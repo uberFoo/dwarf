@@ -6,5 +6,25 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-rlua = "0.19.4"
-rustyline = "6.0.0"
+# rustyline = { version = "11.0.0", features = [
+# "with-file-history",
+# ], optional = true }
+rustyline = { version = "11.0.0", optional = true }
+# nut = { git = "https://gitlab-runner:7kzem8nVeizSJQnLPWFY@git.uberfoo.com/sarzak/nut.git", branch = "develop" }
+nut = { path = "../nut" }
+# sarzak = { git = "https://gitlab-runner:7kzem8nVeizSJQnLPWFY@git.uberfoo.com/sarzak/sarzak.git", branch = "develop" }
+sarzak = { path = "../sarzak" }
+# grace = { git = "https://gitlab-runner:7kzem8nVeizSJQnLPWFY@git.uberfoo.com/sarzak/grace.git", branch = "develop" }
+grace = { path = "../grace" }
+snafu = "0.7.4"
+clap = { version = "4.2.2", features = ["derive"] }
+serde = { version = "1.0.160", features = ["derive"] }
+uuid = { version = "1.3.1", features = ["v4"] }
+fxhash = "0.2.1"
+pretty_env_logger = "0.4.0"
+log = "0.4.17"
+ansi_term = "0.12.1"
+
+[features]
+default = ["repl"]
+repl = ["rustyline"]

@@ -1,0 +1,101 @@
+#V2
+let a = "hello world";
+a;
+print(a)
+let a = "hello world";
+print(a)
+let a = "hello world";
+print(a)
+let a = "hello world";
+print(a);
+let a = "hello world";
+print(a);
+let a = "hello world";
+print(a);
+let a = "hello world";
+print(a);
+let a = "hello world";
+print(a);
+let a = "hello world";
+print(a);
+name
+a
+ba
+let a = "foo";
+a
+let a = "foo";
+a
+a;
+let a = "foo";
+a
+name
+let a = "foo";
+a
+main()
+name
+main
+main()
+let a = "foo";
+print(a);
+a = 7;
+print(a);
+a = "bar";
+print(a);
+main()
+main
+main()
+main
+main()
+main
+main()
+main
+main()
+main
+main()
+main
+main()
+let a = 7;
+print(a);
+let a = "foo";
+print(a);
+print(a)
+a
+let a = 7;
+let a = fn foo() {};
+let a = fn foo() -> int {42};
+fn foo() -> int {42};
+a
+abc
+let a = "foo";
+a
+print(a)
+print(main)
+main
+print(main)
+main
+a
+main
+print(main)
+main()
+let a = main();
+a
+let a = main();
+main
+main()
+lat a = "foo"
+lat a = "foo";
+let a = "foo";
+main()
+let a = "foo";
+main()
+main
+main()
+a
+main()
+a
+print(a)
+main()
+main
+main()
+a
+main()
