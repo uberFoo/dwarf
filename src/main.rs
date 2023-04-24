@@ -1,5 +1,5 @@
 use std::{
-    fmt,
+    fmt, io,
     path::PathBuf,
     sync::{Arc, RwLock},
 };
@@ -20,13 +20,11 @@ use sarzak::{
     sarzak::{store::ObjectStore as SarzakStore, types::Ty},
 };
 use serde::{Deserialize, Serialize};
-use snafu::{prelude::*, Location, Whatever};
+use snafu::{prelude::*, Location};
 use uuid::Uuid;
 
 #[cfg(feature = "repl")]
-use rustyline::error::ReadlineError;
-#[cfg(feature = "repl")]
-use rustyline::{DefaultEditor, Result as ReplResult};
+use rustyline::{error::ReadlineError, DefaultEditor};
 
 #[derive(Debug, Snafu)]
 pub struct Error(InnerError);
@@ -34,12 +32,24 @@ pub struct Error(InnerError);
 #[derive(Debug, Snafu)]
 enum InnerError {
     #[snafu(display("\n{}: {message}\n  --> {}:{}:{}", Colour::Red.paint("error"), location.file, location.line, location.column))]
-    Unimplemented { message: String, location: Location },
-    #[snafu(display("\n{}: could not find static method {}::{} in scope.", Colour::Red.paint("error"), ty, name))]
-    NoSuchStaticMethod { name: String, ty: String },
+    Unimplemented {
+        message: String,
+        location: Location,
+    },
+    #[snafu(display("\n{}: could not find static method `{}::{}`.", Colour::Red.paint("error"), ty, name))]
+    NoSuchStaticMethod {
+        name: String,
+        ty: String,
+    },
+    RustyLine {
+        source: ReadlineError,
+    },
+    Store {
+        source: io::Error,
+    },
 }
 
-pub type Result<T, E = InnerError> = std::result::Result<T, E>;
+type Result<T, E = InnerError> = std::result::Result<T, E>;
 
 macro_rules! error {
     ($arg:expr) => {
@@ -122,13 +132,13 @@ pub struct ChaChaOptions {
     sarzak: PathBuf,
 }
 
-fn main() -> Result<(), Whatever> {
+fn main() -> Result<()> {
     pretty_env_logger::init();
 
     let style = Colour::Purple;
 
-    println!("");
-    let banner = r#"   ________          ________             _       __                            __
+    let banner = r#"
+   ________          ________             _       __                            __
   / ____/ /_  ____ _/ ____/ /_  ____ _   (_)___  / /____  _________  ________  / /____  _____
  / /   / __ \/ __ `/ /   / __ \/ __ `/  / / __ \/ __/ _ \/ ___/ __ \/ ___/ _ \/ __/ _ \/ ___/
 / /___/ / / / /_/ / /___/ / / / /_/ /  / / / / / /_/  __/ /  / /_/ / /  /  __/ /_/  __/ /
@@ -142,25 +152,26 @@ fn main() -> Result<(), Whatever> {
     println!("{}", style.paint(banner));
 
     let sarzak = SarzakStore::load("../sarzak/models/sarzak.v2.json")
-        .with_whatever_context(|_| "failed to load sarzak")?;
+        .map_err(|e| InnerError::Store { source: e })?;
 
     // This will always be a lu-dog, but it's basically a compiled dwarf file.
     // let mut lu_dog = LuDogStore::load("../sarzak/target/sarzak/lu_dog")
     let mut lu_dog = LuDogStore::load("../sarzak/target/sarzak/merlin")
-        .with_whatever_context(|_| "failed to load lu_dog")?;
+        .map_err(|e| InnerError::Store { source: e })?;
 
     // This won't always be Lu-Dog, clearly. So we'll need to be sure to also
     // generate some code that imports the types from the model.
     // let model = SarzakStore::load("../sarzak/models/lu_dog.v2.json")
     let model = Arc::new(
         SarzakStore::load("../sarzak/models/merlin.v2.json")
-            .with_whatever_context(|_| "failed to load model")?,
+            .map_err(|e| InnerError::Store { source: e })?,
     );
 
     #[cfg(feature = "repl")]
-    do_repl(&mut lu_dog, &sarzak, model).with_whatever_context(|_| "repl error")?;
-
-    Ok(())
+    do_repl(&mut lu_dog, &sarzak, model).map_err(|e| {
+        println!("Interpreter exited with: {}", e);
+        e
+    })
 }
 
 fn eval_function_call(
@@ -169,7 +180,7 @@ fn eval_function_call(
     stack: &mut Stack,
     lu_dog: &LuDogStore,
     sarzak: &SarzakStore,
-) -> (Value, Arc<RwLock<ValueType>>) {
+) -> Result<(Value, Arc<RwLock<ValueType>>)> {
     debug!("eval_function_call func ", func);
     trace!("eval_function_call stack", stack);
 
@@ -285,7 +296,7 @@ fn eval_function_call(
             .clone();
 
         loop {
-            (value, ty) = eval_statement(next.clone(), stack, lu_dog, sarzak);
+            (value, ty) = eval_statement(next.clone(), stack, lu_dog, sarzak)?;
             if let Some(ref id) = next.clone().read().unwrap().next {
                 next = lu_dog.exhume_statement(id).unwrap();
             } else {
@@ -296,9 +307,9 @@ fn eval_function_call(
         // Clean up
         stack.pop();
 
-        (value, ty)
+        Ok((value, ty))
     } else {
-        (Value::Empty, ValueType::new_empty())
+        Ok((Value::Empty, ValueType::new_empty()))
     }
 }
 
@@ -339,7 +350,7 @@ fn eval_expression(
                     Value::Function(ref func) => {
                         let func = lu_dog.exhume_function(&func.read().unwrap().id).unwrap();
                         debug!("Expression::Call func", func);
-                        let (value, ty) = eval_function_call(func, &args, stack, lu_dog, sarzak);
+                        let (value, ty) = eval_function_call(func, &args, stack, lu_dog, sarzak)?;
                         debug!("value", value);
                         debug!("ty", ty);
                         (value, ty)
@@ -392,7 +403,7 @@ fn eval_expression(
                                         lu_dog.exhume_function(&func.read().unwrap().id).unwrap();
                                     debug!("func", func);
                                     let (value, ty) =
-                                        eval_function_call(func, &args, stack, lu_dog, sarzak);
+                                        eval_function_call(func, &args, stack, lu_dog, sarzak)?;
                                     debug!("value", value);
                                     debug!("ty", ty);
                                     Ok((value, ty))
@@ -480,10 +491,13 @@ fn eval_expression(
                     let expr = lu_dog
                         .exhume_expression(&f.read().unwrap().expression)
                         .unwrap();
-                    let (value, ty) = match eval_expression(expr, stack, lu_dog, sarzak) {
-                        Ok(x) => x,
-                        Err(e) => return Err(e),
-                    };
+                    //
+                    // 🐝🐝🐝
+                    let (value, ty) = eval_expression(expr, stack, lu_dog, sarzak).unwrap();
+                    // let (value, ty) = match eval_expression(expr, stack, lu_dog, sarzak) {
+                    //     Ok(x) => x,
+                    //     Err(e) => return Err(e),
+                    // };
                     (f.read().unwrap().name.clone(), ty, value)
                 })
                 .collect::<Vec<_>>();
@@ -517,7 +531,7 @@ fn eval_expression(
 
             // let value = Value
 
-            (Value::Empty, ty.clone())
+            Ok((Value::Empty, ty.clone()))
         }
         Expression::VariableExpression(ref expr) => {
             let expr = lu_dog.exhume_variable_expression(expr).unwrap();
@@ -573,18 +587,24 @@ fn eval_expression(
                 // modified. The third thing is when the value is a reference. By
                 // that I mean the type (above) is a reference. Not even sure what
                 // to think about that atm.
-                (value.clone(), ty)
+                Ok((value.clone(), ty))
             } else {
                 println!(
                     "\t{} not found.",
                     Colour::Red.paint(&expr.read().unwrap().name)
                 );
-                (Value::Empty, ValueType::new_empty())
+                Ok((Value::Empty, ValueType::new_empty()))
             }
         }
         ref alpha => {
-            error!("deal with expression", alpha);
-            (Value::Empty, ValueType::new_empty())
+            ensure!(
+                false,
+                UnimplementedSnafu {
+                    message: format!("deal with expression: {:?}", alpha),
+                }
+            );
+
+            Ok((Value::Empty, ValueType::new_empty()))
         }
     }
 }
@@ -594,7 +614,7 @@ fn eval_statement(
     stack: &mut Stack,
     lu_dog: &LuDogStore,
     sarzak: &SarzakStore,
-) -> (Value, Arc<RwLock<ValueType>>) {
+) -> Result<(Value, Arc<RwLock<ValueType>>)> {
     debug!("eval_statement statement", statement);
     trace!("eval_statement stack", stack);
 
@@ -607,11 +627,11 @@ fn eval_statement(
                 .unwrap()
                 .clone();
             let expr = stmt.r31_expression(&lu_dog)[0].clone();
-            let (value, ty) = eval_expression(expr, stack, lu_dog, sarzak);
+            let (value, ty) = eval_expression(expr, stack, lu_dog, sarzak)?;
             no_debug!("StatementEnum::ExpressionStatement: value", value);
             debug!("StatementEnum::ExpressionStatement: ty", ty);
 
-            (Value::Empty, ty)
+            Ok((Value::Empty, ty))
         }
         StatementEnum::LetStatement(ref stmt) => {
             let stmt = lu_dog
@@ -625,7 +645,7 @@ fn eval_statement(
             let expr = stmt.r20_expression(&lu_dog)[0].clone();
             debug!("expr", expr);
 
-            let (value, ty) = eval_expression(expr, stack, lu_dog, sarzak);
+            let (value, ty) = eval_expression(expr, stack, lu_dog, sarzak)?;
             debug!("value", value);
             debug!("ty", ty);
 
@@ -636,7 +656,7 @@ fn eval_statement(
             log::debug!("inserting {} = {}", var.name, value);
             stack.insert(var.name.clone(), value);
 
-            (Value::Empty, ty)
+            Ok((Value::Empty, ty))
         }
         StatementEnum::ResultStatement(ref stmt) => {
             let stmt = lu_dog
@@ -650,25 +670,21 @@ fn eval_statement(
             let expr = stmt.r41_expression(&lu_dog)[0].clone();
             debug!("expr", expr);
 
-            let (value, ty) = eval_expression(expr, stack, lu_dog, sarzak);
+            let (value, ty) = eval_expression(expr, stack, lu_dog, sarzak)?;
             debug!("value", value);
             debug!("ty", ty);
 
-            (value, ty)
+            Ok((value, ty))
         }
         ref beta => {
             error!("deal with statement", beta);
-            (Value::Empty, ValueType::new_empty())
+            Ok((Value::Empty, ValueType::new_empty()))
         }
     }
 }
 
 #[cfg(feature = "repl")]
-fn do_repl(
-    lu_dog: &mut LuDogStore,
-    sarzak: &SarzakStore,
-    model: Arc<SarzakStore>,
-) -> ReplResult<()> {
+fn do_repl(lu_dog: &mut LuDogStore, sarzak: &SarzakStore, model: Arc<SarzakStore>) -> Result<()> {
     let block = Block::new(Uuid::new_v4(), lu_dog);
 
     let mut stack = Stack::new();
@@ -745,7 +761,8 @@ fn do_repl(
     let error_style = Colour::Red.bold();
 
     // `()` can be used when no completer is required
-    let mut rl = DefaultEditor::new()?;
+    let mut rl = DefaultEditor::new().map_err(|e| InnerError::RustyLine { source: e })?;
+
     // #[cfg(feature = "with-file-history")]
     if rl.load_history("history.txt").is_err() {
         println!("No previous history.");
@@ -754,7 +771,8 @@ fn do_repl(
         let readline = rl.readline(&format!("{} ", prompt_style.paint("道:>")));
         match readline {
             Ok(line) => {
-                rl.add_history_entry(line.as_str())?;
+                rl.add_history_entry(line.as_str())
+                    .map_err(|e| InnerError::RustyLine { source: e })?;
                 if let Some(stmt) = parse_line(&line) {
                     debug!("stmt at beginning of readline", stmt);
 
@@ -767,7 +785,7 @@ fn do_repl(
                         &model,
                         sarzak,
                     );
-                    let (value, ty) = eval_statement(stmt, &mut stack, lu_dog, sarzak);
+                    let (value, ty) = eval_statement(stmt, &mut stack, lu_dog, sarzak)?;
 
                     let value = format!("{:?}", value);
                     println!("{}", result_style.paint(value));
@@ -794,7 +812,9 @@ fn do_repl(
         }
     }
     // #[cfg(feature = "with-file-history")]
-    rl.save_history("history.txt")?;
+    rl.save_history("history.txt")
+        .map_err(|e| InnerError::RustyLine { source: e })?;
+
     Ok(())
 }
 
