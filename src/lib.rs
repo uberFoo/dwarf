@@ -10,7 +10,7 @@ pub mod interpreter;
 pub mod merlin;
 pub(crate) mod value;
 
-pub use interpreter::{do_repl, init, Stack};
+pub use interpreter::{initialize_interpreter, start_repl, Stack};
 pub(crate) use value::{UserType, Value};
 
 //
@@ -58,6 +58,11 @@ pub enum InnerError {
     NoSuchStaticMethod {
         method: String,
         ty: String,
+    },
+    #[snafu(display("\n{}: type mismatch -- expected `{}`, found `{}`.", ERR_CLR.paint("error"), OK_CLR.paint(expected.to_string()), ERR_CLR.paint(got.to_string())))]
+    TypeMismatch {
+        expected: String,
+        got: String,
     },
     #[snafu(display("\n{}: {message}\n  --> {}:{}:{}", ERR_CLR.paint("error"), location.file, location.line, location.column))]
     Unimplemented {

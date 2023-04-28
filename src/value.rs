@@ -1,4 +1,5 @@
 use std::{
+    collections::VecDeque,
     fmt,
     sync::{Arc, RwLock},
 };
@@ -20,7 +21,7 @@ pub trait UserType: Clone + fmt::Display + fmt::Debug {
     fn call<T>(
         &mut self,
         method: &str,
-        args: Vec<Self::Value<T>>,
+        args: VecDeque<Self::Value<T>>,
     ) -> Result<(Self::Value<T>, Arc<RwLock<ValueType>>)>;
 }
 

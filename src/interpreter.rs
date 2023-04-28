@@ -1,4 +1,5 @@
 use std::{
+    collections::VecDeque,
     fmt,
     sync::{Arc, RwLock},
 };
@@ -24,10 +25,8 @@ use uuid::{uuid, Uuid};
 use rustyline::{error::ReadlineError, DefaultEditor};
 
 use crate::{
-    merlin::{InflectionStoreType, MerlinType},
-    value::UserType,
-    Error, InnerError, NoSuchStaticMethodSnafu, Result, UnimplementedSnafu, Value,
-    WrongNumberOfArgumentsSnafu,
+    value::UserType, Error, InnerError, NoSuchStaticMethodSnafu, Result, TypeMismatchSnafu,
+    UnimplementedSnafu, Value, WrongNumberOfArgumentsSnafu,
 };
 
 const BANNER: &str = r#"
@@ -116,7 +115,7 @@ lazy_static! {
         Arc::new(RwLock::new(SarzakStore::new()));
 }
 
-pub fn init() -> Result<(), Error> {
+pub fn initialize_interpreter() -> Result<(), Error> {
     let sarzak = SarzakStore::load("../sarzak/models/sarzak.v2.json")
         .map_err(|e| InnerError::Store { source: e })?;
 
@@ -153,7 +152,7 @@ fn eval_function_call<T: UserType<Value<T> = Value<T>>>(
     debug!("eval_function_call func ", func);
     trace!("eval_function_call stack", stack);
 
-    let func = func.read().unwrap().to_owned();
+    let func = func.read().unwrap();
     let block = lu_dog
         .exhume_block(&func.block)
         .unwrap()
@@ -238,21 +237,22 @@ fn eval_function_call<T: UserType<Value<T> = Value<T>>>(
             Vec::new()
         };
 
-        params
-            .into_iter()
-            .zip(arg_values)
-            .for_each(|((name, param_ty), (value, arg_ty))| {
-                debug!("eval_function_call type check", value);
-                if param_ty.read().unwrap().to_owned() != arg_ty.read().unwrap().to_owned() {
-                    let expected = PrintableValueType(param_ty);
-                    let found = PrintableValueType(arg_ty);
-                    panic!(
-                        "argument {}, type mismatch: expected {}, found {}",
-                        name, expected, found
-                    );
-                }
-                stack.insert(name, value);
+        let zipped = params.into_iter().zip(arg_values);
+        for ((name, param_ty), (value, arg_ty)) in zipped {
+            debug!("eval_function_call type check name", name);
+            debug!("eval_function_call type param_ty", param_ty);
+            debug!("eval_function_call type check value", value);
+            debug!("eval_function_call type check arg_ty", arg_ty);
+
+            ensure!(*param_ty.read().unwrap() == *arg_ty.read().unwrap(), {
+                let expected = PrintableValueType(param_ty).to_string();
+                let got = PrintableValueType(arg_ty).to_string();
+                TypeMismatchSnafu { expected, got }
             });
+
+            // Insert the parameter into the frame.
+            stack.insert(name, value);
+        }
 
         let mut value;
         let mut ty;
@@ -293,7 +293,7 @@ fn eval_expression<T: UserType<Value<T> = Value<T>>>(
 
     let result_style = Colour::Green.bold();
 
-    match expression.read().unwrap().to_owned() {
+    match *expression.read().unwrap() {
         Expression::Call(ref call) => {
             let call = lu_dog.exhume_call(call).unwrap().read().unwrap().clone();
             debug!("call", call);
@@ -345,8 +345,36 @@ fn eval_expression<T: UserType<Value<T> = Value<T>>>(
 
                     match &mut value {
                         Value::UserType(ut) => {
-                            let args: Vec<Value<T>> = Vec::new();
-                            ut.call::<T>(meth, args)
+                            let arg_values = if args.len() > 0 {
+                                let mut arg_values = VecDeque::with_capacity(args.len());
+                                let mut next = args
+                                    .iter()
+                                    .find(|a| a.read().unwrap().r27c_argument(lu_dog).len() == 0)
+                                    .unwrap()
+                                    .clone();
+
+                                loop {
+                                    let expr = lu_dog
+                                        .exhume_expression(&next.read().unwrap().expression)
+                                        .unwrap();
+                                    let (value, _ty) =
+                                        eval_expression(expr, stack, lu_dog, sarzak)?;
+                                    arg_values.push_back(value);
+
+                                    let next_id = { next.read().unwrap().next };
+                                    if let Some(ref id) = next_id {
+                                        next = lu_dog.exhume_argument(id).unwrap();
+                                    } else {
+                                        break;
+                                    }
+                                }
+
+                                arg_values
+                            } else {
+                                VecDeque::new()
+                            };
+
+                            ut.call::<T>(meth, arg_values)
                         }
                         bar => panic!("need to deal with Value {:?}", bar),
                     }
@@ -355,6 +383,36 @@ fn eval_expression<T: UserType<Value<T> = Value<T>>>(
                     let meth = lu_dog.exhume_static_method_call(meth).unwrap();
                     let call = meth.read().unwrap().r30_call(lu_dog)[0].clone();
                     let args = call.read().unwrap().r28_argument(lu_dog);
+
+                    // This is for method call on a store type, and we do it out here so that we don't have
+                    // to borrow stack mutably more than once.
+                    let arg_values = if args.len() > 0 {
+                        let mut arg_values = VecDeque::with_capacity(args.len());
+                        let mut next = args
+                            .iter()
+                            .find(|a| a.read().unwrap().r27c_argument(lu_dog).len() == 0)
+                            .unwrap()
+                            .clone();
+
+                        loop {
+                            let expr = lu_dog
+                                .exhume_expression(&next.read().unwrap().expression)
+                                .unwrap();
+                            let (value, _ty) = eval_expression(expr, stack, lu_dog, sarzak)?;
+                            arg_values.push_back(value);
+
+                            let next_id = { next.read().unwrap().next };
+                            if let Some(ref id) = next_id {
+                                next = lu_dog.exhume_argument(id).unwrap();
+                            } else {
+                                break;
+                            }
+                        }
+
+                        arg_values
+                    } else {
+                        VecDeque::new()
+                    };
 
                     let ty = &meth.read().unwrap().ty;
                     let func = &meth.read().unwrap().func;
@@ -400,10 +458,7 @@ fn eval_expression<T: UserType<Value<T> = Value<T>>>(
                                     debug!("StaticMethodCall frame ty", ty);
                                     Ok((value, ty))
                                 }
-                                Value::UserType(ut) => {
-                                    let args: Vec<Value<T>> = Vec::new();
-                                    ut.call::<T>(func, args)
-                                }
+                                Value::UserType(ut) => ut.call::<T>(func, arg_values),
                                 // Value::StoreType(ref mut store_type) => {
                                 //     // We should actually know what's behind the curtain, since
                                 //     // we requested it with `stack.get(ty)`, above.
@@ -448,7 +503,7 @@ fn eval_expression<T: UserType<Value<T> = Value<T>>>(
         }
         Expression::Literal(ref literal) => {
             let literal = lu_dog.exhume_literal(literal).unwrap();
-            let z = match literal.read().unwrap().to_owned() {
+            let z = match &*literal.read().unwrap() {
                 Literal::IntegerLiteral(ref literal) => {
                     let literal = lu_dog.exhume_integer_literal(literal).unwrap();
                     let value = literal.read().unwrap().value;
@@ -521,7 +576,7 @@ fn eval_expression<T: UserType<Value<T> = Value<T>>>(
             for (name, ty, _value) in field_exprs {
                 if let Some(field) = fields.iter().find(|f| f.read().unwrap().name == name) {
                     let struct_ty = lu_dog.exhume_value_type(&field.read().unwrap().ty).unwrap();
-                    if struct_ty.read().unwrap().to_owned() != ty.read().unwrap().to_owned() {
+                    if *struct_ty.read().unwrap() != *ty.read().unwrap() {
                         let expected = PrintableValueType(struct_ty);
                         let found = PrintableValueType(ty);
                         panic!(
@@ -707,7 +762,7 @@ fn eval_statement<T: UserType<Value<T> = Value<T>>>(
 }
 
 #[cfg(feature = "repl")]
-pub fn do_repl<T>() -> Result<(), Error>
+pub fn start_repl<T>() -> Result<(), Error>
 where
     T: UserType<Value<T> = Value<T>>,
 {
@@ -832,14 +887,14 @@ where
                     // 🚧 Need to send an Arc to the inter_statement function instead
                     // of locking the whole time.
                     let stmt = {
-                        let (stmt, _) = inter_statement(
-                            Arc::new(RwLock::new(stmt)),
-                            block.clone(),
+                        let (stmt, _ty) = inter_statement(
+                            &Arc::new(RwLock::new(stmt)),
+                            &block,
                             &mut *lu_dog.write().unwrap(),
                             &model.read().unwrap(),
                             &*sarzak.read().unwrap(),
                         );
-                        stmt.clone()
+                        stmt
                     };
 
                     // 🚧 This needs fixing too.
@@ -890,11 +945,11 @@ struct PrintableValueType(Arc<RwLock<ValueType>>);
 
 impl fmt::Display for PrintableValueType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let value = self.0.read().unwrap().to_owned();
+        let value = self.0.read().unwrap();
         let lu_dog = &LU_DOG;
         let sarzak = &SARZAK;
 
-        match value {
+        match &*value {
             ValueType::Empty(_) => write!(f, "()"),
             ValueType::Error(_) => write!(f, "<error>"),
             ValueType::Function(_) => write!(f, "<function>"),
@@ -941,6 +996,8 @@ impl fmt::Display for PrintableValueType {
                 let sarzak = sarzak.read().unwrap();
                 let ty = sarzak.exhume_ty(ty).unwrap();
                 match ty {
+                    Ty::Boolean(_) => write!(f, "bool"),
+                    Ty::Integer(_) => write!(f, "int"),
                     Ty::Object(ref object) => {
                         if let Some(object) = sarzak.exhume_object(object) {
                             write!(f, "{}", object.name)

@@ -2,20 +2,24 @@
 //! The following will need to be generated
 //!
 use std::{
+    collections::VecDeque,
     fmt,
     sync::{Arc, RwLock},
 };
 
-use fxhash::FxHashMap as HashMap;
 use lazy_static::lazy_static;
 use sarzak::{
-    lu_dog::{Empty, List, ObjectStore as LuDogStore, ValueType},
+    lu_dog::{Empty, ObjectStore as LuDogStore, ValueType},
+    // This line will be generated according to the input domain.
     merlin::{Inflection, ObjectStore as MerlinStore, Point},
-    sarzak::{ObjectStore as SarzakStore, SUuid},
+    sarzak::SUuid,
 };
-use uuid::uuid;
+use uuid::{uuid, Uuid};
 
 use crate::{Result, Stack, UserType, Value};
+
+const INFLECTION_TYPE_UUID: Uuid = uuid!("3bfa471f-df9a-4ba4-99df-f78a5ae7db79");
+const POINT_TYPE_UUID: Uuid = uuid!("577b0cde-022a-4b85-8a25-7365e2f5ac69");
 
 lazy_static! {
     // These are instances of the `model` loaded in the interpreter. In other
@@ -36,7 +40,7 @@ lazy_static! {
     //
     // So we need to include this path somehow when we invoke the compiler. Fun.
     static ref MODEL: Arc<RwLock<MerlinStore>> = Arc::new(RwLock::new(
-        MerlinStore::load("../sarzak/lu_dog.v2.json").unwrap()
+        MerlinStore::load("../sarzak/models/lu_dog.v2.json").unwrap()
     ));
 }
 
@@ -66,7 +70,7 @@ impl InflectionStoreType {
     pub fn call(
         &mut self,
         method: &str,
-        _args: Vec<Value<MerlinType>>,
+        _args: VecDeque<Value<MerlinType>>,
     ) -> Result<(Value<MerlinType>, Arc<RwLock<ValueType>>)> {
         if let Some(self_) = &self.self_ {
             match method {
@@ -90,9 +94,7 @@ impl InflectionStoreType {
                         Value::UserType(MerlinType::Inflection(inflection_store_type)),
                         // Clearly this will be generated...
                         // This is the id of the Inflection object
-                        Arc::new(RwLock::new(ValueType::WoogStruct(uuid!(
-                            "42a2498a-62a9-4ff1-b765-7662910be974"
-                        )))),
+                        Arc::new(RwLock::new(ValueType::WoogStruct(INFLECTION_TYPE_UUID))),
                     ))
                 }
                 道 => Ok((
@@ -126,7 +128,7 @@ impl PointStoreType {
     pub fn call(
         &mut self,
         method: &str,
-        mut args: Vec<Value<MerlinType>>,
+        mut args: VecDeque<Value<MerlinType>>,
     ) -> Result<(Value<MerlinType>, Arc<RwLock<ValueType>>)> {
         if let Some(self_) = &self.self_ {
             match method {
@@ -147,19 +149,19 @@ impl PointStoreType {
         } else {
             match method {
                 "new" => {
-                    let y = args.pop().unwrap().try_into()?;
-                    let x = args.pop().unwrap().try_into()?;
+                    let x = args.pop_front().unwrap().try_into()?;
+                    let y = args.pop_front().unwrap().try_into()?;
 
                     let mut model = MODEL.write().unwrap();
                     let point = Point::new_inflection(x, y, &mut *model);
-                    self.self_ = Some(point);
+
+                    let mut point_store_type = self.clone();
+                    point_store_type.self_ = Some(point);
                     Ok((
-                        Value::UserType(MerlinType::Point(self.clone())),
+                        Value::UserType(MerlinType::Point(point_store_type)),
                         // Clearly this will be generated...
                         // This is the id of the point object
-                        Arc::new(RwLock::new(ValueType::WoogStruct(uuid!(
-                            "236d8f9c-5440-4ca2-8934-31cb07b1992e"
-                        )))),
+                        Arc::new(RwLock::new(ValueType::WoogStruct(POINT_TYPE_UUID))),
                     ))
                 }
                 道 => Ok((
@@ -221,12 +223,10 @@ impl UserType for MerlinType {
     fn get_type(&self) -> Arc<RwLock<ValueType>> {
         match self {
             // I could look this up if I had a pointer to the LuDog store.
-            Self::Inflection(_) => Arc::new(RwLock::new(ValueType::WoogStruct(uuid!(
-                "42a2498a-62a9-4ff1-b765-7662910be974"
-            )))),
-            Self::Point(_) => Arc::new(RwLock::new(ValueType::WoogStruct(uuid!(
-                "236d8f9c-5440-4ca2-8934-31cb07b1992e"
-            )))),
+            Self::Inflection(_) => {
+                Arc::new(RwLock::new(ValueType::WoogStruct(INFLECTION_TYPE_UUID)))
+            }
+            Self::Point(_) => Arc::new(RwLock::new(ValueType::WoogStruct(POINT_TYPE_UUID))),
         }
     }
 
@@ -234,7 +234,7 @@ impl UserType for MerlinType {
     fn call<T>(
         &mut self,
         method: &str,
-        _args: Vec<Self::Value<T>>,
+        _args: VecDeque<Self::Value<T>>,
     ) -> Result<(Self::Value<T>, Arc<RwLock<ValueType>>)> {
         match self {
             // Self::MerlinStore(store) => store.write().unwrap().call(method, args),
