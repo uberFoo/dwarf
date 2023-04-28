@@ -7,11 +7,10 @@ use serde::{Deserialize, Serialize};
 use snafu::{prelude::*, Location};
 
 pub mod interpreter;
-pub(crate) mod merlin;
+pub mod merlin;
 pub(crate) mod value;
 
-pub use interpreter::{do_repl, init};
-
+pub use interpreter::{do_repl, init, Stack};
 pub(crate) use value::{UserType, Value};
 
 //
@@ -44,7 +43,7 @@ const OTH_CLR: Colour = Colour::Cyan;
 pub struct Error(InnerError);
 
 #[derive(Debug, Snafu)]
-enum InnerError {
+pub enum InnerError {
     #[snafu(display("\n{}: could not convent `{}` to `{}`", ERR_CLR.paint("error"), src, dst))]
     Conversion {
         src: String,

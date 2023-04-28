@@ -6,12 +6,14 @@ use std::{
 use ansi_term::Colour;
 use fxhash::FxHashMap as HashMap;
 
-use sarzak::lu_dog::{Function, ValueType};
+use sarzak::lu_dog::{Function, ObjectStore as LuDogStore, ValueType};
 
-use crate::{InnerError, Result};
+use crate::{InnerError, Result, Stack};
 
-pub(crate) trait UserType: Clone + fmt::Display + fmt::Debug {
+pub trait UserType: Clone + fmt::Display + fmt::Debug {
     type Value<T>: fmt::Display + fmt::Debug + Clone;
+
+    fn initialize(stack: &mut Stack<Self>, lu_dog: &mut LuDogStore);
 
     fn get_type(&self) -> Arc<RwLock<ValueType>>;
 
@@ -26,7 +28,7 @@ pub(crate) trait UserType: Clone + fmt::Display + fmt::Debug {
 ///
 /// This is the type used by the interpreter to represent values.
 #[derive(Clone, Debug)]
-pub(crate) enum Value<T>
+pub enum Value<T>
 where
     T: UserType,
 {

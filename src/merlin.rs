@@ -6,15 +6,16 @@ use std::{
     sync::{Arc, RwLock},
 };
 
+use fxhash::FxHashMap as HashMap;
 use lazy_static::lazy_static;
 use sarzak::{
-    lu_dog::{Empty, List, ValueType},
+    lu_dog::{Empty, List, ObjectStore as LuDogStore, ValueType},
     merlin::{Inflection, ObjectStore as MerlinStore, Point},
     sarzak::{ObjectStore as SarzakStore, SUuid},
 };
 use uuid::uuid;
 
-use crate::{Result, UserType, Value};
+use crate::{Result, Stack, UserType, Value};
 
 lazy_static! {
     // These are instances of the `model` loaded in the interpreter. In other
@@ -26,38 +27,18 @@ lazy_static! {
     // just not sure that we need to do that. We have access here, and we should
     // only be doing stuff to the store from here, so maybe we don't need to
     // segregate UserType and StoreType. That seems to track...
+    //
+    // I wonder if it's cool to generate an absolute path here. I don't think
+    // it's a problem, but we'll need to sort it out. This is a model of
+    // instances, so it's different from the model we used to generate the
+    // code. In this specific case we would be generating code against merlin,
+    // and we are reading merlin instances from the lu_dog model.
+    //
+    // So we need to include this path somehow when we invoke the compiler. Fun.
     static ref MODEL: Arc<RwLock<MerlinStore>> = Arc::new(RwLock::new(
         MerlinStore::load("../sarzak/lu_dog.v2.json").unwrap()
     ));
 }
-
-/// This is a type in the store
-///
-/// The store is the one that we are generating code for. So there will be one
-/// entry for each object.
-///
-/// Each entry in a proxy to an instance in the store. The proxy should contain
-/// all of the methods defined on that type. Notably, new, and the relationship
-/// navigation methods.
-// #[derive(Clone, Debug)]
-// pub(crate) enum StoreType {
-//     Inflection(InflectionStoreType),
-//     Point(PointStoreType),
-// }
-
-// impl StoreType {
-//     pub fn get_type(&self) -> Arc<RwLock<ValueType>> {
-//         match self {
-//             // I could look this up if I had a pointer to the LuDog store.
-//             Self::Inflection(_) => Arc::new(RwLock::new(ValueType::WoogStruct(uuid!(
-//                 "42a2498a-62a9-4ff1-b765-7662910be974"
-//             )))),
-//             Self::Point(_) => Arc::new(RwLock::new(ValueType::WoogStruct(uuid!(
-//                 "236d8f9c-5440-4ca2-8934-31cb07b1992e"
-//             )))),
-//         }
-//     }
-// }
 
 /// A proxy for the [`Inflection] type
 ///
@@ -74,7 +55,7 @@ lazy_static! {
 /// arguments are going to be different, so we can't just store pointers to
 /// functions. I've been down this road, I wonder how many times I'll retread it?
 #[derive(Clone, Debug)]
-pub(crate) struct InflectionStoreType {
+pub struct InflectionStoreType {
     pub self_: Option<Inflection>,
 }
 
@@ -130,7 +111,7 @@ impl Default for InflectionStoreType {
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct PointStoreType {
+pub struct PointStoreType {
     pub self_: Option<Point>,
 }
 
@@ -217,7 +198,7 @@ impl Default for PointStoreType {
 /// For now I'll just pretend. Doing that thing above will be a big lift, I think,
 /// and it's really a job for the svm compiler.
 #[derive(Clone, Debug)]
-pub(crate) enum MerlinType {
+pub enum MerlinType {
     // MerlinStore(Arc<RwLock<SarzakStore>>),
     Inflection(InflectionStoreType),
     Point(PointStoreType),
@@ -225,6 +206,17 @@ pub(crate) enum MerlinType {
 
 impl UserType for MerlinType {
     type Value<T> = Value<MerlinType>;
+
+    fn initialize(stack: &mut Stack<Self>, _lu_dog: &mut LuDogStore) {
+        stack.insert_global(
+            "INFLECTION".to_owned(),
+            Value::UserType(MerlinType::Inflection(InflectionStoreType::default())),
+        );
+        stack.insert_global(
+            "POINT".to_owned(),
+            Value::UserType(MerlinType::Point(PointStoreType::default())),
+        );
+    }
 
     fn get_type(&self) -> Arc<RwLock<ValueType>> {
         match self {

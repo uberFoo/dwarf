@@ -1,11 +1,11 @@
-use chacha::{do_repl, init, Error};
+use chacha::{do_repl, init, merlin, Error};
 
 fn main() -> Result<(), Error> {
     pretty_env_logger::init();
 
     init()?;
 
-    do_repl().map_err(|e| {
+    do_repl::<merlin::MerlinType>().map_err(|e| {
         println!("Interpreter exited with: {}", e);
         e
     })

@@ -707,13 +707,16 @@ fn eval_statement<T: UserType<Value<T> = Value<T>>>(
 }
 
 #[cfg(feature = "repl")]
-pub fn do_repl() -> Result<(), Error> {
+pub fn do_repl<T>() -> Result<(), Error>
+where
+    T: UserType<Value<T> = Value<T>>,
+{
     let model = &MODEL;
     let lu_dog = &LU_DOG;
     let sarzak = &SARZAK;
 
     let block = Block::new(Uuid::new_v4(), &mut *lu_dog.write().unwrap());
-    let mut stack = Stack::new();
+    let mut stack = Stack::<T>::new();
 
     // Insert the functions in the root frame.
     let funcs = lu_dog
@@ -772,17 +775,15 @@ pub fn do_repl() -> Result<(), Error> {
         }
     }
 
+    T::initialize(&mut stack, &mut *lu_dog.write().unwrap());
+
     // 🚧 this needs to go into some sort of init function that get's passed
-    // the stack. Or alternatively, there's a function thta returns key value
+    // the stack. Or alternatively, there's a function that returns key value
     // pairs to be inserted into the stack. One way or the other...
     // stack.insert_global(
     // "MERLIN_STORE".to_owned(),
     // Value::UserType(MerlinType::MerlinStore((*model).clone())),
     // );
-    stack.insert_global(
-        "INFLECTION".to_owned(),
-        Value::UserType(MerlinType::Inflection(InflectionStoreType::default())),
-    );
 
     // {
     //     // Build the ASTs
@@ -798,25 +799,6 @@ pub fn do_repl() -> Result<(), Error> {
     //     let _value = LuDogValue::new_variable(
     //         block.clone(),
     //         ValueType::new_z_object_store(store, &mut write),
-    //         var,
-    //         &mut write,
-    //     );
-    // }
-
-    // {
-    //     let local = LocalVariable::new(Uuid::new_v4(), &mut *lu_dog.write().unwrap());
-    //     let var = Variable::new_local_variable(
-    //         "INFLECTION".to_owned(),
-    //         local,
-    //         &mut *lu_dog.write().unwrap(),
-    //     );
-
-    //     let mut write = lu_dog.write().unwrap();
-    //     let _value = LuDogValue::new_variable(
-    //         block.clone(),
-    //         Arc::new(RwLock::new(ValueType::WoogStruct(uuid!(
-    //             "42a2498a-62a9-4ff1-b765-7662910be974"
-    //         )))),
     //         var,
     //         &mut write,
     //     );
@@ -1028,13 +1010,13 @@ impl fmt::Display for PrintableValueType {
 }
 
 #[derive(Debug)]
-struct Stack<T>
+pub struct Stack<T>
 where
     T: UserType,
 {
-    pub meta: HashMap<String, HashMap<String, Value<T>>>,
-    pub global: HashMap<String, Value<T>>,
-    pub frames: Vec<HashMap<String, Value<T>>>,
+    pub(crate) meta: HashMap<String, HashMap<String, Value<T>>>,
+    pub(crate) global: HashMap<String, Value<T>>,
+    pub(crate) frames: Vec<HashMap<String, Value<T>>>,
 }
 
 impl<T> Stack<T>
@@ -1057,11 +1039,11 @@ where
         self.frames.pop();
     }
 
-    fn insert_meta_table(&mut self, table: String) {
+    pub(crate) fn insert_meta_table(&mut self, table: String) {
         self.meta.insert(table, HashMap::default());
     }
 
-    fn insert_meta(&mut self, table: &str, name: String, value: Value<T>) {
+    pub(crate) fn insert_meta(&mut self, table: &str, name: String, value: Value<T>) {
         let table = self.meta.get_mut(table).unwrap();
         table.insert(name, value);
     }
@@ -1074,7 +1056,7 @@ where
         }
     }
 
-    fn insert_global(&mut self, name: String, value: Value<T>) {
+    pub(crate) fn insert_global(&mut self, name: String, value: Value<T>) {
         if name.contains("::") {
             let mut split = name.split("::");
             let table = split.nth(0).unwrap();
@@ -1098,7 +1080,7 @@ where
         }
     }
 
-    fn insert(&mut self, name: String, value: Value<T>) {
+    pub(crate) fn insert(&mut self, name: String, value: Value<T>) {
         let frame = self.frames.last_mut().unwrap();
         frame.insert(name, value);
     }
