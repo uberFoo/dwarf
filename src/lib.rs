@@ -64,6 +64,10 @@ pub enum InnerError {
         expected: String,
         got: String,
     },
+    #[snafu(display("\n{}: no such field `{}`.", ERR_CLR.paint("error"), POP_CLR.paint(field)))]
+    NoSuchField {
+        field: String,
+    },
     #[snafu(display("\n{}: {message}\n  --> {}:{}:{}", ERR_CLR.paint("error"), location.file, location.line, location.column))]
     Unimplemented {
         message: String,

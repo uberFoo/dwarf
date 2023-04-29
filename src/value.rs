@@ -35,6 +35,10 @@ pub enum Value {
     Function(Arc<RwLock<Function>>),
     Integer(i64),
     Option(Option<Box<Self>>),
+    /// User Defined Type Proxy
+    ///
+    ///  Feels like we'll need to generate some code to make this work.
+    ProxyType(Arc<RwLock<dyn StoreProxy>>),
     /// WTF was I thinking?
     ///
     /// That means Self. Or, maybe self?
@@ -43,10 +47,7 @@ pub enum Value {
     // 🚧 I need to rethink the necessity of this locking.
     String(Arc<RwLock<String>>),
     Table(HashMap<String, Value>),
-    /// User Defined Type
-    ///
-    ///  Feels like we'll need to generate some code to make this work.
-    UserType(Arc<RwLock<dyn StoreProxy>>),
+    UserType(Arc<RwLock<UserType>>),
     Uuid(uuid::Uuid),
     Vector(Vec<Value>),
 }
@@ -64,12 +65,13 @@ impl fmt::Display for Value {
                 Some(value) => write!(f, "Some({})", value),
                 None => write!(f, "None"),
             },
+            Self::ProxyType(p) => write!(f, "{}", p.read().unwrap()),
             Self::Reflexive => write!(f, "self"),
             // Self::StoreType(store) => write!(f, "{:?}", store),
             Self::String(str_) => write!(f, "{}", str_.read().unwrap()),
             // Self::String(str_) => write!(f, "\"{}\"", str_),
             Self::Table(table) => write!(f, "{:?}", table),
-            Self::UserType(ut) => write!(f, "{}", ut.read().unwrap()),
+            Self::UserType(ty) => write!(f, "{}\n", ty.read().unwrap()),
             Self::Uuid(uuid) => write!(f, "{}", uuid),
             Self::Vector(vec) => write!(f, "{:?}", vec),
         }
@@ -83,7 +85,15 @@ impl TryFrom<Value> for i64 {
         match value {
             Value::Float(num) => Ok(num as i64),
             Value::Integer(num) => Ok(num),
-            Value::String(str_) => Ok(str_.read().unwrap().parse::<i64>().unwrap()),
+            Value::String(str_) => {
+                str_.read()
+                    .unwrap()
+                    .parse::<i64>()
+                    .map_err(|_| InnerError::Conversion {
+                        src: str_.read().unwrap().to_owned(),
+                        dst: "i64".to_owned(),
+                    })
+            }
             _ => Err(InnerError::Conversion {
                 src: value.to_string(),
                 dst: "i64".to_owned(),
@@ -99,11 +109,60 @@ impl TryFrom<Value> for f64 {
         match value {
             Value::Float(num) => Ok(num),
             Value::Integer(num) => Ok(num as f64),
-            Value::String(str_) => Ok(str_.read().unwrap().parse::<f64>().unwrap()),
+            Value::String(str_) => {
+                str_.read()
+                    .unwrap()
+                    .parse::<f64>()
+                    .map_err(|_| InnerError::Conversion {
+                        src: str_.read().unwrap().to_owned(),
+                        dst: "f64".to_owned(),
+                    })
+            }
             _ => Err(InnerError::Conversion {
                 src: value.to_string(),
                 dst: "f64".to_owned(),
             }),
         }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct UserType {
+    id: Uuid,
+    type_: String,
+    attrs: HashMap<String, Value>,
+}
+
+impl UserType {
+    pub fn new<S: AsRef<str>>(type_: S) -> Self {
+        Self {
+            id: Uuid::new_v4(),
+            type_: type_.as_ref().to_owned(),
+            attrs: HashMap::default(),
+        }
+    }
+
+    pub fn add_attr(&mut self, name: &str, value: Value) {
+        self.attrs.insert(name.to_owned(), value);
+    }
+}
+
+impl Default for UserType {
+    fn default() -> Self {
+        Self::new("default")
+    }
+}
+
+impl fmt::Display for UserType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let mut out = f.debug_struct(&format!("{}", self.type_));
+        let mut attrs = self.attrs.iter().collect::<Vec<_>>();
+        attrs.sort_by(|(k1, _), (k2, _)| k1.cmp(k2));
+
+        for (k, v) in attrs {
+            out.field(k, v);
+        }
+
+        out.finish()
     }
 }

@@ -13,11 +13,11 @@ fn main() -> Result<(), Error> {
 
     ctx.insert_store_proxy(
         "INFLECTION".to_owned(),
-        Value::UserType(Arc::new(RwLock::new(InflectionProxy::default()))),
+        Value::ProxyType(Arc::new(RwLock::new(InflectionProxy::default()))),
     );
     ctx.insert_store_proxy(
         "POINT".to_owned(),
-        Value::UserType(Arc::new(RwLock::new(PointProxy::default()))),
+        Value::ProxyType(Arc::new(RwLock::new(PointProxy::default()))),
     );
 
     start_repl(ctx).map_err(|e| {

@@ -7,6 +7,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 
+use ansi_term::Colour;
 use lazy_static::lazy_static;
 use sarzak::{
     lu_dog::{Empty, ValueType},
@@ -18,8 +19,8 @@ use uuid::{uuid, Uuid};
 
 use crate::{Result, StoreProxy, Value};
 
-const INFLECTION_TYPE_UUID: Uuid = uuid!("3bfa471f-df9a-4ba4-99df-f78a5ae7db79");
-const POINT_TYPE_UUID: Uuid = uuid!("577b0cde-022a-4b85-8a25-7365e2f5ac69");
+const INFLECTION_TYPE_UUID: Uuid = uuid!("298ef558-5169-4617-b6fe-3154bebeed61");
+const POINT_TYPE_UUID: Uuid = uuid!("c1f1f7dd-ccae-42af-945d-b1b9ddd84f7c");
 
 lazy_static! {
     // These are instances of the `model` loaded in the interpreter. In other
@@ -95,7 +96,7 @@ impl StoreProxy for InflectionProxy {
                     let mut inflection_proxy = self.clone();
                     inflection_proxy.self_ = Some(inflection);
                     Ok((
-                        Value::UserType(Arc::new(RwLock::new(inflection_proxy))),
+                        Value::ProxyType(Arc::new(RwLock::new(inflection_proxy))),
                         // Clearly this will be generated...
                         // This is the id of the Inflection object
                         Arc::new(RwLock::new(ValueType::WoogStruct(INFLECTION_TYPE_UUID))),
@@ -119,9 +120,13 @@ impl Default for InflectionProxy {
 impl fmt::Display for InflectionProxy {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if let Some(self_) = &self.self_ {
-            write!(f, "Inflection({})\n", self_.id())
+            write!(f, "InflectionProxy({})\n", self_.id())
         } else {
-            write!(f, "Type: Inflection\n")
+            write!(
+                f,
+                "{} InflectionProxy\n",
+                Colour::Yellow.underline().paint("Type:")
+            )
         }
     }
 }
@@ -176,7 +181,7 @@ impl StoreProxy for PointProxy {
                     let mut point_proxy = self.clone();
                     point_proxy.self_ = Some(point);
                     Ok((
-                        Value::UserType(Arc::new(RwLock::new(point_proxy))),
+                        Value::ProxyType(Arc::new(RwLock::new(point_proxy))),
                         // Clearly this will be generated...
                         // This is the id of the point object
                         Arc::new(RwLock::new(ValueType::WoogStruct(POINT_TYPE_UUID))),
@@ -200,9 +205,13 @@ impl Default for PointProxy {
 impl fmt::Display for PointProxy {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if let Some(self_) = &self.self_ {
-            write!(f, "Point({})\n", self_.id)
+            write!(f, "PointProxy({})\n", self_.id)
         } else {
-            write!(f, "Type: Point\n")
+            write!(
+                f,
+                "{} PointProxy\n",
+                Colour::Yellow.underline().paint("Type:")
+            )
         }
     }
 }

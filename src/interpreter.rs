@@ -25,7 +25,8 @@ use uuid::Uuid;
 use rustyline::{error::ReadlineError, DefaultEditor};
 
 use crate::{
-    value::StoreProxy, Error, InnerError, NoSuchStaticMethodSnafu, Result, TypeMismatchSnafu,
+    value::{StoreProxy, UserType},
+    Error, InnerError, NoSuchFieldSnafu, NoSuchStaticMethodSnafu, Result, TypeMismatchSnafu,
     UnimplementedSnafu, Value, WrongNumberOfArgumentsSnafu,
 };
 
@@ -365,6 +366,9 @@ fn eval_expression(
     let result_style = Colour::Green.bold();
 
     match *expression.read().unwrap() {
+        //
+        // Call
+        //
         Expression::Call(ref call) => {
             let call = lu_dog.exhume_call(call).unwrap();
             let call = call.read().unwrap();
@@ -396,7 +400,7 @@ fn eval_expression(
                         debug!("ty", ty);
                         (value, ty)
                     }
-                    Value::UserType(ut) => {
+                    Value::ProxyType(ut) => {
                         let ty = lu_dog
                             .exhume_value_type(&ut.read().unwrap().get_struct_uuid())
                             .unwrap();
@@ -412,7 +416,13 @@ fn eval_expression(
 
             // So we need to figure out the type this is being called on.
             match (&call.subtype, value, ty) {
+                //
+                // FunctionCall
+                //
                 (CallEnum::FunctionCall(_), value, ty) => Ok((value, ty)),
+                //
+                // MethodCall
+                //
                 (CallEnum::MethodCall(meth), mut value, ty) => {
                     let meth = lu_dog.exhume_method_call(meth).unwrap();
                     let meth = &meth.read().unwrap().name;
@@ -421,7 +431,7 @@ fn eval_expression(
                     debug!("MethodCall type", ty);
 
                     match &mut value {
-                        Value::UserType(ut) => {
+                        Value::ProxyType(ut) => {
                             let arg_values = if args.len() > 0 {
                                 let mut arg_values = VecDeque::with_capacity(args.len());
                                 let mut next = args
@@ -456,6 +466,9 @@ fn eval_expression(
                         bar => panic!("need to deal with Value {:?}", bar),
                     }
                 }
+                //
+                // StaticMethodCall
+                //
                 (CallEnum::StaticMethodCall(meth), _, _) => {
                     let meth = lu_dog.exhume_static_method_call(meth).unwrap();
                     let call = meth.read().unwrap().r30_call(lu_dog)[0].clone();
@@ -535,7 +548,7 @@ fn eval_expression(
                                     debug!("StaticMethodCall frame ty", ty);
                                     Ok((value, ty))
                                 }
-                                Value::UserType(ut) => ut.write().unwrap().call(func, arg_values),
+                                Value::ProxyType(ut) => ut.write().unwrap().call(func, arg_values),
                                 // Value::StoreType(ref mut store_type) => {
                                 //     // We should actually know what's behind the curtain, since
                                 //     // we requested it with `stack.get(ty)`, above.
@@ -571,6 +584,11 @@ fn eval_expression(
                 }
             }
         }
+        //
+        // Error Expression
+        //
+        // 🚧 This should be looked at as part of  The Great Error Overhaul
+        //
         Expression::ErrorExpression(ref error) => {
             let error = lu_dog.exhume_error_expression(error).unwrap();
 
@@ -578,9 +596,27 @@ fn eval_expression(
 
             Ok((Value::Empty, ValueType::new_empty()))
         }
+        //
+        // Literal
+        //
         Expression::Literal(ref literal) => {
             let literal = lu_dog.exhume_literal(literal).unwrap();
             let z = match &*literal.read().unwrap() {
+                //
+                // FloatLiteral
+                //
+                Literal::FloatLiteral(ref literal) => {
+                    let literal = lu_dog.exhume_float_literal(literal).unwrap();
+                    let value = literal.read().unwrap().value;
+                    let value = Value::Float(value);
+                    let ty = Ty::new_float();
+                    let ty = lu_dog.exhume_value_type(&ty.id()).unwrap();
+
+                    Ok((value, ty.clone()))
+                }
+                //
+                // IntegerLiteral
+                //
                 Literal::IntegerLiteral(ref literal) => {
                     let literal = lu_dog.exhume_integer_literal(literal).unwrap();
                     let value = literal.read().unwrap().value;
@@ -590,6 +626,9 @@ fn eval_expression(
 
                     Ok((value, ty.clone()))
                 }
+                //
+                // StringLiteral
+                //
                 Literal::StringLiteral(ref literal) => {
                     let literal = lu_dog.exhume_string_literal(literal).unwrap();
                     // 🚧 It'd be great if this were an Rc...
@@ -613,6 +652,9 @@ fn eval_expression(
             };
             z
         }
+        //
+        // Print
+        //
         Expression::Print(ref print) => {
             let print = lu_dog.exhume_print(print).unwrap();
             debug!("Expression::Print print", print);
@@ -624,22 +666,23 @@ fn eval_expression(
 
             Ok((value, ValueType::new_empty()))
         }
+        //
+        // StructExpression
+        //
         Expression::StructExpression(ref expr) => {
             let expr = lu_dog.exhume_struct_expression(expr).unwrap();
             let field_exprs = expr.read().unwrap().r26_field_expression(lu_dog);
+
+            // Get name, value and type for each field expression.
             let field_exprs = field_exprs
                 .iter()
                 .map(|f| {
                     let expr = lu_dog
                         .exhume_expression(&f.read().unwrap().expression)
                         .unwrap();
-                    //
-                    // 🐝🐝🐝
                     let (value, ty) = eval_expression(expr, stack, lu_dog, sarzak).unwrap();
-                    // let (value, ty) = match eval_expression(expr, stack, lu_dog, sarzak) {
-                    //     Ok(x) => x,
-                    //     Err(e) => return Err(e),
-                    // };
+                    debug!("StructExpression field value", value);
+                    debug!("StructExpression field ty", ty);
                     (f.read().unwrap().name.clone(), ty, value)
                 })
                 .collect::<Vec<_>>();
@@ -650,19 +693,24 @@ fn eval_expression(
             let fields = woog_struct.read().unwrap().r7_field(lu_dog);
 
             // Type checking fields here
-            for (name, ty, _value) in field_exprs {
+            let mut user_type = UserType::new(&woog_struct.read().unwrap().name);
+            for (name, ty, value) in field_exprs {
                 if let Some(field) = fields.iter().find(|f| f.read().unwrap().name == name) {
                     let struct_ty = lu_dog.exhume_value_type(&field.read().unwrap().ty).unwrap();
-                    if *struct_ty.read().unwrap() != *ty.read().unwrap() {
-                        let expected = PrintableValueType(struct_ty);
-                        let found = PrintableValueType(ty);
-                        panic!(
-                            "field {}, type mismatch: expected {}, found {}",
-                            name, expected, found
-                        );
-                    }
+                    ensure!(*struct_ty.read().unwrap() == *ty.read().unwrap(), {
+                        let expected = PrintableValueType(struct_ty).to_string();
+                        let got = PrintableValueType(ty).to_string();
+                        TypeMismatchSnafu { expected, got }
+                    });
+
+                    user_type.add_attr(&name, value);
                 } else {
-                    panic!("no such field");
+                    ensure!(
+                        false,
+                        NoSuchFieldSnafu {
+                            field: name.to_owned(),
+                        }
+                    );
                 }
             }
 
@@ -673,8 +721,14 @@ fn eval_expression(
 
             // let value = Value
 
-            Ok((Value::Empty, ty.clone()))
+            Ok((
+                Value::UserType(Arc::new(RwLock::new(user_type))),
+                ty.clone(),
+            ))
         }
+        //
+        // VariableExpression
+        //
         Expression::VariableExpression(ref expr) => {
             let expr = lu_dog.exhume_variable_expression(expr).unwrap();
             debug!("expr", expr);
@@ -705,7 +759,7 @@ fn eval_expression(
                         let ty = Ty::new_s_string();
                         lu_dog.exhume_value_type(&ty.id()).unwrap()
                     }
-                    Value::UserType(ref ut) => {
+                    Value::ProxyType(ref ut) => {
                         no_debug!(
                             "VariableExpression get type for user type",
                             ut.read().unwrap()
@@ -974,6 +1028,7 @@ impl fmt::Display for PrintableValueType {
                 let ty = sarzak.exhume_ty(ty).unwrap();
                 match ty {
                     Ty::Boolean(_) => write!(f, "bool"),
+                    Ty::Float(_) => write!(f, "float"),
                     Ty::Integer(_) => write!(f, "int"),
                     Ty::Object(ref object) => {
                         if let Some(object) = sarzak.exhume_object(object) {
