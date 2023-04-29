@@ -10,11 +10,19 @@ use fxhash::FxHashMap as HashMap;
 use sarzak::lu_dog::{Function, ValueType};
 use uuid::Uuid;
 
-use crate::{InnerError, Result};
+use crate::{interpreter::PrintableValueType, InnerError, Result};
 
 pub trait StoreProxy: fmt::Display + fmt::Debug {
+    /// Get the UUID of the type this proxy represents.
+    ///
     fn get_struct_uuid(&self) -> Uuid;
 
+    /// Get the UUID of the type of this proxy, in the store.
+    ///
+    fn get_store_uuid(&self) -> Uuid;
+
+    /// Call a method on the proxy.
+    ///
     fn call(
         &mut self,
         method: &str,
@@ -129,33 +137,31 @@ impl TryFrom<Value> for f64 {
 #[derive(Clone, Debug)]
 pub struct UserType {
     id: Uuid,
-    type_: String,
+    type_: Arc<RwLock<ValueType>>,
     attrs: HashMap<String, Value>,
 }
 
 impl UserType {
-    pub fn new<S: AsRef<str>>(type_: S) -> Self {
+    pub fn new(type_: Arc<RwLock<ValueType>>) -> Self {
         Self {
             id: Uuid::new_v4(),
-            type_: type_.as_ref().to_owned(),
+            type_,
             attrs: HashMap::default(),
         }
     }
 
-    pub fn add_attr(&mut self, name: &str, value: Value) {
-        self.attrs.insert(name.to_owned(), value);
+    pub fn add_attr<S: AsRef<str>>(&mut self, name: S, value: Value) {
+        self.attrs.insert(name.as_ref().to_owned(), value);
     }
-}
 
-impl Default for UserType {
-    fn default() -> Self {
-        Self::new("default")
+    pub fn get_type(&self) -> &Arc<RwLock<ValueType>> {
+        &self.type_
     }
 }
 
 impl fmt::Display for UserType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let mut out = f.debug_struct(&format!("{}", self.type_));
+        let mut out = f.debug_struct(&PrintableValueType(self.type_.clone()).to_string());
         let mut attrs = self.attrs.iter().collect::<Vec<_>>();
         attrs.sort_by(|(k1, _), (k2, _)| k1.cmp(k2));
 

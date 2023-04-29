@@ -128,6 +128,8 @@ pub fn initialize_interpreter() -> Result<Context, Error> {
     // This won't always be Lu-Dog, clearly. So we'll need to be sure to also
     // generate some code that imports the types from the model.
     // let model = SarzakStore::load("../sarzak/models/lu_dog.v2.json")
+    //
+    // This one snuck in. It should be registerd as part of the code generation.
     let model = SarzakStore::load("../sarzak/models/merlin.v2.json")
         .map_err(|e| InnerError::Store { source: e })?;
 
@@ -400,12 +402,13 @@ fn eval_expression(
                         debug!("ty", ty);
                         (value, ty)
                     }
-                    Value::ProxyType(ut) => {
+                    Value::ProxyType(pt) => {
                         let ty = lu_dog
-                            .exhume_value_type(&ut.read().unwrap().get_struct_uuid())
+                            .exhume_value_type(&pt.read().unwrap().get_struct_uuid())
                             .unwrap();
                         (value.clone(), ty)
                     }
+                    Value::UserType(ut) => (value.clone(), ut.read().unwrap().get_type().clone()),
                     value => {
                         panic!("dereferenced function expression and found this: {}", value);
                     }
@@ -431,7 +434,7 @@ fn eval_expression(
                     debug!("MethodCall type", ty);
 
                     match &mut value {
-                        Value::ProxyType(ut) => {
+                        Value::ProxyType(pt) => {
                             let arg_values = if args.len() > 0 {
                                 let mut arg_values = VecDeque::with_capacity(args.len());
                                 let mut next = args
@@ -461,8 +464,9 @@ fn eval_expression(
                                 VecDeque::new()
                             };
 
-                            ut.write().unwrap().call(meth, arg_values)
+                            pt.write().unwrap().call(meth, arg_values)
                         }
+                        // Value::UserType(ut) => {}
                         bar => panic!("need to deal with Value {:?}", bar),
                     }
                 }
@@ -548,7 +552,10 @@ fn eval_expression(
                                     debug!("StaticMethodCall frame ty", ty);
                                     Ok((value, ty))
                                 }
-                                Value::ProxyType(ut) => ut.write().unwrap().call(func, arg_values),
+                                Value::ProxyType(ut) => {
+                                    debug!("StaticMethodCall proxy", ut);
+                                    ut.write().unwrap().call(func, arg_values)
+                                }
                                 // Value::StoreType(ref mut store_type) => {
                                 //     // We should actually know what's behind the curtain, since
                                 //     // we requested it with `stack.get(ty)`, above.
@@ -687,13 +694,14 @@ fn eval_expression(
                 })
                 .collect::<Vec<_>>();
 
-            let woog_struct = lu_dog
-                .exhume_woog_struct(&expr.read().unwrap().woog_struct)
+            let woog_struct = expr.read().unwrap().r39_woog_struct(lu_dog)[0].clone();
+            let ty = lu_dog
+                .exhume_value_type(&woog_struct.read().unwrap().id)
                 .unwrap();
             let fields = woog_struct.read().unwrap().r7_field(lu_dog);
 
             // Type checking fields here
-            let mut user_type = UserType::new(&woog_struct.read().unwrap().name);
+            let mut user_type = UserType::new(ty.clone());
             for (name, ty, value) in field_exprs {
                 if let Some(field) = fields.iter().find(|f| f.read().unwrap().name == name) {
                     let struct_ty = lu_dog.exhume_value_type(&field.read().unwrap().ty).unwrap();
@@ -703,6 +711,7 @@ fn eval_expression(
                         TypeMismatchSnafu { expected, got }
                     });
 
+                    // This is where we add the attribute value to the user type.
                     user_type.add_attr(&name, value);
                 } else {
                     ensure!(
@@ -714,17 +723,7 @@ fn eval_expression(
                 }
             }
 
-            let woog_struct = expr.read().unwrap().r39_woog_struct(lu_dog)[0].clone();
-            let ty = lu_dog
-                .exhume_value_type(&woog_struct.read().unwrap().id)
-                .unwrap();
-
-            // let value = Value
-
-            Ok((
-                Value::UserType(Arc::new(RwLock::new(user_type))),
-                ty.clone(),
-            ))
+            Ok((Value::UserType(Arc::new(RwLock::new(user_type))), ty))
         }
         //
         // VariableExpression
@@ -871,13 +870,15 @@ fn eval_statement(
 }
 
 pub struct Context {
-    pub block: Arc<RwLock<Block>>,
-    pub stack: Stack,
+    block: Arc<RwLock<Block>>,
+    stack: Stack,
 }
 
 impl Context {
-    pub fn insert_store_proxy(&mut self, name: String, value: Value) {
-        self.stack.insert_global(name, value);
+    pub fn register_store(&self) {}
+    pub fn register_store_proxy(&mut self, name: String, proxy: impl StoreProxy + 'static) {
+        self.stack
+            .insert_global(name, Value::ProxyType(Arc::new(RwLock::new(proxy))));
         // {
         //     // Build the ASTs
         //     let local = LocalVariable::new(Uuid::new_v4(), &mut *lu_dog.write().unwrap());
@@ -990,13 +991,14 @@ pub fn start_repl(context: Context) -> Result<(), Error> {
     Ok(())
 }
 
-struct PrintableValueType(Arc<RwLock<ValueType>>);
+pub(crate) struct PrintableValueType(pub Arc<RwLock<ValueType>>);
 
 impl fmt::Display for PrintableValueType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let value = self.0.read().unwrap();
         let lu_dog = &LU_DOG;
         let sarzak = &SARZAK;
+        let model = &MODEL;
 
         match &*value {
             ValueType::Empty(_) => write!(f, "()"),
@@ -1024,24 +1026,38 @@ impl fmt::Display for PrintableValueType {
                 write!(f, "&{}", PrintableValueType(ty))
             }
             ValueType::Ty(ref ty) => {
+                // So, sometimes these show up in the model domain. It'll get really
+                // interesting when there are multiples of those in memory at once...
                 let sarzak = sarzak.read().unwrap();
-                let ty = sarzak.exhume_ty(ty).unwrap();
-                match ty {
-                    Ty::Boolean(_) => write!(f, "bool"),
-                    Ty::Float(_) => write!(f, "float"),
-                    Ty::Integer(_) => write!(f, "int"),
-                    Ty::Object(ref object) => {
-                        if let Some(object) = sarzak.exhume_object(object) {
-                            write!(f, "{}", object.name)
-                        } else {
-                            write!(f, "<unknown object>")
+                if let Some(ty) = sarzak.exhume_ty(ty) {
+                    match ty {
+                        Ty::Boolean(_) => write!(f, "bool"),
+                        Ty::Float(_) => write!(f, "float"),
+                        Ty::Integer(_) => write!(f, "int"),
+                        Ty::Object(ref object) => {
+                            // This should probably just be an unwrap().
+                            if let Some(object) = sarzak.exhume_object(object) {
+                                write!(f, "{}", object.name)
+                            } else {
+                                write!(f, "<unknown object>")
+                            }
+                        }
+                        Ty::SString(_) => write!(f, "String"),
+                        Ty::SUuid(_) => write!(f, "Uuid"),
+                        gamma => {
+                            error!("deal with sarzak type", gamma);
+                            write!(f, "todo")
                         }
                     }
-                    Ty::SString(_) => write!(f, "String"),
-                    Ty::SUuid(_) => write!(f, "Uuid"),
-                    gamma => {
-                        error!("deal with sarzak type", gamma);
-                        write!(f, "todo")
+                } else {
+                    // It's not a sarzak type, so it must be an object imported from
+                    // one of the model domains.
+                    let model = model.read().unwrap();
+                    if let Some(Ty::Object(ref object)) = model.exhume_ty(ty) {
+                        let object = model.exhume_object(object).unwrap();
+                        write!(f, "{}Proxy", object.name)
+                    } else {
+                        write!(f, "<unknown object>")
                     }
                 }
             }

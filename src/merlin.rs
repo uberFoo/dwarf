@@ -19,14 +19,21 @@ use uuid::{uuid, Uuid};
 
 use crate::{Result, StoreProxy, Value};
 
-const INFLECTION_TYPE_UUID: Uuid = uuid!("298ef558-5169-4617-b6fe-3154bebeed61");
-const POINT_TYPE_UUID: Uuid = uuid!("c1f1f7dd-ccae-42af-945d-b1b9ddd84f7c");
+// The first one is the UUID of the WoogStruct in the LuDog model.
+const INFLECTION_TYPE_UUID: Uuid = uuid!("7fda3810-27ce-48cf-a81d-ec7810ebfaee");
+// The second one is the UUID of the Object in the Sarzak model.
+const INFLECTION_STORE_TYPE_UUID: Uuid = uuid!("5a71b258-b726-542b-b2f5-050e31b1c6ac");
+const POINT_TYPE_UUID: Uuid = uuid!("3309104e-d40b-46c7-95f4-18450e8bae11");
+const POINT_STORE_TYPE_UUID: Uuid = uuid!("423935ca-86d2-5d0a-ad35-8e7f00663448");
 
 lazy_static! {
     // These are instances of the `model` loaded in the interpreter. In other
     // words, this is a reification of the model described by the model, called,
     // `model` in the interpreter, which is itself instances of the meta-model,
     // sarzak.
+    //
+    // 💥In this _specific_ case we are pulling the merlin instances from the
+    // LuDog model.💥
     //
     // We can share this with the interpreter via the MerlinStore UserType. I'm
     // just not sure that we need to do that. We have access here, and we should
@@ -69,6 +76,10 @@ impl StoreProxy for InflectionProxy {
         INFLECTION_TYPE_UUID
     }
 
+    fn get_store_uuid(&self) -> Uuid {
+        INFLECTION_STORE_TYPE_UUID
+    }
+
     // This should maybe be a trait. Especially if we want to treat these all the
     // same, which I think we will want to do.
     // I also need to think about mutation. Do we want a separate mut version?
@@ -99,7 +110,8 @@ impl StoreProxy for InflectionProxy {
                         Value::ProxyType(Arc::new(RwLock::new(inflection_proxy))),
                         // Clearly this will be generated...
                         // This is the id of the Inflection object
-                        Arc::new(RwLock::new(ValueType::WoogStruct(INFLECTION_TYPE_UUID))),
+                        // Arc::new(RwLock::new(ValueType::WoogStruct(INFLECTION_TYPE_UUID))),
+                        Arc::new(RwLock::new(ValueType::Ty(INFLECTION_STORE_TYPE_UUID))),
                     ))
                 }
                 道 => Ok((
@@ -148,6 +160,10 @@ impl StoreProxy for PointProxy {
         POINT_TYPE_UUID
     }
 
+    fn get_store_uuid(&self) -> Uuid {
+        POINT_STORE_TYPE_UUID
+    }
+
     fn call(
         &mut self,
         method: &str,
@@ -184,7 +200,8 @@ impl StoreProxy for PointProxy {
                         Value::ProxyType(Arc::new(RwLock::new(point_proxy))),
                         // Clearly this will be generated...
                         // This is the id of the point object
-                        Arc::new(RwLock::new(ValueType::WoogStruct(POINT_TYPE_UUID))),
+                        // Arc::new(RwLock::new(ValueType::WoogStruct(POINT_TYPE_UUID))),
+                        Arc::new(RwLock::new(ValueType::Ty(POINT_STORE_TYPE_UUID))),
                     ))
                 }
                 道 => Ok((
