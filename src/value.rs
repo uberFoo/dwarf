@@ -7,37 +7,31 @@ use std::{
 use ansi_term::Colour;
 use fxhash::FxHashMap as HashMap;
 
-use sarzak::lu_dog::{Function, ObjectStore as LuDogStore, ValueType};
+use sarzak::lu_dog::{Function, ValueType};
+use uuid::Uuid;
 
-use crate::{InnerError, Result, Stack};
+use crate::{InnerError, Result};
 
-pub trait UserType: Clone + fmt::Display + fmt::Debug {
-    type Value<T>: fmt::Display + fmt::Debug + Clone;
+pub trait StoreProxy: fmt::Display + fmt::Debug {
+    fn get_struct_uuid(&self) -> Uuid;
 
-    fn initialize(stack: &mut Stack<Self>, lu_dog: &mut LuDogStore);
-
-    fn get_type(&self) -> Arc<RwLock<ValueType>>;
-
-    fn call<T>(
+    fn call(
         &mut self,
         method: &str,
-        args: VecDeque<Self::Value<T>>,
-    ) -> Result<(Self::Value<T>, Arc<RwLock<ValueType>>)>;
+        args: VecDeque<Value>,
+    ) -> Result<(Value, Arc<RwLock<ValueType>>)>;
 }
 
 /// This is an actual Value
 ///
 /// This is the type used by the interpreter to represent values.
 #[derive(Clone, Debug)]
-pub enum Value<T>
-where
-    T: UserType,
-{
+pub enum Value {
     Boolean(bool),
     Empty,
     Error(String),
     Float(f64),
-    // 🚧 I need to rething the necessity of this locking.
+    // 🚧 I need to rethink the necessity of this locking.
     Function(Arc<RwLock<Function>>),
     Integer(i64),
     Option(Option<Box<Self>>),
@@ -46,21 +40,18 @@ where
     /// That means Self. Or, maybe self?
     Reflexive,
     // StoreType(StoreType),
-    // 🚧 I need to rething the necessity of this locking.
+    // 🚧 I need to rethink the necessity of this locking.
     String(Arc<RwLock<String>>),
-    Table(HashMap<String, Value<T>>),
+    Table(HashMap<String, Value>),
     /// User Defined Type
     ///
     ///  Feels like we'll need to generate some code to make this work.
-    UserType(T),
+    UserType(Arc<RwLock<dyn StoreProxy>>),
     Uuid(uuid::Uuid),
-    Vector(Vec<Value<T>>),
+    Vector(Vec<Value>),
 }
 
-impl<T> fmt::Display for Value<T>
-where
-    T: UserType,
-{
+impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Self::Boolean(bool_) => write!(f, "{}", bool_),
@@ -78,20 +69,17 @@ where
             Self::String(str_) => write!(f, "{}", str_.read().unwrap()),
             // Self::String(str_) => write!(f, "\"{}\"", str_),
             Self::Table(table) => write!(f, "{:?}", table),
-            Self::UserType(ut) => write!(f, "{}", ut),
+            Self::UserType(ut) => write!(f, "{}", ut.read().unwrap()),
             Self::Uuid(uuid) => write!(f, "{}", uuid),
             Self::Vector(vec) => write!(f, "{:?}", vec),
         }
     }
 }
 
-impl<T> TryFrom<Value<T>> for i64
-where
-    T: UserType,
-{
+impl TryFrom<Value> for i64 {
     type Error = InnerError;
 
-    fn try_from(value: Value<T>) -> Result<Self, <i64 as TryFrom<Value<T>>>::Error> {
+    fn try_from(value: Value) -> Result<Self, <i64 as TryFrom<Value>>::Error> {
         match value {
             Value::Float(num) => Ok(num as i64),
             Value::Integer(num) => Ok(num),
@@ -104,13 +92,10 @@ where
     }
 }
 
-impl<T> TryFrom<Value<T>> for f64
-where
-    T: UserType,
-{
+impl TryFrom<Value> for f64 {
     type Error = InnerError;
 
-    fn try_from(value: Value<T>) -> Result<Self, <f64 as TryFrom<Value<T>>>::Error> {
+    fn try_from(value: Value) -> Result<Self, <f64 as TryFrom<Value>>::Error> {
         match value {
             Value::Float(num) => Ok(num),
             Value::Integer(num) => Ok(num as f64),

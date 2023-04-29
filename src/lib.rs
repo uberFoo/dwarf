@@ -11,7 +11,7 @@ pub mod merlin;
 pub(crate) mod value;
 
 pub use interpreter::{initialize_interpreter, start_repl, Stack};
-pub(crate) use value::{UserType, Value};
+pub use value::{StoreProxy, Value};
 
 //
 // Command line parameters

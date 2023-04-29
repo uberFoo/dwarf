@@ -9,14 +9,14 @@ use std::{
 
 use lazy_static::lazy_static;
 use sarzak::{
-    lu_dog::{Empty, ObjectStore as LuDogStore, ValueType},
+    lu_dog::{Empty, ValueType},
     // This line will be generated according to the input domain.
     merlin::{Inflection, ObjectStore as MerlinStore, Point},
     sarzak::SUuid,
 };
 use uuid::{uuid, Uuid};
 
-use crate::{Result, Stack, UserType, Value};
+use crate::{Result, StoreProxy, Value};
 
 const INFLECTION_TYPE_UUID: Uuid = uuid!("3bfa471f-df9a-4ba4-99df-f78a5ae7db79");
 const POINT_TYPE_UUID: Uuid = uuid!("577b0cde-022a-4b85-8a25-7365e2f5ac69");
@@ -59,19 +59,23 @@ lazy_static! {
 /// arguments are going to be different, so we can't just store pointers to
 /// functions. I've been down this road, I wonder how many times I'll retread it?
 #[derive(Clone, Debug)]
-pub struct InflectionStoreType {
+pub struct InflectionProxy {
     pub self_: Option<Inflection>,
 }
 
-impl InflectionStoreType {
+impl StoreProxy for InflectionProxy {
+    fn get_struct_uuid(&self) -> Uuid {
+        INFLECTION_TYPE_UUID
+    }
+
     // This should maybe be a trait. Especially if we want to treat these all the
     // same, which I think we will want to do.
     // I also need to think about mutation. Do we want a separate mut version?
-    pub fn call(
+    fn call(
         &mut self,
         method: &str,
-        _args: VecDeque<Value<MerlinType>>,
-    ) -> Result<(Value<MerlinType>, Arc<RwLock<ValueType>>)> {
+        _args: VecDeque<Value>,
+    ) -> Result<(Value, Arc<RwLock<ValueType>>)> {
         if let Some(self_) = &self.self_ {
             match method {
                 "id" => Ok((
@@ -88,10 +92,10 @@ impl InflectionStoreType {
             match method {
                 "new" => {
                     let inflection = Inflection::new();
-                    let mut inflection_store_type = self.clone();
-                    inflection_store_type.self_ = Some(inflection);
+                    let mut inflection_proxy = self.clone();
+                    inflection_proxy.self_ = Some(inflection);
                     Ok((
-                        Value::UserType(MerlinType::Inflection(inflection_store_type)),
+                        Value::UserType(Arc::new(RwLock::new(inflection_proxy))),
                         // Clearly this will be generated...
                         // This is the id of the Inflection object
                         Arc::new(RwLock::new(ValueType::WoogStruct(INFLECTION_TYPE_UUID))),
@@ -106,14 +110,24 @@ impl InflectionStoreType {
     }
 }
 
-impl Default for InflectionStoreType {
+impl Default for InflectionProxy {
     fn default() -> Self {
         Self { self_: None }
     }
 }
 
+impl fmt::Display for InflectionProxy {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if let Some(self_) = &self.self_ {
+            write!(f, "Inflection({})\n", self_.id())
+        } else {
+            write!(f, "Type: Inflection\n")
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
-pub struct PointStoreType {
+pub struct PointProxy {
     pub self_: Option<Point>,
 }
 
@@ -124,12 +138,16 @@ pub struct PointStoreType {
 //         .unwrap()]
 // }
 
-impl PointStoreType {
-    pub fn call(
+impl StoreProxy for PointProxy {
+    fn get_struct_uuid(&self) -> Uuid {
+        POINT_TYPE_UUID
+    }
+
+    fn call(
         &mut self,
         method: &str,
-        mut args: VecDeque<Value<MerlinType>>,
-    ) -> Result<(Value<MerlinType>, Arc<RwLock<ValueType>>)> {
+        mut args: VecDeque<Value>,
+    ) -> Result<(Value, Arc<RwLock<ValueType>>)> {
         if let Some(self_) = &self.self_ {
             match method {
                 "id" => Ok((
@@ -155,10 +173,10 @@ impl PointStoreType {
                     let mut model = MODEL.write().unwrap();
                     let point = Point::new_inflection(x, y, &mut *model);
 
-                    let mut point_store_type = self.clone();
-                    point_store_type.self_ = Some(point);
+                    let mut point_proxy = self.clone();
+                    point_proxy.self_ = Some(point);
                     Ok((
-                        Value::UserType(MerlinType::Point(point_store_type)),
+                        Value::UserType(Arc::new(RwLock::new(point_proxy))),
                         // Clearly this will be generated...
                         // This is the id of the point object
                         Arc::new(RwLock::new(ValueType::WoogStruct(POINT_TYPE_UUID))),
@@ -173,90 +191,18 @@ impl PointStoreType {
     }
 }
 
-impl Default for PointStoreType {
+impl Default for PointProxy {
     fn default() -> Self {
         Self { self_: None }
     }
 }
 
-/// User Defined Types
-///
-/// This is the main interface to the type system in the interpreter. This is wrapped
-/// by `Value::UserType`. We are free to stuff whatever we like in here. It's anticipated
-/// that there will be a type for the store, defined above. It's what holds the
-/// instances. Then there will be the types that are actually in the store.
-///
-/// It needs to be a union of all of the types, for all of the domains that we are
-/// working over.
-///
-/// I'm not sure how to do that. I can create one of these for each domain,
-/// but we don't ever have them all in memory at once. So maybe a macro.
-///
-/// Or maybe this is a nested enum, that we build piecemeal? Sure would be nice
-/// to be able to generate tokens for the main file, and manipulate the tree
-/// directly, rather than having to parse the source code. We can do that with
-/// syn and quote, I'm pretty sure.
-///
-/// For now I'll just pretend. Doing that thing above will be a big lift, I think,
-/// and it's really a job for the svm compiler.
-#[derive(Clone, Debug)]
-pub enum MerlinType {
-    // MerlinStore(Arc<RwLock<SarzakStore>>),
-    Inflection(InflectionStoreType),
-    Point(PointStoreType),
-}
-
-impl UserType for MerlinType {
-    type Value<T> = Value<MerlinType>;
-
-    fn initialize(stack: &mut Stack<Self>, _lu_dog: &mut LuDogStore) {
-        stack.insert_global(
-            "INFLECTION".to_owned(),
-            Value::UserType(MerlinType::Inflection(InflectionStoreType::default())),
-        );
-        stack.insert_global(
-            "POINT".to_owned(),
-            Value::UserType(MerlinType::Point(PointStoreType::default())),
-        );
-    }
-
-    fn get_type(&self) -> Arc<RwLock<ValueType>> {
-        match self {
-            // I could look this up if I had a pointer to the LuDog store.
-            Self::Inflection(_) => {
-                Arc::new(RwLock::new(ValueType::WoogStruct(INFLECTION_TYPE_UUID)))
-            }
-            Self::Point(_) => Arc::new(RwLock::new(ValueType::WoogStruct(POINT_TYPE_UUID))),
-        }
-    }
-
-    // fn call<T: UserType + fmt::Display + fmt::Debug + Clone>(
-    fn call<T>(
-        &mut self,
-        method: &str,
-        _args: VecDeque<Self::Value<T>>,
-    ) -> Result<(Self::Value<T>, Arc<RwLock<ValueType>>)> {
-        match self {
-            // Self::MerlinStore(store) => store.write().unwrap().call(method, args),
-            Self::Inflection(t) => t.call(method, _args),
-            Self::Point(t) => t.call(method, _args),
-        }
-    }
-}
-
-impl fmt::Display for MerlinType {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            // Self::MerlinStore(_) => write!(f, "MerlinStore"),
-            // I think that we are guaranteed to have a self_ here.
-            Self::Inflection(inflection) => {
-                if let Some(self_) = &inflection.self_ {
-                    write!(f, "Inflection({})\n", self_.id())
-                } else {
-                    write!(f, "Type: Inflection\n")
-                }
-            }
-            Self::Point(point) => write!(f, "{:?}", point),
+impl fmt::Display for PointProxy {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if let Some(self_) = &self.self_ {
+            write!(f, "Point({})\n", self_.id)
+        } else {
+            write!(f, "Type: Point\n")
         }
     }
 }
