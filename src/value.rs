@@ -31,6 +31,10 @@ pub trait StoreProxy: fmt::Display + fmt::Debug {
         method: &str,
         args: VecDeque<Value>,
     ) -> Result<(Value, Arc<RwLock<ValueType>>)>;
+
+    /// Read an attribute from the proxy.
+    ///
+    fn get_attr_value(&self, name: &str) -> Result<Value>;
 }
 
 /// This is an actual Value

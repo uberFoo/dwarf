@@ -1,6 +1,7 @@
 use std::{
     collections::VecDeque,
     fmt,
+    path::Path,
     sync::{Arc, RwLock},
 };
 
@@ -18,7 +19,7 @@ use sarzak::{
     },
     sarzak::{store::ObjectStore as SarzakStore, types::Ty},
 };
-use snafu::prelude::*;
+use snafu::{location, prelude::*, Location};
 use uuid::Uuid;
 
 #[cfg(feature = "repl")]
@@ -26,8 +27,8 @@ use rustyline::{error::ReadlineError, DefaultEditor};
 
 use crate::{
     value::{StoreProxy, UserType},
-    Error, InnerError, NoSuchFieldSnafu, NoSuchStaticMethodSnafu, Result, TypeMismatchSnafu,
-    UnimplementedSnafu, Value, WrongNumberOfArgumentsSnafu,
+    BadJuJuSnafu, Error, InnerError, NoSuchFieldSnafu, NoSuchStaticMethodSnafu, Result,
+    TypeMismatchSnafu, UnimplementedSnafu, Value, WrongNumberOfArgumentsSnafu,
 };
 
 const BANNER: &str = r#"
@@ -107,31 +108,40 @@ macro_rules! trace {
     };
 }
 
+macro_rules! dereference {
+    ($referrer:expr, $field:expr, $store:expr) => {
+        let ptr = &$referrer.read().unwrap().$field;
+        $store.exhume_$field(ptr).unwrap()
+    };
+}
+
 lazy_static! {
-    pub(crate) static ref MODEL: Arc<RwLock<SarzakStore>> =
-        Arc::new(RwLock::new(SarzakStore::new()));
+    pub(crate) static ref MODELS: Arc<RwLock<Vec<SarzakStore>>> = Arc::new(RwLock::new(Vec::new()));
     pub(crate) static ref LU_DOG: Arc<RwLock<LuDogStore>> =
         Arc::new(RwLock::new(LuDogStore::new()));
     pub(crate) static ref SARZAK: Arc<RwLock<SarzakStore>> =
         Arc::new(RwLock::new(SarzakStore::new()));
 }
 
-pub fn initialize_interpreter() -> Result<Context, Error> {
-    let sarzak = SarzakStore::load("../sarzak/models/sarzak.v2.json")
-        .map_err(|e| InnerError::Store { source: e })?;
+pub fn initialize_interpreter<P: AsRef<Path>>(
+    sarzak_path: P,
+    lu_dog_path: P,
+) -> Result<Context, Error> {
+    let sarzak =
+        SarzakStore::load(sarzak_path.as_ref()).map_err(|e| InnerError::Store { source: e })?;
 
     // This will always be a lu-dog, but it's basically a compiled dwarf file.
     // let mut lu_dog = LuDogStore::load("../sarzak/target/sarzak/lu_dog")
-    let mut lu_dog = LuDogStore::load("../sarzak/target/sarzak/merlin")
-        .map_err(|e| InnerError::Store { source: e })?;
+    let mut lu_dog =
+        LuDogStore::load(lu_dog_path.as_ref()).map_err(|e| InnerError::Store { source: e })?;
 
     // This won't always be Lu-Dog, clearly. So we'll need to be sure to also
     // generate some code that imports the types from the model.
     // let model = SarzakStore::load("../sarzak/models/lu_dog.v2.json")
     //
     // This one snuck in. It should be registerd as part of the code generation.
-    let model = SarzakStore::load("../sarzak/models/merlin.v2.json")
-        .map_err(|e| InnerError::Store { source: e })?;
+    // let model = SarzakStore::load("../sarzak/models/merlin.v2.json")
+    //     .map_err(|e| InnerError::Store { source: e })?;
 
     // Initialize the stack with stuff from the compiled source.
     let block = Block::new(Uuid::new_v4(), &mut lu_dog);
@@ -213,7 +223,7 @@ pub fn initialize_interpreter() -> Result<Context, Error> {
     // Hide everything behind a the globals.
     *SARZAK.write().unwrap() = sarzak;
     *LU_DOG.write().unwrap() = lu_dog;
-    *MODEL.write().unwrap() = model;
+    // *MODEL.write().unwrap() = model;
 
     Ok(Context { stack, block })
 }
@@ -608,19 +618,47 @@ fn eval_expression(
             debug!("FieldAccess field", field);
 
             let field_name = &field.read().unwrap().name;
+
+            // What we're doing below is actualy dereferencing a pointer. I wonder
+            // if there is a way to make this less confusing and error prone? A
+            // macro wouldn't work because the pointer is stored under vairous
+            // names. So it would be a function on the referrer. Like realationship
+            // navigation, actually.
+            //      `let expr = field.expression(lu_dog).unwrap()`
+            // Something like that.
+            // A macro could maybe do it, if we pass the name of the field storing
+            // the pointer, actually.
+            //
             let expr = &field.read().unwrap().expression;
             let expr = lu_dog.exhume_expression(expr).unwrap();
+            // dereference!(field, expression, lu_dog);
 
-            let (value, ty) = eval_expression(expr, stack, lu_dog, sarzak)?;
+            let (value, _ty) = eval_expression(expr, stack, lu_dog, sarzak)?;
 
-            if let Value::UserType(value) = value {
-                let value = value.read().unwrap();
-                let value = value.get_attr_value(field_name).unwrap();
-                let ty = value.get_type(lu_dog);
+            match value {
+                Value::ProxyType(value) => {
+                    let value = value.read().unwrap();
+                    let value = value.get_attr_value(field_name);
+                    match value {
+                        Ok(value) => {
+                            let ty = value.get_type(lu_dog);
 
-                Ok((value.clone(), ty))
-            } else {
-                Ok((Value::Empty, ValueType::new_empty()))
+                            Ok((value.to_owned(), ty))
+                        }
+                        Err(e) => Err(e),
+                    }
+                }
+                Value::UserType(value) => {
+                    let value = value.read().unwrap();
+                    let value = value.get_attr_value(field_name).unwrap();
+                    let ty = value.get_type(lu_dog);
+
+                    Ok((value.to_owned(), ty))
+                }
+                _ => Err(InnerError::BadJuJu {
+                    message: "Bad value in field access".to_owned(),
+                    location: location!(),
+                }),
             }
         }
         //
@@ -904,7 +942,15 @@ pub struct Context {
 }
 
 impl Context {
-    pub fn register_store(&self) {}
+    pub fn register_model<P: AsRef<Path>>(&self, model_path: P) -> Result<()> {
+        let model =
+            SarzakStore::load(model_path.as_ref()).map_err(|e| InnerError::Store { source: e })?;
+
+        MODELS.write().unwrap().push(model);
+
+        Ok(())
+    }
+
     pub fn register_store_proxy(&mut self, name: String, proxy: impl StoreProxy + 'static) {
         self.stack
             .insert_global(name, Value::ProxyType(Arc::new(RwLock::new(proxy))));
@@ -931,7 +977,7 @@ impl Context {
 
 #[cfg(feature = "repl")]
 pub fn start_repl(context: Context) -> Result<(), Error> {
-    let model = &MODEL;
+    let models = &MODELS;
     let lu_dog = &LU_DOG;
     let sarzak = &SARZAK;
 
@@ -970,7 +1016,7 @@ pub fn start_repl(context: Context) -> Result<(), Error> {
                             &Arc::new(RwLock::new(stmt)),
                             &block,
                             &mut lu_dog.write().unwrap(),
-                            &model.read().unwrap(),
+                            &models.read().unwrap(),
                             &sarzak.read().unwrap(),
                         );
                         stmt
@@ -1027,7 +1073,7 @@ impl fmt::Display for PrintableValueType {
         let value = self.0.read().unwrap();
         let lu_dog = &LU_DOG;
         let sarzak = &SARZAK;
-        let model = &MODEL;
+        let model = &MODELS;
 
         match &*value {
             ValueType::Empty(_) => write!(f, "()"),
@@ -1081,13 +1127,15 @@ impl fmt::Display for PrintableValueType {
                 } else {
                     // It's not a sarzak type, so it must be an object imported from
                     // one of the model domains.
-                    let model = model.read().unwrap();
-                    if let Some(Ty::Object(ref object)) = model.exhume_ty(ty) {
-                        let object = model.exhume_object(object).unwrap();
-                        write!(f, "{}Proxy", object.name)
-                    } else {
-                        write!(f, "<unknown object>")
+                    let models = model.read().unwrap();
+                    for model in &*models {
+                        if let Some(Ty::Object(ref object)) = model.exhume_ty(ty) {
+                            if let Some(object) = model.exhume_object(object) {
+                                return write!(f, "{}Proxy", object.name);
+                            }
+                        }
                     }
+                    write!(f, "<unknown object>")
                 }
             }
             ValueType::Unknown(_) => write!(f, "<unknown>"),

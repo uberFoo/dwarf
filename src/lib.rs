@@ -44,6 +44,11 @@ pub struct Error(InnerError);
 
 #[derive(Debug, Snafu)]
 pub enum InnerError {
+    #[snafu(display("\n{}: internal error: {message}\n  --> {}:{}:{}", ERR_CLR.paint("error"), location.file, location.line, location.column))]
+    BadJuJu {
+        message: String,
+        location: Location,
+    },
     #[snafu(display("\n{}: could not convent `{}` to `{}`", ERR_CLR.paint("error"), src, dst))]
     Conversion {
         src: String,
@@ -68,6 +73,8 @@ pub enum InnerError {
     NoSuchField {
         field: String,
     },
+    #[snafu(display("\n{}: not an instance", ERR_CLR.paint("error")))]
+    NotAnInstance,
     #[snafu(display("\n{}: {message}\n  --> {}:{}:{}", ERR_CLR.paint("error"), location.file, location.line, location.column))]
     Unimplemented {
         message: String,
