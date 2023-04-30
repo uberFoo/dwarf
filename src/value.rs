@@ -7,7 +7,10 @@ use std::{
 use ansi_term::Colour;
 use fxhash::FxHashMap as HashMap;
 
-use sarzak::lu_dog::{Function, ValueType};
+use sarzak::{
+    lu_dog::{Function, ObjectStore as LuDogStore, ValueType},
+    sarzak::Ty,
+};
 use uuid::Uuid;
 
 use crate::{interpreter::PrintableValueType, InnerError, Result};
@@ -60,6 +63,40 @@ pub enum Value {
     Vector(Vec<Value>),
 }
 
+impl Value {
+    pub fn get_type(&self, lu_dog: &LuDogStore) -> Arc<RwLock<ValueType>> {
+        match &self {
+            Value::Empty => ValueType::new_empty(),
+            Value::Function(ref func) => {
+                let func = lu_dog.exhume_function(&func.read().unwrap().id).unwrap();
+                let z = func.read().unwrap().r1_value_type(lu_dog)[0].clone();
+                z
+            }
+            Value::Integer(ref int) => {
+                let ty = Ty::new_integer();
+                lu_dog.exhume_value_type(&ty.id()).unwrap()
+            }
+            // Value::StoreType(ref store) => {
+            //     debug!("VariableExpression get type for store", store);
+            //     store.get_type()
+            // }
+            Value::String(ref str) => {
+                let ty = Ty::new_s_string();
+                lu_dog.exhume_value_type(&ty.id()).unwrap()
+            }
+            Value::ProxyType(ref pt) => lu_dog
+                .exhume_value_type(&pt.read().unwrap().get_struct_uuid())
+                .unwrap(),
+            Value::UserType(ref ut) => ut.read().unwrap().get_type().clone(),
+            Value::Uuid(ref uuid) => {
+                let ty = Ty::new_s_uuid();
+                lu_dog.exhume_value_type(&ty.id()).unwrap()
+            }
+            value => ValueType::new_empty(),
+        }
+    }
+}
+
 impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
@@ -79,7 +116,7 @@ impl fmt::Display for Value {
             Self::String(str_) => write!(f, "{}", str_.read().unwrap()),
             // Self::String(str_) => write!(f, "\"{}\"", str_),
             Self::Table(table) => write!(f, "{:?}", table),
-            Self::UserType(ty) => write!(f, "{}\n", ty.read().unwrap()),
+            Self::UserType(ty) => writeln!(f, "{}", ty.read().unwrap()),
             Self::Uuid(uuid) => write!(f, "{}", uuid),
             Self::Vector(vec) => write!(f, "{:?}", vec),
         }
@@ -152,6 +189,10 @@ impl UserType {
 
     pub fn add_attr<S: AsRef<str>>(&mut self, name: S, value: Value) {
         self.attrs.insert(name.as_ref().to_owned(), value);
+    }
+
+    pub fn get_attr_value<S: AsRef<str>>(&self, name: S) -> Option<&Value> {
+        self.attrs.get(name.as_ref())
     }
 
     pub fn get_type(&self) -> &Arc<RwLock<ValueType>> {

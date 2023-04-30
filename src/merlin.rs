@@ -20,10 +20,10 @@ use uuid::{uuid, Uuid};
 use crate::{Result, StoreProxy, Value};
 
 // The first one is the UUID of the WoogStruct in the LuDog model.
-const INFLECTION_TYPE_UUID: Uuid = uuid!("7fda3810-27ce-48cf-a81d-ec7810ebfaee");
+const INFLECTION_TYPE_UUID: Uuid = uuid!("40ef1bc4-b0dd-49e2-8599-0bc6a91b7f0c");
 // The second one is the UUID of the Object in the Sarzak model.
 const INFLECTION_STORE_TYPE_UUID: Uuid = uuid!("5a71b258-b726-542b-b2f5-050e31b1c6ac");
-const POINT_TYPE_UUID: Uuid = uuid!("3309104e-d40b-46c7-95f4-18450e8bae11");
+const POINT_TYPE_UUID: Uuid = uuid!("cc7f7b6a-6ce6-4a53-b743-2c56d97232e7");
 const POINT_STORE_TYPE_UUID: Uuid = uuid!("423935ca-86d2-5d0a-ad35-8e7f00663448");
 
 lazy_static! {
@@ -66,7 +66,7 @@ lazy_static! {
 /// methods are going to be, and we always ... No, it won't work. The function
 /// arguments are going to be different, so we can't just store pointers to
 /// functions. I've been down this road, I wonder how many times I'll retread it?
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct InflectionProxy {
     pub self_: Option<Inflection>,
 }
@@ -123,27 +123,21 @@ impl StoreProxy for InflectionProxy {
     }
 }
 
-impl Default for InflectionProxy {
-    fn default() -> Self {
-        Self { self_: None }
-    }
-}
-
 impl fmt::Display for InflectionProxy {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if let Some(self_) = &self.self_ {
-            write!(f, "InflectionProxy({})\n", self_.id())
+            writeln!(f, "InflectionProxy({})", self_.id())
         } else {
-            write!(
+            writeln!(
                 f,
-                "{} InflectionProxy\n",
+                "{} InflectionProxy",
                 Colour::Yellow.underline().paint("Type:")
             )
         }
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct PointProxy {
     pub self_: Option<Point>,
 }
@@ -192,7 +186,7 @@ impl StoreProxy for PointProxy {
                     let y = args.pop_front().unwrap().try_into()?;
 
                     let mut model = MODEL.write().unwrap();
-                    let point = Point::new_inflection(x, y, &mut *model);
+                    let point = Point::new_inflection(x, y, &mut model);
 
                     let mut point_proxy = self.clone();
                     point_proxy.self_ = Some(point);
@@ -213,20 +207,14 @@ impl StoreProxy for PointProxy {
     }
 }
 
-impl Default for PointProxy {
-    fn default() -> Self {
-        Self { self_: None }
-    }
-}
-
 impl fmt::Display for PointProxy {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if let Some(self_) = &self.self_ {
-            write!(f, "PointProxy({})\n", self_.id)
+            writeln!(f, "PointProxy({})", self_.id)
         } else {
-            write!(
+            writeln!(
                 f,
-                "{} PointProxy\n",
+                "{} PointProxy",
                 Colour::Yellow.underline().paint("Type:")
             )
         }

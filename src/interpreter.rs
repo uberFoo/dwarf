@@ -138,21 +138,19 @@ pub fn initialize_interpreter() -> Result<Context, Error> {
     let mut stack = Stack::new();
 
     // Insert the functions in the root frame.
-    let funcs = lu_dog
-        .iter_function()
-        .map(|z| z.to_owned())
-        .collect::<Vec<_>>();
+    let funcs = lu_dog.iter_function().collect::<Vec<_>>();
 
     for func in funcs {
         let func_read = func.read().unwrap();
         let imp = func_read.r9_implementation(&lu_dog);
-        if imp.len() == 0 {
+        if imp.is_empty() {
             let name = func_read.name.clone();
             let value = Value::Function(func.clone());
 
             // Build the local in the AST.
             let local = LocalVariable::new(Uuid::new_v4(), &mut lu_dog);
             let var = Variable::new_local_variable(name.clone(), local, &mut lu_dog);
+            // 🚧 What's up with the type below?
             let _value =
                 LuDogValue::new_variable(block.clone(), ValueType::new_empty(), var, &mut lu_dog);
 
@@ -167,7 +165,7 @@ pub fn initialize_interpreter() -> Result<Context, Error> {
         // Create a meta table for each struct.
         stack.insert_meta_table(user_type.name.to_owned());
         let impl_ = user_type.r8c_implementation(&lu_dog);
-        if impl_.len() > 0 {
+        if !impl_.is_empty() {
             // For each function in the impl, insert the function. I should probably
             // check and only insert the static functions.
             // 🚧 Only insert the static functions
@@ -233,15 +231,15 @@ fn eval_function_call(
     let func = func.read().unwrap();
     let block = lu_dog.exhume_block(&func.block).unwrap();
     let block = block.read().unwrap();
-    let stmts = block.r18_statement(&lu_dog);
+    let stmts = block.r18_statement(lu_dog);
 
-    if stmts.len() > 0 {
+    if !stmts.is_empty() {
         stack.push();
 
         // We need to evaluate the arguments, and then push them onto the stack. We
         // also need to typecheck the arguments against the function parameters.
         // We need to look the params up anyway to set the local variables.
-        let params = func.r13_parameter(&lu_dog);
+        let params = func.r13_parameter(lu_dog);
         // Damn, this really needs to return a Result.
         ensure!(
             params.len() == args.len(),
@@ -251,18 +249,18 @@ fn eval_function_call(
             }
         );
 
-        let params = if params.len() > 0 {
+        let params = if !params.is_empty() {
             let mut params = Vec::with_capacity(params.len());
             let mut next = func
                 // .clone()
-                .r13_parameter(&lu_dog)
+                .r13_parameter(lu_dog)
                 .iter()
-                .find(|p| p.read().unwrap().r14c_parameter(&lu_dog).len() == 0)
+                .find(|p| p.read().unwrap().r14c_parameter(lu_dog).is_empty())
                 .unwrap()
                 .clone();
 
             loop {
-                let var = next.read().unwrap().r12_variable(&lu_dog)[0]
+                let var = next.read().unwrap().r12_variable(lu_dog)[0]
                     .read()
                     .unwrap()
                     .clone();
@@ -283,11 +281,11 @@ fn eval_function_call(
             Vec::new()
         };
 
-        let arg_values = if args.len() > 0 {
+        let arg_values = if !args.is_empty() {
             let mut arg_values = Vec::with_capacity(args.len());
             let mut next = args
                 .iter()
-                .find(|a| a.read().unwrap().r27c_argument(lu_dog).len() == 0)
+                .find(|a| a.read().unwrap().r27c_argument(lu_dog).is_empty())
                 .unwrap()
                 .clone();
 
@@ -334,7 +332,7 @@ fn eval_function_call(
         // Find the first statement, by looking for the one with no previous statement.
         let mut next = stmts
             .iter()
-            .find(|s| s.read().unwrap().r17c_statement(lu_dog).len() == 0)
+            .find(|s| s.read().unwrap().r17c_statement(lu_dog).is_empty())
             .unwrap()
             .clone();
 
@@ -435,11 +433,11 @@ fn eval_expression(
 
                     match &mut value {
                         Value::ProxyType(pt) => {
-                            let arg_values = if args.len() > 0 {
+                            let arg_values = if !args.is_empty() {
                                 let mut arg_values = VecDeque::with_capacity(args.len());
                                 let mut next = args
                                     .iter()
-                                    .find(|a| a.read().unwrap().r27c_argument(lu_dog).len() == 0)
+                                    .find(|a| a.read().unwrap().r27c_argument(lu_dog).is_empty())
                                     .unwrap()
                                     .clone();
 
@@ -480,11 +478,11 @@ fn eval_expression(
 
                     // This is for method call on a store type, and we do it out here so that we don't have
                     // to borrow stack mutably more than once.
-                    let arg_values = if args.len() > 0 {
+                    let arg_values = if !args.is_empty() {
                         let mut arg_values = VecDeque::with_capacity(args.len());
                         let mut next = args
                             .iter()
-                            .find(|a| a.read().unwrap().r27c_argument(lu_dog).len() == 0)
+                            .find(|a| a.read().unwrap().r27c_argument(lu_dog).is_empty())
                             .unwrap()
                             .clone();
 
@@ -519,74 +517,72 @@ fn eval_expression(
                         let ty = Ty::new_s_uuid();
                         let ty = lu_dog.exhume_value_type(&ty.id()).unwrap();
 
-                        Ok((value, ty.clone()))
-                    } else {
-                        if let Some(value) = stack.get_meta(ty, func) {
-                            debug!("StaticMethodCall meta value", value);
-                            match &value {
-                                Value::Function(ref func) => {
-                                    let func =
-                                        lu_dog.exhume_function(&func.read().unwrap().id).unwrap();
-                                    debug!("StaticMethodCall meta func", func);
-                                    let (value, ty) =
-                                        eval_function_call(func, &args, stack, lu_dog, sarzak)?;
-                                    debug!("StaticMethodCall meta value", value);
-                                    debug!("StaticMethodCall meta ty", ty);
-                                    Ok((value, ty))
-                                }
-                                value => {
-                                    error!("deal with call expression", value);
-                                    Ok((Value::Empty, ValueType::new_empty()))
-                                }
+                        Ok((value, ty))
+                    } else if let Some(value) = stack.get_meta(ty, func) {
+                        debug!("StaticMethodCall meta value", value);
+                        match &value {
+                            Value::Function(ref func) => {
+                                let func =
+                                    lu_dog.exhume_function(&func.read().unwrap().id).unwrap();
+                                debug!("StaticMethodCall meta func", func);
+                                let (value, ty) =
+                                    eval_function_call(func, &args, stack, lu_dog, sarzak)?;
+                                debug!("StaticMethodCall meta value", value);
+                                debug!("StaticMethodCall meta ty", ty);
+                                Ok((value, ty))
                             }
-                        } else if let Some(mut value) = stack.get_mut(ty) {
-                            debug!("StaticMethodCall frame value", value);
-                            match &mut value {
-                                Value::Function(ref func) => {
-                                    let func =
-                                        lu_dog.exhume_function(&func.read().unwrap().id).unwrap();
-                                    debug!("StaticMethodCall frame func", func);
-                                    let (value, ty) =
-                                        eval_function_call(func, &args, stack, lu_dog, sarzak)?;
-                                    debug!("StaticMethodCall frame value", value);
-                                    debug!("StaticMethodCall frame ty", ty);
-                                    Ok((value, ty))
-                                }
-                                Value::ProxyType(ut) => {
-                                    debug!("StaticMethodCall proxy", ut);
-                                    ut.write().unwrap().call(func, arg_values)
-                                }
-                                // Value::StoreType(ref mut store_type) => {
-                                //     // We should actually know what's behind the curtain, since
-                                //     // we requested it with `stack.get(ty)`, above.
-                                //     match store_type {
-                                //         StoreType::Inflection(ref mut inf) => {
-                                //             let args: Vec<Value> = Vec::new();
-                                //             inf.call(func, &args)
-                                //         }
-                                //         _ => Ok((
-                                //             Value::Error("make point work".to_owned()),
-                                //             ValueType::new_empty(),
-                                //         )),
-                                //     }
-                                // }
-                                value => {
-                                    error!("deal with call expression", value);
-                                    Ok((Value::Empty, ValueType::new_empty()))
-                                }
+                            value => {
+                                error!("deal with call expression", value);
+                                Ok((Value::Empty, ValueType::new_empty()))
                             }
-                        } else {
-                            ensure!(
-                                false,
-                                NoSuchStaticMethodSnafu {
-                                    ty: ty.to_owned(),
-                                    method: func.to_owned(),
-                                }
-                            );
-
-                            // We never will get here.
-                            Ok((Value::Empty, ValueType::new_empty()))
                         }
+                    } else if let Some(mut value) = stack.get_mut(ty) {
+                        debug!("StaticMethodCall frame value", value);
+                        match &mut value {
+                            Value::Function(ref func) => {
+                                let func =
+                                    lu_dog.exhume_function(&func.read().unwrap().id).unwrap();
+                                debug!("StaticMethodCall frame func", func);
+                                let (value, ty) =
+                                    eval_function_call(func, &args, stack, lu_dog, sarzak)?;
+                                debug!("StaticMethodCall frame value", value);
+                                debug!("StaticMethodCall frame ty", ty);
+                                Ok((value, ty))
+                            }
+                            Value::ProxyType(ut) => {
+                                debug!("StaticMethodCall proxy", ut);
+                                ut.write().unwrap().call(func, arg_values)
+                            }
+                            // Value::StoreType(ref mut store_type) => {
+                            //     // We should actually know what's behind the curtain, since
+                            //     // we requested it with `stack.get(ty)`, above.
+                            //     match store_type {
+                            //         StoreType::Inflection(ref mut inf) => {
+                            //             let args: Vec<Value> = Vec::new();
+                            //             inf.call(func, &args)
+                            //         }
+                            //         _ => Ok((
+                            //             Value::Error("make point work".to_owned()),
+                            //             ValueType::new_empty(),
+                            //         )),
+                            //     }
+                            // }
+                            value => {
+                                error!("deal with call expression", value);
+                                Ok((Value::Empty, ValueType::new_empty()))
+                            }
+                        }
+                    } else {
+                        ensure!(
+                            false,
+                            NoSuchStaticMethodSnafu {
+                                ty: ty.to_owned(),
+                                method: func.to_owned(),
+                            }
+                        );
+
+                        // We never will get here.
+                        Ok((Value::Empty, ValueType::new_empty()))
                     }
                 }
             }
@@ -604,6 +600,30 @@ fn eval_expression(
             Ok((Value::Empty, ValueType::new_empty()))
         }
         //
+        // FieldAccess
+        //
+        Expression::FieldAccess(ref field) => {
+            let field = lu_dog.exhume_field_access(field).unwrap();
+
+            debug!("FieldAccess field", field);
+
+            let field_name = &field.read().unwrap().name;
+            let expr = &field.read().unwrap().expression;
+            let expr = lu_dog.exhume_expression(expr).unwrap();
+
+            let (value, ty) = eval_expression(expr, stack, lu_dog, sarzak)?;
+
+            if let Value::UserType(value) = value {
+                let value = value.read().unwrap();
+                let value = value.get_attr_value(field_name).unwrap();
+                let ty = value.get_type(lu_dog);
+
+                Ok((value.clone(), ty))
+            } else {
+                Ok((Value::Empty, ValueType::new_empty()))
+            }
+        }
+        //
         // Literal
         //
         Expression::Literal(ref literal) => {
@@ -619,7 +639,7 @@ fn eval_expression(
                     let ty = Ty::new_float();
                     let ty = lu_dog.exhume_value_type(&ty.id()).unwrap();
 
-                    Ok((value, ty.clone()))
+                    Ok((value, ty))
                 }
                 //
                 // IntegerLiteral
@@ -631,7 +651,7 @@ fn eval_expression(
                     let ty = Ty::new_integer();
                     let ty = lu_dog.exhume_value_type(&ty.id()).unwrap();
 
-                    Ok((value, ty.clone()))
+                    Ok((value, ty))
                 }
                 //
                 // StringLiteral
@@ -644,7 +664,7 @@ fn eval_expression(
                     let ty = Ty::new_s_string();
                     let ty = lu_dog.exhume_value_type(&ty.id()).unwrap();
 
-                    Ok((value, ty.clone()))
+                    Ok((value, ty))
                 }
                 z => {
                     ensure!(
@@ -665,7 +685,7 @@ fn eval_expression(
         Expression::Print(ref print) => {
             let print = lu_dog.exhume_print(print).unwrap();
             debug!("Expression::Print print", print);
-            let expr = print.read().unwrap().r32_expression(&lu_dog)[0].clone();
+            let expr = print.read().unwrap().r32_expression(lu_dog)[0].clone();
             let (value, _) = eval_expression(expr, stack, lu_dog, sarzak)?;
             let result = format!("{}", value);
             let result = result.replace("\\n", "\n");
@@ -736,47 +756,56 @@ fn eval_expression(
                 no_debug!("value", value);
 
                 // We can grab the type from the value
-                let ty = match &value {
-                    Value::Empty => ValueType::new_empty(),
-                    Value::Function(ref func) => {
-                        let func = lu_dog.exhume_function(&func.read().unwrap().id).unwrap();
-                        debug!("VariableExpression get type func", func);
-                        let z = func.read().unwrap().r1_value_type(lu_dog)[0].clone();
-                        z
-                    }
-                    Value::Integer(ref int) => {
-                        debug!("VariableExpression get type for int", int);
-                        let ty = Ty::new_integer();
-                        lu_dog.exhume_value_type(&ty.id()).unwrap()
-                    }
-                    // Value::StoreType(ref store) => {
-                    //     debug!("VariableExpression get type for store", store);
-                    //     store.get_type()
-                    // }
-                    Value::String(ref str) => {
-                        debug!("VariableExpression get type for string", str);
-                        let ty = Ty::new_s_string();
-                        lu_dog.exhume_value_type(&ty.id()).unwrap()
-                    }
-                    Value::ProxyType(ref ut) => {
-                        no_debug!(
-                            "VariableExpression get type for user type",
-                            ut.read().unwrap()
-                        );
-                        lu_dog
-                            .exhume_value_type(&ut.read().unwrap().get_struct_uuid())
-                            .unwrap()
-                    }
-                    Value::Uuid(ref uuid) => {
-                        debug!("VariableExpression get type for uuid", uuid);
-                        let ty = Ty::new_s_uuid();
-                        lu_dog.exhume_value_type(&ty.id()).unwrap()
-                    }
-                    value => {
-                        error!("deal with variable expression", value);
-                        ValueType::new_empty()
-                    }
-                };
+                // let ty = match &value {
+                //     Value::Empty => ValueType::new_empty(),
+                //     Value::Function(ref func) => {
+                //         let func = lu_dog.exhume_function(&func.read().unwrap().id).unwrap();
+                //         debug!("VariableExpression get type func", func);
+                //         let z = func.read().unwrap().r1_value_type(lu_dog)[0].clone();
+                //         z
+                //     }
+                //     Value::Integer(ref int) => {
+                //         debug!("VariableExpression get type for int", int);
+                //         let ty = Ty::new_integer();
+                //         lu_dog.exhume_value_type(&ty.id()).unwrap()
+                //     }
+                //     // Value::StoreType(ref store) => {
+                //     //     debug!("VariableExpression get type for store", store);
+                //     //     store.get_type()
+                //     // }
+                //     Value::String(ref str) => {
+                //         debug!("VariableExpression get type for string", str);
+                //         let ty = Ty::new_s_string();
+                //         lu_dog.exhume_value_type(&ty.id()).unwrap()
+                //     }
+                //     Value::ProxyType(ref pt) => {
+                //         no_debug!(
+                //             "VariableExpression get type for proxy type",
+                //             pt.read().unwrap()
+                //         );
+                //         lu_dog
+                //             .exhume_value_type(&pt.read().unwrap().get_struct_uuid())
+                //             .unwrap()
+                //     }
+                //     Value::UserType(ref ut) => {
+                //         no_debug!(
+                //             "VariableExpression get type for user type",
+                //             ut.read().unwrap()
+                //         );
+                //         ut.read().unwrap().get_type().clone()
+                //     }
+                //     Value::Uuid(ref uuid) => {
+                //         debug!("VariableExpression get type for uuid", uuid);
+                //         let ty = Ty::new_s_uuid();
+                //         lu_dog.exhume_value_type(&ty.id()).unwrap()
+                //     }
+                //     value => {
+                //         error!("deal with variable expression", value);
+                //         ValueType::new_empty()
+                //     }
+                // };
+
+                let ty = value.get_type(lu_dog);
 
                 // Cloning the value isn't going to cut it I don't think. There are
                 // three cases to consider. One is when the value is used read-only.
@@ -820,7 +849,7 @@ fn eval_statement(
         StatementEnum::ExpressionStatement(ref stmt) => {
             let stmt = lu_dog.exhume_expression_statement(stmt).unwrap();
             let stmt = stmt.read().unwrap();
-            let expr = stmt.r31_expression(&lu_dog)[0].clone();
+            let expr = stmt.r31_expression(lu_dog)[0].clone();
             let (value, ty) = eval_expression(expr, stack, lu_dog, sarzak)?;
             no_debug!("StatementEnum::ExpressionStatement: value", value);
             debug!("StatementEnum::ExpressionStatement: ty", ty);
@@ -832,7 +861,7 @@ fn eval_statement(
             let stmt = stmt.read().unwrap();
             debug!("StatementEnum::LetStatement: stmt", stmt);
 
-            let expr = stmt.r20_expression(&lu_dog)[0].clone();
+            let expr = stmt.r20_expression(lu_dog)[0].clone();
             debug!("expr", expr);
 
             let (value, ty) = eval_expression(expr, stack, lu_dog, sarzak)?;
@@ -844,7 +873,7 @@ fn eval_statement(
             debug!("var", var);
 
             log::debug!("inserting {} = {}", var.name, value);
-            stack.insert(var.name.clone(), value);
+            stack.insert(var.name, value);
 
             Ok((Value::Empty, ty))
         }
@@ -853,7 +882,7 @@ fn eval_statement(
             let stmt = stmt.read().unwrap();
             debug!("StatementEnum::ResultStatement: stmt", stmt);
 
-            let expr = stmt.r41_expression(&lu_dog)[0].clone();
+            let expr = stmt.r41_expression(lu_dog)[0].clone();
             debug!("StatementEnum::ResultStatement expr", expr);
 
             let (value, ty) = eval_expression(expr, stack, lu_dog, sarzak)?;
@@ -940,9 +969,9 @@ pub fn start_repl(context: Context) -> Result<(), Error> {
                         let (stmt, _ty) = inter_statement(
                             &Arc::new(RwLock::new(stmt)),
                             &block,
-                            &mut *lu_dog.write().unwrap(),
+                            &mut lu_dog.write().unwrap(),
                             &model.read().unwrap(),
-                            &*sarzak.read().unwrap(),
+                            &sarzak.read().unwrap(),
                         );
                         stmt
                     };
@@ -951,8 +980,8 @@ pub fn start_repl(context: Context) -> Result<(), Error> {
                     match eval_statement(
                         stmt,
                         &mut stack,
-                        &*lu_dog.read().unwrap(),
-                        &*sarzak.read().unwrap(),
+                        &lu_dog.read().unwrap(),
+                        &sarzak.read().unwrap(),
                     ) {
                         Ok((value, ty)) => {
                             let value = format!("{}", value);
@@ -1016,13 +1045,13 @@ impl fmt::Display for PrintableValueType {
             ValueType::List(ref list) => {
                 let list = lu_dog.read().unwrap().exhume_list(list).unwrap();
                 let list = list.read().unwrap();
-                let ty = list.r36_value_type(&*lu_dog.read().unwrap())[0].clone();
+                let ty = list.r36_value_type(&lu_dog.read().unwrap())[0].clone();
                 write!(f, "[{}]", PrintableValueType(ty))
             }
             ValueType::Reference(ref reference) => {
                 let reference = lu_dog.read().unwrap().exhume_reference(reference).unwrap();
                 let reference = reference.read().unwrap();
-                let ty = reference.r35_value_type(&*lu_dog.read().unwrap())[0].clone();
+                let ty = reference.r35_value_type(&lu_dog.read().unwrap())[0].clone();
                 write!(f, "&{}", PrintableValueType(ty))
             }
             ValueType::Ty(ref ty) => {
@@ -1064,20 +1093,20 @@ impl fmt::Display for PrintableValueType {
             ValueType::Unknown(_) => write!(f, "<unknown>"),
             ValueType::WoogOption(ref option) => {
                 let option = lu_dog.read().unwrap().exhume_woog_option(option).unwrap();
-                let baz = match option.read().unwrap().subtype {
+                let option = option.read().unwrap();
+                match option.subtype {
                     WoogOptionEnum::ZNone(_) => write!(f, "None"),
                     WoogOptionEnum::ZSome(ref some) => {
                         let some = lu_dog.read().unwrap().exhume_z_some(some).unwrap();
                         let some = some.read().unwrap();
-                        let value = some.r23_value(&*lu_dog.read().unwrap())[0]
+                        let value = some.r23_value(&lu_dog.read().unwrap())[0]
                             .read()
                             .unwrap()
                             .clone();
-                        let ty = value.r24_value_type(&*lu_dog.read().unwrap())[0].clone();
+                        let ty = value.r24_value_type(&lu_dog.read().unwrap())[0].clone();
                         write!(f, "Some({})", PrintableValueType(ty))
                     }
-                };
-                baz
+                }
             }
             ValueType::WoogStruct(ref woog_struct) => {
                 debug!("woog_struct", woog_struct);
@@ -1144,9 +1173,9 @@ impl Stack {
     pub(crate) fn insert_global(&mut self, name: String, value: Value) {
         if name.contains("::") {
             let mut split = name.split("::");
-            let table = split.nth(0).unwrap();
+            let table = split.next().unwrap();
             let name = split
-                .nth(0)
+                .next()
                 .expect("name contained `::`, but no second element");
 
             if let Some(Value::Table(ref mut table)) = self.global.get_mut(table) {
