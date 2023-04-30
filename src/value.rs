@@ -13,7 +13,7 @@ use sarzak::{
 };
 use uuid::Uuid;
 
-use crate::{interpreter::PrintableValueType, InnerError, Result};
+use crate::{interpreter::PrintableValueType, ChaChaError, Result};
 
 pub trait StoreProxy: fmt::Display + fmt::Debug {
     /// Get the UUID of the type this proxy represents.
@@ -128,7 +128,7 @@ impl fmt::Display for Value {
 }
 
 impl TryFrom<Value> for i64 {
-    type Error = InnerError;
+    type Error = ChaChaError;
 
     fn try_from(value: Value) -> Result<Self, <i64 as TryFrom<Value>>::Error> {
         match value {
@@ -138,12 +138,12 @@ impl TryFrom<Value> for i64 {
                 str_.read()
                     .unwrap()
                     .parse::<i64>()
-                    .map_err(|_| InnerError::Conversion {
+                    .map_err(|_| ChaChaError::Conversion {
                         src: str_.read().unwrap().to_owned(),
                         dst: "i64".to_owned(),
                     })
             }
-            _ => Err(InnerError::Conversion {
+            _ => Err(ChaChaError::Conversion {
                 src: value.to_string(),
                 dst: "i64".to_owned(),
             }),
@@ -152,7 +152,7 @@ impl TryFrom<Value> for i64 {
 }
 
 impl TryFrom<Value> for f64 {
-    type Error = InnerError;
+    type Error = ChaChaError;
 
     fn try_from(value: Value) -> Result<Self, <f64 as TryFrom<Value>>::Error> {
         match value {
@@ -162,12 +162,12 @@ impl TryFrom<Value> for f64 {
                 str_.read()
                     .unwrap()
                     .parse::<f64>()
-                    .map_err(|_| InnerError::Conversion {
+                    .map_err(|_| ChaChaError::Conversion {
                         src: str_.read().unwrap().to_owned(),
                         dst: "f64".to_owned(),
                     })
             }
-            _ => Err(InnerError::Conversion {
+            _ => Err(ChaChaError::Conversion {
                 src: value.to_string(),
                 dst: "f64".to_owned(),
             }),

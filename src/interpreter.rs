@@ -27,7 +27,7 @@ use rustyline::{error::ReadlineError, DefaultEditor};
 
 use crate::{
     value::{StoreProxy, UserType},
-    BadJuJuSnafu, Error, InnerError, NoSuchFieldSnafu, NoSuchStaticMethodSnafu, Result,
+    BadJuJuSnafu, ChaChaError, Error, NoSuchFieldSnafu, NoSuchStaticMethodSnafu, Result,
     TypeMismatchSnafu, UnimplementedSnafu, Value, WrongNumberOfArgumentsSnafu,
 };
 
@@ -128,12 +128,12 @@ pub fn initialize_interpreter<P: AsRef<Path>>(
     lu_dog_path: P,
 ) -> Result<Context, Error> {
     let sarzak =
-        SarzakStore::load(sarzak_path.as_ref()).map_err(|e| InnerError::Store { source: e })?;
+        SarzakStore::load(sarzak_path.as_ref()).map_err(|e| ChaChaError::Store { source: e })?;
 
     // This will always be a lu-dog, but it's basically a compiled dwarf file.
     // let mut lu_dog = LuDogStore::load("../sarzak/target/sarzak/lu_dog")
     let mut lu_dog =
-        LuDogStore::load(lu_dog_path.as_ref()).map_err(|e| InnerError::Store { source: e })?;
+        LuDogStore::load(lu_dog_path.as_ref()).map_err(|e| ChaChaError::Store { source: e })?;
 
     // This won't always be Lu-Dog, clearly. So we'll need to be sure to also
     // generate some code that imports the types from the model.
@@ -655,7 +655,7 @@ fn eval_expression(
 
                     Ok((value.to_owned(), ty))
                 }
-                _ => Err(InnerError::BadJuJu {
+                _ => Err(ChaChaError::BadJuJu {
                     message: "Bad value in field access".to_owned(),
                     location: location!(),
                 }),
@@ -944,7 +944,7 @@ pub struct Context {
 impl Context {
     pub fn register_model<P: AsRef<Path>>(&self, model_path: P) -> Result<()> {
         let model =
-            SarzakStore::load(model_path.as_ref()).map_err(|e| InnerError::Store { source: e })?;
+            SarzakStore::load(model_path.as_ref()).map_err(|e| ChaChaError::Store { source: e })?;
 
         MODELS.write().unwrap().push(model);
 
@@ -993,7 +993,7 @@ pub fn start_repl(context: Context) -> Result<(), Error> {
     println!("{}", banner_style.paint(BANNER));
 
     // `()` can be used when no completer is required
-    let mut rl = DefaultEditor::new().map_err(|e| InnerError::RustyLine { source: e })?;
+    let mut rl = DefaultEditor::new().map_err(|e| ChaChaError::RustyLine { source: e })?;
 
     // #[cfg(feature = "with-file-history")]
     if rl.load_history("history.txt").is_err() {
@@ -1005,7 +1005,7 @@ pub fn start_repl(context: Context) -> Result<(), Error> {
         match readline {
             Ok(line) => {
                 rl.add_history_entry(line.as_str())
-                    .map_err(|e| InnerError::RustyLine { source: e })?;
+                    .map_err(|e| ChaChaError::RustyLine { source: e })?;
                 if let Some(stmt) = parse_line(&line) {
                     debug!("stmt from readline", stmt);
 
@@ -1061,7 +1061,7 @@ pub fn start_repl(context: Context) -> Result<(), Error> {
     }
     // #[cfg(feature = "with-file-history")]
     rl.save_history("history.txt")
-        .map_err(|e| InnerError::RustyLine { source: e })?;
+        .map_err(|e| ChaChaError::RustyLine { source: e })?;
 
     Ok(())
 }

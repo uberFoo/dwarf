@@ -17,7 +17,7 @@ use sarzak::{
 };
 use uuid::{uuid, Uuid};
 
-use crate::{InnerError, Result, StoreProxy, Value};
+use crate::{ChaChaError, Result, StoreProxy, Value};
 
 // The first one is the UUID of the WoogStruct in the LuDog model.
 const INFLECTION_TYPE_UUID: Uuid = uuid!("40ef1bc4-b0dd-49e2-8599-0bc6a91b7f0c");
@@ -126,12 +126,12 @@ impl StoreProxy for InflectionProxy {
         if let Some(self_) = &self.self_ {
             match name {
                 "id" => Ok(Value::Uuid(self_.id())),
-                _ => Err(InnerError::NoSuchField {
+                _ => Err(ChaChaError::NoSuchField {
                     field: name.to_owned(),
                 }),
             }
         } else {
-            Err(InnerError::NotAnInstance)
+            Err(ChaChaError::NotAnInstance)
         }
     }
 }
@@ -228,12 +228,12 @@ impl StoreProxy for PointProxy {
                 // 🚧 Fuck me. Another problem to deal with. How do I represent a type
                 // that isn't in the source?
                 // "subtype" => Ok(Value::ProxyType(self_.subtype)),
-                _ => Err(InnerError::NoSuchField {
+                _ => Err(ChaChaError::NoSuchField {
                     field: name.to_owned(),
                 }),
             }
         } else {
-            Err(InnerError::NotAnInstance)
+            Err(ChaChaError::NotAnInstance)
         }
     }
 }

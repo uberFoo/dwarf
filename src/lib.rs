@@ -40,10 +40,10 @@ const POP_CLR: Colour = Colour::Yellow;
 const OTH_CLR: Colour = Colour::Cyan;
 
 #[derive(Debug, Snafu)]
-pub struct Error(InnerError);
+pub struct Error(ChaChaError);
 
 #[derive(Debug, Snafu)]
-pub enum InnerError {
+pub enum ChaChaError {
     #[snafu(display("\n{}: internal error: {message}\n  --> {}:{}:{}", ERR_CLR.paint("error"), location.file, location.line, location.column))]
     BadJuJu {
         message: String,
@@ -93,4 +93,4 @@ pub enum InnerError {
     },
 }
 
-type Result<T, E = InnerError> = std::result::Result<T, E>;
+type Result<T, E = ChaChaError> = std::result::Result<T, E>;
