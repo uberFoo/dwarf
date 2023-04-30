@@ -697,8 +697,7 @@ fn eval_expression(
                 Literal::StringLiteral(ref literal) => {
                     let literal = lu_dog.exhume_string_literal(literal).unwrap();
                     // 🚧 It'd be great if this were an Rc...
-                    let value =
-                        Value::String(Arc::new(RwLock::new(literal.read().unwrap().value.clone())));
+                    let value = Value::String(literal.read().unwrap().value.clone());
                     let ty = Ty::new_s_string();
                     let ty = lu_dog.exhume_value_type(&ty.id()).unwrap();
 

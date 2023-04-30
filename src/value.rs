@@ -46,7 +46,6 @@ pub enum Value {
     Empty,
     Error(String),
     Float(f64),
-    // 🚧 I need to rethink the necessity of this locking.
     Function(Arc<RwLock<Function>>),
     Integer(i64),
     Option(Option<Box<Self>>),
@@ -58,9 +57,7 @@ pub enum Value {
     ///
     /// That means Self. Or, maybe self?
     Reflexive,
-    // StoreType(StoreType),
-    // 🚧 I need to rethink the necessity of this locking.
-    String(Arc<RwLock<String>>),
+    String(String),
     Table(HashMap<String, Value>),
     UserType(Arc<RwLock<UserType>>),
     Uuid(uuid::Uuid),
@@ -117,7 +114,7 @@ impl fmt::Display for Value {
             Self::ProxyType(p) => write!(f, "{}", p.read().unwrap()),
             Self::Reflexive => write!(f, "self"),
             // Self::StoreType(store) => write!(f, "{:?}", store),
-            Self::String(str_) => write!(f, "{}", str_.read().unwrap()),
+            Self::String(str_) => write!(f, "{}", str_),
             // Self::String(str_) => write!(f, "\"{}\"", str_),
             Self::Table(table) => write!(f, "{:?}", table),
             Self::UserType(ty) => writeln!(f, "{}", ty.read().unwrap()),
@@ -134,15 +131,10 @@ impl TryFrom<Value> for i64 {
         match value {
             Value::Float(num) => Ok(num as i64),
             Value::Integer(num) => Ok(num),
-            Value::String(str_) => {
-                str_.read()
-                    .unwrap()
-                    .parse::<i64>()
-                    .map_err(|_| ChaChaError::Conversion {
-                        src: str_.read().unwrap().to_owned(),
-                        dst: "i64".to_owned(),
-                    })
-            }
+            Value::String(str_) => str_.parse::<i64>().map_err(|_| ChaChaError::Conversion {
+                src: str_.to_owned(),
+                dst: "i64".to_owned(),
+            }),
             _ => Err(ChaChaError::Conversion {
                 src: value.to_string(),
                 dst: "i64".to_owned(),
@@ -158,15 +150,10 @@ impl TryFrom<Value> for f64 {
         match value {
             Value::Float(num) => Ok(num),
             Value::Integer(num) => Ok(num as f64),
-            Value::String(str_) => {
-                str_.read()
-                    .unwrap()
-                    .parse::<f64>()
-                    .map_err(|_| ChaChaError::Conversion {
-                        src: str_.read().unwrap().to_owned(),
-                        dst: "f64".to_owned(),
-                    })
-            }
+            Value::String(str_) => str_.parse::<f64>().map_err(|_| ChaChaError::Conversion {
+                src: str_.to_owned(),
+                dst: "f64".to_owned(),
+            }),
             _ => Err(ChaChaError::Conversion {
                 src: value.to_string(),
                 dst: "f64".to_owned(),

@@ -10,7 +10,7 @@ use std::{
 use ansi_term::Colour;
 use lazy_static::lazy_static;
 use sarzak::{
-    lu_dog::{Empty, ValueType},
+    lu_dog::{Empty, List, ValueType},
     // This line will be generated according to the input domain.
     merlin::{Inflection, ObjectStore as MerlinStore, Point},
     sarzak::SUuid,
@@ -68,7 +68,7 @@ lazy_static! {
 /// functions. I've been down this road, I wonder how many times I'll retread it?
 #[derive(Clone, Debug, Default)]
 pub struct InflectionProxy {
-    pub self_: Option<Inflection>,
+    pub self_: Option<Arc<RwLock<Inflection>>>,
 }
 
 impl StoreProxy for InflectionProxy {
@@ -91,7 +91,7 @@ impl StoreProxy for InflectionProxy {
         if let Some(self_) = &self.self_ {
             match method {
                 "id" => Ok((
-                    Value::Uuid(self_.id()),
+                    Value::Uuid(self_.read().unwrap().id()),
                     Arc::new(RwLock::new(ValueType::Ty(SUuid::new().id()))),
                 )),
                 // 🚧 This needs to be sorted out with the other error stuff.
@@ -103,7 +103,8 @@ impl StoreProxy for InflectionProxy {
         } else {
             match method {
                 "new" => {
-                    let inflection = Inflection::new();
+                    // This is absurd.
+                    let inflection = Arc::new(RwLock::new(Inflection::new()));
                     let mut inflection_proxy = self.clone();
                     inflection_proxy.self_ = Some(inflection);
                     Ok((
@@ -125,7 +126,7 @@ impl StoreProxy for InflectionProxy {
     fn get_attr_value(&self, name: &str) -> Result<Value> {
         if let Some(self_) = &self.self_ {
             match name {
-                "id" => Ok(Value::Uuid(self_.id())),
+                "id" => Ok(Value::Uuid(self_.read().unwrap().id())),
                 _ => Err(ChaChaError::NoSuchField {
                     field: name.to_owned(),
                 }),
@@ -139,7 +140,7 @@ impl StoreProxy for InflectionProxy {
 impl fmt::Display for InflectionProxy {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if let Some(self_) = &self.self_ {
-            writeln!(f, "InflectionProxy({})", self_.id())
+            writeln!(f, "InflectionProxy({})", self_.read().unwrap().id())
         } else {
             writeln!(
                 f,
@@ -152,7 +153,7 @@ impl fmt::Display for InflectionProxy {
 
 #[derive(Clone, Debug, Default)]
 pub struct PointProxy {
-    pub self_: Option<Point>,
+    pub self_: Option<Arc<RwLock<Point>>>,
 }
 
 // pub fn r5_line_segment_point<'a>(&'a self, store: &'a MerlinStore) -> Vec<&LineSegmentPoint> {
@@ -179,7 +180,7 @@ impl StoreProxy for PointProxy {
         if let Some(self_) = &self.self_ {
             match method {
                 "id" => Ok((
-                    Value::Uuid(self_.id),
+                    Value::Uuid(self_.read().unwrap().id),
                     Arc::new(RwLock::new(ValueType::Ty(SUuid::new().id()))),
                 )),
                 // "r5_line_segment_point" => Ok((
@@ -211,6 +212,22 @@ impl StoreProxy for PointProxy {
                         Arc::new(RwLock::new(ValueType::Ty(POINT_STORE_TYPE_UUID))),
                     ))
                 }
+                // "instances" => {
+                //     let instances = MODEL
+                //         .read()
+                //         .unwrap()
+                //         .iter_point()
+                //         .map(|point| {
+                //             let mut proxy = self.clone();
+                //             proxy.self_ = Some(point.clone());
+                //             Value::ProxyType(Arc::new(RwLock::new(proxy)))
+                //         })
+                //         .collect();
+
+                //     let list = List::new(ValueType::Ty(POINT_STORE_TYPE_UUID));
+
+                //     Ok((Value::Vector(instances), Arc::new(RwLock::new(ValueType))))
+                // }
                 道 => Ok((
                     Value::Error(format!("unknown static method `{}`", 道)),
                     Arc::new(RwLock::new(ValueType::Empty(Empty::new().id()))),
@@ -222,9 +239,9 @@ impl StoreProxy for PointProxy {
     fn get_attr_value(&self, name: &str) -> Result<Value> {
         if let Some(self_) = &self.self_ {
             match name {
-                "id" => Ok(Value::Uuid(self_.id)),
-                "x" => Ok(Value::Integer(self_.x)),
-                "y" => Ok(Value::Integer(self_.y)),
+                "id" => Ok(Value::Uuid(self_.read().unwrap().id)),
+                "x" => Ok(Value::Integer(self_.read().unwrap().x)),
+                "y" => Ok(Value::Integer(self_.read().unwrap().y)),
                 // 🚧 Fuck me. Another problem to deal with. How do I represent a type
                 // that isn't in the source?
                 // "subtype" => Ok(Value::ProxyType(self_.subtype)),
@@ -241,7 +258,7 @@ impl StoreProxy for PointProxy {
 impl fmt::Display for PointProxy {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if let Some(self_) = &self.self_ {
-            writeln!(f, "PointProxy({})", self_.id)
+            writeln!(f, "PointProxy({})", self_.read().unwrap().id)
         } else {
             writeln!(
                 f,
