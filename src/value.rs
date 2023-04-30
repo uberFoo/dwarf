@@ -67,7 +67,7 @@ pub enum Value {
 impl Value {
     pub fn get_type(&self, lu_dog: &LuDogStore) -> Arc<RwLock<ValueType>> {
         match &self {
-            Value::Empty => ValueType::new_empty(),
+            Value::Empty => ValueType::new_empty(lu_dog),
             Value::Function(ref func) => {
                 let func = lu_dog.exhume_function(&func.read().unwrap().id).unwrap();
                 let z = func.read().unwrap().r1_value_type(lu_dog)[0].clone();
@@ -93,7 +93,7 @@ impl Value {
                 let ty = Ty::new_s_uuid();
                 lu_dog.exhume_value_type(&ty.id()).unwrap()
             }
-            value => ValueType::new_empty(),
+            value => ValueType::new_empty(lu_dog),
         }
     }
 }

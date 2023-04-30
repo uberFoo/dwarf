@@ -159,10 +159,10 @@ pub fn initialize_interpreter<P: AsRef<Path>>(
 
             // Build the local in the AST.
             let local = LocalVariable::new(Uuid::new_v4(), &mut lu_dog);
-            let var = Variable::new_local_variable(name.clone(), local, &mut lu_dog);
+            let var = Variable::new_local_variable(name.clone(), &local, &mut lu_dog);
             // 🚧 What's up with the type below?
             let _value =
-                LuDogValue::new_variable(block.clone(), ValueType::new_empty(), var, &mut lu_dog);
+                LuDogValue::new_variable(&block, &ValueType::new_empty(&lu_dog), &var, &mut lu_dog);
 
             log::trace!("inserting local function {}", name);
             stack.insert(name, value);
@@ -360,7 +360,7 @@ fn eval_function_call(
 
         Ok((value, ty))
     } else {
-        Ok((Value::Empty, ValueType::new_empty()))
+        Ok((Value::Empty, ValueType::new_empty(lu_dog)))
     }
 }
 
@@ -422,7 +422,7 @@ fn eval_expression(
                     }
                 }
             } else {
-                (Value::Empty, ValueType::new_empty())
+                (Value::Empty, ValueType::new_empty(lu_dog))
             };
 
             // So we need to figure out the type this is being called on.
@@ -543,7 +543,7 @@ fn eval_expression(
                             }
                             value => {
                                 error!("deal with call expression", value);
-                                Ok((Value::Empty, ValueType::new_empty()))
+                                Ok((Value::Empty, ValueType::new_empty(lu_dog)))
                             }
                         }
                     } else if let Some(mut value) = stack.get_mut(ty) {
@@ -579,7 +579,7 @@ fn eval_expression(
                             // }
                             value => {
                                 error!("deal with call expression", value);
-                                Ok((Value::Empty, ValueType::new_empty()))
+                                Ok((Value::Empty, ValueType::new_empty(lu_dog)))
                             }
                         }
                     } else {
@@ -592,7 +592,7 @@ fn eval_expression(
                         );
 
                         // We never will get here.
-                        Ok((Value::Empty, ValueType::new_empty()))
+                        Ok((Value::Empty, ValueType::new_empty(lu_dog)))
                     }
                 }
             }
@@ -607,7 +607,7 @@ fn eval_expression(
 
             print!("\t{}", error.read().unwrap().span);
 
-            Ok((Value::Empty, ValueType::new_empty()))
+            Ok((Value::Empty, ValueType::new_empty(lu_dog)))
         }
         //
         // FieldAccess
@@ -711,7 +711,7 @@ fn eval_expression(
                         }
                     );
 
-                    Ok((Value::Empty, ValueType::new_empty()))
+                    Ok((Value::Empty, ValueType::new_empty(lu_dog)))
                 }
             };
             z
@@ -728,7 +728,7 @@ fn eval_expression(
             let result = result.replace("\\n", "\n");
             print!("\t{}", result_style.paint(result));
 
-            Ok((value, ValueType::new_empty()))
+            Ok((value, ValueType::new_empty(lu_dog)))
         }
         //
         // StructExpression
@@ -857,7 +857,7 @@ fn eval_expression(
                     "\t{} not found.",
                     Colour::Red.paint(&expr.read().unwrap().name)
                 );
-                Ok((Value::Empty, ValueType::new_empty()))
+                Ok((Value::Empty, ValueType::new_empty(lu_dog)))
             }
         }
         ref alpha => {
@@ -868,7 +868,7 @@ fn eval_expression(
                 }
             );
 
-            Ok((Value::Empty, ValueType::new_empty()))
+            Ok((Value::Empty, ValueType::new_empty(lu_dog)))
         }
     }
 }
@@ -930,7 +930,7 @@ fn eval_statement(
         }
         ref beta => {
             error!("deal with statement", beta);
-            Ok((Value::Empty, ValueType::new_empty()))
+            Ok((Value::Empty, ValueType::new_empty(lu_dog)))
         }
     }
 }
