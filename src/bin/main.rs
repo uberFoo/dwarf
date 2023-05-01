@@ -15,7 +15,7 @@ fn main() -> Result<(), Error> {
     ctx.register_model("../sarzak/models/merlin.v2.json")?;
 
     ctx.register_store_proxy("INFLECTION".to_owned(), InflectionProxy::default());
-    ctx.register_store_proxy("POINT".to_owned(), PointProxy::default());
+    ctx.register_store_proxy("POINT".to_owned(), PointProxy::new_type(ctx.lu_dog_heel()));
 
     start_repl(ctx).map_err(|e| {
         println!("Interpreter exited with: {}", e);

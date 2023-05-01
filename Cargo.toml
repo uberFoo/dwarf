@@ -26,6 +26,7 @@ log = "0.4.17"
 ansi_term = "0.12.1"
 heck = "0.4.1"
 lazy_static = "1.4.0"
+derivative = "2.2.0"
 
 [features]
 default = ["repl"]

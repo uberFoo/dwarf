@@ -8,12 +8,13 @@ use std::{
 };
 
 use ansi_term::Colour;
+use derivative::Derivative;
 use lazy_static::lazy_static;
 use sarzak::{
-    lu_dog::{Empty, List, ValueType},
+    lu_dog::{Empty, List, ObjectStore as LuDogStore, ValueType},
     // This line will be generated according to the input domain.
     merlin::{Inflection, ObjectStore as MerlinStore, Point},
-    sarzak::SUuid,
+    sarzak::{SUuid, Ty},
 };
 use uuid::{uuid, Uuid};
 
@@ -151,9 +152,29 @@ impl fmt::Display for InflectionProxy {
     }
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Derivative)]
+#[derivative(Debug)]
 pub struct PointProxy {
-    pub self_: Option<Arc<RwLock<Point>>>,
+    self_: Option<Arc<RwLock<Point>>>,
+    type_: Arc<RwLock<ValueType>>,
+    #[derivative(Debug = "ignore")]
+    lu_dog: Arc<RwLock<LuDogStore>>,
+}
+
+impl PointProxy {
+    pub fn new_type(lu_dog: Arc<RwLock<LuDogStore>>) -> Self {
+        let type_ = lu_dog
+            .read()
+            .unwrap()
+            .exhume_value_type(&POINT_STORE_TYPE_UUID)
+            .unwrap();
+
+        Self {
+            self_: None,
+            type_,
+            lu_dog,
+        }
+    }
 }
 
 // pub fn r5_line_segment_point<'a>(&'a self, store: &'a MerlinStore) -> Vec<&LineSegmentPoint> {
@@ -181,7 +202,11 @@ impl StoreProxy for PointProxy {
             match method {
                 "id" => Ok((
                     Value::Uuid(self_.read().unwrap().id),
-                    Arc::new(RwLock::new(ValueType::Ty(SUuid::new().id()))),
+                    self.lu_dog
+                        .read()
+                        .unwrap()
+                        .exhume_value_type(&SUuid::new().id())
+                        .unwrap(),
                 )),
                 // "r5_line_segment_point" => Ok((
                 //     Value::Vector(self_.r5_line_segment_point(&*MODEL)),
@@ -204,30 +229,29 @@ impl StoreProxy for PointProxy {
 
                     let mut point_proxy = self.clone();
                     point_proxy.self_ = Some(point);
+
                     Ok((
                         Value::ProxyType(Arc::new(RwLock::new(point_proxy))),
-                        // Clearly this will be generated...
-                        // This is the id of the point object
-                        // Arc::new(RwLock::new(ValueType::WoogStruct(POINT_TYPE_UUID))),
-                        Arc::new(RwLock::new(ValueType::Ty(POINT_STORE_TYPE_UUID))),
+                        self.type_.clone(),
                     ))
                 }
-                // "instances" => {
-                //     let instances = MODEL
-                //         .read()
-                //         .unwrap()
-                //         .iter_point()
-                //         .map(|point| {
-                //             let mut proxy = self.clone();
-                //             proxy.self_ = Some(point.clone());
-                //             Value::ProxyType(Arc::new(RwLock::new(proxy)))
-                //         })
-                //         .collect();
+                "instances" => {
+                    let instances = MODEL
+                        .read()
+                        .unwrap()
+                        .iter_point()
+                        .map(|point| {
+                            let mut proxy = self.clone();
+                            proxy.self_ = Some(point.clone());
+                            Value::ProxyType(Arc::new(RwLock::new(proxy)))
+                        })
+                        .collect();
 
-                //     let list = List::new(ValueType::Ty(POINT_STORE_TYPE_UUID));
+                    let list = List::new(&self.type_, &mut self.lu_dog.write().unwrap());
+                    let ty = ValueType::new_list(&list, &mut self.lu_dog.write().unwrap());
 
-                //     Ok((Value::Vector(instances), Arc::new(RwLock::new(ValueType))))
-                // }
+                    Ok((Value::Vector(instances), ty))
+                }
                 道 => Ok((
                     Value::Error(format!("unknown static method `{}`", 道)),
                     Arc::new(RwLock::new(ValueType::Empty(Empty::new().id()))),
