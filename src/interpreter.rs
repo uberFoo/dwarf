@@ -443,7 +443,7 @@ fn eval_expression(
                         let ty = lu_dog
                             .read()
                             .unwrap()
-                            .exhume_value_type(&pt.read().unwrap().get_struct_uuid())
+                            .exhume_value_type(&pt.read().unwrap().struct_uuid())
                             .unwrap();
                         (value.clone(), ty)
                     }

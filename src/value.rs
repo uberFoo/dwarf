@@ -1,4 +1,5 @@
 use std::{
+    any::Any,
     collections::VecDeque,
     fmt,
     sync::{Arc, RwLock},
@@ -16,13 +17,21 @@ use uuid::Uuid;
 use crate::{interpreter::PrintableValueType, ChaChaError, Result};
 
 pub trait StoreProxy: fmt::Display + fmt::Debug {
+    /// Get the name of the type this proxy represents.
+    ///
+    fn name(&self) -> &str;
+
     /// Get the UUID of the type this proxy represents.
     ///
-    fn get_struct_uuid(&self) -> Uuid;
+    fn struct_uuid(&self) -> Uuid;
 
     /// Get the UUID of the type of this proxy, in the store.
     ///
-    fn get_store_uuid(&self) -> Uuid;
+    fn store_uuid(&self) -> Uuid;
+
+    fn into_any(&self) -> Box<dyn Any>;
+
+    // fn de_ref(&)
 
     /// Call a method on the proxy.
     ///
@@ -73,7 +82,7 @@ impl Value {
                 let z = func.read().unwrap().r1_value_type(lu_dog)[0].clone();
                 z
             }
-            Value::Integer(ref int) => {
+            Value::Integer(ref _int) => {
                 let ty = Ty::new_integer();
                 lu_dog.exhume_value_type(&ty.id()).unwrap()
             }
@@ -81,15 +90,15 @@ impl Value {
             //     debug!("VariableExpression get type for store", store);
             //     store.get_type()
             // }
-            Value::String(ref str) => {
+            Value::String(ref _str) => {
                 let ty = Ty::new_s_string();
                 lu_dog.exhume_value_type(&ty.id()).unwrap()
             }
             Value::ProxyType(ref pt) => lu_dog
-                .exhume_value_type(&pt.read().unwrap().get_struct_uuid())
+                .exhume_value_type(&pt.read().unwrap().struct_uuid())
                 .unwrap(),
             Value::UserType(ref ut) => ut.read().unwrap().get_type().clone(),
-            Value::Uuid(ref uuid) => {
+            Value::Uuid(ref _uuid) => {
                 let ty = Ty::new_s_uuid();
                 lu_dog.exhume_value_type(&ty.id()).unwrap()
             }
@@ -159,6 +168,14 @@ impl TryFrom<Value> for f64 {
                 dst: "f64".to_owned(),
             }),
         }
+    }
+}
+
+impl TryFrom<Value> for String {
+    type Error = ChaChaError;
+
+    fn try_from(value: Value) -> Result<Self, <String as TryFrom<Value>>::Error> {
+        Ok(value.to_string())
     }
 }
 

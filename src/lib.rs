@@ -9,6 +9,7 @@ use snafu::{prelude::*, Location};
 pub mod interpreter;
 pub mod merlin;
 pub(crate) mod value;
+pub(crate) mod woog_structs;
 
 pub use interpreter::{initialize_interpreter, start_repl, Stack};
 pub use value::{StoreProxy, Value};
