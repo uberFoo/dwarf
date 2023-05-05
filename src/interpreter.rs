@@ -27,8 +27,8 @@ use rustyline::{error::ReadlineError, DefaultEditor};
 
 use crate::{
     value::{StoreProxy, UserType},
-    BadJuJuSnafu, ChaChaError, Error, NoSuchFieldSnafu, NoSuchStaticMethodSnafu, Result,
-    TypeMismatchSnafu, UnimplementedSnafu, Value, WrongNumberOfArgumentsSnafu,
+    ChaChaError, Error, NoSuchFieldSnafu, NoSuchStaticMethodSnafu, Result, TypeMismatchSnafu,
+    UnimplementedSnafu, Value, VariableNotFoundSnafu, WrongNumberOfArgumentsSnafu,
 };
 
 const BANNER: &str = r#"
@@ -238,7 +238,6 @@ fn eval_function_call(
     stack: &mut Stack,
 ) -> Result<(Value, Arc<RwLock<ValueType>>)> {
     let lu_dog = &LU_DOG;
-    let sarzak = &SARZAK;
 
     debug!("eval_function_call func ", func);
     trace!("eval_function_call stack", stack);
@@ -372,7 +371,35 @@ fn eval_function_call(
             .clone();
 
         loop {
-            (value, ty) = eval_statement(next.clone(), stack)?;
+            let result = eval_statement(next.clone(), stack).map_err(|e| {
+                // This is cool, if it does what I think it does. We basically
+                // get the opportunity to look at the error, and do stuff with
+                // it, and then let it contitue on as if nothing happened.
+                //
+                // Anyway, we need to clean up the stack frame if there was an
+                // error. I'm also considering abusing the error type to pass
+                // through that we hit a return expression. I'm thinknig more
+                // and more that this is a Good Idea. Well, maybe just a good
+                // idea. We can basically just do an early, successful return.
+                //
+                // Well, that doesn't work: return applies to the closure.
+                stack.pop();
+
+                // if let ChaChaError::Return { value } = &e {
+                //     let ty = value.get_type(&lu_dog.read().unwrap());
+                //     return Ok((value, ty));
+                // }
+
+                // Err(e)
+                e
+            });
+
+            if let Err(ChaChaError::Return { value, ty }) = &result {
+                return Ok((value.clone(), ty.clone()));
+            }
+
+            (value, ty) = result?;
+
             if let Some(ref id) = next.clone().read().unwrap().next {
                 next = lu_dog.read().unwrap().exhume_statement(id).unwrap();
             } else {
@@ -401,6 +428,76 @@ fn eval_expression(
     let result_style = Colour::Green.bold();
 
     match *expression.read().unwrap() {
+        //
+        // Block
+        //
+        Expression::Block(ref block) => {
+            let block = lu_dog.read().unwrap().exhume_block(block).unwrap();
+            let block = block.read().unwrap();
+            let stmts = block.r18_statement(&lu_dog.read().unwrap());
+
+            if !stmts.is_empty() {
+                stack.push();
+                let mut value;
+                let mut ty;
+                // This is a pain.
+                // Find the first statement, by looking for the one with no previous statement.
+                let mut next = stmts
+                    .iter()
+                    .find(|s| {
+                        s.read()
+                            .unwrap()
+                            .r17c_statement(&lu_dog.read().unwrap())
+                            .is_empty()
+                    })
+                    .unwrap()
+                    .clone();
+
+                loop {
+                    let result = eval_statement(next.clone(), stack).map_err(|e| {
+                        // This is cool, if it does what I think it does. We basically
+                        // get the opportunity to look at the error, and do stuff with
+                        // it, and then let it contitue on as if nothing happened.
+                        //
+                        // Anyway, we need to clean up the stack frame if there was an
+                        // error. I'm also considering abusing the error type to pass
+                        // through that we hit a return expression. I'm thinknig more
+                        // and more that this is a Good Idea. Well, maybe just a good
+                        // idea. We can basically just do an early, successful return.
+                        //
+                        // Well, that doesn't work: return applies to the closure.
+                        stack.pop();
+
+                        // if let ChaChaError::Return { value } = &e {
+                        //     let ty = value.get_type(&lu_dog.read().unwrap());
+                        //     return Ok((value, ty));
+                        // }
+
+                        // Err(e)
+                        e
+                    });
+
+                    if let Err(ChaChaError::Return { value, ty }) = &result {
+                        return Ok((value.clone(), ty.clone()));
+                    }
+
+                    (value, ty) = result?;
+
+                    if let Some(ref id) = next.clone().read().unwrap().next {
+                        next = lu_dog.read().unwrap().exhume_statement(id).unwrap();
+                    } else {
+                        break;
+                    }
+                }
+
+                // Clean up
+                stack.pop();
+
+                Ok((value, ty))
+            } else {
+                Ok((Value::Empty, ValueType::new_empty(&lu_dog.read().unwrap())))
+            }
+        }
         //
         // Call
         //
@@ -694,15 +791,10 @@ fn eval_expression(
             match value {
                 Value::ProxyType(value) => {
                     let value = value.read().unwrap();
-                    let value = value.get_attr_value(field_name);
-                    match value {
-                        Ok(value) => {
-                            let ty = value.get_type(&lu_dog.read().unwrap());
+                    let value = value.get_attr_value(field_name)?;
+                    let ty = value.get_type(&lu_dog.read().unwrap());
 
-                            Ok((value.to_owned(), ty))
-                        }
-                        Err(e) => Err(e),
-                    }
+                    Ok((value.to_owned(), ty))
                 }
                 Value::UserType(value) => {
                     let value = value.read().unwrap();
@@ -716,6 +808,21 @@ fn eval_expression(
                     location: location!(),
                 }),
             }
+        }
+        //
+        // For Loop
+        //
+        Expression::ForLoop(ref for_loop) => {
+            debug!("ForLoop", for_loop);
+
+            // let for_loop = lu_dog.read().unwrap().exhume_for_loop(for_loop).unwrap();
+            // let for_loop = for_loop.read().unwrap();
+            // let ident = &for_loop.ident;
+
+            Err(ChaChaError::BadJuJu {
+                message: "This isn't implemented yet".to_owned(),
+                location: location!(),
+            })
         }
         //
         // Literal
@@ -885,78 +992,44 @@ fn eval_expression(
                 .unwrap()
                 .exhume_variable_expression(expr)
                 .unwrap();
-            debug!("expr", expr);
+            debug!("Expression::VariableExpression", expr);
             let value = stack.get(&expr.read().unwrap().name);
-            if let Some(value) = value {
-                no_debug!("value", value);
 
-                // We can grab the type from the value
-                // let ty = match &value {
-                //     Value::Empty => ValueType::new_empty(),
-                //     Value::Function(ref func) => {
-                //         let func = lu_dog.exhume_function(&func.read().unwrap().id).unwrap();
-                //         debug!("VariableExpression get type func", func);
-                //         let z = func.read().unwrap().r1_value_type(lu_dog)[0].clone();
-                //         z
-                //     }
-                //     Value::Integer(ref int) => {
-                //         debug!("VariableExpression get type for int", int);
-                //         let ty = Ty::new_integer();
-                //         lu_dog.exhume_value_type(&ty.id()).unwrap()
-                //     }
-                //     // Value::StoreType(ref store) => {
-                //     //     debug!("VariableExpression get type for store", store);
-                //     //     store.get_type()
-                //     // }
-                //     Value::String(ref str) => {
-                //         debug!("VariableExpression get type for string", str);
-                //         let ty = Ty::new_s_string();
-                //         lu_dog.exhume_value_type(&ty.id()).unwrap()
-                //     }
-                //     Value::ProxyType(ref pt) => {
-                //         no_debug!(
-                //             "VariableExpression get type for proxy type",
-                //             pt.read().unwrap()
-                //         );
-                //         lu_dog
-                //             .exhume_value_type(&pt.read().unwrap().get_struct_uuid())
-                //             .unwrap()
-                //     }
-                //     Value::UserType(ref ut) => {
-                //         no_debug!(
-                //             "VariableExpression get type for user type",
-                //             ut.read().unwrap()
-                //         );
-                //         ut.read().unwrap().get_type().clone()
-                //     }
-                //     Value::Uuid(ref uuid) => {
-                //         debug!("VariableExpression get type for uuid", uuid);
-                //         let ty = Ty::new_s_uuid();
-                //         lu_dog.exhume_value_type(&ty.id()).unwrap()
-                //     }
-                //     value => {
-                //         error!("deal with variable expression", value);
-                //         ValueType::new_empty()
-                //     }
-                // };
+            ensure!(value.is_some(), {
+                let var = expr.read().unwrap().name.clone();
+                VariableNotFoundSnafu { var }
+            });
 
-                let ty = value.get_type(&lu_dog.read().unwrap());
+            let value = value.unwrap();
 
-                // Cloning the value isn't going to cut it I don't think. There are
-                // three cases to consider. One is when the value is used read-only.
-                // Cloning is find here. If the value is mutated however, we would
-                // either need to return a reference, or write the value when it's
-                // modified. The third thing is when the value is a reference. By
-                // that I mean the type (above) is a reference. Not even sure what
-                // to think about that atm.
-                Ok((value.clone(), ty))
-            } else {
-                println!(
-                    "\t{} not found.",
-                    Colour::Red.paint(&expr.read().unwrap().name)
-                );
-                Ok((Value::Empty, ValueType::new_empty(&lu_dog.read().unwrap())))
-            }
+            no_debug!("Expression::VariableExpression", value);
+
+            let ty = value.get_type(&lu_dog.read().unwrap());
+
+            // Cloning the value isn't going to cut it I don't think. There are
+            // three cases to consider. One is when the value is used read-only.
+            // Cloning is find here. If the value is mutated however, we would
+            // either need to return a reference, or write the value when it's
+            // modified. The third thing is when the value is a reference. By
+            // that I mean the type (above) is a reference. Not even sure what
+            // to think about that atm.
+            Ok((value.clone(), ty))
+        }
+        //
+        // XReturn
+        //
+        Expression::XReturn(ref expr) => {
+            let expr = lu_dog.read().unwrap().exhume_x_return(expr).unwrap();
+            debug!("Expression::XReturn", expr);
+
+            let expr = &expr.read().unwrap().expression;
+            let expr = lu_dog.read().unwrap().exhume_expression(expr).unwrap();
+
+            let (value, ty) = eval_expression(expr, stack)?;
+            Err(ChaChaError::Return {
+                value: value,
+                ty: ty,
+            })
         }
         ref alpha => {
             ensure!(
@@ -1104,7 +1177,6 @@ pub fn start_repl(context: Context) -> Result<(), Error> {
     let prompt_style = Colour::Blue.normal();
     let result_style = Colour::Yellow.italic().dimmed();
     let type_style = Colour::Blue.italic().dimmed();
-    let error_style = Colour::Red.bold();
     let banner_style = Colour::Purple;
 
     println!("{}", banner_style.paint(BANNER));
@@ -1123,11 +1195,9 @@ pub fn start_repl(context: Context) -> Result<(), Error> {
             Ok(line) => {
                 rl.add_history_entry(line.as_str())
                     .map_err(|e| ChaChaError::RustyLine { source: e })?;
-                if let Some(stmt) = parse_line(&line) {
+                if let Some((stmt, _span)) = parse_line(&line) {
                     debug!("stmt from readline", stmt);
 
-                    // 🚧 Need to send an Arc to the inter_statement function instead
-                    // of locking the whole time.
                     let stmt = {
                         let (stmt, _ty) = inter_statement(
                             &Arc::new(RwLock::new(stmt)),
@@ -1151,10 +1221,12 @@ pub fn start_repl(context: Context) -> Result<(), Error> {
                         }
                         Err(e) => {
                             println!("{}", e);
+                            if let ChaChaError::Return { value: _, ty: _ } = e {
+                                println!("👋 Bye bye!");
+                                break;
+                            }
                         }
                     }
-                } else {
-                    println!("{}", error_style.paint("\tWTF?"));
                 }
             }
             Err(ReadlineError::Interrupted) => {

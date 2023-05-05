@@ -1,8 +1,13 @@
-use std::{io, path::PathBuf};
+use std::{
+    io,
+    path::PathBuf,
+    sync::{Arc, RwLock},
+};
 
 use ansi_term::Colour;
 use clap::Args;
 use rustyline::error::ReadlineError;
+use sarzak::lu_dog::ValueType;
 use serde::{Deserialize, Serialize};
 use snafu::{prelude::*, Location};
 
@@ -81,16 +86,25 @@ pub enum ChaChaError {
         message: String,
         location: Location,
     },
-    #[snafu(display("\n{}: wrong number of arguments. Expected `{}`, found `{}`.", ERR_CLR.paint("error"), OK_CLR.paint(expected.to_string()), ERR_CLR.paint(got.to_string())))]
-    WrongNumberOfArguments {
-        expected: usize,
-        got: usize,
+    #[snafu(display("\nThat was the last stack frame 🥞. Your secret value is {}.", OK_CLR.paint(value.to_string())))]
+    Return {
+        value: Value,
+        ty: Arc<RwLock<ValueType>>,
     },
     RustyLine {
         source: ReadlineError,
     },
     Store {
         source: io::Error,
+    },
+    #[snafu(display("\n{}: variable `{}` not found.", ERR_CLR.paint("error"), POP_CLR.paint(var)))]
+    VariableNotFound {
+        var: String,
+    },
+    #[snafu(display("\n{}: wrong number of arguments. Expected `{}`, found `{}`.", ERR_CLR.paint("error"), OK_CLR.paint(expected.to_string()), ERR_CLR.paint(got.to_string())))]
+    WrongNumberOfArguments {
+        expected: usize,
+        got: usize,
     },
 }
 
