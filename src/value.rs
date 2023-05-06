@@ -179,6 +179,107 @@ impl TryFrom<Value> for String {
     }
 }
 
+impl TryFrom<Value> for bool {
+    type Error = ChaChaError;
+
+    fn try_from(value: Value) -> Result<Self, <bool as TryFrom<Value>>::Error> {
+        match value {
+            Value::Boolean(bool_) => Ok(bool_),
+            Value::Integer(num) => Ok(num != 0),
+            Value::String(str_) => str_.parse::<bool>().map_err(|_| ChaChaError::Conversion {
+                src: str_.to_owned(),
+                dst: "bool".to_owned(),
+            }),
+            _ => Err(ChaChaError::Conversion {
+                src: value.to_string(),
+                dst: "bool".to_owned(),
+            }),
+        }
+    }
+}
+
+/// Addition operator for Value
+///
+/// Implement the addition trait for Value.
+impl std::ops::Add for Value {
+    type Output = Self;
+
+    fn add(self, other: Self) -> Self {
+        match (self, other) {
+            (Value::Float(a), Value::Float(b)) => Value::Float(a + b),
+            (Value::Float(a), Value::Integer(b)) => Value::Float(a + b as f64),
+            (Value::Integer(a), Value::Float(b)) => Value::Float(a as f64 + b),
+            (Value::Integer(a), Value::Integer(b)) => Value::Integer(a + b),
+            (Value::String(a), Value::String(b)) => Value::String(a + &b),
+            // (Value::Vector(a), Value::Vector(b)) => Value::Vector(a + &b),
+            // (Value::Table(a), Value::Table(b)) => Value::Table(a + &b),
+            // (Value::Uuid(a), Value::Uuid(b)) => Value::Uuid(a + &b),
+            // (Value::UserType(a), Value::UserType(b)) => Value::UserType(a + &b),
+            // (Value::ProxyType(a), Value::ProxyType(b)) => Value::ProxyType(a + &b),
+            // (Value::Option(a), Value::Option(b)) => Value::Option(a + &b),
+            // (Value::Reflexive, Value::Reflexive) => Value::Reflexive,
+            (Value::Empty, Value::Empty) => Value::Empty,
+            (Value::Boolean(a), Value::Boolean(b)) => Value::Boolean(a || b),
+            // (Value::Error(a), Value::Error(b)) => Value::Error(a + &b),
+            (a, b) => Value::Error(format!("Cannot add {} and {}", a, b)),
+        }
+    }
+}
+
+/// Subtraction operator for Value
+///
+/// Implement the Sub trait for Value.
+impl std::ops::Sub for Value {
+    type Output = Self;
+
+    fn sub(self, other: Self) -> Self {
+        match (self, other) {
+            (Value::Float(a), Value::Float(b)) => Value::Float(a - b),
+            (Value::Float(a), Value::Integer(b)) => Value::Float(a - b as f64),
+            (Value::Integer(a), Value::Float(b)) => Value::Float(a as f64 - b),
+            (Value::Integer(a), Value::Integer(b)) => Value::Integer(a - b),
+            // (Value::String(a), Value::String(b)) => Value::String(a + &b),
+            // (Value::Vector(a), Value::Vector(b)) => Value::Vector(a + &b),
+            // (Value::Table(a), Value::Table(b)) => Value::Table(a + &b),
+            // (Value::Uuid(a), Value::Uuid(b)) => Value::Uuid(a + &b),
+            // (Value::UserType(a), Value::UserType(b)) => Value::UserType(a + &b),
+            // (Value::ProxyType(a), Value::ProxyType(b)) => Value::ProxyType(a + &b),
+            // (Value::Option(a), Value::Option(b)) => Value::Option(a + &b),
+            // (Value::Reflexive, Value::Reflexive) => Value::Reflexive,
+            (Value::Empty, Value::Empty) => Value::Empty,
+            (Value::Boolean(a), Value::Boolean(b)) => Value::Boolean(a && b),
+            // (Value::Error(a), Value::Error(b)) => Value::Error(a + &b),
+            (a, b) => Value::Error(format!("Cannot add {} and {}", a, b)),
+        }
+    }
+}
+
+/// Less than or equal to operator for Value
+///
+///
+impl Value {
+    pub fn lte(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Value::Float(a), Value::Float(b)) => a <= b,
+            // (Value::Float(a), Value::Integer(b)) => a <= *b as f64,
+            // (Value::Integer(a), Value::Float(b)) => *a as f64 <= b,
+            (Value::Integer(a), Value::Integer(b)) => a <= b,
+            (Value::String(a), Value::String(b)) => a <= b,
+            // (Value::Vector(a), Value::Vector(b)) => a <= b,
+            // (Value::Table(a), Value::Table(b)) => a <= b,
+            // (Value::Uuid(a), Value::Uuid(b)) => a <= b,
+            // (Value::UserType(a), Value::UserType(b)) => a <= b,
+            // (Value::ProxyType(a), Value::ProxyType(b)) => a <= b,
+            // (Value::Option(a), Value::Option(b)) => a <= b,
+            // (Value::Reflexive, Value::Reflexive) => true,
+            (Value::Empty, Value::Empty) => true,
+            (Value::Boolean(a), Value::Boolean(b)) => a <= b,
+            // (Value::Error(a), Value::Error(b)) => a <= b,
+            (a, b) => false, //Value::Error(format!("Cannot compare {} and {}", a, b)),
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct UserType {
     id: Uuid,
