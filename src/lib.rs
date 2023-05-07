@@ -6,6 +6,7 @@ use std::{
 
 use ansi_term::Colour;
 use clap::Args;
+use interpreter::Instruction;
 use rustyline::error::ReadlineError;
 use sarzak::lu_dog::ValueType;
 use serde::{Deserialize, Serialize};
@@ -16,8 +17,12 @@ pub mod merlin;
 pub(crate) mod value;
 pub(crate) mod woog_structs;
 
-pub use interpreter::{initialize_interpreter, start_repl, Stack};
+pub use interpreter::{initialize_interpreter, start_repl, Memory};
 pub use value::{StoreProxy, Value};
+
+// These should eventually come from the domain.
+pub type DwarfInteger = i64;
+pub type DwarfFloat = f64;
 
 //
 // Command line parameters
@@ -60,6 +65,10 @@ pub enum ChaChaError {
         src: String,
         dst: String,
     },
+    #[snafu(display("\n{}: invalid instruction `{}`.", ERR_CLR.paint("error"), OTH_CLR.paint(instr.to_string())))]
+    InvalidInstruction {
+        instr: Instruction,
+    },
     #[snafu(display("\n{}: could not find method `{}::{}`.", ERR_CLR.paint("error"), OTH_CLR.paint(ty), OTH_CLR.paint(method)))]
     NoSuchMethod {
         method: String,
@@ -100,6 +109,10 @@ pub enum ChaChaError {
     #[snafu(display("\n{}: variable `{}` not found.", ERR_CLR.paint("error"), POP_CLR.paint(var)))]
     VariableNotFound {
         var: String,
+    },
+    #[snafu(display("\n{}: vm panic: {}", ERR_CLR.paint("error"), message = OTH_CLR.paint(message)))]
+    VmPanic {
+        message: String,
     },
     #[snafu(display("\n{}: wrong number of arguments. Expected `{}`, found `{}`.", ERR_CLR.paint("error"), OK_CLR.paint(expected.to_string()), ERR_CLR.paint(got.to_string())))]
     WrongNumberOfArguments {

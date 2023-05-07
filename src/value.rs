@@ -14,9 +14,9 @@ use sarzak::{
 };
 use uuid::Uuid;
 
-use crate::{interpreter::PrintableValueType, ChaChaError, Result};
+use crate::{interpreter::PrintableValueType, ChaChaError, DwarfFloat, DwarfInteger, Result};
 
-pub trait StoreProxy: fmt::Display + fmt::Debug {
+pub trait StoreProxy: fmt::Display + fmt::Debug + Send + Sync {
     /// Get the name of the type this proxy represents.
     ///
     fn name(&self) -> &str;
@@ -52,11 +52,12 @@ pub trait StoreProxy: fmt::Display + fmt::Debug {
 #[derive(Clone, Debug)]
 pub enum Value {
     Boolean(bool),
+    Chunk(&'static str, usize),
     Empty,
     Error(String),
-    Float(f64),
+    Float(DwarfFloat),
     Function(Arc<RwLock<Function>>),
-    Integer(i64),
+    Integer(DwarfInteger),
     Option(Option<Box<Self>>),
     /// User Defined Type Proxy
     ///
@@ -111,6 +112,7 @@ impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Self::Boolean(bool_) => write!(f, "{}", bool_),
+            Self::Chunk(name, number) => write!(f, "{} [{}]", name, number),
             Self::Empty => write!(f, "()"),
             Self::Error(e) => write!(f, "{}: {}", Colour::Red.bold().paint("error"), e),
             Self::Float(num) => write!(f, "{}", num),
@@ -133,6 +135,46 @@ impl fmt::Display for Value {
     }
 }
 
+impl TryFrom<Value> for usize {
+    type Error = ChaChaError;
+
+    fn try_from(value: Value) -> Result<Self, <usize as TryFrom<Value>>::Error> {
+        match value {
+            Value::Chunk(_, num) => Ok(num),
+            Value::Float(num) => Ok(num as usize),
+            Value::Integer(num) => Ok(num as usize),
+            Value::String(str_) => str_.parse::<usize>().map_err(|_| ChaChaError::Conversion {
+                src: str_.to_owned(),
+                dst: "usize".to_owned(),
+            }),
+            _ => Err(ChaChaError::Conversion {
+                src: value.to_string(),
+                dst: "usize".to_owned(),
+            }),
+        }
+    }
+}
+
+impl TryFrom<&Value> for usize {
+    type Error = ChaChaError;
+
+    fn try_from(value: &Value) -> Result<Self, <usize as TryFrom<&Value>>::Error> {
+        match value {
+            Value::Chunk(_, num) => Ok(*num),
+            Value::Float(num) => Ok(*num as usize),
+            Value::Integer(num) => Ok(*num as usize),
+            Value::String(str_) => str_.parse::<usize>().map_err(|_| ChaChaError::Conversion {
+                src: str_.to_owned(),
+                dst: "usize".to_owned(),
+            }),
+            _ => Err(ChaChaError::Conversion {
+                src: value.to_string(),
+                dst: "usize".to_owned(),
+            }),
+        }
+    }
+}
+
 impl TryFrom<Value> for i64 {
     type Error = ChaChaError;
 
@@ -140,6 +182,25 @@ impl TryFrom<Value> for i64 {
         match value {
             Value::Float(num) => Ok(num as i64),
             Value::Integer(num) => Ok(num),
+            Value::String(str_) => str_.parse::<i64>().map_err(|_| ChaChaError::Conversion {
+                src: str_.to_owned(),
+                dst: "i64".to_owned(),
+            }),
+            _ => Err(ChaChaError::Conversion {
+                src: value.to_string(),
+                dst: "i64".to_owned(),
+            }),
+        }
+    }
+}
+
+impl TryFrom<&Value> for i64 {
+    type Error = ChaChaError;
+
+    fn try_from(value: &Value) -> Result<Self, <i64 as TryFrom<&Value>>::Error> {
+        match value {
+            Value::Float(num) => Ok(*num as i64),
+            Value::Integer(num) => Ok(*num),
             Value::String(str_) => str_.parse::<i64>().map_err(|_| ChaChaError::Conversion {
                 src: str_.to_owned(),
                 dst: "i64".to_owned(),
@@ -179,6 +240,14 @@ impl TryFrom<Value> for String {
     }
 }
 
+impl TryFrom<&Value> for String {
+    type Error = ChaChaError;
+
+    fn try_from(value: &Value) -> Result<Self, <String as TryFrom<&Value>>::Error> {
+        Ok(value.to_string())
+    }
+}
+
 impl TryFrom<Value> for bool {
     type Error = ChaChaError;
 
@@ -186,6 +255,25 @@ impl TryFrom<Value> for bool {
         match value {
             Value::Boolean(bool_) => Ok(bool_),
             Value::Integer(num) => Ok(num != 0),
+            Value::String(str_) => str_.parse::<bool>().map_err(|_| ChaChaError::Conversion {
+                src: str_.to_owned(),
+                dst: "bool".to_owned(),
+            }),
+            _ => Err(ChaChaError::Conversion {
+                src: value.to_string(),
+                dst: "bool".to_owned(),
+            }),
+        }
+    }
+}
+
+impl TryFrom<&Value> for bool {
+    type Error = ChaChaError;
+
+    fn try_from(value: &Value) -> Result<Self, <bool as TryFrom<&Value>>::Error> {
+        match value {
+            Value::Boolean(bool_) => Ok(*bool_),
+            Value::Integer(num) => Ok(*num != 0),
             Value::String(str_) => str_.parse::<bool>().map_err(|_| ChaChaError::Conversion {
                 src: str_.to_owned(),
                 dst: "bool".to_owned(),

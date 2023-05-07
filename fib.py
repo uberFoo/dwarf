@@ -8,7 +8,7 @@ def fib(n):    # write Fibonacci series up to n
         return fib(n-1) + fib(n-2)
 
 def main():
-    print(fib(20))
+    print(fib(25))
 
 if __name__ == "__main__":
     main()
