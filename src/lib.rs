@@ -6,14 +6,16 @@ use std::{
 
 use ansi_term::Colour;
 use clap::Args;
-use interpreter::Instruction;
 use rustyline::error::ReadlineError;
 use sarzak::lu_dog::ValueType;
 use serde::{Deserialize, Serialize};
 use snafu::{prelude::*, Location};
+use svm::Instruction;
 
+pub mod dwarf;
 pub mod interpreter;
 pub mod merlin;
+pub mod svm;
 pub(crate) mod value;
 pub(crate) mod woog_structs;
 
@@ -44,7 +46,7 @@ pub struct ChaChaOptions {
 }
 
 //
-// Errors
+// Error handling
 const ERR_CLR: Colour = Colour::Red;
 const OK_CLR: Colour = Colour::Green;
 const POP_CLR: Colour = Colour::Yellow;
@@ -55,42 +57,42 @@ pub struct Error(ChaChaError);
 
 #[derive(Debug, Snafu)]
 pub enum ChaChaError {
-    #[snafu(display("\n{}: internal error: {message}\n  --> {}:{}:{}", ERR_CLR.paint("error"), location.file, location.line, location.column))]
+    #[snafu(display("\n{}: internal error: {message}\n  --> {}:{}:{}", ERR_CLR.bold().paint("error"), location.file, location.line, location.column))]
     BadJuJu {
         message: String,
         location: Location,
     },
-    #[snafu(display("\n{}: could not convent `{}` to `{}`", ERR_CLR.paint("error"), src, dst))]
+    #[snafu(display("\n{}: could not convent `{}` to `{}`", ERR_CLR.bold().paint("error"), src, dst))]
     Conversion {
         src: String,
         dst: String,
     },
-    #[snafu(display("\n{}: invalid instruction `{}`.", ERR_CLR.paint("error"), OTH_CLR.paint(instr.to_string())))]
+    #[snafu(display("\n{}: invalid instruction `{}`.", ERR_CLR.bold().paint("error"), OTH_CLR.paint(instr.to_string())))]
     InvalidInstruction {
         instr: Instruction,
     },
-    #[snafu(display("\n{}: could not find method `{}::{}`.", ERR_CLR.paint("error"), OTH_CLR.paint(ty), OTH_CLR.paint(method)))]
+    #[snafu(display("\n{}: could not find method `{}::{}`.", ERR_CLR.bold().paint("error"), OTH_CLR.paint(ty), OTH_CLR.paint(method)))]
     NoSuchMethod {
         method: String,
         ty: String,
     },
-    #[snafu(display("\n{}: could not find static method `{}::{}`.", ERR_CLR.paint("error"), OTH_CLR.paint(ty), OTH_CLR.paint(method)))]
+    #[snafu(display("\n{}: could not find static method `{}::{}`.", ERR_CLR.bold().paint("error"), OTH_CLR.paint(ty), OTH_CLR.paint(method)))]
     NoSuchStaticMethod {
         method: String,
         ty: String,
     },
-    #[snafu(display("\n{}: type mismatch -- expected `{}`, found `{}`.", ERR_CLR.paint("error"), OK_CLR.paint(expected.to_string()), ERR_CLR.paint(got.to_string())))]
+    #[snafu(display("\n{}: type mismatch -- expected `{}`, found `{}`.", ERR_CLR.bold().paint("error"), OK_CLR.paint(expected.to_string()), ERR_CLR.bold().paint(got.to_string())))]
     TypeMismatch {
         expected: String,
         got: String,
     },
-    #[snafu(display("\n{}: no such field `{}`.", ERR_CLR.paint("error"), POP_CLR.paint(field)))]
+    #[snafu(display("\n{}: no such field `{}`.", ERR_CLR.bold().paint("error"), POP_CLR.paint(field)))]
     NoSuchField {
         field: String,
     },
-    #[snafu(display("\n{}: not an instance", ERR_CLR.paint("error")))]
+    #[snafu(display("\n{}: not an instance", ERR_CLR.bold().paint("error")))]
     NotAnInstance,
-    #[snafu(display("\n{}: {message}\n  --> {}:{}:{}", ERR_CLR.paint("error"), location.file, location.line, location.column))]
+    #[snafu(display("\n{}: {message}\n  --> {}:{}:{}", ERR_CLR.bold().paint("error"), location.file, location.line, location.column))]
     Unimplemented {
         message: String,
         location: Location,
@@ -106,15 +108,15 @@ pub enum ChaChaError {
     Store {
         source: io::Error,
     },
-    #[snafu(display("\n{}: variable `{}` not found.", ERR_CLR.paint("error"), POP_CLR.paint(var)))]
+    #[snafu(display("\n{}: variable `{}` not found.", ERR_CLR.bold().paint("error"), POP_CLR.paint(var)))]
     VariableNotFound {
         var: String,
     },
-    #[snafu(display("\n{}: vm panic: {}", ERR_CLR.paint("error"), message = OTH_CLR.paint(message)))]
+    #[snafu(display("\n{}: vm panic: {}", ERR_CLR.bold().paint("error"), message = OTH_CLR.paint(message)))]
     VmPanic {
         message: String,
     },
-    #[snafu(display("\n{}: wrong number of arguments. Expected `{}`, found `{}`.", ERR_CLR.paint("error"), OK_CLR.paint(expected.to_string()), ERR_CLR.paint(got.to_string())))]
+    #[snafu(display("\n{}: wrong number of arguments. Expected `{}`, found `{}`.", ERR_CLR.bold().paint("error"), OK_CLR.paint(expected.to_string()), ERR_CLR.bold().paint(got.to_string())))]
     WrongNumberOfArguments {
         expected: usize,
         got: usize,

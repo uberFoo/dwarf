@@ -3,7 +3,13 @@ name = "chacha"
 version = "0.1.0"
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[[bin]]
+name = "dwarfc"
+path = "src/bin/dwarfc.rs"
+
+[[bin]]
+name = "repl"
+path = "src/bin/main.rs"
 
 [dependencies]
 # rustyline = { version = "11.0.0", features = [
@@ -27,6 +33,10 @@ ansi_term = "0.12.1"
 heck = "0.4.1"
 lazy_static = "1.4.0"
 derivative = "2.2.0"
+chumsky = "0.9.2"
+ariadne = "0.2.0"
+fnv = "1.0.7"
+env_logger = "0.10.0"
 
 [features]
 default = ["repl"]
