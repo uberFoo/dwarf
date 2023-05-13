@@ -7,8 +7,8 @@ use snafu::{location, prelude::*, Location};
 use uuid::Uuid;
 
 use crate::dwarf::{
-    DwarfError, Expression as ParserExpression, Item, ObjectIdNotFoundSnafu,
-    ObjectNameNotFoundSnafu, Result, Spanned, Statement as ParserStatement, Token, Type,
+    DwarfError, Expression as ParserExpression, Item, ObjectIdNotFoundSnafu, Result, Spanned,
+    Statement as ParserStatement, Type,
 };
 use sarzak::{
     lu_dog::{
@@ -151,9 +151,26 @@ impl<'a> ConveyImpl<'a> {
 ///
 /// This is where we go to populate the model from the parsed AST.
 ///
-/// 🚧 Return a result!
+/// So this thing is going to get reworked. Currently `out_dir` is used to write
+/// `woog_structs.rs`, which contains the UUIDs of the woog structs in the LuDog
+/// domain.
+///
+/// `ast` is of course the parsed AST. It's a list of items, as found in the
+/// source code. The AST is itself sort of an intermetiate representation. It's
+/// this program that turns it into instance is the model. I'm writing this,
+/// wondering why I did this. Why am I not just populating a LuDog model in
+/// the parser? Okay, so I'm actually doing some type analysis here. So this is
+/// sort of a compiler... I need to figure out what to call it. I'm not in love
+/// with "populator", but I'm not sure that it lives up to "compiler".
+///
+/// `models`. An array of models. I guess it's a reference to a slice of models
+/// really. These are used by the compiler(?) to resolve imported object references.
+///
+/// `sarzak`. This one really needs a close looking at. It's just an empty metamodel.
+/// It's used in two or three places, and it's baggage on every function call. I think
+/// that it may only be used to look up the id of the UUID type.
 pub fn populate_lu_dog(
-    out_dir: &PathBuf,
+    out_dir: Option<&PathBuf>,
     ast: &[Spanned<Item>],
     models: &[SarzakStore],
     sarzak: &SarzakStore,
@@ -166,7 +183,7 @@ pub fn populate_lu_dog(
 }
 
 fn walk_tree(
-    out_dir: &PathBuf,
+    out_dir: Option<&PathBuf>,
     ast: &[Spanned<Item>],
     lu_dog: &mut LuDogStore,
     models: &[SarzakStore],
@@ -194,12 +211,12 @@ fn walk_tree(
     // Put the type information in first.
     for ConveyStruct { name, fields } in structs {
         debug!("Intering struct {}", name);
-        inter_struct(&name, &fields, lu_dog, models, sarzak);
+        inter_struct(&name, &fields, lu_dog, models, sarzak)?;
     }
 
     // Using the type information, and the input, inter the implementation blocks.
     for ConveyImpl { name, funcs } in implementations {
-        inter_implementation(&name, &funcs, lu_dog, models, sarzak);
+        inter_implementation(&name, &funcs, lu_dog, models, sarzak)?;
     }
 
     // Finally, inter the loose functions.
@@ -223,23 +240,24 @@ fn walk_tree(
         )?;
     }
 
-    // Now write a file containing the WoogStruct id's.
-    // 🚧 Fix this unwrap
-    let mut path = PathBuf::from(out_dir);
-    path.push("woog_structs.rs");
+    if let Some(out_dir) = out_dir {
+        // Now write a file containing the WoogStruct id's.
+        let mut path = PathBuf::from(out_dir);
+        path.push("woog_structs.rs");
 
-    let mut file = File::create(&path).unwrap();
-    writeln!(file, "use uuid::{{uuid, Uuid}};\n").unwrap();
+        let mut file = File::create(&path).unwrap();
+        writeln!(file, "use uuid::{{uuid, Uuid}};\n").unwrap();
 
-    for ws in lu_dog.iter_woog_struct() {
-        let ws = ws.read().unwrap();
-        writeln!(
-            file,
-            "pub(crate) const {}_TYPE_UUID: Uuid = uuid!(\"{}\");",
-            ws.name.to_shouty_snake_case(),
-            ws.id
-        )
-        .unwrap();
+        for ws in lu_dog.iter_woog_struct() {
+            let ws = ws.read().unwrap();
+            writeln!(
+                file,
+                "pub(crate) const {}_TYPE_UUID: Uuid = uuid!(\"{}\");",
+                ws.name.to_shouty_snake_case(),
+                ws.id
+            )
+            .unwrap();
+        }
     }
 
     Ok(())
@@ -298,7 +316,7 @@ fn inter_func(
         .iter()
         .map(|stmt| Arc::new(RwLock::new(stmt.0.clone())))
         .collect();
-    inter_statements(&stmts, &block, lu_dog, models, sarzak);
+    inter_statements(&stmts, &block, lu_dog, models, sarzak)?;
 
     Ok(())
 }
@@ -682,6 +700,7 @@ fn inter_expression(
 
             // We really need to get some error handling in here.
             if let ValueType::Ty(ref ty) = conditional_ty.read().unwrap().to_owned() {
+                error!("exhume Ty from sarzak -- bool check", ty);
                 if let Ty::Boolean(_) = sarzak.exhume_ty(ty).unwrap() {
                     // We're good.
                 } else {
@@ -760,6 +779,10 @@ fn inter_expression(
 
             Ok((expr, ty))
         }
+        //
+        // List
+        //
+        // ParserExpression::List(ref elements) => {}
         //
         // IntegerLiteral
         //
@@ -869,7 +892,10 @@ fn inter_expression(
                 })
                 .collect::<Vec<(Arc<RwLock<Expression>>, Arc<RwLock<ValueType>>)>>();
             // There should be zero or 1 results.
-            debug_assert!(expr_type_tuples.len() <= 1);
+            // Actually there are `n`, where `n` is the number of values in the block,
+            // which is equivalent to the number of `let` statements.
+            // So, yeah, we always want to grab the last one.
+            // debug_assert!(expr_type_tuples.len() <= 1);
 
             debug!("ParserExpression::LocalVariable: expr_ty", expr_type_tuples);
 
@@ -1073,13 +1099,13 @@ fn inter_expression(
 
             // Here we don't de_sanitize the name, and we are looking it up in the
             // dwarf model.
-            let struct_id = lu_dog.exhume_woog_struct_id_by_name(&name).unwrap();
-            let woog_struct = lu_dog.exhume_woog_struct(&struct_id).unwrap().clone();
+            let id = lu_dog.exhume_woog_struct_id_by_name(&name).unwrap();
+            let woog_struct = lu_dog.exhume_woog_struct(&id).unwrap().clone();
 
             let expr = StructExpression::new(Uuid::new_v4(), &woog_struct, lu_dog);
-            fields
-                .iter()
-                .map(|((name, _), (field_expr, _))| (name, field_expr));
+            // fields
+            //     .iter()
+            //     .map(|((name, _), (field_expr, _))| (name, field_expr));
 
             for (name, field_expr) in fields {
                 // 🚧 Do type checking here? I don't think that I have what I need.
@@ -1095,6 +1121,8 @@ fn inter_expression(
 
             // Same name, de_sanitized, in a different model. Oh, right, this is
             // the source model. What's going on above?
+            // Here we are looking up the object in one of the models. Above we
+            // are pulling the struct and it's fields from the lu_dog. lol
             for model in models {
                 if let Some(obj) = model.exhume_object_id_by_name(name.de_sanitize()) {
                     let ty = model.exhume_ty(&obj).unwrap().clone();
@@ -1108,6 +1136,12 @@ fn inter_expression(
                     ));
                 }
             }
+
+            // Ilove that the type of the thing is the same as the thing itself.
+            return Ok((
+                Expression::new_struct_expression(&expr, lu_dog),
+                ValueType::new_woog_struct(&woog_struct, lu_dog),
+            ));
 
             panic!("badness happened: {}", name);
         }
@@ -1144,7 +1178,10 @@ fn inter_expression(
 
             Ok((expr, lhs_ty))
         }
-        道 => todo!("{:?}", 道),
+        道 => Err(DwarfError::NoImplementation {
+            missing: format!("{:?}", 道),
+            location: location!(),
+        }),
     }
 }
 
@@ -1175,9 +1212,10 @@ fn inter_import(
     // );
     // debug!("import", import);
 
-    Err(DwarfError::GenericWarning {
-        description: "Use statement not implemented yet".to_owned(),
-        span: path[0].1.start..path[path.len() - 1].1.end,
+    Err(DwarfError::NoImplementation {
+        missing: "Use statement not implemented yet".to_owned(),
+        // span: path[0].1.start..path[path.len() - 1].1.end,
+        location: location!(),
     })
 }
 
@@ -1245,16 +1283,31 @@ fn inter_struct(
     debug!("inter_struct", name);
     let s_name = name.de_sanitize();
 
-    for model in models {
-        let obj_id = model.exhume_object_id_by_name(s_name);
-        ensure!(obj_id.is_some(), ObjectNameNotFoundSnafu { name: s_name });
-        let obj_id = obj_id.unwrap();
-
-        let obj = model.exhume_object(&obj_id);
-        ensure!(obj.is_some(), ObjectIdNotFoundSnafu { id: obj_id });
+    if let Some((ref model, ref id)) = models
+        .iter()
+        .find_map(|model| {
+            if let Some(id) = model.exhume_object_id_by_name(s_name) {
+                Some((model, id))
+            } else {
+                None
+            }
+        })
+        .map(|id| id.to_owned())
+    {
+        let obj = model.exhume_object(id);
+        ensure!(obj.is_some(), ObjectIdNotFoundSnafu { id: *id });
         let obj = obj.unwrap();
 
         let mt = WoogStruct::new(name.to_owned(), Some(obj.clone()), lu_dog);
+        let _ty = ValueType::new_woog_struct(&mt, lu_dog);
+        for ((name, _), (type_, _)) in fields {
+            let name = name.de_sanitize();
+
+            let ty = get_value_type(type_, None, lu_dog, models, sarzak)?;
+            let _field = Field::new(name.to_owned(), &mt, &ty, lu_dog);
+        }
+    } else {
+        let mt = WoogStruct::new(name.to_owned(), None, lu_dog);
         let _ty = ValueType::new_woog_struct(&mt, lu_dog);
         for ((name, _), (type_, _)) in fields {
             let name = name.de_sanitize();
@@ -1272,8 +1325,6 @@ fn inter_struct(
 /// Note that the `new_*` methods on `Ty` just return `const`s. Also, the
 /// `ValueType::new_ty` method takes on the id of it's subtype, so neither do
 /// those take much space.
-///
-/// 🚧 This should return a result...
 fn get_value_type(
     type_: &Type,
     enclosing_type: Option<&Arc<RwLock<ValueType>>>,
@@ -1369,6 +1420,7 @@ fn get_value_type(
                 // the Uuid. So, it's not unlikely; it's the least likely.
                 if let Some(ty) = sarzak.iter_ty().find(|ty| match ty {
                     Ty::Object(ref obj) => {
+                        error!("sarzak.iter_ty", obj);
                         let obj = sarzak.exhume_object(obj).unwrap();
                         let obj = obj.name.to_upper_camel_case();
                         obj == *name || name == format!("{}Proxy", obj)
@@ -1377,7 +1429,9 @@ fn get_value_type(
                 }) {
                     Ok(ValueType::new_ty(ty, lu_dog))
                 } else {
-                    panic!("Type not found for object {}.", name)
+                    Err(DwarfError::UnknownType {
+                        ty: name.to_string(),
+                    })
                 }
             }
         }

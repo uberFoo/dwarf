@@ -93,8 +93,8 @@ pub enum DwarfError {
     /// Missing Implementation
     ///
     /// This is just not done yet.
-    #[snafu(display("\n{}: {missing}\n  --> {}..{}", C_WARN.bold().paint("warning"), span.start, span.end))]
-    NoImplementation { missing: String, span: Span },
+    #[snafu(display("\n{}: Missing implementation: {missing}\n  --> {}:{}:{}", C_WARN.bold().paint("warning"), location.file, location.line, location.column))]
+    NoImplementation { missing: String, location: Location },
     /// Object ID Lookup Error
     ///
     /// This is used when a reverse object lookup in one of the domains fails.
@@ -110,6 +110,11 @@ pub enum DwarfError {
     /// Error parsing the source code.
     #[snafu(display("\n{}: parser completed with errors", C_ERR.bold().paint("error")))]
     Parse { ast: Vec<Spanned<Item>> },
+    /// Unknown Type
+    ///
+    /// This is used when a type is not found in any domain.
+    #[snafu(display("\n{}: Unknown type: {ty}", C_ERR.bold().paint("error")))]
+    UnknownType { ty: String },
 }
 
 #[derive(Args, Clone, Debug, Deserialize, Serialize)]
@@ -381,6 +386,7 @@ pub enum Expression {
         Box<Spanned<Self>>,
         Option<Box<Spanned<Self>>>,
     ),
+    Index(Box<Spanned<Self>>, Box<Spanned<Self>>),
     IntegerLiteral(i64),
     LessThanOrEqual(Box<Spanned<Self>>, Box<Spanned<Self>>),
     List(Vec<Spanned<Self>>),

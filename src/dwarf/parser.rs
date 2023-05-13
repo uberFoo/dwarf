@@ -25,7 +25,7 @@ macro_rules! debug {
         $(
             log::debug!(
                 "{}: {} --> {:?}\n  --> {}:{}:{}",
-                Colour::White.dimmed().paint(function!()),
+                Colour::Green.dimmed().italic().paint(function!()),
                 Colour::Yellow.underline().paint($msg),
                 $arg,
                 file!(),
@@ -37,7 +37,7 @@ macro_rules! debug {
     ($arg:literal) => {
         log::debug!(
             "{}: {}\n  --> {}:{}:{}",
-            Colour::White.dimmed().paint(function!()),
+            Colour::Green.dimmed().italic().paint(function!()),
             $arg,
             file!(),
             line!(),
@@ -46,7 +46,7 @@ macro_rules! debug {
     ($arg:expr) => {
         log::debug!(
             "{}: {:?}\n  --> {}:{}:{}",
-            Colour::White.dimmed().paint(function!()),
+            Colour::Green.dimmed().italic().paint(function!()),
             $arg,
             file!(),
             line!(),
@@ -59,7 +59,7 @@ macro_rules! error {
         $(
             log::debug!(
                 "{}: {} --> {:?}\n  --> {}:{}:{}",
-                Colour::White.dimmed().paint(function!()),
+                Colour::Green.dimmed().italic().paint(function!()),
                 Colour::Red.underline().paint($msg),
                 $arg,
                 file!(),
@@ -71,7 +71,7 @@ macro_rules! error {
     ($arg:literal) => {
         log::debug!(
             "{}: {}\n  --> {}:{}:{}",
-            Colour::White.dimmed().paint(function!()),
+            Colour::Green.dimmed().italic().paint(function!()),
             Colour::Red.underline().paint($arg),
             file!(),
             line!(),
@@ -80,7 +80,7 @@ macro_rules! error {
     ($arg:expr) => {
         log::debug!(
             "{}: {:?}\n  --> {}:{}:{}",
-            Colour::White.dimmed().paint(function!()),
+            Colour::Green.dimmed().italic().paint(function!()),
             Colour::Ref.underline().paint($arg),
             file!(),
             line!(),
@@ -663,6 +663,57 @@ impl DwarfParser {
         )))
     }
 
+    /// Parse an assignment expression
+    ///
+    /// assignment = expression = expression
+    fn parse_assignment_expression(
+        &mut self,
+        left: &Expression,
+        power: u8,
+    ) -> Result<Option<Expression>> {
+        debug!("enter", power);
+
+        if power > ASSIGN.0 {
+            debug!("exit no power", power);
+            return Ok(None);
+        }
+
+        let start = if let Some(tok) = self.peek() {
+            tok.1.start
+        } else {
+            debug!("exit no token");
+            return Ok(None);
+        };
+
+        if !self.match_(&[Token::Punct('=')]) {
+            debug!("exit no =");
+            return Ok(None);
+        }
+
+        let right = if let Some(expr) = self.parse_expression(ASSIGN.1)? {
+            expr
+        } else {
+            let token = &self.previous().unwrap();
+            let err = Simple::expected_input_found(
+                token.1.clone(),
+                [Some("<expression -> there's a lot of them...>".to_owned())],
+                Some(token.0.to_string()),
+            );
+            error!("exit", err);
+            return Err(err);
+        };
+
+        debug!("exit ok");
+
+        Ok(Some((
+            (
+                DwarfExpression::Assignment(Box::new(left.0.to_owned()), Box::new(right.0)),
+                start..self.previous().unwrap().1.end,
+            ),
+            ASSIGN,
+        )))
+    }
+
     /// Parse an addition operator
     ///
     /// addition = expression + expression
@@ -845,9 +896,15 @@ impl DwarfParser {
                 } else if let Some(expression) = self.parse_lte_operator(&lhs, power)? {
                     debug!("lte operator", expression);
                     Some(expression)
+                } else if let Some(expression) = self.parse_assignment_expression(&lhs, power)? {
+                    debug!("assignment expression", expression);
+                    Some(expression)
+                } else if let Some(expression) = self.parse_index_expression(&lhs, power)? {
+                    debug!("index expression", expression);
+                    Some(expression)
                 } else if let Some(expression) = self.parse_struct_expression(&lhs, power)? {
                     debug!("struct expression", expression);
-                    return Ok(Some(expression));
+                    Some(expression)
                 } else if let Some(expression) = self.parse_function_call(&lhs, power)? {
                     debug!("function call", expression);
                     Some(expression)
@@ -1229,6 +1286,70 @@ impl DwarfParser {
         )))
     }
 
+    /// Parse index expression
+    ///
+    /// index_expression -> expression '[' expression,* ']'
+    fn parse_index_expression(
+        &mut self,
+        name: &Expression,
+        power: u8,
+    ) -> Result<Option<Expression>> {
+        debug!("enter", power);
+
+        if power > FUNC_CALL.0 {
+            debug!("exit no power", power);
+            return Ok(None);
+        }
+
+        let start = name.0 .1.start;
+
+        if !self.match_(&[Token::Punct('[')]) {
+            return Ok(None);
+        }
+
+        // while !self.at_end() && !self.match_(&[Token::Punct(']')]) {
+        let expr = if let Some(expr) = self.parse_expression(ENTER)? {
+            expr
+            // arguments.push(expr.0);
+            // if self.peek().unwrap().0 == Token::Punct(',') {
+            // self.advance();
+            // }
+        } else {
+            let tok = self.peek().unwrap();
+            let err = Simple::expected_input_found(
+                tok.1.clone(),
+                [Some("expression".to_owned())],
+                Some(tok.0.to_string()),
+            );
+            let err = err.with_label("expected expression");
+            error!("exit", err);
+            return Err(err);
+        };
+        // }
+
+        if !self.match_(&[Token::Punct(']')]) {
+            let tok = self.peek().unwrap();
+            let err = Simple::expected_input_found(
+                tok.1.clone(),
+                [Some("]".to_owned())],
+                Some(tok.0.to_string()),
+            );
+            let err = err.with_label("expected expression");
+            error!("exit", err);
+            return Err(err);
+        }
+
+        debug!("exit ok");
+
+        Ok(Some((
+            (
+                DwarfExpression::Index(Box::new(name.0.clone()), Box::new(expr.0)),
+                start..self.previous().unwrap().1.end,
+            ),
+            FUNC_CALL,
+        )))
+    }
+
     /// Parse an Integer Literal
     ///
     /// integer_literal -> INTEGER
@@ -1258,7 +1379,7 @@ impl DwarfParser {
     /// needs to be checked in the compiler, and not the parser, since the parser
     /// doesn't really grok types.
     ///
-    /// list -> '[' expression,* ']'
+    /// list -> '[' expression (, expression)* ']'
     fn parse_list_literal(&mut self) -> Result<Option<Expression>> {
         debug!("enter parse_list_expression");
 
@@ -2933,6 +3054,42 @@ mod tests {
 
         let ast = parse_dwarf(src);
 
+        dbg!(&ast);
+        assert!(ast.is_ok());
+    }
+
+    #[test]
+    fn test_assignment() {
+        let _ = env_logger::builder().is_test(true).try_init();
+
+        let src = r#"
+            fn foo() -> () {
+                a = 1;
+                b = true;
+                c = "Hello, World!";
+                d = 3.14;
+                e = Some(42);
+            }
+        "#;
+
+        let ast = parse_dwarf(src);
+        dbg!(&ast);
+        assert!(ast.is_ok());
+    }
+
+    #[test]
+    fn test_index_expression() {
+        let _ = env_logger::builder().is_test(true).try_init();
+
+        let src = r#"
+            fn foo() -> () {
+                a[1];
+                b[1][2];
+                c[1][2][3];
+            }
+        "#;
+
+        let ast = parse_dwarf(src);
         dbg!(&ast);
         assert!(ast.is_ok());
     }

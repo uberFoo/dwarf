@@ -363,14 +363,13 @@ impl Value {
             (Value::Empty, Value::Empty) => true,
             (Value::Boolean(a), Value::Boolean(b)) => a <= b,
             // (Value::Error(a), Value::Error(b)) => a <= b,
-            (a, b) => false, //Value::Error(format!("Cannot compare {} and {}", a, b)),
+            (_, _) => false, //Value::Error(format!("Cannot compare {} and {}", a, b)),
         }
     }
 }
 
 #[derive(Clone, Debug)]
 pub struct UserType {
-    id: Uuid,
     type_: Arc<RwLock<ValueType>>,
     attrs: HashMap<String, Value>,
 }
@@ -378,7 +377,6 @@ pub struct UserType {
 impl UserType {
     pub fn new(type_: Arc<RwLock<ValueType>>) -> Self {
         Self {
-            id: Uuid::new_v4(),
             type_,
             attrs: HashMap::default(),
         }

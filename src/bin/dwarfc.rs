@@ -1,10 +1,13 @@
 use std::{ffi::OsString, fs, os::unix::ffi::OsStringExt, path::PathBuf, process};
 
-use clap::Parser;
+use clap::{ArgAction, Parser};
 use log;
 use snafu::prelude::*;
 
-use chacha::dwarf::{parse_dwarf, populate_lu_dog, FileSnafu, GenericSnafu, IOSnafu, Result};
+use ariadne::{Color, Fmt, Label, Report, ReportKind, Source};
+use chacha::dwarf::{
+    parse_dwarf, populate_lu_dog, DwarfError, FileSnafu, GenericSnafu, IOSnafu, Result,
+};
 use sarzak::domain::DomainBuilder;
 
 const TARGET_DIR: &str = "target";
@@ -23,10 +26,12 @@ struct Args {
     ///
     /// Path to the model, corresponding to the source file, to build the
     /// Lu-Dog domain.
-    model: PathBuf,
+    #[arg(long, short, requires = "sarzak")]
+    model: Option<PathBuf>,
     /// Meta-Model File
     ///
     /// Path to the meta-model, sarzak.
+    #[arg(long, short)]
     sarzak: PathBuf,
     /// Path to package
     ///
@@ -81,11 +86,29 @@ fn main() -> Result<()> {
 
     let args = Args::parse();
 
-    let model = DomainBuilder::new()
-        .cuckoo_model(&args.model)
-        .unwrap()
-        .build_v2()
-        .unwrap();
+    let _model = if let Some(ref model) = args.model {
+        Some(
+            DomainBuilder::new()
+                .cuckoo_model(model)
+                .unwrap()
+                .build_v2()
+                .unwrap(),
+        )
+    } else {
+        None
+    };
+
+    // let sarzak = if let Some(ref sarzak) = args.sarzak {
+    //     Some(
+    //         DomainBuilder::new()
+    //             .cuckoo_model(sarzak)
+    //             .unwrap()
+    //             .build_v2()
+    //             .unwrap(),
+    //     )
+    // } else {
+    //     None
+    // };
 
     let sarzak = DomainBuilder::new()
         .cuckoo_model(&args.sarzak)
@@ -93,20 +116,35 @@ fn main() -> Result<()> {
         .build_v2()
         .unwrap();
 
-    let package_dir = find_package_dir(&args.package_dir)?;
+    let path = if args.package_dir.is_some() {
+        let package_dir = find_package_dir(&args.package_dir)?;
 
-    // This is where we output the file. I think this is stupid. We should just write
-    // it to current working directory. We do however want the package_dir, because
-    // we need to feed it to the lu dog populator.
-    let mut path = PathBuf::from(package_dir);
-    path.push(TARGET_DIR);
-    path.push(BUILD_DIR);
-    path.push(model.name());
+        // This is where we output the file. I think this is stupid. We should just write
+        // it to current working directory. We do however want the package_dir, because
+        // we need to feed it to the lu dog populator.
+        let mut path = PathBuf::from(package_dir);
+        path.push(TARGET_DIR);
+        path.push(BUILD_DIR);
+        path
+    } else {
+        // Write the output at the same loccation as the source file.
+        fs::canonicalize(&args.source)
+            .unwrap()
+            .parent()
+            .unwrap()
+            .to_path_buf()
+    };
 
-    fs::create_dir_all(&path).context(FileSnafu {
-        description: "creating type directory".to_owned(),
-        path: &path,
-    })?;
+    let mut out_file = path.clone();
+    // Build the output path
+    out_file.push("toadstool");
+    out_file.set_file_name(&args.source.file_name().unwrap());
+    out_file.set_extension(EXTENSIONS[1]);
+
+    // fs::create_dir_all(&path).context(FileSnafu {
+    //     description: "creating type directory".to_owned(),
+    //     path: &path,
+    // })?;
 
     let source_code = fs::read_to_string(&args.source).context(FileSnafu {
         description: "Could not read source file".to_owned(),
@@ -115,13 +153,89 @@ fn main() -> Result<()> {
 
     let ast = parse_dwarf(&source_code)?;
 
-    let lu_dog =
-        populate_lu_dog(&path, &ast, &[model.sarzak().clone()], sarzak.sarzak()).map_err(|e| {
-            println!("Compiler exited with: {}", e);
-            return e;
-        })?;
+    let lu_dog = populate_lu_dog(None, &ast, &[], sarzak.sarzak()).map_err(|e| {
+        match &e {
+            DwarfError::BadSelf { span } => {
+                let span = span.clone();
+                let msg = format!("{}", e);
 
-    println!("Lu-Dog domain created at {:?}", path);
+                Report::build(ReportKind::Error, (), span.start)
+                    .with_message(&msg)
+                    .with_label(
+                        Label::new(span)
+                            .with_message(format!("{}", msg.fg(Color::Red)))
+                            .with_color(Color::Red),
+                    )
+                    .finish()
+                    .print(Source::from(&source_code))
+                    .unwrap()
+            }
+            DwarfError::GenericWarning {
+                description: desc,
+                span,
+            } => {
+                let span = span.clone();
+
+                Report::build(ReportKind::Error, (), span.start)
+                    .with_message(&desc)
+                    .with_label(
+                        Label::new(span)
+                            .with_message(format!("{}", desc.fg(Color::Red)))
+                            .with_color(Color::Red),
+                    )
+                    .finish()
+                    .print(Source::from(&source_code))
+                    .unwrap()
+            }
+            DwarfError::ImplementationBlockError { span } => {
+                let span = span.clone();
+                let msg = format!("{}", e);
+
+                Report::build(ReportKind::Error, (), span.start)
+                    .with_message(&msg)
+                    .with_label(
+                        Label::new(span)
+                            .with_message(format!("{}", msg.fg(Color::Red)))
+                            .with_color(Color::Red),
+                    )
+                    .finish()
+                    .print(Source::from(&source_code))
+                    .unwrap()
+            }
+            DwarfError::Parse { ast } => {
+                for a in ast {
+                    let msg = format!("{}", e);
+                    let span = a.1.clone();
+
+                    Report::build(ReportKind::Error, (), span.start)
+                        .with_message(&msg)
+                        .with_label(
+                            Label::new(span)
+                                .with_message(format!("{}", msg.fg(Color::Red)))
+                                .with_color(Color::Red),
+                        )
+                        .finish()
+                        .print(Source::from(&source_code))
+                        .unwrap()
+                }
+            }
+            _ => {}
+        }
+        // let report = Report::build(ReportKind::Error, (), 0);
+        return e;
+    })?;
+    // let lu_dog =
+    //     populate_lu_dog(&path, &ast, &[model.sarzak().clone()], sarzak.sarzak()).map_err(|e| {
+    //         println!("Compiler exited with: {}", e);
+    //         return e;
+    //     })?;
+
+    lu_dog.persist_bincode(&out_file).context(FileSnafu {
+        description: "Could not persist Lu-Dog domain".to_owned(),
+        path: &out_file,
+    })?;
+
+    println!("Lu-Dog domain created at {:?}", out_file);
 
     Ok(())
 }

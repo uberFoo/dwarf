@@ -21,9 +21,6 @@ use sarzak::{
 use snafu::{location, prelude::*, Location};
 use uuid::Uuid;
 
-#[cfg(feature = "repl")]
-use rustyline::{error::ReadlineError, DefaultEditor};
-
 use crate::{
     dwarf::{inter_statement, parse_line},
     svm::{CallFrame, Chunk, Instruction, VM},
@@ -125,6 +122,16 @@ lazy_static! {
         Arc::new(RwLock::new(SarzakStore::new()));
 }
 
+/// Initialize the interpreter
+///
+/// The interpreter requires two domains to operate. The first is the metamodel:
+/// sarzak. The second is the compiled dwarf file.
+///
+/// So the metamodel is dumb. I think we use it for looking up the id of the UUID
+/// type. Otherwise, I don't think it's used.
+///
+/// Requiring a compiled dwarf file is also sort of stupid. I think we could just
+/// create an empty LuDog as our internal state.
 pub fn initialize_interpreter<P: AsRef<Path>>(
     sarzak_path: P,
     lu_dog_path: P,
@@ -134,8 +141,8 @@ pub fn initialize_interpreter<P: AsRef<Path>>(
 
     // This will always be a lu-dog, but it's basically a compiled dwarf file.
     // let mut lu_dog = LuDogStore::load("../sarzak/target/sarzak/lu_dog")
-    let mut lu_dog =
-        LuDogStore::load(lu_dog_path.as_ref()).map_err(|e| ChaChaError::Store { source: e })?;
+    let mut lu_dog = LuDogStore::load_bincode(lu_dog_path.as_ref())
+        .map_err(|e| ChaChaError::Store { source: e })?;
 
     // This won't always be Lu-Dog, clearly. So we'll need to be sure to also
     // generate some code that imports the types from the model.
@@ -548,7 +555,10 @@ fn eval_expression(
                     }
                     Value::UserType(ut) => (value.clone(), ut.read().unwrap().get_type().clone()),
                     value => {
-                        panic!("dereferenced function expression and found this: {}", value);
+                        panic!(
+                            "dereferenced function expression and found this: {:?}",
+                            value
+                        );
                     }
                 }
             } else {
@@ -929,6 +939,10 @@ fn eval_expression(
                         Binary::Addition(_) => {
                             let value = lhs + rhs.unwrap();
                             Ok((value, lhs_ty))
+                        }
+                        Binary::Assignment(_) => {
+                            dbg!(&lhs, &rhs);
+                            Ok((lhs, lhs_ty))
                         }
                         Binary::Subtraction(_) => {
                             let value = lhs - rhs.unwrap();
@@ -1345,6 +1359,11 @@ pub fn start_vm(n: DwarfInteger) -> Result<DwarfInteger, Error> {
 
 #[cfg(feature = "repl")]
 pub fn start_repl(context: Context) -> Result<(), Error> {
+    use rustyline::error::ReadlineError;
+    use rustyline::validate::{ValidationContext, ValidationResult, Validator};
+    use rustyline::{Completer, Helper, Highlighter, Hinter};
+    use rustyline::{Editor, Result};
+
     let models = &MODELS;
     let lu_dog = &LU_DOG;
     let sarzak = &SARZAK;
@@ -1358,10 +1377,32 @@ pub fn start_repl(context: Context) -> Result<(), Error> {
     let result_style = Colour::Yellow.italic().dimmed();
     let type_style = Colour::Blue.italic().dimmed();
 
+    #[derive(Completer, Helper, Highlighter, Hinter)]
+    struct DwarfValidator {};
+
+    impl DwarfValidator {
+        fn validate(&self, input: &str) -> ValidationResult {
+            if let Some((stmt, _span)) = parse_line(input) {
+                ValidationResult::Valid(None)
+            } else {
+                ValidationResult::Incomplete
+            }
+        }
+    }
+
+    impl Validator for DwarfValidator {
+        fn validate(&self, ctx: &mut ValidationContext) -> Result<ValidationResult> {
+            Ok(self.validate(ctx.input()))
+        }
+    }
+
+    // Display the banner
     println!("{}", banner_style.paint(BANNER));
 
     // `()` can be used when no completer is required
-    let mut rl = DefaultEditor::new().map_err(|e| ChaChaError::RustyLine { source: e })?;
+    let mut rl = Editor::new().map_err(|e| ChaChaError::RustyLine { source: e })?;
+    let v = DwarfValidator {};
+    rl.set_helper(Some(v));
 
     // #[cfg(feature = "with-file-history")]
     if rl.load_history("history.txt").is_err() {
@@ -1476,11 +1517,13 @@ impl fmt::Display for PrintableValueType {
                 // interesting when there are multiples of those in memory at once...
                 let sarzak = sarzak.read().unwrap();
                 if let Some(ty) = sarzak.exhume_ty(ty) {
+                    dbg!(&ty);
                     match ty {
                         Ty::Boolean(_) => write!(f, "bool"),
                         Ty::Float(_) => write!(f, "float"),
                         Ty::Integer(_) => write!(f, "int"),
                         Ty::Object(ref object) => {
+                            panic!("Bitches come!");
                             // This should probably just be an unwrap().
                             if let Some(object) = sarzak.exhume_object(object) {
                                 write!(f, "{}", object.name)

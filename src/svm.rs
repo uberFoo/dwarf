@@ -81,10 +81,6 @@ impl Chunk {
         self.variables.len() - 1
     }
 
-    pub(crate) fn get_variable(&self, index: usize) -> Option<&String> {
-        self.variables.get(index)
-    }
-
     pub(crate) fn add_instruction(&mut self, instr: Instruction) -> usize {
         self.instructions.push(instr);
         self.instructions.len() - 1

@@ -11,10 +11,7 @@ use chacha::{
 fn main() -> Result<(), Error> {
     pretty_env_logger::init();
 
-    let mut ctx = initialize_interpreter(
-        "../sarzak/models/sarzak.v2.json",
-        "../sarzak/target/sarzak/merlin",
-    )?;
+    let mut ctx = initialize_interpreter("../sarzak/models/sarzak.v2.json", "fib.道")?;
 
     // ctx.register_model("../sarzak/models/merlin.v2.json")?;
 

@@ -1,0 +1,58 @@
+fn fib(n: int) -> int {
+    if n <= 1 {
+        return 1;
+    } else {
+        // fib(n - 1) + fib( n -2)
+        // let a = fib(n - 1) + fib(n - 2);
+        // a
+        let a: int = fib(n - 1);
+        let b: int = fib(n - 2);
+        return a + b;
+    }
+}
+
+struct Foo {
+    a: int,
+    b: bool,
+    c: float,
+}
+
+// fn println<T>(a: T) {
+//     print(a);
+//     print("\n");
+// }
+
+fn main() -> int {
+    // let a: int = fib(5);
+    // print(a);
+    let a: Uuid = Uuid::new();
+    let b = false;
+    let c = 42;
+    let d = 3.14;
+    let e = "Hello uberFoo.";
+    let f = Foo {
+        a: 42,
+        b: true,
+        c: 3.14,
+    };
+
+    // This doesn't work yet.
+    // struct Bar {
+    //     a: int,
+    //     b: bool,
+    //     c: f64,
+    // }
+
+    print(a);
+    print(b);
+    print(c);
+    print(d);
+    print(e + "\n");
+    print(f);
+
+    return c;
+}
+
+// fn foo() {
+//     for
+// }

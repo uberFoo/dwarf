@@ -8,14 +8,14 @@ name = "dwarfc"
 path = "src/bin/dwarfc.rs"
 
 [[bin]]
-name = "repl"
+name = "dwarf"
 path = "src/bin/main.rs"
 
 [dependencies]
 # rustyline = { version = "11.0.0", features = [
 # "with-file-history",
 # ], optional = true }
-rustyline = { version = "11.0.0", optional = true }
+rustyline = { version = "11.0.0", optional = true, features = ["derive"] }
 # nut = { git = "https://gitlab-runner:7kzem8nVeizSJQnLPWFY@git.uberfoo.com/sarzak/nut.git", branch = "develop" }
 nut = { path = "../nut" }
 # sarzak = { git = "https://gitlab-runner:7kzem8nVeizSJQnLPWFY@git.uberfoo.com/sarzak/sarzak.git", branch = "develop" }
