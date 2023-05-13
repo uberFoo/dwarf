@@ -12,7 +12,7 @@ use lazy_static::lazy_static;
 use log;
 use sarzak::{
     lu_dog::{
-        Argument, Binary, Block, BooleanLiteral, CallEnum, Comparison, Expression, Function,
+        Argument, Binary, Block, BooleanLiteral, CallEnum, Comparison, Expression, Function, List,
         Literal, LocalVariable, ObjectStore as LuDogStore, Operator, OperatorEnum, Statement,
         StatementEnum, Value as LuDogValue, ValueType, Variable, WoogOptionEnum,
     },
@@ -835,6 +835,69 @@ fn eval_expression(
                 message: "This isn't implemented yet".to_owned(),
                 location: location!(),
             })
+        }
+        //
+        // ListElement
+        //
+        Expression::ListElement(ref element) => {
+            let element = lu_dog.read().unwrap().exhume_list_element(element).unwrap();
+            let element = element.read().unwrap();
+            let expr = element.r55_expression(&lu_dog.read().unwrap())[0].clone();
+            eval_expression(expr, stack)
+        }
+        //
+        // ListExpression
+        //
+        Expression::ListExpression(ref list) => {
+            let list = lu_dog.read().unwrap().exhume_list_expression(list).unwrap();
+            let list = list.read().unwrap();
+            if let Some(ref element) = list.elements {
+                // This is the first element in the list. We need to give this list
+                // a type, and I'm going to do the esay thing here and take the type
+                // to be whatever the first element evaluetes to. We'll then check
+                // each subsequent element to see if it can be cast into the type
+                // of the first element.
+                //
+                // 🚧 Actually do the type checking mentioned above.
+                //
+                // I'm now not so sure that I need to do all this run-time type checking.
+                // I mean, I'm doing it in the compiler, right? This would be a systemic
+                // change I think. But I still need the type when I return from here.
+                // So maybe it's just a loosening of the rules -- rules that I'm probably
+                // not implementing now anyway.
+                let element = lu_dog.read().unwrap().exhume_list_element(element).unwrap();
+                let element = element.read().unwrap();
+                let expr = element.r15_expression(&lu_dog.read().unwrap())[0].clone();
+                let (value, ty) = eval_expression(expr, stack)?;
+                let mut values = vec![value];
+
+                let mut next = element.next;
+                dbg!(&next);
+                while let Some(ref id) = next {
+                    let element = lu_dog.read().unwrap().exhume_list_element(id).unwrap();
+                    let element = element.read().unwrap();
+                    let expr = element.r15_expression(&lu_dog.read().unwrap())[0].clone();
+                    let (value, _ty) = eval_expression(expr, stack)?;
+                    values.push(value);
+                    next = element.next;
+                }
+
+                let mut lu_dog = lu_dog.write().unwrap();
+                let list = List::new(&ty, &mut lu_dog);
+
+                Ok((
+                    Value::Vector(values),
+                    ValueType::new_list(&list, &mut lu_dog),
+                ))
+            } else {
+                let mut lu_dog = lu_dog.write().unwrap();
+                let list = List::new(&ValueType::new_empty(&lu_dog), &mut lu_dog);
+
+                Ok((
+                    Value::Vector(vec![Value::Empty]),
+                    ValueType::new_list(&list, &mut lu_dog),
+                ))
+            }
         }
         //
         // Literal

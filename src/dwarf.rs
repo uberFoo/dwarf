@@ -110,6 +110,11 @@ pub enum DwarfError {
     /// Error parsing the source code.
     #[snafu(display("\n{}: parser completed with errors", C_ERR.bold().paint("error")))]
     Parse { ast: Vec<Spanned<Item>> },
+    /// Type Mismatch
+    ///
+    /// This is used when one type is expected, and another is found.
+    #[snafu(display("\n{}: Type mismatch: expected {expected}, found {found}", C_ERR.bold().paint("error")))]
+    TypeMismatch { expected: String, found: String },
     /// Unknown Type
     ///
     /// This is used when a type is not found in any domain.

@@ -1,3 +1,4 @@
+use core::fmt;
 use std::{fs::File, io::prelude::*, ops::Range, path::PathBuf, sync::Arc, sync::RwLock};
 
 use ansi_term::Colour;
@@ -8,7 +9,7 @@ use uuid::Uuid;
 
 use crate::dwarf::{
     DwarfError, Expression as ParserExpression, Item, ObjectIdNotFoundSnafu, Result, Spanned,
-    Statement as ParserStatement, Type,
+    Statement as ParserStatement, Type, TypeMismatchSnafu,
 };
 use sarzak::{
     lu_dog::{
@@ -20,8 +21,8 @@ use sarzak::{
             StringLiteral, StructExpression, Value, ValueEnum, ValueType, Variable,
             VariableExpression, WoogOption, WoogStruct, XIf,
         },
-        Argument, Binary, BooleanLiteral, Comparison, FieldAccess, FloatLiteral, List, MethodCall,
-        Operator, Reference, ResultStatement, XReturn,
+        Argument, Binary, BooleanLiteral, Comparison, FieldAccess, FloatLiteral, List, ListElement,
+        ListExpression, MethodCall, Operator, Reference, ResultStatement, WoogOptionEnum, XReturn,
     },
     sarzak::{store::ObjectStore as SarzakStore, types::Ty},
 };
@@ -57,6 +58,19 @@ macro_rules! link_statement {
         let next = $next.read().unwrap();
         if let Some(last) = $last {
             let last = $store.exhume_statement(&last).unwrap().clone();
+            let mut last = last.write().unwrap();
+            last.next = Some(next.id);
+        }
+
+        Some(next.id)
+    }};
+}
+
+macro_rules! link_list_element {
+    ($last:expr, $next:expr, $store:expr) => {{
+        let next = $next.read().unwrap();
+        if let Some(last) = $last {
+            let last = $store.exhume_list_element(&last).unwrap().clone();
             let mut last = last.write().unwrap();
             last.next = Some(next.id);
         }
@@ -782,7 +796,63 @@ fn inter_expression(
         //
         // List
         //
-        // ParserExpression::List(ref elements) => {}
+        ParserExpression::List(ref elements) => {
+            if elements.is_empty() {
+                let list = List::new(&ValueType::new_empty(lu_dog), lu_dog);
+                Ok((
+                    Expression::new_list_expression(&ListExpression::new(None, lu_dog), lu_dog),
+                    ValueType::new_list(&list, lu_dog),
+                ))
+            } else {
+                let mut elements = elements.iter();
+                // I'm going to get the type of the first element, and then check
+                // that each subsequent element is the same type.
+                let (first, first_ty) = inter_expression(
+                    &Arc::new(RwLock::new(elements.next().unwrap().0.to_owned())),
+                    block,
+                    lu_dog,
+                    models,
+                    sarzak,
+                )?;
+
+                let list = List::new(&first_ty, lu_dog);
+                let element = ListElement::new(&first, None, lu_dog);
+                let _ = Expression::new_list_element(&element, lu_dog);
+                let list_expr = ListExpression::new(Some(&element), lu_dog);
+
+                let mut last_element_uuid: Option<Uuid> = Some(element.read().unwrap().id);
+                while let Some(element) = elements.next() {
+                    let (element, element_ty) = inter_expression(
+                        &Arc::new(RwLock::new(element.0.to_owned())),
+                        block,
+                        lu_dog,
+                        models,
+                        sarzak,
+                    )?;
+
+                    let element = ListElement::new(&element, None, lu_dog);
+                    last_element_uuid = link_list_element!(last_element_uuid, element, lu_dog);
+                    let _ = Expression::new_list_element(&element, lu_dog);
+
+                    ensure!(
+                        &*first_ty.read().unwrap() == &*element_ty.read().unwrap(),
+                        {
+                            let first_ty = PrintableValueType(first_ty, lu_dog, sarzak, models);
+                            let element_ty = PrintableValueType(element_ty, lu_dog, sarzak, models);
+                            TypeMismatchSnafu {
+                                expected: first_ty.to_string(),
+                                found: element_ty.to_string(),
+                            }
+                        }
+                    );
+                }
+
+                Ok((
+                    Expression::new_list_expression(&list_expr, lu_dog),
+                    ValueType::new_list(&list, lu_dog),
+                ))
+            }
+        }
         //
         // IntegerLiteral
         //
@@ -1484,5 +1554,117 @@ fn de_sanitize(string: &str) -> Option<&str> {
         "ZSome" => Some("Some"),
         "ZNone" => Some("None"),
         _ => None,
+    }
+}
+
+pub(crate) struct PrintableValueType<'a, 'b, 'c>(
+    pub Arc<RwLock<ValueType>>,
+    pub &'a LuDogStore,
+    pub &'b SarzakStore,
+    pub &'c [SarzakStore],
+);
+
+impl<'a, 'b, 'c> fmt::Display for PrintableValueType<'a, 'b, 'c> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let value = self.0.read().unwrap();
+        let lu_dog = self.1;
+        let sarzak = self.2;
+        let models = self.3;
+
+        match &*value {
+            ValueType::Empty(_) => write!(f, "()"),
+            ValueType::Error(_) => write!(f, "<error>"),
+            ValueType::Function(_) => write!(f, "<function>"),
+            ValueType::Import(ref import) => {
+                let import = lu_dog.exhume_import(import).unwrap();
+                let import = import.read().unwrap();
+                if import.has_alias {
+                    write!(f, "{}", import.alias)
+                } else {
+                    write!(f, "{}", import.name)
+                }
+            }
+            ValueType::List(ref list) => {
+                let list = lu_dog.exhume_list(list).unwrap();
+                let list = list.read().unwrap();
+                let ty = list.r36_value_type(&lu_dog)[0].clone();
+                write!(f, "[{}]", PrintableValueType(ty, lu_dog, sarzak, models))
+            }
+            ValueType::Reference(ref reference) => {
+                let reference = lu_dog.exhume_reference(reference).unwrap();
+                let reference = reference.read().unwrap();
+                let ty = reference.r35_value_type(&lu_dog)[0].clone();
+                write!(f, "&{}", PrintableValueType(ty, lu_dog, sarzak, models))
+            }
+            ValueType::Ty(ref ty) => {
+                // So, sometimes these show up in the model domain. It'll get really
+                // interesting when there are multiples of those in memory at once...
+                if let Some(ty) = sarzak.exhume_ty(ty) {
+                    match ty {
+                        Ty::Boolean(_) => write!(f, "bool"),
+                        Ty::Float(_) => write!(f, "float"),
+                        Ty::Integer(_) => write!(f, "int"),
+                        Ty::Object(ref object) => {
+                            panic!("Bitches come!");
+                            // This should probably just be an unwrap().
+                            if let Some(object) = sarzak.exhume_object(object) {
+                                write!(f, "{}", object.name)
+                            } else {
+                                write!(f, "<unknown object>")
+                            }
+                        }
+                        Ty::SString(_) => write!(f, "String"),
+                        Ty::SUuid(_) => write!(f, "Uuid"),
+                        gamma => {
+                            error!("deal with sarzak type", gamma);
+                            write!(f, "todo")
+                        }
+                    }
+                } else {
+                    // It's not a sarzak type, so it must be an object imported from
+                    // one of the model domains.
+                    for model in &*models {
+                        if let Some(Ty::Object(ref object)) = model.exhume_ty(ty) {
+                            if let Some(object) = model.exhume_object(object) {
+                                return write!(f, "{}Proxy", object.name);
+                            }
+                        }
+                    }
+                    write!(f, "<unknown object>")
+                }
+            }
+            ValueType::Unknown(_) => write!(f, "<unknown>"),
+            ValueType::WoogOption(ref option) => {
+                let option = lu_dog.exhume_woog_option(option).unwrap();
+                let option = option.read().unwrap();
+                match option.subtype {
+                    WoogOptionEnum::ZNone(_) => write!(f, "None"),
+                    WoogOptionEnum::ZSome(ref some) => {
+                        let some = lu_dog.exhume_z_some(some).unwrap();
+                        let some = some.read().unwrap();
+                        let value = some.r23_value(&lu_dog)[0].read().unwrap().clone();
+                        let ty = value.r24_value_type(&lu_dog)[0].clone();
+                        write!(
+                            f,
+                            "Some({})",
+                            PrintableValueType(ty, lu_dog, sarzak, models)
+                        )
+                    }
+                }
+            }
+            ValueType::WoogStruct(ref woog_struct) => {
+                debug!("woog_struct", woog_struct);
+                let woog_struct = lu_dog.exhume_woog_struct(woog_struct).unwrap();
+                let woog_struct = woog_struct.read().unwrap();
+                write!(f, "{}", woog_struct.name)
+            }
+            ValueType::ZObjectStore(ref id) => {
+                let zobject_store = lu_dog.exhume_z_object_store(id).unwrap();
+                let zobject_store = zobject_store.read().unwrap();
+                let domain_name = &zobject_store.domain;
+
+                write!(f, "{}Store", domain_name.to_upper_camel_case())
+            }
+        }
     }
 }

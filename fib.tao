@@ -22,6 +22,14 @@ struct Foo {
 //     print("\n");
 // }
 
+fn a() {
+    print("a\n");
+}
+
+fn b() {
+    print("b\n");
+}
+
 fn main() -> int {
     // let a: int = fib(5);
     // print(a);
@@ -36,6 +44,10 @@ fn main() -> int {
         c: 3.14,
     };
 
+    // I need to parse a list type declaration, e.g.,
+    // let a: [int] = [0, 1, 2, 3];
+    let g = [0, 1, 2, 3];
+
     // This doesn't work yet.
     // struct Bar {
     //     a: int,
@@ -49,6 +61,7 @@ fn main() -> int {
     print(d);
     print(e + "\n");
     print(f);
+    print(g);
 
     return c;
 }
