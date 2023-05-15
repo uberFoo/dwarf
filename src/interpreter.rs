@@ -10,6 +10,7 @@ use fxhash::FxHashMap as HashMap;
 use heck::ToUpperCamelCase;
 use lazy_static::lazy_static;
 use log;
+use rayon::prelude::*;
 use sarzak::{
     lu_dog::{
         Argument, Binary, Block, BooleanLiteral, CallEnum, Comparison, Expression, Function, List,
@@ -884,10 +885,18 @@ fn eval_expression(
 
             let block = Expression::new_block(&block, &mut *lu_dog.write().unwrap());
             stack.push();
-            for item in list {
-                stack.insert(ident.clone(), item);
-                eval_expression(block.clone(), stack)?;
-            }
+            list.par_iter().for_each(|item| {
+                // This gives each thread it's own stack frame, and read only
+                // access to the parent stack frame. I don't know that I love
+                // this solution. But it's a qucik hack to threading.
+                let mut stack = stack.clone();
+                stack.insert(ident.clone(), item.clone());
+                eval_expression(block.clone(), &mut stack).unwrap();
+            });
+            // for item in list {
+            //     stack.insert(ident.clone(), item);
+            //     eval_expression(block.clone(), stack)?;
+            // }
             stack.pop();
 
             Ok((
@@ -1818,7 +1827,7 @@ pub(crate) struct ChunkReservation {
     slot: usize,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Memory {
     chunks: Vec<Chunk>,
     meta: HashMap<String, HashMap<String, Arc<RwLock<Value>>>>,

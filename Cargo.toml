@@ -37,6 +37,7 @@ chumsky = "0.9.2"
 ariadne = "0.2.0"
 fnv = "1.0.7"
 env_logger = "0.10.0"
+rayon = "1.7.0"
 
 [features]
 default = ["repl"]
