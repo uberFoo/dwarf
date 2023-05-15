@@ -122,17 +122,7 @@ lazy_static! {
         Arc::new(RwLock::new(SarzakStore::new()));
 }
 
-/// Initialize the interpreter
-///
-/// The interpreter requires two domains to operate. The first is the metamodel:
-/// sarzak. The second is the compiled dwarf file.
-///
-/// So the metamodel is dumb. I think we use it for looking up the id of the UUID
-/// type. Otherwise, I don't think it's used.
-///
-/// Requiring a compiled dwarf file is also sort of stupid. I think we could just
-/// create an empty LuDog as our internal state.
-pub fn initialize_interpreter<P: AsRef<Path>>(
+pub fn initialize_interpreter_paths<P: AsRef<Path>>(
     sarzak_path: P,
     lu_dog_path: P,
 ) -> Result<Context, Error> {
@@ -141,17 +131,28 @@ pub fn initialize_interpreter<P: AsRef<Path>>(
 
     // This will always be a lu-dog, but it's basically a compiled dwarf file.
     // let mut lu_dog = LuDogStore::load("../sarzak/target/sarzak/lu_dog")
-    let mut lu_dog = LuDogStore::load_bincode(lu_dog_path.as_ref())
+    let lu_dog = LuDogStore::load_bincode(lu_dog_path.as_ref())
         .map_err(|e| ChaChaError::Store { source: e })?;
 
-    // This won't always be Lu-Dog, clearly. So we'll need to be sure to also
-    // generate some code that imports the types from the model.
-    // let model = SarzakStore::load("../sarzak/models/lu_dog.v2.json")
-    //
-    // This one snuck in. It should be registerd as part of the code generation.
-    // let model = SarzakStore::load("../sarzak/models/merlin.v2.json")
-    //     .map_err(|e| InnerError::Store { source: e })?;
+    initialize_interpreter(sarzak, lu_dog)
+}
+/// Initialize the interpreter
+///
+/// The interpreter requires two domains to operate. The first is the metamodel:
+/// sarzak. The second is the compiled dwarf file.
+///
+/// So the metamodel is dumb. I think we use it for looking up the id of the UUID
+/// type. Otherwise, I don't think it's used.
 
+/// So, It's also used for looking up a bool type, and when printing value types.
+/// I sort of want to keep it, but bundle it with the compiled dwarf file.
+///
+/// Requiring a compiled dwarf file is also sort of stupid. I think we could just
+/// create an empty LuDog as our internal state.
+pub fn initialize_interpreter(
+    sarzak: SarzakStore,
+    mut lu_dog: LuDogStore,
+) -> Result<Context, Error> {
     // Initialize the stack with stuff from the compiled source.
     let block = Block::new(Uuid::new_v4(), &mut lu_dog);
     let mut stack = Memory::new();
@@ -169,9 +170,12 @@ pub fn initialize_interpreter<P: AsRef<Path>>(
             // Build the local in the AST.
             let local = LocalVariable::new(Uuid::new_v4(), &mut lu_dog);
             let var = Variable::new_local_variable(name.clone(), &local, &mut lu_dog);
-            // 🚧 What's up with the type below?
-            let _value =
-                LuDogValue::new_variable(&block, &ValueType::new_empty(&lu_dog), &var, &mut lu_dog);
+            let _value = LuDogValue::new_variable(
+                &block,
+                &ValueType::new_function(&func, &mut lu_dog),
+                &var,
+                &mut lu_dog,
+            );
 
             log::trace!("inserting local function {}", name);
             stack.insert(name, value);
@@ -827,14 +831,100 @@ fn eval_expression(
         Expression::ForLoop(ref for_loop) => {
             debug!("ForLoop", for_loop);
 
-            // let for_loop = lu_dog.read().unwrap().exhume_for_loop(for_loop).unwrap();
-            // let for_loop = for_loop.read().unwrap();
-            // let ident = &for_loop.ident;
+            let for_loop = lu_dog.read().unwrap().exhume_for_loop(for_loop).unwrap();
+            let for_loop = for_loop.read().unwrap();
+            let ident = for_loop.ident.to_owned();
+            let block = lu_dog
+                .read()
+                .unwrap()
+                .exhume_block(&for_loop.block)
+                .unwrap();
+            let list = lu_dog
+                .read()
+                .unwrap()
+                .exhume_expression(&for_loop.expression)
+                .unwrap();
 
-            Err(ChaChaError::BadJuJu {
-                message: "This isn't implemented yet".to_owned(),
-                location: location!(),
-            })
+            let (list, _ty) = eval_expression(list, stack)?;
+            let list = if let Value::Vector(vec) = list {
+                vec
+            } else if let Value::String(str) = list {
+                str.chars().map(|c| Value::Char(c)).collect()
+            } else {
+                return Err(ChaChaError::BadJuJu {
+                    message: "For loop expression is not a list".to_owned(),
+                    location: location!(),
+                });
+            };
+
+            let block = Expression::new_block(&block, &mut *lu_dog.write().unwrap());
+            stack.push();
+            for item in list {
+                stack.insert(ident.clone(), item);
+                eval_expression(block.clone(), stack)?;
+            }
+            stack.pop();
+
+            Ok((Value::Empty, ValueType::new_empty(&lu_dog.read().unwrap())))
+        }
+        //
+        // Index
+        //
+        Expression::Index(ref index) => {
+            let index = lu_dog.read().unwrap().exhume_index(index).unwrap();
+            let index = index.read().unwrap();
+            let target = lu_dog
+                .read()
+                .unwrap()
+                .exhume_expression(&index.target)
+                .unwrap();
+            let index = lu_dog
+                .read()
+                .unwrap()
+                .exhume_expression(&index.index)
+                .unwrap();
+
+            let (index, _ty) = eval_expression(index, stack)?;
+            let index = if let Value::Integer(index) = index {
+                index as usize
+            } else {
+                return Err(ChaChaError::BadJuJu {
+                    message: "Index is not an integer".to_owned(),
+                    location: location!(),
+                });
+            };
+
+            let (list, _ty) = eval_expression(target, stack)?;
+            if let Value::Vector(vec) = list {
+                if index < vec.len() {
+                    Ok((
+                        vec[index].to_owned(),
+                        ValueType::new_empty(&lu_dog.read().unwrap()),
+                    ))
+                } else {
+                    Err(ChaChaError::BadJuJu {
+                        message: "Index out of bounds".to_owned(),
+                        location: location!(),
+                    })
+                }
+            } else if let Value::String(str) = list {
+                if index < str.len() {
+                    Ok((
+                        Value::String(str[index..index + 1].to_owned()),
+                        ValueType::new_empty(&lu_dog.read().unwrap()),
+                    ))
+                } else {
+                    Err(ChaChaError::BadJuJu {
+                        message: "Index out of bounds".to_owned(),
+                        location: location!(),
+                    })
+                }
+            } else {
+                Err(ChaChaError::BadJuJu {
+                    message: "Target is not a list".to_owned(),
+                    location: location!(),
+                })
+            }
         }
         //
         // ListElement
@@ -872,7 +962,6 @@ fn eval_expression(
                 let mut values = vec![value];
 
                 let mut next = element.next;
-                dbg!(&next);
                 while let Some(ref id) = next {
                     let element = lu_dog.read().unwrap().exhume_list_element(id).unwrap();
                     let element = element.read().unwrap();
@@ -1143,11 +1232,14 @@ fn eval_expression(
 
             no_debug!("Expression::VariableExpression", value);
 
+            dbg!(&value);
+
             let ty = value.get_type(&lu_dog.read().unwrap());
 
+            // 🚧
             // Cloning the value isn't going to cut it I don't think. There are
             // three cases to consider. One is when the value is used read-only.
-            // Cloning is find here. If the value is mutated however, we would
+            // Cloning is fine here. If the value is mutated however, we would
             // either need to return a reference, or write the value when it's
             // modified. The third thing is when the value is a reference. By
             // that I mean the type (above) is a reference. Not even sure what
@@ -1502,7 +1594,7 @@ pub fn start_repl(context: Context) -> Result<(), Error> {
                     match eval_statement(stmt, &mut stack) {
                         Ok((value, ty)) => {
                             let value = format!("{}", value);
-                            println!("{}", result_style.paint(value));
+                            print!("\n'{}'", result_style.paint(value));
 
                             let ty = PrintableValueType(ty);
                             let ty = format!("{}", ty);
@@ -1580,7 +1672,6 @@ impl fmt::Display for PrintableValueType {
                 // interesting when there are multiples of those in memory at once...
                 let sarzak = sarzak.read().unwrap();
                 if let Some(ty) = sarzak.exhume_ty(ty) {
-                    dbg!(&ty);
                     match ty {
                         Ty::Boolean(_) => write!(f, "bool"),
                         Ty::Float(_) => write!(f, "float"),

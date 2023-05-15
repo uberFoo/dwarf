@@ -5,8 +5,9 @@ use log;
 use snafu::prelude::*;
 
 use ariadne::{Color, Fmt, Label, Report, ReportKind, Source};
-use chacha::dwarf::{
-    parse_dwarf, populate_lu_dog, DwarfError, FileSnafu, GenericSnafu, IOSnafu, Result,
+use chacha::{
+    dwarf::{parse_dwarf, populate_lu_dog, DwarfError, FileSnafu, GenericSnafu, IOSnafu, Result},
+    initialize_interpreter, start_repl,
 };
 use sarzak::domain::DomainBuilder;
 
@@ -230,12 +231,23 @@ fn main() -> Result<()> {
     //         return e;
     //     })?;
 
-    lu_dog.persist_bincode(&out_file).context(FileSnafu {
-        description: "Could not persist Lu-Dog domain".to_owned(),
-        path: &out_file,
-    })?;
+    // lu_dog.persist_bincode(&out_file).context(FileSnafu {
+    //     description: "Could not persist Lu-Dog domain".to_owned(),
+    //     path: &out_file,
+    // })?;
 
-    println!("Lu-Dog domain created at {:?}", out_file);
+    // println!("Lu-Dog domain created at {:?}", out_file);
+
+    println!("This is before we create the context");
+
+    let ctx = initialize_interpreter(sarzak.sarzak().clone(), lu_dog).unwrap();
+
+    // start_repl(ctx).map_err(|e| {
+    // println!("Interpreter exited with: {}", e);
+    // e
+    // })
+
+    start_repl(ctx).unwrap();
 
     Ok(())
 }

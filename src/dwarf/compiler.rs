@@ -16,13 +16,14 @@ use sarzak::{
         store::ObjectStore as LuDogStore,
         types::{
             Block, Call, Error, ErrorExpression, Expression, ExpressionStatement, Field,
-            FieldExpression, ForLoop, Function, Implementation, Import, IntegerLiteral,
+            FieldExpression, ForLoop, Function, Implementation, Import, Index, IntegerLiteral,
             LetStatement, Literal, LocalVariable, Parameter, Print, Statement, StaticMethodCall,
             StringLiteral, StructExpression, Value, ValueEnum, ValueType, Variable,
             VariableExpression, WoogOption, WoogStruct, XIf,
         },
         Argument, Binary, BooleanLiteral, Comparison, FieldAccess, FloatLiteral, List, ListElement,
-        ListExpression, MethodCall, Operator, Reference, ResultStatement, WoogOptionEnum, XReturn,
+        ListExpression, MethodCall, Operator, Reference, ResultStatement, VariableEnum,
+        WoogOptionEnum, XReturn,
     },
     sarzak::{store::ObjectStore as SarzakStore, types::Ty},
 };
@@ -365,9 +366,38 @@ pub fn inter_statement(
         // Let
         //
         ParserStatement::Let((var_name, _), type_, (expr, _)) => {
+            // We only want one storage location per name per block, so we look
+            // for, and remove an existing one -- all the way up to the value.
+            let values = lu_dog
+                .iter_value()
+                .filter(|value| value.read().unwrap().block == block.read().unwrap().id)
+                .collect::<Vec<_>>();
+            for value in values {
+                let value = value.read().unwrap();
+                match value.subtype {
+                    ValueEnum::Variable(ref var) => {
+                        let var = lu_dog.exhume_variable(var).unwrap();
+                        let var = var.read().unwrap();
+                        if var.name == *var_name {
+                            match var.subtype {
+                                VariableEnum::LocalVariable(ref local) => {
+                                    lu_dog.exorcise_local_variable(local);
+                                    lu_dog.exorcise_variable(&var.id);
+                                    lu_dog.exorcise_value(&value.id);
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+
             // Setup the local variable that is the LHS of the statement.
             let local = LocalVariable::new(Uuid::new_v4(), lu_dog);
             let var = Variable::new_local_variable(var_name.to_owned(), &local, lu_dog);
+
+            dbg!(&var, &block);
 
             // Now parse the RHS, which is an expression.
             let (expr, ty) = inter_expression(
@@ -383,6 +413,9 @@ pub fn inter_statement(
             } else {
                 ty
             };
+
+            let foo = PrintableValueType(ty.clone(), lu_dog, sarzak, models);
+            debug!("inter_statement let foo", foo.to_string());
 
             // let ty = ty.read().unwrap().to_owned();
             if let ValueType::Unknown(_) = &*ty.read().unwrap() {
@@ -480,7 +513,55 @@ fn inter_expression(
             // 🚧
             // 🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧
 
+            ensure!(*lhs_ty.read().unwrap() == *rhs_ty.read().unwrap(), {
+                let lhs_ty = PrintableValueType(lhs_ty, lu_dog, sarzak, models);
+                let rhs_ty = PrintableValueType(rhs_ty, lu_dog, sarzak, models);
+
+                TypeMismatchSnafu {
+                    expected: lhs_ty.to_string(),
+                    found: rhs_ty.to_string(),
+                }
+            });
+
             let expr = Binary::new_addition(lu_dog);
+            let expr = Operator::new_binary(Some(&rhs), &lhs, &expr, lu_dog);
+            let expr = Expression::new_operator(&expr, lu_dog);
+
+            Ok((expr, lhs_ty))
+        }
+        //
+        // Assignment
+        //
+        ParserExpression::Assignment(ref lhs, ref rhs) => {
+            dbg!("raw", &lhs, &rhs);
+            let (lhs, lhs_ty) = inter_expression(
+                &Arc::new(RwLock::new(lhs.0.to_owned())),
+                block,
+                lu_dog,
+                models,
+                sarzak,
+            )?;
+            let (rhs, rhs_ty) = inter_expression(
+                &Arc::new(RwLock::new(rhs.0.to_owned())),
+                block,
+                lu_dog,
+                models,
+                sarzak,
+            )?;
+            dbg!("expr", &lhs, &rhs);
+            dbg!(&lhs_ty, &rhs_ty);
+
+            ensure!(*lhs_ty.read().unwrap() == *rhs_ty.read().unwrap(), {
+                let lhs_ty = PrintableValueType(lhs_ty, lu_dog, sarzak, models);
+                let rhs_ty = PrintableValueType(rhs_ty, lu_dog, sarzak, models);
+
+                TypeMismatchSnafu {
+                    expected: lhs_ty.to_string(),
+                    found: rhs_ty.to_string(),
+                }
+            });
+
+            let expr = Binary::new_assignment(lu_dog);
             let expr = Operator::new_binary(Some(&rhs), &lhs, &expr, lu_dog);
             let expr = Expression::new_operator(&expr, lu_dog);
 
@@ -537,6 +618,7 @@ fn inter_expression(
                 lu_dog,
             );
             let expr = Expression::new_error_expression(&error, lu_dog);
+            // 🚧
             // Returning an empty, because the error stuff in ValueType is fucked.
             Ok((expr, ValueType::new_empty(lu_dog)))
         }
@@ -576,6 +658,7 @@ fn inter_expression(
                                 FieldAccess::new("💥figure this out🖕".to_owned(), &lhs, lu_dog);
                             let expr = Expression::new_field_access(&expr, lu_dog);
 
+                            // 🚧 Can we not do better?
                             return Ok((expr, ValueType::new_unknown(lu_dog)));
                         }
                     }
@@ -587,6 +670,7 @@ fn inter_expression(
                         lu_dog,
                     );
                     let expr = Expression::new_error_expression(&error, lu_dog);
+                    // 🚧
                     // Returning an empty, because the error stuff in ValueType is fucked.
                     Ok((expr, ValueType::new_empty(lu_dog)))
                 }
@@ -608,6 +692,7 @@ fn inter_expression(
                     } else {
                         let error = ErrorExpression::new("💥 No such field\n".to_owned(), lu_dog);
                         let expr = Expression::new_error_expression(&error, lu_dog);
+                        // 🚧
                         // Returning an empty, because the error stuff in ValueType is fucked.
                         Ok((expr, ValueType::new_empty(lu_dog)))
                     }
@@ -616,7 +701,8 @@ fn inter_expression(
                     let error =
                         ErrorExpression::new(format!("💥 {:?} is not a struct\n", ty), lu_dog);
                     let expr = Expression::new_error_expression(&error, lu_dog);
-                    // Returning an empty, because the error stuff in ValueType is fucked.
+                    // 🚧 Returning an empty, because the error stuff in ValueType is fucked.
+                    // I wonder what we mean?
                     Ok((expr, ValueType::new_empty(lu_dog)))
                 }
             }
@@ -639,17 +725,13 @@ fn inter_expression(
             let iter = iter.0.clone();
 
             let collection = Arc::new(RwLock::new(collection.0.clone()));
-            let (collection, collection_ty) =
+
+            // 🚧 Should we be checking this to ensure that it's an iterable?
+            let (collection, _collection_ty) =
                 inter_expression(&collection, block, lu_dog, models, sarzak)?;
 
-            // let stmts = if let ParserExpression::Block(stmts) = &body.0 {
-            //     stmts
-            // } else {
-            //     panic!("Expected a block expression");
-            // };
-
             let body = Arc::new(RwLock::new((&body.0).to_owned()));
-            let (body, body_ty) = inter_expression(&body, block, lu_dog, models, sarzak)?;
+            let (body, _body_ty) = inter_expression(&body, block, lu_dog, models, sarzak)?;
 
             let body = if let Expression::Block(body) = body.read().unwrap().clone() {
                 body
@@ -713,15 +795,21 @@ fn inter_expression(
             debug!("ParserExpression::If", conditional_ty);
 
             // We really need to get some error handling in here.
+            let ty = conditional_ty.read().unwrap().to_owned();
             if let ValueType::Ty(ref ty) = conditional_ty.read().unwrap().to_owned() {
                 error!("exhume Ty from sarzak -- bool check", ty);
-                if let Ty::Boolean(_) = sarzak.exhume_ty(ty).unwrap() {
+                let ty = sarzak.exhume_ty(ty).unwrap();
+                if let Ty::Boolean(_) = ty {
                     // We're good.
                 } else {
                     panic!("Expected a boolean");
                 }
             } else {
-                panic!("Expected a boolean");
+                let ty = PrintableValueType(Arc::new(RwLock::new(ty)), lu_dog, sarzak, models);
+                return Err(DwarfError::TypeMismatch {
+                    expected: "boolean".to_owned(),
+                    found: ty.to_string(),
+                });
             }
 
             let true_block = Arc::new(RwLock::new(true_block.0.clone()));
@@ -754,8 +842,66 @@ fn inter_expression(
             let if_expr = XIf::new(false_block.as_ref(), &true_block, &conditional, lu_dog);
             let expr = Expression::new_x_if(&if_expr, lu_dog);
 
+            // 🚧 I'd really like to see this return the type of the if expression.
             Ok((expr, ValueType::new_empty(lu_dog)))
         }
+        //
+        // Index
+        //
+        ParserExpression::Index(target, index) => {
+            let (target, target_ty) = inter_expression(
+                &Arc::new(RwLock::new(target.0.to_owned())),
+                block,
+                lu_dog,
+                models,
+                sarzak,
+            )?;
+            let (index, index_ty) = inter_expression(
+                &Arc::new(RwLock::new(index.0.to_owned())),
+                block,
+                lu_dog,
+                models,
+                sarzak,
+            )?;
+
+            let index = Index::new(&index, &target, lu_dog);
+            let int_ty = ValueType::new_ty(&Ty::new_integer(), lu_dog);
+            ensure!(&*int_ty.read().unwrap() == &*index_ty.read().unwrap(), {
+                let int_ty = PrintableValueType(int_ty, lu_dog, sarzak, models);
+                let index_ty = PrintableValueType(index_ty, lu_dog, sarzak, models);
+                TypeMismatchSnafu {
+                    expected: int_ty.to_string(),
+                    found: index_ty.to_string(),
+                }
+            });
+
+            let expr = Expression::new_index(&index, lu_dog);
+
+            let ty = ValueType::new_ty(&Ty::new_integer(), lu_dog);
+
+            ensure!(&*index_ty.read().unwrap() == &*ty.read().unwrap(), {
+                let index_ty = PrintableValueType(index_ty, lu_dog, sarzak, models);
+                let ty = PrintableValueType(ty, lu_dog, sarzak, models);
+                TypeMismatchSnafu {
+                    expected: ty.to_string(),
+                    found: index_ty.to_string(),
+                }
+            });
+
+            // 🚧 We should really check that the target type is some sort of list.
+
+            Ok((expr, target_ty))
+        }
+        //
+        // IntegerLiteral
+        //
+        ParserExpression::IntegerLiteral(literal) => Ok((
+            Expression::new_literal(
+                &Literal::new_integer_literal(&IntegerLiteral::new(*literal, lu_dog), lu_dog),
+                lu_dog,
+            ),
+            ValueType::new_ty(&Ty::new_integer(), lu_dog),
+        )),
         //
         // LessThanOrEqual
         //
@@ -854,16 +1000,6 @@ fn inter_expression(
             }
         }
         //
-        // IntegerLiteral
-        //
-        ParserExpression::IntegerLiteral(literal) => Ok((
-            Expression::new_literal(
-                &Literal::new_integer_literal(&IntegerLiteral::new(*literal, lu_dog), lu_dog),
-                lu_dog,
-            ),
-            ValueType::new_ty(&Ty::new_integer(), lu_dog),
-        )),
-        //
         // LocalVariable
         //
         ParserExpression::LocalVariable(name) => {
@@ -914,7 +1050,7 @@ fn inter_expression(
                             // stoned now, so don't blame yourself later for it being that. What's
                             // going on is that there are a bunch of values in the block --
                             // especially when running the interpreter. So we are iterating over
-                            // them all, and we are bound to find some that aren't, variable expressions
+                            // them all, and we are bound to find some that aren't variable expressions
                             // even though we are parsing a LocalVariable. Remember these are all of
                             // the values -- not just the ones that have something to do with finding
                             // ourselves here.
@@ -929,31 +1065,43 @@ fn inter_expression(
                             debug!("ParserExpression::LocalVariable: var", var);
                             // Check the name
                             if var.name == *name {
-                                let value = var.r11_value(lu_dog)[0].read().unwrap().clone();
-                                let ty = value.r24_value_type(lu_dog)[0].clone();
+                                match var.subtype {
+                                    VariableEnum::LocalVariable(_) => {
+                                        let value =
+                                            var.r11_value(lu_dog)[0].read().unwrap().clone();
+                                        let ty = value.r24_value_type(lu_dog)[0].clone();
 
-                                // Ok, so I parsed a local variable expression. We need to create
-                                // a VariableExpression, and it in turn needs an Expression, which
-                                // needs a Value, and finally a ValueType.
-                                // Except that I don't think we want to create values in the walker.
-                                // Doing so wreaks havoc downstream in the interpreter, because
-                                // It sees that value and expects that it's been evaluated.
-                                // And we got here by searching for a value anyway.
-                                //
-                                // We don't want to create more than one of these.
-                                let expr = lu_dog
-                                    .iter_variable_expression()
-                                    .find(|expr| expr.read().unwrap().name == *name);
+                                        let lhs_ty =
+                                            PrintableValueType(ty.clone(), lu_dog, sarzak, models);
 
-                                let expr = if let Some(expr) = expr {
-                                    expr.read().unwrap().r15_expression(lu_dog)[0].clone()
-                                } else {
-                                    let expr = VariableExpression::new(name.to_owned(), lu_dog);
-                                    debug!("created a new variable expression", expr);
-                                    Expression::new_variable_expression(&expr, lu_dog)
-                                };
+                                        dbg!(name, &value, lhs_ty.to_string());
 
-                                Some((expr, ty))
+                                        // Ok, so I parsed a local variable expression. We need to create
+                                        // a VariableExpression, and it in turn needs an Expression, which
+                                        // needs a Value, and finally a ValueType.
+                                        // Except that I don't think we want to create values in the walker.
+                                        // Doing so wreaks havoc downstream in the interpreter, because
+                                        // It sees that value and expects that it's been evaluated.
+                                        // And we got here by searching for a value anyway.
+                                        //
+                                        // We don't want to create more than one of these.
+                                        let expr = lu_dog
+                                            .iter_variable_expression()
+                                            .find(|expr| expr.read().unwrap().name == *name);
+
+                                        let expr = if let Some(expr) = expr {
+                                            expr.read().unwrap().r15_expression(lu_dog)[0].clone()
+                                        } else {
+                                            let expr =
+                                                VariableExpression::new(name.to_owned(), lu_dog);
+                                            debug!("created a new variable expression", expr);
+                                            Expression::new_variable_expression(&expr, lu_dog)
+                                        };
+
+                                        Some((expr, ty))
+                                    }
+                                    _ => None,
+                                }
                             } else {
                                 None
                             }
@@ -964,6 +1112,30 @@ fn inter_expression(
             // There should be zero or 1 results.
             // Actually there are `n`, where `n` is the number of values in the block,
             // which is equivalent to the number of `let` statements.
+            //
+            // -- or not (the let statement thing)--
+            //
+            // I'm figuring out assignment right now, and doing that I'm looking at
+            // what this returns, and how it works. Here's the setup:
+            //
+            // ```
+            // let b = "yes";
+            // let c = b;
+            // b = "no";
+            // ```
+            //
+            // `b` is being evaluated in the assignment handler. It's getting back
+            // "yes", which I guess is correct, but they type is `()`. So that's werid.
+            // Also, there are two different places that b shows up. I'm taking the
+            // last one, which maybe corresponts to `b` being in rhs of the previous
+            // storage allocation. I'm figuring that out now. In that case, it sort
+            // of makes sense that the type is `()`.
+            //
+            // My sieve isn't sufficient. I'm right, there should be one per `let`.
+            // WHats going on here is that we have been returned values that aren't
+            // necessarily storage locations. So up above we need to filter values
+            // that are only local variables.
+            //
             // So, yeah, we always want to grab the last one.
             // debug_assert!(expr_type_tuples.len() <= 1);
 
@@ -1605,7 +1777,7 @@ impl<'a, 'b, 'c> fmt::Display for PrintableValueType<'a, 'b, 'c> {
                         Ty::Float(_) => write!(f, "float"),
                         Ty::Integer(_) => write!(f, "int"),
                         Ty::Object(ref object) => {
-                            panic!("Bitches come!");
+                            // panic!("Bitches come!");
                             // This should probably just be an unwrap().
                             if let Some(object) = sarzak.exhume_object(object) {
                                 write!(f, "{}", object.name)

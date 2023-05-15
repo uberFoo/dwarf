@@ -33,8 +33,8 @@ fn b() {
 fn main() -> int {
     // let a: int = fib(5);
     // print(a);
-    let a: Uuid = Uuid::new();
-    let b = false;
+    // let a: Uuid = Uuid::new();
+    // let b = false;
     let c = 42;
     let d = 3.14;
     let e = "Hello uberFoo.";
@@ -46,7 +46,7 @@ fn main() -> int {
 
     // I need to parse a list type declaration, e.g.,
     // let a: [int] = [0, 1, 2, 3];
-    let g = [0, 1, 2, 3];
+    let g = [a, b];
 
     // This doesn't work yet.
     // struct Bar {
@@ -55,8 +55,8 @@ fn main() -> int {
     //     c: f64,
     // }
 
-    print(a);
-    print(b);
+    // print(a);
+    // print(b);
     print(c);
     print(d);
     print(e + "\n");

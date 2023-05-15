@@ -1,6 +1,6 @@
 use chacha::{
     initialize_interpreter,
-    interpreter::{start_main, start_vm},
+    interpreter::{initialize_interpreter_paths, start_main, start_vm},
     merlin::{
         AnchorProxy, BisectionProxy, EdgeProxy, GlyphProxy, LineProxy, LineSegmentPointProxy,
         LineSegmentProxy, PointProxy, RelationshipNameProxy, RelationshipPhraseProxy, XBoxProxy,
@@ -11,7 +11,7 @@ use chacha::{
 fn main() -> Result<(), Error> {
     pretty_env_logger::init();
 
-    let mut ctx = initialize_interpreter("../sarzak/models/sarzak.v2.json", "fib.道")?;
+    let mut ctx = initialize_interpreter_paths("../sarzak/models/sarzak.v2.json", "fib.道")?;
 
     // ctx.register_model("../sarzak/models/merlin.v2.json")?;
 

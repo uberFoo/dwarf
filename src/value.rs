@@ -53,6 +53,7 @@ pub trait StoreProxy: fmt::Display + fmt::Debug + Send + Sync {
 pub enum Value {
     Boolean(bool),
     Chunk(&'static str, usize),
+    Char(char),
     Empty,
     Error(String),
     Float(DwarfFloat),
@@ -113,6 +114,7 @@ impl fmt::Display for Value {
         match self {
             Self::Boolean(bool_) => write!(f, "{}", bool_),
             Self::Chunk(name, number) => write!(f, "{} [{}]", name, number),
+            Self::Char(char_) => write!(f, "{}", char_),
             Self::Empty => write!(f, "()"),
             Self::Error(e) => write!(f, "{}: {}", Colour::Red.bold().paint("error"), e),
             Self::Float(num) => write!(f, "{}", num),
