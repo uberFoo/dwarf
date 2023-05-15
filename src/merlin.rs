@@ -26,7 +26,10 @@ use crate::{ChaChaError, Result, StoreProxy, Value};
 
 lazy_static! {
     static ref MODEL: Arc<RwLock<MerlinStore>> = Arc::new(RwLock::new(
-        MerlinStore::load("/Users/uberfoo/projects/sarzak/sarzak/models/lu_dog.v2.json").unwrap()
+        MerlinStore::load(
+            "/Users/uberfoo/projects/sarzak/sarzak/models/lu_dog.v2.json/merlin.json"
+        )
+        .unwrap()
     ));
 }
 
@@ -82,12 +85,12 @@ impl StoreProxy for AnchorProxy {
     fn call(
         &mut self,
         method: &str,
-        mut args: VecDeque<Value>,
-    ) -> Result<(Value, Arc<RwLock<ValueType>>)> {
+        args: &mut VecDeque<Arc<RwLock<Value>>>,
+    ) -> Result<(Arc<RwLock<Value>>, Arc<RwLock<ValueType>>)> {
         if let Some(self_) = &self.self_ {
             match method {
                 "id" => Ok((
-                    Value::Uuid(self_.read().unwrap().id),
+                    Arc::new(RwLock::new(Value::Uuid(self_.read().unwrap().id))),
                     self.lu_dog
                         .read()
                         .unwrap()
@@ -95,23 +98,28 @@ impl StoreProxy for AnchorProxy {
                         .unwrap(),
                 )),
                 道 => Ok((
-                    Value::Error(format!("unknown method `{}`", 道)),
+                    Arc::new(RwLock::new(Value::Error(format!(
+                        "unknown method `{}`",
+                        道
+                    )))),
                     Arc::new(RwLock::new(ValueType::Empty(Empty::new().id()))),
                 )),
             }
         } else {
+            let arg = args.pop_front().unwrap();
+            let arg = arg.read().unwrap();
             match method {
                 "new" => {
-                    let offset = args.pop_front().unwrap().try_into()?;
-                    let x_offset = args.pop_front().unwrap().try_into()?;
-                    let y_offset = args.pop_front().unwrap().try_into()?;
-                    let edge: EdgeProxy = args.pop_front().unwrap().try_into()?;
+                    let offset = (&*arg).try_into()?;
+                    let x_offset = (&*arg).try_into()?;
+                    let y_offset = (&*arg).try_into()?;
+                    let edge: EdgeProxy = (&*arg).try_into()?;
                     let edge = edge.self_.unwrap();
-                    let glyph: GlyphProxy = args.pop_front().unwrap().try_into()?;
+                    let glyph: GlyphProxy = (&*arg).try_into()?;
                     let glyph = glyph.self_.unwrap();
-                    let x_box: XBoxProxy = args.pop_front().unwrap().try_into()?;
+                    let x_box: XBoxProxy = (&*arg).try_into()?;
                     let x_box = x_box.self_.unwrap();
-                    let line: LineProxy = args.pop_front().unwrap().try_into()?;
+                    let line: LineProxy = (&*arg).try_into()?;
                     let line = line.self_.unwrap();
 
                     let mut model = MODEL.write().unwrap();
@@ -123,7 +131,9 @@ impl StoreProxy for AnchorProxy {
                     anchor_proxy.self_ = Some(anchor);
 
                     Ok((
-                        Value::ProxyType(Arc::new(RwLock::new(anchor_proxy))),
+                        Arc::new(RwLock::new(Value::ProxyType(Arc::new(RwLock::new(
+                            anchor_proxy,
+                        ))))),
                         self.type_.clone(),
                     ))
                 }
@@ -135,17 +145,22 @@ impl StoreProxy for AnchorProxy {
                         .map(|anchor| {
                             let mut anchor_proxy = self.clone();
                             anchor_proxy.self_ = Some(anchor);
-                            Value::ProxyType(Arc::new(RwLock::new(anchor_proxy)))
+                            Arc::new(RwLock::new(Value::ProxyType(Arc::new(RwLock::new(
+                                anchor_proxy,
+                            )))))
                         })
                         .collect();
 
                     let list = List::new(&self.type_, &mut self.lu_dog.write().unwrap());
                     let ty = ValueType::new_list(&list, &mut self.lu_dog.write().unwrap());
 
-                    Ok((Value::Vector(instances), ty))
+                    Ok((Arc::new(RwLock::new(Value::Vector(instances))), ty))
                 }
                 道 => Ok((
-                    Value::Error(format!("unknown static method `{}`", 道)),
+                    Arc::new(RwLock::new(Value::Error(format!(
+                        "unknown static method `{}`",
+                        道
+                    )))),
                     Arc::new(RwLock::new(ValueType::Empty(Empty::new().id()))),
                 )),
             }
@@ -153,13 +168,19 @@ impl StoreProxy for AnchorProxy {
     }
 
     /// This method acts as the field access proxy for the type.
-    fn get_attr_value(&self, field: &str) -> Result<Value> {
+    fn get_attr_value(&self, field: &str) -> Result<Arc<RwLock<Value>>> {
         if let Some(self_) = &self.self_ {
             match field {
-                "id" => Ok(Value::Uuid(self_.read().unwrap().id)),
-                "offset" => Ok(Value::Float(self_.read().unwrap().offset)),
-                "x_offset" => Ok(Value::Integer(self_.read().unwrap().x_offset)),
-                "y_offset" => Ok(Value::Integer(self_.read().unwrap().y_offset)),
+                "id" => Ok(Arc::new(RwLock::new(Value::Uuid(self_.read().unwrap().id)))),
+                "offset" => Ok(Arc::new(RwLock::new(Value::Float(
+                    self_.read().unwrap().offset,
+                )))),
+                "x_offset" => Ok(Arc::new(RwLock::new(Value::Integer(
+                    self_.read().unwrap().x_offset,
+                )))),
+                "y_offset" => Ok(Arc::new(RwLock::new(Value::Integer(
+                    self_.read().unwrap().y_offset,
+                )))),
                 "edge" => {
                     let edge = MODEL
                         .read()
@@ -167,7 +188,7 @@ impl StoreProxy for AnchorProxy {
                         .exhume_anchor(&self_.read().unwrap().edge)
                         .unwrap();
 
-                    Ok((edge, self.lu_dog.clone()).into())
+                    Ok(Arc::new(RwLock::new((edge, self.lu_dog.clone()).into())))
                 }
                 "glyph" => {
                     let glyph = MODEL
@@ -176,7 +197,7 @@ impl StoreProxy for AnchorProxy {
                         .exhume_anchor(&self_.read().unwrap().glyph)
                         .unwrap();
 
-                    Ok((glyph, self.lu_dog.clone()).into())
+                    Ok(Arc::new(RwLock::new((glyph, self.lu_dog.clone()).into())))
                 }
                 "x_box" => {
                     let x_box = MODEL
@@ -185,7 +206,7 @@ impl StoreProxy for AnchorProxy {
                         .exhume_anchor(&self_.read().unwrap().x_box)
                         .unwrap();
 
-                    Ok((x_box, self.lu_dog.clone()).into())
+                    Ok(Arc::new(RwLock::new((x_box, self.lu_dog.clone()).into())))
                 }
                 "line" => {
                     let line = MODEL
@@ -194,7 +215,7 @@ impl StoreProxy for AnchorProxy {
                         .exhume_anchor(&self_.read().unwrap().line)
                         .unwrap();
 
-                    Ok((line, self.lu_dog.clone()).into())
+                    Ok(Arc::new(RwLock::new((line, self.lu_dog.clone()).into())))
                 }
                 _ => Err(ChaChaError::NoSuchField {
                     field: field.to_owned(),
@@ -234,10 +255,10 @@ impl From<(Arc<RwLock<Anchor>>, Arc<RwLock<LuDogStore>>)> for Value {
     }
 }
 
-impl TryFrom<Value> for AnchorProxy {
+impl TryFrom<&Value> for AnchorProxy {
     type Error = ChaChaError;
 
-    fn try_from(value: Value) -> Result<Self, <AnchorProxy as TryFrom<Value>>::Error> {
+    fn try_from(value: &Value) -> Result<Self, <AnchorProxy as TryFrom<&Value>>::Error> {
         match value {
             Value::ProxyType(proxy) => {
                 let read_proxy = proxy.read().unwrap();
@@ -312,12 +333,12 @@ impl StoreProxy for BisectionProxy {
     fn call(
         &mut self,
         method: &str,
-        mut args: VecDeque<Value>,
-    ) -> Result<(Value, Arc<RwLock<ValueType>>)> {
+        args: &mut VecDeque<Arc<RwLock<Value>>>,
+    ) -> Result<(Arc<RwLock<Value>>, Arc<RwLock<ValueType>>)> {
         if let Some(self_) = &self.self_ {
             match method {
                 "id" => Ok((
-                    Value::Uuid(self_.read().unwrap().id),
+                    Arc::new(RwLock::new(Value::Uuid(self_.read().unwrap().id))),
                     self.lu_dog
                         .read()
                         .unwrap()
@@ -325,15 +346,20 @@ impl StoreProxy for BisectionProxy {
                         .unwrap(),
                 )),
                 道 => Ok((
-                    Value::Error(format!("unknown method `{}`", 道)),
+                    Arc::new(RwLock::new(Value::Error(format!(
+                        "unknown method `{}`",
+                        道
+                    )))),
                     Arc::new(RwLock::new(ValueType::Empty(Empty::new().id()))),
                 )),
             }
         } else {
+            let arg = args.pop_front().unwrap();
+            let arg = arg.read().unwrap();
             match method {
                 "new" => {
-                    let offset = args.pop_front().unwrap().try_into()?;
-                    let segment: LineSegmentProxy = args.pop_front().unwrap().try_into()?;
+                    let offset = (&*arg).try_into()?;
+                    let segment: LineSegmentProxy = (&*arg).try_into()?;
                     let segment = segment.self_.unwrap();
 
                     let mut model = MODEL.write().unwrap();
@@ -343,7 +369,9 @@ impl StoreProxy for BisectionProxy {
                     bisection_proxy.self_ = Some(bisection);
 
                     Ok((
-                        Value::ProxyType(Arc::new(RwLock::new(bisection_proxy))),
+                        Arc::new(RwLock::new(Value::ProxyType(Arc::new(RwLock::new(
+                            bisection_proxy,
+                        ))))),
                         self.type_.clone(),
                     ))
                 }
@@ -355,17 +383,22 @@ impl StoreProxy for BisectionProxy {
                         .map(|bisection| {
                             let mut bisection_proxy = self.clone();
                             bisection_proxy.self_ = Some(bisection);
-                            Value::ProxyType(Arc::new(RwLock::new(bisection_proxy)))
+                            Arc::new(RwLock::new(Value::ProxyType(Arc::new(RwLock::new(
+                                bisection_proxy,
+                            )))))
                         })
                         .collect();
 
                     let list = List::new(&self.type_, &mut self.lu_dog.write().unwrap());
                     let ty = ValueType::new_list(&list, &mut self.lu_dog.write().unwrap());
 
-                    Ok((Value::Vector(instances), ty))
+                    Ok((Arc::new(RwLock::new(Value::Vector(instances))), ty))
                 }
                 道 => Ok((
-                    Value::Error(format!("unknown static method `{}`", 道)),
+                    Arc::new(RwLock::new(Value::Error(format!(
+                        "unknown static method `{}`",
+                        道
+                    )))),
                     Arc::new(RwLock::new(ValueType::Empty(Empty::new().id()))),
                 )),
             }
@@ -373,11 +406,13 @@ impl StoreProxy for BisectionProxy {
     }
 
     /// This method acts as the field access proxy for the type.
-    fn get_attr_value(&self, field: &str) -> Result<Value> {
+    fn get_attr_value(&self, field: &str) -> Result<Arc<RwLock<Value>>> {
         if let Some(self_) = &self.self_ {
             match field {
-                "id" => Ok(Value::Uuid(self_.read().unwrap().id)),
-                "offset" => Ok(Value::Float(self_.read().unwrap().offset)),
+                "id" => Ok(Arc::new(RwLock::new(Value::Uuid(self_.read().unwrap().id)))),
+                "offset" => Ok(Arc::new(RwLock::new(Value::Float(
+                    self_.read().unwrap().offset,
+                )))),
                 "segment" => {
                     let segment = MODEL
                         .read()
@@ -385,7 +420,7 @@ impl StoreProxy for BisectionProxy {
                         .exhume_bisection(&self_.read().unwrap().segment)
                         .unwrap();
 
-                    Ok((segment, self.lu_dog.clone()).into())
+                    Ok(Arc::new(RwLock::new((segment, self.lu_dog.clone()).into())))
                 }
                 _ => Err(ChaChaError::NoSuchField {
                     field: field.to_owned(),
@@ -425,10 +460,10 @@ impl From<(Arc<RwLock<Bisection>>, Arc<RwLock<LuDogStore>>)> for Value {
     }
 }
 
-impl TryFrom<Value> for BisectionProxy {
+impl TryFrom<&Value> for BisectionProxy {
     type Error = ChaChaError;
 
-    fn try_from(value: Value) -> Result<Self, <BisectionProxy as TryFrom<Value>>::Error> {
+    fn try_from(value: &Value) -> Result<Self, <BisectionProxy as TryFrom<&Value>>::Error> {
         match value {
             Value::ProxyType(proxy) => {
                 let read_proxy = proxy.read().unwrap();
@@ -503,12 +538,12 @@ impl StoreProxy for XBoxProxy {
     fn call(
         &mut self,
         method: &str,
-        mut args: VecDeque<Value>,
-    ) -> Result<(Value, Arc<RwLock<ValueType>>)> {
+        args: &mut VecDeque<Arc<RwLock<Value>>>,
+    ) -> Result<(Arc<RwLock<Value>>, Arc<RwLock<ValueType>>)> {
         if let Some(self_) = &self.self_ {
             match method {
                 "id" => Ok((
-                    Value::Uuid(self_.read().unwrap().id),
+                    Arc::new(RwLock::new(Value::Uuid(self_.read().unwrap().id))),
                     self.lu_dog
                         .read()
                         .unwrap()
@@ -516,11 +551,16 @@ impl StoreProxy for XBoxProxy {
                         .unwrap(),
                 )),
                 道 => Ok((
-                    Value::Error(format!("unknown method `{}`", 道)),
+                    Arc::new(RwLock::new(Value::Error(format!(
+                        "unknown method `{}`",
+                        道
+                    )))),
                     Arc::new(RwLock::new(ValueType::Empty(Empty::new().id()))),
                 )),
             }
         } else {
+            let arg = args.pop_front().unwrap();
+            let arg = arg.read().unwrap();
             match method {
                 "instances" => {
                     let instances = MODEL
@@ -530,17 +570,22 @@ impl StoreProxy for XBoxProxy {
                         .map(|x_box| {
                             let mut x_box_proxy = self.clone();
                             x_box_proxy.self_ = Some(x_box);
-                            Value::ProxyType(Arc::new(RwLock::new(x_box_proxy)))
+                            Arc::new(RwLock::new(Value::ProxyType(Arc::new(RwLock::new(
+                                x_box_proxy,
+                            )))))
                         })
                         .collect();
 
                     let list = List::new(&self.type_, &mut self.lu_dog.write().unwrap());
                     let ty = ValueType::new_list(&list, &mut self.lu_dog.write().unwrap());
 
-                    Ok((Value::Vector(instances), ty))
+                    Ok((Arc::new(RwLock::new(Value::Vector(instances))), ty))
                 }
                 道 => Ok((
-                    Value::Error(format!("unknown static method `{}`", 道)),
+                    Arc::new(RwLock::new(Value::Error(format!(
+                        "unknown static method `{}`",
+                        道
+                    )))),
                     Arc::new(RwLock::new(ValueType::Empty(Empty::new().id()))),
                 )),
             }
@@ -548,14 +593,22 @@ impl StoreProxy for XBoxProxy {
     }
 
     /// This method acts as the field access proxy for the type.
-    fn get_attr_value(&self, field: &str) -> Result<Value> {
+    fn get_attr_value(&self, field: &str) -> Result<Arc<RwLock<Value>>> {
         if let Some(self_) = &self.self_ {
             match field {
-                "height" => Ok(Value::Integer(self_.read().unwrap().height)),
-                "id" => Ok(Value::Uuid(self_.read().unwrap().id)),
-                "width" => Ok(Value::Integer(self_.read().unwrap().width)),
-                "x" => Ok(Value::Integer(self_.read().unwrap().x)),
-                "y" => Ok(Value::Integer(self_.read().unwrap().y)),
+                "height" => Ok(Arc::new(RwLock::new(Value::Integer(
+                    self_.read().unwrap().height,
+                )))),
+                "id" => Ok(Arc::new(RwLock::new(Value::Uuid(self_.read().unwrap().id)))),
+                "width" => Ok(Arc::new(RwLock::new(Value::Integer(
+                    self_.read().unwrap().width,
+                )))),
+                "x" => Ok(Arc::new(RwLock::new(Value::Integer(
+                    self_.read().unwrap().x,
+                )))),
+                "y" => Ok(Arc::new(RwLock::new(Value::Integer(
+                    self_.read().unwrap().y,
+                )))),
                 "object" => {
                     let object = MODEL
                         .read()
@@ -563,7 +616,7 @@ impl StoreProxy for XBoxProxy {
                         .exhume_x_box(&self_.read().unwrap().object)
                         .unwrap();
 
-                    Ok((object, self.lu_dog.clone()).into())
+                    Ok(Arc::new(RwLock::new((object, self.lu_dog.clone()).into())))
                 }
                 _ => Err(ChaChaError::NoSuchField {
                     field: field.to_owned(),
@@ -599,10 +652,10 @@ impl From<(Arc<RwLock<XBox>>, Arc<RwLock<LuDogStore>>)> for Value {
     }
 }
 
-impl TryFrom<Value> for XBoxProxy {
+impl TryFrom<&Value> for XBoxProxy {
     type Error = ChaChaError;
 
-    fn try_from(value: Value) -> Result<Self, <XBoxProxy as TryFrom<Value>>::Error> {
+    fn try_from(value: &Value) -> Result<Self, <XBoxProxy as TryFrom<&Value>>::Error> {
         match value {
             Value::ProxyType(proxy) => {
                 let read_proxy = proxy.read().unwrap();
@@ -677,12 +730,12 @@ impl StoreProxy for EdgeProxy {
     fn call(
         &mut self,
         method: &str,
-        mut args: VecDeque<Value>,
-    ) -> Result<(Value, Arc<RwLock<ValueType>>)> {
+        args: &mut VecDeque<Arc<RwLock<Value>>>,
+    ) -> Result<(Arc<RwLock<Value>>, Arc<RwLock<ValueType>>)> {
         if let Some(self_) = &self.self_ {
             match method {
                 "id" => Ok((
-                    Value::Uuid(self_.read().unwrap().id()),
+                    Arc::new(RwLock::new(Value::Uuid(self_.read().unwrap().id()))),
                     self.lu_dog
                         .read()
                         .unwrap()
@@ -690,11 +743,16 @@ impl StoreProxy for EdgeProxy {
                         .unwrap(),
                 )),
                 道 => Ok((
-                    Value::Error(format!("unknown method `{}`", 道)),
+                    Arc::new(RwLock::new(Value::Error(format!(
+                        "unknown method `{}`",
+                        道
+                    )))),
                     Arc::new(RwLock::new(ValueType::Empty(Empty::new().id()))),
                 )),
             }
         } else {
+            let arg = args.pop_front().unwrap();
+            let arg = arg.read().unwrap();
             match method {
                 "new_bottom" => {
                     let mut model = MODEL.write().unwrap();
@@ -702,7 +760,9 @@ impl StoreProxy for EdgeProxy {
                     bottom_proxy.self_ = Some(Edge::new_bottom(&mut model));
 
                     Ok((
-                        Value::ProxyType(Arc::new(RwLock::new(bottom_proxy))),
+                        Arc::new(RwLock::new(Value::ProxyType(Arc::new(RwLock::new(
+                            bottom_proxy,
+                        ))))),
                         self.type_.clone(),
                     ))
                 }
@@ -712,7 +772,9 @@ impl StoreProxy for EdgeProxy {
                     left_proxy.self_ = Some(Edge::new_left(&mut model));
 
                     Ok((
-                        Value::ProxyType(Arc::new(RwLock::new(left_proxy))),
+                        Arc::new(RwLock::new(Value::ProxyType(Arc::new(RwLock::new(
+                            left_proxy,
+                        ))))),
                         self.type_.clone(),
                     ))
                 }
@@ -722,7 +784,9 @@ impl StoreProxy for EdgeProxy {
                     right_proxy.self_ = Some(Edge::new_right(&mut model));
 
                     Ok((
-                        Value::ProxyType(Arc::new(RwLock::new(right_proxy))),
+                        Arc::new(RwLock::new(Value::ProxyType(Arc::new(RwLock::new(
+                            right_proxy,
+                        ))))),
                         self.type_.clone(),
                     ))
                 }
@@ -732,7 +796,9 @@ impl StoreProxy for EdgeProxy {
                     top_proxy.self_ = Some(Edge::new_top(&mut model));
 
                     Ok((
-                        Value::ProxyType(Arc::new(RwLock::new(top_proxy))),
+                        Arc::new(RwLock::new(Value::ProxyType(Arc::new(RwLock::new(
+                            top_proxy,
+                        ))))),
                         self.type_.clone(),
                     ))
                 }
@@ -744,17 +810,22 @@ impl StoreProxy for EdgeProxy {
                         .map(|edge| {
                             let mut edge_proxy = self.clone();
                             edge_proxy.self_ = Some(edge);
-                            Value::ProxyType(Arc::new(RwLock::new(edge_proxy)))
+                            Arc::new(RwLock::new(Value::ProxyType(Arc::new(RwLock::new(
+                                edge_proxy,
+                            )))))
                         })
                         .collect();
 
                     let list = List::new(&self.type_, &mut self.lu_dog.write().unwrap());
                     let ty = ValueType::new_list(&list, &mut self.lu_dog.write().unwrap());
 
-                    Ok((Value::Vector(instances), ty))
+                    Ok((Arc::new(RwLock::new(Value::Vector(instances))), ty))
                 }
                 道 => Ok((
-                    Value::Error(format!("unknown static method `{}`", 道)),
+                    Arc::new(RwLock::new(Value::Error(format!(
+                        "unknown static method `{}`",
+                        道
+                    )))),
                     Arc::new(RwLock::new(ValueType::Empty(Empty::new().id()))),
                 )),
             }
@@ -762,10 +833,12 @@ impl StoreProxy for EdgeProxy {
     }
 
     /// This method acts as the field access proxy for the type.
-    fn get_attr_value(&self, field: &str) -> Result<Value> {
+    fn get_attr_value(&self, field: &str) -> Result<Arc<RwLock<Value>>> {
         if let Some(self_) = &self.self_ {
             match field {
-                "id" => Ok(Value::Uuid(self_.read().unwrap().id())),
+                "id" => Ok(Arc::new(RwLock::new(Value::Uuid(
+                    self_.read().unwrap().id(),
+                )))),
                 _ => Err(ChaChaError::NoSuchField {
                     field: field.to_owned(),
                 }),
@@ -815,10 +888,10 @@ impl From<(Arc<RwLock<Edge>>, Arc<RwLock<LuDogStore>>)> for Value {
     }
 }
 
-impl TryFrom<Value> for EdgeProxy {
+impl TryFrom<&Value> for EdgeProxy {
     type Error = ChaChaError;
 
-    fn try_from(value: Value) -> Result<Self, <EdgeProxy as TryFrom<Value>>::Error> {
+    fn try_from(value: &Value) -> Result<Self, <EdgeProxy as TryFrom<&Value>>::Error> {
         match value {
             Value::ProxyType(proxy) => {
                 let read_proxy = proxy.read().unwrap();
@@ -893,12 +966,12 @@ impl StoreProxy for GlyphProxy {
     fn call(
         &mut self,
         method: &str,
-        mut args: VecDeque<Value>,
-    ) -> Result<(Value, Arc<RwLock<ValueType>>)> {
+        args: &mut VecDeque<Arc<RwLock<Value>>>,
+    ) -> Result<(Arc<RwLock<Value>>, Arc<RwLock<ValueType>>)> {
         if let Some(self_) = &self.self_ {
             match method {
                 "id" => Ok((
-                    Value::Uuid(self_.read().unwrap().id),
+                    Arc::new(RwLock::new(Value::Uuid(self_.read().unwrap().id))),
                     self.lu_dog
                         .read()
                         .unwrap()
@@ -906,14 +979,19 @@ impl StoreProxy for GlyphProxy {
                         .unwrap(),
                 )),
                 道 => Ok((
-                    Value::Error(format!("unknown method `{}`", 道)),
+                    Arc::new(RwLock::new(Value::Error(format!(
+                        "unknown method `{}`",
+                        道
+                    )))),
                     Arc::new(RwLock::new(ValueType::Empty(Empty::new().id()))),
                 )),
             }
         } else {
+            let arg = args.pop_front().unwrap();
+            let arg = arg.read().unwrap();
             match method {
                 "new_many" => {
-                    let line: LineProxy = args.pop_front().unwrap().try_into()?;
+                    let line: LineProxy = (&*arg).try_into()?;
                     let line = line.self_.unwrap();
 
                     let mut model = MODEL.write().unwrap();
@@ -921,12 +999,14 @@ impl StoreProxy for GlyphProxy {
                     many_proxy.self_ = Some(Glyph::new_many(&line, &mut model));
 
                     Ok((
-                        Value::ProxyType(Arc::new(RwLock::new(many_proxy))),
+                        Arc::new(RwLock::new(Value::ProxyType(Arc::new(RwLock::new(
+                            many_proxy,
+                        ))))),
                         self.type_.clone(),
                     ))
                 }
                 "new_one" => {
-                    let line: LineProxy = args.pop_front().unwrap().try_into()?;
+                    let line: LineProxy = (&*arg).try_into()?;
                     let line = line.self_.unwrap();
 
                     let mut model = MODEL.write().unwrap();
@@ -934,12 +1014,14 @@ impl StoreProxy for GlyphProxy {
                     one_proxy.self_ = Some(Glyph::new_one(&line, &mut model));
 
                     Ok((
-                        Value::ProxyType(Arc::new(RwLock::new(one_proxy))),
+                        Arc::new(RwLock::new(Value::ProxyType(Arc::new(RwLock::new(
+                            one_proxy,
+                        ))))),
                         self.type_.clone(),
                     ))
                 }
                 "new_sub" => {
-                    let line: LineProxy = args.pop_front().unwrap().try_into()?;
+                    let line: LineProxy = (&*arg).try_into()?;
                     let line = line.self_.unwrap();
 
                     let mut model = MODEL.write().unwrap();
@@ -947,12 +1029,14 @@ impl StoreProxy for GlyphProxy {
                     sub_proxy.self_ = Some(Glyph::new_sub(&line, &mut model));
 
                     Ok((
-                        Value::ProxyType(Arc::new(RwLock::new(sub_proxy))),
+                        Arc::new(RwLock::new(Value::ProxyType(Arc::new(RwLock::new(
+                            sub_proxy,
+                        ))))),
                         self.type_.clone(),
                     ))
                 }
                 "new_x_super" => {
-                    let line: LineProxy = args.pop_front().unwrap().try_into()?;
+                    let line: LineProxy = (&*arg).try_into()?;
                     let line = line.self_.unwrap();
 
                     let mut model = MODEL.write().unwrap();
@@ -960,7 +1044,9 @@ impl StoreProxy for GlyphProxy {
                     x_super_proxy.self_ = Some(Glyph::new_x_super(&line, &mut model));
 
                     Ok((
-                        Value::ProxyType(Arc::new(RwLock::new(x_super_proxy))),
+                        Arc::new(RwLock::new(Value::ProxyType(Arc::new(RwLock::new(
+                            x_super_proxy,
+                        ))))),
                         self.type_.clone(),
                     ))
                 }
@@ -972,17 +1058,22 @@ impl StoreProxy for GlyphProxy {
                         .map(|glyph| {
                             let mut glyph_proxy = self.clone();
                             glyph_proxy.self_ = Some(glyph);
-                            Value::ProxyType(Arc::new(RwLock::new(glyph_proxy)))
+                            Arc::new(RwLock::new(Value::ProxyType(Arc::new(RwLock::new(
+                                glyph_proxy,
+                            )))))
                         })
                         .collect();
 
                     let list = List::new(&self.type_, &mut self.lu_dog.write().unwrap());
                     let ty = ValueType::new_list(&list, &mut self.lu_dog.write().unwrap());
 
-                    Ok((Value::Vector(instances), ty))
+                    Ok((Arc::new(RwLock::new(Value::Vector(instances))), ty))
                 }
                 道 => Ok((
-                    Value::Error(format!("unknown static method `{}`", 道)),
+                    Arc::new(RwLock::new(Value::Error(format!(
+                        "unknown static method `{}`",
+                        道
+                    )))),
                     Arc::new(RwLock::new(ValueType::Empty(Empty::new().id()))),
                 )),
             }
@@ -990,10 +1081,10 @@ impl StoreProxy for GlyphProxy {
     }
 
     /// This method acts as the field access proxy for the type.
-    fn get_attr_value(&self, field: &str) -> Result<Value> {
+    fn get_attr_value(&self, field: &str) -> Result<Arc<RwLock<Value>>> {
         if let Some(self_) = &self.self_ {
             match field {
-                "id" => Ok(Value::Uuid(self_.read().unwrap().id)),
+                "id" => Ok(Arc::new(RwLock::new(Value::Uuid(self_.read().unwrap().id)))),
                 "line" => {
                     let line = MODEL
                         .read()
@@ -1001,7 +1092,7 @@ impl StoreProxy for GlyphProxy {
                         .exhume_glyph(&self_.read().unwrap().line)
                         .unwrap();
 
-                    Ok((line, self.lu_dog.clone()).into())
+                    Ok(Arc::new(RwLock::new((line, self.lu_dog.clone()).into())))
                 }
                 _ => Err(ChaChaError::NoSuchField {
                     field: field.to_owned(),
@@ -1037,10 +1128,10 @@ impl From<(Arc<RwLock<Glyph>>, Arc<RwLock<LuDogStore>>)> for Value {
     }
 }
 
-impl TryFrom<Value> for GlyphProxy {
+impl TryFrom<&Value> for GlyphProxy {
     type Error = ChaChaError;
 
-    fn try_from(value: Value) -> Result<Self, <GlyphProxy as TryFrom<Value>>::Error> {
+    fn try_from(value: &Value) -> Result<Self, <GlyphProxy as TryFrom<&Value>>::Error> {
         match value {
             Value::ProxyType(proxy) => {
                 let read_proxy = proxy.read().unwrap();
@@ -1115,12 +1206,12 @@ impl StoreProxy for LineProxy {
     fn call(
         &mut self,
         method: &str,
-        mut args: VecDeque<Value>,
-    ) -> Result<(Value, Arc<RwLock<ValueType>>)> {
+        args: &mut VecDeque<Arc<RwLock<Value>>>,
+    ) -> Result<(Arc<RwLock<Value>>, Arc<RwLock<ValueType>>)> {
         if let Some(self_) = &self.self_ {
             match method {
                 "id" => Ok((
-                    Value::Uuid(self_.read().unwrap().id),
+                    Arc::new(RwLock::new(Value::Uuid(self_.read().unwrap().id))),
                     self.lu_dog
                         .read()
                         .unwrap()
@@ -1128,11 +1219,16 @@ impl StoreProxy for LineProxy {
                         .unwrap(),
                 )),
                 道 => Ok((
-                    Value::Error(format!("unknown method `{}`", 道)),
+                    Arc::new(RwLock::new(Value::Error(format!(
+                        "unknown method `{}`",
+                        道
+                    )))),
                     Arc::new(RwLock::new(ValueType::Empty(Empty::new().id()))),
                 )),
             }
         } else {
+            let arg = args.pop_front().unwrap();
+            let arg = arg.read().unwrap();
             match method {
                 "instances" => {
                     let instances = MODEL
@@ -1142,17 +1238,22 @@ impl StoreProxy for LineProxy {
                         .map(|line| {
                             let mut line_proxy = self.clone();
                             line_proxy.self_ = Some(line);
-                            Value::ProxyType(Arc::new(RwLock::new(line_proxy)))
+                            Arc::new(RwLock::new(Value::ProxyType(Arc::new(RwLock::new(
+                                line_proxy,
+                            )))))
                         })
                         .collect();
 
                     let list = List::new(&self.type_, &mut self.lu_dog.write().unwrap());
                     let ty = ValueType::new_list(&list, &mut self.lu_dog.write().unwrap());
 
-                    Ok((Value::Vector(instances), ty))
+                    Ok((Arc::new(RwLock::new(Value::Vector(instances))), ty))
                 }
                 道 => Ok((
-                    Value::Error(format!("unknown static method `{}`", 道)),
+                    Arc::new(RwLock::new(Value::Error(format!(
+                        "unknown static method `{}`",
+                        道
+                    )))),
                     Arc::new(RwLock::new(ValueType::Empty(Empty::new().id()))),
                 )),
             }
@@ -1160,10 +1261,10 @@ impl StoreProxy for LineProxy {
     }
 
     /// This method acts as the field access proxy for the type.
-    fn get_attr_value(&self, field: &str) -> Result<Value> {
+    fn get_attr_value(&self, field: &str) -> Result<Arc<RwLock<Value>>> {
         if let Some(self_) = &self.self_ {
             match field {
-                "id" => Ok(Value::Uuid(self_.read().unwrap().id)),
+                "id" => Ok(Arc::new(RwLock::new(Value::Uuid(self_.read().unwrap().id)))),
                 "relationship" => {
                     let relationship = MODEL
                         .read()
@@ -1171,7 +1272,9 @@ impl StoreProxy for LineProxy {
                         .exhume_line(&self_.read().unwrap().relationship)
                         .unwrap();
 
-                    Ok((relationship, self.lu_dog.clone()).into())
+                    Ok(Arc::new(RwLock::new(
+                        (relationship, self.lu_dog.clone()).into(),
+                    )))
                 }
                 _ => Err(ChaChaError::NoSuchField {
                     field: field.to_owned(),
@@ -1207,10 +1310,10 @@ impl From<(Arc<RwLock<Line>>, Arc<RwLock<LuDogStore>>)> for Value {
     }
 }
 
-impl TryFrom<Value> for LineProxy {
+impl TryFrom<&Value> for LineProxy {
     type Error = ChaChaError;
 
-    fn try_from(value: Value) -> Result<Self, <LineProxy as TryFrom<Value>>::Error> {
+    fn try_from(value: &Value) -> Result<Self, <LineProxy as TryFrom<&Value>>::Error> {
         match value {
             Value::ProxyType(proxy) => {
                 let read_proxy = proxy.read().unwrap();
@@ -1285,12 +1388,12 @@ impl StoreProxy for LineSegmentProxy {
     fn call(
         &mut self,
         method: &str,
-        mut args: VecDeque<Value>,
-    ) -> Result<(Value, Arc<RwLock<ValueType>>)> {
+        args: &mut VecDeque<Arc<RwLock<Value>>>,
+    ) -> Result<(Arc<RwLock<Value>>, Arc<RwLock<ValueType>>)> {
         if let Some(self_) = &self.self_ {
             match method {
                 "id" => Ok((
-                    Value::Uuid(self_.read().unwrap().id),
+                    Arc::new(RwLock::new(Value::Uuid(self_.read().unwrap().id))),
                     self.lu_dog
                         .read()
                         .unwrap()
@@ -1298,14 +1401,19 @@ impl StoreProxy for LineSegmentProxy {
                         .unwrap(),
                 )),
                 道 => Ok((
-                    Value::Error(format!("unknown method `{}`", 道)),
+                    Arc::new(RwLock::new(Value::Error(format!(
+                        "unknown method `{}`",
+                        道
+                    )))),
                     Arc::new(RwLock::new(ValueType::Empty(Empty::new().id()))),
                 )),
             }
         } else {
+            let arg = args.pop_front().unwrap();
+            let arg = arg.read().unwrap();
             match method {
                 "new" => {
-                    let line: LineProxy = args.pop_front().unwrap().try_into()?;
+                    let line: LineProxy = (&*arg).try_into()?;
                     let line = line.self_.unwrap();
 
                     let mut model = MODEL.write().unwrap();
@@ -1315,7 +1423,9 @@ impl StoreProxy for LineSegmentProxy {
                     line_segment_proxy.self_ = Some(line_segment);
 
                     Ok((
-                        Value::ProxyType(Arc::new(RwLock::new(line_segment_proxy))),
+                        Arc::new(RwLock::new(Value::ProxyType(Arc::new(RwLock::new(
+                            line_segment_proxy,
+                        ))))),
                         self.type_.clone(),
                     ))
                 }
@@ -1327,17 +1437,22 @@ impl StoreProxy for LineSegmentProxy {
                         .map(|line_segment| {
                             let mut line_segment_proxy = self.clone();
                             line_segment_proxy.self_ = Some(line_segment);
-                            Value::ProxyType(Arc::new(RwLock::new(line_segment_proxy)))
+                            Arc::new(RwLock::new(Value::ProxyType(Arc::new(RwLock::new(
+                                line_segment_proxy,
+                            )))))
                         })
                         .collect();
 
                     let list = List::new(&self.type_, &mut self.lu_dog.write().unwrap());
                     let ty = ValueType::new_list(&list, &mut self.lu_dog.write().unwrap());
 
-                    Ok((Value::Vector(instances), ty))
+                    Ok((Arc::new(RwLock::new(Value::Vector(instances))), ty))
                 }
                 道 => Ok((
-                    Value::Error(format!("unknown static method `{}`", 道)),
+                    Arc::new(RwLock::new(Value::Error(format!(
+                        "unknown static method `{}`",
+                        道
+                    )))),
                     Arc::new(RwLock::new(ValueType::Empty(Empty::new().id()))),
                 )),
             }
@@ -1345,10 +1460,10 @@ impl StoreProxy for LineSegmentProxy {
     }
 
     /// This method acts as the field access proxy for the type.
-    fn get_attr_value(&self, field: &str) -> Result<Value> {
+    fn get_attr_value(&self, field: &str) -> Result<Arc<RwLock<Value>>> {
         if let Some(self_) = &self.self_ {
             match field {
-                "id" => Ok(Value::Uuid(self_.read().unwrap().id)),
+                "id" => Ok(Arc::new(RwLock::new(Value::Uuid(self_.read().unwrap().id)))),
                 "line" => {
                     let line = MODEL
                         .read()
@@ -1356,7 +1471,7 @@ impl StoreProxy for LineSegmentProxy {
                         .exhume_line_segment(&self_.read().unwrap().line)
                         .unwrap();
 
-                    Ok((line, self.lu_dog.clone()).into())
+                    Ok(Arc::new(RwLock::new((line, self.lu_dog.clone()).into())))
                 }
                 _ => Err(ChaChaError::NoSuchField {
                     field: field.to_owned(),
@@ -1396,10 +1511,10 @@ impl From<(Arc<RwLock<LineSegment>>, Arc<RwLock<LuDogStore>>)> for Value {
     }
 }
 
-impl TryFrom<Value> for LineSegmentProxy {
+impl TryFrom<&Value> for LineSegmentProxy {
     type Error = ChaChaError;
 
-    fn try_from(value: Value) -> Result<Self, <LineSegmentProxy as TryFrom<Value>>::Error> {
+    fn try_from(value: &Value) -> Result<Self, <LineSegmentProxy as TryFrom<&Value>>::Error> {
         match value {
             Value::ProxyType(proxy) => {
                 let read_proxy = proxy.read().unwrap();
@@ -1474,12 +1589,12 @@ impl StoreProxy for LineSegmentPointProxy {
     fn call(
         &mut self,
         method: &str,
-        mut args: VecDeque<Value>,
-    ) -> Result<(Value, Arc<RwLock<ValueType>>)> {
+        args: &mut VecDeque<Arc<RwLock<Value>>>,
+    ) -> Result<(Arc<RwLock<Value>>, Arc<RwLock<ValueType>>)> {
         if let Some(self_) = &self.self_ {
             match method {
                 "id" => Ok((
-                    Value::Uuid(self_.read().unwrap().id),
+                    Arc::new(RwLock::new(Value::Uuid(self_.read().unwrap().id))),
                     self.lu_dog
                         .read()
                         .unwrap()
@@ -1487,16 +1602,21 @@ impl StoreProxy for LineSegmentPointProxy {
                         .unwrap(),
                 )),
                 道 => Ok((
-                    Value::Error(format!("unknown method `{}`", 道)),
+                    Arc::new(RwLock::new(Value::Error(format!(
+                        "unknown method `{}`",
+                        道
+                    )))),
                     Arc::new(RwLock::new(ValueType::Empty(Empty::new().id()))),
                 )),
             }
         } else {
+            let arg = args.pop_front().unwrap();
+            let arg = arg.read().unwrap();
             match method {
                 "new" => {
-                    let segment: LineSegmentProxy = args.pop_front().unwrap().try_into()?;
+                    let segment: LineSegmentProxy = (&*arg).try_into()?;
                     let segment = segment.self_.unwrap();
-                    let point: PointProxy = args.pop_front().unwrap().try_into()?;
+                    let point: PointProxy = (&*arg).try_into()?;
                     let point = point.self_.unwrap();
 
                     let mut model = MODEL.write().unwrap();
@@ -1506,7 +1626,9 @@ impl StoreProxy for LineSegmentPointProxy {
                     line_segment_point_proxy.self_ = Some(line_segment_point);
 
                     Ok((
-                        Value::ProxyType(Arc::new(RwLock::new(line_segment_point_proxy))),
+                        Arc::new(RwLock::new(Value::ProxyType(Arc::new(RwLock::new(
+                            line_segment_point_proxy,
+                        ))))),
                         self.type_.clone(),
                     ))
                 }
@@ -1518,17 +1640,22 @@ impl StoreProxy for LineSegmentPointProxy {
                         .map(|line_segment_point| {
                             let mut line_segment_point_proxy = self.clone();
                             line_segment_point_proxy.self_ = Some(line_segment_point);
-                            Value::ProxyType(Arc::new(RwLock::new(line_segment_point_proxy)))
+                            Arc::new(RwLock::new(Value::ProxyType(Arc::new(RwLock::new(
+                                line_segment_point_proxy,
+                            )))))
                         })
                         .collect();
 
                     let list = List::new(&self.type_, &mut self.lu_dog.write().unwrap());
                     let ty = ValueType::new_list(&list, &mut self.lu_dog.write().unwrap());
 
-                    Ok((Value::Vector(instances), ty))
+                    Ok((Arc::new(RwLock::new(Value::Vector(instances))), ty))
                 }
                 道 => Ok((
-                    Value::Error(format!("unknown static method `{}`", 道)),
+                    Arc::new(RwLock::new(Value::Error(format!(
+                        "unknown static method `{}`",
+                        道
+                    )))),
                     Arc::new(RwLock::new(ValueType::Empty(Empty::new().id()))),
                 )),
             }
@@ -1536,10 +1663,10 @@ impl StoreProxy for LineSegmentPointProxy {
     }
 
     /// This method acts as the field access proxy for the type.
-    fn get_attr_value(&self, field: &str) -> Result<Value> {
+    fn get_attr_value(&self, field: &str) -> Result<Arc<RwLock<Value>>> {
         if let Some(self_) = &self.self_ {
             match field {
-                "id" => Ok(Value::Uuid(self_.read().unwrap().id)),
+                "id" => Ok(Arc::new(RwLock::new(Value::Uuid(self_.read().unwrap().id)))),
                 "segment" => {
                     let segment = MODEL
                         .read()
@@ -1547,7 +1674,7 @@ impl StoreProxy for LineSegmentPointProxy {
                         .exhume_line_segment_point(&self_.read().unwrap().segment)
                         .unwrap();
 
-                    Ok((segment, self.lu_dog.clone()).into())
+                    Ok(Arc::new(RwLock::new((segment, self.lu_dog.clone()).into())))
                 }
                 "point" => {
                     let point = MODEL
@@ -1556,7 +1683,7 @@ impl StoreProxy for LineSegmentPointProxy {
                         .exhume_line_segment_point(&self_.read().unwrap().point)
                         .unwrap();
 
-                    Ok((point, self.lu_dog.clone()).into())
+                    Ok(Arc::new(RwLock::new((point, self.lu_dog.clone()).into())))
                 }
                 _ => Err(ChaChaError::NoSuchField {
                     field: field.to_owned(),
@@ -1598,10 +1725,10 @@ impl From<(Arc<RwLock<LineSegmentPoint>>, Arc<RwLock<LuDogStore>>)> for Value {
     }
 }
 
-impl TryFrom<Value> for LineSegmentPointProxy {
+impl TryFrom<&Value> for LineSegmentPointProxy {
     type Error = ChaChaError;
 
-    fn try_from(value: Value) -> Result<Self, <LineSegmentPointProxy as TryFrom<Value>>::Error> {
+    fn try_from(value: &Value) -> Result<Self, <LineSegmentPointProxy as TryFrom<&Value>>::Error> {
         match value {
             Value::ProxyType(proxy) => {
                 let read_proxy = proxy.read().unwrap();
@@ -1676,12 +1803,12 @@ impl StoreProxy for PointProxy {
     fn call(
         &mut self,
         method: &str,
-        mut args: VecDeque<Value>,
-    ) -> Result<(Value, Arc<RwLock<ValueType>>)> {
+        args: &mut VecDeque<Arc<RwLock<Value>>>,
+    ) -> Result<(Arc<RwLock<Value>>, Arc<RwLock<ValueType>>)> {
         if let Some(self_) = &self.self_ {
             match method {
                 "id" => Ok((
-                    Value::Uuid(self_.read().unwrap().id),
+                    Arc::new(RwLock::new(Value::Uuid(self_.read().unwrap().id))),
                     self.lu_dog
                         .read()
                         .unwrap()
@@ -1689,25 +1816,17 @@ impl StoreProxy for PointProxy {
                         .unwrap(),
                 )),
                 道 => Ok((
-                    Value::Error(format!("unknown method `{}`", 道)),
+                    Arc::new(RwLock::new(Value::Error(format!(
+                        "unknown method `{}`",
+                        道
+                    )))),
                     Arc::new(RwLock::new(ValueType::Empty(Empty::new().id()))),
                 )),
             }
         } else {
+            let arg = args.pop_front().unwrap();
+            let arg = arg.read().unwrap();
             match method {
-                "new_inflection" => {
-                    let x = args.pop_front().unwrap().try_into()?;
-                    let y = args.pop_front().unwrap().try_into()?;
-
-                    let mut model = MODEL.write().unwrap();
-                    let mut inflection_proxy = self.clone();
-                    inflection_proxy.self_ = Some(Point::new_inflection(x, y, &mut model));
-
-                    Ok((
-                        Value::ProxyType(Arc::new(RwLock::new(inflection_proxy))),
-                        self.type_.clone(),
-                    ))
-                }
                 "instances" => {
                     let instances = MODEL
                         .read()
@@ -1716,17 +1835,22 @@ impl StoreProxy for PointProxy {
                         .map(|point| {
                             let mut point_proxy = self.clone();
                             point_proxy.self_ = Some(point);
-                            Value::ProxyType(Arc::new(RwLock::new(point_proxy)))
+                            Arc::new(RwLock::new(Value::ProxyType(Arc::new(RwLock::new(
+                                point_proxy,
+                            )))))
                         })
                         .collect();
 
                     let list = List::new(&self.type_, &mut self.lu_dog.write().unwrap());
                     let ty = ValueType::new_list(&list, &mut self.lu_dog.write().unwrap());
 
-                    Ok((Value::Vector(instances), ty))
+                    Ok((Arc::new(RwLock::new(Value::Vector(instances))), ty))
                 }
                 道 => Ok((
-                    Value::Error(format!("unknown static method `{}`", 道)),
+                    Arc::new(RwLock::new(Value::Error(format!(
+                        "unknown static method `{}`",
+                        道
+                    )))),
                     Arc::new(RwLock::new(ValueType::Empty(Empty::new().id()))),
                 )),
             }
@@ -1734,12 +1858,16 @@ impl StoreProxy for PointProxy {
     }
 
     /// This method acts as the field access proxy for the type.
-    fn get_attr_value(&self, field: &str) -> Result<Value> {
+    fn get_attr_value(&self, field: &str) -> Result<Arc<RwLock<Value>>> {
         if let Some(self_) = &self.self_ {
             match field {
-                "id" => Ok(Value::Uuid(self_.read().unwrap().id)),
-                "x" => Ok(Value::Integer(self_.read().unwrap().x)),
-                "y" => Ok(Value::Integer(self_.read().unwrap().y)),
+                "id" => Ok(Arc::new(RwLock::new(Value::Uuid(self_.read().unwrap().id)))),
+                "x" => Ok(Arc::new(RwLock::new(Value::Integer(
+                    self_.read().unwrap().x,
+                )))),
+                "y" => Ok(Arc::new(RwLock::new(Value::Integer(
+                    self_.read().unwrap().y,
+                )))),
                 _ => Err(ChaChaError::NoSuchField {
                     field: field.to_owned(),
                 }),
@@ -1774,10 +1902,10 @@ impl From<(Arc<RwLock<Point>>, Arc<RwLock<LuDogStore>>)> for Value {
     }
 }
 
-impl TryFrom<Value> for PointProxy {
+impl TryFrom<&Value> for PointProxy {
     type Error = ChaChaError;
 
-    fn try_from(value: Value) -> Result<Self, <PointProxy as TryFrom<Value>>::Error> {
+    fn try_from(value: &Value) -> Result<Self, <PointProxy as TryFrom<&Value>>::Error> {
         match value {
             Value::ProxyType(proxy) => {
                 let read_proxy = proxy.read().unwrap();
@@ -1852,12 +1980,12 @@ impl StoreProxy for RelationshipNameProxy {
     fn call(
         &mut self,
         method: &str,
-        mut args: VecDeque<Value>,
-    ) -> Result<(Value, Arc<RwLock<ValueType>>)> {
+        args: &mut VecDeque<Arc<RwLock<Value>>>,
+    ) -> Result<(Arc<RwLock<Value>>, Arc<RwLock<ValueType>>)> {
         if let Some(self_) = &self.self_ {
             match method {
                 "id" => Ok((
-                    Value::Uuid(self_.read().unwrap().id),
+                    Arc::new(RwLock::new(Value::Uuid(self_.read().unwrap().id))),
                     self.lu_dog
                         .read()
                         .unwrap()
@@ -1865,19 +1993,24 @@ impl StoreProxy for RelationshipNameProxy {
                         .unwrap(),
                 )),
                 道 => Ok((
-                    Value::Error(format!("unknown method `{}`", 道)),
+                    Arc::new(RwLock::new(Value::Error(format!(
+                        "unknown method `{}`",
+                        道
+                    )))),
                     Arc::new(RwLock::new(ValueType::Empty(Empty::new().id()))),
                 )),
             }
         } else {
+            let arg = args.pop_front().unwrap();
+            let arg = arg.read().unwrap();
             match method {
                 "new" => {
-                    let text = args.pop_front().unwrap().try_into()?;
-                    let x = args.pop_front().unwrap().try_into()?;
-                    let y = args.pop_front().unwrap().try_into()?;
-                    let origin: BisectionProxy = args.pop_front().unwrap().try_into()?;
+                    let text = (&*arg).try_into()?;
+                    let x = (&*arg).try_into()?;
+                    let y = (&*arg).try_into()?;
+                    let origin: BisectionProxy = (&*arg).try_into()?;
                     let origin = origin.self_.unwrap();
-                    let line: LineProxy = args.pop_front().unwrap().try_into()?;
+                    let line: LineProxy = (&*arg).try_into()?;
                     let line = line.self_.unwrap();
 
                     let mut model = MODEL.write().unwrap();
@@ -1888,7 +2021,9 @@ impl StoreProxy for RelationshipNameProxy {
                     relationship_name_proxy.self_ = Some(relationship_name);
 
                     Ok((
-                        Value::ProxyType(Arc::new(RwLock::new(relationship_name_proxy))),
+                        Arc::new(RwLock::new(Value::ProxyType(Arc::new(RwLock::new(
+                            relationship_name_proxy,
+                        ))))),
                         self.type_.clone(),
                     ))
                 }
@@ -1900,17 +2035,22 @@ impl StoreProxy for RelationshipNameProxy {
                         .map(|relationship_name| {
                             let mut relationship_name_proxy = self.clone();
                             relationship_name_proxy.self_ = Some(relationship_name);
-                            Value::ProxyType(Arc::new(RwLock::new(relationship_name_proxy)))
+                            Arc::new(RwLock::new(Value::ProxyType(Arc::new(RwLock::new(
+                                relationship_name_proxy,
+                            )))))
                         })
                         .collect();
 
                     let list = List::new(&self.type_, &mut self.lu_dog.write().unwrap());
                     let ty = ValueType::new_list(&list, &mut self.lu_dog.write().unwrap());
 
-                    Ok((Value::Vector(instances), ty))
+                    Ok((Arc::new(RwLock::new(Value::Vector(instances))), ty))
                 }
                 道 => Ok((
-                    Value::Error(format!("unknown static method `{}`", 道)),
+                    Arc::new(RwLock::new(Value::Error(format!(
+                        "unknown static method `{}`",
+                        道
+                    )))),
                     Arc::new(RwLock::new(ValueType::Empty(Empty::new().id()))),
                 )),
             }
@@ -1918,13 +2058,19 @@ impl StoreProxy for RelationshipNameProxy {
     }
 
     /// This method acts as the field access proxy for the type.
-    fn get_attr_value(&self, field: &str) -> Result<Value> {
+    fn get_attr_value(&self, field: &str) -> Result<Arc<RwLock<Value>>> {
         if let Some(self_) = &self.self_ {
             match field {
-                "id" => Ok(Value::Uuid(self_.read().unwrap().id)),
-                "text" => Ok(Value::String(self_.read().unwrap().text.clone())),
-                "x" => Ok(Value::Integer(self_.read().unwrap().x)),
-                "y" => Ok(Value::Integer(self_.read().unwrap().y)),
+                "id" => Ok(Arc::new(RwLock::new(Value::Uuid(self_.read().unwrap().id)))),
+                "text" => Ok(Arc::new(RwLock::new(Value::String(
+                    self_.read().unwrap().text.to_owned(),
+                )))),
+                "x" => Ok(Arc::new(RwLock::new(Value::Integer(
+                    self_.read().unwrap().x,
+                )))),
+                "y" => Ok(Arc::new(RwLock::new(Value::Integer(
+                    self_.read().unwrap().y,
+                )))),
                 "origin" => {
                     let origin = MODEL
                         .read()
@@ -1932,7 +2078,7 @@ impl StoreProxy for RelationshipNameProxy {
                         .exhume_relationship_name(&self_.read().unwrap().origin)
                         .unwrap();
 
-                    Ok((origin, self.lu_dog.clone()).into())
+                    Ok(Arc::new(RwLock::new((origin, self.lu_dog.clone()).into())))
                 }
                 "line" => {
                     let line = MODEL
@@ -1941,7 +2087,7 @@ impl StoreProxy for RelationshipNameProxy {
                         .exhume_relationship_name(&self_.read().unwrap().line)
                         .unwrap();
 
-                    Ok((line, self.lu_dog.clone()).into())
+                    Ok(Arc::new(RwLock::new((line, self.lu_dog.clone()).into())))
                 }
                 _ => Err(ChaChaError::NoSuchField {
                     field: field.to_owned(),
@@ -1983,10 +2129,10 @@ impl From<(Arc<RwLock<RelationshipName>>, Arc<RwLock<LuDogStore>>)> for Value {
     }
 }
 
-impl TryFrom<Value> for RelationshipNameProxy {
+impl TryFrom<&Value> for RelationshipNameProxy {
     type Error = ChaChaError;
 
-    fn try_from(value: Value) -> Result<Self, <RelationshipNameProxy as TryFrom<Value>>::Error> {
+    fn try_from(value: &Value) -> Result<Self, <RelationshipNameProxy as TryFrom<&Value>>::Error> {
         match value {
             Value::ProxyType(proxy) => {
                 let read_proxy = proxy.read().unwrap();
@@ -2061,12 +2207,12 @@ impl StoreProxy for RelationshipPhraseProxy {
     fn call(
         &mut self,
         method: &str,
-        mut args: VecDeque<Value>,
-    ) -> Result<(Value, Arc<RwLock<ValueType>>)> {
+        args: &mut VecDeque<Arc<RwLock<Value>>>,
+    ) -> Result<(Arc<RwLock<Value>>, Arc<RwLock<ValueType>>)> {
         if let Some(self_) = &self.self_ {
             match method {
                 "id" => Ok((
-                    Value::Uuid(self_.read().unwrap().id),
+                    Arc::new(RwLock::new(Value::Uuid(self_.read().unwrap().id))),
                     self.lu_dog
                         .read()
                         .unwrap()
@@ -2074,19 +2220,24 @@ impl StoreProxy for RelationshipPhraseProxy {
                         .unwrap(),
                 )),
                 道 => Ok((
-                    Value::Error(format!("unknown method `{}`", 道)),
+                    Arc::new(RwLock::new(Value::Error(format!(
+                        "unknown method `{}`",
+                        道
+                    )))),
                     Arc::new(RwLock::new(ValueType::Empty(Empty::new().id()))),
                 )),
             }
         } else {
+            let arg = args.pop_front().unwrap();
+            let arg = arg.read().unwrap();
             match method {
                 "new" => {
-                    let text = args.pop_front().unwrap().try_into()?;
-                    let x = args.pop_front().unwrap().try_into()?;
-                    let y = args.pop_front().unwrap().try_into()?;
-                    let origin: AnchorProxy = args.pop_front().unwrap().try_into()?;
+                    let text = (&*arg).try_into()?;
+                    let x = (&*arg).try_into()?;
+                    let y = (&*arg).try_into()?;
+                    let origin: AnchorProxy = (&*arg).try_into()?;
                     let origin = origin.self_.unwrap();
-                    let line: LineProxy = args.pop_front().unwrap().try_into()?;
+                    let line: LineProxy = (&*arg).try_into()?;
                     let line = line.self_.unwrap();
 
                     let mut model = MODEL.write().unwrap();
@@ -2097,7 +2248,9 @@ impl StoreProxy for RelationshipPhraseProxy {
                     relationship_phrase_proxy.self_ = Some(relationship_phrase);
 
                     Ok((
-                        Value::ProxyType(Arc::new(RwLock::new(relationship_phrase_proxy))),
+                        Arc::new(RwLock::new(Value::ProxyType(Arc::new(RwLock::new(
+                            relationship_phrase_proxy,
+                        ))))),
                         self.type_.clone(),
                     ))
                 }
@@ -2109,17 +2262,22 @@ impl StoreProxy for RelationshipPhraseProxy {
                         .map(|relationship_phrase| {
                             let mut relationship_phrase_proxy = self.clone();
                             relationship_phrase_proxy.self_ = Some(relationship_phrase);
-                            Value::ProxyType(Arc::new(RwLock::new(relationship_phrase_proxy)))
+                            Arc::new(RwLock::new(Value::ProxyType(Arc::new(RwLock::new(
+                                relationship_phrase_proxy,
+                            )))))
                         })
                         .collect();
 
                     let list = List::new(&self.type_, &mut self.lu_dog.write().unwrap());
                     let ty = ValueType::new_list(&list, &mut self.lu_dog.write().unwrap());
 
-                    Ok((Value::Vector(instances), ty))
+                    Ok((Arc::new(RwLock::new(Value::Vector(instances))), ty))
                 }
                 道 => Ok((
-                    Value::Error(format!("unknown static method `{}`", 道)),
+                    Arc::new(RwLock::new(Value::Error(format!(
+                        "unknown static method `{}`",
+                        道
+                    )))),
                     Arc::new(RwLock::new(ValueType::Empty(Empty::new().id()))),
                 )),
             }
@@ -2127,13 +2285,19 @@ impl StoreProxy for RelationshipPhraseProxy {
     }
 
     /// This method acts as the field access proxy for the type.
-    fn get_attr_value(&self, field: &str) -> Result<Value> {
+    fn get_attr_value(&self, field: &str) -> Result<Arc<RwLock<Value>>> {
         if let Some(self_) = &self.self_ {
             match field {
-                "id" => Ok(Value::Uuid(self_.read().unwrap().id)),
-                "text" => Ok(Value::String(self_.read().unwrap().text.clone())),
-                "x" => Ok(Value::Integer(self_.read().unwrap().x)),
-                "y" => Ok(Value::Integer(self_.read().unwrap().y)),
+                "id" => Ok(Arc::new(RwLock::new(Value::Uuid(self_.read().unwrap().id)))),
+                "text" => Ok(Arc::new(RwLock::new(Value::String(
+                    self_.read().unwrap().text.to_owned(),
+                )))),
+                "x" => Ok(Arc::new(RwLock::new(Value::Integer(
+                    self_.read().unwrap().x,
+                )))),
+                "y" => Ok(Arc::new(RwLock::new(Value::Integer(
+                    self_.read().unwrap().y,
+                )))),
                 "origin" => {
                     let origin = MODEL
                         .read()
@@ -2141,7 +2305,7 @@ impl StoreProxy for RelationshipPhraseProxy {
                         .exhume_relationship_phrase(&self_.read().unwrap().origin)
                         .unwrap();
 
-                    Ok((origin, self.lu_dog.clone()).into())
+                    Ok(Arc::new(RwLock::new((origin, self.lu_dog.clone()).into())))
                 }
                 "line" => {
                     let line = MODEL
@@ -2150,7 +2314,7 @@ impl StoreProxy for RelationshipPhraseProxy {
                         .exhume_relationship_phrase(&self_.read().unwrap().line)
                         .unwrap();
 
-                    Ok((line, self.lu_dog.clone()).into())
+                    Ok(Arc::new(RwLock::new((line, self.lu_dog.clone()).into())))
                 }
                 _ => Err(ChaChaError::NoSuchField {
                     field: field.to_owned(),
@@ -2192,10 +2356,12 @@ impl From<(Arc<RwLock<RelationshipPhrase>>, Arc<RwLock<LuDogStore>>)> for Value 
     }
 }
 
-impl TryFrom<Value> for RelationshipPhraseProxy {
+impl TryFrom<&Value> for RelationshipPhraseProxy {
     type Error = ChaChaError;
 
-    fn try_from(value: Value) -> Result<Self, <RelationshipPhraseProxy as TryFrom<Value>>::Error> {
+    fn try_from(
+        value: &Value,
+    ) -> Result<Self, <RelationshipPhraseProxy as TryFrom<&Value>>::Error> {
         match value {
             Value::ProxyType(proxy) => {
                 let read_proxy = proxy.read().unwrap();

@@ -2,7 +2,7 @@ use std::{
     collections::VecDeque,
     fmt,
     path::Path,
-    sync::{Arc, RwLock},
+    sync::{Arc, RwLock, RwLockReadGuard},
 };
 
 use ansi_term::Colour;
@@ -178,7 +178,7 @@ pub fn initialize_interpreter(
             );
 
             log::trace!("inserting local function {}", name);
-            stack.insert(name, value);
+            stack.insert(name, Arc::new(RwLock::new(value)));
         }
     }
 
@@ -198,7 +198,7 @@ pub fn initialize_interpreter(
                     func.read().unwrap().name.to_owned(),
                     // It's here that I'd really like to be able to do a cheap
                     // clone of an Rc.
-                    Value::Function(func.clone()),
+                    Arc::new(RwLock::new(Value::Function(func.clone()))),
                 )
             }
         }
@@ -249,7 +249,7 @@ fn eval_function_call(
     func: Arc<RwLock<Function>>,
     args: &[Arc<RwLock<Argument>>],
     stack: &mut Memory,
-) -> Result<(Value, Arc<RwLock<ValueType>>)> {
+) -> Result<(Arc<RwLock<Value>>, Arc<RwLock<ValueType>>)> {
     let lu_dog = &LU_DOG;
 
     debug!("eval_function_call func ", func);
@@ -424,14 +424,17 @@ fn eval_function_call(
 
         Ok((value, ty))
     } else {
-        Ok((Value::Empty, ValueType::new_empty(&lu_dog.read().unwrap())))
+        Ok((
+            Arc::new(RwLock::new(Value::Empty)),
+            ValueType::new_empty(&lu_dog.read().unwrap()),
+        ))
     }
 }
 
 fn eval_expression(
     expression: Arc<RwLock<Expression>>,
     stack: &mut Memory,
-) -> Result<(Value, Arc<RwLock<ValueType>>)> {
+) -> Result<(Arc<RwLock<Value>>, Arc<RwLock<ValueType>>)> {
     let lu_dog = &LU_DOG;
 
     debug!("eval_expression: expression", expression);
@@ -507,7 +510,10 @@ fn eval_expression(
 
                 Ok((value, ty))
             } else {
-                Ok((Value::Empty, ValueType::new_empty(&lu_dog.read().unwrap())))
+                Ok((
+                    Arc::new(RwLock::new(Value::Empty)),
+                    ValueType::new_empty(&lu_dog.read().unwrap()),
+                ))
             }
         }
         //
@@ -525,7 +531,7 @@ fn eval_expression(
                 let expr = lu_dog.read().unwrap().exhume_expression(expr).unwrap();
                 // Evaluate the LHS to get at the function.
                 let (value, ty) = eval_expression(expr, stack)?;
-                no_debug!("Expression::Call LHS value", value);
+                no_debug!("Expression::Call LHS value", value.read().unwrap());
                 debug!("Expression::Call LHS ty", ty);
                 // So now value is pointing a a legit Function. We need to jump
                 // through all sorts of hoops now. We need to setup a new stack
@@ -535,7 +541,8 @@ fn eval_expression(
                 // function body.
 
                 // Or we can just call the function we already wrote!
-                match &value {
+                let read_value = value.read().unwrap();
+                match &*read_value {
                     Value::Function(ref func) => {
                         let func = lu_dog
                             .read()
@@ -566,7 +573,10 @@ fn eval_expression(
                     }
                 }
             } else {
-                (Value::Empty, ValueType::new_empty(&lu_dog.read().unwrap()))
+                (
+                    Arc::new(RwLock::new(Value::Empty)),
+                    ValueType::new_empty(&lu_dog.read().unwrap()),
+                )
             };
 
             // So we need to figure out the type this is being called on.
@@ -585,9 +595,9 @@ fn eval_expression(
                     debug!("MethodCall value", value);
                     debug!("MethodCall type", ty);
 
-                    match &mut value {
+                    match &mut *value.write().unwrap() {
                         Value::ProxyType(pt) => {
-                            let arg_values = if !args.is_empty() {
+                            let mut arg_values = if !args.is_empty() {
                                 let mut arg_values = VecDeque::with_capacity(args.len());
                                 let mut next = args
                                     .iter()
@@ -622,7 +632,7 @@ fn eval_expression(
                                 VecDeque::new()
                             };
 
-                            pt.write().unwrap().call(meth, arg_values)
+                            pt.write().unwrap().call(meth, &mut arg_values)
                         }
                         // Value::UserType(ut) => {}
                         bar => panic!("need to deal with Value {:?}", bar),
@@ -642,7 +652,7 @@ fn eval_expression(
 
                     // This is for method call on a store type, and we do it out here so that we don't have
                     // to borrow stack mutably more than once.
-                    let arg_values = if !args.is_empty() {
+                    let mut arg_values = if !args.is_empty() {
                         let mut arg_values = VecDeque::with_capacity(args.len());
                         let mut next = args
                             .iter()
@@ -688,10 +698,10 @@ fn eval_expression(
                         let ty = Ty::new_s_uuid();
                         let ty = lu_dog.read().unwrap().exhume_value_type(&ty.id()).unwrap();
 
-                        Ok((value, ty))
+                        Ok((Arc::new(RwLock::new(value)), ty))
                     } else if let Some(value) = stack.get_meta(ty, func) {
                         debug!("StaticMethodCall meta value", value);
-                        match &value {
+                        match &*value.read().unwrap() {
                             Value::Function(ref func) => {
                                 let func = lu_dog
                                     .read()
@@ -706,12 +716,15 @@ fn eval_expression(
                             }
                             value => {
                                 error!("deal with call expression", value);
-                                Ok((Value::Empty, ValueType::new_empty(&lu_dog.read().unwrap())))
+                                Ok((
+                                    Arc::new(RwLock::new(Value::Empty)),
+                                    ValueType::new_empty(&lu_dog.read().unwrap()),
+                                ))
                             }
                         }
-                    } else if let Some(mut value) = stack.get_mut(ty) {
+                    } else if let Some(mut value) = stack.get(ty) {
                         debug!("StaticMethodCall frame value", value);
-                        match &mut value {
+                        match &mut *value.write().unwrap() {
                             Value::Function(ref func) => {
                                 let func = lu_dog
                                     .read()
@@ -726,7 +739,7 @@ fn eval_expression(
                             }
                             Value::ProxyType(ut) => {
                                 debug!("StaticMethodCall proxy", ut);
-                                ut.write().unwrap().call(func, arg_values)
+                                ut.write().unwrap().call(func, &mut arg_values)
                             }
                             // Value::StoreType(ref mut store_type) => {
                             //     // We should actually know what's behind the curtain, since
@@ -744,7 +757,10 @@ fn eval_expression(
                             // }
                             value => {
                                 error!("deal with call expression", value);
-                                Ok((Value::Empty, ValueType::new_empty(&lu_dog.read().unwrap())))
+                                Ok((
+                                    Arc::new(RwLock::new(Value::Empty)),
+                                    ValueType::new_empty(&lu_dog.read().unwrap()),
+                                ))
                             }
                         }
                     } else {
@@ -757,7 +773,10 @@ fn eval_expression(
                         );
 
                         // We never will get here.
-                        Ok((Value::Empty, ValueType::new_empty(&lu_dog.read().unwrap())))
+                        Ok((
+                            Arc::new(RwLock::new(Value::Empty)),
+                            ValueType::new_empty(&lu_dog.read().unwrap()),
+                        ))
                     }
                 }
             }
@@ -776,7 +795,10 @@ fn eval_expression(
 
             print!("\t{}", error.read().unwrap().span);
 
-            Ok((Value::Empty, ValueType::new_empty(&lu_dog.read().unwrap())))
+            Ok((
+                Arc::new(RwLock::new(Value::Empty)),
+                ValueType::new_empty(&lu_dog.read().unwrap()),
+            ))
         }
         //
         // FieldAccess
@@ -803,21 +825,21 @@ fn eval_expression(
             // dereference!(field, expression, lu_dog);
 
             let (value, _ty) = eval_expression(expr, stack)?;
-
-            match value {
+            let value = value.read().unwrap();
+            match &*value {
                 Value::ProxyType(value) => {
                     let value = value.read().unwrap();
                     let value = value.get_attr_value(field_name)?;
-                    let ty = value.get_type(&lu_dog.read().unwrap());
+                    let ty = value.read().unwrap().get_type(&lu_dog.read().unwrap());
 
-                    Ok((value.to_owned(), ty))
+                    Ok((value, ty))
                 }
                 Value::UserType(value) => {
                     let value = value.read().unwrap();
                     let value = value.get_attr_value(field_name).unwrap();
-                    let ty = value.get_type(&lu_dog.read().unwrap());
+                    let ty = value.read().unwrap().get_type(&lu_dog.read().unwrap());
 
-                    Ok((value.to_owned(), ty))
+                    Ok((value.clone(), ty))
                 }
                 _ => Err(ChaChaError::BadJuJu {
                     message: "Bad value in field access".to_owned(),
@@ -846,10 +868,13 @@ fn eval_expression(
                 .unwrap();
 
             let (list, _ty) = eval_expression(list, stack)?;
-            let list = if let Value::Vector(vec) = list {
+            let list = list.read().unwrap();
+            let list = if let Value::Vector(vec) = list.clone() {
                 vec
-            } else if let Value::String(str) = list {
-                str.chars().map(|c| Value::Char(c)).collect()
+            } else if let Value::String(str) = &*list {
+                str.chars()
+                    .map(|c| Arc::new(RwLock::new(Value::Char(c))))
+                    .collect()
             } else {
                 return Err(ChaChaError::BadJuJu {
                     message: "For loop expression is not a list".to_owned(),
@@ -865,7 +890,10 @@ fn eval_expression(
             }
             stack.pop();
 
-            Ok((Value::Empty, ValueType::new_empty(&lu_dog.read().unwrap())))
+            Ok((
+                Arc::new(RwLock::new(Value::Empty)),
+                ValueType::new_empty(&lu_dog.read().unwrap()),
+            ))
         }
         //
         // Index
@@ -885,7 +913,7 @@ fn eval_expression(
                 .unwrap();
 
             let (index, _ty) = eval_expression(index, stack)?;
-            let index = if let Value::Integer(index) = index {
+            let index = if let Value::Integer(index) = *index.read().unwrap() {
                 index as usize
             } else {
                 return Err(ChaChaError::BadJuJu {
@@ -895,7 +923,8 @@ fn eval_expression(
             };
 
             let (list, _ty) = eval_expression(target, stack)?;
-            if let Value::Vector(vec) = list {
+            let list = list.read().unwrap();
+            if let Value::Vector(vec) = list.clone() {
                 if index < vec.len() {
                     Ok((
                         vec[index].to_owned(),
@@ -907,10 +936,10 @@ fn eval_expression(
                         location: location!(),
                     })
                 }
-            } else if let Value::String(str) = list {
+            } else if let Value::String(str) = &*list {
                 if index < str.len() {
                     Ok((
-                        Value::String(str[index..index + 1].to_owned()),
+                        Arc::new(RwLock::new(Value::String(str[index..index + 1].to_owned()))),
                         ValueType::new_empty(&lu_dog.read().unwrap()),
                     ))
                 } else {
@@ -975,7 +1004,7 @@ fn eval_expression(
                 let list = List::new(&ty, &mut lu_dog);
 
                 Ok((
-                    Value::Vector(values),
+                    Arc::new(RwLock::new(Value::Vector(values))),
                     ValueType::new_list(&list, &mut lu_dog),
                 ))
             } else {
@@ -983,7 +1012,9 @@ fn eval_expression(
                 let list = List::new(&ValueType::new_empty(&lu_dog), &mut lu_dog);
 
                 Ok((
-                    Value::Vector(vec![Value::Empty]),
+                    Arc::new(RwLock::new(Value::Vector(vec![Arc::new(RwLock::new(
+                        Value::Empty,
+                    ))]))),
                     ValueType::new_list(&list, &mut lu_dog),
                 ))
             }
@@ -1008,8 +1039,12 @@ fn eval_expression(
                     let ty = lu_dog.read().unwrap().exhume_value_type(&ty.id()).unwrap();
 
                     match *literal {
-                        BooleanLiteral::FalseLiteral(_) => Ok((Value::Boolean(false), ty)),
-                        BooleanLiteral::TrueLiteral(_) => Ok((Value::Boolean(true), ty)),
+                        BooleanLiteral::FalseLiteral(_) => {
+                            Ok((Arc::new(RwLock::new(Value::Boolean(false))), ty))
+                        }
+                        BooleanLiteral::TrueLiteral(_) => {
+                            Ok((Arc::new(RwLock::new(Value::Boolean(true))), ty))
+                        }
                     }
                 }
                 //
@@ -1026,7 +1061,7 @@ fn eval_expression(
                     let ty = Ty::new_float();
                     let ty = lu_dog.read().unwrap().exhume_value_type(&ty.id()).unwrap();
 
-                    Ok((value, ty))
+                    Ok((Arc::new(RwLock::new(value)), ty))
                 }
                 //
                 // IntegerLiteral
@@ -1042,7 +1077,7 @@ fn eval_expression(
                     let ty = Ty::new_integer();
                     let ty = lu_dog.read().unwrap().exhume_value_type(&ty.id()).unwrap();
 
-                    Ok((value, ty))
+                    Ok((Arc::new(RwLock::new(value)), ty))
                 }
                 //
                 // StringLiteral
@@ -1057,8 +1092,7 @@ fn eval_expression(
                     let value = Value::String(literal.read().unwrap().value.clone());
                     let ty = Ty::new_s_string();
                     let ty = lu_dog.read().unwrap().exhume_value_type(&ty.id()).unwrap();
-
-                    Ok((value, ty))
+                    Ok((Arc::new(RwLock::new(value)), ty))
                 }
             };
             z
@@ -1069,12 +1103,13 @@ fn eval_expression(
         Expression::Operator(ref operator) => {
             let operator = lu_dog.read().unwrap().exhume_operator(operator).unwrap();
             let operator = operator.read().unwrap();
-            let lhs = lu_dog
+            let lhs_expr = lu_dog
                 .read()
                 .unwrap()
                 .exhume_expression(&operator.lhs)
                 .unwrap();
-            let (lhs, lhs_ty) = eval_expression(lhs, stack)?;
+
+            let (lhs, lhs_ty) = eval_expression(lhs_expr.clone(), stack)?;
             let rhs = if let Some(ref rhs) = operator.rhs {
                 let rhs = lu_dog.read().unwrap().exhume_expression(rhs).unwrap();
                 let (rhs, _rhs_ty) = eval_expression(rhs, stack)?;
@@ -1089,16 +1124,32 @@ fn eval_expression(
                     let binary = binary.read().unwrap();
                     match &*binary {
                         Binary::Addition(_) => {
-                            let value = lhs + rhs.unwrap();
-                            Ok((value, lhs_ty))
+                            let value =
+                                lhs.read().unwrap().clone() + rhs.unwrap().read().unwrap().clone();
+                            Ok((Arc::new(RwLock::new(value)), lhs_ty))
                         }
                         Binary::Assignment(_) => {
-                            dbg!(&lhs, &rhs);
+                            if let Expression::VariableExpression(expr) = &*lhs_expr.read().unwrap()
+                            {
+                                let expr = lu_dog
+                                    .read()
+                                    .unwrap()
+                                    .exhume_variable_expression(expr)
+                                    .unwrap();
+                                let expr = expr.read().unwrap();
+                                let name = expr.name.clone();
+                                let value = stack.get(&name).unwrap();
+                                let mut value = value.write().unwrap();
+                                *value = rhs.unwrap().read().unwrap().clone();
+                                // stack.insert(name, rhs.unwrap().clone());
+                            }
+
                             Ok((lhs, lhs_ty))
                         }
                         Binary::Subtraction(_) => {
-                            let value = lhs - rhs.unwrap();
-                            Ok((value, lhs_ty))
+                            let value =
+                                lhs.read().unwrap().clone() - rhs.unwrap().read().unwrap().clone();
+                            Ok((Arc::new(RwLock::new(value)), lhs_ty))
                         }
                     }
                 }
@@ -1107,12 +1158,12 @@ fn eval_expression(
                     let comp = comp.read().unwrap();
                     match &*comp {
                         Comparison::LessThanOrEqual(_) => {
-                            let value = lhs.lte(&rhs.unwrap());
+                            let value = lhs.read().unwrap().lte(&rhs.unwrap().read().unwrap());
                             let value = Value::Boolean(value);
                             let ty = Ty::new_boolean();
                             let ty = ValueType::new_ty(&ty, &mut lu_dog.write().unwrap());
 
-                            Ok((value, ty))
+                            Ok((Arc::new(RwLock::new(value)), ty))
                         }
                         _ => unimplemented!(),
                     }
@@ -1131,7 +1182,7 @@ fn eval_expression(
                 .r32_expression(&lu_dog.read().unwrap())[0]
                 .clone();
             let (value, _) = eval_expression(expr, stack)?;
-            let result = format!("{}", value);
+            let result = format!("{}", value.read().unwrap());
             let result = result.replace("\\n", "\n");
             print!("\t{}", result_style.paint(result));
 
@@ -1209,7 +1260,12 @@ fn eval_expression(
                 }
             }
 
-            Ok((Value::UserType(Arc::new(RwLock::new(user_type))), ty))
+            Ok((
+                Arc::new(RwLock::new(Value::UserType(Arc::new(RwLock::new(
+                    user_type,
+                ))))),
+                ty,
+            ))
         }
         //
         // VariableExpression
@@ -1230,11 +1286,9 @@ fn eval_expression(
 
             let value = value.unwrap();
 
-            no_debug!("Expression::VariableExpression", value);
+            no_debug!("Expression::VariableExpression", value.read().unwrap());
 
-            dbg!(&value);
-
-            let ty = value.get_type(&lu_dog.read().unwrap());
+            let ty = value.read().unwrap().get_type(&lu_dog.read().unwrap());
 
             // 🚧
             // Cloning the value isn't going to cut it I don't think. There are
@@ -1263,7 +1317,8 @@ fn eval_expression(
             let (cond, _ty) = eval_expression(cond_expr, stack)?;
             debug!("Expression::XIf conditional", cond);
 
-            let (value, ty) = if cond.try_into()? {
+            let cond = cond.read().unwrap();
+            let (value, ty) = if (&*cond).try_into()? {
                 // Evaluate the true block
                 let block = lu_dog
                     .read()
@@ -1279,7 +1334,10 @@ fn eval_expression(
                     let block = lu_dog.read().unwrap().exhume_expression(expr).unwrap();
                     eval_expression(block, stack)?
                 } else {
-                    (Value::Empty, ValueType::new_empty(&lu_dog.read().unwrap()))
+                    (
+                        Arc::new(RwLock::new(Value::Empty)),
+                        ValueType::new_empty(&lu_dog.read().unwrap()),
+                    )
                 }
             };
 
@@ -1309,7 +1367,10 @@ fn eval_expression(
                 }
             );
 
-            Ok((Value::Empty, ValueType::new_empty(&lu_dog.read().unwrap())))
+            Ok((
+                Arc::new(RwLock::new(Value::Empty)),
+                ValueType::new_empty(&lu_dog.read().unwrap()),
+            ))
         }
     }
 }
@@ -1317,7 +1378,7 @@ fn eval_expression(
 fn eval_statement(
     statement: Arc<RwLock<Statement>>,
     stack: &mut Memory,
-) -> Result<(Value, Arc<RwLock<ValueType>>)> {
+) -> Result<(Arc<RwLock<Value>>, Arc<RwLock<ValueType>>)> {
     let lu_dog = &LU_DOG;
 
     debug!("eval_statement statement", statement);
@@ -1333,7 +1394,10 @@ fn eval_statement(
             let stmt = stmt.read().unwrap();
             let expr = stmt.r31_expression(&lu_dog.read().unwrap())[0].clone();
             let (value, ty) = eval_expression(expr, stack)?;
-            no_debug!("StatementEnum::ExpressionStatement: value", value);
+            no_debug!(
+                "StatementEnum::ExpressionStatement: value",
+                value.read().unwrap()
+            );
             debug!("StatementEnum::ExpressionStatement: ty", ty);
 
             Ok((value, ty))
@@ -1360,10 +1424,10 @@ fn eval_statement(
                 .clone();
             debug!("var", var);
 
-            log::debug!("inserting {} = {}", var.name, value);
+            log::debug!("inserting {} = {}", var.name, value.read().unwrap());
             stack.insert(var.name, value);
 
-            Ok((Value::Empty, ty))
+            Ok((Arc::new(RwLock::new(Value::Empty)), ty))
         }
         StatementEnum::ResultStatement(ref stmt) => {
             let stmt = lu_dog
@@ -1385,7 +1449,10 @@ fn eval_statement(
         }
         ref beta => {
             error!("deal with statement", beta);
-            Ok((Value::Empty, ValueType::new_empty(&lu_dog.read().unwrap())))
+            Ok((
+                Arc::new(RwLock::new(Value::Empty)),
+                ValueType::new_empty(&lu_dog.read().unwrap()),
+            ))
         }
     }
 }
@@ -1411,8 +1478,10 @@ impl Context {
     }
 
     pub fn register_store_proxy(&mut self, name: String, proxy: impl StoreProxy + 'static) {
-        self.stack
-            .insert_global(name, Value::ProxyType(Arc::new(RwLock::new(proxy))));
+        self.stack.insert_global(
+            name,
+            Arc::new(RwLock::new(Value::ProxyType(Arc::new(RwLock::new(proxy))))),
+        );
         // {
         //     // Build the ASTs
         //     let local = LocalVariable::new(Uuid::new_v4(), &mut *lu_dog.write().unwrap());
@@ -1438,7 +1507,7 @@ pub fn start_main(context: Context) -> Result<(), Error> {
     let mut stack = context.stack;
 
     let main = stack.get("main").unwrap();
-    if let Value::Function(ref main) = main {
+    if let Value::Function(ref main) = *main.read().unwrap() {
         let main = LU_DOG
             .read()
             .unwrap()
@@ -1593,7 +1662,7 @@ pub fn start_repl(context: Context) -> Result<(), Error> {
                     // 🚧 This needs fixing too.
                     match eval_statement(stmt, &mut stack) {
                         Ok((value, ty)) => {
-                            let value = format!("{}", value);
+                            let value = format!("{}", value.read().unwrap());
                             print!("\n'{}'", result_style.paint(value));
 
                             let ty = PrintableValueType(ty);
@@ -1752,9 +1821,9 @@ pub(crate) struct ChunkReservation {
 #[derive(Debug)]
 pub struct Memory {
     chunks: Vec<Chunk>,
-    meta: HashMap<String, HashMap<String, Value>>,
-    global: HashMap<String, Value>,
-    frames: Vec<HashMap<String, Value>>,
+    meta: HashMap<String, HashMap<String, Arc<RwLock<Value>>>>,
+    global: HashMap<String, Arc<RwLock<Value>>>,
+    frames: Vec<HashMap<String, Arc<RwLock<Value>>>>,
 }
 
 impl Memory {
@@ -1801,20 +1870,24 @@ impl Memory {
         self.meta.insert(table, HashMap::default());
     }
 
-    pub(crate) fn insert_meta(&mut self, table: &str, name: String, value: Value) {
+    pub(crate) fn insert_meta(&mut self, table: &str, name: String, value: Arc<RwLock<Value>>) {
         let table = self.meta.get_mut(table).unwrap();
         table.insert(name, value);
     }
 
-    pub(crate) fn get_meta(&self, table: &str, name: &str) -> Option<&Value> {
+    pub(crate) fn get_meta(&self, table: &str, name: &str) -> Option<Arc<RwLock<Value>>> {
         if let Some(table) = self.meta.get(table) {
-            table.get(name)
+            if let Some(val) = table.get(name) {
+                Some(val.clone())
+            } else {
+                None
+            }
         } else {
             None
         }
     }
 
-    pub(crate) fn insert_global(&mut self, name: String, value: Value) {
+    pub(crate) fn insert_global(&mut self, name: String, value: Arc<RwLock<Value>>) {
         if name.contains("::") {
             let mut split = name.split("::");
             let table = split.next().unwrap();
@@ -1822,45 +1895,60 @@ impl Memory {
                 .next()
                 .expect("name contained `::`, but no second element");
 
-            if let Some(Value::Table(ref mut table)) = self.global.get_mut(table) {
-                table.insert(name.to_owned(), value);
-            } else {
-                self.global
-                    .insert(table.to_owned(), Value::Table(HashMap::default()));
-                if let Some(Value::Table(ref mut table)) = self.global.get_mut(table) {
-                    table.insert(name.to_owned(), value);
+            if let Some(value) = self.global.get(table) {
+                let mut write_value = value.write().unwrap();
+                if let Value::Table(ref mut table) = *write_value {
+                    table.insert(name.to_owned(), value.clone());
                 } else {
                     unreachable!()
                 }
+            } else {
+                let mut map = HashMap::default();
+                map.insert(name.to_owned(), value.clone());
+                self.global
+                    .insert(table.to_owned(), Arc::new(RwLock::new(Value::Table(map))));
             }
         } else {
             self.global.insert(name, value);
         }
     }
 
-    pub(crate) fn insert(&mut self, name: String, value: Value) {
+    pub(crate) fn insert(&mut self, name: String, value: Arc<RwLock<Value>>) {
         let frame = self.frames.last_mut().unwrap();
         frame.insert(name, value);
     }
 
-    fn get(&self, name: &str) -> Option<&Value> {
+    fn get(&self, name: &str) -> Option<Arc<RwLock<Value>>> {
         if name.contains("::") {
             let mut split = name.split("::");
 
             let name = split.next().unwrap();
             let table = split.next().unwrap();
 
-            if let Some(Value::Table(ref table)) = self.get_simple(table) {
-                table.get(name)
+            if let Some(value) = self.get_simple(table) {
+                let value = value.read().unwrap();
+                if let Value::Table(ref table) = *value {
+                    if let Some(val) = table.get(name) {
+                        Some(val.clone())
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
             } else {
                 None
             }
         } else {
-            self.get_simple(name)
+            if let Some(value) = self.get_simple(name) {
+                Some(value.clone())
+            } else {
+                None
+            }
         }
     }
 
-    fn get_simple(&self, name: &str) -> Option<&Value> {
+    fn get_simple(&self, name: &str) -> Option<&Arc<RwLock<Value>>> {
         for frame in self.frames.iter().rev() {
             if let Some(value) = frame.get(name) {
                 return Some(value);
@@ -1869,29 +1957,29 @@ impl Memory {
         self.global.get(name)
     }
 
-    fn get_mut(&mut self, name: &str) -> Option<&mut Value> {
-        if name.contains("::") {
-            let mut split = name.split("::");
+    // fn get_mut(&mut self, name: &str) -> Option<Arc<RwLock<Value>>> {
+    //     if name.contains("::") {
+    //         let mut split = name.split("::");
 
-            let name = split.next().unwrap();
-            let table = split.next().unwrap();
+    //         let name = split.next().unwrap();
+    //         let table = split.next().unwrap();
 
-            if let Some(Value::Table(ref mut table)) = self.get_simple_mut(table) {
-                table.get_mut(name)
-            } else {
-                None
-            }
-        } else {
-            self.get_simple_mut(name)
-        }
-    }
+    //         if let Some(Value::Table(ref mut table)) = self.get_simple_mut(table) {
+    //             table.get_mut(name)
+    //         } else {
+    //             None
+    //         }
+    //     } else {
+    //         self.get_simple_mut(name)
+    //     }
+    // }
 
-    fn get_simple_mut(&mut self, name: &str) -> Option<&mut Value> {
-        for frame in self.frames.iter_mut().rev() {
-            if let Some(value) = frame.get_mut(name) {
-                return Some(value);
-            }
-        }
-        self.global.get_mut(name)
-    }
+    // fn get_simple_mut(&mut self, name: &str) -> Option<Arc<RwLock<Value>>> {
+    //     for frame in self.frames.iter_mut().rev() {
+    //         if let Some(value) = frame.get_mut(name) {
+    //             return Some(value);
+    //         }
+    //     }
+    //     self.global.get_mut(name)
+    // }
 }

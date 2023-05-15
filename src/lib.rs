@@ -97,9 +97,9 @@ pub enum ChaChaError {
         message: String,
         location: Location,
     },
-    #[snafu(display("\nThat was the last stack frame 🥞. Your secret value is {}.", OK_CLR.paint(value.to_string())))]
+    #[snafu(display("\nThat was the last stack frame 🥞. Your secret value is {}.", OK_CLR.paint(value.read().unwrap().to_string())))]
     Return {
-        value: Value,
+        value: Arc<RwLock<Value>>,
         ty: Arc<RwLock<ValueType>>,
     },
     RustyLine {

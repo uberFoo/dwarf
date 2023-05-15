@@ -397,7 +397,7 @@ pub fn inter_statement(
             let local = LocalVariable::new(Uuid::new_v4(), lu_dog);
             let var = Variable::new_local_variable(var_name.to_owned(), &local, lu_dog);
 
-            dbg!(&var, &block);
+            // dbg!(&var, &block);
 
             // Now parse the RHS, which is an expression.
             let (expr, ty) = inter_expression(
@@ -533,7 +533,7 @@ fn inter_expression(
         // Assignment
         //
         ParserExpression::Assignment(ref lhs, ref rhs) => {
-            dbg!("raw", &lhs, &rhs);
+            // dbg!("raw", &lhs, &rhs);
             let (lhs, lhs_ty) = inter_expression(
                 &Arc::new(RwLock::new(lhs.0.to_owned())),
                 block,
@@ -548,8 +548,8 @@ fn inter_expression(
                 models,
                 sarzak,
             )?;
-            dbg!("expr", &lhs, &rhs);
-            dbg!(&lhs_ty, &rhs_ty);
+            // dbg!("expr", &lhs, &rhs);
+            // dbg!(&lhs_ty, &rhs_ty);
 
             ensure!(*lhs_ty.read().unwrap() == *rhs_ty.read().unwrap(), {
                 let lhs_ty = PrintableValueType(lhs_ty, lu_dog, sarzak, models);
@@ -1074,7 +1074,7 @@ fn inter_expression(
                                         let lhs_ty =
                                             PrintableValueType(ty.clone(), lu_dog, sarzak, models);
 
-                                        dbg!(name, &value, lhs_ty.to_string());
+                                        // dbg!(name, &value, lhs_ty.to_string());
 
                                         // Ok, so I parsed a local variable expression. We need to create
                                         // a VariableExpression, and it in turn needs an Expression, which

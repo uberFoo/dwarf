@@ -38,12 +38,12 @@ pub trait StoreProxy: fmt::Display + fmt::Debug + Send + Sync {
     fn call(
         &mut self,
         method: &str,
-        args: VecDeque<Value>,
-    ) -> Result<(Value, Arc<RwLock<ValueType>>)>;
+        args: &mut VecDeque<Arc<RwLock<Value>>>,
+    ) -> Result<(Arc<RwLock<Value>>, Arc<RwLock<ValueType>>)>;
 
     /// Read an attribute from the proxy.
     ///
-    fn get_attr_value(&self, name: &str) -> Result<Value>;
+    fn get_attr_value(&self, name: &str) -> Result<Arc<RwLock<Value>>>;
 }
 
 /// This is an actual Value
@@ -64,15 +64,16 @@ pub enum Value {
     ///
     ///  Feels like we'll need to generate some code to make this work.
     ProxyType(Arc<RwLock<dyn StoreProxy>>),
+    Reference(Arc<RwLock<Self>>),
     /// WTF was I thinking?
     ///
     /// That means Self. Or, maybe self?
     Reflexive,
     String(String),
-    Table(HashMap<String, Value>),
+    Table(HashMap<String, Arc<RwLock<Value>>>),
     UserType(Arc<RwLock<UserType>>),
     Uuid(uuid::Uuid),
-    Vector(Vec<Value>),
+    Vector(Vec<Arc<RwLock<Value>>>),
 }
 
 impl Value {
@@ -104,7 +105,10 @@ impl Value {
                 let ty = Ty::new_s_uuid();
                 lu_dog.exhume_value_type(&ty.id()).unwrap()
             }
-            value => ValueType::new_empty(lu_dog),
+            value => {
+                log::error!("Value::get_type() not implemented for {:?}", value);
+                ValueType::new_empty(lu_dog)
+            }
         }
     }
 }
@@ -125,6 +129,7 @@ impl fmt::Display for Value {
                 None => write!(f, "None"),
             },
             Self::ProxyType(p) => write!(f, "{}", p.read().unwrap()),
+            Self::Reference(value) => write!(f, "&{}", value.read().unwrap()),
             Self::Reflexive => write!(f, "self"),
             // Self::StoreType(store) => write!(f, "{:?}", store),
             Self::String(str_) => write!(f, "{}", str_),
@@ -222,6 +227,25 @@ impl TryFrom<Value> for f64 {
         match value {
             Value::Float(num) => Ok(num),
             Value::Integer(num) => Ok(num as f64),
+            Value::String(str_) => str_.parse::<f64>().map_err(|_| ChaChaError::Conversion {
+                src: str_.to_owned(),
+                dst: "f64".to_owned(),
+            }),
+            _ => Err(ChaChaError::Conversion {
+                src: value.to_string(),
+                dst: "f64".to_owned(),
+            }),
+        }
+    }
+}
+
+impl TryFrom<&Value> for f64 {
+    type Error = ChaChaError;
+
+    fn try_from(value: &Value) -> Result<Self, <f64 as TryFrom<&Value>>::Error> {
+        match value {
+            Value::Float(num) => Ok(*num),
+            Value::Integer(num) => Ok(*num as f64),
             Value::String(str_) => str_.parse::<f64>().map_err(|_| ChaChaError::Conversion {
                 src: str_.to_owned(),
                 dst: "f64".to_owned(),
@@ -373,7 +397,7 @@ impl Value {
 #[derive(Clone, Debug)]
 pub struct UserType {
     type_: Arc<RwLock<ValueType>>,
-    attrs: HashMap<String, Value>,
+    attrs: HashMap<String, Arc<RwLock<Value>>>,
 }
 
 impl UserType {
@@ -384,11 +408,11 @@ impl UserType {
         }
     }
 
-    pub fn add_attr<S: AsRef<str>>(&mut self, name: S, value: Value) {
+    pub fn add_attr<S: AsRef<str>>(&mut self, name: S, value: Arc<RwLock<Value>>) {
         self.attrs.insert(name.as_ref().to_owned(), value);
     }
 
-    pub fn get_attr_value<S: AsRef<str>>(&self, name: S) -> Option<&Value> {
+    pub fn get_attr_value<S: AsRef<str>>(&self, name: S) -> Option<&Arc<RwLock<Value>>> {
         self.attrs.get(name.as_ref())
     }
 
