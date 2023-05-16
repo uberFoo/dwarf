@@ -17,9 +17,9 @@ use sarzak::{
         types::{
             Block, Call, Error, ErrorExpression, Expression, ExpressionStatement, Field,
             FieldExpression, ForLoop, Function, Implementation, Import, Index, IntegerLiteral,
-            LetStatement, Literal, LocalVariable, Parameter, Print, Statement, StaticMethodCall,
-            StringLiteral, StructExpression, Value, ValueEnum, ValueType, Variable,
-            VariableExpression, WoogOption, WoogStruct, XIf,
+            LetStatement, Literal, LocalVariable, Parameter, Print, RangeExpression, Statement,
+            StaticMethodCall, StringLiteral, StructExpression, Value, ValueEnum, ValueType,
+            Variable, VariableExpression, WoogOption, WoogStruct, XIf,
         },
         Argument, Binary, BooleanLiteral, Comparison, FieldAccess, FloatLiteral, List, ListElement,
         ListExpression, MethodCall, Operator, Reference, ResultStatement, VariableEnum,
@@ -513,15 +513,17 @@ fn inter_expression(
             // 🚧
             // 🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧
 
-            ensure!(*lhs_ty.read().unwrap() == *rhs_ty.read().unwrap(), {
-                let lhs_ty = PrintableValueType(lhs_ty, lu_dog, sarzak, models);
-                let rhs_ty = PrintableValueType(rhs_ty, lu_dog, sarzak, models);
+            typecheck(&lhs_ty, &rhs_ty, lu_dog, sarzak, models)?;
 
-                TypeMismatchSnafu {
-                    expected: lhs_ty.to_string(),
-                    found: rhs_ty.to_string(),
-                }
-            });
+            // ensure!(*lhs_ty.read().unwrap() == *rhs_ty.read().unwrap(), {
+            //     let lhs_ty = PrintableValueType(lhs_ty, lu_dog, sarzak, models);
+            //     let rhs_ty = PrintableValueType(rhs_ty, lu_dog, sarzak, models);
+
+            //     TypeMismatchSnafu {
+            //         expected: lhs_ty.to_string(),
+            //         found: rhs_ty.to_string(),
+            //     }
+            // });
 
             let expr = Binary::new_addition(lu_dog);
             let expr = Operator::new_binary(Some(&rhs), &lhs, &expr, lu_dog);
@@ -809,6 +811,7 @@ fn inter_expression(
                 return Err(DwarfError::TypeMismatch {
                     expected: "boolean".to_owned(),
                     found: ty.to_string(),
+                    location: location!(),
                 });
             }
 
@@ -1214,6 +1217,32 @@ fn inter_expression(
             let print = Print::new(&expr, lu_dog);
 
             Ok((Expression::new_print(&print, lu_dog), ty))
+        }
+        //
+        // Range
+        //
+        ParserExpression::Range(start, end) => {
+            let (start, start_ty) = inter_expression(
+                &Arc::new(RwLock::new((*start).0.clone())),
+                block,
+                lu_dog,
+                models,
+                sarzak,
+            )?;
+            let (end, end_ty) = inter_expression(
+                &Arc::new(RwLock::new((*end).0.clone())),
+                block,
+                lu_dog,
+                models,
+                sarzak,
+            )?;
+
+            // 🚧 Typecheck the start and end types to make sure that they are
+            // both ints.
+
+            let range = RangeExpression::new_full(Some(&start), Some(&end), lu_dog);
+
+            Ok((Expression::new_range_expression(&range, lu_dog), start_ty))
         }
         //
         // Return
@@ -1729,6 +1758,48 @@ fn de_sanitize(string: &str) -> Option<&str> {
     }
 }
 
+fn typecheck(
+    lhs: &Arc<RwLock<ValueType>>,
+    rhs: &Arc<RwLock<ValueType>>,
+    lu_dog: &LuDogStore,
+    sarzak: &SarzakStore,
+    models: &[SarzakStore],
+) -> Result<()> {
+    match (&*lhs.read().unwrap(), &*rhs.read().unwrap()) {
+        (_, ValueType::Empty(_)) => Ok(()),
+        (ValueType::Empty(_), _) => Ok(()),
+        (_, ValueType::Unknown(_)) => Ok(()),
+        (ValueType::Unknown(_), _) => Ok(()),
+        // (_, ValueType::Empty(_)) => Ok(()),
+        // (ValueType::Error(_), _) => Ok(()),
+        // (_, ValueType::Error(_)) => Ok(()),
+        // (ValueType::Function(_), _) => Ok(()),
+        // (_, ValueType::Function(_)) => Ok(()),
+        // (ValueType::Import(_), _) => Ok(()),
+        // (_, ValueType::Import(_)) => Ok(()),
+        // (ValueType::Reference(_), _) => Ok(()),
+        // (_, ValueType::Reference(_)) => Ok(()),
+        // (ValueType::Type(_), _) => Ok(()),
+        // (_, ValueType::Type(_)) => Ok(()),
+        // (ValueType::Uuid(_), _) => Ok(()),
+        // (_, ValueType::Uuid(_)) => Ok(()),
+        (lhs_t, rhs_t) => {
+            if lhs_t == rhs_t {
+                Ok(())
+            } else {
+                let lhs = PrintableValueType(lhs.clone(), lu_dog, sarzak, models);
+                let rhs = PrintableValueType(rhs.clone(), lu_dog, sarzak, models);
+
+                Err(DwarfError::TypeMismatch {
+                    expected: lhs.to_string(),
+                    found: rhs.to_string(),
+                    location: location!(),
+                })
+            }
+        }
+    }
+}
+
 pub(crate) struct PrintableValueType<'a, 'b, 'c>(
     pub Arc<RwLock<ValueType>>,
     pub &'a LuDogStore,
@@ -1762,6 +1833,7 @@ impl<'a, 'b, 'c> fmt::Display for PrintableValueType<'a, 'b, 'c> {
                 let ty = list.r36_value_type(&lu_dog)[0].clone();
                 write!(f, "[{}]", PrintableValueType(ty, lu_dog, sarzak, models))
             }
+            ValueType::Range(_) => write!(f, "<range>"),
             ValueType::Reference(ref reference) => {
                 let reference = lu_dog.exhume_reference(reference).unwrap();
                 let reference = reference.read().unwrap();

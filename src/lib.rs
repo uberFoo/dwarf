@@ -81,10 +81,11 @@ pub enum ChaChaError {
         method: String,
         ty: String,
     },
-    #[snafu(display("\n{}: type mismatch -- expected `{}`, found `{}`.", ERR_CLR.bold().paint("error"), OK_CLR.paint(expected.to_string()), ERR_CLR.bold().paint(got.to_string())))]
+    #[snafu(display("\n{}: type mismatch -- expected `{}`, found `{}`.\n  --> {}:{}:{}", ERR_CLR.bold().paint("error"), OK_CLR.paint(expected.to_string()), ERR_CLR.bold().paint(got.to_string()), location.file, location.line, location.column))]
     TypeMismatch {
         expected: String,
         got: String,
+        location: Location,
     },
     #[snafu(display("\n{}: no such field `{}`.", ERR_CLR.bold().paint("error"), POP_CLR.paint(field)))]
     NoSuchField {

@@ -2,6 +2,7 @@ use std::{
     any::Any,
     collections::VecDeque,
     fmt,
+    ops::Range,
     sync::{Arc, RwLock},
 };
 
@@ -64,6 +65,7 @@ pub enum Value {
     ///
     ///  Feels like we'll need to generate some code to make this work.
     ProxyType(Arc<RwLock<dyn StoreProxy>>),
+    Range(Range<Box<Arc<RwLock<Value>>>>),
     Reference(Arc<RwLock<Self>>),
     /// WTF was I thinking?
     ///
@@ -79,6 +81,7 @@ pub enum Value {
 impl Value {
     pub fn get_type(&self, lu_dog: &LuDogStore) -> Arc<RwLock<ValueType>> {
         match &self {
+            // Value::Char =>
             Value::Empty => ValueType::new_empty(lu_dog),
             Value::Function(ref func) => {
                 let func = lu_dog.exhume_function(&func.read().unwrap().id).unwrap();
@@ -106,7 +109,7 @@ impl Value {
                 lu_dog.exhume_value_type(&ty.id()).unwrap()
             }
             value => {
-                log::error!("Value::get_type() not implemented for {:?}", value);
+                // log::error!("Value::get_type() not implemented for {:?}", value);
                 ValueType::new_empty(lu_dog)
             }
         }
@@ -129,6 +132,7 @@ impl fmt::Display for Value {
                 None => write!(f, "None"),
             },
             Self::ProxyType(p) => write!(f, "{}", p.read().unwrap()),
+            Self::Range(range) => write!(f, "{:?}", range),
             Self::Reference(value) => write!(f, "&{}", value.read().unwrap()),
             Self::Reflexive => write!(f, "self"),
             // Self::StoreType(store) => write!(f, "{:?}", store),
@@ -325,6 +329,9 @@ impl std::ops::Add for Value {
             (Value::Integer(a), Value::Float(b)) => Value::Float(a as f64 + b),
             (Value::Integer(a), Value::Integer(b)) => Value::Integer(a + b),
             (Value::String(a), Value::String(b)) => Value::String(a + &b),
+            (Value::Char(a), Value::Char(b)) => Value::String(a.to_string() + &b.to_string()),
+            (Value::Char(a), Value::String(b)) => Value::String(a.to_string() + &b),
+            (Value::String(a), Value::Char(b)) => Value::String(a + &b.to_string()),
             // (Value::Vector(a), Value::Vector(b)) => Value::Vector(a + &b),
             // (Value::Table(a), Value::Table(b)) => Value::Table(a + &b),
             // (Value::Uuid(a), Value::Uuid(b)) => Value::Uuid(a + &b),
@@ -335,7 +342,10 @@ impl std::ops::Add for Value {
             (Value::Empty, Value::Empty) => Value::Empty,
             (Value::Boolean(a), Value::Boolean(b)) => Value::Boolean(a || b),
             // (Value::Error(a), Value::Error(b)) => Value::Error(a + &b),
-            (a, b) => Value::Error(format!("Cannot add {} and {}", a, b)),
+            (a, b) => {
+                dbg!(&a, &b);
+                Value::Error(format!("Cannot add {} and {}", a, b))
+            }
         }
     }
 }
@@ -363,7 +373,7 @@ impl std::ops::Sub for Value {
             (Value::Empty, Value::Empty) => Value::Empty,
             (Value::Boolean(a), Value::Boolean(b)) => Value::Boolean(a && b),
             // (Value::Error(a), Value::Error(b)) => Value::Error(a + &b),
-            (a, b) => Value::Error(format!("Cannot add {} and {}", a, b)),
+            (a, b) => Value::Error(format!("Cannot subtract {} and {}", a, b)),
         }
     }
 }

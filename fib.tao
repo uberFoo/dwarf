@@ -11,6 +11,14 @@ fn fib(n: int) -> int {
     }
 }
 
+fn fib2(n: int) -> int {
+    if n <= 1 {
+        1
+    } else {
+        fib2(n - 1) + fib2(n - 2)
+    }
+}
+
 struct Foo {
     a: int,
     b: bool,

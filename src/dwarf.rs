@@ -113,8 +113,15 @@ pub enum DwarfError {
     /// Type Mismatch
     ///
     /// This is used when one type is expected, and another is found.
-    #[snafu(display("\n{}: Type mismatch: expected {expected}, found {found}", C_ERR.bold().paint("error")))]
-    TypeMismatch { expected: String, found: String },
+    // #[snafu(display("\n{}: Type mismatch: expected {expected}, found {found}", C_ERR.bold().paint("error")))]
+    // TypeMismatch { expected: String, found: String },
+    #[snafu(display("\n{}: Type mismatch: expected `{expected}`, found `{found}`.\n  --> {}:{}:{}", C_ERR.bold().paint("error"), location.file, location.line, location.column))]
+    TypeMismatch {
+        expected: String,
+        found: String,
+        location: Location,
+    },
+
     /// Unknown Type
     ///
     /// This is used when a type is not found in any domain.
@@ -399,6 +406,7 @@ pub enum Expression {
     MethodCall(Box<Spanned<Self>>, Spanned<String>, Vec<Spanned<Self>>),
     None,
     Print(Box<Spanned<Self>>),
+    Range(Box<Spanned<Self>>, Box<Spanned<Self>>),
     Return(Box<Spanned<Self>>),
     Some(Box<Spanned<Self>>),
     /// Static Method Call

@@ -96,6 +96,7 @@ const FIELD: (u8, u8) = (80, 81);
 const FUNC_CALL: (u8, u8) = (70, 71);
 const ADD_SUB: (u8, u8) = (50, 51);
 const COMP: (u8, u8) = (30, 30);
+const RANGE: (u8, u8) = (20, 20);
 const ASSIGN: (u8, u8) = (11, 10);
 const LITERAL: (u8, u8) = (0, 1);
 const BLOCK: (u8, u8) = (0, 0);
@@ -764,6 +765,61 @@ impl DwarfParser {
         )))
     }
 
+    /// Parse a range expression
+    ///
+    /// range = expression .. expression
+    fn parse_range(&mut self, left: &Expression, power: u8) -> Result<Option<Expression>> {
+        debug!("enter", power);
+
+        if power > RANGE.0 {
+            debug!("exit no power", power);
+            return Ok(None);
+        }
+
+        let start = if let Some(tok) = self.peek() {
+            tok.1.start
+        } else {
+            debug!("exit no token");
+            return Ok(None);
+        };
+
+        if !self.check(&Token::Punct('.')) {
+            debug!("exit no ..");
+            return Ok(None);
+        }
+
+        if !self.check2(&Token::Punct('.')) {
+            debug!("exit no ..");
+            return Ok(None);
+        }
+
+        self.advance();
+        self.advance();
+
+        let right = if let Some(expr) = self.parse_expression(RANGE.1)? {
+            expr
+        } else {
+            let token = &self.previous().unwrap();
+            let err = Simple::expected_input_found(
+                token.1.clone(),
+                [Some("<expression -> there's a lot of them...>".to_owned())],
+                Some(token.0.to_string()),
+            );
+            error!("exit no expression");
+            return Err(err);
+        };
+
+        debug!("exit ok");
+
+        Ok(Some((
+            (
+                DwarfExpression::Range(Box::new(left.0.to_owned()), Box::new(right.0)),
+                start..self.previous().unwrap().1.end,
+            ),
+            RANGE,
+        )))
+    }
+
     /// Parse an subtraction operator
     ///
     /// subtraciton = expression - expression
@@ -914,15 +970,10 @@ impl DwarfParser {
                 } else if let Some(expression) = self.parse_field_access(&lhs, power)? {
                     debug!("field access", expression);
                     Some(expression)
+                } else if let Some(expression) = self.parse_range(&lhs, power)? {
+                    debug!("range", expression);
+                    Some(expression)
                 } else {
-                    //     let token = &self.previous().unwrap();
-                    //     let err = Simple::expected_input_found(
-                    //         token.1.clone(),
-                    //         [Some("<operator fix me!>".to_owned())],
-                    //         Some(token.0.to_string()),
-                    //     );
-                    //     return Err(err);
-                    // };
                     debug!("exit no operator", lhs);
                     None
                 };
@@ -1098,9 +1149,13 @@ impl DwarfParser {
 
         let start = name.0 .1.start;
 
-        if !self.match_(&[Token::Punct('.')]) {
+        if !self.check(&Token::Punct('.'))
+            || self.check(&Token::Punct('.')) && self.check2(&Token::Punct('.'))
+        {
             return Ok(None);
         }
+
+        self.advance();
 
         let expr = if let Some(expr) = self.parse_expression(FIELD.1)? {
             expr
@@ -2492,6 +2547,7 @@ impl DwarfParser {
     }
 
     fn check(&mut self, tok: &Token) -> bool {
+        debug!("check", tok);
         if self.at_end() {
             return false;
         }
@@ -2504,6 +2560,7 @@ impl DwarfParser {
     }
 
     fn check2(&mut self, tok: &Token) -> bool {
+        debug!("check2", tok);
         if let Some(next) = self.next() {
             if next.0 == *tok {
                 true

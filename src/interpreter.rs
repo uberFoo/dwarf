@@ -1,11 +1,13 @@
 use std::{
     collections::VecDeque,
     fmt,
+    ops::Range,
     path::Path,
-    sync::{Arc, RwLock, RwLockReadGuard},
+    sync::{Arc, RwLock},
 };
 
-use ansi_term::Colour;
+use ansi_term::Colour::{self, RGB};
+use ansi_term::{ANSIString, ANSIStrings};
 use fxhash::FxHashMap as HashMap;
 use heck::ToUpperCamelCase;
 use lazy_static::lazy_static;
@@ -30,19 +32,6 @@ use crate::{
     TypeMismatchSnafu, UnimplementedSnafu, Value, VariableNotFoundSnafu,
     WrongNumberOfArgumentsSnafu,
 };
-
-const BANNER: &str = r#"
-   ________          ________             _       __                            __
-  / ____/ /_  ____ _/ ____/ /_  ____ _   (_)___  / /____  _________  ________  / /____  _____
- / /   / __ \/ __ `/ /   / __ \/ __ `/  / / __ \/ __/ _ \/ ___/ __ \/ ___/ _ \/ __/ _ \/ ___/
-/ /___/ / / / /_/ / /___/ / / / /_/ /  / / / / / /_/  __/ /  / /_/ / /  /  __/ /_/  __/ /
-\____/_/ /_/\__,_/\____/_/ /_/\__,_/  /_/_/ /_/\__/\___/_/  / .___/_/   \___/\__/\___/_/
-                        __              __                 /_/____
-   ____ ___  ____  ____/ /__  _    ____/ /      ______ ______/ __/
-  / __ `__ \/ __ \/ __  / _ \(_)  / __  / | /| / / __ `/ ___/ /_
- / / / / / / /_/ / /_/ /  __/    / /_/ /| |/ |/ / /_/ / /  / __/
-/_/ /_/ /_/\____/\__,_/\___(_)   \__,_/ |__/|__/\__,_/_/  /_/
-                                                                                             "#;
 
 macro_rules! error {
     ($arg:expr) => {
@@ -876,6 +865,14 @@ fn eval_expression(
                 str.chars()
                     .map(|c| Arc::new(RwLock::new(Value::Char(c))))
                     .collect()
+            } else if let Value::Range(range) = &*list {
+                let mut vec = Vec::new();
+                for i in (&*range.start.read().unwrap()).try_into()?
+                    ..(&*range.end.read().unwrap()).try_into()?
+                {
+                    vec.push(Arc::new(RwLock::new(Value::Integer(i))));
+                }
+                vec
             } else {
                 return Err(ChaChaError::BadJuJu {
                     message: "For loop expression is not a list".to_owned(),
@@ -885,18 +882,18 @@ fn eval_expression(
 
             let block = Expression::new_block(&block, &mut *lu_dog.write().unwrap());
             stack.push();
-            list.par_iter().for_each(|item| {
-                // This gives each thread it's own stack frame, and read only
-                // access to the parent stack frame. I don't know that I love
-                // this solution. But it's a qucik hack to threading.
-                let mut stack = stack.clone();
-                stack.insert(ident.clone(), item.clone());
-                eval_expression(block.clone(), &mut stack).unwrap();
-            });
-            // for item in list {
-            //     stack.insert(ident.clone(), item);
-            //     eval_expression(block.clone(), stack)?;
-            // }
+            // list.par_iter().for_each(|item| {
+            //     // This gives each thread it's own stack frame, and read only
+            //     // access to the parent stack frame. I don't know that I love
+            //     // this solution. But it's a qucik hack to threading.
+            //     let mut stack = stack.clone();
+            //     stack.insert(ident.clone(), item.clone());
+            //     eval_expression(block.clone(), &mut stack).unwrap();
+            // });
+            for item in list {
+                stack.insert(ident.clone(), item);
+                eval_expression(block.clone(), stack)?;
+            }
             stack.pop();
 
             Ok((
@@ -1160,6 +1157,15 @@ fn eval_expression(
                                 lhs.read().unwrap().clone() - rhs.unwrap().read().unwrap().clone();
                             Ok((Arc::new(RwLock::new(value)), lhs_ty))
                         }
+                        ref alpha => {
+                            ensure!(
+                                false,
+                                UnimplementedSnafu {
+                                    message: format!("deal with expression: {:?}", alpha),
+                                }
+                            );
+                            Ok((Arc::new(RwLock::new(Value::Empty)), lhs_ty))
+                        }
                     }
                 }
                 OperatorEnum::Comparison(ref comp) => {
@@ -1196,6 +1202,33 @@ fn eval_expression(
             print!("\t{}", result_style.paint(result));
 
             Ok((value, ValueType::new_empty(&lu_dog.read().unwrap())))
+        }
+        //
+        // Range
+        //
+        Expression::RangeExpression(ref range) => {
+            let range = lu_dog
+                .read()
+                .unwrap()
+                .exhume_range_expression(range)
+                .unwrap();
+            let lhs = range.read().unwrap().lhs.unwrap();
+            let lhs = lu_dog.read().unwrap().exhume_expression(&lhs).unwrap();
+            let rhs = range.read().unwrap().rhs.unwrap();
+            let rhs = lu_dog.read().unwrap().exhume_expression(&rhs).unwrap();
+
+            let (lhs, _) = eval_expression(lhs, stack)?;
+            let (rhs, _) = eval_expression(rhs, stack)?;
+
+            let range = Range {
+                start: Box::new(lhs),
+                end: Box::new(rhs),
+            };
+
+            Ok((
+                Arc::new(RwLock::new(Value::Range(range))),
+                ValueType::new_range(&lu_dog.read().unwrap()),
+            ))
         }
         //
         // StructExpression
@@ -1604,7 +1637,6 @@ pub fn start_repl(context: Context) -> Result<(), Error> {
     let block = context.block;
     let mut stack = context.stack;
 
-    let banner_style = Colour::Purple;
     let error_style = Colour::Red;
     let prompt_style = Colour::Blue.normal();
     let result_style = Colour::Yellow.italic().dimmed();
@@ -1615,11 +1647,12 @@ pub fn start_repl(context: Context) -> Result<(), Error> {
 
     impl DwarfValidator {
         fn validate(&self, input: &str) -> ValidationResult {
-            if let Some((stmt, _span)) = parse_line(input) {
-                ValidationResult::Valid(None)
-            } else {
-                ValidationResult::Incomplete
-            }
+            ValidationResult::Valid(None)
+            // if let Some((stmt, _span)) = parse_line(input) {
+            // ValidationResult::Valid(None)
+            // } else {
+            // ValidationResult::Incomplete
+            // }
         }
     }
 
@@ -1629,8 +1662,72 @@ pub fn start_repl(context: Context) -> Result<(), Error> {
         }
     }
 
+    //
+    // let some_value = format!("{:b}", 42);
+    // let strings: &[ANSIString<'static>] = &[
+    //     Red.paint("["),
+    //     Red.bold().paint(some_value),
+    //     Red.paint("]"),
+    // ];
+    //
+    // println!("Value: {}", ANSIStrings(strings));
+
     // Display the banner
-    println!("{}", banner_style.paint(BANNER));
+    fn banner() {
+        let strings: &[ANSIString<'static>] = &[
+            RGB(85, 37, 134).paint(
+                r"
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣴⣄⠀⢠⣾⣆⠀⣠⣶⡀⠀⠀⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⡀⠀⠀⣼⣿⣦⣼⣿⣿⣷⣿⣿⣿⣶⣿⣿⣧⣤⣾⣿⠀⠀⢀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⣿⣷⣶⣿⣿⣿⣿⣿⣿⣿⡏⠀⢘⣿⣿⣿⣿⣿⣿⣿⣶⣾⣿⡇⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⠀⠀⠀⠀⣶⣶⣶⣿⣿⣿⣿⡿⠟⠋⠉⠁⢹⣿⣶⣾⣿⣥⣭⣽⠛⠿⣿⣿⣿⣿⣧⣶⣶⡆⠀⠀⠀⠀⠀⠀
+⠀⠀⠀⢀⣀⣀⣿⣿⣿⣿⡿⠟⠁⠀⠀⠀⠀⠀⢸⣿⣿⣿⣿⣿⣿⣿⠀⠀⠈⠙⢿⣿⣿⣿⣿⣀⣀⣀⠀⠀⠀⠀
+",
+            ),
+            RGB(106, 53, 156).paint(
+                r"⠀⠀⠀⠘⣿⣿⣿⣿⣿⠏⠀⠀⠀⠀⠀⠀⠀⠀⠸⠿⠿⣿⣿⣿⣿⣿⠀⠀⠀⠀⠀⠙⢿⣿⣿⣿⣿⡏⠀⠀⠀⠀
+⠀⢠⣤⣤⣿⣿⣿⡿⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣿⣿⣿⣿⣿⠀⠀⠀⠀⠀⠀⠀⢻⣿⣿⣿⣦⣤⣄⠀⠀
+⠀⠈⢻⣿⣿⠿⢿⣧⠀⠀⠀⠀⠀⠀⢀⣀⣀⣀⡀⠀⠀⣿⣿⣿⣿⣿⠀⠀⠀⠀⠀⠀⠀⣰⣿⠿⢿⣿⡿⠁⠀⠀
+⢠⣴⣾⣿⣇⠀⣨⣿⡇⠀⠀⠀⣠⣾⣿⣿⣿⣿⣿⣷⣄⣿⣿⣿⣿⣿⠀⠀⠀⠀⠀⠀⢰⣿⣇⠀⣨⣿⣷⣦⣤⠀
+",
+            ),
+            RGB(128, 79, 179).paint(
+                r"⠈⠻⣿⣿⣿⡿⠟⠋⠁⠀⠀⣰⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠀⠀⠀⠀⠀⠀⠀⠉⠛⢿⣿⣿⣿⡟⠁⠀
+⣤⣶⣿⣿⣿⡇⠀⠀⠀⠀⢰⣿⣿⣿⣿⣿⠟⠛⠛⠻⣿⣿⣿⣿⣿⣿⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣿⣿⣿⣷⣦⡀
+",
+            ),
+            // Colour::Yellow.italic().paint("ChaCha:\n"),
+            RGB(128, 79, 179).paint(
+                r"⠉⠻⣿⣿⣿⡇⠀⠀⠀⠀⣿⣿⣿⣿⣿⡏⠀⠀⠀⠀⠘⣿⣿⣿⣿⣿⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣿⣿⣿⡟⠋⠀
+",
+            ),
+            // Colour::Green.italic().paint("a dwarf language REPL.\n"),
+            RGB(128, 79, 179).paint(
+                r"⢠⣾⣿⣿⣿⣧⠀⠀⠀⠀⣿⣿⣿⣿⣿⠀⠀⠀⠀⠀⠀⣿⣿⣿⣿⣿⠀⠀⠀⠀⠀⠀⠀⠀⠀⢸⣿⣿⣿⣷⣄⠀
+",
+            ),
+            RGB(153, 105, 199).paint(
+                r"⠈⠙⢻⣿⣿⣿⡄⠀⠀⠀⣿⣿⣿⣿⣿⠀⠀⠀⠀⠀⠀⣿⣿⣿⣿⣿⠀⠀⠀⠀⠀⠀⠀⠀⢀⣿⣿⣿⡟⠛⠉⠀
+⠀⢠⣾⣿⣿⣿⣷⡀⠀⠀⣿⣿⣿⣿⣿⣇⠀⠀⠀⠀⢠⣿⣿⣿⣿⣿⠀⠀⠀⠀⠀⠀⠀⠀⣼⣿⣿⣿⣿⣄⠀⠀
+⠀⠈⠉⠉⣿⣿⣿⣿⣄⠀⠸⣿⣿⣿⣿⣿⣦⣀⣀⣴⣿⣿⣿⣿⣿⣿⣀⣀⡀⠀⠀⠀⢀⣾⣿⣿⣿⡋⠉⠁⠀⠀
+⠀⠀⠀⢰⣿⣿⣿⣿⣿⣶⣶⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣶⣶⣶⣿⣿⣿⣿⣿⣧⠀⠀⠀⠀
+",
+            ),
+            RGB(181, 137, 214).paint(
+                r"⠀⠀⠀⠀⠀⠀⣿⣿⣿⣿⡁⠀⢹⣿⣿⣿⣿⣿⣿⡿⠋⣿⣿⣿⣿⣿⣿⣿⣟⠀⠈⣿⣿⣿⣿⡀⠀⠀⠀⠀⠀⠀
+⠀⠀⠀⠀⠀⠀⠟⠛⠛⣿⣿⣶⣿⣿⣿⣿⣿⣉⣉⣀⣀⣉⣉⣉⣭⣽⣿⣿⣿⣷⣾⣿⡟⠛⠻⠃⠀⠀⠀⠀⠀⠀
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⣿⠿⠛⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠛⠻⢿⠇⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢹⠿⠋⠹⣿⣿⠿⢿⣿⣿⠿⣿⣿⡟⠙⠻⡿⠀⠀⠀      ",
+            ),
+            Colour::Yellow.italic().paint("ChaCha:\n"),
+            RGB(181, 137, 214).paint(r"⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠛⠁⠀⠈⠿⠃⠀⠈⠛⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀"),
+            Colour::Green.paint("a dwarf language REPL.\n\n"),
+        ];
+
+        println!("{}", ANSIStrings(strings));
+    }
+
+    banner();
 
     // `()` can be used when no completer is required
     let mut rl = Editor::new().map_err(|e| ChaChaError::RustyLine { source: e })?;
@@ -1649,7 +1746,10 @@ pub fn start_repl(context: Context) -> Result<(), Error> {
                 rl.add_history_entry(line.as_str())
                     .map_err(|e| ChaChaError::RustyLine { source: e })?;
 
-                if let Some((stmt, _span)) = parse_line(&line) {
+                // Should do a regex here, or something.
+                if line == "@logo" {
+                    banner();
+                } else if let Some((stmt, _span)) = parse_line(&line) {
                     debug!("stmt from readline", stmt);
 
                     let stmt = {
@@ -1739,6 +1839,7 @@ impl fmt::Display for PrintableValueType {
                 let ty = list.r36_value_type(&lu_dog.read().unwrap())[0].clone();
                 write!(f, "[{}]", PrintableValueType(ty))
             }
+            ValueType::Range(_) => write!(f, "<range>"),
             ValueType::Reference(ref reference) => {
                 let reference = lu_dog.read().unwrap().exhume_reference(reference).unwrap();
                 let reference = reference.read().unwrap();
