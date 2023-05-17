@@ -60,22 +60,22 @@ pub enum Value {
     Float(DwarfFloat),
     Function(Arc<RwLock<Function>>),
     Integer(DwarfInteger),
-    Option(Option<Box<Self>>),
+    Option(Option<Arc<RwLock<Self>>>),
     /// User Defined Type Proxy
     ///
     ///  Feels like we'll need to generate some code to make this work.
     ProxyType(Arc<RwLock<dyn StoreProxy>>),
-    Range(Range<Box<Arc<RwLock<Value>>>>),
+    Range(Range<Box<Arc<RwLock<Self>>>>),
     Reference(Arc<RwLock<Self>>),
     /// WTF was I thinking?
     ///
     /// That means Self. Or, maybe self?
     Reflexive,
     String(String),
-    Table(HashMap<String, Arc<RwLock<Value>>>),
+    Table(HashMap<String, Arc<RwLock<Self>>>),
     UserType(Arc<RwLock<UserType>>),
     Uuid(uuid::Uuid),
-    Vector(Vec<Arc<RwLock<Value>>>),
+    Vector(Vec<Arc<RwLock<Self>>>),
 }
 
 impl Value {
@@ -128,7 +128,7 @@ impl fmt::Display for Value {
             Self::Function(_) => write!(f, "<function>"),
             Self::Integer(num) => write!(f, "{}", num),
             Self::Option(option) => match option {
-                Some(value) => write!(f, "Some({})", value),
+                Some(value) => write!(f, "Some({})", value.read().unwrap()),
                 None => write!(f, "None"),
             },
             Self::ProxyType(p) => write!(f, "{}", p.read().unwrap()),
@@ -142,6 +142,42 @@ impl fmt::Display for Value {
             Self::UserType(ty) => writeln!(f, "{}", ty.read().unwrap()),
             Self::Uuid(uuid) => write!(f, "{}", uuid),
             Self::Vector(vec) => write!(f, "{:?}", vec),
+        }
+    }
+}
+
+impl TryFrom<Value> for Uuid {
+    type Error = ChaChaError;
+
+    fn try_from(value: Value) -> Result<Self, <Uuid as TryFrom<Value>>::Error> {
+        match value {
+            Value::Uuid(uuid) => Ok(uuid),
+            Value::String(str_) => str_.parse::<Uuid>().map_err(|_| ChaChaError::Conversion {
+                src: str_.to_owned(),
+                dst: "Uuid".to_owned(),
+            }),
+            _ => Err(ChaChaError::Conversion {
+                src: value.to_string(),
+                dst: "Uuid".to_owned(),
+            }),
+        }
+    }
+}
+
+impl TryFrom<&Value> for Uuid {
+    type Error = ChaChaError;
+
+    fn try_from(value: &Value) -> Result<Self, <Uuid as TryFrom<&Value>>::Error> {
+        match value {
+            Value::Uuid(uuid) => Ok(*uuid),
+            Value::String(str_) => str_.parse::<Uuid>().map_err(|_| ChaChaError::Conversion {
+                src: str_.to_owned(),
+                dst: "Uuid".to_owned(),
+            }),
+            _ => Err(ChaChaError::Conversion {
+                src: value.to_string(),
+                dst: "Uuid".to_owned(),
+            }),
         }
     }
 }

@@ -8,7 +8,7 @@ name = "dwarfc"
 path = "src/bin/dwarfc.rs"
 
 [[bin]]
-name = "dwarf"
+name = "chacha"
 path = "src/bin/main.rs"
 
 [dependencies]

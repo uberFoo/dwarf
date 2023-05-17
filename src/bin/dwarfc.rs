@@ -5,11 +5,11 @@ use log;
 use snafu::prelude::*;
 
 use ariadne::{Color, Fmt, Label, Report, ReportKind, Source};
-use chacha::{
-    dwarf::{parse_dwarf, populate_lu_dog, DwarfError, FileSnafu, GenericSnafu, IOSnafu, Result},
-    initialize_interpreter, start_repl,
-};
 use sarzak::domain::DomainBuilder;
+
+use chacha::dwarf::{
+    parse_dwarf, populate_lu_dog, DwarfError, FileSnafu, GenericSnafu, IOSnafu, Result,
+};
 
 const TARGET_DIR: &str = "target";
 const BUILD_DIR: &str = "sarzak";
@@ -87,16 +87,16 @@ fn main() -> Result<()> {
 
     let args = Args::parse();
 
-    let _model = if let Some(ref model) = args.model {
-        Some(
-            DomainBuilder::new()
-                .cuckoo_model(model)
-                .unwrap()
-                .build_v2()
-                .unwrap(),
-        )
+    let model = if let Some(ref model) = args.model {
+        vec![DomainBuilder::new()
+            .cuckoo_model(model)
+            .unwrap()
+            .build_v2()
+            .unwrap()
+            .sarzak()
+            .clone()]
     } else {
-        None
+        vec![]
     };
 
     // let sarzak = if let Some(ref sarzak) = args.sarzak {
@@ -154,7 +154,7 @@ fn main() -> Result<()> {
 
     let ast = parse_dwarf(&source_code)?;
 
-    let lu_dog = populate_lu_dog(None, &ast, &[], sarzak.sarzak()).map_err(|e| {
+    let lu_dog = populate_lu_dog(Some(&path), &ast, &model, sarzak.sarzak()).map_err(|e| {
         match &e {
             DwarfError::BadSelf { span } => {
                 let span = span.clone();
@@ -225,29 +225,13 @@ fn main() -> Result<()> {
         // let report = Report::build(ReportKind::Error, (), 0);
         return e;
     })?;
-    // let lu_dog =
-    //     populate_lu_dog(&path, &ast, &[model.sarzak().clone()], sarzak.sarzak()).map_err(|e| {
-    //         println!("Compiler exited with: {}", e);
-    //         return e;
-    //     })?;
 
-    // lu_dog.persist_bincode(&out_file).context(FileSnafu {
-    //     description: "Could not persist Lu-Dog domain".to_owned(),
-    //     path: &out_file,
-    // })?;
+    lu_dog.persist_bincode(&out_file).context(FileSnafu {
+        description: "Could not persist Lu-Dog domain".to_owned(),
+        path: &out_file,
+    })?;
 
-    // println!("Lu-Dog domain created at {:?}", out_file);
-
-    println!("This is before we create the context");
-
-    let ctx = initialize_interpreter(sarzak.sarzak().clone(), lu_dog).unwrap();
-
-    // start_repl(ctx).map_err(|e| {
-    // println!("Interpreter exited with: {}", e);
-    // e
-    // })
-
-    start_repl(ctx).unwrap();
+    println!("Lu-Dog domain created at {:?}", out_file);
 
     Ok(())
 }

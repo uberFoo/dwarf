@@ -23,7 +23,7 @@ macro_rules! function {
 macro_rules! debug {
     ($msg:literal, $($arg:expr),*) => {
         $(
-            log::debug!(
+            log::trace!(
                 "{}: {} --> {:?}\n  --> {}:{}:{}",
                 Colour::Green.dimmed().italic().paint(function!()),
                 Colour::Yellow.underline().paint($msg),
@@ -35,7 +35,7 @@ macro_rules! debug {
         )*
     };
     ($arg:literal) => {
-        log::debug!(
+        log::trace!(
             "{}: {}\n  --> {}:{}:{}",
             Colour::Green.dimmed().italic().paint(function!()),
             $arg,
@@ -44,7 +44,7 @@ macro_rules! debug {
             column!())
     };
     ($arg:expr) => {
-        log::debug!(
+        log::trace!(
             "{}: {:?}\n  --> {}:{}:{}",
             Colour::Green.dimmed().italic().paint(function!()),
             $arg,
@@ -57,7 +57,7 @@ macro_rules! debug {
 macro_rules! error {
     ($msg:literal, $($arg:expr),*) => {
         $(
-            log::debug!(
+            log::trace!(
                 "{}: {} --> {:?}\n  --> {}:{}:{}",
                 Colour::Green.dimmed().italic().paint(function!()),
                 Colour::Red.underline().paint($msg),
@@ -69,7 +69,7 @@ macro_rules! error {
         )*
     };
     ($arg:literal) => {
-        log::debug!(
+        log::trace!(
             "{}: {}\n  --> {}:{}:{}",
             Colour::Green.dimmed().italic().paint(function!()),
             Colour::Red.underline().paint($arg),
@@ -78,7 +78,7 @@ macro_rules! error {
             column!())
     };
     ($arg:expr) => {
-        log::debug!(
+        log::trace!(
             "{}: {:?}\n  --> {}:{}:{}",
             Colour::Green.dimmed().italic().paint(function!()),
             Colour::Ref.underline().paint($arg),
@@ -1519,6 +1519,9 @@ impl DwarfParser {
 
     /// Parse a print expression
     ///
+    /// This really should just be another function call, and I sort it out
+    /// at name resolution time.
+    ///
     /// print_expression -> PRINT
     fn parse_print_expression(&mut self) -> Result<Option<Expression>> {
         debug!("enter parse_print_expression");
@@ -1554,6 +1557,10 @@ impl DwarfParser {
             );
             return Err(err);
         };
+
+        if self.peek().unwrap().0 == Token::Punct(',') {
+            self.advance();
+        }
 
         if !self.match_(&[Token::Punct(')')]) {
             let token = &self.previous().unwrap();
@@ -3143,6 +3150,23 @@ mod tests {
                 a[1];
                 b[1][2];
                 c[1][2][3];
+            }
+        "#;
+
+        let ast = parse_dwarf(src);
+        dbg!(&ast);
+        assert!(ast.is_ok());
+    }
+
+    #[test]
+    fn test_trailing_commas() {
+        let _ = env_logger::builder().is_test(true).try_init();
+
+        let src = r#"
+            fn foo() -> () {
+                a = [1, 2, 3,];
+                call(a,);
+                print("Hello, World!",);
             }
         "#;
 

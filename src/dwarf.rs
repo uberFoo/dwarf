@@ -48,6 +48,7 @@ pub enum DwarfError {
     /// The Self keyword is being used outside of an impl block.
     #[snafu(display("\n{}: `{}` may only be used inside an impl block.\n  --> {}..{}", C_ERR.bold().paint("error"), C_OTHER.underline().paint("Self"), span.start, span.end))]
     BadSelf { span: Span },
+
     /// File Error
     ///
     /// Something went wrong with the file system.
@@ -58,21 +59,25 @@ pub enum DwarfError {
         path: PathBuf,
         source: std::io::Error,
     },
+
     /// Generic Error
     ///
     /// This non-specific error is a catch-all error type.
     #[snafu(display("\n{}: {description}", C_ERR.bold().paint("error")))]
     Generic { description: String },
+
     /// Generic Warning
     ///
     /// This non-specific error is a catch-all warning type.
     #[snafu(display("\n{}: {description}\n  --> {}..{}", C_WARN.bold().paint("warning"), span.start, span.end))]
     GenericWarning { description: String, span: Span },
+
     /// Implementation Block Error
     ///
     /// An impl block may only contain functions.
     #[snafu(display("\n{}: impl blocks may only contain functions.\n  --> {}..{}", C_ERR.bold().paint("error"), span.start, span.end))]
     ImplementationBlockError { span: Span },
+
     /// Internal Error
     ///
     /// This is an unrecoverable internal error.
@@ -81,6 +86,7 @@ pub enum DwarfError {
         description: String,
         location: Location,
     },
+
     /// IO Related Error
     ///
     /// This is used to wrag std::io::Error into the DwarfError type.
@@ -90,26 +96,31 @@ pub enum DwarfError {
         description: String,
         location: Location,
     },
+
     /// Missing Implementation
     ///
     /// This is just not done yet.
     #[snafu(display("\n{}: Missing implementation: {missing}\n  --> {}:{}:{}", C_WARN.bold().paint("warning"), location.file, location.line, location.column))]
     NoImplementation { missing: String, location: Location },
+
     /// Object ID Lookup Error
     ///
     /// This is used when a reverse object lookup in one of the domains fails.
     #[snafu(display("\n{}: Object lookup failed for {id}", C_ERR.bold().paint("error")))]
     ObjectIdNotFound { id: Uuid },
+
     /// Object Name Lookup Error
     ///
     /// This is used when an object lookup in one of the domains fails.
     #[snafu(display("\n{}: Object lookup failed for {name}", C_ERR.bold().paint("error")))]
     ObjectNameNotFound { name: String },
+
     /// Parse Error
     ///
     /// Error parsing the source code.
     #[snafu(display("\n{}: parser completed with errors", C_ERR.bold().paint("error")))]
     Parse { ast: Vec<Spanned<Item>> },
+
     /// Type Mismatch
     ///
     /// This is used when one type is expected, and another is found.
@@ -257,16 +268,16 @@ impl Type {
         match self {
             Type::Boolean => {
                 let ty = Ty::new_boolean();
-                ValueType::new_ty(&ty, store)
+                ValueType::new_ty(&Arc::new(RwLock::new(ty)), store)
             }
             Type::Empty => ValueType::new_empty(store),
             Type::Float => {
                 let ty = Ty::new_float();
-                ValueType::new_ty(&ty, store)
+                ValueType::new_ty(&Arc::new(RwLock::new(ty)), store)
             }
             Type::Integer => {
                 let ty = Ty::new_integer();
-                ValueType::new_ty(&ty, store)
+                ValueType::new_ty(&Arc::new(RwLock::new(ty)), store)
             }
             Type::List(type_) => {
                 let ty = (*type_).0.into_value_type(store, models, sarzak);
@@ -286,7 +297,7 @@ impl Type {
             Type::Self_ => panic!("Self is deprecated."),
             Type::String => {
                 let ty = Ty::new_s_string();
-                ValueType::new_ty(&ty, store)
+                ValueType::new_ty(&Arc::new(RwLock::new(ty)), store)
             }
             Type::Unknown => ValueType::new_unknown(store),
             Type::UserType(type_) => {
@@ -311,11 +322,11 @@ impl Type {
                 let obj_id = sarzak.exhume_object_id_by_name(&name).unwrap();
                 let ty = sarzak.exhume_ty(&obj_id).unwrap();
 
-                ValueType::new_ty(ty, store)
+                ValueType::new_ty(&Arc::new(RwLock::new(ty.to_owned())), store)
             }
             Type::Uuid => {
                 let ty = Ty::new_s_uuid();
-                ValueType::new_ty(&ty, store)
+                ValueType::new_ty(&Arc::new(RwLock::new(ty)), store)
             }
         }
     }

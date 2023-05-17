@@ -18,8 +18,8 @@ use sarzak::{
             Block, Call, Error, ErrorExpression, Expression, ExpressionStatement, Field,
             FieldExpression, ForLoop, Function, Implementation, Import, Index, IntegerLiteral,
             LetStatement, Literal, LocalVariable, Parameter, Print, RangeExpression, Statement,
-            StaticMethodCall, StringLiteral, StructExpression, Value, ValueEnum, ValueType,
-            Variable, VariableExpression, WoogOption, WoogStruct, XIf,
+            StaticMethodCall, StringLiteral, StructExpression, ValueType, Variable,
+            VariableExpression, WoogOption, WoogStruct, XIf, XValue, XValueEnum,
         },
         Argument, Binary, BooleanLiteral, Comparison, FieldAccess, FloatLiteral, List, ListElement,
         ListExpression, MethodCall, Operator, Reference, ResultStatement, VariableEnum,
@@ -231,6 +231,7 @@ fn walk_tree(
 
     // Using the type information, and the input, inter the implementation blocks.
     for ConveyImpl { name, funcs } in implementations {
+        debug!("Intering implementation {}", name);
         inter_implementation(&name, &funcs, lu_dog, models, sarzak)?;
     }
 
@@ -322,7 +323,7 @@ fn inter_func(
         //
         let param_ty = get_value_type(&param_ty, impl_ty.clone(), lu_dog, models, sarzak)?;
         debug!("inter_func param param_ty", param_ty);
-        let _value = Value::new_variable(&block, &param_ty, &var, lu_dog);
+        let _value = XValue::new_variable(&block, &param_ty, &var, lu_dog);
         last_param_uuid = link_parameter!(last_param_uuid, param, lu_dog);
         debug!("inter_func param last_param_uuid", last_param_uuid);
     }
@@ -369,13 +370,13 @@ pub fn inter_statement(
             // We only want one storage location per name per block, so we look
             // for, and remove an existing one -- all the way up to the value.
             let values = lu_dog
-                .iter_value()
+                .iter_x_value()
                 .filter(|value| value.read().unwrap().block == block.read().unwrap().id)
                 .collect::<Vec<_>>();
             for value in values {
                 let value = value.read().unwrap();
                 match value.subtype {
-                    ValueEnum::Variable(ref var) => {
+                    XValueEnum::Variable(ref var) => {
                         let var = lu_dog.exhume_variable(var).unwrap();
                         let var = var.read().unwrap();
                         if var.name == *var_name {
@@ -383,7 +384,7 @@ pub fn inter_statement(
                                 VariableEnum::LocalVariable(ref local) => {
                                     lu_dog.exorcise_local_variable(local);
                                     lu_dog.exorcise_variable(&var.id);
-                                    lu_dog.exorcise_value(&value.id);
+                                    lu_dog.exorcise_x_value(&value.id);
                                 }
                                 _ => {}
                             }
@@ -417,13 +418,16 @@ pub fn inter_statement(
             let foo = PrintableValueType(ty.clone(), lu_dog, sarzak, models);
             debug!("inter_statement let foo", foo.to_string());
 
-            // let ty = ty.read().unwrap().to_owned();
+            // 🚧
+            // Let's keep an eye on this. I've had the notion of having a separate
+            // entry point for the REPL, and conditionally needing to generate an
+            // error would support the idea.
             if let ValueType::Unknown(_) = &*ty.read().unwrap() {
                 error!("Unknown type for variable", var_name);
             }
 
             // Create a variable, now that we (hopefully) have a type from the expression.
-            let _value = Value::new_variable(&block, &ty, &var, lu_dog);
+            let _value = XValue::new_variable(&block, &ty, &var, lu_dog);
 
             // Setup the let statement itself.
             let stmt = LetStatement::new(&expr, &local, lu_dog);
@@ -595,7 +599,7 @@ fn inter_expression(
             };
             Ok((
                 Expression::new_literal(&Literal::new_boolean_literal(&literal, lu_dog), lu_dog),
-                ValueType::new_ty(&Ty::new_boolean(), lu_dog),
+                ValueType::new_ty(&Arc::new(RwLock::new(Ty::new_boolean())), lu_dog),
             ))
         }
         ParserExpression::Error => {
@@ -717,7 +721,7 @@ fn inter_expression(
                 &Literal::new_float_literal(&FloatLiteral::new(*literal, lu_dog), lu_dog),
                 lu_dog,
             ),
-            ValueType::new_ty(&Ty::new_integer(), lu_dog),
+            ValueType::new_ty(&Arc::new(RwLock::new(Ty::new_integer())), lu_dog),
         )),
         //
         // For Loop
@@ -774,7 +778,7 @@ fn inter_expression(
                     models,
                     sarzak,
                 )?;
-                let _value = Value::new_expression(&block, &ty, &arg_expr, lu_dog);
+                let _value = XValue::new_expression(&block, &ty, &arg_expr, lu_dog);
                 let arg = Argument::new(None, &func_call, &arg_expr, lu_dog);
                 last_arg_uuid = link_argument!(last_arg_uuid, arg, lu_dog);
             }
@@ -868,7 +872,7 @@ fn inter_expression(
             )?;
 
             let index = Index::new(&index, &target, lu_dog);
-            let int_ty = ValueType::new_ty(&Ty::new_integer(), lu_dog);
+            let int_ty = ValueType::new_ty(&Arc::new(RwLock::new(Ty::new_integer())), lu_dog);
             ensure!(&*int_ty.read().unwrap() == &*index_ty.read().unwrap(), {
                 let int_ty = PrintableValueType(int_ty, lu_dog, sarzak, models);
                 let index_ty = PrintableValueType(index_ty, lu_dog, sarzak, models);
@@ -880,7 +884,7 @@ fn inter_expression(
 
             let expr = Expression::new_index(&index, lu_dog);
 
-            let ty = ValueType::new_ty(&Ty::new_integer(), lu_dog);
+            let ty = ValueType::new_ty(&Arc::new(RwLock::new(Ty::new_integer())), lu_dog);
 
             ensure!(&*index_ty.read().unwrap() == &*ty.read().unwrap(), {
                 let index_ty = PrintableValueType(index_ty, lu_dog, sarzak, models);
@@ -903,7 +907,7 @@ fn inter_expression(
                 &Literal::new_integer_literal(&IntegerLiteral::new(*literal, lu_dog), lu_dog),
                 lu_dog,
             ),
-            ValueType::new_ty(&Ty::new_integer(), lu_dog),
+            ValueType::new_ty(&Arc::new(RwLock::new(Ty::new_integer())), lu_dog),
         )),
         //
         // LessThanOrEqual
@@ -938,7 +942,7 @@ fn inter_expression(
             let expr = Expression::new_operator(&expr, lu_dog);
 
             let ty = Ty::new_boolean();
-            let ty = ValueType::new_ty(&ty, lu_dog);
+            let ty = ValueType::new_ty(&Arc::new(RwLock::new(ty)), lu_dog);
 
             Ok((expr, ty))
         }
@@ -1022,9 +1026,9 @@ fn inter_expression(
             // to create
             //
             let values = lu_dog
-                .iter_value()
+                .iter_x_value()
                 .filter(|value| value.read().unwrap().block == block.read().unwrap().id)
-                .collect::<Vec<Arc<RwLock<Value>>>>();
+                .collect::<Vec<Arc<RwLock<XValue>>>>();
 
             debug!("ParserExpression::LocalVariable values", values);
 
@@ -1036,7 +1040,7 @@ fn inter_expression(
                     debug!("ParserExpression::LocalVariable: value", value);
 
                     match value.read().unwrap().subtype {
-                        ValueEnum::Expression(ref _expr) => {
+                        XValueEnum::Expression(ref _expr) => {
                             // let expr = lu_dog.exhume_expression(expr).unwrap();
                             // error!("we don't expect to be here", expr);
                             // So we get here after all.
@@ -1063,7 +1067,7 @@ fn inter_expression(
 
                             None
                         }
-                        ValueEnum::Variable(ref var) => {
+                        XValueEnum::Variable(ref var) => {
                             let var = lu_dog.exhume_variable(var).unwrap().read().unwrap().clone();
                             debug!("ParserExpression::LocalVariable: var", var);
                             // Check the name
@@ -1071,7 +1075,7 @@ fn inter_expression(
                                 match var.subtype {
                                     VariableEnum::LocalVariable(_) => {
                                         let value =
-                                            var.r11_value(lu_dog)[0].read().unwrap().clone();
+                                            var.r11_x_value(lu_dog)[0].read().unwrap().clone();
                                         let ty = value.r24_value_type(lu_dog)[0].clone();
 
                                         let lhs_ty =
@@ -1199,7 +1203,7 @@ fn inter_expression(
                     models,
                     sarzak,
                 )?;
-                let _value = Value::new_expression(&block, &ty, &arg_expr, lu_dog);
+                let _value = XValue::new_expression(&block, &ty, &arg_expr, lu_dog);
                 let arg = Argument::new(None, &call, &arg_expr, lu_dog);
                 last_arg_uuid = link_argument!(last_arg_uuid, arg, lu_dog);
             }
@@ -1292,7 +1296,7 @@ fn inter_expression(
             // We could do something with the imports...
             // 🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧
             let ty = if type_name == "Uuid" && method == "new" {
-                ValueType::new_ty(&Ty::new_s_uuid(), lu_dog)
+                ValueType::new_ty(&Arc::new(RwLock::new(Ty::new_s_uuid())), lu_dog)
             } else {
                 debug!(
                     "ParserExpression::StaticMethodCall: looking up type",
@@ -1328,7 +1332,7 @@ fn inter_expression(
                     models,
                     sarzak,
                 )?;
-                let _value = Value::new_expression(&block, &ty, &arg_expr, lu_dog);
+                let _value = XValue::new_expression(&block, &ty, &arg_expr, lu_dog);
                 let arg = Argument::new(None, &call, &arg_expr, lu_dog);
                 last_arg_uuid = link_argument!(last_arg_uuid, arg, lu_dog);
             }
@@ -1348,7 +1352,7 @@ fn inter_expression(
                     ),
                     lu_dog,
                 ),
-                ValueType::new_ty(&Ty::new_s_string(), lu_dog),
+                ValueType::new_ty(&Arc::new(RwLock::new(Ty::new_s_string())), lu_dog),
             ))
         }
         //
@@ -1403,7 +1407,7 @@ fn inter_expression(
 
                     return Ok((
                         Expression::new_struct_expression(&expr, lu_dog),
-                        ValueType::new_ty(&ty, lu_dog),
+                        ValueType::new_ty(&Arc::new(RwLock::new(ty)), lu_dog),
                     ));
                 }
             }
@@ -1523,6 +1527,8 @@ fn inter_implementation(
             .clone();
         let implementation = Implementation::new(&mt, lu_dog);
 
+        debug!("inter_implementation", name);
+
         for (func, span) in funcs {
             match func {
                 Item::Function(ref name, ref params, ref return_type, ref stmts) => inter_func(
@@ -1569,7 +1575,11 @@ fn inter_struct(
         ensure!(obj.is_some(), ObjectIdNotFoundSnafu { id: *id });
         let obj = obj.unwrap();
 
-        let mt = WoogStruct::new(name.to_owned(), Some(obj.clone()), lu_dog);
+        let mt = WoogStruct::new(
+            name.to_owned(),
+            Some(&Arc::new(RwLock::new(obj.to_owned()))),
+            lu_dog,
+        );
         let _ty = ValueType::new_woog_struct(&mt, lu_dog);
         for ((name, _), (type_, _)) in fields {
             let name = name.de_sanitize();
@@ -1606,16 +1616,16 @@ fn get_value_type(
     match type_ {
         Type::Boolean => {
             let ty = Ty::new_boolean();
-            Ok(ValueType::new_ty(&ty, lu_dog))
+            Ok(ValueType::new_ty(&Arc::new(RwLock::new(ty)), lu_dog))
         }
         Type::Empty => Ok(ValueType::new_empty(lu_dog)),
         Type::Float => {
             let ty = Ty::new_float();
-            Ok(ValueType::new_ty(&ty, lu_dog))
+            Ok(ValueType::new_ty(&Arc::new(RwLock::new(ty)), lu_dog))
         }
         Type::Integer => {
             let ty = Ty::new_integer();
-            Ok(ValueType::new_ty(&ty, lu_dog))
+            Ok(ValueType::new_ty(&Arc::new(RwLock::new(ty)), lu_dog))
         }
         Type::List(ref type_) => {
             let inner_type = get_value_type(&(*type_).0, enclosing_type, lu_dog, models, sarzak)?;
@@ -1635,7 +1645,7 @@ fn get_value_type(
         }
         Type::String => {
             let ty = Ty::new_s_string();
-            Ok(ValueType::new_ty(&ty, lu_dog))
+            Ok(ValueType::new_ty(&Arc::new(RwLock::new(ty)), lu_dog))
         }
         Type::UserType(tok) => {
             let name = tok.0.de_sanitize();
@@ -1667,7 +1677,10 @@ fn get_value_type(
                     }),
                 }
             } else if name == "String" {
-                Ok(ValueType::new_ty(&Ty::new_s_string(), lu_dog))
+                Ok(ValueType::new_ty(
+                    &Arc::new(RwLock::new(Ty::new_s_string())),
+                    lu_dog,
+                ))
             } else {
                 let name = name.de_sanitize();
                 for model in models {
@@ -1683,7 +1696,10 @@ fn get_value_type(
                         }
                         _ => false,
                     }) {
-                        return Ok(ValueType::new_ty(ty, lu_dog));
+                        return Ok(ValueType::new_ty(
+                            &Arc::new(RwLock::new(ty.to_owned())),
+                            lu_dog,
+                        ));
                     }
                 }
 
@@ -1691,24 +1707,28 @@ fn get_value_type(
                 // the Uuid. So, it's not unlikely; it's the least likely.
                 if let Some(ty) = sarzak.iter_ty().find(|ty| match ty {
                     Ty::Object(ref obj) => {
-                        error!("sarzak.iter_ty", obj);
+                        // error!("sarzak.iter_ty", obj);
                         let obj = sarzak.exhume_object(obj).unwrap();
                         let obj = obj.name.to_upper_camel_case();
                         obj == *name || name == format!("{}Proxy", obj)
                     }
                     _ => false,
                 }) {
-                    Ok(ValueType::new_ty(ty, lu_dog))
+                    Ok(ValueType::new_ty(
+                        &Arc::new(RwLock::new(ty.to_owned())),
+                        lu_dog,
+                    ))
                 } else {
-                    Err(DwarfError::UnknownType {
-                        ty: name.to_string(),
-                    })
+                    Ok(ValueType::new_unknown(lu_dog))
+                    // Err(DwarfError::UnknownType {
+                    //     ty: name.to_string(),
+                    // })
                 }
             }
         }
         Type::Uuid => {
             let ty = Ty::new_s_uuid();
-            Ok(ValueType::new_ty(&ty, lu_dog))
+            Ok(ValueType::new_ty(&Arc::new(RwLock::new(ty)), lu_dog))
         }
         道 => todo!("{:?}", 道),
     }
@@ -1754,6 +1774,9 @@ fn de_sanitize(string: &str) -> Option<&str> {
         "ZObjectStore" => Some("ObjectStore"),
         "ZSome" => Some("Some"),
         "ZNone" => Some("None"),
+        "XIf" => Some("If"),
+        "XReturn" => Some("Return"),
+        "XValue" => Some("Value"),
         _ => None,
     }
 }
@@ -1886,7 +1909,7 @@ impl<'a, 'b, 'c> fmt::Display for PrintableValueType<'a, 'b, 'c> {
                     WoogOptionEnum::ZSome(ref some) => {
                         let some = lu_dog.exhume_z_some(some).unwrap();
                         let some = some.read().unwrap();
-                        let value = some.r23_value(&lu_dog)[0].read().unwrap().clone();
+                        let value = some.r23_x_value(&lu_dog)[0].read().unwrap().clone();
                         let ty = value.r24_value_type(&lu_dog)[0].clone();
                         write!(
                             f,

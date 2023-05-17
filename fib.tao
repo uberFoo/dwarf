@@ -48,7 +48,7 @@ fn main() -> int {
     let e = "Hello uberFoo.";
     let f = Foo {
         a: 42,
-        b: true,
+        b: 7,
         c: 3.14,
     };
 

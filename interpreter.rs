@@ -794,7 +794,7 @@ fn eval_expression(
             let (value, _) = eval_expression(expr, stack)?;
             let result = format!("{}", value);
             let result = result.replace("\\n", "\n");
-            print!("\t{}", result_style.paint(result));
+            print!("{}", result_style.paint(result));
 
             Ok((value, ValueType::new_empty(&lu_dog.read().unwrap())))
         }

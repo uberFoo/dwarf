@@ -15,9 +15,9 @@ use log;
 use rayon::prelude::*;
 use sarzak::{
     lu_dog::{
-        Argument, Binary, Block, BooleanLiteral, CallEnum, Comparison, Expression, Function, List,
-        Literal, LocalVariable, ObjectStore as LuDogStore, Operator, OperatorEnum, Statement,
-        StatementEnum, Value as LuDogValue, ValueType, Variable, WoogOptionEnum,
+        Argument, Binary, Block, BooleanLiteral, CallEnum, Comparison, Expression, Function,
+        Import, List, Literal, LocalVariable, ObjectStore as LuDogStore, OperatorEnum, Statement,
+        StatementEnum, ValueType, Variable, WoogOptionEnum, XValue,
     },
     sarzak::{store::ObjectStore as SarzakStore, types::Ty},
 };
@@ -33,35 +33,82 @@ use crate::{
     WrongNumberOfArgumentsSnafu,
 };
 
-macro_rules! error {
-    ($arg:expr) => {
-        log::error!("{:?}\n  --> {}:{}:{}", $arg, file!(), line!(), column!());
-    };
-    ($msg:literal, $arg:expr) => {
-        log::error!(
-            "{} --> {:?}\n  --> {}:{}:{}",
-            Colour::Red.paint($msg),
-            $arg,
-            file!(),
-            line!(),
-            column!()
-        );
-    };
+macro_rules! function {
+    () => {{
+        fn f() {}
+        fn type_name_of<T>(_: T) -> &'static str {
+            std::any::type_name::<T>()
+        }
+        let name = type_name_of(f);
+        name.strip_suffix("::f").unwrap()
+    }};
 }
 
 macro_rules! debug {
-    ($arg:expr) => {
-        log::debug!("{:?}\n  --> {}:{}:{}", $arg, file!(), line!(), column!());
+    ($msg:literal, $($arg:expr),*) => {
+        $(
+            log::debug!(
+                "{}: {} --> {:?}\n  --> {}:{}:{}",
+                Colour::Green.dimmed().italic().paint(function!()),
+                Colour::Yellow.underline().paint($msg),
+                $arg,
+                file!(),
+                line!(),
+                column!()
+            );
+        )*
     };
-    ($msg:literal, $arg:expr) => {
+    ($arg:literal) => {
         log::debug!(
-            "{} --> {:?}\n  --> {}:{}:{}",
-            Colour::Yellow.paint($msg),
+            "{}: {}\n  --> {}:{}:{}",
+            Colour::Green.dimmed().italic().paint(function!()),
             $arg,
             file!(),
             line!(),
-            column!()
-        );
+            column!())
+    };
+    ($arg:expr) => {
+        log::debug!(
+            "{}: {:?}\n  --> {}:{}:{}",
+            Colour::Green.dimmed().italic().paint(function!()),
+            $arg,
+            file!(),
+            line!(),
+            column!())
+    };
+}
+
+macro_rules! error {
+    ($msg:literal, $($arg:expr),*) => {
+        $(
+            log::error!(
+                "{}: {} --> {:?}\n  --> {}:{}:{}",
+                Colour::Green.dimmed().italic().paint(function!()),
+                Colour::Red.underline().paint($msg),
+                $arg,
+                file!(),
+                line!(),
+                column!()
+            );
+        )*
+    };
+    ($arg:literal) => {
+        log::error!(
+            "{}: {}\n  --> {}:{}:{}",
+            Colour::Green.dimmed().italic().paint(function!()),
+            Colour::Red.underline().paint($arg),
+            file!(),
+            line!(),
+            column!())
+    };
+    ($arg:expr) => {
+        log::error!(
+            "{}: {:?}\n  --> {}:{}:{}",
+            Colour::Green.dimmed().italic().paint(function!()),
+            Colour::Ref.underline().paint($arg),
+            file!(),
+            line!(),
+            column!())
     };
 }
 
@@ -160,7 +207,7 @@ pub fn initialize_interpreter(
             // Build the local in the AST.
             let local = LocalVariable::new(Uuid::new_v4(), &mut lu_dog);
             let var = Variable::new_local_variable(name.clone(), &local, &mut lu_dog);
-            let _value = LuDogValue::new_variable(
+            let _value = XValue::new_variable(
                 &block,
                 &ValueType::new_function(&func, &mut lu_dog),
                 &var,
@@ -176,6 +223,7 @@ pub fn initialize_interpreter(
     for user_type in lu_dog.iter_woog_struct() {
         let user_type = user_type.read().unwrap();
         // Create a meta table for each struct.
+        debug!("inserting meta table {}", user_type.name);
         stack.insert_meta_table(user_type.name.to_owned());
         let impl_ = user_type.r8c_implementation(&lu_dog);
         if !impl_.is_empty() {
@@ -183,6 +231,7 @@ pub fn initialize_interpreter(
             // check and only insert the static functions.
             // 🚧 Only insert the static functions
             for func in impl_[0].read().unwrap().r9_function(&lu_dog) {
+                debug!("inserting static function {}", func.read().unwrap().name);
                 stack.insert_meta(
                     &user_type.name,
                     func.read().unwrap().name.to_owned(),
@@ -286,7 +335,7 @@ fn eval_function_call(
                     .read()
                     .unwrap()
                     .clone();
-                let value = var.r11_value(&lu_dog.read().unwrap())[0]
+                let value = var.r11_x_value(&lu_dog.read().unwrap())[0]
                     .read()
                     .unwrap()
                     .clone();
@@ -1062,7 +1111,7 @@ fn eval_expression(
                         .unwrap()
                         .exhume_float_literal(literal)
                         .unwrap();
-                    let value = literal.read().unwrap().value;
+                    let value = literal.read().unwrap().x_value;
                     let value = Value::Float(value);
                     let ty = Ty::new_float();
                     let ty = lu_dog.read().unwrap().exhume_value_type(&ty.id()).unwrap();
@@ -1078,7 +1127,7 @@ fn eval_expression(
                         .unwrap()
                         .exhume_integer_literal(literal)
                         .unwrap();
-                    let value = literal.read().unwrap().value;
+                    let value = literal.read().unwrap().x_value;
                     let value = Value::Integer(value);
                     let ty = Ty::new_integer();
                     let ty = lu_dog.read().unwrap().exhume_value_type(&ty.id()).unwrap();
@@ -1095,7 +1144,7 @@ fn eval_expression(
                         .exhume_string_literal(literal)
                         .unwrap();
                     // 🚧 It'd be great if this were an Rc...
-                    let value = Value::String(literal.read().unwrap().value.clone());
+                    let value = Value::String(literal.read().unwrap().x_value.clone());
                     let ty = Ty::new_s_string();
                     let ty = lu_dog.read().unwrap().exhume_value_type(&ty.id()).unwrap();
                     Ok((Arc::new(RwLock::new(value)), ty))
@@ -1176,7 +1225,10 @@ fn eval_expression(
                             let value = lhs.read().unwrap().lte(&rhs.unwrap().read().unwrap());
                             let value = Value::Boolean(value);
                             let ty = Ty::new_boolean();
-                            let ty = ValueType::new_ty(&ty, &mut lu_dog.write().unwrap());
+                            let ty = ValueType::new_ty(
+                                &Arc::new(RwLock::new(ty)),
+                                &mut lu_dog.write().unwrap(),
+                            );
 
                             Ok((Arc::new(RwLock::new(value)), ty))
                         }
@@ -1199,7 +1251,7 @@ fn eval_expression(
             let (value, _) = eval_expression(expr, stack)?;
             let result = format!("{}", value.read().unwrap());
             let result = result.replace("\\n", "\n");
-            print!("\t{}", result_style.paint(result));
+            print!("{}", result_style.paint(result));
 
             Ok((value, ValueType::new_empty(&lu_dog.read().unwrap())))
         }
@@ -1521,8 +1573,27 @@ impl Context {
 
     pub fn register_store_proxy(&mut self, name: String, proxy: impl StoreProxy + 'static) {
         self.stack.insert_global(
-            name,
+            name.clone(),
             Arc::new(RwLock::new(Value::ProxyType(Arc::new(RwLock::new(proxy))))),
+        );
+
+        let mut lu_dog = self.lu_dog.write().unwrap();
+        let local = LocalVariable::new(Uuid::new_v4(), &mut *lu_dog);
+        let var = Variable::new_local_variable(name.clone(), &local, &mut *lu_dog);
+        let import = Import::new(
+            "So ugly".to_owned(),
+            false,
+            name,
+            "path".to_owned(),
+            None,
+            &mut *lu_dog,
+        );
+        dbg!(&import);
+        let _value = XValue::new_variable(
+            &self.block,
+            &ValueType::new_import(&import, &mut *lu_dog),
+            &var,
+            &mut *lu_dog,
         );
         // {
         //     // Build the ASTs
@@ -1894,7 +1965,7 @@ impl fmt::Display for PrintableValueType {
                     WoogOptionEnum::ZSome(ref some) => {
                         let some = lu_dog.read().unwrap().exhume_z_some(some).unwrap();
                         let some = some.read().unwrap();
-                        let value = some.r23_value(&lu_dog.read().unwrap())[0]
+                        let value = some.r23_x_value(&lu_dog.read().unwrap())[0]
                             .read()
                             .unwrap()
                             .clone();
