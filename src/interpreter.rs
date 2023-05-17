@@ -1336,11 +1336,8 @@ fn eval_expression(
                         .unwrap()
                         .exhume_value_type(&field.read().unwrap().ty)
                         .unwrap();
-                    ensure!(*struct_ty.read().unwrap() == *ty.read().unwrap(), {
-                        let expected = PrintableValueType(struct_ty).to_string();
-                        let got = PrintableValueType(ty).to_string();
-                        TypeMismatchSnafu { expected, got }
-                    });
+
+                    typecheck(&struct_ty, &ty)?;
 
                     // This is where we add the attribute value to the user type.
                     user_type.add_attr(&name, value);
@@ -1588,7 +1585,7 @@ impl Context {
             None,
             &mut *lu_dog,
         );
-        dbg!(&import);
+
         let _value = XValue::new_variable(
             &self.block,
             &ValueType::new_import(&import, &mut *lu_dog),
@@ -1927,7 +1924,6 @@ impl fmt::Display for PrintableValueType {
                         Ty::Float(_) => write!(f, "float"),
                         Ty::Integer(_) => write!(f, "int"),
                         Ty::Object(ref object) => {
-                            panic!("Bitches come!");
                             // This should probably just be an unwrap().
                             if let Some(object) = sarzak.exhume_object(object) {
                                 write!(f, "{}", object.name)
@@ -1975,12 +1971,12 @@ impl fmt::Display for PrintableValueType {
                 }
             }
             ValueType::WoogStruct(ref woog_struct) => {
-                debug!("woog_struct", woog_struct);
                 let woog_struct = lu_dog
                     .read()
                     .unwrap()
                     .exhume_woog_struct(woog_struct)
                     .unwrap();
+                debug!("woog_struct", woog_struct);
                 let woog_struct = woog_struct.read().unwrap();
                 write!(f, "{}", woog_struct.name)
             }
@@ -2163,4 +2159,40 @@ impl Memory {
     //     }
     //     self.global.get_mut(name)
     // }
+}
+
+fn typecheck(lhs: &Arc<RwLock<ValueType>>, rhs: &Arc<RwLock<ValueType>>) -> Result<()> {
+    match (&*lhs.read().unwrap(), &*rhs.read().unwrap()) {
+        (_, ValueType::Empty(_)) => Ok(()),
+        (ValueType::Empty(_), _) => Ok(()),
+        (_, ValueType::Unknown(_)) => Ok(()),
+        (ValueType::Unknown(_), _) => Ok(()),
+        // (_, ValueType::Empty(_)) => Ok(()),
+        // (ValueType::Error(_), _) => Ok(()),
+        // (_, ValueType::Error(_)) => Ok(()),
+        // (ValueType::Function(_), _) => Ok(()),
+        // (_, ValueType::Function(_)) => Ok(()),
+        // (ValueType::Import(_), _) => Ok(()),
+        // (_, ValueType::Import(_)) => Ok(()),
+        // (ValueType::Reference(_), _) => Ok(()),
+        // (_, ValueType::Reference(_)) => Ok(()),
+        // (ValueType::Type(_), _) => Ok(()),
+        // (_, ValueType::Type(_)) => Ok(()),
+        // (ValueType::Uuid(_), _) => Ok(()),
+        // (_, ValueType::Uuid(_)) => Ok(()),
+        (lhs_t, rhs_t) => {
+            if lhs_t == rhs_t {
+                Ok(())
+            } else {
+                let lhs = PrintableValueType(lhs.clone());
+                let rhs = PrintableValueType(rhs.clone());
+
+                Err(ChaChaError::TypeMismatch {
+                    expected: lhs.to_string(),
+                    got: rhs.to_string(),
+                    location: location!(),
+                })
+            }
+        }
+    }
 }

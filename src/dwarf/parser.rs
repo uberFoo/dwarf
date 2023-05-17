@@ -2374,6 +2374,12 @@ impl DwarfParser {
             return Ok(Some((Type::String, start..self.peek().unwrap().1.end)));
         }
 
+        // Match Uuid
+        if self.match_(&[Token::Uuid]) {
+            debug!("exit parse_type: uuid");
+            return Ok(Some((Type::Uuid, start..self.peek().unwrap().1.end)));
+        }
+
         // Match User Defined Type
         if let Some(ident) = self.parse_ident() {
             debug!("exit parse_type: user defined", ident);
@@ -2381,12 +2387,6 @@ impl DwarfParser {
                 Type::UserType(ident),
                 start..self.peek().unwrap().1.end,
             )));
-        }
-
-        // Match Uuid
-        if self.match_(&[Token::Uuid]) {
-            debug!("exit parse_type: uuid");
-            return Ok(Some((Type::Uuid, start..self.peek().unwrap().1.end)));
         }
 
         Ok(None)
@@ -3167,6 +3167,23 @@ mod tests {
                 a = [1, 2, 3,];
                 call(a,);
                 print("Hello, World!",);
+            }
+        "#;
+
+        let ast = parse_dwarf(src);
+        // dbg!(&ast);
+        assert!(ast.is_ok());
+    }
+
+    #[test]
+    fn test_uuid() {
+        let _ = env_logger::builder().is_test(true).try_init();
+
+        let src = r#"
+            fn foo(id: Uuid) -> () {
+                a = Uuid::new();
+                b = Uuid::new_v4();
+                c = Uuid::parse_str("936DA01F9ABD4d9d80C702AF85C822A8").unwrap();
             }
         "#;
 

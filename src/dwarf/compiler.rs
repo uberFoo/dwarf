@@ -259,6 +259,7 @@ fn walk_tree(
     if let Some(out_dir) = out_dir {
         // Now write a file containing the WoogStruct id's.
         let mut path = PathBuf::from(out_dir);
+        // 🚧 This needs to be changed.
         path.push("woog_structs.rs");
 
         let mut file = File::create(&path).unwrap();
@@ -651,6 +652,16 @@ fn inter_expression(
                 sarzak,
             )?;
 
+            let rhs = if let Expression::VariableExpression(ref expr) = &*rhs.read().unwrap() {
+                let expr = lu_dog.exhume_variable_expression(expr).unwrap();
+                let expr = expr.read().unwrap();
+                expr.name.clone()
+            } else {
+                return Err(DwarfError::Generic {
+                    description: "unknown field expression".to_owned(),
+                });
+            };
+
             let id = lhs_ty.read().unwrap().id();
             let ty = lu_dog.exhume_value_type(&id).unwrap();
             let ty = ty.read().unwrap();
@@ -660,8 +671,7 @@ fn inter_expression(
                     for model in models {
                         if let Some(Ty::Object(ref _object)) = model.exhume_ty(id) {
                             // let object = model.exhume_object(object).unwrap();
-                            let expr =
-                                FieldAccess::new("💥figure this out🖕".to_owned(), &lhs, lu_dog);
+                            let expr = FieldAccess::new(rhs, &lhs, lu_dog);
                             let expr = Expression::new_field_access(&expr, lu_dog);
 
                             // 🚧 Can we not do better?
@@ -682,13 +692,11 @@ fn inter_expression(
                 }
                 ValueType::WoogStruct(ref id) => {
                     let woog_struct = lu_dog.exhume_woog_struct(id).unwrap();
-                    let expr = FieldAccess::new("💥figure this out🖕".to_owned(), &lhs, lu_dog);
+                    let expr = FieldAccess::new(rhs.clone(), &lhs, lu_dog);
                     let expr = Expression::new_field_access(&expr, lu_dog);
                     let field = woog_struct.read().unwrap();
                     let field = field.r7_field(lu_dog);
-                    let field = field
-                        .iter()
-                        .find(|f| f.read().unwrap().name == "💥figure this out🖕");
+                    let field = field.iter().find(|f| f.read().unwrap().name == rhs);
 
                     // We need to grab the type from the field: what we have above is the type
                     // of the struct.
@@ -739,7 +747,8 @@ fn inter_expression(
             let body = Arc::new(RwLock::new((&body.0).to_owned()));
             let (body, _body_ty) = inter_expression(&body, block, lu_dog, models, sarzak)?;
 
-            let body = if let Expression::Block(body) = body.read().unwrap().clone() {
+            let body = body.read().unwrap();
+            let body = if let Expression::Block(body) = &*body {
                 body
             } else {
                 panic!("Expected a block expression");
@@ -1681,6 +1690,11 @@ fn get_value_type(
                     &Arc::new(RwLock::new(Ty::new_s_string())),
                     lu_dog,
                 ))
+            } else if name == "Uuid" {
+                Ok(ValueType::new_ty(
+                    &Arc::new(RwLock::new(Ty::new_s_uuid())),
+                    lu_dog,
+                ))
             } else {
                 let name = name.de_sanitize();
                 for model in models {
@@ -1707,7 +1721,7 @@ fn get_value_type(
                 // the Uuid. So, it's not unlikely; it's the least likely.
                 if let Some(ty) = sarzak.iter_ty().find(|ty| match ty {
                     Ty::Object(ref obj) => {
-                        // error!("sarzak.iter_ty", obj);
+                        error!("reach-around", obj);
                         let obj = sarzak.exhume_object(obj).unwrap();
                         let obj = obj.name.to_upper_camel_case();
                         obj == *name || name == format!("{}Proxy", obj)
@@ -1872,7 +1886,7 @@ impl<'a, 'b, 'c> fmt::Display for PrintableValueType<'a, 'b, 'c> {
                         Ty::Float(_) => write!(f, "float"),
                         Ty::Integer(_) => write!(f, "int"),
                         Ty::Object(ref object) => {
-                            // panic!("Bitches come!");
+                            error!("Bitches come!");
                             // This should probably just be an unwrap().
                             if let Some(object) = sarzak.exhume_object(object) {
                                 write!(f, "{}", object.name)
