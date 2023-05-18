@@ -13,10 +13,7 @@ use chacha::{
 fn main() -> Result<(), Error> {
     pretty_env_logger::init();
 
-    let mut ctx = initialize_interpreter_paths(
-        "../sarzak/models/sarzak.v2.json",
-        "../sarzak/target/sarzak/lu_dog/lu_dog.道",
-    )?;
+    let mut ctx = initialize_interpreter_paths("../sarzak/target/sarzak/lu_dog/lu_dog.道")?;
 
     ctx.register_model("../sarzak/models/lu_dog.v2.json")?;
 

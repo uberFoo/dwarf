@@ -19,7 +19,7 @@ use sarzak::{
         Import, List, Literal, LocalVariable, ObjectStore as LuDogStore, OperatorEnum, Statement,
         StatementEnum, ValueType, Variable, WoogOptionEnum, XValue,
     },
-    sarzak::{store::ObjectStore as SarzakStore, types::Ty},
+    sarzak::{store::ObjectStore as SarzakStore, types::Ty, MODEL as SARZAK_MODEL},
 };
 use snafu::{location, prelude::*, Location};
 use uuid::Uuid;
@@ -144,13 +144,6 @@ macro_rules! trace {
     };
 }
 
-macro_rules! dereference {
-    ($referrer:expr, $field:expr, $store:expr) => {
-        let ptr = &$referrer.read().unwrap().$field;
-        $store.exhume_$field(ptr).unwrap()
-    };
-}
-
 lazy_static! {
     pub(crate) static ref MODELS: Arc<RwLock<Vec<SarzakStore>>> = Arc::new(RwLock::new(Vec::new()));
     pub(crate) static ref LU_DOG: Arc<RwLock<LuDogStore>> =
@@ -159,12 +152,9 @@ lazy_static! {
         Arc::new(RwLock::new(SarzakStore::new()));
 }
 
-pub fn initialize_interpreter_paths<P: AsRef<Path>>(
-    sarzak_path: P,
-    lu_dog_path: P,
-) -> Result<Context, Error> {
+pub fn initialize_interpreter_paths<P: AsRef<Path>>(lu_dog_path: P) -> Result<Context, Error> {
     let sarzak =
-        SarzakStore::load(sarzak_path.as_ref()).map_err(|e| ChaChaError::Store { source: e })?;
+        SarzakStore::from_bincode(SARZAK_MODEL).map_err(|e| ChaChaError::Store { source: e })?;
 
     // This will always be a lu-dog, but it's basically a compiled dwarf file.
     // let mut lu_dog = LuDogStore::load("../sarzak/target/sarzak/lu_dog")

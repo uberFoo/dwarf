@@ -6,6 +6,7 @@ use snafu::prelude::*;
 
 use ariadne::{Color, Fmt, Label, Report, ReportKind, Source};
 use sarzak::domain::DomainBuilder;
+use sarzak::sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL};
 
 use chacha::dwarf::{
     parse_dwarf, populate_lu_dog, DwarfError, FileSnafu, GenericSnafu, IOSnafu, Result,
@@ -27,13 +28,13 @@ struct Args {
     ///
     /// Path to the model, corresponding to the source file, to build the
     /// Lu-Dog domain.
-    #[arg(long, short, requires = "sarzak")]
+    #[arg(long, short)]
     model: Option<PathBuf>,
     /// Meta-Model File
     ///
     /// Path to the meta-model, sarzak.
-    #[arg(long, short)]
-    sarzak: PathBuf,
+    // #[arg(long, short)]
+    // sarzak: PathBuf,
     /// Path to package
     ///
     /// If included, `sarzak` will create a new domain in the specified
@@ -111,11 +112,13 @@ fn main() -> Result<()> {
     //     None
     // };
 
-    let sarzak = DomainBuilder::new()
-        .cuckoo_model(&args.sarzak)
-        .unwrap()
-        .build_v2()
-        .unwrap();
+    // let sarzak = DomainBuilder::new()
+    //     .cuckoo_model(&args.sarzak)
+    //     .unwrap()
+    //     .build_v2()
+    //     .unwrap();
+
+    let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
 
     let path = if args.package_dir.is_some() {
         let package_dir = find_package_dir(&args.package_dir)?;
@@ -154,59 +157,12 @@ fn main() -> Result<()> {
 
     let ast = parse_dwarf(&source_code)?;
 
-    let lu_dog = populate_lu_dog(Some(&path), &ast, &model, sarzak.sarzak()).map_err(|e| {
-        match &e {
-            DwarfError::BadSelf { span } => {
-                let span = span.clone();
-                let msg = format!("{}", e);
-
-                Report::build(ReportKind::Error, (), span.start)
-                    .with_message(&msg)
-                    .with_label(
-                        Label::new(span)
-                            .with_message(format!("{}", msg.fg(Color::Red)))
-                            .with_color(Color::Red),
-                    )
-                    .finish()
-                    .print(Source::from(&source_code))
-                    .unwrap()
-            }
-            DwarfError::GenericWarning {
-                description: desc,
-                span,
-            } => {
-                let span = span.clone();
-
-                Report::build(ReportKind::Error, (), span.start)
-                    .with_message(&desc)
-                    .with_label(
-                        Label::new(span)
-                            .with_message(format!("{}", desc.fg(Color::Red)))
-                            .with_color(Color::Red),
-                    )
-                    .finish()
-                    .print(Source::from(&source_code))
-                    .unwrap()
-            }
-            DwarfError::ImplementationBlockError { span } => {
-                let span = span.clone();
-                let msg = format!("{}", e);
-
-                Report::build(ReportKind::Error, (), span.start)
-                    .with_message(&msg)
-                    .with_label(
-                        Label::new(span)
-                            .with_message(format!("{}", msg.fg(Color::Red)))
-                            .with_color(Color::Red),
-                    )
-                    .finish()
-                    .print(Source::from(&source_code))
-                    .unwrap()
-            }
-            DwarfError::Parse { ast } => {
-                for a in ast {
+    let lu_dog =
+        populate_lu_dog(Some(&path), source_code.clone(), &ast, &model, &sarzak).map_err(|e| {
+            match &e {
+                DwarfError::BadSelf { span } => {
+                    let span = span.clone();
                     let msg = format!("{}", e);
-                    let span = a.1.clone();
 
                     Report::build(ReportKind::Error, (), span.start)
                         .with_message(&msg)
@@ -219,12 +175,60 @@ fn main() -> Result<()> {
                         .print(Source::from(&source_code))
                         .unwrap()
                 }
+                DwarfError::GenericWarning {
+                    description: desc,
+                    span,
+                } => {
+                    let span = span.clone();
+
+                    Report::build(ReportKind::Error, (), span.start)
+                        .with_message(&desc)
+                        .with_label(
+                            Label::new(span)
+                                .with_message(format!("{}", desc.fg(Color::Red)))
+                                .with_color(Color::Red),
+                        )
+                        .finish()
+                        .print(Source::from(&source_code))
+                        .unwrap()
+                }
+                DwarfError::ImplementationBlockError { span } => {
+                    let span = span.clone();
+                    let msg = format!("{}", e);
+
+                    Report::build(ReportKind::Error, (), span.start)
+                        .with_message(&msg)
+                        .with_label(
+                            Label::new(span)
+                                .with_message(format!("{}", msg.fg(Color::Red)))
+                                .with_color(Color::Red),
+                        )
+                        .finish()
+                        .print(Source::from(&source_code))
+                        .unwrap()
+                }
+                DwarfError::Parse { ast } => {
+                    for a in ast {
+                        let msg = format!("{}", e);
+                        let span = a.1.clone();
+
+                        Report::build(ReportKind::Error, (), span.start)
+                            .with_message(&msg)
+                            .with_label(
+                                Label::new(span)
+                                    .with_message(format!("{}", msg.fg(Color::Red)))
+                                    .with_color(Color::Red),
+                            )
+                            .finish()
+                            .print(Source::from(&source_code))
+                            .unwrap()
+                    }
+                }
+                _ => {}
             }
-            _ => {}
-        }
-        // let report = Report::build(ReportKind::Error, (), 0);
-        return e;
-    })?;
+            // let report = Report::build(ReportKind::Error, (), 0);
+            return e;
+        })?;
 
     lu_dog.persist_bincode(&out_file).context(FileSnafu {
         description: "Could not persist Lu-Dog domain".to_owned(),
