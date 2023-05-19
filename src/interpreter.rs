@@ -466,8 +466,26 @@ fn eval_expression(
 ) -> Result<(Arc<RwLock<Value>>, Arc<RwLock<ValueType>>)> {
     let lu_dog = &LU_DOG;
 
-    debug!("eval_expression: expression", expression);
-    trace!("eval_expression: stack", stack);
+    debug!("expression", expression);
+    trace!("stack", stack);
+
+    let value = &expression
+        .read()
+        .unwrap()
+        .r11_x_value(&lu_dog.read().unwrap())[0];
+    let span = &value.read().unwrap().r63_span(&lu_dog.read().unwrap())[0];
+    let source = &span.read().unwrap().source;
+    let source = lu_dog
+        .read()
+        .unwrap()
+        .exhume_dwarf_source_file(source)
+        .unwrap();
+    let source = &source.read().unwrap().source;
+
+    println!(
+        "{}",
+        &(source.as_str())[span.read().unwrap().start as usize..span.read().unwrap().end as usize],
+    );
 
     let result_style = Colour::Green.bold();
 
@@ -1687,6 +1705,7 @@ pub fn start_repl(context: Context) -> Result<(), Error> {
     use rustyline::validate::{ValidationContext, ValidationResult, Validator};
     use rustyline::{Completer, Helper, Highlighter, Hinter};
     use rustyline::{Editor, Result};
+    use sarzak::lu_dog::DwarfSourceFile;
 
     let models = &MODELS;
     let lu_dog = &LU_DOG;
@@ -1811,10 +1830,12 @@ pub fn start_repl(context: Context) -> Result<(), Error> {
                     debug!("stmt from readline", stmt);
 
                     let stmt = {
+                        let mut writer = lu_dog.write().unwrap();
                         match inter_statement(
                             &Arc::new(RwLock::new(stmt)),
+                            &DwarfSourceFile::new(line.clone(), &mut writer),
                             &block,
-                            &mut lu_dog.write().unwrap(),
+                            &mut writer,
                             &models.read().unwrap(),
                             &sarzak.read().unwrap(),
                         ) {

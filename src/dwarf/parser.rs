@@ -759,7 +759,7 @@ impl DwarfParser {
         Ok(Some((
             (
                 DwarfExpression::Addition(Box::new(left.0.to_owned()), Box::new(right.0)),
-                start..self.previous().unwrap().1.end,
+                start..self.previous().unwrap().1.start,
             ),
             ADD_SUB,
         )))
@@ -865,7 +865,7 @@ impl DwarfParser {
         Ok(Some((
             (
                 DwarfExpression::Subtraction(Box::new(left.0.to_owned()), Box::new(right.0)),
-                start..self.previous().unwrap().1.end,
+                start..self.previous().unwrap().1.start,
             ),
             ADD_SUB,
         )))
@@ -916,7 +916,7 @@ impl DwarfParser {
         Ok(Some((
             (
                 DwarfExpression::LessThanOrEqual(Box::new(left.0.to_owned()), Box::new(right.0)),
-                start..self.previous().unwrap().1.end,
+                start..self.previous().unwrap().1.start,
             ),
             COMP,
         )))
