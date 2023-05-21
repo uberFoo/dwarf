@@ -1,0 +1,17 @@
+[modules.lu_dog]
+model = "models/lu_dog.json"
+
+[modules.lu_dog.compiler]
+always_process = true
+compiler = "grace"
+derive = ["Clone", "Debug", "Deserialize", "PartialEq", "Serialize"]
+imported_domains = ["sarzak"]
+use_paths = ["serde::{Deserialize, Serialize}"]
+
+[modules.lu_dog.compiler.target]
+is_meta_model = true
+is_sarzak = false
+persist = true
+persist_timestamps = false
+uber_store = true
+target = "domain"

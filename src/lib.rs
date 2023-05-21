@@ -1,5 +1,6 @@
 use std::{
     io,
+    ops::Range,
     path::PathBuf,
     sync::{Arc, RwLock},
 };
@@ -7,13 +8,13 @@ use std::{
 use ansi_term::Colour;
 use clap::Args;
 use rustyline::error::ReadlineError;
-use sarzak::lu_dog::ValueType;
 use serde::{Deserialize, Serialize};
 use snafu::{prelude::*, Location};
 use svm::Instruction;
 
 pub mod dwarf;
 pub mod interpreter;
+pub mod lu_dog;
 pub mod merlin;
 pub mod svm;
 pub(crate) mod value;
@@ -26,6 +27,7 @@ pub use value::{StoreProxy, Value};
 pub type DwarfInteger = i64;
 pub type DwarfFloat = f64;
 
+use lu_dog::ValueType;
 //
 // Command line parameters
 #[derive(Args, Clone, Debug, Deserialize, Serialize)]
@@ -81,11 +83,11 @@ pub enum ChaChaError {
         method: String,
         ty: String,
     },
-    #[snafu(display("\n{}: type mismatch -- expected `{}`, found `{}`.\n  --> {}:{}:{}", ERR_CLR.bold().paint("error"), OK_CLR.paint(expected.to_string()), ERR_CLR.bold().paint(got.to_string()), location.file, location.line, location.column))]
+    #[snafu(display("\n{}: type mismatch -- expected `{}`, found `{}`\n  --> {}:{}", ERR_CLR.bold().paint("error"), OK_CLR.paint(expected.to_string()), ERR_CLR.bold().paint(got.to_string()), span.start, span.end))]
     TypeMismatch {
         expected: String,
         got: String,
-        location: Location,
+        span: Range<usize>,
     },
     #[snafu(display("\n{}: no such field `{}`.", ERR_CLR.bold().paint("error"), POP_CLR.paint(field)))]
     NoSuchField {

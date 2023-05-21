@@ -1,12 +1,15 @@
 use std::{ffi::OsString, fs, os::unix::ffi::OsStringExt, path::PathBuf, process};
 
-use clap::{ArgAction, Parser};
+use clap::Parser;
 use log;
 use snafu::prelude::*;
 
 use ariadne::{Color, Fmt, Label, Report, ReportKind, Source};
-use sarzak::domain::DomainBuilder;
-use sarzak::sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL};
+
+use sarzak::{
+    domain::DomainBuilder,
+    sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL},
+};
 
 use chacha::dwarf::{
     parse_dwarf, populate_lu_dog, DwarfError, FileSnafu, GenericSnafu, IOSnafu, Result,

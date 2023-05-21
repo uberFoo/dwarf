@@ -12,7 +12,7 @@ use lazy_static::lazy_static;
 use sarzak::sarzak::{Object, SUuid, Ty};
 use uuid::{uuid, Uuid};
 
-use sarzak::lu_dog::{
+use crate::lu_dog::{
     Argument, Binary, Block, BooleanLiteral, Call, Comparison, DwarfSourceFile, Empty, Error,
     ErrorExpression, Expression, ExpressionStatement, Field, FieldAccess, FieldExpression,
     FloatLiteral, ForLoop, Function, Grouped, Implementation, Import, Index, IntegerLiteral, Item,

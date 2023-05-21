@@ -1,16 +1,18 @@
+use std::io;
+
+use ansi_to_tui::IntoText;
 use chacha::{
     initialize_interpreter,
-    interpreter::{initialize_interpreter_paths, start_main, start_vm},
+    interpreter::{banner, initialize_interpreter_paths, start_main, start_vm},
     // merlin::{ErrorExpressionProxy, ExpressionProxy},
     // merlin::{
     //     AnchorProxy, BisectionProxy, EdgeProxy, GlyphProxy, LineProxy, LineSegmentPointProxy,
     //     LineSegmentProxy, PointProxy, RelationshipNameProxy, RelationshipPhraseProxy, XBoxProxy,
     // },
     start_repl,
-    Error,
 };
 
-fn main() -> Result<(), Error> {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     pretty_env_logger::init();
 
     // let mut ctx = initialize_interpreter_paths("../sarzak/target/sarzak/lu_dog/lu_dog.道")?;
@@ -35,10 +37,14 @@ fn main() -> Result<(), Error> {
     // println!("Interpreter exited with: {:?}", result);
     // Ok(())
 
+    println!("{}", banner());
+
     start_repl(ctx).map_err(|e| {
         println!("Interpreter exited with: {}", e);
         e
-    })
+    })?;
+
+    Ok(())
 
     // start_main(ctx).map_err(|e| {
     //     println!("Interpreter exited with: {}", e);

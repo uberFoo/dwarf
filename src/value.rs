@@ -8,14 +8,14 @@ use std::{
 
 use ansi_term::Colour;
 use fxhash::FxHashMap as HashMap;
-
-use sarzak::{
-    lu_dog::{Function, ObjectStore as LuDogStore, ValueType},
-    sarzak::Ty,
-};
+use sarzak::sarzak::Ty;
 use uuid::Uuid;
 
-use crate::{interpreter::PrintableValueType, ChaChaError, DwarfFloat, DwarfInteger, Result};
+use crate::{
+    interpreter::{Context, PrintableValueType},
+    lu_dog::{Function, ObjectStore as LuDogStore, ValueType},
+    ChaChaError, DwarfFloat, DwarfInteger, Result,
+};
 
 pub trait StoreProxy: fmt::Display + fmt::Debug + Send + Sync {
     /// Get the name of the type this proxy represents.
@@ -442,14 +442,16 @@ impl Value {
 
 #[derive(Clone, Debug)]
 pub struct UserType {
+    type_name: String,
     type_: Arc<RwLock<ValueType>>,
     attrs: HashMap<String, Arc<RwLock<Value>>>,
 }
 
 impl UserType {
-    pub fn new(type_: Arc<RwLock<ValueType>>) -> Self {
+    pub fn new(type_: &Arc<RwLock<ValueType>>, context: &Context) -> Self {
         Self {
-            type_,
+            type_name: PrintableValueType(type_, context).to_string(),
+            type_: type_.clone(),
             attrs: HashMap::default(),
         }
     }
@@ -469,7 +471,7 @@ impl UserType {
 
 impl fmt::Display for UserType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let mut out = f.debug_struct(&PrintableValueType(self.type_.clone()).to_string());
+        let mut out = f.debug_struct(&self.type_name);
         let mut attrs = self.attrs.iter().collect::<Vec<_>>();
         attrs.sort_by(|(k1, _), (k2, _)| k1.cmp(k2));
 

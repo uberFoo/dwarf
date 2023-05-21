@@ -4,14 +4,15 @@ use std::{fs::File, io::prelude::*, ops::Range, path::PathBuf, sync::Arc, sync::
 use ansi_term::Colour;
 use heck::{ToShoutySnakeCase, ToUpperCamelCase};
 use log;
+use sarzak::sarzak::{store::ObjectStore as SarzakStore, types::Ty};
 use snafu::{location, prelude::*, Location};
 use uuid::Uuid;
 
-use crate::dwarf::{
-    DwarfError, Expression as ParserExpression, Item, ObjectIdNotFoundSnafu, Result, Spanned,
-    Statement as ParserStatement, Type, TypeMismatchSnafu,
-};
-use sarzak::{
+use crate::{
+    dwarf::{
+        DwarfError, Expression as ParserExpression, Item, ObjectIdNotFoundSnafu, Result, Spanned,
+        Statement as ParserStatement, Type, TypeMismatchSnafu,
+    },
     lu_dog::{
         store::ObjectStore as LuDogStore,
         types::{
@@ -26,7 +27,6 @@ use sarzak::{
         List, ListElement, ListExpression, MethodCall, Operator, Reference, ResultStatement,
         VariableEnum, WoogOptionEnum, XReturn,
     },
-    sarzak::{store::ObjectStore as SarzakStore, types::Ty},
 };
 
 macro_rules! link_parameter {

@@ -6,17 +6,15 @@ use std::{
 
 use ansi_term::{Colour, Style};
 use clap::Args;
+use sarzak::sarzak::{store::ObjectStore as SarzakStore, types::Ty};
 use serde::{Deserialize, Serialize};
 use snafu::{prelude::*, Location};
 use uuid::Uuid;
 
-use sarzak::{
-    lu_dog::{
-        store::ObjectStore as LuDogStore,
-        types::{ValueType, WoogOption},
-        List, Reference,
-    },
-    sarzak::{store::ObjectStore as SarzakStore, types::Ty},
+use crate::lu_dog::{
+    store::ObjectStore as LuDogStore,
+    types::{ValueType, WoogOption},
+    List, Reference,
 };
 
 pub mod compiler;
