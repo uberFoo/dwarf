@@ -1145,7 +1145,7 @@ fn inter_expression(
                 // I'm going to get the type of the first element, and then check
                 // that each subsequent element is the same type.
                 let element = elements.next().unwrap();
-                let (first, first_ty) = inter_expression(
+                let ((first, span), first_ty) = inter_expression(
                     &Arc::new(RwLock::new(element.0.to_owned())),
                     &element.1,
                     source,
@@ -1156,13 +1156,15 @@ fn inter_expression(
                 )?;
 
                 let list = List::new(&first_ty, lu_dog);
-                let element = ListElement::new(&first.0, None, lu_dog);
-                let _ = Expression::new_list_element(&element, lu_dog);
+                let element = ListElement::new(&first, None, lu_dog);
+                let expr = Expression::new_list_element(&element, lu_dog);
+                let value = XValue::new_expression(&block, &first_ty, &expr, lu_dog);
+                span.write().unwrap().x_value = Some(value.read().unwrap().id);
                 let list_expr = ListExpression::new(Some(&element), lu_dog);
 
                 let mut last_element_uuid: Option<Uuid> = Some(element.read().unwrap().id);
                 while let Some(element) = elements.next() {
-                    let (element, element_ty) = inter_expression(
+                    let ((elt, span), elt_ty) = inter_expression(
                         &Arc::new(RwLock::new(element.0.to_owned())),
                         &element.1,
                         source,
@@ -1172,21 +1174,13 @@ fn inter_expression(
                         sarzak,
                     )?;
 
-                    let element = ListElement::new(&element.0, None, lu_dog);
-                    last_element_uuid = link_list_element!(last_element_uuid, element, lu_dog);
-                    let _ = Expression::new_list_element(&element, lu_dog);
+                    typecheck(&first_ty, &elt_ty, lu_dog, sarzak, models)?;
 
-                    ensure!(
-                        &*first_ty.read().unwrap() == &*element_ty.read().unwrap(),
-                        {
-                            let first_ty = PrintableValueType(first_ty, lu_dog, sarzak, models);
-                            let element_ty = PrintableValueType(element_ty, lu_dog, sarzak, models);
-                            TypeMismatchSnafu {
-                                expected: first_ty.to_string(),
-                                found: element_ty.to_string(),
-                            }
-                        }
-                    );
+                    let element = ListElement::new(&elt, None, lu_dog);
+                    last_element_uuid = link_list_element!(last_element_uuid, element, lu_dog);
+                    let expr = Expression::new_list_element(&element, lu_dog);
+                    let value = XValue::new_expression(&block, &elt_ty, &expr, lu_dog);
+                    span.write().unwrap().x_value = Some(value.read().unwrap().id);
                 }
 
                 let expr = Expression::new_list_expression(&list_expr, lu_dog);

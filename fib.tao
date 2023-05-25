@@ -39,7 +39,7 @@ fn b() {
 }
 
 fn main() -> int {
-    // let a: int = fib(5);
+    let a: int = fib(5);
     // print(a);
     // let a: Uuid = Uuid::new();
     // let b = false;
@@ -48,13 +48,13 @@ fn main() -> int {
     let e = "Hello uberFoo.";
     let f = Foo {
         a: 42,
-        b: 7,
+        b: true,
         c: 3.14,
     };
 
     // I need to parse a list type declaration, e.g.,
     // let a: [int] = [0, 1, 2, 3];
-    let g = [a, b];
+    let g = [a, 42];
 
     // This doesn't work yet.
     // struct Bar {

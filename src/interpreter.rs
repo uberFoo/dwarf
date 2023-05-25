@@ -1,16 +1,22 @@
 use std::{
     collections::VecDeque,
     fmt,
+    net::TcpListener,
     ops::Range,
     path::Path,
     sync::{Arc, RwLock},
+    thread,
+    time::Duration,
 };
 
 use ansi_term::Colour::{self, RGB};
 use ansi_term::{ANSIString, ANSIStrings};
+use crossbeam::channel::{unbounded, Receiver, Sender};
 use fxhash::FxHashMap as HashMap;
 use heck::ToUpperCamelCase;
+use lazy_static::lazy_static;
 use log;
+use parking_lot::{Condvar, Mutex, RwLock as PRwLock};
 use rayon::prelude::*;
 use sarzak::sarzak::{store::ObjectStore as SarzakStore, types::Ty, MODEL as SARZAK_MODEL};
 use snafu::{location, prelude::*, Location};
@@ -25,9 +31,9 @@ use crate::{
     },
     svm::{CallFrame, Chunk, Instruction, VM},
     value::{StoreProxy, UserType},
-    ChaChaError, DwarfInteger, Error, NoSuchFieldSnafu, NoSuchStaticMethodSnafu, Result,
-    TypeMismatchSnafu, UnimplementedSnafu, Value, VariableNotFoundSnafu,
-    WrongNumberOfArgumentsSnafu,
+    ChaChaError, DwarfInteger, Error, InternalCompilerChannelSnafu, NoSuchFieldSnafu,
+    NoSuchStaticMethodSnafu, Result, TypeMismatchSnafu, UnimplementedSnafu, Value,
+    VariableNotFoundSnafu, WrongNumberOfArgumentsSnafu,
 };
 
 macro_rules! function {
@@ -141,13 +147,18 @@ macro_rules! trace {
     };
 }
 
-// lazy_static! {
+// static ref STEPPING:
+
+lazy_static! {
+    static ref RUNNING: Mutex<bool> = Mutex::new(true);
+    static ref CVAR: Condvar = Condvar::new();
+    static ref STEPPING: PRwLock<bool> = PRwLock::new(false);
 //     pub(crate) static ref MODELS: Arc<RwLock<Vec<SarzakStore>>> = Arc::new(RwLock::new(Vec::new()));
 //     pub(crate) static ref LU_DOG: Arc<RwLock<LuDogStore>> =
 //         Arc::new(RwLock::new(LuDogStore::new()));
 //     pub(crate) static ref SARZAK: Arc<RwLock<SarzakStore>> =
 //         Arc::new(RwLock::new(SarzakStore::new()));
-// }
+}
 
 pub fn initialize_interpreter_paths<P: AsRef<Path>>(lu_dog_path: P) -> Result<Context, Error> {
     let sarzak =
@@ -178,7 +189,7 @@ pub fn initialize_interpreter(
 ) -> Result<Context, Error> {
     // Initialize the stack with stuff from the compiled source.
     let block = Block::new(Uuid::new_v4(), &mut lu_dog);
-    let mut stack = Memory::new();
+    let (mut stack, receiver) = Memory::new();
 
     // Insert the functions in the root frame.
     let funcs = lu_dog.iter_function().collect::<Vec<_>>();
@@ -263,6 +274,8 @@ pub fn initialize_interpreter(
     // *LU_DOG.write().unwrap() = lu_dog;
     // *MODEL.write().unwrap() = model;
 
+    let (std_out_send, std_out_recv) = unbounded();
+
     Ok(Context {
         prompt: format!("{} ", Colour::Blue.normal().paint("道:>")),
         stack,
@@ -270,6 +283,9 @@ pub fn initialize_interpreter(
         lu_dog: Arc::new(RwLock::new(lu_dog)),
         sarzak: Arc::new(RwLock::new(sarzak)),
         models: Arc::new(RwLock::new(Vec::new())),
+        mem_update_recv: receiver,
+        std_out_send,
+        std_out_recv,
     })
 }
 
@@ -389,7 +405,7 @@ fn eval_function_call(
             let x_value = &expr.read().unwrap().r11_x_value(&lu_dog.read().unwrap())[0];
             let span = &x_value.read().unwrap().r63_span(&lu_dog.read().unwrap())[0];
 
-            typecheck(&param_ty, &arg_ty, span, context);
+            typecheck(&param_ty, &arg_ty, span, context)?;
 
             context.stack.insert(name.clone(), value);
         }
@@ -467,18 +483,20 @@ fn eval_expression(
     debug!("expression", expression);
     trace!("stack", context.stack);
 
-    let value = &expression
-        .read()
-        .unwrap()
-        .r11_x_value(&lu_dog.read().unwrap())[0];
-    let span = &value.read().unwrap().r63_span(&lu_dog.read().unwrap())[0];
-    let source = &span.read().unwrap().source;
-    let source = lu_dog
-        .read()
-        .unwrap()
-        .exhume_dwarf_source_file(source)
-        .unwrap();
-    let source = &source.read().unwrap().source;
+    // let value = &expression
+    //     .read()
+    //     .unwrap()
+    //     .r11_x_value(&lu_dog.read().unwrap())[0];
+    // debug!("value", value);
+
+    // let span = &value.read().unwrap().r63_span(&lu_dog.read().unwrap())[0];
+    // let source = &span.read().unwrap().source;
+    // let source = lu_dog
+    //     .read()
+    //     .unwrap()
+    //     .exhume_dwarf_source_file(source)
+    //     .unwrap();
+    // let source = &source.read().unwrap().source;
 
     // println!(
     //     "{}",
@@ -1257,7 +1275,13 @@ fn eval_expression(
             let (value, _) = eval_expression(expr, context)?;
             let result = format!("{}", value.read().unwrap());
             let result = result.replace("\\n", "\n");
-            print!("{}", result_style.paint(result));
+
+            context
+                .std_out_send
+                .send(format!("{}", result_style.paint(result)))
+                .context(InternalCompilerChannelSnafu {
+                    message: "error writing to std out queue".to_owned(),
+                })?;
 
             Ok((value, ValueType::new_empty(&lu_dog.read().unwrap())))
         }
@@ -1484,6 +1508,20 @@ pub fn eval_statement(
     debug!("eval_statement statement", statement);
     trace!("eval_statement stack", context.stack);
 
+    {
+        let mut running = RUNNING.lock();
+        if !*running {
+            debug!("waiting");
+            CVAR.wait(&mut running);
+            debug!("notified");
+        }
+
+        if *STEPPING.read() {
+            debug!("stepping");
+            *running = false;
+        }
+    }
+
     match statement.read().unwrap().subtype {
         StatementEnum::ExpressionStatement(ref stmt) => {
             let stmt = lu_dog
@@ -1564,6 +1602,9 @@ pub struct Context {
     lu_dog: Arc<RwLock<LuDogStore>>,
     sarzak: Arc<RwLock<SarzakStore>>,
     models: Arc<RwLock<Vec<SarzakStore>>>,
+    mem_update_recv: Receiver<MemoryUpdateMessage>,
+    std_out_send: Sender<String>,
+    std_out_recv: Receiver<String>,
 }
 
 impl Context {
@@ -1574,6 +1615,22 @@ impl Context {
         self.models.write().unwrap().push(model);
 
         Ok(())
+    }
+
+    pub fn register_memory_updates(&self) -> Receiver<MemoryUpdateMessage> {
+        self.mem_update_recv.clone()
+    }
+
+    pub fn drain_std_out(&self) -> Vec<String> {
+        let mut out = Vec::new();
+        while let Ok(line) = self.std_out_recv.try_recv() {
+            out.push(line);
+        }
+        out
+    }
+
+    pub fn get_stack(&self) -> &Memory {
+        &self.stack
     }
 
     pub fn prompt(&self) -> &str {
@@ -1653,25 +1710,71 @@ impl Context {
     }
 }
 
-pub fn start_main(mut context: Context) -> Result<(), Error> {
+/// This runs the main function, assuming it exists. It should really return
+/// Ok(Value) I think.
+pub fn start_main(stopped: bool, mut context: Context) -> Result<Value, Error> {
+    {
+        let mut running = RUNNING.lock();
+        *running = !stopped;
+    }
+
     let stack = &mut context.stack;
 
-    let main = stack.get("main").unwrap();
-    if let Value::Function(ref main) = *main.read().unwrap() {
+    let main = stack.get("main").expect("Missing main function.");
+
+    dbg!("foo");
+    // This should fail if it's not a function. Actually, I think that it _has_
+    // to be a function. Unless there's another named item that I'm not thinking
+    // of. I mean, maybe `use main;`  would trigger this to return OK(()), and
+    // not do anything?
+    let result = if let Value::Function(ref main) = *main.read().unwrap() {
         let main = context
             .lu_dog
             .read()
             .unwrap()
             .exhume_function(&main.read().unwrap().id)
             .unwrap();
-        let _result = eval_function_call(main, &[], &mut context)?;
-    }
 
-    Ok(())
+        dbg!("uber");
+        let thread_join_handle = thread::spawn(move || {
+            let result = eval_function_call(main, &[], &mut context);
+            result
+        });
+
+        // this is lame
+        thread::sleep(Duration::from_millis(1));
+
+        dbg!("baz");
+        CVAR.notify_all();
+
+        dbg!("wtf");
+        // some work here
+        let result = thread_join_handle.join().unwrap().unwrap();
+
+        dbg!("finally");
+        // let result = thread::scope(|s| {
+        //     s.spawn(move |_| {
+        //         let result = eval_function_call(main, &[], &mut context);
+        //         result
+        //     })
+        // })
+        // .unwrap();
+        // let result = result.join().unwrap()?;
+
+        // let result = eval_function_call(main, &[], &mut context)?;
+
+        Ok(result.0.clone().read().unwrap().clone())
+    } else {
+        Err(Error(ChaChaError::MainIsNotAFunction))
+    };
+
+    dbg!("bar");
+
+    result
 }
 
 pub fn start_vm(n: DwarfInteger) -> Result<DwarfInteger, Error> {
-    let mut memory = Memory::new();
+    let (mut memory, _) = Memory::new();
     let mut chunk = Chunk::new("fib".to_string());
 
     chunk.add_variable("n".to_owned());
@@ -2040,22 +2143,77 @@ pub(crate) struct ChunkReservation {
     slot: usize,
 }
 
+type MemoryCell = (String, Arc<RwLock<Value>>);
+
+#[derive(Clone, Debug)]
+pub enum MemoryUpdateMessage {
+    AddGlobal(MemoryCell),
+    AddMeta(MemoryCell),
+    PushFrame,
+    PopFrame,
+    AddLocal(MemoryCell),
+}
+
+impl fmt::Display for MemoryUpdateMessage {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            MemoryUpdateMessage::AddGlobal((name, value)) => {
+                write!(f, "add global {}: {}", name, value.read().unwrap())
+            }
+            MemoryUpdateMessage::AddMeta((name, value)) => {
+                write!(f, "add meta {}: {}", name, value.read().unwrap())
+            }
+            MemoryUpdateMessage::PushFrame => write!(f, "push frame"),
+            MemoryUpdateMessage::PopFrame => write!(f, "pop frame"),
+            MemoryUpdateMessage::AddLocal((name, value)) => {
+                write!(f, "add local {}: {}", name, value.read().unwrap())
+            }
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct Memory {
     chunks: Vec<Chunk>,
     meta: HashMap<String, HashMap<String, Arc<RwLock<Value>>>>,
     global: HashMap<String, Arc<RwLock<Value>>>,
     frames: Vec<HashMap<String, Arc<RwLock<Value>>>>,
+    sender: Sender<MemoryUpdateMessage>,
 }
 
 impl Memory {
-    pub(crate) fn new() -> Self {
-        Memory {
-            chunks: Vec::new(),
-            meta: HashMap::default(),
-            global: HashMap::default(),
-            frames: vec![HashMap::default()],
-        }
+    pub(crate) fn new() -> (Self, Receiver<MemoryUpdateMessage>) {
+        let (sender, receiver) = unbounded();
+
+        (
+            Memory {
+                chunks: Vec::new(),
+                meta: HashMap::default(),
+                global: HashMap::default(),
+                frames: vec![HashMap::default()],
+                sender,
+            },
+            receiver,
+        )
+    }
+
+    pub fn get_globals(&self) -> Vec<(&str, &Arc<RwLock<Value>>)> {
+        self.global
+            .iter()
+            .map(|(name, value)| (name.as_str(), value))
+            .collect()
+    }
+
+    pub fn get_frames(&self) -> Vec<Vec<(&str, &Arc<RwLock<Value>>)>> {
+        self.frames
+            .iter()
+            .map(|frame| {
+                frame
+                    .iter()
+                    .map(|(name, value)| (name.as_str(), value))
+                    .collect()
+            })
+            .collect()
     }
 
     pub(crate) fn chunk_index<S: AsRef<str>>(&self, name: S) -> Option<usize> {
@@ -2081,10 +2239,12 @@ impl Memory {
     }
 
     pub(crate) fn push(&mut self) {
+        self.sender.send(MemoryUpdateMessage::PushFrame).unwrap();
         self.frames.push(HashMap::default());
     }
 
     pub(crate) fn pop(&mut self) {
+        self.sender.send(MemoryUpdateMessage::PopFrame).unwrap();
         self.frames.pop();
     }
 
@@ -2109,6 +2269,7 @@ impl Memory {
         }
     }
 
+    // 🚧 Document this -- I'm not sure what the :: business is about.
     pub(crate) fn insert_global(&mut self, name: String, value: Arc<RwLock<Value>>) {
         if name.contains("::") {
             let mut split = name.split("::");
@@ -2116,6 +2277,13 @@ impl Memory {
             let name = split
                 .next()
                 .expect("name contained `::`, but no second element");
+
+            self.sender
+                .send(MemoryUpdateMessage::AddGlobal((
+                    name.to_owned(),
+                    value.clone(),
+                )))
+                .unwrap();
 
             if let Some(value) = self.global.get(table) {
                 let mut write_value = value.write().unwrap();
@@ -2136,6 +2304,9 @@ impl Memory {
     }
 
     pub(crate) fn insert(&mut self, name: String, value: Arc<RwLock<Value>>) {
+        self.sender
+            .send(MemoryUpdateMessage::AddLocal((name.clone(), value.clone())))
+            .unwrap();
         let frame = self.frames.last_mut().unwrap();
         frame.insert(name, value);
     }
@@ -2178,32 +2349,6 @@ impl Memory {
         }
         self.global.get(name)
     }
-
-    // fn get_mut(&mut self, name: &str) -> Option<Arc<RwLock<Value>>> {
-    //     if name.contains("::") {
-    //         let mut split = name.split("::");
-
-    //         let name = split.next().unwrap();
-    //         let table = split.next().unwrap();
-
-    //         if let Some(Value::Table(ref mut table)) = self.get_simple_mut(table) {
-    //             table.get_mut(name)
-    //         } else {
-    //             None
-    //         }
-    //     } else {
-    //         self.get_simple_mut(name)
-    //     }
-    // }
-
-    // fn get_simple_mut(&mut self, name: &str) -> Option<Arc<RwLock<Value>>> {
-    //     for frame in self.frames.iter_mut().rev() {
-    //         if let Some(value) = frame.get_mut(name) {
-    //             return Some(value);
-    //         }
-    //     }
-    //     self.global.get_mut(name)
-    // }
 }
 
 fn typecheck(
@@ -2217,19 +2362,6 @@ fn typecheck(
         (ValueType::Empty(_), _) => Ok(()),
         (_, ValueType::Unknown(_)) => Ok(()),
         (ValueType::Unknown(_), _) => Ok(()),
-        // (_, ValueType::Empty(_)) => Ok(()),
-        // (ValueType::Error(_), _) => Ok(()),
-        // (_, ValueType::Error(_)) => Ok(()),
-        // (ValueType::Function(_), _) => Ok(()),
-        // (_, ValueType::Function(_)) => Ok(()),
-        // (ValueType::Import(_), _) => Ok(()),
-        // (_, ValueType::Import(_)) => Ok(()),
-        // (ValueType::Reference(_), _) => Ok(()),
-        // (_, ValueType::Reference(_)) => Ok(()),
-        // (ValueType::Type(_), _) => Ok(()),
-        // (_, ValueType::Type(_)) => Ok(()),
-        // (ValueType::Uuid(_), _) => Ok(()),
-        // (_, ValueType::Uuid(_)) => Ok(()),
         (lhs_t, rhs_t) => {
             if lhs_t == rhs_t {
                 Ok(())

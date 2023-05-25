@@ -12,8 +12,8 @@ name = "chacha"
 path = "src/bin/main.rs"
 
 [[bin]]
-name = "dwarf"
-path = "src/bin/dwarf.rs"
+name = "tui"
+path = "src/bin/tui.rs"
 
 [dependencies]
 # rustyline = { version = "11.0.0", features = [
@@ -58,6 +58,10 @@ tui-logger = { path = "../../github/tui-logger", default-features = false, featu
 ] }
 serde_json = "1.0.96"
 bincode = "1.3.3"
+tui-tree-widget = { path = "../../github/tui-rs-tree-widget" }
+crossbeam = { version = "0.8.2", features = ["crossbeam-channel"] }
+dap = { path = "../../github/dap-rs" }
+parking_lot = { version = "0.12.1", features = ["serde", "deadlock_detection", "hardware-lock-elision"] }
 # tui-logger = { version = "0.9.1", features = ["ratatui-support"] }
 
 [features]

@@ -5,6 +5,7 @@ use std::sync::{Arc, RwLock};
 use uuid::Uuid;
 
 use crate::lu_dog::types::block::Block;
+use crate::lu_dog::types::debugger::DEBUGGER;
 use crate::lu_dog::types::expression_statement::ExpressionStatement;
 use crate::lu_dog::types::item_statement::ITEM_STATEMENT;
 use crate::lu_dog::types::let_statement::LetStatement;
@@ -34,6 +35,7 @@ pub struct Statement {
 // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"statement-hybrid-enum-definition"}}}
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub enum StatementEnum {
+    Debugger(Uuid),
     ExpressionStatement(Uuid),
     ItemStatement(Uuid),
     LetStatement(Uuid),
@@ -42,6 +44,24 @@ pub enum StatementEnum {
 // {"magic":"","directive":{"End":{"directive":"ignore-orig"}}}
 // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"statement-implementation"}}}
 impl Statement {
+    // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"statement-struct-impl-new_debugger"}}}
+    /// Inter a new Statement in the store, and return it's `id`.
+    pub fn new_debugger(
+        block: &Arc<RwLock<Block>>,
+        next: Option<&Arc<RwLock<Statement>>>,
+        store: &mut LuDogStore,
+    ) -> Arc<RwLock<Statement>> {
+        let id = Uuid::new_v4();
+        let new = Arc::new(RwLock::new(Statement {
+            block: block.read().unwrap().id,
+            next: next.map(|statement| statement.read().unwrap().id),
+            subtype: StatementEnum::Debugger(DEBUGGER),
+            id,
+        }));
+        store.inter_statement(new.clone());
+        new
+    }
+    // {"magic":"","directive":{"End":{"directive":"ignore-orig"}}}
     // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"statement-struct-impl-new_expression_statement"}}}
     /// Inter a new Statement in the store, and return it's `id`.
     pub fn new_expression_statement(

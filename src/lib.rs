@@ -7,11 +7,13 @@ use std::{
 
 use ansi_term::Colour;
 use clap::Args;
+use crossbeam::channel::SendError;
 use rustyline::error::ReadlineError;
 use serde::{Deserialize, Serialize};
 use snafu::{prelude::*, Location};
 use svm::Instruction;
 
+pub mod dap;
 pub mod dwarf;
 pub mod interpreter;
 pub mod lu_dog;
@@ -58,6 +60,7 @@ const OTH_CLR: Colour = Colour::Cyan;
 pub struct Error(ChaChaError);
 
 #[derive(Debug, Snafu)]
+#[snafu(visibility(pub))]
 pub enum ChaChaError {
     #[snafu(display("\n{}: internal error: {message}\n  --> {}:{}:{}", ERR_CLR.bold().paint("error"), location.file, location.line, location.column))]
     BadJuJu {
@@ -69,10 +72,17 @@ pub enum ChaChaError {
         src: String,
         dst: String,
     },
+    #[snafu(display("\n{}: internal error: {}", ERR_CLR.bold().paint("error"), message))]
+    InternalCompilerChannel {
+        source: SendError<String>,
+        message: String,
+    },
     #[snafu(display("\n{}: invalid instruction `{}`.", ERR_CLR.bold().paint("error"), OTH_CLR.paint(instr.to_string())))]
     InvalidInstruction {
         instr: Instruction,
     },
+    #[snafu(display("\n{}: named item `main` found, but it is not a function.", ERR_CLR.bold().paint("error")))]
+    MainIsNotAFunction,
     #[snafu(display("\n{}: could not find method `{}::{}`.", ERR_CLR.bold().paint("error"), OTH_CLR.paint(ty), OTH_CLR.paint(method)))]
     NoSuchMethod {
         method: String,
@@ -82,12 +92,6 @@ pub enum ChaChaError {
     NoSuchStaticMethod {
         method: String,
         ty: String,
-    },
-    #[snafu(display("\n{}: type mismatch -- expected `{}`, found `{}`\n  --> {}:{}", ERR_CLR.bold().paint("error"), OK_CLR.paint(expected.to_string()), ERR_CLR.bold().paint(got.to_string()), span.start, span.end))]
-    TypeMismatch {
-        expected: String,
-        got: String,
-        span: Range<usize>,
     },
     #[snafu(display("\n{}: no such field `{}`.", ERR_CLR.bold().paint("error"), POP_CLR.paint(field)))]
     NoSuchField {
@@ -110,6 +114,12 @@ pub enum ChaChaError {
     },
     Store {
         source: io::Error,
+    },
+    #[snafu(display("\n{}: type mismatch -- expected `{}`, found `{}`\n  --> {}:{}", ERR_CLR.bold().paint("error"), OK_CLR.paint(expected.to_string()), ERR_CLR.bold().paint(got.to_string()), span.start, span.end))]
+    TypeMismatch {
+        expected: String,
+        got: String,
+        span: Range<usize>,
     },
     #[snafu(display("\n{}: variable `{}` not found.", ERR_CLR.bold().paint("error"), POP_CLR.paint(var)))]
     VariableNotFound {
