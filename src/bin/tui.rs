@@ -3,8 +3,8 @@ use chacha::{
     dwarf::{inter_statement, parse_line},
     initialize_interpreter,
     interpreter::{
-        banner, eval_statement, initialize_interpreter_paths, start_main, start_vm, Context,
-        MemoryUpdateMessage,
+        banner, eval_statement, initialize_interpreter_paths, start_main, start_repl2, start_vm,
+        Context, DebuggerControl, DebuggerStatus, MemoryUpdateMessage,
     },
     lu_dog::DwarfSourceFile,
     // merlin::{ErrorExpressionProxy, ExpressionProxy},
@@ -17,7 +17,7 @@ use chacha::{
     ChaChaError,
 };
 use clap::Parser;
-use crossbeam::channel::Receiver;
+use crossbeam::channel::{Receiver, RecvError, RecvTimeoutError, Sender};
 use crossterm::{
     event::{
         self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyModifiers, MouseEvent,
@@ -63,6 +63,12 @@ macro_rules! function {
 macro_rules! debug {
     ($($arg:tt)*) => {
         log::debug!("{} -- {}", function!(), format_args!($($arg)*));
+    };
+}
+
+macro_rules! error {
+    ($($arg:tt)*) => {
+        log::error!("{} -- {}", function!(), format_args!($($arg)*));
     };
 }
 
@@ -169,7 +175,6 @@ struct App<'a> {
     source: TextArea<'a>,
     stack: StatefulTree<'a>,
     frame_number: usize,
-    memory_receiver: Receiver<MemoryUpdateMessage>,
     window: Window,
     hover: Window,
     theme: String,
@@ -188,31 +193,13 @@ impl App<'_> {
 
         let source = TextArea::new(lines);
 
-        let mut items = Vec::new();
-        let mut frame_nodes = Vec::new();
-        let mut frame_number = 0;
-        let frames = console.interpreter.get_stack().get_frames();
-        for (num, frame) in frames.iter().enumerate() {
-            let frame_number = num;
-            let mut vars = Vec::new();
-            for (name, value) in frame {
-                vars.push(TreeItem::new_leaf(format!(
-                    "{}: {}",
-                    name,
-                    value.read().unwrap()
-                )));
-            }
-            frame_nodes.push(TreeItem::new(format!("{num}:"), vars));
-        }
-        let frame_tree = TreeItem::new("Frames", frame_nodes);
-        items.push(frame_tree);
+        let items = vec![TreeItem::new("0:", vec![])];
 
         App {
-            memory_receiver: console.interpreter.register_memory_updates(),
             console,
             source,
             stack: StatefulTree::with_items(items),
-            frame_number,
+            frame_number: 0,
             window: Window::Stack,
             hover: Window::Console,
             theme,
@@ -246,7 +233,9 @@ struct Console<'a> {
     input: Input,
     /// History of recorded messages
     output: Text<'a>,
-    pub interpreter: Context,
+    repl_send: Sender<DebuggerControl>,
+    repl_recv: Receiver<DebuggerStatus>,
+    memory_recv: Receiver<MemoryUpdateMessage>,
     scroll: i16,
     source: String,
 }
@@ -256,13 +245,20 @@ impl Console<'_> {
         let output = banner().into_text().unwrap();
 
         let interpreter = initialize_interpreter_paths(object_file).unwrap();
+        let prompt = interpreter.prompt().into();
+        let memory_recv = interpreter.register_memory_updates();
+        let source = interpreter.source();
+
+        let (repl_send, repl_recv) = start_repl2(interpreter);
 
         Console {
-            input: Input::new(interpreter.prompt().into()),
+            input: Input::new(prompt),
             output,
-            source: interpreter.source(),
-            interpreter,
+            repl_send,
+            repl_recv,
+            memory_recv,
             scroll: 0,
+            source,
         }
     }
 
@@ -275,107 +271,222 @@ impl Console<'_> {
         self.scroll += 1;
         true
     }
+
+    fn step_into(&mut self) {
+        self.repl_send
+            .send(DebuggerControl::StepInto)
+            .expect("Failed to send step-into command");
+    }
+
+    fn run(&mut self) {
+        self.repl_send
+            .send(DebuggerControl::Run)
+            .expect("Failed to send run command");
+    }
+
+    fn execute(&mut self, message: &str) {
+        self.repl_send
+            .send(DebuggerControl::ExecuteInput(message.into()))
+            .unwrap();
+    }
+
+    fn get_memory_recv(&self) -> Receiver<MemoryUpdateMessage> {
+        self.memory_recv.clone()
+    }
+
+    fn get_repl_recv(&self) -> Receiver<DebuggerStatus> {
+        self.repl_recv.clone()
+    }
 }
 
 fn eval_console<'a>(app: &mut App) -> Result<(), ChaChaError> {
-    let console = &mut app.console;
-    let source = &mut app.source;
+    // let console = &mut app.console;
+    // let source = &mut app.source;
 
-    let input = console.input.value();
+    let input = app.console.input.value().to_owned();
 
-    console.scroll = 0;
-    console.output.extend(input.into_text().unwrap());
+    app.console.scroll = 0;
+    app.console.output.extend(input.into_text().unwrap());
     let value = &input[14..];
-    if let Some((stmt, _span)) = parse_line(value) {
-        let lu_dog = console.interpreter.lu_dog_heel();
-        let block = console.interpreter.block();
-        let sarzak = console.interpreter.sarzak_heel();
-        let models = console.interpreter.models();
-        let stmt = {
-            let mut writer = lu_dog.write().unwrap();
-            match inter_statement(
-                &Arc::new(RwLock::new(stmt)),
-                &DwarfSourceFile::new(value.to_owned(), &mut writer),
-                &block,
-                &mut writer,
-                &models.read().unwrap(),
-                &sarzak.read().unwrap(),
-            ) {
-                Ok(stmt) => stmt.0,
-                Err(e) => {
-                    println!("{}", e);
-                    // 🚧 What do we do here?
-                    return Ok(());
-                    // continue;
+    app.console.execute(&value);
+    // if let Some((stmt, _span)) = parse_line(value) {
+    //     let lu_dog = console.interpreter.lu_dog_heel();
+    //     let block = console.interpreter.block();
+    //     let sarzak = console.interpreter.sarzak_heel();
+    //     let models = console.interpreter.models();
+    //     let stmt = {
+    //         // let mut writer = lu_dog.write().unwrap();
+    //         match inter_statement(
+    //             &Arc::new(RwLock::new(stmt)),
+    //             &DwarfSourceFile::new(value.to_owned(), &mut writer),
+    //             &block,
+    //             &mut writer,
+    //             &models.read().unwrap(),
+    //             &sarzak.read().unwrap(),
+    //         ) {
+    //             Ok(stmt) => stmt.0,
+    //             Err(e) => {
+    //                 println!("{}", e);
+    //                 // 🚧 What do we do here?
+    //                 return Ok(());
+    //                 // continue;
+    //             }
+    //         }
+    //     };
+    //     // 🚧 This needs fixing too.
+    //     match eval_statement(stmt, &mut console.interpreter) {
+    //         Ok((value, ty)) => {
+    //             let value = format!("{}", value.read().unwrap());
+    //             // println!("\n'{}'", value);
+    //             console.output.extend(value.into_text().unwrap());
+
+    //             let interpreter = &mut console.interpreter;
+    //             for i in interpreter.drain_std_out() {
+    //                 console.output.extend(i.into_text().unwrap());
+    //             }
+
+    //             // print!("\n'{}'", result_style.paint(value));
+    //             // let ty = PrintableValueType(&ty, &context);
+    //             // let ty = format!("{}", ty);
+    //             // println!("\t  ──➤  {}", type_style.paint(ty));
+    //         }
+    //         Err(e) => {
+    //             if let ChaChaError::TypeMismatch {
+    //                 expected: _,
+    //                 got: _,
+    //                 span,
+    //             } = &e
+    //             {
+    //                 // This belongs in the library, I think?
+    //                 // I'll just do it here and see how it feels
+    //                 // later.
+    //                 let mut iter = source.lines().iter();
+    //                 let mut next = iter.next().unwrap();
+    //                 let mut len = next.len() + 1;
+    //                 let mut n = next.len();
+    //                 let mut m = 0;
+
+    //                 while n < span.start {
+    //                     next = iter.next().unwrap();
+    //                     m += 1;
+    //                     len = next.len() + 1; // `\n`
+    //                     n += len;
+    //                     debug!("({m},{n},{len}), ({}): {}", next.len(), next);
+    //                 }
+
+    //                 debug!("({},{})", m, n - span.start);
+    //                 debug!("{:?}", source.cursor());
+    //                 debug!("span: ({},{})", span.start, span.end);
+    //                 debug!("{}", (len + span.start - n) as u16);
+
+    //                 source.move_cursor(CursorMove::Jump(m as u16, (len - (n - span.start)) as u16));
+    //             }
+    //             console.output.extend(e.to_string().into_text().unwrap());
+    //             if let ChaChaError::Return { value: _, ty: _ } = e {
+    //                 println!("👋 Bye bye!");
+    //                 // break;
+    //             } else {
+    //                 console.output.extend(
+    //                     format!("Something went wrong: {}", value)
+    //                         .into_text()
+    //                         .unwrap(),
+    //                 );
+    //                 // println!("{}", error_style.paint("WTF?"));
+    //             }
+
+    //             // This is lame.
+    //             console.input = Input::new(console.interpreter.prompt().into());
+    //         }
+    //     }
+    // }
+    Ok(())
+}
+
+fn repl_updater(
+    app: SharedRef<App>,
+    pair: Arc<(Mutex<bool>, Condvar)>,
+    halt: Arc<Mutex<bool>>,
+) -> io::Result<()> {
+    let (lock, cvar) = &*pair;
+    let receiver = app.read().console.get_repl_recv();
+
+    loop {
+        let msg = match receiver.recv_timeout(Duration::from_millis(10)) {
+            Ok(msg) => msg,
+            Err(RecvTimeoutError::Timeout) => {
+                if *halt.lock() {
+                    // We maybe want to ping the condvar here?
+                    break;
                 }
+                continue;
+            }
+            Err(_) => {
+                // Nobody is there to send any longer.
+                error!("Repl updater thread died.");
+                break;
             }
         };
-        // 🚧 This needs fixing too.
-        match eval_statement(stmt, &mut console.interpreter) {
-            Ok((value, ty)) => {
-                let value = format!("{}", value.read().unwrap());
-                // println!("\n'{}'", value);
-                console.output.extend(value.into_text().unwrap());
 
-                let interpreter = &mut console.interpreter;
-                for i in interpreter.drain_std_out() {
-                    console.output.extend(i.into_text().unwrap());
-                }
-
-                // print!("\n'{}'", result_style.paint(value));
-                // let ty = PrintableValueType(&ty, &context);
-                // let ty = format!("{}", ty);
-                // println!("\t  ──➤  {}", type_style.paint(ty));
+        match msg {
+            DebuggerStatus::Error(e) => {
+                debug!("Error: {}", e);
             }
-            Err(e) => {
-                if let ChaChaError::TypeMismatch {
-                    expected: _,
-                    got: _,
-                    span,
-                } = &e
-                {
-                    // This belongs in the library, I think?
-                    // I'll just do it here and see how it feels
-                    // later.
-                    let mut iter = source.lines().iter();
-                    let mut next = iter.next().unwrap();
-                    let mut len = next.len() + 1;
-                    let mut n = next.len();
-                    let mut m = 0;
+            DebuggerStatus::Paused(span) => {
+                let source = &mut app.write().source;
 
-                    while n < span.start {
-                        next = iter.next().unwrap();
-                        m += 1;
-                        len = next.len() + 1; // `\n`
-                        n += len;
-                        debug!("({m},{n},{len}), ({}): {}", next.len(), next);
-                    }
+                debug!("Paused: {:?}", span);
+                // This belongs in the library, I think?
+                // I'll just do it here and see how it feels
+                // later.
+                let mut iter = source.lines().iter();
+                let mut next = iter.next().unwrap();
+                let mut len = next.len() + 1;
+                let mut n = next.len();
+                let mut m = 0;
 
-                    debug!("({},{})", m, n - span.start);
-                    debug!("{:?}", source.cursor());
-                    debug!("span: ({},{})", span.start, span.end);
-                    debug!("{}", (len + span.start - n) as u16);
-
-                    source.move_cursor(CursorMove::Jump(m as u16, (len - (n - span.start)) as u16));
-                }
-                console.output.extend(e.to_string().into_text().unwrap());
-                if let ChaChaError::Return { value: _, ty: _ } = e {
-                    println!("👋 Bye bye!");
-                    // break;
-                } else {
-                    console.output.extend(
-                        format!("Something went wrong: {}", value)
-                            .into_text()
-                            .unwrap(),
-                    );
-                    // println!("{}", error_style.paint("WTF?"));
+                while n < span.start {
+                    next = iter.next().unwrap();
+                    m += 1;
+                    len = next.len() + 1; // `\n`
+                    n += len;
+                    debug!("({m},{n},{len}), ({}): {}", next.len(), next);
                 }
 
-                // This is lame.
-                console.input = Input::new(console.interpreter.prompt().into());
+                debug!("({},{})", m, n - span.start);
+                debug!("{:?}", source.cursor());
+                debug!("span: ({},{})", span.start, span.end);
+                debug!("{}", (len + span.start - n) as u16);
+
+                // let midpoint = span.start + (span.end - span.start) / 2;
+
+                source.move_cursor(CursorMove::Jump(m as u16, (len - (n - span.start)) as u16));
+                // source.move_cursor(CursorMove::Jump(m as u16, (len - (n - midpoint)) as u16));
+            }
+            DebuggerStatus::Running => {
+                debug!("Running");
+            }
+            DebuggerStatus::StdOut(value) => {
+                debug!("StdOut: {:?}", value);
+                app.write()
+                    .console
+                    .output
+                    .extend(value.into_text().unwrap());
+            }
+            DebuggerStatus::Stopped(value, ty) => {
+                debug!("Stopped: {:?}", value);
             }
         }
+
+        // Do this after we'ne updated our bits.
+        {
+            let mut started = lock.lock();
+            *started = true;
+            // dbg!("started");
+            // We notify the condvar that the value has changed.
+            cvar.notify_all();
+        }
     }
+
     Ok(())
 }
 
@@ -385,12 +496,54 @@ fn stack_updater(
     halt: Arc<Mutex<bool>>,
 ) -> io::Result<()> {
     let (lock, cvar) = &*pair;
-    let receiver = app.read().memory_receiver.clone();
+    let receiver = app.read().console.get_memory_recv();
 
     loop {
-        // Wake up roughly every 100ms to check if we should stop.
-        let msg = receiver.recv_timeout(Duration::from_millis(100));
+        let msg = match receiver.recv_timeout(Duration::from_millis(10)) {
+            Ok(msg) => msg,
+            Err(RecvTimeoutError::Timeout) => {
+                if *halt.lock() {
+                    // We maybe want to ping the condvar here?
+                    break;
+                }
+                continue;
+            }
+            Err(_) => {
+                // Nobody is there to send any longer.
+                error!("Stack updater thread died.");
+                break;
+            }
+        };
 
+        match msg {
+            MemoryUpdateMessage::AddGlobal(cell) => {}
+            MemoryUpdateMessage::AddMeta(cell) => {}
+            MemoryUpdateMessage::AddLocal(cell) => {
+                let frame_number = app.read().frame_number.clone();
+                let items = &mut app.write().stack.items[frame_number];
+                // let items = items.child_mut(frame_number).expect("fucker");
+                items.add_child(TreeItem::new_leaf(format!(
+                    "{}: {}",
+                    cell.0,
+                    cell.1.read().unwrap()
+                )));
+            }
+            MemoryUpdateMessage::PushFrame => {
+                let frame_number = app.read().frame_number + 1;
+                app.write()
+                    .stack
+                    .items
+                    .push(TreeItem::new(format!("{frame_number}:"), Vec::new()));
+                app.write().frame_number = frame_number;
+            }
+            MemoryUpdateMessage::PopFrame => {
+                let mut app = app.write();
+                app.frame_number -= 1;
+                app.stack.items.pop();
+            }
+        };
+
+        // Do this after we've updated our bits.
         {
             let mut started = lock.lock();
             *started = true;
@@ -398,44 +551,6 @@ fn stack_updater(
             // We notify the condvar that the value has changed.
             cvar.notify_all();
         }
-
-        // We check after we wake the sleepers up so that they may shut down.
-        if *halt.lock() {
-            break;
-        }
-
-        match msg {
-            Ok(msg) => {
-                debug!("{}", msg);
-                match msg {
-                    MemoryUpdateMessage::AddGlobal(cell) => {}
-                    MemoryUpdateMessage::AddMeta(cell) => {}
-                    MemoryUpdateMessage::AddLocal(cell) => {
-                        let frame_number = app.read().frame_number.clone();
-                        let items = &mut app.write().stack.items[frame_number];
-                        items.add_child(TreeItem::new_leaf(format!(
-                            "{}: {}",
-                            cell.0,
-                            cell.1.read().unwrap()
-                        )));
-                    }
-                    MemoryUpdateMessage::PushFrame => {
-                        let frame_number = app.read().frame_number;
-                        app.write()
-                            .stack
-                            .items
-                            .push(TreeItem::new(format!("{}:", frame_number), Vec::new()));
-                        app.write().frame_number += 1;
-                    }
-                    MemoryUpdateMessage::PopFrame => {
-                        let mut app = app.write();
-                        app.frame_number -= 1;
-                        app.stack.items.pop();
-                    }
-                }
-            }
-            Err(_) => {}
-        };
     }
 
     Ok(())
@@ -448,24 +563,17 @@ fn run_app(
 ) -> io::Result<()> {
     let (lock, cvar) = &*pair;
     loop {
-        debug!("waiting for event");
+        // debug!("waiting for event");
 
         let event = event::read()?;
 
-        debug!("read event: {:?}", event);
-
-        {
-            // dbg!("waiting for lock");
-            let mut started = lock.lock();
-            *started = true;
-            // dbg!("started");
-            // We notify the condvar that the value has changed.
-            cvar.notify_all();
-        }
+        // debug!("read event: {:?}", event);
 
         if let Event::Key(key) = event {
             let mut app = app.write();
             match key.code {
+                KeyCode::F(5) => app.console.run(),
+                KeyCode::F(11) => app.console.step_into(),
                 // KeyCode::Char('\n' | ' ') => app.stack.toggle(),
                 KeyCode::Left => app.stack.left(),
                 KeyCode::Right => app.stack.right(),
@@ -478,6 +586,13 @@ fn run_app(
                     if key.modifiers == KeyModifiers::CONTROL =>
                 {
                     *halt.lock() = true;
+
+                    let mut started = lock.lock();
+                    *started = true;
+                    // dbg!("started");
+                    // We notify the condvar that the value has changed.
+                    cvar.notify_all();
+
                     return Ok(());
                 }
                 KeyCode::Enter => match app.window {
@@ -517,6 +632,15 @@ fn run_app(
             } else if e.kind == event::MouseEventKind::Down(event::MouseButton::Left) {
                 app.select_window();
             }
+        }
+
+        {
+            // dbg!("waiting for lock");
+            let mut started = lock.lock();
+            *started = true;
+            // dbg!("started");
+            // We notify the condvar that the value has changed.
+            cvar.notify_all();
         }
     }
 
@@ -758,10 +882,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let halt = Arc::new(Mutex::new(false));
     let halt2 = halt.clone();
     let halt3 = halt.clone();
+    let halt4 = halt.clone();
 
     let pair = Arc::new((Mutex::new(true), Condvar::new()));
     let pair2 = Arc::clone(&pair);
     let pair3 = Arc::clone(&pair);
+    let pair4 = Arc::clone(&pair);
 
     let app = Arc::new(ParkingLotRwLock::new(App::new(
         args.theme,
@@ -769,6 +895,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     )));
     let app2 = app.clone();
     let app3 = app.clone();
+    let app4 = app.clone();
 
     // Inside of our lock, spawn a new thread, and then wait for it to start.
     // thread::spawn(move || {
@@ -782,6 +909,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // });
 
     let updater = thread::spawn(move || stack_updater(app3, pair3, halt3));
+
+    let repl = thread::spawn(move || repl_updater(app4, pair4, halt4));
 
     let drawer = thread::spawn(move || {
         // Wait for the thread to start up.
@@ -820,6 +949,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     updater.join().unwrap();
     drawer.join().unwrap();
+    repl.join().unwrap();
 
     Ok(())
 }

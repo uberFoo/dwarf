@@ -6,6 +6,7 @@ use crate::lu_dog::store::ObjectStore as LuDogStore;
 use crate::lu_dog::types::argument::Argument;
 use crate::lu_dog::types::block::Block;
 use crate::lu_dog::types::call::Call;
+use crate::lu_dog::types::debugger::DEBUGGER;
 use crate::lu_dog::types::error_expression::ErrorExpression;
 use crate::lu_dog::types::expression_statement::ExpressionStatement;
 use crate::lu_dog::types::field_access::FieldAccess;
@@ -42,6 +43,7 @@ use uuid::Uuid;
 pub enum Expression {
     Block(Uuid),
     Call(Uuid),
+    Debugger(Uuid),
     ErrorExpression(Uuid),
     FieldAccess(Uuid),
     ForLoop(Uuid),
@@ -82,6 +84,12 @@ impl Expression {
             store.inter_expression(new.clone());
             new
         }
+    }
+
+    /// Create a new instance of Expression::Debugger
+    pub fn new_debugger(store: &LuDogStore) -> Arc<RwLock<Self>> {
+        // This is already in the store.
+        store.exhume_expression(&DEBUGGER).unwrap()
     }
 
     /// Create a new instance of Expression::ErrorExpression
@@ -314,6 +322,7 @@ impl Expression {
         match self {
             Expression::Block(id) => *id,
             Expression::Call(id) => *id,
+            Expression::Debugger(id) => *id,
             Expression::ErrorExpression(id) => *id,
             Expression::FieldAccess(id) => *id,
             Expression::ForLoop(id) => *id,
@@ -419,20 +428,20 @@ impl Expression {
     }
     // {"magic":"","directive":{"End":{"directive":"ignore-orig"}}}
     // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"expression-struct-impl-nav-backward-1_M-to-index"}}}
-    /// Navigate to [`Index`] across R57(1-M)
-    pub fn r57_index<'a>(&'a self, store: &'a LuDogStore) -> Vec<Arc<RwLock<Index>>> {
-        store
-            .iter_index()
-            .filter(|index| index.read().unwrap().target == self.id())
-            .collect()
-    }
-    // {"magic":"","directive":{"End":{"directive":"ignore-orig"}}}
-    // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"expression-struct-impl-nav-backward-1_M-to-index"}}}
     /// Navigate to [`Index`] across R56(1-M)
     pub fn r56_index<'a>(&'a self, store: &'a LuDogStore) -> Vec<Arc<RwLock<Index>>> {
         store
             .iter_index()
             .filter(|index| index.read().unwrap().index == self.id())
+            .collect()
+    }
+    // {"magic":"","directive":{"End":{"directive":"ignore-orig"}}}
+    // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"expression-struct-impl-nav-backward-1_M-to-index"}}}
+    /// Navigate to [`Index`] across R57(1-M)
+    pub fn r57_index<'a>(&'a self, store: &'a LuDogStore) -> Vec<Arc<RwLock<Index>>> {
+        store
+            .iter_index()
+            .filter(|index| index.read().unwrap().target == self.id())
             .collect()
     }
     // {"magic":"","directive":{"End":{"directive":"ignore-orig"}}}

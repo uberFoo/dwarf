@@ -159,6 +159,7 @@ pub struct DwarfOptions {
 pub enum Token {
     As,
     Bool(bool),
+    Debugger,
     Else,
     Float(String),
     Fn,
@@ -191,6 +192,7 @@ impl fmt::Display for Token {
         match self {
             Self::As => write!(f, "as"),
             Self::Bool(bool_) => write!(f, "{}", bool_),
+            Self::Debugger => write!(f, "debugger"),
             Self::Else => write!(f, "else"),
             Self::Float(num) => write!(f, "{}", num),
             Self::Fn => write!(f, "fn"),
@@ -395,6 +397,7 @@ pub enum Expression {
     Assignment(Box<Spanned<Self>>, Box<Spanned<Self>>),
     Block(Vec<Spanned<Statement>>),
     BooleanLiteral(bool),
+    Debug,
     Error,
     FieldAccess(Box<Spanned<Self>>, Box<Spanned<Self>>),
     FloatLiteral(f64),

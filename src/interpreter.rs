@@ -11,7 +11,7 @@ use std::{
 
 use ansi_term::Colour::{self, RGB};
 use ansi_term::{ANSIString, ANSIStrings};
-use crossbeam::channel::{unbounded, Receiver, Sender};
+use crossbeam::channel::{select, unbounded, Receiver, RecvTimeoutError, Sender};
 use fxhash::FxHashMap as HashMap;
 use heck::ToUpperCamelCase;
 use lazy_static::lazy_static;
@@ -25,9 +25,9 @@ use uuid::Uuid;
 use crate::{
     dwarf::{inter_statement, parse_line},
     lu_dog::{
-        Argument, Binary, Block, BooleanLiteral, CallEnum, Comparison, Expression, Function,
-        Import, List, Literal, LocalVariable, ObjectStore as LuDogStore, OperatorEnum, Span,
-        Statement, StatementEnum, ValueType, Variable, WoogOptionEnum, XValue,
+        Argument, Binary, Block, BooleanLiteral, CallEnum, Comparison, DwarfSourceFile, Expression,
+        Function, Import, List, Literal, LocalVariable, ObjectStore as LuDogStore, OperatorEnum,
+        Span, Statement, StatementEnum, ValueType, Variable, WoogOptionEnum, XValue,
     },
     svm::{CallFrame, Chunk, Instruction, VM},
     value::{StoreProxy, UserType},
@@ -152,7 +152,7 @@ macro_rules! trace {
 lazy_static! {
     static ref RUNNING: Mutex<bool> = Mutex::new(true);
     static ref CVAR: Condvar = Condvar::new();
-    static ref STEPPING: PRwLock<bool> = PRwLock::new(false);
+    static ref STEPPING: Mutex<bool> = Mutex::new(false);
 //     pub(crate) static ref MODELS: Arc<RwLock<Vec<SarzakStore>>> = Arc::new(RwLock::new(Vec::new()));
 //     pub(crate) static ref LU_DOG: Arc<RwLock<LuDogStore>> =
 //         Arc::new(RwLock::new(LuDogStore::new()));
@@ -286,6 +286,7 @@ pub fn initialize_interpreter(
         mem_update_recv: receiver,
         std_out_send,
         std_out_recv,
+        debug_status_writer: None,
     })
 }
 
@@ -483,25 +484,34 @@ fn eval_expression(
     debug!("expression", expression);
     trace!("stack", context.stack);
 
-    // let value = &expression
-    //     .read()
-    //     .unwrap()
-    //     .r11_x_value(&lu_dog.read().unwrap())[0];
-    // debug!("value", value);
+    {
+        let mut running = RUNNING.lock();
+        if !*running {
+            if let Some(sender) = &context.debug_status_writer {
+                let value = &expression
+                    .read()
+                    .unwrap()
+                    .r11_x_value(&lu_dog.read().unwrap())[0];
+                debug!("value", value);
 
-    // let span = &value.read().unwrap().r63_span(&lu_dog.read().unwrap())[0];
-    // let source = &span.read().unwrap().source;
-    // let source = lu_dog
-    //     .read()
-    //     .unwrap()
-    //     .exhume_dwarf_source_file(source)
-    //     .unwrap();
-    // let source = &source.read().unwrap().source;
+                let span = &value.read().unwrap().r63_span(&lu_dog.read().unwrap())[0];
 
-    // println!(
-    //     "{}",
-    //     &(source.as_str())[span.read().unwrap().start as usize..span.read().unwrap().end as usize],
-    // );
+                let read = span.read().unwrap();
+                let span = read.start as usize..read.end as usize;
+                sender.send(DebuggerStatus::Paused(span)).unwrap();
+            }
+            debug!("waiting");
+            CVAR.wait(&mut running);
+            debug!("notified");
+        }
+
+        if *STEPPING.lock() {
+            debug!("stepping");
+            *running = false;
+        }
+
+        debug!("running");
+    }
 
     let result_style = Colour::Green.bold();
 
@@ -844,6 +854,16 @@ fn eval_expression(
                 }
             }
         }
+        Expression::Debugger(_) => {
+            debug!("StatementEnum::Debugger");
+            let mut running = RUNNING.lock();
+            *running = false;
+            *STEPPING.lock() = true;
+            Ok((
+                Arc::new(RwLock::new(Value::Empty)),
+                ValueType::new_empty(&lu_dog.read().unwrap()),
+            ))
+        }
         //
         // Error Expression
         //
@@ -856,6 +876,7 @@ fn eval_expression(
                 .exhume_error_expression(error)
                 .unwrap();
 
+            // 🚧 This isn't going to cut it.
             print!("\t{}", error.read().unwrap().span);
 
             Ok((
@@ -1508,20 +1529,6 @@ pub fn eval_statement(
     debug!("eval_statement statement", statement);
     trace!("eval_statement stack", context.stack);
 
-    {
-        let mut running = RUNNING.lock();
-        if !*running {
-            debug!("waiting");
-            CVAR.wait(&mut running);
-            debug!("notified");
-        }
-
-        if *STEPPING.read() {
-            debug!("stepping");
-            *running = false;
-        }
-    }
-
     match statement.read().unwrap().subtype {
         StatementEnum::ExpressionStatement(ref stmt) => {
             let stmt = lu_dog
@@ -1595,6 +1602,7 @@ pub fn eval_statement(
     }
 }
 
+#[derive(Clone)]
 pub struct Context {
     prompt: String,
     block: Arc<RwLock<Block>>,
@@ -1605,6 +1613,7 @@ pub struct Context {
     mem_update_recv: Receiver<MemoryUpdateMessage>,
     std_out_send: Sender<String>,
     std_out_recv: Receiver<String>,
+    debug_status_writer: Option<Sender<DebuggerStatus>>,
 }
 
 impl Context {
@@ -1708,6 +1717,150 @@ impl Context {
         //     );
         // }
     }
+}
+
+#[derive(Debug)]
+pub enum DebuggerStatus {
+    Error(String),
+    Paused(Range<usize>),
+    Running,
+    StdOut(String),
+    Stopped(Arc<RwLock<Value>>, Arc<RwLock<ValueType>>),
+}
+
+pub enum DebuggerControl {
+    ExecuteInput(String),
+    Run,
+    SetBreakpoint(usize),
+    StepInto,
+    StepOver,
+    Stop,
+}
+
+pub fn start_repl2(mut context: Context) -> (Sender<DebuggerControl>, Receiver<DebuggerStatus>) {
+    let (to_ui_write, to_ui_read) = unbounded();
+    let (from_ui_write, from_ui_read) = unbounded();
+    // let (from_worker_write, from_worker_read) = unbounded();
+    let (to_worker_write, to_worker_read) = unbounded();
+
+    context.debug_status_writer = Some(to_ui_write.clone());
+    let std_out = context.std_out_recv.clone();
+
+    // Control thread
+    //
+    // This one listens for events from the debugger (to set breakpoints, etc.).
+    // It communicates with the worker thread via mutexes and the condition
+    // variable.
+    thread::Builder::new()
+        .name("control".into())
+        .spawn(move || loop {
+            match from_ui_read.recv_timeout(Duration::from_millis(10)) {
+                Ok(DebuggerControl::SetBreakpoint(character)) => {
+                    debug!("Setting breakpoint at character {}", character);
+                }
+                Ok(DebuggerControl::ExecuteInput(input)) => {
+                    debug!("Executing input: {}", input);
+                    to_worker_write.send(input).unwrap();
+                }
+                Ok(DebuggerControl::StepInto) => {
+                    debug!("Debugger StepInto");
+                    *RUNNING.lock() = true;
+                    CVAR.notify_all();
+                }
+                Ok(DebuggerControl::StepOver) => {
+                    debug!("Debugger StepOver");
+                }
+                Ok(DebuggerControl::Run) => {
+                    debug!("Debugger Run");
+                    *STEPPING.lock() = false;
+                    *RUNNING.lock() = true;
+                    CVAR.notify_all();
+                }
+                Ok(DebuggerControl::Stop) => {
+                    debug!("Debugger Stop");
+                    break;
+                }
+                Err(RecvTimeoutError::Timeout) => {}
+                Err(_) => {
+                    debug!("Debugger control thread exiting");
+                    break;
+                }
+            };
+        })
+        .unwrap();
+
+    // Stdout thread
+    //
+    // Really? Another fucking thread?
+    let to_ui = to_ui_write.clone();
+    thread::Builder::new()
+        .name("stdout".into())
+        .spawn(move || loop {
+            match std_out.recv_timeout(Duration::from_millis(10)) {
+                Ok(output) => {
+                    to_ui.send(DebuggerStatus::StdOut(output)).unwrap();
+                }
+                Err(RecvTimeoutError::Timeout) => {}
+                Err(_) => {
+                    debug!("Debugger control thread exiting");
+                    break;
+                }
+            }
+        })
+        .unwrap();
+
+    // Worker thread
+    //
+    // This guy listens for statemntes and executes them. It relies on the state
+    // of the condition variable and mutexes to know how to behave.
+    thread::Builder::new()
+        .name("worker".into())
+        // .stack_size(128 * 1024)
+        .spawn(move || loop {
+            match to_worker_read.recv_timeout(Duration::from_millis(10)) {
+                Ok(input) => {
+                    if let Some((stmt, _span)) = parse_line(&input) {
+                        let lu_dog = context.lu_dog_heel();
+                        let block = context.block();
+                        let sarzak = context.sarzak_heel();
+                        let models = context.models();
+
+                        let stmt = {
+                            let mut writer = lu_dog.write().unwrap();
+                            match inter_statement(
+                                &Arc::new(RwLock::new(stmt)),
+                                &DwarfSourceFile::new(input, &mut writer),
+                                &block,
+                                &mut writer,
+                                &models.read().unwrap(),
+                                &sarzak.read().unwrap(),
+                            ) {
+                                Ok(stmt) => stmt.0,
+                                Err(e) => {
+                                    to_ui_write
+                                        .send(DebuggerStatus::Error(format!("{:?}", e)))
+                                        .unwrap();
+                                    continue;
+                                }
+                            }
+                        };
+
+                        let (value, ty) = eval_statement(stmt, &mut context).unwrap();
+                        to_ui_write
+                            .send(DebuggerStatus::Stopped(value, ty))
+                            .unwrap();
+                    }
+                }
+                Err(RecvTimeoutError::Timeout) => {}
+                Err(_) => {
+                    debug!("Worker thread exiting");
+                    break;
+                }
+            }
+        })
+        .unwrap();
+
+    (from_ui_write, to_ui_read)
 }
 
 /// This runs the main function, assuming it exists. It should really return
@@ -1929,7 +2082,11 @@ pub fn start_repl(mut context: Context) -> Result<(), Error> {
                     };
 
                     // 🚧 This needs fixing too.
-                    match eval_statement(stmt, &mut context) {
+                    let eval = eval_statement(stmt, &mut context);
+                    for i in context.drain_std_out() {
+                        println!("{}", i);
+                    }
+                    match eval {
                         Ok((value, ty)) => {
                             let value = format!("{}", value.read().unwrap());
                             print!("\n'{}'", result_style.paint(value));

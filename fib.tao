@@ -2,11 +2,10 @@ fn fib(n: int) -> int {
     if n <= 1 {
         return 1;
     } else {
-        // fib(n - 1) + fib( n -2)
-        // let a = fib(n - 1) + fib(n - 2);
-        // a
+        debugger;
         let a: int = fib(n - 1);
         let b: int = fib(n - 2);
+//        debugger;
         return a + b;
     }
 }
@@ -39,7 +38,8 @@ fn b() {
 }
 
 fn main() -> int {
-    let a: int = fib(5);
+    let a: int = fib2(5);
+    debugger;
     // print(a);
     // let a: Uuid = Uuid::new();
     // let b = false;
@@ -48,13 +48,14 @@ fn main() -> int {
     let e = "Hello uberFoo.";
     let f = Foo {
         a: 42,
+//        b: Uuid::new(),
         b: true,
         c: 3.14,
     };
 
     // I need to parse a list type declaration, e.g.,
     // let a: [int] = [0, 1, 2, 3];
-    let g = [a, 42];
+//    let g = [a, 42];
 
     // This doesn't work yet.
     // struct Bar {
@@ -69,7 +70,7 @@ fn main() -> int {
     print(d);
     print(e + "\n");
     print(f);
-    print(g);
+//    print(g);
 
     return c;
 }

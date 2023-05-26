@@ -23,9 +23,9 @@ use crate::{
             StructExpression, ValueType, Variable, VariableExpression, WoogOption, WoogStruct, XIf,
             XValue, XValueEnum,
         },
-        Argument, Binary, BooleanLiteral, Comparison, DwarfSourceFile, FieldAccess, FloatLiteral,
-        List, ListElement, ListExpression, MethodCall, Operator, Reference, ResultStatement,
-        VariableEnum, WoogOptionEnum, XReturn,
+        Argument, Binary, BooleanLiteral, Comparison, Debugger, DwarfSourceFile, FieldAccess,
+        FloatLiteral, List, ListElement, ListExpression, MethodCall, Operator, Reference,
+        ResultStatement, VariableEnum, WoogOptionEnum, XReturn,
     },
 };
 
@@ -93,70 +93,30 @@ macro_rules! function {
 }
 
 macro_rules! debug {
-    ($msg:literal, $($arg:expr),*) => {
-        $(
-            log::debug!(
-                "{}: {} --> {:?}\n  --> {}:{}:{}",
-                Colour::Green.dimmed().italic().paint(function!()),
-                Colour::Yellow.underline().paint($msg),
-                $arg,
-                file!(),
-                line!(),
-                column!()
-            );
-        )*
-    };
-    ($arg:literal) => {
+    ($($arg:tt)*) => {
         log::debug!(
+            target: "compiler",
             "{}: {}\n  --> {}:{}:{}",
             Colour::Green.dimmed().italic().paint(function!()),
-            $arg,
+            format_args!($($arg)*),
             file!(),
             line!(),
-            column!())
-    };
-    ($arg:expr) => {
-        log::debug!(
-            "{}: {:?}\n  --> {}:{}:{}",
-            Colour::Green.dimmed().italic().paint(function!()),
-            $arg,
-            file!(),
-            line!(),
-            column!())
+            column!()
+        );
     };
 }
 
 macro_rules! error {
-    ($msg:literal, $($arg:expr),*) => {
-        $(
-            log::error!(
-                "{}: {} --> {:?}\n  --> {}:{}:{}",
-                Colour::Green.dimmed().italic().paint(function!()),
-                Colour::Red.underline().paint($msg),
-                $arg,
-                file!(),
-                line!(),
-                column!()
-            );
-        )*
-    };
-    ($arg:literal) => {
+    ($($arg:tt)*) => {
         log::error!(
+            target: "compiler",
             "{}: {}\n  --> {}:{}:{}",
-            Colour::Green.dimmed().italic().paint(function!()),
-            Colour::Red.underline().paint($arg),
+            Colour::Red.dimmed().italic().paint(function!()),
+            format_args!($($arg)*),
             file!(),
             line!(),
-            column!())
-    };
-    ($arg:expr) => {
-        log::error!(
-            "{}: {:?}\n  --> {}:{}:{}",
-            Colour::Green.dimmed().italic().paint(function!()),
-            Colour::Ref.underline().paint($arg),
-            file!(),
-            line!(),
-            column!())
+            column!()
+        );
     };
 }
 
@@ -284,13 +244,13 @@ fn walk_tree(
 
     // Put the type information in first.
     for ConveyStruct { name, span, fields } in structs {
-        debug!("Intering struct", name);
+        debug!("Intering struct {}", name);
         inter_struct(&name, &fields, span, source, lu_dog, models, sarzak)?;
     }
 
     // Using the type information, and the input, inter the implementation blocks.
     for ConveyImpl { name, span, funcs } in implementations {
-        debug!("Intering implementation", name);
+        debug!("Intering implementation {}", name);
         inter_implementation(&name, &funcs, span, source, lu_dog, models, sarzak)?;
     }
 
@@ -303,7 +263,7 @@ fn walk_tree(
         statements,
     } in funcs
     {
-        debug!("Intering function", name);
+        debug!("Intering function {}", name);
         inter_func(
             &name,
             &params,
@@ -357,7 +317,7 @@ fn inter_func(
     models: &[SarzakStore],
     sarzak: &SarzakStore,
 ) -> Result<()> {
-    debug!("inter_func", name);
+    debug!("inter_func {}", name);
 
     let block = Block::new(Uuid::new_v4(), lu_dog);
 
@@ -384,12 +344,12 @@ fn inter_func(
 
     let mut last_param_uuid: Option<Uuid> = None;
     for ((param_name, name_span), (param_ty, param_span)) in params {
-        debug!("param name", param_name);
-        debug!("param ty", param_ty);
+        debug!("param name {}", param_name);
+        debug!("param ty {}", param_ty);
         let param = Parameter::new(&func, None, lu_dog);
-        debug!("param", param);
+        debug!("param {:?}", param);
         let var = Variable::new_parameter(param_name.to_owned(), &param, lu_dog);
-        debug!("var", var);
+        debug!("var {:?}", var);
         // 🚧 We'll need to do something about this soon. Actually, it never belonged
         // here. It only makes sense that you can only have values in a block. Now the
         // model enforces that.
@@ -405,7 +365,7 @@ fn inter_func(
             models,
             sarzak,
         )?;
-        debug!("param_ty", param_ty);
+        debug!("param_ty {:?}", param_ty);
         let _value = XValue::new_variable(&block, &param_ty, &var, lu_dog);
         last_param_uuid = link_parameter!(last_param_uuid, param, lu_dog);
     }
@@ -427,7 +387,7 @@ pub fn inter_statement(
     models: &[SarzakStore],
     sarzak: &SarzakStore,
 ) -> Result<(Arc<RwLock<Statement>>, Arc<RwLock<ValueType>>)> {
-    debug!("inter_statement", stmt);
+    debug!("inter_statement {:?}", stmt);
 
     match &*stmt.read().unwrap() {
         //
@@ -503,14 +463,14 @@ pub fn inter_statement(
             };
 
             let foo = PrintableValueType(ty.clone(), lu_dog, sarzak, models);
-            debug!("inter_statement let foo", foo.to_string());
+            debug!("inter_statement let foo {}", foo.to_string());
 
             // 🚧
             // Let's keep an eye on this. I've had the notion of having a separate
             // entry point for the REPL, and conditionally needing to generate an
             // error would support the idea.
             if let ValueType::Unknown(_) = &*ty.read().unwrap() {
-                error!("Unknown type for variable", var_name);
+                error!("Unknown type for variable {}", var_name);
             }
 
             // Create a variable, now that we (hopefully) have a type from the expression.
@@ -582,8 +542,8 @@ fn inter_expression(
     (Arc<RwLock<Expression>>, Arc<RwLock<LuDogSpan>>),
     Arc<RwLock<ValueType>>,
 )> {
-    debug!("expr", expr);
-    debug!("span", span);
+    debug!("expr {:?}", expr);
+    debug!("span {:?}", span);
 
     let mut span = LuDogSpan::new(
         span.end as i64,
@@ -687,7 +647,7 @@ fn inter_expression(
         //
         ParserExpression::Block(ref stmts) => {
             let block = Block::new(Uuid::new_v4(), lu_dog);
-            debug!("block", block);
+            debug!("block {:?}", block);
             let stmts: Vec<Arc<RwLock<ParserStatement>>> = stmts
                 .iter()
                 .map(|stmt| Arc::new(RwLock::new(stmt.0.to_owned())))
@@ -716,6 +676,20 @@ fn inter_expression(
 
             Ok(((expr, span), ty))
         }
+        //
+        // Debug
+        //
+        ParserExpression::Debug => {
+            let expr = Expression::new_debugger(lu_dog);
+            let ty = ValueType::new_empty(lu_dog);
+            let value = XValue::new_expression(&block, &ty, &expr, lu_dog);
+            span.write().unwrap().x_value = Some(value.read().unwrap().id);
+
+            Ok(((expr, span), ty))
+        }
+        //
+        // Error
+        //
         ParserExpression::Error => {
             // 🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧
             //
@@ -751,8 +725,8 @@ fn inter_expression(
         // FieldAccess
         //
         ParserExpression::FieldAccess(lhs, rhs) => {
-            debug!("ParserExpression::FieldAccess lhs", lhs);
-            debug!("ParserExpression::FieldAccess rhs", rhs);
+            debug!("ParserExpression::FieldAccess lhs {:?}", lhs);
+            debug!("ParserExpression::FieldAccess rhs {:?}", rhs);
 
             let (lhs, lhs_ty) = inter_expression(
                 &Arc::new(RwLock::new((*lhs).0.clone())),
@@ -764,7 +738,7 @@ fn inter_expression(
                 sarzak,
             )?;
 
-            let (rhs, rhs_ty) = inter_expression(
+            let (rhs, _rhs_ty) = inter_expression(
                 &Arc::new(RwLock::new((*rhs).0.clone())),
                 &rhs.1,
                 source,
@@ -824,8 +798,6 @@ fn inter_expression(
                 }
                 ValueType::WoogStruct(ref id) => {
                     let woog_struct = lu_dog.exhume_woog_struct(id).unwrap();
-                    let expr = FieldAccess::new(rhs.clone(), &lhs.0, lu_dog);
-                    let expr = Expression::new_field_access(&expr, lu_dog);
                     let field = woog_struct.read().unwrap();
                     let field = field.r7_field(lu_dog);
                     let field = field.iter().find(|f| f.read().unwrap().name == rhs);
@@ -833,6 +805,8 @@ fn inter_expression(
                     // We need to grab the type from the field: what we have above is the type
                     // of the struct.
                     if let Some(field) = field {
+                        let expr = FieldAccess::new(rhs.clone(), &lhs.0, lu_dog);
+                        let expr = Expression::new_field_access(&expr, lu_dog);
                         let ty = field.read().unwrap().r5_value_type(lu_dog)[0].clone();
                         let value = XValue::new_expression(&block, &ty, &expr, lu_dog);
                         span.write().unwrap().x_value = Some(value.read().unwrap().id);
@@ -918,10 +892,10 @@ fn inter_expression(
         // FunctionCall
         //
         ParserExpression::FunctionCall(func, params) => {
-            debug!("func", func);
+            debug!("func {:?}", func);
             let fspan = &func.1;
             let func = &func.0;
-            debug!("params", params);
+            debug!("params {:?}", params);
             let (func_expr, ret_ty) = inter_expression(
                 &Arc::new(RwLock::new(func.to_owned())),
                 fspan,
@@ -931,8 +905,11 @@ fn inter_expression(
                 models,
                 sarzak,
             )?;
+
             let func_call = Call::new_function_call(Some(&func_expr.0), lu_dog);
             let func = Expression::new_call(&func_call, lu_dog);
+            let value = XValue::new_expression(&block, &ret_ty, &func, lu_dog);
+            span.write().unwrap().x_value = Some(value.read().unwrap().id);
 
             let mut last_arg_uuid: Option<Uuid> = None;
             for param in params {
@@ -950,12 +927,9 @@ fn inter_expression(
             }
 
             debug!(
-                "ParserExpression::FunctionCall exit",
+                "ParserExpression::FunctionCall exit {:?}",
                 (&func_call, &func_call.read().unwrap().r28_argument(lu_dog))
             );
-
-            let value = XValue::new_expression(&block, &ret_ty, &func, lu_dog);
-            span.write().unwrap().x_value = Some(value.read().unwrap().id);
 
             Ok(((func, span), ret_ty))
         }
@@ -963,17 +937,17 @@ fn inter_expression(
         // If
         //
         ParserExpression::If(conditional, true_block, false_block) => {
-            debug!("conditional", conditional);
+            debug!("conditional {:?}", conditional);
             let cspan = &conditional.1;
             let conditional = Arc::new(RwLock::new(conditional.0.to_owned()));
             let (conditional, conditional_ty) =
                 inter_expression(&conditional, cspan, source, block, lu_dog, models, sarzak)?;
-            debug!("ParserExpression::If", conditional_ty);
+            debug!("ParserExpression::If {:?}", conditional_ty);
 
             // We really need to get some error handling in here.
             let ty = conditional_ty.read().unwrap().to_owned();
             if let ValueType::Ty(ref ty) = conditional_ty.read().unwrap().to_owned() {
-                error!("exhume Ty from sarzak -- bool check", ty);
+                error!("exhume Ty from sarzak -- bool check {:?}", ty);
                 let ty = sarzak.exhume_ty(ty).unwrap();
                 if let Ty::Boolean(_) = ty {
                     // We're good.
@@ -1195,7 +1169,7 @@ fn inter_expression(
         // LocalVariable
         //
         ParserExpression::LocalVariable(name) => {
-            debug!("name", name);
+            debug!("localvariable name {}", name);
             // We need to return an expression and a type.
             // We look for a value in the current block. We need to clone them
             // to be able to modify lu_dog below.
@@ -1215,14 +1189,14 @@ fn inter_expression(
                 .filter(|value| value.read().unwrap().block == block.read().unwrap().id)
                 .collect::<Vec<Arc<RwLock<XValue>>>>();
 
-            debug!("values", values);
+            // debug!("values", values);
 
             // Now search for a value that's a Variable, and see if the access matches
             // the variable.
             let mut expr_type_tuples = values
                 .iter()
                 .filter_map(|value| {
-                    debug!("value", value);
+                    // debug!("value", value);
 
                     match value.read().unwrap().subtype {
                         XValueEnum::Expression(ref _expr) => {
@@ -1254,7 +1228,7 @@ fn inter_expression(
                         }
                         XValueEnum::Variable(ref var) => {
                             let var = lu_dog.exhume_variable(var).unwrap().read().unwrap().clone();
-                            debug!("var", var);
+                            debug!("value var {:?}", var);
                             // Check the name
                             if var.name == *name {
                                 match var.subtype {
@@ -1266,7 +1240,7 @@ fn inter_expression(
                                         let lhs_ty =
                                             PrintableValueType(ty.clone(), lu_dog, sarzak, models);
 
-                                        // dbg!(name, &value, lhs_ty.to_string());
+                                        debug!("{}, {:?}, {}", name, &value, lhs_ty.to_string());
 
                                         // 🚧
                                         // Ok, so I parsed a local variable expression. We need to create
@@ -1287,14 +1261,18 @@ fn inter_expression(
                                         } else {
                                             let expr =
                                                 VariableExpression::new(name.to_owned(), lu_dog);
-                                            debug!("created a new variable expression", expr);
+                                            debug!("created a new variable expression {:?}", expr);
                                             Expression::new_variable_expression(&expr, lu_dog)
                                         };
 
+                                        // Should we be doing this if we pulled the expression from
+                                        // r15 above?
                                         let value =
                                             XValue::new_expression(&block, &ty, &expr, lu_dog);
                                         span.write().unwrap().x_value =
                                             Some(value.read().unwrap().id);
+
+                                        debug!("expr {expr:?}, value {value:?}, span {span:?}");
 
                                         Some(((expr, span.clone()), ty))
                                     }
@@ -1340,11 +1318,11 @@ fn inter_expression(
             // So, yeah, we always want to grab the last one.
             // debug_assert!(expr_type_tuples.len() <= 1);
 
-            debug!("expr_ty", expr_type_tuples);
+            debug!("expr_ty {:?}", expr_type_tuples);
 
             // Why are we taking the last one? -- Oh, read above.
             if let Some(expr_ty_tuple) = expr_type_tuples.pop() {
-                debug!("returning", expr_ty_tuple);
+                debug!("returning {:?}", expr_ty_tuple);
                 Ok(expr_ty_tuple)
             } else {
                 // 🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧
@@ -1364,6 +1342,8 @@ fn inter_expression(
                     expr,
                     ValueType::new_error(&Error::new_unknown_variable(lu_dog), lu_dog),
                 );
+                // 🚧 WTF are we doing here? Above it's an error, and here we have
+                // a variable expression that we're returning?
                 let expr = VariableExpression::new(name.to_owned(), lu_dog);
                 let expr = Expression::new_variable_expression(&expr, lu_dog);
                 let ty = ValueType::new_unknown(lu_dog);
@@ -1378,7 +1358,7 @@ fn inter_expression(
         // MethodCall
         //
         ParserExpression::MethodCall(instance, (method, meth_span), params) => {
-            debug!("ParserExpression::MethodCall", instance);
+            debug!("ParserExpression::MethodCall {:?}", instance);
 
             let (instance, instance_ty) = inter_expression(
                 &Arc::new(RwLock::new((*instance).0.to_owned())),
@@ -1392,6 +1372,8 @@ fn inter_expression(
             let meth = MethodCall::new(method.to_owned(), lu_dog);
             let call = Call::new_method_call(Some(&instance.0), &meth, lu_dog);
             let expr = Expression::new_call(&call, lu_dog);
+            let value = XValue::new_expression(&block, &instance_ty, &expr, lu_dog);
+            span.write().unwrap().x_value = Some(value.read().unwrap().id);
 
             let mut last_arg_uuid: Option<Uuid> = None;
             for param in params {
@@ -1408,8 +1390,6 @@ fn inter_expression(
                 let arg = Argument::new(None, &call, &arg_expr.0, lu_dog);
                 last_arg_uuid = link_argument!(last_arg_uuid, arg, lu_dog);
             }
-            let value = XValue::new_expression(&block, &instance_ty, &expr, lu_dog);
-            span.write().unwrap().x_value = Some(value.read().unwrap().id);
 
             Ok(((expr, span), instance_ty))
         }
@@ -1494,7 +1474,7 @@ fn inter_expression(
                 panic!("I don't think that we should ever see anything other than a user type here: {:?}", ty);
             };
 
-            debug!("type_name", type_name);
+            debug!("type_name {:?}", type_name);
             // let type_name = if let Token::Ident(obj) = obj {
             //     obj.de_sanitize().to_owned()
             // } else if obj == &Token::Uuid {
@@ -1507,8 +1487,8 @@ fn inter_expression(
             let call = Call::new_static_method_call(None, &meth, lu_dog);
             let expr = Expression::new_call(&call, lu_dog);
 
-            debug!("name", type_name);
-            debug!("method", method);
+            debug!("name {}", type_name);
+            debug!("method {}", method);
 
             // 🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧
             // So we are down to this. I suppose that we can check the obj against
@@ -1520,7 +1500,7 @@ fn inter_expression(
                 ValueType::new_ty(&Arc::new(RwLock::new(Ty::new_s_uuid())), lu_dog)
             } else {
                 debug!(
-                    "ParserExpression::StaticMethodCall: looking up type",
+                    "ParserExpression::StaticMethodCall: looking up type {}",
                     type_name
                 );
 
@@ -1567,7 +1547,7 @@ fn inter_expression(
         // StringLiteral
         //
         ParserExpression::StringLiteral(literal) => {
-            debug!("literal", literal);
+            debug!("literal {:?}", literal);
             let expr = Expression::new_literal(
                 &Literal::new_string_literal(
                     &StringLiteral::new(literal.to_owned(), lu_dog),
@@ -1594,7 +1574,7 @@ fn inter_expression(
                 });
             };
 
-            debug!("ParserExpression::Struct", name);
+            debug!("ParserExpression::Struct {}", name);
 
             // dbg!(&lu_dog.iter_woog_struct().collect::<Vec<_>>());
 
@@ -1643,7 +1623,7 @@ fn inter_expression(
                 }
             }
 
-            // Ilove that the type of the thing is the same as the thing itself.
+            // I love that the type of the thing is the same as the thing itself.
             let expr = Expression::new_struct_expression(&expr, lu_dog);
             let ty = ValueType::new_woog_struct(&woog_struct, lu_dog);
 
@@ -1771,7 +1751,7 @@ fn inter_implementation(
         let implementation = Implementation::new(&mt, lu_dog);
         let _ = WoogItem::new_implementation(source, &implementation, lu_dog);
 
-        debug!("inter_implementation", name);
+        debug!("inter_implementation {}", name);
 
         for (func, span) in funcs {
             match func {
@@ -1805,7 +1785,7 @@ fn inter_struct(
     models: &[SarzakStore],
     sarzak: &SarzakStore,
 ) -> Result<()> {
-    debug!("inter_struct", name);
+    debug!("inter_struct {}", name);
     let s_name = name.de_sanitize();
 
     if let Some((ref model, ref id)) = models
@@ -1983,7 +1963,7 @@ fn get_value_type(
                 // the Uuid. So, it's not unlikely; it's the least likely.
                 if let Some(ty) = sarzak.iter_ty().find(|ty| match ty {
                     Ty::Object(ref obj) => {
-                        error!("reach-around", obj);
+                        error!("reach-around {}", obj);
                         let obj = sarzak.exhume_object(obj).unwrap();
                         let obj = obj.name.to_upper_camel_case();
                         obj == *name || name == format!("{}Proxy", obj)
@@ -2162,7 +2142,7 @@ impl<'a, 'b, 'c> fmt::Display for PrintableValueType<'a, 'b, 'c> {
                         Ty::SString(_) => write!(f, "String"),
                         Ty::SUuid(_) => write!(f, "Uuid"),
                         gamma => {
-                            error!("deal with sarzak type", gamma);
+                            error!("deal with sarzak type {:?}", gamma);
                             write!(f, "todo")
                         }
                     }
@@ -2199,7 +2179,7 @@ impl<'a, 'b, 'c> fmt::Display for PrintableValueType<'a, 'b, 'c> {
                 }
             }
             ValueType::WoogStruct(ref woog_struct) => {
-                debug!("woog_struct", woog_struct);
+                debug!("woog_struct {:?}", woog_struct);
                 let woog_struct = lu_dog.exhume_woog_struct(woog_struct).unwrap();
                 let woog_struct = woog_struct.read().unwrap();
                 write!(f, "{}", woog_struct.name)

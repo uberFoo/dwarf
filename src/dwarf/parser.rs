@@ -156,6 +156,7 @@ fn lexer() -> impl Parser<char, Vec<Spanned<Token>>, Error = Simple<char>> {
     let ident = text::ident().map(|ident: String| match ident.as_str() {
         "as" => Token::As,
         "bool" => Token::Type(Type::Boolean),
+        "debugger" => Token::Debugger,
         "else" => Token::Else,
         "false" => Token::Bool(false),
         "float" => Token::Type(Type::Float),
@@ -1057,6 +1058,12 @@ impl DwarfParser {
             return Ok(Some(expression));
         }
 
+        // parse a debugger expression
+        if let Some(expression) = self.parse_debugger_expression()? {
+            debug!("debugger expression");
+            return Ok(Some(expression));
+        }
+
         // parse a return expression
         if let Some(expression) = self.parse_return_expression()? {
             debug!("return expression", expression);
@@ -1522,7 +1529,7 @@ impl DwarfParser {
     /// This really should just be another function call, and I sort it out
     /// at name resolution time.
     ///
-    /// print_expression -> PRINT
+    /// print_expression -> PRINT( expr )
     fn parse_print_expression(&mut self) -> Result<Option<Expression>> {
         debug!("enter parse_print_expression");
 
@@ -1578,6 +1585,33 @@ impl DwarfParser {
         Ok(Some((
             (
                 DwarfExpression::Print(Box::new(expression.0)),
+                start..self.previous().unwrap().1.end,
+            ),
+            LITERAL,
+        )))
+    }
+
+    /// Parse a debugger expression
+    ///
+    /// debugger_expression -> DEBUGGER
+    fn parse_debugger_expression(&mut self) -> Result<Option<Expression>> {
+        debug!("enter");
+
+        let start = if let Some(tok) = self.peek() {
+            tok.1.start
+        } else {
+            return Ok(None);
+        };
+
+        if !self.match_(&[Token::Debugger]) {
+            return Ok(None);
+        }
+
+        debug!("exit");
+
+        Ok(Some((
+            (
+                DwarfExpression::Debug,
                 start..self.previous().unwrap().1.end,
             ),
             LITERAL,

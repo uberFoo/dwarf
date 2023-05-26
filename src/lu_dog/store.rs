@@ -79,7 +79,7 @@ use crate::lu_dog::types::{
     Parameter, Print, RangeExpression, Reference, ResultStatement, Span, Statement,
     StaticMethodCall, StringLiteral, StructExpression, ValueType, Variable, VariableExpression,
     WoogOption, WoogStruct, XIf, XReturn, XValue, ZObjectStore, ZSome, ADDITION, ASSIGNMENT,
-    DIVISION, EMPTY, EQUAL, FALSE_LITERAL, GREATER_THAN_OR_EQUAL, LESS_THAN_OR_EQUAL,
+    DEBUGGER, DIVISION, EMPTY, EQUAL, FALSE_LITERAL, GREATER_THAN_OR_EQUAL, LESS_THAN_OR_EQUAL,
     MULTIPLICATION, RANGE, SUBTRACTION, TRUE_LITERAL, UNKNOWN, UNKNOWN_VARIABLE,
 };
 
@@ -223,6 +223,7 @@ impl ObjectStore {
         store.inter_error(Arc::new(RwLock::new(Error::UnknownVariable(
             UNKNOWN_VARIABLE,
         ))));
+        store.inter_expression(Arc::new(RwLock::new(Expression::Debugger(DEBUGGER))));
         store.inter_expression(Arc::new(RwLock::new(Expression::Literal(
             Literal::BooleanLiteral(BooleanLiteral::FalseLiteral(FALSE_LITERAL).id()).id(),
         ))));

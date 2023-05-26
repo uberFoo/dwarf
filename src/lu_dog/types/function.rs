@@ -18,7 +18,7 @@ use crate::lu_dog::store::ObjectStore as LuDogStore;
 // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"function-struct-documentation"}}}
 /// A Function
 ///
-/// Inputs, outputs. Stuff happens.
+/// Inputs, outputs. Stuff happens. 😎
 ///
 // {"magic":"","directive":{"End":{"directive":"ignore-orig"}}}
 // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"function-struct-definition"}}}

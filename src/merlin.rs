@@ -2437,6 +2437,11 @@ impl From<(Arc<RwLock<Expression>>, Arc<RwLock<LuDogStore>>)> for Value {
                 expression_proxy.self_ = Some(expression.clone());
                 Value::ProxyType(Arc::new(RwLock::new(expression_proxy)))
             }
+            Expression::Debugger(_) => {
+                let mut expression_proxy = ExpressionProxy::new_type(store.clone());
+                expression_proxy.self_ = Some(expression.clone());
+                Value::ProxyType(Arc::new(RwLock::new(expression_proxy)))
+            }
             Expression::ErrorExpression(_) => {
                 let mut expression_proxy = ExpressionProxy::new_type(store.clone());
                 expression_proxy.self_ = Some(expression.clone());
