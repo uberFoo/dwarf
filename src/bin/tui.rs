@@ -23,6 +23,7 @@ use crossterm::{
         self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyModifiers, MouseEvent,
     },
     execute,
+    style::Print,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use log::{Level, LevelFilter, Metadata, Record, SetLoggerError};
@@ -37,7 +38,8 @@ use ratatui::{
 };
 use snafu::prelude::*;
 use std::{
-    io,
+    io::{self, stdout},
+    panic::{self, PanicInfo},
     path::PathBuf,
     sync::{Arc, RwLock},
     thread,
@@ -862,6 +864,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
+    // Set panic hook
+    panic::set_hook(Box::new(panic_hook));
+
     // Set max_log_level to Trace
     tui_logger::init_logger(log::LevelFilter::Trace).unwrap();
 
@@ -952,4 +957,35 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     repl.join().unwrap();
 
     Ok(())
+}
+
+/// A panic hook to properly restore the terminal in the case of a panic.
+/// Based on [spotify-tui's implementation](https://github.com/Rigellute/spotify-tui/blob/master/src/main.rs).
+pub fn panic_hook(panic_info: &PanicInfo<'_>) {
+    let mut stdout = stdout();
+
+    let msg = match panic_info.payload().downcast_ref::<&'static str>() {
+        Some(s) => *s,
+        None => match panic_info.payload().downcast_ref::<String>() {
+            Some(s) => &s[..],
+            None => "Box<Any>",
+        },
+    };
+
+    let stacktrace: String = format!("{:?}", backtrace::Backtrace::new());
+
+    disable_raw_mode().unwrap();
+    execute!(stdout, DisableMouseCapture, LeaveAlternateScreen).unwrap();
+
+    // Print stack trace.  Must be done after!
+    execute!(
+        stdout,
+        Print(format!(
+            "thread '<unnamed>' panicked at '{}', {}\n\r{}",
+            msg,
+            panic_info.location().unwrap(),
+            stacktrace
+        )),
+    )
+    .unwrap();
 }

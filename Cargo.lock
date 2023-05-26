@@ -219,6 +219,7 @@ dependencies = [
  "ansi-to-tui",
  "ansi_term",
  "ariadne",
+ "backtrace",
  "bincode",
  "chumsky",
  "clap 4.2.2",

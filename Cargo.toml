@@ -62,6 +62,7 @@ tui-tree-widget = { path = "../../github/tui-rs-tree-widget" }
 crossbeam = { version = "0.8.2", features = ["crossbeam-channel"] }
 dap = { path = "../../github/dap-rs" }
 parking_lot = { version = "0.12.1", features = ["serde", "deadlock_detection", "hardware-lock-elision"] }
+backtrace = "0.3.67"
 # tui-logger = { version = "0.9.1", features = ["ratatui-support"] }
 
 [features]
