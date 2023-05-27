@@ -662,10 +662,12 @@ fn run_app(
 const MIN_SRC_COLUMN_WIDTH: u16 = 99;
 
 fn draw_frame<B: Backend>(f: &mut Frame<B>, app: &SharedRef<App>) {
+    // This is the initial vertical split.
     let dwarf = Layout::default()
         .direction(Direction::Vertical)
         .constraints([Constraint::Percentage(60), Constraint::Percentage(40)].as_ref())
         .split(f.size());
+    // This is the top half of the screen.
     let source_vars = Layout::default()
         .direction(Direction::Horizontal)
         .constraints(
@@ -676,10 +678,12 @@ fn draw_frame<B: Backend>(f: &mut Frame<B>, app: &SharedRef<App>) {
             .as_ref(),
         )
         .split(dwarf[0]);
+    // This is the bottom half of the screen.
     let con_out = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([Constraint::Percentage(60), Constraint::Percentage(40)].as_ref())
         .split(dwarf[1]);
+    // This is sort of weird.
     let console = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([Constraint::Min(1)].as_ref())
@@ -695,7 +699,7 @@ fn draw_frame<B: Backend>(f: &mut Frame<B>, app: &SharedRef<App>) {
             ]
             .as_ref(),
         )
-        .split(console[0]);
+        .split(con_out[0]);
     let logger = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([Constraint::Min(1)].as_ref())
@@ -802,27 +806,47 @@ fn draw_frame<B: Backend>(f: &mut Frame<B>, app: &SharedRef<App>) {
         app.write().console.scroll = 0;
         0
     } else {
-        let scroll = lines - height;
-        let mut scroll = scroll.saturating_add_signed(app.read().console.scroll);
+        // 🚧
+        // This has a gotcha -- line wrapping. If we turn it on, then we will
+        // have more lines than we are counting. IOW, we ween to account for
+        // the number of lines that are wrapped. I'm disabling wrapping for now
+        // because the only right way to do it is to wrap the lines, and then
+        // why bother with the line wrapping in paragraph. So we write our own
+        // widget, or wrap the lines before we send them to be rendered.
+        // 🚧
+        let offset = lines - height;
+        let scroll = app.read().console.scroll;
+        let mut offset = offset.saturating_add_signed(scroll);
 
-        // dbg!(&scroll, &app.output.lines.len(), &app.scroll);
-
-        if scroll == 0 {
+        // This is the top of the buffer.
+        if offset == 0 {
+            // Interestingly, doing this incrementally keeps the screen from
+            // jumping about erratically.
             app.write().console.scroll += 1;
-            scroll = 1;
+            offset = 1;
         }
 
-        if scroll + height >= lines {
+        if offset + height > lines {
+            // Some here -- no surprise. However, we need to be incremental in
+            // the update of scroll, otherwise the screen jumps.
             app.write().console.scroll -= 1;
-            scroll -= 1;
+            offset -= 1;
         }
-        scroll
+
+        debug!(
+            "{lines}, {height}, {}, {}",
+            &offset,
+            &app.read().console.scroll
+        );
+
+        offset
     };
 
     // dbg!(&scroll, &app.scroll);
 
     let messages = Paragraph::new(app.read().console.output.clone())
-        .wrap(Wrap { trim: false })
+        // 🚧  see above
+        // .wrap(Wrap { trim: false })
         .scroll((scroll, 0));
 
     f.render_widget(messages, console[0]);

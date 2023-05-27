@@ -49,9 +49,9 @@ ratatui = { path = "../../github/ratatui" }
 tui-textarea = { path = "../../github/tui-textarea", features = [
     "ratatui-crossterm",
 ] }
-# tui-input = { path = "../../github/tui-input" }
+tui-input = { path = "../../github/tui-input" }
 ansi-to-tui = { path = "../../github/ansi-to-tui" }
-tui-input = "0.7.0"
+# tui-input = "0.7.0"
 syntect = "5.0.0"
 tui-logger = { path = "../../github/tui-logger", default-features = false, features = [
     "ratatui-support",
@@ -61,7 +61,11 @@ bincode = "1.3.3"
 tui-tree-widget = { path = "../../github/tui-rs-tree-widget" }
 crossbeam = { version = "0.8.2", features = ["crossbeam-channel"] }
 dap = { path = "../../github/dap-rs" }
-parking_lot = { version = "0.12.1", features = ["serde", "deadlock_detection", "hardware-lock-elision"] }
+parking_lot = { version = "0.12.1", features = [
+    "serde",
+    "deadlock_detection",
+    "hardware-lock-elision",
+] }
 backtrace = "0.3.67"
 # tui-logger = { version = "0.9.1", features = ["ratatui-support"] }
 
