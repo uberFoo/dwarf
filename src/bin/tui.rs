@@ -1,23 +1,22 @@
-use ansi_to_tui::{IntoSpans, IntoText};
+use std::{
+    io::{self, stdout},
+    panic::{self, PanicInfo},
+    path::PathBuf,
+    sync::{Arc, RwLock},
+    thread,
+    time::Duration,
+};
+
+use ansi_to_tui::IntoText;
 use chacha::{
-    dwarf::{inter_statement, parse_line},
-    initialize_interpreter,
     interpreter::{
-        banner, eval_statement, initialize_interpreter_paths, start_main, start_repl2, start_vm,
-        Context, DebuggerControl, DebuggerStatus, MemoryUpdateMessage,
+        banner, initialize_interpreter_paths, start_repl2, DebuggerControl, DebuggerStatus,
+        MemoryUpdateMessage,
     },
-    lu_dog::DwarfSourceFile,
-    // merlin::{ErrorExpressionProxy, ExpressionProxy},
-    // merlin::{
-    //     AnchorProxy, BisectionProxy, EdgeProxy, GlyphProxy, LineProxy, LineSegmentPointProxy,
-    //     LineSegmentProxy, PointProxy, RelationshipNameProxy, RelationshipPhraseProxy, XBoxProxy,
-    // },
-    start_repl,
-    BadJuJuSnafu,
     ChaChaError,
 };
 use clap::Parser;
-use crossbeam::channel::{Receiver, RecvError, RecvTimeoutError, Sender};
+use crossbeam::channel::{Receiver, RecvTimeoutError, Sender};
 use crossterm::{
     event::{
         self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyModifiers, MouseEvent,
@@ -26,7 +25,7 @@ use crossterm::{
     style::Print,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use log::{Level, LevelFilter, Metadata, Record, SetLoggerError};
+use log;
 use parking_lot::{Condvar, Mutex, RwLock as ParkingLotRwLock};
 use ratatui::{
     backend::{Backend, CrosstermBackend},
@@ -35,15 +34,6 @@ use ratatui::{
     text::Text,
     widgets::{Block, BorderType, Borders, List, ListItem, Paragraph, Wrap},
     Frame, Terminal,
-};
-use snafu::prelude::*;
-use std::{
-    io::{self, stdout},
-    panic::{self, PanicInfo},
-    path::PathBuf,
-    sync::{Arc, RwLock},
-    thread,
-    time::Duration,
 };
 use syntect::highlighting::ThemeSet;
 use tui_input::{backend::crossterm::EventHandler, Input};
@@ -143,27 +133,6 @@ struct Args {
     #[arg(long, short, default_value = "InspiredGitHub")]
     theme: String,
 }
-
-// struct ConsoleLogger<'a>(Arc<RwLock<Console<'a>>>);
-
-// impl log::Log for ConsoleLogger<'_> {
-//     fn enabled(&self, metadata: &Metadata) -> bool {
-//         metadata.level() <= Level::Info
-//     }
-
-//     fn log(&self, record: &Record) {
-//         if self.enabled(record.metadata()) {
-//             let mut writer = self.0.write().unwrap();
-//             writer.output.extend(
-//                 format!("{} - {}", record.level(), record.args())
-//                     .into_text()
-//                     .unwrap(),
-//             );
-//         }
-//     }
-
-//     fn flush(&self) {}
-// }
 
 #[derive(Clone, Copy, Eq, PartialEq)]
 enum Window {
@@ -302,105 +271,13 @@ impl Console<'_> {
 }
 
 fn eval_console<'a>(app: &mut App) -> Result<(), ChaChaError> {
-    // let console = &mut app.console;
-    // let source = &mut app.source;
-
     let input = app.console.input.value().to_owned();
 
     app.console.scroll = 0;
     app.console.output.extend(input.into_text().unwrap());
     let value = &input[14..];
     app.console.execute(&value);
-    // if let Some((stmt, _span)) = parse_line(value) {
-    //     let lu_dog = console.interpreter.lu_dog_heel();
-    //     let block = console.interpreter.block();
-    //     let sarzak = console.interpreter.sarzak_heel();
-    //     let models = console.interpreter.models();
-    //     let stmt = {
-    //         // let mut writer = lu_dog.write().unwrap();
-    //         match inter_statement(
-    //             &Arc::new(RwLock::new(stmt)),
-    //             &DwarfSourceFile::new(value.to_owned(), &mut writer),
-    //             &block,
-    //             &mut writer,
-    //             &models.read().unwrap(),
-    //             &sarzak.read().unwrap(),
-    //         ) {
-    //             Ok(stmt) => stmt.0,
-    //             Err(e) => {
-    //                 println!("{}", e);
-    //                 // 🚧 What do we do here?
-    //                 return Ok(());
-    //                 // continue;
-    //             }
-    //         }
-    //     };
-    //     // 🚧 This needs fixing too.
-    //     match eval_statement(stmt, &mut console.interpreter) {
-    //         Ok((value, ty)) => {
-    //             let value = format!("{}", value.read().unwrap());
-    //             // println!("\n'{}'", value);
-    //             console.output.extend(value.into_text().unwrap());
 
-    //             let interpreter = &mut console.interpreter;
-    //             for i in interpreter.drain_std_out() {
-    //                 console.output.extend(i.into_text().unwrap());
-    //             }
-
-    //             // print!("\n'{}'", result_style.paint(value));
-    //             // let ty = PrintableValueType(&ty, &context);
-    //             // let ty = format!("{}", ty);
-    //             // println!("\t  ──➤  {}", type_style.paint(ty));
-    //         }
-    //         Err(e) => {
-    //             if let ChaChaError::TypeMismatch {
-    //                 expected: _,
-    //                 got: _,
-    //                 span,
-    //             } = &e
-    //             {
-    //                 // This belongs in the library, I think?
-    //                 // I'll just do it here and see how it feels
-    //                 // later.
-    //                 let mut iter = source.lines().iter();
-    //                 let mut next = iter.next().unwrap();
-    //                 let mut len = next.len() + 1;
-    //                 let mut n = next.len();
-    //                 let mut m = 0;
-
-    //                 while n < span.start {
-    //                     next = iter.next().unwrap();
-    //                     m += 1;
-    //                     len = next.len() + 1; // `\n`
-    //                     n += len;
-    //                     debug!("({m},{n},{len}), ({}): {}", next.len(), next);
-    //                 }
-
-    //                 debug!("({},{})", m, n - span.start);
-    //                 debug!("{:?}", source.cursor());
-    //                 debug!("span: ({},{})", span.start, span.end);
-    //                 debug!("{}", (len + span.start - n) as u16);
-
-    //                 source.move_cursor(CursorMove::Jump(m as u16, (len - (n - span.start)) as u16));
-    //             }
-    //             console.output.extend(e.to_string().into_text().unwrap());
-    //             if let ChaChaError::Return { value: _, ty: _ } = e {
-    //                 println!("👋 Bye bye!");
-    //                 // break;
-    //             } else {
-    //                 console.output.extend(
-    //                     format!("Something went wrong: {}", value)
-    //                         .into_text()
-    //                         .unwrap(),
-    //                 );
-    //                 // println!("{}", error_style.paint("WTF?"));
-    //             }
-
-    //             // This is lame.
-    //             console.input = Input::new(console.interpreter.prompt().into());
-    //         }
-    //     }
-    // }
     Ok(())
 }
 
@@ -801,19 +678,26 @@ fn draw_frame<B: Backend>(f: &mut Frame<B>, app: &SharedRef<App>) {
     f.render_widget(block, con_out[0]);
 
     let height = console[0].height;
-    let lines = app.read().console.output.lines.len() as u16;
+    let width = console[0].width as usize;
+    let lines = app
+        .read()
+        .console
+        .output
+        .lines
+        .iter()
+        .map(|line| {
+            line.spans
+                .iter()
+                .map(|span| span.content.chars().count())
+                .sum::<usize>()
+                / width
+                + 1
+        })
+        .sum::<usize>() as u16;
     let scroll = if height >= lines {
         app.write().console.scroll = 0;
         0
     } else {
-        // 🚧
-        // This has a gotcha -- line wrapping. If we turn it on, then we will
-        // have more lines than we are counting. IOW, we ween to account for
-        // the number of lines that are wrapped. I'm disabling wrapping for now
-        // because the only right way to do it is to wrap the lines, and then
-        // why bother with the line wrapping in paragraph. So we write our own
-        // widget, or wrap the lines before we send them to be rendered.
-        // 🚧
         let offset = lines - height;
         let scroll = app.read().console.scroll;
         let mut offset = offset.saturating_add_signed(scroll);
@@ -833,12 +717,6 @@ fn draw_frame<B: Backend>(f: &mut Frame<B>, app: &SharedRef<App>) {
             offset -= 1;
         }
 
-        debug!(
-            "{lines}, {height}, {}, {}",
-            &offset,
-            &app.read().console.scroll
-        );
-
         offset
     };
 
@@ -846,7 +724,7 @@ fn draw_frame<B: Backend>(f: &mut Frame<B>, app: &SharedRef<App>) {
 
     let messages = Paragraph::new(app.read().console.output.clone())
         // 🚧  see above
-        // .wrap(Wrap { trim: false })
+        .wrap(Wrap { trim: false })
         .scroll((scroll, 0));
 
     f.render_widget(messages, console[0]);
