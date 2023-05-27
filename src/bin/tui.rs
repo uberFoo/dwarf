@@ -564,6 +564,16 @@ fn run_app(
     halt: Arc<Mutex<bool>>,
 ) -> io::Result<()> {
     let (lock, cvar) = &*pair;
+
+    {
+        // dbg!("waiting for lock");
+        let mut started = lock.lock();
+        *started = true;
+        // dbg!("started");
+        // We notify the condvar that the value has changed.
+        cvar.notify_all();
+    }
+
     loop {
         // debug!("waiting for event");
 
@@ -868,10 +878,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     panic::set_hook(Box::new(panic_hook));
 
     // Set max_log_level to Trace
-    tui_logger::init_logger(log::LevelFilter::Trace).unwrap();
+    tui_logger::init_logger(log::LevelFilter::Debug).unwrap();
 
     // Set default level for unknown targets to Trace
-    tui_logger::set_default_level(log::LevelFilter::Trace);
+    tui_logger::set_default_level(log::LevelFilter::Debug);
 
     // // Early initialization of the logger
     // let drain = tui_logger::Drain::new();
@@ -917,7 +927,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let repl = thread::spawn(move || repl_updater(app4, pair4, halt4));
 
-    let drawer = thread::spawn(move || {
+    let renderer = thread::spawn(move || {
         // Wait for the thread to start up.
         let (lock, cvar) = &*pair;
         loop {
@@ -925,10 +935,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             if !*started {
                 // dbg!("waiting");
                 cvar.wait(&mut started);
-                // dbg!(["notified"]);
-                terminal.draw(|f| draw_frame(f, &app)).unwrap();
             }
+
             *started = false;
+            // dbg!(["notified"]);
+            terminal.draw(|f| draw_frame(f, &app)).unwrap();
 
             if *halt.lock() {
                 break;
@@ -953,7 +964,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     updater.join().unwrap();
-    drawer.join().unwrap();
+    renderer.join().unwrap();
     repl.join().unwrap();
 
     Ok(())
