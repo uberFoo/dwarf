@@ -67,7 +67,7 @@ use std::{
 };
 
 use fnv::FnvHashMap as HashMap;
-use heck::ToUpperCamelCase;
+use heck::{ToLowerCamelCase, ToUpperCamelCase};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -102,6 +102,7 @@ pub struct ObjectStore {
     float_literal: Arc<RwLock<HashMap<Uuid, Arc<RwLock<FloatLiteral>>>>>,
     for_loop: Arc<RwLock<HashMap<Uuid, Arc<RwLock<ForLoop>>>>>,
     function: Arc<RwLock<HashMap<Uuid, Arc<RwLock<Function>>>>>,
+    function_id_by_name: Arc<RwLock<HashMap<String, Uuid>>>,
     grouped: Arc<RwLock<HashMap<Uuid, Arc<RwLock<Grouped>>>>>,
     x_if: Arc<RwLock<HashMap<Uuid, Arc<RwLock<XIf>>>>>,
     implementation: Arc<RwLock<HashMap<Uuid, Arc<RwLock<Implementation>>>>>,
@@ -159,6 +160,7 @@ impl ObjectStore {
             float_literal: Arc::new(RwLock::new(HashMap::default())),
             for_loop: Arc::new(RwLock::new(HashMap::default())),
             function: Arc::new(RwLock::new(HashMap::default())),
+            function_id_by_name: Arc::new(RwLock::new(HashMap::default())),
             grouped: Arc::new(RwLock::new(HashMap::default())),
             x_if: Arc::new(RwLock::new(HashMap::default())),
             implementation: Arc::new(RwLock::new(HashMap::default())),
@@ -955,6 +957,10 @@ impl ObjectStore {
     ///
     pub fn inter_function(&mut self, function: Arc<RwLock<Function>>) {
         let read = function.read().unwrap();
+        self.function_id_by_name
+            .write()
+            .unwrap()
+            .insert(read.name.to_lower_camel_case(), read.id);
         self.function
             .write()
             .unwrap()
@@ -969,6 +975,14 @@ impl ObjectStore {
             .unwrap()
             .get(id)
             .map(|function| function.clone())
+    }
+
+    pub fn exhume_function_id_by_name(&self, name: &str) -> Option<Uuid> {
+        self.function_id_by_name
+            .read()
+            .unwrap()
+            .get(name)
+            .map(|id| *id)
     }
 
     /// Exorcise (remove) [`Function`] from the store.
@@ -3441,6 +3455,10 @@ impl ObjectStore {
                 let file = fs::File::open(path)?;
                 let reader = io::BufReader::new(file);
                 let function: Arc<RwLock<Function>> = serde_json::from_reader(reader)?;
+                store.function_id_by_name.write().unwrap().insert(
+                    function.read().unwrap().name.to_lower_camel_case(),
+                    function.read().unwrap().id,
+                );
                 store
                     .function
                     .write()

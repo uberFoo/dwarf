@@ -101,6 +101,13 @@ pub enum DwarfError {
     #[snafu(display("\n{}: Missing implementation: {missing}\n  --> {}:{}:{}", C_WARN.bold().paint("warning"), location.file, location.line, location.column))]
     NoImplementation { missing: String, location: Location },
 
+    /// Struct Field Not Found Error
+    ///
+    /// This is used when a struct field is used and it's not found on the struct
+    /// definition.
+    #[snafu(display("\n{}: Struct field not found: {field}\n  --> {}:{}", C_ERR.bold().paint("error"), span.start, span.end))]
+    StructFieldNotFound { field: String, span: Span },
+
     /// Object ID Lookup Error
     ///
     /// This is used when a reverse object lookup in one of the domains fails.

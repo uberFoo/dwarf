@@ -2,7 +2,7 @@ use std::{
     io::{self, stdout},
     panic::{self, PanicInfo},
     path::PathBuf,
-    sync::{Arc, RwLock},
+    sync::Arc,
     thread,
     time::Duration,
 };
@@ -32,12 +32,12 @@ use ratatui::{
     layout::{Constraint, Direction, Layout},
     style::{Color, Modifier, Style},
     text::Text,
-    widgets::{Block, BorderType, Borders, List, ListItem, Paragraph, Wrap},
+    widgets::{Block, BorderType, Borders, Paragraph, Wrap},
     Frame, Terminal,
 };
 use syntect::highlighting::ThemeSet;
 use tui_input::{backend::crossterm::EventHandler, Input};
-use tui_logger::{TuiLoggerLevelOutput, TuiLoggerWidget, TuiWidgetState};
+use tui_logger::{TuiLoggerLevelOutput, TuiLoggerWidget};
 use tui_textarea::{CursorMove, TextArea};
 use tui_tree_widget::{Tree, TreeItem, TreeState};
 
@@ -139,6 +139,7 @@ enum Window {
     Console,
     Source,
     Stack,
+    Logger,
 }
 
 struct App<'a> {
@@ -171,7 +172,7 @@ impl App<'_> {
             source,
             stack: StatefulTree::with_items(items),
             frame_number: 0,
-            window: Window::Stack,
+            window: Window::Console,
             hover: Window::Console,
             theme,
             mouse_position: (0, 0),
@@ -181,6 +182,7 @@ impl App<'_> {
     fn scroll_up(&mut self, e: MouseEvent) {
         match self.hover {
             Window::Console => self.console.scroll_up(),
+            Window::Logger => true,
             Window::Source => self.source.input(e),
             Window::Stack => true,
         };
@@ -189,6 +191,7 @@ impl App<'_> {
     fn scroll_down(&mut self, e: MouseEvent) {
         match self.hover {
             Window::Console => self.console.scroll_down(),
+            Window::Logger => true,
             Window::Source => self.source.input(e),
             Window::Stack => true,
         };
@@ -209,6 +212,7 @@ struct Console<'a> {
     memory_recv: Receiver<MemoryUpdateMessage>,
     scroll: i16,
     source: String,
+    prompt: String,
 }
 
 impl Console<'_> {
@@ -223,13 +227,14 @@ impl Console<'_> {
         let (repl_send, repl_recv) = start_repl2(interpreter);
 
         Console {
-            input: Input::new(prompt),
+            input: Input::default(),
             output,
             repl_send,
             repl_recv,
             memory_recv,
             scroll: 0,
             source,
+            prompt,
         }
     }
 
@@ -272,11 +277,11 @@ impl Console<'_> {
 
 fn eval_console<'a>(app: &mut App) -> Result<(), ChaChaError> {
     let input = app.console.input.value().to_owned();
+    app.console.input.reset();
 
     app.console.scroll = 0;
     app.console.output.extend(input.into_text().unwrap());
-    let value = &input[14..];
-    app.console.execute(&value);
+    app.console.execute(&input);
 
     Ok(())
 }
@@ -295,6 +300,7 @@ fn repl_updater(
             Err(RecvTimeoutError::Timeout) => {
                 if *halt.lock() {
                     // We maybe want to ping the condvar here?
+                    debug!("stopping");
                     break;
                 }
                 continue;
@@ -309,6 +315,7 @@ fn repl_updater(
         match msg {
             DebuggerStatus::Error(e) => {
                 debug!("Error: {}", e);
+                app.write().console.output.extend(e.into_text().unwrap());
             }
             DebuggerStatus::Paused(span) => {
                 let source = &mut app.write().source;
@@ -358,10 +365,7 @@ fn repl_updater(
 
         // Do this after we'ne updated our bits.
         {
-            let mut started = lock.lock();
-            *started = true;
-            // dbg!("started");
-            // We notify the condvar that the value has changed.
+            *lock.lock() = true;
             cvar.notify_all();
         }
     }
@@ -383,6 +387,7 @@ fn stack_updater(
             Err(RecvTimeoutError::Timeout) => {
                 if *halt.lock() {
                     // We maybe want to ping the condvar here?
+                    debug!("stopping");
                     break;
                 }
                 continue;
@@ -424,10 +429,7 @@ fn stack_updater(
 
         // Do this after we've updated our bits.
         {
-            let mut started = lock.lock();
-            *started = true;
-            // dbg!("started");
-            // We notify the condvar that the value has changed.
+            *lock.lock() = true;
             cvar.notify_all();
         }
     }
@@ -442,18 +444,16 @@ fn run_app(
 ) -> io::Result<()> {
     let (lock, cvar) = &*pair;
 
-    {
-        // dbg!("waiting for lock");
-        let mut started = lock.lock();
-        *started = true;
-        // dbg!("started");
-        // We notify the condvar that the value has changed.
-        cvar.notify_all();
-    }
+    // Let the UI run.
+    *lock.lock() = true;
+    cvar.notify_all();
 
     loop {
         // debug!("waiting for event");
 
+        // 🚧 This causes deadlock... :-( I'll put it back once I sort it out.
+        // if let Ok(poll) = event::poll(Duration::from_millis(10)) {
+        //     if poll {
         let event = event::read()?;
 
         // debug!("read event: {:?}", event);
@@ -463,7 +463,7 @@ fn run_app(
             match key.code {
                 KeyCode::F(5) => app.console.run(),
                 KeyCode::F(11) => app.console.step_into(),
-                // KeyCode::Char('\n' | ' ') => app.stack.toggle(),
+                // KeyCode::Char(' ') => app.stack.toggle(),
                 KeyCode::Left => app.stack.left(),
                 KeyCode::Right => app.stack.right(),
                 KeyCode::Down => app.stack.down(),
@@ -476,10 +476,7 @@ fn run_app(
                 {
                     *halt.lock() = true;
 
-                    let mut started = lock.lock();
-                    *started = true;
-                    // dbg!("started");
-                    // We notify the condvar that the value has changed.
+                    *lock.lock() = true;
                     cvar.notify_all();
 
                     return Ok(());
@@ -491,6 +488,7 @@ fn run_app(
                         //     message: "no clue".to_string(),
                         // })?;
                     }
+                    Window::Logger => {}
                     Window::Source => {
                         app.source.input(Event::Key(key));
                     }
@@ -503,6 +501,7 @@ fn run_app(
                         Window::Console => {
                             app.console.input.handle_event(&Event::Key(key));
                         }
+                        Window::Logger => {}
                         Window::Source => {
                             app.source.input(Event::Key(key));
                         }
@@ -522,21 +521,20 @@ fn run_app(
                 app.select_window();
             }
         }
-
+        // } // 🚧
+        // Redraw after an event, or every 10ms.
         {
-            // dbg!("waiting for lock");
-            let mut started = lock.lock();
-            *started = true;
-            // dbg!("started");
-            // We notify the condvar that the value has changed.
+            *lock.lock() = true;
             cvar.notify_all();
         }
+        // } // 🚧
     }
 
     Ok(())
 }
 
 const MIN_SRC_COLUMN_WIDTH: u16 = 99;
+const MIN_STD_OUT_COLUMN_WIDTH: u16 = 80;
 
 fn draw_frame<B: Backend>(f: &mut Frame<B>, app: &SharedRef<App>) {
     // This is the initial vertical split.
@@ -558,13 +556,15 @@ fn draw_frame<B: Backend>(f: &mut Frame<B>, app: &SharedRef<App>) {
     // This is the bottom half of the screen.
     let con_out = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints([Constraint::Percentage(60), Constraint::Percentage(40)].as_ref())
+        .constraints(
+            [
+                Constraint::Min(MIN_STD_OUT_COLUMN_WIDTH),
+                Constraint::Percentage(40),
+            ]
+            .as_ref(),
+        )
         .split(dwarf[1]);
-    // This is sort of weird.
-    let console = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([Constraint::Min(1)].as_ref())
-        .split(con_out[0]);
+    // The console -- bottom left.
     let console = Layout::default()
         .direction(Direction::Vertical)
         .margin(2)
@@ -577,6 +577,7 @@ fn draw_frame<B: Backend>(f: &mut Frame<B>, app: &SharedRef<App>) {
             .as_ref(),
         )
         .split(con_out[0]);
+    // The logger is the bottom right.
     let logger = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([Constraint::Min(1)].as_ref())
@@ -584,13 +585,16 @@ fn draw_frame<B: Backend>(f: &mut Frame<B>, app: &SharedRef<App>) {
 
     // Figure out where the mouse pointer is located.
     let (row, col) = app.read().mouse_position;
-    if row >= dwarf[0].top() && row <= dwarf[0].bottom() {
-        if col >= dwarf[0].left() && col <= dwarf[0].right() {
-            app.write().hover = Window::Stack;
-        }
-    } else if row >= console[0].top() && row <= console[0].bottom() {
-        if col >= console[0].left() && col <= console[0].right() {
-            app.write().hover = Window::Console;
+    for widget in [
+        (con_out[0], Window::Console),
+        (con_out[1], Window::Logger),
+        (source_vars[0], Window::Source),
+        (source_vars[1], Window::Stack),
+    ] {
+        if row >= widget.0.top() && row <= widget.0.bottom() {
+            if col >= widget.0.left() && col <= widget.0.right() {
+                app.write().hover = widget.1;
+            }
         }
     }
 
@@ -601,12 +605,13 @@ fn draw_frame<B: Backend>(f: &mut Frame<B>, app: &SharedRef<App>) {
         // .border_type(BorderType::Thick)
         .title("Source: fib.tao");
     let block = match app.read().window {
-        Window::Stack => block,
         Window::Console => block,
+        Window::Logger => block,
         Window::Source => block
             .border_type(BorderType::Thick)
             .style(Style::default().fg(Color::Yellow))
             .border_style(Style::default().fg(Color::Yellow)),
+        Window::Stack => block,
     };
 
     {
@@ -617,12 +622,28 @@ fn draw_frame<B: Backend>(f: &mut Frame<B>, app: &SharedRef<App>) {
     }
     // f.render_widget(source.syntax_widget(&app.theme), dwarf[0]);
 
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .style(Style::default().fg(Color::Gray))
+        .border_style(Style::default().fg(Color::Gray))
+        // .border_type(BorderType::Thick)
+        .title("Logging Output");
+    let block = match app.read().window {
+        Window::Console => block,
+        Window::Logger => block
+            .border_type(BorderType::Thick)
+            .style(Style::default().fg(Color::Yellow))
+            .border_style(Style::default().fg(Color::Yellow)),
+        Window::Source => block,
+        Window::Stack => block,
+    };
+
     let tui_logger: TuiLoggerWidget = TuiLoggerWidget::default()
         .block(
-            Block::default()
-                .title("Logging Output")
-                .border_style(Style::default().fg(Color::White).bg(Color::Black))
-                .borders(Borders::ALL),
+            block, // Block::default()
+                  //     .title("Logging Output")
+                  //     .border_style(Style::default().fg(Color::White).bg(Color::Black))
+                  //     .borders(Borders::ALL),
         )
         .output_separator('|')
         .style_error(Style::default().fg(Color::Red))
@@ -635,18 +656,29 @@ fn draw_frame<B: Backend>(f: &mut Frame<B>, app: &SharedRef<App>) {
         .output_level(Some(TuiLoggerLevelOutput::Long))
         .output_target(false)
         .output_file(false)
-        .output_line(false)
-        .style(Style::default().fg(Color::White).bg(Color::Black));
+        .output_line(false);
+    // .style(Style::default().fg(Color::White).bg(Color::Black));
     // .state(&filter_state);
     f.render_widget(tui_logger, logger[0]);
 
+    let block = Block::default()
+        .title("Stack Frames")
+        .borders(Borders::ALL)
+        .style(Style::default().fg(Color::Gray))
+        .border_style(Style::default().fg(Color::Gray));
+    let block = match app.read().window {
+        Window::Console => block,
+        Window::Logger => block,
+        Window::Source => block,
+        Window::Stack => block
+            .border_type(BorderType::Thick)
+            .style(Style::default().fg(Color::Yellow))
+            .border_style(Style::default().fg(Color::Yellow)),
+    };
+
     let items = app.read().stack.items.clone();
     let items = Tree::new(items)
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title(format!("Stack Frames")),
-        )
+        .block(block)
         .highlight_style(
             Style::default()
                 .fg(Color::Black)
@@ -668,12 +700,13 @@ fn draw_frame<B: Backend>(f: &mut Frame<B>, app: &SharedRef<App>) {
         .style(Style::default().fg(Color::Gray))
         .border_style(Style::default().fg(Color::Gray));
     let block = match app.read().window {
-        Window::Stack => block,
-        Window::Source => block,
         Window::Console => block
             .border_type(BorderType::Thick)
             .style(Style::default().fg(Color::Yellow))
             .border_style(Style::default().fg(Color::Yellow)),
+        Window::Logger => block,
+        Window::Source => block,
+        Window::Stack => block,
     };
     f.render_widget(block, con_out[0]);
 
@@ -722,12 +755,12 @@ fn draw_frame<B: Backend>(f: &mut Frame<B>, app: &SharedRef<App>) {
 
     // dbg!(&scroll, &app.scroll);
 
-    let messages = Paragraph::new(app.read().console.output.clone())
+    let std_out = Paragraph::new(app.read().console.output.clone())
         // 🚧  see above
         .wrap(Wrap { trim: false })
         .scroll((scroll, 0));
 
-    f.render_widget(messages, console[0]);
+    f.render_widget(std_out, console[0]);
 
     let width = console[0].width.max(3) - 3; // keep 2 for borders and 1 for cursor
 
@@ -736,15 +769,24 @@ fn draw_frame<B: Backend>(f: &mut Frame<B>, app: &SharedRef<App>) {
         .style(Style::default())
         .scroll((0, scroll as u16));
     // .block(Block::default().borders(Borders::ALL).title("Input"));
-    f.render_widget(input, console[2]);
+
+    let line = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Min("道:>".len() as u16), Constraint::Min(1)].as_ref())
+        .split(console[2]);
+
+    // f.render_widget(input, console[2]);
+    let prompt =
+        Paragraph::new(app.read().console.prompt.into_text().unwrap()).style(Style::default());
+    f.render_widget(prompt, line[0]);
+    f.render_widget(input, line[1]);
 
     if app.read().window == Window::Console {
         f.set_cursor(
             // Put cursor past the end of the input text
-            console[2].x
-                + ((app.read().console.input.visual_cursor()).max(scroll) - scroll - 7) as u16,
+            line[1].x + (app.read().console.input.visual_cursor()).max(scroll) as u16,
             // Move one line down, from the border to the input line
-            console[2].y,
+            line[1].y,
         )
         // } else {
         // let cursor = app.source.cursor();
@@ -865,9 +907,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("{:?}", err)
     }
 
-    updater.join().unwrap();
+    updater.join().unwrap()?;
     renderer.join().unwrap();
-    repl.join().unwrap();
+    repl.join().unwrap()?;
 
     Ok(())
 }

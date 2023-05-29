@@ -361,8 +361,8 @@ impl std::ops::Add for Value {
     fn add(self, other: Self) -> Self {
         match (self, other) {
             (Value::Float(a), Value::Float(b)) => Value::Float(a + b),
-            (Value::Float(a), Value::Integer(b)) => Value::Float(a + b as f64),
-            (Value::Integer(a), Value::Float(b)) => Value::Float(a as f64 + b),
+            // (Value::Float(a), Value::Integer(b)) => Value::Float(a + b as f64),
+            // (Value::Integer(a), Value::Float(b)) => Value::Float(a as f64 + b),
             (Value::Integer(a), Value::Integer(b)) => Value::Integer(a + b),
             (Value::String(a), Value::String(b)) => Value::String(a + &b),
             (Value::Char(a), Value::Char(b)) => Value::String(a.to_string() + &b.to_string()),
@@ -371,7 +371,11 @@ impl std::ops::Add for Value {
             // (Value::Vector(a), Value::Vector(b)) => Value::Vector(a + &b),
             // (Value::Table(a), Value::Table(b)) => Value::Table(a + &b),
             // (Value::Uuid(a), Value::Uuid(b)) => Value::Uuid(a + &b),
-            // (Value::UserType(a), Value::UserType(b)) => Value::UserType(a + &b),
+            // (Value::UserType(a), Value::UserType(b)) => {
+            //     // Maybe look for an add function for the user type?
+            //     let c = a;
+            //     Value::UserType(a + &b)
+            // },
             // (Value::ProxyType(a), Value::ProxyType(b)) => Value::ProxyType(a + &b),
             // (Value::Option(a), Value::Option(b)) => Value::Option(a + &b),
             // (Value::Reflexive, Value::Reflexive) => Value::Reflexive,
@@ -476,7 +480,7 @@ impl fmt::Display for UserType {
         attrs.sort_by(|(k1, _), (k2, _)| k1.cmp(k2));
 
         for (k, v) in attrs {
-            out.field(k, v);
+            out.field(k, &v.read().unwrap());
         }
 
         out.finish()

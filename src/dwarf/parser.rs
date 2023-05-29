@@ -3225,4 +3225,20 @@ mod tests {
         dbg!(&ast);
         assert!(ast.is_ok());
     }
+
+    #[test]
+    fn test_method_call() {
+        let _ = env_logger::builder().is_test(true).try_init();
+
+        let src = r#"
+            fn foo() -> () {
+                let a = Complex::new();
+                a.foo();
+            }
+        "#;
+
+        let ast = parse_dwarf(src);
+        dbg!(&ast);
+        assert!(ast.is_ok());
+    }
 }

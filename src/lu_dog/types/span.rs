@@ -88,4 +88,23 @@ impl Span {
     // {"magic":"","directive":{"End":{"directive":"ignore-orig"}}}
 }
 // {"magic":"","directive":{"End":{"directive":"ignore-orig"}}}
+use std::ops::Range;
+impl From<Range<usize>> for Span {
+    fn from(range: Range<usize>) -> Self {
+        Span {
+            end: range.end as i64,
+            id: Uuid::new_v4(),
+            start: range.start as i64,
+            source: Uuid::new_v4(),
+            x_value: None,
+            ty: None,
+        }
+    }
+}
+// impl From<std::sync::RwLockReadGuard<'_, Span>> for Range<usize> {
+impl From<&Span> for Range<usize> {
+    fn from(span: &Span) -> Self {
+        span.start as usize..span.end as usize
+    }
+}
 // {"magic":"","directive":{"End":{"directive":"allow-editing"}}}

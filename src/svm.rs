@@ -314,7 +314,7 @@ mod tests {
     #[test]
     fn test_instr_constant() {
         let memory = Memory::new();
-        let mut vm = VM::new(&memory);
+        let mut vm = VM::new(&memory.0);
         let mut chunk = Chunk::new("test".to_string());
 
         chunk.add_instruction(Instruction::Constant(Value::Integer(42)));
@@ -340,7 +340,7 @@ mod tests {
     #[test]
     fn test_instr_return() {
         let memory = Memory::new();
-        let mut vm = VM::new(&memory);
+        let mut vm = VM::new(&memory.0);
         let mut chunk = Chunk::new("test".to_string());
 
         chunk.add_instruction(Instruction::Constant(Value::Integer(42)));
@@ -368,7 +368,7 @@ mod tests {
     #[test]
     fn test_instr_add() {
         let memory = Memory::new();
-        let mut vm = VM::new(&memory);
+        let mut vm = VM::new(&memory.0);
         let mut chunk = Chunk::new("test".to_string());
 
         chunk.add_instruction(Instruction::Constant(Value::Integer(42)));
@@ -398,7 +398,7 @@ mod tests {
     #[test]
     fn test_instr_subtract() {
         let memory = Memory::new();
-        let mut vm = VM::new(&memory);
+        let mut vm = VM::new(&memory.0);
         let mut chunk = Chunk::new("test".to_string());
 
         chunk.add_instruction(Instruction::Constant(Value::Integer(111)));
@@ -428,7 +428,7 @@ mod tests {
     fn test_instr_less_than_or_equal() {
         // False Case
         let memory = Memory::new();
-        let mut vm = VM::new(&memory);
+        let mut vm = VM::new(&memory.0);
         let mut chunk = Chunk::new("test".to_string());
 
         chunk.add_instruction(Instruction::Constant(Value::Integer(111)));
@@ -455,7 +455,7 @@ mod tests {
 
         // True case: less than
         let memory = Memory::new();
-        let mut vm = VM::new(&memory);
+        let mut vm = VM::new(&memory.0);
         let mut chunk = Chunk::new("test".to_string());
 
         chunk.add_instruction(Instruction::Constant(Value::Integer(42)));
@@ -482,7 +482,7 @@ mod tests {
 
         // True case: equal
         let memory = Memory::new();
-        let mut vm = VM::new(&memory);
+        let mut vm = VM::new(&memory.0);
         let mut chunk = Chunk::new("test".to_string());
 
         chunk.add_instruction(Instruction::Constant(Value::Integer(42)));
@@ -512,7 +512,7 @@ mod tests {
     #[test]
     fn test_instr_jump_if_false() {
         let memory = Memory::new();
-        let mut vm = VM::new(&memory);
+        let mut vm = VM::new(&memory.0);
         let mut chunk = Chunk::new("test".to_string());
 
         chunk.add_instruction(Instruction::Constant(Value::Integer(69)));
@@ -551,7 +551,7 @@ mod tests {
     fn test_instr_fetch_local() {
         // Simple
         let memory = Memory::new();
-        let mut vm = VM::new(&memory);
+        let mut vm = VM::new(&memory.0);
         let mut chunk = Chunk::new("test".to_string());
 
         vm.stack.push(Value::String(
@@ -585,7 +585,7 @@ mod tests {
     fn test_instr_fetch_local_nested() {
         // Nested
         let memory = Memory::new();
-        let mut vm = VM::new(&memory);
+        let mut vm = VM::new(&memory.0);
         let mut chunk = Chunk::new("test".to_string());
 
         vm.stack.push(Value::String(
@@ -658,12 +658,12 @@ mod tests {
         println!("{}", chunk);
 
         // put fib in memory
-        let slot = memory.reserve_chunk_slot();
-        memory.insert_chunk(chunk.clone(), slot);
+        let slot = memory.0.reserve_chunk_slot();
+        memory.0.insert_chunk(chunk.clone(), slot);
 
         let frame = CallFrame::new(0, 0, &chunk);
 
-        let mut vm = VM::new(&memory);
+        let mut vm = VM::new(&memory.0);
 
         // Push the func
         vm.stack.push(Value::String("fib".to_string()));

@@ -17,7 +17,7 @@ pub mod dap;
 pub mod dwarf;
 pub mod interpreter;
 pub mod lu_dog;
-pub mod merlin;
+// pub mod merlin;
 pub mod svm;
 pub(crate) mod value;
 pub(crate) mod woog_structs;
@@ -96,6 +96,11 @@ pub enum ChaChaError {
     #[snafu(display("\n{}: no such field `{}`.", ERR_CLR.bold().paint("error"), POP_CLR.paint(field)))]
     NoSuchField {
         field: String,
+    },
+    #[snafu(display("\n{}: `{}` is not a function.", ERR_CLR.bold().paint("error"), POP_CLR.paint(value.to_string())))]
+    NotAFunction {
+        value: Value,
+        span: Range<usize>,
     },
     #[snafu(display("\n{}: not an instance", ERR_CLR.bold().paint("error")))]
     NotAnInstance,

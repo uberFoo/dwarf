@@ -151,7 +151,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         // let mut ctx = initialize_interpreter_paths("../sarzak/target/sarzak/lu_dog/lu_dog.道")?;
         // let mut ctx = initialize_interpreter_paths("fib.道")?;
-        let ctx = initialize_interpreter(sarzak, lu_dog)?;
+        let ctx = initialize_interpreter::<PathBuf>(sarzak, lu_dog, None)?;
 
         // ctx.register_model("../sarzak/models/lu_dog.v2.json")?;
 

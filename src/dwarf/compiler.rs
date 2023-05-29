@@ -97,7 +97,7 @@ macro_rules! debug {
         log::debug!(
             target: "compiler",
             "{}: {}\n  --> {}:{}:{}",
-            Colour::Green.dimmed().italic().paint(function!()),
+            Colour::Cyan.dimmed().italic().paint(function!()),
             format_args!($($arg)*),
             file!(),
             line!(),
@@ -337,7 +337,12 @@ fn inter_func(
         models,
         sarzak,
     )?;
+
+    let foo = PrintableValueType(ret_ty.clone(), lu_dog, sarzak, models);
+    dbg!(foo.to_string());
+
     let func = Function::new(name.to_owned(), &block, impl_block, &ret_ty, lu_dog);
+    dbg!(&func.read().unwrap().id);
     let _ = WoogItem::new_function(source, &func, lu_dog);
     // Create a type for our function
     ValueType::new_function(&func, lu_dog);
@@ -463,6 +468,7 @@ pub fn inter_statement(
             };
 
             let foo = PrintableValueType(ty.clone(), lu_dog, sarzak, models);
+            dbg!(foo.to_string());
             debug!("inter_statement let foo {}", foo.to_string());
 
             // 🚧
@@ -623,15 +629,7 @@ fn inter_expression(
             // dbg!("expr", &lhs, &rhs);
             // dbg!(&lhs_ty, &rhs_ty);
 
-            ensure!(*lhs_ty.read().unwrap() == *rhs_ty.read().unwrap(), {
-                let lhs_ty = PrintableValueType(lhs_ty, lu_dog, sarzak, models);
-                let rhs_ty = PrintableValueType(rhs_ty, lu_dog, sarzak, models);
-
-                TypeMismatchSnafu {
-                    expected: lhs_ty.to_string(),
-                    found: rhs_ty.to_string(),
-                }
-            });
+            typecheck(&lhs_ty, &rhs_ty, lu_dog, sarzak, models)?;
 
             let expr = Binary::new_assignment(lu_dog);
             let expr = Operator::new_binary(Some(&rhs.0), &lhs.0, &expr, lu_dog);
@@ -798,9 +796,20 @@ fn inter_expression(
                 }
                 ValueType::WoogStruct(ref id) => {
                     let woog_struct = lu_dog.exhume_woog_struct(id).unwrap();
-                    let field = woog_struct.read().unwrap();
-                    let field = field.r7_field(lu_dog);
+                    let woog_struct = woog_struct.read().unwrap();
+                    let field = woog_struct.r7_field(lu_dog);
                     let field = field.iter().find(|f| f.read().unwrap().name == rhs);
+                    let func = if let Some(impl_) = woog_struct.r8c_implementation(lu_dog).pop() {
+                        let impl_ = impl_.read().unwrap();
+
+                        let funcs = impl_.r9_function(lu_dog);
+                        funcs
+                            .iter()
+                            .find(|f| f.read().unwrap().name == rhs)
+                            .and_then(|f| Some(f.clone()))
+                    } else {
+                        None
+                    };
 
                     // We need to grab the type from the field: what we have above is the type
                     // of the struct.
@@ -812,16 +821,22 @@ fn inter_expression(
                         span.write().unwrap().x_value = Some(value.read().unwrap().id);
 
                         Ok(((expr, span), ty))
-                    } else {
-                        let error = ErrorExpression::new("💥 No such field\n".to_owned(), lu_dog);
-                        let expr = Expression::new_error_expression(&error, lu_dog);
-                        // 🚧
-                        // Returning an empty, because the error stuff in ValueType is fucked.
-                        let ty = ValueType::new_empty(lu_dog);
+                    } else if let Some(func) = func {
+                        let expr = FieldAccess::new(rhs.clone(), &lhs.0, lu_dog);
+                        let expr = Expression::new_field_access(&expr, lu_dog);
+                        let ty = func.read().unwrap().r10_value_type(lu_dog)[0].clone();
                         let value = XValue::new_expression(&block, &ty, &expr, lu_dog);
                         span.write().unwrap().x_value = Some(value.read().unwrap().id);
 
                         Ok(((expr, span), ty))
+                    } else {
+                        let span = span.read().unwrap();
+                        // let span: Range<usize> = *span.into();
+                        let span = span.start as usize..span.end as usize;
+                        Err(DwarfError::StructFieldNotFound {
+                            field: rhs.clone(),
+                            span: span,
+                        })
                     }
                 }
                 ty => {
@@ -846,7 +861,7 @@ fn inter_expression(
                 &Literal::new_float_literal(&FloatLiteral::new(*literal, lu_dog), lu_dog),
                 lu_dog,
             );
-            let ty = ValueType::new_ty(&Arc::new(RwLock::new(Ty::new_integer())), lu_dog);
+            let ty = ValueType::new_ty(&Arc::new(RwLock::new(Ty::new_float())), lu_dog);
             let value = XValue::new_expression(&block, &ty, &expr, lu_dog);
             span.write().unwrap().x_value = Some(value.read().unwrap().id);
 
@@ -896,6 +911,25 @@ fn inter_expression(
             let fspan = &func.1;
             let func = &func.0;
             debug!("params {:?}", params);
+
+            // I think that we need to see if we have the function definition
+            // in memory. This is actually tricky, because theoretically we will
+            // eventually have either the function definition or a pointer to
+            // some external function. Either way we should be able to look up the
+            // return type. We only need to resort to interring the expression
+            // if we con't find it, which means it's a local variable, and we
+            // can go that route.
+            //
+            // The problem, currently, is that not only do we not really resolve
+            // external references, but we also don't parse all the function
+            // signatures into memory before we parse their bodies.
+            //
+            // For now, this will help the REPL work correctly...
+            //
+            // 🚧 Deal with the above situation.
+
+            // Look up the function. Shit. Maybe this function lookup thing
+            // belongs in the LocalVariable interring code...
             let (func_expr, ret_ty) = inter_expression(
                 &Arc::new(RwLock::new(func.to_owned())),
                 fspan,
@@ -1169,8 +1203,28 @@ fn inter_expression(
         // LocalVariable
         //
         ParserExpression::LocalVariable(name) => {
-            debug!("localvariable name {}", name);
             // We need to return an expression and a type.
+            debug!("localvariable name {}", name);
+            // The local variable may be a function name.
+            if let Some(ref id) = lu_dog.exhume_function_id_by_name(name) {
+                let func = lu_dog.exhume_function(id).unwrap();
+                let ty = &func.read().unwrap().return_type;
+                let ty = lu_dog.exhume_value_type(ty).unwrap();
+
+                let foo = PrintableValueType(ty.clone(), lu_dog, sarzak, models);
+                dbg!(id, foo.to_string());
+
+                let expr = VariableExpression::new(name.to_owned(), lu_dog);
+                debug!("created a new variable expression {:?}", expr);
+                let expr = Expression::new_variable_expression(&expr, lu_dog);
+
+                let value = XValue::new_expression(&block, &ty, &expr, lu_dog);
+                span.write().unwrap().x_value = Some(value.read().unwrap().id);
+
+                debug!("expr {expr:?}, value {value:?}, type {ty:?}, span {span:?}");
+
+                return Ok(((expr, span.clone()), ty));
+            };
             // We look for a value in the current block. We need to clone them
             // to be able to modify lu_dog below.
             //
@@ -1272,7 +1326,7 @@ fn inter_expression(
                                         span.write().unwrap().x_value =
                                             Some(value.read().unwrap().id);
 
-                                        debug!("expr {expr:?}, value {value:?}, span {span:?}");
+                                        debug!("expr {expr:?}, value {value:?}, type {ty:?}, span {span:?}");
 
                                         Some(((expr, span.clone()), ty))
                                     }
@@ -1734,44 +1788,47 @@ fn inter_implementation(
         sarzak,
     )?;
 
-    for model in models {
-        let obj_id = model
-            .exhume_object_id_by_name(name)
-            .expect(&format!("Object {} not found", name));
+    // 🚧 I think that this is completely wrong. We don't want to do this for
+    // every model, but rather, we want to find the model that contains the
+    // type.
+    // for model in models {
+    // let obj_id = model
+    //     .exhume_object_id_by_name(name)
+    //     .expect(&format!("Object {} not found", name));
 
-        let obj = model
-            .exhume_object(&obj_id)
-            .expect(&format!("Object {} not found", name));
+    // let obj = model
+    //     .exhume_object(&obj_id)
+    //     .expect(&format!("Object {} not found", name));
+    let id = lu_dog
+        .exhume_woog_struct_id_by_name(name)
+        .expect(&format!("Object {} not found", name));
 
-        let mt = lu_dog
-            .iter_woog_struct()
-            .find(|mt| mt.read().unwrap().object == Some(obj.id))
-            .expect(&format!("Struct for {} not found", name))
-            .clone();
-        let implementation = Implementation::new(&mt, lu_dog);
-        let _ = WoogItem::new_implementation(source, &implementation, lu_dog);
+    let mt = lu_dog.exhume_woog_struct(&id).unwrap();
 
-        debug!("inter_implementation {}", name);
+    let implementation = Implementation::new(&mt, lu_dog);
+    let _ = WoogItem::new_implementation(source, &implementation, lu_dog);
 
-        for (func, span) in funcs {
-            match func {
-                Item::Function(ref name, ref params, ref return_type, ref stmts) => inter_func(
-                    &name.0,
-                    &params,
-                    &return_type,
-                    &stmts,
-                    Some(&implementation),
-                    Some(&impl_ty),
-                    span,
-                    source,
-                    lu_dog,
-                    models,
-                    sarzak,
-                )?,
-                _ => return Err(DwarfError::ImplementationBlockError { span: span.clone() }),
-            }
+    debug!("inter_implementation {}", name);
+
+    for (func, span) in funcs {
+        match func {
+            Item::Function(ref name, ref params, ref return_type, ref stmts) => inter_func(
+                &name.0,
+                &params,
+                &return_type,
+                &stmts,
+                Some(&implementation),
+                Some(&impl_ty),
+                span,
+                source,
+                lu_dog,
+                models,
+                sarzak,
+            )?,
+            _ => return Err(DwarfError::ImplementationBlockError { span: span.clone() }),
         }
     }
+    // }
 
     Ok(())
 }
@@ -1938,7 +1995,6 @@ fn get_value_type(
                     lu_dog,
                 ))
             } else {
-                let name = name.de_sanitize();
                 for model in models {
                     // Look for the Object in the model domains first.
                     if let Some(ty) = model.iter_ty().find(|ty| match ty {
@@ -1963,9 +2019,9 @@ fn get_value_type(
                 // the Uuid. So, it's not unlikely; it's the least likely.
                 if let Some(ty) = sarzak.iter_ty().find(|ty| match ty {
                     Ty::Object(ref obj) => {
-                        error!("reach-around {}", obj);
                         let obj = sarzak.exhume_object(obj).unwrap();
                         let obj = obj.name.to_upper_camel_case();
+                        error!("reach-around {}", obj);
                         obj == *name || name == format!("{}Proxy", obj)
                     }
                     _ => false,
@@ -1975,10 +2031,12 @@ fn get_value_type(
                         lu_dog,
                     ))
                 } else {
-                    Ok(ValueType::new_unknown(lu_dog))
-                    // Err(DwarfError::UnknownType {
-                    //     ty: name.to_string(),
-                    // })
+                    if let Some(ref id) = lu_dog.exhume_woog_struct_id_by_name(name) {
+                        let ws = lu_dog.exhume_woog_struct(id).unwrap();
+                        Ok(ValueType::new_woog_struct(&ws, lu_dog))
+                    } else {
+                        Ok(ValueType::new_unknown(lu_dog))
+                    }
                 }
             }
         }

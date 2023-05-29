@@ -1,9 +1,8 @@
 use std::{
     collections::VecDeque,
     fmt,
-    net::TcpListener,
     ops::Range,
-    path::Path,
+    path::{Path, PathBuf},
     sync::{Arc, RwLock},
     thread,
     time::Duration,
@@ -51,6 +50,7 @@ macro_rules! debug {
     ($msg:literal, $($arg:expr),*) => {
         $(
             log::debug!(
+                target: "interpreter",
                 "{}: {} --> {:?}\n  --> {}:{}:{}",
                 Colour::Green.dimmed().italic().paint(function!()),
                 Colour::Yellow.underline().paint($msg),
@@ -63,6 +63,7 @@ macro_rules! debug {
     };
     ($arg:literal) => {
         log::debug!(
+            target: "interpreter",
             "{}: {}\n  --> {}:{}:{}",
             Colour::Green.dimmed().italic().paint(function!()),
             $arg,
@@ -72,6 +73,7 @@ macro_rules! debug {
     };
     ($arg:expr) => {
         log::debug!(
+            target: "interpreter",
             "{}: {:?}\n  --> {}:{}:{}",
             Colour::Green.dimmed().italic().paint(function!()),
             $arg,
@@ -85,6 +87,7 @@ macro_rules! error {
     ($msg:literal, $($arg:expr),*) => {
         $(
             log::error!(
+                target: "interpreter",
                 "{}: {} --> {:?}\n  --> {}:{}:{}",
                 Colour::Green.dimmed().italic().paint(function!()),
                 Colour::Red.underline().paint($msg),
@@ -97,6 +100,7 @@ macro_rules! error {
     };
     ($arg:literal) => {
         log::error!(
+            target: "interpreter",
             "{}: {}\n  --> {}:{}:{}",
             Colour::Green.dimmed().italic().paint(function!()),
             Colour::Red.underline().paint($arg),
@@ -106,6 +110,7 @@ macro_rules! error {
     };
     ($arg:expr) => {
         log::error!(
+            target: "interpreter",
             "{}: {:?}\n  --> {}:{}:{}",
             Colour::Green.dimmed().italic().paint(function!()),
             Colour::Ref.underline().paint($arg),
@@ -168,7 +173,7 @@ pub fn initialize_interpreter_paths<P: AsRef<Path>>(lu_dog_path: P) -> Result<Co
     let lu_dog = LuDogStore::load_bincode(lu_dog_path.as_ref())
         .map_err(|e| ChaChaError::Store { source: e })?;
 
-    initialize_interpreter(sarzak, lu_dog)
+    initialize_interpreter(sarzak, lu_dog, Some(lu_dog_path.as_ref()))
 }
 /// Initialize the interpreter
 ///
@@ -183,9 +188,10 @@ pub fn initialize_interpreter_paths<P: AsRef<Path>>(lu_dog_path: P) -> Result<Co
 ///
 /// Requiring a compiled dwarf file is also sort of stupid. I think we could just
 /// create an empty LuDog as our internal state.
-pub fn initialize_interpreter(
+pub fn initialize_interpreter<P: AsRef<Path>>(
     sarzak: SarzakStore,
     mut lu_dog: LuDogStore,
+    lu_dog_path: Option<P>,
 ) -> Result<Context, Error> {
     // Initialize the stack with stuff from the compiled source.
     let block = Block::new(Uuid::new_v4(), &mut lu_dog);
@@ -287,6 +293,7 @@ pub fn initialize_interpreter(
         std_out_send,
         std_out_recv,
         debug_status_writer: None,
+        obj_file_path: lu_dog_path.map(|p| p.as_ref().to_owned()),
     })
 }
 
@@ -638,11 +645,22 @@ fn eval_expression(
                         (value.clone(), ty)
                     }
                     Value::UserType(ut) => (value.clone(), ut.read().unwrap().get_type().clone()),
-                    value => {
-                        panic!(
-                            "dereferenced function expression and found this: {:?}",
-                            value
-                        );
+                    value_ => {
+                        let value = &expression
+                            .read()
+                            .unwrap()
+                            .r11_x_value(&lu_dog.read().unwrap())[0];
+                        debug!("value", value);
+
+                        let span = &value.read().unwrap().r63_span(&lu_dog.read().unwrap())[0];
+
+                        let read = span.read().unwrap();
+                        let span = read.start as usize..read.end as usize;
+
+                        return Err(ChaChaError::NotAFunction {
+                            value: value_.to_owned(),
+                            span,
+                        });
                     }
                 }
             } else {
@@ -919,11 +937,27 @@ fn eval_expression(
                     Ok((value, ty))
                 }
                 Value::UserType(value) => {
+                    // This could be a field that we look up, and it may be a
+                    // function call. We need to check for a function call first,
+                    // and then a field.
+                    // let woog_struct = field.r7_woog_struct(&field.id).unwrap();
+                    // let woog_struct = woog_struct.read().unwrap();
+                    // if let Some(impl_) = woog_struct.r8c_implementation(lu_dog).pop() {
+                    //     let impl_ = impl_.read().unwrap();
+
+                    //     let funcs = impl_.r9_function(lu_dog);
+                    //     let func = funcs
+                    //         .iter()
+                    //         .find(|f| f.read().unwrap().name == field_name)
+                    //         .and_then(|f| Some(f.clone()));
+                    //     let ty = func.read().unwrap().return_type;
+                    // } else {
                     let value = value.read().unwrap();
                     let value = value.get_attr_value(field_name).unwrap();
                     let ty = value.read().unwrap().get_type(&lu_dog.read().unwrap());
 
                     Ok((value.clone(), ty))
+                    // }
                 }
                 _ => Err(ChaChaError::BadJuJu {
                     message: "Bad value in field access".to_owned(),
@@ -1159,7 +1193,9 @@ fn eval_expression(
                     let value = literal.read().unwrap().x_value;
                     let value = Value::Float(value);
                     let ty = Ty::new_float();
+                    debug!("ty: {:?}", ty);
                     let ty = lu_dog.read().unwrap().exhume_value_type(&ty.id()).unwrap();
+                    debug!("ty: {:?}", ty);
 
                     Ok((Arc::new(RwLock::new(value)), ty))
                 }
@@ -1175,7 +1211,9 @@ fn eval_expression(
                     let value = literal.read().unwrap().x_value;
                     let value = Value::Integer(value);
                     let ty = Ty::new_integer();
+                    debug!("ty: {:?}", ty);
                     let ty = lu_dog.read().unwrap().exhume_value_type(&ty.id()).unwrap();
+                    debug!("ty: {:?}", ty);
 
                     Ok((Arc::new(RwLock::new(value)), ty))
                 }
@@ -1614,6 +1652,22 @@ pub struct Context {
     std_out_send: Sender<String>,
     std_out_recv: Receiver<String>,
     debug_status_writer: Option<Sender<DebuggerStatus>>,
+    obj_file_path: Option<PathBuf>,
+}
+
+/// Save the lu_dog model when the context is dropped
+///
+/// NB: This doesn't work. The thread that started us apparently goes away
+/// before we get a chance to run this to completion. That's my current
+/// working hypothesis.
+impl Drop for Context {
+    fn drop(&mut self) {
+        // self.lu_dog
+        //     .read()
+        //     .unwrap()
+        //     .persist_bincode(&self.obj_file_path)
+        //     .unwrap();
+    }
 }
 
 impl Context {
@@ -1845,10 +1899,18 @@ pub fn start_repl2(mut context: Context) -> (Sender<DebuggerControl>, Receiver<D
                             }
                         };
 
-                        let (value, ty) = eval_statement(stmt, &mut context).unwrap();
-                        to_ui_write
-                            .send(DebuggerStatus::Stopped(value, ty))
-                            .unwrap();
+                        match eval_statement(stmt, &mut context) {
+                            Ok((value, ty)) => {
+                                to_ui_write
+                                    .send(DebuggerStatus::Stopped(value, ty))
+                                    .unwrap();
+                            }
+                            Err(e) => {
+                                to_ui_write
+                                    .send(DebuggerStatus::Error(format!("{:?}", e)))
+                                    .unwrap();
+                            }
+                        }
                     }
                 }
                 Err(RecvTimeoutError::Timeout) => {}
@@ -1990,7 +2052,6 @@ pub fn start_vm(n: DwarfInteger) -> Result<DwarfInteger, Error> {
 
 #[cfg(feature = "repl")]
 pub fn start_repl(mut context: Context) -> Result<(), Error> {
-    use crate::lu_dog::DwarfSourceFile;
     use rustyline::error::ReadlineError;
     use rustyline::validate::{ValidationContext, ValidationResult, Validator};
     use rustyline::{Completer, Helper, Highlighter, Hinter};
