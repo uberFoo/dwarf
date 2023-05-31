@@ -4,6 +4,7 @@ use std::sync::{Arc, RwLock};
 
 use uuid::Uuid;
 
+use crate::lu_dog::types::expression::Expression;
 use crate::lu_dog::types::woog_option::WoogOption;
 use crate::lu_dog::types::woog_option::WoogOptionEnum;
 use crate::lu_dog::types::x_value::XValue;
@@ -45,6 +46,12 @@ impl ZSome {
     /// Navigate to [`XValue`] across R23(1-*)
     pub fn r23_x_value<'a>(&'a self, store: &'a LuDogStore) -> Vec<Arc<RwLock<XValue>>> {
         vec![store.exhume_x_value(&self.inner).unwrap()]
+    }
+    // {"magic":"","directive":{"End":{"directive":"ignore-orig"}}}
+    // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"z_some-impl-nav-subtype-to-supertype-expression"}}}
+    // Navigate to [`Expression`] across R15(isa)
+    pub fn r15_expression<'a>(&'a self, store: &'a LuDogStore) -> Vec<Arc<RwLock<Expression>>> {
+        vec![store.exhume_expression(&self.id).unwrap()]
     }
     // {"magic":"","directive":{"End":{"directive":"ignore-orig"}}}
     // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"z_some-impl-nav-subtype-to-supertype-woog_option"}}}

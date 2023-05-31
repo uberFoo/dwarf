@@ -12,6 +12,7 @@ use crate::lu_dog::types::list::List;
 use crate::lu_dog::types::range::RANGE;
 use crate::lu_dog::types::reference::Reference;
 use crate::lu_dog::types::span::Span;
+use crate::lu_dog::types::type_cast::TypeCast;
 use crate::lu_dog::types::unknown::UNKNOWN;
 use crate::lu_dog::types::woog_option::WoogOption;
 use crate::lu_dog::types::woog_struct::WoogStruct;
@@ -276,6 +277,15 @@ impl ValueType {
                     None
                 }
             })
+            .collect()
+    }
+    // {"magic":"","directive":{"End":{"directive":"ignore-orig"}}}
+    // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"value_type-struct-impl-nav-backward-1_M-to-type_cast"}}}
+    /// Navigate to [`TypeCast`] across R69(1-M)
+    pub fn r69_type_cast<'a>(&'a self, store: &'a LuDogStore) -> Vec<Arc<RwLock<TypeCast>>> {
+        store
+            .iter_type_cast()
+            .filter(|type_cast| type_cast.read().unwrap().ty == self.id())
             .collect()
     }
     // {"magic":"","directive":{"End":{"directive":"ignore-orig"}}}

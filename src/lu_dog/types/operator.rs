@@ -70,6 +70,8 @@ impl Operator {
             rhs: rhs.map(|expression| expression.read().unwrap().id()),
             lhs: lhs.read().unwrap().id(),
             subtype: OperatorEnum::Comparison(subtype.read().unwrap().id()),
+            // {"magic":"","directive":{"End":{"directive":"ignore-orig"}}}
+            // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"operator-struct-impl-new_type_cast"}}}
             id,
         }));
         store.inter_operator(new.clone());

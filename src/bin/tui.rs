@@ -10,7 +10,7 @@ use std::{
 use ansi_to_tui::IntoText;
 use chacha::{
     interpreter::{
-        banner, initialize_interpreter_paths, start_repl2, DebuggerControl, DebuggerStatus,
+        banner2, initialize_interpreter_paths, start_repl2, DebuggerControl, DebuggerStatus,
         MemoryUpdateMessage,
     },
     ChaChaError,
@@ -217,7 +217,7 @@ struct Console<'a> {
 
 impl Console<'_> {
     fn new(object_file: &PathBuf) -> Console<'static> {
-        let output = banner().into_text().unwrap();
+        let output = banner2().into_text().unwrap();
 
         let interpreter = initialize_interpreter_paths(object_file).unwrap();
         let prompt = interpreter.prompt().into();

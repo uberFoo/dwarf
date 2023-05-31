@@ -20,6 +20,7 @@
 //! * [`ExpressionStatement`]
 //! * [`Field`]
 //! * [`FieldAccess`]
+//! * [`FieldAccessTarget`]
 //! * [`FieldExpression`]
 //! * [`FloatLiteral`]
 //! * [`ForLoop`]
@@ -54,6 +55,7 @@
 //! * [`StringLiteral`]
 //! * [`WoogStruct`]
 //! * [`StructExpression`]
+//! * [`TypeCast`]
 //! * [`XValue`]
 //! * [`ValueType`]
 //! * [`Variable`]
@@ -67,20 +69,21 @@ use std::{
 };
 
 use fnv::FnvHashMap as HashMap;
-use heck::{ToLowerCamelCase, ToUpperCamelCase};
+use heck::ToUpperCamelCase;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::lu_dog::types::{
     Argument, Binary, Block, BooleanLiteral, Call, Comparison, DwarfSourceFile, Error,
-    ErrorExpression, Expression, ExpressionStatement, Field, FieldAccess, FieldExpression,
-    FloatLiteral, ForLoop, Function, Grouped, Implementation, Import, Index, IntegerLiteral, Item,
-    LetStatement, List, ListElement, ListExpression, Literal, LocalVariable, MethodCall, Operator,
-    Parameter, Print, RangeExpression, Reference, ResultStatement, Span, Statement,
-    StaticMethodCall, StringLiteral, StructExpression, ValueType, Variable, VariableExpression,
-    WoogOption, WoogStruct, XIf, XReturn, XValue, ZObjectStore, ZSome, ADDITION, ASSIGNMENT,
-    DEBUGGER, DIVISION, EMPTY, EQUAL, FALSE_LITERAL, GREATER_THAN_OR_EQUAL, LESS_THAN_OR_EQUAL,
-    MULTIPLICATION, RANGE, SUBTRACTION, TRUE_LITERAL, UNKNOWN, UNKNOWN_VARIABLE,
+    ErrorExpression, Expression, ExpressionStatement, Field, FieldAccess, FieldAccessTarget,
+    FieldExpression, FloatLiteral, ForLoop, Function, Grouped, Implementation, Import, Index,
+    IntegerLiteral, Item, LetStatement, List, ListElement, ListExpression, Literal, LocalVariable,
+    MethodCall, Operator, Parameter, Print, RangeExpression, Reference, ResultStatement, Span,
+    Statement, StaticMethodCall, StringLiteral, StructExpression, TypeCast, ValueType, Variable,
+    VariableExpression, WoogOption, WoogStruct, XIf, XReturn, XValue, ZObjectStore, ZSome,
+    ADDITION, ASSIGNMENT, DEBUGGER, DIVISION, EMPTY, EQUAL, FALSE_LITERAL, GREATER_THAN,
+    GREATER_THAN_OR_EQUAL, LESS_THAN_OR_EQUAL, MULTIPLICATION, RANGE, SUBTRACTION, TRUE_LITERAL,
+    UNKNOWN, UNKNOWN_VARIABLE, Z_NONE,
 };
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -97,7 +100,9 @@ pub struct ObjectStore {
     expression: Arc<RwLock<HashMap<Uuid, Arc<RwLock<Expression>>>>>,
     expression_statement: Arc<RwLock<HashMap<Uuid, Arc<RwLock<ExpressionStatement>>>>>,
     field: Arc<RwLock<HashMap<Uuid, Arc<RwLock<Field>>>>>,
+    field_id_by_name: Arc<RwLock<HashMap<String, Uuid>>>,
     field_access: Arc<RwLock<HashMap<Uuid, Arc<RwLock<FieldAccess>>>>>,
+    field_access_target: Arc<RwLock<HashMap<Uuid, Arc<RwLock<FieldAccessTarget>>>>>,
     field_expression: Arc<RwLock<HashMap<Uuid, Arc<RwLock<FieldExpression>>>>>,
     float_literal: Arc<RwLock<HashMap<Uuid, Arc<RwLock<FloatLiteral>>>>>,
     for_loop: Arc<RwLock<HashMap<Uuid, Arc<RwLock<ForLoop>>>>>,
@@ -134,6 +139,7 @@ pub struct ObjectStore {
     woog_struct: Arc<RwLock<HashMap<Uuid, Arc<RwLock<WoogStruct>>>>>,
     woog_struct_id_by_name: Arc<RwLock<HashMap<String, Uuid>>>,
     struct_expression: Arc<RwLock<HashMap<Uuid, Arc<RwLock<StructExpression>>>>>,
+    type_cast: Arc<RwLock<HashMap<Uuid, Arc<RwLock<TypeCast>>>>>,
     x_value: Arc<RwLock<HashMap<Uuid, Arc<RwLock<XValue>>>>>,
     value_type: Arc<RwLock<HashMap<Uuid, Arc<RwLock<ValueType>>>>>,
     variable: Arc<RwLock<HashMap<Uuid, Arc<RwLock<Variable>>>>>,
@@ -155,7 +161,9 @@ impl ObjectStore {
             expression: Arc::new(RwLock::new(HashMap::default())),
             expression_statement: Arc::new(RwLock::new(HashMap::default())),
             field: Arc::new(RwLock::new(HashMap::default())),
+            field_id_by_name: Arc::new(RwLock::new(HashMap::default())),
             field_access: Arc::new(RwLock::new(HashMap::default())),
+            field_access_target: Arc::new(RwLock::new(HashMap::default())),
             field_expression: Arc::new(RwLock::new(HashMap::default())),
             float_literal: Arc::new(RwLock::new(HashMap::default())),
             for_loop: Arc::new(RwLock::new(HashMap::default())),
@@ -192,6 +200,7 @@ impl ObjectStore {
             woog_struct: Arc::new(RwLock::new(HashMap::default())),
             woog_struct_id_by_name: Arc::new(RwLock::new(HashMap::default())),
             struct_expression: Arc::new(RwLock::new(HashMap::default())),
+            type_cast: Arc::new(RwLock::new(HashMap::default())),
             x_value: Arc::new(RwLock::new(HashMap::default())),
             value_type: Arc::new(RwLock::new(HashMap::default())),
             variable: Arc::new(RwLock::new(HashMap::default())),
@@ -216,6 +225,7 @@ impl ObjectStore {
             TRUE_LITERAL,
         ))));
         store.inter_comparison(Arc::new(RwLock::new(Comparison::Equal(EQUAL))));
+        store.inter_comparison(Arc::new(RwLock::new(Comparison::GreaterThan(GREATER_THAN))));
         store.inter_comparison(Arc::new(RwLock::new(Comparison::GreaterThanOrEqual(
             GREATER_THAN_OR_EQUAL,
         ))));
@@ -232,6 +242,7 @@ impl ObjectStore {
         store.inter_expression(Arc::new(RwLock::new(Expression::Literal(
             Literal::BooleanLiteral(BooleanLiteral::TrueLiteral(TRUE_LITERAL).id()).id(),
         ))));
+        store.inter_expression(Arc::new(RwLock::new(Expression::ZNone(Z_NONE))));
         store.inter_literal(Arc::new(RwLock::new(Literal::BooleanLiteral(
             BooleanLiteral::FalseLiteral(FALSE_LITERAL).id(),
         ))));
@@ -740,6 +751,10 @@ impl ObjectStore {
     ///
     pub fn inter_field(&mut self, field: Arc<RwLock<Field>>) {
         let read = field.read().unwrap();
+        self.field_id_by_name
+            .write()
+            .unwrap()
+            .insert(read.name.to_upper_camel_case(), read.id);
         self.field.write().unwrap().insert(read.id, field.clone());
     }
 
@@ -761,6 +776,16 @@ impl ObjectStore {
             .unwrap()
             .remove(id)
             .map(|field| field.clone())
+    }
+
+    /// Exhume [`Field`] id from the store by name.
+    ///
+    pub fn exhume_field_id_by_name(&self, name: &str) -> Option<Uuid> {
+        self.field_id_by_name
+            .read()
+            .unwrap()
+            .get(name)
+            .map(|field| *field)
     }
 
     /// Get an iterator over the internal `HashMap<&Uuid, Field>`.
@@ -816,6 +841,58 @@ impl ObjectStore {
             .unwrap()
             .values()
             .map(|field_access| field_access.clone())
+            .collect();
+        let len = values.len();
+        (0..len).map(move |i| values[i].clone())
+    }
+
+    /// Inter (insert) [`FieldAccessTarget`] into the store.
+    ///
+    pub fn inter_field_access_target(
+        &mut self,
+        field_access_target: Arc<RwLock<FieldAccessTarget>>,
+    ) {
+        let read = field_access_target.read().unwrap();
+        self.field_access_target
+            .write()
+            .unwrap()
+            .insert(read.id(), field_access_target.clone());
+    }
+
+    /// Exhume (get) [`FieldAccessTarget`] from the store.
+    ///
+    pub fn exhume_field_access_target(&self, id: &Uuid) -> Option<Arc<RwLock<FieldAccessTarget>>> {
+        self.field_access_target
+            .read()
+            .unwrap()
+            .get(id)
+            .map(|field_access_target| field_access_target.clone())
+    }
+
+    /// Exorcise (remove) [`FieldAccessTarget`] from the store.
+    ///
+    pub fn exorcise_field_access_target(
+        &mut self,
+        id: &Uuid,
+    ) -> Option<Arc<RwLock<FieldAccessTarget>>> {
+        self.field_access_target
+            .write()
+            .unwrap()
+            .remove(id)
+            .map(|field_access_target| field_access_target.clone())
+    }
+
+    /// Get an iterator over the internal `HashMap<&Uuid, FieldAccessTarget>`.
+    ///
+    pub fn iter_field_access_target(
+        &self,
+    ) -> impl Iterator<Item = Arc<RwLock<FieldAccessTarget>>> + '_ {
+        let values: Vec<Arc<RwLock<FieldAccessTarget>>> = self
+            .field_access_target
+            .read()
+            .unwrap()
+            .values()
+            .map(|field_access_target| field_access_target.clone())
             .collect();
         let len = values.len();
         (0..len).map(move |i| values[i].clone())
@@ -960,7 +1037,7 @@ impl ObjectStore {
         self.function_id_by_name
             .write()
             .unwrap()
-            .insert(read.name.to_lower_camel_case(), read.id);
+            .insert(read.name.to_upper_camel_case(), read.id);
         self.function
             .write()
             .unwrap()
@@ -977,14 +1054,6 @@ impl ObjectStore {
             .map(|function| function.clone())
     }
 
-    pub fn exhume_function_id_by_name(&self, name: &str) -> Option<Uuid> {
-        self.function_id_by_name
-            .read()
-            .unwrap()
-            .get(name)
-            .map(|id| *id)
-    }
-
     /// Exorcise (remove) [`Function`] from the store.
     ///
     pub fn exorcise_function(&mut self, id: &Uuid) -> Option<Arc<RwLock<Function>>> {
@@ -993,6 +1062,16 @@ impl ObjectStore {
             .unwrap()
             .remove(id)
             .map(|function| function.clone())
+    }
+
+    /// Exhume [`Function`] id from the store by name.
+    ///
+    pub fn exhume_function_id_by_name(&self, name: &str) -> Option<Uuid> {
+        self.function_id_by_name
+            .read()
+            .unwrap()
+            .get(name)
+            .map(|function| *function)
     }
 
     /// Get an iterator over the internal `HashMap<&Uuid, Function>`.
@@ -2247,7 +2326,7 @@ impl ObjectStore {
             .read()
             .unwrap()
             .get(name)
-            .map(|id| *id)
+            .map(|woog_struct| *woog_struct)
     }
 
     /// Get an iterator over the internal `HashMap<&Uuid, WoogStruct>`.
@@ -2308,6 +2387,50 @@ impl ObjectStore {
             .unwrap()
             .values()
             .map(|struct_expression| struct_expression.clone())
+            .collect();
+        let len = values.len();
+        (0..len).map(move |i| values[i].clone())
+    }
+
+    /// Inter (insert) [`TypeCast`] into the store.
+    ///
+    pub fn inter_type_cast(&mut self, type_cast: Arc<RwLock<TypeCast>>) {
+        let read = type_cast.read().unwrap();
+        self.type_cast
+            .write()
+            .unwrap()
+            .insert(read.id, type_cast.clone());
+    }
+
+    /// Exhume (get) [`TypeCast`] from the store.
+    ///
+    pub fn exhume_type_cast(&self, id: &Uuid) -> Option<Arc<RwLock<TypeCast>>> {
+        self.type_cast
+            .read()
+            .unwrap()
+            .get(id)
+            .map(|type_cast| type_cast.clone())
+    }
+
+    /// Exorcise (remove) [`TypeCast`] from the store.
+    ///
+    pub fn exorcise_type_cast(&mut self, id: &Uuid) -> Option<Arc<RwLock<TypeCast>>> {
+        self.type_cast
+            .write()
+            .unwrap()
+            .remove(id)
+            .map(|type_cast| type_cast.clone())
+    }
+
+    /// Get an iterator over the internal `HashMap<&Uuid, TypeCast>`.
+    ///
+    pub fn iter_type_cast(&self) -> impl Iterator<Item = Arc<RwLock<TypeCast>>> + '_ {
+        let values: Vec<Arc<RwLock<TypeCast>>> = self
+            .type_cast
+            .read()
+            .unwrap()
+            .values()
+            .map(|type_cast| type_cast.clone())
             .collect();
         let len = values.len();
         (0..len).map(move |i| values[i].clone())
@@ -2676,6 +2799,18 @@ impl ObjectStore {
                 let file = fs::File::create(path)?;
                 let mut writer = io::BufWriter::new(file);
                 serde_json::to_writer_pretty(&mut writer, &field_access)?;
+            }
+        }
+
+        // Persist Field Access Target.
+        {
+            let path = path.join("field_access_target");
+            fs::create_dir_all(&path)?;
+            for field_access_target in self.field_access_target.read().unwrap().values() {
+                let path = path.join(format!("{}.json", field_access_target.read().unwrap().id()));
+                let file = fs::File::create(path)?;
+                let mut writer = io::BufWriter::new(file);
+                serde_json::to_writer_pretty(&mut writer, &field_access_target)?;
             }
         }
 
@@ -3087,6 +3222,18 @@ impl ObjectStore {
             }
         }
 
+        // Persist Type Cast.
+        {
+            let path = path.join("type_cast");
+            fs::create_dir_all(&path)?;
+            for type_cast in self.type_cast.read().unwrap().values() {
+                let path = path.join(format!("{}.json", type_cast.read().unwrap().id));
+                let file = fs::File::create(path)?;
+                let mut writer = io::BufWriter::new(file);
+                serde_json::to_writer_pretty(&mut writer, &type_cast)?;
+            }
+        }
+
         // Persist Value.
         {
             let path = path.join("x_value");
@@ -3365,6 +3512,10 @@ impl ObjectStore {
                 let file = fs::File::open(path)?;
                 let reader = io::BufReader::new(file);
                 let field: Arc<RwLock<Field>> = serde_json::from_reader(reader)?;
+                store.field_id_by_name.write().unwrap().insert(
+                    field.read().unwrap().name.to_upper_camel_case(),
+                    field.read().unwrap().id,
+                );
                 store
                     .field
                     .write()
@@ -3388,6 +3539,24 @@ impl ObjectStore {
                     .write()
                     .unwrap()
                     .insert(field_access.read().unwrap().id, field_access.clone());
+            }
+        }
+
+        // Load Field Access Target.
+        {
+            let path = path.join("field_access_target");
+            let entries = fs::read_dir(path)?;
+            for entry in entries {
+                let entry = entry?;
+                let path = entry.path();
+                let file = fs::File::open(path)?;
+                let reader = io::BufReader::new(file);
+                let field_access_target: Arc<RwLock<FieldAccessTarget>> =
+                    serde_json::from_reader(reader)?;
+                store.field_access_target.write().unwrap().insert(
+                    field_access_target.read().unwrap().id(),
+                    field_access_target.clone(),
+                );
             }
         }
 
@@ -3456,7 +3625,7 @@ impl ObjectStore {
                 let reader = io::BufReader::new(file);
                 let function: Arc<RwLock<Function>> = serde_json::from_reader(reader)?;
                 store.function_id_by_name.write().unwrap().insert(
-                    function.read().unwrap().name.to_lower_camel_case(),
+                    function.read().unwrap().name.to_upper_camel_case(),
                     function.read().unwrap().id,
                 );
                 store
@@ -4008,6 +4177,24 @@ impl ObjectStore {
                     struct_expression.read().unwrap().id,
                     struct_expression.clone(),
                 );
+            }
+        }
+
+        // Load Type Cast.
+        {
+            let path = path.join("type_cast");
+            let entries = fs::read_dir(path)?;
+            for entry in entries {
+                let entry = entry?;
+                let path = entry.path();
+                let file = fs::File::open(path)?;
+                let reader = io::BufReader::new(file);
+                let type_cast: Arc<RwLock<TypeCast>> = serde_json::from_reader(reader)?;
+                store
+                    .type_cast
+                    .write()
+                    .unwrap()
+                    .insert(type_cast.read().unwrap().id, type_cast.clone());
             }
         }
 

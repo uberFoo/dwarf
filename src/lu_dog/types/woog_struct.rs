@@ -5,6 +5,7 @@ use std::sync::{Arc, RwLock};
 use uuid::Uuid;
 
 use crate::lu_dog::types::field::Field;
+use crate::lu_dog::types::field_access::FieldAccess;
 use crate::lu_dog::types::implementation::Implementation;
 use crate::lu_dog::types::item::Item;
 use crate::lu_dog::types::item::ItemEnum;
@@ -66,6 +67,15 @@ impl WoogStruct {
         store
             .iter_field()
             .filter(|field| field.read().unwrap().x_model == self.id)
+            .collect()
+    }
+    // {"magic":"","directive":{"End":{"directive":"ignore-orig"}}}
+    // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"woog_struct-struct-impl-nav-backward-1_M-to-field_access"}}}
+    /// Navigate to [`FieldAccess`] across R66(1-M)
+    pub fn r66_field_access<'a>(&'a self, store: &'a LuDogStore) -> Vec<Arc<RwLock<FieldAccess>>> {
+        store
+            .iter_field_access()
+            .filter(|field_access| field_access.read().unwrap().woog_struct == self.id)
             .collect()
     }
     // {"magic":"","directive":{"End":{"directive":"ignore-orig"}}}

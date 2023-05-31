@@ -23,7 +23,8 @@ macro_rules! function {
 macro_rules! debug {
     ($msg:literal, $($arg:expr),*) => {
         $(
-            log::trace!(
+            log::debug!(
+                target: "parser",
                 "{}: {} --> {:?}\n  --> {}:{}:{}",
                 Colour::Green.dimmed().italic().paint(function!()),
                 Colour::Yellow.underline().paint($msg),
@@ -35,7 +36,8 @@ macro_rules! debug {
         )*
     };
     ($arg:literal) => {
-        log::trace!(
+        log::debug!(
+            target: "parser",
             "{}: {}\n  --> {}:{}:{}",
             Colour::Green.dimmed().italic().paint(function!()),
             $arg,
@@ -44,7 +46,8 @@ macro_rules! debug {
             column!())
     };
     ($arg:expr) => {
-        log::trace!(
+        log::debug!(
+            target: "parser",
             "{}: {:?}\n  --> {}:{}:{}",
             Colour::Green.dimmed().italic().paint(function!()),
             $arg,
@@ -57,7 +60,8 @@ macro_rules! debug {
 macro_rules! error {
     ($msg:literal, $($arg:expr),*) => {
         $(
-            log::trace!(
+            log::error!(
+                target: "parser",
                 "{}: {} --> {:?}\n  --> {}:{}:{}",
                 Colour::Green.dimmed().italic().paint(function!()),
                 Colour::Red.underline().paint($msg),
@@ -69,7 +73,8 @@ macro_rules! error {
         )*
     };
     ($arg:literal) => {
-        log::trace!(
+        log::error!(
+            target: "parser",
             "{}: {}\n  --> {}:{}:{}",
             Colour::Green.dimmed().italic().paint(function!()),
             Colour::Red.underline().paint($arg),
@@ -78,7 +83,8 @@ macro_rules! error {
             column!())
     };
     ($arg:expr) => {
-        log::trace!(
+        log::error!(
+            target: "parser",
             "{}: {:?}\n  --> {}:{}:{}",
             Colour::Green.dimmed().italic().paint(function!()),
             Colour::Ref.underline().paint($arg),
@@ -94,6 +100,8 @@ const PATH: (u8, u8) = (100, 100);
 const METHOD: (u8, u8) = (90, 91);
 const FIELD: (u8, u8) = (80, 81);
 const FUNC_CALL: (u8, u8) = (70, 71);
+const AS_OP: (u8, u8) = (55, 56);
+const MUL_DIV: (u8, u8) = (52, 53);
 const ADD_SUB: (u8, u8) = (50, 51);
 const COMP: (u8, u8) = (30, 30);
 const RANGE: (u8, u8) = (20, 20);
@@ -138,7 +146,7 @@ fn lexer() -> impl Parser<char, Vec<Spanned<Token>>, Error = Simple<char>> {
     //     .map(Token::Op);
 
     // A parser for punctuation (delimiters, semicolons, etc.)
-    let punct = one_of("=-()[]{}:;,.&<>+").map(|c| Token::Punct(c));
+    let punct = one_of("=-()[]{}:;,.&<>+*/").map(|c| Token::Punct(c));
 
     // A "Object type" parser. Basically I'm asserting that if an identifier starts
     // with a capital letter, then it's an object.
@@ -716,6 +724,52 @@ impl DwarfParser {
         )))
     }
 
+    /// Parse an as operator
+    ///
+    /// as = expression as type
+    fn parse_as_operator(&mut self, left: &Expression, power: u8) -> Result<Option<Expression>> {
+        debug!("enter", power);
+
+        if power > AS_OP.0 {
+            debug!("exit no power", power);
+            return Ok(None);
+        }
+
+        let start = if let Some(tok) = self.peek() {
+            tok.1.start
+        } else {
+            debug!("exit no token");
+            return Ok(None);
+        };
+
+        if !self.match_(&[Token::As]) {
+            return Ok(None);
+        }
+
+        let right = if let Some(ty) = self.parse_type()? {
+            ty
+        } else {
+            let token = &self.previous().unwrap();
+            let err = Simple::expected_input_found(
+                token.1.clone(),
+                [Some("<expression -> there's a lot of them...>".to_owned())],
+                Some(token.0.to_string()),
+            );
+            error!("exit no expression");
+            return Err(err);
+        };
+
+        debug!("exit ok");
+
+        Ok(Some((
+            (
+                DwarfExpression::As(Box::new(left.0.to_owned()), right),
+                start..self.previous().unwrap().1.start,
+            ),
+            AS_OP,
+        )))
+    }
+
     /// Parse an addition operator
     ///
     /// addition = expression + expression
@@ -763,6 +817,106 @@ impl DwarfParser {
                 start..self.previous().unwrap().1.start,
             ),
             ADD_SUB,
+        )))
+    }
+
+    /// Parse a multiplication operator
+    ///
+    /// multiplication = expression * expression
+    fn parse_multiplication_operator(
+        &mut self,
+        left: &Expression,
+        power: u8,
+    ) -> Result<Option<Expression>> {
+        debug!("enter", power);
+
+        if power > MUL_DIV.0 {
+            debug!("exit no power", power);
+            return Ok(None);
+        }
+
+        let start = if let Some(tok) = self.peek() {
+            tok.1.start
+        } else {
+            debug!("exit no token");
+            return Ok(None);
+        };
+
+        if !self.match_(&[Token::Punct('*')]) {
+            return Ok(None);
+        }
+
+        let right = if let Some(expr) = self.parse_expression(MUL_DIV.1)? {
+            expr
+        } else {
+            let token = &self.previous().unwrap();
+            let err = Simple::expected_input_found(
+                token.1.clone(),
+                [Some("<expression -> there's a lot of them...>".to_owned())],
+                Some(token.0.to_string()),
+            );
+            error!("exit no expression");
+            return Err(err);
+        };
+
+        debug!("exit ok");
+
+        Ok(Some((
+            (
+                DwarfExpression::Multiplication(Box::new(left.0.to_owned()), Box::new(right.0)),
+                start..self.previous().unwrap().1.start,
+            ),
+            MUL_DIV,
+        )))
+    }
+
+    /// Parse a division operator
+    ///
+    /// division = expression / expression
+    fn parse_division_operator(
+        &mut self,
+        left: &Expression,
+        power: u8,
+    ) -> Result<Option<Expression>> {
+        debug!("enter", power);
+
+        if power > MUL_DIV.0 {
+            debug!("exit no power", power);
+            return Ok(None);
+        }
+
+        let start = if let Some(tok) = self.peek() {
+            tok.1.start
+        } else {
+            debug!("exit no token");
+            return Ok(None);
+        };
+
+        if !self.match_(&[Token::Punct('/')]) {
+            return Ok(None);
+        }
+
+        let right = if let Some(expr) = self.parse_expression(MUL_DIV.1)? {
+            expr
+        } else {
+            let token = &self.previous().unwrap();
+            let err = Simple::expected_input_found(
+                token.1.clone(),
+                [Some("<expression -> there's a lot of them...>".to_owned())],
+                Some(token.0.to_string()),
+            );
+            error!("exit no expression");
+            return Err(err);
+        };
+
+        debug!("exit ok");
+
+        Ok(Some((
+            (
+                DwarfExpression::Division(Box::new(left.0.to_owned()), Box::new(right.0)),
+                start..self.previous().unwrap().1.start,
+            ),
+            MUL_DIV,
         )))
     }
 
@@ -923,6 +1077,52 @@ impl DwarfParser {
         )))
     }
 
+    /// Parse a greater-than operator
+    ///
+    /// gt -> expression > expression
+    fn parse_gt_operator(&mut self, left: &Expression, power: u8) -> Result<Option<Expression>> {
+        debug!("enter", power);
+
+        if power > COMP.0 {
+            debug!("exit no power", power);
+            return Ok(None);
+        }
+
+        let start = if let Some(tok) = self.peek() {
+            tok.1.start
+        } else {
+            debug!("exit no token");
+            return Ok(None);
+        };
+
+        if !self.match_(&[Token::Punct('>')]) {
+            debug!("exit no '<'");
+            return Ok(None);
+        }
+
+        let right = if let Some(expr) = self.parse_expression(COMP.1)? {
+            expr
+        } else {
+            let token = &self.previous().unwrap();
+            let err = Simple::expected_input_found(
+                token.1.clone(),
+                [Some("<expression -> there's a lot of them...>".to_owned())],
+                Some(token.0.to_string()),
+            );
+            error!("exit", err);
+            return Err(err);
+        };
+
+        debug!("exit");
+        Ok(Some((
+            (
+                DwarfExpression::GreaterThan(Box::new(left.0.to_owned()), Box::new(right.0)),
+                start..self.previous().unwrap().1.start,
+            ),
+            COMP,
+        )))
+    }
+
     /// Parse a "simple" expression
     ///
     /// I broke this out for a reason that no longer applies. I'm not sure that
@@ -937,21 +1137,33 @@ impl DwarfParser {
     ///               for | function_call | if |
     ///               list | method_call |print |
     ///               static_method_call | struct
-    fn parse_expression_without_block(&mut self, mut power: u8) -> Result<Option<Expression>> {
+    fn parse_expression_without_block(&mut self, power: u8) -> Result<Option<Expression>> {
         error!("enter", power);
 
         let lhs = if let Some(mut lhs) = self.parse_simple_expression()? {
             debug!("simple expression", lhs);
             // power = lhs.1 .1;
             loop {
-                let rhs = if let Some(expression) = self.parse_addition_operator(&lhs, power)? {
+                let rhs = if let Some(expression) = self.parse_as_operator(&lhs, power)? {
+                    debug!("as operator", expression);
+                    Some(expression)
+                } else if let Some(expression) = self.parse_addition_operator(&lhs, power)? {
                     debug!("addition operator", expression);
                     Some(expression)
                 } else if let Some(expression) = self.parse_subtraction_operator(&lhs, power)? {
                     debug!("subtraction operator", expression);
                     Some(expression)
+                } else if let Some(expression) = self.parse_multiplication_operator(&lhs, power)? {
+                    debug!("multiplication operator", expression);
+                    Some(expression)
+                } else if let Some(expression) = self.parse_division_operator(&lhs, power)? {
+                    debug!("division operator", expression);
+                    Some(expression)
                 } else if let Some(expression) = self.parse_lte_operator(&lhs, power)? {
                     debug!("lte operator", expression);
+                    Some(expression)
+                } else if let Some(expression) = self.parse_gt_operator(&lhs, power)? {
+                    debug!("greater-than operator", expression);
                     Some(expression)
                 } else if let Some(expression) = self.parse_assignment_expression(&lhs, power)? {
                     debug!("assignment expression", expression);
@@ -965,14 +1177,14 @@ impl DwarfParser {
                 } else if let Some(expression) = self.parse_function_call(&lhs, power)? {
                     debug!("function call", expression);
                     Some(expression)
-                } else if let Some(expression) = self.parse_static_method_call(&lhs, power)? {
-                    debug!("static method call", expression);
-                    Some(expression)
-                } else if let Some(expression) = self.parse_field_access(&lhs, power)? {
-                    debug!("field access", expression);
-                    Some(expression)
                 } else if let Some(expression) = self.parse_range(&lhs, power)? {
                     debug!("range", expression);
+                    Some(expression)
+                } else if let Some(expression) = self.parse_method_call(&lhs, power)? {
+                    debug!("method call", expression);
+                    Some(expression)
+                } else if let Some(expression) = self.parse_static_method_call(&lhs, power)? {
+                    debug!("static method call", expression);
                     Some(expression)
                 } else {
                     debug!("exit no operator", lhs);
@@ -1156,34 +1368,48 @@ impl DwarfParser {
 
         let start = name.0 .1.start;
 
-        if !self.check(&Token::Punct('.'))
-            || self.check(&Token::Punct('.')) && self.check2(&Token::Punct('.'))
-        {
-            return Ok(None);
-        }
+        // if !self.check(&Token::Punct('.'))
+        //     || self.check(&Token::Punct('.')) && self.check2(&Token::Punct('.'))
+        // {
+        //     return Ok(None);
+        // }
 
-        self.advance();
+        // self.advance();
 
-        let expr = if let Some(expr) = self.parse_expression(FIELD.1)? {
-            expr
+        let token = if let Some(token) = self.peek() {
+            token.clone()
+        } else {
+            let err = Simple::expected_input_found(
+                self.previous().unwrap().1.clone(),
+                [Some("<IDENT>".to_owned())],
+                None,
+            );
+            error!("exit", err);
+            return Err(err);
+        };
+
+        // let expr = if let Some(expr) = self.parse_expression(FIELD.1)? {
+        let (ident, span) = if let (Token::Ident(ident), span) = token {
+            self.advance();
+            (ident, span)
         } else {
             let token = &self.previous().unwrap();
             let err = Simple::expected_input_found(
                 token.1.clone(),
-                [Some("<expression -> there's a lot of them...>".to_owned())],
+                [Some("<IDENT>".to_owned())],
                 Some(token.0.to_string()),
             );
             error!("exit", err);
             return Err(err);
         };
 
-        let end = expr.0 .1.end;
+        let end = span.end;
 
         debug!("exit ok");
 
         Ok(Some((
             (
-                DwarfExpression::FieldAccess(Box::new(name.0.clone()), Box::new(expr.0)),
+                DwarfExpression::FieldAccess(Box::new(name.0.clone()), (ident, span)),
                 start..end,
             ),
             FIELD,
@@ -1345,6 +1571,78 @@ impl DwarfParser {
                 start..self.previous().unwrap().1.end,
             ),
             FUNC_CALL,
+        )))
+    }
+
+    /// Parse a method call
+    ///
+    /// method_call -> `struct`.ident '(' expression,* ')'
+    fn parse_method_call(&mut self, name: &Expression, power: u8) -> Result<Option<Expression>> {
+        debug!("enter", power);
+
+        if power > METHOD.0 {
+            debug!("exit no power", power);
+            return Ok(None);
+        }
+
+        let start = name.0 .1.start;
+
+        if !self.match_(&[Token::Punct('.')]) {
+            return Ok(None);
+        }
+
+        if let Some(_) = self.peek_ident() {
+            if !self.check2(&Token::Punct('(')) {
+                return self.parse_field_access(name, power);
+            }
+        }
+
+        let method_name = if let Some(ident) = self.parse_ident() {
+            ident
+        } else {
+            let token = &self.previous().unwrap();
+            let err = Simple::expected_input_found(
+                token.1.clone(),
+                [Some("<ident>".to_owned())],
+                Some(token.0.to_string()),
+            );
+            error!("exit", err);
+            return Err(err);
+        };
+
+        if !self.match_(&[Token::Punct('(')]) {
+            return Ok(None);
+        }
+
+        let mut arguments = Vec::new();
+
+        while !self.at_end() && !self.match_(&[Token::Punct(')')]) {
+            if let Some(expr) = self.parse_expression(ENTER)? {
+                arguments.push(expr.0);
+                if self.peek().unwrap().0 == Token::Punct(',') {
+                    self.advance();
+                }
+            } else {
+                let tok = self.peek().unwrap();
+                let err = Simple::expected_input_found(
+                    tok.1.clone(),
+                    [Some("expression".to_owned())],
+                    Some(tok.0.to_string()),
+                );
+                let err = err.with_label("expected expression");
+                error!("exit", err);
+                return Err(err);
+            }
+        }
+
+        debug!("exit ok");
+
+        Ok(Some((
+            (
+                DwarfExpression::MethodCall(Box::new(name.0.clone()), method_name, arguments),
+                start..self.previous().unwrap().1.end,
+            ),
+            METHOD,
         )))
     }
 
@@ -2601,6 +2899,10 @@ impl DwarfParser {
     }
 
     fn check2(&mut self, tok: &Token) -> bool {
+        if self.at_end() {
+            return false;
+        }
+
         debug!("check2", tok);
         if let Some(next) = self.next() {
             if next.0 == *tok {
@@ -3233,7 +3535,9 @@ mod tests {
         let src = r#"
             fn foo() -> () {
                 let a = Complex::new();
-                a.foo();
+                let b = Complex::new();
+                b.re;
+                a.add(b);
             }
         "#;
 

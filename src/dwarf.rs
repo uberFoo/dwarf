@@ -395,6 +395,7 @@ pub enum Statement {
 #[derive(Clone, Debug, PartialEq)]
 pub enum Expression {
     Addition(Box<Spanned<Self>>, Box<Spanned<Self>>),
+    As(Box<Spanned<Self>>, Spanned<Type>),
     /// Assignment Expression
     ///
     /// E.g.: `a = b`
@@ -405,13 +406,15 @@ pub enum Expression {
     Block(Vec<Spanned<Statement>>),
     BooleanLiteral(bool),
     Debug,
+    Division(Box<Spanned<Self>>, Box<Spanned<Self>>),
     Error,
-    FieldAccess(Box<Spanned<Self>>, Box<Spanned<Self>>),
+    FieldAccess(Box<Spanned<Self>>, Spanned<String>),
     FloatLiteral(f64),
     For(Spanned<String>, Box<Spanned<Self>>, Box<Spanned<Self>>),
     // The first element is the function being called, the second is the list of
     // arguments.
     FunctionCall(Box<Spanned<Self>>, Vec<Spanned<Self>>),
+    GreaterThan(Box<Spanned<Self>>, Box<Spanned<Self>>),
     If(
         Box<Spanned<Self>>,
         Box<Spanned<Self>>,
@@ -423,6 +426,7 @@ pub enum Expression {
     List(Vec<Spanned<Self>>),
     LocalVariable(String),
     MethodCall(Box<Spanned<Self>>, Spanned<String>, Vec<Spanned<Self>>),
+    Multiplication(Box<Spanned<Self>>, Box<Spanned<Self>>),
     None,
     Print(Box<Spanned<Self>>),
     Range(Box<Spanned<Self>>, Box<Spanned<Self>>),

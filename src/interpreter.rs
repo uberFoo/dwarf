@@ -25,8 +25,9 @@ use crate::{
     dwarf::{inter_statement, parse_line},
     lu_dog::{
         Argument, Binary, Block, BooleanLiteral, CallEnum, Comparison, DwarfSourceFile, Expression,
-        Function, Import, List, Literal, LocalVariable, ObjectStore as LuDogStore, OperatorEnum,
-        Span, Statement, StatementEnum, ValueType, Variable, WoogOptionEnum, XValue,
+        FieldAccessTarget, Function, Import, List, Literal, LocalVariable,
+        ObjectStore as LuDogStore, OperatorEnum, Span, Statement, StatementEnum, ValueType,
+        Variable, WoogOptionEnum, XValue, XValueEnum,
     },
     svm::{CallFrame, Chunk, Instruction, VM},
     value::{StoreProxy, UserType},
@@ -319,7 +320,10 @@ fn eval_function_call(
         // also need to typecheck the arguments against the function parameters.
         // We need to look the params up anyway to set the local variables.
         let params = func.r13_parameter(&lu_dog.read().unwrap());
-        // Damn, this really needs to return a Result.
+
+        // 🚧 I'd really like to see the source code printed out, with the function
+        // call highlighted.
+        // And can't we catch this is the compiler?
         ensure!(
             params.len() == args.len(),
             WrongNumberOfArgumentsSnafu {
@@ -484,7 +488,7 @@ fn eval_function_call(
 
 fn eval_expression(
     expression: Arc<RwLock<Expression>>,
-    context: &mut Context,
+    mut context: &mut Context,
 ) -> Result<(Arc<RwLock<Value>>, Arc<RwLock<ValueType>>)> {
     let lu_dog = context.lu_dog.clone();
 
@@ -670,23 +674,24 @@ fn eval_expression(
                 )
             };
 
-            // So we need to figure out the type this is being called on.
+            // So we need to figure out the type this is being called upon.
             match (&call.subtype, value, ty) {
                 //
                 // FunctionCall
                 //
+                // We already handled this above.
                 (CallEnum::FunctionCall(_), value, ty) => Ok((value, ty)),
                 //
                 // MethodCall
                 //
-                (CallEnum::MethodCall(meth), mut value, ty) => {
+                (CallEnum::MethodCall(meth), value, ty) => {
                     let meth = lu_dog.read().unwrap().exhume_method_call(meth).unwrap();
                     let meth = &meth.read().unwrap().name;
                     debug!("MethodCall method", meth);
                     debug!("MethodCall value", value);
                     debug!("MethodCall type", ty);
 
-                    match &mut *value.write().unwrap() {
+                    match &*value.read().unwrap() {
                         Value::ProxyType(pt) => {
                             let mut arg_values = if !args.is_empty() {
                                 let mut arg_values = VecDeque::with_capacity(args.len());
@@ -725,7 +730,40 @@ fn eval_expression(
 
                             pt.write().unwrap().call(meth, &mut arg_values)
                         }
-                        // Value::UserType(ut) => {}
+                        Value::UserType(ut) => {
+                            // Well, we need to get the function and the arguments
+                            // and invoke eval_function_call.
+                            let ut_read = ut.read().unwrap();
+                            let ty = ut_read.get_type();
+                            let ty = ty.read().unwrap();
+                            let woog_struct = if let ValueType::WoogStruct(woog_struct) = &*ty {
+                                woog_struct
+                            } else {
+                                panic!("I'm trying to invoke a function on a UserType, and it's not a Struct!");
+                            };
+                            let woog_struct = lu_dog
+                                .read()
+                                .unwrap()
+                                .exhume_woog_struct(&woog_struct)
+                                .unwrap();
+                            let woog_struct = woog_struct.read().unwrap();
+                            let impl_ = &woog_struct.r8c_implementation(&lu_dog.read().unwrap())[0];
+                            let x = if let Some(func) = &impl_
+                                .read()
+                                .unwrap()
+                                .r9_function(&lu_dog.read().unwrap())
+                                .iter()
+                                .find(|f| f.read().unwrap().name == *meth)
+                            {
+                                eval_function_call((*func).clone(), &args, context)
+                            } else {
+                                // Should this be an error? I don't think it's likely to happen.
+                                // 🚧 Wrong! This will happen frequently and should be an error.
+                                // It's can't find method on type.
+                                panic!("I can't find the function: `{}` in the impl.", meth);
+                            };
+                            x
+                        }
                         bar => panic!("need to deal with Value {:?}", bar),
                     }
                 }
@@ -813,7 +851,7 @@ fn eval_expression(
                                 ))
                             }
                         }
-                    } else if let Some(mut value) = context.stack.get(ty) {
+                    } else if let Some(value) = context.stack.get(ty) {
                         debug!("StaticMethodCall frame value", value);
                         match &mut *value.write().unwrap() {
                             Value::Function(ref func) => {
@@ -862,12 +900,12 @@ fn eval_expression(
                                 method: func.to_owned(),
                             }
                         );
-
+                        unimplemented!();
                         // We never will get here.
-                        Ok((
-                            Arc::new(RwLock::new(Value::Empty)),
-                            ValueType::new_empty(&lu_dog.read().unwrap()),
-                        ))
+                        // Ok((
+                        //     Arc::new(RwLock::new(Value::Empty)),
+                        //     ValueType::new_empty(&lu_dog.read().unwrap()),
+                        // ))
                     }
                 }
             }
@@ -907,10 +945,26 @@ fn eval_expression(
         //
         Expression::FieldAccess(ref field) => {
             let field = lu_dog.read().unwrap().exhume_field_access(field).unwrap();
+            let fat = &field
+                .read()
+                .unwrap()
+                .r65_field_access_target(&lu_dog.read().unwrap())[0];
+            let field_name = match *fat.read().unwrap() {
+                FieldAccessTarget::Field(ref field) => {
+                    let field = lu_dog.read().unwrap().exhume_field(field).unwrap();
+                    let field = field.read().unwrap();
+                    field.name.to_owned()
+                }
+                FieldAccessTarget::Function(ref func) => {
+                    let func = lu_dog.read().unwrap().exhume_function(func).unwrap();
+                    let func = func.read().unwrap();
+                    func.name.to_owned()
+                }
+            };
 
-            debug!("FieldAccess field", field);
+            // debug!("FieldAccess field", field);
 
-            let field_name = &field.read().unwrap().name;
+            // let field_name = &field.read().unwrap().name;
 
             // What we're doing below is actualy dereferencing a pointer. I wonder
             // if there is a way to make this less confusing and error prone? A
@@ -931,7 +985,7 @@ fn eval_expression(
             match &*value {
                 Value::ProxyType(value) => {
                     let value = value.read().unwrap();
-                    let value = value.get_attr_value(field_name)?;
+                    let value = value.get_attr_value(&field_name)?;
                     let ty = value.read().unwrap().get_type(&lu_dog.read().unwrap());
 
                     Ok((value, ty))
@@ -1014,9 +1068,9 @@ fn eval_expression(
             //     // This gives each thread it's own stack frame, and read only
             //     // access to the parent stack frame. I don't know that I love
             //     // this solution. But it's a qucik hack to threading.
-            //     let mut stack = stack.clone();
+            //     let mut stack = context.stack.clone();
             //     stack.insert(ident.clone(), item.clone());
-            //     eval_expression(block.clone(), &mut stack).unwrap();
+            //     eval_expression(block.clone(), &mut context.clone()).unwrap();
             // });
             for item in list {
                 context.stack.insert(ident.clone(), item);
@@ -1284,9 +1338,19 @@ fn eval_expression(
 
                             Ok((lhs, lhs_ty))
                         }
+                        Binary::Division(_) => {
+                            let value =
+                                lhs.read().unwrap().clone() / rhs.unwrap().read().unwrap().clone();
+                            Ok((Arc::new(RwLock::new(value)), lhs_ty))
+                        }
                         Binary::Subtraction(_) => {
                             let value =
                                 lhs.read().unwrap().clone() - rhs.unwrap().read().unwrap().clone();
+                            Ok((Arc::new(RwLock::new(value)), lhs_ty))
+                        }
+                        Binary::Multiplication(_) => {
+                            let value =
+                                lhs.read().unwrap().clone() * rhs.unwrap().read().unwrap().clone();
                             Ok((Arc::new(RwLock::new(value)), lhs_ty))
                         }
                         ref alpha => {
@@ -1304,6 +1368,17 @@ fn eval_expression(
                     let comp = lu_dog.read().unwrap().exhume_comparison(comp).unwrap();
                     let comp = comp.read().unwrap();
                     match &*comp {
+                        Comparison::GreaterThan(_) => {
+                            let value = lhs.read().unwrap().lte(&rhs.unwrap().read().unwrap());
+                            let value = Value::Boolean(value);
+                            let ty = Ty::new_boolean();
+                            let ty = ValueType::new_ty(
+                                &Arc::new(RwLock::new(ty)),
+                                &mut lu_dog.write().unwrap(),
+                            );
+
+                            Ok((Arc::new(RwLock::new(value)), ty))
+                        }
                         Comparison::LessThanOrEqual(_) => {
                             let value = lhs.read().unwrap().lte(&rhs.unwrap().read().unwrap());
                             let value = Value::Boolean(value);
@@ -1451,6 +1526,53 @@ fn eval_expression(
             ))
         }
         //
+        // TypeCast
+        //
+        Expression::TypeCast(ref expr) => {
+            let sarzak = context.sarzak.clone();
+
+            let expr = lu_dog.read().unwrap().exhume_type_cast(expr).unwrap();
+            debug!("Expression::TypeCast", expr);
+
+            let lhs = expr.read().unwrap().r68_expression(&lu_dog.read().unwrap())[0].clone();
+            let as_ty = expr.read().unwrap().r69_value_type(&lu_dog.read().unwrap())[0].clone();
+
+            let (lhs, _lhs_ty) = eval_expression(lhs, context)?;
+
+            let value = match &*as_ty.read().unwrap() {
+                ValueType::Ty(ref ty) => {
+                    // 🚧 WTF?
+                    let ty = sarzak.read().unwrap().exhume_ty(ty).unwrap().clone();
+                    match ty {
+                        Ty::Float(_) => {
+                            let value: f64 = (&*lhs.read().unwrap()).try_into()?;
+                            Arc::new(RwLock::new(Value::Float(value)))
+                        }
+                        ref alpha => {
+                            ensure!(
+                                false,
+                                UnimplementedSnafu {
+                                    message: format!("deal with type cast as: {:?}", alpha),
+                                }
+                            );
+                            unreachable!();
+                        }
+                    }
+                }
+                ref alpha => {
+                    ensure!(
+                        false,
+                        UnimplementedSnafu {
+                            message: format!("deal with type cast as: {:?}", alpha),
+                        }
+                    );
+                    unreachable!();
+                }
+            };
+
+            Ok((value, as_ty))
+        }
+        //
         // VariableExpression
         //
         Expression::VariableExpression(ref expr) => {
@@ -1501,7 +1623,7 @@ fn eval_expression(
             debug!("Expression::XIf conditional", cond);
 
             let cond = cond.read().unwrap();
-            let (value, ty) = if (&*cond).try_into()? {
+            Ok(if (&*cond).try_into()? {
                 // Evaluate the true block
                 let block = lu_dog
                     .read()
@@ -1522,9 +1644,7 @@ fn eval_expression(
                         ValueType::new_empty(&lu_dog.read().unwrap()),
                     )
                 }
-            };
-
-            Ok((value, ty))
+            })
         }
         //
         // XReturn
@@ -1541,6 +1661,41 @@ fn eval_expression(
                 value: value,
                 ty: ty,
             })
+        }
+        //
+        // ZNone
+        //
+        Expression::ZNone(_) => Ok((
+            Arc::new(RwLock::new(Value::Empty)),
+            ValueType::new_empty(&lu_dog.read().unwrap()),
+        )),
+        //
+        // ZSome
+        //
+        Expression::ZSome(ref some) => {
+            let some = lu_dog.read().unwrap().exhume_z_some(some).unwrap();
+            debug!("Expression::ZSome", some);
+
+            let value = &some.read().unwrap().r23_x_value(&lu_dog.read().unwrap())[0];
+            let option = &some.read().unwrap().r3_woog_option(&lu_dog.read().unwrap())[0];
+            let ty = &option
+                .read()
+                .unwrap()
+                .r2_value_type(&lu_dog.read().unwrap())[0];
+
+            let value = match value.read().unwrap().subtype {
+                XValueEnum::Expression(ref expr) => {
+                    let expr = lu_dog.read().unwrap().exhume_expression(expr).unwrap();
+                    let (value, _ty) = eval_expression(expr, context)?;
+                    value
+                }
+                XValueEnum::Variable(ref var) => {
+                    let var = lu_dog.read().unwrap().exhume_variable(var).unwrap();
+                    Arc::new(RwLock::new(Value::Empty))
+                }
+            };
+
+            Ok((value, ty.clone()))
         }
         ref alpha => {
             ensure!(
@@ -2070,7 +2225,7 @@ pub fn start_repl(mut context: Context) -> Result<(), Error> {
     let type_style = Colour::Blue.italic().dimmed();
 
     #[derive(Completer, Helper, Highlighter, Hinter)]
-    struct DwarfValidator {};
+    struct DwarfValidator {}
 
     impl DwarfValidator {
         fn validate(&self, input: &str) -> ValidationResult {
@@ -2192,7 +2347,7 @@ pub fn start_repl(mut context: Context) -> Result<(), Error> {
 /// Display the banner
 pub fn banner() -> String {
     let strings: &[ANSIString<'static>] = &[
-        RGB(85, 37, 134).paint(
+        RGB(255, 184, 0).paint(
             r"
 ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣴⣄⠀⢠⣾⣆⠀⣠⣶⡀⠀⠀⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
 ⠀⠀⠀⠀⠀⠀⠀⠀⠀⡀⠀⠀⣼⣿⣦⣼⣿⣿⣷⣿⣿⣿⣶⣿⣿⣧⣤⣾⣿⠀⠀⢀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
@@ -2201,44 +2356,85 @@ pub fn banner() -> String {
 ⠀⠀⠀⢀⣀⣀⣿⣿⣿⣿⡿⠟⠁⠀⠀⠀⠀⠀⢸⣿⣿⣿⣿⣿⣿⣿⠀⠀⠈⠙⢿⣿⣿⣿⣿⣀⣀⣀⠀⠀⠀⠀
 ",
         ),
-        RGB(106, 53, 156).paint(
+        RGB(255, 156, 0).paint(
             r"⠀⠀⠀⠘⣿⣿⣿⣿⣿⠏⠀⠀⠀⠀⠀⠀⠀⠀⠸⠿⠿⣿⣿⣿⣿⣿⠀⠀⠀⠀⠀⠙⢿⣿⣿⣿⣿⡏⠀⠀⠀⠀
 ⠀⢠⣤⣤⣿⣿⣿⡿⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣿⣿⣿⣿⣿⠀⠀⠀⠀⠀⠀⠀⢻⣿⣿⣿⣦⣤⣄⠀⠀
 ⠀⠈⢻⣿⣿⠿⢿⣧⠀⠀⠀⠀⠀⠀⢀⣀⣀⣀⡀⠀⠀⣿⣿⣿⣿⣿⠀⠀⠀⠀⠀⠀⠀⣰⣿⠿⢿⣿⡿⠁⠀⠀
 ⢠⣴⣾⣿⣇⠀⣨⣿⡇⠀⠀⠀⣠⣾⣿⣿⣿⣿⣿⣷⣄⣿⣿⣿⣿⣿⠀⠀⠀⠀⠀⠀⢰⣿⣇⠀⣨⣿⣷⣦⣤⠀
 ",
         ),
-        RGB(128, 79, 179).paint(
+        RGB(255, 128, 0).paint(
             r"⠈⠻⣿⣿⣿⡿⠟⠋⠁⠀⠀⣰⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠀⠀⠀⠀⠀⠀⠀⠉⠛⢿⣿⣿⣿⡟⠁⠀
 ⣤⣶⣿⣿⣿⡇⠀⠀⠀⠀⢰⣿⣿⣿⣿⣿⠟⠛⠛⠻⣿⣿⣿⣿⣿⣿⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣿⣿⣿⣷⣦⡀
 ",
         ),
         // Colour::Yellow.italic().paint("ChaCha:\n"),
-        RGB(128, 79, 179).paint(
+        RGB(255, 128, 0).paint(
             r"⠉⠻⣿⣿⣿⡇⠀⠀⠀⠀⣿⣿⣿⣿⣿⡏⠀⠀⠀⠀⠘⣿⣿⣿⣿⣿⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣿⣿⣿⡟⠋⠀
 ",
         ),
         // Colour::Green.italic().paint("a dwarf language REPL.\n"),
-        RGB(128, 79, 179).paint(
+        RGB(255, 128, 0).paint(
             r"⢠⣾⣿⣿⣿⣧⠀⠀⠀⠀⣿⣿⣿⣿⣿⠀⠀⠀⠀⠀⠀⣿⣿⣿⣿⣿⠀⠀⠀⠀⠀⠀⠀⠀⠀⢸⣿⣿⣿⣷⣄⠀
 ",
         ),
-        RGB(153, 105, 199).paint(
+        RGB(255, 102, 0).paint(
             r"⠈⠙⢻⣿⣿⣿⡄⠀⠀⠀⣿⣿⣿⣿⣿⠀⠀⠀⠀⠀⠀⣿⣿⣿⣿⣿⠀⠀⠀⠀⠀⠀⠀⠀⢀⣿⣿⣿⡟⠛⠉⠀
 ⠀⢠⣾⣿⣿⣿⣷⡀⠀⠀⣿⣿⣿⣿⣿⣇⠀⠀⠀⠀⢠⣿⣿⣿⣿⣿⠀⠀⠀⠀⠀⠀⠀⠀⣼⣿⣿⣿⣿⣄⠀⠀
 ⠀⠈⠉⠉⣿⣿⣿⣿⣄⠀⠸⣿⣿⣿⣿⣿⣦⣀⣀⣴⣿⣿⣿⣿⣿⣿⣀⣀⡀⠀⠀⠀⢀⣾⣿⣿⣿⡋⠉⠁⠀⠀
 ⠀⠀⠀⢰⣿⣿⣿⣿⣿⣶⣶⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣶⣶⣶⣿⣿⣿⣿⣿⣧⠀⠀⠀⠀
 ",
         ),
-        RGB(181, 137, 214).paint(
+        RGB(255, 67, 0).paint(
             r"⠀⠀⠀⠀⠀⠀⣿⣿⣿⣿⡁⠀⢹⣿⣿⣿⣿⣿⣿⡿⠋⣿⣿⣿⣿⣿⣿⣿⣟⠀⠈⣿⣿⣿⣿⡀⠀⠀⠀⠀⠀⠀
 ⠀⠀⠀⠀⠀⠀⠟⠛⠛⣿⣿⣶⣿⣿⣿⣿⣿⣉⣉⣀⣀⣉⣉⣉⣭⣽⣿⣿⣿⣷⣾⣿⡟⠛⠻⠃⠀⠀⠀⠀⠀⠀
 ⠀⠀⠀⠀⠀⠀⠀⠀⠀⣿⠿⠛⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠛⠻⢿⠇⠀⠀⠀⠀⠀⠀⠀⠀⠀
 ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢹⠿⠋⠹⣿⣿⠿⢿⣿⣿⠿⣿⣿⡟⠙⠻⡿⠀⠀⠀      ",
         ),
         Colour::Yellow.italic().paint("ChaCha:\n"),
-        RGB(181, 137, 214).paint(r"⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠛⠁⠀⠈⠿⠃⠀⠈⠛⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀"),
+        RGB(255, 67, 0).paint(r"⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠛⠁⠀⠈⠿⠃⠀⠈⠛⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀"),
         Colour::Green.paint("a dwarf language interpreter\n\n"),
+    ];
+
+    format!("{}", ANSIStrings(strings))
+}
+
+pub fn banner2() -> String {
+    let strings: &[ANSIString<'static>] = &[
+        RGB(255, 184, 0).paint(
+            r"
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⢠⣀⠀⣿⣦⣠⣿⣦⣠⣿⡀⢀⣤⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⠀⠀⠀⠀⠀⣿⣶⣿⣿⣿⣿⣿⣿⠀⢹⣿⣿⣿⣿⣿⣶⣾⡇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⠀⠀⠸⣿⣿⣿⣿⠟⠉⠀⠀⠀⣿⣿⣿⣿⣿⣿⠉⠛⣿⣿⣿⣿⡿⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+",
+        ),
+        RGB(255, 156, 0).paint(
+            r"⠀⠀⠈⣿⣿⣿⣿⠉⠀⠀⠀⠀⠀⠀⣿⠿⣿⣿⣿⣿⠀⠀⠀⠈⢿⣿⣿⣿⠏⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣠⣶⠛⢿⣿⣦⠀⠀⠀
+⠀⢶⣿⣿⣿⣟⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣿⣿⣿⣿⠀⠀⠀⠀⠀⢙⣿⣿⣿⣿⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣿⣿⡟⠀⠀⠉⠉⠀⠀⠀
+⣠⣶⣿⣅⠀⣿⡆⠀⠀⢠⣾⣿⣿⣿⣿⣄⣿⣿⣿⣿⠀⠀⠀⠀⠀⣿⡀⢀⣿⣶⣤⠰⣶⣶⣶⣶⠶⠀⠰⣶⣶⣶⡶⠀⠀⠶⣶⣶⡶⠀⣠⣶⠖⠲⣶⣶⡀⠀⠀⢠⣤⣶⣶⣶⢀⣶⣿⣦⣶⣶⣿⣿⣿⣶⣶⠀⠀⠀⠀⠀
+",
+        ),
+        RGB(255, 128, 0).paint(
+            r"⠀⣽⣿⣿⠉⠀⠀⠀⣼⣿⣿⣿⣿⡿⣿⣿⣿⣿⣿⣿⠀⠀⠀⠀⠀⠀⠈⣿⣿⣿⡀⠀⠀⢻⣿⣿⡄⠀⠀⠀⣿⣿⣷⠀⠀⠀⣿⠋⠀⠘⣿⡿⠀⠀⢹⣿⣿⠀⠀⠀⠀⣿⣿⣿⠉⠙⠿⠋⠀⠀⣿⣿⡟⠀⠀⠀⠀⠀⠀⠀
+⠉⢻⣿⣿⠀⠀⠀⢰⣿⣿⣿⡟⠀⠀⠀⠘⣿⣿⣿⣿⠀⠀⠀⠀⠀⠀⠀⣿⣿⣿⠋⠀⠀⠀⢿⣿⣿⡀⠀⣿⠉⣿⣿⣧⠀⣼⠋⠀⠀⠀⣠⣶⡾⠋⢹⣿⣿⠀⠀⠀⠀⣿⣿⣿⠀⠀⠀⠀⠀⠀⣿⣿⡟⠀⠀⠀⠀⠀⠀⠀
+⠺⣿⣿⣿⣆⠀⠀⢸⣿⣿⣿⡇⠀⠀⠀⠀⣿⣿⣿⣿⠀⠀⠀⠀⠀⠀⢀⣿⣿⣿⠿⠀⠀⠀⠀⣿⣿⣿⣾⠁⠀⠘⣿⣿⣶⠏⠀⠀⠀⣿⣿⣿⠀⠀⢸⣿⣿⠀⠀⠀⠀⣿⣿⣿⠀⠀⠀⠀⠀⠀⣿⣿⣿⠀⠀⠀⠀⠀⠀⠀
+",
+        ),
+        RGB(255, 102, 0).paint(
+            r"⠀⣴⣿⣿⣿⣄⠀⠘⣿⣿⣿⣷⠀⠀⠀⢠⣿⣿⣿⣿⠀⠀⠀⠀⠀⢀⣿⣿⣿⣷⠀⠀⠀⠀⠀⠀⠿⠿⠁⠀⠀⠀⠻⠿⠟⠀⠀⠀⠀⠈⠻⠿⠿⠋⠈⠿⠿⠟⠉⠐⠚⠛⠛⠛⠓⠒⠀⠀⠒⠛⠛⠛⠛⠓⠒⠀⠀⠀⠀⠀
+⠀⠀⢀⣿⣿⣿⣷⣀⣿⣿⣿⣿⣿⣶⣾⣿⣿⣿⣿⣿⣶⣶⣄⣀⣴⣿⣿⣿⡄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⠀⠀⢠⣿⣿⣿⠀⣹⣿⣿⣿⣿⡿⠋⣿⣿⣿⣿⣿⣿⠀⢹⣿⣿⣧⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+",
+        ),
+        RGB(255, 67, 0).paint(
+            r"⠀⠀⠀⠀⠀⠀⠀⣿⣿⣿⣿⣿⣿⣶⣶⣶⣶⣶⣿⣿⣿⣿⣿⣿⡇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠻⠛⠉⣿⡿⠻⣿⡿⠻⣿⠋⠙⠿⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+",
+        ),
+        // Colour::Yellow.italic().paint("ChaCha:\n"),
+        // RGB(255, 67, 0).paint(r"⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠛⠁⠀⠈⠿⠃⠀⠈⠛⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀"),
+        // Colour::Green.paint("a dwarf language interpreter\n\n"),
     ];
 
     format!("{}", ANSIStrings(strings))

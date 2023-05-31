@@ -11,7 +11,7 @@ use chacha::{
     dap::DapAdapter,
     dwarf::{parse_dwarf, populate_lu_dog, DwarfError},
     initialize_interpreter,
-    interpreter::{banner, initialize_interpreter_paths, start_main, start_vm},
+    interpreter::{banner, banner2, initialize_interpreter_paths, start_main, start_vm},
     // merlin::{ErrorExpressionProxy, ExpressionProxy},
     // merlin::{
     //     AnchorProxy, BisectionProxy, EdgeProxy, GlyphProxy, LineProxy, LineSegmentPointProxy,
@@ -183,7 +183,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         // // let stdin = io::stdin(); // We get `Stdin` here.
         // // stdin.read_line(&mut buffer)?;
         // } else {
-        println!("{}", banner());
+        println!("{}", banner2());
+
+        // start_main(false, ctx).map_err(|e| {
+        //     println!("Interpreter exited with: {}", e);
+        //     e
+        // })?;
 
         start_repl(ctx).map_err(|e| {
             println!("Interpreter exited with: {}", e);

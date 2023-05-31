@@ -23,11 +23,14 @@ use crate::lu_dog::types::print::Print;
 use crate::lu_dog::types::range_expression::RangeExpression;
 use crate::lu_dog::types::result_statement::ResultStatement;
 use crate::lu_dog::types::struct_expression::StructExpression;
+use crate::lu_dog::types::type_cast::TypeCast;
 use crate::lu_dog::types::variable_expression::VariableExpression;
 use crate::lu_dog::types::x_if::XIf;
 use crate::lu_dog::types::x_return::XReturn;
 use crate::lu_dog::types::x_value::XValue;
 use crate::lu_dog::types::x_value::XValueEnum;
+use crate::lu_dog::types::z_none::Z_NONE;
+use crate::lu_dog::types::z_some::ZSome;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 // {"magic":"","directive":{"End":{"directive":"ignore-orig"}}}
@@ -46,6 +49,7 @@ pub enum Expression {
     Debugger(Uuid),
     ErrorExpression(Uuid),
     FieldAccess(Uuid),
+    FieldExpression(Uuid),
     ForLoop(Uuid),
     Grouped(Uuid),
     XIf(Uuid),
@@ -53,11 +57,14 @@ pub enum Expression {
     ListElement(Uuid),
     ListExpression(Uuid),
     Literal(Uuid),
+    ZNone(Uuid),
     Operator(Uuid),
     Print(Uuid),
     RangeExpression(Uuid),
     XReturn(Uuid),
+    ZSome(Uuid),
     StructExpression(Uuid),
+    TypeCast(Uuid),
     VariableExpression(Uuid),
 }
 // {"magic":"","directive":{"End":{"directive":"ignore-orig"}}}
@@ -120,6 +127,24 @@ impl Expression {
         } else {
             let new = Arc::new(RwLock::new(Self::FieldAccess(
                 field_access.read().unwrap().id,
+            )));
+            store.inter_expression(new.clone());
+            new
+        }
+    }
+
+    /// Create a new instance of Expression::FieldExpression
+    pub fn new_field_expression(
+        field_expression: &Arc<RwLock<FieldExpression>>,
+        store: &mut LuDogStore,
+    ) -> Arc<RwLock<Self>> {
+        if let Some(field_expression) =
+            store.exhume_expression(&field_expression.read().unwrap().id)
+        {
+            field_expression
+        } else {
+            let new = Arc::new(RwLock::new(Self::FieldExpression(
+                field_expression.read().unwrap().id,
             )));
             store.inter_expression(new.clone());
             new
@@ -223,6 +248,12 @@ impl Expression {
         }
     }
 
+    /// Create a new instance of Expression::ZNone
+    pub fn new_z_none(store: &LuDogStore) -> Arc<RwLock<Self>> {
+        // This is already in the store.
+        store.exhume_expression(&Z_NONE).unwrap()
+    }
+
     /// Create a new instance of Expression::Operator
     pub fn new_operator(
         operator: &Arc<RwLock<Operator>>,
@@ -280,6 +311,17 @@ impl Expression {
         }
     }
 
+    /// Create a new instance of Expression::ZSome
+    pub fn new_z_some(z_some: &Arc<RwLock<ZSome>>, store: &mut LuDogStore) -> Arc<RwLock<Self>> {
+        if let Some(z_some) = store.exhume_expression(&z_some.read().unwrap().id) {
+            z_some
+        } else {
+            let new = Arc::new(RwLock::new(Self::ZSome(z_some.read().unwrap().id)));
+            store.inter_expression(new.clone());
+            new
+        }
+    }
+
     /// Create a new instance of Expression::StructExpression
     pub fn new_struct_expression(
         struct_expression: &Arc<RwLock<StructExpression>>,
@@ -293,6 +335,20 @@ impl Expression {
             let new = Arc::new(RwLock::new(Self::StructExpression(
                 struct_expression.read().unwrap().id,
             )));
+            store.inter_expression(new.clone());
+            new
+        }
+    }
+
+    /// Create a new instance of Expression::TypeCast
+    pub fn new_type_cast(
+        type_cast: &Arc<RwLock<TypeCast>>,
+        store: &mut LuDogStore,
+    ) -> Arc<RwLock<Self>> {
+        if let Some(type_cast) = store.exhume_expression(&type_cast.read().unwrap().id) {
+            type_cast
+        } else {
+            let new = Arc::new(RwLock::new(Self::TypeCast(type_cast.read().unwrap().id)));
             store.inter_expression(new.clone());
             new
         }
@@ -325,6 +381,7 @@ impl Expression {
             Expression::Debugger(id) => *id,
             Expression::ErrorExpression(id) => *id,
             Expression::FieldAccess(id) => *id,
+            Expression::FieldExpression(id) => *id,
             Expression::ForLoop(id) => *id,
             Expression::Grouped(id) => *id,
             Expression::XIf(id) => *id,
@@ -332,11 +389,14 @@ impl Expression {
             Expression::ListElement(id) => *id,
             Expression::ListExpression(id) => *id,
             Expression::Literal(id) => *id,
+            Expression::ZNone(id) => *id,
             Expression::Operator(id) => *id,
             Expression::Print(id) => *id,
             Expression::RangeExpression(id) => *id,
             Expression::XReturn(id) => *id,
+            Expression::ZSome(id) => *id,
             Expression::StructExpression(id) => *id,
+            Expression::TypeCast(id) => *id,
             Expression::VariableExpression(id) => *id,
         }
     }
@@ -556,6 +616,15 @@ impl Expression {
         store
             .iter_x_return()
             .filter(|x_return| x_return.read().unwrap().expression == self.id())
+            .collect()
+    }
+    // {"magic":"","directive":{"End":{"directive":"ignore-orig"}}}
+    // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"expression-struct-impl-nav-backward-1_M-to-type_cast"}}}
+    /// Navigate to [`TypeCast`] across R68(1-M)
+    pub fn r68_type_cast<'a>(&'a self, store: &'a LuDogStore) -> Vec<Arc<RwLock<TypeCast>>> {
+        store
+            .iter_type_cast()
+            .filter(|type_cast| type_cast.read().unwrap().lhs == self.id())
             .collect()
     }
     // {"magic":"","directive":{"End":{"directive":"ignore-orig"}}}

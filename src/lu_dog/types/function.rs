@@ -5,6 +5,7 @@ use std::sync::{Arc, RwLock};
 use uuid::Uuid;
 
 use crate::lu_dog::types::block::Block;
+use crate::lu_dog::types::field_access_target::FieldAccessTarget;
 use crate::lu_dog::types::implementation::Implementation;
 use crate::lu_dog::types::item::Item;
 use crate::lu_dog::types::item::ItemEnum;
@@ -18,7 +19,7 @@ use crate::lu_dog::store::ObjectStore as LuDogStore;
 // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"function-struct-documentation"}}}
 /// A Function
 ///
-/// Inputs, outputs. Stuff happens. 😎
+/// Inputs, outputs. Stuff happens.
 ///
 // {"magic":"","directive":{"End":{"directive":"ignore-orig"}}}
 // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"function-struct-definition"}}}
@@ -88,6 +89,15 @@ impl Function {
             .iter_parameter()
             .filter(|parameter| parameter.read().unwrap().function == self.id)
             .collect()
+    }
+    // {"magic":"","directive":{"End":{"directive":"ignore-orig"}}}
+    // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"function-impl-nav-subtype-to-supertype-field_access_target"}}}
+    // Navigate to [`FieldAccessTarget`] across R67(isa)
+    pub fn r67_field_access_target<'a>(
+        &'a self,
+        store: &'a LuDogStore,
+    ) -> Vec<Arc<RwLock<FieldAccessTarget>>> {
+        vec![store.exhume_field_access_target(&self.id).unwrap()]
     }
     // {"magic":"","directive":{"End":{"directive":"ignore-orig"}}}
     // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"function-impl-nav-subtype-to-supertype-item"}}}

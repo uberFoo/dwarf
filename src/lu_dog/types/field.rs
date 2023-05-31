@@ -4,6 +4,7 @@ use std::sync::{Arc, RwLock};
 
 use uuid::Uuid;
 
+use crate::lu_dog::types::field_access_target::FieldAccessTarget;
 use crate::lu_dog::types::value_type::ValueType;
 use crate::lu_dog::types::woog_struct::WoogStruct;
 use serde::{Deserialize, Serialize};
@@ -59,6 +60,16 @@ impl Field {
     /// Navigate to [`ValueType`] across R5(1-*)
     pub fn r5_value_type<'a>(&'a self, store: &'a LuDogStore) -> Vec<Arc<RwLock<ValueType>>> {
         vec![store.exhume_value_type(&self.ty).unwrap()]
+    }
+    // {"magic":"","directive":{"End":{"directive":"ignore-orig"}}}
+    // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"field-struct-impl-nav-backward-1_M-to-field_access"}}}
+    // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"field-impl-nav-subtype-to-supertype-field_access_target"}}}
+    // Navigate to [`FieldAccessTarget`] across R67(isa)
+    pub fn r67_field_access_target<'a>(
+        &'a self,
+        store: &'a LuDogStore,
+    ) -> Vec<Arc<RwLock<FieldAccessTarget>>> {
+        vec![store.exhume_field_access_target(&self.id).unwrap()]
     }
     // {"magic":"","directive":{"End":{"directive":"ignore-orig"}}}
 }

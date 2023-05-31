@@ -58,6 +58,11 @@ pub enum Value {
     Empty,
     Error(String),
     Float(DwarfFloat),
+    /// Function
+    ///
+    /// 🚧 I really need to write something here describing, once and for all,
+    /// why I need the inner Function to be behind an Arc<RwLock<T>>. It seems
+    /// excessive, and yet I know I've looked into it before.
     Function(Arc<RwLock<Function>>),
     Integer(DwarfInteger),
     Option(Option<Arc<RwLock<Self>>>),
@@ -361,27 +366,13 @@ impl std::ops::Add for Value {
     fn add(self, other: Self) -> Self {
         match (self, other) {
             (Value::Float(a), Value::Float(b)) => Value::Float(a + b),
-            // (Value::Float(a), Value::Integer(b)) => Value::Float(a + b as f64),
-            // (Value::Integer(a), Value::Float(b)) => Value::Float(a as f64 + b),
             (Value::Integer(a), Value::Integer(b)) => Value::Integer(a + b),
             (Value::String(a), Value::String(b)) => Value::String(a + &b),
             (Value::Char(a), Value::Char(b)) => Value::String(a.to_string() + &b.to_string()),
             (Value::Char(a), Value::String(b)) => Value::String(a.to_string() + &b),
             (Value::String(a), Value::Char(b)) => Value::String(a + &b.to_string()),
-            // (Value::Vector(a), Value::Vector(b)) => Value::Vector(a + &b),
-            // (Value::Table(a), Value::Table(b)) => Value::Table(a + &b),
-            // (Value::Uuid(a), Value::Uuid(b)) => Value::Uuid(a + &b),
-            // (Value::UserType(a), Value::UserType(b)) => {
-            //     // Maybe look for an add function for the user type?
-            //     let c = a;
-            //     Value::UserType(a + &b)
-            // },
-            // (Value::ProxyType(a), Value::ProxyType(b)) => Value::ProxyType(a + &b),
-            // (Value::Option(a), Value::Option(b)) => Value::Option(a + &b),
-            // (Value::Reflexive, Value::Reflexive) => Value::Reflexive,
             (Value::Empty, Value::Empty) => Value::Empty,
             (Value::Boolean(a), Value::Boolean(b)) => Value::Boolean(a || b),
-            // (Value::Error(a), Value::Error(b)) => Value::Error(a + &b),
             (a, b) => {
                 dbg!(&a, &b);
                 Value::Error(format!("Cannot add {} and {}", a, b))
@@ -399,21 +390,65 @@ impl std::ops::Sub for Value {
     fn sub(self, other: Self) -> Self {
         match (self, other) {
             (Value::Float(a), Value::Float(b)) => Value::Float(a - b),
-            (Value::Float(a), Value::Integer(b)) => Value::Float(a - b as f64),
-            (Value::Integer(a), Value::Float(b)) => Value::Float(a as f64 - b),
             (Value::Integer(a), Value::Integer(b)) => Value::Integer(a - b),
-            // (Value::String(a), Value::String(b)) => Value::String(a + &b),
-            // (Value::Vector(a), Value::Vector(b)) => Value::Vector(a + &b),
-            // (Value::Table(a), Value::Table(b)) => Value::Table(a + &b),
-            // (Value::Uuid(a), Value::Uuid(b)) => Value::Uuid(a + &b),
-            // (Value::UserType(a), Value::UserType(b)) => Value::UserType(a + &b),
-            // (Value::ProxyType(a), Value::ProxyType(b)) => Value::ProxyType(a + &b),
-            // (Value::Option(a), Value::Option(b)) => Value::Option(a + &b),
-            // (Value::Reflexive, Value::Reflexive) => Value::Reflexive,
             (Value::Empty, Value::Empty) => Value::Empty,
             (Value::Boolean(a), Value::Boolean(b)) => Value::Boolean(a && b),
-            // (Value::Error(a), Value::Error(b)) => Value::Error(a + &b),
             (a, b) => Value::Error(format!("Cannot subtract {} and {}", a, b)),
+        }
+    }
+}
+
+/// Multiplication operator for Value
+///
+/// Implement the multiplication trait for Value.
+impl std::ops::Mul for Value {
+    type Output = Self;
+
+    fn mul(self, other: Self) -> Self {
+        match (self, other) {
+            (Value::Float(a), Value::Float(b)) => Value::Float(a * b),
+            (Value::Integer(a), Value::Integer(b)) => Value::Integer(a * b),
+            (Value::Empty, Value::Empty) => Value::Empty,
+            (a, b) => {
+                dbg!(&a, &b);
+                Value::Error(format!("Cannot multiply {} and {}", a, b))
+            }
+        }
+    }
+}
+
+/// Division operator for Value
+///
+/// Implement the division trait for Value.
+impl std::ops::Div for Value {
+    type Output = Self;
+
+    fn div(self, other: Self) -> Self {
+        match (self, other) {
+            (Value::Float(a), Value::Float(b)) => Value::Float(a / b),
+            (Value::Integer(a), Value::Integer(b)) => Value::Integer(a / b),
+            (Value::Empty, Value::Empty) => Value::Empty,
+            (a, b) => {
+                dbg!(&a, &b);
+                Value::Error(format!("Cannot divide {} and {}", a, b))
+            }
+        }
+    }
+}
+
+/// Greater than operator for Value
+///
+///
+impl Value {
+    pub fn gt(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Value::Float(a), Value::Float(b)) => a > b,
+            (Value::Integer(a), Value::Integer(b)) => a > b,
+            (Value::String(a), Value::String(b)) => a > b,
+            (Value::Char(a), Value::Char(b)) => a > b,
+            (Value::Empty, Value::Empty) => true,
+            (Value::Boolean(a), Value::Boolean(b)) => a > b,
+            (_, _) => false, //Value::Error(format!("Cannot compare {} and {}", a, b)),
         }
     }
 }
@@ -425,20 +460,11 @@ impl Value {
     pub fn lte(&self, other: &Self) -> bool {
         match (self, other) {
             (Value::Float(a), Value::Float(b)) => a <= b,
-            // (Value::Float(a), Value::Integer(b)) => a <= *b as f64,
-            // (Value::Integer(a), Value::Float(b)) => *a as f64 <= b,
             (Value::Integer(a), Value::Integer(b)) => a <= b,
             (Value::String(a), Value::String(b)) => a <= b,
-            // (Value::Vector(a), Value::Vector(b)) => a <= b,
-            // (Value::Table(a), Value::Table(b)) => a <= b,
-            // (Value::Uuid(a), Value::Uuid(b)) => a <= b,
-            // (Value::UserType(a), Value::UserType(b)) => a <= b,
-            // (Value::ProxyType(a), Value::ProxyType(b)) => a <= b,
-            // (Value::Option(a), Value::Option(b)) => a <= b,
-            // (Value::Reflexive, Value::Reflexive) => true,
+            (Value::Char(a), Value::Char(b)) => a <= b,
             (Value::Empty, Value::Empty) => true,
             (Value::Boolean(a), Value::Boolean(b)) => a <= b,
-            // (Value::Error(a), Value::Error(b)) => a <= b,
             (_, _) => false, //Value::Error(format!("Cannot compare {} and {}", a, b)),
         }
     }

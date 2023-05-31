@@ -1,24 +1,84 @@
 struct Complex {
-    re: f64,
-    im: f64,
+    re: float,
+    im: float,
 }
 
 impl Complex {
+    fn zero() -> Complex {
+        Complex { re: 0.0, im: 0.0 }
+    }
+
+    fn one() -> Complex {
+        Complex { re: 1.0, im: 0.0 }
+    }
+
     fn add(self: Complex, other: Complex) -> Complex {
         Complex {
             re: self.re + other.re,
             im: self.im + other.im,
         }
     }
+
+    fn square(self: Complex) -> Complex {
+        Complex {
+            re: self.re * self.re - self.im * self.im,
+            im: 2.0 * self.re * self.im,
+        }
+    }
+
+    fn norm_squared(self: Complex) -> float {
+        self.re * self.re + self.im * self.im
+    }
+}
+
+fn pixel_to_point(
+    width: int,
+    height: int,
+    pixel_x: int,
+    pixel_y: int,
+    upper_left: Complex,
+    lower_right: Complex,
+) -> Complex {
+    let w = lower_right.re - upper_left.re;
+    let h = upper_left.im - lower_right.im;
+    Complex {
+        re: upper_left.re + pixel_x as float * w / width as float,
+        im: upper_left.im - pixel_y as float * h / height as float,
+    }
+}
+
+fn escape_time(c: Complex, limit: int) -> Option<int> {
+    // debugger;
+    let z = Complex::zero();
+    for i in 0..limit {
+        let z = z.square(z).add(z, c);
+        if z.norm_squared(z) > 4.0 {
+            return Some(i);
+        }
+    }
+    None
 }
 
 fn main() -> Complex {
-    // let buffer = Term::buffer();
-    // debugger;
-    let zero = Complex { re: 0.0, im: 0.0 };
-    let one = Complex { re: 1.0, im: 0.0 };
-    print(one.re);
-    print(one.im);
-    // print(zero.add(one));
-    one
+    let width = 5;
+    let height = 5;
+    let upper_left = Complex { re: 1.20, im: 0.35 };
+    let lower_right = Complex { re: 1.0, im: 0.20 };
+    // let row = 0;
+    // let column = 0;
+
+    for row in 0..height {
+        for column in 0..width {
+            let point = pixel_to_point(width, height, column, row, upper_left, lower_right);
+            // print(point);
+            print(escape_time(point, 255));
+            // let time = escape_time(point, 255);
+            // print(time);
+            // if time == Some({
+            //     Some(count) => print(count),
+            //     None => print(" "),
+            // }
+        }
+        print("\n");
+    }
 }
