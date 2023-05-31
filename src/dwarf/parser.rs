@@ -100,6 +100,7 @@ const PATH: (u8, u8) = (100, 100);
 const METHOD: (u8, u8) = (90, 91);
 const FIELD: (u8, u8) = (80, 81);
 const FUNC_CALL: (u8, u8) = (70, 71);
+const MINUS: (u8, u8) = (60, 61);
 const AS_OP: (u8, u8) = (55, 56);
 const MUL_DIV: (u8, u8) = (52, 53);
 const ADD_SUB: (u8, u8) = (50, 51);
@@ -1138,7 +1139,7 @@ impl DwarfParser {
     ///               list | method_call |print |
     ///               static_method_call | struct
     fn parse_expression_without_block(&mut self, power: u8) -> Result<Option<Expression>> {
-        error!("enter", power);
+        debug!("enter", power);
 
         let lhs = if let Some(mut lhs) = self.parse_simple_expression()? {
             debug!("simple expression", lhs);
@@ -1255,6 +1256,12 @@ impl DwarfParser {
         // parse a list literal
         if let Some(expression) = self.parse_list_literal()? {
             debug!("list literal", expression);
+            return Ok(Some(expression));
+        }
+
+        // parse a negation operator
+        if let Some(expression) = self.parse_negation_operator()? {
+            debug!("negation operator", expression);
             return Ok(Some(expression));
         }
 
@@ -1437,6 +1444,53 @@ impl DwarfParser {
         } else {
             None
         }
+    }
+
+    /// Parse a negation operator
+    ///
+    /// negation -> '-' expression
+    fn parse_negation_operator(&mut self) -> Result<Option<Expression>> {
+        debug!("enter");
+
+        let start = if let Some(tok) = self.peek() {
+            tok.1.start
+        } else {
+            debug!("exit no tok");
+            return Ok(None);
+        };
+
+        if !self.match_(&[Token::Punct('-')]) {
+            debug!("exit no for");
+            return Ok(None);
+        }
+
+        debug!("getting expression");
+
+        debug!("getting collection");
+
+        let operand = if let Some(expr) = self.parse_expression(MINUS.1)? {
+            debug!("minus operand", expr);
+            expr
+        } else {
+            let token = &self.previous().unwrap();
+            let err = Simple::expected_input_found(
+                token.1.clone(),
+                [Some("<expression -> there's a lot of them...>".to_owned())],
+                Some(token.0.to_string()),
+            );
+            error!("exit", err);
+            return Err(err);
+        };
+
+        debug!("exit ok");
+
+        Ok(Some((
+            (
+                DwarfExpression::Negation(Box::new(operand.0)),
+                start..self.previous().unwrap().1.end,
+            ),
+            MINUS,
+        )))
     }
 
     /// Parse a for loop expression

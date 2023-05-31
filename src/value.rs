@@ -404,7 +404,7 @@ impl std::ops::Sub for Value {
 impl std::ops::Mul for Value {
     type Output = Self;
 
-    fn mul(self, other: Self) -> Self {
+    fn mul(self, other: Self) -> Self::Output {
         match (self, other) {
             (Value::Float(a), Value::Float(b)) => Value::Float(a * b),
             (Value::Integer(a), Value::Integer(b)) => Value::Integer(a * b),
@@ -413,6 +413,22 @@ impl std::ops::Mul for Value {
                 dbg!(&a, &b);
                 Value::Error(format!("Cannot multiply {} and {}", a, b))
             }
+        }
+    }
+}
+
+/// Negation Operator
+///
+/// Implement negation trait for Value
+impl std::ops::Neg for Value {
+    type Output = Self;
+
+    fn neg(self) -> Self::Output {
+        match self {
+            Value::Float(a) => Value::Float(-a),
+            Value::Integer(a) => Value::Integer(-a),
+            Value::Empty => Value::Empty,
+            a => Value::Error(format!("Cannot negate {}", a)),
         }
     }
 }

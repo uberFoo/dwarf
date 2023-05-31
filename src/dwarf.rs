@@ -427,6 +427,7 @@ pub enum Expression {
     LocalVariable(String),
     MethodCall(Box<Spanned<Self>>, Spanned<String>, Vec<Spanned<Self>>),
     Multiplication(Box<Spanned<Self>>, Box<Spanned<Self>>),
+    Negation(Box<Spanned<Self>>),
     None,
     Print(Box<Spanned<Self>>),
     Range(Box<Spanned<Self>>, Box<Spanned<Self>>),

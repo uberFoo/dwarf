@@ -47,23 +47,48 @@ fn pixel_to_point(
     }
 }
 
-fn escape_time(c: Complex, limit: int) -> Option<int> {
+// fn escape_time(c: Complex, limit: int) -> Option<int> {
+//     // debugger;
+//     let z = Complex::zero();
+//     for i in 0..limit {
+//         let z = z.square(z).add(z, c);
+//         if z.norm_squared(z) > 4.0 {
+//             return Some(i);
+//         }
+//     }
+//     None
+// }
+
+fn escape_time(c: Complex, limit: int) -> int {
     // debugger;
     let z = Complex::zero();
     for i in 0..limit {
-        let z = z.square(z).add(z, c);
+        // 🚧 This let wreaks havoc -- fix it.
+        // Also the chained method calls don't affect the correct z, or something.
+        // let z = z.square(z).add(z, c);
+        z = z.square(z);
+        z = z.add(z, c);
         if z.norm_squared(z) > 4.0 {
-            return Some(i);
+            // debugger;
+            return i;
         }
     }
-    None
+    limit
 }
 
 fn main() -> Complex {
-    let width = 5;
-    let height = 5;
-    let upper_left = Complex { re: 1.20, im: 0.35 };
-    let lower_right = Complex { re: 1.0, im: 0.20 };
+    let width = 42;
+    let height = 14;
+    let upper_left = Complex { re: -2.5, im: 1.0 };
+    let lower_right = Complex { re: 2.0, im: -1.0 };
+    // let upper_left = Complex {
+    // re: -0.750222,
+    // im: 0.031161,
+    // };
+    // let lower_right = Complex {
+    // re: -0.749191,
+    // im: 0.031752,
+    // };
     // let row = 0;
     // let column = 0;
 
@@ -71,9 +96,14 @@ fn main() -> Complex {
         for column in 0..width {
             let point = pixel_to_point(width, height, column, row, upper_left, lower_right);
             // print(point);
-            print(escape_time(point, 255));
-            // let time = escape_time(point, 255);
+            // print(escape_time(point, 255));
+            let time = escape_time(point, 500);
             // print(time);
+            if time > 400 {
+                print("*");
+            } else {
+                print(" ");
+            }
             // if time == Some({
             //     Some(count) => print(count),
             //     None => print(" "),

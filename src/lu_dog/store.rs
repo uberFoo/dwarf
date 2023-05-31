@@ -39,6 +39,7 @@
 //! * [`Literal`]
 //! * [`LocalVariable`]
 //! * [`MethodCall`]
+//! * [`Negation`]
 //! * [`ZObjectStore`]
 //! * [`Operator`]
 //! * [`WoogOption`]
@@ -78,10 +79,10 @@ use crate::lu_dog::types::{
     ErrorExpression, Expression, ExpressionStatement, Field, FieldAccess, FieldAccessTarget,
     FieldExpression, FloatLiteral, ForLoop, Function, Grouped, Implementation, Import, Index,
     IntegerLiteral, Item, LetStatement, List, ListElement, ListExpression, Literal, LocalVariable,
-    MethodCall, Operator, Parameter, Print, RangeExpression, Reference, ResultStatement, Span,
-    Statement, StaticMethodCall, StringLiteral, StructExpression, TypeCast, ValueType, Variable,
-    VariableExpression, WoogOption, WoogStruct, XIf, XReturn, XValue, ZObjectStore, ZSome,
-    ADDITION, ASSIGNMENT, DEBUGGER, DIVISION, EMPTY, EQUAL, FALSE_LITERAL, GREATER_THAN,
+    MethodCall, Negation, Operator, Parameter, Print, RangeExpression, Reference, ResultStatement,
+    Span, Statement, StaticMethodCall, StringLiteral, StructExpression, TypeCast, ValueType,
+    Variable, VariableExpression, WoogOption, WoogStruct, XIf, XReturn, XValue, ZObjectStore,
+    ZSome, ADDITION, ASSIGNMENT, DEBUGGER, DIVISION, EMPTY, EQUAL, FALSE_LITERAL, GREATER_THAN,
     GREATER_THAN_OR_EQUAL, LESS_THAN_OR_EQUAL, MULTIPLICATION, RANGE, SUBTRACTION, TRUE_LITERAL,
     UNKNOWN, UNKNOWN_VARIABLE, Z_NONE,
 };
@@ -122,6 +123,7 @@ pub struct ObjectStore {
     literal: Arc<RwLock<HashMap<Uuid, Arc<RwLock<Literal>>>>>,
     local_variable: Arc<RwLock<HashMap<Uuid, Arc<RwLock<LocalVariable>>>>>,
     method_call: Arc<RwLock<HashMap<Uuid, Arc<RwLock<MethodCall>>>>>,
+    negation: Arc<RwLock<HashMap<Uuid, Arc<RwLock<Negation>>>>>,
     z_object_store: Arc<RwLock<HashMap<Uuid, Arc<RwLock<ZObjectStore>>>>>,
     operator: Arc<RwLock<HashMap<Uuid, Arc<RwLock<Operator>>>>>,
     woog_option: Arc<RwLock<HashMap<Uuid, Arc<RwLock<WoogOption>>>>>,
@@ -183,6 +185,7 @@ impl ObjectStore {
             literal: Arc::new(RwLock::new(HashMap::default())),
             local_variable: Arc::new(RwLock::new(HashMap::default())),
             method_call: Arc::new(RwLock::new(HashMap::default())),
+            negation: Arc::new(RwLock::new(HashMap::default())),
             z_object_store: Arc::new(RwLock::new(HashMap::default())),
             operator: Arc::new(RwLock::new(HashMap::default())),
             woog_option: Arc::new(RwLock::new(HashMap::default())),
@@ -1677,6 +1680,50 @@ impl ObjectStore {
         (0..len).map(move |i| values[i].clone())
     }
 
+    /// Inter (insert) [`Negation`] into the store.
+    ///
+    pub fn inter_negation(&mut self, negation: Arc<RwLock<Negation>>) {
+        let read = negation.read().unwrap();
+        self.negation
+            .write()
+            .unwrap()
+            .insert(read.id, negation.clone());
+    }
+
+    /// Exhume (get) [`Negation`] from the store.
+    ///
+    pub fn exhume_negation(&self, id: &Uuid) -> Option<Arc<RwLock<Negation>>> {
+        self.negation
+            .read()
+            .unwrap()
+            .get(id)
+            .map(|negation| negation.clone())
+    }
+
+    /// Exorcise (remove) [`Negation`] from the store.
+    ///
+    pub fn exorcise_negation(&mut self, id: &Uuid) -> Option<Arc<RwLock<Negation>>> {
+        self.negation
+            .write()
+            .unwrap()
+            .remove(id)
+            .map(|negation| negation.clone())
+    }
+
+    /// Get an iterator over the internal `HashMap<&Uuid, Negation>`.
+    ///
+    pub fn iter_negation(&self) -> impl Iterator<Item = Arc<RwLock<Negation>>> + '_ {
+        let values: Vec<Arc<RwLock<Negation>>> = self
+            .negation
+            .read()
+            .unwrap()
+            .values()
+            .map(|negation| negation.clone())
+            .collect();
+        let len = values.len();
+        (0..len).map(move |i| values[i].clone())
+    }
+
     /// Inter (insert) [`ZObjectStore`] into the store.
     ///
     pub fn inter_z_object_store(&mut self, z_object_store: Arc<RwLock<ZObjectStore>>) {
@@ -3030,6 +3077,18 @@ impl ObjectStore {
             }
         }
 
+        // Persist Negation.
+        {
+            let path = path.join("negation");
+            fs::create_dir_all(&path)?;
+            for negation in self.negation.read().unwrap().values() {
+                let path = path.join(format!("{}.json", negation.read().unwrap().id));
+                let file = fs::File::create(path)?;
+                let mut writer = io::BufWriter::new(file);
+                serde_json::to_writer_pretty(&mut writer, &negation)?;
+            }
+        }
+
         // Persist Object Store.
         {
             let path = path.join("z_object_store");
@@ -3885,6 +3944,24 @@ impl ObjectStore {
                     .write()
                     .unwrap()
                     .insert(method_call.read().unwrap().id, method_call.clone());
+            }
+        }
+
+        // Load Negation.
+        {
+            let path = path.join("negation");
+            let entries = fs::read_dir(path)?;
+            for entry in entries {
+                let entry = entry?;
+                let path = entry.path();
+                let file = fs::File::open(path)?;
+                let reader = io::BufReader::new(file);
+                let negation: Arc<RwLock<Negation>> = serde_json::from_reader(reader)?;
+                store
+                    .negation
+                    .write()
+                    .unwrap()
+                    .insert(negation.read().unwrap().id, negation.clone());
             }
         }
 

@@ -576,9 +576,9 @@ fn eval_expression(
                         e
                     });
 
-                    if let Err(ChaChaError::Return { value, ty }) = &result {
-                        return Ok((value.clone(), ty.clone()));
-                    }
+                    // if let Err(ChaChaError::Return { value, ty }) = &result {
+                    //     return Ok((value.clone(), ty.clone()));
+                    // }
 
                     (value, ty) = result?;
 
@@ -1074,7 +1074,14 @@ fn eval_expression(
             // });
             for item in list {
                 context.stack.insert(ident.clone(), item);
-                eval_expression(block.clone(), context)?;
+                let expr_ty = eval_expression(block.clone(), context);
+                match expr_ty {
+                    Ok(_) => {}
+                    Err(e) => {
+                        context.stack.pop();
+                        return Err(e);
+                    }
+                }
             }
             context.stack.pop();
 
@@ -1290,6 +1297,21 @@ fn eval_expression(
             z
         }
         //
+        // Negation
+        //
+        Expression::Negation(ref id) => {
+            let negation = lu_dog.read().unwrap().exhume_negation(id).unwrap();
+            let operand = negation
+                .read()
+                .unwrap()
+                .r70_expression(&lu_dog.read().unwrap())[0]
+                .clone();
+            let (value, ty) = eval_expression(operand, context)?;
+            let value = -value.read().unwrap().clone();
+
+            Ok((Arc::new(RwLock::new(value)), ty))
+        }
+        //
         // Operator
         //
         Expression::Operator(ref operator) => {
@@ -1369,7 +1391,7 @@ fn eval_expression(
                     let comp = comp.read().unwrap();
                     match &*comp {
                         Comparison::GreaterThan(_) => {
-                            let value = lhs.read().unwrap().lte(&rhs.unwrap().read().unwrap());
+                            let value = lhs.read().unwrap().gt(&rhs.unwrap().read().unwrap());
                             let value = Value::Boolean(value);
                             let ty = Ty::new_boolean();
                             let ty = ValueType::new_ty(
@@ -1779,7 +1801,12 @@ pub fn eval_statement(
             let expr = stmt.r41_expression(&lu_dog.read().unwrap())[0].clone();
             debug!("StatementEnum::ResultStatement expr", expr);
 
-            let (value, ty) = eval_expression(expr, context)?;
+            let (value, ty) = eval_expression(expr, context)?; // {
+                                                               //     Ok((value, ty)) => (value, ty),
+                                                               //     Err(ChaChaError::Return { value, ty }) => (value, ty),
+                                                               //     Err(e) => return Err(e),
+                                                               // };
+
             debug!("StatementEnum::ResultStatement value", value);
             debug!("StatementEnum::ResultStatement ty", ty);
 
@@ -2207,6 +2234,8 @@ pub fn start_vm(n: DwarfInteger) -> Result<DwarfInteger, Error> {
 
 #[cfg(feature = "repl")]
 pub fn start_repl(mut context: Context) -> Result<(), Error> {
+    use std::io::{self, Write};
+
     use rustyline::error::ReadlineError;
     use rustyline::validate::{ValidationContext, ValidationResult, Validator};
     use rustyline::{Completer, Helper, Highlighter, Hinter};
@@ -2266,6 +2295,20 @@ pub fn start_repl(mut context: Context) -> Result<(), Error> {
         println!("No previous history.");
     }
 
+    let reader = context.std_out_recv.clone();
+    let handle = thread::spawn(move || loop {
+        match reader.recv() {
+            Ok(line) => {
+                print!("{}", line);
+                io::stdout().flush();
+            }
+            Err(_) => {
+                debug!("Debugger control thread exiting");
+                break;
+            }
+        };
+    });
+
     loop {
         let readline = rl.readline(&format!("{} ", prompt_style.paint("道:>")));
         match readline {
@@ -2299,9 +2342,9 @@ pub fn start_repl(mut context: Context) -> Result<(), Error> {
 
                     // 🚧 This needs fixing too.
                     let eval = eval_statement(stmt, &mut context);
-                    for i in context.drain_std_out() {
-                        println!("{}", i);
-                    }
+                    // for i in context.drain_std_out() {
+                    //     println!("{}", i);
+                    // }
                     match eval {
                         Ok((value, ty)) => {
                             let value = format!("{}", value.read().unwrap());
@@ -2340,6 +2383,8 @@ pub fn start_repl(mut context: Context) -> Result<(), Error> {
     // #[cfg(feature = "with-file-history")]
     rl.save_history("history.txt")
         .map_err(|e| ChaChaError::RustyLine { source: e })?;
+
+    handle.join().unwrap();
 
     Ok(())
 }

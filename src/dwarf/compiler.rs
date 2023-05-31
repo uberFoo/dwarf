@@ -24,8 +24,8 @@ use crate::{
             XValue, XValueEnum, ZNone, ZSome,
         },
         Argument, Binary, BooleanLiteral, Comparison, Debugger, DwarfSourceFile, FieldAccess,
-        FieldAccessTarget, FloatLiteral, List, ListElement, ListExpression, MethodCall, Operator,
-        Reference, ResultStatement, TypeCast, VariableEnum, WoogOptionEnum, XReturn,
+        FieldAccessTarget, FloatLiteral, List, ListElement, ListExpression, MethodCall, Negation,
+        Operator, Reference, ResultStatement, TypeCast, VariableEnum, WoogOptionEnum, XReturn,
     },
 };
 
@@ -1570,6 +1570,26 @@ fn inter_expression(
             }
 
             Ok(((expr, span), instance_ty))
+        }
+        //
+        // Negation
+        //
+        ParserExpression::Negation(expr) => {
+            let (expr, ty) = inter_expression(
+                &Arc::new(RwLock::new((*expr).0.to_owned())),
+                &expr.1,
+                source,
+                block,
+                lu_dog,
+                models,
+                sarzak,
+            )?;
+            let negation = Negation::new(&expr.0, lu_dog);
+            let expr = Expression::new_negation(&negation, lu_dog);
+            let value = XValue::new_expression(&block, &ty, &expr, lu_dog);
+            span.write().unwrap().x_value = Some(value.read().unwrap().id);
+
+            Ok(((expr, span), ty))
         }
         //
         // Print
