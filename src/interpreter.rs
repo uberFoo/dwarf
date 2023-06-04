@@ -1,9 +1,10 @@
 use std::{
     collections::VecDeque,
     fmt,
+    io::{self, Write},
     ops::Range,
     path::{Path, PathBuf},
-    sync::{Arc, RwLock},
+    sync::Arc,
     thread,
     time::Duration,
 };
@@ -15,10 +16,11 @@ use fxhash::FxHashMap as HashMap;
 use heck::ToUpperCamelCase;
 use lazy_static::lazy_static;
 use log;
-use parking_lot::{Condvar, Mutex, RwLock as PRwLock};
+use parking_lot::{Condvar, Mutex};
 use rayon::prelude::*;
 use sarzak::sarzak::{store::ObjectStore as SarzakStore, types::Ty, MODEL as SARZAK_MODEL};
 use snafu::{location, prelude::*, Location};
+use tracy_client::{frame_name, span, span_location, Client};
 use uuid::Uuid;
 
 use crate::{
@@ -29,10 +31,11 @@ use crate::{
         ObjectStore as LuDogStore, OperatorEnum, Span, Statement, StatementEnum, ValueType,
         Variable, WoogOptionEnum, XValue, XValueEnum,
     },
+    s_read, s_write,
     svm::{CallFrame, Chunk, Instruction, VM},
     value::{StoreProxy, UserType},
-    ChaChaError, DwarfInteger, Error, InternalCompilerChannelSnafu, NoSuchFieldSnafu,
-    NoSuchStaticMethodSnafu, Result, TypeMismatchSnafu, UnimplementedSnafu, Value,
+    ChaChaError, DwarfInteger, Error, InternalCompilerChannelSnafu, NewRefType, NoSuchFieldSnafu,
+    NoSuchStaticMethodSnafu, RefType, Result, TypeMismatchSnafu, UnimplementedSnafu, Value,
     VariableNotFoundSnafu, WrongNumberOfArgumentsSnafu,
 };
 
@@ -153,17 +156,10 @@ macro_rules! trace {
     };
 }
 
-// static ref STEPPING:
-
 lazy_static! {
     static ref RUNNING: Mutex<bool> = Mutex::new(true);
     static ref CVAR: Condvar = Condvar::new();
     static ref STEPPING: Mutex<bool> = Mutex::new(false);
-//     pub(crate) static ref MODELS: Arc<RwLock<Vec<SarzakStore>>> = Arc::new(RwLock::new(Vec::new()));
-//     pub(crate) static ref LU_DOG: Arc<RwLock<LuDogStore>> =
-//         Arc::new(RwLock::new(LuDogStore::new()));
-//     pub(crate) static ref SARZAK: Arc<RwLock<SarzakStore>> =
-//         Arc::new(RwLock::new(SarzakStore::new()));
 }
 
 pub fn initialize_interpreter_paths<P: AsRef<Path>>(lu_dog_path: P) -> Result<Context, Error> {
@@ -195,14 +191,14 @@ pub fn initialize_interpreter<P: AsRef<Path>>(
     lu_dog_path: Option<P>,
 ) -> Result<Context, Error> {
     // Initialize the stack with stuff from the compiled source.
-    let block = Block::new(Uuid::new_v4(), &mut lu_dog);
+    let block = Block::new(Uuid::new_v4(), None, &mut lu_dog);
     let (mut stack, receiver) = Memory::new();
 
     // Insert the functions in the root frame.
     let funcs = lu_dog.iter_function().collect::<Vec<_>>();
 
     for func in funcs {
-        let func_read = func.read().unwrap();
+        let func_read = s_read!(func);
         let imp = func_read.r9_implementation(&lu_dog);
         if imp.is_empty() {
             let name = func_read.name.clone();
@@ -219,13 +215,16 @@ pub fn initialize_interpreter<P: AsRef<Path>>(
             );
 
             log::trace!("inserting local function {}", name);
-            stack.insert(name, Arc::new(RwLock::new(value)));
+            stack.insert(
+                name,
+                <RefType<Value> as NewRefType<Value>>::new_ref_type(value),
+            );
         }
     }
 
     // Insert static methods for each struct. They go into the meta table.
     for user_type in lu_dog.iter_woog_struct() {
-        let user_type = user_type.read().unwrap();
+        let user_type = s_read!(user_type);
         // Create a meta table for each struct.
         debug!("inserting meta table {}", user_type.name);
         stack.insert_meta_table(user_type.name.to_owned());
@@ -234,20 +233,22 @@ pub fn initialize_interpreter<P: AsRef<Path>>(
             // For each function in the impl, insert the function. I should probably
             // check and only insert the static functions.
             // 🚧 Only insert the static functions
-            for func in impl_[0].read().unwrap().r9_function(&lu_dog) {
-                debug!("inserting static function {}", func.read().unwrap().name);
+            for func in s_read!(impl_[0]).r9_function(&lu_dog) {
+                debug!("inserting static function {}", s_read!(func).name);
                 stack.insert_meta(
                     &user_type.name,
-                    func.read().unwrap().name.to_owned(),
+                    s_read!(func).name.to_owned(),
                     // It's here that I'd really like to be able to do a cheap
                     // clone of an Rc.
-                    Arc::new(RwLock::new(Value::Function(func.clone()))),
+                    <RefType<Value> as NewRefType<Value>>::new_ref_type(Value::Function(
+                        func.clone(),
+                    )),
                 )
             }
         }
     }
 
-    // T::initialize(&mut stack, &mut *lu_dog.write().unwrap());
+    // T::initialize(&mut stack, &mut *s_write!(lu_dog));
 
     // 🚧 this needs to go into some sort of init function that get's passed
     // the stack. Or alternatively, there's a function that returns key value
@@ -259,15 +260,15 @@ pub fn initialize_interpreter<P: AsRef<Path>>(
 
     // {
     //     // Build the ASTs
-    //     let local = LocalVariable::new(Uuid::new_v4(), &mut *lu_dog.write().unwrap());
+    //     let local = LocalVariable::new(Uuid::new_v4(), &mut *s_write!(lu_dog));
     //     let var = Variable::new_local_variable(
     //         "MERLIN_STORE".to_owned(),
     //         local,
-    //         &mut *lu_dog.write().unwrap(),
+    //         &mut *s_write!(lu_dog),
     //     );
 
-    //     let store = ZObjectStore::new("merlin".to_owned(), &mut *lu_dog.write().unwrap());
-    //     let mut write = lu_dog.write().unwrap();
+    //     let store = ZObjectStore::new("merlin".to_owned(), &mut *s_write!(lu_dog));
+    //     let mut write = s_write!(lu_dog);
     //     let _value = LuDogValue::new_variable(
     //         block.clone(),
     //         ValueType::new_z_object_store(store, &mut write),
@@ -277,9 +278,9 @@ pub fn initialize_interpreter<P: AsRef<Path>>(
     // }
 
     // Hide everything behind a the globals.
-    // *SARZAK.write().unwrap() = sarzak;
-    // *LU_DOG.write().unwrap() = lu_dog;
-    // *MODEL.write().unwrap() = model;
+    // *s_write!(SARZAK) = sarzak;
+    // *s_write!(LU_DOG) = lu_dog;
+    // *s_write!(MODEL) = model;
 
     let (std_out_send, std_out_recv) = unbounded();
 
@@ -287,31 +288,37 @@ pub fn initialize_interpreter<P: AsRef<Path>>(
         prompt: format!("{} ", Colour::Blue.normal().paint("道:>")),
         stack,
         block,
-        lu_dog: Arc::new(RwLock::new(lu_dog)),
-        sarzak: Arc::new(RwLock::new(sarzak)),
-        models: Arc::new(RwLock::new(Vec::new())),
+        lu_dog: <RefType<LuDogStore> as NewRefType<LuDogStore>>::new_ref_type(lu_dog),
+        sarzak: <RefType<SarzakStore> as NewRefType<SarzakStore>>::new_ref_type(sarzak),
+        models: <RefType<Vec<SarzakStore>> as NewRefType<Vec<SarzakStore>>>::new_ref_type(
+            Vec::new(),
+        ),
         mem_update_recv: receiver,
         std_out_send,
         std_out_recv,
         debug_status_writer: None,
         obj_file_path: lu_dog_path.map(|p| p.as_ref().to_owned()),
+        tracy: Client::start(),
     })
 }
 
 fn eval_function_call(
-    func: Arc<RwLock<Function>>,
-    args: &[Arc<RwLock<Argument>>],
+    func: RefType<Function>,
+    args: &[RefType<Argument>],
+    arg_check: bool,
     context: &mut Context,
-) -> Result<(Arc<RwLock<Value>>, Arc<RwLock<ValueType>>)> {
+) -> Result<(RefType<Value>, RefType<ValueType>)> {
     let lu_dog = context.lu_dog.clone();
 
     debug!("eval_function_call func ", func);
     trace!("eval_function_call stack", context.stack);
 
-    let func = func.read().unwrap();
-    let block = lu_dog.read().unwrap().exhume_block(&func.block).unwrap();
-    let block = block.read().unwrap();
-    let stmts = block.r18_statement(&lu_dog.read().unwrap());
+    span!("eval_function_call");
+
+    let func = s_read!(func);
+    let block = s_read!(lu_dog).exhume_block(&func.block).unwrap();
+    let block = s_read!(block);
+    let stmts = block.r18_statement(&s_read!(lu_dog));
 
     if !stmts.is_empty() {
         context.stack.push();
@@ -319,7 +326,7 @@ fn eval_function_call(
         // We need to evaluate the arguments, and then push them onto the stack. We
         // also need to typecheck the arguments against the function parameters.
         // We need to look the params up anyway to set the local variables.
-        let params = func.r13_parameter(&lu_dog.read().unwrap());
+        let params = func.r13_parameter(&s_read!(lu_dog));
 
         // 🚧 I'd really like to see the source code printed out, with the function
         // call highlighted.
@@ -336,32 +343,21 @@ fn eval_function_call(
             let mut params = Vec::with_capacity(params.len());
             let mut next = func
                 // .clone()
-                .r13_parameter(&lu_dog.read().unwrap())
+                .r13_parameter(&s_read!(lu_dog))
                 .iter()
-                .find(|p| {
-                    p.read()
-                        .unwrap()
-                        .r14c_parameter(&lu_dog.read().unwrap())
-                        .is_empty()
-                })
+                .find(|p| s_read!(p).r14c_parameter(&s_read!(lu_dog)).is_empty())
                 .unwrap()
                 .clone();
 
             loop {
-                let var = next.read().unwrap().r12_variable(&lu_dog.read().unwrap())[0]
-                    .read()
-                    .unwrap()
-                    .clone();
-                let value = var.r11_x_value(&lu_dog.read().unwrap())[0]
-                    .read()
-                    .unwrap()
-                    .clone();
-                let ty = value.r24_value_type(&lu_dog.read().unwrap())[0].clone();
+                let var = s_read!(s_read!(next).r12_variable(&s_read!(lu_dog))[0]).clone();
+                let value = s_read!(var.r11_x_value(&s_read!(lu_dog))[0]).clone();
+                let ty = value.r24_value_type(&s_read!(lu_dog))[0].clone();
                 params.push((var.name.clone(), ty.clone()));
 
-                let next_id = { next.read().unwrap().next };
+                let next_id = { s_read!(next).next };
                 if let Some(ref id) = next_id {
-                    next = lu_dog.read().unwrap().exhume_parameter(id).unwrap();
+                    next = s_read!(lu_dog).exhume_parameter(id).unwrap();
                 } else {
                     break;
                 }
@@ -376,27 +372,20 @@ fn eval_function_call(
             let mut arg_values = Vec::with_capacity(args.len());
             let mut next = args
                 .iter()
-                .find(|a| {
-                    a.read()
-                        .unwrap()
-                        .r27c_argument(&lu_dog.read().unwrap())
-                        .is_empty()
-                })
+                .find(|a| s_read!(a).r27c_argument(&s_read!(lu_dog)).is_empty())
                 .unwrap()
                 .clone();
 
             loop {
-                let expr = lu_dog
-                    .read()
-                    .unwrap()
-                    .exhume_expression(&next.read().unwrap().expression)
+                let expr = s_read!(lu_dog)
+                    .exhume_expression(&s_read!(next).expression)
                     .unwrap();
                 let (value, ty) = eval_expression(expr.clone(), context)?;
                 arg_values.push((expr, value, ty));
 
-                let next_id = { next.read().unwrap().next };
+                let next_id = { s_read!(next).next };
                 if let Some(ref id) = next_id {
-                    next = lu_dog.read().unwrap().exhume_argument(id).unwrap();
+                    next = s_read!(lu_dog).exhume_argument(id).unwrap();
                 } else {
                     break;
                 }
@@ -414,63 +403,63 @@ fn eval_function_call(
             debug!("type check value", value);
             debug!("type check arg_ty", arg_ty);
 
-            let x_value = &expr.read().unwrap().r11_x_value(&lu_dog.read().unwrap())[0];
-            let span = &x_value.read().unwrap().r63_span(&lu_dog.read().unwrap())[0];
+            if arg_check {
+                let x_value = &s_read!(expr).r11_x_value(&s_read!(lu_dog))[0];
+                let span = &s_read!(x_value).r63_span(&s_read!(lu_dog))[0];
 
-            typecheck(&param_ty, &arg_ty, span, context)?;
+                typecheck(&param_ty, &arg_ty, span, context)?;
+            }
 
             context.stack.insert(name.clone(), value);
         }
 
-        let mut value;
-        let mut ty;
+        let mut value = <RefType<Value> as NewRefType<Value>>::new_ref_type(Value::Empty);
+        let mut ty = ValueType::new_empty(&s_read!(lu_dog));
         // This is a pain.
         // Find the first statement, by looking for the one with no previous statement.
-        let mut next = stmts
-            .iter()
-            .find(|s| {
-                s.read()
-                    .unwrap()
-                    .r17c_statement(&lu_dog.read().unwrap())
-                    .is_empty()
-            })
-            .unwrap()
-            .clone();
+        // let mut next = stmts
+        //     .iter()
+        //     .find(|s| s_read!(s).r17c_statement(&s_read!(lu_dog)).is_empty())
+        //     .unwrap()
+        //     .clone();
+        if let Some(ref id) = block.statement {
+            let mut next = s_read!(lu_dog).exhume_statement(id).unwrap();
 
-        loop {
-            let result = eval_statement(next.clone(), context).map_err(|e| {
-                // This is cool, if it does what I think it does. We basically
-                // get the opportunity to look at the error, and do stuff with
-                // it, and then let it contitue on as if nothing happened.
-                //
-                // Anyway, we need to clean up the stack frame if there was an
-                // error. I'm also considering abusing the error type to pass
-                // through that we hit a return expression. I'm thinknig more
-                // and more that this is a Good Idea. Well, maybe just a good
-                // idea. We can basically just do an early, successful return.
-                //
-                // Well, that doesn't work: return applies to the closure.
-                context.stack.pop();
+            loop {
+                let result = eval_statement(next.clone(), context).map_err(|e| {
+                    // This is cool, if it does what I think it does. We basically
+                    // get the opportunity to look at the error, and do stuff with
+                    // it, and then let it contitue on as if nothing happened.
+                    //
+                    // Anyway, we need to clean up the stack frame if there was an
+                    // error. I'm also considering abusing the error type to pass
+                    // through that we hit a return expression. I'm thinknig more
+                    // and more that this is a Good Idea. Well, maybe just a good
+                    // idea. We can basically just do an early, successful return.
+                    //
+                    // Well, that doesn't work: return applies to the closure.
+                    context.stack.pop();
 
-                // if let ChaChaError::Return { value } = &e {
-                //     let ty = value.get_type(&lu_dog.read().unwrap());
-                //     return Ok((value, ty));
-                // }
+                    // if let ChaChaError::Return { value } = &e {
+                    //     let ty = value.get_type(&s_read!(lu_dog));
+                    //     return Ok((value, ty));
+                    // }
 
-                // Err(e)
-                e
-            });
+                    // Err(e)
+                    e
+                });
 
-            if let Err(ChaChaError::Return { value, ty }) = &result {
-                return Ok((value.clone(), ty.clone()));
-            }
+                if let Err(ChaChaError::Return { value, ty }) = &result {
+                    return Ok((value.clone(), ty.clone()));
+                }
 
-            (value, ty) = result?;
+                (value, ty) = result?;
 
-            if let Some(ref id) = next.clone().read().unwrap().next {
-                next = lu_dog.read().unwrap().exhume_statement(id).unwrap();
-            } else {
-                break;
+                if let Some(ref id) = s_read!(next.clone()).next {
+                    next = s_read!(lu_dog).exhume_statement(id).unwrap();
+                } else {
+                    break;
+                }
             }
         }
 
@@ -480,34 +469,37 @@ fn eval_function_call(
         Ok((value, ty))
     } else {
         Ok((
-            Arc::new(RwLock::new(Value::Empty)),
-            ValueType::new_empty(&lu_dog.read().unwrap()),
+            <RefType<Value> as NewRefType<Value>>::new_ref_type(Value::Empty),
+            ValueType::new_empty(&s_read!(lu_dog)),
         ))
     }
 }
 
 fn eval_expression(
-    expression: Arc<RwLock<Expression>>,
-    mut context: &mut Context,
-) -> Result<(Arc<RwLock<Value>>, Arc<RwLock<ValueType>>)> {
+    expression: RefType<Expression>,
+    context: &mut Context,
+) -> Result<(RefType<Value>, RefType<ValueType>)> {
     let lu_dog = context.lu_dog.clone();
 
     debug!("expression", expression);
     trace!("stack", context.stack);
 
+    // context.tracy.span(span_location!("eval_expression"), 0);
+    // context
+    //     .tracy
+    //     .non_continuous_frame(frame_name!("eval_expression"));
+    span!("eval_expression");
+
     {
         let mut running = RUNNING.lock();
         if !*running {
             if let Some(sender) = &context.debug_status_writer {
-                let value = &expression
-                    .read()
-                    .unwrap()
-                    .r11_x_value(&lu_dog.read().unwrap())[0];
+                let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
                 debug!("value", value);
 
-                let span = &value.read().unwrap().r63_span(&lu_dog.read().unwrap())[0];
+                let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
 
-                let read = span.read().unwrap();
+                let read = s_read!(span);
                 let span = read.start as usize..read.end as usize;
                 sender.send(DebuggerStatus::Paused(span)).unwrap();
             }
@@ -526,14 +518,14 @@ fn eval_expression(
 
     let result_style = Colour::Green.bold();
 
-    match *expression.read().unwrap() {
+    match *s_read!(expression) {
         //
         // Block
         //
         Expression::Block(ref block) => {
-            let block = lu_dog.read().unwrap().exhume_block(block).unwrap();
-            let block = block.read().unwrap();
-            let stmts = block.r18_statement(&lu_dog.read().unwrap());
+            let block = s_read!(lu_dog).exhume_block(block).unwrap();
+            let block = s_read!(block);
+            let stmts = block.r18_statement(&s_read!(lu_dog));
 
             if !stmts.is_empty() {
                 context.stack.push();
@@ -543,12 +535,7 @@ fn eval_expression(
                 // Find the first statement, by looking for the one with no previous statement.
                 let mut next = stmts
                     .iter()
-                    .find(|s| {
-                        s.read()
-                            .unwrap()
-                            .r17c_statement(&lu_dog.read().unwrap())
-                            .is_empty()
-                    })
+                    .find(|s| s_read!(s).r17c_statement(&s_read!(lu_dog)).is_empty())
                     .unwrap()
                     .clone();
 
@@ -568,7 +555,7 @@ fn eval_expression(
                         context.stack.pop();
 
                         // if let ChaChaError::Return { value } = &e {
-                        //     let ty = value.get_type(&lu_dog.read().unwrap());
+                        //     let ty = value.get_type(&s_read!(lu_dog));
                         //     return Ok((value, ty));
                         // }
 
@@ -582,8 +569,8 @@ fn eval_expression(
 
                     (value, ty) = result?;
 
-                    if let Some(ref id) = next.clone().read().unwrap().next {
-                        next = lu_dog.read().unwrap().exhume_statement(id).unwrap();
+                    if let Some(ref id) = s_read!(next.clone()).next {
+                        next = s_read!(lu_dog).exhume_statement(id).unwrap();
                     } else {
                         break;
                     }
@@ -595,8 +582,8 @@ fn eval_expression(
                 Ok((value, ty))
             } else {
                 Ok((
-                    Arc::new(RwLock::new(Value::Empty)),
-                    ValueType::new_empty(&lu_dog.read().unwrap()),
+                    <RefType<Value> as NewRefType<Value>>::new_ref_type(Value::Empty),
+                    ValueType::new_empty(&s_read!(lu_dog)),
                 ))
             }
         }
@@ -604,18 +591,20 @@ fn eval_expression(
         // Call
         //
         Expression::Call(ref call) => {
-            let call = lu_dog.read().unwrap().exhume_call(call).unwrap();
-            let call = call.read().unwrap();
+            // error!("call id", call);
+            let call = s_read!(lu_dog).exhume_call(call).unwrap();
+            // let s_read!(call)aoeu = s_read!(call);
             debug!("call", call);
-            let args = call.r28_argument(&lu_dog.read().unwrap());
+            let args = s_read!(call).r28_argument(&s_read!(lu_dog));
             debug!("args", args);
+            // error!("arg_check", s_read!(call).arg_check);
 
             // This optional expression is the LHS of the call.
-            let (value, ty) = if let Some(ref expr) = call.expression {
-                let expr = lu_dog.read().unwrap().exhume_expression(expr).unwrap();
+            let (value, ty) = if let Some(ref expr) = s_read!(call).expression {
+                let expr = s_read!(lu_dog).exhume_expression(expr).unwrap();
                 // Evaluate the LHS to get at the function.
                 let (value, ty) = eval_expression(expr, context)?;
-                no_debug!("Expression::Call LHS value", value.read().unwrap());
+                no_debug!("Expression::Call LHS value", s_read!(value));
                 debug!("Expression::Call LHS ty", ty);
                 // So now value is pointing a a legit Function. We need to jump
                 // through all sorts of hoops now. We need to setup a new stack
@@ -625,40 +614,31 @@ fn eval_expression(
                 // function body.
 
                 // Or we can just call the function we already wrote!
-                let read_value = value.read().unwrap();
+                let read_value = s_read!(value);
                 match &*read_value {
                     Value::Function(ref func) => {
-                        let func = lu_dog
-                            .read()
-                            .unwrap()
-                            .exhume_function(&func.read().unwrap().id)
-                            .unwrap();
+                        let func = s_read!(lu_dog).exhume_function(&s_read!(func).id).unwrap();
                         debug!("Expression::Call func", func);
-
-                        let (value, ty) = eval_function_call(func, &args, context)?;
+                        let checked = s_read!(call).arg_check;
+                        let (value, ty) = eval_function_call(func, &args, checked, context)?;
                         debug!("value", value);
                         debug!("ty", ty);
                         (value, ty)
                     }
                     Value::ProxyType(pt) => {
-                        let ty = lu_dog
-                            .read()
-                            .unwrap()
-                            .exhume_value_type(&pt.read().unwrap().struct_uuid())
+                        let ty = s_read!(lu_dog)
+                            .exhume_value_type(&s_read!(pt).struct_uuid())
                             .unwrap();
                         (value.clone(), ty)
                     }
-                    Value::UserType(ut) => (value.clone(), ut.read().unwrap().get_type().clone()),
+                    Value::UserType(ut) => (value.clone(), s_read!(ut).get_type().clone()),
                     value_ => {
-                        let value = &expression
-                            .read()
-                            .unwrap()
-                            .r11_x_value(&lu_dog.read().unwrap())[0];
+                        let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
                         debug!("value", value);
 
-                        let span = &value.read().unwrap().r63_span(&lu_dog.read().unwrap())[0];
+                        let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
 
-                        let read = span.read().unwrap();
+                        let read = s_read!(span);
                         let span = read.start as usize..read.end as usize;
 
                         return Err(ChaChaError::NotAFunction {
@@ -669,13 +649,13 @@ fn eval_expression(
                 }
             } else {
                 (
-                    Arc::new(RwLock::new(Value::Empty)),
-                    ValueType::new_empty(&lu_dog.read().unwrap()),
+                    <RefType<Value> as NewRefType<Value>>::new_ref_type(Value::Empty),
+                    ValueType::new_empty(&s_read!(lu_dog)),
                 )
             };
 
             // So we need to figure out the type this is being called upon.
-            match (&call.subtype, value, ty) {
+            let x = match (&s_read!(call).subtype, value, ty) {
                 //
                 // FunctionCall
                 //
@@ -685,39 +665,32 @@ fn eval_expression(
                 // MethodCall
                 //
                 (CallEnum::MethodCall(meth), value, ty) => {
-                    let meth = lu_dog.read().unwrap().exhume_method_call(meth).unwrap();
-                    let meth = &meth.read().unwrap().name;
+                    let meth = s_read!(lu_dog).exhume_method_call(meth).unwrap();
+                    let meth = &s_read!(meth).name;
                     debug!("MethodCall method", meth);
                     debug!("MethodCall value", value);
                     debug!("MethodCall type", ty);
 
-                    match &*value.read().unwrap() {
+                    match &*s_read!(value) {
                         Value::ProxyType(pt) => {
                             let mut arg_values = if !args.is_empty() {
                                 let mut arg_values = VecDeque::with_capacity(args.len());
                                 let mut next = args
                                     .iter()
-                                    .find(|a| {
-                                        a.read()
-                                            .unwrap()
-                                            .r27c_argument(&lu_dog.read().unwrap())
-                                            .is_empty()
-                                    })
+                                    .find(|a| s_read!(a).r27c_argument(&s_read!(lu_dog)).is_empty())
                                     .unwrap()
                                     .clone();
 
                                 loop {
-                                    let expr = lu_dog
-                                        .read()
-                                        .unwrap()
-                                        .exhume_expression(&next.read().unwrap().expression)
+                                    let expr = s_read!(lu_dog)
+                                        .exhume_expression(&s_read!(next).expression)
                                         .unwrap();
                                     let (value, _ty) = eval_expression(expr, context)?;
                                     arg_values.push_back(value);
 
-                                    let next_id = { next.read().unwrap().next };
+                                    let next_id = { s_read!(next).next };
                                     if let Some(ref id) = next_id {
-                                        next = lu_dog.read().unwrap().exhume_argument(id).unwrap();
+                                        next = s_read!(lu_dog).exhume_argument(id).unwrap();
                                     } else {
                                         break;
                                     }
@@ -728,34 +701,35 @@ fn eval_expression(
                                 VecDeque::new()
                             };
 
-                            pt.write().unwrap().call(meth, &mut arg_values)
+                            s_write!(pt).call(meth, &mut arg_values)
                         }
                         Value::UserType(ut) => {
                             // Well, we need to get the function and the arguments
                             // and invoke eval_function_call.
-                            let ut_read = ut.read().unwrap();
+                            let ut_read = s_read!(ut);
                             let ty = ut_read.get_type();
-                            let ty = ty.read().unwrap();
+                            let ty = s_read!(ty);
                             let woog_struct = if let ValueType::WoogStruct(woog_struct) = &*ty {
                                 woog_struct
                             } else {
                                 panic!("I'm trying to invoke a function on a UserType, and it's not a Struct!");
                             };
-                            let woog_struct = lu_dog
-                                .read()
-                                .unwrap()
-                                .exhume_woog_struct(&woog_struct)
-                                .unwrap();
-                            let woog_struct = woog_struct.read().unwrap();
-                            let impl_ = &woog_struct.r8c_implementation(&lu_dog.read().unwrap())[0];
-                            let x = if let Some(func) = &impl_
-                                .read()
-                                .unwrap()
-                                .r9_function(&lu_dog.read().unwrap())
+                            let woog_struct =
+                                s_read!(lu_dog).exhume_woog_struct(&woog_struct).unwrap();
+                            let woog_struct = s_read!(woog_struct);
+                            let impl_ = &woog_struct.r8c_implementation(&s_read!(lu_dog))[0];
+                            let x = if let Some(func) = s_read!(&impl_)
+                                .r9_function(&s_read!(lu_dog))
                                 .iter()
-                                .find(|f| f.read().unwrap().name == *meth)
+                                .find(|f| s_read!(f).name == *meth)
                             {
-                                eval_function_call((*func).clone(), &args, context)
+                                let result = eval_function_call(
+                                    (*func).clone(),
+                                    &args,
+                                    s_read!(call).arg_check,
+                                    context,
+                                );
+                                result
                             } else {
                                 // Should this be an error? I don't think it's likely to happen.
                                 // 🚧 Wrong! This will happen frequently and should be an error.
@@ -771,13 +745,9 @@ fn eval_expression(
                 // StaticMethodCall
                 //
                 (CallEnum::StaticMethodCall(meth), _, _) => {
-                    let meth = lu_dog
-                        .read()
-                        .unwrap()
-                        .exhume_static_method_call(meth)
-                        .unwrap();
-                    let call = meth.read().unwrap().r30_call(&lu_dog.read().unwrap())[0].clone();
-                    let args = call.read().unwrap().r28_argument(&lu_dog.read().unwrap());
+                    let meth = s_read!(lu_dog).exhume_static_method_call(meth).unwrap();
+                    let call = s_read!(meth).r30_call(&s_read!(lu_dog))[0].clone();
+                    let args = s_read!(call).r28_argument(&s_read!(lu_dog));
 
                     // This is for method call on a store type, and we do it out here so that we don't have
                     // to borrow stack mutably more than once.
@@ -785,27 +755,20 @@ fn eval_expression(
                         let mut arg_values = VecDeque::with_capacity(args.len());
                         let mut next = args
                             .iter()
-                            .find(|a| {
-                                a.read()
-                                    .unwrap()
-                                    .r27c_argument(&lu_dog.read().unwrap())
-                                    .is_empty()
-                            })
+                            .find(|a| s_read!(a).r27c_argument(&s_read!(lu_dog)).is_empty())
                             .unwrap()
                             .clone();
 
                         loop {
-                            let expr = lu_dog
-                                .read()
-                                .unwrap()
-                                .exhume_expression(&next.read().unwrap().expression)
+                            let expr = s_read!(lu_dog)
+                                .exhume_expression(&s_read!(next).expression)
                                 .unwrap();
                             let (value, _ty) = eval_expression(expr, context)?;
                             arg_values.push_back(value);
 
-                            let next_id = { next.read().unwrap().next };
+                            let next_id = { s_read!(next).next };
                             if let Some(ref id) = next_id {
-                                next = lu_dog.read().unwrap().exhume_argument(id).unwrap();
+                                next = s_read!(lu_dog).exhume_argument(id).unwrap();
                             } else {
                                 break;
                             }
@@ -816,8 +779,8 @@ fn eval_expression(
                         VecDeque::new()
                     };
 
-                    let ty = &meth.read().unwrap().ty;
-                    let func = &meth.read().unwrap().func;
+                    let ty = &s_read!(meth).ty;
+                    let func = &s_read!(meth).func;
                     debug!("StaticMethodCall ty", ty);
                     debug!("StaticMethodCall func", func);
 
@@ -825,20 +788,25 @@ fn eval_expression(
                     if ty == "Uuid" && func == "new" {
                         let value = Value::Uuid(Uuid::new_v4());
                         let ty = Ty::new_s_uuid();
-                        let ty = lu_dog.read().unwrap().exhume_value_type(&ty.id()).unwrap();
+                        let ty = s_read!(lu_dog).exhume_value_type(&ty.id()).unwrap();
 
-                        Ok((Arc::new(RwLock::new(value)), ty))
+                        Ok((
+                            <RefType<Value> as NewRefType<Value>>::new_ref_type(value),
+                            ty,
+                        ))
                     } else if let Some(value) = context.stack.get_meta(ty, func) {
                         debug!("StaticMethodCall meta value", value);
-                        match &*value.read().unwrap() {
+                        match &*s_read!(value) {
                             Value::Function(ref func) => {
-                                let func = lu_dog
-                                    .read()
-                                    .unwrap()
-                                    .exhume_function(&func.read().unwrap().id)
-                                    .unwrap();
+                                let func =
+                                    s_read!(lu_dog).exhume_function(&s_read!(func).id).unwrap();
                                 debug!("StaticMethodCall meta func", func);
-                                let (value, ty) = eval_function_call(func, &args, context)?;
+                                let (value, ty) = eval_function_call(
+                                    func,
+                                    &args,
+                                    s_read!(call).arg_check,
+                                    context,
+                                )?;
                                 debug!("StaticMethodCall meta value", value);
                                 debug!("StaticMethodCall meta ty", ty);
                                 Ok((value, ty))
@@ -846,29 +814,33 @@ fn eval_expression(
                             value => {
                                 error!("deal with call expression", value);
                                 Ok((
-                                    Arc::new(RwLock::new(Value::Empty)),
-                                    ValueType::new_empty(&lu_dog.read().unwrap()),
+                                    <RefType<Value> as NewRefType<Value>>::new_ref_type(
+                                        Value::Empty,
+                                    ),
+                                    ValueType::new_empty(&s_read!(lu_dog)),
                                 ))
                             }
                         }
                     } else if let Some(value) = context.stack.get(ty) {
                         debug!("StaticMethodCall frame value", value);
-                        match &mut *value.write().unwrap() {
+                        match &mut *s_write!(value) {
                             Value::Function(ref func) => {
-                                let func = lu_dog
-                                    .read()
-                                    .unwrap()
-                                    .exhume_function(&func.read().unwrap().id)
-                                    .unwrap();
+                                let func =
+                                    s_read!(lu_dog).exhume_function(&s_read!(func).id).unwrap();
                                 debug!("StaticMethodCall frame func", func);
-                                let (value, ty) = eval_function_call(func, &args, context)?;
+                                let (value, ty) = eval_function_call(
+                                    func,
+                                    &args,
+                                    s_read!(call).arg_check,
+                                    context,
+                                )?;
                                 debug!("StaticMethodCall frame value", value);
                                 debug!("StaticMethodCall frame ty", ty);
                                 Ok((value, ty))
                             }
                             Value::ProxyType(ut) => {
                                 debug!("StaticMethodCall proxy", ut);
-                                ut.write().unwrap().call(func, &mut arg_values)
+                                s_write!(ut).call(func, &mut arg_values)
                             }
                             // Value::StoreType(ref mut store_type) => {
                             //     // We should actually know what's behind the curtain, since
@@ -887,8 +859,10 @@ fn eval_expression(
                             value => {
                                 error!("deal with call expression", value);
                                 Ok((
-                                    Arc::new(RwLock::new(Value::Empty)),
-                                    ValueType::new_empty(&lu_dog.read().unwrap()),
+                                    <RefType<Value> as NewRefType<Value>>::new_ref_type(
+                                        Value::Empty,
+                                    ),
+                                    ValueType::new_empty(&s_read!(lu_dog)),
                                 ))
                             }
                         }
@@ -903,12 +877,15 @@ fn eval_expression(
                         unimplemented!();
                         // We never will get here.
                         // Ok((
-                        //     Arc::new(RwLock::new(Value::Empty)),
-                        //     ValueType::new_empty(&lu_dog.read().unwrap()),
+                        //     NewRefType::new_ref_type(Value::Empty)),
+                        //     ValueType::new_empty(&s_read!(lu_dog)),
                         // ))
                     }
                 }
-            }
+            };
+            s_write!(call).arg_check = false;
+
+            x
         }
         Expression::Debugger(_) => {
             debug!("StatementEnum::Debugger");
@@ -916,8 +893,8 @@ fn eval_expression(
             *running = false;
             *STEPPING.lock() = true;
             Ok((
-                Arc::new(RwLock::new(Value::Empty)),
-                ValueType::new_empty(&lu_dog.read().unwrap()),
+                <RefType<Value> as NewRefType<Value>>::new_ref_type(Value::Empty),
+                ValueType::new_empty(&s_read!(lu_dog)),
             ))
         }
         //
@@ -926,67 +903,60 @@ fn eval_expression(
         // 🚧 This should be looked at as part of  The Great Error Overhaul
         //
         Expression::ErrorExpression(ref error) => {
-            let error = lu_dog
-                .read()
-                .unwrap()
-                .exhume_error_expression(error)
-                .unwrap();
+            let error = s_read!(lu_dog).exhume_error_expression(error).unwrap();
 
             // 🚧 This isn't going to cut it.
-            print!("\t{}", error.read().unwrap().span);
+            print!("\t{}", s_read!(error).span);
 
             Ok((
-                Arc::new(RwLock::new(Value::Empty)),
-                ValueType::new_empty(&lu_dog.read().unwrap()),
+                <RefType<Value> as NewRefType<Value>>::new_ref_type(Value::Empty),
+                ValueType::new_empty(&s_read!(lu_dog)),
             ))
         }
         //
         // FieldAccess
         //
         Expression::FieldAccess(ref field) => {
-            let field = lu_dog.read().unwrap().exhume_field_access(field).unwrap();
-            let fat = &field
-                .read()
-                .unwrap()
-                .r65_field_access_target(&lu_dog.read().unwrap())[0];
-            let field_name = match *fat.read().unwrap() {
+            let field = s_read!(lu_dog).exhume_field_access(field).unwrap();
+            let fat = &s_read!(field).r65_field_access_target(&s_read!(lu_dog))[0];
+            let field_name = match *s_read!(fat) {
                 FieldAccessTarget::Field(ref field) => {
-                    let field = lu_dog.read().unwrap().exhume_field(field).unwrap();
-                    let field = field.read().unwrap();
+                    let field = s_read!(lu_dog).exhume_field(field).unwrap();
+                    let field = s_read!(field);
                     field.name.to_owned()
                 }
                 FieldAccessTarget::Function(ref func) => {
-                    let func = lu_dog.read().unwrap().exhume_function(func).unwrap();
-                    let func = func.read().unwrap();
+                    let func = s_read!(lu_dog).exhume_function(func).unwrap();
+                    let func = s_read!(func);
                     func.name.to_owned()
                 }
             };
 
             // debug!("FieldAccess field", field);
 
-            // let field_name = &field.read().unwrap().name;
+            // let field_name = &s_read!(field).name;
 
-            // What we're doing below is actualy dereferencing a pointer. I wonder
+            // What we're doing below is actually dereferencing a pointer. I wonder
             // if there is a way to make this less confusing and error prone? A
-            // macro wouldn't work because the pointer is stored under vairous
-            // names. So it would be a function on the referrer. Like realationship
+            // macro wouldn't work because the pointer is stored under various
+            // names. So it would be a function on the referrer. Like relationship
             // navigation, actually.
             //      `let expr = field.expression(lu_dog).unwrap()`
             // Something like that.
             // A macro could maybe do it, if we pass the name of the field storing
             // the pointer, actually.
             //
-            let expr = &field.read().unwrap().expression;
-            let expr = lu_dog.read().unwrap().exhume_expression(expr).unwrap();
+            let expr = &s_read!(field).expression;
+            let expr = s_read!(lu_dog).exhume_expression(expr).unwrap();
             // dereference!(field, expression, lu_dog);
 
             let (value, _ty) = eval_expression(expr, context)?;
-            let value = value.read().unwrap();
+            let value = s_read!(value);
             match &*value {
                 Value::ProxyType(value) => {
-                    let value = value.read().unwrap();
+                    let value = s_read!(value);
                     let value = value.get_attr_value(&field_name)?;
-                    let ty = value.read().unwrap().get_type(&lu_dog.read().unwrap());
+                    let ty = s_read!(value).get_type(&s_read!(lu_dog));
 
                     Ok((value, ty))
                 }
@@ -995,20 +965,20 @@ fn eval_expression(
                     // function call. We need to check for a function call first,
                     // and then a field.
                     // let woog_struct = field.r7_woog_struct(&field.id).unwrap();
-                    // let woog_struct = woog_struct.read().unwrap();
+                    // let woog_struct = s_read!(woog_struct);
                     // if let Some(impl_) = woog_struct.r8c_implementation(lu_dog).pop() {
-                    //     let impl_ = impl_.read().unwrap();
+                    //     let impl_ = s_read!(impl_);
 
                     //     let funcs = impl_.r9_function(lu_dog);
                     //     let func = funcs
                     //         .iter()
-                    //         .find(|f| f.read().unwrap().name == field_name)
+                    //         .find(|f| s_read!(f).name == field_name)
                     //         .and_then(|f| Some(f.clone()));
-                    //     let ty = func.read().unwrap().return_type;
+                    //     let ty = s_read!(func).return_type;
                     // } else {
-                    let value = value.read().unwrap();
+                    let value = s_read!(value);
                     let value = value.get_attr_value(field_name).unwrap();
-                    let ty = value.read().unwrap().get_type(&lu_dog.read().unwrap());
+                    let ty = s_read!(value).get_type(&s_read!(lu_dog));
 
                     Ok((value.clone(), ty))
                     // }
@@ -1025,34 +995,28 @@ fn eval_expression(
         Expression::ForLoop(ref for_loop) => {
             debug!("ForLoop", for_loop);
 
-            let for_loop = lu_dog.read().unwrap().exhume_for_loop(for_loop).unwrap();
-            let for_loop = for_loop.read().unwrap();
+            let for_loop = s_read!(lu_dog).exhume_for_loop(for_loop).unwrap();
+            let for_loop = s_read!(for_loop);
             let ident = for_loop.ident.to_owned();
-            let block = lu_dog
-                .read()
-                .unwrap()
-                .exhume_block(&for_loop.block)
-                .unwrap();
-            let list = lu_dog
-                .read()
-                .unwrap()
+            let block = s_read!(lu_dog).exhume_block(&for_loop.block).unwrap();
+            let list = s_read!(lu_dog)
                 .exhume_expression(&for_loop.expression)
                 .unwrap();
 
             let (list, _ty) = eval_expression(list, context)?;
-            let list = list.read().unwrap();
+            let list = s_read!(list);
             let list = if let Value::Vector(vec) = list.clone() {
                 vec
             } else if let Value::String(str) = &*list {
                 str.chars()
-                    .map(|c| Arc::new(RwLock::new(Value::Char(c))))
+                    .map(|c| <RefType<Value> as NewRefType<Value>>::new_ref_type(Value::Char(c)))
                     .collect()
             } else if let Value::Range(range) = &*list {
                 let mut vec = Vec::new();
-                for i in (&*range.start.read().unwrap()).try_into()?
-                    ..(&*range.end.read().unwrap()).try_into()?
-                {
-                    vec.push(Arc::new(RwLock::new(Value::Integer(i))));
+                for i in (&*s_read!(range.start)).try_into()?..(&*s_read!(range.end)).try_into()? {
+                    vec.push(<RefType<Value> as NewRefType<Value>>::new_ref_type(
+                        Value::Integer(i),
+                    ));
                 }
                 vec
             } else {
@@ -1062,7 +1026,7 @@ fn eval_expression(
                 });
             };
 
-            let block = Expression::new_block(&block, &mut *lu_dog.write().unwrap());
+            let block = Expression::new_block(&block, &mut *s_write!(lu_dog));
             context.stack.push();
             // list.par_iter().for_each(|item| {
             //     // This gives each thread it's own stack frame, and read only
@@ -1086,29 +1050,21 @@ fn eval_expression(
             context.stack.pop();
 
             Ok((
-                Arc::new(RwLock::new(Value::Empty)),
-                ValueType::new_empty(&lu_dog.read().unwrap()),
+                <RefType<Value> as NewRefType<Value>>::new_ref_type(Value::Empty),
+                ValueType::new_empty(&s_read!(lu_dog)),
             ))
         }
         //
         // Index
         //
         Expression::Index(ref index) => {
-            let index = lu_dog.read().unwrap().exhume_index(index).unwrap();
-            let index = index.read().unwrap();
-            let target = lu_dog
-                .read()
-                .unwrap()
-                .exhume_expression(&index.target)
-                .unwrap();
-            let index = lu_dog
-                .read()
-                .unwrap()
-                .exhume_expression(&index.index)
-                .unwrap();
+            let index = s_read!(lu_dog).exhume_index(index).unwrap();
+            let index = s_read!(index);
+            let target = s_read!(lu_dog).exhume_expression(&index.target).unwrap();
+            let index = s_read!(lu_dog).exhume_expression(&index.index).unwrap();
 
             let (index, _ty) = eval_expression(index, context)?;
-            let index = if let Value::Integer(index) = *index.read().unwrap() {
+            let index = if let Value::Integer(index) = *s_read!(index) {
                 index as usize
             } else {
                 return Err(ChaChaError::BadJuJu {
@@ -1118,12 +1074,12 @@ fn eval_expression(
             };
 
             let (list, _ty) = eval_expression(target, context)?;
-            let list = list.read().unwrap();
+            let list = s_read!(list);
             if let Value::Vector(vec) = list.clone() {
                 if index < vec.len() {
                     Ok((
                         vec[index].to_owned(),
-                        ValueType::new_empty(&lu_dog.read().unwrap()),
+                        ValueType::new_empty(&s_read!(lu_dog)),
                     ))
                 } else {
                     Err(ChaChaError::BadJuJu {
@@ -1134,8 +1090,10 @@ fn eval_expression(
             } else if let Value::String(str) = &*list {
                 if index < str.len() {
                     Ok((
-                        Arc::new(RwLock::new(Value::String(str[index..index + 1].to_owned()))),
-                        ValueType::new_empty(&lu_dog.read().unwrap()),
+                        <RefType<Value> as NewRefType<Value>>::new_ref_type(Value::String(
+                            str[index..index + 1].to_owned(),
+                        )),
+                        ValueType::new_empty(&s_read!(lu_dog)),
                     ))
                 } else {
                     Err(ChaChaError::BadJuJu {
@@ -1154,17 +1112,17 @@ fn eval_expression(
         // ListElement
         //
         Expression::ListElement(ref element) => {
-            let element = lu_dog.read().unwrap().exhume_list_element(element).unwrap();
-            let element = element.read().unwrap();
-            let expr = element.r55_expression(&lu_dog.read().unwrap())[0].clone();
+            let element = s_read!(lu_dog).exhume_list_element(element).unwrap();
+            let element = s_read!(element);
+            let expr = element.r55_expression(&s_read!(lu_dog))[0].clone();
             eval_expression(expr, context)
         }
         //
         // ListExpression
         //
         Expression::ListExpression(ref list) => {
-            let list = lu_dog.read().unwrap().exhume_list_expression(list).unwrap();
-            let list = list.read().unwrap();
+            let list = s_read!(lu_dog).exhume_list_expression(list).unwrap();
+            let list = s_read!(list);
             if let Some(ref element) = list.elements {
                 // This is the first element in the list. We need to give this list
                 // a type, and I'm going to do the esay thing here and take the type
@@ -1179,37 +1137,37 @@ fn eval_expression(
                 // change I think. But I still need the type when I return from here.
                 // So maybe it's just a loosening of the rules -- rules that I'm probably
                 // not implementing now anyway.
-                let element = lu_dog.read().unwrap().exhume_list_element(element).unwrap();
-                let element = element.read().unwrap();
-                let expr = element.r15_expression(&lu_dog.read().unwrap())[0].clone();
+                let element = s_read!(lu_dog).exhume_list_element(element).unwrap();
+                let element = s_read!(element);
+                let expr = element.r15_expression(&s_read!(lu_dog))[0].clone();
                 let (value, ty) = eval_expression(expr, context)?;
                 let mut values = vec![value];
 
                 let mut next = element.next;
                 while let Some(ref id) = next {
-                    let element = lu_dog.read().unwrap().exhume_list_element(id).unwrap();
-                    let element = element.read().unwrap();
-                    let expr = element.r15_expression(&lu_dog.read().unwrap())[0].clone();
+                    let element = s_read!(lu_dog).exhume_list_element(id).unwrap();
+                    let element = s_read!(element);
+                    let expr = element.r15_expression(&s_read!(lu_dog))[0].clone();
                     let (value, _ty) = eval_expression(expr, context)?;
                     values.push(value);
                     next = element.next;
                 }
 
-                let mut lu_dog = lu_dog.write().unwrap();
+                let mut lu_dog = s_write!(lu_dog);
                 let list = List::new(&ty, &mut lu_dog);
 
                 Ok((
-                    Arc::new(RwLock::new(Value::Vector(values))),
+                    <RefType<Value> as NewRefType<Value>>::new_ref_type(Value::Vector(values)),
                     ValueType::new_list(&list, &mut lu_dog),
                 ))
             } else {
-                let mut lu_dog = lu_dog.write().unwrap();
+                let mut lu_dog = s_write!(lu_dog);
                 let list = List::new(&ValueType::new_empty(&lu_dog), &mut lu_dog);
 
                 Ok((
-                    Arc::new(RwLock::new(Value::Vector(vec![Arc::new(RwLock::new(
-                        Value::Empty,
-                    ))]))),
+                    <RefType<Value> as NewRefType<Value>>::new_ref_type(Value::Vector(vec![
+                        <RefType<Value> as NewRefType<Value>>::new_ref_type(Value::Empty),
+                    ])),
                     ValueType::new_list(&list, &mut lu_dog),
                 ))
             }
@@ -1218,80 +1176,79 @@ fn eval_expression(
         // Literal
         //
         Expression::Literal(ref literal) => {
-            let literal = lu_dog.read().unwrap().exhume_literal(literal).unwrap();
-            let z = match &*literal.read().unwrap() {
+            let literal = s_read!(lu_dog).exhume_literal(literal).unwrap();
+            let z = match &*s_read!(literal) {
                 //
                 // BooleanLiteral
                 //
                 Literal::BooleanLiteral(ref literal) => {
-                    let literal = lu_dog
-                        .read()
-                        .unwrap()
-                        .exhume_boolean_literal(literal)
-                        .unwrap();
-                    let literal = literal.read().unwrap();
+                    let literal = s_read!(lu_dog).exhume_boolean_literal(literal).unwrap();
+                    let literal = s_read!(literal);
                     let ty = Ty::new_boolean();
-                    let ty = lu_dog.read().unwrap().exhume_value_type(&ty.id()).unwrap();
+                    let ty = s_read!(lu_dog).exhume_value_type(&ty.id()).unwrap();
 
                     match *literal {
-                        BooleanLiteral::FalseLiteral(_) => {
-                            Ok((Arc::new(RwLock::new(Value::Boolean(false))), ty))
-                        }
-                        BooleanLiteral::TrueLiteral(_) => {
-                            Ok((Arc::new(RwLock::new(Value::Boolean(true))), ty))
-                        }
+                        BooleanLiteral::FalseLiteral(_) => Ok((
+                            <RefType<Value> as NewRefType<Value>>::new_ref_type(Value::Boolean(
+                                false,
+                            )),
+                            ty,
+                        )),
+                        BooleanLiteral::TrueLiteral(_) => Ok((
+                            <RefType<Value> as NewRefType<Value>>::new_ref_type(Value::Boolean(
+                                true,
+                            )),
+                            ty,
+                        )),
                     }
                 }
                 //
                 // FloatLiteral
                 //
                 Literal::FloatLiteral(ref literal) => {
-                    let literal = lu_dog
-                        .read()
-                        .unwrap()
-                        .exhume_float_literal(literal)
-                        .unwrap();
-                    let value = literal.read().unwrap().x_value;
+                    let literal = s_read!(lu_dog).exhume_float_literal(literal).unwrap();
+                    let value = s_read!(literal).x_value;
                     let value = Value::Float(value);
                     let ty = Ty::new_float();
                     debug!("ty: {:?}", ty);
-                    let ty = lu_dog.read().unwrap().exhume_value_type(&ty.id()).unwrap();
+                    let ty = s_read!(lu_dog).exhume_value_type(&ty.id()).unwrap();
                     debug!("ty: {:?}", ty);
 
-                    Ok((Arc::new(RwLock::new(value)), ty))
+                    Ok((
+                        <RefType<Value> as NewRefType<Value>>::new_ref_type(value),
+                        ty,
+                    ))
                 }
                 //
                 // IntegerLiteral
                 //
                 Literal::IntegerLiteral(ref literal) => {
-                    let literal = lu_dog
-                        .read()
-                        .unwrap()
-                        .exhume_integer_literal(literal)
-                        .unwrap();
-                    let value = literal.read().unwrap().x_value;
+                    let literal = s_read!(lu_dog).exhume_integer_literal(literal).unwrap();
+                    let value = s_read!(literal).x_value;
                     let value = Value::Integer(value);
                     let ty = Ty::new_integer();
                     debug!("ty: {:?}", ty);
-                    let ty = lu_dog.read().unwrap().exhume_value_type(&ty.id()).unwrap();
+                    let ty = s_read!(lu_dog).exhume_value_type(&ty.id()).unwrap();
                     debug!("ty: {:?}", ty);
 
-                    Ok((Arc::new(RwLock::new(value)), ty))
+                    Ok((
+                        <RefType<Value> as NewRefType<Value>>::new_ref_type(value),
+                        ty,
+                    ))
                 }
                 //
                 // StringLiteral
                 //
                 Literal::StringLiteral(ref literal) => {
-                    let literal = lu_dog
-                        .read()
-                        .unwrap()
-                        .exhume_string_literal(literal)
-                        .unwrap();
+                    let literal = s_read!(lu_dog).exhume_string_literal(literal).unwrap();
                     // 🚧 It'd be great if this were an Rc...
-                    let value = Value::String(literal.read().unwrap().x_value.clone());
+                    let value = Value::String(s_read!(literal).x_value.clone());
                     let ty = Ty::new_s_string();
-                    let ty = lu_dog.read().unwrap().exhume_value_type(&ty.id()).unwrap();
-                    Ok((Arc::new(RwLock::new(value)), ty))
+                    let ty = s_read!(lu_dog).exhume_value_type(&ty.id()).unwrap();
+                    Ok((
+                        <RefType<Value> as NewRefType<Value>>::new_ref_type(value),
+                        ty,
+                    ))
                 }
             };
             z
@@ -1300,32 +1257,27 @@ fn eval_expression(
         // Negation
         //
         Expression::Negation(ref id) => {
-            let negation = lu_dog.read().unwrap().exhume_negation(id).unwrap();
-            let operand = negation
-                .read()
-                .unwrap()
-                .r70_expression(&lu_dog.read().unwrap())[0]
-                .clone();
+            let negation = s_read!(lu_dog).exhume_negation(id).unwrap();
+            let operand = s_read!(negation).r70_expression(&s_read!(lu_dog))[0].clone();
             let (value, ty) = eval_expression(operand, context)?;
-            let value = -value.read().unwrap().clone();
+            let value = -s_read!(value).clone();
 
-            Ok((Arc::new(RwLock::new(value)), ty))
+            Ok((
+                <RefType<Value> as NewRefType<Value>>::new_ref_type(value),
+                ty,
+            ))
         }
         //
         // Operator
         //
         Expression::Operator(ref operator) => {
-            let operator = lu_dog.read().unwrap().exhume_operator(operator).unwrap();
-            let operator = operator.read().unwrap();
-            let lhs_expr = lu_dog
-                .read()
-                .unwrap()
-                .exhume_expression(&operator.lhs)
-                .unwrap();
+            let operator = s_read!(lu_dog).exhume_operator(operator).unwrap();
+            let operator = s_read!(operator);
+            let lhs_expr = s_read!(lu_dog).exhume_expression(&operator.lhs).unwrap();
 
             let (lhs, lhs_ty) = eval_expression(lhs_expr.clone(), context)?;
             let rhs = if let Some(ref rhs) = operator.rhs {
-                let rhs = lu_dog.read().unwrap().exhume_expression(rhs).unwrap();
+                let rhs = s_read!(lu_dog).exhume_expression(rhs).unwrap();
                 let (rhs, _rhs_ty) = eval_expression(rhs, context)?;
                 Some(rhs)
             } else {
@@ -1334,46 +1286,50 @@ fn eval_expression(
 
             match &operator.subtype {
                 OperatorEnum::Binary(ref binary) => {
-                    let binary = lu_dog.read().unwrap().exhume_binary(binary).unwrap();
-                    let binary = binary.read().unwrap();
+                    let binary = s_read!(lu_dog).exhume_binary(binary).unwrap();
+                    let binary = s_read!(binary);
                     match &*binary {
                         Binary::Addition(_) => {
-                            let value =
-                                lhs.read().unwrap().clone() + rhs.unwrap().read().unwrap().clone();
-                            Ok((Arc::new(RwLock::new(value)), lhs_ty))
+                            let value = s_read!(lhs).clone() + s_read!(rhs.unwrap()).clone();
+                            Ok((
+                                <RefType<Value> as NewRefType<Value>>::new_ref_type(value),
+                                lhs_ty,
+                            ))
                         }
                         Binary::Assignment(_) => {
-                            if let Expression::VariableExpression(expr) = &*lhs_expr.read().unwrap()
-                            {
-                                let expr = lu_dog
-                                    .read()
-                                    .unwrap()
-                                    .exhume_variable_expression(expr)
-                                    .unwrap();
-                                let expr = expr.read().unwrap();
+                            if let Expression::VariableExpression(expr) = &*s_read!(lhs_expr) {
+                                let expr =
+                                    s_read!(lu_dog).exhume_variable_expression(expr).unwrap();
+                                let expr = s_read!(expr);
                                 let name = expr.name.clone();
                                 let value = context.stack.get(&name).unwrap();
-                                let mut value = value.write().unwrap();
-                                *value = rhs.unwrap().read().unwrap().clone();
+                                let mut value = s_write!(value);
+                                *value = s_read!(rhs.unwrap()).clone();
                                 // stack.insert(name, rhs.unwrap().clone());
                             }
 
                             Ok((lhs, lhs_ty))
                         }
                         Binary::Division(_) => {
-                            let value =
-                                lhs.read().unwrap().clone() / rhs.unwrap().read().unwrap().clone();
-                            Ok((Arc::new(RwLock::new(value)), lhs_ty))
+                            let value = s_read!(lhs).clone() / s_read!(rhs.unwrap()).clone();
+                            Ok((
+                                <RefType<Value> as NewRefType<Value>>::new_ref_type(value),
+                                lhs_ty,
+                            ))
                         }
                         Binary::Subtraction(_) => {
-                            let value =
-                                lhs.read().unwrap().clone() - rhs.unwrap().read().unwrap().clone();
-                            Ok((Arc::new(RwLock::new(value)), lhs_ty))
+                            let value = s_read!(lhs).clone() - s_read!(rhs.unwrap()).clone();
+                            Ok((
+                                <RefType<Value> as NewRefType<Value>>::new_ref_type(value),
+                                lhs_ty,
+                            ))
                         }
                         Binary::Multiplication(_) => {
-                            let value =
-                                lhs.read().unwrap().clone() * rhs.unwrap().read().unwrap().clone();
-                            Ok((Arc::new(RwLock::new(value)), lhs_ty))
+                            let value = s_read!(lhs).clone() * s_read!(rhs.unwrap()).clone();
+                            Ok((
+                                <RefType<Value> as NewRefType<Value>>::new_ref_type(value),
+                                lhs_ty,
+                            ))
                         }
                         ref alpha => {
                             ensure!(
@@ -1382,35 +1338,44 @@ fn eval_expression(
                                     message: format!("deal with expression: {:?}", alpha),
                                 }
                             );
-                            Ok((Arc::new(RwLock::new(Value::Empty)), lhs_ty))
+                            Ok((
+                                <RefType<Value> as NewRefType<Value>>::new_ref_type(Value::Empty),
+                                lhs_ty,
+                            ))
                         }
                     }
                 }
                 OperatorEnum::Comparison(ref comp) => {
-                    let comp = lu_dog.read().unwrap().exhume_comparison(comp).unwrap();
-                    let comp = comp.read().unwrap();
+                    let comp = s_read!(lu_dog).exhume_comparison(comp).unwrap();
+                    let comp = s_read!(comp);
                     match &*comp {
                         Comparison::GreaterThan(_) => {
-                            let value = lhs.read().unwrap().gt(&rhs.unwrap().read().unwrap());
+                            let value = s_read!(lhs).gt(&s_read!(rhs.unwrap()));
                             let value = Value::Boolean(value);
                             let ty = Ty::new_boolean();
                             let ty = ValueType::new_ty(
-                                &Arc::new(RwLock::new(ty)),
-                                &mut lu_dog.write().unwrap(),
+                                &<RefType<Ty> as NewRefType<Ty>>::new_ref_type(ty),
+                                &mut s_write!(lu_dog),
                             );
 
-                            Ok((Arc::new(RwLock::new(value)), ty))
+                            Ok((
+                                <RefType<Value> as NewRefType<Value>>::new_ref_type(value),
+                                ty,
+                            ))
                         }
                         Comparison::LessThanOrEqual(_) => {
-                            let value = lhs.read().unwrap().lte(&rhs.unwrap().read().unwrap());
+                            let value = s_read!(lhs).lte(&s_read!(rhs.unwrap()));
                             let value = Value::Boolean(value);
                             let ty = Ty::new_boolean();
                             let ty = ValueType::new_ty(
-                                &Arc::new(RwLock::new(ty)),
-                                &mut lu_dog.write().unwrap(),
+                                &<RefType<Ty> as NewRefType<Ty>>::new_ref_type(ty),
+                                &mut s_write!(lu_dog),
                             );
 
-                            Ok((Arc::new(RwLock::new(value)), ty))
+                            Ok((
+                                <RefType<Value> as NewRefType<Value>>::new_ref_type(value),
+                                ty,
+                            ))
                         }
                         _ => unimplemented!(),
                     }
@@ -1421,39 +1386,38 @@ fn eval_expression(
         // Print
         //
         Expression::Print(ref print) => {
-            let print = lu_dog.read().unwrap().exhume_print(print).unwrap();
+            let print = s_read!(lu_dog).exhume_print(print).unwrap();
             debug!("Expression::Print print", print);
-            let expr = print
-                .read()
-                .unwrap()
-                .r32_expression(&lu_dog.read().unwrap())[0]
-                .clone();
+            let expr = s_read!(print).r32_expression(&s_read!(lu_dog))[0].clone();
             let (value, _) = eval_expression(expr, context)?;
-            let result = format!("{}", value.read().unwrap());
+            let result = format!("{}", s_read!(value));
             let result = result.replace("\\n", "\n");
 
-            context
-                .std_out_send
-                .send(format!("{}", result_style.paint(result)))
-                .context(InternalCompilerChannelSnafu {
-                    message: "error writing to std out queue".to_owned(),
-                })?;
+            cfg_if::cfg_if! {
+                if #[cfg(feature = "print-std-out")] {
+                    print!("{}", result_style.paint(result));
+                    std::io::stdout().flush().unwrap();
+                } else {
+                    context
+                        .std_out_send
+                        .send(format!("{}", result_style.paint(result)))
+                        .context(InternalCompilerChannelSnafu {
+                            message: "error writing to std out queue".to_owned(),
+                        })?;
+                }
+            }
 
-            Ok((value, ValueType::new_empty(&lu_dog.read().unwrap())))
+            Ok((value, ValueType::new_empty(&s_read!(lu_dog))))
         }
         //
         // Range
         //
         Expression::RangeExpression(ref range) => {
-            let range = lu_dog
-                .read()
-                .unwrap()
-                .exhume_range_expression(range)
-                .unwrap();
-            let lhs = range.read().unwrap().lhs.unwrap();
-            let lhs = lu_dog.read().unwrap().exhume_expression(&lhs).unwrap();
-            let rhs = range.read().unwrap().rhs.unwrap();
-            let rhs = lu_dog.read().unwrap().exhume_expression(&rhs).unwrap();
+            let range = s_read!(lu_dog).exhume_range_expression(range).unwrap();
+            let lhs = s_read!(range).lhs.unwrap();
+            let lhs = s_read!(lu_dog).exhume_expression(&lhs).unwrap();
+            let rhs = s_read!(range).rhs.unwrap();
+            let rhs = s_read!(lu_dog).exhume_expression(&rhs).unwrap();
 
             let (lhs, _) = eval_expression(lhs, context)?;
             let (rhs, _) = eval_expression(rhs, context)?;
@@ -1464,67 +1428,46 @@ fn eval_expression(
             };
 
             Ok((
-                Arc::new(RwLock::new(Value::Range(range))),
-                ValueType::new_range(&lu_dog.read().unwrap()),
+                <RefType<Value> as NewRefType<Value>>::new_ref_type(Value::Range(range)),
+                ValueType::new_range(&s_read!(lu_dog)),
             ))
         }
         //
         // StructExpression
         //
         Expression::StructExpression(ref expr) => {
-            let expr = lu_dog
-                .read()
-                .unwrap()
-                .exhume_struct_expression(expr)
-                .unwrap();
-            let field_exprs = expr
-                .read()
-                .unwrap()
-                .r26_field_expression(&lu_dog.read().unwrap());
+            let expr = s_read!(lu_dog).exhume_struct_expression(expr).unwrap();
+            let field_exprs = s_read!(expr).r26_field_expression(&s_read!(lu_dog));
 
             // Get name, value and type for each field expression.
             let field_exprs = field_exprs
                 .iter()
                 .map(|f| {
-                    let expr = lu_dog
-                        .read()
-                        .unwrap()
-                        .exhume_expression(&f.read().unwrap().expression)
+                    let expr = s_read!(lu_dog)
+                        .exhume_expression(&s_read!(f).expression)
                         .unwrap();
                     let (value, ty) = eval_expression(expr.clone(), context)?;
                     debug!("StructExpression field value", value);
                     debug!("StructExpression field ty", ty);
-                    Ok((f.read().unwrap().name.clone(), ty, value, expr))
+                    Ok((s_read!(f).name.clone(), ty, value, expr))
                 })
                 .collect::<Result<Vec<_>>>()?;
 
-            let woog_struct = expr
-                .read()
-                .unwrap()
-                .r39_woog_struct(&lu_dog.read().unwrap())[0]
-                .clone();
-            let ty = lu_dog
-                .read()
-                .unwrap()
-                .exhume_value_type(&woog_struct.read().unwrap().id)
+            let woog_struct = s_read!(expr).r39_woog_struct(&s_read!(lu_dog))[0].clone();
+            let ty = s_read!(lu_dog)
+                .exhume_value_type(&s_read!(woog_struct).id)
                 .unwrap();
-            let fields = woog_struct
-                .read()
-                .unwrap()
-                .r7_field(&lu_dog.read().unwrap());
+            let fields = s_read!(woog_struct).r7_field(&s_read!(lu_dog));
 
             // Type checking fields here
             let mut user_type = UserType::new(&ty, context);
+            let lu_dog = s_read!(lu_dog);
             for (name, ty, value, expr) in field_exprs {
-                if let Some(field) = fields.iter().find(|f| f.read().unwrap().name == name) {
-                    let struct_ty = lu_dog
-                        .read()
-                        .unwrap()
-                        .exhume_value_type(&field.read().unwrap().ty)
-                        .unwrap();
+                if let Some(field) = fields.iter().find(|f| s_read!(f).name == name) {
+                    let struct_ty = lu_dog.exhume_value_type(&s_read!(field).ty).unwrap();
 
-                    let x_value = &expr.read().unwrap().r11_x_value(&lu_dog.read().unwrap())[0];
-                    let span = &x_value.read().unwrap().r63_span(&lu_dog.read().unwrap())[0];
+                    let x_value = &s_read!(expr).r11_x_value(&lu_dog)[0];
+                    let span = &s_read!(x_value).r63_span(&lu_dog)[0];
 
                     typecheck(&struct_ty, &ty, span, context)?;
 
@@ -1541,9 +1484,13 @@ fn eval_expression(
             }
 
             Ok((
-                Arc::new(RwLock::new(Value::UserType(Arc::new(RwLock::new(
-                    user_type,
-                ))))),
+                <RefType<Value> as NewRefType<Value>>::new_ref_type(Value::UserType(<RefType<
+                    UserType,
+                > as NewRefType<
+                    UserType,
+                >>::new_ref_type(
+                    user_type
+                ))),
                 ty,
             ))
         }
@@ -1553,22 +1500,22 @@ fn eval_expression(
         Expression::TypeCast(ref expr) => {
             let sarzak = context.sarzak.clone();
 
-            let expr = lu_dog.read().unwrap().exhume_type_cast(expr).unwrap();
+            let expr = s_read!(lu_dog).exhume_type_cast(expr).unwrap();
             debug!("Expression::TypeCast", expr);
 
-            let lhs = expr.read().unwrap().r68_expression(&lu_dog.read().unwrap())[0].clone();
-            let as_ty = expr.read().unwrap().r69_value_type(&lu_dog.read().unwrap())[0].clone();
+            let lhs = s_read!(expr).r68_expression(&s_read!(lu_dog))[0].clone();
+            let as_ty = s_read!(expr).r69_value_type(&s_read!(lu_dog))[0].clone();
 
             let (lhs, _lhs_ty) = eval_expression(lhs, context)?;
 
-            let value = match &*as_ty.read().unwrap() {
+            let value = match &*s_read!(as_ty) {
                 ValueType::Ty(ref ty) => {
                     // 🚧 WTF?
-                    let ty = sarzak.read().unwrap().exhume_ty(ty).unwrap().clone();
+                    let ty = s_read!(sarzak).exhume_ty(ty).unwrap().clone();
                     match ty {
                         Ty::Float(_) => {
-                            let value: f64 = (&*lhs.read().unwrap()).try_into()?;
-                            Arc::new(RwLock::new(Value::Float(value)))
+                            let value: f64 = (&*s_read!(lhs)).try_into()?;
+                            <RefType<Value> as NewRefType<Value>>::new_ref_type(Value::Float(value))
                         }
                         ref alpha => {
                             ensure!(
@@ -1598,24 +1545,20 @@ fn eval_expression(
         // VariableExpression
         //
         Expression::VariableExpression(ref expr) => {
-            let expr = lu_dog
-                .read()
-                .unwrap()
-                .exhume_variable_expression(expr)
-                .unwrap();
+            let expr = s_read!(lu_dog).exhume_variable_expression(expr).unwrap();
             debug!("Expression::VariableExpression", expr);
-            let value = context.stack.get(&expr.read().unwrap().name);
+            let value = context.stack.get(&s_read!(expr).name);
 
             ensure!(value.is_some(), {
-                let var = expr.read().unwrap().name.clone();
+                let var = s_read!(expr).name.clone();
                 VariableNotFoundSnafu { var }
             });
 
             let value = value.unwrap();
 
-            no_debug!("Expression::VariableExpression", value.read().unwrap());
+            no_debug!("Expression::VariableExpression", s_read!(value));
 
-            let ty = value.read().unwrap().get_type(&lu_dog.read().unwrap());
+            let ty = s_read!(value).get_type(&s_read!(lu_dog));
 
             // 🚧
             // Cloning the value isn't going to cut it I don't think. There are
@@ -1631,39 +1574,31 @@ fn eval_expression(
         // XIf
         //
         Expression::XIf(ref expr) => {
-            let expr = lu_dog.read().unwrap().exhume_x_if(expr).unwrap();
-            let expr = expr.read().unwrap();
+            let expr = s_read!(lu_dog).exhume_x_if(expr).unwrap();
+            let expr = s_read!(expr);
             debug!("Expression::XIf", expr);
 
-            let cond_expr = lu_dog
-                .read()
-                .unwrap()
-                .exhume_expression(&expr.test)
-                .unwrap();
+            let cond_expr = s_read!(lu_dog).exhume_expression(&expr.test).unwrap();
 
             let (cond, _ty) = eval_expression(cond_expr, context)?;
             debug!("Expression::XIf conditional", cond);
 
-            let cond = cond.read().unwrap();
+            let cond = s_read!(cond);
             Ok(if (&*cond).try_into()? {
                 // Evaluate the true block
-                let block = lu_dog
-                    .read()
-                    .unwrap()
-                    .exhume_expression(&expr.true_block)
-                    .unwrap();
+                let block = s_read!(lu_dog).exhume_expression(&expr.true_block).unwrap();
                 eval_expression(block, context)?
             } else {
                 debug!("Expression::XIf else");
                 if let Some(expr) = &expr.false_block {
                     debug!("Expression::XIf false block");
                     // Evaluate the false block
-                    let block = lu_dog.read().unwrap().exhume_expression(expr).unwrap();
+                    let block = s_read!(lu_dog).exhume_expression(expr).unwrap();
                     eval_expression(block, context)?
                 } else {
                     (
-                        Arc::new(RwLock::new(Value::Empty)),
-                        ValueType::new_empty(&lu_dog.read().unwrap()),
+                        <RefType<Value> as NewRefType<Value>>::new_ref_type(Value::Empty),
+                        ValueType::new_empty(&s_read!(lu_dog)),
                     )
                 }
             })
@@ -1672,11 +1607,11 @@ fn eval_expression(
         // XReturn
         //
         Expression::XReturn(ref expr) => {
-            let expr = lu_dog.read().unwrap().exhume_x_return(expr).unwrap();
+            let expr = s_read!(lu_dog).exhume_x_return(expr).unwrap();
             debug!("Expression::XReturn", expr);
 
-            let expr = &expr.read().unwrap().expression;
-            let expr = lu_dog.read().unwrap().exhume_expression(expr).unwrap();
+            let expr = &s_read!(expr).expression;
+            let expr = s_read!(lu_dog).exhume_expression(expr).unwrap();
 
             let (value, ty) = eval_expression(expr, context)?;
             Err(ChaChaError::Return {
@@ -1688,32 +1623,29 @@ fn eval_expression(
         // ZNone
         //
         Expression::ZNone(_) => Ok((
-            Arc::new(RwLock::new(Value::Empty)),
-            ValueType::new_empty(&lu_dog.read().unwrap()),
+            <RefType<Value> as NewRefType<Value>>::new_ref_type(Value::Empty),
+            ValueType::new_empty(&s_read!(lu_dog)),
         )),
         //
         // ZSome
         //
         Expression::ZSome(ref some) => {
-            let some = lu_dog.read().unwrap().exhume_z_some(some).unwrap();
+            let some = s_read!(lu_dog).exhume_z_some(some).unwrap();
             debug!("Expression::ZSome", some);
 
-            let value = &some.read().unwrap().r23_x_value(&lu_dog.read().unwrap())[0];
-            let option = &some.read().unwrap().r3_woog_option(&lu_dog.read().unwrap())[0];
-            let ty = &option
-                .read()
-                .unwrap()
-                .r2_value_type(&lu_dog.read().unwrap())[0];
+            let value = &s_read!(some).r23_x_value(&s_read!(lu_dog))[0];
+            let option = &s_read!(some).r3_woog_option(&s_read!(lu_dog))[0];
+            let ty = &s_read!(option).r2_value_type(&s_read!(lu_dog))[0];
 
-            let value = match value.read().unwrap().subtype {
+            let value = match s_read!(value).subtype {
                 XValueEnum::Expression(ref expr) => {
-                    let expr = lu_dog.read().unwrap().exhume_expression(expr).unwrap();
+                    let expr = s_read!(lu_dog).exhume_expression(expr).unwrap();
                     let (value, _ty) = eval_expression(expr, context)?;
                     value
                 }
                 XValueEnum::Variable(ref var) => {
-                    let var = lu_dog.read().unwrap().exhume_variable(var).unwrap();
-                    Arc::new(RwLock::new(Value::Empty))
+                    let var = s_read!(lu_dog).exhume_variable(var).unwrap();
+                    <RefType<Value> as NewRefType<Value>>::new_ref_type(Value::Empty)
                 }
             };
 
@@ -1728,77 +1660,65 @@ fn eval_expression(
             );
 
             Ok((
-                Arc::new(RwLock::new(Value::Empty)),
-                ValueType::new_empty(&lu_dog.read().unwrap()),
+                <RefType<Value> as NewRefType<Value>>::new_ref_type(Value::Empty),
+                ValueType::new_empty(&s_read!(lu_dog)),
             ))
         }
     }
 }
 
 pub fn eval_statement(
-    statement: Arc<RwLock<Statement>>,
+    statement: RefType<Statement>,
     context: &mut Context,
-) -> Result<(Arc<RwLock<Value>>, Arc<RwLock<ValueType>>)> {
+) -> Result<(RefType<Value>, RefType<ValueType>)> {
     let lu_dog = context.lu_dog.clone();
 
     debug!("eval_statement statement", statement);
     trace!("eval_statement stack", context.stack);
 
-    match statement.read().unwrap().subtype {
+    span!("eval_statement");
+
+    match s_read!(statement).subtype {
         StatementEnum::ExpressionStatement(ref stmt) => {
-            let stmt = lu_dog
-                .read()
-                .unwrap()
-                .exhume_expression_statement(stmt)
-                .unwrap();
-            let stmt = stmt.read().unwrap();
-            let expr = stmt.r31_expression(&lu_dog.read().unwrap())[0].clone();
+            let stmt = s_read!(lu_dog).exhume_expression_statement(stmt).unwrap();
+            let stmt = s_read!(stmt);
+            let expr = stmt.r31_expression(&s_read!(lu_dog))[0].clone();
             let (value, ty) = eval_expression(expr, context)?;
-            no_debug!(
-                "StatementEnum::ExpressionStatement: value",
-                value.read().unwrap()
-            );
+            no_debug!("StatementEnum::ExpressionStatement: value", s_read!(value));
             debug!("StatementEnum::ExpressionStatement: ty", ty);
 
             Ok((value, ty))
         }
         StatementEnum::LetStatement(ref stmt) => {
-            let stmt = lu_dog.read().unwrap().exhume_let_statement(stmt).unwrap();
-            let stmt = stmt.read().unwrap();
+            let stmt = s_read!(lu_dog).exhume_let_statement(stmt).unwrap();
+            let stmt = s_read!(stmt);
             debug!("StatementEnum::LetStatement: stmt", stmt);
 
-            let expr = stmt.r20_expression(&lu_dog.read().unwrap())[0].clone();
+            let expr = stmt.r20_expression(&s_read!(lu_dog))[0].clone();
             debug!("expr", expr);
 
             let (value, ty) = eval_expression(expr, context)?;
             debug!("value", value);
             debug!("ty", ty);
 
-            let var = stmt.r21_local_variable(&lu_dog.read().unwrap())[0]
-                .read()
-                .unwrap()
-                .clone();
-            let var = var.r12_variable(&lu_dog.read().unwrap())[0]
-                .read()
-                .unwrap()
-                .clone();
+            let var = s_read!(stmt.r21_local_variable(&s_read!(lu_dog))[0]).clone();
+            let var = s_read!(var.r12_variable(&s_read!(lu_dog))[0]).clone();
             debug!("var", var);
 
-            log::debug!("inserting {} = {}", var.name, value.read().unwrap());
+            log::debug!("inserting {} = {}", var.name, s_read!(value));
             context.stack.insert(var.name, value);
 
-            Ok((Arc::new(RwLock::new(Value::Empty)), ty))
+            Ok((
+                <RefType<Value> as NewRefType<Value>>::new_ref_type(Value::Empty),
+                ty,
+            ))
         }
         StatementEnum::ResultStatement(ref stmt) => {
-            let stmt = lu_dog
-                .read()
-                .unwrap()
-                .exhume_result_statement(stmt)
-                .unwrap();
-            let stmt = stmt.read().unwrap();
+            let stmt = s_read!(lu_dog).exhume_result_statement(stmt).unwrap();
+            let stmt = s_read!(stmt);
             debug!("StatementEnum::ResultStatement: stmt", stmt);
 
-            let expr = stmt.r41_expression(&lu_dog.read().unwrap())[0].clone();
+            let expr = stmt.r41_expression(&s_read!(lu_dog))[0].clone();
             debug!("StatementEnum::ResultStatement expr", expr);
 
             let (value, ty) = eval_expression(expr, context)?; // {
@@ -1815,8 +1735,8 @@ pub fn eval_statement(
         ref beta => {
             error!("deal with statement", beta);
             Ok((
-                Arc::new(RwLock::new(Value::Empty)),
-                ValueType::new_empty(&lu_dog.read().unwrap()),
+                <RefType<Value> as NewRefType<Value>>::new_ref_type(Value::Empty),
+                ValueType::new_empty(&s_read!(lu_dog)),
             ))
         }
     }
@@ -1825,16 +1745,17 @@ pub fn eval_statement(
 #[derive(Clone)]
 pub struct Context {
     prompt: String,
-    block: Arc<RwLock<Block>>,
+    block: RefType<Block>,
     stack: Memory,
-    lu_dog: Arc<RwLock<LuDogStore>>,
-    sarzak: Arc<RwLock<SarzakStore>>,
-    models: Arc<RwLock<Vec<SarzakStore>>>,
+    lu_dog: RefType<LuDogStore>,
+    sarzak: RefType<SarzakStore>,
+    models: RefType<Vec<SarzakStore>>,
     mem_update_recv: Receiver<MemoryUpdateMessage>,
     std_out_send: Sender<String>,
     std_out_recv: Receiver<String>,
     debug_status_writer: Option<Sender<DebuggerStatus>>,
     obj_file_path: Option<PathBuf>,
+    tracy: Client,
 }
 
 /// Save the lu_dog model when the context is dropped
@@ -1844,8 +1765,7 @@ pub struct Context {
 /// working hypothesis.
 impl Drop for Context {
     fn drop(&mut self) {
-        // self.lu_dog
-        //     .read()
+        // s_read!(self.lu_dog)
         //     .unwrap()
         //     .persist_bincode(&self.obj_file_path)
         //     .unwrap();
@@ -1857,7 +1777,7 @@ impl Context {
         let model =
             SarzakStore::load(model_path.as_ref()).map_err(|e| ChaChaError::Store { source: e })?;
 
-        self.models.write().unwrap().push(model);
+        s_write!(self.models).push(model);
 
         Ok(())
     }
@@ -1883,40 +1803,43 @@ impl Context {
     }
 
     pub fn source(&self) -> String {
-        let source = self
-            .lu_dog
-            .read()
-            .unwrap()
+        let source = s_read!(self.lu_dog)
             .iter_dwarf_source_file()
             .next()
             .unwrap();
-        let source = source.read().unwrap();
+        let source = s_read!(source);
         source.source.clone()
     }
 
-    pub fn lu_dog_heel(&self) -> Arc<RwLock<LuDogStore>> {
+    pub fn lu_dog_heel(&self) -> RefType<LuDogStore> {
         self.lu_dog.clone()
     }
 
-    pub fn block(&self) -> Arc<RwLock<Block>> {
+    pub fn block(&self) -> RefType<Block> {
         self.block.clone()
     }
 
-    pub fn sarzak_heel(&self) -> Arc<RwLock<SarzakStore>> {
+    pub fn sarzak_heel(&self) -> RefType<SarzakStore> {
         self.sarzak.clone()
     }
 
-    pub fn models(&self) -> Arc<RwLock<Vec<SarzakStore>>> {
+    pub fn models(&self) -> RefType<Vec<SarzakStore>> {
         self.models.clone()
     }
 
     pub fn register_store_proxy(&mut self, name: String, proxy: impl StoreProxy + 'static) {
         self.stack.insert_global(
             name.clone(),
-            Arc::new(RwLock::new(Value::ProxyType(Arc::new(RwLock::new(proxy))))),
+            <RefType<Value> as NewRefType<Value>>::new_ref_type(Value::ProxyType(<RefType<
+                Box<dyn StoreProxy>,
+            > as NewRefType<
+                Box<dyn StoreProxy>,
+            >>::new_ref_type(
+                Box::new(proxy),
+            ))),
         );
 
-        let mut lu_dog = self.lu_dog.write().unwrap();
+        let mut lu_dog = s_write!(self.lu_dog);
         let local = LocalVariable::new(Uuid::new_v4(), &mut *lu_dog);
         let var = Variable::new_local_variable(name.clone(), &local, &mut *lu_dog);
         let import = Import::new(
@@ -1936,15 +1859,15 @@ impl Context {
         );
         // {
         //     // Build the ASTs
-        //     let local = LocalVariable::new(Uuid::new_v4(), &mut *lu_dog.write().unwrap());
+        //     let local = LocalVariable::new(Uuid::new_v4(), &mut *s_write!(lu_dog));
         //     let var = Variable::new_local_variable(
         //         "MERLIN_STORE".to_owned(),
         //         local,
-        //         &mut *lu_dog.write().unwrap(),
+        //         &mut *s_write!(lu_dog),
         //     );
 
-        //     let store = ZObjectStore::new("merlin".to_owned(), &mut *lu_dog.write().unwrap());
-        //     let mut write = lu_dog.write().unwrap();
+        //     let store = ZObjectStore::new("merlin".to_owned(), &mut *s_write!(lu_dog));
+        //     let mut write = s_write!(lu_dog);
         //     let _value = LuDogValue::new_variable(
         //         block.clone(),
         //         ValueType::new_z_object_store(store, &mut write),
@@ -1961,7 +1884,7 @@ pub enum DebuggerStatus {
     Paused(Range<usize>),
     Running,
     StdOut(String),
-    Stopped(Arc<RwLock<Value>>, Arc<RwLock<ValueType>>),
+    Stopped(RefType<Value>, RefType<ValueType>),
 }
 
 pub enum DebuggerControl {
@@ -1973,6 +1896,7 @@ pub enum DebuggerControl {
     Stop,
 }
 
+#[cfg(not(feature = "single-threaded"))]
 pub fn start_repl2(mut context: Context) -> (Sender<DebuggerControl>, Receiver<DebuggerStatus>) {
     let (to_ui_write, to_ui_read) = unbounded();
     let (from_ui_write, from_ui_read) = unbounded();
@@ -2062,14 +1986,16 @@ pub fn start_repl2(mut context: Context) -> (Sender<DebuggerControl>, Receiver<D
                         let models = context.models();
 
                         let stmt = {
-                            let mut writer = lu_dog.write().unwrap();
+                            let mut writer = s_write!(lu_dog);
                             match inter_statement(
-                                &Arc::new(RwLock::new(stmt)),
+                                &<RefType<crate::dwarf::Statement> as NewRefType<
+                                    crate::dwarf::Statement,
+                                >>::new_ref_type(stmt),
                                 &DwarfSourceFile::new(input, &mut writer),
                                 &block,
                                 &mut writer,
-                                &models.read().unwrap(),
-                                &sarzak.read().unwrap(),
+                                &s_read!(models),
+                                &s_read!(sarzak),
                             ) {
                                 Ok(stmt) => stmt.0,
                                 Err(e) => {
@@ -2109,7 +2035,7 @@ pub fn start_repl2(mut context: Context) -> (Sender<DebuggerControl>, Receiver<D
 
 /// This runs the main function, assuming it exists. It should really return
 /// Ok(Value) I think.
-pub fn start_main(stopped: bool, mut context: Context) -> Result<Value, Error> {
+pub fn start_main(stopped: bool, silent: bool, mut context: Context) -> Result<Value, Error> {
     {
         let mut running = RUNNING.lock();
         *running = !stopped;
@@ -2119,36 +2045,50 @@ pub fn start_main(stopped: bool, mut context: Context) -> Result<Value, Error> {
 
     let main = stack.get("main").expect("Missing main function.");
 
-    dbg!("foo");
     // This should fail if it's not a function. Actually, I think that it _has_
     // to be a function. Unless there's another named item that I'm not thinking
     // of. I mean, maybe `use main;`  would trigger this to return OK(()), and
     // not do anything?
-    let result = if let Value::Function(ref main) = *main.read().unwrap() {
-        let main = context
-            .lu_dog
-            .read()
-            .unwrap()
-            .exhume_function(&main.read().unwrap().id)
+    let result = if let Value::Function(ref main) = *s_read!(main) {
+        let main = s_read!(context.lu_dog)
+            .exhume_function(&s_read!(main).id)
             .unwrap();
 
-        dbg!("uber");
-        let thread_join_handle = thread::spawn(move || {
-            let result = eval_function_call(main, &[], &mut context);
-            result
-        });
+        // let handle = if !silent {
+        //     let reader = context.std_out_recv.clone();
+        //     let handle = thread::spawn(move || loop {
+        //         match reader.recv() {
+        //             Ok(line) => {
+        //                 print!("{}", line);
+        //                 io::stdout().flush().unwrap();
+        //             }
+        //             Err(_) => {
+        //                 debug!("Debugger control thread exiting");
+        //                 break;
+        //             }
+        //         };
+        //     });
+        //     Some(handle)
+        // } else {
+        //     None
+        // };
+
+        // let thread_join_handle = thread::spawn(move || {
+        let result = eval_function_call(main, &[], true, &mut context)?;
+        // result
+        // });
 
         // this is lame
-        thread::sleep(Duration::from_millis(1));
+        // thread::sleep(Duration::from_millis(1));
 
-        dbg!("baz");
-        CVAR.notify_all();
+        // CVAR.notify_all();
 
-        dbg!("wtf");
         // some work here
-        let result = thread_join_handle.join().unwrap().unwrap();
+        // let result = thread_join_handle.join().unwrap().unwrap();
+        // if let Some(handle) = handle {
+        //     handle.join().unwrap();
+        // }
 
-        dbg!("finally");
         // let result = thread::scope(|s| {
         //     s.spawn(move |_| {
         //         let result = eval_function_call(main, &[], &mut context);
@@ -2160,12 +2100,10 @@ pub fn start_main(stopped: bool, mut context: Context) -> Result<Value, Error> {
 
         // let result = eval_function_call(main, &[], &mut context)?;
 
-        Ok(result.0.clone().read().unwrap().clone())
+        Ok(s_read!(result.0.clone()).clone())
     } else {
         Err(Error(ChaChaError::MainIsNotAFunction))
     };
-
-    dbg!("bar");
 
     result
 }
@@ -2323,14 +2261,16 @@ pub fn start_repl(mut context: Context) -> Result<(), Error> {
                     debug!("stmt from readline", stmt);
 
                     let stmt = {
-                        let mut writer = lu_dog.write().unwrap();
+                        let mut writer = s_write!(lu_dog);
                         match inter_statement(
-                            &Arc::new(RwLock::new(stmt)),
+                            &<RefType<crate::dwarf::Statement> as NewRefType<
+                                crate::dwarf::Statement,
+                            >>::new_ref_type(stmt),
                             &DwarfSourceFile::new(line.clone(), &mut writer),
                             &block,
                             &mut writer,
-                            &models.read().unwrap(),
-                            &sarzak.read().unwrap(),
+                            &s_read!(models),
+                            &s_read!(sarzak),
                         ) {
                             Ok(stmt) => stmt.0,
                             Err(e) => {
@@ -2347,7 +2287,7 @@ pub fn start_repl(mut context: Context) -> Result<(), Error> {
                     // }
                     match eval {
                         Ok((value, ty)) => {
-                            let value = format!("{}", value.read().unwrap());
+                            let value = format!("{}", s_read!(value));
                             print!("\n'{}'", result_style.paint(value));
 
                             let ty = PrintableValueType(&ty, &context);
@@ -2485,11 +2425,11 @@ pub fn banner2() -> String {
     format!("{}", ANSIStrings(strings))
 }
 
-pub(crate) struct PrintableValueType<'a>(pub &'a Arc<RwLock<ValueType>>, pub &'a Context);
+pub(crate) struct PrintableValueType<'a>(pub &'a RefType<ValueType>, pub &'a Context);
 
 impl<'a> fmt::Display for PrintableValueType<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let value = self.0.read().unwrap();
+        let value = s_read!(self.0);
         let context = self.1;
         let lu_dog = &context.lu_dog;
         let sarzak = &context.sarzak;
@@ -2500,8 +2440,8 @@ impl<'a> fmt::Display for PrintableValueType<'a> {
             ValueType::Error(_) => write!(f, "<error>"),
             ValueType::Function(_) => write!(f, "<function>"),
             ValueType::Import(ref import) => {
-                let import = lu_dog.read().unwrap().exhume_import(import).unwrap();
-                let import = import.read().unwrap();
+                let import = s_read!(lu_dog).exhume_import(import).unwrap();
+                let import = s_read!(import);
                 if import.has_alias {
                     write!(f, "{}", import.alias)
                 } else {
@@ -2509,22 +2449,22 @@ impl<'a> fmt::Display for PrintableValueType<'a> {
                 }
             }
             ValueType::List(ref list) => {
-                let list = lu_dog.read().unwrap().exhume_list(list).unwrap();
-                let list = list.read().unwrap();
-                let ty = list.r36_value_type(&lu_dog.read().unwrap())[0].clone();
+                let list = s_read!(lu_dog).exhume_list(list).unwrap();
+                let list = s_read!(list);
+                let ty = list.r36_value_type(&s_read!(lu_dog))[0].clone();
                 write!(f, "[{}]", PrintableValueType(&ty, context))
             }
             ValueType::Range(_) => write!(f, "<range>"),
             ValueType::Reference(ref reference) => {
-                let reference = lu_dog.read().unwrap().exhume_reference(reference).unwrap();
-                let reference = reference.read().unwrap();
-                let ty = reference.r35_value_type(&lu_dog.read().unwrap())[0].clone();
+                let reference = s_read!(lu_dog).exhume_reference(reference).unwrap();
+                let reference = s_read!(reference);
+                let ty = reference.r35_value_type(&s_read!(lu_dog))[0].clone();
                 write!(f, "&{}", PrintableValueType(&ty, context))
             }
             ValueType::Ty(ref ty) => {
                 // So, sometimes these show up in the model domain. It'll get really
                 // interesting when there are multiples of those in memory at once...
-                let sarzak = sarzak.read().unwrap();
+                let sarzak = s_read!(sarzak);
                 if let Some(ty) = sarzak.exhume_ty(ty) {
                     match ty {
                         Ty::Boolean(_) => write!(f, "bool"),
@@ -2548,7 +2488,7 @@ impl<'a> fmt::Display for PrintableValueType<'a> {
                 } else {
                     // It's not a sarzak type, so it must be an object imported from
                     // one of the model domains.
-                    let models = model.read().unwrap();
+                    let models = s_read!(model);
                     for model in &*models {
                         if let Some(Ty::Object(ref object)) = model.exhume_ty(ty) {
                             if let Some(object) = model.exhume_object(object) {
@@ -2561,35 +2501,28 @@ impl<'a> fmt::Display for PrintableValueType<'a> {
             }
             ValueType::Unknown(_) => write!(f, "<unknown>"),
             ValueType::WoogOption(ref option) => {
-                let option = lu_dog.read().unwrap().exhume_woog_option(option).unwrap();
-                let option = option.read().unwrap();
+                let option = s_read!(lu_dog).exhume_woog_option(option).unwrap();
+                let option = s_read!(option);
                 match option.subtype {
                     WoogOptionEnum::ZNone(_) => write!(f, "None"),
                     WoogOptionEnum::ZSome(ref some) => {
-                        let some = lu_dog.read().unwrap().exhume_z_some(some).unwrap();
-                        let some = some.read().unwrap();
-                        let value = some.r23_x_value(&lu_dog.read().unwrap())[0]
-                            .read()
-                            .unwrap()
-                            .clone();
-                        let ty = value.r24_value_type(&lu_dog.read().unwrap())[0].clone();
+                        let some = s_read!(lu_dog).exhume_z_some(some).unwrap();
+                        let some = s_read!(some);
+                        let value = s_read!(some.r23_x_value(&s_read!(lu_dog))[0]).clone();
+                        let ty = value.r24_value_type(&s_read!(lu_dog))[0].clone();
                         write!(f, "Some({})", PrintableValueType(&ty, context))
                     }
                 }
             }
             ValueType::WoogStruct(ref woog_struct) => {
-                let woog_struct = lu_dog
-                    .read()
-                    .unwrap()
-                    .exhume_woog_struct(woog_struct)
-                    .unwrap();
+                let woog_struct = s_read!(lu_dog).exhume_woog_struct(woog_struct).unwrap();
                 debug!("woog_struct", woog_struct);
-                let woog_struct = woog_struct.read().unwrap();
+                let woog_struct = s_read!(woog_struct);
                 write!(f, "{}", woog_struct.name)
             }
             ValueType::ZObjectStore(ref id) => {
-                let zobject_store = lu_dog.read().unwrap().exhume_z_object_store(id).unwrap();
-                let zobject_store = zobject_store.read().unwrap();
+                let zobject_store = s_read!(lu_dog).exhume_z_object_store(id).unwrap();
+                let zobject_store = s_read!(zobject_store);
                 let domain_name = &zobject_store.domain;
 
                 write!(f, "{}Store", domain_name.to_upper_camel_case())
@@ -2602,7 +2535,7 @@ pub(crate) struct ChunkReservation {
     slot: usize,
 }
 
-type MemoryCell = (String, Arc<RwLock<Value>>);
+type MemoryCell = (String, RefType<Value>);
 
 #[derive(Clone, Debug)]
 pub enum MemoryUpdateMessage {
@@ -2617,15 +2550,15 @@ impl fmt::Display for MemoryUpdateMessage {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             MemoryUpdateMessage::AddGlobal((name, value)) => {
-                write!(f, "add global {}: {}", name, value.read().unwrap())
+                write!(f, "add global {}: {}", name, s_read!(value))
             }
             MemoryUpdateMessage::AddMeta((name, value)) => {
-                write!(f, "add meta {}: {}", name, value.read().unwrap())
+                write!(f, "add meta {}: {}", name, s_read!(value))
             }
             MemoryUpdateMessage::PushFrame => write!(f, "push frame"),
             MemoryUpdateMessage::PopFrame => write!(f, "pop frame"),
             MemoryUpdateMessage::AddLocal((name, value)) => {
-                write!(f, "add local {}: {}", name, value.read().unwrap())
+                write!(f, "add local {}: {}", name, s_read!(value))
             }
         }
     }
@@ -2634,9 +2567,9 @@ impl fmt::Display for MemoryUpdateMessage {
 #[derive(Clone, Debug)]
 pub struct Memory {
     chunks: Vec<Chunk>,
-    meta: HashMap<String, HashMap<String, Arc<RwLock<Value>>>>,
-    global: HashMap<String, Arc<RwLock<Value>>>,
-    frames: Vec<HashMap<String, Arc<RwLock<Value>>>>,
+    meta: HashMap<String, HashMap<String, RefType<Value>>>,
+    global: HashMap<String, RefType<Value>>,
+    frames: Vec<HashMap<String, RefType<Value>>>,
     sender: Sender<MemoryUpdateMessage>,
 }
 
@@ -2656,14 +2589,14 @@ impl Memory {
         )
     }
 
-    pub fn get_globals(&self) -> Vec<(&str, &Arc<RwLock<Value>>)> {
+    pub fn get_globals(&self) -> Vec<(&str, &RefType<Value>)> {
         self.global
             .iter()
             .map(|(name, value)| (name.as_str(), value))
             .collect()
     }
 
-    pub fn get_frames(&self) -> Vec<Vec<(&str, &Arc<RwLock<Value>>)>> {
+    pub fn get_frames(&self) -> Vec<Vec<(&str, &RefType<Value>)>> {
         self.frames
             .iter()
             .map(|frame| {
@@ -2711,12 +2644,12 @@ impl Memory {
         self.meta.insert(table, HashMap::default());
     }
 
-    pub(crate) fn insert_meta(&mut self, table: &str, name: String, value: Arc<RwLock<Value>>) {
+    pub(crate) fn insert_meta(&mut self, table: &str, name: String, value: RefType<Value>) {
         let table = self.meta.get_mut(table).unwrap();
         table.insert(name, value);
     }
 
-    pub(crate) fn get_meta(&self, table: &str, name: &str) -> Option<Arc<RwLock<Value>>> {
+    pub(crate) fn get_meta(&self, table: &str, name: &str) -> Option<RefType<Value>> {
         if let Some(table) = self.meta.get(table) {
             if let Some(val) = table.get(name) {
                 Some(val.clone())
@@ -2729,7 +2662,7 @@ impl Memory {
     }
 
     // 🚧 Document this -- I'm not sure what the :: business is about.
-    pub(crate) fn insert_global(&mut self, name: String, value: Arc<RwLock<Value>>) {
+    pub(crate) fn insert_global(&mut self, name: String, value: RefType<Value>) {
         if name.contains("::") {
             let mut split = name.split("::");
             let table = split.next().unwrap();
@@ -2745,7 +2678,7 @@ impl Memory {
                 .unwrap();
 
             if let Some(value) = self.global.get(table) {
-                let mut write_value = value.write().unwrap();
+                let mut write_value = s_write!(value);
                 if let Value::Table(ref mut table) = *write_value {
                     table.insert(name.to_owned(), value.clone());
                 } else {
@@ -2754,15 +2687,17 @@ impl Memory {
             } else {
                 let mut map = HashMap::default();
                 map.insert(name.to_owned(), value.clone());
-                self.global
-                    .insert(table.to_owned(), Arc::new(RwLock::new(Value::Table(map))));
+                self.global.insert(
+                    table.to_owned(),
+                    <RefType<Value> as NewRefType<Value>>::new_ref_type(Value::Table(map)),
+                );
             }
         } else {
             self.global.insert(name, value);
         }
     }
 
-    pub(crate) fn insert(&mut self, name: String, value: Arc<RwLock<Value>>) {
+    pub(crate) fn insert(&mut self, name: String, value: RefType<Value>) {
         self.sender
             .send(MemoryUpdateMessage::AddLocal((name.clone(), value.clone())))
             .unwrap();
@@ -2770,7 +2705,7 @@ impl Memory {
         frame.insert(name, value);
     }
 
-    fn get(&self, name: &str) -> Option<Arc<RwLock<Value>>> {
+    fn get(&self, name: &str) -> Option<RefType<Value>> {
         if name.contains("::") {
             let mut split = name.split("::");
 
@@ -2778,7 +2713,7 @@ impl Memory {
             let table = split.next().unwrap();
 
             if let Some(value) = self.get_simple(table) {
-                let value = value.read().unwrap();
+                let value = s_read!(value);
                 if let Value::Table(ref table) = *value {
                     if let Some(val) = table.get(name) {
                         Some(val.clone())
@@ -2800,7 +2735,7 @@ impl Memory {
         }
     }
 
-    fn get_simple(&self, name: &str) -> Option<&Arc<RwLock<Value>>> {
+    fn get_simple(&self, name: &str) -> Option<&RefType<Value>> {
         for frame in self.frames.iter().rev() {
             if let Some(value) = frame.get(name) {
                 return Some(value);
@@ -2811,12 +2746,12 @@ impl Memory {
 }
 
 fn typecheck(
-    lhs: &Arc<RwLock<ValueType>>,
-    rhs: &Arc<RwLock<ValueType>>,
-    span: &Arc<RwLock<Span>>,
+    lhs: &RefType<ValueType>,
+    rhs: &RefType<ValueType>,
+    span: &RefType<Span>,
     context: &Context,
 ) -> Result<()> {
-    match (&*lhs.read().unwrap(), &*rhs.read().unwrap()) {
+    match (&*s_read!(lhs), &*s_read!(rhs)) {
         (_, ValueType::Empty(_)) => Ok(()),
         (ValueType::Empty(_), _) => Ok(()),
         (_, ValueType::Unknown(_)) => Ok(()),
@@ -2831,7 +2766,7 @@ fn typecheck(
                 Err(ChaChaError::TypeMismatch {
                     expected: lhs.to_string(),
                     got: rhs.to_string(),
-                    span: span.read().unwrap().start as usize..span.read().unwrap().end as usize,
+                    span: s_read!(span).start as usize..s_read!(span).end as usize,
                 })
             }
         }

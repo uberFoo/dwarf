@@ -14,6 +14,7 @@ use sarzak::{
 use chacha::dwarf::{
     parse_dwarf, populate_lu_dog, DwarfError, FileSnafu, GenericSnafu, IOSnafu, Result,
 };
+use tracy_client::Client;
 
 const TARGET_DIR: &str = "target";
 const BUILD_DIR: &str = "sarzak";
@@ -237,10 +238,10 @@ fn main() -> Result<()> {
         description: "Could not persist Lu-Dog domain".to_owned(),
         path: &out_file,
     })?;
-    lu_dog.persist("help_me").context(FileSnafu {
-        description: "Could not persist Lu-Dog domain".to_owned(),
-        path: &out_file,
-    })?;
+    // lu_dog.persist("help_me").context(FileSnafu {
+    //     description: "Could not persist Lu-Dog domain".to_owned(),
+    //     path: &out_file,
+    // })?;
 
     println!("Lu-Dog domain created at {:?}", out_file);
 

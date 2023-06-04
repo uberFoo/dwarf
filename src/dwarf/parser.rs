@@ -1078,6 +1078,60 @@ impl DwarfParser {
         )))
     }
 
+    /// Parse an equals operator
+    ///
+    /// eq -> expression == expression
+    fn parse_eq_operator(&mut self, left: &Expression, power: u8) -> Result<Option<Expression>> {
+        debug!("enter", power);
+
+        if power > COMP.0 {
+            debug!("exit no power", power);
+            return Ok(None);
+        }
+
+        let start = if let Some(tok) = self.peek() {
+            tok.1.start
+        } else {
+            debug!("exit no token");
+            return Ok(None);
+        };
+
+        if !self.check(&Token::Punct('=')) {
+            debug!("exit no '='");
+            return Ok(None);
+        }
+
+        if !self.check2(&Token::Punct('=')) {
+            debug!("exit no '='");
+            return Ok(None);
+        }
+
+        self.advance();
+        self.advance();
+
+        let right = if let Some(expr) = self.parse_expression(COMP.1)? {
+            expr
+        } else {
+            let token = &self.previous().unwrap();
+            let err = Simple::expected_input_found(
+                token.1.clone(),
+                [Some("<expression -> there's a lot of them...>".to_owned())],
+                Some(token.0.to_string()),
+            );
+            error!("exit", err);
+            return Err(err);
+        };
+
+        debug!("exit");
+        Ok(Some((
+            (
+                DwarfExpression::Equals(Box::new(left.0.to_owned()), Box::new(right.0)),
+                start..self.previous().unwrap().1.start,
+            ),
+            COMP,
+        )))
+    }
+
     /// Parse a greater-than operator
     ///
     /// gt -> expression > expression
@@ -1165,6 +1219,9 @@ impl DwarfParser {
                     Some(expression)
                 } else if let Some(expression) = self.parse_gt_operator(&lhs, power)? {
                     debug!("greater-than operator", expression);
+                    Some(expression)
+                } else if let Some(expression) = self.parse_eq_operator(&lhs, power)? {
+                    debug!("equal operator", expression);
                     Some(expression)
                 } else if let Some(expression) = self.parse_assignment_expression(&lhs, power)? {
                     debug!("assignment expression", expression);

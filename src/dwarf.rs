@@ -1,20 +1,22 @@
-use std::{
-    fmt, ops,
-    path::PathBuf,
-    sync::{Arc, RwLock},
-};
+use std::{fmt, ops, path::PathBuf, sync::Arc};
 
 use ansi_term::{Colour, Style};
 use clap::Args;
-use sarzak::sarzak::{store::ObjectStore as SarzakStore, types::Ty};
+use sarzak::{
+    lu_dog::WoogStruct,
+    sarzak::{store::ObjectStore as SarzakStore, types::Ty},
+};
 use serde::{Deserialize, Serialize};
 use snafu::{prelude::*, Location};
 use uuid::Uuid;
 
-use crate::lu_dog::{
-    store::ObjectStore as LuDogStore,
-    types::{ValueType, WoogOption},
-    List, Reference,
+use crate::{
+    lu_dog::{
+        store::ObjectStore as LuDogStore,
+        types::{ValueType, WoogOption},
+        List, Reference,
+    },
+    s_read, NewRefType, RefType,
 };
 
 pub mod compiler;
@@ -271,20 +273,20 @@ impl Type {
         store: &mut LuDogStore,
         models: &[SarzakStore],
         sarzak: &SarzakStore,
-    ) -> Arc<RwLock<ValueType>> {
+    ) -> RefType<ValueType> {
         match self {
             Type::Boolean => {
                 let ty = Ty::new_boolean();
-                ValueType::new_ty(&Arc::new(RwLock::new(ty)), store)
+                ValueType::new_ty(&<RefType<Ty> as NewRefType<Ty>>::new_ref_type(ty), store)
             }
             Type::Empty => ValueType::new_empty(store),
             Type::Float => {
                 let ty = Ty::new_float();
-                ValueType::new_ty(&Arc::new(RwLock::new(ty)), store)
+                ValueType::new_ty(&<RefType<Ty> as NewRefType<Ty>>::new_ref_type(ty), store)
             }
             Type::Integer => {
                 let ty = Ty::new_integer();
-                ValueType::new_ty(&Arc::new(RwLock::new(ty)), store)
+                ValueType::new_ty(&<RefType<Ty> as NewRefType<Ty>>::new_ref_type(ty), store)
             }
             Type::List(type_) => {
                 let ty = (*type_).0.into_value_type(store, models, sarzak);
@@ -304,7 +306,7 @@ impl Type {
             Type::Self_ => panic!("Self is deprecated."),
             Type::String => {
                 let ty = Ty::new_s_string();
-                ValueType::new_ty(&Arc::new(RwLock::new(ty)), store)
+                ValueType::new_ty(&<RefType<Ty> as NewRefType<Ty>>::new_ref_type(ty), store)
             }
             Type::Unknown => ValueType::new_unknown(store),
             Type::UserType(type_) => {
@@ -314,12 +316,14 @@ impl Type {
                     if let Some(obj_id) = model.exhume_object_id_by_name(&name) {
                         let woog_struct = store
                             .iter_woog_struct()
-                            .find(|ws| ws.read().unwrap().object == Some(obj_id))
+                            .find(|ws| s_read!(ws).object == Some(obj_id))
                             .unwrap();
-                        let woog_struct = woog_struct.read().unwrap();
+                        let woog_struct = s_read!(woog_struct);
 
                         return ValueType::new_woog_struct(
-                            &Arc::new(RwLock::new(woog_struct.to_owned())),
+                            &<RefType<WoogStruct> as NewRefType<WoogStruct>>::new_ref_type(
+                                woog_struct.to_owned(),
+                            ),
                             store,
                         );
                     }
@@ -329,11 +333,14 @@ impl Type {
                 let obj_id = sarzak.exhume_object_id_by_name(&name).unwrap();
                 let ty = sarzak.exhume_ty(&obj_id).unwrap();
 
-                ValueType::new_ty(&Arc::new(RwLock::new(ty.to_owned())), store)
+                ValueType::new_ty(
+                    &<RefType<Ty> as NewRefType<Ty>>::new_ref_type(ty.to_owned()),
+                    store,
+                )
             }
             Type::Uuid => {
                 let ty = Ty::new_s_uuid();
-                ValueType::new_ty(&Arc::new(RwLock::new(ty)), store)
+                ValueType::new_ty(&<RefType<Ty> as NewRefType<Ty>>::new_ref_type(ty), store)
             }
         }
     }
@@ -408,6 +415,7 @@ pub enum Expression {
     Debug,
     Division(Box<Spanned<Self>>, Box<Spanned<Self>>),
     Error,
+    Equals(Box<Spanned<Self>>, Box<Spanned<Self>>),
     FieldAccess(Box<Spanned<Self>>, Spanned<String>),
     FloatLiteral(f64),
     For(Spanned<String>, Box<Spanned<Self>>, Box<Spanned<Self>>),

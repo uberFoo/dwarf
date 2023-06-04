@@ -1,20 +1,15 @@
-use std::{
-    any::Any,
-    collections::VecDeque,
-    fmt,
-    ops::Range,
-    sync::{Arc, RwLock},
-};
+use std::{any::Any, collections::VecDeque, fmt, ops::Range, sync::Arc};
 
 use ansi_term::Colour;
 use fxhash::FxHashMap as HashMap;
+// use parking_lot::Lock;
 use sarzak::sarzak::Ty;
 use uuid::Uuid;
 
 use crate::{
     interpreter::{Context, PrintableValueType},
     lu_dog::{Function, ObjectStore as LuDogStore, ValueType},
-    ChaChaError, DwarfFloat, DwarfInteger, Result,
+    s_read, ChaChaError, DwarfFloat, DwarfInteger, RefType, Result,
 };
 
 pub trait StoreProxy: fmt::Display + fmt::Debug + Send + Sync {
@@ -39,12 +34,42 @@ pub trait StoreProxy: fmt::Display + fmt::Debug + Send + Sync {
     fn call(
         &mut self,
         method: &str,
-        args: &mut VecDeque<Arc<RwLock<Value>>>,
-    ) -> Result<(Arc<RwLock<Value>>, Arc<RwLock<ValueType>>)>;
+        args: &mut VecDeque<RefType<Value>>,
+    ) -> Result<(RefType<Value>, RefType<ValueType>)>;
 
     /// Read an attribute from the proxy.
     ///
-    fn get_attr_value(&self, name: &str) -> Result<Arc<RwLock<Value>>>;
+    fn get_attr_value(&self, name: &str) -> Result<RefType<Value>>;
+}
+
+impl StoreProxy for Box<dyn StoreProxy> {
+    fn name(&self) -> &str {
+        self.as_ref().name()
+    }
+
+    fn struct_uuid(&self) -> Uuid {
+        self.as_ref().struct_uuid()
+    }
+
+    fn store_uuid(&self) -> Uuid {
+        self.as_ref().store_uuid()
+    }
+
+    fn into_any(&self) -> Box<dyn Any> {
+        self.as_ref().into_any()
+    }
+
+    fn call(
+        &mut self,
+        method: &str,
+        args: &mut VecDeque<RefType<Value>>,
+    ) -> Result<(RefType<Value>, RefType<ValueType>)> {
+        self.as_mut().call(method, args)
+    }
+
+    fn get_attr_value(&self, name: &str) -> Result<RefType<Value>> {
+        self.as_ref().get_attr_value(name)
+    }
 }
 
 /// This is an actual Value
@@ -61,36 +86,36 @@ pub enum Value {
     /// Function
     ///
     /// 🚧 I really need to write something here describing, once and for all,
-    /// why I need the inner Function to be behind an Arc<RwLock<T>>. It seems
+    /// why I need the inner Function to be behind an RefType<<T>>. It seems
     /// excessive, and yet I know I've looked into it before.
-    Function(Arc<RwLock<Function>>),
+    Function(RefType<Function>),
     Integer(DwarfInteger),
-    Option(Option<Arc<RwLock<Self>>>),
+    Option(Option<RefType<Self>>),
     /// User Defined Type Proxy
     ///
     ///  Feels like we'll need to generate some code to make this work.
-    ProxyType(Arc<RwLock<dyn StoreProxy>>),
-    Range(Range<Box<Arc<RwLock<Self>>>>),
-    Reference(Arc<RwLock<Self>>),
+    ProxyType(RefType<dyn StoreProxy>),
+    Range(Range<Box<RefType<Self>>>),
+    Reference(RefType<Self>),
     /// WTF was I thinking?
     ///
     /// That means Self. Or, maybe self?
     Reflexive,
     String(String),
-    Table(HashMap<String, Arc<RwLock<Self>>>),
-    UserType(Arc<RwLock<UserType>>),
+    Table(HashMap<String, RefType<Self>>),
+    UserType(RefType<UserType>),
     Uuid(uuid::Uuid),
-    Vector(Vec<Arc<RwLock<Self>>>),
+    Vector(Vec<RefType<Self>>),
 }
 
 impl Value {
-    pub fn get_type(&self, lu_dog: &LuDogStore) -> Arc<RwLock<ValueType>> {
+    pub fn get_type(&self, lu_dog: &LuDogStore) -> RefType<ValueType> {
         match &self {
             // Value::Char =>
             Value::Empty => ValueType::new_empty(lu_dog),
             Value::Function(ref func) => {
-                let func = lu_dog.exhume_function(&func.read().unwrap().id).unwrap();
-                let z = func.read().unwrap().r1_value_type(lu_dog)[0].clone();
+                let func = lu_dog.exhume_function(&s_read!(func).id).unwrap();
+                let z = s_read!(func).r1_value_type(lu_dog)[0].clone();
                 z
             }
             Value::Integer(ref _int) => {
@@ -106,9 +131,9 @@ impl Value {
                 lu_dog.exhume_value_type(&ty.id()).unwrap()
             }
             Value::ProxyType(ref pt) => lu_dog
-                .exhume_value_type(&pt.read().unwrap().struct_uuid())
+                .exhume_value_type(&s_read!(pt).struct_uuid())
                 .unwrap(),
-            Value::UserType(ref ut) => ut.read().unwrap().get_type().clone(),
+            Value::UserType(ref ut) => s_read!(ut).get_type().clone(),
             Value::Uuid(ref _uuid) => {
                 let ty = Ty::new_s_uuid();
                 lu_dog.exhume_value_type(&ty.id()).unwrap()
@@ -133,18 +158,18 @@ impl fmt::Display for Value {
             Self::Function(_) => write!(f, "<function>"),
             Self::Integer(num) => write!(f, "{}", num),
             Self::Option(option) => match option {
-                Some(value) => write!(f, "Some({})", value.read().unwrap()),
+                Some(value) => write!(f, "Some({})", s_read!(value)),
                 None => write!(f, "None"),
             },
-            Self::ProxyType(p) => write!(f, "{}", p.read().unwrap()),
+            Self::ProxyType(p) => write!(f, "{}", s_read!(p)),
             Self::Range(range) => write!(f, "{:?}", range),
-            Self::Reference(value) => write!(f, "&{}", value.read().unwrap()),
+            Self::Reference(value) => write!(f, "&{}", s_read!(value)),
             Self::Reflexive => write!(f, "self"),
             // Self::StoreType(store) => write!(f, "{:?}", store),
             Self::String(str_) => write!(f, "{}", str_),
             // Self::String(str_) => write!(f, "\"{}\"", str_),
             Self::Table(table) => write!(f, "{:?}", table),
-            Self::UserType(ty) => writeln!(f, "{}", ty.read().unwrap()),
+            Self::UserType(ty) => writeln!(f, "{}", s_read!(ty)),
             Self::Uuid(uuid) => write!(f, "{}", uuid),
             Self::Vector(vec) => write!(f, "{:?}", vec),
         }
@@ -489,12 +514,12 @@ impl Value {
 #[derive(Clone, Debug)]
 pub struct UserType {
     type_name: String,
-    type_: Arc<RwLock<ValueType>>,
-    attrs: HashMap<String, Arc<RwLock<Value>>>,
+    type_: RefType<ValueType>,
+    attrs: HashMap<String, RefType<Value>>,
 }
 
 impl UserType {
-    pub fn new(type_: &Arc<RwLock<ValueType>>, context: &Context) -> Self {
+    pub fn new(type_: &RefType<ValueType>, context: &Context) -> Self {
         Self {
             type_name: PrintableValueType(type_, context).to_string(),
             type_: type_.clone(),
@@ -502,15 +527,15 @@ impl UserType {
         }
     }
 
-    pub fn add_attr<S: AsRef<str>>(&mut self, name: S, value: Arc<RwLock<Value>>) {
+    pub fn add_attr<S: AsRef<str>>(&mut self, name: S, value: RefType<Value>) {
         self.attrs.insert(name.as_ref().to_owned(), value);
     }
 
-    pub fn get_attr_value<S: AsRef<str>>(&self, name: S) -> Option<&Arc<RwLock<Value>>> {
+    pub fn get_attr_value<S: AsRef<str>>(&self, name: S) -> Option<&RefType<Value>> {
         self.attrs.get(name.as_ref())
     }
 
-    pub fn get_type(&self) -> &Arc<RwLock<ValueType>> {
+    pub fn get_type(&self) -> &RefType<ValueType> {
         &self.type_
     }
 }
@@ -522,7 +547,7 @@ impl fmt::Display for UserType {
         attrs.sort_by(|(k1, _), (k2, _)| k1.cmp(k2));
 
         for (k, v) in attrs {
-            out.field(k, &v.read().unwrap());
+            out.field(k, &s_read!(v));
         }
 
         out.finish()

@@ -1,4 +1,3 @@
-// use term::rgb;
 struct Complex {
     re: float,
     im: float,
@@ -60,8 +59,7 @@ fn pixel_to_point(
 //     None
 // }
 
-fn escape_time(c: Complex, limit: int) -> Option<int> {
-    // debugger;
+fn escape_time(c: Complex, limit: int) -> int {
     let z = Complex::zero();
     for i in 1..limit {
         // 🚧 This let wreaks havoc -- fix it.
@@ -70,57 +68,28 @@ fn escape_time(c: Complex, limit: int) -> Option<int> {
         z = z.square(z);
         z = z.add(z, c);
         if z.norm_squared(z) > 4.0 {
-            // debugger;
-            // return Some(i);
             return i;
         }
     }
     0
-    // None
-    // limit
 }
 
 fn main() -> Complex {
-    let width = 168;
-    let height = 56;
-    // let width = 84;
-    // let height = 28;
-    // let width = 21;
-    // let height = 7;
+    let width = 7;
+    let height = 2;
     let upper_left = Complex { re: -2.5, im: 1.0 };
     let lower_right = Complex { re: 2.0, im: -1.0 };
-    // let upper_left = Complex {
-    // re: -0.750222,
-    // im: 0.031161,
-    // };
-    // let lower_right = Complex {
-    // re: -0.749191,
-    // im: 0.031752,
-    // };
-    // let row = 0;
-    // let column = 0;
-    // debugger;
+
     for row in 0..height {
         for column in 0..width {
             let point = pixel_to_point(width, height, column, row, upper_left, lower_right);
-            // print(point);
-            // print(escape_time(point, 255));
+
             let time = escape_time(point, 255);
-            // print(time);
-            // if line == 500 {
-            // print("!");
-            // } else
             if time > 0 {
                 print(" ");
             } else {
                 print("*");
             }
-            // if let Some(i) = time {
-            //     // print(rgb(i) + "*");
-            //     print("*");
-            // } else {
-            //     print(" ");
-            // }
         }
         print("\n");
     }

@@ -68,7 +68,21 @@ parking_lot = { version = "0.12.1", features = [
 ] }
 backtrace = "0.3.67"
 # tui-logger = { version = "0.9.1", features = ["ratatui-support"] }
+criterion = { version = "0.4", features = ["html_reports"] }
+cfg-if = "1.0.0"
+tracy-client = "0.15.2"
+
+[[bench]]
+name = "mandelbrot"
+harness = false
 
 [features]
-default = ["repl"]
+default = ["repl", "std-rwlock", "print-std-out"]
 repl = ["rustyline"]
+
+single-threaded = ["sarzak/lu-dog-none"]
+std-mutex = []
+std-rwlock = []
+parking-lot-mutex = []
+parking-lot-rwlock = []
+print-std-out = []

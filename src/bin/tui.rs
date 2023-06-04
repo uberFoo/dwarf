@@ -1,3 +1,7 @@
+use tracy_client::Client;
+
+cfg_if::cfg_if! {
+if #[cfg(not(feature = "single-threaded"))] {
 use std::{
     io::{self, stdout},
     panic::{self, PanicInfo},
@@ -13,7 +17,7 @@ use chacha::{
         banner2, initialize_interpreter_paths, start_repl2, DebuggerControl, DebuggerStatus,
         MemoryUpdateMessage,
     },
-    ChaChaError,
+    ref_read, ChaChaError,
 };
 use clap::Parser;
 use crossbeam::channel::{Receiver, RecvTimeoutError, Sender};
@@ -409,7 +413,7 @@ fn stack_updater(
                 items.add_child(TreeItem::new_leaf(format!(
                     "{}: {}",
                     cell.0,
-                    cell.1.read().unwrap()
+                    ref_read!(cell.1)
                 )));
             }
             MemoryUpdateMessage::PushFrame => {
@@ -812,6 +816,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
 
+    let _client = Client::start();
+
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     crossterm::execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
@@ -943,4 +949,15 @@ pub fn panic_hook(panic_info: &PanicInfo<'_>) {
         )),
     )
     .unwrap();
+}
+} else{
+    fn main() {
+       let error_style = ansi_term::Colour::Red;
+       let alert_style = ansi_term::Colour::Yellow;
+
+        println!("{}: The debugger requires the feature flag: `{}`.",
+            error_style.paint("error"),
+            alert_style.paint("std-rwlock"));
+    }
+}
 }

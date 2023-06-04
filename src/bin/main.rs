@@ -28,6 +28,7 @@ use sarzak::{
     sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL},
 };
 use snafu::prelude::*;
+use tracy_client::Client;
 
 macro_rules! function {
     () => {{
@@ -185,15 +186,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         // } else {
         println!("{}", banner2());
 
-        // start_main(false, ctx).map_err(|e| {
-        //     println!("Interpreter exited with: {}", e);
-        //     e
-        // })?;
-
-        start_repl(ctx).map_err(|e| {
+        start_main(false, false, ctx).map_err(|e| {
             println!("Interpreter exited with: {}", e);
             e
         })?;
+
+        // start_repl(ctx).map_err(|e| {
+        //     println!("Interpreter exited with: {}", e);
+        //     e
+        // })?;
         // }
     } else if let Some(_) = args.dap {
         let listener = TcpListener::bind("127.0.0.1:4711").unwrap();

@@ -1,14 +1,10 @@
-use std::{
-    io,
-    ops::Range,
-    path::PathBuf,
-    sync::{Arc, RwLock},
-};
+use std::{io, ops::Range, path::PathBuf};
 
 use ansi_term::Colour;
 use clap::Args;
 use crossbeam::channel::SendError;
 use rustyline::error::ReadlineError;
+use sarzak::lu_dog;
 use serde::{Deserialize, Serialize};
 use snafu::{prelude::*, Location};
 use svm::Instruction;
@@ -16,7 +12,7 @@ use svm::Instruction;
 pub mod dap;
 pub mod dwarf;
 pub mod interpreter;
-pub mod lu_dog;
+// pub mod lu_dog;
 // pub mod merlin;
 pub mod svm;
 pub(crate) mod value;
@@ -30,6 +26,141 @@ pub type DwarfInteger = i64;
 pub type DwarfFloat = f64;
 
 use lu_dog::ValueType;
+
+cfg_if::cfg_if! {
+    if #[cfg(feature = "single-threaded")] {
+        type RefType<T> = std::rc::Rc<std::cell::RefCell<T>>;
+
+        impl<T> NewRefType<T> for RefType<T> {
+            fn new_ref_type(value: T) -> RefType<T> {
+                std::rc::Rc::new(std::cell::RefCell::new(value))
+            }
+        }
+
+        // Macros to abstract the underlying read/write operations.
+        #[macro_export]
+        macro_rules! ref_read {
+            ($arg:expr) => {
+                $arg.borrow()
+            };
+        }
+
+        #[macro_export]
+        macro_rules! ref_write {
+            ($arg:expr) => {
+                $arg.borrow_mut()
+            };
+        }
+
+    } else if #[cfg(feature = "std-mutex")] {
+        compile_error!("std mutex is not currently supported");
+
+        type RefType<T> = std::sync::Arc<std::sync::Mutex<T>>;
+
+        impl<T> NewRefType<T> for RefType<T> {
+            fn new_ref_type(value: T) -> RefType<T> {
+                std::sync::Arc::new(std::sync::Mutex::new(value))
+            }
+        }
+
+        // Macros to abstract the underlying read/write operations.
+        #[macro_export]
+        macro_rules! ref_read {
+            ($arg:expr) => {
+                $arg.lock().unwrap()
+            };
+        }
+
+        #[macro_export]
+        macro_rules! ref_write {
+            ($arg:expr) => {
+                $arg.lock().unwrap()
+            };
+        }
+
+   } else if #[cfg(feature = "std-rwlock")] {
+        type RefType<T> = std::sync::Arc<std::sync::RwLock<T>>;
+
+        impl<T> NewRefType<T> for RefType<T> {
+            fn new_ref_type(value: T) -> RefType<T> {
+                std::sync::Arc::new(std::sync::RwLock::new(value))
+            }
+        }
+
+        // Macros to abstract the underlying read/write operations.
+        #[macro_export]
+        macro_rules! ref_read {
+            ($arg:expr) => {
+                $arg.read().unwrap()
+            };
+        }
+
+        #[macro_export]
+        macro_rules! ref_write {
+            ($arg:expr) => {
+                $arg.write().unwrap()
+            };
+        }
+
+    } else if #[cfg(feature = "parking-lot-mutex")] {
+        compile_error!("parking-lot mutex is not currently supported");
+        type RefType<T> = std::sync::Arc<parking_lot::Mutex<T>>;
+
+        impl<T> NewRefType<T> for RefType<T> {
+            fn new_ref_type(value: T) -> RefType<T> {
+                std::sync::Arc::new(parking_lot::Mutex::new(value))
+            }
+        }
+
+        // Macros to abstract the underlying read/write operations.
+        #[macro_export]
+        macro_rules! ref_read {
+            ($arg:expr) => {
+                $arg.lock()
+            };
+        }
+
+        #[macro_export]
+        macro_rules! ref_write {
+            ($arg:expr) => {
+                $arg.lock()
+            };
+        }
+
+    } else if #[cfg(feature = "parking-lot-rwlock")] {
+        type RefType<T> = std::sync::Arc<parking_lot::RwLock<T>>;
+
+        impl<T> NewRefType<T> for RefType<T> {
+            fn new_ref_type(value: T) -> RefType<T> {
+                std::sync::Arc::new(parking_lot::RwLock::new(value))
+            }
+        }
+
+        // Macros to abstract the underlying read/write operations.
+        #[macro_export]
+        macro_rules! ref_read {
+            ($arg:expr) => {
+                $arg.read()
+            };
+        }
+
+        #[macro_export]
+        macro_rules! ref_write {
+            ($arg:expr) => {
+                $arg.write()
+            };
+        }
+    }
+}
+
+// This is ugly, but it's the only way I could find to get the macro to work.
+pub(crate) use ref_read as s_read;
+pub(crate) use ref_write as s_write;
+
+trait NewRefType<T> {
+    fn new_ref_type(value: T) -> RefType<T>;
+}
+
 //
 // Command line parameters
 #[derive(Args, Clone, Debug, Deserialize, Serialize)]
@@ -109,10 +240,10 @@ pub enum ChaChaError {
         message: String,
         location: Location,
     },
-    #[snafu(display("\nThat was the last stack frame 🥞. Your secret value is {}.", OK_CLR.paint(value.read().unwrap().to_string())))]
+    #[snafu(display("\nThat was the last stack frame 🥞. Your secret value is {}.", OK_CLR.paint(s_read!(value).to_string())))]
     Return {
-        value: Arc<RwLock<Value>>,
-        ty: Arc<RwLock<ValueType>>,
+        value: RefType<Value>,
+        ty: RefType<ValueType>,
     },
     RustyLine {
         source: ReadlineError,
