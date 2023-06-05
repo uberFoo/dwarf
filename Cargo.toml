@@ -3,23 +3,32 @@ name = "chacha"
 version = "0.1.0"
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[[bin]]
+name = "dwarfc"
+path = "src/bin/dwarfc.rs"
+
+[[bin]]
+name = "chacha"
+path = "src/bin/main.rs"
+
+[[bin]]
+name = "tui"
+path = "src/bin/tui.rs"
 
 [dependencies]
 # rustyline = { version = "11.0.0", features = [
 # "with-file-history",
 # ], optional = true }
-rustyline = { version = "11.0.0", optional = true }
-# nut = { git = "https://gitlab-runner:7kzem8nVeizSJQnLPWFY@git.uberfoo.com/sarzak/nut.git", branch = "develop" }
-nut = { path = "../nut" }
+rustyline = { version = "11.0.0", optional = true, features = ["derive"] }
+sarzak = { path = "../sarzak", default-features = false }                  # nut = { git = "https://gitlab-runner:7kzem8nVeizSJQnLPWFY@git.uberfoo.com/sarzak/nut.git", branch = "develop" }
+# nut = { path = "../nut" }
 # sarzak = { git = "https://gitlab-runner:7kzem8nVeizSJQnLPWFY@git.uberfoo.com/sarzak/sarzak.git", branch = "develop" }
-sarzak = { path = "../sarzak" }
 # grace = { git = "https://gitlab-runner:7kzem8nVeizSJQnLPWFY@git.uberfoo.com/sarzak/grace.git", branch = "develop" }
-grace = { path = "../grace" }
+# grace = { path = "../grace" }
 snafu = "0.7.4"
 clap = { version = "4.2.2", features = ["derive"] }
-serde = { version = "1.0.160", features = ["derive"] }
-uuid = { version = "1.3.1", features = ["v4"] }
+serde = { version = "1.0.160", features = ["derive", "rc"] }
+uuid = { version = "1.3.1", features = ["v4", "serde"] }
 fxhash = "0.2.1"
 pretty_env_logger = "0.4.0"
 log = "0.4.17"
@@ -27,7 +36,55 @@ ansi_term = "0.12.1"
 heck = "0.4.1"
 lazy_static = "1.4.0"
 derivative = "2.2.0"
+chumsky = "0.9.2"
+ariadne = "0.2.0"
+fnv = "1.0.7"
+env_logger = "0.10.0"
+rayon = "1.7.0"
+crossterm = "0.26.1"
+# ratatui = "0.20.1"
+ratatui = { path = "../../github/ratatui" }
+# tui-textarea = { version = "0.2.0", features = ["ratatui-crossterm"] }
+tui-textarea = { path = "../../github/tui-textarea", features = [
+    "ratatui-crossterm",
+] }
+tui-input = { path = "../../github/tui-input" }
+ansi-to-tui = { path = "../../github/ansi-to-tui" }
+# tui-input = "0.7.0"
+syntect = "5.0.0"
+tui-logger = { path = "../../github/tui-logger", default-features = false, features = [
+    "ratatui-support",
+] }
+serde_json = "1.0.96"
+bincode = "1.3.3"
+tui-tree-widget = { path = "../../github/tui-rs-tree-widget" }
+crossbeam = { version = "0.8.2", features = ["crossbeam-channel"] }
+dap = { path = "../../github/dap-rs" }
+parking_lot = { version = "0.12.1", features = [
+    "serde",
+    "deadlock_detection",
+    "hardware-lock-elision",
+] }
+backtrace = "0.3.67"
+# tui-logger = { version = "0.9.1", features = ["ratatui-support"] }
+criterion = { version = "0.4", features = ["html_reports"] }
+cfg-if = "1.0.0"
+tracy-client = "0.15.2"
+
+[[bench]]
+name = "dwarf"
+harness = false
 
 [features]
-default = ["repl"]
+# default = ["single", "repl", "print-std-out"]
+default = ["repl", "multi", "print-std-out"]
+# default = ["repl", "parking-lot-mutex", "print-std-out"]
 repl = ["rustyline"]
+
+single = ["sarzak/lu-dog-none"]
+multi = ["multi-std-rwlock"]
+multi-std-mutex = []
+multi-std-rwlock = ["sarzak/lu-dog-rwlock"]
+multi-parking-lot-mutex = ["sarzak/lu-dog-pl-mutex"]
+multi-parking-lot-rwlock = []
+print-std-out = []

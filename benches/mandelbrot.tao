@@ -1,0 +1,96 @@
+struct Complex {
+    re: float,
+    im: float,
+}
+
+impl Complex {
+    fn zero() -> Complex {
+        Complex { re: 0.0, im: 0.0 }
+    }
+
+    fn one() -> Complex {
+        Complex { re: 1.0, im: 0.0 }
+    }
+
+    fn add(self: Complex, other: Complex) -> Complex {
+        Complex {
+            re: self.re + other.re,
+            im: self.im + other.im,
+        }
+    }
+
+    fn square(self: Complex) -> Complex {
+        Complex {
+            re: self.re * self.re - self.im * self.im,
+            im: 2.0 * self.re * self.im,
+        }
+    }
+
+    fn norm_squared(self: Complex) -> float {
+        self.re * self.re + self.im * self.im
+    }
+}
+
+fn pixel_to_point(
+    width: int,
+    height: int,
+    pixel_x: int,
+    pixel_y: int,
+    upper_left: Complex,
+    lower_right: Complex,
+) -> Complex {
+    let w = lower_right.re - upper_left.re;
+    let h = upper_left.im - lower_right.im;
+    Complex {
+        re: upper_left.re + pixel_x as float * w / width as float,
+        im: upper_left.im - pixel_y as float * h / height as float,
+    }
+}
+
+// fn escape_time(c: Complex, limit: int) -> Option<int> {
+//     // debugger;
+//     let z = Complex::zero();
+//     for i in 0..limit {
+//         let z = z.square(z).add(z, c);
+//         if z.norm_squared(z) > 4.0 {
+//             return Some(i);
+//         }
+//     }
+//     None
+// }
+
+fn escape_time(c: Complex, limit: int) -> int {
+    let z = Complex::zero();
+    for i in 1..limit {
+        // 🚧 This let wreaks havoc -- fix it.
+        // Also the chained method calls don't affect the correct z, or something.
+        // let z = z.square(z).add(z, c);
+        z = z.square(z);
+        z = z.add(z, c);
+        if z.norm_squared(z) > 4.0 {
+            return i;
+        }
+    }
+    0
+}
+
+fn main() -> Complex {
+    let width = 7;
+    let height = 2;
+    let upper_left = Complex { re: -2.5, im: 1.0 };
+    let lower_right = Complex { re: 2.0, im: -1.0 };
+
+    for row in 0..height {
+        for column in 0..width {
+            let point = pixel_to_point(width, height, column, row, upper_left, lower_right);
+
+            let time = escape_time(point, 255);
+            if time > 0 {
+                print(" ");
+            } else {
+                print("*");
+            }
+        }
+        print("\n");
+    }
+}
