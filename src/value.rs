@@ -78,7 +78,6 @@ impl StoreProxy for Box<dyn StoreProxy> {
 #[derive(Clone, Debug)]
 pub enum Value {
     Boolean(bool),
-    Chunk(&'static str, usize),
     Char(char),
     Empty,
     Error(String),
@@ -103,6 +102,7 @@ pub enum Value {
     Reflexive,
     String(String),
     Table(HashMap<String, RefType<Self>>),
+    Thonk(&'static str, usize),
     UserType(RefType<UserType>),
     Uuid(uuid::Uuid),
     Vector(Vec<RefType<Self>>),
@@ -150,7 +150,6 @@ impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Self::Boolean(bool_) => write!(f, "{}", bool_),
-            Self::Chunk(name, number) => write!(f, "{} [{}]", name, number),
             Self::Char(char_) => write!(f, "{}", char_),
             Self::Empty => write!(f, "()"),
             Self::Error(e) => write!(f, "{}: {}", Colour::Red.bold().paint("error"), e),
@@ -169,6 +168,7 @@ impl fmt::Display for Value {
             Self::String(str_) => write!(f, "{}", str_),
             // Self::String(str_) => write!(f, "\"{}\"", str_),
             Self::Table(table) => write!(f, "{:?}", table),
+            Self::Thonk(name, number) => write!(f, "{} [{}]", name, number),
             Self::UserType(ty) => writeln!(f, "{}", s_read!(ty)),
             Self::Uuid(uuid) => write!(f, "{}", uuid),
             Self::Vector(vec) => write!(f, "{:?}", vec),
@@ -217,13 +217,13 @@ impl TryFrom<Value> for usize {
 
     fn try_from(value: Value) -> Result<Self, <usize as TryFrom<Value>>::Error> {
         match value {
-            Value::Chunk(_, num) => Ok(num),
             Value::Float(num) => Ok(num as usize),
             Value::Integer(num) => Ok(num as usize),
             Value::String(str_) => str_.parse::<usize>().map_err(|_| ChaChaError::Conversion {
                 src: str_.to_owned(),
                 dst: "usize".to_owned(),
             }),
+            Value::Thonk(_, num) => Ok(num),
             _ => Err(ChaChaError::Conversion {
                 src: value.to_string(),
                 dst: "usize".to_owned(),
@@ -237,13 +237,13 @@ impl TryFrom<&Value> for usize {
 
     fn try_from(value: &Value) -> Result<Self, <usize as TryFrom<&Value>>::Error> {
         match value {
-            Value::Chunk(_, num) => Ok(*num),
             Value::Float(num) => Ok(*num as usize),
             Value::Integer(num) => Ok(*num as usize),
             Value::String(str_) => str_.parse::<usize>().map_err(|_| ChaChaError::Conversion {
                 src: str_.to_owned(),
                 dst: "usize".to_owned(),
             }),
+            Value::Thonk(_, num) => Ok(*num),
             _ => Err(ChaChaError::Conversion {
                 src: value.to_string(),
                 dst: "usize".to_owned(),

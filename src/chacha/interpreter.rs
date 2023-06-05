@@ -4,6 +4,7 @@ use std::{
     io::{self, Write},
     ops::Range,
     path::{Path, PathBuf},
+    rc::Rc,
     sync::Arc,
     thread,
     time::Duration,
@@ -24,6 +25,7 @@ use tracy_client::{frame_name, span, span_location, Client};
 use uuid::Uuid;
 
 use crate::{
+    chacha::vm::{CallFrame, Instruction, Thonk, VM},
     dwarf::{inter_statement, parse_line},
     lu_dog::{
         Argument, Binary, Block, BooleanLiteral, CallEnum, Comparison, DwarfSourceFile, Expression,
@@ -32,7 +34,6 @@ use crate::{
         Variable, WoogOptionEnum, XValue, XValueEnum,
     },
     s_read, s_write,
-    svm::{CallFrame, Chunk, Instruction, VM},
     value::{StoreProxy, UserType},
     ChaChaError, DwarfInteger, Error, InternalCompilerChannelSnafu, NewRefType, NoSuchFieldSnafu,
     NoSuchStaticMethodSnafu, RefType, Result, TypeMismatchSnafu, UnimplementedSnafu, Value,
@@ -198,10 +199,9 @@ pub fn initialize_interpreter<P: AsRef<Path>>(
     let funcs = lu_dog.iter_function().collect::<Vec<_>>();
 
     for func in funcs {
-        let func_read = s_read!(func);
-        let imp = func_read.r9_implementation(&lu_dog);
+        let imp = s_read!(func).r9_implementation(&lu_dog);
         if imp.is_empty() {
-            let name = func_read.name.clone();
+            let name = s_read!(func).name.clone();
             let value = Value::Function(func.clone());
 
             // Build the local in the AST.
@@ -248,40 +248,6 @@ pub fn initialize_interpreter<P: AsRef<Path>>(
         }
     }
 
-    // T::initialize(&mut stack, &mut *s_write!(lu_dog));
-
-    // 🚧 this needs to go into some sort of init function that get's passed
-    // the stack. Or alternatively, there's a function that returns key value
-    // pairs to be inserted into the stack. One way or the other...
-    // stack.insert_global(
-    // "MERLIN_STORE".to_owned(),
-    // Value::UserType(MerlinType::MerlinStore((*model).clone())),
-    // );
-
-    // {
-    //     // Build the ASTs
-    //     let local = LocalVariable::new(Uuid::new_v4(), &mut *s_write!(lu_dog));
-    //     let var = Variable::new_local_variable(
-    //         "MERLIN_STORE".to_owned(),
-    //         local,
-    //         &mut *s_write!(lu_dog),
-    //     );
-
-    //     let store = ZObjectStore::new("merlin".to_owned(), &mut *s_write!(lu_dog));
-    //     let mut write = s_write!(lu_dog);
-    //     let _value = LuDogValue::new_variable(
-    //         block.clone(),
-    //         ValueType::new_z_object_store(store, &mut write),
-    //         var,
-    //         &mut write,
-    //     );
-    // }
-
-    // Hide everything behind a the globals.
-    // *s_write!(SARZAK) = sarzak;
-    // *s_write!(LU_DOG) = lu_dog;
-    // *s_write!(MODEL) = model;
-
     let (std_out_send, std_out_recv) = unbounded();
 
     Ok(Context {
@@ -317,10 +283,12 @@ fn eval_function_call(
 
     let func = s_read!(func);
     let block = s_read!(lu_dog).exhume_block(&func.block).unwrap();
-    let block = s_read!(block);
-    let stmts = block.r18_statement(&s_read!(lu_dog));
+    // let stmts = s_read!(block).r18_statement(&s_read!(lu_dog));
+    let has_stmts = !s_read!(block).r18_statement(&s_read!(lu_dog)).is_empty();
 
-    if !stmts.is_empty() {
+    // if !stmts.is_empty() {
+    // if !s_read!(block).r18_statement(&s_read!(lu_dog)).is_empty() {
+    if has_stmts {
         context.stack.push();
 
         // We need to evaluate the arguments, and then push them onto the stack. We
@@ -422,7 +390,7 @@ fn eval_function_call(
         //     .find(|s| s_read!(s).r17c_statement(&s_read!(lu_dog)).is_empty())
         //     .unwrap()
         //     .clone();
-        if let Some(ref id) = block.statement {
+        if let Some(ref id) = s_read!(block).statement {
             let mut next = s_read!(lu_dog).exhume_statement(id).unwrap();
 
             loop {
@@ -524,8 +492,7 @@ fn eval_expression(
         //
         Expression::Block(ref block) => {
             let block = s_read!(lu_dog).exhume_block(block).unwrap();
-            let block = s_read!(block);
-            let stmts = block.r18_statement(&s_read!(lu_dog));
+            let stmts = s_read!(block).r18_statement(&s_read!(lu_dog));
 
             if !stmts.is_empty() {
                 context.stack.push();
@@ -672,7 +639,7 @@ fn eval_expression(
                     debug!("MethodCall type", ty);
 
                     match &*s_read!(value) {
-                        Value::ProxyType(pt) => {
+                        Value::ProxyType(proxy_type) => {
                             let mut arg_values = if !args.is_empty() {
                                 let mut arg_values = VecDeque::with_capacity(args.len());
                                 let mut next = args
@@ -701,7 +668,7 @@ fn eval_expression(
                                 VecDeque::new()
                             };
 
-                            s_write!(pt).call(meth, &mut arg_values)
+                            s_write!(proxy_type).call(meth, &mut arg_values)
                         }
                         Value::UserType(ut) => {
                             // Well, we need to get the function and the arguments
@@ -883,7 +850,9 @@ fn eval_expression(
                     }
                 }
             };
-            s_write!(call).arg_check = false;
+            if s_read!(call).arg_check {
+                s_write!(call).arg_check = false;
+            }
 
             x
         }
@@ -1896,7 +1865,7 @@ pub enum DebuggerControl {
     Stop,
 }
 
-#[cfg(not(feature = "single-threaded"))]
+#[cfg(not(feature = "single"))]
 pub fn start_repl2(mut context: Context) -> (Sender<DebuggerControl>, Receiver<DebuggerStatus>) {
     let (to_ui_write, to_ui_read) = unbounded();
     let (from_ui_write, from_ui_read) = unbounded();
@@ -2110,49 +2079,49 @@ pub fn start_main(stopped: bool, silent: bool, mut context: Context) -> Result<V
 
 pub fn start_vm(n: DwarfInteger) -> Result<DwarfInteger, Error> {
     let (mut memory, _) = Memory::new();
-    let mut chunk = Chunk::new("fib".to_string());
+    let mut thonk = Thonk::new("fib".to_string());
 
-    chunk.add_variable("n".to_owned());
+    thonk.add_variable("n".to_owned());
 
     // Get the parameter off the stack
-    chunk.add_instruction(Instruction::FetchLocal(0));
-    chunk.add_instruction(Instruction::Constant(Value::Integer(1)));
+    thonk.add_instruction(Instruction::FetchLocal(0));
+    thonk.add_instruction(Instruction::Constant(Value::Integer(1)));
     // Chcek if it's <= 1
-    chunk.add_instruction(Instruction::LessThanOrEqual);
-    chunk.add_instruction(Instruction::JumpIfFalse(2));
+    thonk.add_instruction(Instruction::LessThanOrEqual);
+    thonk.add_instruction(Instruction::JumpIfFalse(2));
     // If false return 1
-    chunk.add_instruction(Instruction::Constant(Value::Integer(1)));
-    chunk.add_instruction(Instruction::Return);
+    thonk.add_instruction(Instruction::Constant(Value::Integer(1)));
+    thonk.add_instruction(Instruction::Return);
     // return fidbn-1) + fib(n-2)
     // Load fib
-    chunk.add_instruction(Instruction::Constant(Value::Chunk("fib", 0)));
+    thonk.add_instruction(Instruction::Constant(Value::Thonk("fib", 0)));
     // load n
-    chunk.add_instruction(Instruction::FetchLocal(0));
+    thonk.add_instruction(Instruction::FetchLocal(0));
     // load 1
-    chunk.add_instruction(Instruction::Constant(Value::Integer(1)));
+    thonk.add_instruction(Instruction::Constant(Value::Integer(1)));
     // subtract
-    chunk.add_instruction(Instruction::Subtract);
+    thonk.add_instruction(Instruction::Subtract);
     // Call fib(n-1)
-    chunk.add_instruction(Instruction::Call(1));
+    thonk.add_instruction(Instruction::Call(1));
     // load fib
-    chunk.add_instruction(Instruction::Constant(Value::Chunk("fib", 0)));
+    thonk.add_instruction(Instruction::Constant(Value::Thonk("fib", 0)));
     // load n
-    chunk.add_instruction(Instruction::FetchLocal(0));
+    thonk.add_instruction(Instruction::FetchLocal(0));
     // load 2
-    chunk.add_instruction(Instruction::Constant(Value::Integer(2)));
+    thonk.add_instruction(Instruction::Constant(Value::Integer(2)));
     // subtract
-    chunk.add_instruction(Instruction::Subtract);
+    thonk.add_instruction(Instruction::Subtract);
     // Call fib(n-1)
-    chunk.add_instruction(Instruction::Call(1));
+    thonk.add_instruction(Instruction::Call(1));
     // add
-    chunk.add_instruction(Instruction::Add);
-    chunk.add_instruction(Instruction::Return);
+    thonk.add_instruction(Instruction::Add);
+    thonk.add_instruction(Instruction::Return);
 
     // put fib in memory
-    let slot = memory.reserve_chunk_slot();
-    memory.insert_chunk(chunk.clone(), slot);
+    let slot = memory.reserve_thonk_slot();
+    memory.insert_thonk(thonk.clone(), slot);
 
-    let frame = CallFrame::new(0, 0, &chunk);
+    let frame = CallFrame::new(0, 0, &thonk);
 
     let mut vm = VM::new(&memory);
 
@@ -2531,7 +2500,7 @@ impl<'a> fmt::Display for PrintableValueType<'a> {
     }
 }
 
-pub(crate) struct ChunkReservation {
+pub(crate) struct ThonkReservation {
     slot: usize,
 }
 
@@ -2566,7 +2535,7 @@ impl fmt::Display for MemoryUpdateMessage {
 
 #[derive(Clone, Debug)]
 pub struct Memory {
-    chunks: Vec<Chunk>,
+    thonks: Vec<Thonk>,
     meta: HashMap<String, HashMap<String, RefType<Value>>>,
     global: HashMap<String, RefType<Value>>,
     frames: Vec<HashMap<String, RefType<Value>>>,
@@ -2579,7 +2548,7 @@ impl Memory {
 
         (
             Memory {
-                chunks: Vec::new(),
+                thonks: Vec::new(),
                 meta: HashMap::default(),
                 global: HashMap::default(),
                 frames: vec![HashMap::default()],
@@ -2608,26 +2577,26 @@ impl Memory {
             .collect()
     }
 
-    pub(crate) fn chunk_index<S: AsRef<str>>(&self, name: S) -> Option<usize> {
-        self.chunks
+    pub(crate) fn thonk_index<S: AsRef<str>>(&self, name: S) -> Option<usize> {
+        self.thonks
             .iter()
             .enumerate()
-            .find(|(_, chunk)| chunk.name == name.as_ref())
+            .find(|(_, thonk)| thonk.name == name.as_ref())
             .map(|(index, _)| index)
     }
 
-    pub(crate) fn reserve_chunk_slot(&mut self) -> ChunkReservation {
-        let slot = self.chunks.len();
-        self.chunks.push(Chunk::new("placeholder".to_string()));
-        ChunkReservation { slot }
+    pub(crate) fn reserve_thonk_slot(&mut self) -> ThonkReservation {
+        let slot = self.thonks.len();
+        self.thonks.push(Thonk::new("placeholder".to_string()));
+        ThonkReservation { slot }
     }
 
-    pub(crate) fn insert_chunk(&mut self, chunk: Chunk, reservation: ChunkReservation) {
-        self.chunks[reservation.slot] = chunk;
+    pub(crate) fn insert_thonk(&mut self, thonk: Thonk, reservation: ThonkReservation) {
+        self.thonks[reservation.slot] = thonk;
     }
 
-    pub(crate) fn get_chunk(&self, index: usize) -> Option<&Chunk> {
-        self.chunks.get(index)
+    pub(crate) fn get_thonk(&self, index: usize) -> Option<&Thonk> {
+        self.thonks.get(index)
     }
 
     pub(crate) fn push(&mut self) {
@@ -2751,6 +2720,18 @@ fn typecheck(
     span: &RefType<Span>,
     context: &Context,
 ) -> Result<()> {
+    cfg_if::cfg_if! {
+        if #[cfg(feature = "single")] {
+            if Rc::as_ptr(lhs) == Rc::as_ptr(rhs) {
+                return Ok(());
+            }
+        } else {
+            if Arc::as_ptr(lhs) == Arc::as_ptr(rhs) {
+                return Ok(());
+            }
+        }
+    }
+
     match (&*s_read!(lhs), &*s_read!(rhs)) {
         (_, ValueType::Empty(_)) => Ok(()),
         (ValueType::Empty(_), _) => Ok(()),

@@ -7,3 +7,4 @@ function fibonacci_recursive($n) {
 }
 
 echo fibonacci_recursive(20);
+echo "\n";

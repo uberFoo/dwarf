@@ -8,7 +8,7 @@ use std::{
 
 use ariadne::{Color, Fmt, Label, Report, ReportKind, Source};
 use chacha::{
-    dap::DapAdapter,
+    chacha::dap::DapAdapter,
     dwarf::{parse_dwarf, populate_lu_dog, DwarfError},
     initialize_interpreter,
     interpreter::{banner, banner2, initialize_interpreter_paths, start_main, start_vm},

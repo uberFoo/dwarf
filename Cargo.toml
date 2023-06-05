@@ -20,10 +20,9 @@ path = "src/bin/tui.rs"
 # "with-file-history",
 # ], optional = true }
 rustyline = { version = "11.0.0", optional = true, features = ["derive"] }
-# nut = { git = "https://gitlab-runner:7kzem8nVeizSJQnLPWFY@git.uberfoo.com/sarzak/nut.git", branch = "develop" }
+sarzak = { path = "../sarzak", default-features = false }                  # nut = { git = "https://gitlab-runner:7kzem8nVeizSJQnLPWFY@git.uberfoo.com/sarzak/nut.git", branch = "develop" }
 # nut = { path = "../nut" }
 # sarzak = { git = "https://gitlab-runner:7kzem8nVeizSJQnLPWFY@git.uberfoo.com/sarzak/sarzak.git", branch = "develop" }
-sarzak = { path = "../sarzak" }
 # grace = { git = "https://gitlab-runner:7kzem8nVeizSJQnLPWFY@git.uberfoo.com/sarzak/grace.git", branch = "develop" }
 # grace = { path = "../grace" }
 snafu = "0.7.4"
@@ -73,16 +72,19 @@ cfg-if = "1.0.0"
 tracy-client = "0.15.2"
 
 [[bench]]
-name = "mandelbrot"
+name = "dwarf"
 harness = false
 
 [features]
-default = ["repl", "std-rwlock", "print-std-out"]
+# default = ["single", "repl", "print-std-out"]
+default = ["repl", "multi", "print-std-out"]
+# default = ["repl", "parking-lot-mutex", "print-std-out"]
 repl = ["rustyline"]
 
-single-threaded = ["sarzak/lu-dog-none"]
-std-mutex = []
-std-rwlock = []
-parking-lot-mutex = []
-parking-lot-rwlock = []
+single = ["sarzak/lu-dog-none"]
+multi = ["multi-std-rwlock"]
+multi-std-mutex = []
+multi-std-rwlock = ["sarzak/lu-dog-rwlock"]
+multi-parking-lot-mutex = ["sarzak/lu-dog-pl-mutex"]
+multi-parking-lot-rwlock = []
 print-std-out = []

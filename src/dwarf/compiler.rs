@@ -1,5 +1,5 @@
 use core::fmt;
-use std::{fs::File, io::prelude::*, ops::Range, path::PathBuf};
+use std::{fs::File, io::prelude::*, ops::Range, path::PathBuf, rc::Rc, sync::Arc};
 
 use ansi_term::Colour;
 use heck::{ToShoutySnakeCase, ToUpperCamelCase};
@@ -1463,8 +1463,8 @@ fn inter_expression(
                 .iter()
                 .filter_map(|value| {
                     // debug!("value", value);
-
-                    match s_read!(value).subtype {
+                    let value = s_read!(value);
+                    match value.subtype {
                         XValueEnum::Expression(ref _expr) => {
                             // let expr = lu_dog.exhume_expression(expr).unwrap();
                             // error!("we don't expect to be here", expr);
@@ -1498,8 +1498,8 @@ fn inter_expression(
                             if var.name == *name {
                                 match var.subtype {
                                     VariableEnum::LocalVariable(_) | VariableEnum::Parameter(_) => {
-                                        let value =
-                                            s_read!(var.r11_x_value(lu_dog)[0]).clone();
+                                        // let value =
+                                            // s_read!(var.r11_x_value(lu_dog)[0]).clone();
                                         let ty = value.r24_value_type(lu_dog)[0].clone();
 
                                         let lhs_ty =
@@ -2506,6 +2506,18 @@ fn typecheck(
     sarzak: &SarzakStore,
     models: &[SarzakStore],
 ) -> Result<()> {
+    cfg_if::cfg_if! {
+        if #[cfg(feature = "single")] {
+            if Rc::as_ptr(lhs) == Rc::as_ptr(rhs) {
+                return Ok(());
+            }
+        } else {
+            if Arc::as_ptr(lhs) == Arc::as_ptr(rhs) {
+                return Ok(());
+            }
+        }
+    }
+
     match (&*s_read!(lhs), &*s_read!(rhs)) {
         (_, ValueType::Empty(_)) => Ok(()),
         (ValueType::Empty(_), _) => Ok(()),

@@ -38,6 +38,12 @@ fn b() {
 }
 
 fn main() -> int {
+    print("Calculating the 20th fibonacci number:\n");
+    print(fib2(20));
+    print("\n");
+}
+
+fn main_wtf() -> int {
     let a: int = fib2(5);
     debugger;
     // print(a);

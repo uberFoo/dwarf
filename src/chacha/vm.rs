@@ -4,8 +4,6 @@ use ansi_term::Colour;
 
 use crate::{ChaChaError, Memory, Result, Value};
 
-// pub mod compiler;
-
 #[derive(Clone, Debug)]
 pub enum Instruction {
     Add,
@@ -61,15 +59,15 @@ impl fmt::Display for Instruction {
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct Chunk {
+pub(crate) struct Thonk {
     pub(crate) name: String,
     variables: Vec<String>,
     instructions: Vec<Instruction>,
 }
 
-impl Chunk {
+impl Thonk {
     pub(crate) fn new(name: String) -> Self {
-        Chunk {
+        Thonk {
             name,
             variables: Vec::new(),
             instructions: Vec::new(),
@@ -91,7 +89,7 @@ impl Chunk {
     }
 }
 
-impl fmt::Display for Chunk {
+impl fmt::Display for Thonk {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         for (i, instr) in self.instructions.iter().enumerate() {
             writeln!(f, "{:08x}:\t {}", i, instr)?;
@@ -104,16 +102,16 @@ impl fmt::Display for Chunk {
 pub(crate) struct CallFrame<'a> {
     ip: usize,
     fp: usize,
-    chunk: &'a Chunk,
+    thonk: &'a Thonk,
 }
 
 impl<'a> CallFrame<'a> {
-    pub(crate) fn new(ip: usize, fp: usize, chunk: &'a Chunk) -> Self {
-        CallFrame { ip, fp, chunk }
+    pub(crate) fn new(ip: usize, fp: usize, thonk: &'a Thonk) -> Self {
+        CallFrame { ip, fp, thonk }
     }
 
     fn load_instruction(&mut self) -> Option<&Instruction> {
-        let instr = self.chunk.get_instruction(self.ip);
+        let instr = self.thonk.get_instruction(self.ip);
         if instr.is_some() {
             self.ip += 1;
         }
@@ -201,8 +199,8 @@ impl<'a, 'b> VM<'a, 'b> {
                                     });
                                 }
                             };
-                            let chunk = self.memory.get_chunk(callee).unwrap();
-                            let frame = CallFrame::new(0, self.stack.len() - arity - 1, chunk);
+                            let thonk = self.memory.get_thonk(callee).unwrap();
+                            let frame = CallFrame::new(0, self.stack.len() - arity - 1, thonk);
 
                             if trace {
                                 println!("\t\t{}\t{}", Colour::Green.paint("frame:"), frame);
@@ -315,12 +313,12 @@ mod tests {
     fn test_instr_constant() {
         let memory = Memory::new();
         let mut vm = VM::new(&memory.0);
-        let mut chunk = Chunk::new("test".to_string());
+        let mut thonk = Thonk::new("test".to_string());
 
-        chunk.add_instruction(Instruction::Constant(Value::Integer(42)));
-        println!("{}", chunk);
+        thonk.add_instruction(Instruction::Constant(Value::Integer(42)));
+        println!("{}", thonk);
 
-        let frame = CallFrame::new(0, 0, &chunk);
+        let frame = CallFrame::new(0, 0, &thonk);
         vm.frames.push(frame);
 
         let result = vm.run(true);
@@ -341,13 +339,13 @@ mod tests {
     fn test_instr_return() {
         let memory = Memory::new();
         let mut vm = VM::new(&memory.0);
-        let mut chunk = Chunk::new("test".to_string());
+        let mut thonk = Thonk::new("test".to_string());
 
-        chunk.add_instruction(Instruction::Constant(Value::Integer(42)));
-        chunk.add_instruction(Instruction::Return);
-        println!("{}", chunk);
+        thonk.add_instruction(Instruction::Constant(Value::Integer(42)));
+        thonk.add_instruction(Instruction::Return);
+        println!("{}", thonk);
 
-        let frame = CallFrame::new(0, 0, &chunk);
+        let frame = CallFrame::new(0, 0, &thonk);
         vm.frames.push(frame);
 
         let result = vm.run(true);
@@ -369,15 +367,15 @@ mod tests {
     fn test_instr_add() {
         let memory = Memory::new();
         let mut vm = VM::new(&memory.0);
-        let mut chunk = Chunk::new("test".to_string());
+        let mut thonk = Thonk::new("test".to_string());
 
-        chunk.add_instruction(Instruction::Constant(Value::Integer(42)));
-        chunk.add_instruction(Instruction::Constant(Value::Integer(69)));
-        chunk.add_instruction(Instruction::Add);
-        chunk.add_instruction(Instruction::Return);
-        println!("{}", chunk);
+        thonk.add_instruction(Instruction::Constant(Value::Integer(42)));
+        thonk.add_instruction(Instruction::Constant(Value::Integer(69)));
+        thonk.add_instruction(Instruction::Add);
+        thonk.add_instruction(Instruction::Return);
+        println!("{}", thonk);
 
-        let frame = CallFrame::new(0, 0, &chunk);
+        let frame = CallFrame::new(0, 0, &thonk);
         vm.frames.push(frame);
 
         let result = vm.run(true);
@@ -399,15 +397,15 @@ mod tests {
     fn test_instr_subtract() {
         let memory = Memory::new();
         let mut vm = VM::new(&memory.0);
-        let mut chunk = Chunk::new("test".to_string());
+        let mut thonk = Thonk::new("test".to_string());
 
-        chunk.add_instruction(Instruction::Constant(Value::Integer(111)));
-        chunk.add_instruction(Instruction::Constant(Value::Integer(69)));
-        chunk.add_instruction(Instruction::Subtract);
-        chunk.add_instruction(Instruction::Return);
-        println!("{}", chunk);
+        thonk.add_instruction(Instruction::Constant(Value::Integer(111)));
+        thonk.add_instruction(Instruction::Constant(Value::Integer(69)));
+        thonk.add_instruction(Instruction::Subtract);
+        thonk.add_instruction(Instruction::Return);
+        println!("{}", thonk);
 
-        let frame = CallFrame::new(0, 0, &chunk);
+        let frame = CallFrame::new(0, 0, &thonk);
         vm.frames.push(frame);
 
         let result = vm.run(true);
@@ -429,15 +427,15 @@ mod tests {
         // False Case
         let memory = Memory::new();
         let mut vm = VM::new(&memory.0);
-        let mut chunk = Chunk::new("test".to_string());
+        let mut thonk = Thonk::new("test".to_string());
 
-        chunk.add_instruction(Instruction::Constant(Value::Integer(111)));
-        chunk.add_instruction(Instruction::Constant(Value::Integer(69)));
-        chunk.add_instruction(Instruction::LessThanOrEqual);
-        chunk.add_instruction(Instruction::Return);
-        println!("{}", chunk);
+        thonk.add_instruction(Instruction::Constant(Value::Integer(111)));
+        thonk.add_instruction(Instruction::Constant(Value::Integer(69)));
+        thonk.add_instruction(Instruction::LessThanOrEqual);
+        thonk.add_instruction(Instruction::Return);
+        println!("{}", thonk);
 
-        let frame = CallFrame::new(0, 0, &chunk);
+        let frame = CallFrame::new(0, 0, &thonk);
         vm.frames.push(frame);
 
         let result = vm.run(true);
@@ -456,15 +454,15 @@ mod tests {
         // True case: less than
         let memory = Memory::new();
         let mut vm = VM::new(&memory.0);
-        let mut chunk = Chunk::new("test".to_string());
+        let mut thonk = Thonk::new("test".to_string());
 
-        chunk.add_instruction(Instruction::Constant(Value::Integer(42)));
-        chunk.add_instruction(Instruction::Constant(Value::Integer(69)));
-        chunk.add_instruction(Instruction::LessThanOrEqual);
-        chunk.add_instruction(Instruction::Return);
-        println!("{}", chunk);
+        thonk.add_instruction(Instruction::Constant(Value::Integer(42)));
+        thonk.add_instruction(Instruction::Constant(Value::Integer(69)));
+        thonk.add_instruction(Instruction::LessThanOrEqual);
+        thonk.add_instruction(Instruction::Return);
+        println!("{}", thonk);
 
-        let frame = CallFrame::new(0, 0, &chunk);
+        let frame = CallFrame::new(0, 0, &thonk);
         vm.frames.push(frame);
 
         let result = vm.run(true);
@@ -483,15 +481,15 @@ mod tests {
         // True case: equal
         let memory = Memory::new();
         let mut vm = VM::new(&memory.0);
-        let mut chunk = Chunk::new("test".to_string());
+        let mut thonk = Thonk::new("test".to_string());
 
-        chunk.add_instruction(Instruction::Constant(Value::Integer(42)));
-        chunk.add_instruction(Instruction::Constant(Value::Integer(42)));
-        chunk.add_instruction(Instruction::LessThanOrEqual);
-        chunk.add_instruction(Instruction::Return);
-        println!("{}", chunk);
+        thonk.add_instruction(Instruction::Constant(Value::Integer(42)));
+        thonk.add_instruction(Instruction::Constant(Value::Integer(42)));
+        thonk.add_instruction(Instruction::LessThanOrEqual);
+        thonk.add_instruction(Instruction::Return);
+        println!("{}", thonk);
 
-        let frame = CallFrame::new(0, 0, &chunk);
+        let frame = CallFrame::new(0, 0, &thonk);
         vm.frames.push(frame);
 
         let result = vm.run(true);
@@ -513,23 +511,23 @@ mod tests {
     fn test_instr_jump_if_false() {
         let memory = Memory::new();
         let mut vm = VM::new(&memory.0);
-        let mut chunk = Chunk::new("test".to_string());
+        let mut thonk = Thonk::new("test".to_string());
 
-        chunk.add_instruction(Instruction::Constant(Value::Integer(69)));
-        chunk.add_instruction(Instruction::Constant(Value::Integer(42)));
-        chunk.add_instruction(Instruction::LessThanOrEqual);
-        chunk.add_instruction(Instruction::JumpIfFalse(2));
-        chunk.add_instruction(Instruction::Constant(Value::String(
+        thonk.add_instruction(Instruction::Constant(Value::Integer(69)));
+        thonk.add_instruction(Instruction::Constant(Value::Integer(42)));
+        thonk.add_instruction(Instruction::LessThanOrEqual);
+        thonk.add_instruction(Instruction::JumpIfFalse(2));
+        thonk.add_instruction(Instruction::Constant(Value::String(
             "epic fail!".to_string(),
         )));
-        chunk.add_instruction(Instruction::Return);
-        chunk.add_instruction(Instruction::Constant(Value::String(
+        thonk.add_instruction(Instruction::Return);
+        thonk.add_instruction(Instruction::Constant(Value::String(
             "you rock!".to_string(),
         )));
-        chunk.add_instruction(Instruction::Return);
-        println!("{}", chunk);
+        thonk.add_instruction(Instruction::Return);
+        println!("{}", thonk);
 
-        let frame = CallFrame::new(0, 0, &chunk);
+        let frame = CallFrame::new(0, 0, &thonk);
         vm.frames.push(frame);
 
         let result = vm.run(true);
@@ -552,18 +550,18 @@ mod tests {
         // Simple
         let memory = Memory::new();
         let mut vm = VM::new(&memory.0);
-        let mut chunk = Chunk::new("test".to_string());
+        let mut thonk = Thonk::new("test".to_string());
 
         vm.stack.push(Value::String(
             "this would normally be a function at the top of the call frame".to_string(),
         ));
         vm.stack.push(Value::Integer(42));
 
-        chunk.add_instruction(Instruction::FetchLocal(0));
-        chunk.add_instruction(Instruction::Return);
-        println!("{}", chunk);
+        thonk.add_instruction(Instruction::FetchLocal(0));
+        thonk.add_instruction(Instruction::Return);
+        println!("{}", thonk);
 
-        let frame = CallFrame::new(0, 0, &chunk);
+        let frame = CallFrame::new(0, 0, &thonk);
         vm.frames.push(frame);
 
         let result = vm.run(true);
@@ -586,7 +584,7 @@ mod tests {
         // Nested
         let memory = Memory::new();
         let mut vm = VM::new(&memory.0);
-        let mut chunk = Chunk::new("test".to_string());
+        let mut thonk = Thonk::new("test".to_string());
 
         vm.stack.push(Value::String(
             "this would normally be a function at the top of the call frame".to_string(),
@@ -595,11 +593,11 @@ mod tests {
         vm.stack.push(Value::Integer(42));
         vm.stack.push(Value::Integer(-1));
 
-        chunk.add_instruction(Instruction::FetchLocal(1));
-        chunk.add_instruction(Instruction::Return);
-        println!("{}", chunk);
+        thonk.add_instruction(Instruction::FetchLocal(1));
+        thonk.add_instruction(Instruction::Return);
+        println!("{}", thonk);
 
-        let frame = CallFrame::new(0, 0, &chunk);
+        let frame = CallFrame::new(0, 0, &thonk);
         vm.frames.push(frame);
 
         let result = vm.run(true);
@@ -620,48 +618,48 @@ mod tests {
     #[test]
     fn test_instr_call() {
         let mut memory = Memory::new();
-        let mut chunk = Chunk::new("fib".to_string());
+        let mut thonk = Thonk::new("fib".to_string());
 
         // Get the parameter off the stack
-        chunk.add_instruction(Instruction::FetchLocal(0));
-        chunk.add_instruction(Instruction::Constant(Value::Integer(1)));
+        thonk.add_instruction(Instruction::FetchLocal(0));
+        thonk.add_instruction(Instruction::Constant(Value::Integer(1)));
         // Chcek if it's <= 1
-        chunk.add_instruction(Instruction::LessThanOrEqual);
-        chunk.add_instruction(Instruction::JumpIfFalse(2));
+        thonk.add_instruction(Instruction::LessThanOrEqual);
+        thonk.add_instruction(Instruction::JumpIfFalse(2));
         // If false return 1
-        chunk.add_instruction(Instruction::Constant(Value::Integer(1)));
-        chunk.add_instruction(Instruction::Return);
+        thonk.add_instruction(Instruction::Constant(Value::Integer(1)));
+        thonk.add_instruction(Instruction::Return);
         // return fidbn-1) + fib(n-2)
         // Load fib
-        chunk.add_instruction(Instruction::Constant(Value::Chunk("fib", 0)));
+        thonk.add_instruction(Instruction::Constant(Value::Thonk("fib", 0)));
         // load n
-        chunk.add_instruction(Instruction::FetchLocal(0));
+        thonk.add_instruction(Instruction::FetchLocal(0));
         // load 1
-        chunk.add_instruction(Instruction::Constant(Value::Integer(1)));
+        thonk.add_instruction(Instruction::Constant(Value::Integer(1)));
         // subtract
-        chunk.add_instruction(Instruction::Subtract);
+        thonk.add_instruction(Instruction::Subtract);
         // Call fib(n-1)
-        chunk.add_instruction(Instruction::Call(1));
+        thonk.add_instruction(Instruction::Call(1));
         // load fib
-        chunk.add_instruction(Instruction::Constant(Value::Chunk("fib", 0)));
+        thonk.add_instruction(Instruction::Constant(Value::Thonk("fib", 0)));
         // load n
-        chunk.add_instruction(Instruction::FetchLocal(0));
+        thonk.add_instruction(Instruction::FetchLocal(0));
         // load 2
-        chunk.add_instruction(Instruction::Constant(Value::Integer(2)));
+        thonk.add_instruction(Instruction::Constant(Value::Integer(2)));
         // subtract
-        chunk.add_instruction(Instruction::Subtract);
+        thonk.add_instruction(Instruction::Subtract);
         // Call fib(n-1)
-        chunk.add_instruction(Instruction::Call(1));
+        thonk.add_instruction(Instruction::Call(1));
         // add
-        chunk.add_instruction(Instruction::Add);
-        chunk.add_instruction(Instruction::Return);
-        println!("{}", chunk);
+        thonk.add_instruction(Instruction::Add);
+        thonk.add_instruction(Instruction::Return);
+        println!("{}", thonk);
 
         // put fib in memory
-        let slot = memory.0.reserve_chunk_slot();
-        memory.0.insert_chunk(chunk.clone(), slot);
+        let slot = memory.0.reserve_thonk_slot();
+        memory.0.insert_thonk(thonk.clone(), slot);
 
-        let frame = CallFrame::new(0, 0, &chunk);
+        let frame = CallFrame::new(0, 0, &thonk);
 
         let mut vm = VM::new(&memory.0);
 

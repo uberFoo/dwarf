@@ -1,7 +1,7 @@
 use tracy_client::Client;
 
 cfg_if::cfg_if! {
-if #[cfg(not(feature = "single-threaded"))] {
+if #[cfg(not(feature = "single"))] {
 use std::{
     io::{self, stdout},
     panic::{self, PanicInfo},

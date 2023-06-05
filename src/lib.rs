@@ -1,24 +1,21 @@
 use std::{io, ops::Range, path::PathBuf};
 
 use ansi_term::Colour;
+use chacha::vm::Instruction;
 use clap::Args;
 use crossbeam::channel::SendError;
 use rustyline::error::ReadlineError;
 use sarzak::lu_dog;
 use serde::{Deserialize, Serialize};
 use snafu::{prelude::*, Location};
-use svm::Instruction;
 
-pub mod dap;
+pub mod chacha;
 pub mod dwarf;
-pub mod interpreter;
-// pub mod lu_dog;
 // pub mod merlin;
-pub mod svm;
 pub(crate) mod value;
 pub(crate) mod woog_structs;
 
-pub use interpreter::{initialize_interpreter, start_repl, Memory};
+pub use chacha::interpreter::{self, initialize_interpreter, start_repl, Memory};
 pub use value::{StoreProxy, Value};
 
 // These should eventually come from the domain.
@@ -28,7 +25,7 @@ pub type DwarfFloat = f64;
 use lu_dog::ValueType;
 
 cfg_if::cfg_if! {
-    if #[cfg(feature = "single-threaded")] {
+    if #[cfg(feature = "single")] {
         type RefType<T> = std::rc::Rc<std::cell::RefCell<T>>;
 
         impl<T> NewRefType<T> for RefType<T> {
@@ -52,7 +49,7 @@ cfg_if::cfg_if! {
             };
         }
 
-    } else if #[cfg(feature = "std-mutex")] {
+    } else if #[cfg(feature = "multi-std-mutex")] {
         compile_error!("std mutex is not currently supported");
 
         type RefType<T> = std::sync::Arc<std::sync::Mutex<T>>;
@@ -78,7 +75,7 @@ cfg_if::cfg_if! {
             };
         }
 
-   } else if #[cfg(feature = "std-rwlock")] {
+   } else if #[cfg(feature = "multi-std-rwlock")] {
         type RefType<T> = std::sync::Arc<std::sync::RwLock<T>>;
 
         impl<T> NewRefType<T> for RefType<T> {
@@ -102,7 +99,7 @@ cfg_if::cfg_if! {
             };
         }
 
-    } else if #[cfg(feature = "parking-lot-mutex")] {
+    } else if #[cfg(feature = "multi-parking-lot-mutex")] {
         compile_error!("parking-lot mutex is not currently supported");
         type RefType<T> = std::sync::Arc<parking_lot::Mutex<T>>;
 
@@ -127,7 +124,7 @@ cfg_if::cfg_if! {
             };
         }
 
-    } else if #[cfg(feature = "parking-lot-rwlock")] {
+    } else if #[cfg(feature = "multi-parking-lot-rwlock")] {
         type RefType<T> = std::sync::Arc<parking_lot::RwLock<T>>;
 
         impl<T> NewRefType<T> for RefType<T> {

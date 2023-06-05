@@ -1,0 +1,13 @@
+fn fib2(n: int) -> int {
+    if n <= 1 {
+        1
+    } else {
+        fib2(n - 1) + fib2(n - 2)
+    }
+}
+
+fn main() -> int {
+    print("Calculating the 17th fibonacci number:\n");
+    print(fib2(17));
+    print("\n");
+}
