@@ -11,7 +11,7 @@ use sarzak::{
     sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL},
 };
 
-use chacha::dwarf::{
+use dwarf::dwarf::{
     parse_dwarf, populate_lu_dog, DwarfError, FileSnafu, GenericSnafu, IOSnafu, Result,
 };
 use tracy_client::Client;

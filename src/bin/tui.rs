@@ -12,7 +12,7 @@ use std::{
 };
 
 use ansi_to_tui::IntoText;
-use chacha::{
+use dwarf::{
     interpreter::{
         banner2, initialize_interpreter_paths, start_repl2, DebuggerControl, DebuggerStatus,
         MemoryUpdateMessage,

@@ -48,18 +48,6 @@ fn pixel_to_point(
     }
 }
 
-// fn escape_time(c: Complex, limit: int) -> Option<int> {
-//     // debugger;
-//     let z = Complex::zero();
-//     for i in 0..limit {
-//         let z = z.square(z).add(z, c);
-//         if z.norm_squared(z) > 4.0 {
-//             return Some(i);
-//         }
-//     }
-//     None
-// }
-
 fn escape_time(c: Complex, limit: int) -> Option<int> {
     // debugger;
     let z = Complex::zero();
@@ -81,10 +69,10 @@ fn escape_time(c: Complex, limit: int) -> Option<int> {
 }
 
 fn main() -> Complex {
-    let width = 168;
-    let height = 56;
-    // let width = 84;
-    // let height = 28;
+    // let width = 168;
+    // let height = 56;
+    let width = 84;
+    let height = 28;
     // let width = 21;
     // let height = 7;
     let upper_left = Complex { re: -2.5, im: 1.0 };
@@ -101,27 +89,21 @@ fn main() -> Complex {
     // let column = 0;
     // debugger;
     for row in 0..height {
-        for column in 0..width {
-            let point = pixel_to_point(width, height, column, row, upper_left, lower_right);
-            // print(point);
-            // print(escape_time(point, 255));
-            let time = escape_time(point, 255);
-            // print(time);
-            // if line == 500 {
-            // print("!");
-            // } else
-            if time > 0 {
-                print(" ");
-            } else {
-                print("*");
-            }
-            // if let Some(i) = time {
-            //     // print(rgb(i) + "*");
-            //     print("*");
-            // } else {
-            //     print(" ");
-            // }
-        }
-        print("\n");
+        // OMG, this is an ugly hack, and yet it's so badass.
+        // ChaCha::spawn(do_column, [row, width, height, upper_left, lower_right]);
+        do_column(row, width, height, upper_left, lower_right);
     }
+}
+
+fn do_column(row: int, width: int, height: int, upper_left: Complex, lower_right: Complex) {
+    for column in 0..width {
+        let point = pixel_to_point(width, height, column, row, upper_left, lower_right);
+        let time = escape_time(point, 255);
+        if time > 0 {
+            print(" ");
+        } else {
+            print("*");
+        }
+    }
+    print("\n");
 }
