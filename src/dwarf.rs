@@ -1,6 +1,6 @@
-use std::{fmt, ops, path::PathBuf, sync::Arc};
+use std::{fmt, ops, path::PathBuf};
 
-use ansi_term::{Colour, Style};
+use ansi_term::Colour;
 use clap::Args;
 use sarzak::{
     lu_dog::WoogStruct,
@@ -133,11 +133,13 @@ pub enum DwarfError {
     /// This is used when one type is expected, and another is found.
     // #[snafu(display("\n{}: Type mismatch: expected {expected}, found {found}", C_ERR.bold().paint("error")))]
     // TypeMismatch { expected: String, found: String },
-    #[snafu(display("\n{}: Type mismatch: expected `{expected}`, found `{found}`.\n  --> {}:{}:{}", C_ERR.bold().paint("error"), location.file, location.line, location.column))]
+    // #[snafu(display("\n{}: Type mismatch: expected `{expected}`, found `{found}`.\n  --> {}:{}:{}", C_ERR.bold().paint("error"), location.file, location.line, location.column))]
+    // #[snafu(display("\n{}: Type mismatch: expected `{expected}`, found `{found}`.", C_ERR.bold().paint("error")))]
+    // #[snafu(display())]
     TypeMismatch {
         expected: String,
         found: String,
-        location: Location,
+        span: Span,
     },
 
     /// Unknown Type
@@ -402,6 +404,7 @@ pub enum Statement {
 #[derive(Clone, Debug, PartialEq)]
 pub enum Expression {
     Addition(Box<Spanned<Self>>, Box<Spanned<Self>>),
+    And(Box<Spanned<Self>>, Box<Spanned<Self>>),
     As(Box<Spanned<Self>>, Spanned<Type>),
     /// Assignment Expression
     ///
@@ -410,6 +413,7 @@ pub enum Expression {
     /// The first element is the left-hand side expression representing the storage
     /// and the second is the right-hand side, representing the value to be stored.
     Assignment(Box<Spanned<Self>>, Box<Spanned<Self>>),
+    Bang(Box<Spanned<Self>>),
     Block(Vec<Spanned<Statement>>),
     BooleanLiteral(bool),
     Debug,

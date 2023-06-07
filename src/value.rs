@@ -537,6 +537,21 @@ impl std::ops::Neg for Value {
     }
 }
 
+/// Not Operator
+///
+/// Implement negation trait for Value
+impl std::ops::Not for Value {
+    type Output = Self;
+
+    fn not(self) -> Self::Output {
+        match self {
+            Value::Boolean(a) => Value::Boolean(!a),
+            Value::Empty => Value::Empty,
+            a => Value::Error(format!("Cannot bang {}", a)),
+        }
+    }
+}
+
 /// Division operator for Value
 ///
 /// Implement the division trait for Value.

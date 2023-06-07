@@ -1,0 +1,4 @@
+/// Test _Logical_ OR
+fn main() -> bool {
+    true || false
+}

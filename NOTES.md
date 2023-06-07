@@ -8,3 +8,7 @@ are put together according to the whims of the coder.
 
 * The Proxy methods are not typechecked at runtime, so it's recommended to not call
 them directly.
+
+## Book Notes
+
+* I'd like it understood that I built this in a very weird way, and that instead of inventing a language, I borrowed Rust.

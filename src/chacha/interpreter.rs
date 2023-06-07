@@ -26,10 +26,10 @@ use crate::{
     chacha::vm::{CallFrame, Instruction, Thonk, VM},
     dwarf::{inter_statement, parse_line},
     lu_dog::{
-        Argument, Binary, Block, BooleanLiteral, CallEnum, Comparison, DwarfSourceFile, Expression,
-        FieldAccessTarget, Function, Import, List, Literal, LocalVariable,
-        ObjectStore as LuDogStore, OperatorEnum, Span, Statement, StatementEnum, ValueType,
-        Variable, WoogOptionEnum, XValue, XValueEnum,
+        Argument, Binary, Block, BooleanLiteral, BooleanOperator, CallEnum, Comparison,
+        DwarfSourceFile, Expression, FieldAccessTarget, Function, Import, List, Literal,
+        LocalVariable, ObjectStore as LuDogStore, OperatorEnum, Span, Statement, StatementEnum,
+        Unary, ValueType, Variable, WoogOptionEnum, XValue, XValueEnum,
     },
     new_rc, new_ref, s_read, s_write,
     value::{StoreProxy, ThreadHandle, ThreadHandleType, UserType},
@@ -1432,17 +1432,6 @@ fn eval_expression(
             z
         }
         //
-        // Negation
-        //
-        Expression::Negation(ref id) => {
-            let negation = s_read!(lu_dog).exhume_negation(id).unwrap();
-            let operand = s_read!(negation).r70_expression(&s_read!(lu_dog))[0].clone();
-            let (value, ty) = eval_expression(operand, context)?;
-            let value = -s_read!(value).clone();
-
-            Ok((new_ref!(Value, value), ty))
-        }
-        //
         // Operator
         //
         Expression::Operator(ref operator) => {
@@ -1481,6 +1470,24 @@ fn eval_expression(
                             }
 
                             Ok((lhs, lhs_ty))
+                        }
+                        Binary::BooleanOperator(ref id) => {
+                            let boolean_operator =
+                                s_read!(lu_dog).exhume_boolean_operator(id).unwrap();
+                            let boolean_operator = s_read!(boolean_operator);
+                            match &*boolean_operator {
+                                BooleanOperator::And(_) => {
+                                    let value = Value::Boolean(
+                                        (&*s_read!(lhs)).try_into().unwrap()
+                                            && (&*s_read!(rhs.unwrap())).try_into().unwrap(),
+                                    );
+                                    Ok((new_ref!(Value, value), lhs_ty))
+                                } // BooleanOperator::Or(_) => {
+                                  //     let value =
+                                  //         s_read!(lhs).clone() || s_read!(rhs.unwrap()).clone();
+                                  //     Ok((new_ref!(Value, value), lhs_ty))
+                                  // }
+                            }
                         }
                         Binary::Division(_) => {
                             let value = s_read!(lhs).clone() / s_read!(rhs.unwrap()).clone();
@@ -1526,6 +1533,25 @@ fn eval_expression(
                             Ok((new_ref!(Value, value), ty))
                         }
                         _ => unimplemented!(),
+                    }
+                }
+                OperatorEnum::Unary(ref unary) => {
+                    let unary = s_read!(lu_dog).exhume_unary(unary).unwrap();
+                    let unary = s_read!(unary);
+                    match &*unary {
+                        //
+                        // Negation
+                        //
+                        Unary::Negation(_) => {
+                            let value = -s_read!(lhs).clone();
+
+                            Ok((new_ref!(Value, value), lhs_ty))
+                        }
+                        Unary::Not(_) => {
+                            let value = !s_read!(lhs).clone();
+
+                            Ok((new_ref!(Value, value), lhs_ty))
+                        }
                     }
                 }
             }

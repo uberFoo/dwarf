@@ -12,13 +12,13 @@ use uuid::Uuid;
 use crate::{
     dwarf::{
         DwarfError, Expression as ParserExpression, Item, ObjectIdNotFoundSnafu, Result, Spanned,
-        Statement as ParserStatement, Type,
+        Statement as ParserStatement, Type, TypeMismatchSnafu,
     },
     lu_dog::{
         store::ObjectStore as LuDogStore,
         types::{
-            Block, Call, Error, ErrorExpression, Expression, ExpressionStatement, Field,
-            FieldExpression, ForLoop, Function, Implementation, Index, IntegerLiteral,
+            Block, BooleanOperator, Call, Error, ErrorExpression, Expression, ExpressionStatement,
+            Field, FieldExpression, ForLoop, Function, Implementation, Index, IntegerLiteral,
             Item as WoogItem, LetStatement, Literal, LocalVariable, Parameter, Print,
             RangeExpression, Span as LuDogSpan, Statement, StaticMethodCall, StringLiteral,
             StructExpression, ValueType, Variable, VariableExpression, WoogOption, WoogStruct, XIf,
@@ -26,7 +26,8 @@ use crate::{
         },
         Argument, Binary, BooleanLiteral, Comparison, DwarfSourceFile, FieldAccess,
         FieldAccessTarget, FloatLiteral, List, ListElement, ListExpression, MethodCall, Negation,
-        Operator, Reference, ResultStatement, TypeCast, VariableEnum, WoogOptionEnum, XReturn,
+        Not, Operator, Reference, ResultStatement, TypeCast, Unary, VariableEnum, WoogOptionEnum,
+        XReturn,
     },
     new_ref, s_read, s_write, NewRefType, RefType,
 };
@@ -342,11 +343,7 @@ fn inter_func(
         sarzak,
     )?;
 
-    let foo = PrintableValueType(ret_ty.clone(), lu_dog, sarzak, models);
-    dbg!(foo.to_string());
-
     let func = Function::new(name.to_owned(), &block, impl_block, &ret_ty, lu_dog);
-    dbg!(&s_read!(func).id);
     let _ = WoogItem::new_function(source, &func, lu_dog);
     // Create a type for our function
     ValueType::new_function(&func, lu_dog);
@@ -488,10 +485,6 @@ pub fn inter_statement(
                 ty
             };
 
-            let foo = PrintableValueType(ty.clone(), lu_dog, sarzak, models);
-            dbg!(foo.to_string());
-            debug!("inter_statement let foo {}", foo.to_string());
-
             // 🚧
             // Let's keep an eye on this. I've had the notion of having a separate
             // entry point for the REPL, and conditionally needing to generate an
@@ -625,10 +618,69 @@ fn inter_expression(
             // 🚧
             // 🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧
 
-            typecheck(&lhs_ty, &rhs_ty, lu_dog, sarzak, models)?;
+            let tc_span = s_read!(span).start as usize..s_read!(span).end as usize;
+            typecheck(&lhs_ty, &rhs_ty, tc_span, lu_dog, sarzak, models)?;
 
             let expr = Binary::new_addition(lu_dog);
-            let expr = Operator::new_binary(&lhs.0, Some(&rhs.0), &expr, lu_dog);
+            let expr = Operator::new_binary(Some(&rhs.0), &lhs.0, &expr, lu_dog);
+            let expr = Expression::new_operator(&expr, lu_dog);
+
+            let value = XValue::new_expression(block, &lhs_ty, &expr, lu_dog);
+            s_write!(span).x_value = Some(s_read!(value).id);
+
+            Ok(((expr, span), lhs_ty))
+        }
+        //
+        // And
+        //
+        ParserExpression::And(ref lhs, ref rhs) => {
+            let (lhs, lhs_ty) = inter_expression(
+                &new_ref!(ParserExpression, lhs.0.to_owned()),
+                &lhs.1,
+                source,
+                block,
+                lu_dog,
+                models,
+                sarzak,
+            )?;
+            let (rhs, rhs_ty) = inter_expression(
+                &new_ref!(ParserExpression, rhs.0.to_owned()),
+                &rhs.1,
+                source,
+                block,
+                lu_dog,
+                models,
+                sarzak,
+            )?;
+
+            ensure!(
+                if let ValueType::Ty(ref id) = &*s_read!(lhs_ty) {
+                    let ty = sarzak.exhume_ty(id).unwrap();
+                    if let Ty::Boolean(_) = ty {
+                        true
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                },
+                {
+                    let span = s_read!(lhs.1).start as usize..s_read!(lhs.1).end as usize;
+                    let lhs = PrintableValueType(lhs_ty, lu_dog, sarzak, models);
+                    TypeMismatchSnafu {
+                        found: lhs.to_string(),
+                        expected: "bool".to_string(),
+                        span,
+                    }
+                }
+            );
+
+            let tc_span = s_read!(span).start as usize..s_read!(span).end as usize;
+            typecheck(&lhs_ty, &rhs_ty, tc_span, lu_dog, sarzak, models)?;
+
+            let expr = BooleanOperator::new_and(lu_dog);
+            let expr = Binary::new_boolean_operator(&expr, lu_dog);
+            let expr = Operator::new_binary(Some(&rhs.0), &lhs.0, &expr, lu_dog);
             let expr = Expression::new_operator(&expr, lu_dog);
 
             let value = XValue::new_expression(block, &lhs_ty, &expr, lu_dog);
@@ -683,16 +735,38 @@ fn inter_expression(
             // dbg!("expr", &lhs, &rhs);
             // dbg!(&lhs_ty, &rhs_ty);
 
-            typecheck(&lhs_ty, &rhs_ty, lu_dog, sarzak, models)?;
+            let tc_span = s_read!(span).start as usize..s_read!(span).end as usize;
+            typecheck(&lhs_ty, &rhs_ty, tc_span, lu_dog, sarzak, models)?;
 
             let expr = Binary::new_assignment(lu_dog);
-            let expr = Operator::new_binary(&lhs.0, Some(&rhs.0), &expr, lu_dog);
+            let expr = Operator::new_binary(Some(&rhs.0), &lhs.0, &expr, lu_dog);
             let expr = Expression::new_operator(&expr, lu_dog);
 
             let value = XValue::new_expression(&block, &lhs_ty, &expr, lu_dog);
             s_write!(span).x_value = Some(s_read!(value).id);
 
             Ok(((expr, span), lhs_ty))
+        }
+        //
+        // Bang
+        //
+        ParserExpression::Bang(expr) => {
+            let (expr, ty) = inter_expression(
+                &new_ref!(ParserExpression, (*expr).0.to_owned()),
+                &expr.1,
+                source,
+                block,
+                lu_dog,
+                models,
+                sarzak,
+            )?;
+            let not = Unary::new_not(lu_dog);
+            let operator = Operator::new_unary(None, &expr.0, &not, lu_dog);
+            let expr = Expression::new_operator(&operator, lu_dog);
+            let value = XValue::new_expression(&block, &ty, &expr, lu_dog);
+            s_write!(span).x_value = Some(s_read!(value).id);
+
+            Ok(((expr, span), ty))
         }
         //
         // Block
@@ -769,10 +843,11 @@ fn inter_expression(
             // 🚧
             // 🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧
 
-            typecheck(&lhs_ty, &rhs_ty, lu_dog, sarzak, models)?;
+            let tc_span = s_read!(span).start as usize..s_read!(span).end as usize;
+            typecheck(&lhs_ty, &rhs_ty, tc_span, lu_dog, sarzak, models)?;
 
             let expr = Binary::new_division(lu_dog);
-            let expr = Operator::new_binary(&lhs.0, Some(&rhs.0), &expr, lu_dog);
+            let expr = Operator::new_binary(Some(&rhs.0), &lhs.0, &expr, lu_dog);
             let expr = Expression::new_operator(&expr, lu_dog);
 
             let value = XValue::new_expression(block, &lhs_ty, &expr, lu_dog);
@@ -891,7 +966,7 @@ fn inter_expression(
                 }
                 ValueType::WoogStruct(ref id) => {
                     let woog_struct = lu_dog.exhume_woog_struct(id).unwrap();
-                    dbg!(&woog_struct, &rhs);
+
                     let field = lu_dog
                         .exhume_field_id_by_name(&rhs.0.to_upper_camel_case())
                         .unwrap();
@@ -1105,10 +1180,11 @@ fn inter_expression(
             // 🚧
             // 🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧
 
-            typecheck(&lhs_ty, &rhs_ty, lu_dog, sarzak, models)?;
+            let tc_span = s_read!(span).start as usize..s_read!(span).end as usize;
+            typecheck(&lhs_ty, &rhs_ty, tc_span, lu_dog, sarzak, models)?;
 
             let expr = Comparison::new_greater_than(lu_dog);
-            let expr = Operator::new_comparison(&lhs.0, Some(&rhs.0), &expr, lu_dog);
+            let expr = Operator::new_comparison(Some(&rhs.0), &lhs.0, &expr, lu_dog);
             let expr = Expression::new_operator(&expr, lu_dog);
 
             let ty = Ty::new_boolean();
@@ -1131,21 +1207,25 @@ fn inter_expression(
             debug!("ParserExpression::If {:?}", conditional_ty);
 
             // We really need to get some error handling in here.
-            let ty = s_read!(conditional_ty).to_owned();
-            if let ValueType::Ty(ref ty) = s_read!(conditional_ty).to_owned() {
+            if let ValueType::Ty(ref ty) = &*s_read!(conditional_ty) {
                 error!("exhume Ty from sarzak -- bool check {:?}", ty);
-                let ty = sarzak.exhume_ty(ty).unwrap();
-                if let Ty::Boolean(_) = ty {
+                let s_ty = sarzak.exhume_ty(ty).unwrap();
+                if let Ty::Boolean(_) = s_ty {
                     // We're good.
                 } else {
-                    panic!("Expected a boolean");
+                    let ty = PrintableValueType(conditional_ty.clone(), lu_dog, sarzak, models);
+                    return Err(DwarfError::TypeMismatch {
+                        expected: "boolean".to_owned(),
+                        found: ty.to_string(),
+                        span: cspan.to_owned(),
+                    });
                 }
             } else {
-                let ty = PrintableValueType(new_ref!(ValueType, ty), lu_dog, sarzak, models);
+                let ty = PrintableValueType(conditional_ty.clone(), lu_dog, sarzak, models);
                 return Err(DwarfError::TypeMismatch {
                     expected: "boolean".to_owned(),
                     found: ty.to_string(),
-                    location: location!(),
+                    span: cspan.to_owned(),
                 });
             }
 
@@ -1177,7 +1257,7 @@ fn inter_expression(
                 None
             };
 
-            let if_expr = XIf::new(&true_block, false_block.as_ref(), &conditional.0, lu_dog);
+            let if_expr = XIf::new(false_block.as_ref(), &true_block, &conditional.0, lu_dog);
             let expr = Expression::new_x_if(&if_expr, lu_dog);
 
             let ty = true_ty;
@@ -1213,10 +1293,12 @@ fn inter_expression(
             let index = Index::new(&index.0, &target.0, lu_dog);
             let int_ty = ValueType::new_ty(&new_ref!(Ty, Ty::new_integer()), lu_dog);
 
-            typecheck(&int_ty, &index_ty, lu_dog, sarzak, models)?;
+            let tc_span = s_read!(span).start as usize..s_read!(span).end as usize;
+            typecheck(&int_ty, &index_ty, tc_span, lu_dog, sarzak, models)?;
 
             let ty = ValueType::new_ty(&new_ref!(Ty, Ty::new_integer()), lu_dog);
-            typecheck(&index_ty, &ty, lu_dog, sarzak, models)?;
+            let tc_span = s_read!(span).start as usize..s_read!(span).end as usize;
+            typecheck(&index_ty, &ty, tc_span, lu_dog, sarzak, models)?;
 
             let expr = Expression::new_index(&index, lu_dog);
             let value = XValue::new_expression(&block, &ty, &expr, lu_dog);
@@ -1271,10 +1353,11 @@ fn inter_expression(
             // 🚧
             // 🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧
 
-            typecheck(&lhs_ty, &rhs_ty, lu_dog, sarzak, models)?;
+            let tc_span = s_read!(span).start as usize..s_read!(span).end as usize;
+            typecheck(&lhs_ty, &rhs_ty, tc_span, lu_dog, sarzak, models)?;
 
             let expr = Comparison::new_less_than_or_equal(lu_dog);
-            let expr = Operator::new_comparison(&lhs.0, Some(&rhs.0), &expr, lu_dog);
+            let expr = Operator::new_comparison(Some(&rhs.0), &lhs.0, &expr, lu_dog);
             let expr = Expression::new_operator(&expr, lu_dog);
 
             let ty = Ty::new_boolean();
@@ -1332,7 +1415,8 @@ fn inter_expression(
                         sarzak,
                     )?;
 
-                    typecheck(&first_ty, &elt_ty, lu_dog, sarzak, models)?;
+                    let tc_span = s_read!(span).start as usize..s_read!(span).end as usize;
+                    typecheck(&first_ty, &elt_ty, tc_span, lu_dog, sarzak, models)?;
 
                     let element = ListElement::new(&elt, None, lu_dog);
                     last_element_uuid = link_list_element!(last_element_uuid, element, lu_dog);
@@ -1595,8 +1679,9 @@ fn inter_expression(
                 models,
                 sarzak,
             )?;
-            let negation = Negation::new(&expr.0, lu_dog);
-            let expr = Expression::new_negation(&negation, lu_dog);
+            let negation = Unary::new_negation(lu_dog);
+            let operator = Operator::new_unary(None, &expr.0, &negation, lu_dog);
+            let expr = Expression::new_operator(&operator, lu_dog);
             let value = XValue::new_expression(&block, &ty, &expr, lu_dog);
             s_write!(span).x_value = Some(s_read!(value).id);
 
@@ -1652,10 +1737,11 @@ fn inter_expression(
             // 🚧
             // 🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧
 
-            typecheck(&lhs_ty, &rhs_ty, lu_dog, sarzak, models)?;
+            let tc_span = s_read!(span).start as usize..s_read!(span).end as usize;
+            typecheck(&lhs_ty, &rhs_ty, tc_span, lu_dog, sarzak, models)?;
 
             let expr = Binary::new_multiplication(lu_dog);
-            let expr = Operator::new_binary(&lhs.0, Some(&rhs.0), &expr, lu_dog);
+            let expr = Operator::new_binary(Some(&rhs.0), &lhs.0, &expr, lu_dog);
             let expr = Expression::new_operator(&expr, lu_dog);
 
             let value = XValue::new_expression(block, &lhs_ty, &expr, lu_dog);
@@ -1986,7 +2072,7 @@ fn inter_expression(
             // 🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧
 
             let expr = Binary::new_subtraction(lu_dog);
-            let expr = Operator::new_binary(&lhs.0, Some(&rhs.0), &expr, lu_dog);
+            let expr = Operator::new_binary(Some(&rhs.0), &lhs.0, &expr, lu_dog);
             let expr = Expression::new_operator(&expr, lu_dog);
 
             let value = XValue::new_expression(&block, &lhs_ty, &expr, lu_dog);
@@ -2354,6 +2440,7 @@ fn de_sanitize(string: &str) -> Option<&str> {
 fn typecheck(
     lhs: &RefType<ValueType>,
     rhs: &RefType<ValueType>,
+    span: Span,
     lu_dog: &LuDogStore,
     sarzak: &SarzakStore,
     models: &[SarzakStore],
@@ -2385,9 +2472,7 @@ fn typecheck(
                 Err(DwarfError::TypeMismatch {
                     expected: lhs.to_string(),
                     found: rhs.to_string(),
-                    // 🚧 This shouldn't point to here, it should point to a span
-                    // in the source code.
-                    location: location!(),
+                    span,
                 })
             }
         }

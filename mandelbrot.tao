@@ -69,12 +69,13 @@ fn escape_time(c: Complex, limit: int) -> Option<int> {
 }
 
 fn main() -> Complex {
-    // let width = 168;
-    // let height = 56;
-    let width = 84;
-    let height = 28;
+    // 🚧 Need to fix this multiple let let-down. Oh, no! 😫
     // let width = 21;
     // let height = 7;
+    // let width = 84;
+    // let height = 28;
+    let width = 168;
+    let height = 56;
     let upper_left = Complex { re: -2.5, im: 1.0 };
     let lower_right = Complex { re: 2.0, im: -1.0 };
     // let upper_left = Complex {
