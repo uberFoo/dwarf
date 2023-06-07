@@ -15,6 +15,10 @@ The long term plan is to turn the dwarf source into Rust source, and compile it 
 * Interpreter / debugger performance
 * 100% Rust feature / syntax parity
 
+## On the Horizon
+
+* Supertype / subtype hierarchies -- there will be some sort of support for OO-like behavior
+
 ## Syntax
 
 dwarf syntax is a strict subset of Rust's.

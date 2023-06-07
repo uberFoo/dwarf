@@ -1,11 +1,11 @@
 use std::{fs, path::PathBuf};
 
-use chacha::{
+use criterion::{criterion_group, criterion_main, Criterion};
+use dwarf::{
     dwarf::{parse_dwarf, populate_lu_dog},
     initialize_interpreter,
     interpreter::{start_main, start_vm},
 };
-use criterion::{criterion_group, criterion_main, Criterion};
 use sarzak::sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL};
 use tracy_client::Client;
 

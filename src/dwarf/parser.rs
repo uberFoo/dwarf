@@ -100,12 +100,13 @@ const PATH: (u8, u8) = (100, 100);
 const METHOD: (u8, u8) = (90, 91);
 const FIELD: (u8, u8) = (80, 81);
 const FUNC_CALL: (u8, u8) = (70, 71);
-const MINUS: (u8, u8) = (60, 61);
+const UNARY: (u8, u8) = (60, 61);
 const AS_OP: (u8, u8) = (55, 56);
 const MUL_DIV: (u8, u8) = (52, 53);
 const ADD_SUB: (u8, u8) = (50, 51);
-const COMP: (u8, u8) = (30, 30);
-const RANGE: (u8, u8) = (20, 20);
+const COMP: (u8, u8) = (30, 31);
+const BOOL: (u8, u8) = (25, 26);
+const RANGE: (u8, u8) = (20, 21);
 const ASSIGN: (u8, u8) = (11, 10);
 const LITERAL: (u8, u8) = (0, 1);
 const BLOCK: (u8, u8) = (0, 0);
@@ -130,36 +131,8 @@ fn lexer() -> impl Parser<char, Vec<Spanned<Token>>, Error = Simple<char>> {
         .collect::<String>()
         .map(Token::String);
 
-    // let dagger = just::<char, char, Simple<char>>('-')
-    //     .ignore_then(just('>'))
-    //     .map(|_| Token::Punct('→'));
-
-    // let double_colon = just::<char, char, Simple<char>>(':')
-    //     .ignore_then(just(':'))
-    //     .padded_by(filter(|c: &char| c.is_whitespace()).repeated())
-    //     .map(|_| Token::Punct('∷'));
-
-    // A parser for operators
-    // let op = one_of("+-*/!=")
-    //     .repeated()
-    //     .at_least(1)
-    //     .collect::<String>()
-    //     .map(Token::Op);
-
     // A parser for punctuation (delimiters, semicolons, etc.)
-    let punct = one_of("=-()[]{}:;,.&<>+*/").map(|c| Token::Punct(c));
-
-    // A "Object type" parser. Basically I'm asserting that if an identifier starts
-    // with a capital letter, then it's an object.
-    // let object = filter::<_, _, Simple<char>>(|c: &char| c.is_uppercase())
-    //     .chain::<char, Vec<_>, _>(filter(|c: &char| c.is_alphanumeric()).repeated())
-    //     .collect::<String>()
-    //     .map(Token::Object);
-
-    // let some = just::<char, &str, Simple<char>>("Some")
-    //     .then_ignore(just('('))
-    //     .then(filter(|c: &char| *c != ')').repeated().collect::<String>())
-    //     .map(|inner| Token::Some(inner.1));
+    let punct = one_of("=-()[]{}:;,.&<>+*/!").map(|c| Token::Punct(c));
 
     // A parser for identifiers and keywords
     let ident = text::ident().map(|ident: String| match ident.as_str() {
@@ -1132,6 +1105,60 @@ impl DwarfParser {
         )))
     }
 
+    /// Parse an and operator
+    ///
+    /// and -> expression && expression
+    fn parse_and_operator(&mut self, left: &Expression, power: u8) -> Result<Option<Expression>> {
+        debug!("enter", power);
+
+        if power > BOOL.0 {
+            debug!("exit no power", power);
+            return Ok(None);
+        }
+
+        let start = if let Some(tok) = self.peek() {
+            tok.1.start
+        } else {
+            debug!("exit no token");
+            return Ok(None);
+        };
+
+        if !self.check(&Token::Punct('&')) {
+            debug!("exit no '&'");
+            return Ok(None);
+        }
+
+        if !self.check2(&Token::Punct('&')) {
+            debug!("exit no '&'");
+            return Ok(None);
+        }
+
+        self.advance();
+        self.advance();
+
+        let right = if let Some(expr) = self.parse_expression(COMP.1)? {
+            expr
+        } else {
+            let token = &self.previous().unwrap();
+            let err = Simple::expected_input_found(
+                token.1.clone(),
+                [Some("<expression -> there's a lot of them...>".to_owned())],
+                Some(token.0.to_string()),
+            );
+            error!("exit", err);
+            return Err(err);
+        };
+
+        debug!("exit");
+        Ok(Some((
+            (
+                DwarfExpression::And(Box::new(left.0.to_owned()), Box::new(right.0)),
+                start..self.previous().unwrap().1.start,
+            ),
+            BOOL,
+        )))
+    }
+
     /// Parse a greater-than operator
     ///
     /// gt -> expression > expression
@@ -1222,6 +1249,9 @@ impl DwarfParser {
                     Some(expression)
                 } else if let Some(expression) = self.parse_eq_operator(&lhs, power)? {
                     debug!("equal operator", expression);
+                    Some(expression)
+                } else if let Some(expression) = self.parse_and_operator(&lhs, power)? {
+                    debug!("and operator", expression);
                     Some(expression)
                 } else if let Some(expression) = self.parse_assignment_expression(&lhs, power)? {
                     debug!("assignment expression", expression);
@@ -1319,6 +1349,12 @@ impl DwarfParser {
         // parse a negation operator
         if let Some(expression) = self.parse_negation_operator()? {
             debug!("negation operator", expression);
+            return Ok(Some(expression));
+        }
+
+        // parse a negation operator
+        if let Some(expression) = self.parse_bang_operator()? {
+            debug!("boolean not operator", expression);
             return Ok(Some(expression));
         }
 
@@ -1525,7 +1561,7 @@ impl DwarfParser {
 
         debug!("getting collection");
 
-        let operand = if let Some(expr) = self.parse_expression(MINUS.1)? {
+        let operand = if let Some(expr) = self.parse_expression(UNARY.1)? {
             debug!("minus operand", expr);
             expr
         } else {
@@ -1546,7 +1582,54 @@ impl DwarfParser {
                 DwarfExpression::Negation(Box::new(operand.0)),
                 start..self.previous().unwrap().1.end,
             ),
-            MINUS,
+            UNARY,
+        )))
+    }
+
+    /// Parse a boolean not operator
+    ///
+    /// not -> '!' expression
+    fn parse_bang_operator(&mut self) -> Result<Option<Expression>> {
+        debug!("enter");
+
+        let start = if let Some(tok) = self.peek() {
+            tok.1.start
+        } else {
+            debug!("exit no tok");
+            return Ok(None);
+        };
+
+        if !self.match_(&[Token::Punct('!')]) {
+            debug!("exit no for");
+            return Ok(None);
+        }
+
+        debug!("getting expression");
+
+        debug!("getting collection");
+
+        let operand = if let Some(expr) = self.parse_expression(UNARY.1)? {
+            debug!("minus operand", expr);
+            expr
+        } else {
+            let token = &self.previous().unwrap();
+            let err = Simple::expected_input_found(
+                token.1.clone(),
+                [Some("<expression -> there's a lot of them...>".to_owned())],
+                Some(token.0.to_string()),
+            );
+            error!("exit", err);
+            return Err(err);
+        };
+
+        debug!("exit ok");
+
+        Ok(Some((
+            (
+                DwarfExpression::Bang(Box::new(operand.0)),
+                start..self.previous().unwrap().1.end,
+            ),
+            UNARY,
         )))
     }
 
@@ -3167,7 +3250,7 @@ fn report_errors(errs: Vec<Simple<char>>, parse_errs: Vec<Simple<String>>, src: 
                 ),
             };
 
-            report.finish().print(Source::from(&src)).unwrap();
+            report.finish().eprint(Source::from(&src)).unwrap();
         });
 }
 

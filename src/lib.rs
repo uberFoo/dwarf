@@ -26,6 +26,13 @@ use lu_dog::ValueType;
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "single")] {
+        type RcType<T> = std::rc::Rc<T>;
+        impl<T> NewRcType<T> for RcType<T> {
+            fn new_rc_type(value: T) -> RcType<T> {
+                std::rc::Rc::new(value)
+            }
+        }
+
         type RefType<T> = std::rc::Rc<std::cell::RefCell<T>>;
 
         impl<T> NewRefType<T> for RefType<T> {
@@ -76,8 +83,14 @@ cfg_if::cfg_if! {
         }
 
    } else if #[cfg(feature = "multi-std-rwlock")] {
-        type RefType<T> = std::sync::Arc<std::sync::RwLock<T>>;
+        type RcType<T> = std::sync::Arc<T>;
+        impl<T> NewRcType<T> for RcType<T> {
+            fn new_rc_type(value: T) -> RcType<T> {
+                std::sync::Arc::new(value)
+            }
+        }
 
+        type RefType<T> = std::sync::Arc<std::sync::RwLock<T>>;
         impl<T> NewRefType<T> for RefType<T> {
             fn new_ref_type(value: T) -> RefType<T> {
                 std::sync::Arc::new(std::sync::RwLock::new(value))
@@ -100,7 +113,7 @@ cfg_if::cfg_if! {
         }
 
     } else if #[cfg(feature = "multi-parking-lot-mutex")] {
-        compile_error!("parking-lot mutex is not currently supported");
+        compile_error!("parking lot mutex is not currently supported");
         type RefType<T> = std::sync::Arc<parking_lot::Mutex<T>>;
 
         impl<T> NewRefType<T> for RefType<T> {
@@ -154,9 +167,27 @@ cfg_if::cfg_if! {
 pub(crate) use ref_read as s_read;
 pub(crate) use ref_write as s_write;
 
+trait NewRcType<T> {
+    fn new_rc_type(value: T) -> RcType<T>;
+}
+
 trait NewRefType<T> {
     fn new_ref_type(value: T) -> RefType<T>;
 }
+
+macro_rules! new_rc {
+    ($type:ty, $value:expr) => {
+        <RcType<$type> as NewRcType<$type>>::new_rc_type($value)
+    };
+}
+pub(crate) use new_rc;
+
+macro_rules! new_ref {
+    ($type:ty, $value:expr) => {
+        <RefType<$type> as NewRefType<$type>>::new_ref_type($value)
+    };
+}
+pub(crate) use new_ref;
 
 //
 // Command line parameters

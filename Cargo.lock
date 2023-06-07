@@ -225,47 +225,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 
 [[package]]
-name = "chacha"
-version = "0.1.0"
-dependencies = [
- "ansi-to-tui",
- "ansi_term",
- "ariadne",
- "backtrace",
- "bincode",
- "cfg-if",
- "chumsky",
- "clap 4.2.2",
- "criterion",
- "crossbeam",
- "crossterm",
- "dap",
- "derivative",
- "env_logger 0.10.0",
- "fnv",
- "fxhash",
- "heck",
- "lazy_static",
- "log",
- "parking_lot",
- "pretty_env_logger",
- "ratatui",
- "rayon",
- "rustyline",
- "sarzak",
- "serde",
- "serde_json",
- "snafu",
- "syntect",
- "tracy-client",
- "tui-input",
- "tui-logger",
- "tui-textarea",
- "tui-tree-widget",
- "uuid",
-]
-
-[[package]]
 name = "chrono"
 version = "0.4.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -662,6 +621,47 @@ name = "doc-comment"
 version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fea41bba32d969b513997752735605054bc0dfa92b4c56bf1189f2e174be7a10"
+
+[[package]]
+name = "dwarf"
+version = "0.1.0"
+dependencies = [
+ "ansi-to-tui",
+ "ansi_term",
+ "ariadne",
+ "backtrace",
+ "bincode",
+ "cfg-if",
+ "chumsky",
+ "clap 4.2.2",
+ "criterion",
+ "crossbeam",
+ "crossterm",
+ "dap",
+ "derivative",
+ "env_logger 0.10.0",
+ "fnv",
+ "fxhash",
+ "heck",
+ "lazy_static",
+ "log",
+ "parking_lot",
+ "pretty_env_logger",
+ "ratatui",
+ "rayon",
+ "rustyline",
+ "sarzak",
+ "serde",
+ "serde_json",
+ "snafu",
+ "syntect",
+ "tracy-client",
+ "tui-input",
+ "tui-logger",
+ "tui-textarea",
+ "tui-tree-widget",
+ "uuid",
+]
 
 [[package]]
 name = "either"
@@ -1181,6 +1181,7 @@ dependencies = [
 [[package]]
 name = "nut"
 version = "1.0.0"
+source = "git+https://gitlab-runner:7kzem8nVeizSJQnLPWFY@git.uberfoo.com/sarzak/nut.git?branch=develop#4ddf8fb03e9854579b25adbbb1c8b72302c4202f"
 dependencies = [
  "anyhow",
  "clap 4.2.2",

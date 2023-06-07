@@ -7,29 +7,24 @@ use std::{
 };
 
 use ariadne::{Color, Fmt, Label, Report, ReportKind, Source};
-use chacha::{
+use clap::Parser;
+use dap::{prelude::BasicClient, server::Server};
+use dwarf::{
     chacha::dap::DapAdapter,
     dwarf::{parse_dwarf, populate_lu_dog, DwarfError},
     initialize_interpreter,
-    interpreter::{banner, banner2, initialize_interpreter_paths, start_main, start_vm},
+    interpreter::{banner2, start_main},
     // merlin::{ErrorExpressionProxy, ExpressionProxy},
     // merlin::{
     //     AnchorProxy, BisectionProxy, EdgeProxy, GlyphProxy, LineProxy, LineSegmentPointProxy,
     //     LineSegmentProxy, PointProxy, RelationshipNameProxy, RelationshipPhraseProxy, XBoxProxy,
     // },
-    start_repl,
 };
-use clap::Parser;
-use crossbeam::channel;
-use dap::{prelude::BasicClient, server::Server};
 use log;
 use sarzak::{
     domain::DomainBuilder,
     sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL},
 };
-use snafu::prelude::*;
-use tracy_client::Client;
-
 macro_rules! function {
     () => {{
         fn f() {}
@@ -92,7 +87,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     .with_color(Color::Red),
                             )
                             .finish()
-                            .print(Source::from(&source_code))
+                            .eprint(Source::from(&source_code))
                             .unwrap()
                     }
                     DwarfError::GenericWarning {
@@ -109,7 +104,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     .with_color(Color::Red),
                             )
                             .finish()
-                            .print(Source::from(&source_code))
+                            .eprint(Source::from(&source_code))
                             .unwrap()
                     }
                     DwarfError::ImplementationBlockError { span } => {
@@ -124,7 +119,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     .with_color(Color::Red),
                             )
                             .finish()
-                            .print(Source::from(&source_code))
+                            .eprint(Source::from(&source_code))
                             .unwrap()
                     }
                     DwarfError::Parse { ast } => {
@@ -140,13 +135,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                         .with_color(Color::Red),
                                 )
                                 .finish()
-                                .print(Source::from(&source_code))
+                                .eprint(Source::from(&source_code))
                                 .unwrap()
                         }
                     }
                     _ => {}
                 }
-                // let report = Report::build(ReportKind::Error, (), 0);
                 return e;
             })?;
 

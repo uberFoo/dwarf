@@ -11,7 +11,7 @@ use sarzak::{
     sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL},
 };
 
-use chacha::dwarf::{
+use dwarf::dwarf::{
     parse_dwarf, populate_lu_dog, DwarfError, FileSnafu, GenericSnafu, IOSnafu, Result,
 };
 use tracy_client::Client;
@@ -176,7 +176,7 @@ fn main() -> Result<()> {
                                 .with_color(Color::Red),
                         )
                         .finish()
-                        .print(Source::from(&source_code))
+                        .eprint(Source::from(&source_code))
                         .unwrap()
                 }
                 DwarfError::GenericWarning {
@@ -193,7 +193,7 @@ fn main() -> Result<()> {
                                 .with_color(Color::Red),
                         )
                         .finish()
-                        .print(Source::from(&source_code))
+                        .eprint(Source::from(&source_code))
                         .unwrap()
                 }
                 DwarfError::ImplementationBlockError { span } => {
@@ -208,7 +208,7 @@ fn main() -> Result<()> {
                                 .with_color(Color::Red),
                         )
                         .finish()
-                        .print(Source::from(&source_code))
+                        .eprint(Source::from(&source_code))
                         .unwrap()
                 }
                 DwarfError::Parse { ast } => {
@@ -224,13 +224,13 @@ fn main() -> Result<()> {
                                     .with_color(Color::Red),
                             )
                             .finish()
-                            .print(Source::from(&source_code))
+                            .eprint(Source::from(&source_code))
                             .unwrap()
                     }
                 }
                 _ => {}
             }
-            // let report = Report::build(ReportKind::Error, (), 0);
+
             return e;
         })?;
 

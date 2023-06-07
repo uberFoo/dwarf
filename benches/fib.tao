@@ -8,6 +8,5 @@ fn fib2(n: int) -> int {
 
 fn main() -> int {
     print("Calculating the 17th fibonacci number:\n");
-    print(fib2(17));
-    print("\n");
+    print(fib2(17) + "\n");
 }

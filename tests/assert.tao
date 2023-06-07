@@ -1,0 +1,9 @@
+/// Testing the assert_eq macro.
+/// Note that we don't know anything about ChaCha::assert_eq. Once we have use
+/// statements working, that may change. Until then we need to annotate the type
+/// of `pass`.
+fn main() -> bool {
+    let fail = ChaCha::assert_eq(1, 0);
+    let pass = ChaCha::assert_eq(1, 1);
+    pass && !fail
+}
