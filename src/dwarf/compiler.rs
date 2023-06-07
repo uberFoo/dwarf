@@ -2082,7 +2082,7 @@ fn inter_expression(
         }
         道 => Err(DwarfError::NoImplementation {
             missing: format!("{:?}", 道),
-            location: location!(),
+            span: s_read!(span).start as usize..s_read!(span).end as usize,
         }),
     }
 }
@@ -2090,7 +2090,7 @@ fn inter_expression(
 fn inter_import(
     path: &Vec<Spanned<String>>,
     _alias: &Option<(String, Range<usize>)>,
-    _span: &Range<usize>,
+    span: &Range<usize>,
     _lu_dog: &mut LuDogStore,
 ) -> Result<()> {
     error!("Do something with the use statement");
@@ -2118,7 +2118,7 @@ fn inter_import(
     Err(DwarfError::NoImplementation {
         missing: "Use statement not implemented yet".to_owned(),
         // span: path[0].1.start..path[path.len() - 1].1.end,
-        location: location!(),
+        span: span.clone(),
     })
 }
 
@@ -2179,7 +2179,7 @@ fn inter_implementation(
                 models,
                 sarzak,
             )?,
-            _ => return Err(DwarfError::ImplementationBlockError { span: span.clone() }),
+            _ => return Err(DwarfError::ImplementationBlock { span: span.clone() }),
         }
     }
     // }

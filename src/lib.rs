@@ -11,9 +11,12 @@ use snafu::{prelude::*, Location};
 
 pub mod chacha;
 pub mod dwarf;
-// pub mod merlin;
+#[cfg(all(not(feature = "print-std-out"), not(feature = "single")))]
+pub mod tui;
 pub(crate) mod value;
-pub(crate) mod woog_structs;
+
+// pub mod merlin;
+// pub(crate) mod woog_structs;
 
 pub use chacha::interpreter::{self, initialize_interpreter, start_repl, Memory};
 pub use value::{StoreProxy, Value};
@@ -279,7 +282,7 @@ pub enum ChaChaError {
     Store {
         source: io::Error,
     },
-    #[snafu(display("\n{}: type mismatch -- expected `{}`, found `{}`\n  --> {}:{}", ERR_CLR.bold().paint("error"), OK_CLR.paint(expected.to_string()), ERR_CLR.bold().paint(got.to_string()), span.start, span.end))]
+    #[snafu(display("\n{}: type mismatch -- expected `{}`, found `{}`\n  --> {}..{}", ERR_CLR.bold().paint("error"), OK_CLR.paint(expected.to_string()), ERR_CLR.bold().paint(got.to_string()), span.start, span.end))]
     TypeMismatch {
         expected: String,
         got: String,

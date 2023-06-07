@@ -8,11 +8,11 @@ name = "dwarfc"
 path = "src/bin/dwarfc.rs"
 
 [[bin]]
-name = "chacha"
+name = "dwarf"
 path = "src/bin/main.rs"
 
 [[bin]]
-name = "tui"
+name = "dwarfdb"
 path = "src/bin/tui.rs"
 
 [dependencies]
@@ -38,6 +38,7 @@ lazy_static = "1.4.0"
 derivative = "2.2.0"
 chumsky = "0.9.2"
 ariadne = "0.2.0"
+# ariadne = { path = "../../github/ariadne" }
 fnv = "1.0.7"
 env_logger = "0.10.0"
 rayon = "1.7.0"

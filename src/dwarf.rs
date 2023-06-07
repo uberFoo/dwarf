@@ -76,7 +76,7 @@ pub enum DwarfError {
     ///
     /// An impl block may only contain functions.
     #[snafu(display("\n{}: impl blocks may only contain functions.\n  --> {}..{}", C_ERR.bold().paint("error"), span.start, span.end))]
-    ImplementationBlockError { span: Span },
+    ImplementationBlock { span: Span },
 
     /// Internal Error
     ///
@@ -100,8 +100,8 @@ pub enum DwarfError {
     /// Missing Implementation
     ///
     /// This is just not done yet.
-    #[snafu(display("\n{}: Missing implementation: {missing}\n  --> {}:{}:{}", C_WARN.bold().paint("warning"), location.file, location.line, location.column))]
-    NoImplementation { missing: String, location: Location },
+    #[snafu(display("\n{}: Missing implementation: {missing}\n  --> {}..{}", C_WARN.bold().paint("warning"), span.start, span.end))]
+    NoImplementation { missing: String, span: Span },
 
     /// Struct Field Not Found Error
     ///

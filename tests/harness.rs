@@ -17,7 +17,7 @@ fn run_program(program: &str) -> bool {
     let lu_dog = populate_lu_dog(None, program.to_owned(), &ast, &[], &sarzak)
         .map_err(|e| {
             match &e {
-                DwarfError::BadSelf { span } | DwarfError::ImplementationBlockError { span } => {
+                DwarfError::BadSelf { span } | DwarfError::ImplementationBlock { span } => {
                     let span = span.clone();
                     let msg = format!("{}", e);
 

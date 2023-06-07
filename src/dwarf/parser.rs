@@ -2112,6 +2112,9 @@ impl DwarfParser {
 
     /// Parse a Statement
     ///
+    /// This returns `Result<Option<T>>`. Result because we may err, and Option
+    /// because we may not err, and yet there may still not be a statement.
+    ///
     ///  statement -> ; | Item | LetStatement | ExpressionStatement
     fn parse_statement(&mut self) -> Result<Option<Spanned<Statement>>> {
         debug!("enter");
@@ -3145,7 +3148,10 @@ impl DwarfParser {
     }
 }
 
-pub fn parse_line(src: &str) -> Option<Spanned<Statement>> {
+/// Interpreter Entry Point
+///
+/// Parses a single line of input.
+pub fn parse_line(src: &str) -> Result<Option<Spanned<Statement>>, String> {
     let (tokens, errs) = lexer().parse_recovery_verbose(src);
 
     let mut parser = DwarfParser::new(tokens.unwrap());
@@ -3159,10 +3165,10 @@ pub fn parse_line(src: &str) -> Option<Spanned<Statement>> {
     };
 
     if !errs.is_empty() || !parser.errors.is_empty() {
-        report_errors(errs, parser.errors, src);
+        Err(report_errors(errs, parser.errors, src))
+    } else {
+        Ok(ast)
     }
-
-    ast
 }
 
 // This will return as much of the parsed ast as possible, even when hitting an
@@ -3174,15 +3180,17 @@ pub fn parse_dwarf(src: &str) -> Result<Vec<Spanned<Item>>, DwarfError> {
     let (ast, parse_errs) = parser.parse_program();
 
     if !errs.is_empty() || !parse_errs.is_empty() {
-        report_errors(errs, parse_errs, src);
+        let errors = report_errors(errs, parse_errs, src);
+        eprintln!("{}", errors);
         Err(DwarfError::Parse { ast })
     } else {
         Ok(ast)
     }
 }
 
-fn report_errors(errs: Vec<Simple<char>>, parse_errs: Vec<Simple<String>>, src: &str) {
-    // dbg!(&ast, &errs, &parse_errs);
+fn report_errors(errs: Vec<Simple<char>>, parse_errs: Vec<Simple<String>>, src: &str) -> String {
+    let mut result = Vec::new();
+
     errs.into_iter()
         .map(|e| e.map(|c| c.to_string()))
         .chain(parse_errs.into_iter().map(|e| e.map(|tok| tok.to_string())))
@@ -3250,8 +3258,13 @@ fn report_errors(errs: Vec<Simple<char>>, parse_errs: Vec<Simple<String>>, src: 
                 ),
             };
 
-            report.finish().eprint(Source::from(&src)).unwrap();
+            report
+                .finish()
+                .write(Source::from(&src), &mut result)
+                .unwrap();
         });
+
+    String::from_utf8_lossy(&result).to_string()
 }
 
 #[cfg(test)]

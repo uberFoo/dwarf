@@ -107,7 +107,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             .eprint(Source::from(&source_code))
                             .unwrap()
                     }
-                    DwarfError::ImplementationBlockError { span } => {
+                    DwarfError::ImplementationBlock { span } => {
                         let span = span.clone();
                         let msg = format!("{}", e);
 

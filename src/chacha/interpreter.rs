@@ -49,6 +49,34 @@ macro_rules! function {
     }};
 }
 
+// macro_rules! debug {
+//     ($($arg:tt)*) => {
+//         log::debug!(
+//             target: "interpreter",
+//             "{}: {}\n  --> {}:{}:{}",
+//             Colour::Cyan.dimmed().italic().paint(function!()),
+//             format_args!($($arg)*),
+//             file!(),
+//             line!(),
+//             column!()
+//         );
+//     };
+// }
+
+// macro_rules! error {
+//     ($($arg:tt)*) => {
+//         log::error!(
+//             target: "compiler",
+//             "{}: {}\n  --> {}:{}:{}",
+//             Colour::Red.dimmed().italic().paint(function!()),
+//             format_args!($($arg)*),
+//             file!(),
+//             line!(),
+//             column!()
+//         );
+//     };
+// }
+
 macro_rules! debug {
     ($msg:literal, $($arg:expr),*) => {
         $(
@@ -1886,12 +1914,7 @@ pub fn eval_statement(
             let expr = stmt.r41_expression(&s_read!(lu_dog))[0].clone();
             debug!("StatementEnum::ResultStatement expr", expr);
 
-            let (value, ty) = eval_expression(expr, context)?; // {
-                                                               //     Ok((value, ty)) => (value, ty),
-                                                               //     Err(ChaChaError::Return { value, ty }) => (value, ty),
-                                                               //     Err(e) => return Err(e),
-                                                               // };
-
+            let (value, ty) = eval_expression(expr, context)?;
             debug!("StatementEnum::ResultStatement value", value);
             debug!("StatementEnum::ResultStatement ty", ty);
 
@@ -2059,7 +2082,7 @@ pub enum DebuggerControl {
 }
 
 #[cfg(not(feature = "single"))]
-pub fn start_repl2(mut context: Context) -> (Sender<DebuggerControl>, Receiver<DebuggerStatus>) {
+pub fn start_tui_repl(mut context: Context) -> (Sender<DebuggerControl>, Receiver<DebuggerStatus>) {
     let (to_ui_write, to_ui_read) = unbounded();
     let (from_ui_write, from_ui_read) = unbounded();
     // let (from_worker_write, from_worker_read) = unbounded();
@@ -2140,19 +2163,21 @@ pub fn start_repl2(mut context: Context) -> (Sender<DebuggerControl>, Receiver<D
         // .stack_size(128 * 1024)
         .spawn(move || loop {
             match to_worker_read.recv_timeout(Duration::from_millis(10)) {
-                Ok(input) => {
-                    if let Some((stmt, _span)) = parse_line(&input) {
+                Ok(input) => match parse_line(&input) {
+                    Ok(None) => {}
+                    Ok(Some((stmt, _span))) => {
                         let lu_dog = context.lu_dog_heel();
                         let block = context.block();
                         let sarzak = context.sarzak_heel();
                         let models = context.models();
 
                         let stmt = {
+                            let mut lu_dog = s_write!(lu_dog);
                             match inter_statement(
                                 &new_ref!(crate::dwarf::Statement, stmt),
-                                &DwarfSourceFile::new(input, &mut s_write!(lu_dog)),
+                                &DwarfSourceFile::new(input, &mut lu_dog),
                                 &block,
-                                &mut s_write!(lu_dog),
+                                &mut lu_dog,
                                 &s_read!(models),
                                 &s_read!(sarzak),
                             ) {
@@ -2179,7 +2204,12 @@ pub fn start_repl2(mut context: Context) -> (Sender<DebuggerControl>, Receiver<D
                             }
                         }
                     }
-                }
+                    Err(e) => {
+                        to_ui_write
+                            .send(DebuggerStatus::Error(format!("{}", e)))
+                            .unwrap();
+                    }
+                },
                 Err(RecvTimeoutError::Timeout) => {}
                 Err(_) => {
                     debug!("Worker thread exiting");
@@ -2192,8 +2222,7 @@ pub fn start_repl2(mut context: Context) -> (Sender<DebuggerControl>, Receiver<D
     (from_ui_write, to_ui_read)
 }
 
-/// This runs the main function, assuming it exists. It should really return
-/// Ok(Value) I think.
+/// This runs the main function, assuming it exists.
 pub fn start_main(stopped: bool, silent: bool, mut context: Context) -> Result<Value, Error> {
     {
         let mut running = RUNNING.lock();
@@ -2397,7 +2426,7 @@ pub fn start_repl(mut context: Context) -> Result<(), Error> {
         match reader.recv() {
             Ok(line) => {
                 print!("{}", line);
-                io::stdout().flush();
+                io::stdout().flush().unwrap();
             }
             Err(_) => {
                 debug!("Debugger control thread exiting");
@@ -2416,7 +2445,7 @@ pub fn start_repl(mut context: Context) -> Result<(), Error> {
                 // Should do a regex here, or something.
                 if line == "@logo" {
                     banner();
-                } else if let Some((stmt, _span)) = parse_line(&line) {
+                } else if let Ok(Some((stmt, _span))) = parse_line(&line) {
                     debug!("stmt from readline", stmt);
 
                     let stmt = {
@@ -2787,12 +2816,16 @@ impl Memory {
     }
 
     pub(crate) fn push(&mut self) {
-        self.sender.send(MemoryUpdateMessage::PushFrame).unwrap();
+        if *STEPPING.lock() {
+            self.sender.send(MemoryUpdateMessage::PushFrame).unwrap();
+        }
         self.frames.push(HashMap::default());
     }
 
     pub(crate) fn pop(&mut self) {
-        self.sender.send(MemoryUpdateMessage::PopFrame).unwrap();
+        if *STEPPING.lock() {
+            self.sender.send(MemoryUpdateMessage::PopFrame).unwrap();
+        }
         self.frames.pop();
     }
 
@@ -2826,12 +2859,14 @@ impl Memory {
                 .next()
                 .expect("name contained `::`, but no second element");
 
-            self.sender
-                .send(MemoryUpdateMessage::AddGlobal((
-                    name.to_owned(),
-                    value.clone(),
-                )))
-                .unwrap();
+            if *STEPPING.lock() {
+                self.sender
+                    .send(MemoryUpdateMessage::AddGlobal((
+                        name.to_owned(),
+                        value.clone(),
+                    )))
+                    .unwrap();
+            }
 
             if let Some(value) = self.global.get(table) {
                 let mut write_value = s_write!(value);
@@ -2852,9 +2887,11 @@ impl Memory {
     }
 
     pub(crate) fn insert(&mut self, name: String, value: RefType<Value>) {
-        self.sender
-            .send(MemoryUpdateMessage::AddLocal((name.clone(), value.clone())))
-            .unwrap();
+        if *STEPPING.lock() {
+            self.sender
+                .send(MemoryUpdateMessage::AddLocal((name.clone(), value.clone())))
+                .unwrap();
+        }
         let frame = self.frames.last_mut().unwrap();
         frame.insert(name, value);
     }

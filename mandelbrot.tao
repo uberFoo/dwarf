@@ -72,10 +72,11 @@ fn main() -> Complex {
     // 🚧 Need to fix this multiple let let-down. Oh, no! 😫
     // let width = 21;
     // let height = 7;
-    // let width = 84;
-    // let height = 28;
-    let width = 168;
-    let height = 56;
+    let width = 84;
+    let height = 28;
+    // debugger;
+    // let width = 168;
+    // let height = 56;
     let upper_left = Complex { re: -2.5, im: 1.0 };
     let lower_right = Complex { re: 2.0, im: -1.0 };
     // let upper_left = Complex {
@@ -92,6 +93,9 @@ fn main() -> Complex {
     for row in 0..height {
         // OMG, this is an ugly hack, and yet it's so badass.
         // ChaCha::spawn(do_column, [row, width, height, upper_left, lower_right]);
+        // if row > 1 {
+        // debugger;
+        // }
         do_column(row, width, height, upper_left, lower_right);
     }
 }
