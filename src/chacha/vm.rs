@@ -2,19 +2,38 @@ use std::fmt;
 
 use ansi_term::Colour;
 
-use crate::{ChaChaError, Memory, Result, Value};
+use crate::{new_ref, s_read, s_write, ChaChaError, Memory, NewRef, RefType, Result, Value};
 
 #[derive(Clone, Debug)]
 pub enum Instruction {
+    /// Add the top two values on the stack.
     Add,
+    /// Call a function with the given arity.
     Call(usize),
-    Constant(Value),
+    /// Fetch a local variable.
     FetchLocal(usize),
+    /// Read a field value
+    ///
+    /// The top of the stack is the name of the field to read. The second value
+    /// on the stack is the object from which to read.
+    FieldRead,
+    /// Read several field values
+    ///
+    /// The first `n` entries of the stack are the names of the fields to read.
+    /// The next value on the stack is the object from which to read.
+    FieldsRead(usize),
+    /// Jump to the given offset if the top of the stack is false.
     JumpIfFalse(usize),
+    /// Compare the top two values on the stack.
     LessThanOrEqual,
+    /// Multiply the top two values on the stack.
+    Mul,
+    /// Pop the top value off the stack.
     Pop,
-    Push,
+    /// Push a value onto the stack.
+    Push(RefType<Value>),
     Return,
+    /// Subtract the top two values on the stack.
     Subtract,
 }
 
@@ -31,17 +50,18 @@ impl fmt::Display for Instruction {
                 opcode_style.paint("call"),
                 operand_style.paint(arity.to_string())
             ),
-            Instruction::Constant(value) => write!(
-                f,
-                "{} {}",
-                opcode_style.paint("const"),
-                operand_style.paint(value.to_string())
-            ),
             Instruction::FetchLocal(index) => write!(
                 f,
                 "{} {}",
                 opcode_style.paint("fetch"),
                 operand_style.paint(index.to_string())
+            ),
+            Instruction::FieldRead => write!(f, "{}", opcode_style.paint("field")),
+            Instruction::FieldsRead(count) => write!(
+                f,
+                "{} {}",
+                opcode_style.paint("fields"),
+                operand_style.paint(count.to_string())
             ),
             Instruction::JumpIfFalse(offset) => write!(
                 f,
@@ -50,8 +70,15 @@ impl fmt::Display for Instruction {
                 operand_style.paint(offset.to_string())
             ),
             Instruction::LessThanOrEqual => write!(f, "{}", opcode_style.paint("lte")),
+            Instruction::Mul => write!(f, "{}", opcode_style.paint("mul")),
             Instruction::Pop => write!(f, "{}", opcode_style.paint("pop")),
-            Instruction::Push => write!(f, "{}", opcode_style.paint("push")),
+            // Instruction::Push => write!(f, "{}", opcode_style.paint("push")),
+            Instruction::Push(value) => write!(
+                f,
+                "{} {}",
+                opcode_style.paint("push"),
+                operand_style.paint(s_read!(value).to_string())
+            ),
             Instruction::Return => write!(f, "{}", opcode_style.paint("ret")),
             Instruction::Subtract => write!(f, "{}", opcode_style.paint("sub")),
         }
@@ -129,13 +156,14 @@ impl<'a> fmt::Display for CallFrame<'a> {
 #[derive(Debug)]
 pub(crate) struct VM<'a, 'b: 'a> {
     frames: Vec<CallFrame<'a>>,
-    stack: Vec<Value>,
+    stack: Vec<RefType<Value>>,
     memory: &'b Memory,
 }
 
 impl<'a, 'b> VM<'a, 'b> {
     pub(crate) fn new(memory: &'b Memory) -> Self {
         VM {
+            // 🚧 These shouldn't be hard-coded, and they should be configurable.
             frames: Vec::with_capacity(10 * 1024),
             stack: Vec::with_capacity(10 * 1024 * 1024),
             memory,
@@ -146,11 +174,11 @@ impl<'a, 'b> VM<'a, 'b> {
         self.frames.push(frame);
     }
 
-    pub(crate) fn push_stack(&mut self, value: Value) {
+    pub(crate) fn push_stack(&mut self, value: RefType<Value>) {
         self.stack.push(value);
     }
 
-    pub(crate) fn run(&mut self, trace: bool) -> Result<Value> {
+    pub(crate) fn run(&mut self, trace: bool) -> Result<RefType<Value>> {
         if let Some(mut frame) = self.frames.pop() {
             loop {
                 let fp = frame.fp;
@@ -167,7 +195,7 @@ impl<'a, 'b> VM<'a, 'b> {
                             } else {
                                 print!("\t\t");
                             }
-                            println!("stack {}:\t{}", len - i - 1, self.stack[i]);
+                            println!("stack {}:\t{}", len - i - 1, s_read!(self.stack[i]));
                         }
                         println!("");
                         println!("{:08x}:\t{}", ip, instr);
@@ -176,29 +204,35 @@ impl<'a, 'b> VM<'a, 'b> {
                         Instruction::Add => {
                             let b = self.stack.pop().unwrap();
                             let a = self.stack.pop().unwrap();
-                            // let b = pop!(self.stack);
-                            // let a = pop!(self.stack);
-                            let c = a + b;
+                            let c = s_read!(a).clone() + s_read!(b).clone();
                             if let Value::Error(e) = c {
                                 return Err(ChaChaError::VmPanic { message: e });
                             }
-                            self.stack.push(c);
+                            self.stack.push(new_ref!(Value, c));
 
                             0
                         }
                         Instruction::Call(arity) => {
                             let callee = &self.stack[self.stack.len() - arity - 1];
                             if trace {
-                                println!("\t\t{}:\t{}", Colour::Green.paint("func:"), callee);
+                                println!(
+                                    "\t\t{}:\t{}",
+                                    Colour::Green.paint("func:"),
+                                    s_read!(callee)
+                                );
                             }
-                            let callee: usize = match callee.try_into() {
-                                Ok(callee) => callee,
-                                Err(e) => {
-                                    return Err::<Value, ChaChaError>(ChaChaError::VmPanic {
-                                        message: format!("{}: {}", callee, e),
-                                    });
-                                }
-                            };
+                            // let callee: usize = match (&*s_read!(callee)).try_into() {
+                            let callee: usize =
+                                match <&Value as TryInto<usize>>::try_into(&*s_read!(callee)) {
+                                    Ok(callee) => callee,
+                                    Err(e) => {
+                                        return Err::<RefType<Value>, ChaChaError>(
+                                            ChaChaError::VmPanic {
+                                                message: format!("{}: {e}", s_read!(callee)),
+                                            },
+                                        );
+                                    }
+                                };
                             let thonk = self.memory.get_thonk(callee).unwrap();
                             let frame = CallFrame::new(0, self.stack.len() - arity - 1, thonk);
 
@@ -212,9 +246,11 @@ impl<'a, 'b> VM<'a, 'b> {
                             let result = match self.run(trace) {
                                 Ok(result) => result,
                                 Err(e) => {
-                                    return Err::<Value, ChaChaError>(ChaChaError::VmPanic {
-                                        message: format!("{}: {}", callee, e),
-                                    });
+                                    return Err::<RefType<Value>, ChaChaError>(
+                                        ChaChaError::VmPanic {
+                                            message: format!("{callee}: {e}"),
+                                        },
+                                    );
                                 }
                             };
 
@@ -226,20 +262,62 @@ impl<'a, 'b> VM<'a, 'b> {
 
                             0
                         }
-                        Instruction::Constant(value) => {
-                            self.stack.push(value.clone());
-
-                            0
-                        }
                         Instruction::FetchLocal(index) => {
                             let value = self.stack[fp + index + 1].clone();
                             self.stack.push(value);
 
                             0
                         }
+                        Instruction::FieldRead => {
+                            let field = self.stack.pop().unwrap();
+                            let value = self.stack.pop().unwrap();
+                            match &*s_read!(value) {
+                                Value::ProxyType(value) => {
+                                    match s_read!(value).get_attr_value(s_read!(field).as_ref()) {
+                                        Ok(value) => {
+                                            self.stack.push(value);
+                                        }
+                                        Err(e) => {
+                                            return Err::<RefType<Value>, ChaChaError>(
+                                                ChaChaError::VmPanic {
+                                                    message: format!("{}", e),
+                                                },
+                                            );
+                                        }
+                                    }
+                                }
+                                Value::UserType(value) => {
+                                    match s_read!(value).get_attr_value(s_read!(field).as_ref()) {
+                                        Some(value) => {
+                                            self.stack.push(value.clone());
+                                        }
+                                        None => {
+                                            return Err::<RefType<Value>, ChaChaError>(
+                                                ChaChaError::VmPanic {
+                                                    message: format!(
+                                                        "Unknown field {} for {}.",
+                                                        s_read!(field),
+                                                        s_read!(value)
+                                                    ),
+                                                },
+                                            );
+                                        }
+                                    }
+                                }
+                                value => {
+                                    return Err::<RefType<Value>, ChaChaError>(
+                                        ChaChaError::VmPanic {
+                                            message: format!("Unexpected value type: {value}."),
+                                        },
+                                    )
+                                }
+                            }
+
+                            0
+                        }
                         Instruction::JumpIfFalse(offset) => {
                             let condition = self.stack.pop().unwrap();
-                            let condition: bool = condition
+                            let condition: bool = (&*s_read!(condition))
                                 .try_into()
                                 .map_err(|e| {
                                     return ChaChaError::VmPanic {
@@ -264,7 +342,24 @@ impl<'a, 'b> VM<'a, 'b> {
                         Instruction::LessThanOrEqual => {
                             let b = self.stack.pop().unwrap();
                             let a = self.stack.pop().unwrap();
-                            self.stack.push(Value::Boolean(a.lte(&b)));
+                            self.stack
+                                .push(new_ref!(Value, Value::Boolean(s_read!(a).lte(&s_read!(b)))));
+
+                            0
+                        }
+                        Instruction::Mul => {
+                            let b = self.stack.pop().unwrap();
+                            let a = self.stack.pop().unwrap();
+                            let c = s_read!(a).clone() * s_read!(b).clone();
+                            if let Value::Error(e) = c {
+                                return Err(ChaChaError::VmPanic { message: e });
+                            }
+                            self.stack.push(new_ref!(Value, c));
+
+                            0
+                        }
+                        Instruction::Push(value) => {
+                            self.stack.push(value.clone());
 
                             0
                         }
@@ -274,12 +369,12 @@ impl<'a, 'b> VM<'a, 'b> {
                         Instruction::Subtract => {
                             let b = self.stack.pop().unwrap();
                             let a = self.stack.pop().unwrap();
-                            let c = a - b;
+                            let c = s_read!(a).clone() - s_read!(b).clone();
                             if let Value::Error(e) = c {
                                 return Err(ChaChaError::VmPanic { message: e });
                             }
 
-                            self.stack.push(c);
+                            self.stack.push(new_ref!(Value, c));
 
                             0
                         }
@@ -315,7 +410,7 @@ mod tests {
         let mut vm = VM::new(&memory.0);
         let mut thonk = Thonk::new("test".to_string());
 
-        thonk.add_instruction(Instruction::Constant(Value::Integer(42)));
+        thonk.add_instruction(Instruction::Push(new_ref!(Value, Value::Integer(42))));
         println!("{}", thonk);
 
         let frame = CallFrame::new(0, 0, &thonk);
@@ -328,7 +423,7 @@ mod tests {
         assert!(result.is_err());
 
         let tos = vm.stack.pop().unwrap();
-        let as_int: DwarfInteger = tos.try_into().unwrap();
+        let as_int: DwarfInteger = (&*s_read!(tos)).try_into().unwrap();
         assert_eq!(as_int, 42);
 
         // let frame = vm.frames.pop().unwrap();
@@ -341,7 +436,7 @@ mod tests {
         let mut vm = VM::new(&memory.0);
         let mut thonk = Thonk::new("test".to_string());
 
-        thonk.add_instruction(Instruction::Constant(Value::Integer(42)));
+        thonk.add_instruction(Instruction::Push(new_ref!(Value, Value::Integer(42))));
         thonk.add_instruction(Instruction::Return);
         println!("{}", thonk);
 
@@ -356,7 +451,7 @@ mod tests {
 
         assert!(result.is_ok());
 
-        let as_int: DwarfInteger = result.unwrap().try_into().unwrap();
+        let as_int: DwarfInteger = (&*s_read!(result.unwrap())).try_into().unwrap();
         assert_eq!(as_int, 42);
 
         // let frame = vm.frames.pop().unwrap();
@@ -369,8 +464,8 @@ mod tests {
         let mut vm = VM::new(&memory.0);
         let mut thonk = Thonk::new("test".to_string());
 
-        thonk.add_instruction(Instruction::Constant(Value::Integer(42)));
-        thonk.add_instruction(Instruction::Constant(Value::Integer(69)));
+        thonk.add_instruction(Instruction::Push(new_ref!(Value, Value::Integer(42))));
+        thonk.add_instruction(Instruction::Push(new_ref!(Value, Value::Integer(69))));
         thonk.add_instruction(Instruction::Add);
         thonk.add_instruction(Instruction::Return);
         println!("{}", thonk);
@@ -386,7 +481,7 @@ mod tests {
 
         assert!(result.is_ok());
 
-        let as_int: DwarfInteger = result.unwrap().try_into().unwrap();
+        let as_int: DwarfInteger = (&*s_read!(result.unwrap())).try_into().unwrap();
         assert_eq!(as_int, 111);
 
         // let frame = vm.frames.pop().unwrap();
@@ -399,8 +494,8 @@ mod tests {
         let mut vm = VM::new(&memory.0);
         let mut thonk = Thonk::new("test".to_string());
 
-        thonk.add_instruction(Instruction::Constant(Value::Integer(111)));
-        thonk.add_instruction(Instruction::Constant(Value::Integer(69)));
+        thonk.add_instruction(Instruction::Push(new_ref!(Value, Value::Integer(111))));
+        thonk.add_instruction(Instruction::Push(new_ref!(Value, Value::Integer(69))));
         thonk.add_instruction(Instruction::Subtract);
         thonk.add_instruction(Instruction::Return);
         println!("{}", thonk);
@@ -416,10 +511,37 @@ mod tests {
 
         assert!(result.is_ok());
 
-        let as_int: DwarfInteger = result.unwrap().try_into().unwrap();
+        let as_int: DwarfInteger = (&*s_read!(result.unwrap())).try_into().unwrap();
         assert_eq!(as_int, 42);
 
         // assert_eq!(frame.ip, 4);
+    }
+
+    #[test]
+    fn test_instr_multiply() {
+        let memory = Memory::new();
+        let mut vm = VM::new(&memory.0);
+        let mut thonk = Thonk::new("test".to_string());
+
+        thonk.add_instruction(Instruction::Push(new_ref!(Value, Value::Integer(42))));
+        thonk.add_instruction(Instruction::Push(new_ref!(Value, Value::Integer(69))));
+        thonk.add_instruction(Instruction::Mul);
+        thonk.add_instruction(Instruction::Return);
+        println!("{}", thonk);
+
+        let frame = CallFrame::new(0, 0, &thonk);
+        vm.frames.push(frame);
+
+        let result = vm.run(true);
+        println!("{:?}", result);
+        println!("{:?}", vm);
+
+        assert!(vm.stack.is_empty());
+
+        assert!(result.is_ok());
+
+        let as_int: DwarfInteger = (&*s_read!(result.unwrap())).try_into().unwrap();
+        assert_eq!(as_int, 2898);
     }
 
     #[test]
@@ -429,8 +551,8 @@ mod tests {
         let mut vm = VM::new(&memory.0);
         let mut thonk = Thonk::new("test".to_string());
 
-        thonk.add_instruction(Instruction::Constant(Value::Integer(111)));
-        thonk.add_instruction(Instruction::Constant(Value::Integer(69)));
+        thonk.add_instruction(Instruction::Push(new_ref!(Value, Value::Integer(111))));
+        thonk.add_instruction(Instruction::Push(new_ref!(Value, Value::Integer(69))));
         thonk.add_instruction(Instruction::LessThanOrEqual);
         thonk.add_instruction(Instruction::Return);
         println!("{}", thonk);
@@ -446,7 +568,7 @@ mod tests {
 
         assert!(result.is_ok());
 
-        let as_bool: bool = result.unwrap().try_into().unwrap();
+        let as_bool: bool = (&*s_read!(result.unwrap())).try_into().unwrap();
         assert_eq!(as_bool, false);
 
         // assert_eq!(frame.ip, 4);
@@ -456,8 +578,8 @@ mod tests {
         let mut vm = VM::new(&memory.0);
         let mut thonk = Thonk::new("test".to_string());
 
-        thonk.add_instruction(Instruction::Constant(Value::Integer(42)));
-        thonk.add_instruction(Instruction::Constant(Value::Integer(69)));
+        thonk.add_instruction(Instruction::Push(new_ref!(Value, Value::Integer(42))));
+        thonk.add_instruction(Instruction::Push(new_ref!(Value, Value::Integer(69))));
         thonk.add_instruction(Instruction::LessThanOrEqual);
         thonk.add_instruction(Instruction::Return);
         println!("{}", thonk);
@@ -473,7 +595,7 @@ mod tests {
 
         assert!(result.is_ok());
 
-        let as_bool: bool = result.unwrap().try_into().unwrap();
+        let as_bool: bool = (&*s_read!(result.unwrap())).try_into().unwrap();
         assert_eq!(as_bool, true);
 
         // assert_eq!(frame.ip, 4);
@@ -483,8 +605,8 @@ mod tests {
         let mut vm = VM::new(&memory.0);
         let mut thonk = Thonk::new("test".to_string());
 
-        thonk.add_instruction(Instruction::Constant(Value::Integer(42)));
-        thonk.add_instruction(Instruction::Constant(Value::Integer(42)));
+        thonk.add_instruction(Instruction::Push(new_ref!(Value, Value::Integer(42))));
+        thonk.add_instruction(Instruction::Push(new_ref!(Value, Value::Integer(42))));
         thonk.add_instruction(Instruction::LessThanOrEqual);
         thonk.add_instruction(Instruction::Return);
         println!("{}", thonk);
@@ -500,7 +622,7 @@ mod tests {
 
         assert!(result.is_ok());
 
-        let as_bool: bool = result.unwrap().try_into().unwrap();
+        let as_bool: bool = (&*s_read!(result.unwrap())).try_into().unwrap();
         assert_eq!(as_bool, true);
 
         // let frame = vm.frames.pop().unwrap();
@@ -513,16 +635,18 @@ mod tests {
         let mut vm = VM::new(&memory.0);
         let mut thonk = Thonk::new("test".to_string());
 
-        thonk.add_instruction(Instruction::Constant(Value::Integer(69)));
-        thonk.add_instruction(Instruction::Constant(Value::Integer(42)));
+        thonk.add_instruction(Instruction::Push(new_ref!(Value, Value::Integer(69))));
+        thonk.add_instruction(Instruction::Push(new_ref!(Value, Value::Integer(42))));
         thonk.add_instruction(Instruction::LessThanOrEqual);
         thonk.add_instruction(Instruction::JumpIfFalse(2));
-        thonk.add_instruction(Instruction::Constant(Value::String(
-            "epic fail!".to_string(),
+        thonk.add_instruction(Instruction::Push(new_ref!(
+            Value,
+            Value::String("epic fail!".to_string())
         )));
         thonk.add_instruction(Instruction::Return);
-        thonk.add_instruction(Instruction::Constant(Value::String(
-            "you rock!".to_string(),
+        thonk.add_instruction(Instruction::Push(new_ref!(
+            Value,
+            Value::String("you rock!".to_string())
         )));
         thonk.add_instruction(Instruction::Return);
         println!("{}", thonk);
@@ -538,7 +662,7 @@ mod tests {
 
         assert!(result.is_ok());
 
-        let result: String = result.unwrap().try_into().unwrap();
+        let result: String = (&*s_read!(result.unwrap())).try_into().unwrap();
         assert_eq!(result, "you rock!");
 
         // let frame = vm.frames.pop().unwrap();
@@ -552,10 +676,13 @@ mod tests {
         let mut vm = VM::new(&memory.0);
         let mut thonk = Thonk::new("test".to_string());
 
-        vm.stack.push(Value::String(
-            "this would normally be a function at the top of the call frame".to_string(),
+        vm.stack.push(new_ref!(
+            Value,
+            Value::String(
+                "this would normally be a function at the top of the call frame".to_string(),
+            )
         ));
-        vm.stack.push(Value::Integer(42));
+        vm.stack.push(new_ref!(Value, Value::Integer(42)));
 
         thonk.add_instruction(Instruction::FetchLocal(0));
         thonk.add_instruction(Instruction::Return);
@@ -572,11 +699,42 @@ mod tests {
 
         assert!(result.is_ok());
 
-        let result: DwarfInteger = result.unwrap().try_into().unwrap();
+        let result: DwarfInteger = (&*s_read!(result.unwrap())).try_into().unwrap();
         assert_eq!(result, 42);
+    }
 
-        // let frame = vm.frames.pop().unwrap();
-        // assert_eq!(frame.ip, 2);
+    #[test]
+    fn test_instr_field() {
+        // Simple
+        let memory = Memory::new();
+        let mut vm = VM::new(&memory.0);
+        let mut thonk = Thonk::new("test".to_string());
+
+        vm.stack.push(new_ref!(
+            Value,
+            Value::String(
+                "this would normally be a function at the top of the call frame".to_string(),
+            )
+        ));
+        vm.stack.push(new_ref!(Value, Value::Integer(42)));
+
+        thonk.add_instruction(Instruction::FetchLocal(0));
+        thonk.add_instruction(Instruction::Return);
+        println!("{}", thonk);
+
+        let frame = CallFrame::new(0, 0, &thonk);
+        vm.frames.push(frame);
+
+        let result = vm.run(true);
+        println!("{:?}", result);
+        println!("{:?}", vm);
+
+        assert!(vm.stack.len() == 2);
+
+        assert!(result.is_ok());
+
+        let result: DwarfInteger = (&*s_read!(result.unwrap())).try_into().unwrap();
+        assert_eq!(result, 42);
     }
 
     #[test]
@@ -586,12 +744,15 @@ mod tests {
         let mut vm = VM::new(&memory.0);
         let mut thonk = Thonk::new("test".to_string());
 
-        vm.stack.push(Value::String(
-            "this would normally be a function at the top of the call frame".to_string(),
+        vm.stack.push(new_ref!(
+            Value,
+            Value::String(
+                "this would normally be a function at the top of the call frame".to_string(),
+            )
         ));
-        vm.stack.push(Value::Integer(-1));
-        vm.stack.push(Value::Integer(42));
-        vm.stack.push(Value::Integer(-1));
+        vm.stack.push(new_ref!(Value, Value::Integer(-1)));
+        vm.stack.push(new_ref!(Value, Value::Integer(42)));
+        vm.stack.push(new_ref!(Value, Value::Integer(-1)));
 
         thonk.add_instruction(Instruction::FetchLocal(1));
         thonk.add_instruction(Instruction::Return);
@@ -608,7 +769,7 @@ mod tests {
 
         assert!(result.is_ok());
 
-        let result: DwarfInteger = result.unwrap().try_into().unwrap();
+        let result: DwarfInteger = (&*s_read!(result.unwrap())).try_into().unwrap();
         assert_eq!(result, 42);
 
         // let frame = vm.frames.pop().unwrap();
@@ -622,30 +783,30 @@ mod tests {
 
         // Get the parameter off the stack
         thonk.add_instruction(Instruction::FetchLocal(0));
-        thonk.add_instruction(Instruction::Constant(Value::Integer(1)));
+        thonk.add_instruction(Instruction::Push(new_ref!(Value, Value::Integer(1))));
         // Chcek if it's <= 1
         thonk.add_instruction(Instruction::LessThanOrEqual);
         thonk.add_instruction(Instruction::JumpIfFalse(2));
         // If false return 1
-        thonk.add_instruction(Instruction::Constant(Value::Integer(1)));
+        thonk.add_instruction(Instruction::Push(new_ref!(Value, Value::Integer(1))));
         thonk.add_instruction(Instruction::Return);
         // return fidbn-1) + fib(n-2)
         // Load fib
-        thonk.add_instruction(Instruction::Constant(Value::Thonk("fib", 0)));
+        thonk.add_instruction(Instruction::Push(new_ref!(Value, Value::Thonk("fib", 0))));
         // load n
         thonk.add_instruction(Instruction::FetchLocal(0));
         // load 1
-        thonk.add_instruction(Instruction::Constant(Value::Integer(1)));
+        thonk.add_instruction(Instruction::Push(new_ref!(Value, Value::Integer(1))));
         // subtract
         thonk.add_instruction(Instruction::Subtract);
         // Call fib(n-1)
         thonk.add_instruction(Instruction::Call(1));
         // load fib
-        thonk.add_instruction(Instruction::Constant(Value::Thonk("fib", 0)));
+        thonk.add_instruction(Instruction::Push(new_ref!(Value, Value::Thonk("fib", 0))));
         // load n
         thonk.add_instruction(Instruction::FetchLocal(0));
         // load 2
-        thonk.add_instruction(Instruction::Constant(Value::Integer(2)));
+        thonk.add_instruction(Instruction::Push(new_ref!(Value, Value::Integer(2))));
         // subtract
         thonk.add_instruction(Instruction::Subtract);
         // Call fib(n-1)
@@ -664,9 +825,10 @@ mod tests {
         let mut vm = VM::new(&memory.0);
 
         // Push the func
-        vm.stack.push(Value::String("fib".to_string()));
+        vm.stack
+            .push(new_ref!(Value, Value::String("fib".to_string())));
         // Push the argument
-        vm.stack.push(Value::Integer(20));
+        vm.stack.push(new_ref!(Value, Value::Integer(20)));
 
         vm.frames.push(frame);
 
@@ -678,7 +840,7 @@ mod tests {
 
         assert!(result.is_ok());
 
-        let result: DwarfInteger = result.unwrap().try_into().unwrap();
+        let result: DwarfInteger = (&*s_read!(result.unwrap())).try_into().unwrap();
         assert_eq!(result, 10946);
 
         // let frame = vm.frames.pop().unwrap();

@@ -16,7 +16,7 @@ use crate::{
         types::{ValueType, WoogOption},
         List, Reference,
     },
-    s_read, NewRefType, RefType,
+    s_read, NewRef, RefType,
 };
 
 pub mod compiler;
@@ -279,16 +279,16 @@ impl Type {
         match self {
             Type::Boolean => {
                 let ty = Ty::new_boolean();
-                ValueType::new_ty(&<RefType<Ty> as NewRefType<Ty>>::new_ref_type(ty), store)
+                ValueType::new_ty(&<RefType<Ty> as NewRef<Ty>>::new_ref(ty), store)
             }
             Type::Empty => ValueType::new_empty(store),
             Type::Float => {
                 let ty = Ty::new_float();
-                ValueType::new_ty(&<RefType<Ty> as NewRefType<Ty>>::new_ref_type(ty), store)
+                ValueType::new_ty(&<RefType<Ty> as NewRef<Ty>>::new_ref(ty), store)
             }
             Type::Integer => {
                 let ty = Ty::new_integer();
-                ValueType::new_ty(&<RefType<Ty> as NewRefType<Ty>>::new_ref_type(ty), store)
+                ValueType::new_ty(&<RefType<Ty> as NewRef<Ty>>::new_ref(ty), store)
             }
             Type::List(type_) => {
                 let ty = (*type_).0.into_value_type(store, models, sarzak);
@@ -308,7 +308,7 @@ impl Type {
             Type::Self_ => panic!("Self is deprecated."),
             Type::String => {
                 let ty = Ty::new_s_string();
-                ValueType::new_ty(&<RefType<Ty> as NewRefType<Ty>>::new_ref_type(ty), store)
+                ValueType::new_ty(&<RefType<Ty> as NewRef<Ty>>::new_ref(ty), store)
             }
             Type::Unknown => ValueType::new_unknown(store),
             Type::UserType(type_) => {
@@ -323,7 +323,7 @@ impl Type {
                         let woog_struct = s_read!(woog_struct);
 
                         return ValueType::new_woog_struct(
-                            &<RefType<WoogStruct> as NewRefType<WoogStruct>>::new_ref_type(
+                            &<RefType<WoogStruct> as NewRef<WoogStruct>>::new_ref(
                                 woog_struct.to_owned(),
                             ),
                             store,
@@ -335,14 +335,11 @@ impl Type {
                 let obj_id = sarzak.exhume_object_id_by_name(&name).unwrap();
                 let ty = sarzak.exhume_ty(&obj_id).unwrap();
 
-                ValueType::new_ty(
-                    &<RefType<Ty> as NewRefType<Ty>>::new_ref_type(ty.to_owned()),
-                    store,
-                )
+                ValueType::new_ty(&<RefType<Ty> as NewRef<Ty>>::new_ref(ty.to_owned()), store)
             }
             Type::Uuid => {
                 let ty = Ty::new_s_uuid();
-                ValueType::new_ty(&<RefType<Ty> as NewRefType<Ty>>::new_ref_type(ty), store)
+                ValueType::new_ty(&<RefType<Ty> as NewRef<Ty>>::new_ref(ty), store)
             }
         }
     }

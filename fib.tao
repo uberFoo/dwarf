@@ -37,16 +37,11 @@ fn b() {
     print("b\n");
 }
 
-fn main() {
-    let t = ChaCha::assert_eq(1, 1);
-    let f = ChaCha::assert_eq(1, 2);
-    print("Should be true: " + t + "\n");
-    print("Should be false: " + f + "\n");
-}
+fn main() {}
 
 fn main_wtf() -> int {
     let a: int = fib2(5);
-    debugger;
+    // debugger;
     // print(a);
     // let a: Uuid = Uuid::new();
     // let b = false;
@@ -59,6 +54,8 @@ fn main_wtf() -> int {
         b: true,
         c: 3.14,
     };
+
+    f.b = false;
 
     // I need to parse a list type declaration, e.g.,
     // let a: [int] = [0, 1, 2, 3];

@@ -5,12 +5,11 @@ use std::{
     ops::Range,
     path::{Path, PathBuf},
     thread,
-    time::Duration,
 };
 
 use ansi_term::Colour::{self, RGB};
 use ansi_term::{ANSIString, ANSIStrings};
-use crossbeam::channel::{unbounded, Receiver, RecvTimeoutError, Sender};
+use crossbeam::channel::{unbounded, Receiver, Sender};
 use fxhash::FxHashMap as HashMap;
 use heck::ToUpperCamelCase;
 use lazy_static::lazy_static;
@@ -31,11 +30,10 @@ use crate::{
         LocalVariable, ObjectStore as LuDogStore, OperatorEnum, Span, Statement, StatementEnum,
         Unary, ValueType, Variable, WoogOptionEnum, XValue, XValueEnum,
     },
-    new_rc, new_ref, s_read, s_write,
-    value::{StoreProxy, ThreadHandle, ThreadHandleType, UserType},
-    ChaChaError, DwarfInteger, Error, NewRcType, NewRefType, NoSuchFieldSnafu,
-    NoSuchStaticMethodSnafu, RcType, RefType, Result, TypeMismatchSnafu, UnimplementedSnafu, Value,
-    VariableNotFoundSnafu, WrongNumberOfArgumentsSnafu,
+    new_ref, s_read, s_write,
+    value::{StoreProxy, UserType},
+    ChaChaError, DwarfInteger, Error, NewRef, NoSuchFieldSnafu, NoSuchStaticMethodSnafu, RefType,
+    Result, UnimplementedSnafu, Value, VariableNotFoundSnafu, WrongNumberOfArgumentsSnafu,
 };
 
 macro_rules! function {
@@ -199,6 +197,7 @@ pub fn initialize_interpreter_paths<P: AsRef<Path>>(lu_dog_path: P) -> Result<Co
 
     initialize_interpreter(sarzak, lu_dog, Some(lu_dog_path.as_ref()))
 }
+
 /// Initialize the interpreter
 ///
 /// The interpreter requires two domains to operate. The first is the metamodel:
@@ -261,13 +260,58 @@ pub fn initialize_interpreter<P: AsRef<Path>>(
                 stack.insert_meta(
                     &user_type.name,
                     s_read!(func).name.to_owned(),
-                    // It's here that I'd really like to be able to do a cheap
-                    // clone of an Rc.
                     new_ref!(Value, Value::Function(func.clone(),)),
                 )
             }
         }
     }
+
+    // Hack to try to get mandelbrot running faster...
+    let mut thonk = Thonk::new("norm_squared".to_string());
+
+    thonk.add_variable("self".to_owned());
+
+    // Get the parameter off the stack
+    // push {fp + 0}
+    thonk.add_instruction(Instruction::FetchLocal(0));
+    // push 1
+    thonk.add_instruction(Instruction::Push(new_ref!(Value, Value::Integer(1))));
+    // Chcek if it's <= 1
+    // lte
+    thonk.add_instruction(Instruction::LessThanOrEqual);
+    // jne
+    thonk.add_instruction(Instruction::JumpIfFalse(2));
+    // If false return 1
+    thonk.add_instruction(Instruction::Push(new_ref!(Value, Value::Integer(1))));
+    thonk.add_instruction(Instruction::Return);
+    // return fidbn-1) + fib(n-2)
+    // Load fib
+    thonk.add_instruction(Instruction::Push(new_ref!(Value, Value::Thonk("fib", 0))));
+    // load n
+    thonk.add_instruction(Instruction::FetchLocal(0));
+    // load 1
+    thonk.add_instruction(Instruction::Push(new_ref!(Value, Value::Integer(1))));
+    // subtract
+    thonk.add_instruction(Instruction::Subtract);
+    // Call fib(n-1)
+    thonk.add_instruction(Instruction::Call(1));
+    // load fib
+    thonk.add_instruction(Instruction::Push(new_ref!(Value, Value::Thonk("fib", 0))));
+    // load n
+    thonk.add_instruction(Instruction::FetchLocal(0));
+    // load 2
+    thonk.add_instruction(Instruction::Push(new_ref!(Value, Value::Integer(2))));
+    // subtract
+    thonk.add_instruction(Instruction::Subtract);
+    // Call fib(n-1)
+    thonk.add_instruction(Instruction::Call(1));
+    // add
+    thonk.add_instruction(Instruction::Add);
+    thonk.add_instruction(Instruction::Return);
+
+    let slot = stack.reserve_thonk_slot();
+    let frame = CallFrame::new(0, 0, &thonk);
+    stack.insert_thonk(thonk, slot);
 
     let (std_out_send, std_out_recv) = unbounded();
 
@@ -283,7 +327,7 @@ pub fn initialize_interpreter<P: AsRef<Path>>(
         std_out_recv,
         debug_status_writer: None,
         obj_file_path: lu_dog_path.map(|p| p.as_ref().to_owned()),
-        tracy: Client::start(),
+        _tracy: Client::start(),
     })
 }
 
@@ -1187,28 +1231,13 @@ fn eval_expression(
                     Ok((value, ty))
                 }
                 Value::UserType(value) => {
-                    // This could be a field that we look up, and it may be a
-                    // function call. We need to check for a function call first,
-                    // and then a field.
-                    // let woog_struct = field.r7_woog_struct(&field.id).unwrap();
-                    // let woog_struct = s_read!(woog_struct);
-                    // if let Some(impl_) = woog_struct.r8c_implementation(lu_dog).pop() {
-                    //     let impl_ = s_read!(impl_);
-
-                    //     let funcs = impl_.r9_function(lu_dog);
-                    //     let func = funcs
-                    //         .iter()
-                    //         .find(|f| s_read!(f).name == field_name)
-                    //         .and_then(|f| Some(f.clone()));
-                    //     let ty = s_read!(func).return_type;
-                    // } else {
                     let value = s_read!(value);
                     let value = value.get_attr_value(field_name).unwrap();
                     let ty = s_read!(value).get_type(&s_read!(lu_dog));
 
                     Ok((value.clone(), ty))
-                    // }
                 }
+                // 🚧 This needs it's own error. Lazy me.
                 _ => Err(ChaChaError::BadJuJu {
                     message: "Bad value in field access".to_owned(),
                     location: location!(),
@@ -1347,8 +1376,8 @@ fn eval_expression(
             let list = s_read!(list);
             if let Some(ref element) = list.elements {
                 // This is the first element in the list. We need to give this list
-                // a type, and I'm going to do the esay thing here and take the type
-                // to be whatever the first element evaluetes to. We'll then check
+                // a type, and I'm going to do the easy thing here and take the type
+                // to be whatever the first element evaluates to be. We'll then check
                 // each subsequent element to see if it can be cast into the type
                 // of the first element.
                 //
@@ -1840,7 +1869,7 @@ fn eval_expression(
                     value
                 }
                 XValueEnum::Variable(ref var) => {
-                    let var = s_read!(lu_dog).exhume_variable(var).unwrap();
+                    let _var = s_read!(lu_dog).exhume_variable(var).unwrap();
                     new_ref!(Value, Value::Empty)
                 }
             };
@@ -1943,7 +1972,7 @@ pub struct Context {
     std_out_recv: Receiver<String>,
     debug_status_writer: Option<Sender<DebuggerStatus>>,
     obj_file_path: Option<PathBuf>,
-    tracy: Client,
+    _tracy: Client,
 }
 
 /// Save the lu_dog model when the context is dropped
@@ -2083,6 +2112,10 @@ pub enum DebuggerControl {
 
 #[cfg(not(feature = "single"))]
 pub fn start_tui_repl(mut context: Context) -> (Sender<DebuggerControl>, Receiver<DebuggerStatus>) {
+    use std::time::Duration;
+
+    use crossbeam::channel::RecvTimeoutError;
+
     let (to_ui_write, to_ui_read) = unbounded();
     let (from_ui_write, from_ui_read) = unbounded();
     // let (from_worker_write, from_worker_read) = unbounded();
@@ -2223,7 +2256,7 @@ pub fn start_tui_repl(mut context: Context) -> (Sender<DebuggerControl>, Receive
 }
 
 /// This runs the main function, assuming it exists.
-pub fn start_main(stopped: bool, silent: bool, mut context: Context) -> Result<Value, Error> {
+pub fn start_main(stopped: bool, _silent: bool, mut context: Context) -> Result<Value, Error> {
     {
         let mut running = RUNNING.lock();
         *running = !stopped;
@@ -2303,31 +2336,35 @@ pub fn start_vm(n: DwarfInteger) -> Result<DwarfInteger, Error> {
     thonk.add_variable("n".to_owned());
 
     // Get the parameter off the stack
+    // push {fp + 0}
     thonk.add_instruction(Instruction::FetchLocal(0));
-    thonk.add_instruction(Instruction::Constant(Value::Integer(1)));
+    // push 1
+    thonk.add_instruction(Instruction::Push(new_ref!(Value, Value::Integer(1))));
     // Chcek if it's <= 1
+    // lte
     thonk.add_instruction(Instruction::LessThanOrEqual);
+    // jne
     thonk.add_instruction(Instruction::JumpIfFalse(2));
     // If false return 1
-    thonk.add_instruction(Instruction::Constant(Value::Integer(1)));
+    thonk.add_instruction(Instruction::Push(new_ref!(Value, Value::Integer(1))));
     thonk.add_instruction(Instruction::Return);
     // return fidbn-1) + fib(n-2)
     // Load fib
-    thonk.add_instruction(Instruction::Constant(Value::Thonk("fib", 0)));
+    thonk.add_instruction(Instruction::Push(new_ref!(Value, Value::Thonk("fib", 0))));
     // load n
     thonk.add_instruction(Instruction::FetchLocal(0));
     // load 1
-    thonk.add_instruction(Instruction::Constant(Value::Integer(1)));
+    thonk.add_instruction(Instruction::Push(new_ref!(Value, Value::Integer(1))));
     // subtract
     thonk.add_instruction(Instruction::Subtract);
     // Call fib(n-1)
     thonk.add_instruction(Instruction::Call(1));
     // load fib
-    thonk.add_instruction(Instruction::Constant(Value::Thonk("fib", 0)));
+    thonk.add_instruction(Instruction::Push(new_ref!(Value, Value::Thonk("fib", 0))));
     // load n
     thonk.add_instruction(Instruction::FetchLocal(0));
     // load 2
-    thonk.add_instruction(Instruction::Constant(Value::Integer(2)));
+    thonk.add_instruction(Instruction::Push(new_ref!(Value, Value::Integer(2))));
     // subtract
     thonk.add_instruction(Instruction::Subtract);
     // Call fib(n-1)
@@ -2345,22 +2382,22 @@ pub fn start_vm(n: DwarfInteger) -> Result<DwarfInteger, Error> {
     let mut vm = VM::new(&memory);
 
     // Push the func
-    vm.push_stack(Value::String("fib".to_string()));
+    vm.push_stack(new_ref!(Value, Value::String("fib".to_string())));
     // Push the argument
-    vm.push_stack(Value::Integer(n));
+    vm.push_stack(new_ref!(Value, Value::Integer(n)));
 
     vm.push_frame(frame);
 
     let result = vm.run(false);
 
-    let result: DwarfInteger = result.unwrap().try_into().unwrap();
+    let result: DwarfInteger = (&*s_read!(result.unwrap())).try_into().unwrap();
 
     Ok(result)
 }
 
 #[cfg(feature = "repl")]
 pub fn start_repl(mut context: Context) -> Result<(), Error> {
-    use std::io::{self, Write};
+    use std::io;
 
     use rustyline::error::ReadlineError;
     use rustyline::validate::{ValidationContext, ValidationResult, Validator};
@@ -2383,7 +2420,7 @@ pub fn start_repl(mut context: Context) -> Result<(), Error> {
     struct DwarfValidator {}
 
     impl DwarfValidator {
-        fn validate(&self, input: &str) -> ValidationResult {
+        fn validate(&self, _input: &str) -> ValidationResult {
             ValidationResult::Valid(None)
             // if let Some((stmt, _span)) = parse_line(input) {
             // ValidationResult::Valid(None)
@@ -2449,11 +2486,12 @@ pub fn start_repl(mut context: Context) -> Result<(), Error> {
                     debug!("stmt from readline", stmt);
 
                     let stmt = {
+                        let mut lu_dog = s_write!(lu_dog);
                         match inter_statement(
                             &new_ref!(crate::dwarf::Statement, stmt),
-                            &DwarfSourceFile::new(line.clone(), &mut s_write!(lu_dog)),
+                            &DwarfSourceFile::new(line.clone(), &mut lu_dog),
                             &block,
-                            &mut s_write!(lu_dog),
+                            &mut lu_dog,
                             &s_read!(models),
                             &s_read!(sarzak),
                         ) {

@@ -13,7 +13,8 @@ fn main() {
                 continue;
             }
             let name = path.file_stem().unwrap().to_str().unwrap();
-            let contents = fs::read_to_string(&path).unwrap();
+            let mut contents = fs::read_to_string(&path).unwrap();
+            contents = contents.replace("\"", "\\\"");
             tests += "#[test]\n";
             tests += &format!("fn {}() {{\n", name);
             tests += "    let _ = env_logger::builder().is_test(true).try_init();\n";

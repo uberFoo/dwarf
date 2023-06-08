@@ -21,5 +21,15 @@ cfg_if::cfg_if! {
                 error_style.paint("error"),
                 alert_style.paint("print-std-out"));
         }
+    } else {
+        fn main() {
+           let error_style = ansi_term::Colour::Red;
+           let alert_style = ansi_term::Colour::Yellow;
+
+            println!("{}: The debugger won't function properly with feature flag: `{}`, and also requires `{}`.",
+                error_style.paint("error"),
+                alert_style.paint("print-std-out"),
+                alert_style.paint("multi"));
+        }
     }
 }

@@ -9,7 +9,7 @@ use uuid::Uuid;
 use crate::{
     interpreter::{Context, PrintableValueType},
     lu_dog::{Function, ObjectStore as LuDogStore, ValueType},
-    new_ref, s_read, ChaChaError, DwarfFloat, DwarfInteger, NewRefType, RcType, RefType, Result,
+    new_ref, s_read, ChaChaError, DwarfFloat, DwarfInteger, NewRef, RcType, RefType, Result,
 };
 
 pub trait StoreProxy: fmt::Display + fmt::Debug + Send + Sync {
@@ -481,6 +481,22 @@ impl std::ops::Add for Value {
             (Value::Boolean(a), Value::String(b)) => Value::String(a.to_string() + &b),
             (Value::String(a), Value::Boolean(b)) => Value::String(a + &b.to_string()),
             (a, b) => Value::Error(format!("Cannot add {} and {}", a, b)),
+        }
+    }
+}
+
+/// AsRef<str> implementation for Value
+///
+impl AsRef<str> for Value {
+    fn as_ref(&self) -> &str {
+        match self {
+            Value::Boolean(bool_) => match bool_ {
+                true => "true",
+                false => "false",
+            },
+            Value::Empty => "()",
+            Value::String(str_) => str_,
+            _ => "",
         }
     }
 }

@@ -1,5 +1,5 @@
 use core::fmt;
-use std::{fs::File, io::prelude::*, ops::Range, path::PathBuf, rc::Rc, sync::Arc};
+use std::{fs::File, io::prelude::*, ops::Range, path::PathBuf};
 
 use ansi_term::Colour;
 use heck::{ToShoutySnakeCase, ToUpperCamelCase};
@@ -25,11 +25,10 @@ use crate::{
             XValue, XValueEnum, ZSome,
         },
         Argument, Binary, BooleanLiteral, Comparison, DwarfSourceFile, FieldAccess,
-        FieldAccessTarget, FloatLiteral, List, ListElement, ListExpression, MethodCall, Negation,
-        Not, Operator, Reference, ResultStatement, TypeCast, Unary, VariableEnum, WoogOptionEnum,
-        XReturn,
+        FieldAccessTarget, FloatLiteral, List, ListElement, ListExpression, MethodCall, Operator,
+        Reference, ResultStatement, TypeCast, Unary, VariableEnum, WoogOptionEnum, XReturn,
     },
-    new_ref, s_read, s_write, NewRefType, RefType,
+    new_ref, s_read, s_write, NewRef, RefType,
 };
 
 macro_rules! link_parameter {
@@ -98,6 +97,20 @@ macro_rules! function {
 macro_rules! debug {
     ($($arg:tt)*) => {
         log::debug!(
+            target: "compiler",
+            "{}: {}\n  --> {}:{}:{}",
+            Colour::Cyan.dimmed().italic().paint(function!()),
+            format_args!($($arg)*),
+            file!(),
+            line!(),
+            column!()
+        );
+    };
+}
+
+macro_rules! warn {
+    ($($arg:tt)*) => {
+        log::warn!(
             target: "compiler",
             "{}: {}\n  --> {}:{}:{}",
             Colour::Cyan.dimmed().italic().paint(function!()),
@@ -316,7 +329,7 @@ fn inter_func(
     stmts: &Spanned<ParserExpression>,
     impl_block: Option<&RefType<Implementation>>,
     impl_ty: Option<&RefType<ValueType>>,
-    span: &Span,
+    _span: &Span,
     source: &RefType<DwarfSourceFile>,
     lu_dog: &mut LuDogStore,
     models: &[SarzakStore],
@@ -431,7 +444,7 @@ pub fn inter_statement(
         //
         // Let
         //
-        ParserStatement::Let((var_name, var_span), type_, (expr, expr_span)) => {
+        ParserStatement::Let((var_name, _var_span), type_, (expr, expr_span)) => {
             // We only want one storage location per name per block, so we look
             // for, and remove an existing one -- all the way up to the value.
             // 🚧 There's a let problem in mandelbrot, and I wonder if this might
@@ -490,11 +503,11 @@ pub fn inter_statement(
             // entry point for the REPL, and conditionally needing to generate an
             // error would support the idea.
             if let ValueType::Unknown(_) = &*s_read!(ty) {
-                error!("Unknown type for variable {}", var_name);
+                warn!("Unknown type for variable {}", var_name);
             }
 
             // Create a variable, now that we (hopefully) have a type from the expression.
-            let value = XValue::new_variable(&block, &ty, &var, lu_dog);
+            let _value = XValue::new_variable(&block, &ty, &var, lu_dog);
             // 🚧 Was this causing a crash?
             // LuDogSpan::new(
             //     var_span.end as i64,
@@ -692,7 +705,7 @@ fn inter_expression(
         // As
         //
         ParserExpression::As(ref expr, ref ty) => {
-            let (expr, expr_ty) = inter_expression(
+            let (expr, _expr_ty) = inter_expression(
                 &new_ref!(ParserExpression, expr.0.to_owned()),
                 &expr.1,
                 source,
@@ -951,7 +964,7 @@ fn inter_expression(
                 //     return Ok(((expr, span), ty));
                 // }
                 /// We matched on the lhs type.
-                ValueType::Function(ref id) => {
+                ValueType::Function(ref _id) => {
                     // let func = lu_dog.exhume_function(id).unwrap();
                     // let impl_ = &s_read!(func).r9_implementation(lu_dog)[0];
                     // let woog_struct = &s_read!(impl_).r8_woog_struct(lu_dog)[0];
@@ -1125,7 +1138,7 @@ fn inter_expression(
 
             let mut last_arg_uuid: Option<Uuid> = None;
             for param in params {
-                let (arg_expr, ty) = inter_expression(
+                let (arg_expr, _ty) = inter_expression(
                     &new_ref!(ParserExpression, param.0.to_owned()),
                     &param.1,
                     source,
@@ -1208,7 +1221,6 @@ fn inter_expression(
 
             // We really need to get some error handling in here.
             if let ValueType::Ty(ref ty) = &*s_read!(conditional_ty) {
-                error!("exhume Ty from sarzak -- bool check {:?}", ty);
                 let s_ty = sarzak.exhume_ty(ty).unwrap();
                 if let Ty::Boolean(_) = s_ty {
                     // We're good.
@@ -1271,7 +1283,7 @@ fn inter_expression(
         // Index
         //
         ParserExpression::Index(target, index) => {
-            let (target, target_ty) = inter_expression(
+            let (target, _target_ty) = inter_expression(
                 &new_ref!(ParserExpression, target.0.to_owned()),
                 &target.1,
                 source,
@@ -1652,7 +1664,7 @@ fn inter_expression(
                     sarzak,
                 )?;
                 let value = XValue::new_expression(&block, &ty, &arg_expr.0, lu_dog);
-                let span = LuDogSpan::new(
+                let _span = LuDogSpan::new(
                     arg.1.end as i64,
                     arg.1.start as i64,
                     source,
@@ -1776,7 +1788,7 @@ fn inter_expression(
                 models,
                 sarzak,
             )?;
-            let (end, end_ty) = inter_expression(
+            let (end, _end_ty) = inter_expression(
                 &new_ref!(ParserExpression, (*end).0.to_owned()),
                 &end.1,
                 source,
@@ -1928,7 +1940,7 @@ fn inter_expression(
 
             let mut last_arg_uuid: Option<Uuid> = None;
             for param in params {
-                let (arg_expr, ty) = inter_expression(
+                let (arg_expr, _ty) = inter_expression(
                     &new_ref!(ParserExpression, param.0.to_owned()),
                     &param.1,
                     source,
@@ -1993,7 +2005,7 @@ fn inter_expression(
 
             for (name, field_expr) in fields {
                 // 🚧 Do type checking here? I don't think that I have what I need.
-                let (field_expr, ty) = inter_expression(
+                let (field_expr, _ty) = inter_expression(
                     &new_ref!(ParserExpression, field_expr.0.to_owned()),
                     &field_expr.1,
                     source,
@@ -2002,7 +2014,7 @@ fn inter_expression(
                     models,
                     sarzak,
                 )?;
-                let field = FieldExpression::new(name.0.to_owned(), &field_expr.0, &expr, lu_dog);
+                let _field = FieldExpression::new(name.0.to_owned(), &field_expr.0, &expr, lu_dog);
 
                 // Adding the following actually breaks shit.
                 // let expr = Expression::new_field_expression(&field, lu_dog);
@@ -2053,7 +2065,7 @@ fn inter_expression(
                 models,
                 sarzak,
             )?;
-            let (rhs, rhs_ty) = inter_expression(
+            let (rhs, _rhs_ty) = inter_expression(
                 &new_ref!(ParserExpression, rhs.0.to_owned()),
                 &rhs.1,
                 source,
@@ -2088,7 +2100,7 @@ fn inter_expression(
 }
 
 fn inter_import(
-    path: &Vec<Spanned<String>>,
+    _path: &Vec<Spanned<String>>,
     _alias: &Option<(String, Range<usize>)>,
     span: &Range<usize>,
     _lu_dog: &mut LuDogStore,
@@ -2248,7 +2260,7 @@ fn inter_struct(
 /// those take much space.
 fn get_value_type(
     type_: &Type,
-    span: &Span,
+    _span: &Span,
     enclosing_type: Option<&RefType<ValueType>>,
     lu_dog: &mut LuDogStore,
     models: &[SarzakStore],
@@ -2366,7 +2378,6 @@ fn get_value_type(
                     Ty::Object(ref obj) => {
                         let obj = sarzak.exhume_object(obj).unwrap();
                         let obj = obj.name.to_upper_camel_case();
-                        error!("reach-around {}", obj);
                         obj == *name || name == format!("{}Proxy", obj)
                     }
                     _ => false,
@@ -2447,11 +2458,11 @@ fn typecheck(
 ) -> Result<()> {
     cfg_if::cfg_if! {
         if #[cfg(feature = "single")] {
-            if Rc::as_ptr(lhs) == Rc::as_ptr(rhs) {
+            if std::rc::Rc::as_ptr(lhs) == std::rc::Rc::as_ptr(rhs) {
                 return Ok(());
             }
         } else {
-            if Arc::as_ptr(lhs) == Arc::as_ptr(rhs) {
+            if std::sync::Arc::as_ptr(lhs) == std::sync::Arc::as_ptr(rhs) {
                 return Ok(());
             }
         }

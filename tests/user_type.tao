@@ -1,0 +1,39 @@
+/// Test user defined types
+///
+struct Foo {
+    a: int,
+    b: bool,
+    c: float,
+    d: string,
+    e: Uuid,
+}
+
+fn main() -> bool {
+    let f = Foo {
+        a: 42,
+        b: true,
+        c: 3.14,
+        d: "Hello uberFoo.",
+    };
+    let g = Foo {
+        a: 42,
+        b: true,
+        c: 3.14,
+        d: "Hello uberFoo.",
+    };
+    let h = f;
+
+    let a: bool = ChaCha::assert_eq(f.a, 42);
+    let b = ChaCha::assert_eq(f.b, true);
+    let c = ChaCha::assert_eq(f.c, 3.14);
+    let d = ChaCha::assert_eq(f.d, "Hello uberFoo.");
+
+    // This one I'm not sure about. I'm tending towards false, as it's a
+    // different instance.
+    let e = ChaCha::assert_eq(f, g);
+
+    // This one should certainly be true.
+    let i = ChaCha::assert_eq(f, h);
+
+    a && b && c && d && !e && i
+}

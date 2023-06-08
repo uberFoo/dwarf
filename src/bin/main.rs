@@ -1,6 +1,6 @@
 use std::{
     fs,
-    io::{prelude::*, BufReader, BufWriter, Cursor},
+    io::{BufReader, BufWriter},
     net::TcpListener,
     path::PathBuf,
     thread,
@@ -14,6 +14,7 @@ use dwarf::{
     dwarf::{parse_dwarf, populate_lu_dog, DwarfError},
     initialize_interpreter,
     interpreter::{banner2, start_main},
+    start_repl,
     // merlin::{ErrorExpressionProxy, ExpressionProxy},
     // merlin::{
     //     AnchorProxy, BisectionProxy, EdgeProxy, GlyphProxy, LineProxy, LineSegmentPointProxy,
@@ -21,26 +22,8 @@ use dwarf::{
     // },
 };
 use log;
-use sarzak::{
-    domain::DomainBuilder,
-    sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL},
-};
-macro_rules! function {
-    () => {{
-        fn f() {}
-        fn type_name_of<T>(_: T) -> &'static str {
-            std::any::type_name::<T>()
-        }
-        let name = type_name_of(f);
-        name.strip_suffix("::f").unwrap()
-    }};
-}
-
-macro_rules! debug {
-    ($($arg:tt)*) => {
-        log::debug!("{}: {}", function!(), format_args!($($arg)*));
-    };
-}
+use sarzak::lu_dog::ObjectStore as LuDogStore;
+use sarzak::sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL};
 
 #[derive(Debug, Parser)]
 #[command(author, version, about, long_about = None)]
@@ -62,6 +45,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     pretty_env_logger::init();
 
     let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
+    let lu_dog = LuDogStore::new();
 
     let args = Args::parse();
 
@@ -184,11 +168,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("Interpreter exited with: {}", e);
             e
         })?;
-
-        // start_repl(ctx).map_err(|e| {
-        //     println!("Interpreter exited with: {}", e);
-        //     e
-        // })?;
         // }
     } else if let Some(_) = args.dap {
         let listener = TcpListener::bind("127.0.0.1:4711").unwrap();
@@ -230,6 +209,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             //     in_file.flush()?;
             // }
         }
+    } else {
+        let ctx = initialize_interpreter::<PathBuf>(sarzak, lu_dog, None)?;
+
+        start_repl(ctx).map_err(|e| {
+            println!("Interpreter exited with: {}", e);
+            e
+        })?;
     }
 
     Ok(())
