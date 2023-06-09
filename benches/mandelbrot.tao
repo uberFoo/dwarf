@@ -53,9 +53,13 @@ fn escape_time(c: Complex, limit: int) -> int {
         // 🚧 This let wreaks havoc -- fix it.
         // Also the chained method calls don't affect the correct z, or something.
         // let z = z.square(z).add(z, c);
-        z = z.square(z);
-        z = z.add(z, c);
-        if z.norm_squared(z) > 4.0 {
+        z = ComplexEx::square(z);
+        // z = square(z);
+        // z = z.add(z, c);
+        z = ComplexEx::add(z, c);
+        let foo = ComplexEx::norm_squared(z);
+        if foo > 4.0 {
+            // if z.norm_squared(z) > 4.0 {
             return i;
         }
     }
@@ -63,8 +67,8 @@ fn escape_time(c: Complex, limit: int) -> int {
 }
 
 fn main() -> Complex {
-    let width = 7;
-    let height = 2;
+    let width = 14;
+    let height = 4;
     let upper_left = Complex { re: -2.5, im: 1.0 };
     let lower_right = Complex { re: 2.0, im: -1.0 };
 

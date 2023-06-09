@@ -2331,6 +2331,11 @@ fn get_value_type(
             });
 
             if let Some(import) = import {
+                // 🚧 Holy cow, it's been a while since I've plumbed these depths.
+                // I seem to be having an interesting conversation with myself below.
+                // I wonder what will come of it? TBH, I'm not sure how I'm getting
+                // away with this code. I guess it's just not being used?
+                //
                 // Now what do we do with it? If it's something that we generated,
                 // then we could load up the store, if we knew where it was, and
                 // but we don't.

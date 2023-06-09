@@ -21,7 +21,7 @@ fn mandelbrot(c: &mut Criterion) {
 
     let ctx = initialize_interpreter::<PathBuf>(sarzak, lu_dog, None).unwrap();
 
-    c.bench_function("mandelbrot-7x2", |b| {
+    c.bench_function("mandelbrot-14x4", |b| {
         b.iter(|| start_main(false, true, ctx.clone()).unwrap())
     });
 }
@@ -50,5 +50,10 @@ fn vm_17(c: &mut Criterion) {
     c.bench_function("vm-fib-17", |b| b.iter(|| start_vm(17.into()).unwrap()));
 }
 
-criterion_group!(benches, mandelbrot, fib, vm_25, vm_17);
+fn vm_5(c: &mut Criterion) {
+    let _client = Client::start();
+    c.bench_function("vm-fib-5", |b| b.iter(|| start_vm(5.into()).unwrap()));
+}
+
+criterion_group!(benches, mandelbrot, fib, vm_25, vm_17, vm_5);
 criterion_main!(benches);
