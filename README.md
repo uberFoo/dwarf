@@ -17,7 +17,13 @@ The long term plan is to turn the dwarf source into Rust source, and compile it 
 
 ## On the Horizon
 
-* Supertype / subtype hierarchies -- there will be some sort of support for OO-like behavior
+### Supertype / subtype hierarchies
+
+There will be some sort of support for OO-like behavior
+
+### Virtual Machine
+
+There's a sort-of hybrid-VM currently, but no compiler.
 
 ## Syntax
 

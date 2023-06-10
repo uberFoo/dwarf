@@ -11,9 +11,11 @@ use snafu::{prelude::*, Location};
 
 pub mod chacha;
 pub mod dwarf;
-// pub mod merlin;
+#[cfg(all(not(feature = "print-std-out"), not(feature = "single")))]
+pub mod tui;
 pub(crate) mod value;
-pub(crate) mod woog_structs;
+// pub mod merlin;
+// pub(crate) mod woog_structs;
 
 pub use chacha::interpreter::{self, initialize_interpreter, start_repl, Memory};
 pub use value::{StoreProxy, Value};
@@ -35,8 +37,8 @@ cfg_if::cfg_if! {
 
         type RefType<T> = std::rc::Rc<std::cell::RefCell<T>>;
 
-        impl<T> NewRefType<T> for RefType<T> {
-            fn new_ref_type(value: T) -> RefType<T> {
+        impl<T> NewRef<T> for RefType<T> {
+            fn new_ref(value: T) -> RefType<T> {
                 std::rc::Rc::new(std::cell::RefCell::new(value))
             }
         }
@@ -61,7 +63,7 @@ cfg_if::cfg_if! {
 
         type RefType<T> = std::sync::Arc<std::sync::Mutex<T>>;
 
-        impl<T> NewRefType<T> for RefType<T> {
+        impl<T> NewRef<T> for RefType<T> {
             fn new_ref_type(value: T) -> RefType<T> {
                 std::sync::Arc::new(std::sync::Mutex::new(value))
             }
@@ -91,8 +93,8 @@ cfg_if::cfg_if! {
         }
 
         type RefType<T> = std::sync::Arc<std::sync::RwLock<T>>;
-        impl<T> NewRefType<T> for RefType<T> {
-            fn new_ref_type(value: T) -> RefType<T> {
+        impl<T> NewRef<T> for RefType<T> {
+            fn new_ref(value: T) -> RefType<T> {
                 std::sync::Arc::new(std::sync::RwLock::new(value))
             }
         }
@@ -116,7 +118,7 @@ cfg_if::cfg_if! {
         compile_error!("parking lot mutex is not currently supported");
         type RefType<T> = std::sync::Arc<parking_lot::Mutex<T>>;
 
-        impl<T> NewRefType<T> for RefType<T> {
+        impl<T> NewRef<T> for RefType<T> {
             fn new_ref_type(value: T) -> RefType<T> {
                 std::sync::Arc::new(parking_lot::Mutex::new(value))
             }
@@ -140,7 +142,7 @@ cfg_if::cfg_if! {
     } else if #[cfg(feature = "multi-parking-lot-rwlock")] {
         type RefType<T> = std::sync::Arc<parking_lot::RwLock<T>>;
 
-        impl<T> NewRefType<T> for RefType<T> {
+        impl<T> NewRef<T> for RefType<T> {
             fn new_ref_type(value: T) -> RefType<T> {
                 std::sync::Arc::new(parking_lot::RwLock::new(value))
             }
@@ -171,8 +173,8 @@ trait NewRcType<T> {
     fn new_rc_type(value: T) -> RcType<T>;
 }
 
-trait NewRefType<T> {
-    fn new_ref_type(value: T) -> RefType<T>;
+trait NewRef<T> {
+    fn new_ref(value: T) -> RefType<T>;
 }
 
 macro_rules! new_rc {
@@ -184,7 +186,7 @@ pub(crate) use new_rc;
 
 macro_rules! new_ref {
     ($type:ty, $value:expr) => {
-        <RefType<$type> as NewRefType<$type>>::new_ref_type($value)
+        <RefType<$type> as NewRef<$type>>::new_ref($value)
     };
 }
 pub(crate) use new_ref;
@@ -279,7 +281,7 @@ pub enum ChaChaError {
     Store {
         source: io::Error,
     },
-    #[snafu(display("\n{}: type mismatch -- expected `{}`, found `{}`\n  --> {}:{}", ERR_CLR.bold().paint("error"), OK_CLR.paint(expected.to_string()), ERR_CLR.bold().paint(got.to_string()), span.start, span.end))]
+    #[snafu(display("\n{}: type mismatch -- expected `{}`, found `{}`\n  --> {}..{}", ERR_CLR.bold().paint("error"), OK_CLR.paint(expected.to_string()), ERR_CLR.bold().paint(got.to_string()), span.start, span.end))]
     TypeMismatch {
         expected: String,
         got: String,

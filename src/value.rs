@@ -9,7 +9,7 @@ use uuid::Uuid;
 use crate::{
     interpreter::{Context, PrintableValueType},
     lu_dog::{Function, ObjectStore as LuDogStore, ValueType},
-    new_ref, s_read, ChaChaError, DwarfFloat, DwarfInteger, NewRefType, RcType, RefType, Result,
+    new_ref, s_read, ChaChaError, DwarfFloat, DwarfInteger, NewRef, RcType, RefType, Result,
 };
 
 pub trait StoreProxy: fmt::Display + fmt::Debug + Send + Sync {
@@ -252,6 +252,54 @@ impl fmt::Display for Value {
     }
 }
 
+impl From<bool> for Value {
+    fn from(value: bool) -> Self {
+        Self::Boolean(value)
+    }
+}
+
+impl From<usize> for Value {
+    fn from(value: usize) -> Self {
+        Self::Integer(value as i64)
+    }
+}
+
+impl From<i64> for Value {
+    fn from(value: i64) -> Self {
+        Self::Integer(value)
+    }
+}
+
+impl From<u64> for Value {
+    fn from(value: u64) -> Self {
+        Self::Integer(value as i64)
+    }
+}
+
+impl From<i32> for Value {
+    fn from(value: i32) -> Self {
+        Self::Integer(value as i64)
+    }
+}
+
+impl From<u32> for Value {
+    fn from(value: u32) -> Self {
+        Self::Integer(value as i64)
+    }
+}
+
+impl From<f64> for Value {
+    fn from(value: f64) -> Self {
+        Self::Float(value)
+    }
+}
+
+impl From<&str> for Value {
+    fn from(value: &str) -> Self {
+        Self::String(value.to_owned())
+    }
+}
+
 impl TryFrom<Value> for Uuid {
     type Error = ChaChaError;
 
@@ -269,6 +317,8 @@ impl TryFrom<Value> for Uuid {
         }
     }
 }
+
+// impl TryFrom<Value> for UserType
 
 impl TryFrom<&Value> for Uuid {
     type Error = ChaChaError;
@@ -485,6 +535,22 @@ impl std::ops::Add for Value {
     }
 }
 
+/// AsRef<str> implementation for Value
+///
+impl AsRef<str> for Value {
+    fn as_ref(&self) -> &str {
+        match self {
+            Value::Boolean(bool_) => match bool_ {
+                true => "true",
+                false => "false",
+            },
+            Value::Empty => "()",
+            Value::String(str_) => str_,
+            _ => "",
+        }
+    }
+}
+
 /// Subtraction operator for Value
 ///
 /// Implement the Sub trait for Value.
@@ -513,10 +579,7 @@ impl std::ops::Mul for Value {
             (Value::Float(a), Value::Float(b)) => Value::Float(a * b),
             (Value::Integer(a), Value::Integer(b)) => Value::Integer(a * b),
             (Value::Empty, Value::Empty) => Value::Empty,
-            (a, b) => {
-                dbg!(&a, &b);
-                Value::Error(format!("Cannot multiply {} and {}", a, b))
-            }
+            (a, b) => Value::Error(format!("Cannot multiply {} and {}", a, b)),
         }
     }
 }
@@ -627,9 +690,9 @@ pub struct UserType {
 }
 
 impl UserType {
-    pub fn new(type_: &RefType<ValueType>, context: &Context) -> Self {
+    pub fn new<S: AsRef<str>>(type_name: S, type_: &RefType<ValueType>) -> Self {
         Self {
-            type_name: PrintableValueType(type_, context).to_string(),
+            type_name: type_name.as_ref().to_owned(),
             type_: type_.clone(),
             attrs: HashMap::default(),
         }

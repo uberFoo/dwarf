@@ -196,7 +196,22 @@ fn main() -> Result<()> {
                         .eprint(Source::from(&source_code))
                         .unwrap()
                 }
-                DwarfError::ImplementationBlockError { span } => {
+                DwarfError::ImplementationBlock { span } => {
+                    let span = span.clone();
+                    let msg = format!("{}", e);
+
+                    Report::build(ReportKind::Error, (), span.start)
+                        .with_message(&msg)
+                        .with_label(
+                            Label::new(span)
+                                .with_message(format!("{}", msg.fg(Color::Red)))
+                                .with_color(Color::Red),
+                        )
+                        .finish()
+                        .eprint(Source::from(&source_code))
+                        .unwrap()
+                }
+                DwarfError::NoImplementation { missing, span } => {
                     let span = span.clone();
                     let msg = format!("{}", e);
 
