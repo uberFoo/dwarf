@@ -24,10 +24,6 @@ tracing = { version = "0.1", features = ["log"] }
 tracing-subscriber = { version = "0.3", default-features = false, features = [
     "fmt",
 ] }
-sarzak = { path = "../../../sarzak", default-features = false, features = [
-    "lu-dog-rc",
-] }
-# sarzak = { git = "https://gitlab-runner:7kzem8nVeizSJQnLPWFY@git.uberfoo.com/sarzak/sarzak.git", branch = "develop" }
 dwarf = { path = "../../", default-features = false, features = [
     "single",
     "repl",

@@ -1,0 +1,5 @@
+fn main() {
+    let f = chacha::assert_eq(42.0, 42 as float);
+    let i = chacha::assert_eq(42, 42.0 as int);
+    let s = chacha::assert_eq("42", 42 as string);
+}

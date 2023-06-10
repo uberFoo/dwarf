@@ -7,7 +7,6 @@ use sarzak::sarzak::Ty;
 use uuid::Uuid;
 
 use crate::{
-    interpreter::{Context, PrintableValueType},
     lu_dog::{Function, ObjectStore as LuDogStore, ValueType},
     new_ref, s_read, ChaChaError, DwarfFloat, DwarfInteger, NewRef, RcType, RefType, Result,
 };
@@ -40,6 +39,10 @@ pub trait StoreProxy: fmt::Display + fmt::Debug + Send + Sync {
     /// Read an attribute from the proxy.
     ///
     fn get_attr_value(&self, name: &str) -> Result<RefType<Value>>;
+
+    /// Write an attribute to the proxy.
+    ///
+    fn set_attr_value(&mut self, name: &str, value: RefType<Value>) -> Result<()>;
 }
 
 impl StoreProxy for Box<dyn StoreProxy> {
@@ -69,6 +72,10 @@ impl StoreProxy for Box<dyn StoreProxy> {
 
     fn get_attr_value(&self, name: &str) -> Result<RefType<Value>> {
         self.as_ref().get_attr_value(name)
+    }
+
+    fn set_attr_value(&mut self, name: &str, value: RefType<Value>) -> Result<()> {
+        self.as_mut().set_attr_value(name, value)
     }
 }
 
@@ -202,7 +209,7 @@ impl Value {
                 lu_dog.exhume_value_type(&ty.id()).unwrap()
             }
             value => {
-                // log::error!("Value::get_type() not implemented for {:?}", value);
+                log::error!("Value::get_type() not implemented for {:?}", value);
                 ValueType::new_unknown(lu_dog)
             }
         }
@@ -297,6 +304,12 @@ impl From<f64> for Value {
 impl From<&str> for Value {
     fn from(value: &str) -> Self {
         Self::String(value.to_owned())
+    }
+}
+
+impl From<String> for Value {
+    fn from(value: String) -> Self {
+        Self::String(value)
     }
 }
 
@@ -677,6 +690,7 @@ impl Value {
             (Value::Char(a), Value::Char(b)) => a == b,
             (Value::Empty, Value::Empty) => true,
             (Value::Boolean(a), Value::Boolean(b)) => a == b,
+            (Value::Uuid(a), Value::Uuid(b)) => a == b,
             (_, _) => false, //Value::Error(format!("Cannot compare {} and {}", a, b)),
         }
     }

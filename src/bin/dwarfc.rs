@@ -11,9 +11,7 @@ use sarzak::{
     sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL},
 };
 
-use dwarf::dwarf::{
-    parse_dwarf, populate_lu_dog, DwarfError, FileSnafu, GenericSnafu, IOSnafu, Result,
-};
+use dwarf::dwarf::{new_lu_dog, parse_dwarf, DwarfError, FileSnafu, GenericSnafu, IOSnafu, Result};
 use tracy_client::Client;
 
 const TARGET_DIR: &str = "target";
@@ -161,93 +159,102 @@ fn main() -> Result<()> {
 
     let ast = parse_dwarf(&source_code)?;
 
-    let lu_dog =
-        populate_lu_dog(Some(&path), source_code.clone(), &ast, &model, &sarzak).map_err(|e| {
-            match &e {
-                DwarfError::BadSelf { span } => {
-                    let span = span.clone();
-                    let msg = format!("{}", e);
+    let lu_dog = new_lu_dog(
+        Some(&path),
+        Some((source_code.clone(), &ast)),
+        &model,
+        &sarzak,
+    )
+    .map_err(|e| {
+        match &e {
+            DwarfError::BadSelf { span } => {
+                let span = span.clone();
+                let msg = format!("{}", e);
 
-                    Report::build(ReportKind::Error, (), span.start)
-                        .with_message(&msg)
-                        .with_label(
-                            Label::new(span)
-                                .with_message(format!("{}", msg.fg(Color::Red)))
-                                .with_color(Color::Red),
-                        )
-                        .finish()
-                        .eprint(Source::from(&source_code))
-                        .unwrap()
-                }
-                DwarfError::GenericWarning {
-                    description: desc,
-                    span,
-                } => {
-                    let span = span.clone();
-
-                    Report::build(ReportKind::Error, (), span.start)
-                        .with_message(&desc)
-                        .with_label(
-                            Label::new(span)
-                                .with_message(format!("{}", desc.fg(Color::Red)))
-                                .with_color(Color::Red),
-                        )
-                        .finish()
-                        .eprint(Source::from(&source_code))
-                        .unwrap()
-                }
-                DwarfError::ImplementationBlock { span } => {
-                    let span = span.clone();
-                    let msg = format!("{}", e);
-
-                    Report::build(ReportKind::Error, (), span.start)
-                        .with_message(&msg)
-                        .with_label(
-                            Label::new(span)
-                                .with_message(format!("{}", msg.fg(Color::Red)))
-                                .with_color(Color::Red),
-                        )
-                        .finish()
-                        .eprint(Source::from(&source_code))
-                        .unwrap()
-                }
-                DwarfError::NoImplementation { missing, span } => {
-                    let span = span.clone();
-                    let msg = format!("{}", e);
-
-                    Report::build(ReportKind::Error, (), span.start)
-                        .with_message(&msg)
-                        .with_label(
-                            Label::new(span)
-                                .with_message(format!("{}", msg.fg(Color::Red)))
-                                .with_color(Color::Red),
-                        )
-                        .finish()
-                        .eprint(Source::from(&source_code))
-                        .unwrap()
-                }
-                DwarfError::Parse { ast } => {
-                    for a in ast {
-                        let msg = format!("{}", e);
-                        let span = a.1.clone();
-
-                        Report::build(ReportKind::Error, (), span.start)
-                            .with_message(&msg)
-                            .with_label(
-                                Label::new(span)
-                                    .with_message(format!("{}", msg.fg(Color::Red)))
-                                    .with_color(Color::Red),
-                            )
-                            .finish()
-                            .eprint(Source::from(&source_code))
-                            .unwrap()
-                    }
-                }
-                _ => {}
+                Report::build(ReportKind::Error, (), span.start)
+                    .with_message(&msg)
+                    .with_label(
+                        Label::new(span)
+                            .with_message(format!("{}", msg.fg(Color::Red)))
+                            .with_color(Color::Red),
+                    )
+                    .finish()
+                    .eprint(Source::from(&source_code))
+                    .unwrap()
             }
+            DwarfError::GenericWarning {
+                description: desc,
+                span,
+            } => {
+                let span = span.clone();
 
-            return e;
-        })?;
+                Report::build(ReportKind::Error, (), span.start)
+                    .with_message(&desc)
+                    .with_label(
+                        Label::new(span)
+                            .with_message(format!("{}", desc.fg(Color::Red)))
+                            .with_color(Color::Red),
+                    )
+                    .finish()
+                    .eprint(Source::from(&source_code))
+                    .unwrap()
+            }
+            DwarfError::ImplementationBlock { span } => {
+                let span = span.clone();
+                let msg = format!("{}", e);
+
+                Report::build(ReportKind::Error, (), span.start)
+                    .with_message(&msg)
+                    .with_label(
+                        Label::new(span)
+                            .with_message(format!("{}", msg.fg(Color::Red)))
+                            .with_color(Color::Red),
+                    )
+                    .finish()
+                    .eprint(Source::from(&source_code))
+                    .unwrap()
+            }
+            DwarfError::NoImplementation {
+                missing: _missing,
+                code: _code,
+                span,
+            } => {
+                let span = span.clone();
+                let msg = format!("{}", e);
+
+                Report::build(ReportKind::Error, (), span.start)
+                    .with_message(&msg)
+                    .with_label(
+                        Label::new(span)
+                            .with_message(format!("{}", msg.fg(Color::Red)))
+                            .with_color(Color::Red),
+                    )
+                    .finish()
+                    .eprint(Source::from(&source_code))
+                    .unwrap()
+            }
+            DwarfError::Parse { ast } => {
+                for a in ast {
+                    let msg = format!("{}", e);
+                    let span = a.1.clone();
+
+                    Report::build(ReportKind::Error, (), span.start)
+                        .with_message(&msg)
+                        .with_label(
+                            Label::new(span)
+                                .with_message(format!("{}", msg.fg(Color::Red)))
+                                .with_color(Color::Red),
+                        )
+                        .finish()
+                        .eprint(Source::from(&source_code))
+                        .unwrap()
+                }
+            }
+            _ => {}
+        }
+
+        return e;
+    })?;
 
     lu_dog.persist_bincode(&out_file).context(FileSnafu {
         description: "Could not persist Lu-Dog domain".to_owned(),

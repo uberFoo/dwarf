@@ -211,20 +211,28 @@ impl<'a> ConveyImpl<'a> {
 /// `sarzak`. This one really needs a close looking at. It's just an empty metamodel.
 /// It's used in two or three places, and it's baggage on every function call. I think
 /// that it may only be used to look up the id of the UUID type.
-pub fn populate_lu_dog(
+pub fn new_lu_dog(
     out_dir: Option<&PathBuf>,
-    source: String,
-    ast: &[Spanned<Item>],
+    source: Option<(String, &[Spanned<Item>])>,
     models: &[SarzakStore],
     sarzak: &SarzakStore,
 ) -> Result<LuDogStore> {
     let mut lu_dog = LuDogStore::new();
 
-    let source = DwarfSourceFile::new(source, &mut lu_dog);
+    // We need to stuff all of the sarzak types into the store.
+    ValueType::new_ty(&new_ref!(Ty, Ty::new_boolean()), &mut lu_dog);
+    ValueType::new_ty(&new_ref!(Ty, Ty::new_float()), &mut lu_dog);
+    ValueType::new_ty(&new_ref!(Ty, Ty::new_integer()), &mut lu_dog);
+    ValueType::new_ty(&new_ref!(Ty, Ty::new_s_string()), &mut lu_dog);
+    ValueType::new_ty(&new_ref!(Ty, Ty::new_s_uuid()), &mut lu_dog);
 
-    let _client = Client::start();
+    if let Some((source, ast)) = source {
+        let _client = Client::start();
 
-    walk_tree(out_dir, ast, &source, &mut lu_dog, models, sarzak)?;
+        let source = DwarfSourceFile::new(source, &mut lu_dog);
+
+        walk_tree(out_dir, ast, &source, &mut lu_dog, models, sarzak)?;
+    }
 
     Ok(lu_dog)
 }
@@ -252,7 +260,7 @@ fn walk_tree(
             }
             // Imports can happen any time, I think.
             (Item::Import((path, _path_span), alias), span) => {
-                inter_import(path, alias, span, lu_dog)?
+                inter_import(path, alias, &s_read!(source).source, span, lu_dog)?
             }
             (Item::Struct((name, span), fields), _span) => {
                 structs.push(ConveyStruct::new(name, span, fields))
@@ -868,6 +876,17 @@ fn inter_expression(
 
             Ok(((expr, span), lhs_ty))
         }
+        // //
+        // // Empty
+        // //
+        // ParserExpression::Empty => {
+        //     let expr = Expression::new_empty(lu_dog);
+        //     let ty = ValueType::new_empty(lu_dog);
+        //     let value = XValue::new_expression(&block, &ty, &expr, lu_dog);
+        //     s_write!(span).x_value = Some(s_read!(value).id);
+
+        //     Ok(((expr, span), ty))
+        // }
         //
         // Error
         //
@@ -2092,16 +2111,22 @@ fn inter_expression(
 
             Ok(((expr, span), lhs_ty))
         }
-        道 => Err(DwarfError::NoImplementation {
-            missing: format!("{:?}", 道),
-            span: s_read!(span).start as usize..s_read!(span).end as usize,
-        }),
+        道 => {
+            let source = &s_read!(source).source;
+            let span = s_read!(span).start as usize..s_read!(span).end as usize;
+            Err(DwarfError::NoImplementation {
+                missing: format!("{:?}", 道),
+                code: source[span.clone()].to_owned(),
+                span,
+            })
+        }
     }
 }
 
 fn inter_import(
     _path: &Vec<Spanned<String>>,
     _alias: &Option<(String, Range<usize>)>,
+    source: &String,
     span: &Range<usize>,
     _lu_dog: &mut LuDogStore,
 ) -> Result<()> {
@@ -2130,7 +2155,8 @@ fn inter_import(
     Err(DwarfError::NoImplementation {
         missing: "Use statement not implemented yet".to_owned(),
         // span: path[0].1.start..path[path.len() - 1].1.end,
-        span: span.clone(),
+        span: span.to_owned(),
+        code: source[span.to_owned()].to_owned(),
     })
 }
 

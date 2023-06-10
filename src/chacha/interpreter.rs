@@ -14,10 +14,9 @@ use crossbeam::channel::{unbounded, Receiver, Sender};
 use fxhash::FxHashMap as HashMap;
 use heck::ToUpperCamelCase;
 use lazy_static::lazy_static;
-use log;
+use log::{self, log_enabled, Level::Debug};
 use parking_lot::{Condvar, Mutex};
 // use rayon::prelude::*;
-use sarzak::sarzak::{store::ObjectStore as SarzakStore, types::Ty, MODEL as SARZAK_MODEL};
 use snafu::{location, prelude::*, Location};
 use tracy_client::{span, Client};
 use uuid::Uuid;
@@ -32,6 +31,7 @@ use crate::{
         Unary, ValueType, Variable, WoogOptionEnum, XValue, XValueEnum,
     },
     new_ref, s_read, s_write,
+    sarzak::{store::ObjectStore as SarzakStore, types::Ty, MODEL as SARZAK_MODEL},
     value::{StoreProxy, UserType},
     ChaChaError, DwarfInteger, Error, NewRef, NoSuchFieldSnafu, NoSuchStaticMethodSnafu, RefType,
     Result, UnimplementedSnafu, Value, VariableNotFoundSnafu, WrongNumberOfArgumentsSnafu,
@@ -810,6 +810,17 @@ fn eval_expression(
         debug!("running");
     }
 
+    if log_enabled!(Debug) {
+        let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
+        let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
+        let read = s_read!(span);
+        let span = read.start as usize..read.end as usize;
+        let source = s_read!(lu_dog).iter_dwarf_source_file().next().unwrap();
+        let source = s_read!(source);
+        let source = &source.source;
+        error!("{}", source[span].to_owned());
+    }
+
     let result_style = Colour::Green.bold();
 
     match *s_read!(expression) {
@@ -948,7 +959,7 @@ fn eval_expression(
             };
 
             // So we need to figure out the type this is being called upon.
-            let x = match (&s_read!(call).subtype, value, ty) {
+            let call_result = match (&s_read!(call).subtype, value, ty) {
                 //
                 // FunctionCall
                 //
@@ -1043,8 +1054,8 @@ fn eval_expression(
                     let call = s_read!(meth).r30_call(&s_read!(lu_dog))[0].clone();
                     let args = s_read!(call).r28_argument(&s_read!(lu_dog));
 
-                    // This is for method call on a store type, and we do it out here so that we don't have
-                    // to borrow stack mutably more than once.
+                    // This is for method call on a store type, and we do it out here so that we
+                    // don't have to borrow stack mutably more than once.
                     let mut arg_values = if !args.is_empty() {
                         let mut arg_values = VecDeque::with_capacity(args.len());
                         let mut next = args
@@ -1131,18 +1142,47 @@ fn eval_expression(
                                 method: method.to_owned(),
                             }),
                         }
-                    } else if ty == "ChaCha" {
+                    } else if ty == "chacha" {
                         match func.as_str() {
                             "assert_eq" => {
-                                let value = Value::Boolean(
-                                    s_read!(arg_values.pop_front().unwrap().0)
-                                        .eq(&*s_read!(arg_values.pop_front().unwrap().0))
-                                        == true,
-                                );
-                                let ty = Ty::new_boolean();
-                                let ty = s_read!(lu_dog).exhume_value_type(&ty.id()).unwrap();
+                                let lhs = arg_values.pop_front().unwrap().0;
+                                let rhs = arg_values.pop_front().unwrap().0;
 
-                                Ok((new_ref!(Value, value), ty))
+                                let value = Value::Boolean(s_read!(lhs).eq(&*s_read!(rhs)) == true);
+
+                                if let Value::Boolean(result) = value {
+                                    // if value.into() {
+                                    if result {
+                                        let ty = Ty::new_boolean();
+                                        let ty =
+                                            s_read!(lu_dog).exhume_value_type(&ty.id()).unwrap();
+
+                                        Ok((new_ref!(Value, value), ty))
+                                    } else {
+                                        let source = s_read!(lu_dog)
+                                            .iter_dwarf_source_file()
+                                            .next()
+                                            .unwrap();
+                                        let source = s_read!(source);
+                                        let source = &source.source;
+
+                                        let value =
+                                            &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
+
+                                        let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
+
+                                        let read = s_read!(span);
+                                        let span = read.start as usize..read.end as usize;
+
+                                        Err(ChaChaError::Assertion {
+                                            found: lhs,
+                                            expected: rhs,
+                                            code: source[span].to_owned(),
+                                        })
+                                    }
+                                } else {
+                                    unreachable!()
+                                }
                             }
                             // "spawn" => {
                             //     // error!("spawn not implemented");
@@ -1330,7 +1370,7 @@ fn eval_expression(
                 s_write!(call).arg_check = false;
             }
 
-            x
+            call_result
         }
         Expression::Debugger(_) => {
             debug!("StatementEnum::Debugger");
@@ -1674,8 +1714,7 @@ fn eval_expression(
             let (lhs, lhs_ty) = eval_expression(lhs_expr.clone(), context, vm)?;
             let rhs = if let Some(ref rhs) = operator.rhs {
                 let rhs = s_read!(lu_dog).exhume_expression(rhs).unwrap();
-                let (rhs, _rhs_ty) = eval_expression(rhs, context, vm)?;
-                Some(rhs)
+                Some(eval_expression(rhs, context, vm)?)
             } else {
                 None
             };
@@ -1684,21 +1723,73 @@ fn eval_expression(
                 OperatorEnum::Binary(ref binary) => {
                     let binary = s_read!(lu_dog).exhume_binary(binary).unwrap();
                     let binary = s_read!(binary);
+                    let rhs = rhs.unwrap();
                     match &*binary {
                         Binary::Addition(_) => {
-                            let value = s_read!(lhs).clone() + s_read!(rhs.unwrap()).clone();
+                            let value = s_read!(lhs).clone() + s_read!(rhs.0).clone();
                             Ok((new_ref!(Value, value), lhs_ty))
                         }
                         Binary::Assignment(_) => {
-                            if let Expression::VariableExpression(expr) = &*s_read!(lhs_expr) {
-                                let expr =
-                                    s_read!(lu_dog).exhume_variable_expression(expr).unwrap();
-                                let expr = s_read!(expr);
-                                let name = expr.name.clone();
-                                let value = context.stack.get(&name).unwrap();
-                                let mut value = s_write!(value);
-                                *value = s_read!(rhs.unwrap()).clone();
-                                // stack.insert(name, rhs.unwrap().clone());
+                            // Type checking has already been handled by the compiler.
+                            match &*s_read!(lhs_expr) {
+                                Expression::VariableExpression(expr) => {
+                                    let expr =
+                                        s_read!(lu_dog).exhume_variable_expression(expr).unwrap();
+                                    let expr = s_read!(expr);
+                                    let name = expr.name.clone();
+                                    let value = context.stack.get(&name).unwrap();
+                                    let mut value = s_write!(value);
+                                    *value = s_read!(rhs.0).clone();
+                                }
+                                Expression::FieldAccess(field) => {
+                                    let field = s_read!(lu_dog).exhume_field_access(field).unwrap();
+                                    let fat = &s_read!(field)
+                                        .r65_field_access_target(&s_read!(lu_dog))[0];
+                                    let field_name = match *s_read!(fat) {
+                                        FieldAccessTarget::Field(ref field) => {
+                                            let field =
+                                                s_read!(lu_dog).exhume_field(field).unwrap();
+                                            let field = s_read!(field);
+                                            field.name.to_owned()
+                                        }
+                                        FieldAccessTarget::Function(_) => {
+                                            return Err(ChaChaError::BadJuJu {
+                                                message: "Attempt to assign to function".to_owned(),
+                                                location: location!(),
+                                            })
+                                        }
+                                    };
+
+                                    let expr = &s_read!(field).expression;
+                                    let expr = s_read!(lu_dog).exhume_expression(expr).unwrap();
+
+                                    let (value, _ty) = eval_expression(expr, context, vm)?;
+                                    let value = s_read!(value);
+                                    match &*value {
+                                        Value::ProxyType(value) => {
+                                            let value = s_read!(value);
+                                            let value = value.get_attr_value(&field_name)?;
+                                            let ty = s_read!(value).get_type(&s_read!(lu_dog));
+
+                                            // Ok((value, ty))
+                                        }
+                                        Value::UserType(value) => {
+                                            let value = s_read!(value);
+                                            let value = value.get_attr_value(field_name).unwrap();
+                                            let ty = s_read!(value).get_type(&s_read!(lu_dog));
+
+                                            // Ok((value.clone(), ty))
+                                        }
+                                        // 🚧 This needs it's own error. Lazy me.
+                                        _ => {
+                                            return Err(ChaChaError::BadJuJu {
+                                                message: "Bad value in field access".to_owned(),
+                                                location: location!(),
+                                            })
+                                        }
+                                    }
+                                }
+                                _ => {}
                             }
 
                             Ok((lhs, lhs_ty))
@@ -1711,7 +1802,7 @@ fn eval_expression(
                                 BooleanOperator::And(_) => {
                                     let value = Value::Boolean(
                                         (&*s_read!(lhs)).try_into().unwrap()
-                                            && (&*s_read!(rhs.unwrap())).try_into().unwrap(),
+                                            && (&*s_read!(rhs.0)).try_into().unwrap(),
                                     );
                                     Ok((new_ref!(Value, value), lhs_ty))
                                 } // BooleanOperator::Or(_) => {
@@ -1722,15 +1813,15 @@ fn eval_expression(
                             }
                         }
                         Binary::Division(_) => {
-                            let value = s_read!(lhs).clone() / s_read!(rhs.unwrap()).clone();
+                            let value = s_read!(lhs).clone() / s_read!(rhs.0).clone();
                             Ok((new_ref!(Value, value), lhs_ty))
                         }
                         Binary::Subtraction(_) => {
-                            let value = s_read!(lhs).clone() - s_read!(rhs.unwrap()).clone();
+                            let value = s_read!(lhs).clone() - s_read!(rhs.0).clone();
                             Ok((new_ref!(Value, value), lhs_ty))
                         }
                         Binary::Multiplication(_) => {
-                            let value = s_read!(lhs).clone() * s_read!(rhs.unwrap()).clone();
+                            let value = s_read!(lhs).clone() * s_read!(rhs.0).clone();
                             Ok((new_ref!(Value, value), lhs_ty))
                         }
                         ref alpha => {
@@ -1749,7 +1840,7 @@ fn eval_expression(
                     let comp = s_read!(comp);
                     match &*comp {
                         Comparison::GreaterThan(_) => {
-                            let value = s_read!(lhs).gt(&s_read!(rhs.unwrap()));
+                            let value = s_read!(lhs).gt(&s_read!(rhs.unwrap().0));
                             let value = Value::Boolean(value);
                             let ty = Ty::new_boolean();
                             let ty = ValueType::new_ty(&new_ref!(Ty, ty), &mut s_write!(lu_dog));
@@ -1757,7 +1848,7 @@ fn eval_expression(
                             Ok((new_ref!(Value, value), ty))
                         }
                         Comparison::LessThanOrEqual(_) => {
-                            let value = s_read!(lhs).lte(&s_read!(rhs.unwrap()));
+                            let value = s_read!(lhs).lte(&s_read!(rhs.unwrap().0));
                             let value = Value::Boolean(value);
                             let ty = Ty::new_boolean();
                             let ty = ValueType::new_ty(&new_ref!(Ty, ty), &mut s_write!(lu_dog));
@@ -1918,7 +2009,15 @@ fn eval_expression(
                     match ty {
                         Ty::Float(_) => {
                             let value: f64 = (&*s_read!(lhs)).try_into()?;
-                            new_ref!(Value, Value::Float(value))
+                            new_ref!(Value, value.into())
+                        }
+                        Ty::Integer(_) => {
+                            let value: i64 = (&*s_read!(lhs)).try_into()?;
+                            new_ref!(Value, value.into())
+                        }
+                        Ty::SString(_) => {
+                            let value: String = (&*s_read!(lhs)).try_into()?;
+                            new_ref!(Value, value.into())
                         }
                         ref alpha => {
                             ensure!(

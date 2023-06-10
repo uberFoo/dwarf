@@ -1,5 +1,5 @@
 fn main() -> bool {
     let a = 1;
     let a = 2;
-    ChaCha::assert_eq(a, 2);
+    chacha::assert_eq(a, 2);
 }

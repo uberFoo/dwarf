@@ -11,7 +11,7 @@ use clap::Parser;
 use dap::{prelude::BasicClient, server::Server};
 use dwarf::{
     chacha::dap::DapAdapter,
-    dwarf::{parse_dwarf, populate_lu_dog, DwarfError},
+    dwarf::{new_lu_dog, parse_dwarf, DwarfError},
     initialize_interpreter,
     interpreter::{banner2, start_main},
     start_repl,
@@ -57,7 +57,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let ast = parse_dwarf(&source_code)?;
 
         let lu_dog =
-            populate_lu_dog(None, source_code.clone(), &ast, &[], &sarzak).map_err(|e| {
+            new_lu_dog(None, Some((source_code.clone(), &ast)), &[], &sarzak).map_err(|e| {
                 match &e {
                     DwarfError::BadSelf { span } => {
                         let span = span.clone();

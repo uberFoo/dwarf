@@ -6,10 +6,10 @@ use dwarf::{
     dwarf::{parse_dwarf, populate_lu_dog, DwarfError},
     initialize_interpreter,
     interpreter::start_main,
+    sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL},
     Value,
 };
 use lambda_http::{run, service_fn, Body, Error, Request, RequestExt, Response};
-use sarzak::sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL};
 
 /// This is the main body for the function.
 /// Write your code inside it.

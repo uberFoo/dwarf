@@ -13,6 +13,8 @@ Dwarf looks a lot like Rust -- that's on purpose.
 You see, I wanted to use `sarzak` to generate Rust code for dwarf.
 Making that work was enough of a mental load.
 Adding "programming language design" was more than I needed to deal with.
+Like I already mentioned, dwarf is meant to be a DSL, and I plan on hacking on it quite a bit.
+The more it looks like, and acts like Rust, the happier a cowboy be me.
 
 Dwarf contains generated code -- a lot of it.
 Counting lines of code is a pretty terrible metric.
@@ -31,7 +33,9 @@ The code genarator is called `grace`, which I began in January 2023.
 Dwarf is in fact necessary for me to continue work on grace.
 Once I've escaped this recursive rabbit hole, I'll publish the whole mess.
 
+So really, this is an experiment.
+
 — Keith Star (June 8, 2023)
 
 [^std]: After benchmarking the differences between Parking Lot and std, I got to digging.
-Apparently the std sync stuff has recently been updated.
+Apparently the std sync stuffwas recently updated.

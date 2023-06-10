@@ -5,7 +5,6 @@ use chacha::vm::Instruction;
 use clap::Args;
 use crossbeam::channel::SendError;
 use rustyline::error::ReadlineError;
-use sarzak::lu_dog;
 use serde::{Deserialize, Serialize};
 use snafu::{prelude::*, Location};
 
@@ -17,6 +16,7 @@ pub(crate) mod value;
 // pub mod merlin;
 // pub(crate) mod woog_structs;
 
+pub use ::sarzak::{lu_dog, sarzak};
 pub use chacha::interpreter::{self, initialize_interpreter, start_repl, Memory};
 pub use value::{StoreProxy, Value};
 
@@ -223,6 +223,12 @@ pub struct Error(ChaChaError);
 #[derive(Debug, Snafu)]
 #[snafu(visibility(pub))]
 pub enum ChaChaError {
+    #[snafu(display("\n{}: assertion failed at {}.\n  --> Found `{}`, expected `{}`.\n", ERR_CLR.bold().paint("error"), POP_CLR.underline().paint(code), s_read!(found), s_read!(expected)))]
+    Assertion {
+        found: RefType<Value>,
+        expected: RefType<Value>,
+        code: String,
+    },
     #[snafu(display("\n{}: internal error: {message}\n  --> {}:{}:{}", ERR_CLR.bold().paint("error"), location.file, location.line, location.column))]
     BadJuJu {
         message: String,
@@ -291,7 +297,7 @@ pub enum ChaChaError {
     VariableNotFound {
         var: String,
     },
-    #[snafu(display("\n{}: vm panic: {}", ERR_CLR.bold().paint("error"), message = OTH_CLR.paint(message)))]
+    #[snafu(display("\n{}: vm panic: {}", ERR_CLR.bold().paint("error"), OTH_CLR.paint(message)))]
     VmPanic {
         message: String,
     },

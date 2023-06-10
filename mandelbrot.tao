@@ -78,13 +78,13 @@ fn main() -> Complex {
     // 🚧 Need to fix this multiple let let-down. Oh, no! 😫
     // let width = 21;
     // let height = 7;
-    // let width = 42;
-    // let height = 14;
+    let width = 42;
+    let height = 14;
     // let width = 84;
     // let height = 28;
-    // debugger;
-    let width = 168;
-    let height = 56;
+    debugger;
+    // let width = 168;
+    // let height = 56;
     // let width = 7;
     // let height = 2;
     let upper_left = Complex { re: -2.5, im: 1.0 };

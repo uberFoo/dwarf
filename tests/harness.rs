@@ -5,16 +5,17 @@ use ariadne::{Color, Fmt, Label, Report, ReportKind, Source};
 use env_logger;
 
 use dwarf::{
-    dwarf::{parse_dwarf, populate_lu_dog, DwarfError},
+    dwarf::{new_lu_dog, parse_dwarf, DwarfError},
     initialize_interpreter,
     interpreter::start_main,
+    sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL},
+    Value,
 };
-use sarzak::sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL};
 
-fn run_program(program: &str) -> bool {
+fn run_program(program: &str) -> Result<Value, ()> {
     let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
     let ast = parse_dwarf(&program).unwrap();
-    let lu_dog = populate_lu_dog(None, program.to_owned(), &ast, &[], &sarzak)
+    let lu_dog = new_lu_dog(None, Some((program.to_owned(), &ast)), &[], &sarzak)
         .map_err(|e| {
             match &e {
                 DwarfError::BadSelf { span } | DwarfError::ImplementationBlock { span } => {
@@ -91,7 +92,9 @@ fn run_program(program: &str) -> bool {
         .unwrap();
 
     let ctx = initialize_interpreter::<PathBuf>(sarzak, lu_dog, None).unwrap();
-    start_main(false, false, ctx).unwrap().try_into().unwrap()
+    start_main(false, false, ctx).map_err(|e| {
+        println!("{e}");
+    })
 }
 
 include!(concat!(env!("OUT_DIR"), "/tests.rs"));

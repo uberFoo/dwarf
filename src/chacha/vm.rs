@@ -499,7 +499,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        dwarf::{parse_dwarf, populate_lu_dog},
+        dwarf::{new_lu_dog, parse_dwarf},
         initialize_interpreter, DwarfFloat, DwarfInteger,
     };
 

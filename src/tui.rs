@@ -369,10 +369,6 @@ fn repl_updater(
                 } else {
                     buffer.push_str(&value);
                 }
-                // app.write()
-                //     .console
-                //     .output
-                //     .extend(value.into_text().unwrap());
             }
             DebuggerStatus::Stopped(value, ty) => {
                 debug!("Stopped: {:?}", value);
@@ -622,7 +618,7 @@ fn draw_frame<B: Backend>(f: &mut Frame<B>, app: &SharedRef<App>) {
         .style(Style::default().fg(Color::Gray))
         .border_style(Style::default().fg(Color::Gray))
         // .border_type(BorderType::Thick)
-        .title("Source: fib.tao");
+        .title("Source");
     let block = match app.read().window {
         Window::Console => block,
         Window::Logger => block,

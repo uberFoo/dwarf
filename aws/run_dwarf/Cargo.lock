@@ -1864,7 +1864,6 @@ dependencies = [
  "dwarf",
  "lambda_http",
  "lambda_runtime",
- "sarzak",
  "tokio",
  "tracing",
  "tracing-subscriber",

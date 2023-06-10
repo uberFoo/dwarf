@@ -116,9 +116,10 @@ const ENTER: u8 = 0;
 type Expression = (Spanned<DwarfExpression>, (u8, u8));
 
 fn lexer() -> impl Parser<char, Vec<Spanned<Token>>, Error = Simple<char>> {
-    // A parser for numbers
+    // A parser for ints
     let int = text::int(10).map(Token::Integer);
 
+    // Float parser
     let float = text::int(10)
         .chain::<char, _, _>(just('.').chain::<char, _, _>(text::digits(10)))
         .collect::<String>()
@@ -602,6 +603,7 @@ impl DwarfParser {
                         Some("'Uuid'".to_owned()),
                         Some("'Option<T>'".to_owned()),
                         Some("'[T]'".to_owned()),
+                        Some("'()'".to_owned()),
                     ],
                     Some(tok.0.to_string()),
                 );
@@ -1346,6 +1348,12 @@ impl DwarfParser {
             return Ok(Some(expression));
         }
 
+        // parse an empty literal
+        if let Some(expression) = self.parse_empty_literal() {
+            debug!("empty literal", expression);
+            return Ok(Some(expression));
+        }
+
         // parse a negation operator
         if let Some(expression) = self.parse_negation_operator()? {
             debug!("negation operator", expression);
@@ -2012,6 +2020,22 @@ impl DwarfParser {
         } else {
             None
         }
+    }
+
+    /// Parse an empty expression
+    ///
+    /// () -> Empty
+    fn parse_empty_literal(&mut self) -> Option<Expression> {
+        debug!("enter parse_empty_expression");
+
+        if !self.check(&Token::Punct('(')) || !self.check2(&Token::Punct(')')) {
+            return None;
+        }
+
+        let start = self.next().unwrap().1.start;
+        let end = self.next().unwrap().1.end;
+        let span = start..end;
+        Some(((DwarfExpression::Empty, span.to_owned()), LITERAL))
     }
 
     /// Parse a print expression
@@ -3178,6 +3202,8 @@ pub fn parse_dwarf(src: &str) -> Result<Vec<Spanned<Item>>, DwarfError> {
     let mut parser = DwarfParser::new(tokens.unwrap());
     let (ast, parse_errs) = parser.parse_program();
 
+    log::debug!("parse_dwarf: {:#?}", ast);
+
     if !errs.is_empty() || !parse_errs.is_empty() {
         let errors = report_errors(errs, parse_errs, src);
         eprintln!("{}", errors);
@@ -3281,6 +3307,24 @@ mod tests {
         let ast = parse_line(src);
 
         assert!(ast.is_err());
+        // assert_eq!(ast, Ok(Some((Statement::Empty, (13..14)))));
+    }
+
+    #[test]
+    fn test_empty_value() {
+        let _ = env_logger::builder().is_test(true).try_init();
+
+        let src = r#"
+            fn main() {
+                assert_eq((), ());
+            }
+        "#;
+
+        let ast = parse_line(src);
+
+        dbg!(&ast);
+
+        assert!(ast.is_ok());
         // assert_eq!(ast, Ok(Some((Statement::Empty, (13..14)))));
     }
 

@@ -22,7 +22,7 @@ use crate::{
 pub mod compiler;
 pub mod parser;
 
-pub use compiler::{inter_statement, populate_lu_dog};
+pub use compiler::{inter_statement, new_lu_dog};
 pub use parser::{parse_dwarf, parse_line};
 
 pub type Span = ops::Range<usize>;
@@ -100,8 +100,12 @@ pub enum DwarfError {
     /// Missing Implementation
     ///
     /// This is just not done yet.
-    #[snafu(display("\n{}: Missing implementation: {missing}\n  --> {}..{}", C_WARN.bold().paint("warning"), span.start, span.end))]
-    NoImplementation { missing: String, span: Span },
+    #[snafu(display("\n{}: Missing implementation: {missing}\n  --> {}", C_WARN.bold().paint("warning"), C_WARN.underline().paint(code)))]
+    NoImplementation {
+        missing: String,
+        code: String,
+        span: Span,
+    },
 
     /// Struct Field Not Found Error
     ///
@@ -172,6 +176,7 @@ pub enum Token {
     Bool(bool),
     Debugger,
     Else,
+    Empty,
     Float(String),
     Fn,
     For,
@@ -205,6 +210,7 @@ impl fmt::Display for Token {
             Self::Bool(bool_) => write!(f, "{}", bool_),
             Self::Debugger => write!(f, "debugger"),
             Self::Else => write!(f, "else"),
+            Self::Empty => write!(f, "()"),
             Self::Float(num) => write!(f, "{}", num),
             Self::Fn => write!(f, "fn"),
             Self::For => write!(f, "for"),
@@ -415,6 +421,7 @@ pub enum Expression {
     BooleanLiteral(bool),
     Debug,
     Division(Box<Spanned<Self>>, Box<Spanned<Self>>),
+    Empty,
     Error,
     Equals(Box<Spanned<Self>>, Box<Spanned<Self>>),
     FieldAccess(Box<Spanned<Self>>, Spanned<String>),
