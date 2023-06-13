@@ -13,21 +13,31 @@ impl Complex {
         Complex { re: 1.0, im: 0.0 }
     }
 
-    fn add(self: Complex, other: Complex) -> Complex {
+    fn add(self, other: Complex) -> Complex {
         Complex {
             re: self.re + other.re,
             im: self.im + other.im,
         }
     }
 
-    fn square(self: Complex) -> Complex {
+    fn square(self) -> Complex {
         Complex {
             re: self.re * self.re - self.im * self.im,
             im: 2.0 * self.re * self.im,
         }
     }
 
-    fn norm_squared(self: Complex) -> float {
+    fn square_2(self) {
+        // let re = self.re * self.re - self.im * self.im;
+        // let im = 2.0 * self.re * self.im;
+        let re = 1.0;
+        let im = 2.0;
+
+        self.re = re;
+        self.im = im;
+    }
+
+    fn norm_squared(self) -> float {
         self.re * self.re + self.im * self.im
     }
 }
@@ -55,15 +65,16 @@ fn escape_time(c: Complex, limit: int) -> Option<int> {
         // 🚧 This let wreaks havoc -- fix it.
         // Also the chained method calls don't affect the correct z, or something.
         // let z = z.square(z).add(z, c);
-        z = ComplexEx::square(z);
-        z = ComplexEx::add(z, c);
+        // z = ComplexEx::square(z);
+        // z = ComplexEx::add(z, c);
         // z = z.square(z);
-        // z = z.add(z, c);
+        z.square_2(z);
+        z = z.add(z, c);
         // Having the RHS of this statement on the lhs of the expression below
         // does not work.
-        let foo = ComplexEx::norm_squared(z);
-        if foo > 4.0 {
-            // if z.norm_squared(z) > 4.0 {
+        // let foo = ComplexEx::norm_squared(z);
+        // if foo > 4.0 {
+        if z.norm_squared(z) > 4.0 {
             // debugger;
             // return Some(i);
             return i;
@@ -75,16 +86,23 @@ fn escape_time(c: Complex, limit: int) -> Option<int> {
 }
 
 fn main() -> Complex {
+    let ty = chacha::typeof("mandelbrot");
+    print("Type: " + ty + "\n");
+    let time = chacha::time(plot);
+    print("Total time: " + time as string + "\n");
+}
+
+fn plot() -> Complex {
     // 🚧 Need to fix this multiple let let-down. Oh, no! 😫
     // let width = 21;
-    // let height = 7;
-    let width = 42;
-    let height = 14;
-    // let width = 84;
-    // let height = 28;
-    debugger;
+    // let height = 5;
+    // let width = 42;
+    // let height = 10;
+    let width = 84;
+    let height = 20;
+    // debugger;
     // let width = 168;
-    // let height = 56;
+    // let height = 40;
     // let width = 7;
     // let height = 2;
     let upper_left = Complex { re: -2.5, im: 1.0 };
@@ -108,20 +126,27 @@ fn main() -> Complex {
     // let row = 0;
     // let column = 0;
     // debugger;
-    for row in 0..height {
+    // for t in 0..255 {
+        let t = 100;
+        for row in 0..height {
         // OMG, this is an ugly hack, and yet it's so badass. If it had worked. 😢
         // ChaCha::spawn(do_column, [row, width, height, upper_left, lower_right]);
         // if row > 1 {
         // debugger;
         // }
-        do_column(row, width, height, upper_left, lower_right);
-    }
+            do_column(t, row, width, height, upper_left, lower_right);
+        }
+    // This is busted too.
+    // print(chacha::eps() + "\n");
+    // }
+    print(chacha::eps());
+    print("\n");
 }
 
-fn do_column(row: int, width: int, height: int, upper_left: Complex, lower_right: Complex) {
+fn do_column(time: int, row: int, width: int, height: int, upper_left: Complex, lower_right: Complex) {
     for column in 0..width {
         let point = pixel_to_point(width, height, column, row, upper_left, lower_right);
-        let time = escape_time(point, 255);
+        let time = escape_time(point, time);
         if time > 0 {
             print(" ");
         } else {

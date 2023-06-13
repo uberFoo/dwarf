@@ -1,20 +1,22 @@
 use std::{
-    cell::OnceCell,
     collections::VecDeque,
     fmt,
     io::Write,
     ops::Range,
     path::{Path, PathBuf},
     thread,
+    time::{Duration, Instant},
 };
 
 use ansi_term::Colour::{self, RGB};
 use ansi_term::{ANSIString, ANSIStrings};
+use circular_queue::CircularQueue;
 use crossbeam::channel::{unbounded, Receiver, Sender};
 use fxhash::FxHashMap as HashMap;
 use heck::ToUpperCamelCase;
 use lazy_static::lazy_static;
 use log::{self, log_enabled, Level::Debug};
+use num_format::{Locale, ToFormattedString};
 use parking_lot::{Condvar, Mutex};
 // use rayon::prelude::*;
 use snafu::{location, prelude::*, Location};
@@ -22,7 +24,10 @@ use tracy_client::{span, Client};
 use uuid::Uuid;
 
 use crate::{
-    chacha::vm::{CallFrame, Instruction, Thonk, VM},
+    chacha::{
+        memory::{Memory, MemoryUpdateMessage},
+        vm::{CallFrame, Instruction, Thonk, VM},
+    },
     dwarf::{inter_statement, parse_line},
     lu_dog::{
         Argument, Binary, Block, BooleanLiteral, BooleanOperator, CallEnum, Comparison,
@@ -34,7 +39,8 @@ use crate::{
     sarzak::{store::ObjectStore as SarzakStore, types::Ty, MODEL as SARZAK_MODEL},
     value::{StoreProxy, UserType},
     ChaChaError, DwarfInteger, Error, NewRef, NoSuchFieldSnafu, NoSuchStaticMethodSnafu, RefType,
-    Result, UnimplementedSnafu, Value, VariableNotFoundSnafu, WrongNumberOfArgumentsSnafu,
+    Result, TypeMismatchSnafu, UnimplementedSnafu, Value, VariableNotFoundSnafu,
+    WrongNumberOfArgumentsSnafu,
 };
 
 macro_rules! function {
@@ -182,24 +188,27 @@ macro_rules! trace {
     };
 }
 
-const VM: OnceCell<VM> = OnceCell::new();
-const CTX: OnceCell<Context> = OnceCell::new();
+// const VM: OnceCell<VM> = OnceCell::new();
+// const CTX: OnceCell<Context> = OnceCell::new();
+
+const TIMING_COUNT: usize = 1_000;
 
 lazy_static! {
     static ref RUNNING: Mutex<bool> = Mutex::new(true);
     static ref CVAR: Condvar = Condvar::new();
-    static ref STEPPING: Mutex<bool> = Mutex::new(false);
+    pub(crate) static ref STEPPING: Mutex<bool> = Mutex::new(false);
 }
 
 pub fn initialize_interpreter_paths<P: AsRef<Path>>(lu_dog_path: P) -> Result<Context, Error> {
-    let sarzak =
-        SarzakStore::from_bincode(SARZAK_MODEL).map_err(|e| ChaChaError::Store { source: e })?;
+    unimplemented!();
+    // let sarzak =
+    //     SarzakStore::from_bincode(SARZAK_MODEL).map_err(|e| ChaChaError::Store { source: e })?;
 
-    // This will always be a lu-dog -- it's basically compiled dwarf source.
-    let lu_dog = LuDogStore::load_bincode(lu_dog_path.as_ref())
-        .map_err(|e| ChaChaError::Store { source: e })?;
+    // // This will always be a lu-dog -- it's basically compiled dwarf source.
+    // let lu_dog = LuDogStore::load_bincode(lu_dog_path.as_ref())
+    //     .map_err(|e| ChaChaError::Store { source: e })?;
 
-    initialize_interpreter(sarzak, lu_dog, Some(lu_dog_path.as_ref()))
+    // initialize_interpreter(sarzak, lu_dog, Some(lu_dog_path.as_ref()))
 }
 
 /// Initialize the interpreter
@@ -441,7 +450,7 @@ pub fn initialize_interpreter<P: AsRef<Path>>(
 
     Ok(Context {
         prompt: format!("{} ", Colour::Blue.normal().paint("道:>")),
-        stack,
+        memory: stack,
         block,
         lu_dog: new_ref!(LuDogStore, lu_dog),
         sarzak: new_ref!(SarzakStore, sarzak),
@@ -451,6 +460,9 @@ pub fn initialize_interpreter<P: AsRef<Path>>(
         std_out_recv,
         debug_status_writer: None,
         obj_file_path: lu_dog_path.map(|p| p.as_ref().to_owned()),
+        timings: CircularQueue::with_capacity(TIMING_COUNT),
+        expr_count: 0,
+        func_calls: 0,
     })
 }
 
@@ -462,9 +474,10 @@ fn eval_function_call(
     vm: &mut VM,
 ) -> Result<(RefType<Value>, RefType<ValueType>)> {
     let lu_dog = context.lu_dog.clone();
+    context.func_calls += 1;
 
     debug!("eval_function_call func ", func);
-    trace!("eval_function_call stack", context.stack);
+    trace!("eval_function_call stack", context.memory);
 
     span!("eval_function_call");
 
@@ -476,7 +489,11 @@ fn eval_function_call(
     // if !stmts.is_empty() {
     // if !s_read!(block).r18_statement(&s_read!(lu_dog)).is_empty() {
     if has_stmts {
-        context.stack.push();
+        // Collect timing info
+        let now = Instant::now();
+        let expr_count_start = context.expr_count;
+
+        context.memory.push_frame();
 
         // We need to evaluate the arguments, and then push them onto the stack. We
         // also need to typecheck the arguments against the function parameters.
@@ -565,7 +582,7 @@ fn eval_function_call(
                 typecheck(&param_ty, &arg_ty, span, context)?;
             }
 
-            context.stack.insert(name.clone(), value);
+            context.memory.insert(name.clone(), value);
         }
 
         let mut value = new_ref!(Value, Value::Empty);
@@ -593,7 +610,7 @@ fn eval_function_call(
                     // idea. We can basically just do an early, successful return.
                     //
                     // Well, that doesn't work: return applies to the closure.
-                    context.stack.pop();
+                    context.memory.pop_frame();
 
                     // if let ChaChaError::Return { value } = &e {
                     //     let ty = value.get_type(&s_read!(lu_dog));
@@ -619,7 +636,12 @@ fn eval_function_call(
         }
 
         // Clean up
-        context.stack.pop();
+        context.memory.pop_frame();
+        let elapsed = now.elapsed();
+        // Counting 10k expressions per second
+        let eps =
+            (context.expr_count - expr_count_start) as f64 / elapsed.as_micros() as f64 * 10.0;
+        context.timings.push(eps);
 
         Ok((value, ty))
     } else {
@@ -630,142 +652,22 @@ fn eval_function_call(
     }
 }
 
-fn eval_function_call2(
-    func: RefType<Function>,
-    args: &[RefType<Value>],
-    context: &mut Context,
-    vm: &mut VM,
-) -> Result<(RefType<Value>, RefType<ValueType>)> {
-    let lu_dog = context.lu_dog.clone();
-
-    debug!("eval_function_call func ", func);
-    trace!("eval_function_call stack", context.stack);
-
-    span!("eval_function_call");
-
-    let func = s_read!(func);
-    let block = s_read!(lu_dog).exhume_block(&func.block).unwrap();
-    // let stmts = s_read!(block).r18_statement(&s_read!(lu_dog));
-    let has_stmts = !s_read!(block).r18_statement(&s_read!(lu_dog)).is_empty();
-
-    // if !stmts.is_empty() {
-    // if !s_read!(block).r18_statement(&s_read!(lu_dog)).is_empty() {
-    if has_stmts {
-        context.stack.push();
-
-        // We need to evaluate the arguments, and then push them onto the stack. We
-        // also need to typecheck the arguments against the function parameters.
-        // We need to look the params up anyway to set the local variables.
-        let params = func.r13_parameter(&s_read!(lu_dog));
-
-        // 🚧 I'd really like to see the source code printed out, with the function
-        // call highlighted.
-        // And can't we catch this is the compiler?
-        ensure!(
-            params.len() == args.len(),
-            WrongNumberOfArgumentsSnafu {
-                expected: params.len(),
-                got: args.len()
-            }
-        );
-
-        let params = if !params.is_empty() {
-            let mut params = Vec::with_capacity(params.len());
-            let mut next = func
-                // .clone()
-                .r13_parameter(&s_read!(lu_dog))
-                .iter()
-                .find(|p| s_read!(p).r14c_parameter(&s_read!(lu_dog)).is_empty())
-                .unwrap()
-                .clone();
-
-            loop {
-                let var = s_read!(s_read!(next).r12_variable(&s_read!(lu_dog))[0]).clone();
-                let value = s_read!(var.r11_x_value(&s_read!(lu_dog))[0]).clone();
-                let ty = value.r24_value_type(&s_read!(lu_dog))[0].clone();
-                params.push((var.name.clone(), ty.clone()));
-
-                let next_id = { s_read!(next).next };
-                if let Some(ref id) = next_id {
-                    next = s_read!(lu_dog).exhume_parameter(id).unwrap();
-                } else {
-                    break;
-                }
-            }
-
-            params
+fn chacha_print<S: AsRef<str>>(result: S, context: &mut Context) -> Result<()> {
+    let result_style = Colour::Green.bold();
+    cfg_if::cfg_if! {
+        if #[cfg(feature = "print-std-out")] {
+            print!("{}", result_style.paint(result.as_ref()));
+            std::io::stdout().flush().unwrap();
         } else {
-            Vec::new()
-        };
-
-        let zipped = params.into_iter().zip(args);
-        for ((name, _param_ty), value) in zipped {
-            debug!("type check name", name);
-            debug!("type check value", value);
-
-            context.stack.insert(name.clone(), value.clone());
+            context
+                .std_out_send
+                .send(format!("{}", result_style.paint(result.as_ref())))
+                .context(crate::InternalCompilerChannelSnafu {
+                    message: "error writing to std out queue".to_owned(),
+                })?;
         }
-
-        let mut value = new_ref!(Value, Value::Empty);
-        let mut ty = ValueType::new_empty(&s_read!(lu_dog));
-        // This is a pain.
-        // Find the first statement, by looking for the one with no previous statement.
-        // let mut next = stmts
-        //     .iter()
-        //     .find(|s| s_read!(s).r17c_statement(&s_read!(lu_dog)).is_empty())
-        //     .unwrap()
-        //     .clone();
-        if let Some(ref id) = s_read!(block).statement {
-            let mut next = s_read!(lu_dog).exhume_statement(id).unwrap();
-
-            loop {
-                let result = eval_statement(next.clone(), context, vm).map_err(|e| {
-                    // This is cool, if it does what I think it does. We basically
-                    // get the opportunity to look at the error, and do stuff with
-                    // it, and then let it contitue on as if nothing happened.
-                    //
-                    // Anyway, we need to clean up the stack frame if there was an
-                    // error. I'm also considering abusing the error type to pass
-                    // through that we hit a return expression. I'm thinknig more
-                    // and more that this is a Good Idea. Well, maybe just a good
-                    // idea. We can basically just do an early, successful return.
-                    //
-                    // Well, that doesn't work: return applies to the closure.
-                    context.stack.pop();
-
-                    // if let ChaChaError::Return { value } = &e {
-                    //     let ty = value.get_type(&s_read!(lu_dog));
-                    //     return Ok((value, ty));
-                    // }
-
-                    // Err(e)
-                    e
-                });
-
-                if let Err(ChaChaError::Return { value, ty }) = &result {
-                    return Ok((value.clone(), ty.clone()));
-                }
-
-                (value, ty) = result?;
-
-                if let Some(ref id) = s_read!(next.clone()).next {
-                    next = s_read!(lu_dog).exhume_statement(id).unwrap();
-                } else {
-                    break;
-                }
-            }
-        }
-
-        // Clean up
-        context.stack.pop();
-
-        Ok((value, ty))
-    } else {
-        Ok((
-            new_ref!(Value, Value::Empty),
-            ValueType::new_empty(&s_read!(lu_dog)),
-        ))
     }
+    Ok(())
 }
 
 fn eval_expression(
@@ -775,8 +677,11 @@ fn eval_expression(
 ) -> Result<(RefType<Value>, RefType<ValueType>)> {
     let lu_dog = context.lu_dog.clone();
 
+    // Timing goodness
+    context.expr_count += 1;
+
     debug!("expression", expression);
-    trace!("stack", context.stack);
+    trace!("stack", context.memory);
 
     // context.tracy.span(span_location!("eval_expression"), 0);
     // context
@@ -821,8 +726,6 @@ fn eval_expression(
         error!("{}", source[span].to_owned());
     }
 
-    let result_style = Colour::Green.bold();
-
     match *s_read!(expression) {
         //
         // Block
@@ -832,7 +735,7 @@ fn eval_expression(
             let stmts = s_read!(block).r18_statement(&s_read!(lu_dog));
 
             if !stmts.is_empty() {
-                context.stack.push();
+                context.memory.push_frame();
                 let mut value;
                 let mut ty;
                 // This is a pain.
@@ -856,7 +759,7 @@ fn eval_expression(
                         // idea. We can basically just do an early, successful return.
                         //
                         // Well, that doesn't work: return applies to the closure.
-                        context.stack.pop();
+                        context.memory.pop_frame();
 
                         // if let ChaChaError::Return { value } = &e {
                         //     let ty = value.get_type(&s_read!(lu_dog));
@@ -881,7 +784,7 @@ fn eval_expression(
                 }
 
                 // Clean up
-                context.stack.pop();
+                context.memory.pop_frame();
 
                 Ok((value, ty))
             } else {
@@ -923,8 +826,8 @@ fn eval_expression(
                     Value::Function(ref func) => {
                         let func = s_read!(lu_dog).exhume_function(&s_read!(func).id).unwrap();
                         debug!("Expression::Call func", func);
-                        let checked = s_read!(call).arg_check;
-                        let (value, ty) = eval_function_call(func, &args, checked, context, vm)?;
+                        let (value, ty) =
+                            eval_function_call(func, &args, s_read!(call).arg_check, context, vm)?;
                         debug!("value", value);
                         debug!("ty", ty);
                         (value, ty)
@@ -1100,30 +1003,32 @@ fn eval_expression(
                         match func.as_str() {
                             "norm_squared" => {
                                 let (value, ty) = arg_values.pop_front().unwrap();
-                                let thonk = context.stack.get_thonk(0).unwrap();
+                                let thonk = context.memory.get_thonk(0).unwrap();
                                 let mut frame = CallFrame::new(0, 0, thonk);
                                 vm.push_stack(new_ref!(Value, "norm_squared".into()));
                                 vm.push_stack(value);
                                 let result = vm.run(&mut frame, false);
                                 vm.pop_stack();
                                 vm.pop_stack();
+                                context.expr_count += 2;
 
                                 Ok((result.unwrap(), ty))
                             }
                             "square" => {
                                 let (value, ty) = arg_values.pop_front().unwrap();
-                                let thonk = context.stack.get_thonk(2).unwrap();
+                                let thonk = context.memory.get_thonk(2).unwrap();
                                 let mut frame = CallFrame::new(0, 0, thonk);
                                 vm.push_stack(new_ref!(Value, "square".into()));
                                 vm.push_stack(value);
                                 let result = vm.run(&mut frame, false);
                                 vm.pop_stack();
                                 vm.pop_stack();
+                                context.expr_count += 5;
 
                                 Ok((result.unwrap(), ty))
                             }
                             "add" => {
-                                let thonk = context.stack.get_thonk(1).unwrap();
+                                let thonk = context.memory.get_thonk(1).unwrap();
                                 let mut frame = CallFrame::new(0, 0, thonk);
                                 vm.push_stack(new_ref!(Value, "add".into()));
                                 let (value, ty) = arg_values.pop_front().unwrap();
@@ -1134,6 +1039,7 @@ fn eval_expression(
                                 vm.pop_stack();
                                 vm.pop_stack();
                                 vm.pop_stack();
+                                context.expr_count += 2;
 
                                 Ok((result.unwrap(), ty))
                             }
@@ -1144,6 +1050,80 @@ fn eval_expression(
                         }
                     } else if ty == "chacha" {
                         match func.as_str() {
+                            // This returns a string because that's the easy button given what
+                            // I have to work with. Once I get enums into the language, I'll
+                            // be able to return a proper enum.
+                            "typeof" => {
+                                let (_arg, ty) = arg_values.pop_front().unwrap();
+                                let pvt_ty = PrintableValueType(&ty, &context);
+                                let ty = Ty::new_s_string();
+                                let ty = s_read!(lu_dog).exhume_value_type(&ty.id()).unwrap();
+                                Ok((new_ref!(Value, pvt_ty.to_string().into()), ty))
+                            }
+                            "time" => {
+                                // 🚧 I should be checking that there is an argument before
+                                // I go unwrapping it.
+                                let (func, ty) = arg_values.pop_front().unwrap();
+                                let func = s_read!(func);
+                                ensure!(
+                                    if let Value::Function(_) = &*func {
+                                        true
+                                    } else {
+                                        false
+                                    },
+                                    {
+                                        // 🚧 I'm not really sure what to do about this here. It's
+                                        // all really a hack for now anyway.
+                                        let ty = PrintableValueType(&ty, &context);
+                                        TypeMismatchSnafu {
+                                            expected: "<function>".to_string(),
+                                            got: ty.to_string(),
+                                            span: 0..0,
+                                        }
+                                    }
+                                );
+                                let func = if let Value::Function(f) = &*func {
+                                    f.clone()
+                                } else {
+                                    unreachable!()
+                                };
+
+                                let now = Instant::now();
+                                let result = eval_function_call(func, &[], true, context, vm)?;
+                                let elapsed = now.elapsed();
+
+                                let time = format!("{:?}\n", elapsed);
+                                chacha_print(time, context);
+
+                                Ok(result)
+
+                                // Ok((
+                                // new_ref!(Value, Value::Empty),
+                                // ValueType::new_empty(&s_read!(lu_dog)),
+                                // ))
+                            }
+                            "eps" => {
+                                let timings = context.timings.iter().cloned().collect::<Vec<_>>();
+
+                                let mean = timings.iter().sum::<f64>() / timings.len() as f64;
+                                let std_dev =
+                                    timings.iter().map(|x| (x - mean).powi(2)).sum::<f64>()
+                                        / timings.len() as f64;
+                                let median = timings[timings.len() / 2];
+
+                                let result = format!(
+                                    "expressions (10k)/sec (mean/std_dev/median): {:.1} / {:.1} / {:.1}\n",
+                                    mean,
+                                    std_dev,
+                                    median
+                                );
+                                chacha_print(result, context);
+
+                                Ok((
+                                    new_ref!(Value, Value::Empty),
+                                    ValueType::new_empty(&s_read!(lu_dog)),
+                                ))
+                            }
                             "assert_eq" => {
                                 let lhs = arg_values.pop_front().unwrap().0;
                                 let rhs = arg_values.pop_front().unwrap().0;
@@ -1276,7 +1256,7 @@ fn eval_expression(
                                 method: method.to_owned(),
                             }),
                         }
-                    } else if let Some(value) = context.stack.get_meta(ty, func) {
+                    } else if let Some(value) = context.memory.get_meta(ty, func) {
                         debug!("StaticMethodCall meta value", value);
                         match &*s_read!(value) {
                             Value::Function(ref func) => {
@@ -1302,7 +1282,7 @@ fn eval_expression(
                                 ))
                             }
                         }
-                    } else if let Some(value) = context.stack.get(ty) {
+                    } else if let Some(value) = context.memory.get(ty) {
                         debug!("StaticMethodCall frame value", value);
                         match &mut *s_write!(value) {
                             Value::Function(ref func) => {
@@ -1448,6 +1428,7 @@ fn eval_expression(
                 Value::UserType(value) => {
                     let value = s_read!(value);
                     let value = value.get_attr_value(field_name).unwrap();
+                    dbg!(&value);
                     let ty = s_read!(value).get_type(&s_read!(lu_dog));
 
                     Ok((value.clone(), ty))
@@ -1495,7 +1476,7 @@ fn eval_expression(
             };
 
             let block = Expression::new_block(&block, &mut *s_write!(lu_dog));
-            context.stack.push();
+            context.memory.push_frame();
             // list.par_iter().for_each(|item| {
             //     // This gives each thread it's own stack frame, and read only
             //     // access to the parent stack frame. I don't know that I love
@@ -1505,17 +1486,17 @@ fn eval_expression(
             //     eval_expression(block.clone(), &mut context.clone()).unwrap();
             // });
             for item in list {
-                context.stack.insert(ident.clone(), item);
+                context.memory.insert(ident.clone(), item);
                 let expr_ty = eval_expression(block.clone(), context, vm);
                 match expr_ty {
                     Ok(_) => {}
                     Err(e) => {
-                        context.stack.pop();
+                        context.memory.pop_frame();
                         return Err(e);
                     }
                 }
             }
-            context.stack.pop();
+            context.memory.pop_frame();
 
             Ok((
                 new_ref!(Value, Value::Empty),
@@ -1711,37 +1692,62 @@ fn eval_expression(
             let operator = s_read!(operator);
             let lhs_expr = s_read!(lu_dog).exhume_expression(&operator.lhs).unwrap();
 
-            let (lhs, lhs_ty) = eval_expression(lhs_expr.clone(), context, vm)?;
-            let rhs = if let Some(ref rhs) = operator.rhs {
-                let rhs = s_read!(lu_dog).exhume_expression(rhs).unwrap();
-                Some(eval_expression(rhs, context, vm)?)
-            } else {
-                None
-            };
+            // let (lhs, lhs_ty) = eval_expression(lhs_expr.clone(), context, vm)?;
+            // let rhs = if let Some(ref rhs) = operator.rhs {
+            //     let rhs = s_read!(lu_dog).exhume_expression(rhs).unwrap();
+            //     Some(eval_expression(rhs, context, vm)?)
+            // } else {
+            //     None
+            // };
+
+            debug!("operator", operator);
 
             match &operator.subtype {
                 OperatorEnum::Binary(ref binary) => {
                     let binary = s_read!(lu_dog).exhume_binary(binary).unwrap();
                     let binary = s_read!(binary);
-                    let rhs = rhs.unwrap();
+
                     match &*binary {
                         Binary::Addition(_) => {
+                            let (lhs, lhs_ty) = eval_expression(lhs_expr, context, vm)?;
+                            let rhs = {
+                                let rhs = operator.rhs.unwrap();
+                                let rhs = s_read!(lu_dog).exhume_expression(&rhs).unwrap();
+                                eval_expression(rhs, context, vm)?
+                            };
                             let value = s_read!(lhs).clone() + s_read!(rhs.0).clone();
                             Ok((new_ref!(Value, value), lhs_ty))
                         }
                         Binary::Assignment(_) => {
                             // Type checking has already been handled by the compiler.
                             match &*s_read!(lhs_expr) {
+                                // 🚧 I'm sort of duplicating work here. It's not exactly the same
+                                // as the general expression handling code, but I think it's close
+                                // enough that I could make it work if I wanted to. And so I should.
+                                //
+                                // Hm. I've already processed the lhs above, and I'm basically doing
+                                // it again here.
                                 Expression::VariableExpression(expr) => {
+                                    let rhs = {
+                                        let rhs = operator.rhs.unwrap();
+                                        let rhs = s_read!(lu_dog).exhume_expression(&rhs).unwrap();
+                                        eval_expression(rhs, context, vm)?
+                                    };
                                     let expr =
                                         s_read!(lu_dog).exhume_variable_expression(expr).unwrap();
                                     let expr = s_read!(expr);
                                     let name = expr.name.clone();
-                                    let value = context.stack.get(&name).unwrap();
+                                    let value = context.memory.get(&name).unwrap();
                                     let mut value = s_write!(value);
                                     *value = s_read!(rhs.0).clone();
+                                    Ok(rhs)
                                 }
                                 Expression::FieldAccess(field) => {
+                                    let rhs = {
+                                        let rhs = operator.rhs.unwrap();
+                                        let rhs = s_read!(lu_dog).exhume_expression(&rhs).unwrap();
+                                        eval_expression(rhs, context, vm)?
+                                    };
                                     let field = s_read!(lu_dog).exhume_field_access(field).unwrap();
                                     let fat = &s_read!(field)
                                         .r65_field_access_target(&s_read!(lu_dog))[0];
@@ -1763,38 +1769,96 @@ fn eval_expression(
                                     let expr = &s_read!(field).expression;
                                     let expr = s_read!(lu_dog).exhume_expression(expr).unwrap();
 
-                                    let (value, _ty) = eval_expression(expr, context, vm)?;
-                                    let value = s_read!(value);
-                                    match &*value {
-                                        Value::ProxyType(value) => {
-                                            let value = s_read!(value);
-                                            let value = value.get_attr_value(&field_name)?;
-                                            let ty = s_read!(value).get_type(&s_read!(lu_dog));
+                                    dbg!(&expr);
 
-                                            // Ok((value, ty))
+                                    let Expression::VariableExpression(expr) = &*s_read!(expr)
+                                    else { unreachable!() };
+                                    let expr = s_read!(lu_dog).exhume_expression(expr).unwrap();
+                                    let expr = s_read!(lu_dog)
+                                        .exhume_variable_expression(&(&*s_read!(expr)).id())
+                                        .unwrap();
+                                    dbg!(&expr);
+
+                                    let value = context.memory.get(&s_read!(expr).name);
+                                    ensure!(value.is_some(), {
+                                        let var = s_read!(expr).name.clone();
+                                        VariableNotFoundSnafu { var }
+                                    });
+
+                                    let value = value.unwrap();
+
+                                    dbg!(&value);
+                                    dbg!(s_read!(value));
+                                    match &*s_read!(value) {
+                                        Value::ProxyType(value) => {
+                                            // dbg!(s_read!(value));
+                                            // s_write!(value).set_attr_value(&field_name, rhs.0)?;
+                                            // Ok(rhs)
                                         }
                                         Value::UserType(value) => {
-                                            let value = s_read!(value);
-                                            let value = value.get_attr_value(field_name).unwrap();
-                                            let ty = s_read!(value).get_type(&s_read!(lu_dog));
-
-                                            // Ok((value.clone(), ty))
+                                            // dbg!(s_read!(value));
+                                            s_write!(value).set_attr_value(&field_name, rhs.0);
+                                            // Ok(rhs)
                                         }
                                         // 🚧 This needs it's own error. Lazy me.
-                                        _ => {
+                                        value => {
                                             return Err(ChaChaError::BadJuJu {
-                                                message: "Bad value in field access".to_owned(),
+                                                message: "Attempt to assign to non-struct"
+                                                    .to_owned(),
                                                 location: location!(),
                                             })
                                         }
                                     }
+
+                                    // This is the LHS.
+                                    // The "other" LHS? It's
+                                    // let (value, ty) = eval_expression(expr, context, vm)?;
+                                    // debug!("field access fubar", value);
+                                    // let value_read = s_read!(value).clone();
+                                    // match &value_read {
+                                    //     // match &*s_read!(lhs) {
+                                    //     Value::ProxyType(lhs) => {
+                                    //         s_write!(lhs).set_attr_value(&field_name, rhs.0)?;
+                                    //         Ok((value, ty))
+                                    //     }
+                                    //     Value::UserType(lhs) => {
+                                    //         s_write!(lhs).set_attr_value(&field_name, rhs.0);
+                                    //         Ok((value, ty))
+                                    //     }
+                                    //     // 🚧 This needs it's own error. Lazy me.
+                                    //     value => {
+                                    //         return Err(ChaChaError::BadJuJu {
+                                    //             message: format!(
+                                    //                 "Bad value ({:?}) in field access",
+                                    //                 value
+                                    //             ),
+
+                                    //             location: location!(),
+                                    //         })
+                                    //     }
+                                    // }
+                                    Ok((
+                                        new_ref!(Value, Value::Empty),
+                                        ValueType::new_empty(&s_read!(lu_dog)),
+                                    ))
                                 }
-                                _ => {}
+                                _ => {
+                                    return Err(ChaChaError::BadJuJu {
+                                        message: "Bad LHS in assignment".to_owned(),
+                                        location: location!(),
+                                    })
+                                }
                             }
 
-                            Ok((lhs, lhs_ty))
+                            // Ok((lhs, lhs_ty))
                         }
                         Binary::BooleanOperator(ref id) => {
+                            let (lhs, lhs_ty) = eval_expression(lhs_expr, context, vm)?;
+                            let rhs = {
+                                let rhs = operator.rhs.unwrap();
+                                let rhs = s_read!(lu_dog).exhume_expression(&rhs).unwrap();
+                                eval_expression(rhs, context, vm)?
+                            };
                             let boolean_operator =
                                 s_read!(lu_dog).exhume_boolean_operator(id).unwrap();
                             let boolean_operator = s_read!(boolean_operator);
@@ -1813,14 +1877,32 @@ fn eval_expression(
                             }
                         }
                         Binary::Division(_) => {
+                            let (lhs, lhs_ty) = eval_expression(lhs_expr, context, vm)?;
+                            let rhs = {
+                                let rhs = operator.rhs.unwrap();
+                                let rhs = s_read!(lu_dog).exhume_expression(&rhs).unwrap();
+                                eval_expression(rhs, context, vm)?
+                            };
                             let value = s_read!(lhs).clone() / s_read!(rhs.0).clone();
                             Ok((new_ref!(Value, value), lhs_ty))
                         }
                         Binary::Subtraction(_) => {
+                            let (lhs, lhs_ty) = eval_expression(lhs_expr, context, vm)?;
+                            let rhs = {
+                                let rhs = operator.rhs.unwrap();
+                                let rhs = s_read!(lu_dog).exhume_expression(&rhs).unwrap();
+                                eval_expression(rhs, context, vm)?
+                            };
                             let value = s_read!(lhs).clone() - s_read!(rhs.0).clone();
                             Ok((new_ref!(Value, value), lhs_ty))
                         }
                         Binary::Multiplication(_) => {
+                            let (lhs, lhs_ty) = eval_expression(lhs_expr, context, vm)?;
+                            let rhs = {
+                                let rhs = operator.rhs.unwrap();
+                                let rhs = s_read!(lu_dog).exhume_expression(&rhs).unwrap();
+                                eval_expression(rhs, context, vm)?
+                            };
                             let value = s_read!(lhs).clone() * s_read!(rhs.0).clone();
                             Ok((new_ref!(Value, value), lhs_ty))
                         }
@@ -1831,16 +1913,30 @@ fn eval_expression(
                                     message: format!("deal with expression: {:?}", alpha),
                                 }
                             );
-                            Ok((new_ref!(Value, Value::Empty), lhs_ty))
+                            unreachable!()
                         }
                     }
                 }
                 OperatorEnum::Comparison(ref comp) => {
+                    let (lhs, lhs_ty) = eval_expression(lhs_expr, context, vm)?;
+                    let rhs = {
+                        let rhs = operator.rhs.unwrap();
+                        let rhs = s_read!(lu_dog).exhume_expression(&rhs).unwrap();
+                        eval_expression(rhs, context, vm)?
+                    };
                     let comp = s_read!(lu_dog).exhume_comparison(comp).unwrap();
                     let comp = s_read!(comp);
                     match &*comp {
+                        Comparison::Equal(_) => {
+                            let value = s_read!(lhs).eq(&s_read!(rhs.0));
+                            let value = Value::Boolean(value);
+                            let ty = Ty::new_boolean();
+                            let ty = ValueType::new_ty(&new_ref!(Ty, ty), &mut s_write!(lu_dog));
+
+                            Ok((new_ref!(Value, value), ty))
+                        }
                         Comparison::GreaterThan(_) => {
-                            let value = s_read!(lhs).gt(&s_read!(rhs.unwrap().0));
+                            let value = s_read!(lhs).gt(&s_read!(rhs.0));
                             let value = Value::Boolean(value);
                             let ty = Ty::new_boolean();
                             let ty = ValueType::new_ty(&new_ref!(Ty, ty), &mut s_write!(lu_dog));
@@ -1848,7 +1944,7 @@ fn eval_expression(
                             Ok((new_ref!(Value, value), ty))
                         }
                         Comparison::LessThanOrEqual(_) => {
-                            let value = s_read!(lhs).lte(&s_read!(rhs.unwrap().0));
+                            let value = s_read!(lhs).lte(&s_read!(rhs.0));
                             let value = Value::Boolean(value);
                             let ty = Ty::new_boolean();
                             let ty = ValueType::new_ty(&new_ref!(Ty, ty), &mut s_write!(lu_dog));
@@ -1859,6 +1955,7 @@ fn eval_expression(
                     }
                 }
                 OperatorEnum::Unary(ref unary) => {
+                    let (lhs, lhs_ty) = eval_expression(lhs_expr, context, vm)?;
                     let unary = s_read!(lu_dog).exhume_unary(unary).unwrap();
                     let unary = s_read!(unary);
                     match &*unary {
@@ -1890,21 +1987,12 @@ fn eval_expression(
             let result = format!("{}", s_read!(value));
             let result = result.replace("\\n", "\n");
 
-            cfg_if::cfg_if! {
-                if #[cfg(feature = "print-std-out")] {
-                    print!("{}", result_style.paint(result));
-                    std::io::stdout().flush().unwrap();
-                } else {
-                    context
-                        .std_out_send
-                        .send(format!("{}", result_style.paint(result)))
-                        .context(crate::InternalCompilerChannelSnafu {
-                            message: "error writing to std out queue".to_owned(),
-                        })?;
-                }
-            }
+            chacha_print(result, context);
 
-            Ok((value, ValueType::new_empty(&s_read!(lu_dog))))
+            Ok((
+                new_ref!(Value, Value::Empty),
+                ValueType::new_empty(&s_read!(lu_dog)),
+            ))
         }
         //
         // Range
@@ -2049,7 +2137,7 @@ fn eval_expression(
         Expression::VariableExpression(ref expr) => {
             let expr = s_read!(lu_dog).exhume_variable_expression(expr).unwrap();
             debug!("Expression::VariableExpression", expr);
-            let value = context.stack.get(&s_read!(expr).name);
+            let value = context.memory.get(&s_read!(expr).name);
 
             ensure!(value.is_some(), {
                 let var = s_read!(expr).name.clone();
@@ -2058,18 +2146,10 @@ fn eval_expression(
 
             let value = value.unwrap();
 
-            no_debug!("Expression::VariableExpression", s_read!(value));
+            debug!("Expression::VariableExpression value", s_read!(value));
 
             let ty = s_read!(value).get_type(&s_read!(lu_dog));
 
-            // 🚧
-            // Cloning the value isn't going to cut it I don't think. There are
-            // three cases to consider. One is when the value is used read-only.
-            // Cloning is fine here. If the value is mutated however, we would
-            // either need to return a reference, or write the value when it's
-            // modified. The third thing is when the value is a reference. By
-            // that I mean the type (above) is a reference. Not even sure what
-            // to think about that atm.
             Ok((value.clone(), ty))
         }
         //
@@ -2177,7 +2257,7 @@ pub fn eval_statement(
     let lu_dog = context.lu_dog.clone();
 
     debug!("eval_statement statement", statement);
-    trace!("eval_statement stack", context.stack);
+    trace!("eval_statement stack", context.memory);
 
     span!("eval_statement");
 
@@ -2209,7 +2289,7 @@ pub fn eval_statement(
             debug!("var", var);
 
             log::debug!("inserting {} = {}", var.name, s_read!(value));
-            context.stack.insert(var.name, value);
+            context.memory.insert(var.name, value);
 
             Ok((new_ref!(Value, Value::Empty), ty))
         }
@@ -2239,9 +2319,11 @@ pub fn eval_statement(
 
 #[derive(Clone, Debug)]
 pub struct Context {
+    /// The prompt to display in the REPL
     prompt: String,
+    /// The root block, used by the REPL
     block: RefType<Block>,
-    stack: Memory,
+    memory: Memory,
     lu_dog: RefType<LuDogStore>,
     sarzak: RefType<SarzakStore>,
     models: RefType<Vec<SarzakStore>>,
@@ -2250,6 +2332,9 @@ pub struct Context {
     std_out_recv: Receiver<String>,
     debug_status_writer: Option<Sender<DebuggerStatus>>,
     obj_file_path: Option<PathBuf>,
+    timings: CircularQueue<f64>,
+    expr_count: usize,
+    func_calls: usize,
 }
 
 /// Save the lu_dog model when the context is dropped
@@ -2257,6 +2342,9 @@ pub struct Context {
 /// NB: This doesn't work. The thread that started us apparently goes away
 /// before we get a chance to run this to completion. That's my current
 /// working hypothesis.
+///
+/// Shouldn't this work if we are joining the threads? Maybe I wasn't doing that?
+/// Do I still need this?
 impl Drop for Context {
     fn drop(&mut self) {
         // s_read!(self.lu_dog)
@@ -2289,7 +2377,7 @@ impl Context {
     }
 
     pub fn get_stack(&self) -> &Memory {
-        &self.stack
+        &self.memory
     }
 
     pub fn prompt(&self) -> &str {
@@ -2322,7 +2410,7 @@ impl Context {
     }
 
     pub fn register_store_proxy(&mut self, name: String, proxy: impl StoreProxy + 'static) {
-        self.stack.insert_global(
+        self.memory.insert_global(
             name.clone(),
             new_ref!(
                 Value,
@@ -2472,7 +2560,7 @@ pub fn start_tui_repl(mut context: Context) -> (Sender<DebuggerControl>, Receive
         .name("worker".into())
         // .stack_size(128 * 1024)
         .spawn(move || {
-            let stack = &mut context.stack;
+            let stack = &mut context.memory;
             let vm_stack = stack.clone();
             let mut vm = VM::new(&vm_stack);
 
@@ -2539,13 +2627,17 @@ pub fn start_tui_repl(mut context: Context) -> (Sender<DebuggerControl>, Receive
 }
 
 /// This runs the main function, assuming it exists.
-pub fn start_main(stopped: bool, _silent: bool, mut context: Context) -> Result<Value, Error> {
+pub fn start_main(
+    stopped: bool,
+    _silent: bool,
+    mut context: Context,
+) -> Result<(Value, Context), Error> {
     {
         let mut running = RUNNING.lock();
         *running = !stopped;
     }
 
-    let stack = &mut context.stack;
+    let stack = &mut context.memory;
     let vm_stack = stack.clone();
     let mut vm = VM::new(&vm_stack);
 
@@ -2606,7 +2698,7 @@ pub fn start_main(stopped: bool, _silent: bool, mut context: Context) -> Result<
 
         // let result = eval_function_call(main, &[], &mut context, vm)?;
 
-        Ok(s_read!(result.0.clone()).clone())
+        Ok((s_read!(result.0.clone()).clone(), context))
     } else {
         Err(Error(ChaChaError::MainIsNotAFunction))
     };
@@ -2697,7 +2789,7 @@ pub fn start_repl(mut context: Context) -> Result<(), Error> {
     let block = context.block.clone();
     // let stack = &mut context.stack;
 
-    let vm_stack = context.stack.clone();
+    let vm_stack = context.memory.clone();
     let mut vm = VM::new(&vm_stack);
 
     let error_style = Colour::Red;
@@ -3040,226 +3132,6 @@ impl<'a, 'b> fmt::Display for PrintableValueType<'a> {
                 write!(f, "{}Store", domain_name.to_upper_camel_case())
             }
         }
-    }
-}
-
-pub(crate) struct ThonkReservation {
-    slot: usize,
-}
-
-type MemoryCell = (String, RefType<Value>);
-
-#[derive(Clone, Debug)]
-pub enum MemoryUpdateMessage {
-    AddGlobal(MemoryCell),
-    AddMeta(MemoryCell),
-    PushFrame,
-    PopFrame,
-    AddLocal(MemoryCell),
-}
-
-impl fmt::Display for MemoryUpdateMessage {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            MemoryUpdateMessage::AddGlobal((name, value)) => {
-                write!(f, "add global {}: {}", name, s_read!(value))
-            }
-            MemoryUpdateMessage::AddMeta((name, value)) => {
-                write!(f, "add meta {}: {}", name, s_read!(value))
-            }
-            MemoryUpdateMessage::PushFrame => write!(f, "push frame"),
-            MemoryUpdateMessage::PopFrame => write!(f, "pop frame"),
-            MemoryUpdateMessage::AddLocal((name, value)) => {
-                write!(f, "add local {}: {}", name, s_read!(value))
-            }
-        }
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct Memory {
-    thonks: Vec<Thonk>,
-    meta: HashMap<String, HashMap<String, RefType<Value>>>,
-    global: HashMap<String, RefType<Value>>,
-    frames: Vec<HashMap<String, RefType<Value>>>,
-    sender: Sender<MemoryUpdateMessage>,
-}
-
-impl Memory {
-    pub(crate) fn new() -> (Self, Receiver<MemoryUpdateMessage>) {
-        let (sender, receiver) = unbounded();
-
-        (
-            Memory {
-                thonks: Vec::new(),
-                meta: HashMap::default(),
-                global: HashMap::default(),
-                frames: vec![HashMap::default()],
-                sender,
-            },
-            receiver,
-        )
-    }
-
-    pub fn get_globals(&self) -> Vec<(&str, &RefType<Value>)> {
-        self.global
-            .iter()
-            .map(|(name, value)| (name.as_str(), value))
-            .collect()
-    }
-
-    pub fn get_frames(&self) -> Vec<Vec<(&str, &RefType<Value>)>> {
-        self.frames
-            .iter()
-            .map(|frame| {
-                frame
-                    .iter()
-                    .map(|(name, value)| (name.as_str(), value))
-                    .collect()
-            })
-            .collect()
-    }
-
-    pub(crate) fn thonk_index<S: AsRef<str>>(&self, name: S) -> Option<usize> {
-        self.thonks
-            .iter()
-            .enumerate()
-            .find(|(_, thonk)| thonk.name == name.as_ref())
-            .map(|(index, _)| index)
-    }
-
-    pub(crate) fn reserve_thonk_slot(&mut self) -> ThonkReservation {
-        let slot = self.thonks.len();
-        self.thonks.push(Thonk::new("placeholder".to_string()));
-        ThonkReservation { slot }
-    }
-
-    pub(crate) fn insert_thonk(&mut self, thonk: Thonk, reservation: ThonkReservation) {
-        self.thonks[reservation.slot] = thonk;
-    }
-
-    pub(crate) fn get_thonk(&self, index: usize) -> Option<&Thonk> {
-        self.thonks.get(index)
-    }
-
-    pub(crate) fn push(&mut self) {
-        if *STEPPING.lock() {
-            self.sender.send(MemoryUpdateMessage::PushFrame).unwrap();
-        }
-        self.frames.push(HashMap::default());
-    }
-
-    pub(crate) fn pop(&mut self) {
-        if *STEPPING.lock() {
-            self.sender.send(MemoryUpdateMessage::PopFrame).unwrap();
-        }
-        self.frames.pop();
-    }
-
-    pub(crate) fn insert_meta_table(&mut self, table: String) {
-        self.meta.insert(table, HashMap::default());
-    }
-
-    pub(crate) fn insert_meta(&mut self, table: &str, name: String, value: RefType<Value>) {
-        let table = self.meta.get_mut(table).unwrap();
-        table.insert(name, value);
-    }
-
-    pub(crate) fn get_meta(&self, table: &str, name: &str) -> Option<RefType<Value>> {
-        if let Some(table) = self.meta.get(table) {
-            if let Some(val) = table.get(name) {
-                Some(val.clone())
-            } else {
-                None
-            }
-        } else {
-            None
-        }
-    }
-
-    // 🚧 Document this -- I'm not sure what the :: business is about.
-    pub(crate) fn insert_global(&mut self, name: String, value: RefType<Value>) {
-        if name.contains("::") {
-            let mut split = name.split("::");
-            let table = split.next().unwrap();
-            let name = split
-                .next()
-                .expect("name contained `::`, but no second element");
-
-            if *STEPPING.lock() {
-                self.sender
-                    .send(MemoryUpdateMessage::AddGlobal((
-                        name.to_owned(),
-                        value.clone(),
-                    )))
-                    .unwrap();
-            }
-
-            if let Some(value) = self.global.get(table) {
-                let mut write_value = s_write!(value);
-                if let Value::Table(ref mut table) = *write_value {
-                    table.insert(name.to_owned(), value.clone());
-                } else {
-                    unreachable!()
-                }
-            } else {
-                let mut map = HashMap::default();
-                map.insert(name.to_owned(), value.clone());
-                self.global
-                    .insert(table.to_owned(), new_ref!(Value, Value::Table(map)));
-            }
-        } else {
-            self.global.insert(name, value);
-        }
-    }
-
-    pub(crate) fn insert(&mut self, name: String, value: RefType<Value>) {
-        if *STEPPING.lock() {
-            self.sender
-                .send(MemoryUpdateMessage::AddLocal((name.clone(), value.clone())))
-                .unwrap();
-        }
-        let frame = self.frames.last_mut().unwrap();
-        frame.insert(name, value);
-    }
-
-    fn get(&self, name: &str) -> Option<RefType<Value>> {
-        if name.contains("::") {
-            let mut split = name.split("::");
-
-            let name = split.next().unwrap();
-            let table = split.next().unwrap();
-
-            if let Some(value) = self.get_simple(table) {
-                let value = s_read!(value);
-                if let Value::Table(ref table) = *value {
-                    if let Some(val) = table.get(name) {
-                        Some(val.clone())
-                    } else {
-                        None
-                    }
-                } else {
-                    None
-                }
-            } else {
-                None
-            }
-        } else {
-            if let Some(value) = self.get_simple(name) {
-                Some(value.clone())
-            } else {
-                None
-            }
-        }
-    }
-
-    fn get_simple(&self, name: &str) -> Option<&RefType<Value>> {
-        for frame in self.frames.iter().rev() {
-            if let Some(value) = frame.get(name) {
-                return Some(value);
-            }
-        }
-        self.global.get(name)
     }
 }
 

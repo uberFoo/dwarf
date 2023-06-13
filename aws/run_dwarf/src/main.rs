@@ -1,15 +1,15 @@
-use std::path::PathBuf;
+use std::{io::Write, path::PathBuf};
 
 use ansi_term::Colour;
 use ariadne::{Color, Fmt, Label, Report, ReportKind, Source};
 use dwarf::{
-    dwarf::{parse_dwarf, populate_lu_dog, DwarfError},
+    dwarf::{new_lu_dog, parse_dwarf, DwarfError},
     initialize_interpreter,
     interpreter::start_main,
     sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL},
-    Value,
 };
 use lambda_http::{run, service_fn, Body, Error, Request, RequestExt, Response};
+use tracing::{event, Level};
 
 /// This is the main body for the function.
 /// Write your code inside it.
@@ -19,93 +19,132 @@ async fn function_handler(event: Request) -> Result<Response<Body>, Error> {
     let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
 
     let message = if let Body::Text(program) = event.into_body() {
-        let ast = parse_dwarf(&program).unwrap();
+        let mut std_err = Vec::new();
 
-        let lu_dog = populate_lu_dog(None, program.to_owned(), &ast, &[], &sarzak)
-            .map_err(|e| {
-                match &e {
-                    DwarfError::BadSelf { span } | DwarfError::ImplementationBlock { span } => {
-                        let span = span.clone();
-                        let msg = format!("{}", e);
+        event!(Level::INFO, "dwarf received program");
 
-                        Report::build(ReportKind::Error, (), span.start)
-                            .with_message(&msg)
-                            .with_label(
-                                Label::new(span)
-                                    .with_message(format!("{}", msg.fg(Color::Red)))
-                                    .with_color(Color::Red),
-                            )
-                            .finish()
-                            .eprint(Source::from(&program))
-                            .unwrap()
-                    }
-                    DwarfError::GenericWarning {
-                        description: desc,
-                        span,
-                    } => {
-                        let span = span.clone();
+        let ast = parse_dwarf(&program).map_err(|e| {
+            std_err.write(format!("{}", e).as_bytes()).unwrap();
+        });
 
-                        Report::build(ReportKind::Error, (), span.start)
-                            .with_message(&desc)
-                            .with_label(
-                                Label::new(span)
-                                    .with_message(format!("{}", desc.fg(Color::Red)))
-                                    .with_color(Color::Red),
-                            )
-                            .finish()
-                            .eprint(Source::from(&program))
-                            .unwrap()
-                    }
-                    DwarfError::TypeMismatch {
-                        expected,
-                        found,
-                        span,
-                    } => {
-                        let span = span.clone();
-                        let msg = format!(
-                            "{}: Type mismatch: expected `{expected}`, found `{found}`.",
-                            Colour::Red.bold().paint("error")
-                        );
+        event!(Level::INFO, "dwarf parsed program");
 
-                        Report::build(ReportKind::Error, (), span.start)
-                            .with_message(&msg)
-                            .with_label(Label::new(span).with_message(msg).with_color(Color::Red))
-                            .finish()
-                            .eprint(Source::from(&program))
-                            .unwrap()
-                    }
-                    DwarfError::Parse { ast } => {
-                        for a in ast {
-                            let msg = format!("{}", e);
-                            let span = a.1.clone();
+        match ast {
+            Ok(ast) => {
+                let lu_dog = new_lu_dog(None, Some((program.to_owned(), &ast)), &[], &sarzak)
+                    .map_err(|e| {
+                        // Dang. I'd like to refactor the report creation up here, and then just
+                        // add details below. The problem is that I don't have the span information
+                        // until I get into the error.
+                        match &e {
+                            DwarfError::BadSelf { span }
+                            | DwarfError::ImplementationBlock { span } => {
+                                let span = span.clone();
+                                let msg = format!("{}", e);
 
-                            Report::build(ReportKind::Error, (), span.start)
-                                .with_message(&msg)
-                                .with_label(
-                                    Label::new(span)
-                                        .with_message(format!("{}", msg.fg(Color::Red)))
-                                        .with_color(Color::Red),
-                                )
-                                .finish()
-                                .eprint(Source::from(&program))
-                                .unwrap()
+                                Report::build(ReportKind::Error, (), span.start)
+                                    .with_message(&msg)
+                                    .with_label(
+                                        Label::new(span)
+                                            .with_message(format!("{}", msg.fg(Color::Red)))
+                                            .with_color(Color::Red),
+                                    )
+                                    .finish()
+                                    .write(Source::from(&program), &mut std_err)
+                                    .unwrap()
+                            }
+                            DwarfError::GenericWarning {
+                                description: desc,
+                                span,
+                            } => {
+                                let span = span.clone();
+
+                                Report::build(ReportKind::Error, (), span.start)
+                                    .with_message(&desc)
+                                    .with_label(
+                                        Label::new(span)
+                                            .with_message(format!("{}", desc.fg(Color::Red)))
+                                            .with_color(Color::Red),
+                                    )
+                                    .finish()
+                                    .write(Source::from(&program), &mut std_err)
+                                    .unwrap()
+                            }
+                            DwarfError::TypeMismatch {
+                                expected,
+                                found,
+                                span,
+                            } => {
+                                let span = span.clone();
+                                let msg = format!(
+                                    "{}: Type mismatch: expected `{expected}`, found `{found}`.",
+                                    Colour::Red.bold().paint("error")
+                                );
+
+                                Report::build(ReportKind::Error, (), span.start)
+                                    .with_message(&msg)
+                                    .with_label(
+                                        Label::new(span).with_message(msg).with_color(Color::Red),
+                                    )
+                                    .finish()
+                                    .write(Source::from(&program), &mut std_err)
+                                    .unwrap()
+                            }
+                            DwarfError::Parse { error, ast } => {
+                                std_err.write(format!("{}", e).as_bytes()).unwrap();
+
+                                for a in ast {
+                                    let msg = format!("{}", e);
+                                    let span = a.1.clone();
+
+                                    Report::build(ReportKind::Error, (), span.start)
+                                        .with_message(&msg)
+                                        .with_label(
+                                            Label::new(span)
+                                                .with_message(format!("{}", msg.fg(Color::Red)))
+                                                .with_color(Color::Red),
+                                        )
+                                        .finish()
+                                        .write(Source::from(&program), &mut std_err)
+                                        .unwrap()
+                                }
+                            }
+                            _ => panic!("Something that needs to be taken care of! {e}"),
                         }
-                    }
-                    _ => panic!("Something that needs to be taken care of! {e}"),
-                }
-                return e;
-            })
-            .unwrap();
+                        e
+                    });
 
-        let ctx = initialize_interpreter::<PathBuf>(sarzak, lu_dog, None).unwrap();
-        let message: Value = start_main(false, false, ctx).unwrap().try_into().unwrap();
-        let message = message.to_string();
-        ansi_to_html::convert_escaped(&message).unwrap()
+                match lu_dog {
+                    Ok(lu_dog) => {
+                        let ctx = initialize_interpreter::<PathBuf>(sarzak, lu_dog, None).unwrap();
+                        // 🚧 Can't unwrap this. Must deal with errors from ChaCha.
+                        let (result, ctx) =
+                            start_main(false, false, ctx).unwrap().try_into().unwrap();
+                        let result = result.to_string();
+                        let result = ansi_to_html::convert_escaped(&result).unwrap();
+                        let std_out = ctx.drain_std_out();
+                        let std_out = std_out
+                            .iter()
+                            .map(|line| ansi_to_html::convert_escaped(&line).unwrap())
+                            .collect::<Vec<String>>()
+                            .join("");
+                        std_out + &ansi_to_html::convert_escaped(&result).unwrap()
+                    }
+                    Err(_) => {
+                        let err = String::from_utf8(std_err).unwrap();
+                        ansi_to_html::convert_escaped(&err).unwrap()
+                    }
+                }
+            }
+            Err(_) => {
+                let err = String::from_utf8(std_err).unwrap();
+                ansi_to_html::convert_escaped(&err).unwrap()
+            }
+        }
     } else {
+        event!(Level::INFO, "dwarf received no program");
         "No program provided".to_string()
     };
-
-    // let message = "Hello, world!";
 
     // Return something that implements IntoResponse.
     // It will be serialized to the right response event automatically by the runtime

@@ -106,7 +106,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             .eprint(Source::from(&source_code))
                             .unwrap()
                     }
-                    DwarfError::Parse { ast } => {
+                    DwarfError::Parse { error: _, ast } => {
                         for a in ast {
                             let msg = format!("{}", e);
                             let span = a.1.clone();

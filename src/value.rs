@@ -3,12 +3,13 @@ use std::{any::Any, collections::VecDeque, fmt, ops::Range};
 use ansi_term::Colour;
 use fxhash::FxHashMap as HashMap;
 // use parking_lot::Lock;
-use sarzak::sarzak::Ty;
 use uuid::Uuid;
 
 use crate::{
     lu_dog::{Function, ObjectStore as LuDogStore, ValueType},
-    new_ref, s_read, ChaChaError, DwarfFloat, DwarfInteger, NewRef, RcType, RefType, Result,
+    new_ref, s_read,
+    sarzak::Ty,
+    ChaChaError, DwarfFloat, DwarfInteger, NewRef, RcType, RefType, Result,
 };
 
 pub trait StoreProxy: fmt::Display + fmt::Debug + Send + Sync {
@@ -188,21 +189,21 @@ impl Value {
                 let z = s_read!(func).r1_value_type(lu_dog)[0].clone();
                 z
             }
-            Value::Integer(ref _int) => {
-                let ty = Ty::new_integer();
+            Value::Float(ref _float) => {
+                let ty = Ty::new_float();
                 lu_dog.exhume_value_type(&ty.id()).unwrap()
             }
-            // Value::StoreType(ref store) => {
-            //     debug!("VariableExpression get type for store", store);
-            //     store.get_type()
-            // }
-            Value::String(ref _str) => {
-                let ty = Ty::new_s_string();
+            Value::Integer(ref _int) => {
+                let ty = Ty::new_integer();
                 lu_dog.exhume_value_type(&ty.id()).unwrap()
             }
             Value::ProxyType(ref pt) => lu_dog
                 .exhume_value_type(&s_read!(pt).struct_uuid())
                 .unwrap(),
+            Value::String(ref _str) => {
+                let ty = Ty::new_s_string();
+                lu_dog.exhume_value_type(&ty.id()).unwrap()
+            }
             Value::UserType(ref ut) => s_read!(ut).get_type().clone(),
             Value::Uuid(ref _uuid) => {
                 let ty = Ty::new_s_uuid();
@@ -241,7 +242,9 @@ impl fmt::Display for Value {
                 Some(value) => write!(f, "Some({})", s_read!(value)),
                 None => write!(f, "None"),
             },
-            Self::ProxyType(p) => write!(f, "{}", s_read!(p)),
+            // 🚧 swap these out when I'm done
+            Self::ProxyType(p) => write!(f, "<put the other thing back>"),
+            // Self::ProxyType(p) => write!(f, "{}", s_read!(p)),
             Self::Range(range) => write!(f, "{:?}", range),
             Self::Reference(value) => write!(f, "&{}", s_read!(value)),
             Self::Reflexive => write!(f, "self"),
@@ -530,19 +533,19 @@ impl std::ops::Add for Value {
     fn add(self, other: Self) -> Self {
         match (self, other) {
             (Value::Float(a), Value::Float(b)) => Value::Float(a + b),
-            (Value::Float(a), Value::String(b)) => Value::String(a.to_string() + &b),
+            // (Value::Float(a), Value::String(b)) => Value::String(a.to_string() + &b),
             (Value::String(a), Value::Float(b)) => Value::String(a + &b.to_string()),
             (Value::Integer(a), Value::Integer(b)) => Value::Integer(a + b),
-            (Value::Integer(a), Value::String(b)) => Value::String(a.to_string() + &b),
-            (Value::String(a), Value::Integer(b)) => Value::String(a + &b.to_string()),
+            // (Value::Integer(a), Value::String(b)) => Value::String(a.to_string() + &b),
+            // (Value::String(a), Value::Integer(b)) => Value::String(a + &b.to_string()),
             (Value::String(a), Value::String(b)) => Value::String(a + &b),
             (Value::Char(a), Value::Char(b)) => Value::String(a.to_string() + &b.to_string()),
             (Value::Char(a), Value::String(b)) => Value::String(a.to_string() + &b),
             (Value::String(a), Value::Char(b)) => Value::String(a + &b.to_string()),
             (Value::Empty, Value::Empty) => Value::Empty,
             (Value::Boolean(a), Value::Boolean(b)) => Value::Boolean(a || b),
-            (Value::Boolean(a), Value::String(b)) => Value::String(a.to_string() + &b),
-            (Value::String(a), Value::Boolean(b)) => Value::String(a + &b.to_string()),
+            // (Value::Boolean(a), Value::String(b)) => Value::String(a.to_string() + &b),
+            // (Value::String(a), Value::Boolean(b)) => Value::String(a + &b.to_string()),
             (a, b) => Value::Error(format!("Cannot add {} and {}", a, b)),
         }
     }
@@ -680,7 +683,9 @@ impl Value {
 
 /// Equal operator for Value
 ///
-///
+/// This is testing value equality.
+/// Equality is transitive. So, given a = 1, b = 1 a == b is true because there
+/// is a single <word> 1 in the machine.
 impl Value {
     pub fn eq(&self, other: &Self) -> bool {
         match (self, other) {
@@ -691,36 +696,78 @@ impl Value {
             (Value::Empty, Value::Empty) => true,
             (Value::Boolean(a), Value::Boolean(b)) => a == b,
             (Value::Uuid(a), Value::Uuid(b)) => a == b,
+            (Value::UserType(a), Value::UserType(b)) => &*s_read!(a) == &*s_read!(b),
             (_, _) => false, //Value::Error(format!("Cannot compare {} and {}", a, b)),
         }
     }
 }
 
+#[derive(Clone, Debug, Default)]
+pub struct UserTypeAttribute(HashMap<String, RefType<Value>>);
+
+impl PartialEq for UserTypeAttribute {
+    fn eq(&self, other: &Self) -> bool {
+        if self.0.len() != other.0.len() {
+            return false;
+        }
+
+        for (k, v) in self.0.iter() {
+            if !other.0.contains_key(k) {
+                return false;
+            }
+
+            if !s_read!(v).eq(&s_read!(other.0.get(k).unwrap())) {
+                return false;
+            }
+        }
+
+        true
+    }
+}
+
+impl Eq for UserTypeAttribute {}
+
 #[derive(Clone, Debug)]
 pub struct UserType {
     type_name: String,
-    type_: RefType<ValueType>,
-    attrs: HashMap<String, RefType<Value>>,
+    type_: ValueType,
+    attrs: UserTypeAttribute,
 }
+
+impl PartialEq for UserType {
+    fn eq(&self, other: &Self) -> bool {
+        s_read!(self.type_).eq(&s_read!(other.type_)) && self.attrs.eq(&other.attrs)
+    }
+}
+
+impl Eq for UserType {}
 
 impl UserType {
     pub fn new<S: AsRef<str>>(type_name: S, type_: &RefType<ValueType>) -> Self {
         Self {
             type_name: type_name.as_ref().to_owned(),
             type_: type_.clone(),
-            attrs: HashMap::default(),
+            attrs: UserTypeAttribute::default(),
         }
     }
 
     pub fn add_attr<S: AsRef<str>>(&mut self, name: S, value: RefType<Value>) {
-        self.attrs.insert(name.as_ref().to_owned(), value);
+        self.attrs.0.insert(name.as_ref().to_owned(), value);
     }
 
     pub fn get_attr_value<S: AsRef<str>>(&self, name: S) -> Option<&RefType<Value>> {
-        self.attrs.get(name.as_ref())
+        self.attrs.0.get(name.as_ref())
     }
 
-    pub fn get_type(&self) -> &RefType<ValueType> {
+    pub fn set_attr_value<S: AsRef<str>>(
+        &mut self,
+        name: S,
+        value: RefType<Value>,
+    ) -> Option<RefType<Value>> {
+        self.attrs.0.insert(name.as_ref().to_owned(), value)
+    }
+
+    pub fn get_type(&self) -> &ValueType {
         &self.type_
     }
 }
@@ -728,7 +775,7 @@ impl UserType {
 impl fmt::Display for UserType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut out = f.debug_struct(&self.type_name);
-        let mut attrs = self.attrs.iter().collect::<Vec<_>>();
+        let mut attrs = self.attrs.0.iter().collect::<Vec<_>>();
         attrs.sort_by(|(k1, _), (k2, _)| k1.cmp(k2));
 
         for (k, v) in attrs {

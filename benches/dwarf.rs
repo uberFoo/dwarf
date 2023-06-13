@@ -17,7 +17,7 @@ fn mandelbrot(c: &mut Criterion) {
     let source = fs::read_to_string(&MANDEL_SOURCE_FILE).unwrap();
     let ast = parse_dwarf(&source).unwrap();
     let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
-    let lu_dog = new_lu_dog(None, source.clone(), &ast, &[], &sarzak).unwrap();
+    let lu_dog = new_lu_dog(None, Some((source.clone(), &ast)), &[], &sarzak).unwrap();
 
     let ctx = initialize_interpreter::<PathBuf>(sarzak, lu_dog, None).unwrap();
 
@@ -31,7 +31,7 @@ fn fib(c: &mut Criterion) {
     let source = fs::read_to_string(&FIB_SOURCE_FILE).unwrap();
     let ast = parse_dwarf(&source).unwrap();
     let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
-    let lu_dog = new_lu_dog(None, source.clone(), &ast, &[], &sarzak).unwrap();
+    let lu_dog = new_lu_dog(None, Some((source.clone(), &ast)), &[], &sarzak).unwrap();
 
     let ctx = initialize_interpreter::<PathBuf>(sarzak, lu_dog, None).unwrap();
 

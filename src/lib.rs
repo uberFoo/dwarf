@@ -17,7 +17,7 @@ pub(crate) mod value;
 // pub(crate) mod woog_structs;
 
 pub use ::sarzak::{lu_dog, sarzak};
-pub use chacha::interpreter::{self, initialize_interpreter, start_repl, Memory};
+pub use chacha::interpreter::{self, initialize_interpreter, start_repl};
 pub use value::{StoreProxy, Value};
 
 // These should eventually come from the domain.
@@ -92,10 +92,12 @@ cfg_if::cfg_if! {
             }
         }
 
-        type RefType<T> = std::sync::Arc<std::sync::RwLock<T>>;
+        // type RefType<T> = std::sync::Arc<std::sync::RwLock<T>>;
+        type RefType<T> = std::sync::Arc<no_deadlocks::RwLock<T>>;
         impl<T> NewRef<T> for RefType<T> {
             fn new_ref(value: T) -> RefType<T> {
-                std::sync::Arc::new(std::sync::RwLock::new(value))
+                // std::sync::Arc::new(std::sync::RwLock::new(value))
+                std::sync::Arc::new(no_deadlocks::RwLock::new(value))
             }
         }
 
@@ -190,6 +192,63 @@ macro_rules! new_ref {
     };
 }
 pub(crate) use new_ref;
+
+macro_rules! function {
+    () => {{
+        fn f() {}
+        fn type_name_of<T>(_: T) -> &'static str {
+            std::any::type_name::<T>()
+        }
+        let name = type_name_of(f);
+        name.strip_suffix("::f").unwrap()
+    }};
+}
+pub(crate) use function;
+
+macro_rules! debug {
+    ($target:literal, $($arg:tt)*) => {
+        log::debug!(
+            target: $target,
+            "{}: {}\n  --> {}:{}:{}",
+            Colour::Cyan.dimmed().italic().paint(function!()),
+            format_args!($($arg)*),
+            file!(),
+            line!(),
+            column!()
+        );
+    };
+}
+pub(crate) use debug;
+
+macro_rules! warning {
+    ($target:literal, $($arg:tt)*) => {
+        log::warn!(
+            target: $target,
+            "{}: {}\n  --> {}:{}:{}",
+            Colour::Cyan.dimmed().italic().paint(function!()),
+            format_args!($($arg)*),
+            file!(),
+            line!(),
+            column!()
+        );
+    };
+}
+pub(crate) use warning;
+
+macro_rules! error {
+    ($target:literal, $($arg:tt)*) => {
+        log::error!(
+            target: $target,
+            "{}: {}\n  --> {}:{}:{}",
+            Colour::Red.dimmed().italic().paint(function!()),
+            format_args!($($arg)*),
+            file!(),
+            line!(),
+            column!()
+        );
+    };
+}
+pub(crate) use error;
 
 //
 // Command line parameters

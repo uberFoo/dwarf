@@ -182,10 +182,12 @@ fn lexer() -> impl Parser<char, Vec<Spanned<Token>>, Error = Simple<char>> {
         .recover_with(skip_then_retry_until([]));
 
     let comment = just("//").then(take_until(just('\n'))).padded();
+    let doc_comment = just('#').padded();
 
     token
         .map_with_span(|tok, span| (tok, span))
         .padded_by(comment.repeated())
+        .padded_by(doc_comment.repeated())
         .padded()
         .repeated()
 }
@@ -2763,23 +2765,27 @@ impl DwarfParser {
             return Ok(None);
         };
 
-        if !self.match_(&[Token::Punct(':')]) {
-            let token = self.peek().unwrap().clone();
-            let err = Simple::expected_input_found(
-                token.1.clone(),
-                [Some("':'".to_owned())],
-                Some(token.0.to_string()),
-            );
-            return Err(err);
-        }
+        let ty = if name.0 != "self" {
+            if !self.match_(&[Token::Punct(':')]) {
+                let token = self.peek().unwrap().clone();
+                let err = Simple::expected_input_found(
+                    token.1.clone(),
+                    [Some("':'".to_owned())],
+                    Some(token.0.to_string()),
+                );
+                return Err(err);
+            }
 
-        let ty = if let Some(ty) = self.parse_type()? {
-            ty
+            if let Some(ty) = self.parse_type()? {
+                ty
+            } else {
+                let start = self.previous().unwrap().1.end;
+                let end = self.peek().unwrap().1.start;
+                let err = Simple::custom(start..end, "missing type");
+                return Err(err);
+            }
         } else {
-            let start = self.previous().unwrap().1.end;
-            let end = self.peek().unwrap().1.start;
-            let err = Simple::custom(start..end, "missing type");
-            return Err(err);
+            (Type::Self_, 0..0)
         };
 
         debug!("exit parse_param: ", (&name, &ty));
@@ -2805,7 +2811,7 @@ impl DwarfParser {
             return Ok(Some((Type::Boolean, start..self.peek().unwrap().1.end)));
         }
 
-        // Match emppty
+        // Match empty
         if self.match_(&[Token::Punct('(')]) {
             if !self.match_(&[Token::Punct(')')]) {
                 let token = self.peek().unwrap().clone();
@@ -3205,9 +3211,9 @@ pub fn parse_dwarf(src: &str) -> Result<Vec<Spanned<Item>>, DwarfError> {
     log::debug!("parse_dwarf: {:#?}", ast);
 
     if !errs.is_empty() || !parse_errs.is_empty() {
-        let errors = report_errors(errs, parse_errs, src);
-        eprintln!("{}", errors);
-        Err(DwarfError::Parse { ast })
+        let error = report_errors(errs, parse_errs, src);
+        eprintln!("{}", error);
+        Err(DwarfError::Parse { error, ast })
     } else {
         Ok(ast)
     }

@@ -5,5 +5,19 @@ multilingual = false
 src = "src"
 title = "The Dwarf Programming Language"
 
+[output.html]
+git-repository-url = "https://github.com/uberfoo/dwarf"
+git-repository-icon = "fa-github"
+mathjax-support = true
+
 [output.html.playground]
 editable = true
+
+[preprocessor.indexing]
+[preprocessor.indexing.see_instead]
+"if" = "if expression"
+"equals" = "=="
+[preprocessor.indexing.nest_under]
+"if expression" = "expression"
+"=" = "expression"
+"==" = "expression"

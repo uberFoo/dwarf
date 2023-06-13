@@ -68,7 +68,7 @@ fn run_program(program: &str) -> Result<Value, ()> {
                         .eprint(Source::from(&program))
                         .unwrap()
                 }
-                DwarfError::Parse { ast } => {
+                DwarfError::Parse { error: _, ast } => {
                     for a in ast {
                         let msg = format!("{}", e);
                         let span = a.1.clone();
@@ -92,9 +92,11 @@ fn run_program(program: &str) -> Result<Value, ()> {
         .unwrap();
 
     let ctx = initialize_interpreter::<PathBuf>(sarzak, lu_dog, None).unwrap();
-    start_main(false, false, ctx).map_err(|e| {
-        println!("{e}");
-    })
+    start_main(false, false, ctx)
+        .map_err(|e| {
+            println!("{e}");
+        })
+        .and_then(|v| Ok(v.0))
 }
 
 include!(concat!(env!("OUT_DIR"), "/tests.rs"));

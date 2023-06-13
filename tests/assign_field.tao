@@ -7,8 +7,6 @@ fn main() -> bool {
 
     print(foo.a + "\n");
 
-    let a: bool = chacha::assert_eq(foo.a, 42);
-    let b = chacha::assert_eq(foo, Foo { a: 42 });
-
-    a && b
+    chacha::assert_eq(foo.a, 42);
+    chacha::assert_eq(foo, Foo { a: 42 });
 }

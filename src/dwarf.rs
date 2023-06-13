@@ -129,8 +129,11 @@ pub enum DwarfError {
     /// Parse Error
     ///
     /// Error parsing the source code.
-    #[snafu(display("\n{}: parser completed with errors", C_ERR.bold().paint("error")))]
-    Parse { ast: Vec<Spanned<Item>> },
+    #[snafu(display("\n{}: parser completed with errors:\n  --> {error}", C_ERR.bold().paint("error")))]
+    Parse {
+        error: String,
+        ast: Vec<Spanned<Item>>,
+    },
 
     /// Type Mismatch
     ///

@@ -4,7 +4,10 @@ use std::{fs::File, io::prelude::*, ops::Range, path::PathBuf};
 use ansi_term::Colour;
 use heck::{ToShoutySnakeCase, ToUpperCamelCase};
 use log;
-use sarzak::sarzak::{store::ObjectStore as SarzakStore, types::Ty, Object};
+use sarzak::{
+    lu_dog::ItemStatement,
+    sarzak::{store::ObjectStore as SarzakStore, types::Ty, Object},
+};
 use snafu::{location, prelude::*, Location};
 use tracy_client::Client;
 use uuid::Uuid;
@@ -447,6 +450,40 @@ pub fn inter_statement(
             let stmt = ExpressionStatement::new(&expr.0, lu_dog);
             let stmt = Statement::new_expression_statement(&block, None, &stmt, lu_dog);
 
+            Ok((stmt, ValueType::new_empty(lu_dog)))
+        }
+        //
+        // Item
+        //
+        ParserStatement::Item((item, span)) => {
+            match item {
+                // Item::Function((name, _name_span), params, return_type, stmts) => {
+                Item::Function(ref name, ref params, ref return_type, ref stmts) => inter_func(
+                    &name.0,
+                    &params,
+                    &return_type,
+                    &stmts,
+                    None,
+                    None,
+                    span,
+                    source,
+                    lu_dog,
+                    models,
+                    sarzak,
+                )?,
+                Item::Implementation((name, _name_span), funcs) => {
+                    inter_implementation(name, funcs, span, source, lu_dog, models, sarzak)?
+                }
+                // Item::Import((path, _path_span), alias) => {
+                //     inter_import(path, alias, &s_read!(source).source, span, lu_dog)?
+                // }
+                Item::Struct((name, span), fields) => {
+                    inter_struct(&name, &fields, span, source, lu_dog, models, sarzak)?
+                }
+                _ => unimplemented!(),
+            };
+            let stmt = ItemStatement::new();
+            let stmt = Statement::new_item_statement(&block, None, lu_dog);
             Ok((stmt, ValueType::new_empty(lu_dog)))
         }
         //
@@ -915,6 +952,44 @@ fn inter_expression(
             // 🚧
             // Returning an empty, because the error stuff in ValueType is fucked.
             let ty = ValueType::new_empty(lu_dog);
+
+            let value = XValue::new_expression(&block, &ty, &expr, lu_dog);
+            s_write!(span).x_value = Some(s_read!(value).id);
+
+            Ok(((expr, span), ty))
+        }
+        //
+        // Equals
+        //
+        ParserExpression::Equals(ref lhs, ref rhs) => {
+            let (lhs, lhs_ty) = inter_expression(
+                &new_ref!(ParserExpression, lhs.0.to_owned()),
+                &lhs.1,
+                source,
+                block,
+                lu_dog,
+                models,
+                sarzak,
+            )?;
+            let (rhs, rhs_ty) = inter_expression(
+                &new_ref!(ParserExpression, rhs.0.to_owned()),
+                &rhs.1,
+                source,
+                block,
+                lu_dog,
+                models,
+                sarzak,
+            )?;
+
+            let tc_span = s_read!(span).start as usize..s_read!(span).end as usize;
+            typecheck(&lhs_ty, &rhs_ty, tc_span, lu_dog, sarzak, models)?;
+
+            let expr = Comparison::new_equal(lu_dog);
+            let expr = Operator::new_comparison(Some(&rhs.0), &lhs.0, &expr, lu_dog);
+            let expr = Expression::new_operator(&expr, lu_dog);
+
+            let ty = Ty::new_boolean();
+            let ty = ValueType::new_ty(&new_ref!(Ty, ty), lu_dog);
 
             let value = XValue::new_expression(&block, &ty, &expr, lu_dog);
             s_write!(span).x_value = Some(s_read!(value).id);
@@ -2193,7 +2268,7 @@ fn inter_implementation(
     //     .expect(&format!("Object {} not found", name));
     let id = lu_dog
         .exhume_woog_struct_id_by_name(name)
-        .expect(&format!("Object {} not found", name));
+        .expect(&format!("struct {} not found", name));
 
     let mt = lu_dog.exhume_woog_struct(&id).unwrap();
 
@@ -2286,7 +2361,7 @@ fn inter_struct(
 /// those take much space.
 fn get_value_type(
     type_: &Type,
-    _span: &Span,
+    span: &Span,
     enclosing_type: Option<&RefType<ValueType>>,
     lu_dog: &mut LuDogStore,
     models: &[SarzakStore],
@@ -2343,6 +2418,10 @@ fn get_value_type(
             let reference = Reference::new(Uuid::new_v4(), false, &inner_type, lu_dog);
             Ok(ValueType::new_reference(&reference, lu_dog))
         }
+        Type::Self_ => match enclosing_type {
+            Some(ty) => Ok(ty.clone()),
+            None => Err(DwarfError::BadSelf { span: span.clone() }),
+        },
         Type::String => {
             let ty = Ty::new_s_string();
             Ok(ValueType::new_ty(&new_ref!(Ty, ty), lu_dog))

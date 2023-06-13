@@ -1,0 +1,5 @@
+use chacha::assert_eq;
+
+fn main() -> bool {
+    chacha::assert_eq(foo.a, 42)
+}

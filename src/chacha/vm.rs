@@ -3,10 +3,13 @@ use std::fmt;
 use ansi_term::Colour;
 
 use crate::{
-    interpreter::{Context, PrintableValueType},
-    new_ref, s_read, s_write,
+    chacha::{
+        interpreter::{Context, PrintableValueType},
+        memory::Memory,
+    },
+    new_ref, s_read,
     value::UserType,
-    ChaChaError, Memory, NewRef, RefType, Result, Value, ValueType,
+    ChaChaError, NewRef, RefType, Result, Value, ValueType,
 };
 
 #[derive(Clone, Debug)]

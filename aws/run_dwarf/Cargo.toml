@@ -15,6 +15,13 @@ edition = "2021"
 # and it will keep the alphabetic ordering for you.
 
 [dependencies]
+ariadne = "0.2.0"
+ansi_term = "0.12.1"
+ansi-to-html = "0.1.3"
+dwarf = { path = "../../", default-features = false, features = [
+    "single",
+    "repl",
+] }
 lambda_http = { version = "0.8.0", default-features = false, features = [
     "apigw_http",
 ] }
@@ -24,10 +31,3 @@ tracing = { version = "0.1", features = ["log"] }
 tracing-subscriber = { version = "0.3", default-features = false, features = [
     "fmt",
 ] }
-dwarf = { path = "../../", default-features = false, features = [
-    "single",
-    "repl",
-] }
-ariadne = "0.2.0"
-ansi_term = "0.12.1"
-ansi-to-html = "0.1.3"
