@@ -20,6 +20,11 @@ impl Complex {
         }
     }
 
+    fn add_2(self, other: Complex) {
+        self.re = self.re + other.re;
+        self.im = self.im + other.im;
+    }
+
     fn square(self) -> Complex {
         Complex {
             re: self.re * self.re - self.im * self.im,
@@ -28,13 +33,9 @@ impl Complex {
     }
 
     fn square_2(self) {
-        // let re = self.re * self.re - self.im * self.im;
-        // let im = 2.0 * self.re * self.im;
-        let re = 1.0;
-        let im = 2.0;
-
+        let re = self.re * self.re - self.im * self.im;
+        self.im = 2.0 * self.re * self.im;
         self.re = re;
-        self.im = im;
     }
 
     fn norm_squared(self) -> float {
@@ -67,14 +68,15 @@ fn escape_time(c: Complex, limit: int) -> Option<int> {
         // let z = z.square(z).add(z, c);
         // z = ComplexEx::square(z);
         // z = ComplexEx::add(z, c);
-        // z = z.square(z);
-        z.square_2(z);
-        z = z.add(z, c);
+        z = z.square();
+        // z.square_2();
+        z = z.add(c);
+        // z.add_2(c);
         // Having the RHS of this statement on the lhs of the expression below
         // does not work.
         // let foo = ComplexEx::norm_squared(z);
         // if foo > 4.0 {
-        if z.norm_squared(z) > 4.0 {
+        if z.norm_squared() > 4.0 {
             // debugger;
             // return Some(i);
             return i;

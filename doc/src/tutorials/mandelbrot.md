@@ -14,5 +14,5 @@ Basically, you fall within the set if \\(z\\) does not go to \\(\infty\\) when y
 
 I mentioned that the set is over the complex plane, and dwarf doesn't grok complex numbers.
 That means that we'll need to invent our own complex type.
-As per above, we'll need to support addition and squaring (multiplicaiton).
+As per above, we'll need to support addition and squaring.
 So, let's get started!

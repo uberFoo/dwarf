@@ -18,6 +18,7 @@ use lazy_static::lazy_static;
 use log::{self, log_enabled, Level::Debug};
 use num_format::{Locale, ToFormattedString};
 use parking_lot::{Condvar, Mutex};
+use sarzak::lu_dog::VariableExpression;
 // use rayon::prelude::*;
 use snafu::{location, prelude::*, Location};
 use tracy_client::{span, Client};
@@ -798,9 +799,7 @@ fn eval_expression(
         // Call
         //
         Expression::Call(ref call) => {
-            // error!("call id", call);
             let call = s_read!(lu_dog).exhume_call(call).unwrap();
-            // let s_read!(call)aoeu = s_read!(call);
             debug!("call", call);
             let args = s_read!(call).r28_argument(&s_read!(lu_dog));
             debug!("args", args);
@@ -861,7 +860,7 @@ fn eval_expression(
                 )
             };
 
-            // So we need to figure out the type this is being called upon.
+            // So we need to figure out the type that this is being called upon.
             let call_result = match (&s_read!(call).subtype, value, ty) {
                 //
                 // FunctionCall
@@ -881,6 +880,7 @@ fn eval_expression(
                     match &*s_read!(value) {
                         Value::ProxyType(proxy_type) => {
                             let mut arg_values = if !args.is_empty() {
+                                // Why am I doing all this with the VecDeque? It's
                                 let mut arg_values = VecDeque::with_capacity(args.len());
                                 let mut next = args
                                     .iter()
@@ -911,16 +911,19 @@ fn eval_expression(
                             s_write!(proxy_type).call(meth, &mut arg_values)
                         }
                         Value::UserType(ut) => {
-                            // Well, we need to get the function and the arguments
-                            // and invoke eval_function_call.
-                            let ut_read = s_read!(ut);
-                            let ty = ut_read.get_type();
-                            let ty = s_read!(ty);
-                            let woog_struct = if let ValueType::WoogStruct(woog_struct) = &*ty {
-                                woog_struct
-                            } else {
-                                panic!("I'm trying to invoke a function on a UserType, and it's not a Struct!");
+                            // Below is all wrapped up to avoid a double borrow.
+                            let woog_struct = {
+                                let ut_read = s_read!(ut);
+                                let ty = ut_read.get_type();
+                                let ty = s_read!(ty);
+                                if let ValueType::WoogStruct(woog_struct) = &*ty {
+                                    woog_struct.clone()
+                                } else {
+                                    // 🚧 This should be an error.
+                                    panic!("I'm trying to invoke a function on a UserType, and it's not a Struct!");
+                                }
                             };
+
                             let woog_struct =
                                 s_read!(lu_dog).exhume_woog_struct(&woog_struct).unwrap();
                             let woog_struct = s_read!(woog_struct);
@@ -930,14 +933,13 @@ fn eval_expression(
                                 .iter()
                                 .find(|f| s_read!(f).name == *meth)
                             {
-                                let result = eval_function_call(
+                                eval_function_call(
                                     (*func).clone(),
                                     &args,
                                     s_read!(call).arg_check,
                                     context,
                                     vm,
-                                );
-                                result
+                                )
                             } else {
                                 // Should this be an error? I don't think it's likely to happen.
                                 // 🚧 Wrong! This will happen frequently and should be an error.
@@ -1428,7 +1430,6 @@ fn eval_expression(
                 Value::UserType(value) => {
                     let value = s_read!(value);
                     let value = value.get_attr_value(field_name).unwrap();
-                    dbg!(&value);
                     let ty = s_read!(value).get_type(&s_read!(lu_dog));
 
                     Ok((value.clone(), ty))
@@ -1769,15 +1770,12 @@ fn eval_expression(
                                     let expr = &s_read!(field).expression;
                                     let expr = s_read!(lu_dog).exhume_expression(expr).unwrap();
 
-                                    dbg!(&expr);
-
                                     let Expression::VariableExpression(expr) = &*s_read!(expr)
                                     else { unreachable!() };
                                     let expr = s_read!(lu_dog).exhume_expression(expr).unwrap();
                                     let expr = s_read!(lu_dog)
                                         .exhume_variable_expression(&(&*s_read!(expr)).id())
                                         .unwrap();
-                                    dbg!(&expr);
 
                                     let value = context.memory.get(&s_read!(expr).name);
                                     ensure!(value.is_some(), {
@@ -1787,8 +1785,6 @@ fn eval_expression(
 
                                     let value = value.unwrap();
 
-                                    dbg!(&value);
-                                    dbg!(s_read!(value));
                                     match &*s_read!(value) {
                                         Value::ProxyType(value) => {
                                             // dbg!(s_read!(value));
@@ -2148,7 +2144,8 @@ fn eval_expression(
 
             debug!("Expression::VariableExpression value", s_read!(value));
 
-            let ty = s_read!(value).get_type(&s_read!(lu_dog));
+            // let ty = s_read!(value).get_type(&s_read!(lu_dog));
+            let ty = ValueType::new_empty(&s_read!(lu_dog));
 
             Ok((value.clone(), ty))
         }

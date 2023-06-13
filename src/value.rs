@@ -730,7 +730,7 @@ impl Eq for UserTypeAttribute {}
 #[derive(Clone, Debug)]
 pub struct UserType {
     type_name: String,
-    type_: ValueType,
+    type_: RefType<ValueType>,
     attrs: UserTypeAttribute,
 }
 
@@ -767,7 +767,7 @@ impl UserType {
         self.attrs.0.insert(name.as_ref().to_owned(), value)
     }
 
-    pub fn get_type(&self) -> &ValueType {
+    pub fn get_type(&self) -> &RefType<ValueType> {
         &self.type_
     }
 }

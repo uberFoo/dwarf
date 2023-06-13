@@ -117,11 +117,18 @@ cfg_if::cfg_if! {
         }
 
     } else if #[cfg(feature = "multi-parking-lot-mutex")] {
-        compile_error!("parking lot mutex is not currently supported");
+        // compile_error!("parking lot mutex is not currently supported");
+        type RcType<T> = std::sync::Arc<T>;
+        impl<T> NewRcType<T> for RcType<T> {
+            fn new_rc_type(value: T) -> RcType<T> {
+                std::sync::Arc::new(value)
+            }
+        }
+
         type RefType<T> = std::sync::Arc<parking_lot::Mutex<T>>;
 
         impl<T> NewRef<T> for RefType<T> {
-            fn new_ref_type(value: T) -> RefType<T> {
+            fn new_ref(value: T) -> RefType<T> {
                 std::sync::Arc::new(parking_lot::Mutex::new(value))
             }
         }

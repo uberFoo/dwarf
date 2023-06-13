@@ -690,7 +690,7 @@ dependencies = [
  "heck",
  "lazy_static",
  "log",
- "no_deadlocks 1.3.0",
+ "no_deadlocks",
  "num-format",
  "parking_lot",
  "pretty_env_logger",
@@ -1424,17 +1424,6 @@ name = "no_deadlocks"
 version = "1.3.0"
 dependencies = [
  "backtrace",
- "serde",
- "vector-map",
-]
-
-[[package]]
-name = "no_deadlocks"
-version = "1.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "94ebaca80b33988245ba8888ba4a034a82402e7113c62e1be9290114cda2c583"
-dependencies = [
- "backtrace",
  "vector-map",
 ]
 
@@ -2072,7 +2061,7 @@ dependencies = [
  "fnv",
  "heck",
  "log",
- "no_deadlocks 1.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "no_deadlocks",
  "nut",
  "parking_lot",
  "pretty_env_logger",

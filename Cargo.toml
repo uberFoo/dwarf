@@ -80,7 +80,7 @@ harness = false
 [features]
 # default = ["single", "repl", "print-std-out"]
 default = ["multi", "repl", "print-std-out"]
-# default = ["repl", "parking-lot-mutex", "print-std-out"]
+# default = ["repl", "multi-parking-lot-mutex", "print-std-out"]
 repl = ["rustyline"]
 
 single = ["sarzak/lu-dog-rc"]

@@ -37,11 +37,9 @@ Addition is fairly straightforward:
 # }
 
 impl Complex {
-    fn add(self, other: Complex) -> Complex {
-        Complex {
-            re: self.re + other.re,
-            im: self.im + other.im,
-        }
+    fn add(self, other: Complex) {
+        self.re = self.re + other.re;
+        self.im = self.im + other.im;
     }
 }
 ```
@@ -59,11 +57,9 @@ Similarly, the square function is not too bad:
 # }
 
 impl Complex {
-    fn square(self) -> Complex {
-        Complex {
-            re: self.re * self.re - self.im * self.im,
-            im: 2.0 * self.re * self.im,
-        }
+    fn square(self) {
+        self.re = self.re * self.re - self.im * self.im;
+        self.im = 2.0 * self.re * self.im;
     }
 }
 ```
@@ -88,5 +84,36 @@ impl Complex {
     fn norm(self) -> float {
         self.re * self.re + self.im * self.im
     }
+}
+```
+
+There is something worth noting in the last function.
+We are returning a *float*, but there is no *return* statement.
+Just like in Rust, the last expression in a *block* is the the value of the block.
+
+We'll need to be able to create the Complex number "0".
+We can do that with a *{{i: static method}}*.
+Static methods are functions that belong to the type, rather than an instance of the type.
+Practically that means that the function does not take a *self* parameter.
+
+```dwarf
+#struct Complex {
+#    re: float,
+#    im: float,
+#}
+
+impl Complex {
+    fn zero() -> Complex {
+        Complex {
+            re: 0.0,
+            im: 0.0,
+        }
+    }
+}
+
+fn main() {
+    let zero = Complex::zero();
+    chacha::assert_eq(zero.re, 0.0);
+    chacha::assert_eq(zero.im, 0.0);
 }
 ```

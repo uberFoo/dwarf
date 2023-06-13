@@ -1747,6 +1747,10 @@ fn inter_expression(
             s_write!(span).x_value = Some(s_read!(value).id);
 
             let mut last_arg_uuid: Option<Uuid> = None;
+            // This is the self parameter
+            let this = Argument::new(None, &call, &instance.0, lu_dog);
+            last_arg_uuid = link_argument!(last_arg_uuid, this, lu_dog);
+
             for arg in args {
                 let (arg_expr, ty) = inter_expression(
                     &new_ref!(ParserExpression, arg.0.to_owned()),
