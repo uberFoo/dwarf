@@ -1,6 +1,6 @@
 # Coding a Complex Type
 
-{{i: Complex numbers}} are really just a {{i: tuple}} of two {{i: float}}s.
+{{i: Complex numbers}} are really just a {{i: tuple}} of two {{i: `float`}}s.
 One element is the real part of the number, and the other is the imaginary part.
 The real part is plotted along the x-axis, and the imaginary part is plotted along the y-axis.
 
@@ -10,7 +10,7 @@ But don't get caught up in the math — it's not on the test.
 
 ## Defining the Type
 
-dwarf doesn't have tuples (yet) so we'll use *{{i: struct}}*s like so:
+dwarf doesn't have tuples (yet) so we'll use {{i: `struct`}}s like so:
 
 ```dwarf
 struct Complex {
@@ -27,6 +27,32 @@ Trailing commas are just fine.
 
 In this specific case we have a *struct* called `Complex` that has two fields, each of type *float*.
 The first is called `re`, and the second, `im`.
+
+Initializiation of a *struct* is done by a *{{i: struct expression}}*, just like Rust.
+if you are unfamiliar, a struct expression looks like the definition, but with values in place of types.
+
+```dwarf
+#struct Complex {
+#    re: float,
+#    im: float,
+#}
+fn main() {
+    let z = Complex {
+        re: 1.23,
+        im: 4.56,
+    };
+    chacha::assert_eq(z.re, 1.23);
+    chacha::assert_eq(z.im, 4.56);
+}
+```
+
+The last two lines are functions provided by the runtime {{i: ChaCha}}.
+`chach::assert_eq` tests it's arguments for equality, and throws an error if they are not.
+
+## Complex Methods
+
+Having a type is a good start.
+We can now create Complex numbers
 
 Addition is fairly straightforward:
 

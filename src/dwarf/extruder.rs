@@ -768,6 +768,35 @@ fn inter_expression(
             Ok(((expr, span), as_type))
         }
         //
+        // Asm
+        //
+        // ParserExpression::Asm(ref exprs) => {
+        //     let mut exprs = exprs
+        //         .iter()
+        //         .map(|expr| {
+        //             inter_expression(
+        //                 &new_ref!(ParserExpression, expr.0.to_owned()),
+        //                 &expr.1,
+        //                 source,
+        //                 block,
+        //                 lu_dog,
+        //                 models,
+        //                 sarzak,
+        //             )
+        //         })
+        //         .collect::<Result<Vec<_>, _>>()?;
+
+        //     let static_method_call =
+        //         StaticMethodCall::new("execute_asm".to_owend(), "chacha".to_owned(), lu_dog);
+        //     //     &exprs
+        //     //         .iter()
+        //     //         .map(|expr| &expr.0)
+        //     //         .collect::<Vec<_>>()
+        //     //         .as_slice(),
+        //     //     lu_dog,
+        //     // );
+        // }
+        //
         // Assignment
         //
         ParserExpression::Assignment(ref lhs, ref rhs) => {

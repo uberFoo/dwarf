@@ -1961,6 +1961,7 @@ dependencies = [
  "ansi_term",
  "ariadne",
  "dwarf",
+ "hyper",
  "lambda_http",
  "lambda_runtime",
  "tokio",

@@ -3,13 +3,8 @@ use std::fmt;
 use ansi_term::Colour;
 
 use crate::{
-    chacha::{
-        interpreter::{Context, PrintableValueType},
-        memory::Memory,
-    },
-    new_ref, s_read,
-    value::UserType,
-    ChaChaError, NewRef, RefType, Result, Value, ValueType,
+    chacha::memory::Memory, new_ref, s_read, s_write, value::UserType, ChaChaError, NewRef,
+    RefType, Result, Value, ValueType,
 };
 
 #[derive(Clone, Debug)]
@@ -21,17 +16,31 @@ pub enum Instruction {
     /// Duplicate the top of the stack.
     Dup,
     /// Fetch a local variable.
-    FetchLocal(usize),
+    ///
+    /// The parameter is it's distance from the frame pointer, I think.
+    /// The value of the local variable is pushed onto the stack.
+    PushLocal(usize),
     /// Read a field value
     ///
     /// The top of the stack is the name of the field to read. The second value
     /// on the stack is the object from which to read.
+    ///
+    /// The value read is left on top of the stack.
     FieldRead,
     /// Read several field values
     ///
     /// The first `n` entries of the stack are the names of the fields to read.
     /// The next value on the stack is the object from which to read.
+    ///
+    /// The values read are left on top of the stack, in the same order as their
+    /// field names were on the stack.
     FieldsRead(usize),
+    /// Write a field value
+    ///
+    /// The top of the stack is the value to write. The second value on the
+    /// stack is the filed name, and the third value on the stack is the object
+    /// to which to write.
+    FieldWrite,
     /// Jump to the given offset if the top of the stack is false.
     JumpIfFalse(usize),
     /// Compare the top two values on the stack.
@@ -47,7 +56,7 @@ pub enum Instruction {
     /// field.
     NewUserType(String, RefType<ValueType>, usize),
     /// Pop the top value off the stack.
-    Pop,
+    PopLocal(usize),
     /// Push a value onto the stack.
     Push(RefType<Value>),
     Return,
@@ -69,19 +78,20 @@ impl fmt::Display for Instruction {
                 operand_style.paint(arity.to_string())
             ),
             Instruction::Dup => write!(f, "{}", opcode_style.paint("dup")),
-            Instruction::FetchLocal(index) => write!(
+            Instruction::PushLocal(index) => write!(
                 f,
                 "{} {}",
-                opcode_style.paint("fetch"),
+                opcode_style.paint("push_local"),
                 operand_style.paint(index.to_string())
             ),
-            Instruction::FieldRead => write!(f, "{}", opcode_style.paint("field")),
+            Instruction::FieldRead => write!(f, "{}", opcode_style.paint("field_read")),
             Instruction::FieldsRead(count) => write!(
                 f,
                 "{} {}",
-                opcode_style.paint("fields"),
+                opcode_style.paint("fields_read"),
                 operand_style.paint(count.to_string())
             ),
+            Instruction::FieldWrite => write!(f, "{}", opcode_style.paint("field_write")),
             Instruction::JumpIfFalse(offset) => write!(
                 f,
                 "{} {}",
@@ -93,7 +103,12 @@ impl fmt::Display for Instruction {
             Instruction::NewUserType(name, ty, n) => {
                 write!(f, "{}{name}({n})", opcode_style.paint("new"))
             }
-            Instruction::Pop => write!(f, "{}", opcode_style.paint("pop")),
+            Instruction::PopLocal(index) => write!(
+                f,
+                "{} {}",
+                opcode_style.paint("pop_local"),
+                operand_style.paint(index.to_string())
+            ),
             // Instruction::Push => write!(f, "{}", opcode_style.paint("push")),
             Instruction::Push(value) => write!(
                 f,
@@ -323,23 +338,17 @@ impl<'a, 'b> VM<'a, 'b> {
 
                         0
                     }
-                    Instruction::FetchLocal(index) => {
-                        let value = self.stack[fp + index + 1].clone();
-                        self.stack.push(value);
-
-                        0
-                    }
                     Instruction::FieldRead => {
                         let field = self.stack.pop().unwrap();
-                        let value = self.stack.pop().unwrap();
-                        match &*s_read!(value) {
-                            Value::ProxyType(value) => {
-                                match s_read!(value).get_attr_value(s_read!(field).as_ref()) {
+                        let ty_ = self.stack.pop().unwrap();
+                        match &*s_read!(ty_) {
+                            Value::ProxyType(ty_) => {
+                                match s_read!(ty_).get_attr_value(s_read!(field).as_ref()) {
                                     Ok(value) => {
                                         if trace {
                                             println!(
                                                 "\t\t{}\t{}",
-                                                Colour::Green.paint("field:"),
+                                                Colour::Green.paint("field_read:"),
                                                 s_read!(value)
                                             );
                                         }
@@ -348,15 +357,26 @@ impl<'a, 'b> VM<'a, 'b> {
                                     Err(e) => {
                                         return Err::<RefType<Value>, ChaChaError>(
                                             ChaChaError::VmPanic {
-                                                message: format!("{}", e),
+                                                message: format!(
+                                                    "Unknown field {} for proxy.",
+                                                    s_read!(field),
+                                                    // s_read!(ty_)
+                                                ),
                                             },
                                         );
                                     }
                                 }
                             }
-                            Value::UserType(value) => {
-                                match s_read!(value).get_attr_value(s_read!(field).as_ref()) {
+                            Value::UserType(ty_) => {
+                                match s_read!(ty_).get_attr_value(s_read!(field).as_ref()) {
                                     Some(value) => {
+                                        if trace {
+                                            println!(
+                                                "\t\t{}\t{}",
+                                                Colour::Green.paint("field_read:"),
+                                                s_read!(value)
+                                            );
+                                        }
                                         self.stack.push(value.clone());
                                     }
                                     None => {
@@ -365,10 +385,76 @@ impl<'a, 'b> VM<'a, 'b> {
                                                 message: format!(
                                                     "Unknown field {} for {}.",
                                                     s_read!(field),
-                                                    s_read!(value)
+                                                    s_read!(ty_)
                                                 ),
                                             },
                                         );
+                                    }
+                                }
+                            }
+                            value => {
+                                return Err::<RefType<Value>, ChaChaError>(ChaChaError::VmPanic {
+                                    message: format!("Unexpected value type: {value}."),
+                                })
+                            }
+                        }
+
+                        0
+                    }
+                    Instruction::FieldWrite => {
+                        let field = self.stack.pop().unwrap();
+                        let ty_ = self.stack.pop().unwrap();
+                        let value = self.stack.pop().unwrap();
+                        match &*s_read!(ty_) {
+                            Value::ProxyType(ty_) => {
+                                match s_write!(ty_)
+                                    .set_attr_value(s_read!(field).as_ref(), value.clone())
+                                {
+                                    Ok(_) => {
+                                        if trace {
+                                            println!(
+                                                "\t\t{}\t{}",
+                                                Colour::Green.paint("field_write:"),
+                                                s_read!(value)
+                                            );
+                                        }
+                                    }
+                                    Err(e) => {
+                                        return Err::<RefType<Value>, ChaChaError>(
+                                            ChaChaError::VmPanic {
+                                                message: format!(
+                                                    "Unknown field {} for proxy.",
+                                                    s_read!(field),
+                                                    // s_read!(ty_)
+                                                ),
+                                            },
+                                        );
+                                    }
+                                }
+                            }
+                            Value::UserType(ty_) => {
+                                match s_write!(ty_)
+                                    .set_attr_value(s_read!(field).as_ref(), value.clone())
+                                {
+                                    Some(_) => {
+                                        if trace {
+                                            println!(
+                                                "\t\t{}\t{}",
+                                                Colour::Green.paint("field_write:"),
+                                                s_read!(value)
+                                            );
+                                        }
+                                    }
+                                    None => {
+                                        return Err::<RefType<Value>, ChaChaError>(
+                                            ChaChaError::VmPanic {
+                                                message: format!(
+                                                    "Unknown field {} for {}.",
+                                                    s_read!(field),
+                                                    s_read!(ty_)
+                                                ),
+                                            },
+                                        )
                                     }
                                 }
                             }
@@ -458,8 +544,20 @@ impl<'a, 'b> VM<'a, 'b> {
 
                         0
                     }
+                    Instruction::PopLocal(index) => {
+                        let value = self.stack.pop().unwrap();
+                        self.stack[fp + index + 1] = value;
+
+                        0
+                    }
                     Instruction::Push(value) => {
                         self.stack.push(value.clone());
+
+                        0
+                    }
+                    Instruction::PushLocal(index) => {
+                        let value = self.stack[fp + index + 1].clone();
+                        self.stack.push(value);
 
                         0
                     }
@@ -503,7 +601,9 @@ mod tests {
     use super::*;
     use crate::{
         dwarf::{new_lu_dog, parse_dwarf},
-        initialize_interpreter, DwarfFloat, DwarfInteger,
+        initialize_interpreter,
+        interpreter::PrintableValueType,
+        DwarfFloat, DwarfInteger,
     };
 
     #[test]
@@ -784,7 +884,7 @@ mod tests {
         ));
         vm.stack.push(new_ref!(Value, 42.into()));
 
-        thonk.add_instruction(Instruction::FetchLocal(0));
+        thonk.add_instruction(Instruction::PushLocal(0));
         thonk.add_instruction(Instruction::Return);
         println!("{}", thonk);
 
@@ -880,7 +980,7 @@ mod tests {
         vm.stack.push(new_ref!(Value, 42.into()));
         vm.stack.push(new_ref!(Value, Value::Integer(-1)));
 
-        thonk.add_instruction(Instruction::FetchLocal(1));
+        thonk.add_instruction(Instruction::PushLocal(1));
         thonk.add_instruction(Instruction::Return);
         println!("{}", thonk);
 
@@ -908,7 +1008,7 @@ mod tests {
         let mut thonk = Thonk::new("fib".to_string());
 
         // Get the parameter off the stack
-        thonk.add_instruction(Instruction::FetchLocal(0));
+        thonk.add_instruction(Instruction::PushLocal(0));
         thonk.add_instruction(Instruction::Push(new_ref!(Value, 1.into())));
         // Chcek if it's <= 1
         thonk.add_instruction(Instruction::LessThanOrEqual);
@@ -920,7 +1020,7 @@ mod tests {
         // Load fib
         thonk.add_instruction(Instruction::Push(new_ref!(Value, Value::Thonk("fib", 0))));
         // load n
-        thonk.add_instruction(Instruction::FetchLocal(0));
+        thonk.add_instruction(Instruction::PushLocal(0));
         // load 1
         thonk.add_instruction(Instruction::Push(new_ref!(Value, 1.into())));
         // subtract
@@ -930,7 +1030,7 @@ mod tests {
         // load fib
         thonk.add_instruction(Instruction::Push(new_ref!(Value, Value::Thonk("fib", 0))));
         // load n
-        thonk.add_instruction(Instruction::FetchLocal(0));
+        thonk.add_instruction(Instruction::PushLocal(0));
         // load 2
         thonk.add_instruction(Instruction::Push(new_ref!(Value, 2.into())));
         // subtract

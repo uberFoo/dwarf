@@ -1,3 +1,5 @@
+# Rendering the Set
+```dwarf, editable
 // use term::rgb;
 struct Complex {
     re: float,
@@ -66,17 +68,17 @@ fn escape_time(c: Complex, limit: int) -> Option<int> {
         // 🚧 This let wreaks havoc -- fix it.
         // Also the chained method calls don't affect the correct z, or something.
         // let z = z.square(z).add(z, c);
-        ComplexEx::square(z);
-        ComplexEx::add(z, c);
-        // z = z.square();
+        z = ComplexEx::square(z);
+        z = ComplexEx::add(z, c);
+        //z = z.square();
         // z.square_2();
-        // z = z.add(c);
+        //z = z.add(c);
         // z.add_2(c);
         // Having the RHS of this statement on the lhs of the expression below
         // does not work.
         let foo = ComplexEx::norm_squared(z);
         if foo > 4.0 {
-        // if z.norm_squared() > 4.0 {
+        //if z.norm_squared() > 4.0 {
             // debugger;
             // return Some(i);
             return i;
@@ -129,7 +131,7 @@ fn plot() -> Complex {
     // let column = 0;
     // debugger;
     // for t in 0..255 {
-        let t = 50;
+        let t = 100;
         for row in 0..height {
         // OMG, this is an ugly hack, and yet it's so badass. If it had worked. 😢
         // ChaCha::spawn(do_column, [row, width, height, upper_left, lower_right]);
@@ -157,3 +159,4 @@ fn do_column(time: int, row: int, width: int, height: int, upper_left: Complex, 
     }
     print("\n");
 }
+```

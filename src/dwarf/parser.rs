@@ -132,12 +132,10 @@ fn lexer() -> impl Parser<char, Vec<Spanned<Token>>, Error = Simple<char>> {
         .collect::<String>()
         .map(Token::String);
 
-    // A parser for punctuation (delimiters, semicolons, etc.)
-    let punct = one_of("=-()[]{}:;,.&<>+*/!").map(|c| Token::Punct(c));
-
     // A parser for identifiers and keywords
     let ident = text::ident().map(|ident: String| match ident.as_str() {
         "as" => Token::As,
+        "asm" => Token::Asm,
         "bool" => Token::Type(Type::Boolean),
         "debugger" => Token::Debugger,
         "else" => Token::Else,
@@ -164,6 +162,9 @@ fn lexer() -> impl Parser<char, Vec<Spanned<Token>>, Error = Simple<char>> {
         // "Uuid" => Token::Uuid,
         _ => Token::Ident(ident),
     });
+
+    // A parser for punctuation (delimiters, semicolons, etc.)
+    let punct = one_of("=-()[]{}:;,.&<>+*/!").map(|c| Token::Punct(c));
 
     let option = just("Option").map(|_| Token::Option);
 
@@ -1380,6 +1381,12 @@ impl DwarfParser {
             return Ok(Some(expression));
         }
 
+        // parse an asm! expression
+        if let Some(expression) = self.parse_asm_expression()? {
+            debug!("asm! expression", expression);
+            return Ok(Some(expression));
+        }
+
         // parse a debugger expression
         if let Some(expression) = self.parse_debugger_expression()? {
             debug!("debugger expression");
@@ -2040,10 +2047,77 @@ impl DwarfParser {
         Some(((DwarfExpression::Empty, span.to_owned()), LITERAL))
     }
 
+    /// Parse an asm! expression
+    ///
+    /// print_expression -> PRINT( expr )
+    fn parse_asm_expression(&mut self) -> Result<Option<Expression>> {
+        debug!("enter");
+
+        let start = if let Some(tok) = self.peek() {
+            tok.1.start
+        } else {
+            return Ok(None);
+        };
+
+        if !self.check(&Token::Asm) {
+            return Ok(None);
+        }
+        if !self.check2(&Token::Punct('!')) {
+            return Ok(None);
+        }
+        self.advance();
+        self.advance();
+
+        if !self.match_(&[Token::Punct('(')]) {
+            let token = &self.previous().unwrap();
+            let err = Simple::expected_input_found(
+                token.1.clone(),
+                [Some("(".to_owned())],
+                Some(token.0.to_string()),
+            );
+            return Err(err);
+        }
+
+        let mut arguments = Vec::new();
+
+        while !self.at_end() && !self.match_(&[Token::Punct(')')]) {
+            if let Some(expr) = self.parse_expression(LITERAL.1)? {
+                arguments.push(expr.0);
+
+                if self.peek().unwrap().0 == Token::Punct(',') {
+                    self.advance();
+                }
+            } else {
+                let tok = self.peek().unwrap();
+                let err = Simple::expected_input_found(
+                    tok.1.clone(),
+                    [Some("expression".to_owned())],
+                    Some(tok.0.to_string()),
+                );
+                let err = err.with_label("expected expression");
+                error!("exit", err);
+                return Err(err);
+            }
+        }
+
+        debug!("exit");
+
+        Ok(Some((
+            (
+                DwarfExpression::Asm(arguments),
+                start..self.previous().unwrap().1.end,
+            ),
+            LITERAL,
+        )))
+    }
+
     /// Parse a print expression
     ///
     /// This really should just be another function call, and I sort it out
     /// at name resolution time.
+    ///
+    /// I'm not so sure that I still agree with this. I think you need a built-in
+    /// output. I should have an input too.
     ///
     /// print_expression -> PRINT( expr )
     fn parse_print_expression(&mut self) -> Result<Option<Expression>> {
@@ -2785,7 +2859,7 @@ impl DwarfParser {
                 return Err(err);
             }
         } else {
-            (Type::Self_, 0..0)
+            (Type::Self_, name.1.clone())
         };
 
         debug!("exit parse_param: ", (&name, &ty));
@@ -3780,7 +3854,6 @@ mod tests {
         "#;
 
         let ast = parse_dwarf(src);
-        dbg!(&ast);
         assert!(ast.is_ok());
     }
 
@@ -3798,7 +3871,26 @@ mod tests {
         "#;
 
         let ast = parse_dwarf(src);
-        dbg!(&ast);
+        assert!(ast.is_ok());
+    }
+
+    #[test]
+    fn test_asm() {
+        let _ = env_logger::builder().is_test(true).try_init();
+
+        let src = r#"
+            fn foo() -> () {
+                let foo: string = "nop";
+
+                asm!(
+                    "nop",
+                    "nop",
+                    foo
+                );
+            }
+        "#;
+
+        let ast = parse_dwarf(src);
         assert!(ast.is_ok());
     }
 }

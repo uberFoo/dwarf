@@ -10,9 +10,9 @@ use std::{
 };
 
 use crate::{
+    chacha::memory::MemoryUpdateMessage,
     interpreter::{
         banner2, initialize_interpreter_paths, start_tui_repl, DebuggerControl, DebuggerStatus,
-        MemoryUpdateMessage,
     },
     s_read, ChaChaError,
 };

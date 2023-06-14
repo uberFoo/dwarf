@@ -8,7 +8,9 @@ use dwarf::{
     interpreter::start_main,
     sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL},
 };
-use lambda_http::{run, service_fn, Body, Error, Request, RequestExt, Response};
+use lambda_http::{
+    run_with_streaming_response, service_fn, Body, Error, Request, RequestExt, Response,
+};
 use tracing::{event, Level};
 
 /// This is the main body for the function.
@@ -16,6 +18,15 @@ use tracing::{event, Level};
 /// There are some code example in the following URLs:
 /// - https://github.com/awslabs/aws-lambda-rust-runtime/tree/main/examples
 async fn function_handler(event: Request) -> Result<Response<Body>, Error> {
+    let (mut tx, rx) = hyper::Body::channel();
+
+    // tokio::spawn(async move {
+    //     for message in messages.iter() {
+    //         tx.send_data((*message).into()).await.unwrap();
+    //         thread::sleep(Duration::from_millis(500));
+    //     }
+    // });
+
     let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
 
     let message = if let Body::Text(program) = event.into_body() {
@@ -166,5 +177,5 @@ async fn main() -> Result<(), Error> {
         .without_time()
         .init();
 
-    run(service_fn(function_handler)).await
+    run_with_streaming_response(service_fn(function_handler)).await
 }

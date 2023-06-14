@@ -19,10 +19,10 @@ use crate::{
     s_read, NewRef, RefType,
 };
 
-pub mod compiler;
+pub mod extruder;
 pub mod parser;
 
-pub use compiler::{inter_statement, new_lu_dog};
+pub use extruder::{inter_statement, new_lu_dog};
 pub use parser::{parse_dwarf, parse_line};
 
 pub type Span = ops::Range<usize>;
@@ -176,6 +176,7 @@ pub struct DwarfOptions {
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum Token {
     As,
+    Asm,
     Bool(bool),
     Debugger,
     Else,
@@ -210,6 +211,7 @@ impl fmt::Display for Token {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Self::As => write!(f, "as"),
+            Self::Asm => write!(f, "asm!"),
             Self::Bool(bool_) => write!(f, "{}", bool_),
             Self::Debugger => write!(f, "debugger"),
             Self::Else => write!(f, "else"),
@@ -412,6 +414,7 @@ pub enum Expression {
     Addition(Box<Spanned<Self>>, Box<Spanned<Self>>),
     And(Box<Spanned<Self>>, Box<Spanned<Self>>),
     As(Box<Spanned<Self>>, Spanned<Type>),
+    Asm(Vec<Spanned<Self>>),
     /// Assignment Expression
     ///
     /// E.g.: `a = b`

@@ -1,4 +1,6 @@
 pub mod dap;
 pub mod interpreter;
-mod memory;
+pub mod memory;
 pub mod vm;
+
+pub use memory::MemoryUpdateMessage;
