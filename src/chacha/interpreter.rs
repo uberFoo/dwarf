@@ -792,11 +792,12 @@ fn eval_expression(
                 let mut ty;
                 // This is a pain.
                 // Find the first statement, by looking for the one with no previous statement.
-                let mut next = stmts
-                    .iter()
-                    .find(|s| s_read!(s).r17c_statement(&s_read!(lu_dog)).is_empty())
-                    .unwrap()
-                    .clone();
+                // let mut next = stmts
+                //     .iter()
+                //     .find(|s| s_read!(s).r17c_statement(&s_read!(lu_dog)).is_empty())
+                //     .unwrap()
+                //     .clone();
+                let mut next = s_read!(block).r71_statement(&s_read!(lu_dog))[0].clone();
 
                 loop {
                     let result = eval_statement(next.clone(), context, vm).map_err(|e| {

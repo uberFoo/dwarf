@@ -604,6 +604,9 @@ fn inter_statements(
     let mut last_stmt_uuid: Option<Uuid> = None;
     for stmt in statements {
         let (stmt, ty) = inter_statement(stmt, source, block, lu_dog, models, sarzak)?;
+        if last_stmt_uuid == None {
+            s_write!(block).statement = Some(s_read!(stmt).id);
+        }
         if s_read!(block).statement.is_none() {
             s_write!(block).statement = Some(s_read!(stmt).id);
         }
