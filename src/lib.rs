@@ -4,6 +4,7 @@ use ansi_term::Colour;
 use chacha::vm::Instruction;
 use clap::Args;
 use crossbeam::channel::SendError;
+#[cfg(feature = "repl")]
 use rustyline::error::ReadlineError;
 use serde::{Deserialize, Serialize};
 use snafu::{prelude::*, Location};
@@ -17,7 +18,7 @@ pub(crate) mod value;
 // pub(crate) mod woog_structs;
 
 pub use ::sarzak::{lu_dog, sarzak};
-pub use chacha::interpreter::{self, initialize_interpreter, start_repl};
+pub use chacha::interpreter::{self, initialize_interpreter};
 pub use value::{StoreProxy, Value};
 
 // These should eventually come from the domain.
@@ -347,6 +348,7 @@ pub enum ChaChaError {
         value: RefType<Value>,
         ty: RefType<ValueType>,
     },
+    #[cfg(feature = "repl")]
     RustyLine {
         source: ReadlineError,
     },
