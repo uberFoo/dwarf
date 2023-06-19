@@ -1,0 +1,11 @@
+fn main() {
+    print(chacha::typeof(42) + "\n");
+    print(chacha::typeof(42.0) + "\n");
+    print(chacha::typeof("42") + "\n");
+    print(chacha::typeof(true) + "\n");
+    print(chacha::typeof(false) + "\n");
+    print(chacha::typeof({}) + "\n");
+    print(chacha::typeof(()) + "\n");
+    print(chacha::typeof({42}) + "\n");
+    print(chacha::typeof({42, 42.0, "42", true, false}) + "\n");
+}

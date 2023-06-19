@@ -1,0 +1,22 @@
+/// Test basic string stuff
+fn main() -> () {
+    let s = "Hello, world!🎉💥";
+    print(s + "\n");
+
+    // Strings are also iterable.
+    for c in s {
+        print(c + "\n");
+    }
+
+    // Can we get the length of a string?
+    print(s.len() as string + "\n");
+
+    // Can we index into a string?
+    let len: int = s.len();
+    // print(s[len] + "\n");
+    chacha::assert_eq(s[len - 1], "💥");
+    chacha::assert_eq(s[len - 2], "🎉");
+    chacha::assert_eq(s[len - 9], " ");
+
+    print(s[s.len() - 2] + "\n");
+}

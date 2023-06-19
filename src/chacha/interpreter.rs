@@ -989,7 +989,12 @@ fn eval_expression(
                         }
                         Value::String(string) => match meth.as_str() {
                             "len" => {
-                                let len = string.len();
+                                let len = unicode_segmentation::UnicodeSegmentation::graphemes(
+                                    string.as_str(),
+                                    true,
+                                )
+                                .collect::<Vec<&str>>()
+                                .len();
                                 let ty = Ty::new_integer();
                                 let ty =
                                     ValueType::new_ty(&new_ref!(Ty, ty), &mut s_write!(lu_dog));
@@ -1650,9 +1655,12 @@ fn eval_expression(
                     })
                 }
             } else if let Value::String(str) = &*list {
+                let str = unicode_segmentation::UnicodeSegmentation::graphemes(str.as_str(), true)
+                    .collect::<Vec<&str>>();
+
                 if index < str.len() {
                     Ok((
-                        new_ref!(Value, Value::String(str[index..index + 1].to_owned(),)),
+                        new_ref!(Value, Value::String(str[index..index + 1].join(""),)),
                         ValueType::new_empty(&s_read!(lu_dog)),
                     ))
                 } else {
