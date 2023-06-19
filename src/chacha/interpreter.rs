@@ -515,6 +515,7 @@ pub fn initialize_interpreter<P: AsRef<Path>>(
         timings: CircularQueue::with_capacity(TIMING_COUNT),
         expr_count: 0,
         func_calls: 0,
+        args: None,
     })
 }
 
@@ -728,6 +729,7 @@ fn eval_expression(
     vm: &mut VM,
 ) -> Result<(RefType<Value>, RefType<ValueType>)> {
     let lu_dog = context.lu_dog.clone();
+    let sarzak = context.sarzak.clone();
 
     // Timing goodness
     context.expr_count += 1;
@@ -862,49 +864,72 @@ fn eval_expression(
                 let expr = s_read!(lu_dog).exhume_expression(expr).unwrap();
                 // Evaluate the LHS to get at the function.
                 let (value, ty) = eval_expression(expr, context, vm)?;
-                no_debug!("Expression::Call LHS value", s_read!(value));
+                debug!("Expression::Call LHS value", s_read!(value));
                 debug!("Expression::Call LHS ty", ty);
-                // So now value is pointing a a legit Function. We need to jump
-                // through all sorts of hoops now. We need to setup a new stack
-                // frame, and push the old one on to a stack that doesn't exist
-                // yet. Then we need to eval all the arguments and put them in
-                // the frame. And then we need to eval the statements in the
-                // function body.
 
-                // Or we can just call the function we already wrote!
-                let read_value = s_read!(value);
-                match &*read_value {
-                    Value::Function(ref func) => {
-                        let func = s_read!(lu_dog).exhume_function(&s_read!(func).id).unwrap();
-                        debug!("Expression::Call func", func);
-                        let (value, ty) =
-                            eval_function_call(func, &args, s_read!(call).arg_check, context, vm)?;
-                        debug!("value", value);
-                        debug!("ty", ty);
-                        (value, ty)
+                let mut tuple_from_value = || -> Result<(RefType<Value>, RefType<ValueType>)> {
+                    // Below we are reading the value of the LHS, and then using that
+                    // to determine what to do with the RHS.
+                    let read_value = s_read!(value);
+                    match &*read_value {
+                        Value::Function(ref func) => {
+                            let func = s_read!(lu_dog).exhume_function(&s_read!(func).id).unwrap();
+                            debug!("Expression::Call func", func);
+                            let (value, ty) = eval_function_call(
+                                func,
+                                &args,
+                                s_read!(call).arg_check,
+                                context,
+                                vm,
+                            )?;
+                            debug!("value", value);
+                            debug!("ty", ty);
+                            Ok((value, ty))
+                        }
+                        Value::ProxyType(pt) => {
+                            let ty = s_read!(lu_dog)
+                                .exhume_value_type(&s_read!(pt).struct_uuid())
+                                .unwrap();
+                            Ok((value.clone(), ty))
+                        }
+                        Value::UserType(ut) => Ok((value.clone(), s_read!(ut).get_type().clone())),
+                        value_ => {
+                            let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
+                            debug!("value", value);
+
+                            let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
+
+                            let read = s_read!(span);
+                            let span = read.start as usize..read.end as usize;
+
+                            return Err(ChaChaError::NotAFunction {
+                                value: value_.to_owned(),
+                                span,
+                            });
+                        }
                     }
-                    Value::ProxyType(pt) => {
-                        let ty = s_read!(lu_dog)
-                            .exhume_value_type(&s_read!(pt).struct_uuid())
-                            .unwrap();
-                        (value.clone(), ty)
+                };
+
+                // First we need to check the type of the LHS to see if there are
+                // any instance methods on the type. This seems weird. I'm not sure
+                // where to put it in my brain just yet.
+                // But basically it comes down to allowing things like
+                // `x = 1; x.to_string();` -- Not sure copilot wrote that, but it looks interesting.
+                // `"dwarf".len()`
+                // Or iterators things like
+                // `[1, 2, 3].iter().map(|x| x + 1)`
+                // `["hello", "I", "am", "dwarf!"].sort();
+                let x = match &*s_read!(ty) {
+                    ValueType::Ty(ref id) => {
+                        let _ty = s_read!(sarzak).exhume_ty(id).unwrap().clone();
+                        match &_ty {
+                            Ty::SString(_) => (value, ty.clone()),
+                            _ => tuple_from_value()?,
+                        }
                     }
-                    Value::UserType(ut) => (value.clone(), s_read!(ut).get_type().clone()),
-                    value_ => {
-                        let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
-                        debug!("value", value);
-
-                        let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
-
-                        let read = s_read!(span);
-                        let span = read.start as usize..read.end as usize;
-
-                        return Err(ChaChaError::NotAFunction {
-                            value: value_.to_owned(),
-                            span,
-                        });
-                    }
-                }
+                    _ => tuple_from_value()?,
+                };
+                x
             } else {
                 (
                     new_ref!(Value, Value::Empty),
@@ -962,6 +987,29 @@ fn eval_expression(
 
                             s_write!(proxy_type).call(meth, &mut arg_values)
                         }
+                        Value::String(string) => match meth.as_str() {
+                            "len" => {
+                                let len = string.len();
+                                let ty = Ty::new_integer();
+                                let ty =
+                                    ValueType::new_ty(&new_ref!(Ty, ty), &mut s_write!(lu_dog));
+                                Ok((new_ref!(Value, Value::Integer(len as i64)), ty))
+                            }
+                            value_ => {
+                                let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
+                                debug!("value", value);
+
+                                let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
+
+                                let read = s_read!(span);
+                                let span = read.start as usize..read.end as usize;
+
+                                return Err(ChaChaError::NoSuchMethod {
+                                    method: value_.to_owned(),
+                                    span,
+                                });
+                            }
+                        },
                         Value::UserType(ut) => {
                             // Below is all wrapped up to avoid a double borrow.
                             let woog_struct = {
@@ -1104,6 +1152,18 @@ fn eval_expression(
                         }
                     } else if ty == "chacha" {
                         match func.as_str() {
+                            "args" => {
+                                let ty = Ty::new_s_string();
+                                let ty = s_read!(lu_dog).exhume_value_type(&ty.id()).unwrap();
+                                let ty = List::new(&ty, &mut s_write!(lu_dog));
+                                let ty = ValueType::new_list(&ty, &mut s_write!(lu_dog));
+
+                                if let Some(args) = &context.args {
+                                    Ok((args.clone(), ty))
+                                } else {
+                                    Ok((new_ref!(Value, Value::Vector(Vec::new())), ty))
+                                }
+                            }
                             // This returns a string because that's the easy button given what
                             // I have to work with. Once I get enums into the language, I'll
                             // be able to return a proper enum.
@@ -2196,8 +2256,13 @@ fn eval_expression(
 
             debug!("Expression::VariableExpression value", s_read!(value));
 
-            // let ty = s_read!(value).get_type(&s_read!(lu_dog));
-            let ty = ValueType::new_empty(&s_read!(lu_dog));
+            // 🚧 These statements were swapped, comment-status-wise. I thought
+            // it was because of a deadlock, or trying to mutably borrow whilst
+            // already borrowed error. Anyway, I needed the type, and swapped them
+            // to how they are now and it seems to be working. I'm just leaving
+            // this for my future self, just in case.
+            let ty = s_read!(value).get_type(&s_read!(lu_dog));
+            // let ty = ValueType::new_empty(&s_read!(lu_dog));
 
             Ok((value.clone(), ty))
         }
@@ -2384,6 +2449,7 @@ pub struct Context {
     timings: CircularQueue<f64>,
     expr_count: usize,
     func_calls: usize,
+    args: Option<RefType<Value>>,
 }
 
 /// Save the lu_dog model when the context is dropped
@@ -2404,6 +2470,10 @@ impl Drop for Context {
 }
 
 impl Context {
+    pub fn add_args(&mut self, args: Vec<String>) {
+        self.args = Some(new_ref!(Value, args.into()));
+    }
+
     pub fn register_model<P: AsRef<Path>>(&self, model_path: P) -> Result<()> {
         let model =
             SarzakStore::load(model_path.as_ref()).map_err(|e| ChaChaError::Store { source: e })?;
@@ -2676,11 +2746,7 @@ pub fn start_tui_repl(mut context: Context) -> (Sender<DebuggerControl>, Receive
 }
 
 /// This runs the main function, assuming it exists.
-pub fn start_main(
-    stopped: bool,
-    _silent: bool,
-    mut context: Context,
-) -> Result<(Value, Context), Error> {
+pub fn start_main(stopped: bool, mut context: Context) -> Result<(Value, Context), Error> {
     {
         let mut running = RUNNING.lock();
         *running = !stopped;
@@ -2701,51 +2767,7 @@ pub fn start_main(
             .exhume_function(&s_read!(main).id)
             .unwrap();
 
-        // let handle = if !silent {
-        //     let reader = context.std_out_recv.clone();
-        //     let handle = thread::spawn(move || loop {
-        //         match reader.recv() {
-        //             Ok(line) => {
-        //                 print!("{}", line);
-        //                 io::stdout().flush().unwrap();
-        //             }
-        //             Err(_) => {
-        //                 debug!("Debugger control thread exiting");
-        //                 break;
-        //             }
-        //         };
-        //     });
-        //     Some(handle)
-        // } else {
-        //     None
-        // };
-
-        // let thread_join_handle = thread::spawn(move || {
         let result = eval_function_call(main, &[], true, &mut context, &mut vm)?;
-        // result
-        // });
-
-        // this is lame
-        // thread::sleep(Duration::from_millis(1));
-
-        // CVAR.notify_all();
-
-        // some work here
-        // let result = thread_join_handle.join().unwrap().unwrap();
-        // if let Some(handle) = handle {
-        //     handle.join().unwrap();
-        // }
-
-        // let result = thread::scope(|s| {
-        //     s.spawn(move |_| {
-        //         let result = eval_function_call(main, &[], &mut context);
-        //         result
-        //     })
-        // })
-        // .unwrap();
-        // let result = result.join().unwrap()?;
-
-        // let result = eval_function_call(main, &[], &mut context, vm)?;
 
         Ok((s_read!(result.0.clone()).clone(), context))
     } else {

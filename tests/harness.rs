@@ -92,7 +92,7 @@ fn run_program(program: &str) -> Result<Value, ()> {
         .unwrap();
 
     let ctx = initialize_interpreter::<PathBuf>(sarzak, lu_dog, None).unwrap();
-    start_main(false, false, ctx)
+    start_main(false, ctx)
         .map_err(|e| {
             println!("{e}");
         })

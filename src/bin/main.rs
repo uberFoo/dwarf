@@ -30,9 +30,26 @@ use sarzak::sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL};
 compile_error!("The REPL requires the \"repl\" feature flag..");
 
 #[derive(Debug, Parser)]
-#[command(author, version, about, long_about = None)]
+#[command(
+    author,
+    version,
+    about,
+    long_about = r#"
+This is the dwarf interpreter, ChaCha.
+
+By default, with no arguments you will be drapped into a REPL. If you pass
+a source file, it will be executed and return to your shell.
+
+This default behavior may be modified by using any of the options below.
+"#
+)]
 #[command(propagate_version = true)]
-/// Run the program without an input file and it will drop you into a REPL.
+/// This is the dwarf interpreter, ChaCha.
+///
+/// By default, with no arguments you will be drapped into a REPL. If you pass
+/// a source file, it will be executed and return to your shell.
+///
+/// This default behavior may be modified by using any of the options below.
 ///
 struct Arguments {
     /// Dwarf Source File
@@ -154,13 +171,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 return e;
             })?;
 
-        let ctx = initialize_interpreter::<PathBuf>(sarzak, lu_dog, None)?;
+        let mut ctx = initialize_interpreter::<PathBuf>(sarzak, lu_dog, None)?;
+        ctx.add_args(args.dwarf.args);
 
         if args.banner.is_some() && args.banner.unwrap() {
             println!("{}", banner2());
         }
 
-        let (_, ctx) = start_main(false, false, ctx).map_err(|e| {
+        let (_, ctx) = start_main(false, ctx).map_err(|e| {
             println!("Interpreter exited with: {}", e);
             e
         })?;

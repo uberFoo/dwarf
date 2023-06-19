@@ -316,6 +316,19 @@ impl From<String> for Value {
     }
 }
 
+impl<T> From<Vec<T>> for Value
+where
+    T: Into<Value>,
+{
+    fn from(value: Vec<T>) -> Self {
+        let value = value
+            .into_iter()
+            .map(|v| new_ref!(Value, v.into()))
+            .collect();
+        Self::Vector(value)
+    }
+}
+
 impl TryFrom<Value> for Uuid {
     type Error = ChaChaError;
 

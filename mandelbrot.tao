@@ -88,6 +88,9 @@ fn escape_time(c: Complex, limit: int) -> Option<int> {
 }
 
 fn main() -> Complex {
+    for arg in chacha::args() {
+        print("arg: " + arg + "\n");
+    }
     let ty = chacha::typeof("mandelbrot");
     print("Type: " + ty + "\n");
     let time = chacha::time(plot);

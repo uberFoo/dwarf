@@ -33,10 +33,20 @@ print({42});
 ## {{i: Item Statement}}
 
 ```dwarf
-fn main () {
+fn main() -> () {
+    // This is aa item statement.
+    // Note the lack of a semicolon.
     struct Point {
         x: float,
         y: float,
     }
+
+    // This is also an item statement.
+    fn foo() -> Point {
+        Point { x: 42.0, y: -3.14 }
+    }
+
+    // Technically this is a statement, but `print` is an expression.
+    print(foo());
 }
 ```

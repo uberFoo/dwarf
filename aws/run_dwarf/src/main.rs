@@ -9,7 +9,7 @@ use dwarf::{
     sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL},
 };
 use lambda_http::{
-    run_with_streaming_response, service_fn, Body, Error, Request, RequestExt, Response,
+    run, run_with_streaming_response, service_fn, Body, Error, Request, RequestExt, Response,
 };
 use tracing::{event, Level};
 
@@ -129,8 +129,7 @@ async fn function_handler(event: Request) -> Result<Response<Body>, Error> {
                     Ok(lu_dog) => {
                         let ctx = initialize_interpreter::<PathBuf>(sarzak, lu_dog, None).unwrap();
                         // 🚧 Can't unwrap this. Must deal with errors from ChaCha.
-                        let (result, ctx) =
-                            start_main(false, false, ctx).unwrap().try_into().unwrap();
+                        let (result, ctx) = start_main(false, ctx).unwrap().try_into().unwrap();
                         let result = result.to_string();
                         let result = ansi_to_html::convert_escaped(&result).unwrap();
                         let std_out = ctx.drain_std_out();
@@ -177,5 +176,5 @@ async fn main() -> Result<(), Error> {
         .without_time()
         .init();
 
-    run_with_streaming_response(service_fn(function_handler)).await
+    run(service_fn(function_handler)).await
 }

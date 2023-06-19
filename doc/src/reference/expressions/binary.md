@@ -36,20 +36,20 @@ fn main() {
 >     let a = Foo {};
 >     let b = Foo {};
 >     let e = b;
->     print(e == b); // false
+>     print(e == b); // ~~~false~~~ *true*
 >     let c = 1;
 >     let d = c;
->     print(a == b); // false
->     print(c == d); // true? false?
+>     print(a == b); // ~~false~~ *true*
+>     print(c == d); // true? false? *true*!
 >
 >     let f = Bar { bar: 1 };
 >     let g = Bar { bar: 1 };
 >     let h = f;
 >     print(h == f); // true
->     print(f == g); // true? false?
+>     print(f == g); // true? false? *true*!
 >     f.bar = 2;
->     print(f == g); // true? false?
->     print(h == f); // true? false?
+>     print(f == g); // true? false? *false*!
+>     print(h == f); // true? false? *true*!
 > }
 > ```
 >

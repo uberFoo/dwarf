@@ -1,6 +1,5 @@
 # Rendering the Set
 ```dwarf, editable
-// use term::rgb;
 struct Complex {
     re: float,
     im: float,
@@ -9,10 +8,6 @@ struct Complex {
 impl Complex {
     fn zero() -> Complex {
         Complex { re: 0.0, im: 0.0 }
-    }
-
-    fn one() -> Complex {
-        Complex { re: 1.0, im: 0.0 }
     }
 
     fn add(self, other: Complex) -> Complex {
@@ -65,28 +60,14 @@ fn escape_time(c: Complex, limit: int) -> Option<int> {
     // debugger;
     let z = Complex::zero();
     for i in 1..limit {
-        // 🚧 This let wreaks havoc -- fix it.
-        // Also the chained method calls don't affect the correct z, or something.
-        // let z = z.square(z).add(z, c);
-        z = ComplexEx::square(z);
-        z = ComplexEx::add(z, c);
-        //z = z.square();
-        // z.square_2();
-        //z = z.add(c);
-        // z.add_2(c);
-        // Having the RHS of this statement on the lhs of the expression below
-        // does not work.
+        ComplexEx::square(z);
+        ComplexEx::add(z, c);
         let foo = ComplexEx::norm_squared(z);
         if foo > 4.0 {
-        //if z.norm_squared() > 4.0 {
-            // debugger;
-            // return Some(i);
             return i;
         }
     }
     0
-    // None
-    // limit
 }
 
 fn main() -> Complex {
@@ -97,41 +78,12 @@ fn main() -> Complex {
 }
 
 fn plot() -> Complex {
-    // 🚧 Need to fix this multiple let let-down. Oh, no! 😫
-    // let width = 21;
-    // let height = 5;
     let width = 42;
     let height = 10;
-    // let width = 84;
-    // let height = 20;
-    // debugger;
-    // let width = 168;
-    // let height = 40;
-    // let width = 7;
-    // let height = 2;
     let upper_left = Complex { re: -2.5, im: 1.0 };
     let lower_right = Complex { re: 2.0, im: -1.0 };
-    // let upper_left = Complex {
-    //     re: -0.750322,
-    //     im: 0.031261,
-    // };
-    // let lower_right = Complex {
-    //     re: -0.749291,
-    //     im: 0.031852,
-    // };
-    // let upper_left = Complex {
-    //     re: -0.750222,
-    //     im: 0.031161,
-    // };
-    // let lower_right = Complex {
-    //     re: -0.749191,
-    //     im: 0.031752,
-    // };
-    // let row = 0;
-    // let column = 0;
-    // debugger;
     // for t in 0..255 {
-        let t = 100;
+        let t = 50;
         for row in 0..height {
         // OMG, this is an ugly hack, and yet it's so badass. If it had worked. 😢
         // ChaCha::spawn(do_column, [row, width, height, upper_left, lower_right]);
