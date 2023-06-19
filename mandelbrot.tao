@@ -91,8 +91,12 @@ fn main() -> Complex {
     for arg in chacha::args() {
         print("arg: " + arg + "\n");
     }
-    let ty = chacha::typeof("mandelbrot");
+    let s = "mandelbrot";
+    let ty = chacha::typeof(s);
     print("Type: " + ty + "\n");
+
+    print(s[s.len() - 1]);
+
     let time = chacha::time(plot);
     print("Total time: " + time as string + "\n");
 }

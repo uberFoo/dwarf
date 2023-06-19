@@ -100,7 +100,7 @@ macro_rules! function {
 macro_rules! debug {
     ($($arg:tt)*) => {
         log::debug!(
-            target: "compiler",
+            target: "extruder",
             "{}: {}\n  --> {}:{}:{}",
             Colour::Cyan.dimmed().italic().paint(function!()),
             format_args!($($arg)*),
@@ -114,7 +114,7 @@ macro_rules! debug {
 macro_rules! warn {
     ($($arg:tt)*) => {
         log::warn!(
-            target: "compiler",
+            target: "extruder",
             "{}: {}\n  --> {}:{}:{}",
             Colour::Cyan.dimmed().italic().paint(function!()),
             format_args!($($arg)*),
@@ -128,7 +128,7 @@ macro_rules! warn {
 macro_rules! error {
     ($($arg:tt)*) => {
         log::error!(
-            target: "compiler",
+            target: "extruder",
             "{}: {}\n  --> {}:{}:{}",
             Colour::Red.dimmed().italic().paint(function!()),
             format_args!($($arg)*),
@@ -652,6 +652,7 @@ fn inter_expression(
         // Addition
         //
         ParserExpression::Addition(ref lhs, ref rhs) => {
+            debug!("Addition");
             let (lhs, lhs_ty) = inter_expression(
                 &new_ref!(ParserExpression, lhs.0.to_owned()),
                 &lhs.1,
@@ -1775,7 +1776,9 @@ fn inter_expression(
             let meth = MethodCall::new(method.to_owned(), lu_dog);
             let call = Call::new_method_call(false, Some(&instance.0), &meth, lu_dog);
             let expr = Expression::new_call(&call, lu_dog);
-            let value = XValue::new_expression(&block, &instance_ty, &expr, lu_dog);
+
+            let method_return_type = ValueType::new_unknown(lu_dog);
+            let value = XValue::new_expression(&block, &method_return_type, &expr, lu_dog);
             s_write!(span).x_value = Some(s_read!(value).id);
 
             let mut last_arg_uuid: Option<Uuid> = None;
@@ -1806,7 +1809,7 @@ fn inter_expression(
                 last_arg_uuid = link_argument!(last_arg_uuid, arg, lu_dog);
             }
 
-            Ok(((expr, span), instance_ty))
+            Ok(((expr, span), method_return_type))
         }
         //
         // Negation
@@ -2186,6 +2189,7 @@ fn inter_expression(
         // Subtraction
         //
         ParserExpression::Subtraction(ref lhs, ref rhs) => {
+            debug!("Subtraction");
             let (lhs, lhs_ty) = inter_expression(
                 &new_ref!(ParserExpression, lhs.0.to_owned()),
                 &lhs.1,

@@ -147,6 +147,7 @@ pub enum DwarfError {
         expected: String,
         found: String,
         span: Span,
+        // location: Location,
     },
 
     /// Unknown Type

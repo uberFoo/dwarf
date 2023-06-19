@@ -12,7 +12,9 @@
 
 - [Python Bindings]()
 
-- [Language Reference]()
+# Reference
+
+- [Dwarf Language Reference]()
     - [Items]()
     - [Statements](./reference/statements.md)
     - [Expressions](./reference/expressions.md)

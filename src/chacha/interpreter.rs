@@ -2392,7 +2392,10 @@ pub fn eval_statement(
             no_debug!("StatementEnum::ExpressionStatement: value", s_read!(value));
             debug!("StatementEnum::ExpressionStatement: ty", ty);
 
-            Ok((value, ty))
+            Ok((
+                new_ref!(Value, Value::Empty),
+                ValueType::new_empty(&s_read!(lu_dog)),
+            ))
         }
         StatementEnum::LetStatement(ref stmt) => {
             let stmt = s_read!(lu_dog).exhume_let_statement(stmt).unwrap();
@@ -2413,7 +2416,13 @@ pub fn eval_statement(
             log::debug!("inserting {} = {}", var.name, s_read!(value));
             context.memory.insert(var.name, value);
 
-            Ok((new_ref!(Value, Value::Empty), ty))
+            // 🚧 I'm changing this from returning ty. If something get's wonky,
+            // maybe start looking here. But TBH, why would we return the type of
+            // the storage?
+            Ok((
+                new_ref!(Value, Value::Empty),
+                ValueType::new_empty(&s_read!(lu_dog)),
+            ))
         }
         StatementEnum::ResultStatement(ref stmt) => {
             let stmt = s_read!(lu_dog).exhume_result_statement(stmt).unwrap();

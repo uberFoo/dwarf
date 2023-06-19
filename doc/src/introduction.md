@@ -22,6 +22,12 @@ I know you want to. 😀
 
 ## A brief story of dwarf
 
+> Caveat Emptor / Note Bene, etcetera
+>
+> This is very much a work in progress.
+> It's maybe at an alpha stage, but centainly not beta.
+> I don't honestly see very many breaking changes, but I can't promise anything.
+
 Dwarf started life as a DSLfor another project.
 I've had so much fun with it, I want to see if anyone else might find it generally useful.
 Not that it's quite ready for production.
@@ -47,12 +53,7 @@ Other's, and those of my needs.
 Right now dwarf is also very slow.
 (He's still working on his tunneling gear apparently.)
 It's slow because it's interpreted, and the foundations of the interpreter are not really built for speed.
-That said, there is a VM currently in the works, and it's somewhat integrated with the interpreter.
-
-This integration is currently taking the form of compiled functions that the interpreter can call to speed things up.
-I've done that with the [{{i: Mandelbrot}}](./tutorials/mandelbrot.md) example.
-There is also work underway for including inline assembly in dwarf files.
-Of course that will not be necessary once I've finished the VM.and it' compiler.
+That said, there is a VM currently in the works, and it's alreayd integrated with the interpreter to speed things up.
 
 Along the way I wrote a "debugger" and a REPL.
 The debugger is very basic.

@@ -9,6 +9,7 @@ That is to say that it is a proper unicode string, encoded as UTF-8.
 
 ```dwarf
 let s: string = "Hello, world!🎉💥";
+
 // Note the addition operator below.
 print(s + "\n");
 
@@ -17,10 +18,12 @@ for c in s {
     print(c + "\n");
 }
 
-// Can we get the length of a string?
-print(s.len() + "\n");
+// Of course you can fetch the length of a string.
+let len = s.len();
 
-// Can we index into a string?
-//print(s[s.len()] + "\n");
-```
+// Note that indexing into a string is zero based. Also, we are indexing by
+// unicode grapheme's, which is a "printable" character.
+chacha::assert_eq(s[len - 1], "💥");
+chacha::assert_eq(s[len - 2], "🎉");
+chacha::assert_eq(s[len - 9], " ");
 ```

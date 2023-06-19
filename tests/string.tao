@@ -12,11 +12,10 @@ fn main() -> () {
     print(s.len() as string + "\n");
 
     // Can we index into a string?
-    let len: int = s.len();
-    // print(s[len] + "\n");
+    let len = s.len();
     chacha::assert_eq(s[len - 1], "💥");
     chacha::assert_eq(s[len - 2], "🎉");
     chacha::assert_eq(s[len - 9], " ");
 
-    print(s[s.len() - 2] + "\n");
+    print(s[s.len() - 2] as string + "\n");
 }
