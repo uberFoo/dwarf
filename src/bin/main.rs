@@ -7,38 +7,64 @@ use std::{
 };
 
 use ariadne::{Color, Fmt, Label, Report, ReportKind, Source};
-use clap::Parser;
+use clap::{ArgAction, Args, Parser};
 use dap::{prelude::BasicClient, server::Server};
 use dwarf::{
     chacha::dap::DapAdapter,
     dwarf::{new_lu_dog, parse_dwarf, DwarfError},
     initialize_interpreter,
-    interpreter::{banner2, start_main},
-    start_repl,
+    interpreter::start_repl,
     // merlin::{ErrorExpressionProxy, ExpressionProxy},
     // merlin::{
     //     AnchorProxy, BisectionProxy, EdgeProxy, GlyphProxy, LineProxy, LineSegmentPointProxy,
     //     LineSegmentProxy, PointProxy, RelationshipNameProxy, RelationshipPhraseProxy, XBoxProxy,
     // },
+    interpreter::{banner2, start_main},
 };
+
 use log;
 use sarzak::lu_dog::ObjectStore as LuDogStore;
 use sarzak::sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL};
 
+#[cfg(not(feature = "repl"))]
+compile_error!("The REPL requires the \"repl\" feature flag..");
+
 #[derive(Debug, Parser)]
 #[command(author, version, about, long_about = None)]
 #[command(propagate_version = true)]
-struct Args {
+/// Run the program without an input file and it will drop you into a REPL.
+///
+struct Arguments {
     /// Dwarf Source File
     ///
-    /// Path to the source file to compile.
-    #[arg(long, short, group = "input")]
+    /// Path to the source file to execute.
     source: Option<PathBuf>,
     /// Debug Adapter Protocol (DAP) Backend
     ///
     /// Enable the DAP backend. This will start a TCP server on port 4711.
-    #[arg(long, short, action, group = "input")]
+    #[arg(long, short, action=ArgAction::SetTrue)]
     dap: Option<bool>,
+    /// Post-execution behavior
+    ///
+    /// Drop into the REPL after executing the source file.
+    #[arg(long, short, action=ArgAction::SetTrue)]
+    repl: Option<bool>,
+    /// Print the dwarf banner
+    ///
+    #[arg(long, short, action=ArgAction::SetTrue)]
+    banner: Option<bool>,
+    #[command(flatten)]
+    dwarf: DwarfArgs,
+}
+
+#[derive(Clone, Debug, Args)]
+#[group(required = false, multiple = true)]
+struct DwarfArgs {
+    /// Dwarf main arguments
+    ///
+    /// These argumnets are passed on to the dwarf `main` function.
+    #[arg(last = true, allow_hyphen_values = true)]
+    args: Vec<String>,
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -47,7 +73,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
     let lu_dog = LuDogStore::new();
 
-    let args = Args::parse();
+    let args = Arguments::parse();
 
     if let Some(source) = args.source {
         log::info!("Compiling source file {}", &source.display());
@@ -128,47 +154,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 return e;
             })?;
 
-        // let mut ctx = initialize_interpreter_paths("../sarzak/target/sarzak/lu_dog/lu_dog.道")?;
-        // let mut ctx = initialize_interpreter_paths("fib.道")?;
         let ctx = initialize_interpreter::<PathBuf>(sarzak, lu_dog, None)?;
 
-        // ctx.register_model("../sarzak/models/lu_dog.v2.json")?;
+        if args.banner.is_some() && args.banner.unwrap() {
+            println!("{}", banner2());
+        }
 
-        // ctx.register_store_proxy(
-        //     "ExpressionProxy".to_owned(),
-        //     ExpressionProxy::new_type(ctx.lu_dog_heel()),
-        // );
-
-        // ctx.register_store_proxy(
-        //     "ErrorExpressionProxy".to_owned(),
-        //     ErrorExpressionProxy::new_type(ctx.lu_dog_heel()),
-        // );
-
-        // let result = start_vm(20).map_err(|e| {
-        //     println!("Interpreter exited with: {}", e);
-        //     e
-        // });
-        // println!("Interpreter exited with: {:?}", result);
-        // Ok(())
-
-        // if args.vscode {
-        //     println!(
-        //         "\nreturned: {}",
-        //         start_main(true, ctx).map_err(|e| {
-        //             println!("Interpreter exited with: {}", e);
-        //             e
-        //         })?
-        //     );
-        // // let stdin = io::stdin(); // We get `Stdin` here.
-        // // stdin.read_line(&mut buffer)?;
-        // } else {
-        println!("{}", banner2());
-
-        start_main(false, false, ctx).map_err(|e| {
+        let (_, ctx) = start_main(false, false, ctx).map_err(|e| {
             println!("Interpreter exited with: {}", e);
             e
         })?;
-        // }
+
+        if args.repl.is_some() && args.repl.unwrap() {
+            start_repl(ctx).map_err(|e| {
+                println!("Interpreter exited with: {}", e);
+                e
+            })?;
+        }
     } else if let Some(_) = args.dap {
         let listener = TcpListener::bind("127.0.0.1:4711").unwrap();
         println!("Listening on port {}", listener.local_addr().unwrap());
