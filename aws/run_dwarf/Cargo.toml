@@ -25,7 +25,8 @@ dwarf = { path = "../../", default-features = false, features = [
 lambda_http = { version = "0.8.0", default-features = false, features = [
     "apigw_http",
 ] }
-lambda_runtime = "0.8.0"
+# lambda_runtime = "0.8.0"
+lambda_runtime = { path = "../../../../github/aws-lambda-rust-runtime/lambda-runtime" }
 tokio = { version = "1", features = ["macros"] }
 tracing = { version = "0.1", features = ["log"] }
 tracing-subscriber = { version = "0.3", default-features = false, features = [
