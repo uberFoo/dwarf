@@ -104,6 +104,55 @@ fn main() {
 }
 ```
 
+> Numeric Type Casting
+>
+> There are some subtleties to conditional expressions with regard to {{i: type conversion}}.
+> In the example below if we let {{i: ChhCha}} do the conversion for us it will convert the {{i: `int`}} to a {{i: `float`}}.
+> The first comparison turns out as expected.
+> ```dwarf
+> fn main() {
+>     let a = 3;
+>     let b = 3.14;
+>     let c = if a >= b  { a } else { b }; // c == 3.14
+>     print(c as string + "\n");
+>     let c = if a >= b as int  { a } else { b }; // c == ?
+>     print(c as string + "\n");
+> }
+> ```
+> In the second comparison we are casting `b` to an `int` with the {{i: `as`}} expression.
+> Note the difference.
+
+There are all the usual {{i: comparison operators}}: `==`, `!=`, `<`, `<=`, `>`, `>=`.
+Here are a few examples.
+
+```dwarf
+fn main() {
+    let a = true;
+    if a != false {
+        print("a is true\n");
+    } else {
+        print("a is false\n");
+    }
+}
+```
+
+```dwarf
+
+```dwarf
+fn main() {
+    let a = 42;
+    let b = 3.14;
+    let c = if a == b { a } else { b };
+    print(c);
+}
+```
+
+> Expression Magic
+>
+> Having everything as an expression pays great dividends.
+> In the example above notice how we assign `c` to the result of the {{i: `if`}} expression.
+> `if` actually has a value, which is the value of it's evaluation.
+
 
 Notice that we left the semi-colon off of the print statement, and it still printed `()`.
 That is because the print expression has the empty value.

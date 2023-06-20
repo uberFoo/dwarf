@@ -2059,6 +2059,14 @@ fn eval_expression(
 
                             Ok((new_ref!(Value, value), ty))
                         }
+                        Comparison::GreaterThanOrEqual(_) => {
+                            let value = s_read!(lhs).gte(&s_read!(rhs.0));
+                            let value = Value::Boolean(value);
+                            let ty = Ty::new_boolean();
+                            let ty = ValueType::new_ty(&new_ref!(Ty, ty), &mut s_write!(lu_dog));
+
+                            Ok((new_ref!(Value, value), ty))
+                        }
                         Comparison::LessThanOrEqual(_) => {
                             let value = s_read!(lhs).lte(&s_read!(rhs.0));
                             let value = Value::Boolean(value);

@@ -495,30 +495,30 @@ pub fn inter_statement(
             // 🚧 There's a let problem in mandelbrot, and I wonder if this might
             // have something to do with it? I'worry that we are eliding the locals
             // in parent stack frames.
-            let values = lu_dog
-                .iter_x_value()
-                .filter(|value| s_read!(value).block == s_read!(block).id)
-                .collect::<Vec<_>>();
-            for value in values {
-                let value = s_read!(value);
-                match value.subtype {
-                    XValueEnum::Variable(ref var) => {
-                        let var = lu_dog.exhume_variable(var).unwrap();
-                        let var = s_read!(var);
-                        if var.name == *var_name {
-                            match var.subtype {
-                                VariableEnum::LocalVariable(ref local) => {
-                                    lu_dog.exorcise_local_variable(local);
-                                    lu_dog.exorcise_variable(&var.id);
-                                    lu_dog.exorcise_x_value(&value.id);
-                                }
-                                _ => {}
-                            }
-                        }
-                    }
-                    _ => {}
-                }
-            }
+            // let values = lu_dog
+            //     .iter_x_value()
+            //     .filter(|value| s_read!(value).block == s_read!(block).id)
+            //     .collect::<Vec<_>>();
+            // for value in values {
+            //     let value = s_read!(value);
+            //     match value.subtype {
+            //         XValueEnum::Variable(ref var) => {
+            //             let var = lu_dog.exhume_variable(var).unwrap();
+            //             let var = s_read!(var);
+            //             if var.name == *var_name {
+            //                 match var.subtype {
+            //                     VariableEnum::LocalVariable(ref local) => {
+            //                         lu_dog.exorcise_local_variable(local);
+            //                         lu_dog.exorcise_variable(&var.id);
+            //                         lu_dog.exorcise_x_value(&value.id);
+            //                     }
+            //                     _ => {}
+            //                 }
+            //             }
+            //         }
+            //         _ => {}
+            //     }
+            // }
 
             // Setup the local variable that is the LHS of the statement.
             let local = LocalVariable::new(Uuid::new_v4(), lu_dog);
@@ -1324,6 +1324,53 @@ fn inter_expression(
             typecheck(&lhs_ty, &rhs_ty, tc_span, lu_dog, sarzak, models)?;
 
             let expr = Comparison::new_greater_than(lu_dog);
+            let expr = Operator::new_comparison(Some(&rhs.0), &lhs.0, &expr, lu_dog);
+            let expr = Expression::new_operator(&expr, lu_dog);
+
+            let ty = Ty::new_boolean();
+            let ty = ValueType::new_ty(&new_ref!(Ty, ty), lu_dog);
+
+            let value = XValue::new_expression(&block, &ty, &expr, lu_dog);
+            s_write!(span).x_value = Some(s_read!(value).id);
+
+            Ok(((expr, span), ty))
+        }
+        //
+        // GreaterThanOrEqual: >=
+        //
+        ParserExpression::GreaterThanOrEqual(ref lhs, ref rhs) => {
+            let (lhs, lhs_ty) = inter_expression(
+                &new_ref!(ParserExpression, lhs.0.to_owned()),
+                &lhs.1,
+                source,
+                block,
+                lu_dog,
+                models,
+                sarzak,
+            )?;
+            let (rhs, rhs_ty) = inter_expression(
+                &new_ref!(ParserExpression, rhs.0.to_owned()),
+                &rhs.1,
+                source,
+                block,
+                lu_dog,
+                models,
+                sarzak,
+            )?;
+
+            // 🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧
+            // 🚧                        THIS IS SUPER IMPORTANT!
+            // 🚧
+            // 🚧 We need to check the types of the LHS and RHS to make sure that they are the same,
+            // 🚧 or at least compatible. Need to look into rust rules.
+            // 🚧 We also need to check that the types implement PartialEq, and whatever else...
+            // 🚧
+            // 🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧
+
+            let tc_span = s_read!(span).start as usize..s_read!(span).end as usize;
+            typecheck(&lhs_ty, &rhs_ty, tc_span, lu_dog, sarzak, models)?;
+
+            let expr = Comparison::new_greater_than_or_equal(lu_dog);
             let expr = Operator::new_comparison(Some(&rhs.0), &lhs.0, &expr, lu_dog);
             let expr = Expression::new_operator(&expr, lu_dog);
 

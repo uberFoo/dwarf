@@ -1005,6 +1005,57 @@ impl DwarfParser {
         )))
     }
 
+    /// Parse a greater than or equal to operator
+    ///
+    /// lte -> expression >= expression
+    fn parse_gte_operator(&mut self, left: &Expression, power: u8) -> Result<Option<Expression>> {
+        debug!("enter", power);
+
+        if power > COMP.0 {
+            debug!("exit no power", power);
+            return Ok(None);
+        }
+
+        let start = if let Some(tok) = self.peek() {
+            tok.1.start
+        } else {
+            debug!("exit no token");
+            return Ok(None);
+        };
+
+        if !self.match_(&[Token::Punct('>')]) {
+            debug!("exit no '<'");
+            return Ok(None);
+        }
+
+        if !self.match_(&[Token::Punct('=')]) {
+            debug!("exit no '='");
+            return Ok(None);
+        }
+
+        let right = if let Some(expr) = self.parse_expression(COMP.1)? {
+            expr
+        } else {
+            let token = &self.previous().unwrap();
+            let err = Simple::expected_input_found(
+                token.1.clone(),
+                [Some("<expression -> there's a lot of them...>".to_owned())],
+                Some(token.0.to_string()),
+            );
+            error!("exit", err);
+            return Err(err);
+        };
+
+        debug!("exit");
+        Ok(Some((
+            (
+                DwarfExpression::GreaterThanOrEqual(Box::new(left.0.to_owned()), Box::new(right.0)),
+                start..self.previous().unwrap().1.start,
+            ),
+            COMP,
+        )))
+    }
+
     /// Parse a less than or equal to operator
     ///
     /// lte -> expression <= expression
@@ -1248,6 +1299,9 @@ impl DwarfParser {
                     Some(expression)
                 } else if let Some(expression) = self.parse_lte_operator(&lhs, power)? {
                     debug!("lte operator", expression);
+                    Some(expression)
+                } else if let Some(expression) = self.parse_gte_operator(&lhs, power)? {
+                    debug!("gte operator", expression);
                     Some(expression)
                 } else if let Some(expression) = self.parse_gt_operator(&lhs, power)? {
                     debug!("greater-than operator", expression);

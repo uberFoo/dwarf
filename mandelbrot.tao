@@ -91,6 +91,7 @@ fn main() -> Complex {
     for arg in chacha::args() {
         print("arg: " + arg + "\n");
     }
+    let s = "not-mandelbrot";
     let s = "mandelbrot";
     let ty = chacha::typeof(s);
     print("Type: " + ty + "\n");
