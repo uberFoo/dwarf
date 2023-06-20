@@ -1,0 +1,7 @@
+/// Of note: we are comparing a float to an int.
+fn main() {
+    let a = 42;
+    let b = 3.14;
+    let c = if a > b { a } else { b };
+    chacha::assert_eq(c, 42);
+}

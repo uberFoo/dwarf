@@ -31,7 +31,7 @@
 
 - [The Future]()
 
-- [For Hackers]()
+- [For Hackers](./hacker.md)
     - [Building]()
         - [Tools]()
         - [Benchmarks]()

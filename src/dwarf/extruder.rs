@@ -1289,7 +1289,7 @@ fn inter_expression(
             Ok(((func, span), ret_ty))
         }
         //
-        // GreaterThan
+        // GreaterThan: >
         //
         ParserExpression::GreaterThan(ref lhs, ref rhs) => {
             let (lhs, lhs_ty) = inter_expression(
@@ -2623,6 +2623,33 @@ fn typecheck(
         (ValueType::Empty(_), _) => Ok(()),
         (_, ValueType::Unknown(_)) => Ok(()),
         (ValueType::Unknown(_), _) => Ok(()),
+        (ValueType::Ty(a), ValueType::Ty(b)) => {
+            let a = sarzak.exhume_ty(&a).unwrap();
+            let b = sarzak.exhume_ty(&b).unwrap();
+            match (a, b) {
+                (Ty::Integer(_), Ty::Integer(_)) => Ok(()),
+                (Ty::Integer(_), Ty::Float(_)) => Ok(()),
+                (Ty::Float(_), Ty::Integer(_)) => Ok(()),
+                (Ty::Float(_), Ty::Float(_)) => Ok(()),
+                (Ty::Boolean(_), Ty::Boolean(_)) => Ok(()),
+                (Ty::SString(_), Ty::SString(_)) => Ok(()),
+                (Ty::SUuid(_), Ty::SUuid(_)) => Ok(()),
+                (a, b) => {
+                    if a == b {
+                        Ok(())
+                    } else {
+                        let a = PrintableValueType(lhs.clone(), lu_dog, sarzak, models);
+                        let b = PrintableValueType(rhs.clone(), lu_dog, sarzak, models);
+
+                        Err(DwarfError::TypeMismatch {
+                            expected: a.to_string(),
+                            found: b.to_string(),
+                            span,
+                        })
+                    }
+                }
+            }
+        }
         (lhs_t, rhs_t) => {
             if lhs_t == rhs_t {
                 Ok(())

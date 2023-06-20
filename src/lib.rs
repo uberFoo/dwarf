@@ -18,7 +18,7 @@ pub(crate) mod value;
 // pub(crate) mod woog_structs;
 
 pub use ::sarzak::{lu_dog, sarzak};
-pub use chacha::interpreter::{self, initialize_interpreter};
+pub use chacha::interpreter::{self, initialize_interpreter, start_repl};
 pub use value::{StoreProxy, Value};
 
 // These should eventually come from the domain.
@@ -348,6 +348,8 @@ pub enum ChaChaError {
         value: RefType<Value>,
         ty: RefType<ValueType>,
     },
+    #[snafu(display("\n{}: chacha was not built with repl support.\n", ERR_CLR.bold().paint("error")))]
+    ReplNotEnabled,
     #[cfg(feature = "repl")]
     RustyLine {
         source: ReadlineError,

@@ -667,7 +667,9 @@ impl Value {
     pub fn gt(&self, other: &Self) -> bool {
         match (self, other) {
             (Value::Float(a), Value::Float(b)) => a > b,
+            (Value::Float(a), Value::Integer(b)) => a > &(*b as DwarfFloat),
             (Value::Integer(a), Value::Integer(b)) => a > b,
+            (Value::Integer(a), Value::Float(b)) => *a as DwarfFloat > *b,
             (Value::String(a), Value::String(b)) => a > b,
             (Value::Char(a), Value::Char(b)) => a > b,
             (Value::Empty, Value::Empty) => true,
