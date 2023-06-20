@@ -946,6 +946,10 @@ fn inter_expression(
 
             Ok(((expr, span), lhs_ty))
         }
+        // 🚧 This doesn't exist. And I don't want to create a BS type for it in
+        // lu_dog. Because really the "empty" type is jsut an empty tuple. I
+        // think I want tuples, so I'm just going to assert that the user can't
+        // construct the empty type.
         // //
         // // Empty
         // //
@@ -2277,7 +2281,7 @@ fn inter_expression(
             let source = &s_read!(source).source;
             let span = s_read!(span).start as usize..s_read!(span).end as usize;
             Err(DwarfError::NoImplementation {
-                missing: format!("{:?}", 道),
+                missing: format!("inter_expression: {:?}", 道),
                 code: source[span.clone()].to_owned(),
                 span,
             })

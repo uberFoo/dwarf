@@ -2103,7 +2103,7 @@ impl DwarfParser {
 
     /// Parse an asm! expression
     ///
-    /// print_expression -> PRINT( expr )
+    /// asm_expression -> asm! '(' expression (, expression)* ')'
     fn parse_asm_expression(&mut self) -> Result<Option<Expression>> {
         debug!("enter");
 
@@ -2197,7 +2197,7 @@ impl DwarfParser {
             return Err(err);
         }
 
-        let expression = if let Some(expr) = self.parse_expression(LITERAL.1)? {
+        let expression = if let Some(expr) = self.parse_expression(BLOCK.1)? {
             expr
         } else {
             let token = &self.previous().unwrap();
@@ -2231,7 +2231,7 @@ impl DwarfParser {
                 DwarfExpression::Print(Box::new(expression.0)),
                 start..self.previous().unwrap().1.end,
             ),
-            LITERAL,
+            BLOCK,
         )))
     }
 
