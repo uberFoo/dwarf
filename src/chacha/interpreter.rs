@@ -228,7 +228,7 @@ pub fn initialize_interpreter_paths<P: AsRef<Path>>(_lu_dog_path: P) -> Result<C
 pub fn initialize_interpreter<P: AsRef<Path>>(
     sarzak: SarzakStore,
     mut lu_dog: LuDogStore,
-    lu_dog_path: Option<P>,
+    _lu_dog_path: Option<P>,
 ) -> Result<Context, Error> {
     // Initialize the stack with stuff from the compiled source.
     let block = Block::new(Uuid::new_v4(), None, &mut lu_dog);
@@ -511,7 +511,7 @@ pub fn initialize_interpreter<P: AsRef<Path>>(
         std_out_send,
         std_out_recv,
         debug_status_writer: None,
-        obj_file_path: lu_dog_path.map(|p| p.as_ref().to_owned()),
+        // obj_file_path: lu_dog_path.map(|p| p.as_ref().to_owned()),
         timings: CircularQueue::with_capacity(TIMING_COUNT),
         expr_count: 0,
         func_calls: 0,
@@ -2126,15 +2126,6 @@ fn eval_expression(
                             let value = s_read!(lhs).clone() * s_read!(rhs.0).clone();
                             Ok((new_ref!(Value, value), lhs_ty))
                         }
-                        ref alpha => {
-                            ensure!(
-                                false,
-                                UnimplementedSnafu {
-                                    message: format!("deal with expression: {:?}", alpha),
-                                }
-                            );
-                            unreachable!()
-                        }
                     }
                 }
                 OperatorEnum::Comparison(ref comp) => {
@@ -2571,10 +2562,11 @@ pub struct Context {
     sarzak: RefType<SarzakStore>,
     models: RefType<Vec<SarzakStore>>,
     mem_update_recv: Receiver<MemoryUpdateMessage>,
+    #[allow(dead_code)]
     std_out_send: Sender<String>,
     std_out_recv: Receiver<String>,
     debug_status_writer: Option<Sender<DebuggerStatus>>,
-    obj_file_path: Option<PathBuf>,
+    // obj_file_path: Option<PathBuf>,
     timings: CircularQueue<f64>,
     expr_count: usize,
     func_calls: usize,
@@ -2589,6 +2581,7 @@ pub struct Context {
 ///
 /// Shouldn't this work if we are joining the threads? Maybe I wasn't doing that?
 /// Do I still need this?
+/// I do if we want to save the model on exit.
 impl Drop for Context {
     fn drop(&mut self) {
         // s_read!(self.lu_dog)

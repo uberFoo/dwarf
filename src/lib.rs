@@ -187,12 +187,12 @@ trait NewRef<T> {
     fn new_ref(value: T) -> RefType<T>;
 }
 
+#[allow(unused_macros)]
 macro_rules! new_rc {
     ($type:ty, $value:expr) => {
         <RcType<$type> as NewRcType<$type>>::new_rc_type($value)
     };
 }
-
 
 macro_rules! new_ref {
     ($type:ty, $value:expr) => {
@@ -228,6 +228,7 @@ macro_rules! debug {
 }
 pub(crate) use debug;
 
+#[allow(unused_macros)]
 macro_rules! warning {
     ($target:literal, $($arg:tt)*) => {
         log::warn!(
@@ -241,8 +242,10 @@ macro_rules! warning {
         );
     };
 }
+#[allow(unused_imports)]
+pub(crate) use warning;
 
-
+#[allow(unused_macros)]
 macro_rules! error {
     ($target:literal, $($arg:tt)*) => {
         log::error!(
@@ -256,7 +259,8 @@ macro_rules! error {
         );
     };
 }
-
+#[allow(unused_imports)]
+pub(crate) use error;
 
 //
 // Command line parameters

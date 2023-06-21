@@ -55,11 +55,12 @@ impl Memory {
             .collect()
     }
 
+    #[allow(dead_code)]
     pub(crate) fn thonk_index<S: AsRef<str>>(&self, name: S) -> Option<usize> {
         self.thonks
             .iter()
             .enumerate()
-            .find(|(_, thonk)| thonk.name == name.as_ref())
+            .find(|(_, thonk)| thonk._name == name.as_ref())
             .map(|(index, _)| index)
     }
 

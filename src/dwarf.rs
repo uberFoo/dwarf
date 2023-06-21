@@ -34,7 +34,7 @@ pub type DwarfFloat = f64;
 
 // Error handling
 const C_ERR: Colour = Colour::Red;
-const C_OK: Colour = Colour::Green;
+const _C_OK: Colour = Colour::Green;
 const C_WARN: Colour = Colour::Yellow;
 const C_OTHER: Colour = Colour::Cyan;
 

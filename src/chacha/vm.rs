@@ -124,16 +124,14 @@ impl fmt::Display for Instruction {
 
 #[derive(Clone, Debug)]
 pub(crate) struct Thonk {
-    pub(crate) name: String,
-    variables: Vec<String>,
+    pub(crate) _name: String,
     instructions: Vec<Instruction>,
 }
 
 impl Thonk {
     pub(crate) fn new(name: String) -> Self {
         Thonk {
-            name,
-            variables: Vec::new(),
+            _name: name,
             instructions: Vec::new(),
         }
     }
@@ -215,27 +213,19 @@ impl<'a> fmt::Display for CallFrame<'a> {
 
 #[derive(Debug)]
 // pub struct VM<'b> {
-pub struct VM<'a, 'b: 'a> {
-    // frames: Vec<CallFrame>,
-    frames: Vec<CallFrame<'a>>,
+pub struct VM<'b> {
     stack: Vec<RefType<Value>>,
     memory: &'b Memory,
 }
 
 // impl<'b> VM<'b> {
-impl<'a, 'b> VM<'a, 'b> {
+impl<'b> VM<'b> {
     pub(crate) fn new(memory: &'b Memory) -> Self {
         VM {
             // 🚧 These shouldn't be hard-coded, and they should be configurable.
-            frames: Vec::with_capacity(10 * 1024),
             stack: Vec::with_capacity(10 * 1024 * 1024),
             memory,
         }
-    }
-
-    // pub(crate) fn push_frame(&mut self, frame: CallFrame) {
-    pub(crate) fn push_frame(&mut self, frame: CallFrame<'a>) {
-        self.frames.push(frame);
     }
 
     pub(crate) fn push_stack(&mut self, value: RefType<Value>) {
@@ -593,13 +583,19 @@ impl<'a, 'b> VM<'a, 'b> {
     }
 }
 
+#[cfg(test)]
 mod tests {
-    
+    use std::path::PathBuf;
 
-    
+    use tracy_client::Client;
 
-    
-    
+    use crate::{
+        dwarf::{DwarfFloat, DwarfInteger},
+        initialize_interpreter,
+        interpreter::PrintableValueType,
+    };
+
+    use super::*;
 
     #[test]
     fn test_instr_constant() {
