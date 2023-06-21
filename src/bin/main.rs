@@ -22,7 +22,7 @@ use dwarf::{
     interpreter::{banner2, start_main},
 };
 
-use log;
+
 use sarzak::lu_dog::ObjectStore as LuDogStore;
 use sarzak::sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL};
 
@@ -124,7 +124,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         let span = span.clone();
 
                         Report::build(ReportKind::Error, (), span.start)
-                            .with_message(&desc)
+                            .with_message(desc)
                             .with_label(
                                 Label::new(span)
                                     .with_message(format!("{}", desc.fg(Color::Red)))
@@ -168,7 +168,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                     _ => {}
                 }
-                return e;
+                e
             })?;
 
         let mut ctx = initialize_interpreter::<PathBuf>(sarzak, lu_dog, None)?;
@@ -189,7 +189,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 e
             })?;
         }
-    } else if let Some(_) = args.dap {
+    } else if args.dap.is_some() {
         let listener = TcpListener::bind("127.0.0.1:4711").unwrap();
         println!("Listening on port {}", listener.local_addr().unwrap());
         // let in_file = fs::File::create("/tmp/socket_in.txt").unwrap();
