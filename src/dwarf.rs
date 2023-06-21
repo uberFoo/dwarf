@@ -303,17 +303,17 @@ impl Type {
                 ValueType::new_ty(&<RefType<Ty> as NewRef<Ty>>::new_ref(ty), store)
             }
             Type::List(type_) => {
-                let ty = (*type_).0.into_value_type(store, models, sarzak);
+                let ty = type_.0.into_value_type(store, models, sarzak);
                 let list = List::new(&ty, store);
                 ValueType::new_list(&list, store)
             }
             Type::Option(type_) => {
-                let ty = (*type_).0.into_value_type(store, models, sarzak);
+                let ty = type_.0.into_value_type(store, models, sarzak);
                 let option = WoogOption::new_z_none(&ty, store);
                 ValueType::new_woog_option(&option, store)
             }
             Type::Reference(type_) => {
-                let ty = (*type_).0.into_value_type(store, models, sarzak);
+                let ty = type_.0.into_value_type(store, models, sarzak);
                 let reference = Reference::new(Uuid::new_v4(), false, &ty, store);
                 ValueType::new_reference(&reference, store)
             }
@@ -327,7 +327,7 @@ impl Type {
                 let name = &type_.0;
 
                 for model in models {
-                    if let Some(obj_id) = model.exhume_object_id_by_name(&name) {
+                    if let Some(obj_id) = model.exhume_object_id_by_name(name) {
                         let woog_struct = store
                             .iter_woog_struct()
                             .find(|ws| s_read!(ws).object == Some(obj_id))
@@ -344,7 +344,7 @@ impl Type {
                 }
 
                 // If it's not in one of the models, it must be in sarzak.
-                let obj_id = sarzak.exhume_object_id_by_name(&name).unwrap();
+                let obj_id = sarzak.exhume_object_id_by_name(name).unwrap();
                 let ty = sarzak.exhume_ty(&obj_id).unwrap();
 
                 ValueType::new_ty(&<RefType<Ty> as NewRef<Ty>>::new_ref(ty.to_owned()), store)
