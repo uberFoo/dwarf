@@ -5,7 +5,7 @@ use std::{
     ops::Range,
     path::{Path, PathBuf},
     thread,
-    time::{Instant},
+    time::Instant,
 };
 
 use ansi_term::Colour::{self, RGB};
@@ -1323,11 +1323,6 @@ fn eval_expression(
                                 chacha_print(time, context)?;
 
                                 Ok(result)
-
-                                // Ok((
-                                // new_ref!(Value, Value::Empty),
-                                // ValueType::new_empty(&s_read!(lu_dog)),
-                                // ))
                             }
                             "eps" => {
                                 let timings = context.timings.iter().cloned().collect::<Vec<_>>();
@@ -1355,7 +1350,7 @@ fn eval_expression(
                                 let lhs = arg_values.pop_front().unwrap().0;
                                 let rhs = arg_values.pop_front().unwrap().0;
 
-                                let value = Value::Boolean(s_read!(lhs).eq(&*s_read!(rhs)) == true);
+                                let value = Value::Boolean(*s_read!(lhs) == *s_read!(rhs));
 
                                 if let Value::Boolean(result) = value {
                                     // if value.into() {
@@ -2152,7 +2147,7 @@ fn eval_expression(
                     let comp = s_read!(comp);
                     match &*comp {
                         Comparison::Equal(_) => {
-                            let value = s_read!(lhs).eq(&s_read!(rhs.0));
+                            let value = *s_read!(lhs) == *s_read!(rhs.0);
                             let value = Value::Boolean(value);
                             let ty = Ty::new_boolean();
                             let ty = ValueType::new_ty(&new_ref!(Ty, ty), &mut s_write!(lu_dog));
