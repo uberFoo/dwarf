@@ -315,6 +315,11 @@ pub enum ChaChaError {
     InvalidInstruction {
         instr: Instruction,
     },
+    #[snafu(display("\n{}: error with input/output `{}`.", ERR_CLR.bold().paint("error"), OTH_CLR.paint(message)))]
+    IO {
+        message: String,
+        source: std::io::Error,
+    },
     #[snafu(display("\n{}: named item `main` found, but it is not a function.", ERR_CLR.bold().paint("error")))]
     MainIsNotAFunction,
     #[snafu(display("\n{}: no such method `{}`.", ERR_CLR.bold().paint("error"), OTH_CLR.paint(method)))]

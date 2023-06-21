@@ -1006,6 +1006,8 @@ fn eval_expression(
                                 let mut arg_values = if !args.is_empty() {
                                     // The VecDeque is so that I can pop off the args, and then push them
                                     // back onto a queue in the same order.
+                                    // Gotta do this goofy thing because we don't have a first pointer,
+                                    // and thery aren't in order.
                                     let mut arg_values = VecDeque::with_capacity(args.len());
                                     let mut next = args
                                         .iter()
@@ -1318,7 +1320,7 @@ fn eval_expression(
                                 let elapsed = now.elapsed();
 
                                 let time = format!("{:?}\n", elapsed);
-                                chacha_print(time, context);
+                                chacha_print(time, context)?;
 
                                 Ok(result)
 
@@ -1342,7 +1344,7 @@ fn eval_expression(
                                     std_dev,
                                     median
                                 );
-                                chacha_print(result, context);
+                                chacha_print(result, context)?;
 
                                 Ok((
                                     new_ref!(Value, Value::Empty),
@@ -2217,7 +2219,7 @@ fn eval_expression(
             let result = format!("{}", s_read!(value));
             let result = result.replace("\\n", "\n");
 
-            chacha_print(result, context);
+            chacha_print(result, context)?;
 
             Ok((
                 new_ref!(Value, Value::Empty),
