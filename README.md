@@ -6,6 +6,8 @@ dwarf is a programming language based heavily upon, and implementd in, [Rust](ht
 The language is interpreted (and slow) with a VM (fast-ish) on the way.
 The long term plan is to turn the dwarf source into Rust source, and compile it with the Rust compiler.
 
+See the [book](https://uberfoo.github.io/assets/docs/dwarf/introduction.html).
+
 ## Goals
 
 *
@@ -75,3 +77,9 @@ I think that the default is to execute a `main` function.
 If you start in the REPL, you get the execution in a loop.
 
 ### Debugger
+
+## License
+
+dwarfr is distributed under the terms of both the MIT license and the Apache License (Version 2.0).
+
+See [LICENSE-APACHE](LICENSE-APACHE), [LICENSE-MIT](LICENSE-MIT) for details.

@@ -1,6 +1,22 @@
 [package]
 name = "dwarf"
 version = "0.1.0"
+authors = ["Keith T. Star <uberfoo@me.com>"]
+categories = ["compilers"]
+description = "A Rust-like, typed, interpreted programming language"
+documentation = "https://uberfoo.github.io/assets/docs/dwarf/introduction.html"
+homepage = "https://uberfoo.github.io/assets/docs/dwarf/introduction.html"
+include = [
+    "build.rs",
+    "src/**/*.rs",
+    "README.md",
+    "LICENSE-APACHE",
+    "LICENSE-MIT",
+]
+keywords = ["dwarf", "language", "interpreter", "compiler"]
+license = "MIT OR Apache-2.0"
+readme = "crates-io.md"
+repository = "https://github.com/uberfoo/dwarf"
 edition = "2021"
 
 [[bin]]
