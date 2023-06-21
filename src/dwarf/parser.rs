@@ -94,7 +94,7 @@ macro_rules! error {
     };
 }
 
-type Result<T, E = Simple<String>> = std::result::Result<T, E>;
+type Result<T, E = Box<Simple<String>>> = std::result::Result<T, E>;
 
 const PATH: (u8, u8) = (100, 100);
 const METHOD: (u8, u8) = (90, 91);
@@ -197,7 +197,7 @@ fn lexer() -> impl Parser<char, Vec<Spanned<Token>>, Error = Simple<char>> {
 struct DwarfParser {
     tokens: Vec<Spanned<Token>>,
     current: usize,
-    errors: Vec<Simple<String>>,
+    errors: Vec<Box<Simple<String>>>,
 }
 
 impl DwarfParser {
@@ -214,7 +214,7 @@ impl DwarfParser {
     /// A proram is a list of items
     ///
     /// program -> item*
-    fn parse_program(&mut self) -> (Vec<Spanned<Item>>, Vec<Simple<String>>) {
+    fn parse_program(&mut self) -> (Vec<Spanned<Item>>, Vec<Box<Simple<String>>>) {
         debug!("enter");
 
         let mut result = Vec::new();
@@ -243,7 +243,7 @@ impl DwarfParser {
                 );
                 let err = err.with_label("expected item");
 
-                self.errors.push(err);
+                self.errors.push(Box::new(err));
 
                 error!("parse_program: resynchronize looking for '}'");
                 while !self.at_end() && !self.match_(&[Token::Punct('}')]) {
@@ -288,7 +288,7 @@ impl DwarfParser {
                 Some(token.0.to_string()),
             );
             debug!("exit");
-            return Err(err);
+            return Err(Box::new(err));
         };
 
         debug!("getting true block");
@@ -303,7 +303,7 @@ impl DwarfParser {
                 Some(token.0.to_string()),
             );
             debug!("exit");
-            return Err(err);
+            return Err(Box::new(err));
         };
 
         let false_block = if self.match_(&[Token::Else]) {
@@ -319,7 +319,7 @@ impl DwarfParser {
                     Some(token.0.to_string()),
                 );
                 error!("no false block");
-                return Err(err);
+                return Err(Box::new(err));
             };
 
             debug!("exit getting false block");
@@ -440,7 +440,7 @@ impl DwarfParser {
                 Some(tok.0.to_string()),
             );
             let err = err.with_label("expected path");
-            self.errors.push(err);
+            self.errors.push(Box::new(err));
             error!("exit no path");
             return None;
         };
@@ -457,7 +457,7 @@ impl DwarfParser {
                     Some(tok.0.to_string()),
                 );
                 let err = err.with_label("expected identifier");
-                self.errors.push(err);
+                self.errors.push(Box::new(err));
                 error!("exit no alias");
                 return None;
             }
@@ -473,7 +473,7 @@ impl DwarfParser {
                 Some(tok.0.to_string()),
             );
             let err = err.with_label("expected ;");
-            self.errors.push(err);
+            self.errors.push(Box::new(err));
             error!("exit no semicolon");
             return None;
         }
@@ -513,7 +513,7 @@ impl DwarfParser {
                 Some(tok.0.to_string()),
             );
             let err = err.with_label("expected identifier");
-            self.errors.push(err);
+            self.errors.push(Box::new(err));
             error!("exit no ident");
             return None;
         };
@@ -526,7 +526,7 @@ impl DwarfParser {
                 Some(tok.0.to_string()),
             );
             let err = err.with_label("expected '{'");
-            self.errors.push(err);
+            self.errors.push(Box::new(err));
             error!("exit no `{`");
             return None;
         }
@@ -545,7 +545,7 @@ impl DwarfParser {
                     Some(tok.0.to_string()),
                 );
                 let err = err.with_label("expected '}'");
-                self.errors.push(err);
+                self.errors.push(Box::new(err));
                 error!("exit no `}`");
                 return None;
             }
@@ -588,7 +588,7 @@ impl DwarfParser {
             );
             let err = err.with_label("expected identifier");
             error!("exit", err);
-            return Err(err);
+            return Err(Box::new(err));
         };
 
         let type_ = if self.match_(&[Token::Punct(':')]) {
@@ -612,7 +612,7 @@ impl DwarfParser {
                 );
                 let err = err.with_label("expected type");
                 error!("exit", err);
-                return Err(err);
+                return Err(Box::new(err));
             }
         } else {
             None
@@ -627,7 +627,7 @@ impl DwarfParser {
             );
             let err = err.with_label("expected equals");
             error!("exit", err);
-            return Err(err);
+            return Err(Box::new(err));
         }
 
         let value = if let Some(expr) = self.parse_expression(ENTER)? {
@@ -641,7 +641,7 @@ impl DwarfParser {
             );
             let err = err.with_label("expected expression");
             error!("exit", err);
-            return Err(err);
+            return Err(Box::new(err));
         };
 
         debug!("exit");
@@ -689,7 +689,7 @@ impl DwarfParser {
                 Some(token.0.to_string()),
             );
             error!("exit", err);
-            return Err(err);
+            return Err(Box::new(err));
         };
 
         debug!("exit ok");
@@ -735,7 +735,7 @@ impl DwarfParser {
                 Some(token.0.to_string()),
             );
             error!("exit no expression");
-            return Err(err);
+            return Err(Box::new(err));
         };
 
         debug!("exit ok");
@@ -785,7 +785,7 @@ impl DwarfParser {
                 Some(token.0.to_string()),
             );
             error!("exit no expression");
-            return Err(err);
+            return Err(Box::new(err));
         };
 
         debug!("exit ok");
@@ -835,7 +835,7 @@ impl DwarfParser {
                 Some(token.0.to_string()),
             );
             error!("exit no expression");
-            return Err(err);
+            return Err(Box::new(err));
         };
 
         debug!("exit ok");
@@ -885,7 +885,7 @@ impl DwarfParser {
                 Some(token.0.to_string()),
             );
             error!("exit no expression");
-            return Err(err);
+            return Err(Box::new(err));
         };
 
         debug!("exit ok");
@@ -940,7 +940,7 @@ impl DwarfParser {
                 Some(token.0.to_string()),
             );
             error!("exit no expression");
-            return Err(err);
+            return Err(Box::new(err));
         };
 
         debug!("exit ok");
@@ -991,7 +991,7 @@ impl DwarfParser {
                 Some(token.0.to_string()),
             );
             error!("exit no expression");
-            return Err(err);
+            return Err(Box::new(err));
         };
 
         debug!("exit");
@@ -1043,7 +1043,7 @@ impl DwarfParser {
                 Some(token.0.to_string()),
             );
             error!("exit", err);
-            return Err(err);
+            return Err(Box::new(err));
         };
 
         debug!("exit");
@@ -1094,7 +1094,7 @@ impl DwarfParser {
                 Some(token.0.to_string()),
             );
             error!("exit", err);
-            return Err(err);
+            return Err(Box::new(err));
         };
 
         debug!("exit");
@@ -1148,7 +1148,7 @@ impl DwarfParser {
                 Some(token.0.to_string()),
             );
             error!("exit", err);
-            return Err(err);
+            return Err(Box::new(err));
         };
 
         debug!("exit");
@@ -1202,7 +1202,7 @@ impl DwarfParser {
                 Some(token.0.to_string()),
             );
             error!("exit", err);
-            return Err(err);
+            return Err(Box::new(err));
         };
 
         debug!("exit");
@@ -1248,7 +1248,7 @@ impl DwarfParser {
                 Some(token.0.to_string()),
             );
             error!("exit", err);
-            return Err(err);
+            return Err(Box::new(err));
         };
 
         debug!("exit");
@@ -1554,7 +1554,7 @@ impl DwarfParser {
                 None,
             );
             error!("exit", err);
-            return Err(err);
+            return Err(Box::new(err));
         };
 
         // let expr = if let Some(expr) = self.parse_expression(FIELD.1)? {
@@ -1569,7 +1569,7 @@ impl DwarfParser {
                 Some(token.0.to_string()),
             );
             error!("exit", err);
-            return Err(err);
+            return Err(Box::new(err));
         };
 
         let end = span.end;
@@ -1641,7 +1641,7 @@ impl DwarfParser {
                 Some(token.0.to_string()),
             );
             error!("exit", err);
-            return Err(err);
+            return Err(Box::new(err));
         };
 
         debug!("exit ok");
@@ -1688,7 +1688,7 @@ impl DwarfParser {
                 Some(token.0.to_string()),
             );
             error!("exit", err);
-            return Err(err);
+            return Err(Box::new(err));
         };
 
         debug!("exit ok");
@@ -1732,7 +1732,7 @@ impl DwarfParser {
                 Some(token.0.to_string()),
             );
             error!("exit", err);
-            return Err(err);
+            return Err(Box::new(err));
         };
 
         if !self.match_(&[Token::In]) {
@@ -1743,7 +1743,7 @@ impl DwarfParser {
                 Some(token.0.to_string()),
             );
             error!("exit", err);
-            return Err(err);
+            return Err(Box::new(err));
         }
 
         debug!("getting collection");
@@ -1760,7 +1760,7 @@ impl DwarfParser {
                 Some(token.0.to_string()),
             );
             error!("exit", err);
-            return Err(err);
+            return Err(Box::new(err));
         };
 
         debug!("getting body");
@@ -1774,7 +1774,7 @@ impl DwarfParser {
                 Some(token.0.to_string()),
             );
             error!("exit", err);
-            return Err(err);
+            return Err(Box::new(err));
         };
 
         debug!("exit ok");
@@ -1822,7 +1822,7 @@ impl DwarfParser {
                 );
                 let err = err.with_label("expected expression");
                 error!("exit", err);
-                return Err(err);
+                return Err(Box::new(err));
             }
         }
 
@@ -1870,7 +1870,7 @@ impl DwarfParser {
                 Some(token.0.to_string()),
             );
             error!("exit", err);
-            return Err(err);
+            return Err(Box::new(err));
         };
 
         if !self.match_(&[Token::Punct('(')]) {
@@ -1894,7 +1894,7 @@ impl DwarfParser {
                 );
                 let err = err.with_label("expected expression");
                 error!("exit", err);
-                return Err(err);
+                return Err(Box::new(err));
             }
         }
 
@@ -1946,7 +1946,7 @@ impl DwarfParser {
             );
             let err = err.with_label("expected expression");
             error!("exit", err);
-            return Err(err);
+            return Err(Box::new(err));
         };
         // }
 
@@ -1959,7 +1959,7 @@ impl DwarfParser {
             );
             let err = err.with_label("expected expression");
             error!("exit", err);
-            return Err(err);
+            return Err(Box::new(err));
         }
 
         debug!("exit ok");
@@ -2034,7 +2034,7 @@ impl DwarfParser {
                     Some(tok.0.to_string()),
                 );
                 let err = err.with_label("expected expression");
-                return Err(err);
+                return Err(Box::new(err));
             }
         }
 
@@ -2129,7 +2129,7 @@ impl DwarfParser {
                 [Some("(".to_owned())],
                 Some(token.0.to_string()),
             );
-            return Err(err);
+            return Err(Box::new(err));
         }
 
         let mut arguments = Vec::new();
@@ -2150,7 +2150,7 @@ impl DwarfParser {
                 );
                 let err = err.with_label("expected expression");
                 error!("exit", err);
-                return Err(err);
+                return Err(Box::new(err));
             }
         }
 
@@ -2194,7 +2194,7 @@ impl DwarfParser {
                 [Some("(".to_owned())],
                 Some(token.0.to_string()),
             );
-            return Err(err);
+            return Err(Box::new(err));
         }
 
         let expression = if let Some(expr) = self.parse_expression(BLOCK.1)? {
@@ -2206,7 +2206,7 @@ impl DwarfParser {
                 [Some("<expression -> there's a lot of them...>".to_owned())],
                 Some(token.0.to_string()),
             );
-            return Err(err);
+            return Err(Box::new(err));
         };
 
         if self.peek().unwrap().0 == Token::Punct(',') {
@@ -2221,7 +2221,7 @@ impl DwarfParser {
                 [Some(")".to_owned())],
                 Some(token.0.to_string()),
             );
-            return Err(err);
+            return Err(Box::new(err));
         }
 
         debug!("exit parse_print_expression");
@@ -2284,10 +2284,10 @@ impl DwarfParser {
             debug!("empty statement");
             // 🚧 We need to implement our own error type so that we can
             //     report warnings and they show up in yellow.
-            self.errors.push(Simple::custom(
+            self.errors.push(Box::new(Simple::custom(
                 self.previous().unwrap().1.clone(),
                 "unnecessary `;`".to_owned(),
-            ));
+            )));
             return Ok(Some((
                 Statement::Empty,
                 start..self.previous().unwrap().1.end,
@@ -2351,7 +2351,7 @@ impl DwarfParser {
                 );
 
                 error!("exit error", err);
-                return Err(err);
+                return Err(Box::new(err));
             }
         }
 
@@ -2374,7 +2374,7 @@ impl DwarfParser {
                 );
                 let err = err.with_label("expected ;");
                 error!("exit error", err);
-                return Err(err);
+                return Err(Box::new(err));
             }
         }
 
@@ -2429,7 +2429,7 @@ impl DwarfParser {
                 Some(format!("{:?}", name.0)),
             );
             error!("exit", err);
-            return Err(err);
+            return Err(Box::new(err));
         };
 
         let method_name = if let Some(ident) = self.parse_ident() {
@@ -2442,7 +2442,7 @@ impl DwarfParser {
                 Some(token.0.to_string()),
             );
             error!("exit", err);
-            return Err(err);
+            return Err(Box::new(err));
         };
 
         if !self.match_(&[Token::Punct('(')]) {
@@ -2453,7 +2453,7 @@ impl DwarfParser {
                 Some(token.0.to_string()),
             );
             error!("exit", err);
-            return Err(err);
+            return Err(Box::new(err));
         }
 
         let mut arguments = Vec::new();
@@ -2474,7 +2474,7 @@ impl DwarfParser {
                 );
                 let err = err.with_label("expected expression");
                 error!("exit", err);
-                return Err(err);
+                return Err(Box::new(err));
             }
         }
 
@@ -2529,7 +2529,7 @@ impl DwarfParser {
                     Some(token.0.to_string()),
                 );
                 error!("exit", err);
-                return Err(err);
+                return Err(Box::new(err));
             };
 
             if !self.match_(&[Token::Punct(':')]) {
@@ -2540,7 +2540,7 @@ impl DwarfParser {
                     Some(token.0.to_string()),
                 );
                 error!("exit", err);
-                return Err(err);
+                return Err(Box::new(err));
             }
 
             let expression = if let Some(expr) = self.parse_expression(ENTER)? {
@@ -2553,7 +2553,7 @@ impl DwarfParser {
                     Some(token.0.to_string()),
                 );
                 error!("exit", err);
-                return Err(err);
+                return Err(Box::new(err));
             };
 
             fields.push((field_name, expression.0));
@@ -2602,7 +2602,7 @@ impl DwarfParser {
                 Some(token.0.to_string()),
             );
             error!("exit", err);
-            return Err(err);
+            return Err(Box::new(err));
         };
 
         debug!("exit ok");
@@ -2639,7 +2639,7 @@ impl DwarfParser {
                 [Some("(".to_owned())],
                 Some(token.0.to_string()),
             );
-            return Err(err);
+            return Err(Box::new(err));
         }
 
         let expression = if let Some(expr) = self.parse_expression(PATH.1)? {
@@ -2651,7 +2651,7 @@ impl DwarfParser {
                 [Some("<expression -> there's a lot of them...>".to_owned())],
                 Some(token.0.to_string()),
             );
-            return Err(err);
+            return Err(Box::new(err));
         };
 
         if !self.match_(&[Token::Punct(')')]) {
@@ -2662,7 +2662,7 @@ impl DwarfParser {
                 [Some(")".to_owned())],
                 Some(token.0.to_string()),
             );
-            return Err(err);
+            return Err(Box::new(err));
         }
 
         debug!("exit parse_some_expression");
@@ -2736,7 +2736,7 @@ impl DwarfParser {
                     );
 
                     debug!("parse_block_expression: no statement");
-                    return Err(err);
+                    return Err(Box::new(err));
                 }
 
                 Err(error) => {
@@ -2782,7 +2782,7 @@ impl DwarfParser {
                 Some(token.0.to_string()),
             );
             debug!("exit parse_function: no ident");
-            return Err(err);
+            return Err(Box::new(err));
         };
 
         if !self.match_(&[Token::Punct('(')]) {
@@ -2794,7 +2794,7 @@ impl DwarfParser {
                 Some(token.0.to_string()),
             );
             debug!("exit parse_function: no '('");
-            return Err(err);
+            return Err(Box::new(err));
         }
 
         let mut params = Vec::new();
@@ -2830,7 +2830,7 @@ impl DwarfParser {
                     Some(token.0.to_string()),
                 );
                 debug!("exit parse_function: got '-', but no '>'");
-                return Err(err);
+                return Err(Box::new(err));
             }
 
             match self.parse_type() {
@@ -2839,7 +2839,7 @@ impl DwarfParser {
                     let start = self.previous().unwrap().1.end;
                     let end = self.peek().unwrap().1.start;
                     debug!("exit parse_function: no type");
-                    return Err(Simple::custom(start..end, "missing type"));
+                    return Err(Box::new(Simple::custom(start..end, "missing type")));
                 }
                 Err(error) => {
                     self.errors.push(error);
@@ -2868,7 +2868,7 @@ impl DwarfParser {
             let end = self.peek().unwrap().1.start;
             let err = Simple::custom(start..end, "missing body");
             debug!("exit parse_function: no body");
-            return Err(err);
+            return Err(Box::new(err));
         };
 
         let end = body.0 .1.end;
@@ -2901,7 +2901,7 @@ impl DwarfParser {
                     [Some("':'".to_owned())],
                     Some(token.0.to_string()),
                 );
-                return Err(err);
+                return Err(Box::new(err));
             }
 
             if let Some(ty) = self.parse_type()? {
@@ -2910,7 +2910,7 @@ impl DwarfParser {
                 let start = self.previous().unwrap().1.end;
                 let end = self.peek().unwrap().1.start;
                 let err = Simple::custom(start..end, "missing type");
-                return Err(err);
+                return Err(Box::new(err));
             }
         } else {
             (Type::Self_, name.1.clone())
@@ -2949,7 +2949,7 @@ impl DwarfParser {
                     [Some("')'".to_owned())],
                     Some(token.0.to_string()),
                 );
-                return Err(err);
+                return Err(Box::new(err));
             }
 
             debug!("exit parse_type: empty");
@@ -2976,7 +2976,7 @@ impl DwarfParser {
                 let start = self.previous().unwrap().1.end;
                 let end = self.peek().unwrap().1.start;
                 let err = Simple::custom(start..end, "missing type");
-                return Err(err);
+                return Err(Box::new(err));
             };
 
             if !self.match_(&[Token::Punct(']')]) {
@@ -2987,7 +2987,7 @@ impl DwarfParser {
                     [Some("']'".to_owned())],
                     Some(token.0.to_string()),
                 );
-                return Err(err);
+                return Err(Box::new(err));
             }
 
             debug!("exit parse_type: list");
@@ -3006,12 +3006,12 @@ impl DwarfParser {
                     [Some("'<'".to_owned())],
                     Some(token.0.to_string()),
                 );
-                return Err(err);
+                return Err(Box::new(err));
             }
 
             let ty = self.parse_type()?;
 
-            if let None = ty {
+            if ty.is_none() {
                 let tok = self.peek().unwrap();
                 let err = Simple::expected_input_found(
                     tok.1.clone(),
@@ -3026,7 +3026,7 @@ impl DwarfParser {
                     ],
                     Some(tok.0.to_string()),
                 );
-                return Err(err);
+                return Err(Box::new(err));
             }
 
             if !self.match_(&[Token::Punct('>')]) {
@@ -3037,7 +3037,7 @@ impl DwarfParser {
                     [Some("'>'".to_owned())],
                     Some(token.0.to_string()),
                 );
-                return Err(err);
+                return Err(Box::new(err));
             }
 
             debug!("exit parse_type: option", ty);
@@ -3101,16 +3101,16 @@ impl DwarfParser {
                 Some(tok.0.to_string()),
             );
             let err = err.with_label("expected identifier");
-            return Err(err);
+            return Err(Box::new(err));
         };
 
         if !self.match_(&[Token::Punct('{')]) {
             let tok = self.peek().unwrap();
-            return Err(Simple::expected_input_found(
+            return Err(Box::new(Simple::expected_input_found(
                 tok.1.clone(),
                 [Some("'{".to_owned())],
                 Some(tok.0.to_string()),
-            ));
+            )));
         }
 
         let mut fields = Vec::new();
@@ -3148,7 +3148,7 @@ impl DwarfParser {
         if let (Token::Ident(ident), span) = next {
             self.advance();
             debug!("exit", ident);
-            Some((ident.to_owned(), span.to_owned()))
+            Some((ident, span))
         } else {
             None
         }
@@ -3186,7 +3186,7 @@ impl DwarfParser {
                 Some(tok.0.to_string()),
             );
             let err = err.with_label("expected identifier");
-            return Err(err);
+            return Err(Box::new(err));
         };
 
         if !self.match_(&[Token::Punct(':')]) {
@@ -3197,7 +3197,7 @@ impl DwarfParser {
                 Some(tok.0.to_string()),
             );
             let err = err.with_label("expected colon");
-            return Err(err);
+            return Err(Box::new(err));
         }
 
         let ty = if let Some(ty) = self.parse_type()? {
@@ -3218,7 +3218,7 @@ impl DwarfParser {
                 Some(tok.0.to_string()),
             );
             let err = err.with_label("expected type");
-            return Err(err);
+            return Err(Box::new(err));
         };
 
         debug!("exit parse_struct_field: ", (&name, &ty));
@@ -3244,11 +3244,7 @@ impl DwarfParser {
             return false;
         }
 
-        if self.peek().unwrap().0 == *tok {
-            true
-        } else {
-            false
-        }
+        self.peek().unwrap().0 == *tok
     }
 
     fn check2(&mut self, tok: &Token) -> bool {
@@ -3258,11 +3254,7 @@ impl DwarfParser {
 
         debug!("check2", tok);
         if let Some(next) = self.next() {
-            if next.0 == *tok {
-                true
-            } else {
-                false
-            }
+            next.0 == *tok
         } else {
             false
         }
@@ -3347,12 +3339,16 @@ pub fn parse_dwarf(src: &str) -> Result<Vec<Spanned<Item>>, DwarfError> {
     }
 }
 
-fn report_errors(errs: Vec<Simple<char>>, parse_errs: Vec<Simple<String>>, src: &str) -> String {
+fn report_errors(
+    errs: Vec<Simple<char>>,
+    parse_errs: Vec<Box<Simple<String>>>,
+    src: &str,
+) -> String {
     let mut result = Vec::new();
 
     errs.into_iter()
         .map(|e| e.map(|c| c.to_string()))
-        .chain(parse_errs.into_iter().map(|e| e))
+        .chain(parse_errs.into_iter().map(|e| e.map(|s| s.to_string())))
         .for_each(|e| {
             let report = Report::build(ReportKind::Error, (), e.span().start);
 

@@ -1,12 +1,4 @@
-use std::{
-    collections::VecDeque,
-    fmt,
-    io::Write,
-    ops::Range,
-    path::{Path},
-    thread,
-    time::Instant,
-};
+use std::{collections::VecDeque, fmt, io::Write, ops::Range, path::Path, thread, time::Instant};
 
 use ansi_term::Colour::{self, RGB};
 use ansi_term::{ANSIString, ANSIStrings};
@@ -705,7 +697,7 @@ fn eval_function_call(
     }
 }
 
-fn chacha_print<S: AsRef<str>>(result: S, _context: &mut Context) -> Result<()> {
+fn chacha_print<S: AsRef<str>>(result: S, context: &mut Context) -> Result<()> {
     let result_style = Colour::Green.bold();
     cfg_if::cfg_if! {
         if #[cfg(feature = "print-std-out")] {
@@ -3020,7 +3012,7 @@ pub fn start_repl(mut context: Context) -> Result<(), Error> {
     //
     // println!("Value: {}", ANSIStrings(strings));
 
-    banner();
+    println!("{}", banner2());
 
     // `()` can be used when no completer is required
     let mut rl = Editor::new().map_err(|e| ChaChaError::RustyLine { source: e })?;

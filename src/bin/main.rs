@@ -22,7 +22,6 @@ use dwarf::{
     interpreter::{banner2, start_main},
 };
 
-
 use sarzak::lu_dog::ObjectStore as LuDogStore;
 use sarzak::sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL};
 
@@ -189,7 +188,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 e
             })?;
         }
-    } else if args.dap.is_some() {
+    } else if args.dap.is_some() && args.dap.unwrap() {
         let listener = TcpListener::bind("127.0.0.1:4711").unwrap();
         println!("Listening on port {}", listener.local_addr().unwrap());
         // let in_file = fs::File::create("/tmp/socket_in.txt").unwrap();

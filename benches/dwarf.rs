@@ -22,7 +22,7 @@ fn mandelbrot(c: &mut Criterion) {
     let ctx = initialize_interpreter::<PathBuf>(sarzak, lu_dog, None).unwrap();
 
     c.bench_function("mandelbrot-14x4", |b| {
-        b.iter(|| start_main(false, true, ctx.clone()).unwrap())
+        b.iter(|| start_main(false, ctx.clone()).unwrap())
     });
 }
 
@@ -36,7 +36,7 @@ fn fib(c: &mut Criterion) {
     let ctx = initialize_interpreter::<PathBuf>(sarzak, lu_dog, None).unwrap();
 
     c.bench_function("fib-17", |b| {
-        b.iter(|| start_main(false, true, ctx.clone()).unwrap())
+        b.iter(|| start_main(false, ctx.clone()).unwrap())
     });
 }
 
