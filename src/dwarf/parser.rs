@@ -3352,7 +3352,7 @@ fn report_errors(errs: Vec<Simple<char>>, parse_errs: Vec<Simple<String>>, src: 
 
     errs.into_iter()
         .map(|e| e.map(|c| c.to_string()))
-        .chain(parse_errs.into_iter().map(|e| e.map(|tok| tok.to_string())))
+        .chain(parse_errs.into_iter().map(|e| e))
         .for_each(|e| {
             let report = Report::build(ReportKind::Error, (), e.span().start);
 
