@@ -718,11 +718,7 @@ fn inter_expression(
             ensure!(
                 if let ValueType::Ty(ref id) = &*s_read!(lhs_ty) {
                     let ty = sarzak.exhume_ty(id).unwrap();
-                    if let Ty::Boolean(_) = ty {
-                        true
-                    } else {
-                        false
-                    }
+                    matches!(ty, Ty::Boolean(_))
                 } else {
                     false
                 },
@@ -843,7 +839,7 @@ fn inter_expression(
         //
         ParserExpression::Bang(expr) => {
             let (expr, ty) = inter_expression(
-                &new_ref!(ParserExpression, (*expr).0.to_owned()),
+                &new_ref!(ParserExpression, expr.0.to_owned()),
                 &expr.1,
                 source,
                 block,
@@ -1041,7 +1037,7 @@ fn inter_expression(
             debug!("ParserExpression::FieldAccess rhs {:?}", rhs);
 
             let (lhs, lhs_ty) = inter_expression(
-                &new_ref!(ParserExpression, (*lhs).0.clone()),
+                &new_ref!(ParserExpression, lhs.0.clone()),
                 &lhs.1,
                 source,
                 block,
@@ -1204,7 +1200,7 @@ fn inter_expression(
                 inter_expression(&collection, cspan, source, block, lu_dog, models, sarzak)?;
 
             let bspan = &body.1;
-            let body = new_ref!(ParserExpression, (&body.0).to_owned());
+            let body = new_ref!(ParserExpression, (body.0).to_owned());
             let (body, _body_ty) =
                 inter_expression(&body, bspan, source, block, lu_dog, models, sarzak)?;
 
@@ -1214,7 +1210,7 @@ fn inter_expression(
             } else {
                 panic!("Expected a block expression");
             };
-            let body = lu_dog.exhume_block(&body).unwrap();
+            let body = lu_dog.exhume_block(body).unwrap();
 
             let for_loop = ForLoop::new(iter, &body, &collection.0, lu_dog);
             let expr = Expression::new_for_loop(&for_loop, lu_dog);
@@ -1423,7 +1419,7 @@ fn inter_expression(
             let true_block = new_ref!(ParserExpression, true_block.0.to_owned());
             let (true_block, true_ty) =
                 inter_expression(&true_block, tspan, source, block, lu_dog, models, sarzak)?;
-            let true_block = if let Expression::Block(true_block) = s_read!(true_block.0).clone() {
+            let true_block = if let Expression::Block(true_block) = *s_read!(true_block.0) {
                 true_block
             } else {
                 panic!("Expected a block expression");
@@ -1435,12 +1431,11 @@ fn inter_expression(
                 let false_block = new_ref!(ParserExpression, false_block.0.to_owned());
                 let (false_block, _false_ty) =
                     inter_expression(&false_block, fspan, source, block, lu_dog, models, sarzak)?;
-                let false_block =
-                    if let Expression::Block(false_block) = s_read!(false_block.0).clone() {
-                        false_block
-                    } else {
-                        panic!("Expected a block expression");
-                    };
+                let false_block = if let Expression::Block(false_block) = *s_read!(false_block.0) {
+                    false_block
+                } else {
+                    panic!("Expected a block expression");
+                };
                 let false_block = lu_dog.exhume_block(&false_block).unwrap();
                 Some(false_block)
             } else {
@@ -1594,7 +1589,7 @@ fn inter_expression(
                 let list_expr = ListExpression::new(Some(&element), lu_dog);
 
                 let mut last_element_uuid: Option<Uuid> = Some(s_read!(element).id);
-                while let Some(element) = elements.next() {
+                for element in elements {
                     let ((elt, span), elt_ty) = inter_expression(
                         &new_ref!(ParserExpression, element.0.to_owned()),
                         &element.1,
@@ -1785,18 +1780,15 @@ fn inter_expression(
                 // bail here, and make the user do something about it. The issue is that this
                 // may get run from the repl, and in that case we want to return the expression.
                 // So, we need a flag...
-                let expr = ErrorExpression::new(
-                    format!(
-                        "\n  ──➤  variable: `{}` not found\n",
-                        Colour::Red.paint(name.to_owned())
-                    ),
-                    lu_dog,
-                );
-                let expr = Expression::new_error_expression(&expr, lu_dog);
-                (
-                    expr,
-                    ValueType::new_error(&Error::new_unknown_variable(lu_dog), lu_dog),
-                );
+                // let expr = ErrorExpression::new(
+                //     format!(
+                //         "\n  ──➤  variable: `{}` not found\n",
+                //         Colour::Red.paint(name.to_owned())
+                //     ),
+                //     lu_dog,
+                // );
+                // Expression::new_error_expression(&expr, lu_dog);
+                // ValueType::new_error(&Error::new_unknown_variable(lu_dog), lu_dog);
                 // 🚧 WTF are we doing here? Above it's an error, and here we have
                 // a variable expression that we're returning?
                 let expr = VariableExpression::new(name.to_owned(), lu_dog);
@@ -1816,7 +1808,7 @@ fn inter_expression(
             debug!("ParserExpression::MethodCall {:?}", instance);
 
             let (instance, _instance_ty) = inter_expression(
-                &new_ref!(ParserExpression, (*instance).0.to_owned()),
+                &new_ref!(ParserExpression, instance.0.to_owned()),
                 &instance.1,
                 source,
                 block,
@@ -1867,7 +1859,7 @@ fn inter_expression(
         //
         ParserExpression::Negation(expr) => {
             let (expr, ty) = inter_expression(
-                &new_ref!(ParserExpression, (*expr).0.to_owned()),
+                &new_ref!(ParserExpression, expr.0.to_owned()),
                 &expr.1,
                 source,
                 block,
@@ -1888,7 +1880,7 @@ fn inter_expression(
         //
         ParserExpression::Print(expr) => {
             let (expr, ty) = inter_expression(
-                &new_ref!(ParserExpression, (*expr).0.to_owned()),
+                &new_ref!(ParserExpression, expr.0.to_owned()),
                 &expr.1,
                 source,
                 block,
@@ -2081,14 +2073,10 @@ fn inter_expression(
                         let impl_ = s_read!(impl_);
 
                         let funcs = impl_.r9_function(lu_dog);
-                        funcs
-                            .iter()
-                            .find(|f| s_read!(f).name == *method)
-                            .and_then(|f| {
-                                let ret_ty = s_read!(f).return_type;
-                                let ret_ty = lu_dog.exhume_value_type(&ret_ty).unwrap();
-                                Some(ret_ty)
-                            })
+                        funcs.iter().find(|f| s_read!(f).name == *method).map(|f| {
+                            let ret_ty = s_read!(f).return_type;
+                            lu_dog.exhume_value_type(&ret_ty).unwrap()
+                        })
                     } else {
                         None
                     };
@@ -2234,7 +2222,7 @@ fn inter_expression(
             let value = XValue::new_expression(block, &ty, &expr, lu_dog);
             s_write!(span).x_value = Some(s_read!(value).id);
 
-            return Ok(((expr, span), ty));
+            Ok(((expr, span), ty))
         }
         //
         // Subtraction
