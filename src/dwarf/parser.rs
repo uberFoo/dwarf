@@ -1300,11 +1300,11 @@ impl DwarfParser {
                 } else if let Some(expression) = self.parse_lte_operator(&lhs, power)? {
                     debug!("lte operator", expression);
                     Some(expression)
-                } else if let Some(expression) = self.parse_gte_operator(&lhs, power)? {
-                    debug!("gte operator", expression);
-                    Some(expression)
                 } else if let Some(expression) = self.parse_gt_operator(&lhs, power)? {
                     debug!("greater-than operator", expression);
+                    Some(expression)
+                } else if let Some(expression) = self.parse_gte_operator(&lhs, power)? {
+                    debug!("gte operator", expression);
                     Some(expression)
                 } else if let Some(expression) = self.parse_eq_operator(&lhs, power)? {
                     debug!("equal operator", expression);

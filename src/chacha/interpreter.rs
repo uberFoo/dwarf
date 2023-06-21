@@ -957,7 +957,8 @@ fn eval_expression(
                     match &*s_read!(value) {
                         Value::ProxyType(proxy_type) => {
                             let mut arg_values = if !args.is_empty() {
-                                // Why am I doing all this with the VecDeque? It's
+                                // The VecDeque is so that I can pop off the args, and then push them
+                                // back onto a queue in the same order.
                                 let mut arg_values = VecDeque::with_capacity(args.len());
                                 let mut next = args
                                     .iter()
@@ -999,6 +1000,111 @@ fn eval_expression(
                                 let ty =
                                     ValueType::new_ty(&new_ref!(Ty, ty), &mut s_write!(lu_dog));
                                 Ok((new_ref!(Value, Value::Integer(len as i64)), ty))
+                            }
+                            "format" => {
+                                let mut arg_map = HashMap::default();
+                                let mut arg_values = if !args.is_empty() {
+                                    // The VecDeque is so that I can pop off the args, and then push them
+                                    // back onto a queue in the same order.
+                                    let mut arg_values = VecDeque::with_capacity(args.len());
+                                    let mut next = args
+                                        .iter()
+                                        .find(|a| {
+                                            s_read!(a).r27c_argument(&s_read!(lu_dog)).is_empty()
+                                        })
+                                        .unwrap()
+                                        .clone();
+
+                                    loop {
+                                        let expr = s_read!(lu_dog)
+                                            .exhume_expression(&s_read!(next).expression)
+                                            .unwrap();
+
+                                        let source = s_read!(lu_dog)
+                                            .iter_dwarf_source_file()
+                                            .next()
+                                            .unwrap();
+                                        let source = s_read!(source);
+                                        let source = &source.source;
+
+                                        let value = &s_read!(expr).r11_x_value(&s_read!(lu_dog))[0];
+
+                                        let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
+
+                                        let read = s_read!(span);
+                                        let span = read.start as usize..read.end as usize;
+
+                                        let key = source[span].to_owned();
+
+                                        let (value, _ty) = eval_expression(expr, context, vm)?;
+                                        arg_values.push_back(s_read!(value).to_string());
+
+                                        arg_map.insert(key, s_read!(value).to_string());
+
+                                        let next_id = { s_read!(next).next };
+                                        if let Some(ref id) = next_id {
+                                            next = s_read!(lu_dog).exhume_argument(id).unwrap();
+                                        } else {
+                                            break;
+                                        }
+                                    }
+
+                                    arg_values
+                                } else {
+                                    VecDeque::new()
+                                };
+
+                                // 🚧 Oddly, the lhs is the first argument. Not somethnig that I want
+                                // or even need to understand atm.
+                                arg_values.pop_front();
+                                dbg!(&arg_values);
+
+                                enum State {
+                                    Normal,
+                                    InBrace,
+                                }
+                                let mut state = State::Normal;
+                                let mut result = String::new();
+                                let mut current = String::new();
+                                for c in string.chars() {
+                                    match state {
+                                        State::Normal => {
+                                            if c == '{' {
+                                                state = State::InBrace;
+                                            } else {
+                                                result.push(c);
+                                            }
+                                        }
+                                        State::InBrace => {
+                                            if c == '}' {
+                                                if let Ok(index) = current.parse::<usize>() {
+                                                    // 🚧 Should check index bounds here.
+                                                    let value = arg_values[index].clone();
+                                                    result.push_str(&value);
+                                                    current.clear();
+                                                    state = State::Normal;
+                                                // } else if let Some(value) = arg_map.get(&current) {
+                                                //     result.push_str(&value);
+                                                //     current.clear();
+                                                //     state = State::Normal;
+                                                } else {
+                                                    // 🚧 this is the wrong error
+                                                    return Err(ChaChaError::NoSuchMethod {
+                                                        method: current.to_owned(),
+                                                        span: 0..0,
+                                                    });
+                                                }
+                                            } else {
+                                                current.push(c);
+                                            }
+                                        }
+                                    }
+                                }
+
+                                let ty = Ty::new_s_string();
+                                let ty =
+                                    ValueType::new_ty(&new_ref!(Ty, ty), &mut s_write!(lu_dog));
+                                Ok((new_ref!(Value, Value::String(result)), ty))
                             }
                             value_ => {
                                 let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];

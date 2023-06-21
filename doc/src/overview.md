@@ -29,7 +29,7 @@ fn main() {
 }
 ```
 
-> Expressions
+> **Expressions**
 >
 > There will be a lot more to say about expressions later.
 > For now just know that basically everything in dwarf is an expression.
@@ -58,8 +58,21 @@ fn main() {
 }
 ```
 
+Getting back to functions, functions take inputs, do something with them, and return an output.
+The following code defines a function that takes an integer, does some computation, and returns a string.
 
-> Advanced Statements
+```dwarf
+fn foo(a: int) -> string {
+    let b = a * 2;
+//    "The value of b is " + b as string
+    "The value of b is {1}. This is here just to confuse you {0}".format("hahahah!", b)
+}
+
+print(foo(42) + "\n");
+```
+
+
+> **Advanced Statements**
 >
 > There is a third type of statement, called an {{i: item}} statement.
 > It's useful for defining {{i: struct}}s and {{i: function}}s inside of a {{i: block expression}}.
@@ -104,7 +117,7 @@ fn main() {
 }
 ```
 
-> Numeric Type Casting
+> **Numeric Type Casting**
 >
 > There are some subtleties to conditional expressions with regard to {{i: type conversion}}.
 > In the example below if we let {{i: ChhCha}} do the conversion for us it will convert the {{i: `int`}} to a {{i: `float`}}.
@@ -147,16 +160,36 @@ fn main() {
 }
 ```
 
-> Expression Magic
+> **Expression Magic**
 >
 > Having everything as an expression pays great dividends.
 > In the example above notice how we assign `c` to the result of the {{i: `if`}} expression.
 > `if` actually has a value, which is the value of it's evaluation.
+> It's expressions all the way down. 🥁
 
 
-Notice that we left the semi-colon off of the print statement, and it still printed `()`.
-That is because the print expression has the empty value.
+```dwarf
+//macro_rules! println {
+//    () => {
+//        print("\n");
+//    },
+//    ($arg:expr) => {
+//        print($arg as string + "\n");
+//    },
+//    ($fmt:literal, $($arg:expr),*) => {
+//        print($fmt.format($($arg),*) + "\n");
+//    }
+//}
 
+//printtln!();
+print("\n");
+//println!("Hello, world!");
+print("Hello, world!" as string + "\n");
+//println!("The answer is {0}, what's the {1}", 42, "question?");
+print("The answer is {0}, what's the {1}".format(42, "question?") + "\n");
+//println!(42);
+print(42 as string + "\n");
+```
 ## Golden Nuggets ⭐️🌟✨
 
 0. The interpreter is called {{i: ChaCha}}, but the binary is called `dwarf`.

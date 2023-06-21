@@ -22,7 +22,7 @@ I know you want to. 😀
 
 ## A brief story of dwarf
 
-> Caveat Emptor / Note Bene, etcetera
+> **Caveat Emptor / Note Bene, etcetera**
 >
 > This is very much a work in progress.
 > It's maybe at an alpha stage, but centainly not beta.
@@ -70,7 +70,7 @@ It's also a great way to prototype ideas.
 
 So, thanks for taking a look, I hope you enjoy what you find!
 
-> A note regarding the code in this book:
+> **A note regarding the code in this book:**
 >
 > The code snippets contained herein are executed by AWS Lambda.
 > I've mentioned elsewhere that the interpreter is not fast.

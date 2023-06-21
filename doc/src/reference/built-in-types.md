@@ -22,8 +22,15 @@ for c in s {
 let len = s.len();
 
 // Note that indexing into a string is zero based. Also, we are indexing by
-// unicode grapheme's, which is a "printable" character.
+// unicode grapheme's, which is a "printable character".
 chacha::assert_eq(s[len - 1], "💥");
 chacha::assert_eq(s[len - 2], "🎉");
 chacha::assert_eq(s[len - 9], " ");
+
+// Strings also support substitution via the `format` method.
+print("The length of the string is {0}. {0} * {0} = {1}\n".format(len, len * len));
+let answer = 42;
+let question = "Huh?";
+//print("The answer to life, the universe, and everything is {answer}. {question} Really, {answer}\n".format(question, answer));
+print("The answer to life, the universe, and everything is {1}. {0} Really, {1}\n".format(question, answer));
 ```
