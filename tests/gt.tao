@@ -1,0 +1,13 @@
+fn main() {
+    let foo = 42;
+    if foo > 4.0 {
+        print("foo is greater than 4.0\n");
+    } else {
+        print("foo is less than 4.0\n");
+    }
+
+    chacha::assert_eq(3 > 1, true);
+    chacha::assert_eq(3.0 > 1, true);
+    chacha::assert_eq(3 > 1.0, true);
+    chacha::assert_eq(3.0 > 1.0, true);
+}
