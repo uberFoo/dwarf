@@ -25,7 +25,7 @@ pub trait StoreProxy: fmt::Display + fmt::Debug + Send + Sync {
     ///
     fn store_uuid(&self) -> Uuid;
 
-    fn into_any(&self) -> Box<dyn Any>;
+    fn as_any(&self) -> Box<dyn Any>;
 
     // fn de_ref(&)
 
@@ -59,8 +59,8 @@ impl StoreProxy for Box<dyn StoreProxy> {
         self.as_ref().store_uuid()
     }
 
-    fn into_any(&self) -> Box<dyn Any> {
-        self.as_ref().into_any()
+    fn as_any(&self) -> Box<dyn Any> {
+        self.as_ref().as_any()
     }
 
     fn call(

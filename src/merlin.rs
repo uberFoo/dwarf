@@ -68,7 +68,7 @@ impl StoreProxy for ArgumentProxy {
     }
 
     /// Magic methods to make things appear from thin air. 🪄
-    fn into_any(&self) -> Box<dyn Any> {
+    fn as_any(&self) -> Box<dyn Any> {
         Box::new(self.clone())
     }
 
@@ -255,7 +255,7 @@ impl TryFrom<&Value> for ArgumentProxy {
                 let read_proxy = proxy.read().unwrap();
 
                 if read_proxy.store_uuid() == ARGUMENT_STORE_TYPE_UUID {
-                    let any = (&*read_proxy).into_any();
+                    let any = (&*read_proxy).as_any();
                     Ok(any.downcast_ref::<ArgumentProxy>().unwrap().clone())
                 } else {
                     Err(ChaChaError::Conversion {
@@ -306,7 +306,7 @@ impl StoreProxy for BinaryProxy {
     }
 
     /// Magic methods to make things appear from thin air. 🪄
-    fn into_any(&self) -> Box<dyn Any> {
+    fn as_any(&self) -> Box<dyn Any> {
         Box::new(self.clone())
     }
 
@@ -512,7 +512,7 @@ impl TryFrom<&Value> for BinaryProxy {
                 let read_proxy = proxy.read().unwrap();
 
                 if read_proxy.store_uuid() == BINARY_STORE_TYPE_UUID {
-                    let any = (&*read_proxy).into_any();
+                    let any = (&*read_proxy).as_any();
                     Ok(any.downcast_ref::<BinaryProxy>().unwrap().clone())
                 } else {
                     Err(ChaChaError::Conversion {
@@ -563,7 +563,7 @@ impl StoreProxy for BlockProxy {
     }
 
     /// Magic methods to make things appear from thin air. 🪄
-    fn into_any(&self) -> Box<dyn Any> {
+    fn as_any(&self) -> Box<dyn Any> {
         Box::new(self.clone())
     }
 
@@ -705,7 +705,7 @@ impl TryFrom<&Value> for BlockProxy {
                 let read_proxy = proxy.read().unwrap();
 
                 if read_proxy.store_uuid() == BLOCK_STORE_TYPE_UUID {
-                    let any = (&*read_proxy).into_any();
+                    let any = (&*read_proxy).as_any();
                     Ok(any.downcast_ref::<BlockProxy>().unwrap().clone())
                 } else {
                     Err(ChaChaError::Conversion {
@@ -756,7 +756,7 @@ impl StoreProxy for BooleanLiteralProxy {
     }
 
     /// Magic methods to make things appear from thin air. 🪄
-    fn into_any(&self) -> Box<dyn Any> {
+    fn as_any(&self) -> Box<dyn Any> {
         Box::new(self.clone())
     }
 
@@ -913,7 +913,7 @@ impl TryFrom<&Value> for BooleanLiteralProxy {
                 let read_proxy = proxy.read().unwrap();
 
                 if read_proxy.store_uuid() == BOOLEAN_LITERAL_STORE_TYPE_UUID {
-                    let any = (&*read_proxy).into_any();
+                    let any = (&*read_proxy).as_any();
                     Ok(any.downcast_ref::<BooleanLiteralProxy>().unwrap().clone())
                 } else {
                     Err(ChaChaError::Conversion {
@@ -964,7 +964,7 @@ impl StoreProxy for CallProxy {
     }
 
     /// Magic methods to make things appear from thin air. 🪄
-    fn into_any(&self) -> Box<dyn Any> {
+    fn as_any(&self) -> Box<dyn Any> {
         Box::new(self.clone())
     }
 
@@ -1164,7 +1164,7 @@ impl TryFrom<&Value> for CallProxy {
                 let read_proxy = proxy.read().unwrap();
 
                 if read_proxy.store_uuid() == CALL_STORE_TYPE_UUID {
-                    let any = (&*read_proxy).into_any();
+                    let any = (&*read_proxy).as_any();
                     Ok(any.downcast_ref::<CallProxy>().unwrap().clone())
                 } else {
                     Err(ChaChaError::Conversion {
@@ -1215,7 +1215,7 @@ impl StoreProxy for ComparisonProxy {
     }
 
     /// Magic methods to make things appear from thin air. 🪄
-    fn into_any(&self) -> Box<dyn Any> {
+    fn as_any(&self) -> Box<dyn Any> {
         Box::new(self.clone())
     }
 
@@ -1389,7 +1389,7 @@ impl TryFrom<&Value> for ComparisonProxy {
                 let read_proxy = proxy.read().unwrap();
 
                 if read_proxy.store_uuid() == COMPARISON_STORE_TYPE_UUID {
-                    let any = (&*read_proxy).into_any();
+                    let any = (&*read_proxy).as_any();
                     Ok(any.downcast_ref::<ComparisonProxy>().unwrap().clone())
                 } else {
                     Err(ChaChaError::Conversion {
@@ -1440,7 +1440,7 @@ impl StoreProxy for DwarfSourceFileProxy {
     }
 
     /// Magic methods to make things appear from thin air. 🪄
-    fn into_any(&self) -> Box<dyn Any> {
+    fn as_any(&self) -> Box<dyn Any> {
         Box::new(self.clone())
     }
 
@@ -1588,7 +1588,7 @@ impl TryFrom<&Value> for DwarfSourceFileProxy {
                 let read_proxy = proxy.read().unwrap();
 
                 if read_proxy.store_uuid() == DWARF_SOURCE_FILE_STORE_TYPE_UUID {
-                    let any = (&*read_proxy).into_any();
+                    let any = (&*read_proxy).as_any();
                     Ok(any.downcast_ref::<DwarfSourceFileProxy>().unwrap().clone())
                 } else {
                     Err(ChaChaError::Conversion {
@@ -1639,7 +1639,7 @@ impl StoreProxy for ErrorProxy {
     }
 
     /// Magic methods to make things appear from thin air. 🪄
-    fn into_any(&self) -> Box<dyn Any> {
+    fn as_any(&self) -> Box<dyn Any> {
         Box::new(self.clone())
     }
 
@@ -1773,7 +1773,7 @@ impl TryFrom<&Value> for ErrorProxy {
                 let read_proxy = proxy.read().unwrap();
 
                 if read_proxy.store_uuid() == ERROR_STORE_TYPE_UUID {
-                    let any = (&*read_proxy).into_any();
+                    let any = (&*read_proxy).as_any();
                     Ok(any.downcast_ref::<ErrorProxy>().unwrap().clone())
                 } else {
                     Err(ChaChaError::Conversion {
@@ -1824,7 +1824,7 @@ impl StoreProxy for ErrorExpressionProxy {
     }
 
     /// Magic methods to make things appear from thin air. 🪄
-    fn into_any(&self) -> Box<dyn Any> {
+    fn as_any(&self) -> Box<dyn Any> {
         Box::new(self.clone())
     }
 
@@ -1972,7 +1972,7 @@ impl TryFrom<&Value> for ErrorExpressionProxy {
                 let read_proxy = proxy.read().unwrap();
 
                 if read_proxy.store_uuid() == ERROR_EXPRESSION_STORE_TYPE_UUID {
-                    let any = (&*read_proxy).into_any();
+                    let any = (&*read_proxy).as_any();
                     Ok(any.downcast_ref::<ErrorExpressionProxy>().unwrap().clone())
                 } else {
                     Err(ChaChaError::Conversion {
@@ -2023,7 +2023,7 @@ impl StoreProxy for ExpressionProxy {
     }
 
     /// Magic methods to make things appear from thin air. 🪄
-    fn into_any(&self) -> Box<dyn Any> {
+    fn as_any(&self) -> Box<dyn Any> {
         Box::new(self.clone())
     }
 
@@ -2530,7 +2530,7 @@ impl TryFrom<&Value> for ExpressionProxy {
                 let read_proxy = proxy.read().unwrap();
 
                 if read_proxy.store_uuid() == EXPRESSION_STORE_TYPE_UUID {
-                    let any = (&*read_proxy).into_any();
+                    let any = (&*read_proxy).as_any();
                     Ok(any.downcast_ref::<ExpressionProxy>().unwrap().clone())
                 } else {
                     Err(ChaChaError::Conversion {
@@ -2581,7 +2581,7 @@ impl StoreProxy for ExpressionStatementProxy {
     }
 
     /// Magic methods to make things appear from thin air. 🪄
-    fn into_any(&self) -> Box<dyn Any> {
+    fn as_any(&self) -> Box<dyn Any> {
         Box::new(self.clone())
     }
 
@@ -2740,7 +2740,7 @@ impl TryFrom<&Value> for ExpressionStatementProxy {
                 let read_proxy = proxy.read().unwrap();
 
                 if read_proxy.store_uuid() == EXPRESSION_STATEMENT_STORE_TYPE_UUID {
-                    let any = (&*read_proxy).into_any();
+                    let any = (&*read_proxy).as_any();
                     Ok(any
                         .downcast_ref::<ExpressionStatementProxy>()
                         .unwrap()
@@ -2794,7 +2794,7 @@ impl StoreProxy for FieldProxy {
     }
 
     /// Magic methods to make things appear from thin air. 🪄
-    fn into_any(&self) -> Box<dyn Any> {
+    fn as_any(&self) -> Box<dyn Any> {
         Box::new(self.clone())
     }
 
@@ -2964,7 +2964,7 @@ impl TryFrom<&Value> for FieldProxy {
                 let read_proxy = proxy.read().unwrap();
 
                 if read_proxy.store_uuid() == FIELD_STORE_TYPE_UUID {
-                    let any = (&*read_proxy).into_any();
+                    let any = (&*read_proxy).as_any();
                     Ok(any.downcast_ref::<FieldProxy>().unwrap().clone())
                 } else {
                     Err(ChaChaError::Conversion {
@@ -3015,7 +3015,7 @@ impl StoreProxy for FieldAccessProxy {
     }
 
     /// Magic methods to make things appear from thin air. 🪄
-    fn into_any(&self) -> Box<dyn Any> {
+    fn as_any(&self) -> Box<dyn Any> {
         Box::new(self.clone())
     }
 
@@ -3177,7 +3177,7 @@ impl TryFrom<&Value> for FieldAccessProxy {
                 let read_proxy = proxy.read().unwrap();
 
                 if read_proxy.store_uuid() == FIELD_ACCESS_STORE_TYPE_UUID {
-                    let any = (&*read_proxy).into_any();
+                    let any = (&*read_proxy).as_any();
                     Ok(any.downcast_ref::<FieldAccessProxy>().unwrap().clone())
                 } else {
                     Err(ChaChaError::Conversion {
@@ -3228,7 +3228,7 @@ impl StoreProxy for FieldExpressionProxy {
     }
 
     /// Magic methods to make things appear from thin air. 🪄
-    fn into_any(&self) -> Box<dyn Any> {
+    fn as_any(&self) -> Box<dyn Any> {
         Box::new(self.clone())
     }
 
@@ -3413,7 +3413,7 @@ impl TryFrom<&Value> for FieldExpressionProxy {
                 let read_proxy = proxy.read().unwrap();
 
                 if read_proxy.store_uuid() == FIELD_EXPRESSION_STORE_TYPE_UUID {
-                    let any = (&*read_proxy).into_any();
+                    let any = (&*read_proxy).as_any();
                     Ok(any.downcast_ref::<FieldExpressionProxy>().unwrap().clone())
                 } else {
                     Err(ChaChaError::Conversion {
@@ -3464,7 +3464,7 @@ impl StoreProxy for FloatLiteralProxy {
     }
 
     /// Magic methods to make things appear from thin air. 🪄
-    fn into_any(&self) -> Box<dyn Any> {
+    fn as_any(&self) -> Box<dyn Any> {
         Box::new(self.clone())
     }
 
@@ -3610,7 +3610,7 @@ impl TryFrom<&Value> for FloatLiteralProxy {
                 let read_proxy = proxy.read().unwrap();
 
                 if read_proxy.store_uuid() == FLOAT_LITERAL_STORE_TYPE_UUID {
-                    let any = (&*read_proxy).into_any();
+                    let any = (&*read_proxy).as_any();
                     Ok(any.downcast_ref::<FloatLiteralProxy>().unwrap().clone())
                 } else {
                     Err(ChaChaError::Conversion {
@@ -3661,7 +3661,7 @@ impl StoreProxy for ForLoopProxy {
     }
 
     /// Magic methods to make things appear from thin air. 🪄
-    fn into_any(&self) -> Box<dyn Any> {
+    fn as_any(&self) -> Box<dyn Any> {
         Box::new(self.clone())
     }
 
@@ -3837,7 +3837,7 @@ impl TryFrom<&Value> for ForLoopProxy {
                 let read_proxy = proxy.read().unwrap();
 
                 if read_proxy.store_uuid() == FOR_LOOP_STORE_TYPE_UUID {
-                    let any = (&*read_proxy).into_any();
+                    let any = (&*read_proxy).as_any();
                     Ok(any.downcast_ref::<ForLoopProxy>().unwrap().clone())
                 } else {
                     Err(ChaChaError::Conversion {
@@ -3888,7 +3888,7 @@ impl StoreProxy for FunctionProxy {
     }
 
     /// Magic methods to make things appear from thin air. 🪄
-    fn into_any(&self) -> Box<dyn Any> {
+    fn as_any(&self) -> Box<dyn Any> {
         Box::new(self.clone())
     }
 
@@ -4086,7 +4086,7 @@ impl TryFrom<&Value> for FunctionProxy {
                 let read_proxy = proxy.read().unwrap();
 
                 if read_proxy.store_uuid() == FUNCTION_STORE_TYPE_UUID {
-                    let any = (&*read_proxy).into_any();
+                    let any = (&*read_proxy).as_any();
                     Ok(any.downcast_ref::<FunctionProxy>().unwrap().clone())
                 } else {
                     Err(ChaChaError::Conversion {
@@ -4137,7 +4137,7 @@ impl StoreProxy for GroupedProxy {
     }
 
     /// Magic methods to make things appear from thin air. 🪄
-    fn into_any(&self) -> Box<dyn Any> {
+    fn as_any(&self) -> Box<dyn Any> {
         Box::new(self.clone())
     }
 
@@ -4292,7 +4292,7 @@ impl TryFrom<&Value> for GroupedProxy {
                 let read_proxy = proxy.read().unwrap();
 
                 if read_proxy.store_uuid() == GROUPED_STORE_TYPE_UUID {
-                    let any = (&*read_proxy).into_any();
+                    let any = (&*read_proxy).as_any();
                     Ok(any.downcast_ref::<GroupedProxy>().unwrap().clone())
                 } else {
                     Err(ChaChaError::Conversion {
@@ -4343,7 +4343,7 @@ impl StoreProxy for XIfProxy {
     }
 
     /// Magic methods to make things appear from thin air. 🪄
-    fn into_any(&self) -> Box<dyn Any> {
+    fn as_any(&self) -> Box<dyn Any> {
         Box::new(self.clone())
     }
 
@@ -4524,7 +4524,7 @@ impl TryFrom<&Value> for XIfProxy {
                 let read_proxy = proxy.read().unwrap();
 
                 if read_proxy.store_uuid() == X_IF_STORE_TYPE_UUID {
-                    let any = (&*read_proxy).into_any();
+                    let any = (&*read_proxy).as_any();
                     Ok(any.downcast_ref::<XIfProxy>().unwrap().clone())
                 } else {
                     Err(ChaChaError::Conversion {
@@ -4575,7 +4575,7 @@ impl StoreProxy for ImplementationProxy {
     }
 
     /// Magic methods to make things appear from thin air. 🪄
-    fn into_any(&self) -> Box<dyn Any> {
+    fn as_any(&self) -> Box<dyn Any> {
         Box::new(self.clone())
     }
 
@@ -4732,7 +4732,7 @@ impl TryFrom<&Value> for ImplementationProxy {
                 let read_proxy = proxy.read().unwrap();
 
                 if read_proxy.store_uuid() == IMPLEMENTATION_STORE_TYPE_UUID {
-                    let any = (&*read_proxy).into_any();
+                    let any = (&*read_proxy).as_any();
                     Ok(any.downcast_ref::<ImplementationProxy>().unwrap().clone())
                 } else {
                     Err(ChaChaError::Conversion {
@@ -4783,7 +4783,7 @@ impl StoreProxy for ImportProxy {
     }
 
     /// Magic methods to make things appear from thin air. 🪄
-    fn into_any(&self) -> Box<dyn Any> {
+    fn as_any(&self) -> Box<dyn Any> {
         Box::new(self.clone())
     }
 
@@ -4973,7 +4973,7 @@ impl TryFrom<&Value> for ImportProxy {
                 let read_proxy = proxy.read().unwrap();
 
                 if read_proxy.store_uuid() == IMPORT_STORE_TYPE_UUID {
-                    let any = (&*read_proxy).into_any();
+                    let any = (&*read_proxy).as_any();
                     Ok(any.downcast_ref::<ImportProxy>().unwrap().clone())
                 } else {
                     Err(ChaChaError::Conversion {
@@ -5024,7 +5024,7 @@ impl StoreProxy for IndexProxy {
     }
 
     /// Magic methods to make things appear from thin air. 🪄
-    fn into_any(&self) -> Box<dyn Any> {
+    fn as_any(&self) -> Box<dyn Any> {
         Box::new(self.clone())
     }
 
@@ -5187,7 +5187,7 @@ impl TryFrom<&Value> for IndexProxy {
                 let read_proxy = proxy.read().unwrap();
 
                 if read_proxy.store_uuid() == INDEX_STORE_TYPE_UUID {
-                    let any = (&*read_proxy).into_any();
+                    let any = (&*read_proxy).as_any();
                     Ok(any.downcast_ref::<IndexProxy>().unwrap().clone())
                 } else {
                     Err(ChaChaError::Conversion {
@@ -5238,7 +5238,7 @@ impl StoreProxy for IntegerLiteralProxy {
     }
 
     /// Magic methods to make things appear from thin air. 🪄
-    fn into_any(&self) -> Box<dyn Any> {
+    fn as_any(&self) -> Box<dyn Any> {
         Box::new(self.clone())
     }
 
@@ -5386,7 +5386,7 @@ impl TryFrom<&Value> for IntegerLiteralProxy {
                 let read_proxy = proxy.read().unwrap();
 
                 if read_proxy.store_uuid() == INTEGER_LITERAL_STORE_TYPE_UUID {
-                    let any = (&*read_proxy).into_any();
+                    let any = (&*read_proxy).as_any();
                     Ok(any.downcast_ref::<IntegerLiteralProxy>().unwrap().clone())
                 } else {
                     Err(ChaChaError::Conversion {
@@ -5437,7 +5437,7 @@ impl StoreProxy for ItemProxy {
     }
 
     /// Magic methods to make things appear from thin air. 🪄
-    fn into_any(&self) -> Box<dyn Any> {
+    fn as_any(&self) -> Box<dyn Any> {
         Box::new(self.clone())
     }
 
@@ -5653,7 +5653,7 @@ impl TryFrom<&Value> for ItemProxy {
                 let read_proxy = proxy.read().unwrap();
 
                 if read_proxy.store_uuid() == ITEM_STORE_TYPE_UUID {
-                    let any = (&*read_proxy).into_any();
+                    let any = (&*read_proxy).as_any();
                     Ok(any.downcast_ref::<ItemProxy>().unwrap().clone())
                 } else {
                     Err(ChaChaError::Conversion {
@@ -5704,7 +5704,7 @@ impl StoreProxy for LetStatementProxy {
     }
 
     /// Magic methods to make things appear from thin air. 🪄
-    fn into_any(&self) -> Box<dyn Any> {
+    fn as_any(&self) -> Box<dyn Any> {
         Box::new(self.clone())
     }
 
@@ -5875,7 +5875,7 @@ impl TryFrom<&Value> for LetStatementProxy {
                 let read_proxy = proxy.read().unwrap();
 
                 if read_proxy.store_uuid() == LET_STATEMENT_STORE_TYPE_UUID {
-                    let any = (&*read_proxy).into_any();
+                    let any = (&*read_proxy).as_any();
                     Ok(any.downcast_ref::<LetStatementProxy>().unwrap().clone())
                 } else {
                     Err(ChaChaError::Conversion {
@@ -5926,7 +5926,7 @@ impl StoreProxy for ListProxy {
     }
 
     /// Magic methods to make things appear from thin air. 🪄
-    fn into_any(&self) -> Box<dyn Any> {
+    fn as_any(&self) -> Box<dyn Any> {
         Box::new(self.clone())
     }
 
@@ -6075,7 +6075,7 @@ impl TryFrom<&Value> for ListProxy {
                 let read_proxy = proxy.read().unwrap();
 
                 if read_proxy.store_uuid() == LIST_STORE_TYPE_UUID {
-                    let any = (&*read_proxy).into_any();
+                    let any = (&*read_proxy).as_any();
                     Ok(any.downcast_ref::<ListProxy>().unwrap().clone())
                 } else {
                     Err(ChaChaError::Conversion {
@@ -6126,7 +6126,7 @@ impl StoreProxy for ListElementProxy {
     }
 
     /// Magic methods to make things appear from thin air. 🪄
-    fn into_any(&self) -> Box<dyn Any> {
+    fn as_any(&self) -> Box<dyn Any> {
         Box::new(self.clone())
     }
 
@@ -6297,7 +6297,7 @@ impl TryFrom<&Value> for ListElementProxy {
                 let read_proxy = proxy.read().unwrap();
 
                 if read_proxy.store_uuid() == LIST_ELEMENT_STORE_TYPE_UUID {
-                    let any = (&*read_proxy).into_any();
+                    let any = (&*read_proxy).as_any();
                     Ok(any.downcast_ref::<ListElementProxy>().unwrap().clone())
                 } else {
                     Err(ChaChaError::Conversion {
@@ -6348,7 +6348,7 @@ impl StoreProxy for ListExpressionProxy {
     }
 
     /// Magic methods to make things appear from thin air. 🪄
-    fn into_any(&self) -> Box<dyn Any> {
+    fn as_any(&self) -> Box<dyn Any> {
         Box::new(self.clone())
     }
 
@@ -6509,7 +6509,7 @@ impl TryFrom<&Value> for ListExpressionProxy {
                 let read_proxy = proxy.read().unwrap();
 
                 if read_proxy.store_uuid() == LIST_EXPRESSION_STORE_TYPE_UUID {
-                    let any = (&*read_proxy).into_any();
+                    let any = (&*read_proxy).as_any();
                     Ok(any.downcast_ref::<ListExpressionProxy>().unwrap().clone())
                 } else {
                     Err(ChaChaError::Conversion {
@@ -6560,7 +6560,7 @@ impl StoreProxy for LiteralProxy {
     }
 
     /// Magic methods to make things appear from thin air. 🪄
-    fn into_any(&self) -> Box<dyn Any> {
+    fn as_any(&self) -> Box<dyn Any> {
         Box::new(self.clone())
     }
 
@@ -6773,7 +6773,7 @@ impl TryFrom<&Value> for LiteralProxy {
                 let read_proxy = proxy.read().unwrap();
 
                 if read_proxy.store_uuid() == LITERAL_STORE_TYPE_UUID {
-                    let any = (&*read_proxy).into_any();
+                    let any = (&*read_proxy).as_any();
                     Ok(any.downcast_ref::<LiteralProxy>().unwrap().clone())
                 } else {
                     Err(ChaChaError::Conversion {
@@ -6824,7 +6824,7 @@ impl StoreProxy for LocalVariableProxy {
     }
 
     /// Magic methods to make things appear from thin air. 🪄
-    fn into_any(&self) -> Box<dyn Any> {
+    fn as_any(&self) -> Box<dyn Any> {
         Box::new(self.clone())
     }
 
@@ -6972,7 +6972,7 @@ impl TryFrom<&Value> for LocalVariableProxy {
                 let read_proxy = proxy.read().unwrap();
 
                 if read_proxy.store_uuid() == LOCAL_VARIABLE_STORE_TYPE_UUID {
-                    let any = (&*read_proxy).into_any();
+                    let any = (&*read_proxy).as_any();
                     Ok(any.downcast_ref::<LocalVariableProxy>().unwrap().clone())
                 } else {
                     Err(ChaChaError::Conversion {
@@ -7023,7 +7023,7 @@ impl StoreProxy for MethodCallProxy {
     }
 
     /// Magic methods to make things appear from thin air. 🪄
-    fn into_any(&self) -> Box<dyn Any> {
+    fn as_any(&self) -> Box<dyn Any> {
         Box::new(self.clone())
     }
 
@@ -7169,7 +7169,7 @@ impl TryFrom<&Value> for MethodCallProxy {
                 let read_proxy = proxy.read().unwrap();
 
                 if read_proxy.store_uuid() == METHOD_CALL_STORE_TYPE_UUID {
-                    let any = (&*read_proxy).into_any();
+                    let any = (&*read_proxy).as_any();
                     Ok(any.downcast_ref::<MethodCallProxy>().unwrap().clone())
                 } else {
                     Err(ChaChaError::Conversion {
@@ -7219,7 +7219,7 @@ impl StoreProxy for ObjectProxy {
     }
 
     /// Magic methods to make things appear from thin air. 🪄
-    fn into_any(&self) -> Box<dyn Any> {
+    fn as_any(&self) -> Box<dyn Any> {
         Box::new(self.clone())
     }
 
@@ -7336,7 +7336,7 @@ impl TryFrom<&Value> for ObjectProxy {
                 let read_proxy = proxy.read().unwrap();
 
                 if read_proxy.store_uuid() == OBJECT_STORE_TYPE_UUID {
-                    let any = (&*read_proxy).into_any();
+                    let any = (&*read_proxy).as_any();
                     Ok(any.downcast_ref::<ObjectProxy>().unwrap().clone())
                 } else {
                     Err(ChaChaError::Conversion {
@@ -7387,7 +7387,7 @@ impl StoreProxy for ZObjectStoreProxy {
     }
 
     /// Magic methods to make things appear from thin air. 🪄
-    fn into_any(&self) -> Box<dyn Any> {
+    fn as_any(&self) -> Box<dyn Any> {
         Box::new(self.clone())
     }
 
@@ -7533,7 +7533,7 @@ impl TryFrom<&Value> for ZObjectStoreProxy {
                 let read_proxy = proxy.read().unwrap();
 
                 if read_proxy.store_uuid() == Z_OBJECT_STORE_STORE_TYPE_UUID {
-                    let any = (&*read_proxy).into_any();
+                    let any = (&*read_proxy).as_any();
                     Ok(any.downcast_ref::<ZObjectStoreProxy>().unwrap().clone())
                 } else {
                     Err(ChaChaError::Conversion {
@@ -7584,7 +7584,7 @@ impl StoreProxy for OperatorProxy {
     }
 
     /// Magic methods to make things appear from thin air. 🪄
-    fn into_any(&self) -> Box<dyn Any> {
+    fn as_any(&self) -> Box<dyn Any> {
         Box::new(self.clone())
     }
 
@@ -7790,7 +7790,7 @@ impl TryFrom<&Value> for OperatorProxy {
                 let read_proxy = proxy.read().unwrap();
 
                 if read_proxy.store_uuid() == OPERATOR_STORE_TYPE_UUID {
-                    let any = (&*read_proxy).into_any();
+                    let any = (&*read_proxy).as_any();
                     Ok(any.downcast_ref::<OperatorProxy>().unwrap().clone())
                 } else {
                     Err(ChaChaError::Conversion {
@@ -7841,7 +7841,7 @@ impl StoreProxy for WoogOptionProxy {
     }
 
     /// Magic methods to make things appear from thin air. 🪄
-    fn into_any(&self) -> Box<dyn Any> {
+    fn as_any(&self) -> Box<dyn Any> {
         Box::new(self.clone())
     }
 
@@ -8013,7 +8013,7 @@ impl TryFrom<&Value> for WoogOptionProxy {
                 let read_proxy = proxy.read().unwrap();
 
                 if read_proxy.store_uuid() == WOOG_OPTION_STORE_TYPE_UUID {
-                    let any = (&*read_proxy).into_any();
+                    let any = (&*read_proxy).as_any();
                     Ok(any.downcast_ref::<WoogOptionProxy>().unwrap().clone())
                 } else {
                     Err(ChaChaError::Conversion {
@@ -8064,7 +8064,7 @@ impl StoreProxy for ParameterProxy {
     }
 
     /// Magic methods to make things appear from thin air. 🪄
-    fn into_any(&self) -> Box<dyn Any> {
+    fn as_any(&self) -> Box<dyn Any> {
         Box::new(self.clone())
     }
 
@@ -8235,7 +8235,7 @@ impl TryFrom<&Value> for ParameterProxy {
                 let read_proxy = proxy.read().unwrap();
 
                 if read_proxy.store_uuid() == PARAMETER_STORE_TYPE_UUID {
-                    let any = (&*read_proxy).into_any();
+                    let any = (&*read_proxy).as_any();
                     Ok(any.downcast_ref::<ParameterProxy>().unwrap().clone())
                 } else {
                     Err(ChaChaError::Conversion {
@@ -8286,7 +8286,7 @@ impl StoreProxy for PrintProxy {
     }
 
     /// Magic methods to make things appear from thin air. 🪄
-    fn into_any(&self) -> Box<dyn Any> {
+    fn as_any(&self) -> Box<dyn Any> {
         Box::new(self.clone())
     }
 
@@ -8437,7 +8437,7 @@ impl TryFrom<&Value> for PrintProxy {
                 let read_proxy = proxy.read().unwrap();
 
                 if read_proxy.store_uuid() == PRINT_STORE_TYPE_UUID {
-                    let any = (&*read_proxy).into_any();
+                    let any = (&*read_proxy).as_any();
                     Ok(any.downcast_ref::<PrintProxy>().unwrap().clone())
                 } else {
                     Err(ChaChaError::Conversion {
@@ -8488,7 +8488,7 @@ impl StoreProxy for RangeExpressionProxy {
     }
 
     /// Magic methods to make things appear from thin air. 🪄
-    fn into_any(&self) -> Box<dyn Any> {
+    fn as_any(&self) -> Box<dyn Any> {
         Box::new(self.clone())
     }
 
@@ -8763,7 +8763,7 @@ impl TryFrom<&Value> for RangeExpressionProxy {
                 let read_proxy = proxy.read().unwrap();
 
                 if read_proxy.store_uuid() == RANGE_EXPRESSION_STORE_TYPE_UUID {
-                    let any = (&*read_proxy).into_any();
+                    let any = (&*read_proxy).as_any();
                     Ok(any.downcast_ref::<RangeExpressionProxy>().unwrap().clone())
                 } else {
                     Err(ChaChaError::Conversion {
@@ -8814,7 +8814,7 @@ impl StoreProxy for ReferenceProxy {
     }
 
     /// Magic methods to make things appear from thin air. 🪄
-    fn into_any(&self) -> Box<dyn Any> {
+    fn as_any(&self) -> Box<dyn Any> {
         Box::new(self.clone())
     }
 
@@ -8981,7 +8981,7 @@ impl TryFrom<&Value> for ReferenceProxy {
                 let read_proxy = proxy.read().unwrap();
 
                 if read_proxy.store_uuid() == REFERENCE_STORE_TYPE_UUID {
-                    let any = (&*read_proxy).into_any();
+                    let any = (&*read_proxy).as_any();
                     Ok(any.downcast_ref::<ReferenceProxy>().unwrap().clone())
                 } else {
                     Err(ChaChaError::Conversion {
@@ -9032,7 +9032,7 @@ impl StoreProxy for ResultStatementProxy {
     }
 
     /// Magic methods to make things appear from thin air. 🪄
-    fn into_any(&self) -> Box<dyn Any> {
+    fn as_any(&self) -> Box<dyn Any> {
         Box::new(self.clone())
     }
 
@@ -9189,7 +9189,7 @@ impl TryFrom<&Value> for ResultStatementProxy {
                 let read_proxy = proxy.read().unwrap();
 
                 if read_proxy.store_uuid() == RESULT_STATEMENT_STORE_TYPE_UUID {
-                    let any = (&*read_proxy).into_any();
+                    let any = (&*read_proxy).as_any();
                     Ok(any.downcast_ref::<ResultStatementProxy>().unwrap().clone())
                 } else {
                     Err(ChaChaError::Conversion {
@@ -9240,7 +9240,7 @@ impl StoreProxy for XReturnProxy {
     }
 
     /// Magic methods to make things appear from thin air. 🪄
-    fn into_any(&self) -> Box<dyn Any> {
+    fn as_any(&self) -> Box<dyn Any> {
         Box::new(self.clone())
     }
 
@@ -9395,7 +9395,7 @@ impl TryFrom<&Value> for XReturnProxy {
                 let read_proxy = proxy.read().unwrap();
 
                 if read_proxy.store_uuid() == X_RETURN_STORE_TYPE_UUID {
-                    let any = (&*read_proxy).into_any();
+                    let any = (&*read_proxy).as_any();
                     Ok(any.downcast_ref::<XReturnProxy>().unwrap().clone())
                 } else {
                     Err(ChaChaError::Conversion {
@@ -9446,7 +9446,7 @@ impl StoreProxy for ZSomeProxy {
     }
 
     /// Magic methods to make things appear from thin air. 🪄
-    fn into_any(&self) -> Box<dyn Any> {
+    fn as_any(&self) -> Box<dyn Any> {
         Box::new(self.clone())
     }
 
@@ -9595,7 +9595,7 @@ impl TryFrom<&Value> for ZSomeProxy {
                 let read_proxy = proxy.read().unwrap();
 
                 if read_proxy.store_uuid() == Z_SOME_STORE_TYPE_UUID {
-                    let any = (&*read_proxy).into_any();
+                    let any = (&*read_proxy).as_any();
                     Ok(any.downcast_ref::<ZSomeProxy>().unwrap().clone())
                 } else {
                     Err(ChaChaError::Conversion {
@@ -9646,7 +9646,7 @@ impl StoreProxy for StatementProxy {
     }
 
     /// Magic methods to make things appear from thin air. 🪄
-    fn into_any(&self) -> Box<dyn Any> {
+    fn as_any(&self) -> Box<dyn Any> {
         Box::new(self.clone())
     }
 
@@ -9907,7 +9907,7 @@ impl TryFrom<&Value> for StatementProxy {
                 let read_proxy = proxy.read().unwrap();
 
                 if read_proxy.store_uuid() == STATEMENT_STORE_TYPE_UUID {
-                    let any = (&*read_proxy).into_any();
+                    let any = (&*read_proxy).as_any();
                     Ok(any.downcast_ref::<StatementProxy>().unwrap().clone())
                 } else {
                     Err(ChaChaError::Conversion {
@@ -9958,7 +9958,7 @@ impl StoreProxy for StaticMethodCallProxy {
     }
 
     /// Magic methods to make things appear from thin air. 🪄
-    fn into_any(&self) -> Box<dyn Any> {
+    fn as_any(&self) -> Box<dyn Any> {
         Box::new(self.clone())
     }
 
@@ -10114,7 +10114,7 @@ impl TryFrom<&Value> for StaticMethodCallProxy {
                 let read_proxy = proxy.read().unwrap();
 
                 if read_proxy.store_uuid() == STATIC_METHOD_CALL_STORE_TYPE_UUID {
-                    let any = (&*read_proxy).into_any();
+                    let any = (&*read_proxy).as_any();
                     Ok(any.downcast_ref::<StaticMethodCallProxy>().unwrap().clone())
                 } else {
                     Err(ChaChaError::Conversion {
@@ -10165,7 +10165,7 @@ impl StoreProxy for StringLiteralProxy {
     }
 
     /// Magic methods to make things appear from thin air. 🪄
-    fn into_any(&self) -> Box<dyn Any> {
+    fn as_any(&self) -> Box<dyn Any> {
         Box::new(self.clone())
     }
 
@@ -10313,7 +10313,7 @@ impl TryFrom<&Value> for StringLiteralProxy {
                 let read_proxy = proxy.read().unwrap();
 
                 if read_proxy.store_uuid() == STRING_LITERAL_STORE_TYPE_UUID {
-                    let any = (&*read_proxy).into_any();
+                    let any = (&*read_proxy).as_any();
                     Ok(any.downcast_ref::<StringLiteralProxy>().unwrap().clone())
                 } else {
                     Err(ChaChaError::Conversion {
@@ -10364,7 +10364,7 @@ impl StoreProxy for WoogStructProxy {
     }
 
     /// Magic methods to make things appear from thin air. 🪄
-    fn into_any(&self) -> Box<dyn Any> {
+    fn as_any(&self) -> Box<dyn Any> {
         Box::new(self.clone())
     }
 
@@ -10526,7 +10526,7 @@ impl TryFrom<&Value> for WoogStructProxy {
                 let read_proxy = proxy.read().unwrap();
 
                 if read_proxy.store_uuid() == WOOG_STRUCT_STORE_TYPE_UUID {
-                    let any = (&*read_proxy).into_any();
+                    let any = (&*read_proxy).as_any();
                     Ok(any.downcast_ref::<WoogStructProxy>().unwrap().clone())
                 } else {
                     Err(ChaChaError::Conversion {
@@ -10577,7 +10577,7 @@ impl StoreProxy for StructExpressionProxy {
     }
 
     /// Magic methods to make things appear from thin air. 🪄
-    fn into_any(&self) -> Box<dyn Any> {
+    fn as_any(&self) -> Box<dyn Any> {
         Box::new(self.clone())
     }
 
@@ -10742,7 +10742,7 @@ impl TryFrom<&Value> for StructExpressionProxy {
                 let read_proxy = proxy.read().unwrap();
 
                 if read_proxy.store_uuid() == STRUCT_EXPRESSION_STORE_TYPE_UUID {
-                    let any = (&*read_proxy).into_any();
+                    let any = (&*read_proxy).as_any();
                     Ok(any.downcast_ref::<StructExpressionProxy>().unwrap().clone())
                 } else {
                     Err(ChaChaError::Conversion {
@@ -10792,7 +10792,7 @@ impl StoreProxy for TyProxy {
     }
 
     /// Magic methods to make things appear from thin air. 🪄
-    fn into_any(&self) -> Box<dyn Any> {
+    fn as_any(&self) -> Box<dyn Any> {
         Box::new(self.clone())
     }
 
@@ -10925,7 +10925,7 @@ impl TryFrom<&Value> for TyProxy {
                 let read_proxy = proxy.read().unwrap();
 
                 if read_proxy.store_uuid() == TY_STORE_TYPE_UUID {
-                    let any = (&*read_proxy).into_any();
+                    let any = (&*read_proxy).as_any();
                     Ok(any.downcast_ref::<TyProxy>().unwrap().clone())
                 } else {
                     Err(ChaChaError::Conversion {
@@ -10976,7 +10976,7 @@ impl StoreProxy for XValueProxy {
     }
 
     /// Magic methods to make things appear from thin air. 🪄
-    fn into_any(&self) -> Box<dyn Any> {
+    fn as_any(&self) -> Box<dyn Any> {
         Box::new(self.clone())
     }
 
@@ -11172,7 +11172,7 @@ impl TryFrom<&Value> for XValueProxy {
                 let read_proxy = proxy.read().unwrap();
 
                 if read_proxy.store_uuid() == X_VALUE_STORE_TYPE_UUID {
-                    let any = (&*read_proxy).into_any();
+                    let any = (&*read_proxy).as_any();
                     Ok(any.downcast_ref::<XValueProxy>().unwrap().clone())
                 } else {
                     Err(ChaChaError::Conversion {
@@ -11223,7 +11223,7 @@ impl StoreProxy for ValueTypeProxy {
     }
 
     /// Magic methods to make things appear from thin air. 🪄
-    fn into_any(&self) -> Box<dyn Any> {
+    fn as_any(&self) -> Box<dyn Any> {
         Box::new(self.clone())
     }
 
@@ -11596,7 +11596,7 @@ impl TryFrom<&Value> for ValueTypeProxy {
                 let read_proxy = proxy.read().unwrap();
 
                 if read_proxy.store_uuid() == VALUE_TYPE_STORE_TYPE_UUID {
-                    let any = (&*read_proxy).into_any();
+                    let any = (&*read_proxy).as_any();
                     Ok(any.downcast_ref::<ValueTypeProxy>().unwrap().clone())
                 } else {
                     Err(ChaChaError::Conversion {
@@ -11647,7 +11647,7 @@ impl StoreProxy for VariableProxy {
     }
 
     /// Magic methods to make things appear from thin air. 🪄
-    fn into_any(&self) -> Box<dyn Any> {
+    fn as_any(&self) -> Box<dyn Any> {
         Box::new(self.clone())
     }
 
@@ -11823,7 +11823,7 @@ impl TryFrom<&Value> for VariableProxy {
                 let read_proxy = proxy.read().unwrap();
 
                 if read_proxy.store_uuid() == VARIABLE_STORE_TYPE_UUID {
-                    let any = (&*read_proxy).into_any();
+                    let any = (&*read_proxy).as_any();
                     Ok(any.downcast_ref::<VariableProxy>().unwrap().clone())
                 } else {
                     Err(ChaChaError::Conversion {
@@ -11874,7 +11874,7 @@ impl StoreProxy for VariableExpressionProxy {
     }
 
     /// Magic methods to make things appear from thin air. 🪄
-    fn into_any(&self) -> Box<dyn Any> {
+    fn as_any(&self) -> Box<dyn Any> {
         Box::new(self.clone())
     }
 
@@ -12024,7 +12024,7 @@ impl TryFrom<&Value> for VariableExpressionProxy {
                 let read_proxy = proxy.read().unwrap();
 
                 if read_proxy.store_uuid() == VARIABLE_EXPRESSION_STORE_TYPE_UUID {
-                    let any = (&*read_proxy).into_any();
+                    let any = (&*read_proxy).as_any();
                     Ok(any
                         .downcast_ref::<VariableExpressionProxy>()
                         .unwrap()
