@@ -697,6 +697,7 @@ fn eval_function_call(
     }
 }
 
+#[allow(unused_variables)]
 fn chacha_print<S: AsRef<str>>(result: S, context: &mut Context) -> Result<()> {
     let result_style = Colour::Green.bold();
     cfg_if::cfg_if! {

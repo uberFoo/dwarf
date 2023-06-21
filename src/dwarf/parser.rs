@@ -164,7 +164,7 @@ fn lexer() -> impl Parser<char, Vec<Spanned<Token>>, Error = Simple<char>> {
     });
 
     // A parser for punctuation (delimiters, semicolons, etc.)
-    let punct = one_of("=-()[]{}:;,.&<>+*/!").map(|c| Token::Punct(c));
+    let punct = one_of("=-()[]{}:;,.&<>+*/!").map(Token::Punct);
 
     let option = just("Option").map(|_| Token::Option);
 
@@ -1515,10 +1515,7 @@ impl DwarfParser {
 
         if let (Token::Bool(bool), span) = token {
             self.advance();
-            Some((
-                (DwarfExpression::BooleanLiteral(bool), span.to_owned()),
-                LITERAL,
-            ))
+            Some(((DwarfExpression::BooleanLiteral(bool), span), LITERAL))
         } else {
             None
         }
@@ -1596,10 +1593,7 @@ impl DwarfParser {
         if let (Token::Float(float), span) = token {
             if let Ok(float) = float.parse::<DwarfFloat>() {
                 self.advance();
-                Some((
-                    (DwarfExpression::FloatLiteral(float), span.to_owned()),
-                    LITERAL,
-                ))
+                Some(((DwarfExpression::FloatLiteral(float), span), LITERAL))
             } else {
                 None
             }
@@ -1854,7 +1848,7 @@ impl DwarfParser {
             return Ok(None);
         }
 
-        if let Some(_) = self.peek_ident() {
+        if self.peek_ident().is_some() {
             if !self.check2(&Token::Punct('(')) {
                 return self.parse_field_access(name, power);
             }
@@ -2057,10 +2051,7 @@ impl DwarfParser {
         if let (Token::Ident(ident), span) = token {
             self.advance();
             debug!("exit parse_local_variable", ident);
-            Some((
-                (DwarfExpression::LocalVariable(ident), span.to_owned()),
-                LITERAL,
-            ))
+            Some(((DwarfExpression::LocalVariable(ident), span), LITERAL))
         } else {
             None
         }
