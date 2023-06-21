@@ -939,6 +939,7 @@ fn eval_expression(
 
             // So we need to figure out the type that this is being called upon.
             let call_result = match (&s_read!(call).subtype, value, ty) {
+                (CallEnum::MacroCall(_), _, _) => unimplemented!(),
                 //
                 // FunctionCall
                 //
