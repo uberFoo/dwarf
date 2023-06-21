@@ -2405,13 +2405,7 @@ fn inter_struct(
 
     if let Some((model, ref id)) = models
         .iter()
-        .find_map(|model| {
-            if let Some(id) = model.exhume_object_id_by_name(s_name) {
-                Some((model, id))
-            } else {
-                None
-            }
-        })
+        .find_map(|model| model.exhume_object_id_by_name(s_name).map(|id| (model, id)))
         .map(|id| id.to_owned())
     {
         let obj = model.exhume_object(id);
