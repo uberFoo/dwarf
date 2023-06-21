@@ -1,7 +1,7 @@
 use std::{ffi::OsString, fs, os::unix::ffi::OsStringExt, path::PathBuf, process};
 
 use clap::Parser;
-use log;
+
 use snafu::prelude::*;
 
 use ariadne::{Color, Fmt, Label, Report, ReportKind, Source};
@@ -12,7 +12,7 @@ use sarzak::{
 };
 
 use dwarf::dwarf::{new_lu_dog, parse_dwarf, DwarfError, FileSnafu, GenericSnafu, IOSnafu, Result};
-use tracy_client::Client;
+
 
 const TARGET_DIR: &str = "target";
 const BUILD_DIR: &str = "sarzak";
@@ -47,7 +47,7 @@ struct Args {
 
 fn find_package_dir(start_dir: &Option<PathBuf>) -> Result<PathBuf> {
     if let Some(dir) = start_dir {
-        std::env::set_current_dir(&dir).context(IOSnafu {
+        std::env::set_current_dir(dir).context(IOSnafu {
             description: "Failed to set current dir".to_owned(),
         })?;
     }
@@ -128,7 +128,7 @@ fn main() -> Result<()> {
         // This is where we output the file. I think this is stupid. We should just write
         // it to current working directory. We do however want the package_dir, because
         // we need to feed it to the lu dog populator.
-        let mut path = PathBuf::from(package_dir);
+        let mut path = package_dir;
         path.push(TARGET_DIR);
         path.push(BUILD_DIR);
         path
@@ -144,7 +144,7 @@ fn main() -> Result<()> {
     let mut out_file = path.clone();
     // Build the output path
     out_file.push("toadstool");
-    out_file.set_file_name(&args.source.file_name().unwrap());
+    out_file.set_file_name(args.source.file_name().unwrap());
     out_file.set_extension(EXTENSIONS[1]);
 
     // fs::create_dir_all(&path).context(FileSnafu {
@@ -189,7 +189,7 @@ fn main() -> Result<()> {
                 let span = span.clone();
 
                 Report::build(ReportKind::Error, (), span.start)
-                    .with_message(&desc)
+                    .with_message(desc)
                     .with_label(
                         Label::new(span)
                             .with_message(format!("{}", desc.fg(Color::Red)))
@@ -253,7 +253,7 @@ fn main() -> Result<()> {
             _ => {}
         }
 
-        return e;
+        e
     })?;
 
     lu_dog.persist_bincode(&out_file).context(FileSnafu {
