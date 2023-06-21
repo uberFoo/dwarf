@@ -243,7 +243,7 @@ impl fmt::Display for Value {
                 None => write!(f, "None"),
             },
             // 🚧 swap these out when I'm done
-            Self::ProxyType(p) => write!(f, "<put the other thing back>"),
+            Self::ProxyType(_p) => write!(f, "<put the other thing back>"),
             // Self::ProxyType(p) => write!(f, "{}", s_read!(p)),
             Self::Range(range) => write!(f, "{:?}", range),
             Self::Reference(value) => write!(f, "&{}", s_read!(value)),

@@ -100,7 +100,7 @@ impl fmt::Display for Instruction {
             ),
             Instruction::LessThanOrEqual => write!(f, "{}", opcode_style.paint("lte")),
             Instruction::Mul => write!(f, "{}", opcode_style.paint("mul")),
-            Instruction::NewUserType(name, ty, n) => {
+            Instruction::NewUserType(name, _ty, n) => {
                 write!(f, "{}{name}({n})", opcode_style.paint("new"))
             }
             Instruction::PopLocal(index) => write!(
@@ -354,7 +354,7 @@ impl<'a, 'b> VM<'a, 'b> {
                                         }
                                         self.stack.push(value);
                                     }
-                                    Err(e) => {
+                                    Err(_e) => {
                                         return Err::<RefType<Value>, ChaChaError>(
                                             ChaChaError::VmPanic {
                                                 message: format!(
@@ -419,7 +419,7 @@ impl<'a, 'b> VM<'a, 'b> {
                                             );
                                         }
                                     }
-                                    Err(e) => {
+                                    Err(_e) => {
                                         return Err::<RefType<Value>, ChaChaError>(
                                             ChaChaError::VmPanic {
                                                 message: format!(
@@ -525,7 +525,7 @@ impl<'a, 'b> VM<'a, 'b> {
 
                         let mut inst = UserType::new(name, &ty);
 
-                        for i in 0..*n {
+                        for _i in 0..*n {
                             let name = self.stack.pop().unwrap();
                             let value = self.stack.pop().unwrap();
 
@@ -594,17 +594,12 @@ impl<'a, 'b> VM<'a, 'b> {
 }
 
 mod tests {
-    use std::path::PathBuf;
+    
 
-    use tracy_client::Client;
+    
 
-    use super::*;
-    use crate::{
-        dwarf::{new_lu_dog, parse_dwarf},
-        initialize_interpreter,
-        interpreter::PrintableValueType,
-        DwarfFloat, DwarfInteger,
-    };
+    
+    
 
     #[test]
     fn test_instr_constant() {

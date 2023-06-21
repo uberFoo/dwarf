@@ -192,7 +192,7 @@ macro_rules! new_rc {
         <RcType<$type> as NewRcType<$type>>::new_rc_type($value)
     };
 }
-pub(crate) use new_rc;
+
 
 macro_rules! new_ref {
     ($type:ty, $value:expr) => {
@@ -241,7 +241,7 @@ macro_rules! warning {
         );
     };
 }
-pub(crate) use warning;
+
 
 macro_rules! error {
     ($target:literal, $($arg:tt)*) => {
@@ -256,7 +256,7 @@ macro_rules! error {
         );
     };
 }
-pub(crate) use error;
+
 
 //
 // Command line parameters

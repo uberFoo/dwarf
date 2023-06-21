@@ -482,7 +482,7 @@ pub fn inter_statement(
                 }
                 _ => unimplemented!(),
             };
-            let stmt = ItemStatement::new();
+            let _stmt = ItemStatement::new();
             let stmt = Statement::new_item_statement(&block, None, lu_dog);
             Ok((stmt, ValueType::new_empty(lu_dog)))
         }
@@ -1815,7 +1815,7 @@ fn inter_expression(
         ParserExpression::MethodCall(instance, (method, _meth_span), args) => {
             debug!("ParserExpression::MethodCall {:?}", instance);
 
-            let (instance, instance_ty) = inter_expression(
+            let (instance, _instance_ty) = inter_expression(
                 &new_ref!(ParserExpression, (*instance).0.to_owned()),
                 &instance.1,
                 source,

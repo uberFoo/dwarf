@@ -5,7 +5,7 @@ use std::{
     ops::Range,
     path::{Path, PathBuf},
     thread,
-    time::{Duration, Instant},
+    time::{Instant},
 };
 
 use ansi_term::Colour::{self, RGB};
@@ -16,9 +16,9 @@ use fxhash::FxHashMap as HashMap;
 use heck::ToUpperCamelCase;
 use lazy_static::lazy_static;
 use log::{self, log_enabled, Level::Debug};
-use num_format::{Locale, ToFormattedString};
+
 use parking_lot::{Condvar, Mutex};
-use sarzak::lu_dog::VariableExpression;
+
 // use rayon::prelude::*;
 use snafu::{location, prelude::*, Location};
 use tracy_client::{span, Client};
@@ -37,7 +37,7 @@ use crate::{
         Unary, ValueType, Variable, WoogOptionEnum, XValue, XValueEnum,
     },
     new_ref, s_read, s_write,
-    sarzak::{store::ObjectStore as SarzakStore, types::Ty, MODEL as SARZAK_MODEL},
+    sarzak::{store::ObjectStore as SarzakStore, types::Ty},
     value::{StoreProxy, UserType},
     ChaChaError, DwarfInteger, Error, NewRef, NoSuchFieldSnafu, NoSuchStaticMethodSnafu, RefType,
     Result, TypeMismatchSnafu, UnimplementedSnafu, Value, VariableNotFoundSnafu,
@@ -200,7 +200,7 @@ lazy_static! {
     pub(crate) static ref STEPPING: Mutex<bool> = Mutex::new(false);
 }
 
-pub fn initialize_interpreter_paths<P: AsRef<Path>>(lu_dog_path: P) -> Result<Context, Error> {
+pub fn initialize_interpreter_paths<P: AsRef<Path>>(_lu_dog_path: P) -> Result<Context, Error> {
     unimplemented!();
     // let sarzak =
     //     SarzakStore::from_bincode(SARZAK_MODEL).map_err(|e| ChaChaError::Store { source: e })?;
@@ -280,7 +280,7 @@ pub fn initialize_interpreter<P: AsRef<Path>>(
         }
     }
 
-    if let Some(id) = lu_dog.exhume_woog_struct_id_by_name("Complex") {
+    if let Some(_id) = lu_dog.exhume_woog_struct_id_by_name("Complex") {
         // Hack to try to get mandelbrot running faster...
         let mut thonk = Thonk::new("norm_squared".to_string());
 
@@ -705,7 +705,7 @@ fn eval_function_call(
     }
 }
 
-fn chacha_print<S: AsRef<str>>(result: S, context: &mut Context) -> Result<()> {
+fn chacha_print<S: AsRef<str>>(result: S, _context: &mut Context) -> Result<()> {
     let result_style = Colour::Green.bold();
     cfg_if::cfg_if! {
         if #[cfg(feature = "print-std-out")] {
@@ -1246,7 +1246,7 @@ fn eval_expression(
                                 let thonk = context.memory.get_thonk(1).unwrap();
                                 let mut frame = CallFrame::new(0, 0, thonk);
                                 vm.push_stack(new_ref!(Value, "add".into()));
-                                let (value, ty) = arg_values.pop_front().unwrap();
+                                let (value, _ty) = arg_values.pop_front().unwrap();
                                 vm.push_stack(value);
                                 let (value, ty) = arg_values.pop_front().unwrap();
                                 vm.push_stack(value);
@@ -2014,7 +2014,7 @@ fn eval_expression(
                                     let value = value.unwrap();
 
                                     match &*s_read!(value) {
-                                        Value::ProxyType(value) => {
+                                        Value::ProxyType(_value) => {
                                             // dbg!(s_read!(value));
                                             // s_write!(value).set_attr_value(&field_name, rhs.0)?;
                                             // Ok(rhs)
@@ -2025,7 +2025,7 @@ fn eval_expression(
                                             // Ok(rhs)
                                         }
                                         // 🚧 This needs it's own error. Lazy me.
-                                        value => {
+                                        _value => {
                                             return Err(ChaChaError::BadJuJu {
                                                 message: "Attempt to assign to non-struct"
                                                     .to_owned(),
@@ -2142,7 +2142,7 @@ fn eval_expression(
                     }
                 }
                 OperatorEnum::Comparison(ref comp) => {
-                    let (lhs, lhs_ty) = eval_expression(lhs_expr, context, vm)?;
+                    let (lhs, _lhs_ty) = eval_expression(lhs_expr, context, vm)?;
                     let rhs = {
                         let rhs = operator.rhs.unwrap();
                         let rhs = s_read!(lu_dog).exhume_expression(&rhs).unwrap();
