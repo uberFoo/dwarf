@@ -3,7 +3,7 @@ use std::{
     fmt,
     io::Write,
     ops::Range,
-    path::{Path, PathBuf},
+    path::{Path},
     thread,
     time::Instant,
 };
