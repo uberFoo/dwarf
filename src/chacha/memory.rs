@@ -103,11 +103,7 @@ impl Memory {
 
     pub(crate) fn get_meta(&self, table: &str, name: &str) -> Option<RefType<Value>> {
         if let Some(table) = self.meta.get(table) {
-            if let Some(val) = table.get(name) {
-                Some(val.clone())
-            } else {
-                None
-            }
+            table.get(name).cloned()
         } else {
             None
         }
@@ -140,7 +136,7 @@ impl Memory {
                 }
             } else {
                 let mut map = HashMap::default();
-                map.insert(name.to_owned(), value.clone());
+                map.insert(name.to_owned(), value);
                 self.global
                     .insert(table.to_owned(), new_ref!(Value, Value::Table(map)));
             }
@@ -170,11 +166,7 @@ impl Memory {
             if let Some(value) = self.get_simple(table) {
                 let value = s_read!(value);
                 if let Value::Table(ref table) = *value {
-                    if let Some(val) = table.get(name) {
-                        Some(val.clone())
-                    } else {
-                        None
-                    }
+                    table.get(name).cloned()
                 } else {
                     None
                 }
@@ -182,11 +174,7 @@ impl Memory {
                 None
             }
         } else {
-            if let Some(value) = self.get_simple(name) {
-                Some(value.clone())
-            } else {
-                None
-            }
+            self.get_simple(name).cloned()
         }
     }
 

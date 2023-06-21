@@ -254,7 +254,7 @@ impl<'b> VM<'b> {
                         }
                         println!("stack {}:\t{}", len - i - 1, s_read!(self.stack[i]));
                     }
-                    println!("");
+                    println!();
                     println!("{:08x}:\t{}", ip, instr);
                 }
                 match instr {
@@ -461,10 +461,8 @@ impl<'b> VM<'b> {
                         let condition = self.stack.pop().unwrap();
                         let condition: bool = (&*s_read!(condition))
                             .try_into()
-                            .map_err(|e| {
-                                return ChaChaError::VmPanic {
-                                    message: format!("{}", e),
-                                };
+                            .map_err(|e| ChaChaError::VmPanic {
+                                message: format!("{}", e),
                             })
                             .unwrap();
 
@@ -513,7 +511,7 @@ impl<'b> VM<'b> {
                             println!("\t\t{}\t{} {{", Colour::Green.paint("new:"), name);
                         }
 
-                        let mut inst = UserType::new(name, &ty);
+                        let mut inst = UserType::new(name, ty);
 
                         for _i in 0..*n {
                             let name = self.stack.pop().unwrap();

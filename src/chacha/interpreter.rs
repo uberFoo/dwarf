@@ -895,10 +895,10 @@ fn eval_expression(
                             let read = s_read!(span);
                             let span = read.start as usize..read.end as usize;
 
-                            return Err(ChaChaError::NotAFunction {
+                            Err(ChaChaError::NotAFunction {
                                 value: value_.to_owned(),
                                 span,
-                            });
+                            })
                         }
                     }
                 };
@@ -914,7 +914,7 @@ fn eval_expression(
                 // `["hello", "I", "am", "dwarf!"].sort();
                 let x = match &*s_read!(ty) {
                     ValueType::Ty(ref id) => {
-                        let _ty = s_read!(sarzak).exhume_ty(id).unwrap().clone();
+                        let _ty = *s_read!(sarzak).exhume_ty(id).unwrap();
                         match &_ty {
                             Ty::SString(_) => (value, ty.clone()),
                             _ => tuple_from_value()?,
@@ -1124,7 +1124,7 @@ fn eval_expression(
                                 let ty = ut_read.get_type();
                                 let ty = s_read!(ty);
                                 if let ValueType::WoogStruct(woog_struct) = &*ty {
-                                    woog_struct.clone()
+                                    *woog_struct
                                 } else {
                                     // 🚧 This should be an error.
                                     panic!("I'm trying to invoke a function on a UserType, and it's not a Struct!");
@@ -1135,7 +1135,7 @@ fn eval_expression(
                                 s_read!(lu_dog).exhume_woog_struct(&woog_struct).unwrap();
                             let woog_struct = s_read!(woog_struct);
                             let impl_ = &woog_struct.r8c_implementation(&s_read!(lu_dog))[0];
-                            let x = if let Some(func) = s_read!(&impl_)
+                            let x = if let Some(func) = s_read!(impl_)
                                 .r9_function(&s_read!(lu_dog))
                                 .iter()
                                 .find(|f| s_read!(f).name == *meth)
@@ -1276,7 +1276,7 @@ fn eval_expression(
                             // be able to return a proper enum.
                             "typeof" => {
                                 let (_arg, ty) = arg_values.pop_front().unwrap();
-                                let pvt_ty = PrintableValueType(&ty, &context);
+                                let pvt_ty = PrintableValueType(&ty, context);
                                 let ty = Ty::new_s_string();
                                 let ty = s_read!(lu_dog).exhume_value_type(&ty.id()).unwrap();
                                 Ok((new_ref!(Value, pvt_ty.to_string().into()), ty))
@@ -1286,23 +1286,16 @@ fn eval_expression(
                                 // I go unwrapping it.
                                 let (func, ty) = arg_values.pop_front().unwrap();
                                 let func = s_read!(func);
-                                ensure!(
-                                    if let Value::Function(_) = &*func {
-                                        true
-                                    } else {
-                                        false
-                                    },
-                                    {
-                                        // 🚧 I'm not really sure what to do about this here. It's
-                                        // all really a hack for now anyway.
-                                        let ty = PrintableValueType(&ty, &context);
-                                        TypeMismatchSnafu {
-                                            expected: "<function>".to_string(),
-                                            got: ty.to_string(),
-                                            span: 0..0,
-                                        }
+                                ensure!(matches!(&*func, Value::Function(_)), {
+                                    // 🚧 I'm not really sure what to do about this here. It's
+                                    // all really a hack for now anyway.
+                                    let ty = PrintableValueType(&ty, context);
+                                    TypeMismatchSnafu {
+                                        expected: "<function>".to_string(),
+                                        got: ty.to_string(),
+                                        span: 0..0,
                                     }
-                                );
+                                });
                                 let func = if let Value::Function(f) = &*func {
                                     f.clone()
                                 } else {
@@ -1690,7 +1683,7 @@ fn eval_expression(
                 });
             };
 
-            let block = Expression::new_block(&block, &mut *s_write!(lu_dog));
+            let block = Expression::new_block(&block, &mut s_write!(lu_dog));
             context.memory.push_frame();
             // list.par_iter().for_each(|item| {
             //     // This gives each thread it's own stack frame, and read only
@@ -1826,7 +1819,7 @@ fn eval_expression(
                 ))
             } else {
                 let list = List::new(
-                    &ValueType::new_empty(&mut s_write!(lu_dog)),
+                    &ValueType::new_empty(&s_write!(lu_dog)),
                     &mut s_write!(lu_dog),
                 );
 
@@ -1991,7 +1984,7 @@ fn eval_expression(
                                     else { unreachable!() };
                                     let expr = s_read!(lu_dog).exhume_expression(expr).unwrap();
                                     let expr = s_read!(lu_dog)
-                                        .exhume_variable_expression(&(&*s_read!(expr)).id())
+                                        .exhume_variable_expression(&(*s_read!(expr)).id())
                                         .unwrap();
 
                                     let value = context.memory.get(&s_read!(expr).name);
@@ -2055,12 +2048,10 @@ fn eval_expression(
                                         ValueType::new_empty(&s_read!(lu_dog)),
                                     ))
                                 }
-                                _ => {
-                                    return Err(ChaChaError::BadJuJu {
-                                        message: "Bad LHS in assignment".to_owned(),
-                                        location: location!(),
-                                    })
-                                }
+                                _ => Err(ChaChaError::BadJuJu {
+                                    message: "Bad LHS in assignment".to_owned(),
+                                    location: location!(),
+                                }),
                             }
 
                             // Ok((lhs, lhs_ty))
@@ -2260,7 +2251,7 @@ fn eval_expression(
             let fields = s_read!(woog_struct).r7_field(&s_read!(lu_dog));
 
             // Type checking fields here
-            let ty_name = PrintableValueType(&ty, &context);
+            let ty_name = PrintableValueType(&ty, context);
             let mut user_type = UserType::new(ty_name.to_string(), &ty);
             let lu_dog = s_read!(lu_dog);
             for (name, ty, value, expr) in field_exprs {
@@ -2305,7 +2296,7 @@ fn eval_expression(
 
             let value = match &*s_read!(as_ty) {
                 ValueType::Ty(ref ty) => {
-                    let ty = s_read!(sarzak).exhume_ty(ty).unwrap().clone();
+                    let ty = *s_read!(sarzak).exhume_ty(ty).unwrap();
                     match ty {
                         Ty::Float(_) => {
                             let value: f64 = (&*s_read!(lhs)).try_into()?;
@@ -2368,7 +2359,7 @@ fn eval_expression(
             let ty = s_read!(value).get_type(&s_read!(lu_dog));
             // let ty = ValueType::new_empty(&s_read!(lu_dog));
 
-            Ok((value.clone(), ty))
+            Ok((value, ty))
         }
         //
         // XIf
@@ -2414,10 +2405,7 @@ fn eval_expression(
             let expr = s_read!(lu_dog).exhume_expression(expr).unwrap();
 
             let (value, ty) = eval_expression(expr, context, vm)?;
-            Err(ChaChaError::Return {
-                value: value,
-                ty: ty,
-            })
+            Err(ChaChaError::Return { value, ty })
         }
         //
         // ZNone
@@ -2653,22 +2641,22 @@ impl Context {
         );
 
         let mut lu_dog = s_write!(self.lu_dog);
-        let local = LocalVariable::new(Uuid::new_v4(), &mut *lu_dog);
-        let var = Variable::new_local_variable(name.clone(), &local, &mut *lu_dog);
+        let local = LocalVariable::new(Uuid::new_v4(), &mut lu_dog);
+        let var = Variable::new_local_variable(name.clone(), &local, &mut lu_dog);
         let import = Import::new(
             "So ugly".to_owned(),
             false,
             name,
             "path".to_owned(),
             None,
-            &mut *lu_dog,
+            &mut lu_dog,
         );
 
         let _value = XValue::new_variable(
             &self.block,
-            &ValueType::new_import(&import, &mut *lu_dog),
+            &ValueType::new_import(&import, &mut lu_dog),
             &var,
-            &mut *lu_dog,
+            &mut lu_dog,
         );
         // {
         //     // Build the ASTs
@@ -2884,6 +2872,8 @@ pub fn start_main(stopped: bool, mut context: Context) -> Result<(Value, Context
 
         let result = eval_function_call(main, &[], true, &mut context, &mut vm)?;
 
+        #[allow(clippy::redundant_clone)]
+        // It's not -- the macro is just hiding the fact that it isn't.
         Ok((s_read!(result.0.clone()).clone(), context))
     } else {
         Err(Error(ChaChaError::MainIsNotAFunction))
@@ -3217,7 +3207,7 @@ pub fn banner2() -> String {
 
 pub(crate) struct PrintableValueType<'a>(pub &'a RefType<ValueType>, pub &'a Context);
 
-impl<'a, 'b> fmt::Display for PrintableValueType<'a> {
+impl<'a> fmt::Display for PrintableValueType<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let value = s_read!(self.0);
         let context = self.1;

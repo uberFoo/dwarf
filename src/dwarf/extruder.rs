@@ -20,8 +20,8 @@ use crate::{
     lu_dog::{
         store::ObjectStore as LuDogStore,
         types::{
-            Block, BooleanOperator, Call, Error, ErrorExpression, Expression, ExpressionStatement,
-            Field, FieldExpression, ForLoop, Function, Implementation, Index, IntegerLiteral,
+            Block, BooleanOperator, Call, ErrorExpression, Expression, ExpressionStatement, Field,
+            FieldExpression, ForLoop, Function, Implementation, Index, IntegerLiteral,
             Item as WoogItem, LetStatement, Literal, LocalVariable, Parameter, Print,
             RangeExpression, Span as LuDogSpan, Statement, StaticMethodCall, StringLiteral,
             StructExpression, ValueType, Variable, VariableExpression, WoogOption, WoogStruct, XIf,
@@ -140,6 +140,7 @@ macro_rules! error {
 }
 
 type Span = Range<usize>;
+type ExprSpan = (RefType<Expression>, RefType<LuDogSpan>);
 
 // These below are just to avoid cloning things.
 struct ConveyFunc<'a> {
@@ -274,13 +275,13 @@ fn walk_tree(
     // Put the type information in first.
     for ConveyStruct { name, span, fields } in structs {
         debug!("Intering struct {}", name);
-        inter_struct(&name, &fields, span, source, lu_dog, models, sarzak)?;
+        inter_struct(name, fields, span, source, lu_dog, models, sarzak)?;
     }
 
     // Using the type information, and the input, inter the implementation blocks.
     for ConveyImpl { name, span, funcs } in implementations {
         debug!("Intering implementation {}", name);
-        inter_implementation(&name, &funcs, span, source, lu_dog, models, sarzak)?;
+        inter_implementation(name, funcs, span, source, lu_dog, models, sarzak)?;
     }
 
     // Finally, inter the loose functions.
@@ -294,10 +295,10 @@ fn walk_tree(
     {
         debug!("Intering function {}", name);
         inter_func(
-            &name,
-            &params,
-            &return_type,
-            &statements,
+            name,
+            params,
+            return_type,
+            statements,
             None,
             None,
             span,
@@ -333,6 +334,7 @@ fn walk_tree(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn inter_func(
     name: &str,
     params: &[(Spanned<String>, Spanned<Type>)],
@@ -398,14 +400,7 @@ fn inter_func(
         // That said, we need to introduce the values into the block, so that we don't
         // error out when parsing the statements.
         //
-        let param_ty = get_value_type(
-            &param_ty,
-            param_span,
-            impl_ty.clone(),
-            lu_dog,
-            models,
-            sarzak,
-        )?;
+        let param_ty = get_value_type(param_ty, param_span, impl_ty, lu_dog, models, sarzak)?;
         debug!("param_ty {:?}", param_ty);
         let value = XValue::new_variable(&block, &param_ty, &var, lu_dog);
         // 🚧 Was this causing a crash?
@@ -460,9 +455,9 @@ pub fn inter_statement(
                 // Item::Function((name, _name_span), params, return_type, stmts) => {
                 Item::Function(ref name, ref params, ref return_type, ref stmts) => inter_func(
                     &name.0,
-                    &params,
-                    &return_type,
-                    &stmts,
+                    params,
+                    return_type,
+                    stmts,
                     None,
                     None,
                     span,
@@ -478,7 +473,7 @@ pub fn inter_statement(
                 //     inter_import(path, alias, &s_read!(source).source, span, lu_dog)?
                 // }
                 Item::Struct((name, span), fields) => {
-                    inter_struct(&name, &fields, span, source, lu_dog, models, sarzak)?
+                    inter_struct(name, fields, span, source, lu_dog, models, sarzak)?
                 }
                 _ => unimplemented!(),
             };
@@ -604,7 +599,7 @@ fn inter_statements(
     let mut last_stmt_uuid: Option<Uuid> = None;
     for stmt in statements {
         let (stmt, ty) = inter_statement(stmt, source, block, lu_dog, models, sarzak)?;
-        if last_stmt_uuid == None {
+        if last_stmt_uuid.is_none() {
             s_write!(block).statement = Some(s_read!(stmt).id);
         }
         if s_read!(block).statement.is_none() {
@@ -631,10 +626,7 @@ fn inter_expression(
     lu_dog: &mut LuDogStore,
     models: &[SarzakStore],
     sarzak: &SarzakStore,
-) -> Result<(
-    (RefType<Expression>, RefType<LuDogSpan>),
-    RefType<ValueType>,
-)> {
+) -> Result<(ExprSpan, RefType<ValueType>)> {
     debug!("expr {:?}", expr);
     debug!("span {:?}", span);
 
@@ -1119,10 +1111,7 @@ fn inter_expression(
                         let impl_ = s_read!(impl_);
 
                         let funcs = impl_.r9_function(lu_dog);
-                        funcs
-                            .iter()
-                            .find(|f| s_read!(f).name == rhs.0)
-                            .and_then(|f| Some(f.clone()))
+                        funcs.iter().find(|f| s_read!(f).name == rhs.0).cloned()
                     } else {
                         None
                     };
@@ -2168,7 +2157,7 @@ fn inter_expression(
             // Here we don't de_sanitize the name, and we are looking it up in the
             // dwarf model.
             let id = lu_dog.exhume_woog_struct_id_by_name(name).unwrap();
-            let woog_struct = lu_dog.exhume_woog_struct(&id).unwrap().clone();
+            let woog_struct = lu_dog.exhume_woog_struct(&id).unwrap();
 
             let expr = StructExpression::new(Uuid::new_v4(), &woog_struct, lu_dog);
             // fields
@@ -2548,13 +2537,11 @@ fn get_value_type(
                     _ => false,
                 }) {
                     Ok(ValueType::new_ty(&new_ref!(Ty, ty.to_owned()), lu_dog))
+                } else if let Some(ref id) = lu_dog.exhume_woog_struct_id_by_name(name) {
+                    let ws = lu_dog.exhume_woog_struct(id).unwrap();
+                    Ok(ValueType::new_woog_struct(&ws, lu_dog))
                 } else {
-                    if let Some(ref id) = lu_dog.exhume_woog_struct_id_by_name(name) {
-                        let ws = lu_dog.exhume_woog_struct(id).unwrap();
-                        Ok(ValueType::new_woog_struct(&ws, lu_dog))
-                    } else {
-                        Ok(ValueType::new_unknown(lu_dog))
-                    }
+                    Ok(ValueType::new_unknown(lu_dog))
                 }
             }
         }

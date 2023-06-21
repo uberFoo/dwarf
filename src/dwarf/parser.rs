@@ -1848,10 +1848,8 @@ impl DwarfParser {
             return Ok(None);
         }
 
-        if self.peek_ident().is_some() {
-            if !self.check2(&Token::Punct('(')) {
-                return self.parse_field_access(name, power);
-            }
+        if self.peek_ident().is_some() && !self.check2(&Token::Punct('(')) {
+            return self.parse_field_access(name, power);
         }
 
         let method_name = if let Some(ident) = self.parse_ident() {
