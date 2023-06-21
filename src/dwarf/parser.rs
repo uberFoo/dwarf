@@ -1984,10 +1984,7 @@ impl DwarfParser {
         if let (Token::Integer(int), span) = token {
             if let Ok(int) = int.parse::<DwarfInteger>() {
                 self.advance();
-                Some((
-                    (DwarfExpression::IntegerLiteral(int), span.to_owned()),
-                    LITERAL,
-                ))
+                Some(((DwarfExpression::IntegerLiteral(int), span), LITERAL))
             } else {
                 None
             }
@@ -2079,7 +2076,7 @@ impl DwarfParser {
 
         if let (Token::None, span) = token {
             self.advance();
-            Some(((DwarfExpression::None, span.to_owned()), LITERAL))
+            Some(((DwarfExpression::None, span), LITERAL))
         } else {
             None
         }
@@ -2098,7 +2095,7 @@ impl DwarfParser {
         let start = self.next().unwrap().1.start;
         let end = self.next().unwrap().1.end;
         let span = start..end;
-        Some(((DwarfExpression::Empty, span.to_owned()), LITERAL))
+        Some(((DwarfExpression::Empty, span), LITERAL))
     }
 
     /// Parse an asm! expression
@@ -2686,10 +2683,7 @@ impl DwarfParser {
 
         if let (Token::String(string), span) = token {
             self.advance();
-            Some((
-                (DwarfExpression::StringLiteral(string), span.to_owned()),
-                LITERAL,
-            ))
+            Some(((DwarfExpression::StringLiteral(string), span), LITERAL))
         } else {
             None
         }
@@ -3348,7 +3342,7 @@ fn report_errors(
 
     errs.into_iter()
         .map(|e| e.map(|c| c.to_string()))
-        .chain(parse_errs.into_iter().map(|e| e.map(|s| s.to_string())))
+        .chain(parse_errs.into_iter().map(|e| e.map(|s| s)))
         .for_each(|e| {
             let report = Report::build(ReportKind::Error, (), e.span().start);
 
