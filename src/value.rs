@@ -720,8 +720,8 @@ impl Value {
 /// This is testing value equality.
 /// Equality is transitive. So, given a = 1, b = 1 a == b is true because there
 /// is a single <word> 1 in the machine.
-impl Value {
-    pub fn eq(&self, other: &Self) -> bool {
+impl std::cmp::PartialEq for Value {
+    fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (Value::Float(a), Value::Float(b)) => a == b,
             (Value::Integer(a), Value::Integer(b)) => a == b,
@@ -730,11 +730,27 @@ impl Value {
             (Value::Empty, Value::Empty) => true,
             (Value::Boolean(a), Value::Boolean(b)) => a == b,
             (Value::Uuid(a), Value::Uuid(b)) => a == b,
-            (Value::UserType(a), Value::UserType(b)) => &*s_read!(a) == &*s_read!(b),
+            (Value::UserType(a), Value::UserType(b)) => *s_read!(a) == *s_read!(b),
             (_, _) => false, //Value::Error(format!("Cannot compare {} and {}", a, b)),
         }
     }
 }
+
+// impl Value {
+//     pub fn eq(&self, other: &Self) -> bool {
+//         match (self, other) {
+//             (Value::Float(a), Value::Float(b)) => a == b,
+//             (Value::Integer(a), Value::Integer(b)) => a == b,
+//             (Value::String(a), Value::String(b)) => a == b,
+//             (Value::Char(a), Value::Char(b)) => a == b,
+//             (Value::Empty, Value::Empty) => true,
+//             (Value::Boolean(a), Value::Boolean(b)) => a == b,
+//             (Value::Uuid(a), Value::Uuid(b)) => a == b,
+//             (Value::UserType(a), Value::UserType(b)) => *s_read!(a) == *s_read!(b),
+//             (_, _) => false, //Value::Error(format!("Cannot compare {} and {}", a, b)),
+//         }
+//     }
+// }
 
 #[derive(Clone, Debug, Default)]
 pub struct UserTypeAttribute(HashMap<String, RefType<Value>>);
