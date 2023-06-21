@@ -197,7 +197,7 @@ fn lexer() -> impl Parser<char, Vec<Spanned<Token>>, Error = Simple<char>> {
 struct DwarfParser {
     tokens: Vec<Spanned<Token>>,
     current: usize,
-    errors: Vec<Box<Simple<String>>>,
+    errors: Vec<Simple<String>>,
 }
 
 impl DwarfParser {
@@ -214,7 +214,7 @@ impl DwarfParser {
     /// A proram is a list of items
     ///
     /// program -> item*
-    fn parse_program(&mut self) -> (Vec<Spanned<Item>>, Vec<Box<Simple<String>>>) {
+    fn parse_program(&mut self) -> (Vec<Spanned<Item>>, Vec<Simple<String>>) {
         debug!("enter");
 
         let mut result = Vec::new();
@@ -243,7 +243,7 @@ impl DwarfParser {
                 );
                 let err = err.with_label("expected item");
 
-                self.errors.push(Box::new(err));
+                self.errors.push(err);
 
                 error!("parse_program: resynchronize looking for '}'");
                 while !self.at_end() && !self.match_(&[Token::Punct('}')]) {
@@ -356,7 +356,7 @@ impl DwarfParser {
             Ok(None) => {}
             Err(err) => {
                 error!("error", err);
-                self.errors.push(err);
+                self.errors.push(*err);
             }
         }
 
@@ -378,7 +378,7 @@ impl DwarfParser {
             }
             Ok(None) => {}
             Err(err) => {
-                self.errors.push(err);
+                self.errors.push(*err);
             }
         }
 
@@ -440,7 +440,7 @@ impl DwarfParser {
                 Some(tok.0.to_string()),
             );
             let err = err.with_label("expected path");
-            self.errors.push(Box::new(err));
+            self.errors.push(err);
             error!("exit no path");
             return None;
         };
@@ -457,7 +457,7 @@ impl DwarfParser {
                     Some(tok.0.to_string()),
                 );
                 let err = err.with_label("expected identifier");
-                self.errors.push(Box::new(err));
+                self.errors.push(err);
                 error!("exit no alias");
                 return None;
             }
@@ -473,7 +473,7 @@ impl DwarfParser {
                 Some(tok.0.to_string()),
             );
             let err = err.with_label("expected ;");
-            self.errors.push(Box::new(err));
+            self.errors.push(err);
             error!("exit no semicolon");
             return None;
         }
@@ -513,7 +513,7 @@ impl DwarfParser {
                 Some(tok.0.to_string()),
             );
             let err = err.with_label("expected identifier");
-            self.errors.push(Box::new(err));
+            self.errors.push(err);
             error!("exit no ident");
             return None;
         };
@@ -526,7 +526,7 @@ impl DwarfParser {
                 Some(tok.0.to_string()),
             );
             let err = err.with_label("expected '{'");
-            self.errors.push(Box::new(err));
+            self.errors.push(err);
             error!("exit no `{`");
             return None;
         }
@@ -545,7 +545,7 @@ impl DwarfParser {
                     Some(tok.0.to_string()),
                 );
                 let err = err.with_label("expected '}'");
-                self.errors.push(Box::new(err));
+                self.errors.push(err);
                 error!("exit no `}`");
                 return None;
             }
@@ -2281,10 +2281,10 @@ impl DwarfParser {
             debug!("empty statement");
             // 🚧 We need to implement our own error type so that we can
             //     report warnings and they show up in yellow.
-            self.errors.push(Box::new(Simple::custom(
+            self.errors.push(Simple::custom(
                 self.previous().unwrap().1.clone(),
                 "unnecessary `;`".to_owned(),
-            )));
+            ));
             return Ok(Some((
                 Statement::Empty,
                 start..self.previous().unwrap().1.end,
@@ -2803,7 +2803,7 @@ impl DwarfParser {
                 }
                 Ok(None) => error!("parse_function: no param"),
                 Err(error) => {
-                    self.errors.push(error);
+                    self.errors.push(*error);
 
                     error!("parse_function: resynchronize looking for ')'");
                     while !self.at_end() && !self.match_(&[Token::Punct(')')]) {
@@ -2836,7 +2836,7 @@ impl DwarfParser {
                     return Err(Box::new(Simple::custom(start..end, "missing type")));
                 }
                 Err(error) => {
-                    self.errors.push(error);
+                    self.errors.push(*error);
 
                     error!("parse_function: resynchronize looking for '{'");
                     while !self.at_end() && !self.match_(&[Token::Punct('{')]) {
@@ -3300,7 +3300,7 @@ pub fn parse_line(src: &str) -> Result<Option<Spanned<Statement>>, String> {
     let ast = parser.parse_statement();
 
     let ast = if let Err(e) = ast {
-        parser.errors.push(e);
+        parser.errors.push(*e);
         None
     } else {
         ast.unwrap()
@@ -3333,11 +3333,7 @@ pub fn parse_dwarf(src: &str) -> Result<Vec<Spanned<Item>>, DwarfError> {
     }
 }
 
-fn report_errors(
-    errs: Vec<Simple<char>>,
-    parse_errs: Vec<Box<Simple<String>>>,
-    src: &str,
-) -> String {
+fn report_errors(errs: Vec<Simple<char>>, parse_errs: Vec<Simple<String>>, src: &str) -> String {
     let mut result = Vec::new();
 
     errs.into_iter()
