@@ -34,7 +34,7 @@ jobs:
             - name: Deploy to GitHub Pages
               uses: peaceiris/actions-gh-pages@v3
               with:
-                  deploy_key: ${{ secrets.PERSONAL_TOKEN }}
+                  personal_token: ${{ secrets.PERSONAL_TOKEN }}
                   external_repository: uberFoo/uberFoo.github.io
                   publish_dir: doc/book
                   publish_branch: gh-pages
