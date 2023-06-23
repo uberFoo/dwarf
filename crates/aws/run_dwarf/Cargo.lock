@@ -821,7 +821,7 @@ dependencies = [
  "heck",
  "lazy_static",
  "log",
- "no_deadlocks",
+ "no_deadlocks 1.3.0",
  "num-format",
  "parking_lot",
  "pretty_env_logger",
@@ -1605,6 +1605,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "no_deadlocks"
+version = "1.3.0"
+source = "git+https://github.com/uberFoo/no-deadlocks#4325754be06b41c142589d6648dfffdb789b5b4b"
+dependencies = [
+ "backtrace",
+ "vector-map",
+]
+
+[[package]]
 name = "nom"
 version = "7.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1656,7 +1665,7 @@ dependencies = [
 [[package]]
 name = "nut"
 version = "1.0.0"
-source = "git+https://gitlab-runner:7kzem8nVeizSJQnLPWFY@git.uberfoo.com/sarzak/nut.git?branch=develop#4ddf8fb03e9854579b25adbbb1c8b72302c4202f"
+source = "git+https://github.com/uberFoo/nut#d89b2f85cebc037fdfdc4d2d9bb243d7dfba0838"
 dependencies = [
  "anyhow",
  "clap 4.3.2",
@@ -2263,7 +2272,7 @@ dependencies = [
  "futures",
  "heck",
  "log",
- "no_deadlocks",
+ "no_deadlocks 1.3.0 (git+https://github.com/uberFoo/no-deadlocks)",
  "nut",
  "parking_lot",
  "pretty_env_logger",

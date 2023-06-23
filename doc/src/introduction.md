@@ -2,6 +2,8 @@
 
 # Introduction
 
+> 🚧 This is book is a work in progress. 🚧
+
 Welcome!
 This brief introduction will outline the status of dwarf, and set the stage for what's to come.
 
@@ -24,9 +26,9 @@ I know you want to. 😀
 
 > **Caveat Emptor / Note Bene, etcetera**
 >
-> This is very much a work in progress.
-> It's maybe at an alpha stage, but centainly not beta.
-> I don't honestly see very many breaking changes, but I can't promise anything.
+> The dwarf (the language and it's implementation) is very much a work in progress.
+> It's maybe at an alpha stage, and certainly not beta.
+> I don't honestly see very many breaking changes, however I won't promise anything until 1.0.
 
 Dwarf started life as a DSLfor another project.
 I've had so much fun with it, I want to see if anyone else might find it generally useful.
