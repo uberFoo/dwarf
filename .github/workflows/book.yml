@@ -1,0 +1,41 @@
+name: Build and Deploy Book
+
+on:
+    push:
+        branches:
+            - master
+
+jobs:
+    build:
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: Checkout Repository
+              uses: actions/checkout@v2
+
+            - name: Install Dependencies
+              run: |
+                  sudo apt-get update
+                  sudo apt-get install -y curl
+                  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+                  export PATH="$HOME/.cargo/bin:$PATH"
+                  rustup update stable
+                  cargo install mdbook-indexing
+                  git clone https://github.com/uberFoo/mdBook.git
+                  cd mdBook
+                  cargo install --path .
+                  cd ..
+
+            - name: Build Mdbook
+              run: |
+                  cd doc
+                  mdbook build
+                  cd ..
+
+            - name: Deploy to GitHub Pages
+              uses: peaceiris/actions-gh-pages@v3
+              with:
+                  personal_token: ${{ secrets.PERSONAL_TOKEN }}
+                  external_repository: uberFoo/uberFoo.github.io
+                  publish_dir: doc/book
+                  publish_branch: gh-pages

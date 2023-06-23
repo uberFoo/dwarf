@@ -80,6 +80,6 @@ If you start in the REPL, you get the execution in a loop.
 
 ## License
 
-dwarfr is distributed under the terms of both the MIT license and the Apache License (Version 2.0).
+dwarf is distributed under the terms of both the MIT license and the Apache License (Version 2.0).
 
 See [LICENSE-APACHE](LICENSE-APACHE), [LICENSE-MIT](LICENSE-MIT) for details.

@@ -344,10 +344,12 @@ impl Type {
                 }
 
                 // If it's not in one of the models, it must be in sarzak.
-                let obj_id = sarzak.exhume_object_id_by_name(name).unwrap();
-                let ty = sarzak.exhume_ty(&obj_id).unwrap();
-
-                ValueType::new_ty(&<RefType<Ty> as NewRef<Ty>>::new_ref(ty.to_owned()), store)
+                if let Some(obj_id) = sarzak.exhume_object_id_by_name(name) {
+                    let ty = sarzak.exhume_ty(&obj_id).unwrap();
+                    ValueType::new_ty(&<RefType<Ty> as NewRef<Ty>>::new_ref(ty.to_owned()), store)
+                } else {
+                    panic!("Couldn't find type `{}` in any model or sarzak.\nThis should be an error. 😢", name);
+                }
             }
             Type::Uuid => {
                 let ty = Ty::new_s_uuid();
