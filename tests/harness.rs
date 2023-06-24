@@ -57,6 +57,7 @@ fn run_program(test: &str, program: &str) -> Result<Value, ()> {
     let ctx = initialize_interpreter::<PathBuf>(sarzak, lu_dog, None).unwrap();
     start_main(false, ctx)
         .map_err(|e| {
+            // 🚧 Likely as not I'll need some sort of thing here like I have above.
             eprintln!("{e}");
         })
         .and_then(|v| Ok(v.0))

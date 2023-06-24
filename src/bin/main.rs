@@ -172,9 +172,4 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     Ok(())
-
-    // start_main(ctx).map_err(|e| {
-    //     println!("Interpreter exited with: {}", e);
-    //     e
-    // })
 }
