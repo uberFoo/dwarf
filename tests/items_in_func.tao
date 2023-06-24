@@ -1,0 +1,51 @@
+fn main() {
+    struct Point {
+        x: int,
+        y: int,
+    }
+
+    impl Point {
+        fn new(x: int, y: int) -> Point {
+            Point { x: x, y: y }
+        }
+
+        fn x(self) -> int {
+            self.x
+        }
+
+        fn y(self) -> int {
+            self.y
+        }
+    }
+
+    struct Line {
+        start: Point,
+        end: Point,
+    }
+
+    impl Line {
+        fn new(start: Point, end: Point) -> Line {
+            Line {
+                start: start,
+                end: end,
+            }
+        }
+
+        fn midpoint(self) -> Point {
+            let x = self.start.x() + self.end.x();
+            let y = self.start.y() + self.end.y();
+            Point::new(
+                x / 2,
+                y / 2,
+                // (self.start.x() + self.end.x()) / 2,
+                // (self.start.y() + self.end.y()) / 2,
+            )
+        }
+    }
+
+    // create a line and get its midpoint
+    let line = Line::new(Point::new(1, 2), Point::new(3, 4));
+    let midpoint = line.midpoint();
+
+    print("midpoint is ({0}, {1})".format(midpoint.x(), midpoint.y()));
+}

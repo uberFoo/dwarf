@@ -1064,10 +1064,9 @@ fn eval_expression(
                                     VecDeque::new()
                                 };
 
-                                // 🚧 Oddly, the lhs is the first argument. Not somethnig that I want
+                                // 🚧 Oddly, the lhs is the first argument. Not something that I want
                                 // or even need to understand atm.
                                 arg_values.pop_front();
-                                dbg!(&arg_values);
 
                                 enum State {
                                     Normal,
@@ -1337,7 +1336,9 @@ fn eval_expression(
                                 Ok((new_ref!(Value, Value::Float(elapsed.as_secs_f64())), ty))
                             }
                             "eps" => {
-                                let timings = context.timings.iter().cloned().collect::<Vec<_>>();
+                                let mut timings =
+                                    context.timings.iter().cloned().collect::<Vec<_>>();
+                                timings.sort_by(|a, b| a.partial_cmp(b).unwrap());
 
                                 let mean = timings.iter().sum::<f64>() / timings.len() as f64;
                                 let std_dev =
@@ -1346,7 +1347,7 @@ fn eval_expression(
                                 let median = timings[timings.len() / 2];
 
                                 let result = format!(
-                                    "expressions (1k)/sec (mean/std_dev/median): {:.1} / {:.1} / {:.1}\n",
+                                    "expressions (mean/std_dev/median) ((1k)/sec): {:.1} / {:.1} / {:.1}\n",
                                     mean,
                                     std_dev,
                                     median
@@ -2596,13 +2597,10 @@ pub fn eval_statement(
 
             Ok((value, ty))
         }
-        ref beta => {
-            error!("deal with statement", beta);
-            Ok((
-                new_ref!(Value, Value::Empty),
-                ValueType::new_empty(&s_read!(lu_dog)),
-            ))
-        }
+        StatementEnum::ItemStatement(_) => Ok((
+            new_ref!(Value, Value::Empty),
+            ValueType::new_empty(&s_read!(lu_dog)),
+        )),
     }
 }
 
