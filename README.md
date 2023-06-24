@@ -1,5 +1,8 @@
 <h1 align="left"><img width="440" src="doc/art/dwarf_sunburst.png" /></h1>
 
+![Build Status](https://github.com/uberFoo/dwarf/workflows/Rust%20Test%20and%20Code%20Coverage/badge.svg)
+[![codecov](https://codecov.io/gh/uberFoo/dwarf/branch/develop/graph/badge.svg?token=D2DEOU0S6E)](https://codecov.io/gh/uberFoo/dwarf)
+
 # The dwarf Programming Language
 
 dwarf is a programming language based heavily upon, and implementd in, [Rust](https://www.rust-lang.org).
