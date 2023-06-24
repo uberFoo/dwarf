@@ -4,14 +4,12 @@ use clap::{ArgAction, Parser};
 
 use snafu::prelude::*;
 
-use ariadne::{Color, Fmt, Label, Report, ReportKind, Source};
-
 use sarzak::{
     domain::DomainBuilder,
     sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL},
 };
 
-use dwarf::dwarf::{new_lu_dog, parse_dwarf, DwarfError, FileSnafu, GenericSnafu, IOSnafu, Result};
+use dwarf::dwarf::{new_lu_dog, parse_dwarf, FileSnafu, GenericSnafu, IOSnafu, Result};
 
 const TARGET_DIR: &str = "target";
 const BUILD_DIR: &str = "sarzak";

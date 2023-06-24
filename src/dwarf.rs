@@ -193,7 +193,7 @@ impl fmt::Display for DwarfErrorReporter<'_, '_> {
                     )
                     .finish()
                     .write(Source::from(&program), &mut std_err)
-                    .map_err(|e| fmt::Error)?;
+                    .map_err(|_| fmt::Error)?;
                 write!(f, "{}", String::from_utf8_lossy(&std_err))
             }
             DwarfError::GenericWarning {
@@ -211,7 +211,7 @@ impl fmt::Display for DwarfErrorReporter<'_, '_> {
                     )
                     .finish()
                     .write(Source::from(&program), &mut std_err)
-                    .map_err(|e| fmt::Error)?;
+                    .map_err(|_| fmt::Error)?;
                 write!(f, "{}", String::from_utf8_lossy(&std_err))
             }
             DwarfError::TypeMismatch {
@@ -230,7 +230,7 @@ impl fmt::Display for DwarfErrorReporter<'_, '_> {
                     .with_label(Label::new(span).with_message(msg).with_color(Color::Red))
                     .finish()
                     .write(Source::from(&program), &mut std_err)
-                    .map_err(|e| fmt::Error)?;
+                    .map_err(|_| fmt::Error)?;
                 write!(f, "{}", String::from_utf8_lossy(&std_err))
             }
             DwarfError::Parse { error, ast } => {
@@ -252,7 +252,7 @@ impl fmt::Display for DwarfErrorReporter<'_, '_> {
                         )
                         .finish()
                         .write(Source::from(&program), &mut std_err)
-                        .map_err(|e| fmt::Error)?;
+                        .map_err(|_| fmt::Error)?;
                     write!(f, "{}", String::from_utf8_lossy(&std_err))?;
                 }
                 Ok(())

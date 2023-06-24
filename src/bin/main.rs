@@ -6,12 +6,11 @@ use std::{
     thread,
 };
 
-use ariadne::{Color, Fmt, Label, Report, ReportKind, Source};
 use clap::{ArgAction, Args, Parser};
 use dap::{prelude::BasicClient, server::Server};
 use dwarf::{
     chacha::dap::DapAdapter,
-    dwarf::{new_lu_dog, parse_dwarf, DwarfError},
+    dwarf::{new_lu_dog, parse_dwarf},
     initialize_interpreter,
     interpreter::start_repl,
     // merlin::{ErrorExpressionProxy, ExpressionProxy},
