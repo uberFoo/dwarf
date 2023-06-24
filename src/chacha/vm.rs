@@ -236,7 +236,7 @@ impl<'b> VM<'b> {
         self.stack.pop()
     }
 
-    pub(crate) fn run(&mut self, mut frame: &mut CallFrame, trace: bool) -> Result<RefType<Value>> {
+    pub(crate) fn run(&mut self, frame: &mut CallFrame, trace: bool) -> Result<RefType<Value>> {
         loop {
             let fp = frame.fp;
             let ip = frame.ip;
