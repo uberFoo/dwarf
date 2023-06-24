@@ -39,3 +39,4 @@ jobs:
                   external_repository: uberFoo/uberFoo.github.io
                   publish_dir: doc/book
                   publish_branch: gh-pages
+                  destination_dir: assets/docs/dwarf
