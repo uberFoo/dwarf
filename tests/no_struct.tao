@@ -1,3 +1,4 @@
+/// This test throws an error.
 impl Complex {
     fn add(self, other: Complex) -> Complex {
         Complex {

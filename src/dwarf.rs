@@ -1,6 +1,7 @@
-use std::{fmt, ops, path::PathBuf};
+use std::{fmt, io::Write, ops, path::PathBuf};
 
 use ansi_term::Colour;
+use ariadne::{Color, Fmt, Label, Report, ReportKind, Source};
 use clap::Args;
 use sarzak::{
     lu_dog::WoogStruct,
@@ -37,6 +38,23 @@ const C_ERR: Colour = Colour::Red;
 const _C_OK: Colour = Colour::Green;
 const C_WARN: Colour = Colour::Yellow;
 const C_OTHER: Colour = Colour::Cyan;
+
+#[derive(Args, Clone, Debug, Deserialize, Serialize)]
+pub struct DwarfOptions {
+    /// Dwarf Source File
+    ///
+    /// Path to the source file to compile.
+    source: PathBuf,
+    /// Model File
+    ///
+    /// Path to the model, corresponding to the source file, to build the
+    /// Lu-Dog domain.
+    model: PathBuf,
+    /// Meta-Model File
+    ///
+    /// Path to the meta-model, sarzak.
+    sarzak: PathBuf,
+}
 
 pub type Result<T, E = DwarfError> = std::result::Result<T, E>;
 
@@ -138,16 +156,14 @@ pub enum DwarfError {
     /// Type Mismatch
     ///
     /// This is used when one type is expected, and another is found.
-    // #[snafu(display("\n{}: Type mismatch: expected {expected}, found {found}", C_ERR.bold().paint("error")))]
-    // TypeMismatch { expected: String, found: String },
-    // #[snafu(display("\n{}: Type mismatch: expected `{expected}`, found `{found}`.\n  --> {}:{}:{}", C_ERR.bold().paint("error"), location.file, location.line, location.column))]
-    // #[snafu(display("\n{}: Type mismatch: expected `{expected}`, found `{found}`.", C_ERR.bold().paint("error")))]
-    // #[snafu(display())]
+    ///
+    /// I think that this doesn't implement Display because it's displayed
+    /// someplace other than where error go? I'm not really sure, and it needs
+    /// looking into.
     TypeMismatch {
         expected: String,
         found: String,
         span: Span,
-        // location: Location,
     },
 
     /// Unknown Type
@@ -157,21 +173,93 @@ pub enum DwarfError {
     UnknownType { ty: String },
 }
 
-#[derive(Args, Clone, Debug, Deserialize, Serialize)]
-pub struct DwarfOptions {
-    /// Dwarf Source File
-    ///
-    /// Path to the source file to compile.
-    source: PathBuf,
-    /// Model File
-    ///
-    /// Path to the model, corresponding to the source file, to build the
-    /// Lu-Dog domain.
-    model: PathBuf,
-    /// Meta-Model File
-    ///
-    /// Path to the meta-model, sarzak.
-    sarzak: PathBuf,
+pub struct DwarfErrorReporter<'a, 'b>(pub &'a DwarfError, pub &'b str);
+impl fmt::Display for DwarfErrorReporter<'_, '_> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let program = &self.1;
+        let mut std_err = Vec::new();
+
+        match &self.0 {
+            DwarfError::BadSelf { span } | DwarfError::ImplementationBlock { span } => {
+                let span = span.clone();
+                let msg = format!("{}", self);
+
+                Report::build(ReportKind::Error, (), span.start)
+                    .with_message(&msg)
+                    .with_label(
+                        Label::new(span)
+                            .with_message(format!("{}", msg.fg(Color::Red)))
+                            .with_color(Color::Red),
+                    )
+                    .finish()
+                    .write(Source::from(&program), &mut std_err)
+                    .map_err(|e| fmt::Error)?;
+                write!(f, "{}", String::from_utf8_lossy(&std_err))
+            }
+            DwarfError::GenericWarning {
+                description: desc,
+                span,
+            } => {
+                let span = span.clone();
+
+                Report::build(ReportKind::Error, (), span.start)
+                    .with_message(&desc)
+                    .with_label(
+                        Label::new(span)
+                            .with_message(format!("{}", desc.fg(Color::Red)))
+                            .with_color(Color::Red),
+                    )
+                    .finish()
+                    .write(Source::from(&program), &mut std_err)
+                    .map_err(|e| fmt::Error)?;
+                write!(f, "{}", String::from_utf8_lossy(&std_err))
+            }
+            DwarfError::TypeMismatch {
+                expected,
+                found,
+                span,
+            } => {
+                let span = span.clone();
+                let msg = format!(
+                    "{}: Type mismatch: expected `{expected}`, found `{found}`.",
+                    Colour::Red.bold().paint("error")
+                );
+
+                Report::build(ReportKind::Error, (), span.start)
+                    .with_message(&msg)
+                    .with_label(Label::new(span).with_message(msg).with_color(Color::Red))
+                    .finish()
+                    .write(Source::from(&program), &mut std_err)
+                    .map_err(|e| fmt::Error)?;
+                write!(f, "{}", String::from_utf8_lossy(&std_err))
+            }
+            DwarfError::Parse { error, ast } => {
+                // What's up with both of these? Need to write a test and see
+                // what looks good.
+                std_err.write(format!("{}", error).as_bytes()).unwrap();
+                std_err.write(format!("{}", self.0).as_bytes()).unwrap();
+
+                for a in ast {
+                    let msg = format!("{}", self.0);
+                    let span = a.1.clone();
+
+                    Report::build(ReportKind::Error, (), span.start)
+                        .with_message(&msg)
+                        .with_label(
+                            Label::new(span)
+                                .with_message(format!("{}", msg.fg(Color::Red)))
+                                .with_color(Color::Red),
+                        )
+                        .finish()
+                        .write(Source::from(&program), &mut std_err)
+                        .map_err(|e| fmt::Error)?;
+                    write!(f, "{}", String::from_utf8_lossy(&std_err))?;
+                }
+                Ok(())
+            }
+            _ => write!(f, "{}", self.0),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
@@ -455,6 +543,7 @@ pub enum Expression {
     Multiplication(Box<Spanned<Self>>, Box<Spanned<Self>>),
     Negation(Box<Spanned<Self>>),
     None,
+    Or(Box<Spanned<Self>>, Box<Spanned<Self>>),
     Print(Box<Spanned<Self>>),
     Range(Box<Spanned<Self>>, Box<Spanned<Self>>),
     Return(Box<Spanned<Self>>),

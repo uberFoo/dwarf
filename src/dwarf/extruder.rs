@@ -14,8 +14,9 @@ use uuid::Uuid;
 
 use crate::{
     dwarf::{
-        DwarfError, Expression as ParserExpression, Item, ObjectIdNotFoundSnafu, Result, Spanned,
-        Statement as ParserStatement, Type, TypeMismatchSnafu,
+        DwarfError, Expression as ParserExpression, Item, ObjectIdNotFoundSnafu,
+        ObjectNameNotFoundSnafu, Result, Spanned, Statement as ParserStatement, Type,
+        TypeMismatchSnafu,
     },
     lu_dog::{
         store::ObjectStore as LuDogStore,
@@ -1941,6 +1942,60 @@ fn inter_expression(
             Ok(((expr, span), ty))
         }
         //
+        // Or
+        //
+        ParserExpression::Or(ref lhs, ref rhs) => {
+            let (lhs, lhs_ty) = inter_expression(
+                &new_ref!(ParserExpression, lhs.0.to_owned()),
+                &lhs.1,
+                source,
+                block,
+                lu_dog,
+                models,
+                sarzak,
+            )?;
+            let (rhs, rhs_ty) = inter_expression(
+                &new_ref!(ParserExpression, rhs.0.to_owned()),
+                &rhs.1,
+                source,
+                block,
+                lu_dog,
+                models,
+                sarzak,
+            )?;
+
+            ensure!(
+                if let ValueType::Ty(ref id) = &*s_read!(lhs_ty) {
+                    let ty = sarzak.exhume_ty(id).unwrap();
+                    matches!(ty, Ty::Boolean(_))
+                } else {
+                    false
+                },
+                {
+                    let span = s_read!(lhs.1).start as usize..s_read!(lhs.1).end as usize;
+                    let lhs = PrintableValueType(lhs_ty, lu_dog, sarzak, models);
+                    TypeMismatchSnafu {
+                        found: lhs.to_string(),
+                        expected: "bool".to_string(),
+                        span,
+                    }
+                }
+            );
+
+            let tc_span = s_read!(span).start as usize..s_read!(span).end as usize;
+            typecheck(&lhs_ty, &rhs_ty, tc_span, lu_dog, sarzak, models)?;
+
+            let expr = BooleanOperator::new_or(lu_dog);
+            let expr = Binary::new_boolean_operator(&expr, lu_dog);
+            let expr = Operator::new_binary(Some(&rhs.0), &lhs.0, &expr, lu_dog);
+            let expr = Expression::new_operator(&expr, lu_dog);
+
+            let value = XValue::new_expression(block, &lhs_ty, &expr, lu_dog);
+            s_write!(span).x_value = Some(s_read!(value).id);
+
+            Ok(((expr, span), lhs_ty))
+        }
+        //
         // Range
         //
         ParserExpression::Range(start, end) => {
@@ -2334,9 +2389,11 @@ fn inter_implementation(
     // let obj = model
     //     .exhume_object(&obj_id)
     //     .expect(&format!("Object {} not found", name));
-    let id = lu_dog
-        .exhume_woog_struct_id_by_name(name)
-        .unwrap_or_else(|| panic!("struct {} not found", name));
+    let id = lu_dog.exhume_woog_struct_id_by_name(name);
+
+    ensure!(id.is_some(), ObjectNameNotFoundSnafu { name });
+
+    let id = id.unwrap();
 
     let mt = lu_dog.exhume_woog_struct(&id).unwrap();
 

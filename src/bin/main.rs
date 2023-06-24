@@ -100,73 +100,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         let lu_dog =
             new_lu_dog(None, Some((source_code.clone(), &ast)), &[], &sarzak).map_err(|e| {
-                match &e {
-                    DwarfError::BadSelf { span } => {
-                        let span = span.clone();
-                        let msg = format!("{}", e);
-
-                        Report::build(ReportKind::Error, (), span.start)
-                            .with_message(&msg)
-                            .with_label(
-                                Label::new(span)
-                                    .with_message(format!("{}", msg.fg(Color::Red)))
-                                    .with_color(Color::Red),
-                            )
-                            .finish()
-                            .eprint(Source::from(&source_code))
-                            .unwrap()
-                    }
-                    DwarfError::GenericWarning {
-                        description: desc,
-                        span,
-                    } => {
-                        let span = span.clone();
-
-                        Report::build(ReportKind::Error, (), span.start)
-                            .with_message(desc)
-                            .with_label(
-                                Label::new(span)
-                                    .with_message(format!("{}", desc.fg(Color::Red)))
-                                    .with_color(Color::Red),
-                            )
-                            .finish()
-                            .eprint(Source::from(&source_code))
-                            .unwrap()
-                    }
-                    DwarfError::ImplementationBlock { span } => {
-                        let span = span.clone();
-                        let msg = format!("{}", e);
-
-                        Report::build(ReportKind::Error, (), span.start)
-                            .with_message(&msg)
-                            .with_label(
-                                Label::new(span)
-                                    .with_message(format!("{}", msg.fg(Color::Red)))
-                                    .with_color(Color::Red),
-                            )
-                            .finish()
-                            .eprint(Source::from(&source_code))
-                            .unwrap()
-                    }
-                    DwarfError::Parse { error: _, ast } => {
-                        for a in ast {
-                            let msg = format!("{}", e);
-                            let span = a.1.clone();
-
-                            Report::build(ReportKind::Error, (), span.start)
-                                .with_message(&msg)
-                                .with_label(
-                                    Label::new(span)
-                                        .with_message(format!("{}", msg.fg(Color::Red)))
-                                        .with_color(Color::Red),
-                                )
-                                .finish()
-                                .eprint(Source::from(&source_code))
-                                .unwrap()
-                        }
-                    }
-                    _ => {}
-                }
+                eprintln!("{}", dwarf::dwarf::DwarfErrorReporter(&e, &source_code));
                 e
             })?;
 

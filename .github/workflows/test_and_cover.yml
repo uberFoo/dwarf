@@ -1,0 +1,64 @@
+name: Rust Test and Code Coverage
+
+on:
+    push:
+        branches:
+            - develop
+            - master
+
+jobs:
+    build:
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v2
+              with:
+                  ref: develop
+            - name: Set up Rust
+              uses: actions-rs/toolchain@v1
+              with:
+                  toolchain: nightly
+            - name: Install grcov
+              run: cargo install grcov
+            - name: Install llvm-tools-preview
+              run: rustup component add llvm-tools-preview
+            - name: Build and run tests with coverage
+              run: |
+                  CARGO_INCREMENTAL=0 RUSTFLAGS='-Cinstrument-coverage' RUSTDOCFLAGS='-Cinstrument-coverage -Z unstable-options --persist-doctests target/debug/doctestbins' LLVM_PROFILE_FILE='cargo-test-%p-%m.profraw' cargo +nightly test
+                  grcov . --binary-path ./target/debug/doctestbins -s . -t html --branch --ignore-not-existing --ignore '../*' --ignore "/*" -o ./coverage/
+                  grcov . --binary-path ./target/debug/doctestbins -s . -t lcov --branch --ignore-not-existing --ignore '../*' --ignore "/*" -o coverage.lcov
+            - name: Install lcov
+              run: sudo apt-get install lcov
+            - name: Install lcov_cobertura
+              run: pip install lcov_cobertura
+            - name: Generate coverage report
+              run: |
+                  lcov --summary coverage.lcov
+                  lcov_cobertura coverage.lcov --output coverage.xml
+              env:
+                  CI: true
+            - name: Upload coverage reports to Codecov
+              uses: codecov/codecov-action@v3
+              env:
+                  CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+              with:
+                  directory: ./
+                  fail_ci_if_error: true
+                  files: ./coverage.xml
+                  flags: unittests
+                  name: codecov-umbrella
+                  verbose: true
+            # - name: Upload coverage report
+            #   uses: actions/upload-artifact@v2
+            #   with:
+            #       name: coverage
+            #       path: |
+            #           coverage/
+            #           coverage.lcov
+            #           coverage.xml
+            # - name: Comment coverage percentage
+            #   uses: unsplash/comment-on-pr@v1.3.0
+            #   env:
+            #       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+            #   with:
+            #       msg: 'Coverage: ${{ job.steps[3].outputs.coverage }}'

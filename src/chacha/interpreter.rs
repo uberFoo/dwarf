@@ -2113,11 +2113,14 @@ fn eval_expression(
                                             && (&*s_read!(rhs.0)).try_into().unwrap(),
                                     );
                                     Ok((new_ref!(Value, value), lhs_ty))
-                                } // BooleanOperator::Or(_) => {
-                                  //     let value =
-                                  //         s_read!(lhs).clone() || s_read!(rhs.unwrap()).clone();
-                                  //     Ok((new_ref!(Value, value), lhs_ty))
-                                  // }
+                                }
+                                BooleanOperator::Or(_) => {
+                                    let value = Value::Boolean(
+                                        (&*s_read!(lhs)).try_into().unwrap()
+                                            || (&*s_read!(rhs.0)).try_into().unwrap(),
+                                    );
+                                    Ok((new_ref!(Value, value), lhs_ty))
+                                }
                             }
                         }
                         Binary::Division(_) => {

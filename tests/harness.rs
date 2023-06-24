@@ -1,100 +1,63 @@
 use std::path::PathBuf;
 
 use ansi_term::Colour;
-use ariadne::{Color, Fmt, Label, Report, ReportKind, Source};
 use env_logger;
 
 use dwarf::{
-    dwarf::{new_lu_dog, parse_dwarf, DwarfError},
+    dwarf::{new_lu_dog, parse_dwarf},
     initialize_interpreter,
     interpreter::start_main,
     sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL},
     Value,
 };
 
-fn run_program(program: &str) -> Result<Value, ()> {
+fn run_program(test: &str, program: &str) -> Result<Value, ()> {
     let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
+    // 🚧 need to expand on this once we are testing parser errors.
     let ast = parse_dwarf(&program).unwrap();
-    let lu_dog = new_lu_dog(None, Some((program.to_owned(), &ast)), &[], &sarzak)
-        .map_err(|e| {
-            match &e {
-                DwarfError::BadSelf { span } | DwarfError::ImplementationBlock { span } => {
-                    let span = span.clone();
-                    let msg = format!("{}", e);
-
-                    Report::build(ReportKind::Error, (), span.start)
-                        .with_message(&msg)
-                        .with_label(
-                            Label::new(span)
-                                .with_message(format!("{}", msg.fg(Color::Red)))
-                                .with_color(Color::Red),
-                        )
-                        .finish()
-                        .eprint(Source::from(&program))
-                        .unwrap()
-                }
-                DwarfError::GenericWarning {
-                    description: desc,
-                    span,
-                } => {
-                    let span = span.clone();
-
-                    Report::build(ReportKind::Error, (), span.start)
-                        .with_message(&desc)
-                        .with_label(
-                            Label::new(span)
-                                .with_message(format!("{}", desc.fg(Color::Red)))
-                                .with_color(Color::Red),
-                        )
-                        .finish()
-                        .eprint(Source::from(&program))
-                        .unwrap()
-                }
-                DwarfError::TypeMismatch {
-                    expected,
-                    found,
-                    span,
-                } => {
-                    let span = span.clone();
-                    let msg = format!(
-                        "{}: Type mismatch: expected `{expected}`, found `{found}`.",
-                        Colour::Red.bold().paint("error")
+    let lu_dog = match new_lu_dog(None, Some((program.to_owned(), &ast)), &[], &sarzak) {
+        Ok(lu_dog) => lu_dog,
+        Err(e) => {
+            // We got here because of an error. We need to look and see if this
+            // test has a .stderr file. If it does, we need to compare the error
+            // message to what's in the file. If they match we pass the test and
+            // if they differ we fail. Passing means business as usual, failure
+            // implies that we just need to return the error and let the rust
+            // test framework handle the rest.
+            // Look for a .stderr file.
+            let stderr_path = PathBuf::from(format!("tests/{}.stderr", test));
+            if stderr_path.exists() {
+                // We found a .stderr file. Read it and compare it to the error
+                // message.
+                let stderr = std::fs::read_to_string(stderr_path).unwrap();
+                if stderr == format!("{}", e) {
+                    // The error message matches the .stderr file. We pass the
+                    // test.
+                    return Ok(Value::Empty);
+                } else {
+                    // The error message does not match the .stderr file. We
+                    // fail the test.
+                    eprintln!(
+                        "{}",
+                        Colour::Red.paint(format!(
+                            "Error message does not match .stderr file for test {}",
+                            test
+                        ))
                     );
-
-                    Report::build(ReportKind::Error, (), span.start)
-                        .with_message(&msg)
-                        .with_label(Label::new(span).with_message(msg).with_color(Color::Red))
-                        .finish()
-                        .eprint(Source::from(&program))
-                        .unwrap()
+                    eprintln!("Expected: {}", stderr);
+                    eprintln!("Found: {}", e);
+                    return Err(());
                 }
-                DwarfError::Parse { error: _, ast } => {
-                    for a in ast {
-                        let msg = format!("{}", e);
-                        let span = a.1.clone();
-
-                        Report::build(ReportKind::Error, (), span.start)
-                            .with_message(&msg)
-                            .with_label(
-                                Label::new(span)
-                                    .with_message(format!("{}", msg.fg(Color::Red)))
-                                    .with_color(Color::Red),
-                            )
-                            .finish()
-                            .eprint(Source::from(&program))
-                            .unwrap()
-                    }
-                }
-                _ => panic!("Something that needs to be taken care of! {e}"),
             }
-            return e;
-        })
-        .unwrap();
+            eprintln!("{e}");
+            return Err(());
+        }
+    };
 
     let ctx = initialize_interpreter::<PathBuf>(sarzak, lu_dog, None).unwrap();
     start_main(false, ctx)
         .map_err(|e| {
-            println!("{e}");
+            eprintln!("{e}");
         })
         .and_then(|v| Ok(v.0))
 }
