@@ -14,7 +14,7 @@ use uuid::Uuid;
 
 use crate::{
     dwarf::{
-        DwarfError, Expression as ParserExpression, Item, ObjectIdNotFoundSnafu,
+        DwarfError, Expression as ParserExpression, GenericSnafu, Item, ObjectIdNotFoundSnafu,
         ObjectNameNotFoundSnafu, Result, Spanned, Statement as ParserStatement, Type,
         TypeMismatchSnafu,
     },
@@ -343,7 +343,7 @@ fn inter_func(
     stmts: &Spanned<ParserExpression>,
     impl_block: Option<&RefType<Implementation>>,
     impl_ty: Option<&RefType<ValueType>>,
-    _span: &Span,
+    span: &Span,
     source: &RefType<DwarfSourceFile>,
     lu_dog: &mut LuDogStore,
     models: &[SarzakStore],
@@ -373,21 +373,29 @@ fn inter_func(
     let func = Function::new(name.to_owned(), &block, impl_block, &ret_ty, lu_dog);
     let _ = WoogItem::new_function(source, &func, lu_dog);
     // Create a type for our function
-    ValueType::new_function(&func, lu_dog);
+    let ty = ValueType::new_function(&func, lu_dog);
+    LuDogSpan::new(
+        span.end as i64,
+        span.start as i64,
+        source,
+        None,
+        Some(&ty),
+        lu_dog,
+    );
 
     let mut last_param_uuid: Option<Uuid> = None;
     for ((param_name, name_span), (param_ty, param_span)) in params {
         debug!("param name {}", param_name);
         debug!("param ty {}", param_ty);
 
-        let span = LuDogSpan::new(
-            name_span.end as i64,
-            name_span.start as i64,
-            source,
-            None,
-            None,
-            lu_dog,
-        );
+        // let span = LuDogSpan::new(
+        //     name_span.end as i64,
+        //     name_span.start as i64,
+        //     source,
+        //     None,
+        //     None,
+        //     lu_dog,
+        // );
         let param = Parameter::new(&func, None, lu_dog);
 
         debug!("param {:?}", param);
@@ -404,8 +412,15 @@ fn inter_func(
         let param_ty = get_value_type(param_ty, param_span, impl_ty, lu_dog, models, sarzak)?;
         debug!("param_ty {:?}", param_ty);
         let value = XValue::new_variable(&block, &param_ty, &var, lu_dog);
-        // 🚧 Was this causing a crash?
-        s_write!(span).x_value = Some(s_read!(value).id);
+        // s_write!(span).x_value = Some(s_read!(value).id);
+        LuDogSpan::new(
+            name_span.end as i64,
+            name_span.start as i64,
+            source,
+            Some(&value),
+            None,
+            lu_dog,
+        );
         last_param_uuid = link_parameter!(last_param_uuid, param, lu_dog);
     }
 
@@ -2207,11 +2222,16 @@ fn inter_expression(
 
             debug!("ParserExpression::Struct {}", name);
 
-            // dbg!(&lu_dog_heel.iter_woog_struct().collect::<Vec<_>>());
-
             // Here we don't de_sanitize the name, and we are looking it up in the
             // dwarf model.
-            let id = lu_dog.exhume_woog_struct_id_by_name(name).unwrap();
+            let id = lu_dog.exhume_woog_struct_id_by_name(name);
+            ensure!(
+                id.is_some(),
+                GenericSnafu {
+                    description: format!("Could not find struct {}", name),
+                }
+            );
+            let id = id.unwrap();
             let woog_struct = lu_dog.exhume_woog_struct(&id).unwrap();
 
             let expr = StructExpression::new(Uuid::new_v4(), &woog_struct, lu_dog);

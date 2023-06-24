@@ -60,8 +60,10 @@ fn escape_time(c: Complex, limit: int) -> Option<int> {
     // debugger;
     let z = Complex::zero();
     for i in 1..limit {
-        ComplexEx::square(z);
-        ComplexEx::add(z, c);
+        z = Complex::square(z);
+        z = Complex::add(z, c);
+//        ComplexEx::square(z);
+//        ComplexEx::add(z, c);
         let foo = ComplexEx::norm_squared(z);
         if foo > 4.0 {
             return i;
@@ -71,10 +73,7 @@ fn escape_time(c: Complex, limit: int) -> Option<int> {
 }
 
 fn main() -> Complex {
-    let ty = chacha::typeof("mandelbrot");
-    print("Type: " + ty + "\n");
-    let time = chacha::time(plot);
-    print("Total time: " + time as string + "\n");
+    print("Total time: {0}s\n".format(chacha::time(plot)));
 }
 
 fn plot() -> Complex {
@@ -82,21 +81,12 @@ fn plot() -> Complex {
     let height = 10;
     let upper_left = Complex { re: -2.5, im: 1.0 };
     let lower_right = Complex { re: 2.0, im: -1.0 };
-    // for t in 0..255 {
         let t = 50;
         for row in 0..height {
-        // OMG, this is an ugly hack, and yet it's so badass. If it had worked. 😢
-        // ChaCha::spawn(do_column, [row, width, height, upper_left, lower_right]);
-        // if row > 1 {
-        // debugger;
-        // }
             do_column(t, row, width, height, upper_left, lower_right);
         }
-    // This is busted too.
-    // print(chacha::eps() + "\n");
-    // }
-    print(chacha::eps());
-    print("\n");
+
+    print("{0}\n".format(chacha::eps()));
 }
 
 fn do_column(time: int, row: int, width: int, height: int, upper_left: Complex, lower_right: Complex) {

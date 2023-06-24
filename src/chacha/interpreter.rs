@@ -515,6 +515,7 @@ fn eval_function_call(
     func: RefType<Function>,
     args: &[RefType<Argument>],
     arg_check: bool,
+    span: &RefType<Span>,
     context: &mut Context,
     vm: &mut VM,
 ) -> Result<(RefType<Value>, RefType<ValueType>)> {
@@ -548,13 +549,22 @@ fn eval_function_call(
         // 🚧 I'd really like to see the source code printed out, with the function
         // call highlighted.
         // And can't we catch this is the compiler?
-        ensure!(
-            params.len() == args.len(),
+        ensure!(params.len() == args.len(), {
+            let value_ty = &func.r1_value_type(&s_read!(lu_dog))[0];
+            let defn_span = &s_read!(value_ty).r62_span(&s_read!(lu_dog))[0];
+            let read = s_read!(defn_span);
+            let defn_span = read.start as usize..read.end as usize;
+
+            let read = s_read!(span);
+            let invocation_span = read.start as usize..read.end as usize;
+
             WrongNumberOfArgumentsSnafu {
                 expected: params.len(),
-                got: args.len()
+                got: args.len(),
+                defn_span,
+                invocation_span,
             }
-        );
+        });
 
         let params = if !params.is_empty() {
             let mut params = Vec::with_capacity(params.len());
@@ -683,9 +693,9 @@ fn eval_function_call(
         // Clean up
         context.memory.pop_frame();
         let elapsed = now.elapsed();
-        // Counting 10k expressions per second
+        // Counting 1k expressions per second
         let eps =
-            (context.expr_count - expr_count_start) as f64 / elapsed.as_micros() as f64 * 10.0;
+            (context.expr_count - expr_count_start) as f64 / elapsed.as_micros() as f64 * 100.0;
         context.timings.push(eps);
 
         Ok((value, ty))
@@ -866,12 +876,16 @@ fn eval_expression(
                     let read_value = s_read!(value);
                     match &*read_value {
                         Value::Function(ref func) => {
+                            let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
+                            let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
+
                             let func = s_read!(lu_dog).exhume_function(&s_read!(func).id).unwrap();
                             debug!("Expression::Call func", func);
                             let (value, ty) = eval_function_call(
                                 func,
                                 &args,
                                 s_read!(call).arg_check,
+                                span,
                                 context,
                                 vm,
                             )?;
@@ -1140,10 +1154,14 @@ fn eval_expression(
                                 .iter()
                                 .find(|f| s_read!(f).name == *meth)
                             {
+                                let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
+                                let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
+
                                 eval_function_call(
                                     (*func).clone(),
                                     &args,
                                     s_read!(call).arg_check,
+                                    span,
                                     context,
                                     vm,
                                 )
@@ -1302,14 +1320,21 @@ fn eval_expression(
                                     unreachable!()
                                 };
 
+                                let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
+                                let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
+
                                 let now = Instant::now();
-                                let result = eval_function_call(func, &[], true, context, vm)?;
+                                let _result =
+                                    eval_function_call(func, &[], true, span, context, vm)?;
                                 let elapsed = now.elapsed();
 
-                                let time = format!("{:?}\n", elapsed);
-                                chacha_print(time, context)?;
+                                // let time = format!("{:?}\n", elapsed);
+                                // chacha_print(time, context)?;
 
-                                Ok(result)
+                                let ty = Ty::new_float();
+                                let ty = s_read!(lu_dog).exhume_value_type(&ty.id()).unwrap();
+
+                                Ok((new_ref!(Value, Value::Float(elapsed.as_secs_f64())), ty))
                             }
                             "eps" => {
                                 let timings = context.timings.iter().cloned().collect::<Vec<_>>();
@@ -1321,17 +1346,17 @@ fn eval_expression(
                                 let median = timings[timings.len() / 2];
 
                                 let result = format!(
-                                    "expressions (10k)/sec (mean/std_dev/median): {:.1} / {:.1} / {:.1}\n",
+                                    "expressions (1k)/sec (mean/std_dev/median): {:.1} / {:.1} / {:.1}\n",
                                     mean,
                                     std_dev,
                                     median
                                 );
-                                chacha_print(result, context)?;
+                                // chacha_print(result, context)?;
 
-                                Ok((
-                                    new_ref!(Value, Value::Empty),
-                                    ValueType::new_empty(&s_read!(lu_dog)),
-                                ))
+                                let ty = Ty::new_s_string();
+                                let ty = s_read!(lu_dog).exhume_value_type(&ty.id()).unwrap();
+
+                                Ok((new_ref!(Value, Value::String(result)), ty))
                             }
                             "assert_eq" => {
                                 let lhs = arg_values.pop_front().unwrap().0;
@@ -1469,6 +1494,8 @@ fn eval_expression(
                         debug!("StaticMethodCall meta value", value);
                         match &*s_read!(value) {
                             Value::Function(ref func) => {
+                                let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
+                                let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
                                 let func =
                                     s_read!(lu_dog).exhume_function(&s_read!(func).id).unwrap();
                                 debug!("StaticMethodCall meta func", func);
@@ -1476,6 +1503,7 @@ fn eval_expression(
                                     func,
                                     &args,
                                     s_read!(call).arg_check,
+                                    span,
                                     context,
                                     vm,
                                 )?;
@@ -1495,6 +1523,8 @@ fn eval_expression(
                         debug!("StaticMethodCall frame value", value);
                         match &mut *s_write!(value) {
                             Value::Function(ref func) => {
+                                let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
+                                let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
                                 let func =
                                     s_read!(lu_dog).exhume_function(&s_read!(func).id).unwrap();
                                 debug!("StaticMethodCall frame func", func);
@@ -1502,6 +1532,7 @@ fn eval_expression(
                                     func,
                                     &args,
                                     s_read!(call).arg_check,
+                                    span,
                                     context,
                                     vm,
                                 )?;
@@ -2913,10 +2944,13 @@ pub fn start_main(stopped: bool, mut context: Context) -> Result<(Value, Context
             .exhume_function(&s_read!(main).id)
             .unwrap();
 
-        let result = eval_function_call(main, &[], true, &mut context, &mut vm)?;
+        let value_ty = &s_read!(main).r1_value_type(&s_read!(context.lu_dog))[0];
+        let span = &s_read!(value_ty).r62_span(&s_read!(context.lu_dog))[0];
+
+        let result = eval_function_call(main, &[], true, span, &mut context, &mut vm)?;
 
         #[allow(clippy::redundant_clone)]
-        // It's not -- the macro is just hiding the fact that it isn't.
+        //              ^^^^^^^^^^^^^^^ : It's not -- the macro is just hiding the fact that it isn't.
         Ok((s_read!(result.0.clone()).clone(), context))
     } else {
         Err(Error(ChaChaError::MainIsNotAFunction))

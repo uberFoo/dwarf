@@ -1,6 +1,11 @@
-use std::{io, ops::Range, path::PathBuf};
+use std::{
+    fmt, io,
+    ops::{self, Range},
+    path::PathBuf,
+};
 
 use ansi_term::Colour;
+use ariadne::{Color, Label, Report, ReportKind, Source};
 use chacha::vm::Instruction;
 use clap::Args;
 use crossbeam::channel::SendError;
@@ -281,6 +286,8 @@ pub struct ChaChaOptions {
     sarzak: PathBuf,
 }
 
+pub type Span = ops::Range<usize>;
+
 //
 // Error handling
 const ERR_CLR: Colour = Colour::Red;
@@ -384,7 +391,101 @@ pub enum ChaChaError {
     WrongNumberOfArguments {
         expected: usize,
         got: usize,
+        defn_span: Span,
+        invocation_span: Span,
     },
 }
 
 type Result<T, E = ChaChaError> = std::result::Result<T, E>;
+
+pub struct ChaChaErrorReporter<'a, 'b>(pub &'a Error, pub &'b str);
+impl fmt::Display for ChaChaErrorReporter<'_, '_> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let program = &self.1;
+        let mut std_err = Vec::new();
+
+        match &self.0 .0 {
+            //             ChaChaError::BadSelf { span } | DwarfError::ImplementationBlock { span } => {
+            //                 let span = span.clone();
+            //                 let msg = format!("{}", self);
+
+            //                 Report::build(ReportKind::Error, (), span.start)
+            //                     .with_message(&msg)
+            //                     .with_label(
+            //                         Label::new(span)
+            //                             .with_message(format!("{}", msg.fg(Color::Red)))
+            //                             .with_color(Color::Red),
+            //                     )
+            //                     .finish()
+            //                     .write(Source::from(&program), &mut std_err)
+            //                     .map_err(|_| fmt::Error)?;
+            //                 write!(f, "{}", String::from_utf8_lossy(&std_err))
+            //             }
+            //             DwarfError::GenericWarning {
+            //                 description: desc,
+            //                 span,
+            //             } => {
+            //                 let span = span.clone();
+
+            //                 Report::build(ReportKind::Error, (), span.start)
+            //                     .with_message(&desc)
+            //                     .with_label(
+            //                         Label::new(span)
+            //                             .with_message(format!("{}", desc.fg(Color::Red)))
+            //                             .with_color(Color::Red),
+            //                     )
+            //                     .finish()
+            //                     .write(Source::from(&program), &mut std_err)
+            //                     .map_err(|_| fmt::Error)?;
+            //                 write!(f, "{}", String::from_utf8_lossy(&std_err))
+            //             }
+            // 🚧  StaticMethod next
+            ChaChaError::WrongNumberOfArguments {
+                expected,
+                got,
+                defn_span,
+                invocation_span,
+            } => {
+                let msg = format!("expected `{expected}`, found `{got}`.");
+
+                Report::build(ReportKind::Error, (), invocation_span.start)
+                    .with_message("wrong number of arguments")
+                    .with_label(
+                        Label::new(defn_span.clone()).with_message("for function defined here"), // .with_color(Color::Red),
+                    )
+                    .with_label(
+                        Label::new(invocation_span.clone()).with_message(&msg), // .with_color(Color::Red),
+                    )
+                    .finish()
+                    .write(Source::from(&program), &mut std_err)
+                    .map_err(|_| fmt::Error)?;
+                write!(f, "{}", String::from_utf8_lossy(&std_err))
+            }
+            //             DwarfError::Parse { error, ast } => {
+            //                 // What's up with both of these? Need to write a test and see
+            //                 // what looks good.
+            //                 std_err.write(format!("{}", error).as_bytes()).unwrap();
+            //                 std_err.write(format!("{}", self.0).as_bytes()).unwrap();
+
+            //                 for a in ast {
+            //                     let msg = format!("{}", self.0);
+            //                     let span = a.1.clone();
+
+            //                     Report::build(ReportKind::Error, (), span.start)
+            //                         .with_message(&msg)
+            //                         .with_label(
+            //                             Label::new(span)
+            //                                 .with_message(format!("{}", msg.fg(Color::Red)))
+            //                                 .with_color(Color::Red),
+            //                         )
+            //                         .finish()
+            //                         .write(Source::from(&program), &mut std_err)
+            //                         .map_err(|_| fmt::Error)?;
+            //                     write!(f, "{}", String::from_utf8_lossy(&std_err))?;
+            //                 }
+            //                 Ok(())
+            //             }
+            _ => write!(f, "{}", self.0),
+        }
+    }
+}

@@ -54,17 +54,24 @@ async fn function_handler(event: Request) -> Result<Response<Body>, Error> {
                 match lu_dog {
                     Ok(lu_dog) => {
                         let ctx = initialize_interpreter::<PathBuf>(sarzak, lu_dog, None).unwrap();
-                        // 🚧 Can't unwrap this. Must deal with errors from ChaCha.
-                        let (result, ctx) = start_main(false, ctx).unwrap().try_into().unwrap();
-                        let result = result.to_string();
-                        let result = ansi_to_html::convert_escaped(&result).unwrap();
-                        let std_out = ctx.drain_std_out();
-                        let std_out = std_out
-                            .iter()
-                            .map(|line| ansi_to_html::convert_escaped(&line).unwrap())
-                            .collect::<Vec<String>>()
-                            .join("");
-                        std_out + &ansi_to_html::convert_escaped(&result).unwrap()
+                        match start_main(false, ctx) {
+                            Ok((result, ctx)) => {
+                                let result = result.to_string();
+                                let result = ansi_to_html::convert_escaped(&result).unwrap();
+                                let std_out = ctx.drain_std_out();
+                                let std_out = std_out
+                                    .iter()
+                                    .map(|line| ansi_to_html::convert_escaped(&line).unwrap())
+                                    .collect::<Vec<String>>()
+                                    .join("");
+                                std_out + &ansi_to_html::convert_escaped(&result).unwrap()
+                            }
+                            Err(e) => ansi_to_html::convert_escaped(&format!(
+                                "{}",
+                                dwarf::ChaChaErrorReporter(&e, &program,)
+                            ))
+                            .unwrap(),
+                        }
                     }
                     Err(_) => {
                         let err = String::from_utf8(std_err).unwrap();
