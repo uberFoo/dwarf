@@ -529,6 +529,7 @@ pub enum Expression {
     FunctionCall(Box<Spanned<Self>>, Vec<Spanned<Self>>),
     GreaterThan(Box<Spanned<Self>>, Box<Spanned<Self>>),
     GreaterThanOrEqual(Box<Spanned<Self>>, Box<Spanned<Self>>),
+    Group(Box<Spanned<Self>>),
     If(
         Box<Spanned<Self>>,
         Box<Spanned<Self>>,

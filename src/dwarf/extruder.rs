@@ -1388,6 +1388,21 @@ fn inter_expression(
             Ok(((expr, span), ty))
         }
         //
+        // Group
+        //
+        ParserExpression::Group(ref expr) => {
+            let (expr, ty) = inter_expression(
+                &new_ref!(ParserExpression, expr.0.to_owned()),
+                &expr.1,
+                source,
+                block,
+                lu_dog,
+                models,
+                sarzak,
+            )?;
+            Ok((expr, ty))
+        }
+        //
         // If
         //
         ParserExpression::If(conditional, true_block, false_block) => {

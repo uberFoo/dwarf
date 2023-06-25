@@ -96,6 +96,14 @@ macro_rules! error {
 
 type Result<T, E = Box<Simple<String>>> = std::result::Result<T, E>;
 
+// These are the binding strengths of the operators used by the parser.
+// The idea comes from
+// [this article](https://matklad.github.io/2020/04/13/simple-but-powerful-pratt-parsing.html)
+// on Pratt parsing.
+// The first value in the tuple is the binding power of the operator on its left,
+// and the second value is the binding power on its right. Assign is the only
+// one that's inverted, and that seems wrong. Shouldn't '.' (for method calls)
+// also associate right to left?
 const PATH: (u8, u8) = (100, 100);
 const METHOD: (u8, u8) = (90, 91);
 const FIELD: (u8, u8) = (80, 81);
@@ -1421,20 +1429,11 @@ impl DwarfParser {
         )))
     }
 
-    /// Parse a "simple" expression
+    /// Parse an expression that does not have a block.
     ///
-    /// I broke this out for a reason that no longer applies. I'm not sure that
-    /// it's great.
-    ///
-    /// expression -> boolean_literal | float_literal | integer_literal |
-    ///               local_variable | none | some | string_literal
-    ///
-    /// Parse an expression without a block
-    ///
-    /// expression -> assignment | block | Error | field_access |
-    ///               for | function_call | if |
-    ///               list | method_call |print |
-    ///               static_method_call | struct
+    /// This is where the Pratt stuff comes in. The main point to make about this is
+    /// that in this function we are calling parsers with some left-hand-side expression.
+    /// So all the parsers being called here deal with binding powers.
     fn parse_expression_without_block(&mut self, power: u8) -> Result<Option<Expression>> {
         debug!("enter", power);
 
@@ -1529,6 +1528,7 @@ impl DwarfParser {
         Ok(lhs)
     }
 
+    /// The parsers called from here don't need to worry about binding.
     fn parse_simple_expression(&mut self) -> Result<Option<Expression>> {
         debug!("enter");
 
@@ -1577,6 +1577,12 @@ impl DwarfParser {
         // parse an empty literal
         if let Some(expression) = self.parse_empty_literal() {
             debug!("empty literal", expression);
+            return Ok(Some(expression));
+        }
+
+        // parse a group expression
+        if let Some(expression) = self.parse_group_expression()? {
+            debug!("group expression", expression);
             return Ok(Some(expression));
         }
 
@@ -2000,6 +2006,60 @@ impl DwarfParser {
         )))
     }
 
+    /// Parse a group expression
+    ///
+    /// group -> '(' expression,* ')'
+    fn parse_group_expression(&mut self) -> Result<Option<Expression>> {
+        debug!("enter");
+
+        let start = if let Some(tok) = self.peek() {
+            tok.1.start
+        } else {
+            debug!("exit parse_list_expression");
+            return Ok(None);
+        };
+
+        if !self.match_(&[Token::Punct('(')]) {
+            return Ok(None);
+        }
+
+        let expr = if let Some(expr) = self.parse_expression(ENTER)? {
+            expr
+        } else {
+            let tok = self.peek().unwrap();
+            let err = Simple::expected_input_found(
+                tok.1.clone(),
+                [Some("expression".to_owned())],
+                Some(tok.0.to_string()),
+            );
+            let err = err.with_label("expected expression");
+            error!("exit", err);
+            return Err(Box::new(err));
+        };
+
+        if !self.match_(&[Token::Punct(')')]) {
+            let tok = self.peek().unwrap();
+            let err = Simple::expected_input_found(
+                tok.1.clone(),
+                [Some("]".to_owned())],
+                Some(tok.0.to_string()),
+            );
+            let err = err.with_label("expected expression");
+            error!("exit", err);
+            return Err(Box::new(err));
+        }
+
+        debug!("exit ok");
+
+        Ok(Some((
+            (
+                DwarfExpression::Group(Box::new(expr.0)),
+                start..self.previous().unwrap().1.end,
+            ),
+            FUNC_CALL,
+        )))
+    }
+
     /// Parse a method call
     ///
     /// method_call -> `struct`.ident '(' expression,* ')'
@@ -2091,13 +2151,8 @@ impl DwarfParser {
             return Ok(None);
         }
 
-        // while !self.at_end() && !self.match_(&[Token::Punct(']')]) {
         let expr = if let Some(expr) = self.parse_expression(ENTER)? {
             expr
-            // arguments.push(expr.0);
-            // if self.peek().unwrap().0 == Token::Punct(',') {
-            // self.advance();
-            // }
         } else {
             let tok = self.peek().unwrap();
             let err = Simple::expected_input_found(
@@ -2109,7 +2164,6 @@ impl DwarfParser {
             error!("exit", err);
             return Err(Box::new(err));
         };
-        // }
 
         if !self.match_(&[Token::Punct(']')]) {
             let tok = self.peek().unwrap();

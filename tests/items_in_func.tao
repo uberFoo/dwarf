@@ -32,13 +32,9 @@ fn main() {
         }
 
         fn midpoint(self) -> Point {
-            let x = self.start.x() + self.end.x();
-            let y = self.start.y() + self.end.y();
             Point::new(
-                x / 2,
-                y / 2,
-                // (self.start.x() + self.end.x()) / 2,
-                // (self.start.y() + self.end.y()) / 2,
+                (self.start.x() + self.end.x()) / 2,
+                (self.start.y() + self.end.y()) / 2,
             )
         }
     }
@@ -46,6 +42,9 @@ fn main() {
     // create a line and get its midpoint
     let line = Line::new(Point::new(1, 2), Point::new(3, 4));
     let midpoint = line.midpoint();
+
+    chacha::assert_eq(midpoint.x(), 2);
+    chacha::assert_eq(midpoint.y(), 3);
 
     print("midpoint is ({0}, {1})".format(midpoint.x(), midpoint.y()));
 }
