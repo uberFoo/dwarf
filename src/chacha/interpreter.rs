@@ -2246,7 +2246,6 @@ fn eval_expression(
 
                             Ok((new_ref!(Value, value), ty))
                         }
-                        _ => unimplemented!(),
                     }
                 }
                 OperatorEnum::Unary(ref unary) => {

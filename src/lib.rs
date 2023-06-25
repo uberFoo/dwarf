@@ -5,7 +5,7 @@ use std::{
 };
 
 use ansi_term::Colour;
-use ariadne::{Color, Label, Report, ReportKind, Source};
+use ariadne::{Label, Report, ReportKind, Source};
 use chacha::vm::Instruction;
 use clap::Args;
 use crossbeam::channel::SendError;
