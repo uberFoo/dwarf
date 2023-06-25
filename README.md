@@ -13,7 +13,8 @@ See the [book](https://uberfoo.github.io/assets/docs/dwarf/introduction.html).
 
 ## Goals
 
-*
+* Typed, interpreted language
+* Rust-like syntax
 
 ## Non-Goals
 
