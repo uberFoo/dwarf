@@ -1,6 +1,7 @@
 name: Rust Test and Code Coverage
 
 on:
+    workflow_dispatch:
     push:
         branches:
             - develop
