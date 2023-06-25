@@ -1,0 +1,13 @@
+fn main() {
+    chacha::assert_eq(42 <= 42, true);
+    chacha::assert_eq(42.0 <= 42, true);
+    chacha::assert_eq(42 <= 42.0, true);
+    chacha::assert_eq(42.0 <= 42.0, true);
+
+    chacha::assert_eq(42 <= 69, true);
+    chacha::assert_eq(42.0 <= 69, true);
+    chacha::assert_eq(42 <= 69.0, true);
+    chacha::assert_eq(42.0 <= 69.0, true);
+
+    chacha::assert_eq("42" <= "69", true);
+}

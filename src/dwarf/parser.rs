@@ -1023,15 +1023,18 @@ impl DwarfParser {
             return Ok(None);
         };
 
-        if !self.match_(&[Token::Punct('>')]) {
-            debug!("exit no '<'");
+        if !self.check(&Token::Punct('>')) {
+            debug!("exit no ''");
             return Ok(None);
         }
 
-        if !self.match_(&[Token::Punct('=')]) {
+        if !self.check2(&Token::Punct('=')) {
             debug!("exit no '='");
             return Ok(None);
         }
+
+        self.advance();
+        self.advance();
 
         let right = if let Some(expr) = self.parse_expression(COMP.1)? {
             expr
@@ -1074,15 +1077,18 @@ impl DwarfParser {
             return Ok(None);
         };
 
-        if !self.match_(&[Token::Punct('<')]) {
+        if !self.check(&Token::Punct('<')) {
             debug!("exit no '<'");
             return Ok(None);
         }
 
-        if !self.match_(&[Token::Punct('=')]) {
+        if !self.check2(&Token::Punct('=')) {
             debug!("exit no '='");
             return Ok(None);
         }
+
+        self.advance();
+        self.advance();
 
         let right = if let Some(expr) = self.parse_expression(COMP.1)? {
             expr
@@ -1155,6 +1161,60 @@ impl DwarfParser {
         Ok(Some((
             (
                 DwarfExpression::Equals(Box::new(left.0.to_owned()), Box::new(right.0)),
+                start..self.previous().unwrap().1.start,
+            ),
+            COMP,
+        )))
+    }
+
+    /// Parse a not equals operator
+    ///
+    /// neq -> expression != expression
+    fn parse_neq_operator(&mut self, left: &Expression, power: u8) -> Result<Option<Expression>> {
+        debug!("enter", power);
+
+        if power > COMP.0 {
+            debug!("exit no power", power);
+            return Ok(None);
+        }
+
+        let start = if let Some(tok) = self.peek() {
+            tok.1.start
+        } else {
+            debug!("exit no token");
+            return Ok(None);
+        };
+
+        if !self.check(&Token::Punct('!')) {
+            debug!("exit no '!'");
+            return Ok(None);
+        }
+
+        if !self.check2(&Token::Punct('=')) {
+            debug!("exit no '='");
+            return Ok(None);
+        }
+
+        self.advance();
+        self.advance();
+
+        let right = if let Some(expr) = self.parse_expression(COMP.1)? {
+            expr
+        } else {
+            let token = &self.previous().unwrap();
+            let err = Simple::expected_input_found(
+                token.1.clone(),
+                [Some("<expression -> there's a lot of them...>".to_owned())],
+                Some(token.0.to_string()),
+            );
+            error!("exit", err);
+            return Err(Box::new(err));
+        };
+
+        debug!("exit");
+        Ok(Some((
+            (
+                DwarfExpression::NotEquals(Box::new(left.0.to_owned()), Box::new(right.0)),
                 start..self.previous().unwrap().1.start,
             ),
             COMP,
@@ -1288,7 +1348,7 @@ impl DwarfParser {
         };
 
         if !self.match_(&[Token::Punct('>')]) {
-            debug!("exit no '<'");
+            debug!("exit no '>'");
             return Ok(None);
         }
 
@@ -1309,6 +1369,52 @@ impl DwarfParser {
         Ok(Some((
             (
                 DwarfExpression::GreaterThan(Box::new(left.0.to_owned()), Box::new(right.0)),
+                start..self.previous().unwrap().1.start,
+            ),
+            COMP,
+        )))
+    }
+
+    /// Parse a less-than operator
+    ///
+    /// lt -> expression > expression
+    fn parse_lt_operator(&mut self, left: &Expression, power: u8) -> Result<Option<Expression>> {
+        debug!("enter", power);
+
+        if power > COMP.0 {
+            debug!("exit no power", power);
+            return Ok(None);
+        }
+
+        let start = if let Some(tok) = self.peek() {
+            tok.1.start
+        } else {
+            debug!("exit no token");
+            return Ok(None);
+        };
+
+        if !self.match_(&[Token::Punct('<')]) {
+            debug!("exit no '<'");
+            return Ok(None);
+        }
+
+        let right = if let Some(expr) = self.parse_expression(COMP.1)? {
+            expr
+        } else {
+            let token = &self.previous().unwrap();
+            let err = Simple::expected_input_found(
+                token.1.clone(),
+                [Some("<expression -> there's a lot of them...>".to_owned())],
+                Some(token.0.to_string()),
+            );
+            error!("exit", err);
+            return Err(Box::new(err));
+        };
+
+        debug!("exit");
+        Ok(Some((
+            (
+                DwarfExpression::LessThan(Box::new(left.0.to_owned()), Box::new(right.0)),
                 start..self.previous().unwrap().1.start,
             ),
             COMP,
@@ -1354,14 +1460,20 @@ impl DwarfParser {
                 } else if let Some(expression) = self.parse_lte_operator(&lhs, power)? {
                     debug!("lte operator", expression);
                     Some(expression)
-                } else if let Some(expression) = self.parse_gt_operator(&lhs, power)? {
-                    debug!("greater-than operator", expression);
-                    Some(expression)
                 } else if let Some(expression) = self.parse_gte_operator(&lhs, power)? {
                     debug!("gte operator", expression);
                     Some(expression)
+                } else if let Some(expression) = self.parse_lt_operator(&lhs, power)? {
+                    debug!("less-than operator", expression);
+                    Some(expression)
+                } else if let Some(expression) = self.parse_gt_operator(&lhs, power)? {
+                    debug!("greater-than operator", expression);
+                    Some(expression)
                 } else if let Some(expression) = self.parse_eq_operator(&lhs, power)? {
                     debug!("equal operator", expression);
+                    Some(expression)
+                } else if let Some(expression) = self.parse_neq_operator(&lhs, power)? {
+                    debug!("not equal operator", expression);
                     Some(expression)
                 } else if let Some(expression) = self.parse_and_operator(&lhs, power)? {
                     debug!("and operator", expression);

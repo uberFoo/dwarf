@@ -1360,6 +1360,7 @@ fn eval_expression(
                                 Ok((new_ref!(Value, Value::String(result)), ty))
                             }
                             "assert_eq" => {
+                                // 🚧 Check that there are two arguments
                                 let lhs = arg_values.pop_front().unwrap().0;
                                 let rhs = arg_values.pop_front().unwrap().0;
 
@@ -2221,8 +2222,24 @@ fn eval_expression(
 
                             Ok((new_ref!(Value, value), ty))
                         }
+                        Comparison::LessThan(_) => {
+                            let value = s_read!(lhs).lt(&s_read!(rhs.0));
+                            let value = Value::Boolean(value);
+                            let ty = Ty::new_boolean();
+                            let ty = ValueType::new_ty(&new_ref!(Ty, ty), &mut s_write!(lu_dog));
+
+                            Ok((new_ref!(Value, value), ty))
+                        }
                         Comparison::LessThanOrEqual(_) => {
                             let value = s_read!(lhs).lte(&s_read!(rhs.0));
+                            let value = Value::Boolean(value);
+                            let ty = Ty::new_boolean();
+                            let ty = ValueType::new_ty(&new_ref!(Ty, ty), &mut s_write!(lu_dog));
+
+                            Ok((new_ref!(Value, value), ty))
+                        }
+                        Comparison::NotEqual(_) => {
+                            let value = *s_read!(lhs) != *s_read!(rhs.0);
                             let value = Value::Boolean(value);
                             let ty = Ty::new_boolean();
                             let ty = ValueType::new_ty(&new_ref!(Ty, ty), &mut s_write!(lu_dog));

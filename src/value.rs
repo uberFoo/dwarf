@@ -678,6 +678,24 @@ impl std::ops::Div for Value {
     }
 }
 
+/// Less than operator for Value
+///
+///
+impl Value {
+    pub fn lt(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Value::Float(a), Value::Float(b)) => a < b,
+            (Value::Float(a), Value::Integer(b)) => a < &(*b as DwarfFloat),
+            (Value::Integer(a), Value::Integer(b)) => a < b,
+            (Value::Integer(a), Value::Float(b)) => (*a as DwarfFloat) < *b,
+            (Value::String(a), Value::String(b)) => a < b,
+            (Value::Char(a), Value::Char(b)) => a < b,
+            (Value::Empty, Value::Empty) => true,
+            (Value::Boolean(a), Value::Boolean(b)) => a < b,
+            (_, _) => false, //Value::Error(format!("Cannot compare {} and {}", a, b)),
+        }
+    }
+}
 /// Greater than operator for Value
 ///
 ///
@@ -697,7 +715,7 @@ impl Value {
     }
 }
 
-/// Greater than operator for Value
+/// Greater than-equal operator for Value
 ///
 ///
 impl Value {
@@ -723,7 +741,9 @@ impl Value {
     pub fn lte(&self, other: &Self) -> bool {
         match (self, other) {
             (Value::Float(a), Value::Float(b)) => a <= b,
+            (Value::Float(a), Value::Integer(b)) => a <= &(*b as DwarfFloat),
             (Value::Integer(a), Value::Integer(b)) => a <= b,
+            (Value::Integer(a), Value::Float(b)) => (*a as DwarfFloat) <= *b,
             (Value::String(a), Value::String(b)) => a <= b,
             (Value::Char(a), Value::Char(b)) => a <= b,
             (Value::Empty, Value::Empty) => true,
@@ -742,7 +762,9 @@ impl std::cmp::PartialEq for Value {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (Value::Float(a), Value::Float(b)) => a == b,
+            (Value::Float(a), Value::Integer(b)) => a == &(*b as DwarfFloat),
             (Value::Integer(a), Value::Integer(b)) => a == b,
+            (Value::Integer(a), Value::Float(b)) => (*a as DwarfFloat) == *b,
             (Value::String(a), Value::String(b)) => a == b,
             (Value::Char(a), Value::Char(b)) => a == b,
             (Value::Empty, Value::Empty) => true,

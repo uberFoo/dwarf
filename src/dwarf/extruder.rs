@@ -1512,6 +1512,53 @@ fn inter_expression(
             Ok(((expr, span), ty))
         }
         //
+        // LessThan: <
+        //
+        ParserExpression::LessThan(ref lhs, ref rhs) => {
+            let (lhs, lhs_ty) = inter_expression(
+                &new_ref!(ParserExpression, lhs.0.to_owned()),
+                &lhs.1,
+                source,
+                block,
+                lu_dog,
+                models,
+                sarzak,
+            )?;
+            let (rhs, rhs_ty) = inter_expression(
+                &new_ref!(ParserExpression, rhs.0.to_owned()),
+                &rhs.1,
+                source,
+                block,
+                lu_dog,
+                models,
+                sarzak,
+            )?;
+
+            // 🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧
+            // 🚧                        THIS IS SUPER IMPORTANT!
+            // 🚧
+            // 🚧 We need to check the types of the LHS and RHS to make sure that they are the same,
+            // 🚧 or at least compatible. Need to look into rust rules.
+            // 🚧 We also need to check that the types implement PartialEq, and whatever else...
+            // 🚧
+            // 🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧
+
+            let tc_span = s_read!(span).start as usize..s_read!(span).end as usize;
+            typecheck(&lhs_ty, &rhs_ty, tc_span, lu_dog, sarzak, models)?;
+
+            let expr = Comparison::new_less_than(lu_dog);
+            let expr = Operator::new_comparison(Some(&rhs.0), &lhs.0, &expr, lu_dog);
+            let expr = Expression::new_operator(&expr, lu_dog);
+
+            let ty = Ty::new_boolean();
+            let ty = ValueType::new_ty(&new_ref!(Ty, ty), lu_dog);
+
+            let value = XValue::new_expression(block, &ty, &expr, lu_dog);
+            s_write!(span).x_value = Some(s_read!(value).id);
+
+            Ok(((expr, span), ty))
+        }
+        //
         // LessThanOrEqual
         //
         ParserExpression::LessThanOrEqual(ref lhs, ref rhs) => {
@@ -1875,6 +1922,44 @@ fn inter_expression(
             let negation = Unary::new_negation(lu_dog);
             let operator = Operator::new_unary(None, &expr.0, &negation, lu_dog);
             let expr = Expression::new_operator(&operator, lu_dog);
+            let value = XValue::new_expression(block, &ty, &expr, lu_dog);
+            s_write!(span).x_value = Some(s_read!(value).id);
+
+            Ok(((expr, span), ty))
+        }
+        //
+        // NotEquals
+        //
+        ParserExpression::NotEquals(ref lhs, ref rhs) => {
+            let (lhs, lhs_ty) = inter_expression(
+                &new_ref!(ParserExpression, lhs.0.to_owned()),
+                &lhs.1,
+                source,
+                block,
+                lu_dog,
+                models,
+                sarzak,
+            )?;
+            let (rhs, rhs_ty) = inter_expression(
+                &new_ref!(ParserExpression, rhs.0.to_owned()),
+                &rhs.1,
+                source,
+                block,
+                lu_dog,
+                models,
+                sarzak,
+            )?;
+
+            let tc_span = s_read!(span).start as usize..s_read!(span).end as usize;
+            typecheck(&lhs_ty, &rhs_ty, tc_span, lu_dog, sarzak, models)?;
+
+            let expr = Comparison::new_not_equal(lu_dog);
+            let expr = Operator::new_comparison(Some(&rhs.0), &lhs.0, &expr, lu_dog);
+            let expr = Expression::new_operator(&expr, lu_dog);
+
+            let ty = Ty::new_boolean();
+            let ty = ValueType::new_ty(&new_ref!(Ty, ty), lu_dog);
+
             let value = XValue::new_expression(block, &ty, &expr, lu_dog);
             s_write!(span).x_value = Some(s_read!(value).id);
 
