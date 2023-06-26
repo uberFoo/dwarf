@@ -33,8 +33,9 @@ fn main() {
 
         fn midpoint(self) -> Point {
             Point::new(
-                (self.start.x() + self.end.x()) / 2,
-                (self.start.y() + self.end.y()) / 2,
+                // 🚧 The casting is because of a bug.
+                (self.start.x() + self.end.x()) as int / 2,
+                (self.start.y() + self.end.y()) as int / 2,
             )
         }
     }

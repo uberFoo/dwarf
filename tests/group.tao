@@ -1,4 +1,9 @@
 fn main() {
     chacha::assert_eq((1 + 1), 2);
     chacha::assert_eq((2 + 2) / 4, 1);
+
+    let a = 3;
+    let b = 3.14;
+    let c = if a >= (b as int) { a } else { b };
+    chacha::assert_eq(c, 3);
 }

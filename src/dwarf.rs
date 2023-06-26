@@ -56,7 +56,7 @@ pub struct DwarfOptions {
     sarzak: PathBuf,
 }
 
-pub type Result<T, E = DwarfError> = std::result::Result<T, E>;
+pub type Result<T, E = Vec<DwarfError>> = std::result::Result<T, E>;
 
 #[derive(Debug, Snafu)]
 #[snafu(visibility(pub))]
@@ -163,14 +163,15 @@ pub enum DwarfError {
     TypeMismatch {
         expected: String,
         found: String,
-        span: Span,
+        expected_span: Span,
+        found_span: Span,
     },
 
     /// Unknown Type
     ///
     /// This is used when a type is not found in any domain.
     #[snafu(display("\n{}: Unknown type: {ty}", C_ERR.bold().paint("error")))]
-    UnknownType { ty: String },
+    UnknownType { ty: String, span: Span },
 }
 
 pub struct DwarfErrorReporter<'a, 'b>(pub &'a DwarfError, pub &'b str);
@@ -182,7 +183,7 @@ impl fmt::Display for DwarfErrorReporter<'_, '_> {
         match &self.0 {
             DwarfError::BadSelf { span } | DwarfError::ImplementationBlock { span } => {
                 let span = span.clone();
-                let msg = format!("{}", self);
+                let msg = format!("{}", self.0);
 
                 Report::build(ReportKind::Error, (), span.start)
                     .with_message(&msg)
@@ -200,12 +201,10 @@ impl fmt::Display for DwarfErrorReporter<'_, '_> {
                 description: desc,
                 span,
             } => {
-                let span = span.clone();
-
                 Report::build(ReportKind::Error, (), span.start)
-                    .with_message(&desc)
+                    .with_message(desc)
                     .with_label(
-                        Label::new(span)
+                        Label::new(span.to_owned())
                             .with_message(format!("{}", desc.fg(Color::Red)))
                             .with_color(Color::Red),
                     )
@@ -217,17 +216,26 @@ impl fmt::Display for DwarfErrorReporter<'_, '_> {
             DwarfError::TypeMismatch {
                 expected,
                 found,
-                span,
+                expected_span,
+                found_span,
             } => {
-                let span = span.clone();
                 let msg = format!(
                     "{}: Type mismatch: expected `{expected}`, found `{found}`.",
                     Colour::Red.bold().paint("error")
                 );
 
-                Report::build(ReportKind::Error, (), span.start)
+                Report::build(ReportKind::Error, (), expected_span.start)
                     .with_message(&msg)
-                    .with_label(Label::new(span).with_message(msg).with_color(Color::Red))
+                    .with_label(
+                        Label::new(expected_span.to_owned())
+                            .with_message(format!("expected {}", C_OTHER.paint(expected)))
+                            .with_color(Color::Red),
+                    )
+                    .with_label(
+                        Label::new(found_span.to_owned())
+                            .with_message(format!("found {}", C_OTHER.paint(found)))
+                            .with_color(Color::Yellow),
+                    )
                     .finish()
                     .write(Source::from(&program), &mut std_err)
                     .map_err(|_| fmt::Error)?;
@@ -236,8 +244,8 @@ impl fmt::Display for DwarfErrorReporter<'_, '_> {
             DwarfError::Parse { error, ast } => {
                 // What's up with both of these? Need to write a test and see
                 // what looks good.
-                std_err.write(format!("{}", error).as_bytes()).unwrap();
-                std_err.write(format!("{}", self.0).as_bytes()).unwrap();
+                std_err.write_all(error.to_string().as_bytes()).unwrap();
+                std_err.write_all(self.0.to_string().as_bytes()).unwrap();
 
                 for a in ast {
                     let msg = format!("{}", self.0);
@@ -256,6 +264,57 @@ impl fmt::Display for DwarfErrorReporter<'_, '_> {
                     write!(f, "{}", String::from_utf8_lossy(&std_err))?;
                 }
                 Ok(())
+            }
+            DwarfError::StructFieldNotFound { field, span } => {
+                Report::build(ReportKind::Error, (), span.start)
+                    .with_message("struct field not found")
+                    .with_label(
+                        Label::new(span.to_owned())
+                            .with_message(format!("unkwnown field {}", C_OTHER.paint(field)))
+                            .with_color(Color::Red),
+                    )
+                    .finish()
+                    .write(Source::from(&program), &mut std_err)
+                    .map_err(|_| fmt::Error)?;
+                write!(f, "{}", String::from_utf8_lossy(&std_err))
+            }
+            DwarfError::UnknownType { ty, span } => {
+                let msg = format!(
+                    "{}: Unknown type: `{}`.",
+                    Colour::Red.bold().paint("error"),
+                    ty
+                );
+
+                let report = Report::build(ReportKind::Error, (), span.start)
+                    .with_message(&msg)
+                    .with_label(
+                        Label::new(span.to_owned())
+                            .with_message(format!("unknown type {}", C_OTHER.paint(ty)))
+                            .with_color(Color::Red),
+                    );
+
+                let report = if ty.contains('8')
+                    || ty.contains("16")
+                    || ty.contains("32")
+                    || ty.contains("64")
+                    || ty.contains("128")
+                {
+                    if &ty[0..1] == "i" || &ty[0..1] == "u" {
+                        report.with_note(format!("try `{}`", C_WARN.paint("int")))
+                    } else if &ty[0..1] == "f" {
+                        report.with_note(format!("try `{}`", C_WARN.paint("float")))
+                    } else {
+                        report
+                    }
+                } else {
+                    report
+                };
+
+                report
+                    .finish()
+                    .write(Source::from(&program), &mut std_err)
+                    .map_err(|_| fmt::Error)?;
+                write!(f, "{}", String::from_utf8_lossy(&std_err))
             }
             _ => write!(f, "{}", self.0),
         }
@@ -369,48 +428,71 @@ impl fmt::Display for Type {
 }
 
 impl Type {
-    // 🚧 Should probably return a result
-    pub fn into_value_type(
+    pub fn check_type(
         &self,
+        span: &Span,
         store: &mut LuDogStore,
         models: &[SarzakStore],
         sarzak: &SarzakStore,
-    ) -> RefType<ValueType> {
+    ) -> Result<bool> {
+        self.into_value_type(span, store, models, sarzak)
+            .and_then(|_| Ok(true))
+    }
+
+    pub fn into_value_type(
+        &self,
+        span: &Span,
+        store: &mut LuDogStore,
+        models: &[SarzakStore],
+        sarzak: &SarzakStore,
+    ) -> Result<RefType<ValueType>> {
         match self {
             Type::Boolean => {
                 let ty = Ty::new_boolean();
-                ValueType::new_ty(&<RefType<Ty> as NewRef<Ty>>::new_ref(ty), store)
+                Ok(ValueType::new_ty(
+                    &<RefType<Ty> as NewRef<Ty>>::new_ref(ty),
+                    store,
+                ))
             }
-            Type::Empty => ValueType::new_empty(store),
+            Type::Empty => Ok(ValueType::new_empty(store)),
             Type::Float => {
                 let ty = Ty::new_float();
-                ValueType::new_ty(&<RefType<Ty> as NewRef<Ty>>::new_ref(ty), store)
+                Ok(ValueType::new_ty(
+                    &<RefType<Ty> as NewRef<Ty>>::new_ref(ty),
+                    store,
+                ))
             }
             Type::Integer => {
                 let ty = Ty::new_integer();
-                ValueType::new_ty(&<RefType<Ty> as NewRef<Ty>>::new_ref(ty), store)
+                Ok(ValueType::new_ty(
+                    &<RefType<Ty> as NewRef<Ty>>::new_ref(ty),
+                    store,
+                ))
             }
             Type::List(type_) => {
-                let ty = type_.0.into_value_type(store, models, sarzak);
+                let ty = type_.0.into_value_type(span, store, models, sarzak)?;
                 let list = List::new(&ty, store);
-                ValueType::new_list(&list, store)
+                Ok(ValueType::new_list(&list, store))
             }
             Type::Option(type_) => {
-                let ty = type_.0.into_value_type(store, models, sarzak);
+                let ty = type_.0.into_value_type(span, store, models, sarzak)?;
                 let option = WoogOption::new_z_none(&ty, store);
-                ValueType::new_woog_option(&option, store)
+                Ok(ValueType::new_woog_option(&option, store))
             }
             Type::Reference(type_) => {
-                let ty = type_.0.into_value_type(store, models, sarzak);
+                let ty = type_.0.into_value_type(span, store, models, sarzak)?;
                 let reference = Reference::new(Uuid::new_v4(), false, &ty, store);
-                ValueType::new_reference(&reference, store)
+                Ok(ValueType::new_reference(&reference, store))
             }
             Type::Self_ => panic!("Self is deprecated."),
             Type::String => {
                 let ty = Ty::new_s_string();
-                ValueType::new_ty(&<RefType<Ty> as NewRef<Ty>>::new_ref(ty), store)
+                Ok(ValueType::new_ty(
+                    &<RefType<Ty> as NewRef<Ty>>::new_ref(ty),
+                    store,
+                ))
             }
-            Type::Unknown => ValueType::new_unknown(store),
+            Type::Unknown => Ok(ValueType::new_unknown(store)),
             Type::UserType(type_) => {
                 let name = &type_.0;
 
@@ -422,26 +504,35 @@ impl Type {
                             .unwrap();
                         let woog_struct = s_read!(woog_struct);
 
-                        return ValueType::new_woog_struct(
+                        return Ok(ValueType::new_woog_struct(
                             &<RefType<WoogStruct> as NewRef<WoogStruct>>::new_ref(
                                 woog_struct.to_owned(),
                             ),
                             store,
-                        );
+                        ));
                     }
                 }
 
                 // If it's not in one of the models, it must be in sarzak.
                 if let Some(obj_id) = sarzak.exhume_object_id_by_name(name) {
                     let ty = sarzak.exhume_ty(&obj_id).unwrap();
-                    ValueType::new_ty(&<RefType<Ty> as NewRef<Ty>>::new_ref(ty.to_owned()), store)
+                    Ok(ValueType::new_ty(
+                        &<RefType<Ty> as NewRef<Ty>>::new_ref(ty.to_owned()),
+                        store,
+                    ))
                 } else {
-                    panic!("Couldn't find type `{}` in any model or sarzak.\nThis should be an error. 😢", name);
+                    Err(vec![DwarfError::UnknownType {
+                        ty: name.to_owned(),
+                        span: span.to_owned(),
+                    }])
                 }
             }
             Type::Uuid => {
                 let ty = Ty::new_s_uuid();
-                ValueType::new_ty(&<RefType<Ty> as NewRef<Ty>>::new_ref(ty), store)
+                Ok(ValueType::new_ty(
+                    &<RefType<Ty> as NewRef<Ty>>::new_ref(ty),
+                    store,
+                ))
             }
         }
     }

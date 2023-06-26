@@ -1,0 +1,34 @@
+struct Foo {
+    a: i32,
+    c: int,
+    b: Bar,
+}
+
+impl Foo {
+    // In order to test the bad parameters we need to have a valid return typ.
+    fn foo(self, a: f64, b: bool, c: u8) {}
+
+    // Here we can test the borked return type.
+    fn bar(self) -> Bar {}
+
+    // And here we can test something wrong with the return value.
+    fn baz() -> Foo {
+        Baz {}
+    }
+}
+
+fn foo(a: f64, b: bool, c: u8) {}
+
+// Here we can test the borked return type.
+fn bar() -> Bar {}
+
+// And here we can test something wrong with the return value.
+fn baz() -> Foo {
+    Baz {}
+}
+
+// Same sort of thing as above.
+
+fn main() {
+    let a: i32 = 1;
+}

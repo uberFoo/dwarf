@@ -1,0 +1,7 @@
+fn main() {
+    let a: int = 3.14;
+    let b: float = 42;
+    let c: int = "hello";
+    let d: string = true;
+    let e: bool = 42.0;
+}

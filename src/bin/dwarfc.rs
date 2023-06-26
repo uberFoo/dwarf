@@ -9,7 +9,7 @@ use sarzak::{
     sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL},
 };
 
-use dwarf::dwarf::{new_lu_dog, parse_dwarf, FileSnafu, GenericSnafu, IOSnafu, Result};
+use dwarf::dwarf::{new_lu_dog, parse_dwarf, FileSnafu, IOSnafu, Result};
 
 const TARGET_DIR: &str = "target";
 const BUILD_DIR: &str = "sarzak";
@@ -51,9 +51,11 @@ struct Args {
 
 fn find_package_dir(start_dir: &Option<PathBuf>) -> Result<PathBuf> {
     if let Some(dir) = start_dir {
-        std::env::set_current_dir(dir).context(IOSnafu {
-            description: "Failed to set current dir".to_owned(),
-        })?;
+        std::env::set_current_dir(dir)
+            .context(IOSnafu {
+                description: "Failed to set current dir".to_owned(),
+            })
+            .map_err(|e| vec![e])?;
     }
 
     // Figure out where Cargo.toml is located.
@@ -65,14 +67,14 @@ fn find_package_dir(start_dir: &Option<PathBuf>) -> Result<PathBuf> {
         .output()
         .context(IOSnafu {
             description: "Failed to run cargo locate-project".to_owned(),
-        })?;
+        })
+        .map_err(|e| vec![e])?;
 
-    ensure!(
-        output.status.success(),
-        GenericSnafu {
-            description: "cargo locate-project failed".to_owned()
-        }
-    );
+    if !output.status.success() {
+        return Err(vec![dwarf::dwarf::DwarfError::Generic {
+            description: "cargo locate-project failed".to_owned(),
+        }]);
+    }
 
     let mut stdout = output.stdout;
 
@@ -138,34 +140,46 @@ fn main() -> Result<()> {
     //     path: &path,
     // })?;
 
-    let source_code = fs::read_to_string(&args.source).context(FileSnafu {
-        description: "Could not read source file".to_owned(),
-        path: &args.source,
-    })?;
+    let source_code = fs::read_to_string(&args.source)
+        .context(FileSnafu {
+            description: "Could not read source file".to_owned(),
+            path: &args.source,
+        })
+        .map_err(|e| vec![e])?;
 
-    let ast = parse_dwarf(&source_code)?;
+    let ast = parse_dwarf(&source_code).map_err(|e| vec![e])?;
 
-    let lu_dog = new_lu_dog(
+    let lu_dog = match new_lu_dog(
         Some(&path),
         Some((source_code.clone(), &ast)),
         &model,
         &sarzak,
-    )
-    .map_err(|e| {
-        eprintln!("{}", dwarf::dwarf::DwarfErrorReporter(&e, &source_code));
-        e
-    })?;
+    ) {
+        Ok(lu_dog) => lu_dog,
+        Err(errors) => {
+            for err in errors {
+                eprintln!("{}", dwarf::dwarf::DwarfErrorReporter(&err, &source_code));
+            }
+            return Ok(());
+        }
+    };
 
     if args.debug.is_some() && args.debug.unwrap() {
-        lu_dog.persist(&out_file).context(FileSnafu {
-            description: "Could not persist Lu-Dog domain".to_owned(),
-            path: &out_file,
-        })?;
+        lu_dog
+            .persist(&out_file)
+            .context(FileSnafu {
+                description: "Could not persist Lu-Dog domain".to_owned(),
+                path: &out_file,
+            })
+            .map_err(|e| vec![e])?;
     } else {
-        lu_dog.persist_bincode(&out_file).context(FileSnafu {
-            description: "Could not persist Lu-Dog domain".to_owned(),
-            path: &out_file,
-        })?;
+        lu_dog
+            .persist_bincode(&out_file)
+            .context(FileSnafu {
+                description: "Could not persist Lu-Dog domain".to_owned(),
+                path: &out_file,
+            })
+            .map_err(|e| vec![e])?;
     }
 
     println!("Lu-Dog domain created at {:?}", out_file);

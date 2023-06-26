@@ -47,24 +47,38 @@ macro_rules! function {
     }};
 }
 
-// macro_rules! debug {
-//     ($($arg:tt)*) => {
-//         log::debug!(
-//             target: "interpreter",
-//             "{}: {}\n  --> {}:{}:{}",
-//             Colour::Cyan.dimmed().italic().paint(function!()),
-//             format_args!($($arg)*),
-//             file!(),
-//             line!(),
-//             column!()
-//         );
-//     };
-// }
+macro_rules! trace {
+    ($($arg:tt)*) => {
+        log::trace!(
+            target: "chacha",
+            "{}: {}\n  --> {}:{}:{}",
+            Colour::Green.dimmed().italic().paint(function!()),
+            format_args!($($arg)*),
+            file!(),
+            line!(),
+            column!()
+        );
+    };
+}
+
+macro_rules! debug {
+    ($($arg:tt)*) => {
+        log::debug!(
+            target: "chacha",
+            "{}: {}\n  --> {}:{}:{}",
+            Colour::Cyan.dimmed().italic().paint(function!()),
+            format_args!($($arg)*),
+            file!(),
+            line!(),
+            column!()
+        );
+    };
+}
 
 // macro_rules! error {
 //     ($($arg:tt)*) => {
 //         log::error!(
-//             target: "compiler",
+//             target: "chacha",
 //             "{}: {}\n  --> {}:{}:{}",
 //             Colour::Red.dimmed().italic().paint(function!()),
 //             format_args!($($arg)*),
@@ -75,11 +89,11 @@ macro_rules! function {
 //     };
 // }
 
-macro_rules! debug {
+macro_rules! fix_debug {
     ($msg:literal, $($arg:expr),*) => {
         $(
             log::debug!(
-                target: "interpreter",
+                target: "chacha",
                 "{}: {} --> {:?}\n  --> {}:{}:{}",
                 Colour::Green.dimmed().italic().paint(function!()),
                 Colour::Yellow.underline().paint($msg),
@@ -92,7 +106,7 @@ macro_rules! debug {
     };
     ($arg:literal) => {
         log::debug!(
-            target: "interpreter",
+            target: "chacha",
             "{}: {}\n  --> {}:{}:{}",
             Colour::Green.dimmed().italic().paint(function!()),
             $arg,
@@ -102,7 +116,7 @@ macro_rules! debug {
     };
     ($arg:expr) => {
         log::debug!(
-            target: "interpreter",
+            target: "chacha",
             "{}: {:?}\n  --> {}:{}:{}",
             Colour::Green.dimmed().italic().paint(function!()),
             $arg,
@@ -112,11 +126,11 @@ macro_rules! debug {
     };
 }
 
-macro_rules! error {
+macro_rules! fix_error {
     ($msg:literal, $($arg:expr),*) => {
         $(
             log::error!(
-                target: "interpreter",
+                target: "chacha",
                 "{}: {} --> {:?}\n  --> {}:{}:{}",
                 Colour::Green.dimmed().italic().paint(function!()),
                 Colour::Red.underline().paint($msg),
@@ -129,7 +143,7 @@ macro_rules! error {
     };
     ($arg:literal) => {
         log::error!(
-            target: "interpreter",
+            target: "chacha",
             "{}: {}\n  --> {}:{}:{}",
             Colour::Green.dimmed().italic().paint(function!()),
             Colour::Red.underline().paint($arg),
@@ -139,7 +153,7 @@ macro_rules! error {
     };
     ($arg:expr) => {
         log::error!(
-            target: "interpreter",
+            target: "chacha",
             "{}: {:?}\n  --> {}:{}:{}",
             Colour::Green.dimmed().italic().paint(function!()),
             Colour::Ref.underline().paint($arg),
@@ -149,12 +163,14 @@ macro_rules! error {
     };
 }
 
+// what is this even for?
 macro_rules! no_debug {
     ($arg:expr) => {
         log::debug!("{}\n  --> {}:{}:{}", $arg, file!(), line!(), column!());
     };
     ($msg:literal, $arg:expr) => {
         log::debug!(
+            target: "chacha",
             "{} --> {}\n  --> {}:{}:{}",
             Colour::Yellow.paint($msg),
             $arg,
@@ -165,12 +181,13 @@ macro_rules! no_debug {
     };
 }
 
-macro_rules! trace {
+macro_rules! fix_trace {
     ($arg:expr) => {
         log::trace!("{:?}\n  --> {}:{}:{}", $arg, file!(), line!(), column!());
     };
     ($msg:literal, $arg:expr) => {
         log::trace!(
+            target: "chacha",
             "{} --> {:?}\n  --> {}:{}:{}",
             Colour::Yellow.paint($msg),
             $arg,
@@ -245,7 +262,7 @@ pub fn initialize_interpreter<P: AsRef<Path>>(
                 &mut lu_dog,
             );
 
-            log::trace!("inserting local function {}", name);
+            trace!("inserting local function {}", name);
             stack.insert(name, new_ref!(Value, value));
         }
     }
@@ -254,7 +271,7 @@ pub fn initialize_interpreter<P: AsRef<Path>>(
     for user_type in lu_dog.iter_woog_struct() {
         let user_type = s_read!(user_type);
         // Create a meta table for each struct.
-        debug!("inserting meta table {}", user_type.name);
+        fix_debug!("inserting meta table {}", user_type.name);
         stack.insert_meta_table(user_type.name.to_owned());
         let impl_ = user_type.r8c_implementation(&lu_dog);
         if !impl_.is_empty() {
@@ -262,7 +279,7 @@ pub fn initialize_interpreter<P: AsRef<Path>>(
             // check and only insert the static functions.
             // 🚧 Only insert the static functions
             for func in s_read!(impl_[0]).r9_function(&lu_dog) {
-                debug!("inserting static function {}", s_read!(func).name);
+                fix_debug!("inserting static function {}", s_read!(func).name);
                 stack.insert_meta(
                     &user_type.name,
                     s_read!(func).name.to_owned(),
@@ -522,8 +539,8 @@ fn eval_function_call(
     let lu_dog = context.lu_dog.clone();
     context.func_calls += 1;
 
-    debug!("eval_function_call func ", func);
-    trace!("eval_function_call stack", context.memory);
+    fix_debug!("eval_function_call func ", func);
+    fix_trace!("eval_function_call stack", context.memory);
 
     span!("eval_function_call");
 
@@ -625,10 +642,10 @@ fn eval_function_call(
 
         let zipped = params.into_iter().zip(arg_values);
         for ((name, param_ty), (expr, value, arg_ty)) in zipped {
-            debug!("type check name", name);
-            debug!("type check param_ty", param_ty);
-            debug!("type check value", value);
-            debug!("type check arg_ty", arg_ty);
+            fix_debug!("type check name", name);
+            fix_debug!("type check param_ty", param_ty);
+            fix_debug!("type check value", value);
+            fix_debug!("type check arg_ty", arg_ty);
 
             if arg_check {
                 let x_value = &s_read!(expr).r11_x_value(&s_read!(lu_dog))[0];
@@ -693,9 +710,9 @@ fn eval_function_call(
         // Clean up
         context.memory.pop_frame();
         let elapsed = now.elapsed();
-        // Counting 1k expressions per second
+        // Counting 10k expressions per second
         let eps =
-            (context.expr_count - expr_count_start) as f64 / elapsed.as_micros() as f64 * 100.0;
+            (context.expr_count - expr_count_start) as f64 / elapsed.as_micros() as f64 * 10.0;
         context.timings.push(eps);
 
         Ok((value, ty))
@@ -737,8 +754,8 @@ fn eval_expression(
     // Timing goodness
     context.expr_count += 1;
 
-    debug!("expression", expression);
-    trace!("stack", context.memory);
+    fix_debug!("expression", expression);
+    fix_trace!("stack", context.memory);
 
     // context.tracy.span(span_location!("eval_expression"), 0);
     // context
@@ -751,7 +768,7 @@ fn eval_expression(
         if !*running {
             if let Some(sender) = &context.debug_status_writer {
                 let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
-                debug!("value", value);
+                fix_debug!("value", value);
 
                 let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
 
@@ -759,17 +776,17 @@ fn eval_expression(
                 let span = read.start as usize..read.end as usize;
                 sender.send(DebuggerStatus::Paused(span)).unwrap();
             }
-            debug!("waiting");
+            fix_debug!("waiting");
             CVAR.wait(&mut running);
-            debug!("notified");
+            fix_debug!("notified");
         }
 
         if *STEPPING.lock() {
-            debug!("stepping");
+            fix_debug!("stepping");
             *running = false;
         }
 
-        debug!("running");
+        fix_debug!("running");
     }
 
     if log_enabled!(Debug) {
@@ -780,7 +797,7 @@ fn eval_expression(
         let source = s_read!(lu_dog).iter_dwarf_source_file().next().unwrap();
         let source = s_read!(source);
         let source = &source.source;
-        error!("{}", source[span].to_owned());
+        fix_error!("{}", source[span].to_owned());
     }
 
     match *s_read!(expression) {
@@ -857,18 +874,18 @@ fn eval_expression(
         //
         Expression::Call(ref call) => {
             let call = s_read!(lu_dog).exhume_call(call).unwrap();
-            debug!("call", call);
+            fix_debug!("call", call);
             let args = s_read!(call).r28_argument(&s_read!(lu_dog));
-            debug!("args", args);
-            // error!("arg_check", s_read!(call).arg_check);
+            fix_debug!("args", args);
+            // fix_error!("arg_check", s_read!(call).arg_check);
 
             // This optional expression is the LHS of the call.
             let (value, ty) = if let Some(ref expr) = s_read!(call).expression {
                 let expr = s_read!(lu_dog).exhume_expression(expr).unwrap();
                 // Evaluate the LHS to get at the function.
                 let (value, ty) = eval_expression(expr, context, vm)?;
-                debug!("Expression::Call LHS value", s_read!(value));
-                debug!("Expression::Call LHS ty", ty);
+                fix_debug!("Expression::Call LHS value", s_read!(value));
+                fix_debug!("Expression::Call LHS ty", ty);
 
                 let mut tuple_from_value = || -> Result<(RefType<Value>, RefType<ValueType>)> {
                     // Below we are reading the value of the LHS, and then using that
@@ -880,7 +897,7 @@ fn eval_expression(
                             let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
 
                             let func = s_read!(lu_dog).exhume_function(&s_read!(func).id).unwrap();
-                            debug!("Expression::Call func", func);
+                            fix_debug!("Expression::Call func", func);
                             let (value, ty) = eval_function_call(
                                 func,
                                 &args,
@@ -889,8 +906,8 @@ fn eval_expression(
                                 context,
                                 vm,
                             )?;
-                            debug!("value", value);
-                            debug!("ty", ty);
+                            fix_debug!("value", value);
+                            fix_debug!("ty", ty);
                             Ok((value, ty))
                         }
                         Value::ProxyType(pt) => {
@@ -902,7 +919,7 @@ fn eval_expression(
                         Value::UserType(ut) => Ok((value.clone(), s_read!(ut).get_type().clone())),
                         value_ => {
                             let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
-                            debug!("value", value);
+                            fix_debug!("value", value);
 
                             let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
 
@@ -958,9 +975,9 @@ fn eval_expression(
                 (CallEnum::MethodCall(meth), value, ty) => {
                     let meth = s_read!(lu_dog).exhume_method_call(meth).unwrap();
                     let meth = &s_read!(meth).name;
-                    debug!("MethodCall method", meth);
-                    debug!("MethodCall value", value);
-                    debug!("MethodCall type", ty);
+                    fix_debug!("MethodCall method", meth);
+                    fix_debug!("MethodCall value", value);
+                    fix_debug!("MethodCall type", ty);
 
                     match &*s_read!(value) {
                         Value::ProxyType(proxy_type) => {
@@ -998,6 +1015,7 @@ fn eval_expression(
                         }
                         Value::String(string) => match meth.as_str() {
                             "len" => {
+                                debug!("evaluating String::len");
                                 let len = unicode_segmentation::UnicodeSegmentation::graphemes(
                                     string.as_str(),
                                     true,
@@ -1010,6 +1028,7 @@ fn eval_expression(
                                 Ok((new_ref!(Value, Value::Integer(len as i64)), ty))
                             }
                             "format" => {
+                                debug!("evaluating String::format");
                                 let mut arg_map = HashMap::default();
                                 let mut arg_values = if !args.is_empty() {
                                     // The VecDeque is so that I can pop off the args, and then push them
@@ -1117,7 +1136,7 @@ fn eval_expression(
                             }
                             value_ => {
                                 let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
-                                debug!("value", value);
+                                fix_debug!("value", value);
 
                                 let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
 
@@ -1215,8 +1234,8 @@ fn eval_expression(
 
                     let ty = &s_read!(meth).ty;
                     let func = &s_read!(meth).func;
-                    debug!("StaticMethodCall ty", ty);
-                    debug!("StaticMethodCall func", func);
+                    fix_debug!("StaticMethodCall ty", ty);
+                    fix_debug!("StaticMethodCall func", func);
 
                     // This is dirty. Down and dirty...
                     if ty == "Uuid" && func == "new" {
@@ -1277,6 +1296,7 @@ fn eval_expression(
                     } else if ty == "chacha" {
                         match func.as_str() {
                             "args" => {
+                                debug!("evaluating chacha::args");
                                 let ty = Ty::new_s_string();
                                 let ty = s_read!(lu_dog).exhume_value_type(&ty.id()).unwrap();
                                 let ty = List::new(&ty, &mut s_write!(lu_dog));
@@ -1292,6 +1312,7 @@ fn eval_expression(
                             // I have to work with. Once I get enums into the language, I'll
                             // be able to return a proper enum.
                             "typeof" => {
+                                debug!("evaluating chacha::typeof");
                                 let (_arg, ty) = arg_values.pop_front().unwrap();
                                 let pvt_ty = PrintableValueType(&ty, context);
                                 let ty = Ty::new_s_string();
@@ -1299,6 +1320,7 @@ fn eval_expression(
                                 Ok((new_ref!(Value, pvt_ty.to_string().into()), ty))
                             }
                             "time" => {
+                                debug!("evaluating chacha::time");
                                 // 🚧 I should be checking that there is an argument before
                                 // I go unwrapping it.
                                 let (func, ty) = arg_values.pop_front().unwrap();
@@ -1336,6 +1358,7 @@ fn eval_expression(
                                 Ok((new_ref!(Value, Value::Float(elapsed.as_secs_f64())), ty))
                             }
                             "eps" => {
+                                debug!("evaluating chacha::eps");
                                 let mut timings =
                                     context.timings.iter().cloned().collect::<Vec<_>>();
                                 timings.sort_by(|a, b| a.partial_cmp(b).unwrap());
@@ -1347,7 +1370,7 @@ fn eval_expression(
                                 let median = timings[timings.len() / 2];
 
                                 let result = format!(
-                                    "expressions (mean/std_dev/median) ((1k)/sec): {:.1} / {:.1} / {:.1}\n",
+                                    "expressions (mean/std_dev/median) ((10k)/sec): {:.1} / {:.1} / {:.1}\n",
                                     mean,
                                     std_dev,
                                     median
@@ -1360,6 +1383,7 @@ fn eval_expression(
                                 Ok((new_ref!(Value, Value::String(result)), ty))
                             }
                             "assert_eq" => {
+                                debug!("evaluating chacha::assert_eq");
                                 // 🚧 Check that there are two arguments
                                 let lhs = arg_values.pop_front().unwrap().0;
                                 let rhs = arg_values.pop_front().unwrap().0;
@@ -1400,107 +1424,20 @@ fn eval_expression(
                                     unreachable!()
                                 }
                             }
-                            // "spawn" => {
-                            //     // error!("spawn not implemented");
-
-                            //     let (func, ty) = arg_values.pop_front().unwrap();
-                            //     let func = s_read!(func);
-                            //     ensure!(
-                            //         if let Value::Function(_) = &*func {
-                            //             true
-                            //         } else {
-                            //             false
-                            //         },
-                            //         {
-                            //             // 🚧 I'm not really sure what to do about this here. It's
-                            //             // all really a hack for now anyway.
-                            //             let ty = PrintableValueType(&ty, &context);
-                            //             TypeMismatchSnafu {
-                            //                 expected: "<function>".to_string(),
-                            //                 got: ty.to_string(),
-                            //                 span: 0..0,
-                            //             }
-                            //         }
-                            //     );
-                            //     let func = if let Value::Function(f) = &*func {
-                            //         f.clone()
-                            //     } else {
-                            //         unreachable!()
-                            //     };
-
-                            //     let (args, ty) = arg_values.pop_front().unwrap();
-                            //     let args = s_read!(args);
-                            //     ensure!(
-                            //         if let Value::Vector(_) = &*args {
-                            //             true
-                            //         } else {
-                            //             false
-                            //         },
-                            //         {
-                            //             // 🚧 I'm not really sure what to do about this here. It's
-                            //             // all really a hack for now anyway.
-                            //             let ty = PrintableValueType(&ty, &context);
-                            //             TypeMismatchSnafu {
-                            //                 expected: "Vector".to_string(),
-                            //                 got: ty.to_string(),
-                            //                 span: 0..0,
-                            //             }
-                            //         }
-                            //     );
-
-                            //     let args = match &*args {
-                            //         Value::Vector(v) => {
-                            //             let mut stack = Vec::new();
-                            //             for arg in v.iter() {
-                            //                 stack.push(arg.clone());
-                            //             }
-                            //             stack
-                            //         }
-                            //         _ => unreachable!(),
-                            //     };
-
-                            //     debug!("spawn", func);
-                            //     let mut c_clone = context.clone();
-                            //     let handle = thread::spawn(move || {
-                            //         eval_function_call2(func, &args, &mut c_clone)
-                            //     });
-                            //     let handle = ThreadHandle::new(
-                            //         std::sync::Arc::new(handle),
-                            //         &mut s_write!(lu_dog),
-                            //     );
-                            //     // let handle = ThreadHandle::new(
-                            //     // new_rc!(ThreadHandleType, handle),
-                            //     // &mut s_write!(lu_dog),
-                            //     // );
-                            //     // let handle = ThreadHandle::new(
-                            //     //     std::sync::Arc::new(handle),
-                            //     //     &mut s_write!(lu_dog),
-                            //     // );
-                            //     let handle = new_ref!(Value, Value::Thread(handle));
-
-                            //     // debug!("StaticMethodCall meta value", value);
-                            //     // debug!("StaticMethodCall meta ty", ty);
-
-                            //     Ok((
-                            //         new_ref!(Value, Value::Empty),
-                            //         // handle,
-                            //         ValueType::new_empty(&s_read!(lu_dog)),
-                            //     ))
-                            // }
                             method => Err(ChaChaError::NoSuchStaticMethod {
                                 ty: ty.to_owned(),
                                 method: method.to_owned(),
                             }),
                         }
                     } else if let Some(value) = context.memory.get_meta(ty, func) {
-                        debug!("StaticMethodCall meta value", value);
+                        fix_debug!("StaticMethodCall meta value", value);
                         match &*s_read!(value) {
                             Value::Function(ref func) => {
                                 let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
                                 let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
                                 let func =
                                     s_read!(lu_dog).exhume_function(&s_read!(func).id).unwrap();
-                                debug!("StaticMethodCall meta func", func);
+                                fix_debug!("StaticMethodCall meta func", func);
                                 let (value, ty) = eval_function_call(
                                     func,
                                     &args,
@@ -1509,12 +1446,12 @@ fn eval_expression(
                                     context,
                                     vm,
                                 )?;
-                                debug!("StaticMethodCall meta value", value);
-                                debug!("StaticMethodCall meta ty", ty);
+                                fix_debug!("StaticMethodCall meta value", value);
+                                fix_debug!("StaticMethodCall meta ty", ty);
                                 Ok((value, ty))
                             }
                             value => {
-                                error!("deal with call expression", value);
+                                fix_error!("deal with call expression", value);
                                 Ok((
                                     new_ref!(Value, Value::Empty),
                                     ValueType::new_empty(&s_read!(lu_dog)),
@@ -1522,14 +1459,14 @@ fn eval_expression(
                             }
                         }
                     } else if let Some(value) = context.memory.get(ty) {
-                        debug!("StaticMethodCall frame value", value);
+                        fix_debug!("StaticMethodCall frame value", value);
                         match &mut *s_write!(value) {
                             Value::Function(ref func) => {
                                 let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
                                 let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
                                 let func =
                                     s_read!(lu_dog).exhume_function(&s_read!(func).id).unwrap();
-                                debug!("StaticMethodCall frame func", func);
+                                fix_debug!("StaticMethodCall frame func", func);
                                 let (value, ty) = eval_function_call(
                                     func,
                                     &args,
@@ -1538,12 +1475,12 @@ fn eval_expression(
                                     context,
                                     vm,
                                 )?;
-                                debug!("StaticMethodCall frame value", value);
-                                debug!("StaticMethodCall frame ty", ty);
+                                fix_debug!("StaticMethodCall frame value", value);
+                                fix_debug!("StaticMethodCall frame ty", ty);
                                 Ok((value, ty))
                             }
                             Value::ProxyType(ut) => {
-                                debug!("StaticMethodCall proxy", ut);
+                                fix_debug!("StaticMethodCall proxy", ut);
                                 s_write!(ut).call(
                                     func,
                                     &mut arg_values.iter().map(|v| v.0.clone()).collect(),
@@ -1564,7 +1501,7 @@ fn eval_expression(
                             //     }
                             // }
                             value => {
-                                error!("deal with call expression", value);
+                                fix_error!("deal with call expression", value);
                                 Ok((
                                     new_ref!(Value, Value::Empty),
                                     ValueType::new_empty(&s_read!(lu_dog)),
@@ -1581,10 +1518,6 @@ fn eval_expression(
                         );
                         unimplemented!();
                         // We never will get here.
-                        // Ok((
-                        //     NewRefType::new_ref_type(Value::Empty)),
-                        //     ValueType::new_empty(&s_read!(lu_dog)),
-                        // ))
                     }
                 }
             };
@@ -1595,7 +1528,7 @@ fn eval_expression(
             call_result
         }
         Expression::Debugger(_) => {
-            debug!("StatementEnum::Debugger");
+            fix_debug!("StatementEnum::Debugger");
             let mut running = RUNNING.lock();
             *running = false;
             *STEPPING.lock() = true;
@@ -1639,7 +1572,7 @@ fn eval_expression(
                 }
             };
 
-            // debug!("FieldAccess field", field);
+            // fix_debug!("FieldAccess field", field);
 
             // let field_name = &s_read!(field).name;
 
@@ -1685,7 +1618,7 @@ fn eval_expression(
         // For Loop
         //
         Expression::ForLoop(ref for_loop) => {
-            debug!("ForLoop", for_loop);
+            fix_debug!("ForLoop", for_loop);
 
             let for_loop = s_read!(lu_dog).exhume_for_loop(for_loop).unwrap();
             let for_loop = s_read!(for_loop);
@@ -1934,9 +1867,9 @@ fn eval_expression(
                     let value = s_read!(literal).x_value;
                     let value = Value::Float(value);
                     let ty = Ty::new_float();
-                    debug!("ty: {:?}", ty);
+                    fix_debug!("ty: {:?}", ty);
                     let ty = s_read!(lu_dog).exhume_value_type(&ty.id()).unwrap();
-                    debug!("ty: {:?}", ty);
+                    fix_debug!("ty: {:?}", ty);
 
                     Ok((new_ref!(Value, value), ty))
                 }
@@ -1948,9 +1881,9 @@ fn eval_expression(
                     let value = s_read!(literal).x_value;
                     let value = Value::Integer(value);
                     let ty = Ty::new_integer();
-                    debug!("ty: {:?}", ty);
+                    fix_debug!("ty: {:?}", ty);
                     let ty = s_read!(lu_dog).exhume_value_type(&ty.id()).unwrap();
-                    debug!("ty: {:?}", ty);
+                    fix_debug!("ty: {:?}", ty);
 
                     Ok((new_ref!(Value, value), ty))
                 }
@@ -1984,7 +1917,7 @@ fn eval_expression(
             //     None
             // };
 
-            debug!("operator", operator);
+            fix_debug!("operator", operator);
 
             match &operator.subtype {
                 OperatorEnum::Binary(ref binary) => {
@@ -2092,7 +2025,7 @@ fn eval_expression(
                                     // This is the LHS.
                                     // The "other" LHS? It's
                                     // let (value, ty) = eval_expression(expr, context, vm)?;
-                                    // debug!("field access fubar", value);
+                                    // fix_debug!("field access fubar", value);
                                     // let value_read = s_read!(value).clone();
                                     // match &value_read {
                                     //     // match &*s_read!(lhs) {
@@ -2275,7 +2208,7 @@ fn eval_expression(
         //
         Expression::Print(ref print) => {
             let print = s_read!(lu_dog).exhume_print(print).unwrap();
-            debug!("Expression::Print print", print);
+            fix_debug!("Expression::Print print", print);
             let expr = s_read!(print).r32_expression(&s_read!(lu_dog))[0].clone();
             let (value, _) = eval_expression(expr, context, vm)?;
             let result = format!("{}", s_read!(value));
@@ -2329,8 +2262,8 @@ fn eval_expression(
                         .exhume_expression(&s_read!(f).expression)
                         .unwrap();
                     let (value, ty) = eval_expression(expr.clone(), context, vm)?;
-                    debug!("StructExpression field value", value);
-                    debug!("StructExpression field ty", ty);
+                    fix_debug!("StructExpression field value", value);
+                    fix_debug!("StructExpression field ty", ty);
                     Ok((s_read!(f).name.clone(), ty, value, expr))
                 })
                 .collect::<Result<Vec<_>>>()?;
@@ -2378,7 +2311,7 @@ fn eval_expression(
             let sarzak = context.sarzak.clone();
 
             let expr = s_read!(lu_dog).exhume_type_cast(expr).unwrap();
-            debug!("Expression::TypeCast", expr);
+            fix_debug!("Expression::TypeCast", expr);
 
             let lhs = s_read!(expr).r68_expression(&s_read!(lu_dog))[0].clone();
             let as_ty = s_read!(expr).r69_value_type(&s_read!(lu_dog))[0].clone();
@@ -2389,6 +2322,10 @@ fn eval_expression(
                 ValueType::Ty(ref ty) => {
                     let ty = *s_read!(sarzak).exhume_ty(ty).unwrap();
                     match ty {
+                        Ty::Boolean(_) => {
+                            let value: bool = (&*s_read!(lhs)).try_into()?;
+                            new_ref!(Value, value.into())
+                        }
                         Ty::Float(_) => {
                             let value: f64 = (&*s_read!(lhs)).try_into()?;
                             new_ref!(Value, value.into())
@@ -2430,7 +2367,7 @@ fn eval_expression(
         //
         Expression::VariableExpression(ref expr) => {
             let expr = s_read!(lu_dog).exhume_variable_expression(expr).unwrap();
-            debug!("Expression::VariableExpression", expr);
+            fix_debug!("Expression::VariableExpression", expr);
             let value = context.memory.get(&s_read!(expr).name);
 
             ensure!(value.is_some(), {
@@ -2440,7 +2377,7 @@ fn eval_expression(
 
             let value = value.unwrap();
 
-            debug!("Expression::VariableExpression value", s_read!(value));
+            fix_debug!("Expression::VariableExpression value", s_read!(value));
 
             // 🚧 These statements were swapped, comment-status-wise. I thought
             // it was because of a deadlock, or trying to mutably borrow whilst
@@ -2458,12 +2395,12 @@ fn eval_expression(
         Expression::XIf(ref expr) => {
             let expr = s_read!(lu_dog).exhume_x_if(expr).unwrap();
             let expr = s_read!(expr);
-            debug!("Expression::XIf", expr);
+            fix_debug!("Expression::XIf", expr);
 
             let cond_expr = s_read!(lu_dog).exhume_expression(&expr.test).unwrap();
 
             let (cond, _ty) = eval_expression(cond_expr, context, vm)?;
-            debug!("Expression::XIf conditional", cond);
+            fix_debug!("Expression::XIf conditional", cond);
 
             let cond = s_read!(cond);
             Ok(if (&*cond).try_into()? {
@@ -2471,9 +2408,9 @@ fn eval_expression(
                 let block = s_read!(lu_dog).exhume_expression(&expr.true_block).unwrap();
                 eval_expression(block, context, vm)?
             } else {
-                debug!("Expression::XIf else");
+                fix_debug!("Expression::XIf else");
                 if let Some(expr) = &expr.false_block {
-                    debug!("Expression::XIf false block");
+                    fix_debug!("Expression::XIf false block");
                     // Evaluate the false block
                     let block = s_read!(lu_dog).exhume_expression(expr).unwrap();
                     eval_expression(block, context, vm)?
@@ -2490,7 +2427,7 @@ fn eval_expression(
         //
         Expression::XReturn(ref expr) => {
             let expr = s_read!(lu_dog).exhume_x_return(expr).unwrap();
-            debug!("Expression::XReturn", expr);
+            fix_debug!("Expression::XReturn", expr);
 
             let expr = &s_read!(expr).expression;
             let expr = s_read!(lu_dog).exhume_expression(expr).unwrap();
@@ -2510,7 +2447,7 @@ fn eval_expression(
         //
         Expression::ZSome(ref some) => {
             let some = s_read!(lu_dog).exhume_z_some(some).unwrap();
-            debug!("Expression::ZSome", some);
+            fix_debug!("Expression::ZSome", some);
 
             let value = &s_read!(some).r23_x_value(&s_read!(lu_dog))[0];
             let option = &s_read!(some).r3_woog_option(&s_read!(lu_dog))[0];
@@ -2553,8 +2490,8 @@ pub fn eval_statement(
 ) -> Result<(RefType<Value>, RefType<ValueType>)> {
     let lu_dog = context.lu_dog.clone();
 
-    debug!("eval_statement statement", statement);
-    trace!("eval_statement stack", context.memory);
+    fix_debug!("eval_statement statement", statement);
+    fix_trace!("eval_statement stack", context.memory);
 
     span!("eval_statement");
 
@@ -2565,7 +2502,7 @@ pub fn eval_statement(
             let expr = stmt.r31_expression(&s_read!(lu_dog))[0].clone();
             let (value, ty) = eval_expression(expr, context, vm)?;
             no_debug!("StatementEnum::ExpressionStatement: value", s_read!(value));
-            debug!("StatementEnum::ExpressionStatement: ty", ty);
+            fix_debug!("StatementEnum::ExpressionStatement: ty", ty);
 
             Ok((
                 new_ref!(Value, Value::Empty),
@@ -2575,20 +2512,20 @@ pub fn eval_statement(
         StatementEnum::LetStatement(ref stmt) => {
             let stmt = s_read!(lu_dog).exhume_let_statement(stmt).unwrap();
             let stmt = s_read!(stmt);
-            debug!("StatementEnum::LetStatement: stmt", stmt);
+            fix_debug!("StatementEnum::LetStatement: stmt", stmt);
 
             let expr = stmt.r20_expression(&s_read!(lu_dog))[0].clone();
-            debug!("expr", expr);
+            fix_debug!("expr", expr);
 
             let (value, ty) = eval_expression(expr, context, vm)?;
-            debug!("value", value);
-            debug!("ty", ty);
+            fix_debug!("value", value);
+            fix_debug!("ty", ty);
 
             let var = s_read!(stmt.r21_local_variable(&s_read!(lu_dog))[0]).clone();
             let var = s_read!(var.r12_variable(&s_read!(lu_dog))[0]).clone();
-            debug!("var", var);
+            fix_debug!("var", var);
 
-            log::debug!("inserting {} = {}", var.name, s_read!(value));
+            debug!("inserting {} = {}", var.name, s_read!(value));
             context.memory.insert(var.name, value);
 
             // 🚧 I'm changing this from returning ty. If something get's wonky,
@@ -2602,14 +2539,14 @@ pub fn eval_statement(
         StatementEnum::ResultStatement(ref stmt) => {
             let stmt = s_read!(lu_dog).exhume_result_statement(stmt).unwrap();
             let stmt = s_read!(stmt);
-            debug!("StatementEnum::ResultStatement: stmt", stmt);
+            fix_debug!("StatementEnum::ResultStatement: stmt", stmt);
 
             let expr = stmt.r41_expression(&s_read!(lu_dog))[0].clone();
-            debug!("StatementEnum::ResultStatement expr", expr);
+            fix_debug!("StatementEnum::ResultStatement expr", expr);
 
             let (value, ty) = eval_expression(expr, context, vm)?;
-            debug!("StatementEnum::ResultStatement value", value);
-            debug!("StatementEnum::ResultStatement ty", ty);
+            fix_debug!("StatementEnum::ResultStatement value", value);
+            fix_debug!("StatementEnum::ResultStatement ty", ty);
 
             Ok((value, ty))
         }
@@ -2809,33 +2746,33 @@ pub fn start_tui_repl(mut context: Context) -> (Sender<DebuggerControl>, Receive
         .spawn(move || loop {
             match from_ui_read.recv_timeout(Duration::from_millis(10)) {
                 Ok(DebuggerControl::SetBreakpoint(character)) => {
-                    debug!("Setting breakpoint at character {}", character);
+                    fix_debug!("Setting breakpoint at character {}", character);
                 }
                 Ok(DebuggerControl::ExecuteInput(input)) => {
-                    debug!("Executing input: {}", input);
+                    fix_debug!("Executing input: {}", input);
                     to_worker_write.send(input).unwrap();
                 }
                 Ok(DebuggerControl::StepInto) => {
-                    debug!("Debugger StepInto");
+                    fix_debug!("Debugger StepInto");
                     *RUNNING.lock() = true;
                     CVAR.notify_all();
                 }
                 Ok(DebuggerControl::StepOver) => {
-                    debug!("Debugger StepOver");
+                    fix_debug!("Debugger StepOver");
                 }
                 Ok(DebuggerControl::Run) => {
-                    debug!("Debugger Run");
+                    fix_debug!("Debugger Run");
                     *STEPPING.lock() = false;
                     *RUNNING.lock() = true;
                     CVAR.notify_all();
                 }
                 Ok(DebuggerControl::Stop) => {
-                    debug!("Debugger Stop");
+                    fix_debug!("Debugger Stop");
                     break;
                 }
                 Err(RecvTimeoutError::Timeout) => {}
                 Err(_) => {
-                    debug!("Debugger control thread exiting");
+                    fix_debug!("Debugger control thread exiting");
                     break;
                 }
             };
@@ -2855,7 +2792,7 @@ pub fn start_tui_repl(mut context: Context) -> (Sender<DebuggerControl>, Receive
                 }
                 Err(RecvTimeoutError::Timeout) => {}
                 Err(_) => {
-                    debug!("Debugger control thread exiting");
+                    fix_debug!("Debugger control thread exiting");
                     break;
                 }
             }
@@ -2925,7 +2862,7 @@ pub fn start_tui_repl(mut context: Context) -> (Sender<DebuggerControl>, Receive
                     },
                     Err(RecvTimeoutError::Timeout) => {}
                     Err(_) => {
-                        debug!("Worker thread exiting");
+                        fix_debug!("Worker thread exiting");
                         break;
                     }
                 }
@@ -3114,7 +3051,7 @@ pub fn start_repl(mut context: Context) -> Result<(), Error> {
                 io::stdout().flush().unwrap();
             }
             Err(_) => {
-                debug!("Debugger control thread exiting");
+                fix_debug!("Debugger control thread exiting");
                 break;
             }
         };
@@ -3131,7 +3068,7 @@ pub fn start_repl(mut context: Context) -> Result<(), Error> {
                 if line == "@logo" {
                     banner();
                 } else if let Ok(Some((stmt, _span))) = parse_line(&line) {
-                    debug!("stmt from readline", stmt);
+                    fix_debug!("stmt from readline", stmt);
 
                     let stmt = {
                         let mut lu_dog = s_write!(lu_dog);
@@ -3139,20 +3076,23 @@ pub fn start_repl(mut context: Context) -> Result<(), Error> {
                             &new_ref!(crate::dwarf::Statement, stmt),
                             &DwarfSourceFile::new(line.clone(), &mut lu_dog),
                             &block,
+                            true,
                             &mut lu_dog,
                             &s_read!(models),
                             &s_read!(sarzak),
                         ) {
                             Ok(stmt) => stmt.0,
-                            Err(e) => {
-                                println!("{}", e);
+                            Err(errors) => {
+                                for e in errors {
+                                    println!("{}", e);
+                                }
                                 continue;
                             }
                         }
                     };
 
                     // 🚧 This needs fixing too.
-                    let eval = eval_statement(stmt, &mut context, &mut vm);
+                    let eval = eval_statement(stmt.0, &mut context, &mut vm);
                     // for i in context.drain_std_out() {
                     //     println!("{}", i);
                     // }
@@ -3352,7 +3292,7 @@ impl<'a> fmt::Display for PrintableValueType<'a> {
                         Ty::SString(_) => write!(f, "String"),
                         Ty::SUuid(_) => write!(f, "Uuid"),
                         gamma => {
-                            error!("deal with sarzak type", gamma);
+                            fix_error!("deal with sarzak type", gamma);
                             write!(f, "todo")
                         }
                     }
@@ -3387,7 +3327,7 @@ impl<'a> fmt::Display for PrintableValueType<'a> {
             }
             ValueType::WoogStruct(ref woog_struct) => {
                 let woog_struct = s_read!(lu_dog).exhume_woog_struct(woog_struct).unwrap();
-                debug!("woog_struct", woog_struct);
+                fix_debug!("woog_struct", woog_struct);
                 let woog_struct = s_read!(woog_struct);
                 write!(f, "{}", woog_struct.name)
             }

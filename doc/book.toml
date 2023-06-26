@@ -15,6 +15,7 @@ dwarf = "#"
 
 [output.html.playground]
 editable = true
+line-numbers = true
 
 [preprocessor.indexing]
 [preprocessor.indexing.see_instead]

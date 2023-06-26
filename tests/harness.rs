@@ -18,6 +18,9 @@ fn run_program(test: &str, program: &str) -> Result<Value, ()> {
     let lu_dog = match new_lu_dog(None, Some((program.to_owned(), &ast)), &[], &sarzak) {
         Ok(lu_dog) => lu_dog,
         Err(e) => {
+            // 🚧 This isn't quite right. We should be checking for the existence
+            // of a stderr file to do this, not relying on the test to fail.
+            //
             // We got here because of an error. We need to look and see if this
             // test has a .stderr file. If it does, we need to compare the error
             // message to what's in the file. If they match we pass the test and
@@ -25,12 +28,23 @@ fn run_program(test: &str, program: &str) -> Result<Value, ()> {
             // implies that we just need to return the error and let the rust
             // test framework handle the rest.
             // Look for a .stderr file.
+            let errors = e
+                .iter()
+                .map(|e| format!("{}", dwarf::dwarf::DwarfErrorReporter(&e, &program)))
+                .collect::<Vec<_>>()
+                .join("\n")
+                .trim()
+                .to_owned();
+
             let stderr_path = PathBuf::from(format!("tests/{}.stderr", test));
             if stderr_path.exists() {
                 // We found a .stderr file. Read it and compare it to the error
                 // message.
-                let stderr = std::fs::read_to_string(stderr_path).unwrap();
-                if stderr == format!("{}", e) {
+                let stderr = std::fs::read_to_string(stderr_path)
+                    .unwrap()
+                    .trim()
+                    .to_owned();
+                if stderr == errors {
                     // The error message matches the .stderr file. We pass the
                     // test.
                     return Ok(Value::Empty);
@@ -44,12 +58,24 @@ fn run_program(test: &str, program: &str) -> Result<Value, ()> {
                             test
                         ))
                     );
-                    eprintln!("Expected: {}", stderr);
-                    eprintln!("Found: {}", e);
+                    eprintln!("Expected:\n{}", stderr);
+                    eprintln!("Found:\n{}", errors);
+                    eprintln!("Diff:");
+                    for line in diff::lines(&stderr, &errors) {
+                        match line {
+                            diff::Result::Left(expected) => {
+                                eprintln!("{1} {0}", expected, Colour::Green.paint("+++"));
+                            }
+                            diff::Result::Right(found) => {
+                                eprintln!("{1} {0}", found, Colour::Red.paint("---"));
+                            }
+                            diff::Result::Both(a, _) => eprintln!("    {}", a),
+                        }
+                    }
                     return Err(());
                 }
             }
-            eprintln!("{e}");
+            eprintln!("{errors}");
             return Err(());
         }
     };

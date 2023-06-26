@@ -1,1 +1,8 @@
-fn main() -> bool {}
+fn main() -> bool {
+    chacha::assert_eq(true, true);
+    chacha::assert_eq(false, false);
+    chacha::assert_eq(true && false, false);
+    chacha::assert_eq(false || true, true);
+
+    true
+}

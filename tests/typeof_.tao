@@ -1,13 +1,13 @@
 fn main() {
-    print(chacha::typeof(42) + "\n");
-    print(chacha::typeof(42.0) + "\n");
-    print(chacha::typeof("42") + "\n");
-    print(chacha::typeof(true) + "\n");
-    print(chacha::typeof(false) + "\n");
+    print("{0}\n".format(chacha::typeof(42)));
+    print("{0}\n".format(chacha::typeof(42.0)));
+    print("{0}\n".format(chacha::typeof("42")));
+    print("{0}\n".format(chacha::typeof(true)));
+    print("{0}\n".format(chacha::typeof(false)));
     // This returns empty. So that's one way to construct an empty, but I'm
     // not sure that it should have a type of empty.
-    print(chacha::typeof({}) + "\n");
+    print(chacha::typeof({}) as string + "\n");
     // This can be added in once we have tuples.
     // print(chacha::typeof(()) + "\n");
-    print(chacha::typeof({42}) + "\n");
+    print(chacha::typeof({42}) as string + "\n");
 }

@@ -11,6 +11,11 @@ The long term plan is to turn the dwarf source into Rust source, and compile it 
 
 See the [book](https://uberfoo.github.io/assets/docs/dwarf/introduction.html).
 
+## Cool Error Messages!
+![error](doc/art/error.png)
+
+Check out [ariadne](https://docs.rs/ariadne/latest/ariadne/) and you too can have cool error messages!
+
 ## Goals
 
 * Typed, interpreted language

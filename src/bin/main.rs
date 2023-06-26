@@ -69,7 +69,7 @@ struct Arguments {
     #[arg(long, short, action=ArgAction::SetTrue)]
     banner: Option<bool>,
     #[command(flatten)]
-    dwarf: DwarfArgs,
+    dwarf_args: DwarfArgs,
 }
 
 #[derive(Clone, Debug, Args)]
@@ -93,27 +93,44 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if let Some(source) = args.source {
         log::info!("Compiling source file {}", &source.display());
 
+        let mut dwarf_args = vec![source.to_string_lossy().to_string()];
+        dwarf_args.extend(args.dwarf_args.args);
+
         let source_code = fs::read_to_string(&source)?;
 
-        let ast = parse_dwarf(&source_code)?;
+        let ast = match parse_dwarf(&source_code) {
+            Ok(ast) => ast,
+            Err(_) => {
+                // eprintln!("{}", dwarf::dwarf::DwarfErrorReporter(&e, &source_code));
+                return Ok(());
+            }
+        };
 
-        let lu_dog =
-            new_lu_dog(None, Some((source_code.clone(), &ast)), &[], &sarzak).map_err(|e| {
-                eprintln!("{}", dwarf::dwarf::DwarfErrorReporter(&e, &source_code));
-                e
-            })?;
+        let lu_dog = match new_lu_dog(None, Some((source_code.clone(), &ast)), &[], &sarzak) {
+            Ok(lu_dog) => lu_dog,
+            Err(errors) => {
+                for err in errors {
+                    eprintln!("{}", dwarf::dwarf::DwarfErrorReporter(&err, &source_code));
+                }
+                return Ok(());
+            }
+        };
 
         let mut ctx = initialize_interpreter::<PathBuf>(sarzak, lu_dog, None)?;
-        ctx.add_args(args.dwarf.args);
+        ctx.add_args(dwarf_args);
 
         if args.banner.is_some() && args.banner.unwrap() {
             println!("{}", banner2());
         }
 
-        let (_, ctx) = start_main(false, ctx).map_err(|e| {
-            println!("Interpreter exited with: {}", e);
-            e
-        })?;
+        let ctx = match start_main(false, ctx) {
+            Ok((_, ctx)) => ctx,
+            Err(e) => {
+                eprintln!("Interpreter exited with:");
+                eprintln!("{}", dwarf::ChaChaErrorReporter(&e, &source_code));
+                return Ok(());
+            }
+        };
 
         if args.repl.is_some() && args.repl.unwrap() {
             start_repl(ctx).map_err(|e| {

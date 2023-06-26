@@ -23,17 +23,19 @@ fn main() -> bool {
     };
     let h = f;
 
-    let a: bool = chacha::assert_eq(f.a, 42);
-    let b = chacha::assert_eq(f.b, true);
-    let c = chacha::assert_eq(f.c, 3.14);
-    let d = chacha::assert_eq(f.d, "Hello uberFoo.");
+    // For now we need to cast the assert_eq to bool, since the extruder
+    // doesn't know anything about the assert_eq function.
+    let a: bool = chacha::assert_eq(f.a, 42) as bool;
+    let b = chacha::assert_eq(f.b, true) as bool;
+    let c = chacha::assert_eq(f.c, 3.14) as bool;
+    let d = chacha::assert_eq(f.d, "Hello uberFoo.") as bool;
 
     // This one I'm not sure about. I'm tending towards false, as it's a
     // different instance.
-    let e = chacha::assert_eq(f, g);
+    let e = chacha::assert_eq(f, g) as bool;
 
     // This one should certainly be true.
-    let i = chacha::assert_eq(f, h);
+    let i = chacha::assert_eq(f, h) as bool;
 
     a && b && c && d && !e && i
 }

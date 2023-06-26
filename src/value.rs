@@ -9,7 +9,7 @@ use crate::{
     lu_dog::{Function, ObjectStore as LuDogStore, ValueType},
     new_ref, s_read,
     sarzak::Ty,
-    ChaChaError, DwarfFloat, DwarfInteger, NewRef, RcType, RefType, Result,
+    ChaChaError, DwarfFloat, DwarfInteger, NewRef, RefType, Result,
 };
 
 pub trait StoreProxy: fmt::Display + fmt::Debug + Send + Sync {
@@ -80,66 +80,6 @@ impl StoreProxy for Box<dyn StoreProxy> {
     }
 }
 
-pub type ThreadHandleType =
-    RcType<std::thread::JoinHandle<Result<(RefType<Value>, RefType<ValueType>)>>>;
-
-pub struct ThreadHandle {
-    join: ThreadHandleType,
-    result: (RefType<Value>, RefType<ValueType>),
-    complete: bool,
-}
-
-impl ThreadHandle {
-    // pub fn new_thread<F>(f: F)
-    // where
-    //     F: Fn() -> Self,
-    // {
-    //     let handle = thread::spawn(|| f());
-    // }
-
-    pub fn new(join: ThreadHandleType, lu_dog: &LuDogStore) -> Self {
-        ThreadHandle {
-            join,
-            result: (
-                new_ref!(Value, Value::Unknown),
-                ValueType::new_unknown(lu_dog),
-            ),
-            complete: false,
-        }
-    }
-}
-
-impl Clone for ThreadHandle {
-    fn clone(&self) -> Self {
-        ThreadHandle {
-            join: self.join.clone(),
-            result: self.result.clone(),
-            complete: self.complete,
-        }
-    }
-}
-
-// impl std::ops::Deref for ThreadHandle {
-//     type Target = Result<(RefType<Value>, RefType<ValueType>)>;
-
-//     fn deref(&self) -> &Self::Target {
-//         if self.join.is_finished() {}
-//         // &self.join.join().unwrap()
-//     }
-// }
-
-impl fmt::Debug for ThreadHandle {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "ThreadHandle({:?})", self.join.thread().id())
-    }
-}
-
-impl fmt::Display for ThreadHandle {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.join.thread().name().unwrap_or("unnamed"))
-    }
-}
-
 /// This is an actual Value
 ///
 /// This is the type used by the interpreter to represent values.
@@ -172,7 +112,6 @@ pub enum Value {
     String(String),
     Table(HashMap<String, RefType<Self>>),
     Thonk(&'static str, usize),
-    Thread(ThreadHandle),
     Unknown,
     UserType(RefType<UserType>),
     Uuid(uuid::Uuid),
@@ -217,17 +156,6 @@ impl Value {
     }
 }
 
-// impl std::ops::Deref for Value {
-//     type Target = Value;
-
-//     fn deref(&self) -> &Self::Target {
-//         match self {
-//             Self::Thread(t) => t.deref(),
-//             _ => self,
-//         }
-//     }
-// }
-
 impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
@@ -253,7 +181,6 @@ impl fmt::Display for Value {
             // Self::String(str_) => write!(f, "\"{}\"", str_),
             Self::Table(table) => write!(f, "{:?}", table),
             Self::Thonk(name, number) => write!(f, "{} [{}]", name, number),
-            Self::Thread(thread) => write!(f, "{}", thread),
             Self::Unknown => write!(f, "<unknown>"),
             Self::UserType(ty) => writeln!(f, "{}", s_read!(ty)),
             Self::Uuid(uuid) => write!(f, "{}", uuid),
@@ -775,22 +702,6 @@ impl std::cmp::PartialEq for Value {
         }
     }
 }
-
-// impl Value {
-//     pub fn eq(&self, other: &Self) -> bool {
-//         match (self, other) {
-//             (Value::Float(a), Value::Float(b)) => a == b,
-//             (Value::Integer(a), Value::Integer(b)) => a == b,
-//             (Value::String(a), Value::String(b)) => a == b,
-//             (Value::Char(a), Value::Char(b)) => a == b,
-//             (Value::Empty, Value::Empty) => true,
-//             (Value::Boolean(a), Value::Boolean(b)) => a == b,
-//             (Value::Uuid(a), Value::Uuid(b)) => a == b,
-//             (Value::UserType(a), Value::UserType(b)) => *s_read!(a) == *s_read!(b),
-//             (_, _) => false, //Value::Error(format!("Cannot compare {} and {}", a, b)),
-//         }
-//     }
-// }
 
 #[derive(Clone, Debug, Default)]
 pub struct UserTypeAttribute(HashMap<String, RefType<Value>>);

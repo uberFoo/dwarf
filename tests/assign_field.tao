@@ -1,11 +1,11 @@
 struct Foo {
-    a: i32,
+    a: int,
 }
-fn main() -> bool {
+fn main() {
     let foo = Foo { a: 69 };
     foo.a = 42;
 
-    print(foo.a + "\n");
+    print(foo.a as string + "\n");
 
     chacha::assert_eq(foo.a, 42);
     chacha::assert_eq(foo, Foo { a: 42 });

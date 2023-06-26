@@ -4,6 +4,21 @@ Thanks for reading thus far!
 This section is a walkthrough of the language.
 It is designed to provide information in an order useful to someone new to programming.
 
+## A Quick Program
+
+This will be a motivating example for the rest of the section:
+
+```dwarf
+fn print_number(n: int) {
+    print("the number is {0}\n".format(n));
+}
+
+fn main() {
+    let a = 42;
+    print_number(a);
+}
+```
+
 ## Functions and Statements
 
 Let's start with {{i: function}}s and {{i: statement}}s.
@@ -120,43 +135,36 @@ fn main() {
 > **Numeric Type Casting**
 >
 > There are some subtleties to conditional expressions with regard to {{i: type conversion}}.
-> In the example below if we let {{i: ChhCha}} do the conversion for us it will convert the {{i: `int`}} to a {{i: `float`}}.
+> In the example below if we let {{i: *ChaCha*}} (the interpreter) do the conversion for us it will convert the {{i: `int`}} to a {{i: `float`}}.
 > The first comparison turns out as expected.
 > ```dwarf
 > fn main() {
 >     let a = 3;
 >     let b = 3.14;
 >     let c = if a >= b  { a } else { b }; // c == 3.14
->     print(c as string + "\n");
->     let c = if a >= b as int  { a } else { b }; // c == ?
->     print(c as string + "\n");
+>     print("{0}\n".format(c));
+>
+>     // The parens around the expression `b as int` are not required.
+>     let c = if a >= (b as int)  { a } else { b }; // c == ?
+>     print("{0}\n".format(c));
 > }
 > ```
 > In the second comparison we are casting `b` to an `int` with the {{i: `as`}} expression.
 > Note the difference.
+>
+> *ChCha* *always converts `int`s to `float`s* when performing binary operations.
+> This is genearally the least surprising behavior.
 
-There are all the usual {{i: comparison operators}}: `==`, `!=`, `<`, `<=`, `>`, `>=`.
-Here are a few examples.
-
-```dwarf
-fn main() {
-    let a = true;
-    if a != false {
-        print("a is true\n");
-    } else {
-        print("a is false\n");
-    }
-}
-```
-
-```dwarf
+There are all the usual {{i: comparison operators}}: `==`, `!=`, `<`, `<=`, `>`, `>=`:
 
 ```dwarf
 fn main() {
-    let a = 42;
-    let b = 3.14;
-    let c = if a == b { a } else { b };
-    print(c);
+    chacha::assert_eq(42 == 42, true);
+    chacha::assert_eq(42 != 42, false);
+    chacha::assert_eq(42 < 42, false);
+    chacha::assert_eq(42 <= 42, true);
+    chacha::assert_eq(42 > 42, false);
+    chacha::assert_eq(42 >= 42, true);
 }
 ```
 

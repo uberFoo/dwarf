@@ -12,7 +12,8 @@ fn main() -> () {
     print(s.len() as string + "\n");
 
     // Of course you can fetch the length of a string.
-    let len = s.len();
+    // 🚧 This should be an inherent method that we know the type of.
+    let len = s.len() as int;
 
     // Note that indexing into a string is zero based. Also, we are indexing by
     // unicode graphemes, which is a "printable character".

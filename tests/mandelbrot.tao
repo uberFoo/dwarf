@@ -22,6 +22,17 @@ impl Complex {
         }
     }
 
+    fn add_2(self, other: Complex) {
+        self.re = self.re + other.re;
+        self.im = self.im + other.im;
+    }
+
+    fn square_2(self) {
+        let re = self.re * self.re - self.im * self.im;
+        self.im = 2.0 * self.re * self.im;
+        self.re = re;
+    }
+
     fn norm_squared(self) -> float {
         self.re * self.re + self.im * self.im
     }
@@ -46,17 +57,13 @@ fn pixel_to_point(
 fn escape_time(c: Complex, limit: int) -> int {
     let z = Complex::zero();
     for i in 1..limit {
-        // 🚧 This let wreaks havoc -- fix it.
-        // Also the chained method calls don't affect the correct z, or something.
-        // let z = z.square(z).add(z, c);
-        // 🚧 This breaks things badly.
-        // z = ComplexEx::square(z);
+        // 🚧 this does not work
+        // let z = z.square_2().add_2(c);
         ComplexEx::square(z);
-        // z = square(z);
-        // z = z.add(z, c);
         ComplexEx::add(z, c);
         let foo = ComplexEx::norm_squared(z);
-        if foo > 4.0 {
+        // 🚧  this is wrong.
+        if foo as float > 4.0 {
             // if z.norm_squared(z) > 4.0 {
             return i;
         }
@@ -64,7 +71,7 @@ fn escape_time(c: Complex, limit: int) -> int {
     0
 }
 
-fn main() -> Complex {
+fn main() {
     let width = 14;
     let height = 4;
     let upper_left = Complex { re: -2.5, im: 1.0 };
@@ -75,7 +82,7 @@ fn main() -> Complex {
             let point = pixel_to_point(width, height, column, row, upper_left, lower_right);
 
             let time = escape_time(point, 255);
-            if time > 0 {
+            if time as int > 0 {
                 print(" ");
             } else {
                 print("*");

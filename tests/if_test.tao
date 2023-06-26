@@ -1,0 +1,15 @@
+// This is actually testing errors on if, not evaluating the if expression
+fn main() {
+    // not a bool
+    if 1 {
+        print("1");
+    }
+
+    if "8" {
+        print("8");
+    }
+
+    if 1.0 {
+        print("1.0");
+    }
+}

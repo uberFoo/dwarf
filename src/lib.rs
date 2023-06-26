@@ -405,41 +405,18 @@ impl fmt::Display for ChaChaErrorReporter<'_, '_> {
         let mut std_err = Vec::new();
 
         match &self.0 .0 {
-            //             ChaChaError::BadSelf { span } | DwarfError::ImplementationBlock { span } => {
-            //                 let span = span.clone();
-            //                 let msg = format!("{}", self);
-
-            //                 Report::build(ReportKind::Error, (), span.start)
-            //                     .with_message(&msg)
-            //                     .with_label(
-            //                         Label::new(span)
-            //                             .with_message(format!("{}", msg.fg(Color::Red)))
-            //                             .with_color(Color::Red),
-            //                     )
-            //                     .finish()
-            //                     .write(Source::from(&program), &mut std_err)
-            //                     .map_err(|_| fmt::Error)?;
-            //                 write!(f, "{}", String::from_utf8_lossy(&std_err))
-            //             }
-            //             DwarfError::GenericWarning {
-            //                 description: desc,
-            //                 span,
-            //             } => {
-            //                 let span = span.clone();
-
-            //                 Report::build(ReportKind::Error, (), span.start)
-            //                     .with_message(&desc)
-            //                     .with_label(
-            //                         Label::new(span)
-            //                             .with_message(format!("{}", desc.fg(Color::Red)))
-            //                             .with_color(Color::Red),
-            //                     )
-            //                     .finish()
-            //                     .write(Source::from(&program), &mut std_err)
-            //                     .map_err(|_| fmt::Error)?;
-            //                 write!(f, "{}", String::from_utf8_lossy(&std_err))
-            //             }
-            // 🚧  StaticMethod next
+            ChaChaError::NotAFunction { value, span } => {
+                Report::build(ReportKind::Error, (), span.start)
+                    .with_message("not a function")
+                    .with_label(
+                        Label::new(span.clone()).with_message("found here"), // .with_color(Color::Red),
+                    )
+                    .with_note(value.to_string())
+                    .finish()
+                    .write(Source::from(&program), &mut std_err)
+                    .map_err(|_| fmt::Error)?;
+                write!(f, "{}", String::from_utf8_lossy(&std_err))
+            }
             ChaChaError::WrongNumberOfArguments {
                 expected,
                 got,
@@ -454,37 +431,13 @@ impl fmt::Display for ChaChaErrorReporter<'_, '_> {
                         Label::new(defn_span.clone()).with_message("for function defined here"), // .with_color(Color::Red),
                     )
                     .with_label(
-                        Label::new(invocation_span.clone()).with_message(&msg), // .with_color(Color::Red),
+                        Label::new(invocation_span.clone()).with_message(msg), // .with_color(Color::Red),
                     )
                     .finish()
                     .write(Source::from(&program), &mut std_err)
                     .map_err(|_| fmt::Error)?;
                 write!(f, "{}", String::from_utf8_lossy(&std_err))
             }
-            //             DwarfError::Parse { error, ast } => {
-            //                 // What's up with both of these? Need to write a test and see
-            //                 // what looks good.
-            //                 std_err.write(format!("{}", error).as_bytes()).unwrap();
-            //                 std_err.write(format!("{}", self.0).as_bytes()).unwrap();
-
-            //                 for a in ast {
-            //                     let msg = format!("{}", self.0);
-            //                     let span = a.1.clone();
-
-            //                     Report::build(ReportKind::Error, (), span.start)
-            //                         .with_message(&msg)
-            //                         .with_label(
-            //                             Label::new(span)
-            //                                 .with_message(format!("{}", msg.fg(Color::Red)))
-            //                                 .with_color(Color::Red),
-            //                         )
-            //                         .finish()
-            //                         .write(Source::from(&program), &mut std_err)
-            //                         .map_err(|_| fmt::Error)?;
-            //                     write!(f, "{}", String::from_utf8_lossy(&std_err))?;
-            //                 }
-            //                 Ok(())
-            //             }
             _ => write!(f, "{}", self.0),
         }
     }
