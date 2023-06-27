@@ -18,7 +18,8 @@ Check out [ariadne](https://docs.rs/ariadne/latest/ariadne/) and you too can hav
 
 ## Goals
 
-* Typed, interpreted language
+* Typed, interpreted DSL
+* Easily embeddable
 * Rust-like syntax
 
 ## Non-Goals
@@ -42,19 +43,10 @@ dwarf syntax is a strict subset of Rust's.
 In fact, I use the Rust language syntax parser in `vscode` to highlight, navigate, and edit Dwarf source.
 
 The bits that are missing include iteraters, enumerations, paths, visibility modifiers, generics (for now), and the list goes on.
-I recommend you just explore, or take a look at the parser source.
-Maybe I'll put together a BNF grammar table below.
 
 ## REPL
 
 ## Debugger
-
-## Source Code
-
-About thirty percent of the source code (everything in `./src/lu_dog` ) is generated from models.
-The models are `json` files located in `./src/models` .
-These models are "compiled" using another project that I'm currently working on.
-In fact, this is a daughter project of that other one.
 
 ## Architecture
 

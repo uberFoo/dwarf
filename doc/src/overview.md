@@ -79,12 +79,10 @@ The following code defines a function that takes an integer, does some computati
 ```dwarf
 fn foo(a: int) -> string {
     let b = a * 2;
-    // 🚧 This should not need a cast.
-    "The value of b is {1}. This is here just to confuse you, {0}".format("hah!", b) as string
+    "The value of b is {1}. This is here just to confuse you, {0}".format("hah!", b)
 }
 
-// 🚧 This should not need a cast.
-print(foo(42) as string + "\n");
+print(foo(42) + "\n");
 ```
 
 
@@ -132,6 +130,14 @@ fn main() {
     print(c);
 }
 ```
+
+> **Expression Magic**
+>
+> Having everything as an expression pays great dividends.
+> In the example above notice how we assign `c` to the result of the {{i: `if`}} expression.
+> `if` actually has a value, which is the value of it's evaluation.
+> It's expressions all the way down. 🥁
+
 There are all the usual {{i: comparison operators}}: `==`, `!=`, `<`, `<=`, `>`, `>=`:
 
 ```dwarf
@@ -144,14 +150,6 @@ fn main() {
     chacha::assert_eq(42 >= 42, true);
 }
 ```
-
-> **Expression Magic**
->
-> Having everything as an expression pays great dividends.
-> In the example above notice how we assign `c` to the result of the {{i: `if`}} expression.
-> `if` actually has a value, which is the value of it's evaluation.
-> It's expressions all the way down. 🥁
-
 
 ```dwarf
 //macro_rules! println {

@@ -1,0 +1,7 @@
+fn main() {
+    fn foo(a: int) -> string {
+        let b = a * 2;
+        "The value of b is {1}. This is here just to confuse you, {0}".format("hah!", b)
+    }
+    print(foo(42) + "\n");
+}

@@ -97,7 +97,14 @@ default = ["single", "repl", "print-std-out"]
 
 repl = ["dep:rustyline"]
 
-tracy = ["tracy-client/enable", "tracy-client/system-tracing", "tracy-client/context-switch-tracing", "tracy-client/sampling", "tracy-client/code-transfer", "tracy-client/broadcast"]
+tracy = [
+    "tracy-client/enable",
+    "tracy-client/system-tracing",
+    "tracy-client/context-switch-tracing",
+    "tracy-client/sampling",
+    "tracy-client/code-transfer",
+    "tracy-client/broadcast",
+]
 
 
 single = ["sarzak/lu-dog-rc"]

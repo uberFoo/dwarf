@@ -22,12 +22,15 @@ jobs:
                   export PATH="$HOME/.cargo/bin:$PATH"
                   rustup update stable
                   cargo install mdbook-indexing
+
+            - name: Build mdBook
+              run: |
                   git clone https://github.com/uberFoo/mdBook.git
                   cd mdBook
                   cargo install --path .
                   cd ..
 
-            - name: Build Mdbook
+            - name: Build Book
               run: |
                   cd doc
                   mdbook build

@@ -107,7 +107,7 @@ macro_rules! debug {
             file!(),
             line!(),
             column!()
-        );
+        )
     };
 }
 
@@ -121,7 +121,7 @@ macro_rules! warn {
             file!(),
             line!(),
             column!()
-        );
+        )
     };
 }
 
@@ -135,7 +135,7 @@ macro_rules! error {
             file!(),
             line!(),
             column!()
-        );
+        )
     };
 }
 
@@ -459,6 +459,8 @@ fn inter_func(
             models,
         )?;
     }
+
+    debug!("func {name} saved");
 
     if errors.is_empty() {
         Ok(())
@@ -1336,12 +1338,7 @@ fn inter_expression(
             // external references, but we also don't parse all the function
             // signatures into memory before we parse their bodies.
             //
-            // For now, this will help the REPL work correctly...
-            //
             // 🚧 Deal with the above situation.
-
-            // Look up the function. Shit. Maybe this function lookup thing
-            // belongs in the LocalVariable interring code...
             let (func_expr, ret_ty) = inter_expression(
                 &new_ref!(ParserExpression, func.to_owned()),
                 check_types,
@@ -1352,6 +1349,10 @@ fn inter_expression(
                 models,
                 sarzak,
             )?;
+
+            if let ValueType::Unknown(_) = &*s_read!(ret_ty) {
+                // Here's where we need to lookup the function definition.
+            }
 
             let func_call = Call::new_function_call(false, Some(&func_expr.0), lu_dog);
             let func = Expression::new_call(&func_call, lu_dog);
@@ -1379,8 +1380,10 @@ fn inter_expression(
                 (&func_call, &s_read!(func_call).r28_argument(lu_dog))
             );
 
-            let ty = PrintableValueType(&ret_ty, lu_dog, sarzak, models);
-            debug!("return type{}", ty.to_string());
+            debug!(
+                "return type {}",
+                PrintableValueType(&ret_ty, lu_dog, sarzak, models).to_string()
+            );
 
             Ok(((func, span), ret_ty))
         }
@@ -1862,6 +1865,7 @@ fn inter_expression(
             // the variable.
             let mut expr_type_tuples = values
                 .iter()
+                .inspect(|v| debug!("value: {v:#?}"))
                 .filter_map(|value| {
                     // debug!("value", value);
                     let value = s_read!(value);
@@ -1988,7 +1992,29 @@ fn inter_expression(
             if let Some(expr_ty_tuple) = expr_type_tuples.pop() {
                 debug!("returning {:?}", expr_ty_tuple);
                 Ok(expr_ty_tuple)
+            } else if let Some(ref id) =
+                lu_dog.exhume_function_id_by_name(&name.to_upper_camel_case())
+            {
+                // 🚧 The exhumation above is sort of messed up. I dan't like that
+                // I have to turn it into upper-camel-case.
+                // We get here because there was no local variable info, so we are
+                // going to check if it's a function.
+                // 🚧 NB: We'll only find it if it's been processed. We really need to
+                // load function definitions before we start processing the block.
+                // 🚧 NB: If it's imported we're screwed until that's implemented.
+                //
+                // Dang. We need to return an expression, and what I'd really like
+                // to do is just return the function's return type. I wonder if I
+                // can cheat and return a variable expression?
+                debug!("found a function named {name}");
+                let func = lu_dog.exhume_function(id).unwrap();
+                let ty = s_read!(func).r10_value_type(lu_dog)[0].clone();
+                let expr = VariableExpression::new(name.to_owned(), lu_dog);
+                let expr = Expression::new_variable_expression(&expr, lu_dog);
+
+                Ok(((expr, span), ty))
             } else {
+                debug!("variable not found");
                 // 🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧
                 // As neat as it is that I'm compiling this into the binary, we should actually
                 // bail here, and make the user do something about it. The issue is that this
@@ -2021,7 +2047,7 @@ fn inter_expression(
         ParserExpression::MethodCall(instance, (method, _meth_span), args) => {
             debug!("ParserExpression::MethodCall {:?}", instance);
 
-            let (instance, _instance_ty) = inter_expression(
+            let (instance, instance_ty) = inter_expression(
                 &new_ref!(ParserExpression, instance.0.to_owned()),
                 check_types,
                 &instance.1,
@@ -2031,12 +2057,17 @@ fn inter_expression(
                 models,
                 sarzak,
             )?;
+
+            debug!(
+                "return type {}",
+                PrintableValueType(&instance_ty, lu_dog, sarzak, models).to_string()
+            );
+
             let meth = MethodCall::new(method.to_owned(), lu_dog);
             let call = Call::new_method_call(false, Some(&instance.0), &meth, lu_dog);
             let expr = Expression::new_call(&call, lu_dog);
 
-            let method_return_type = ValueType::new_unknown(lu_dog);
-            let value = XValue::new_expression(block, &method_return_type, &expr, lu_dog);
+            let value = XValue::new_expression(block, &instance_ty, &expr, lu_dog);
             s_write!(span).x_value = Some(s_read!(value).id);
 
             let mut last_arg_uuid: Option<Uuid> = None;
@@ -2068,7 +2099,7 @@ fn inter_expression(
                 last_arg_uuid = link_argument!(last_arg_uuid, arg, lu_dog);
             }
 
-            Ok(((expr, span), method_return_type))
+            Ok(((expr, span), instance_ty))
         }
         //
         // Negation
