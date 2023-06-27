@@ -41,14 +41,16 @@ async fn function_handler(event: Request) -> Result<Response<Body>, Error> {
         match ast {
             Ok(ast) => {
                 let lu_dog = new_lu_dog(None, Some((program.to_owned(), &ast)), &[], &sarzak)
-                    .map_err(|e| {
-                        std_err
-                            .write(
-                                format!("{}", dwarf::dwarf::DwarfErrorReporter(&e, &program))
-                                    .as_bytes(),
-                            )
-                            .unwrap();
-                        e
+                    .map_err(|errors| {
+                        for e in &errors {
+                            std_err
+                                .write(
+                                    format!("{}", dwarf::dwarf::DwarfErrorReporter(&e, &program))
+                                        .as_bytes(),
+                                )
+                                .unwrap();
+                        }
+                        errors
                     });
 
                 match lu_dog {

@@ -862,7 +862,9 @@ fn inter_expression(
                 sarzak,
             )?;
 
-            typecheck(&lhs_ty, &rhs_ty, &lhs_p.1, &rhs_p.1, lu_dog, sarzak, models)?;
+            if check_types {
+                typecheck(&lhs_ty, &rhs_ty, &lhs_p.1, &rhs_p.1, lu_dog, sarzak, models)?;
+            }
 
             let expr = Binary::new_assignment(lu_dog);
             let expr = Operator::new_binary(Some(&rhs.0), &lhs.0, &expr, lu_dog);
@@ -1466,7 +1468,9 @@ fn inter_expression(
             // 🚧
             // 🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧
 
-            typecheck(&lhs_ty, &rhs_ty, &lhs_p.1, &rhs_p.1, lu_dog, sarzak, models)?;
+            if check_types {
+                typecheck(&lhs_ty, &rhs_ty, &lhs_p.1, &rhs_p.1, lu_dog, sarzak, models)?;
+            }
 
             let expr = Comparison::new_greater_than_or_equal(lu_dog);
             let expr = Operator::new_comparison(Some(&rhs.0), &lhs.0, &expr, lu_dog);
@@ -1620,17 +1624,19 @@ fn inter_expression(
             )?;
 
             let int_ty = ValueType::new_ty(&new_ref!(Ty, Ty::new_integer()), lu_dog);
-            // let tc_span = s_read!(span).start as usize..s_read!(span).end as usize;
-            let index_span = s_read!(index.1).start as usize..s_read!(index.1).end as usize;
-            typecheck(
-                &int_ty,
-                &index_ty,
-                &index_span,
-                &index_p.1,
-                lu_dog,
-                sarzak,
-                models,
-            )?;
+            if check_types {
+                // let tc_span = s_read!(span).start as usize..s_read!(span).end as usize;
+                let index_span = s_read!(index.1).start as usize..s_read!(index.1).end as usize;
+                typecheck(
+                    &int_ty,
+                    &index_ty,
+                    &index_span,
+                    &index_p.1,
+                    lu_dog,
+                    sarzak,
+                    models,
+                )?;
+            }
 
             let index = Index::new(&index.0, &target.0, lu_dog);
 
@@ -2111,7 +2117,9 @@ fn inter_expression(
                 sarzak,
             )?;
 
-            typecheck(&lhs_ty, &rhs_ty, &lhs_p.1, &rhs_p.1, lu_dog, sarzak, models)?;
+            if check_types {
+                typecheck(&lhs_ty, &rhs_ty, &lhs_p.1, &rhs_p.1, lu_dog, sarzak, models)?;
+            }
 
             let expr = Comparison::new_not_equal(lu_dog);
             let expr = Operator::new_comparison(Some(&rhs.0), &lhs.0, &expr, lu_dog);

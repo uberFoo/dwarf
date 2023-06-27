@@ -39,7 +39,7 @@ fn main() {
 On the other hand, a statement that does not terminate in a semi-colon has the value of it's expression:
 
 ```dwarf
-fn main() {
+fn main() -> int {
     42
 }
 ```
@@ -69,7 +69,7 @@ You use the name to refer to the variable elsewhere in the function:
 ```dwarf
 fn main() {
     let a = 42;
-    print(a)
+    print(a);
 }
 ```
 
@@ -79,11 +79,12 @@ The following code defines a function that takes an integer, does some computati
 ```dwarf
 fn foo(a: int) -> string {
     let b = a * 2;
-//    "The value of b is " + b as string
-    "The value of b is {1}. This is here just to confuse you {0}".format("hahahah!", b)
+    // 🚧 This should not need a cast.
+    "The value of b is {1}. This is here just to confuse you, {0}".format("hah!", b) as string
 }
 
-print(foo(42) + "\n");
+// 🚧 This should not need a cast.
+print(foo(42) as string + "\n");
 ```
 
 
@@ -126,35 +127,11 @@ The following is an example of a conditional expression:
 ```dwarf
 fn main() {
     let a = 42;
-    let b = 3.14;
+    let b = 69;
     let c = if a > b { a } else { b };
     print(c);
 }
 ```
-
-> **Numeric Type Casting**
->
-> There are some subtleties to conditional expressions with regard to {{i: type conversion}}.
-> In the example below if we let {{i: *ChaCha*}} (the interpreter) do the conversion for us it will convert the {{i: `int`}} to a {{i: `float`}}.
-> The first comparison turns out as expected.
-> ```dwarf
-> fn main() {
->     let a = 3;
->     let b = 3.14;
->     let c = if a >= b  { a } else { b }; // c == 3.14
->     print("{0}\n".format(c));
->
->     // The parens around the expression `b as int` are not required.
->     let c = if a >= (b as int)  { a } else { b }; // c == ?
->     print("{0}\n".format(c));
-> }
-> ```
-> In the second comparison we are casting `b` to an `int` with the {{i: `as`}} expression.
-> Note the difference.
->
-> *ChCha* *always converts `int`s to `float`s* when performing binary operations.
-> This is genearally the least surprising behavior.
-
 There are all the usual {{i: comparison operators}}: `==`, `!=`, `<`, `<=`, `>`, `>=`:
 
 ```dwarf
