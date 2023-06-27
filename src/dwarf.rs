@@ -229,12 +229,12 @@ impl fmt::Display for DwarfErrorReporter<'_, '_> {
                     .with_label(
                         Label::new(expected_span.to_owned())
                             .with_message(format!("expected {}", C_OTHER.paint(expected)))
-                            .with_color(Color::Red),
+                            .with_color(Color::Yellow),
                     )
                     .with_label(
                         Label::new(found_span.to_owned())
                             .with_message(format!("found {}", C_OTHER.paint(found)))
-                            .with_color(Color::Yellow),
+                            .with_color(Color::Red),
                     )
                     .finish()
                     .write(Source::from(&program), &mut std_err)
