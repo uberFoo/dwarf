@@ -5,7 +5,7 @@ use std::{
 };
 
 use ansi_term::Colour;
-use ariadne::{Label, Report, ReportKind, Source};
+use ariadne::{Color, Label, Report, ReportKind, Source};
 use chacha::vm::Instruction;
 use clap::Args;
 use crossbeam::channel::SendError;
@@ -16,7 +16,10 @@ use snafu::{prelude::*, Location};
 
 pub mod chacha;
 pub mod dwarf;
-#[cfg(all(not(feature = "print-std-out"), not(feature = "single")))]
+#[cfg(all(
+    not(feature = "print-std-out"),
+    not(any(feature = "single", feature = "single-vec"))
+))]
 pub mod tui;
 pub(crate) mod value;
 // pub mod merlin;
@@ -34,6 +37,37 @@ use lu_dog::ValueType;
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "single")] {
+        type RcType<T> = std::rc::Rc<T>;
+        impl<T> NewRcType<T> for RcType<T> {
+            fn new_rc_type(value: T) -> RcType<T> {
+                std::rc::Rc::new(value)
+            }
+        }
+
+        type RefType<T> = std::rc::Rc<std::cell::RefCell<T>>;
+
+        impl<T> NewRef<T> for RefType<T> {
+            fn new_ref(value: T) -> RefType<T> {
+                std::rc::Rc::new(std::cell::RefCell::new(value))
+            }
+        }
+
+        // Macros to abstract the underlying read/write operations.
+        #[macro_export]
+        macro_rules! ref_read {
+            ($arg:expr) => {
+                $arg.borrow()
+            };
+        }
+
+        #[macro_export]
+        macro_rules! ref_write {
+            ($arg:expr) => {
+                $arg.borrow_mut()
+            };
+        }
+
+    } else if #[cfg(feature = "single-vec")] {
         type RcType<T> = std::rc::Rc<T>;
         impl<T> NewRcType<T> for RcType<T> {
             fn new_rc_type(value: T) -> RcType<T> {
@@ -345,7 +379,7 @@ pub enum ChaChaError {
     #[snafu(display("\n{}: no such method `{}`.", ERR_CLR.bold().paint("error"), OTH_CLR.paint(method)))]
     NoSuchMethod {
         method: String,
-        span: Range<usize>,
+        span: Span,
     },
     #[snafu(display("\n{}: could not find static method `{}::{}`.", ERR_CLR.bold().paint("error"), OTH_CLR.paint(ty), OTH_CLR.paint(method)))]
     NoSuchStaticMethod {
@@ -379,11 +413,16 @@ pub enum ChaChaError {
     TypeMismatch {
         expected: String,
         got: String,
-        span: Range<usize>,
+        span: Span,
     },
+    /// A Variable was not found
+    ///
+    /// While happily interpreting away, we ran into a variable that we could
+    /// not resolve.
     #[snafu(display("\n{}: variable `{}` not found.", ERR_CLR.bold().paint("error"), POP_CLR.paint(var)))]
     VariableNotFound {
         var: String,
+        span: Span,
     },
     #[snafu(display("\n{}: vm panic: {}", ERR_CLR.bold().paint("error"), OTH_CLR.paint(message)))]
     VmPanic {
@@ -411,9 +450,24 @@ impl fmt::Display for ChaChaErrorReporter<'_, '_> {
                 Report::build(ReportKind::Error, (), span.start)
                     .with_message("not a function")
                     .with_label(
-                        Label::new(span.clone()).with_message("found here"), // .with_color(Color::Red),
+                        Label::new(span.clone())
+                            .with_message("found here")
+                            .with_color(Color::Red),
                     )
                     .with_note(value.to_string())
+                    .finish()
+                    .write(Source::from(&program), &mut std_err)
+                    .map_err(|_| fmt::Error)?;
+                write!(f, "{}", String::from_utf8_lossy(&std_err))
+            }
+            ChaChaError::VariableNotFound { var, span } => {
+                Report::build(ReportKind::Error, (), span.start)
+                    .with_message("variable not found")
+                    .with_label(
+                        Label::new(span.clone())
+                            .with_message("found here")
+                            .with_color(Color::Red),
+                    )
                     .finish()
                     .write(Source::from(&program), &mut std_err)
                     .map_err(|_| fmt::Error)?;

@@ -11,6 +11,10 @@ use log::{self, log_enabled, Level::Debug};
 
 use parking_lot::{Condvar, Mutex};
 
+use sarzak::lu_dog::{
+    BinaryEnum, BooleanLiteralEnum, BooleanOperatorEnum, ComparisonEnum, ExpressionEnum,
+    FieldAccessTargetEnum, LiteralEnum, UnaryEnum, ValueTypeEnum,
+};
 // use rayon::prelude::*;
 use snafu::{location, prelude::*, Location};
 use tracy_client::{span, Client};
@@ -23,10 +27,9 @@ use crate::{
     },
     dwarf::{inter_statement, parse_line},
     lu_dog::{
-        Argument, Binary, Block, BooleanLiteral, BooleanOperator, CallEnum, Comparison,
-        DwarfSourceFile, Expression, FieldAccessTarget, Function, Import, List, Literal,
+        Argument, Block, CallEnum, DwarfSourceFile, Expression, Function, Import, List,
         LocalVariable, ObjectStore as LuDogStore, OperatorEnum, Span, Statement, StatementEnum,
-        Unary, ValueType, Variable, WoogOptionEnum, XValue, XValueEnum,
+        ValueType, Variable, WoogOptionEnum, XValue, XValueEnum,
     },
     new_ref, s_read, s_write,
     sarzak::{store::ObjectStore as SarzakStore, types::Ty},
@@ -658,7 +661,7 @@ fn eval_function_call(
         }
 
         let mut value = new_ref!(Value, Value::Empty);
-        let mut ty = ValueType::new_empty(&s_read!(lu_dog));
+        let mut ty = ValueType::new_empty(&mut s_write!(lu_dog));
         // This is a pain.
         // Find the first statement, by looking for the one with no previous statement.
         // let mut next = stmts
@@ -685,7 +688,7 @@ fn eval_function_call(
                     context.memory.pop_frame();
 
                     // if let ChaChaError::Return { value } = &e {
-                    //     let ty = value.get_type(&s_read!(lu_dog));
+                    //     let ty = value.get_type(&mut s_write!(lu_dog));
                     //     return Ok((value, ty));
                     // }
 
@@ -719,7 +722,7 @@ fn eval_function_call(
     } else {
         Ok((
             new_ref!(Value, Value::Empty),
-            ValueType::new_empty(&s_read!(lu_dog)),
+            ValueType::new_empty(&mut s_write!(lu_dog)),
         ))
     }
 }
@@ -797,14 +800,14 @@ fn eval_expression(
         let source = s_read!(lu_dog).iter_dwarf_source_file().next().unwrap();
         let source = s_read!(source);
         let source = &source.source;
-        fix_error!("{}", source[span].to_owned());
+        debug!("executing {}", source[span].to_owned());
     }
 
-    match *s_read!(expression) {
+    match s_read!(expression).subtype {
         //
         // Block
         //
-        Expression::Block(ref block) => {
+        ExpressionEnum::Block(ref block) => {
             let block = s_read!(lu_dog).exhume_block(block).unwrap();
             let stmts = s_read!(block).r18_statement(&s_read!(lu_dog));
 
@@ -812,13 +815,6 @@ fn eval_expression(
                 context.memory.push_frame();
                 let mut value;
                 let mut ty;
-                // This is a pain.
-                // Find the first statement, by looking for the one with no previous statement.
-                // let mut next = stmts
-                //     .iter()
-                //     .find(|s| s_read!(s).r17c_statement(&s_read!(lu_dog)).is_empty())
-                //     .unwrap()
-                //     .clone();
                 let mut next = s_read!(block).r71_statement(&s_read!(lu_dog))[0].clone();
 
                 loop {
@@ -837,7 +833,7 @@ fn eval_expression(
                         context.memory.pop_frame();
 
                         // if let ChaChaError::Return { value } = &e {
-                        //     let ty = value.get_type(&s_read!(lu_dog));
+                        //     let ty = value.get_type(&mut s_write!(lu_dog));
                         //     return Ok((value, ty));
                         // }
 
@@ -865,14 +861,14 @@ fn eval_expression(
             } else {
                 Ok((
                     new_ref!(Value, Value::Empty),
-                    ValueType::new_empty(&s_read!(lu_dog)),
+                    ValueType::new_empty(&mut s_write!(lu_dog)),
                 ))
             }
         }
         //
         // Call
         //
-        Expression::Call(ref call) => {
+        ExpressionEnum::Call(ref call) => {
             let call = s_read!(lu_dog).exhume_call(call).unwrap();
             fix_debug!("call", call);
             let args = s_read!(call).r28_argument(&s_read!(lu_dog));
@@ -884,8 +880,8 @@ fn eval_expression(
                 let expr = s_read!(lu_dog).exhume_expression(expr).unwrap();
                 // Evaluate the LHS to get at the function.
                 let (value, ty) = eval_expression(expr, context, vm)?;
-                fix_debug!("Expression::Call LHS value", s_read!(value));
-                fix_debug!("Expression::Call LHS ty", ty);
+                fix_debug!("ExpressionEnum::Call LHS value", s_read!(value));
+                fix_debug!("ExpressionEnum::Call LHS ty", ty);
 
                 let mut tuple_from_value = || -> Result<(RefType<Value>, RefType<ValueType>)> {
                     // Below we are reading the value of the LHS, and then using that
@@ -897,7 +893,7 @@ fn eval_expression(
                             let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
 
                             let func = s_read!(lu_dog).exhume_function(&s_read!(func).id).unwrap();
-                            fix_debug!("Expression::Call func", func);
+                            debug!("ExpressionEnum::Call func: {func:?}");
                             let (value, ty) = eval_function_call(
                                 func,
                                 &args,
@@ -910,12 +906,13 @@ fn eval_expression(
                             fix_debug!("ty", ty);
                             Ok((value, ty))
                         }
-                        Value::ProxyType(pt) => {
-                            let ty = s_read!(lu_dog)
-                                .exhume_value_type(&s_read!(pt).struct_uuid())
-                                .unwrap();
-                            Ok((value.clone(), ty))
-                        }
+                        // 🚧 ProxyType
+                        // Value::ProxyType(pt) => {
+                        //     let ty = s_read!(lu_dog)
+                        //         .exhume_value_type(&s_read!(pt).struct_uuid())
+                        //         .unwrap();
+                        //     Ok((value.clone(), ty))
+                        // }
                         Value::UserType(ut) => Ok((value.clone(), s_read!(ut).get_type().clone())),
                         value_ => {
                             let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
@@ -943,8 +940,8 @@ fn eval_expression(
                 // Or iterators things like
                 // `[1, 2, 3].iter().map(|x| x + 1)`
                 // `["hello", "I", "am", "dwarf!"].sort();
-                let x = match &*s_read!(ty) {
-                    ValueType::Ty(ref id) => {
+                let x = match &s_read!(ty).subtype {
+                    ValueTypeEnum::Ty(ref id) => {
                         let _ty = *s_read!(sarzak).exhume_ty(id).unwrap();
                         match &_ty {
                             Ty::SString(_) => (value, ty.clone()),
@@ -957,7 +954,7 @@ fn eval_expression(
             } else {
                 (
                     new_ref!(Value, Value::Empty),
-                    ValueType::new_empty(&s_read!(lu_dog)),
+                    ValueType::new_empty(&mut s_write!(lu_dog)),
                 )
             };
 
@@ -1023,8 +1020,7 @@ fn eval_expression(
                                 .collect::<Vec<&str>>()
                                 .len();
                                 let ty = Ty::new_integer();
-                                let ty =
-                                    ValueType::new_ty(&new_ref!(Ty, ty), &mut s_write!(lu_dog));
+                                let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
                                 Ok((new_ref!(Value, Value::Integer(len as i64)), ty))
                             }
                             "format" => {
@@ -1130,8 +1126,7 @@ fn eval_expression(
                                 }
 
                                 let ty = Ty::new_s_string();
-                                let ty =
-                                    ValueType::new_ty(&new_ref!(Ty, ty), &mut s_write!(lu_dog));
+                                let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
                                 Ok((new_ref!(Value, Value::String(result)), ty))
                             }
                             value_ => {
@@ -1155,7 +1150,7 @@ fn eval_expression(
                                 let ut_read = s_read!(ut);
                                 let ty = ut_read.get_type();
                                 let ty = s_read!(ty);
-                                if let ValueType::WoogStruct(woog_struct) = &*ty {
+                                if let ValueTypeEnum::WoogStruct(woog_struct) = &ty.subtype {
                                     *woog_struct
                                 } else {
                                     // 🚧 This should be an error.
@@ -1241,7 +1236,7 @@ fn eval_expression(
                     if ty == "Uuid" && func == "new" {
                         let value = Value::Uuid(Uuid::new_v4());
                         let ty = Ty::new_s_uuid();
-                        let ty = s_read!(lu_dog).exhume_value_type(&ty.id()).unwrap();
+                        let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
 
                         Ok((new_ref!(Value, value), ty))
                     } else if ty == "ComplexEx" {
@@ -1298,7 +1293,7 @@ fn eval_expression(
                             "args" => {
                                 debug!("evaluating chacha::args");
                                 let ty = Ty::new_s_string();
-                                let ty = s_read!(lu_dog).exhume_value_type(&ty.id()).unwrap();
+                                let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
                                 let ty = List::new(&ty, &mut s_write!(lu_dog));
                                 let ty = ValueType::new_list(&ty, &mut s_write!(lu_dog));
 
@@ -1316,7 +1311,8 @@ fn eval_expression(
                                 let (_arg, ty) = arg_values.pop_front().unwrap();
                                 let pvt_ty = PrintableValueType(&ty, context);
                                 let ty = Ty::new_s_string();
-                                let ty = s_read!(lu_dog).exhume_value_type(&ty.id()).unwrap();
+                                let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
+
                                 Ok((new_ref!(Value, pvt_ty.to_string().into()), ty))
                             }
                             "time" => {
@@ -1353,7 +1349,7 @@ fn eval_expression(
                                 // chacha_print(time, context)?;
 
                                 let ty = Ty::new_float();
-                                let ty = s_read!(lu_dog).exhume_value_type(&ty.id()).unwrap();
+                                let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
 
                                 Ok((new_ref!(Value, Value::Float(elapsed.as_secs_f64())), ty))
                             }
@@ -1378,7 +1374,7 @@ fn eval_expression(
                                 // chacha_print(result, context)?;
 
                                 let ty = Ty::new_s_string();
-                                let ty = s_read!(lu_dog).exhume_value_type(&ty.id()).unwrap();
+                                let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
 
                                 Ok((new_ref!(Value, Value::String(result)), ty))
                             }
@@ -1394,8 +1390,7 @@ fn eval_expression(
                                     // if value.into() {
                                     if result {
                                         let ty = Ty::new_boolean();
-                                        let ty =
-                                            s_read!(lu_dog).exhume_value_type(&ty.id()).unwrap();
+                                        let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
 
                                         Ok((new_ref!(Value, value), ty))
                                     } else {
@@ -1454,7 +1449,7 @@ fn eval_expression(
                                 fix_error!("deal with call expression", value);
                                 Ok((
                                     new_ref!(Value, Value::Empty),
-                                    ValueType::new_empty(&s_read!(lu_dog)),
+                                    ValueType::new_empty(&mut s_write!(lu_dog)),
                                 ))
                             }
                         }
@@ -1504,7 +1499,7 @@ fn eval_expression(
                                 fix_error!("deal with call expression", value);
                                 Ok((
                                     new_ref!(Value, Value::Empty),
-                                    ValueType::new_empty(&s_read!(lu_dog)),
+                                    ValueType::new_empty(&mut s_write!(lu_dog)),
                                 ))
                             }
                         }
@@ -1527,14 +1522,14 @@ fn eval_expression(
 
             call_result
         }
-        Expression::Debugger(_) => {
+        ExpressionEnum::Debugger(_) => {
             fix_debug!("StatementEnum::Debugger");
             let mut running = RUNNING.lock();
             *running = false;
             *STEPPING.lock() = true;
             Ok((
                 new_ref!(Value, Value::Empty),
-                ValueType::new_empty(&s_read!(lu_dog)),
+                ValueType::new_empty(&mut s_write!(lu_dog)),
             ))
         }
         //
@@ -1542,7 +1537,7 @@ fn eval_expression(
         //
         // 🚧 This should be looked at as part of  The Great Error Overhaul
         //
-        Expression::ErrorExpression(ref error) => {
+        ExpressionEnum::ErrorExpression(ref error) => {
             let error = s_read!(lu_dog).exhume_error_expression(error).unwrap();
 
             // 🚧 This isn't going to cut it.
@@ -1550,22 +1545,22 @@ fn eval_expression(
 
             Ok((
                 new_ref!(Value, Value::Empty),
-                ValueType::new_empty(&s_read!(lu_dog)),
+                ValueType::new_empty(&mut s_write!(lu_dog)),
             ))
         }
         //
         // FieldAccess
         //
-        Expression::FieldAccess(ref field) => {
+        ExpressionEnum::FieldAccess(ref field) => {
             let field = s_read!(lu_dog).exhume_field_access(field).unwrap();
             let fat = &s_read!(field).r65_field_access_target(&s_read!(lu_dog))[0];
-            let field_name = match *s_read!(fat) {
-                FieldAccessTarget::Field(ref field) => {
+            let field_name = match s_read!(fat).subtype {
+                FieldAccessTargetEnum::Field(ref field) => {
                     let field = s_read!(lu_dog).exhume_field(field).unwrap();
                     let field = s_read!(field);
                     field.name.to_owned()
                 }
-                FieldAccessTarget::Function(ref func) => {
+                FieldAccessTargetEnum::Function(ref func) => {
                     let func = s_read!(lu_dog).exhume_function(func).unwrap();
                     let func = s_read!(func);
                     func.name.to_owned()
@@ -1596,14 +1591,14 @@ fn eval_expression(
                 Value::ProxyType(value) => {
                     let value = s_read!(value);
                     let value = value.get_attr_value(&field_name)?;
-                    let ty = s_read!(value).get_type(&s_read!(lu_dog));
+                    let ty = s_read!(value).get_type(&mut s_write!(lu_dog));
 
                     Ok((value, ty))
                 }
                 Value::UserType(value) => {
                     let value = s_read!(value);
                     let value = value.get_attr_value(field_name).unwrap();
-                    let ty = s_read!(value).get_type(&s_read!(lu_dog));
+                    let ty = s_read!(value).get_type(&mut s_write!(lu_dog));
 
                     Ok((value.clone(), ty))
                 }
@@ -1617,7 +1612,7 @@ fn eval_expression(
         //
         // For Loop
         //
-        Expression::ForLoop(ref for_loop) => {
+        ExpressionEnum::ForLoop(ref for_loop) => {
             fix_debug!("ForLoop", for_loop);
 
             let for_loop = s_read!(lu_dog).exhume_for_loop(for_loop).unwrap();
@@ -1674,13 +1669,13 @@ fn eval_expression(
 
             Ok((
                 new_ref!(Value, Value::Empty),
-                ValueType::new_empty(&s_read!(lu_dog)),
+                ValueType::new_empty(&mut s_write!(lu_dog)),
             ))
         }
         //
         // Index
         //
-        Expression::Index(ref index) => {
+        ExpressionEnum::Index(ref index) => {
             let index = s_read!(lu_dog).exhume_index(index).unwrap();
             let index = s_read!(index);
             let target = s_read!(lu_dog).exhume_expression(&index.target).unwrap();
@@ -1711,7 +1706,7 @@ fn eval_expression(
 
                         if index < str.len() {
                             let ty = Ty::new_s_string();
-                            let ty = s_read!(lu_dog).exhume_value_type(&ty.id()).unwrap();
+                            let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
                             Ok((
                                 new_ref!(Value, Value::String(str[index..index + 1].join(""),)),
                                 ty,
@@ -1751,7 +1746,7 @@ fn eval_expression(
 
                         if range.end < str.len() {
                             let ty = Ty::new_s_string();
-                            let ty = s_read!(lu_dog).exhume_value_type(&ty.id()).unwrap();
+                            let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
                             Ok((new_ref!(Value, Value::String(str[range].join(""),)), ty))
                         } else {
                             Err(ChaChaError::BadJuJu {
@@ -1775,7 +1770,7 @@ fn eval_expression(
         //
         // ListElement
         //
-        Expression::ListElement(ref element) => {
+        ExpressionEnum::ListElement(ref element) => {
             let element = s_read!(lu_dog).exhume_list_element(element).unwrap();
             let element = s_read!(element);
             let expr = element.r55_expression(&s_read!(lu_dog))[0].clone();
@@ -1784,7 +1779,7 @@ fn eval_expression(
         //
         // ListExpression
         //
-        Expression::ListExpression(ref list) => {
+        ExpressionEnum::ListExpression(ref list) => {
             let list = s_read!(lu_dog).exhume_list_expression(list).unwrap();
             let list = s_read!(list);
             if let Some(ref element) = list.elements {
@@ -1825,7 +1820,7 @@ fn eval_expression(
                 ))
             } else {
                 let list = List::new(
-                    &ValueType::new_empty(&s_write!(lu_dog)),
+                    &ValueType::new_empty(&mut s_write!(lu_dog)),
                     &mut s_write!(lu_dog),
                 );
 
@@ -1838,23 +1833,23 @@ fn eval_expression(
         //
         // Literal
         //
-        Expression::Literal(ref literal) => {
+        ExpressionEnum::Literal(ref literal) => {
             let literal = s_read!(lu_dog).exhume_literal(literal).unwrap();
-            let z = match &*s_read!(literal) {
+            let z = match &s_read!(literal).subtype {
                 //
                 // BooleanLiteral
                 //
-                Literal::BooleanLiteral(ref literal) => {
+                LiteralEnum::BooleanLiteral(ref literal) => {
                     let literal = s_read!(lu_dog).exhume_boolean_literal(literal).unwrap();
                     let literal = s_read!(literal);
                     let ty = Ty::new_boolean();
-                    let ty = s_read!(lu_dog).exhume_value_type(&ty.id()).unwrap();
+                    let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
 
-                    match *literal {
-                        BooleanLiteral::FalseLiteral(_) => {
+                    match literal.subtype {
+                        BooleanLiteralEnum::FalseLiteral(_) => {
                             Ok((new_ref!(Value, Value::Boolean(false,)), ty))
                         }
-                        BooleanLiteral::TrueLiteral(_) => {
+                        BooleanLiteralEnum::TrueLiteral(_) => {
                             Ok((new_ref!(Value, Value::Boolean(true,)), ty))
                         }
                     }
@@ -1862,40 +1857,36 @@ fn eval_expression(
                 //
                 // FloatLiteral
                 //
-                Literal::FloatLiteral(ref literal) => {
+                LiteralEnum::FloatLiteral(ref literal) => {
                     let literal = s_read!(lu_dog).exhume_float_literal(literal).unwrap();
                     let value = s_read!(literal).x_value;
                     let value = Value::Float(value);
                     let ty = Ty::new_float();
-                    fix_debug!("ty: {:?}", ty);
-                    let ty = s_read!(lu_dog).exhume_value_type(&ty.id()).unwrap();
-                    fix_debug!("ty: {:?}", ty);
+                    let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
 
                     Ok((new_ref!(Value, value), ty))
                 }
                 //
                 // IntegerLiteral
                 //
-                Literal::IntegerLiteral(ref literal) => {
+                LiteralEnum::IntegerLiteral(ref literal) => {
                     let literal = s_read!(lu_dog).exhume_integer_literal(literal).unwrap();
                     let value = s_read!(literal).x_value;
                     let value = Value::Integer(value);
                     let ty = Ty::new_integer();
-                    fix_debug!("ty: {:?}", ty);
-                    let ty = s_read!(lu_dog).exhume_value_type(&ty.id()).unwrap();
-                    fix_debug!("ty: {:?}", ty);
+                    let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
 
                     Ok((new_ref!(Value, value), ty))
                 }
                 //
                 // StringLiteral
                 //
-                Literal::StringLiteral(ref literal) => {
+                LiteralEnum::StringLiteral(ref literal) => {
                     let literal = s_read!(lu_dog).exhume_string_literal(literal).unwrap();
                     // 🚧 It'd be great if this were an Rc...
                     let value = Value::String(s_read!(literal).x_value.clone());
                     let ty = Ty::new_s_string();
-                    let ty = s_read!(lu_dog).exhume_value_type(&ty.id()).unwrap();
+                    let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
                     Ok((new_ref!(Value, value), ty))
                 }
             };
@@ -1904,7 +1895,7 @@ fn eval_expression(
         //
         // Operator
         //
-        Expression::Operator(ref operator) => {
+        ExpressionEnum::Operator(ref operator) => {
             let operator = s_read!(lu_dog).exhume_operator(operator).unwrap();
             let operator = s_read!(operator);
             let lhs_expr = s_read!(lu_dog).exhume_expression(&operator.lhs).unwrap();
@@ -1924,8 +1915,8 @@ fn eval_expression(
                     let binary = s_read!(lu_dog).exhume_binary(binary).unwrap();
                     let binary = s_read!(binary);
 
-                    match &*binary {
-                        Binary::Addition(_) => {
+                    match &binary.subtype {
+                        BinaryEnum::Addition(_) => {
                             let (lhs, lhs_ty) = eval_expression(lhs_expr, context, vm)?;
                             let rhs = {
                                 let rhs = operator.rhs.unwrap();
@@ -1935,16 +1926,16 @@ fn eval_expression(
                             let value = s_read!(lhs).clone() + s_read!(rhs.0).clone();
                             Ok((new_ref!(Value, value), lhs_ty))
                         }
-                        Binary::Assignment(_) => {
+                        BinaryEnum::Assignment(_) => {
                             // Type checking has already been handled by the compiler.
-                            match &*s_read!(lhs_expr) {
+                            match &s_read!(lhs_expr).subtype {
                                 // 🚧 I'm sort of duplicating work here. It's not exactly the same
                                 // as the general expression handling code, but I think it's close
                                 // enough that I could make it work if I wanted to. And so I should.
                                 //
                                 // Hm. I've already processed the lhs above, and I'm basically doing
                                 // it again here.
-                                Expression::VariableExpression(expr) => {
+                                ExpressionEnum::VariableExpression(expr) => {
                                     let rhs = {
                                         let rhs = operator.rhs.unwrap();
                                         let rhs = s_read!(lu_dog).exhume_expression(&rhs).unwrap();
@@ -1959,7 +1950,7 @@ fn eval_expression(
                                     *value = s_read!(rhs.0).clone();
                                     Ok(rhs)
                                 }
-                                Expression::FieldAccess(field) => {
+                                ExpressionEnum::FieldAccess(field) => {
                                     let rhs = {
                                         let rhs = operator.rhs.unwrap();
                                         let rhs = s_read!(lu_dog).exhume_expression(&rhs).unwrap();
@@ -1968,14 +1959,14 @@ fn eval_expression(
                                     let field = s_read!(lu_dog).exhume_field_access(field).unwrap();
                                     let fat = &s_read!(field)
                                         .r65_field_access_target(&s_read!(lu_dog))[0];
-                                    let field_name = match *s_read!(fat) {
-                                        FieldAccessTarget::Field(ref field) => {
+                                    let field_name = match s_read!(fat).subtype {
+                                        FieldAccessTargetEnum::Field(ref field) => {
                                             let field =
                                                 s_read!(lu_dog).exhume_field(field).unwrap();
                                             let field = s_read!(field);
                                             field.name.to_owned()
                                         }
-                                        FieldAccessTarget::Function(_) => {
+                                        FieldAccessTargetEnum::Function(_) => {
                                             return Err(ChaChaError::BadJuJu {
                                                 message: "Attempt to assign to function".to_owned(),
                                                 location: location!(),
@@ -1986,17 +1977,22 @@ fn eval_expression(
                                     let expr = &s_read!(field).expression;
                                     let expr = s_read!(lu_dog).exhume_expression(expr).unwrap();
 
-                                    let Expression::VariableExpression(expr) = &*s_read!(expr)
+                                    let ExpressionEnum::VariableExpression(expr) = &s_read!(expr).subtype
                                     else { unreachable!() };
                                     let expr = s_read!(lu_dog).exhume_expression(expr).unwrap();
                                     let expr = s_read!(lu_dog)
-                                        .exhume_variable_expression(&(*s_read!(expr)).id())
+                                        .exhume_variable_expression(&(*s_read!(expr)).id)
                                         .unwrap();
 
                                     let value = context.memory.get(&s_read!(expr).name);
                                     ensure!(value.is_some(), {
+                                        let value =
+                                            &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
+                                        let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
+                                        let read = s_read!(span);
+                                        let span = read.start as usize..read.end as usize;
                                         let var = s_read!(expr).name.clone();
-                                        VariableNotFoundSnafu { var }
+                                        VariableNotFoundSnafu { var, span }
                                     });
 
                                     let value = value.unwrap();
@@ -2022,36 +2018,9 @@ fn eval_expression(
                                         }
                                     }
 
-                                    // This is the LHS.
-                                    // The "other" LHS? It's
-                                    // let (value, ty) = eval_expression(expr, context, vm)?;
-                                    // fix_debug!("field access fubar", value);
-                                    // let value_read = s_read!(value).clone();
-                                    // match &value_read {
-                                    //     // match &*s_read!(lhs) {
-                                    //     Value::ProxyType(lhs) => {
-                                    //         s_write!(lhs).set_attr_value(&field_name, rhs.0)?;
-                                    //         Ok((value, ty))
-                                    //     }
-                                    //     Value::UserType(lhs) => {
-                                    //         s_write!(lhs).set_attr_value(&field_name, rhs.0);
-                                    //         Ok((value, ty))
-                                    //     }
-                                    //     // 🚧 This needs it's own error. Lazy me.
-                                    //     value => {
-                                    //         return Err(ChaChaError::BadJuJu {
-                                    //             message: format!(
-                                    //                 "Bad value ({:?}) in field access",
-                                    //                 value
-                                    //             ),
-
-                                    //             location: location!(),
-                                    //         })
-                                    //     }
-                                    // }
                                     Ok((
                                         new_ref!(Value, Value::Empty),
-                                        ValueType::new_empty(&s_read!(lu_dog)),
+                                        ValueType::new_empty(&mut s_write!(lu_dog)),
                                     ))
                                 }
                                 _ => Err(ChaChaError::BadJuJu {
@@ -2062,7 +2031,7 @@ fn eval_expression(
 
                             // Ok((lhs, lhs_ty))
                         }
-                        Binary::BooleanOperator(ref id) => {
+                        BinaryEnum::BooleanOperator(ref id) => {
                             let (lhs, lhs_ty) = eval_expression(lhs_expr, context, vm)?;
                             let rhs = {
                                 let rhs = operator.rhs.unwrap();
@@ -2072,15 +2041,15 @@ fn eval_expression(
                             let boolean_operator =
                                 s_read!(lu_dog).exhume_boolean_operator(id).unwrap();
                             let boolean_operator = s_read!(boolean_operator);
-                            match &*boolean_operator {
-                                BooleanOperator::And(_) => {
+                            match &boolean_operator.subtype {
+                                BooleanOperatorEnum::And(_) => {
                                     let value = Value::Boolean(
                                         (&*s_read!(lhs)).try_into().unwrap()
                                             && (&*s_read!(rhs.0)).try_into().unwrap(),
                                     );
                                     Ok((new_ref!(Value, value), lhs_ty))
                                 }
-                                BooleanOperator::Or(_) => {
+                                BooleanOperatorEnum::Or(_) => {
                                     let value = Value::Boolean(
                                         (&*s_read!(lhs)).try_into().unwrap()
                                             || (&*s_read!(rhs.0)).try_into().unwrap(),
@@ -2089,7 +2058,7 @@ fn eval_expression(
                                 }
                             }
                         }
-                        Binary::Division(_) => {
+                        BinaryEnum::Division(_) => {
                             let (lhs, lhs_ty) = eval_expression(lhs_expr, context, vm)?;
                             let rhs = {
                                 let rhs = operator.rhs.unwrap();
@@ -2099,7 +2068,7 @@ fn eval_expression(
                             let value = s_read!(lhs).clone() / s_read!(rhs.0).clone();
                             Ok((new_ref!(Value, value), lhs_ty))
                         }
-                        Binary::Subtraction(_) => {
+                        BinaryEnum::Subtraction(_) => {
                             let (lhs, lhs_ty) = eval_expression(lhs_expr, context, vm)?;
                             let rhs = {
                                 let rhs = operator.rhs.unwrap();
@@ -2109,7 +2078,7 @@ fn eval_expression(
                             let value = s_read!(lhs).clone() - s_read!(rhs.0).clone();
                             Ok((new_ref!(Value, value), lhs_ty))
                         }
-                        Binary::Multiplication(_) => {
+                        BinaryEnum::Multiplication(_) => {
                             let (lhs, lhs_ty) = eval_expression(lhs_expr, context, vm)?;
                             let rhs = {
                                 let rhs = operator.rhs.unwrap();
@@ -2130,52 +2099,52 @@ fn eval_expression(
                     };
                     let comp = s_read!(lu_dog).exhume_comparison(comp).unwrap();
                     let comp = s_read!(comp);
-                    match &*comp {
-                        Comparison::Equal(_) => {
+                    match &comp.subtype {
+                        ComparisonEnum::Equal(_) => {
                             let value = *s_read!(lhs) == *s_read!(rhs.0);
                             let value = Value::Boolean(value);
                             let ty = Ty::new_boolean();
-                            let ty = ValueType::new_ty(&new_ref!(Ty, ty), &mut s_write!(lu_dog));
+                            let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
 
                             Ok((new_ref!(Value, value), ty))
                         }
-                        Comparison::GreaterThan(_) => {
+                        ComparisonEnum::GreaterThan(_) => {
                             let value = s_read!(lhs).gt(&s_read!(rhs.0));
                             let value = Value::Boolean(value);
                             let ty = Ty::new_boolean();
-                            let ty = ValueType::new_ty(&new_ref!(Ty, ty), &mut s_write!(lu_dog));
+                            let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
 
                             Ok((new_ref!(Value, value), ty))
                         }
-                        Comparison::GreaterThanOrEqual(_) => {
+                        ComparisonEnum::GreaterThanOrEqual(_) => {
                             let value = s_read!(lhs).gte(&s_read!(rhs.0));
                             let value = Value::Boolean(value);
                             let ty = Ty::new_boolean();
-                            let ty = ValueType::new_ty(&new_ref!(Ty, ty), &mut s_write!(lu_dog));
+                            let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
 
                             Ok((new_ref!(Value, value), ty))
                         }
-                        Comparison::LessThan(_) => {
+                        ComparisonEnum::LessThan(_) => {
                             let value = s_read!(lhs).lt(&s_read!(rhs.0));
                             let value = Value::Boolean(value);
                             let ty = Ty::new_boolean();
-                            let ty = ValueType::new_ty(&new_ref!(Ty, ty), &mut s_write!(lu_dog));
+                            let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
 
                             Ok((new_ref!(Value, value), ty))
                         }
-                        Comparison::LessThanOrEqual(_) => {
+                        ComparisonEnum::LessThanOrEqual(_) => {
                             let value = s_read!(lhs).lte(&s_read!(rhs.0));
                             let value = Value::Boolean(value);
                             let ty = Ty::new_boolean();
-                            let ty = ValueType::new_ty(&new_ref!(Ty, ty), &mut s_write!(lu_dog));
+                            let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
 
                             Ok((new_ref!(Value, value), ty))
                         }
-                        Comparison::NotEqual(_) => {
+                        ComparisonEnum::NotEqual(_) => {
                             let value = *s_read!(lhs) != *s_read!(rhs.0);
                             let value = Value::Boolean(value);
                             let ty = Ty::new_boolean();
-                            let ty = ValueType::new_ty(&new_ref!(Ty, ty), &mut s_write!(lu_dog));
+                            let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
 
                             Ok((new_ref!(Value, value), ty))
                         }
@@ -2185,16 +2154,16 @@ fn eval_expression(
                     let (lhs, lhs_ty) = eval_expression(lhs_expr, context, vm)?;
                     let unary = s_read!(lu_dog).exhume_unary(unary).unwrap();
                     let unary = s_read!(unary);
-                    match &*unary {
+                    match &unary.subtype {
                         //
                         // Negation
                         //
-                        Unary::Negation(_) => {
+                        UnaryEnum::Negation(_) => {
                             let value = -s_read!(lhs).clone();
 
                             Ok((new_ref!(Value, value), lhs_ty))
                         }
-                        Unary::Not(_) => {
+                        UnaryEnum::Not(_) => {
                             let value = !s_read!(lhs).clone();
 
                             Ok((new_ref!(Value, value), lhs_ty))
@@ -2206,9 +2175,9 @@ fn eval_expression(
         //
         // Print
         //
-        Expression::Print(ref print) => {
+        ExpressionEnum::Print(ref print) => {
             let print = s_read!(lu_dog).exhume_print(print).unwrap();
-            fix_debug!("Expression::Print print", print);
+            fix_debug!("ExpressionEnum::Print print", print);
             let expr = s_read!(print).r32_expression(&s_read!(lu_dog))[0].clone();
             let (value, _) = eval_expression(expr, context, vm)?;
             let result = format!("{}", s_read!(value));
@@ -2218,13 +2187,13 @@ fn eval_expression(
 
             Ok((
                 new_ref!(Value, Value::Empty),
-                ValueType::new_empty(&s_read!(lu_dog)),
+                ValueType::new_empty(&mut s_write!(lu_dog)),
             ))
         }
         //
         // Range
         //
-        Expression::RangeExpression(ref range) => {
+        ExpressionEnum::RangeExpression(ref range) => {
             let range = s_read!(lu_dog).exhume_range_expression(range).unwrap();
             let lhs = s_read!(range).lhs.unwrap();
             let lhs = s_read!(lu_dog).exhume_expression(&lhs).unwrap();
@@ -2241,7 +2210,7 @@ fn eval_expression(
 
             Ok((
                 new_ref!(Value, Value::Range(range)),
-                ValueType::new_range(&s_read!(lu_dog)),
+                ValueType::new_range(&mut s_write!(lu_dog)),
             ))
         }
         //
@@ -2250,7 +2219,7 @@ fn eval_expression(
         // 🚧  This creates `UserType`s, but what about `ProxyType`s? I sort of
         // think that the latter is only for imported, but I'm not sure.
         //
-        Expression::StructExpression(ref expr) => {
+        ExpressionEnum::StructExpression(ref expr) => {
             let expr = s_read!(lu_dog).exhume_struct_expression(expr).unwrap();
             let field_exprs = s_read!(expr).r26_field_expression(&s_read!(lu_dog));
 
@@ -2307,19 +2276,19 @@ fn eval_expression(
         //
         // TypeCast
         //
-        Expression::TypeCast(ref expr) => {
+        ExpressionEnum::TypeCast(ref expr) => {
             let sarzak = context.sarzak.clone();
 
             let expr = s_read!(lu_dog).exhume_type_cast(expr).unwrap();
-            fix_debug!("Expression::TypeCast", expr);
+            fix_debug!("ExpressionEnum::TypeCast", expr);
 
             let lhs = s_read!(expr).r68_expression(&s_read!(lu_dog))[0].clone();
             let as_ty = s_read!(expr).r69_value_type(&s_read!(lu_dog))[0].clone();
 
             let (lhs, _lhs_ty) = eval_expression(lhs, context, vm)?;
 
-            let value = match &*s_read!(as_ty) {
-                ValueType::Ty(ref ty) => {
+            let value = match &s_read!(as_ty).subtype {
+                ValueTypeEnum::Ty(ref ty) => {
                     let ty = *s_read!(sarzak).exhume_ty(ty).unwrap();
                     match ty {
                         Ty::Boolean(_) => {
@@ -2365,42 +2334,46 @@ fn eval_expression(
         //
         // VariableExpression
         //
-        Expression::VariableExpression(ref expr) => {
+        ExpressionEnum::VariableExpression(ref expr) => {
             let expr = s_read!(lu_dog).exhume_variable_expression(expr).unwrap();
-            fix_debug!("Expression::VariableExpression", expr);
+            fix_debug!("ExpressionEnum::VariableExpression", expr);
             let value = context.memory.get(&s_read!(expr).name);
 
             ensure!(value.is_some(), {
+                let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
+                let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
+                let read = s_read!(span);
+                let span = read.start as usize..read.end as usize;
                 let var = s_read!(expr).name.clone();
-                VariableNotFoundSnafu { var }
+                VariableNotFoundSnafu { var, span }
             });
 
             let value = value.unwrap();
 
-            fix_debug!("Expression::VariableExpression value", s_read!(value));
+            fix_debug!("ExpressionEnum::VariableExpression value", s_read!(value));
 
             // 🚧 These statements were swapped, comment-status-wise. I thought
             // it was because of a deadlock, or trying to mutably borrow whilst
             // already borrowed error. Anyway, I needed the type, and swapped them
             // to how they are now and it seems to be working. I'm just leaving
             // this for my future self, just in case.
-            let ty = s_read!(value).get_type(&s_read!(lu_dog));
-            // let ty = ValueType::new_empty(&s_read!(lu_dog));
+            let ty = s_read!(value).get_type(&mut s_write!(lu_dog));
+            // let ty = ValueType::new_empty(& mut s_write!(lu_dog));
 
             Ok((value, ty))
         }
         //
         // XIf
         //
-        Expression::XIf(ref expr) => {
+        ExpressionEnum::XIf(ref expr) => {
             let expr = s_read!(lu_dog).exhume_x_if(expr).unwrap();
             let expr = s_read!(expr);
-            fix_debug!("Expression::XIf", expr);
+            fix_debug!("ExpressionEnum::XIf", expr);
 
             let cond_expr = s_read!(lu_dog).exhume_expression(&expr.test).unwrap();
 
             let (cond, _ty) = eval_expression(cond_expr, context, vm)?;
-            fix_debug!("Expression::XIf conditional", cond);
+            fix_debug!("ExpressionEnum::XIf conditional", cond);
 
             let cond = s_read!(cond);
             Ok(if (&*cond).try_into()? {
@@ -2408,16 +2381,16 @@ fn eval_expression(
                 let block = s_read!(lu_dog).exhume_expression(&expr.true_block).unwrap();
                 eval_expression(block, context, vm)?
             } else {
-                fix_debug!("Expression::XIf else");
+                fix_debug!("ExpressionEnum::XIf else");
                 if let Some(expr) = &expr.false_block {
-                    fix_debug!("Expression::XIf false block");
+                    fix_debug!("ExpressionEnum::XIf false block");
                     // Evaluate the false block
                     let block = s_read!(lu_dog).exhume_expression(expr).unwrap();
                     eval_expression(block, context, vm)?
                 } else {
                     (
                         new_ref!(Value, Value::Empty),
-                        ValueType::new_empty(&s_read!(lu_dog)),
+                        ValueType::new_empty(&mut s_write!(lu_dog)),
                     )
                 }
             })
@@ -2425,9 +2398,9 @@ fn eval_expression(
         //
         // XReturn
         //
-        Expression::XReturn(ref expr) => {
+        ExpressionEnum::XReturn(ref expr) => {
             let expr = s_read!(lu_dog).exhume_x_return(expr).unwrap();
-            fix_debug!("Expression::XReturn", expr);
+            fix_debug!("ExpressionEnum::XReturn", expr);
 
             let expr = &s_read!(expr).expression;
             let expr = s_read!(lu_dog).exhume_expression(expr).unwrap();
@@ -2438,16 +2411,16 @@ fn eval_expression(
         //
         // ZNone
         //
-        Expression::ZNone(_) => Ok((
+        ExpressionEnum::ZNone(_) => Ok((
             new_ref!(Value, Value::Empty),
-            ValueType::new_empty(&s_read!(lu_dog)),
+            ValueType::new_empty(&mut s_write!(lu_dog)),
         )),
         //
         // ZSome
         //
-        Expression::ZSome(ref some) => {
+        ExpressionEnum::ZSome(ref some) => {
             let some = s_read!(lu_dog).exhume_z_some(some).unwrap();
-            fix_debug!("Expression::ZSome", some);
+            fix_debug!("ExpressionEnum::ZSome", some);
 
             let value = &s_read!(some).r23_x_value(&s_read!(lu_dog))[0];
             let option = &s_read!(some).r3_woog_option(&s_read!(lu_dog))[0];
@@ -2477,7 +2450,7 @@ fn eval_expression(
 
             Ok((
                 new_ref!(Value, Value::Empty),
-                ValueType::new_empty(&s_read!(lu_dog)),
+                ValueType::new_empty(&mut s_write!(lu_dog)),
             ))
         }
     }
@@ -2506,7 +2479,7 @@ pub fn eval_statement(
 
             Ok((
                 new_ref!(Value, Value::Empty),
-                ValueType::new_empty(&s_read!(lu_dog)),
+                ValueType::new_empty(&mut s_write!(lu_dog)),
             ))
         }
         StatementEnum::LetStatement(ref stmt) => {
@@ -2533,7 +2506,7 @@ pub fn eval_statement(
             // the storage?
             Ok((
                 new_ref!(Value, Value::Empty),
-                ValueType::new_empty(&s_read!(lu_dog)),
+                ValueType::new_empty(&mut s_write!(lu_dog)),
             ))
         }
         StatementEnum::ResultStatement(ref stmt) => {
@@ -2552,7 +2525,7 @@ pub fn eval_statement(
         }
         StatementEnum::ItemStatement(_) => Ok((
             new_ref!(Value, Value::Empty),
-            ValueType::new_empty(&s_read!(lu_dog)),
+            ValueType::new_empty(&mut s_write!(lu_dog)),
         )),
     }
 }
@@ -2613,6 +2586,10 @@ impl Context {
 
     pub fn register_memory_updates(&self) -> Receiver<MemoryUpdateMessage> {
         self.mem_update_recv.clone()
+    }
+
+    pub fn get_std_out(&self) -> Receiver<String> {
+        self.std_out_recv.clone()
     }
 
     pub fn drain_std_out(&self) -> Vec<String> {
@@ -2722,7 +2699,7 @@ pub enum DebuggerControl {
     Stop,
 }
 
-#[cfg(not(feature = "single"))]
+#[cfg(not(any(feature = "single", feature = "single-vec")))]
 pub fn start_tui_repl(mut context: Context) -> (Sender<DebuggerControl>, Receiver<DebuggerStatus>) {
     use std::time::Duration;
 
@@ -3248,11 +3225,11 @@ impl<'a> fmt::Display for PrintableValueType<'a> {
         let sarzak = &context.sarzak;
         let model = &context.models;
 
-        match &*value {
-            ValueType::Empty(_) => write!(f, "()"),
-            ValueType::Error(_) => write!(f, "<error>"),
-            ValueType::Function(_) => write!(f, "<function>"),
-            ValueType::Import(ref import) => {
+        match &value.subtype {
+            ValueTypeEnum::Empty(_) => write!(f, "()"),
+            ValueTypeEnum::Error(_) => write!(f, "<error>"),
+            ValueTypeEnum::Function(_) => write!(f, "<function>"),
+            ValueTypeEnum::Import(ref import) => {
                 let import = s_read!(lu_dog).exhume_import(import).unwrap();
                 let import = s_read!(import);
                 if import.has_alias {
@@ -3261,20 +3238,20 @@ impl<'a> fmt::Display for PrintableValueType<'a> {
                     write!(f, "{}", import.name)
                 }
             }
-            ValueType::List(ref list) => {
+            ValueTypeEnum::List(ref list) => {
                 let list = s_read!(lu_dog).exhume_list(list).unwrap();
                 let list = s_read!(list);
                 let ty = list.r36_value_type(&s_read!(lu_dog))[0].clone();
                 write!(f, "[{}]", PrintableValueType(&ty, context))
             }
-            ValueType::Range(_) => write!(f, "<range>"),
-            ValueType::Reference(ref reference) => {
+            ValueTypeEnum::Range(_) => write!(f, "<range>"),
+            ValueTypeEnum::Reference(ref reference) => {
                 let reference = s_read!(lu_dog).exhume_reference(reference).unwrap();
                 let reference = s_read!(reference);
                 let ty = reference.r35_value_type(&s_read!(lu_dog))[0].clone();
                 write!(f, "&{}", PrintableValueType(&ty, context))
             }
-            ValueType::Ty(ref ty) => {
+            ValueTypeEnum::Ty(ref ty) => {
                 // So, sometimes these show up in the model domain. It'll get really
                 // interesting when there are multiples of those in memory at once...
                 let sarzak = s_read!(sarzak);
@@ -3312,8 +3289,8 @@ impl<'a> fmt::Display for PrintableValueType<'a> {
                     write!(f, "<unknown object>")
                 }
             }
-            ValueType::Unknown(_) => write!(f, "<unknown>"),
-            ValueType::WoogOption(ref option) => {
+            ValueTypeEnum::Unknown(_) => write!(f, "<unknown>"),
+            ValueTypeEnum::WoogOption(ref option) => {
                 let option = s_read!(lu_dog).exhume_woog_option(option).unwrap();
                 let option = s_read!(option);
                 match option.subtype {
@@ -3327,13 +3304,13 @@ impl<'a> fmt::Display for PrintableValueType<'a> {
                     }
                 }
             }
-            ValueType::WoogStruct(ref woog_struct) => {
+            ValueTypeEnum::WoogStruct(ref woog_struct) => {
                 let woog_struct = s_read!(lu_dog).exhume_woog_struct(woog_struct).unwrap();
                 fix_debug!("woog_struct", woog_struct);
                 let woog_struct = s_read!(woog_struct);
                 write!(f, "{}", woog_struct.name)
             }
-            ValueType::ZObjectStore(ref id) => {
+            ValueTypeEnum::ZObjectStore(ref id) => {
                 let zobject_store = s_read!(lu_dog).exhume_z_object_store(id).unwrap();
                 let zobject_store = s_read!(zobject_store);
                 let domain_name = &zobject_store.domain;
@@ -3351,7 +3328,7 @@ fn typecheck(
     context: &Context,
 ) -> Result<()> {
     cfg_if::cfg_if! {
-        if #[cfg(feature = "single")] {
+        if #[cfg(any(feature = "single", feature = "single-vec"))] {
             if std::rc::Rc::as_ptr(lhs) == std::rc::Rc::as_ptr(rhs) {
                 return Ok(());
             }
@@ -3362,11 +3339,11 @@ fn typecheck(
         }
     }
 
-    match (&*s_read!(lhs), &*s_read!(rhs)) {
-        (_, ValueType::Empty(_)) => Ok(()),
-        (ValueType::Empty(_), _) => Ok(()),
-        (_, ValueType::Unknown(_)) => Ok(()),
-        (ValueType::Unknown(_), _) => Ok(()),
+    match (&s_read!(lhs).subtype, &s_read!(rhs).subtype) {
+        // (_, ValueTypeEnum::Empty(_)) => Ok(()),
+        // (ValueTypeEnum::Empty(_), _) => Ok(()),
+        // (_, ValueTypeEnum::Unknown(_)) => Ok(()),
+        // (ValueTypeEnum::Unknown(_), _) => Ok(()),
         (lhs_t, rhs_t) => {
             if lhs_t == rhs_t {
                 Ok(())

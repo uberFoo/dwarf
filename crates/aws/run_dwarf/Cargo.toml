@@ -3,33 +3,28 @@ name = "run_dwarf"
 version = "0.1.0"
 edition = "2021"
 
-# Starting in Rust 1.62 you can use `cargo add` to add dependencies
-# to your project.
-#
-# If you're using an older Rust version,
-# download cargo-edit(https://github.com/killercup/cargo-edit#installation)
-# to install the `add` subcommand.
-#
-# Running `cargo add DEPENDENCY_NAME` will
-# add the latest version of a dependency to the list,
-# and it will keep the alphabetic ordering for you.
+[[bin]]
+name = "run_dwarf_async"
+path = "src/main.rs"
 
 [dependencies]
 ariadne = "0.2.0"
 ansi_term = "0.12.1"
 ansi-to-html = "0.1.3"
+crossbeam = { version = "0.8.2", features = ["crossbeam-channel"] }
 dwarf = { path = "../../../", default-features = false, features = [
     "single",
     "repl",
 ] }
+hyper = "0.14.26"
 lambda_http = { version = "0.8.0", default-features = false, features = [
     "apigw_http",
 ] }
 lambda_runtime = "0.8.0"
-# lambda_runtime = { path = "../../../../github/aws-lambda-rust-runtime/lambda-runtime" }
+# lambda_runtime = { path = "../../../../../github/aws-lambda-rust-runtime/lambda-runtime" }
+serde_json = "1.0.99"
 tokio = { version = "1", features = ["macros"] }
 tracing = { version = "0.1", features = ["log"] }
 tracing-subscriber = { version = "0.3", default-features = false, features = [
     "fmt",
 ] }
-hyper = "0.14.26"

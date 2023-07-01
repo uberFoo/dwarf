@@ -911,10 +911,10 @@ mod tests {
         // let _ = WoogItem::new_woog_struct(source, &mt, lu_dog);
         let struct_ty = ValueType::new_woog_struct(&foo, &mut lu_dog);
         let ty = Ty::new_integer();
-        let ty = ValueType::new_ty(&new_ref!(Ty, ty), &mut lu_dog);
+        let ty = ValueType::new_ty(&ty, &mut lu_dog);
         let _ = Field::new("bar".to_owned(), &foo, &ty, &mut lu_dog);
         let ty = Ty::new_float();
-        let ty = ValueType::new_ty(&new_ref!(Ty, ty), &mut lu_dog);
+        let ty = ValueType::new_ty(&ty, &mut lu_dog);
         let _ = Field::new("baz".to_owned(), &foo, &ty, &mut lu_dog);
 
         // Now we need an instance.

@@ -65,7 +65,8 @@ rustyline = { version = "11.0.0", optional = true, features = [
     "derive",
     "with-file-history",
 ] }
-sarzak = { git = "https://github.com/uberFoo/sarzak", default-features = false, branch = "develop" }
+# sarzak = { git = "https://github.com/uberFoo/sarzak", default-features = false, branch = "develop" }
+sarzak = { path = "../sarzak", default-features = false }
 serde = { version = "1.0.160", features = ["derive", "rc"] }
 serde_json = "1.0.96"
 snafu = "0.7.4"
@@ -109,7 +110,7 @@ tracy = [
 
 single = ["sarzak/lu-dog-rc"]
 multi = ["multi-std-rwlock"]
-
+single-vec = ["sarzak/lu-dog-vec"]
 multi-std-mutex = []
 multi-std-rwlock = ["sarzak/lu-dog-rwlock"]
 multi-parking-lot-mutex = ["sarzak/lu-dog-pl-mutex"]

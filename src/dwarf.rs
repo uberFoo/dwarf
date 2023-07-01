@@ -449,25 +449,16 @@ impl Type {
         match self {
             Type::Boolean => {
                 let ty = Ty::new_boolean();
-                Ok(ValueType::new_ty(
-                    &<RefType<Ty> as NewRef<Ty>>::new_ref(ty),
-                    store,
-                ))
+                Ok(ValueType::new_ty(&ty, store))
             }
             Type::Empty => Ok(ValueType::new_empty(store)),
             Type::Float => {
                 let ty = Ty::new_float();
-                Ok(ValueType::new_ty(
-                    &<RefType<Ty> as NewRef<Ty>>::new_ref(ty),
-                    store,
-                ))
+                Ok(ValueType::new_ty(&ty, store))
             }
             Type::Integer => {
                 let ty = Ty::new_integer();
-                Ok(ValueType::new_ty(
-                    &<RefType<Ty> as NewRef<Ty>>::new_ref(ty),
-                    store,
-                ))
+                Ok(ValueType::new_ty(&ty, store))
             }
             Type::List(type_) => {
                 let ty = type_.0.into_value_type(span, store, models, sarzak)?;
@@ -487,10 +478,7 @@ impl Type {
             Type::Self_ => panic!("Self is deprecated."),
             Type::String => {
                 let ty = Ty::new_s_string();
-                Ok(ValueType::new_ty(
-                    &<RefType<Ty> as NewRef<Ty>>::new_ref(ty),
-                    store,
-                ))
+                Ok(ValueType::new_ty(&ty, store))
             }
             Type::Unknown => Ok(ValueType::new_unknown(store)),
             Type::UserType(type_) => {
@@ -516,10 +504,7 @@ impl Type {
                 // If it's not in one of the models, it must be in sarzak.
                 if let Some(obj_id) = sarzak.exhume_object_id_by_name(name) {
                     let ty = sarzak.exhume_ty(&obj_id).unwrap();
-                    Ok(ValueType::new_ty(
-                        &<RefType<Ty> as NewRef<Ty>>::new_ref(ty.to_owned()),
-                        store,
-                    ))
+                    Ok(ValueType::new_ty(&ty, store))
                 } else {
                     Err(vec![DwarfError::UnknownType {
                         ty: name.to_owned(),
@@ -529,10 +514,7 @@ impl Type {
             }
             Type::Uuid => {
                 let ty = Ty::new_s_uuid();
-                Ok(ValueType::new_ty(
-                    &<RefType<Ty> as NewRef<Ty>>::new_ref(ty),
-                    store,
-                ))
+                Ok(ValueType::new_ty(&ty, store))
             }
         }
     }
