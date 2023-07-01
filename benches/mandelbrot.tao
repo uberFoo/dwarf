@@ -64,7 +64,7 @@ fn escape_time(c: Complex, limit: int) -> int {
     0
 }
 
-fn main() -> Complex {
+fn main() {
     let width = 14;
     let height = 4;
     let upper_left = Complex { re: -2.5, im: 1.0 };
