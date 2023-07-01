@@ -13,7 +13,6 @@ use dwarf::{
 
 fn run_program(test: &str, program: &str) -> Result<Value, ()> {
     let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
-    // 🚧 need to expand on this once we are testing parser errors.
     let ast = parse_dwarf(&program).unwrap();
     let lu_dog = match new_lu_dog(None, Some((program.to_owned(), &ast)), &[], &sarzak) {
         Ok(lu_dog) => lu_dog,

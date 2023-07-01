@@ -333,6 +333,15 @@ pub enum ChaChaError {
     },
     #[snafu(display("\n{}: named item `main` found, but it is not a function.", ERR_CLR.bold().paint("error")))]
     MainIsNotAFunction,
+    #[snafu(display("\n{}: `{}` is not a function.", ERR_CLR.bold().paint("error"), POP_CLR.paint(value.to_string())))]
+    NotAFunction {
+        value: Value,
+        span: Range<usize>,
+    },
+    #[snafu(display("\n{}: not an instance", ERR_CLR.bold().paint("error")))]
+    NotAnInstance,
+    #[snafu(display("\n{}: `main` function not found.", ERR_CLR.bold().paint("error")))]
+    NoMainFunction,
     #[snafu(display("\n{}: no such method `{}`.", ERR_CLR.bold().paint("error"), OTH_CLR.paint(method)))]
     NoSuchMethod {
         method: String,
@@ -347,13 +356,6 @@ pub enum ChaChaError {
     NoSuchField {
         field: String,
     },
-    #[snafu(display("\n{}: `{}` is not a function.", ERR_CLR.bold().paint("error"), POP_CLR.paint(value.to_string())))]
-    NotAFunction {
-        value: Value,
-        span: Range<usize>,
-    },
-    #[snafu(display("\n{}: not an instance", ERR_CLR.bold().paint("error")))]
-    NotAnInstance,
     #[snafu(display("\n{}: {message}\n  --> {}:{}:{}", ERR_CLR.bold().paint("error"), location.file, location.line, location.column))]
     Unimplemented {
         message: String,

@@ -289,7 +289,7 @@ impl DwarfParser {
             debug!("conditional", cond);
             cond
         } else {
-            let token = &self.previous().unwrap();
+            let token = self.previous().unwrap();
             let err = Simple::expected_input_found(
                 token.1.clone(),
                 [Some("<expression -> there's a lot of them...>".to_owned())],
@@ -304,7 +304,7 @@ impl DwarfParser {
             debug!("true block", expr);
             expr
         } else {
-            let token = &self.previous().unwrap();
+            let token = self.previous().unwrap();
             let err = Simple::expected_input_found(
                 token.1.clone(),
                 [Some("<expression -> there's a lot of them...>".to_owned())],
@@ -320,7 +320,7 @@ impl DwarfParser {
                 debug!("false block", expr);
                 expr
             } else {
-                let token = &self.previous().unwrap();
+                let token = self.previous().unwrap();
                 let err = Simple::expected_input_found(
                     token.1.clone(),
                     [Some("<expression -> there's a lot of them...>".to_owned())],
@@ -441,7 +441,7 @@ impl DwarfParser {
             debug!("path", ident);
             ident
         } else {
-            let tok = self.peek().unwrap();
+            let tok = self.previous().unwrap();
             let err = Simple::expected_input_found(
                 tok.1.clone(),
                 [Some("<path -> IDENTIFIER (:: IDENTIFIER)*>".to_owned())],
@@ -458,7 +458,7 @@ impl DwarfParser {
                 debug!("alias", ident);
                 Some(ident)
             } else {
-                let tok = self.peek().unwrap();
+                let tok = self.previous().unwrap();
                 let err = Simple::expected_input_found(
                     tok.1.clone(),
                     [Some("identifier".to_owned())],
@@ -474,7 +474,7 @@ impl DwarfParser {
         };
 
         if !self.match_(&[Token::Punct(';')]) {
-            let tok = self.peek().unwrap();
+            let tok = self.previous().unwrap();
             let err = Simple::expected_input_found(
                 tok.1.clone(),
                 [Some("';'".to_owned())],
@@ -514,7 +514,7 @@ impl DwarfParser {
         let name = if let Some(ident) = self.parse_ident() {
             ident
         } else {
-            let tok = self.peek().unwrap();
+            let tok = self.previous().unwrap();
             let err = Simple::expected_input_found(
                 tok.1.clone(),
                 [Some("identifier".to_owned())],
@@ -527,7 +527,7 @@ impl DwarfParser {
         };
 
         if !self.match_(&[Token::Punct('{')]) {
-            let tok = self.peek().unwrap();
+            let tok = self.previous().unwrap();
             let err = Simple::expected_input_found(
                 tok.1.clone(),
                 [Some("'{'".to_owned())],
@@ -545,7 +545,7 @@ impl DwarfParser {
                 debug!("item", item);
                 body.push(item);
             } else {
-                let tok = self.peek().unwrap();
+                let tok = self.previous().unwrap();
                 // 🚧 use the unclosed_delimiter constructor
                 let err = Simple::expected_input_found(
                     tok.1.clone(),
@@ -588,7 +588,7 @@ impl DwarfParser {
         let name = if let Some(ident) = self.parse_ident() {
             ident
         } else {
-            let tok = self.peek().unwrap();
+            let tok = self.previous().unwrap();
             let err = Simple::expected_input_found(
                 tok.1.clone(),
                 [Some("identifier".to_owned())],
@@ -603,7 +603,7 @@ impl DwarfParser {
             if let Some(ty) = self.parse_type()? {
                 Some(ty)
             } else {
-                let tok = self.peek().unwrap();
+                let tok = self.previous().unwrap();
                 let err = Simple::expected_input_found(
                     tok.1.clone(),
                     [
@@ -627,7 +627,7 @@ impl DwarfParser {
         };
 
         if !self.match_(&[Token::Punct('=')]) {
-            let tok = self.peek().unwrap();
+            let tok = self.previous().unwrap();
             let err = Simple::expected_input_found(
                 tok.1.clone(),
                 [Some("'='".to_owned())],
@@ -641,7 +641,7 @@ impl DwarfParser {
         let value = if let Some(expr) = self.parse_expression(ENTER)? {
             expr
         } else {
-            let tok = self.peek().unwrap();
+            let tok = self.previous().unwrap();
             let err = Simple::expected_input_found(
                 tok.1.clone(),
                 [Some("expression".to_owned())],
@@ -690,7 +690,7 @@ impl DwarfParser {
         let right = if let Some(expr) = self.parse_expression(ASSIGN.1)? {
             expr
         } else {
-            let token = &self.previous().unwrap();
+            let token = self.previous().unwrap();
             let err = Simple::expected_input_found(
                 token.1.clone(),
                 [Some("<expression -> there's a lot of them...>".to_owned())],
@@ -736,7 +736,7 @@ impl DwarfParser {
         let right = if let Some(ty) = self.parse_type()? {
             ty
         } else {
-            let token = &self.previous().unwrap();
+            let token = self.previous().unwrap();
             let err = Simple::expected_input_found(
                 token.1.clone(),
                 [Some("<expression -> there's a lot of them...>".to_owned())],
@@ -786,7 +786,7 @@ impl DwarfParser {
         let right = if let Some(expr) = self.parse_expression(ADD_SUB.1)? {
             expr
         } else {
-            let token = &self.previous().unwrap();
+            let token = self.previous().unwrap();
             let err = Simple::expected_input_found(
                 token.1.clone(),
                 [Some("<expression -> there's a lot of them...>".to_owned())],
@@ -836,7 +836,7 @@ impl DwarfParser {
         let right = if let Some(expr) = self.parse_expression(MUL_DIV.1)? {
             expr
         } else {
-            let token = &self.previous().unwrap();
+            let token = self.previous().unwrap();
             let err = Simple::expected_input_found(
                 token.1.clone(),
                 [Some("<expression -> there's a lot of them...>".to_owned())],
@@ -886,7 +886,7 @@ impl DwarfParser {
         let right = if let Some(expr) = self.parse_expression(MUL_DIV.1)? {
             expr
         } else {
-            let token = &self.previous().unwrap();
+            let token = self.previous().unwrap();
             let err = Simple::expected_input_found(
                 token.1.clone(),
                 [Some("<expression -> there's a lot of them...>".to_owned())],
@@ -941,7 +941,7 @@ impl DwarfParser {
         let right = if let Some(expr) = self.parse_expression(RANGE.1)? {
             expr
         } else {
-            let token = &self.previous().unwrap();
+            let token = self.previous().unwrap();
             let err = Simple::expected_input_found(
                 token.1.clone(),
                 [Some("<expression -> there's a lot of them...>".to_owned())],
@@ -992,7 +992,7 @@ impl DwarfParser {
         let right = if let Some(expr) = self.parse_expression(ADD_SUB.1)? {
             expr
         } else {
-            let token = &self.previous().unwrap();
+            let token = self.previous().unwrap();
             let err = Simple::expected_input_found(
                 token.1.clone(),
                 [Some("<expression -> there's a lot of them...>".to_owned())],
@@ -1047,7 +1047,7 @@ impl DwarfParser {
         let right = if let Some(expr) = self.parse_expression(COMP.1)? {
             expr
         } else {
-            let token = &self.previous().unwrap();
+            let token = self.previous().unwrap();
             let err = Simple::expected_input_found(
                 token.1.clone(),
                 [Some("<expression -> there's a lot of them...>".to_owned())],
@@ -1101,7 +1101,7 @@ impl DwarfParser {
         let right = if let Some(expr) = self.parse_expression(COMP.1)? {
             expr
         } else {
-            let token = &self.previous().unwrap();
+            let token = self.previous().unwrap();
             let err = Simple::expected_input_found(
                 token.1.clone(),
                 [Some("<expression -> there's a lot of them...>".to_owned())],
@@ -1155,7 +1155,7 @@ impl DwarfParser {
         let right = if let Some(expr) = self.parse_expression(COMP.1)? {
             expr
         } else {
-            let token = &self.previous().unwrap();
+            let token = self.previous().unwrap();
             let err = Simple::expected_input_found(
                 token.1.clone(),
                 [Some("<expression -> there's a lot of them...>".to_owned())],
@@ -1209,7 +1209,7 @@ impl DwarfParser {
         let right = if let Some(expr) = self.parse_expression(COMP.1)? {
             expr
         } else {
-            let token = &self.previous().unwrap();
+            let token = self.previous().unwrap();
             let err = Simple::expected_input_found(
                 token.1.clone(),
                 [Some("<expression -> there's a lot of them...>".to_owned())],
@@ -1263,7 +1263,7 @@ impl DwarfParser {
         let right = if let Some(expr) = self.parse_expression(COMP.1)? {
             expr
         } else {
-            let token = &self.previous().unwrap();
+            let token = self.previous().unwrap();
             let err = Simple::expected_input_found(
                 token.1.clone(),
                 [Some("<expression -> there's a lot of them...>".to_owned())],
@@ -1317,7 +1317,7 @@ impl DwarfParser {
         let right = if let Some(expr) = self.parse_expression(COMP.1)? {
             expr
         } else {
-            let token = &self.previous().unwrap();
+            let token = self.previous().unwrap();
             let err = Simple::expected_input_found(
                 token.1.clone(),
                 [Some("<expression -> there's a lot of them...>".to_owned())],
@@ -1363,7 +1363,7 @@ impl DwarfParser {
         let right = if let Some(expr) = self.parse_expression(COMP.1)? {
             expr
         } else {
-            let token = &self.previous().unwrap();
+            let token = self.previous().unwrap();
             let err = Simple::expected_input_found(
                 token.1.clone(),
                 [Some("<expression -> there's a lot of them...>".to_owned())],
@@ -1409,7 +1409,7 @@ impl DwarfParser {
         let right = if let Some(expr) = self.parse_expression(COMP.1)? {
             expr
         } else {
-            let token = &self.previous().unwrap();
+            let token = self.previous().unwrap();
             let err = Simple::expected_input_found(
                 token.1.clone(),
                 [Some("<expression -> there's a lot of them...>".to_owned())],
@@ -1734,7 +1734,7 @@ impl DwarfParser {
             self.advance();
             (ident, span)
         } else {
-            let token = &self.previous().unwrap();
+            let token = self.previous().unwrap();
             let err = Simple::expected_input_found(
                 token.1.clone(),
                 [Some("<IDENT>".to_owned())],
@@ -1803,7 +1803,7 @@ impl DwarfParser {
             debug!("minus operand", expr);
             expr
         } else {
-            let token = &self.previous().unwrap();
+            let token = self.previous().unwrap();
             let err = Simple::expected_input_found(
                 token.1.clone(),
                 [Some("<expression -> there's a lot of them...>".to_owned())],
@@ -1850,7 +1850,7 @@ impl DwarfParser {
             debug!("minus operand", expr);
             expr
         } else {
-            let token = &self.previous().unwrap();
+            let token = self.previous().unwrap();
             let err = Simple::expected_input_found(
                 token.1.clone(),
                 [Some("<expression -> there's a lot of them...>".to_owned())],
@@ -1894,7 +1894,7 @@ impl DwarfParser {
             debug!("iterator", ident);
             ident
         } else {
-            let token = &self.previous().unwrap();
+            let token = self.previous().unwrap();
             let err = Simple::expected_input_found(
                 token.1.clone(),
                 [Some("IDENT".to_owned())],
@@ -1905,7 +1905,7 @@ impl DwarfParser {
         };
 
         if !self.match_(&[Token::In]) {
-            let token = &self.previous().unwrap();
+            let token = self.previous().unwrap();
             let err = Simple::expected_input_found(
                 token.1.clone(),
                 [Some("in".to_owned())],
@@ -1922,7 +1922,7 @@ impl DwarfParser {
             debug!("parse_for_loop_expression collection", expr);
             expr
         } else {
-            let token = &self.previous().unwrap();
+            let token = self.previous().unwrap();
             let err = Simple::expected_input_found(
                 token.1.clone(),
                 [Some("<expression -> there's a lot of them...>".to_owned())],
@@ -1936,7 +1936,7 @@ impl DwarfParser {
         let body = if let Some(expr) = self.parse_block_expression()? {
             expr
         } else {
-            let token = &self.previous().unwrap();
+            let token = self.previous().unwrap();
             let err = Simple::expected_input_found(
                 token.1.clone(),
                 [Some("<expression -> there's a lot of them...>".to_owned())],
@@ -1983,7 +1983,7 @@ impl DwarfParser {
                     self.advance();
                 }
             } else {
-                let tok = self.peek().unwrap();
+                let tok = self.previous().unwrap();
                 let err = Simple::expected_input_found(
                     tok.1.clone(),
                     [Some("expression".to_owned())],
@@ -2026,7 +2026,7 @@ impl DwarfParser {
         let expr = if let Some(expr) = self.parse_expression(ENTER)? {
             expr
         } else {
-            let tok = self.peek().unwrap();
+            let tok = self.previous().unwrap();
             let err = Simple::expected_input_found(
                 tok.1.clone(),
                 [Some("expression".to_owned())],
@@ -2038,7 +2038,7 @@ impl DwarfParser {
         };
 
         if !self.match_(&[Token::Punct(')')]) {
-            let tok = self.peek().unwrap();
+            let tok = self.previous().unwrap();
             let err = Simple::expected_input_found(
                 tok.1.clone(),
                 [Some("]".to_owned())],
@@ -2084,7 +2084,7 @@ impl DwarfParser {
         let method_name = if let Some(ident) = self.parse_ident() {
             ident
         } else {
-            let token = &self.previous().unwrap();
+            let token = self.previous().unwrap();
             let err = Simple::expected_input_found(
                 token.1.clone(),
                 [Some("<ident>".to_owned())],
@@ -2107,7 +2107,7 @@ impl DwarfParser {
                     self.advance();
                 }
             } else {
-                let tok = self.peek().unwrap();
+                let tok = self.previous().unwrap();
                 let err = Simple::expected_input_found(
                     tok.1.clone(),
                     [Some("expression".to_owned())],
@@ -2154,7 +2154,7 @@ impl DwarfParser {
         let expr = if let Some(expr) = self.parse_expression(ENTER)? {
             expr
         } else {
-            let tok = self.peek().unwrap();
+            let tok = self.previous().unwrap();
             let err = Simple::expected_input_found(
                 tok.1.clone(),
                 [Some("expression".to_owned())],
@@ -2166,7 +2166,7 @@ impl DwarfParser {
         };
 
         if !self.match_(&[Token::Punct(']')]) {
-            let tok = self.peek().unwrap();
+            let tok = self.previous().unwrap();
             let err = Simple::expected_input_found(
                 tok.1.clone(),
                 [Some("]".to_owned())],
@@ -2239,7 +2239,7 @@ impl DwarfParser {
                     self.advance();
                 }
             } else {
-                let tok = self.peek().unwrap();
+                let tok = self.previous().unwrap();
                 let err = Simple::expected_input_found(
                     tok.1.clone(),
                     [Some("expression".to_owned())],
@@ -2332,7 +2332,7 @@ impl DwarfParser {
         self.advance();
 
         if !self.match_(&[Token::Punct('(')]) {
-            let token = &self.previous().unwrap();
+            let token = self.previous().unwrap();
             let err = Simple::expected_input_found(
                 token.1.clone(),
                 [Some("(".to_owned())],
@@ -2351,7 +2351,7 @@ impl DwarfParser {
                     self.advance();
                 }
             } else {
-                let tok = self.peek().unwrap();
+                let tok = self.previous().unwrap();
                 let err = Simple::expected_input_found(
                     tok.1.clone(),
                     [Some("expression".to_owned())],
@@ -2397,7 +2397,7 @@ impl DwarfParser {
         }
 
         if !self.match_(&[Token::Punct('(')]) {
-            let token = &self.previous().unwrap();
+            let token = self.previous().unwrap();
             let err = Simple::expected_input_found(
                 token.1.clone(),
                 [Some("(".to_owned())],
@@ -2409,7 +2409,7 @@ impl DwarfParser {
         let expression = if let Some(expr) = self.parse_expression(BLOCK.1)? {
             expr
         } else {
-            let token = &self.previous().unwrap();
+            let token = self.previous().unwrap();
             let err = Simple::expected_input_found(
                 token.1.clone(),
                 [Some("<expression -> there's a lot of them...>".to_owned())],
@@ -2423,7 +2423,7 @@ impl DwarfParser {
         }
 
         if !self.match_(&[Token::Punct(')')]) {
-            let token = &self.previous().unwrap();
+            let token = self.previous().unwrap();
             // 🚧 use the unclosed_delimiter constructor
             let err = Simple::expected_input_found(
                 token.1.clone(),
@@ -2644,7 +2644,7 @@ impl DwarfParser {
         let method_name = if let Some(ident) = self.parse_ident() {
             ident
         } else {
-            let token = &self.previous().unwrap();
+            let token = self.previous().unwrap();
             let err = Simple::expected_input_found(
                 token.1.clone(),
                 [Some("<ident>".to_owned())],
@@ -2655,7 +2655,7 @@ impl DwarfParser {
         };
 
         if !self.match_(&[Token::Punct('(')]) {
-            let token = &self.previous().unwrap();
+            let token = self.previous().unwrap();
             let err = Simple::expected_input_found(
                 token.1.clone(),
                 [Some("(".to_owned())],
@@ -2675,7 +2675,7 @@ impl DwarfParser {
                     self.advance();
                 }
             } else {
-                let tok = self.peek().unwrap();
+                let tok = self.previous().unwrap();
                 let err = Simple::expected_input_found(
                     tok.1.clone(),
                     [Some("expression".to_owned())],
@@ -2731,7 +2731,7 @@ impl DwarfParser {
             let field_name = if let Some(ident) = self.parse_ident() {
                 ident
             } else {
-                let token = &self.previous().unwrap();
+                let token = self.previous().unwrap();
                 let err = Simple::expected_input_found(
                     token.1.clone(),
                     [Some("<ident>".to_owned())],
@@ -2742,7 +2742,7 @@ impl DwarfParser {
             };
 
             if !self.match_(&[Token::Punct(':')]) {
-                let token = &self.previous().unwrap();
+                let token = self.previous().unwrap();
                 let err = Simple::expected_input_found(
                     token.1.clone(),
                     [Some("".to_owned())],
@@ -2755,7 +2755,7 @@ impl DwarfParser {
             let expression = if let Some(expr) = self.parse_expression(ENTER)? {
                 expr
             } else {
-                let token = &self.previous().unwrap();
+                let token = self.previous().unwrap();
                 let err = Simple::expected_input_found(
                     token.1.clone(),
                     [Some("<expression -> there's a lot of them...>".to_owned())],
@@ -2804,7 +2804,7 @@ impl DwarfParser {
         let expression = if let Some(expr) = self.parse_expression(ENTER)? {
             expr
         } else {
-            let token = &self.previous().unwrap();
+            let token = self.previous().unwrap();
             let err = Simple::expected_input_found(
                 token.1.clone(),
                 [Some("<expression -> there's a lot of them...>".to_owned())],
@@ -2842,7 +2842,7 @@ impl DwarfParser {
         };
 
         if !self.match_(&[Token::Punct('(')]) {
-            let token = &self.previous().unwrap();
+            let token = self.previous().unwrap();
             let err = Simple::expected_input_found(
                 token.1.clone(),
                 [Some("(".to_owned())],
@@ -2854,7 +2854,7 @@ impl DwarfParser {
         let expression = if let Some(expr) = self.parse_expression(PATH.1)? {
             expr
         } else {
-            let token = &self.previous().unwrap();
+            let token = self.previous().unwrap();
             let err = Simple::expected_input_found(
                 token.1.clone(),
                 [Some("<expression -> there's a lot of them...>".to_owned())],
@@ -2864,7 +2864,7 @@ impl DwarfParser {
         };
 
         if !self.match_(&[Token::Punct(')')]) {
-            let token = &self.previous().unwrap();
+            let token = self.previous().unwrap();
             // 🚧 Use the unclosed_delimiter constructor
             let err = Simple::expected_input_found(
                 token.1.clone(),
@@ -2981,7 +2981,7 @@ impl DwarfParser {
         let name = if let Some(ident) = self.parse_ident() {
             ident
         } else {
-            let token = self.peek().unwrap().clone();
+            let token = self.previous().unwrap();
             let err = Simple::expected_input_found(
                 token.1.clone(),
                 [Some("identifier".to_owned())],
@@ -2992,7 +2992,7 @@ impl DwarfParser {
         };
 
         if !self.match_(&[Token::Punct('(')]) {
-            let token = self.peek().unwrap().clone();
+            let token = self.previous().unwrap();
             // 🚧 use the unclosed_delimiter constructor
             let err = Simple::expected_input_found(
                 token.1.clone(),
@@ -3028,7 +3028,7 @@ impl DwarfParser {
 
         let return_type = if self.match_(&[Token::Punct('-')]) {
             if !self.match_(&[Token::Punct('>')]) {
-                let token = self.peek().unwrap().clone();
+                let token = self.previous().unwrap();
                 // 🚧 use the unclosed_delimiter constructor
                 let err = Simple::expected_input_found(
                     token.1.clone(),
@@ -3063,7 +3063,7 @@ impl DwarfParser {
             }
         } else {
             let start = self.previous().unwrap().1.end;
-            let end = self.peek().unwrap().1.start;
+            let end = self.previous().unwrap().1.start;
             (Type::Empty, start..end)
         };
 
@@ -3101,7 +3101,7 @@ impl DwarfParser {
 
         let ty = if name.0 != "self" {
             if !self.match_(&[Token::Punct(':')]) {
-                let token = self.peek().unwrap().clone();
+                let token = self.previous().unwrap();
                 let err = Simple::expected_input_found(
                     token.1.clone(),
                     [Some("':'".to_owned())],
@@ -3148,7 +3148,7 @@ impl DwarfParser {
         // Match empty
         if self.match_(&[Token::Punct('(')]) {
             if !self.match_(&[Token::Punct(')')]) {
-                let token = self.peek().unwrap().clone();
+                let token = self.previous().unwrap();
                 // 🚧 use the unclosed_delimiter constructor
                 let err = Simple::expected_input_found(
                     token.1.clone(),
@@ -3186,7 +3186,7 @@ impl DwarfParser {
             };
 
             if !self.match_(&[Token::Punct(']')]) {
-                let token = self.peek().unwrap().clone();
+                let token = self.previous().unwrap();
                 // 🚧 use the unclosed_delimiter constructor
                 let err = Simple::expected_input_found(
                     token.1.clone(),
@@ -3206,7 +3206,7 @@ impl DwarfParser {
         // Match an option
         if self.match_(&[Token::Option]) {
             if !self.match_(&[Token::Punct('<')]) {
-                let token = self.peek().unwrap().clone();
+                let token = self.previous().unwrap();
                 let err = Simple::expected_input_found(
                     token.1.clone(),
                     [Some("'<'".to_owned())],
@@ -3218,7 +3218,7 @@ impl DwarfParser {
             let ty = self.parse_type()?;
 
             if ty.is_none() {
-                let tok = self.peek().unwrap();
+                let tok = self.previous().unwrap();
                 let err = Simple::expected_input_found(
                     tok.1.clone(),
                     [
@@ -3236,7 +3236,7 @@ impl DwarfParser {
             }
 
             if !self.match_(&[Token::Punct('>')]) {
-                let token = self.peek().unwrap().clone();
+                let token = self.previous().unwrap();
                 // 🚧 use the unclosed_delimiter constructor
                 let err = Simple::expected_input_found(
                     token.1.clone(),
@@ -3300,7 +3300,7 @@ impl DwarfParser {
         let name = if let Some(ident) = self.parse_ident() {
             ident
         } else {
-            let tok = self.peek().unwrap();
+            let tok = self.previous().unwrap();
             let err = Simple::expected_input_found(
                 tok.1.clone(),
                 [Some("identifier".to_owned())],
@@ -3311,7 +3311,7 @@ impl DwarfParser {
         };
 
         if !self.match_(&[Token::Punct('{')]) {
-            let tok = self.peek().unwrap();
+            let tok = self.previous().unwrap();
             return Err(Box::new(Simple::expected_input_found(
                 tok.1.clone(),
                 [Some("'{".to_owned())],
@@ -3385,7 +3385,7 @@ impl DwarfParser {
         let name = if let Some(ident) = self.parse_ident() {
             ident
         } else {
-            let tok = self.peek().unwrap();
+            let tok = self.previous().unwrap();
             let err = Simple::expected_input_found(
                 tok.1.clone(),
                 [Some("identifier".to_owned())],
@@ -3396,7 +3396,7 @@ impl DwarfParser {
         };
 
         if !self.match_(&[Token::Punct(':')]) {
-            let tok = self.peek().unwrap();
+            let tok = self.previous().unwrap();
             let err = Simple::expected_input_found(
                 tok.1.clone(),
                 [Some("':'".to_owned())],
@@ -3409,7 +3409,7 @@ impl DwarfParser {
         let ty = if let Some(ty) = self.parse_type()? {
             ty
         } else {
-            let tok = self.peek().unwrap();
+            let tok = self.previous().unwrap();
             let err = Simple::expected_input_found(
                 tok.1.clone(),
                 [

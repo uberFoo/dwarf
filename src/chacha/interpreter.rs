@@ -2884,27 +2884,29 @@ pub fn start_main(stopped: bool, mut context: Context) -> Result<(Value, Context
     let vm_stack = stack.clone();
     let mut vm = VM::new(&vm_stack);
 
-    let main = stack.get("main").expect("Missing main function.");
+    let result = if let Some(main) = stack.get("main") {
+        // This should fail if it's not a function. Actually, I think that it _has_
+        // to be a function. Unless there's another named item that I'm not thinking
+        // of. I mean, maybe `use main;`  would trigger this to return OK(()), and
+        // not do anything?
+        if let Value::Function(ref main) = *s_read!(main) {
+            let main = s_read!(context.lu_dog)
+                .exhume_function(&s_read!(main).id)
+                .unwrap();
 
-    // This should fail if it's not a function. Actually, I think that it _has_
-    // to be a function. Unless there's another named item that I'm not thinking
-    // of. I mean, maybe `use main;`  would trigger this to return OK(()), and
-    // not do anything?
-    let result = if let Value::Function(ref main) = *s_read!(main) {
-        let main = s_read!(context.lu_dog)
-            .exhume_function(&s_read!(main).id)
-            .unwrap();
+            let value_ty = &s_read!(main).r1_value_type(&s_read!(context.lu_dog))[0];
+            let span = &s_read!(value_ty).r62_span(&s_read!(context.lu_dog))[0];
 
-        let value_ty = &s_read!(main).r1_value_type(&s_read!(context.lu_dog))[0];
-        let span = &s_read!(value_ty).r62_span(&s_read!(context.lu_dog))[0];
+            let result = eval_function_call(main, &[], true, span, &mut context, &mut vm)?;
 
-        let result = eval_function_call(main, &[], true, span, &mut context, &mut vm)?;
-
-        #[allow(clippy::redundant_clone)]
-        //              ^^^^^^^^^^^^^^^ : It's not -- the macro is just hiding the fact that it isn't.
-        Ok((s_read!(result.0.clone()).clone(), context))
+            #[allow(clippy::redundant_clone)]
+            //              ^^^^^^^^^^^^^^^ : It's not -- the macro is just hiding the fact that it isn't.
+            Ok((s_read!(result.0.clone()).clone(), context))
+        } else {
+            Err(Error(ChaChaError::MainIsNotAFunction))
+        }
     } else {
-        Err(Error(ChaChaError::MainIsNotAFunction))
+        Err(Error(ChaChaError::NoMainFunction))
     };
 
     result
