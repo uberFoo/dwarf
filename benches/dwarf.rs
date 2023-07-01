@@ -33,7 +33,8 @@ fn fib(c: &mut Criterion) {
     let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
     let lu_dog = new_lu_dog(None, Some((source.clone(), &ast)), &[], &sarzak).unwrap();
 
-    let ctx = initialize_interpreter::<PathBuf>(sarzak, lu_dog, None).unwrap();
+    let mut ctx = initialize_interpreter::<PathBuf>(sarzak, lu_dog, None).unwrap();
+    ctx.add_args(vec!["fib".to_owned(), "17".to_owned()]);
 
     c.bench_function("fib-17", |b| {
         b.iter(|| start_main(false, ctx.clone()).unwrap())

@@ -7,8 +7,17 @@ fn fib2(n: int) -> int {
 }
 
 fn main() -> int {
-    print("Calculating the 17th fibonacci number:\n");
-    let result = fib2(17);
+    // let len = (chacha::args()).len();
+    // print(len as string + "\n");
+
+    // if (len < 2) {
+    //     print("Usage: fib <n>\n");
+    //     return 0;
+    // }
+    let n = chacha::args()[1];
+
+    print("Calculating fibonacci number {0}:\n".format(n));
+    let result = fib2(n as int);
     print(result as string + "\n");
     result
 }
