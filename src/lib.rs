@@ -370,7 +370,7 @@ pub enum ChaChaError {
     #[snafu(display("\n{}: `{}` is not a function.", ERR_CLR.bold().paint("error"), POP_CLR.paint(value.to_string())))]
     NotAFunction {
         value: Value,
-        span: Range<usize>,
+        span: Span,
     },
     #[snafu(display("\n{}: not an instance", ERR_CLR.bold().paint("error")))]
     NotAnInstance,
@@ -409,10 +409,12 @@ pub enum ChaChaError {
     Store {
         source: io::Error,
     },
-    #[snafu(display("\n{}: type mismatch -- expected `{}`, found `{}`\n  --> {}..{}", ERR_CLR.bold().paint("error"), OK_CLR.paint(expected.to_string()), ERR_CLR.bold().paint(got.to_string()), span.start, span.end))]
+    #[snafu(display("\n{}: type mismatch -- expected `{}`, found `{}`", ERR_CLR.bold().paint("error"), OK_CLR.paint(expected.to_string()), ERR_CLR.bold().paint(found.to_string())))]
     TypeMismatch {
         expected: String,
-        got: String,
+        found: String,
+        // expected_span: Span,
+        // found_span: Span,
         span: Span,
     },
     /// A Variable was not found
@@ -446,6 +448,35 @@ impl fmt::Display for ChaChaErrorReporter<'_, '_> {
         let mut std_err = Vec::new();
 
         match &self.0 .0 {
+            ChaChaError::TypeMismatch {
+                expected,
+                found,
+                // expected_span,
+                // found_span,
+                span,
+            } => {
+                let msg = format!(
+                    "{}: Type mismatch: expected `{expected}`, found `{found}`.",
+                    Colour::Red.bold().paint("error")
+                );
+
+                Report::build(ReportKind::Error, (), span.start)
+                    .with_message(&msg)
+                    .with_label(
+                        Label::new(span.to_owned())
+                            .with_message(format!("expected {}", POP_CLR.paint(expected)))
+                            .with_color(Color::Yellow),
+                    )
+                    .with_label(
+                        Label::new(span.to_owned())
+                            .with_message(format!("found {}", POP_CLR.paint(found)))
+                            .with_color(Color::Red),
+                    )
+                    .finish()
+                    .write(Source::from(&program), &mut std_err)
+                    .map_err(|_| fmt::Error)?;
+                write!(f, "{}", String::from_utf8_lossy(&std_err))
+            }
             ChaChaError::NotAFunction { value, span } => {
                 Report::build(ReportKind::Error, (), span.start)
                     .with_message("not a function")

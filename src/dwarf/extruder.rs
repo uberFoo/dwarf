@@ -392,8 +392,8 @@ fn inter_func(
         span.end as i64,
         span.start as i64,
         source,
-        None,
         Some(&ty),
+        None,
         lu_dog,
     );
 
@@ -425,8 +425,8 @@ fn inter_func(
             name_span.end as i64,
             name_span.start as i64,
             source,
-            Some(&value),
             None,
+            Some(&value),
             lu_dog,
         );
         last_param_uuid = link_parameter!(last_param_uuid, param, lu_dog);
@@ -727,7 +727,7 @@ fn inter_expression(
             }
 
             let expr = Binary::new_addition(lu_dog);
-            let expr = Operator::new_binary(Some(&rhs.0), &lhs.0, &expr, lu_dog);
+            let expr = Operator::new_binary(&lhs.0, Some(&rhs.0), &expr, lu_dog);
             let expr = Expression::new_operator(&expr, lu_dog);
 
             let value = XValue::new_expression(block, &lhs_ty, &expr, lu_dog);
@@ -779,7 +779,7 @@ fn inter_expression(
 
             let expr = BooleanOperator::new_and(lu_dog);
             let expr = Binary::new_boolean_operator(&expr, lu_dog);
-            let expr = Operator::new_binary(Some(&rhs.0), &lhs.0, &expr, lu_dog);
+            let expr = Operator::new_binary(&lhs.0, Some(&rhs.0), &expr, lu_dog);
             let expr = Expression::new_operator(&expr, lu_dog);
 
             let value = XValue::new_expression(block, &lhs_ty, &expr, lu_dog);
@@ -869,7 +869,7 @@ fn inter_expression(
             }
 
             let expr = Binary::new_assignment(lu_dog);
-            let expr = Operator::new_binary(Some(&rhs.0), &lhs.0, &expr, lu_dog);
+            let expr = Operator::new_binary(&lhs.0, Some(&rhs.0), &expr, lu_dog);
             let expr = Expression::new_operator(&expr, lu_dog);
 
             let value = XValue::new_expression(block, &lhs_ty, &expr, lu_dog);
@@ -892,7 +892,7 @@ fn inter_expression(
                 sarzak,
             )?;
             let not = Unary::new_not(lu_dog);
-            let operator = Operator::new_unary(None, &expr.0, &not, lu_dog);
+            let operator = Operator::new_unary(&expr.0, None, &not, lu_dog);
             let expr = Expression::new_operator(&operator, lu_dog);
             let value = XValue::new_expression(block, &ty, &expr, lu_dog);
             s_write!(span).x_value = Some(s_read!(value).id);
@@ -904,7 +904,7 @@ fn inter_expression(
         //
         ParserExpression::Block(ref stmts) => {
             let block = Block::new(Uuid::new_v4(), None, lu_dog);
-            debug!("block {:?}", block);
+            debug!("block {block:?}");
             let stmts_vec: Vec<RefType<ParserStatement>> = stmts
                 .iter()
                 .map(|stmt| new_ref!(ParserStatement, stmt.0.to_owned()))
@@ -929,6 +929,7 @@ fn inter_expression(
             let value = XValue::new_expression(&block, &ty.0, &expr, lu_dog);
             s_write!(span).x_value = Some(s_read!(value).id);
 
+            debug!("block {expr:?}");
             Ok(((expr, span), ty.0))
         }
         //
@@ -996,7 +997,7 @@ fn inter_expression(
             }
 
             let expr = Binary::new_division(lu_dog);
-            let expr = Operator::new_binary(Some(&rhs.0), &lhs.0, &expr, lu_dog);
+            let expr = Operator::new_binary(&lhs.0, Some(&rhs.0), &expr, lu_dog);
             let expr = Expression::new_operator(&expr, lu_dog);
 
             let value = XValue::new_expression(block, &lhs_ty, &expr, lu_dog);
@@ -1083,7 +1084,7 @@ fn inter_expression(
             }
 
             let expr = Comparison::new_equal(lu_dog);
-            let expr = Operator::new_comparison(Some(&rhs.0), &lhs.0, &expr, lu_dog);
+            let expr = Operator::new_comparison(&lhs.0, Some(&rhs.0), &expr, lu_dog);
             let expr = Expression::new_operator(&expr, lu_dog);
 
             let ty = Ty::new_boolean();
@@ -1373,7 +1374,7 @@ fn inter_expression(
                     models,
                     sarzak,
                 )?;
-                let arg = Argument::new(None, &func_call, &arg_expr.0, lu_dog);
+                let arg = Argument::new(&arg_expr.0, &func_call, None, lu_dog);
                 last_arg_uuid = link_argument!(last_arg_uuid, arg, lu_dog);
             }
 
@@ -1428,7 +1429,7 @@ fn inter_expression(
             }
 
             let expr = Comparison::new_greater_than(lu_dog);
-            let expr = Operator::new_comparison(Some(&rhs.0), &lhs.0, &expr, lu_dog);
+            let expr = Operator::new_comparison(&lhs.0, Some(&rhs.0), &expr, lu_dog);
             let expr = Expression::new_operator(&expr, lu_dog);
 
             let ty = Ty::new_boolean();
@@ -1478,7 +1479,7 @@ fn inter_expression(
             }
 
             let expr = Comparison::new_greater_than_or_equal(lu_dog);
-            let expr = Operator::new_comparison(Some(&rhs.0), &lhs.0, &expr, lu_dog);
+            let expr = Operator::new_comparison(&lhs.0, Some(&rhs.0), &expr, lu_dog);
             let expr = Expression::new_operator(&expr, lu_dog);
 
             let ty = Ty::new_boolean();
@@ -1595,7 +1596,7 @@ fn inter_expression(
                 None
             };
 
-            let if_expr = XIf::new(false_block.as_ref(), &true_block, &conditional.0, lu_dog);
+            let if_expr = XIf::new(false_block.as_ref(), &conditional.0, &true_block, lu_dog);
             let expr = Expression::new_x_if(&if_expr, lu_dog);
 
             let ty = true_ty;
@@ -1707,7 +1708,7 @@ fn inter_expression(
             }
 
             let expr = Comparison::new_less_than(lu_dog);
-            let expr = Operator::new_comparison(Some(&rhs.0), &lhs.0, &expr, lu_dog);
+            let expr = Operator::new_comparison(&lhs.0, Some(&rhs.0), &expr, lu_dog);
             let expr = Expression::new_operator(&expr, lu_dog);
 
             let ty = Ty::new_boolean();
@@ -1757,7 +1758,7 @@ fn inter_expression(
             }
 
             let expr = Comparison::new_less_than_or_equal(lu_dog);
-            let expr = Operator::new_comparison(Some(&rhs.0), &lhs.0, &expr, lu_dog);
+            let expr = Operator::new_comparison(&lhs.0, Some(&rhs.0), &expr, lu_dog);
             let expr = Expression::new_operator(&expr, lu_dog);
 
             let ty = Ty::new_boolean();
@@ -2076,7 +2077,7 @@ fn inter_expression(
 
             let mut last_arg_uuid: Option<usize> = None;
             // This is the self parameter
-            let this = Argument::new(None, &call, &instance.0, lu_dog);
+            let this = Argument::new(&instance.0, &call, None, lu_dog);
             last_arg_uuid = link_argument!(last_arg_uuid, this, lu_dog);
 
             for arg in args {
@@ -2095,11 +2096,11 @@ fn inter_expression(
                     arg.1.end as i64,
                     arg.1.start as i64,
                     source,
-                    Some(&value),
                     None,
+                    Some(&value),
                     lu_dog,
                 );
-                let arg = Argument::new(None, &call, &arg_expr.0, lu_dog);
+                let arg = Argument::new(&arg_expr.0, &call, None, lu_dog);
                 last_arg_uuid = link_argument!(last_arg_uuid, arg, lu_dog);
             }
 
@@ -2120,7 +2121,7 @@ fn inter_expression(
                 sarzak,
             )?;
             let negation = Unary::new_negation(lu_dog);
-            let operator = Operator::new_unary(None, &expr.0, &negation, lu_dog);
+            let operator = Operator::new_unary(&expr.0, None, &negation, lu_dog);
             let expr = Expression::new_operator(&operator, lu_dog);
             let value = XValue::new_expression(block, &ty, &expr, lu_dog);
             s_write!(span).x_value = Some(s_read!(value).id);
@@ -2157,7 +2158,7 @@ fn inter_expression(
             }
 
             let expr = Comparison::new_not_equal(lu_dog);
-            let expr = Operator::new_comparison(Some(&rhs.0), &lhs.0, &expr, lu_dog);
+            let expr = Operator::new_comparison(&lhs.0, Some(&rhs.0), &expr, lu_dog);
             let expr = Expression::new_operator(&expr, lu_dog);
 
             let ty = Ty::new_boolean();
@@ -2226,7 +2227,7 @@ fn inter_expression(
             }
 
             let expr = Binary::new_multiplication(lu_dog);
-            let expr = Operator::new_binary(Some(&rhs.0), &lhs.0, &expr, lu_dog);
+            let expr = Operator::new_binary(&lhs.0, Some(&rhs.0), &expr, lu_dog);
             let expr = Expression::new_operator(&expr, lu_dog);
 
             let value = XValue::new_expression(block, &lhs_ty, &expr, lu_dog);
@@ -2292,7 +2293,7 @@ fn inter_expression(
 
             let expr = BooleanOperator::new_or(lu_dog);
             let expr = Binary::new_boolean_operator(&expr, lu_dog);
-            let expr = Operator::new_binary(Some(&rhs.0), &lhs.0, &expr, lu_dog);
+            let expr = Operator::new_binary(&lhs.0, Some(&rhs.0), &expr, lu_dog);
             let expr = Expression::new_operator(&expr, lu_dog);
 
             let value = XValue::new_expression(block, &lhs_ty, &expr, lu_dog);
@@ -2475,7 +2476,7 @@ fn inter_expression(
                     models,
                     sarzak,
                 )?;
-                let arg = Argument::new(None, &call, &arg_expr.0, lu_dog);
+                let arg = Argument::new(&arg_expr.0, &call, None, lu_dog);
                 last_arg_uuid = link_argument!(last_arg_uuid, arg, lu_dog);
             }
 
@@ -2532,13 +2533,10 @@ fn inter_expression(
             let woog_struct = lu_dog.exhume_woog_struct(&id).unwrap();
 
             let expr = StructExpression::new(Uuid::new_v4(), &woog_struct, lu_dog);
-            // fields
-            //     .iter()
-            //     .map(|((name, _), (field_expr, _))| (name, field_expr));
 
             for (name, field_expr) in fields {
                 // 🚧 Do type checking here? I don't think that I have what I need.
-                let (field_expr, _ty) = inter_expression(
+                let (field_expr, ty) = inter_expression(
                     &new_ref!(ParserExpression, field_expr.0.to_owned()),
                     check_types,
                     &field_expr.1,
@@ -2548,12 +2546,13 @@ fn inter_expression(
                     models,
                     sarzak,
                 )?;
-                let _field = FieldExpression::new(name.0.to_owned(), &field_expr.0, &expr, lu_dog);
+                debug!("field `{name:?}` is of type `{ty:?}`, expr: {field_expr:?}");
+                let field = FieldExpression::new(name.0.to_owned(), &field_expr.0, &expr, lu_dog);
 
+                let expr = Expression::new_field_expression(&field, lu_dog);
                 // Adding the following actually breaks shit.
-                // let expr = Expression::new_field_expression(&field, lu_dog);
-                // let value = XValue::new_expression(block, &ty, &expr, lu_dog);
-                // s_write!(field_expr.1).x_value = Some(s_read!(value).id);
+                let value = XValue::new_expression(block, &ty, &expr, lu_dog);
+                s_write!(field_expr.1).x_value = Some(s_read!(value).id);
             }
 
             // Same name, de_sanitized, in a different model. Oh, right, this is
@@ -2621,7 +2620,7 @@ fn inter_expression(
             // 🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧
 
             let expr = Binary::new_subtraction(lu_dog);
-            let expr = Operator::new_binary(Some(&rhs.0), &lhs.0, &expr, lu_dog);
+            let expr = Operator::new_binary(&lhs.0, Some(&rhs.0), &expr, lu_dog);
             let expr = Expression::new_operator(&expr, lu_dog);
 
             let value = XValue::new_expression(block, &lhs_ty, &expr, lu_dog);
@@ -3096,6 +3095,7 @@ impl<'d, 'a, 'b, 'c> fmt::Display for PrintableValueType<'d, 'a, 'b, 'c> {
         let models = self.3;
 
         match value.subtype {
+            ValueTypeEnum::Char(c) => write!(f, "'{}'", c),
             ValueTypeEnum::Empty(_) => write!(f, "()"),
             ValueTypeEnum::Error(_) => write!(f, "<error>"),
             ValueTypeEnum::Function(_) => write!(f, "<function>"),

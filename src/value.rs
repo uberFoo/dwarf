@@ -2,6 +2,7 @@ use std::{any::Any, collections::VecDeque, fmt, ops::Range};
 
 use ansi_term::Colour;
 use fxhash::FxHashMap as HashMap;
+use sarzak::lu_dog::ValueTypeEnum;
 // use parking_lot::Lock;
 use uuid::Uuid;
 
@@ -123,13 +124,35 @@ pub enum Value {
 }
 
 impl Value {
-    pub fn get_type(&self, lu_dog: &mut LuDogStore) -> RefType<ValueType> {
+    pub fn get_type(&self, lu_dog: &LuDogStore) -> RefType<ValueType> {
         match &self {
             Value::Boolean(ref _bool) => {
                 let ty = Ty::new_boolean();
-                ValueType::new_ty(&ty, lu_dog)
+                for vt in lu_dog.iter_value_type() {
+                    if let ValueTypeEnum::Ty(_ty) = s_read!(vt).subtype {
+                        if ty.id() == _ty {
+                            return vt.clone();
+                        }
+                    }
+                }
+                unreachable!()
             }
-            Value::Empty => ValueType::new_empty(lu_dog),
+            Value::Char(ref c) => {
+                for vt in lu_dog.iter_value_type() {
+                    if let ValueTypeEnum::Char(_) = s_read!(vt).subtype {
+                        return vt.clone();
+                    }
+                }
+                unreachable!()
+            }
+            Value::Empty => {
+                for vt in lu_dog.iter_value_type() {
+                    if let ValueTypeEnum::Empty(_) = s_read!(vt).subtype {
+                        return vt.clone();
+                    }
+                }
+                unreachable!()
+            }
             Value::Function(ref func) => {
                 let func = lu_dog.exhume_function(&s_read!(func).id).unwrap();
                 let z = s_read!(func).r1_value_type(lu_dog)[0].clone();
@@ -137,11 +160,25 @@ impl Value {
             }
             Value::Float(ref _float) => {
                 let ty = Ty::new_float();
-                ValueType::new_ty(&ty, lu_dog)
+                for vt in lu_dog.iter_value_type() {
+                    if let ValueTypeEnum::Ty(_ty) = s_read!(vt).subtype {
+                        if ty.id() == _ty {
+                            return vt.clone();
+                        }
+                    }
+                }
+                unreachable!()
             }
             Value::Integer(ref _int) => {
                 let ty = Ty::new_integer();
-                ValueType::new_ty(&ty, lu_dog)
+                for vt in lu_dog.iter_value_type() {
+                    if let ValueTypeEnum::Ty(_ty) = s_read!(vt).subtype {
+                        if ty.id() == _ty {
+                            return vt.clone();
+                        }
+                    }
+                }
+                unreachable!()
             }
             // 🚧 ProxyType
             // Value::ProxyType(ref pt) => lu_dog
@@ -149,16 +186,35 @@ impl Value {
             //     .unwrap(),
             Value::String(ref _str) => {
                 let ty = Ty::new_s_string();
-                ValueType::new_ty(&ty, lu_dog)
+                for vt in lu_dog.iter_value_type() {
+                    if let ValueTypeEnum::Ty(_ty) = s_read!(vt).subtype {
+                        if ty.id() == _ty {
+                            return vt.clone();
+                        }
+                    }
+                }
+                unreachable!()
             }
             Value::UserType(ref ut) => s_read!(ut).get_type().clone(),
             Value::Uuid(ref _uuid) => {
                 let ty = Ty::new_s_uuid();
-                ValueType::new_ty(&ty, lu_dog)
+                for vt in lu_dog.iter_value_type() {
+                    if let ValueTypeEnum::Ty(_ty) = s_read!(vt).subtype {
+                        if ty.id() == _ty {
+                            return vt.clone();
+                        }
+                    }
+                }
+                unreachable!()
             }
             value => {
                 log::error!("Value::get_type() not implemented for {:?}", value);
-                ValueType::new_unknown(lu_dog)
+                for vt in lu_dog.iter_value_type() {
+                    if let ValueTypeEnum::Unknown(_) = s_read!(vt).subtype {
+                        return vt.clone();
+                    }
+                }
+                unreachable!()
             }
         }
     }

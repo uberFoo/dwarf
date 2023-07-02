@@ -1,4 +1,3 @@
-// use term::rgb;
 struct Complex {
     re: float,
     im: float,
@@ -59,7 +58,7 @@ fn pixel_to_point(
     }
 }
 
-fn escape_time(c: Complex, limit: int) -> Option<int> {
+fn escape_time(c: Complex, limit: int) -> int {
     // debugger;
     let z = Complex::zero();
     for i in 1..limit {
@@ -87,41 +86,30 @@ fn escape_time(c: Complex, limit: int) -> Option<int> {
     // limit
 }
 
-fn main() -> Complex {
-    if ((chacha::args()).len() < 2) {
-        print("Usage: mandelbrot <filename> <iterations>\n");
-        return Complex::zero();
-    }
+fn main() {
+    // if (((chacha::args()).len() as int) < 2) {
+    //     print("Usage: mandelbrot <filename> <iterations>\n");
+    //     return Complex::zero();
+    // }
 
     let iterations = chacha::args()[1];
-    print("iterations type is {0}".format(chacha::typeof(iterations)));
-    for arg in chacha::args() {
-        print("arg: " + arg + "\n");
-    }
-    let s = "not-mandelbrot";
-    let s = "mandelbrot";
-    let ty = chacha::typeof(s);
-    print("Type: " + ty + "\n");
-
-    print(s[s.len() - 1]);
-
-    // This should not typecheck.
-    print("Total time: {0}s.\n".format(chacha::time(plot(chacha::args()[0]))));
+    print("iterations {1},  type is {0}\n".format(chacha::typeof(iterations), iterations));
+    print("Total time: {0}s.\n".format(chacha::time(plot(iterations))));
 }
 
-fn plot(t: int) -> Complex {
+fn plot(t: int) {
     // 🚧 Need to fix this multiple let let-down. Oh, no! 😫
     // let width = 21;
     // let height = 5;
-    let width = 42;
-    let height = 10;
+    // let width = 42;
+    // let height = 10;
     // let width = 84;
     // let height = 20;
     // debugger;
-    // let width = 168;
-    // let height = 40;
-    // let width = 7;
-    // let height = 2;
+    let width = 168;
+    let height = 40;
+    let width = 7;
+    let height = 2;
     let upper_left = Complex { re: -2.5, im: 1.0 };
     let lower_right = Complex { re: 2.0, im: -1.0 };
     // let upper_left = Complex {
@@ -133,12 +121,12 @@ fn plot(t: int) -> Complex {
     //     im: 0.031852,
     // };
     // let upper_left = Complex {
-    //     re: -0.34853774148008254,
-    //     im: -0.6065922085831237,
+    //     re: -0.34843774148008254,
+    //     im: -0.6066922085831237,
     // };
     // let lower_right = Complex {
-    //     re: -0.34831493420245574,
-    //     im: -0.606486596104741,
+    //     re: -0.34821493420245574,
+    //     im: -0.606586596104741,
     // };
     // let row = 0;
     // let column = 0;
