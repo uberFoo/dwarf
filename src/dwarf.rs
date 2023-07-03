@@ -226,10 +226,7 @@ impl fmt::Display for DwarfErrorReporter<'_, '_, '_> {
                 expected_span,
                 found_span,
             } => {
-                let msg = format!(
-                    "{}: Type mismatch: expected `{expected}`, found `{found}`.",
-                    Colour::Red.bold().paint("error")
-                );
+                let msg = format!("Type mismatch: expected `{expected}`, found `{found}`.");
 
                 Report::build(ReportKind::Error, self.2, expected_span.start)
                     .with_message(&msg)
@@ -286,11 +283,7 @@ impl fmt::Display for DwarfErrorReporter<'_, '_, '_> {
                 write!(f, "{}", String::from_utf8_lossy(&std_err))
             }
             DwarfError::UnknownType { ty, span } => {
-                let msg = format!(
-                    "{}: Unknown type: `{}`.",
-                    Colour::Red.bold().paint("error"),
-                    ty
-                );
+                let msg = format!("Unknown type: `{}`.", ty);
 
                 let report = Report::build(ReportKind::Error, self.2, span.start)
                     .with_message(&msg)

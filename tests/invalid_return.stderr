@@ -1,4 +1,4 @@
-[31mError:[0m [1;31merror[0m: Type mismatch: expected `int`, found `()`.
+[31mError:[0m Type mismatch: expected `int`, found `()`.
    [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0minvalid_return:5:1[38;5;246m][0m
    [38;5;246m│[0m
  [38;5;246m5 │[0m [33mf[0m[33mn[0m[33m [0m[33ma[0m[33m([0m[33m)[0m[33m [0m[33m-[0m[33m>[0m[33m [0m[33mi[0m[33mn[0m[33mt[0m[33m [0m[31m{[0m[31m}[0m
@@ -8,7 +8,7 @@
  [38;5;240m  │[0m                [31m╰[0m[31m─[0m[31m─[0m found [36m()[0m
 [38;5;246m───╯[0m
 
-[31mError:[0m [1;31merror[0m: Type mismatch: expected `int`, found `String`.
+[31mError:[0m Type mismatch: expected `int`, found `String`.
     [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0minvalid_return:8:1[38;5;246m][0m
     [38;5;246m│[0m
  [38;5;246m 8 │[0m [33m╭[0m[33m─[0m[33m▶[0m[33m [0m[33mf[0m[33mn[0m[33m [0m[33mb[0m[33m([0m[33m)[0m[33m [0m[33m-[0m[33m>[0m[33m [0m[33mi[0m[33mn[0m[33mt[0m[33m [0m[33m{[0m
@@ -20,7 +20,7 @@
  [38;5;240m   │[0m [33m╰[0m[33m─[0m[33m─[0m[33m─[0m[33m─[0m[33m─[0m[33m─[0m[33m─[0m expected [36mint[0m
 [38;5;246m────╯[0m
 
-[31mError:[0m [1;31merror[0m: Type mismatch: expected `String`, found `int`.
+[31mError:[0m Type mismatch: expected `String`, found `int`.
     [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0minvalid_return:13:1[38;5;246m][0m
     [38;5;246m│[0m
  [38;5;246m13 │[0m [33m╭[0m[33m─[0m[33m▶[0m[33m [0m[33mf[0m[33mn[0m[33m [0m[33mc[0m[33m([0m[33m)[0m[33m [0m[33m-[0m[33m>[0m[33m [0m[33ms[0m[33mt[0m[33mr[0m[33mi[0m[33mn[0m[33mg[0m[33m [0m[33m{[0m

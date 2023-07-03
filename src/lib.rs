@@ -511,10 +511,7 @@ impl fmt::Display for ChaChaErrorReporter<'_, '_, '_> {
                 // found_span,
                 span,
             } => {
-                let msg = format!(
-                    "{}: Type mismatch: expected `{expected}`, found `{found}`.",
-                    Colour::Red.bold().paint("error")
-                );
+                let msg = format!("Type mismatch: expected `{expected}`, found `{found}`.");
 
                 Report::build(ReportKind::Error, self.2, span.start)
                     .with_message(&msg)
