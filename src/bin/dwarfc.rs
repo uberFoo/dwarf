@@ -147,7 +147,7 @@ fn main() -> Result<()> {
         })
         .map_err(|e| vec![e])?;
 
-    let ast = parse_dwarf(&source_code).map_err(|e| vec![e])?;
+    let ast = parse_dwarf(&args.source.to_str().unwrap(), &source_code).map_err(|e| vec![e])?;
 
     let lu_dog = match new_lu_dog(
         Some(&path),

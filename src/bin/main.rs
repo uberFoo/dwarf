@@ -100,12 +100,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if let Some(ref source) = args.source {
         log::info!("Compiling source file {}", &source.display());
 
+        let file = args.source.clone().unwrap();
+        let file = if args.bless.is_some() && args.bless.unwrap() {
+            file.file_stem().unwrap().to_str().unwrap()
+        } else {
+            file.to_str().unwrap()
+        };
+
         let mut dwarf_args = vec![source.to_string_lossy().to_string()];
         dwarf_args.extend(args.dwarf_args.args);
 
         let source_code = fs::read_to_string(&source)?;
 
-        let ast = match parse_dwarf(&source_code) {
+        let ast = match parse_dwarf(&file, &source_code) {
             Ok(ast) => ast,
             Err(_) => {
                 // eprintln!("{}", dwarf::dwarf::DwarfErrorReporter(&e, &source_code));
@@ -116,13 +123,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let lu_dog = match new_lu_dog(None, Some((source_code.clone(), &ast)), &[], &sarzak) {
             Ok(lu_dog) => lu_dog,
             Err(errors) => {
-                let file = args.source.unwrap();
-                let file = if args.bless.is_some() && args.bless.unwrap() {
-                    file.file_stem().unwrap().to_str().unwrap()
-                } else {
-                    file.to_str().unwrap()
-                };
-
                 for err in errors {
                     eprintln!(
                         "{}",
@@ -143,13 +143,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let ctx = match start_main(false, ctx) {
             Ok((_, ctx)) => ctx,
             Err(e) => {
-                let file = args.source.unwrap();
-                let file = if args.bless.is_some() && args.bless.unwrap() {
-                    file.file_stem().unwrap().to_str().unwrap()
-                } else {
-                    file.to_str().unwrap()
-                };
-
                 eprintln!("Interpreter exited with:");
                 eprintln!("{}", dwarf::ChaChaErrorReporter(&e, &source_code, &file));
                 return Ok(());

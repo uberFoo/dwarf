@@ -11,7 +11,7 @@ use dwarf::{
     Value,
 };
 
-fn diff_errors(test: &str, errors: &String) -> Result<Value, ()> {
+fn diff_errors(test: &str, errors: &str) -> Result<Value, Option<i32>> {
     let stderr_path = PathBuf::from(format!("tests/{}.stderr", test));
     if stderr_path.exists() {
         // We found a .stderr file. Read it and compare it to the error
@@ -37,9 +37,11 @@ fn diff_errors(test: &str, errors: &String) -> Result<Value, ()> {
             eprintln!("Expected:\n{}", stderr);
             eprintln!("Found:\n{}", errors);
             eprintln!("Diff:");
+            let mut diff_count = 0;
             for line in diff::lines(&stderr, &errors) {
                 match line {
                     diff::Result::Left(expected) => {
+                        diff_count += 1;
                         eprintln!("{1} {0}", expected, Colour::Green.paint("+++"));
                     }
                     diff::Result::Right(found) => {
@@ -48,15 +50,38 @@ fn diff_errors(test: &str, errors: &String) -> Result<Value, ()> {
                     diff::Result::Both(a, _) => eprintln!("    {}", a),
                 }
             }
-            return Err(());
+            return Err(Some(diff_count));
         }
     } else {
-        return Err(());
+        return Err(None);
     }
 }
 fn run_program(test: &str, program: &str) -> Result<Value, ()> {
     let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
-    let ast = parse_dwarf(&program).unwrap();
+    let ast = match parse_dwarf(&test, &program) {
+        Ok(ast) => ast,
+        Err(dwarf::dwarf::DwarfError::Parse { error, ast: _ }) => {
+            let error = error.trim();
+            eprintln!("{error}");
+            // The first line may be different, and there's not much I can do about
+            // it. It's becasue the expected tokens are an opaque type on the error
+            // type I'm using in the parser. I suppose I could use a different error
+            // type to get around it. But that's a low priority item atm.
+            match diff_errors(test, error) {
+                Err(None) => return Err(()),
+                Err(Some(diff_count)) => {
+                    dbg!(diff_count);
+                    if diff_count < 2 {
+                        return Ok(Value::Empty);
+                    } else {
+                        return Err(());
+                    }
+                }
+                Ok(_) => return Ok(Value::Empty),
+            }
+        }
+        _ => unreachable!(),
+    };
     let lu_dog = match new_lu_dog(None, Some((program.to_owned(), &ast)), &[], &sarzak) {
         Ok(lu_dog) => lu_dog,
         Err(e) => {
@@ -79,7 +104,7 @@ fn run_program(test: &str, program: &str) -> Result<Value, ()> {
                 .to_owned();
 
             eprintln!("{errors}");
-            return diff_errors(test, &errors);
+            return diff_errors(test, &errors).map_err(|_| ());
         }
     };
 
@@ -95,7 +120,7 @@ fn run_program(test: &str, program: &str) -> Result<Value, ()> {
             .trim()
             .to_owned();
             eprintln!("{error}");
-            return diff_errors(test, &error);
+            return diff_errors(test, &error).map_err(|_| ());
         }
     }
 }

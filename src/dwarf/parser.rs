@@ -253,11 +253,11 @@ impl DwarfParser {
 
                 self.errors.push(err);
 
-                error!("parse_program: resynchronize looking for '}'");
+                debug!("parse_program: resynchronize looking for '}'");
                 while !self.at_end() && !self.match_(&[Token::Punct('}')]) {
                     self.advance();
                 }
-                error!("parse_program: resynchronized");
+                debug!("parse_program: resynchronized");
             }
         }
 
@@ -3017,11 +3017,11 @@ impl DwarfParser {
                 Err(error) => {
                     self.errors.push(*error);
 
-                    error!("parse_function: resynchronize looking for ')'");
+                    debug!("parse_function: resynchronize looking for ')'");
                     while !self.at_end() && !self.match_(&[Token::Punct(')')]) {
                         self.advance();
                     }
-                    error!("parse_function: resynchronized");
+                    debug!("parse_function: resynchronized");
                 }
             }
         }
@@ -3050,11 +3050,11 @@ impl DwarfParser {
                 Err(error) => {
                     self.errors.push(*error);
 
-                    error!("parse_function: resynchronize looking for '{'");
+                    debug!("parse_function: resynchronize looking for '{'");
                     while !self.at_end() && !self.match_(&[Token::Punct('{')]) {
                         self.advance();
                     }
-                    error!("parse_function: resynchronized");
+                    debug!("parse_function: resynchronized");
 
                     let start = self.previous().unwrap().1.end;
                     let end = self.peek().unwrap().1.start;
@@ -3519,7 +3519,7 @@ pub fn parse_line(src: &str) -> Result<Option<Spanned<Statement>>, String> {
     };
 
     if !errs.is_empty() || !parser.errors.is_empty() {
-        Err(report_errors(errs, parser.errors, src))
+        Err(report_errors(errs, parser.errors, "line", src))
     } else {
         Ok(ast)
     }
@@ -3528,7 +3528,7 @@ pub fn parse_line(src: &str) -> Result<Option<Spanned<Statement>>, String> {
 // This will return as much of the parsed ast as possible, even when hitting an
 // error, which explains the return type.
 // 🚧 WTF am I talking about?
-pub fn parse_dwarf(src: &str) -> Result<Vec<Spanned<Item>>, DwarfError> {
+pub fn parse_dwarf(name: &str, src: &str) -> Result<Vec<Spanned<Item>>, DwarfError> {
     let (tokens, errs) = lexer().parse_recovery_verbose(src);
 
     let mut parser = DwarfParser::new(tokens.unwrap());
@@ -3537,7 +3537,7 @@ pub fn parse_dwarf(src: &str) -> Result<Vec<Spanned<Item>>, DwarfError> {
     log::debug!("parse_dwarf: {:#?}", ast);
 
     if !errs.is_empty() || !parse_errs.is_empty() {
-        let error = report_errors(errs, parse_errs, src);
+        let error = report_errors(errs, parse_errs, name, src);
         eprintln!("{}", error);
         Err(DwarfError::Parse { error, ast })
     } else {
@@ -3545,14 +3545,19 @@ pub fn parse_dwarf(src: &str) -> Result<Vec<Spanned<Item>>, DwarfError> {
     }
 }
 
-fn report_errors(errs: Vec<Simple<char>>, parse_errs: Vec<Simple<String>>, src: &str) -> String {
+fn report_errors(
+    errs: Vec<Simple<char>>,
+    parse_errs: Vec<Simple<String>>,
+    name: &str,
+    src: &str,
+) -> String {
     let mut result = Vec::new();
 
     errs.into_iter()
         .map(|e| e.map(|c| c.to_string()))
         .chain(parse_errs.into_iter().map(|e| e.map(|s| s)))
         .for_each(|e| {
-            let report = Report::build(ReportKind::Error, (), e.span().start);
+            let report = Report::build(ReportKind::Error, name, e.span().start);
 
             let report = match e.reason() {
                 chumsky::error::SimpleReason::Unclosed { span, delimiter } => report
@@ -3561,7 +3566,7 @@ fn report_errors(errs: Vec<Simple<char>>, parse_errs: Vec<Simple<String>>, src: 
                         delimiter.fg(Color::Yellow)
                     ))
                     .with_label(
-                        Label::new(span.clone())
+                        Label::new((name, span.clone()))
                             .with_message(format!(
                                 "Unclosed delimiter {}",
                                 delimiter.fg(Color::Yellow)
@@ -3569,7 +3574,7 @@ fn report_errors(errs: Vec<Simple<char>>, parse_errs: Vec<Simple<String>>, src: 
                             .with_color(Color::Yellow),
                     )
                     .with_label(
-                        Label::new(e.span())
+                        Label::new((name, e.span()))
                             .with_message(format!(
                                 "Must be closed before this {}",
                                 e.found()
@@ -3599,7 +3604,7 @@ fn report_errors(errs: Vec<Simple<char>>, parse_errs: Vec<Simple<String>>, src: 
                         }
                     ))
                     .with_label(
-                        Label::new(e.span())
+                        Label::new((name, e.span()))
                             .with_message(format!(
                                 "Unexpected token {}",
                                 e.found()
@@ -3609,7 +3614,7 @@ fn report_errors(errs: Vec<Simple<char>>, parse_errs: Vec<Simple<String>>, src: 
                             .with_color(Color::Red),
                     ),
                 chumsky::error::SimpleReason::Custom(msg) => report.with_message(msg).with_label(
-                    Label::new(e.span())
+                    Label::new((name, e.span()))
                         .with_message(format!("{}", msg.fg(Color::Red)))
                         .with_color(Color::Red),
                 ),
@@ -3617,7 +3622,7 @@ fn report_errors(errs: Vec<Simple<char>>, parse_errs: Vec<Simple<String>>, src: 
 
             report
                 .finish()
-                .write(Source::from(&src), &mut result)
+                .write((name, Source::from(&src)), &mut result)
                 .unwrap();
         });
 
@@ -3694,7 +3699,7 @@ mod tests {
             struct Bar {}
         "#;
 
-        let ast = parse_dwarf(src);
+        let ast = parse_dwarf("test_struct", src);
 
         assert!(ast.is_ok());
     }
@@ -3709,7 +3714,7 @@ mod tests {
             use foo::bar::Xyzzy as Plugh;
         "#;
 
-        let ast = parse_dwarf(src);
+        let ast = parse_dwarf("test_import", src);
 
         // dbg!(&ast);
 
@@ -3759,7 +3764,7 @@ mod tests {
             }
         "#;
 
-        let ast = parse_dwarf(src);
+        let ast = parse_dwarf("xyzzy", src);
 
         // dbg!(&ast);
 
@@ -3816,7 +3821,7 @@ mod tests {
             }
         "#;
 
-        let ast = parse_dwarf(src);
+        let ast = parse_dwarf("test_impl", src);
 
         // dbg!(&ast);
 
@@ -3849,7 +3854,7 @@ mod tests {
             }
         "#;
 
-        let ast = parse_dwarf(src);
+        let ast = parse_dwarf("test_item_fn", src);
 
         assert!(ast.is_ok());
         assert!(ast.unwrap().len() == 3);
@@ -3888,7 +3893,7 @@ mod tests {
             }
         "#;
 
-        let ast = parse_dwarf(src);
+        let ast = parse_dwarf("test_list", src);
 
         assert!(ast.is_ok());
     }
@@ -3906,7 +3911,7 @@ mod tests {
             }
         "#;
 
-        let ast = parse_dwarf(src);
+        let ast = parse_dwarf("test_option", src);
 
         assert!(ast.is_ok());
     }
@@ -3927,7 +3932,7 @@ mod tests {
             }
         "#;
 
-        let ast = parse_dwarf(src);
+        let ast = parse_dwarf("test_for", src);
 
         // dbg!(&ast);
 
@@ -3961,7 +3966,7 @@ mod tests {
             }
         "#;
 
-        let ast = parse_dwarf(src);
+        let ast = parse_dwarf("test_return", src);
 
         // dbg!(&ast);
 
@@ -3982,7 +3987,7 @@ mod tests {
             }
         "#;
 
-        let ast = parse_dwarf(src);
+        let ast = parse_dwarf("test_fib", src);
 
         // dbg!(&ast);
 
@@ -4034,7 +4039,7 @@ mod tests {
         }
         "#;
 
-        let ast = parse_dwarf(src);
+        let ast = parse_dwarf("test_struct_expression", src);
 
         dbg!(&ast);
         assert!(ast.is_ok());
@@ -4054,7 +4059,7 @@ mod tests {
             }
         "#;
 
-        let ast = parse_dwarf(src);
+        let ast = parse_dwarf("test_assignment", src);
         dbg!(&ast);
         assert!(ast.is_ok());
     }
@@ -4071,7 +4076,7 @@ mod tests {
             }
         "#;
 
-        let ast = parse_dwarf(src);
+        let ast = parse_dwarf("test_index_expression", src);
         dbg!(&ast);
         assert!(ast.is_ok());
     }
@@ -4088,7 +4093,7 @@ mod tests {
             }
         "#;
 
-        let ast = parse_dwarf(src);
+        let ast = parse_dwarf("test_trailing_commas", src);
         // dbg!(&ast);
         assert!(ast.is_ok());
     }
@@ -4105,7 +4110,7 @@ mod tests {
             }
         "#;
 
-        let ast = parse_dwarf(src);
+        let ast = parse_dwarf("test_uuid", src);
         assert!(ast.is_ok());
     }
 
@@ -4122,7 +4127,7 @@ mod tests {
             }
         "#;
 
-        let ast = parse_dwarf(src);
+        let ast = parse_dwarf("test_method_call", src);
         assert!(ast.is_ok());
     }
 
@@ -4142,7 +4147,7 @@ mod tests {
             }
         "#;
 
-        let ast = parse_dwarf(src);
+        let ast = parse_dwarf("test_asm", src);
         assert!(ast.is_ok());
     }
 }
