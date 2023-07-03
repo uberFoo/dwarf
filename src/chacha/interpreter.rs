@@ -933,7 +933,6 @@ fn eval_expression(
                 // any instance methods on the type. This seems weird. I'm not sure
                 // where to put it in my brain just yet.
                 // But basically it comes down to allowing things like
-                // `x = 1; x.to_string();` -- Not sure copilot wrote that, but it looks interesting.
                 // `"dwarf".len()`
                 // Or iterators things like
                 // `[1, 2, 3].iter().map(|x| x + 1)`
@@ -1177,10 +1176,15 @@ fn eval_expression(
                                     vm,
                                 )
                             } else {
-                                // Should this be an error? I don't think it's likely to happen.
-                                // 🚧 Wrong! This will happen frequently and should be an error.
-                                // It's can't find method on type.
-                                panic!("I can't find the function: `{}` in the impl.", meth);
+                                let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
+                                let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
+                                let read = s_read!(span);
+                                let span = read.start as usize..read.end as usize;
+
+                                return Err(ChaChaError::NoSuchMethod {
+                                    method: meth.to_owned(),
+                                    span,
+                                });
                             };
                             x
                         }
@@ -1281,10 +1285,18 @@ fn eval_expression(
 
                                 Ok((result.unwrap(), ty))
                             }
-                            method => Err(ChaChaError::NoSuchStaticMethod {
-                                ty: ty.to_owned(),
-                                method: method.to_owned(),
-                            }),
+                            method => {
+                                let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
+                                let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
+                                let read = s_read!(span);
+                                let span = read.start as usize..read.end as usize;
+
+                                Err(ChaChaError::NoSuchStaticMethod {
+                                    ty: ty.to_owned(),
+                                    method: method.to_owned(),
+                                    span,
+                                })
+                            }
                         }
                     } else if ty == "chacha" {
                         match func.as_str() {
@@ -1417,10 +1429,18 @@ fn eval_expression(
                                     unreachable!()
                                 }
                             }
-                            method => Err(ChaChaError::NoSuchStaticMethod {
-                                ty: ty.to_owned(),
-                                method: method.to_owned(),
-                            }),
+                            method => {
+                                let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
+                                let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
+                                let read = s_read!(span);
+                                let span = read.start as usize..read.end as usize;
+
+                                Err(ChaChaError::NoSuchStaticMethod {
+                                    ty: ty.to_owned(),
+                                    method: method.to_owned(),
+                                    span,
+                                })
+                            }
                         }
                     } else if let Some(value) = context.memory.get_meta(ty, func) {
                         fix_debug!("StaticMethodCall meta value", value);
@@ -1495,20 +1515,22 @@ fn eval_expression(
                             // }
                             value => {
                                 fix_error!("deal with call expression", value);
-                                Ok((
-                                    new_ref!(Value, Value::Empty),
-                                    Value::Empty.get_type(&s_read!(lu_dog)),
-                                ))
+                                panic!("fix this");
                             }
                         }
                     } else {
-                        ensure!(
-                            false,
+                        ensure!(false, {
+                            let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
+                            let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
+                            let read = s_read!(span);
+                            let span = read.start as usize..read.end as usize;
+
                             NoSuchStaticMethodSnafu {
                                 ty: ty.to_owned(),
                                 method: func.to_owned(),
+                                span,
                             }
-                        );
+                        });
                         unimplemented!();
                         // We never will get here.
                     }
@@ -1685,9 +1707,9 @@ fn eval_expression(
             let index = s_read!(lu_dog).exhume_index(index).unwrap();
             let index = s_read!(index);
             let target = s_read!(lu_dog).exhume_expression(&index.target).unwrap();
-            let index = s_read!(lu_dog).exhume_expression(&index.index).unwrap();
+            let index_expr = s_read!(lu_dog).exhume_expression(&index.index).unwrap();
 
-            let (index, _ty) = eval_expression(index, context, vm)?;
+            let (index, _ty) = eval_expression(index_expr.clone(), context, vm)?;
             let index = s_read!(index).clone();
             match &index {
                 Value::Integer(index) => {
@@ -1698,9 +1720,15 @@ fn eval_expression(
                         if index < vec.len() {
                             Ok((vec[index].to_owned(), ty))
                         } else {
-                            Err(ChaChaError::BadJuJu {
-                                message: "Index out of bounds".to_owned(),
-                                location: location!(),
+                            let value = &s_read!(index_expr).r11_x_value(&s_read!(lu_dog))[0];
+                            let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
+                            let read = s_read!(span);
+                            let span = read.start as usize..read.end as usize;
+
+                            Err(ChaChaError::IndexOutOfBounds {
+                                index: index,
+                                len: vec.len(),
+                                span,
                             })
                         }
                     } else if let Value::String(str) = &*list {
@@ -1718,9 +1746,15 @@ fn eval_expression(
                                 ty,
                             ))
                         } else {
-                            Err(ChaChaError::BadJuJu {
-                                message: "Index out of bounds".to_owned(),
-                                location: location!(),
+                            let value = &s_read!(index_expr).r11_x_value(&s_read!(lu_dog))[0];
+                            let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
+                            let read = s_read!(span);
+                            let span = read.start as usize..read.end as usize;
+
+                            Err(ChaChaError::IndexOutOfBounds {
+                                index: index,
+                                len: str.len(),
+                                span,
                             })
                         }
                     } else {
@@ -1738,9 +1772,15 @@ fn eval_expression(
                         if range.end < vec.len() {
                             Ok((new_ref!(Value, Value::Vector(vec[range].to_owned())), ty))
                         } else {
-                            Err(ChaChaError::BadJuJu {
-                                message: "Index out of bounds".to_owned(),
-                                location: location!(),
+                            let value = &s_read!(index_expr).r11_x_value(&s_read!(lu_dog))[0];
+                            let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
+                            let read = s_read!(span);
+                            let span = read.start as usize..read.end as usize;
+
+                            Err(ChaChaError::IndexOutOfBounds {
+                                index: range.end,
+                                len: vec.len(),
+                                span,
                             })
                         }
                     } else if let Value::String(str) = &*list {
@@ -2241,10 +2281,6 @@ fn eval_expression(
                 .collect::<Result<Vec<_>>>()?;
 
             let woog_struct = s_read!(expr).r39_woog_struct(&s_read!(lu_dog))[0].clone();
-            // let ty = s_read!(lu_dog)
-            // .exhume_value_type(&s_read!(woog_struct).id)
-            // .unwrap();
-            // kts
             let ty = s_read!(woog_struct).r1_value_type(&s_read!(lu_dog))[0].clone();
             let fields = s_read!(woog_struct).r7_field(&s_read!(lu_dog));
 

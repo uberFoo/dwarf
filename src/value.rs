@@ -126,7 +126,7 @@ pub enum Value {
 impl Value {
     pub fn get_type(&self, lu_dog: &LuDogStore) -> RefType<ValueType> {
         match &self {
-            Value::Boolean(ref _bool) => {
+            Value::Boolean(_) => {
                 let ty = Ty::new_boolean();
                 for vt in lu_dog.iter_value_type() {
                     if let ValueTypeEnum::Ty(_ty) = s_read!(vt).subtype {
@@ -137,7 +137,7 @@ impl Value {
                 }
                 unreachable!()
             }
-            Value::Char(ref c) => {
+            Value::Char(_) => {
                 for vt in lu_dog.iter_value_type() {
                     if let ValueTypeEnum::Char(_) = s_read!(vt).subtype {
                         return vt.clone();
@@ -158,7 +158,7 @@ impl Value {
                 let z = s_read!(func).r1_value_type(lu_dog)[0].clone();
                 z
             }
-            Value::Float(ref _float) => {
+            Value::Float(_) => {
                 let ty = Ty::new_float();
                 for vt in lu_dog.iter_value_type() {
                     if let ValueTypeEnum::Ty(_ty) = s_read!(vt).subtype {
@@ -169,7 +169,7 @@ impl Value {
                 }
                 unreachable!()
             }
-            Value::Integer(ref _int) => {
+            Value::Integer(_) => {
                 let ty = Ty::new_integer();
                 for vt in lu_dog.iter_value_type() {
                     if let ValueTypeEnum::Ty(_ty) = s_read!(vt).subtype {
@@ -184,7 +184,7 @@ impl Value {
             // Value::ProxyType(ref pt) => lu_dog
             //     .exhume_value_type(&s_read!(pt).struct_uuid())
             //     .unwrap(),
-            Value::String(ref _str) => {
+            Value::String(_) => {
                 let ty = Ty::new_s_string();
                 for vt in lu_dog.iter_value_type() {
                     if let ValueTypeEnum::Ty(_ty) = s_read!(vt).subtype {
@@ -196,7 +196,7 @@ impl Value {
                 unreachable!()
             }
             Value::UserType(ref ut) => s_read!(ut).get_type().clone(),
-            Value::Uuid(ref _uuid) => {
+            Value::Uuid(_) => {
                 let ty = Ty::new_s_uuid();
                 for vt in lu_dog.iter_value_type() {
                     if let ValueTypeEnum::Ty(_ty) = s_read!(vt).subtype {

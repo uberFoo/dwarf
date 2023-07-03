@@ -70,6 +70,13 @@ struct Arguments {
     banner: Option<bool>,
     #[command(flatten)]
     dwarf_args: DwarfArgs,
+    /// Bless a test
+    ///
+    /// This is only useful if you are writing tests for dwarf. I'd really like
+    /// it if clap had hidden arguments.
+    /// 🚧 Hack on clap
+    #[arg(long, action=ArgAction::SetTrue)]
+    bless: Option<bool>,
 }
 
 #[derive(Clone, Debug, Args)]
@@ -90,7 +97,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let args = Arguments::parse();
 
-    if let Some(source) = args.source {
+    if let Some(ref source) = args.source {
         log::info!("Compiling source file {}", &source.display());
 
         let mut dwarf_args = vec![source.to_string_lossy().to_string()];
@@ -109,8 +116,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let lu_dog = match new_lu_dog(None, Some((source_code.clone(), &ast)), &[], &sarzak) {
             Ok(lu_dog) => lu_dog,
             Err(errors) => {
+                let file = args.source.unwrap();
+                let file = if args.bless.is_some() && args.bless.unwrap() {
+                    file.file_stem().unwrap().to_str().unwrap()
+                } else {
+                    file.to_str().unwrap()
+                };
+
                 for err in errors {
-                    eprintln!("{}", dwarf::dwarf::DwarfErrorReporter(&err, &source_code));
+                    eprintln!(
+                        "{}",
+                        dwarf::dwarf::DwarfErrorReporter(&err, &source_code, &file)
+                    );
                 }
                 return Ok(());
             }
@@ -126,8 +143,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let ctx = match start_main(false, ctx) {
             Ok((_, ctx)) => ctx,
             Err(e) => {
+                let file = args.source.unwrap();
+                let file = if args.bless.is_some() && args.bless.unwrap() {
+                    file.file_stem().unwrap().to_str().unwrap()
+                } else {
+                    file.to_str().unwrap()
+                };
+
                 eprintln!("Interpreter exited with:");
-                eprintln!("{}", dwarf::ChaChaErrorReporter(&e, &source_code));
+                eprintln!("{}", dwarf::ChaChaErrorReporter(&e, &source_code, &file));
                 return Ok(());
             }
         };

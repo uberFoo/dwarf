@@ -1,0 +1,5 @@
+Interpreter exited with:
+
+[1;31merror[0m: assertion failed at [4;33mchacha::assert_eq(false, true)[0m.
+  --> Found `false`, expected `true`.
+

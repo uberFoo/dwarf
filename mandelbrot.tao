@@ -108,8 +108,8 @@ fn plot(t: int) {
     // debugger;
     let width = 168;
     let height = 40;
-    let width = 7;
-    let height = 2;
+    // let width = 7;
+    // let height = 2;
     let upper_left = Complex { re: -2.5, im: 1.0 };
     let lower_right = Complex { re: 2.0, im: -1.0 };
     // let upper_left = Complex {

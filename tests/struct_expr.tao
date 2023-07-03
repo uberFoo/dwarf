@@ -1,0 +1,15 @@
+struct Test {
+    a: int,
+    b: float,
+    c: string,
+    d: Uuid,
+}
+
+fn main() {
+    Test {
+        a: 42,
+        b: 3.14,
+        c: "hello",
+        d: Uuid::new(),
+    };
+}

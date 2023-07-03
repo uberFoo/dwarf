@@ -39,6 +39,10 @@ const _C_OK: Colour = Colour::Green;
 const C_WARN: Colour = Colour::Yellow;
 const C_OTHER: Colour = Colour::Cyan;
 
+// impl Span for Span {
+//     type SourceId: PartialEq + ToOwned + ?Sized;
+// }
+
 #[derive(Args, Clone, Debug, Deserialize, Serialize)]
 pub struct DwarfOptions {
     /// Dwarf Source File
@@ -174,8 +178,8 @@ pub enum DwarfError {
     UnknownType { ty: String, span: Span },
 }
 
-pub struct DwarfErrorReporter<'a, 'b>(pub &'a DwarfError, pub &'b str);
-impl fmt::Display for DwarfErrorReporter<'_, '_> {
+pub struct DwarfErrorReporter<'a, 'b, 'c>(pub &'a DwarfError, pub &'b str, pub &'c str);
+impl fmt::Display for DwarfErrorReporter<'_, '_, '_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let program = &self.1;
         let mut std_err = Vec::new();
@@ -185,15 +189,18 @@ impl fmt::Display for DwarfErrorReporter<'_, '_> {
                 let span = span.clone();
                 let msg = format!("{}", self.0);
 
-                Report::build(ReportKind::Error, (), span.start)
+                Report::build(ReportKind::Error, self.2, span.start)
+                    // 🚧 Figure out some error numbering scheme and use one of
+                    // the snafu magic methods to provide the value here.
+                    //.with_code(&code)
                     .with_message(&msg)
                     .with_label(
-                        Label::new(span)
+                        Label::new((self.2, span))
                             .with_message(format!("{}", msg.fg(Color::Red)))
                             .with_color(Color::Red),
                     )
                     .finish()
-                    .write(Source::from(&program), &mut std_err)
+                    .write((self.2, Source::from(&program)), &mut std_err)
                     .map_err(|_| fmt::Error)?;
                 write!(f, "{}", String::from_utf8_lossy(&std_err))
             }
@@ -201,15 +208,15 @@ impl fmt::Display for DwarfErrorReporter<'_, '_> {
                 description: desc,
                 span,
             } => {
-                Report::build(ReportKind::Error, (), span.start)
+                Report::build(ReportKind::Error, self.2, span.start)
                     .with_message(desc)
                     .with_label(
-                        Label::new(span.to_owned())
+                        Label::new((self.2, span.to_owned()))
                             .with_message(format!("{}", desc.fg(Color::Red)))
                             .with_color(Color::Red),
                     )
                     .finish()
-                    .write(Source::from(&program), &mut std_err)
+                    .write((self.2, Source::from(&program)), &mut std_err)
                     .map_err(|_| fmt::Error)?;
                 write!(f, "{}", String::from_utf8_lossy(&std_err))
             }
@@ -224,20 +231,20 @@ impl fmt::Display for DwarfErrorReporter<'_, '_> {
                     Colour::Red.bold().paint("error")
                 );
 
-                Report::build(ReportKind::Error, (), expected_span.start)
+                Report::build(ReportKind::Error, self.2, expected_span.start)
                     .with_message(&msg)
                     .with_label(
-                        Label::new(expected_span.to_owned())
+                        Label::new((self.2, expected_span.to_owned()))
                             .with_message(format!("expected {}", C_OTHER.paint(expected)))
                             .with_color(Color::Yellow),
                     )
                     .with_label(
-                        Label::new(found_span.to_owned())
+                        Label::new((self.2, found_span.to_owned()))
                             .with_message(format!("found {}", C_OTHER.paint(found)))
                             .with_color(Color::Red),
                     )
                     .finish()
-                    .write(Source::from(&program), &mut std_err)
+                    .write((self.2, Source::from(&program)), &mut std_err)
                     .map_err(|_| fmt::Error)?;
                 write!(f, "{}", String::from_utf8_lossy(&std_err))
             }
@@ -251,30 +258,30 @@ impl fmt::Display for DwarfErrorReporter<'_, '_> {
                     let msg = format!("{}", self.0);
                     let span = a.1.clone();
 
-                    Report::build(ReportKind::Error, (), span.start)
+                    Report::build(ReportKind::Error, self.2, span.start)
                         .with_message(&msg)
                         .with_label(
-                            Label::new(span)
+                            Label::new((self.2, span))
                                 .with_message(format!("{}", msg.fg(Color::Red)))
                                 .with_color(Color::Red),
                         )
                         .finish()
-                        .write(Source::from(&program), &mut std_err)
+                        .write((self.2, Source::from(&program)), &mut std_err)
                         .map_err(|_| fmt::Error)?;
                     write!(f, "{}", String::from_utf8_lossy(&std_err))?;
                 }
                 Ok(())
             }
             DwarfError::StructFieldNotFound { field, span } => {
-                Report::build(ReportKind::Error, (), span.start)
+                Report::build(ReportKind::Error, self.2, span.start)
                     .with_message("struct field not found")
                     .with_label(
-                        Label::new(span.to_owned())
+                        Label::new((self.2, span.to_owned()))
                             .with_message(format!("unkwnown field {}", C_OTHER.paint(field)))
                             .with_color(Color::Red),
                     )
                     .finish()
-                    .write(Source::from(&program), &mut std_err)
+                    .write((self.2, Source::from(&program)), &mut std_err)
                     .map_err(|_| fmt::Error)?;
                 write!(f, "{}", String::from_utf8_lossy(&std_err))
             }
@@ -285,10 +292,10 @@ impl fmt::Display for DwarfErrorReporter<'_, '_> {
                     ty
                 );
 
-                let report = Report::build(ReportKind::Error, (), span.start)
+                let report = Report::build(ReportKind::Error, self.2, span.start)
                     .with_message(&msg)
                     .with_label(
-                        Label::new(span.to_owned())
+                        Label::new((self.2, span.to_owned()))
                             .with_message(format!("unknown type {}", C_OTHER.paint(ty)))
                             .with_color(Color::Red),
                     );
@@ -312,7 +319,7 @@ impl fmt::Display for DwarfErrorReporter<'_, '_> {
 
                 report
                     .finish()
-                    .write(Source::from(&program), &mut std_err)
+                    .write((self.2, Source::from(&program)), &mut std_err)
                     .map_err(|_| fmt::Error)?;
                 write!(f, "{}", String::from_utf8_lossy(&std_err))
             }

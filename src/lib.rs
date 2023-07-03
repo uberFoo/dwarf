@@ -1,8 +1,4 @@
-use std::{
-    fmt, io,
-    ops::{self, Range},
-    path::PathBuf,
-};
+use std::{fmt, io, ops, path::PathBuf};
 
 use ansi_term::Colour;
 use ariadne::{Color, Label, Report, ReportKind, Source};
@@ -351,6 +347,11 @@ pub enum ChaChaError {
         src: String,
         dst: String,
     },
+    IndexOutOfBounds {
+        index: usize,
+        len: usize,
+        span: Span,
+    },
     #[snafu(display("\n{}: internal error: {}", ERR_CLR.bold().paint("error"), message))]
     InternalCompilerChannel {
         source: SendError<String>,
@@ -385,6 +386,7 @@ pub enum ChaChaError {
     NoSuchStaticMethod {
         method: String,
         ty: String,
+        span: Span,
     },
     #[snafu(display("\n{}: no such field `{}`.", ERR_CLR.bold().paint("error"), POP_CLR.paint(field)))]
     NoSuchField {
@@ -441,13 +443,67 @@ pub enum ChaChaError {
 
 type Result<T, E = ChaChaError> = std::result::Result<T, E>;
 
-pub struct ChaChaErrorReporter<'a, 'b>(pub &'a Error, pub &'b str);
-impl fmt::Display for ChaChaErrorReporter<'_, '_> {
+pub struct ChaChaErrorReporter<'a, 'b, 'c>(pub &'a Error, pub &'b str, pub &'c str);
+impl fmt::Display for ChaChaErrorReporter<'_, '_, '_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let program = &self.1;
         let mut std_err = Vec::new();
 
         match &self.0 .0 {
+            ChaChaError::IndexOutOfBounds { index, len, span } => {
+                Report::build(ReportKind::Error, self.2, span.start)
+                    .with_message("index out of bounds")
+                    .with_label(
+                        Label::new((self.2, span.to_owned()))
+                            .with_message(format!(
+                                "the index is {}",
+                                POP_CLR.paint(format!("{index}"))
+                            ))
+                            .with_color(Color::Red),
+                    )
+                    .with_note(format!(
+                        "and the length of the array is {}",
+                        POP_CLR.paint(format!("{len}"))
+                    ))
+                    .finish()
+                    .write((self.2, Source::from(&program)), &mut std_err)
+                    .map_err(|_| fmt::Error)?;
+                write!(f, "{}", String::from_utf8_lossy(&std_err))
+            }
+            ChaChaError::NoSuchMethod { method, span } => {
+                Report::build(ReportKind::Error, self.2, span.start)
+                    .with_message("no such method")
+                    .with_label(
+                        Label::new((self.2, span.to_owned()))
+                            .with_message(format!(
+                                "in this invocation: {}",
+                                POP_CLR.paint(format!("{method}"))
+                            ))
+                            .with_color(Color::Red),
+                    )
+                    .finish()
+                    .write((self.2, Source::from(&program)), &mut std_err)
+                    .map_err(|_| fmt::Error)?;
+                write!(f, "{}", String::from_utf8_lossy(&std_err))
+            }
+            ChaChaError::NoSuchStaticMethod { method, ty, span } => {
+                Report::build(ReportKind::Error, self.2, span.start)
+                    .with_message("no such static method")
+                    .with_label(
+                        Label::new((self.2, span.to_owned()))
+                            .with_message(format!("in this invocation"))
+                            .with_color(Color::Red),
+                    )
+                    .with_note(format!(
+                        "{} does not have a static method named {}",
+                        POP_CLR.paint(format!("{ty}")),
+                        POP_CLR.paint(format!("{method}"))
+                    ))
+                    .finish()
+                    .write((self.2, Source::from(&program)), &mut std_err)
+                    .map_err(|_| fmt::Error)?;
+                write!(f, "{}", String::from_utf8_lossy(&std_err))
+            }
             ChaChaError::TypeMismatch {
                 expected,
                 found,
@@ -460,47 +516,63 @@ impl fmt::Display for ChaChaErrorReporter<'_, '_> {
                     Colour::Red.bold().paint("error")
                 );
 
-                Report::build(ReportKind::Error, (), span.start)
+                Report::build(ReportKind::Error, self.2, span.start)
                     .with_message(&msg)
                     .with_label(
-                        Label::new(span.to_owned())
+                        Label::new((self.2, span.to_owned()))
                             .with_message(format!("expected {}", POP_CLR.paint(expected)))
                             .with_color(Color::Yellow),
                     )
                     .with_label(
-                        Label::new(span.to_owned())
+                        Label::new((self.2, span.to_owned()))
                             .with_message(format!("found {}", POP_CLR.paint(found)))
                             .with_color(Color::Red),
                     )
                     .finish()
-                    .write(Source::from(&program), &mut std_err)
+                    .write((self.2, Source::from(&program)), &mut std_err)
                     .map_err(|_| fmt::Error)?;
                 write!(f, "{}", String::from_utf8_lossy(&std_err))
             }
             ChaChaError::NotAFunction { value, span } => {
-                Report::build(ReportKind::Error, (), span.start)
+                Report::build(ReportKind::Error, self.2, span.start)
                     .with_message("not a function")
                     .with_label(
-                        Label::new(span.clone())
+                        Label::new((self.2, span.clone()))
                             .with_message("found here")
                             .with_color(Color::Red),
                     )
                     .with_note(value.to_string())
                     .finish()
-                    .write(Source::from(&program), &mut std_err)
+                    .write((self.2, Source::from(&program)), &mut std_err)
                     .map_err(|_| fmt::Error)?;
                 write!(f, "{}", String::from_utf8_lossy(&std_err))
             }
             ChaChaError::VariableNotFound { var, span } => {
-                Report::build(ReportKind::Error, (), span.start)
+                let report = Report::build(ReportKind::Error, self.2, span.start)
                     .with_message("variable not found")
                     .with_label(
-                        Label::new(span.clone())
-                            .with_message("found here")
+                        Label::new((self.2, span.clone()))
+                            .with_message("used here")
                             .with_color(Color::Red),
-                    )
+                    );
+
+                let report = if var == "assert_eq" || var == "time" || var == "eps" {
+                    report.with_note(format!(
+                        "This is a built-in function. Try adding `chacha::` before \
+                         the name, e.g. `chacha::{}`.",
+                        POP_CLR.paint(var)
+                    ))
+                } else {
+                    report
+                };
+
+                report
+                    .with_note(format!(
+                        "This variable {} is not found in this scope.",
+                        POP_CLR.paint(var)
+                    ))
                     .finish()
-                    .write(Source::from(&program), &mut std_err)
+                    .write((self.2, Source::from(&program)), &mut std_err)
                     .map_err(|_| fmt::Error)?;
                 write!(f, "{}", String::from_utf8_lossy(&std_err))
             }
@@ -512,16 +584,20 @@ impl fmt::Display for ChaChaErrorReporter<'_, '_> {
             } => {
                 let msg = format!("expected `{expected}`, found `{got}`.");
 
-                Report::build(ReportKind::Error, (), invocation_span.start)
+                Report::build(ReportKind::Error, self.2, invocation_span.start)
                     .with_message("wrong number of arguments")
                     .with_label(
-                        Label::new(defn_span.clone()).with_message("for function defined here"), // .with_color(Color::Red),
+                        Label::new((self.2, defn_span.clone()))
+                            .with_message("for function defined here")
+                            .with_color(Color::Yellow),
                     )
                     .with_label(
-                        Label::new(invocation_span.clone()).with_message(msg), // .with_color(Color::Red),
+                        Label::new((self.2, invocation_span.clone()))
+                            .with_message(msg)
+                            .with_color(Color::Red),
                     )
                     .finish()
-                    .write(Source::from(&program), &mut std_err)
+                    .write((self.2, Source::from(&program)), &mut std_err)
                     .map_err(|_| fmt::Error)?;
                 write!(f, "{}", String::from_utf8_lossy(&std_err))
             }
