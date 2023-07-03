@@ -35,7 +35,7 @@ compile_error!("The REPL requires the \"repl\" feature flag..");
     long_about = r#"
 This is the dwarf interpreter, ChaCha.
 
-By default, with no arguments you will be drapped into a REPL. If you pass
+By default, with no arguments you will be dropped into a REPL. If you pass
 a source file, it will be executed and return to your shell.
 
 This default behavior may be modified by using any of the options below.
@@ -44,7 +44,7 @@ This default behavior may be modified by using any of the options below.
 #[command(propagate_version = true)]
 /// This is the dwarf interpreter, ChaCha.
 ///
-/// By default, with no arguments you will be drapped into a REPL. If you pass
+/// By default, with no arguments you will be dropped into a REPL. If you pass
 /// a source file, it will be executed and return to your shell.
 ///
 /// This default behavior may be modified by using any of the options below.
@@ -84,7 +84,7 @@ struct Arguments {
 struct DwarfArgs {
     /// Dwarf main arguments
     ///
-    /// These argumnets are passed on to the dwarf `main` function.
+    /// These arguments are passed on to the dwarf `main` function.
     #[arg(last = true, allow_hyphen_values = true)]
     args: Vec<String>,
 }

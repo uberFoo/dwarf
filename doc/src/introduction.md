@@ -10,7 +10,7 @@ This brief introduction will outline the status of dwarf, and set the stage for 
 ## {{i:Hello World}}
 
 Every language deserves one, so let's get it out of the way.
-Go ahead and click the run button in the top right corner.
+Go ahead and click the run button in the top right corner of the code-box below.
 
 ```dwarf, editable
 fn main() {
@@ -24,18 +24,16 @@ I know you want to. 😀
 
 ## A brief story of dwarf
 
-> **Caveat Emptor / Note Bene, etcetera**
+> **Caveat Emptor, Note Bene, etcetera**
 >
-> The dwarf (the language and it's implementation) is very much a work in progress.
-> It's maybe at an alpha stage, and certainly not beta.
-> I don't honestly see very many breaking changes, however I won't promise anything until 1.0.
+> {{i:dwarf}} (the language and it's implementation, {{i: ChaCha}}) is very much a work in progress.
+> The language itself is still evolving, and the implementation is still very much in flux.
+> I don't honestly see very many breaking changes moving forward, however I can't promise anything until 1.0.
 
-Dwarf started life as a DSLfor another project.
+Dwarf started life as a DSL for another project.
 I've had so much fun with it, I want to see if anyone else might find it generally useful.
-Not that it's quite ready for production.
-This is still very much alpha software.
 
-Because dwarf is a DSL, the focus was not language design.
+Because dwarf was intended as a DSL, the focus was not language design.
 I'm pretty sure if I had allowed myself that freedom that I'd still be working on it.
 And it would be weird...
 
@@ -55,7 +53,7 @@ Other's, and those of my needs.
 Right now dwarf is also very slow.
 (He's still working on his tunneling gear apparently.)
 It's slow because it's interpreted, and the foundations of the interpreter are not really built for speed.
-That said, there is a VM currently in the works, and it's alreayd integrated with the interpreter to speed things up.
+That said, there is a VM currently in the works, and it's already integrated with the interpreter to speed some things up.
 
 Along the way I wrote a "debugger" and a REPL.
 The debugger is very basic.

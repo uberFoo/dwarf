@@ -65,12 +65,12 @@ fn escape_time(c: Complex, limit: int) -> int {
         // 🚧 This let wreaks havoc -- fix it.
         // Also the chained method calls don't affect the correct z, or something.
         // let z = z.square(z).add(z, c);
-        ComplexEx::square(z);
-        ComplexEx::add(z, c);
+        // ComplexEx::square(z);
+        // ComplexEx::add(z, c);
         // z = z.square();
-        // z.square_2();
         // z = z.add(c);
-        // z.add_2(c);
+        z.square_2();
+        z.add_2(c);
         // Having the RHS of this statement on the lhs of the expression below
         // does not work.
         let foo = ComplexEx::norm_squared(z);

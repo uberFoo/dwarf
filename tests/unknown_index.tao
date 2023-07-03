@@ -1,0 +1,12 @@
+fn main() {
+    // This one is all untyped.
+    let s = "uberFoo";
+    let l = s.len();
+    let c = s[l - 1];
+    chacha::assert_eq(c, "o");
+
+    // This one is all typed.
+    let s: string = "Hello, world!🎉💥";
+    let len: int = s.len();
+    chacha::assert_eq(s[len - 1], "💥");
+}

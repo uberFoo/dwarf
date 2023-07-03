@@ -14,7 +14,7 @@ Arguments:
   [ARGS]...
           Dwarf main arguments
 
-          These argumnets are passed on to the dwarf `main` function.
+          These arguments are passed on to the dwarf `main` function.
 
 Options:
   -d, --dap
@@ -57,18 +57,37 @@ I might get to it before release.
 This is exactly what it sounds like.
 Pass a value, and see what type it is:
 
-```dwarf, editable
-fn main() {
-    print(chacha::typeof(42));
-    print(chacha::typeof(42.0));
-    print(chacha::typeof("42"));
-    print(chacha::typeof(true));
-    print(chacha::typeof(false));
-    print(chacha::typeof({}));
-    print(chacha::typeof([0, 1, 2, 3]));
-    print(chacha::typeof(["0", "1", "2", "3"]));
-    print(chacha::typeof(0..100));
-//    print(chacha::typeof(()) );
-//    print(chacha::typeof({42, 42.0, "42", true, false}));
+```dwarf
+print("42's type: {0}\n".format(chacha::typeof(42)));
+print("42.0's type: {0}\n".format(chacha::typeof(42.0)));
+print("true's type: {0}\n".format(chacha::typeof(true)));
+print("false's type: {0}\n".format(chacha::typeof(false)));
+print("[0, 1, 2, 3]'s type: {0}\n".format(chacha::typeof([0, 1, 2, 3])));
+print("0..100's type: {0}\n".format(chacha::typeof(0..100)));
+```
+
+```dwarf
+```
+
+``` dwarf
+# struct Foo {}
+//print("Foo\{\}'s type: {0}\n".format(chacha::typeof(Foo{})));
+print("{0}\n".format(chacha::typeof({})));
+print("{0}\n".format(chacha::typeof(["0", "1", "2", "3"])));
+print("\"42\"'s type: {0}\n".format(chacha::typeof("42")));
+// print(chacha::typeof(()) );
+```
+
+```dwarf
+# struct Complex {
+#     re: float,
+#     im: float,
+# }
+
+impl Complex {
+    fn square(self) {
+        self.re = self.re * self.re - self.im * self.im;
+        self.im = 2.0 * self.re * self.im;
+    }
 }
 ```

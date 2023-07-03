@@ -1351,10 +1351,9 @@ fn inter_expression(
                 sarzak,
             )?;
 
-            // 🚧 WTF is this for exactly? It's clearly doing nothing, but what
-            // was I thinking when I wrote it? And is something missing?
             if let ValueTypeEnum::Unknown(_) = s_read!(ret_ty).subtype {
                 // Here's where we need to lookup the function definition.
+                panic!("🚧 we need a function definition");
             }
 
             let func_call = Call::new_function_call(false, Some(&func_expr.0), lu_dog);
@@ -1866,13 +1865,16 @@ fn inter_expression(
 
             // debug!("values", values);
 
+            let types = lu_dog.iter_value_type().collect::<Vec<_>>();
             // Now search for a value that's a Variable, and see if the access matches
             // the variable.
             let mut expr_type_tuples = values
                 .iter()
-                .inspect(|v| debug!("value: {v:#?}"))
+                .inspect(|v| {
+                    let ty = s_read!(v).ty;
+                    debug!("value: {v:#?}, type: {:#?}", types[ty]);
+                })
                 .filter_map(|value| {
-                    // debug!("value", value);
                     let value = s_read!(value);
                     match value.subtype {
                         XValueEnum::Expression(ref _expr) => {
@@ -2043,6 +2045,7 @@ fn inter_expression(
                 let value = XValue::new_expression(block, &ty, &expr, lu_dog);
                 s_write!(span).x_value = Some(s_read!(value).id);
 
+                debug!("LocalVariable result ({expr:#?}, {ty:#?})");
                 Ok(((expr, span), ty))
             }
         }
@@ -2104,7 +2107,9 @@ fn inter_expression(
                 last_arg_uuid = link_argument!(last_arg_uuid, arg, lu_dog);
             }
 
-            Ok(((expr, span), instance_ty))
+            let ty = ValueType::new_unknown(lu_dog);
+            debug!("MethodCall result ({expr:#?}, {ty:#?})");
+            Ok(((expr, span), ty))
         }
         //
         // Negation
@@ -3060,6 +3065,8 @@ fn typecheck(
                 }
             }
         }
+        (ValueTypeEnum::Unknown(_), _) => Ok(()),
+        (_, ValueTypeEnum::Unknown(_)) => Ok(()),
         (lhs_t, rhs_t) => {
             // dbg!(PrintableValueType(lhs, lu_dog, sarzak, models).to_string());
             // dbg!(PrintableValueType(rhs, lu_dog, sarzak, models).to_string());

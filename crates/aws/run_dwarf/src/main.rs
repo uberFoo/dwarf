@@ -32,7 +32,7 @@ async fn function_handler(event: Request) -> Result<Response<Body>, Error> {
 
         event!(Level::INFO, "dwarf received program");
 
-        let ast = parse_dwarf(&program).map_err(|e| {
+        let ast = parse_dwarf("lambda", &program).map_err(|e| {
             std_err.write(format!("{}", e).as_bytes()).unwrap();
         });
 
@@ -45,8 +45,11 @@ async fn function_handler(event: Request) -> Result<Response<Body>, Error> {
                         for e in &errors {
                             std_err
                                 .write(
-                                    format!("{}", dwarf::dwarf::DwarfErrorReporter(&e, &program))
-                                        .as_bytes(),
+                                    format!(
+                                        "{}",
+                                        dwarf::dwarf::DwarfErrorReporter(&e, &program, "lambda")
+                                    )
+                                    .as_bytes(),
                                 )
                                 .unwrap();
                         }
@@ -70,7 +73,7 @@ async fn function_handler(event: Request) -> Result<Response<Body>, Error> {
                             }
                             Err(e) => ansi_to_html::convert_escaped(&format!(
                                 "{}",
-                                dwarf::ChaChaErrorReporter(&e, &program,)
+                                dwarf::ChaChaErrorReporter(&e, &program, "lambda")
                             ))
                             .unwrap(),
                         }

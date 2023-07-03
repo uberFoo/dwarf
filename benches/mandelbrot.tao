@@ -7,6 +7,17 @@ impl Complex {
     fn zero() -> Self {
         Complex { re: 0.0, im: 0.0 }
     }
+
+    fn add_2(self, other: Complex) {
+        self.re = self.re + other.re;
+        self.im = self.im + other.im;
+    }
+
+    fn square_2(self) {
+        let re = self.re * self.re - self.im * self.im;
+        self.im = 2.0 * self.re * self.im;
+        self.re = re;
+    }
 }
 
 fn pixel_to_point(
@@ -34,9 +45,11 @@ fn escape_time(c: Complex, limit: int) -> int {
         // 🚧 This breaks things badly.
         // z = ComplexEx::square(z);
         ComplexEx::square(z);
+        ComplexEx::add(z, c);
+        // z = z.square_2();
+        // z = z.add_2(c);
         // z = square(z);
         // z = z.add(z, c);
-        ComplexEx::add(z, c);
         let foo = ComplexEx::norm_squared(z);
         if foo > 4.0 {
             // if z.norm_squared(z) > 4.0 {

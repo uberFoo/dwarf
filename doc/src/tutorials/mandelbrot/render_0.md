@@ -56,14 +56,16 @@ fn pixel_to_point(
     }
 }
 
-fn escape_time(c: Complex, limit: int) -> Option<int> {
+fn escape_time(c: Complex, limit: int) -> int {
     // debugger;
     let z = Complex::zero();
     for i in 1..limit {
-        z = Complex::square(z);
-        z = Complex::add(z, c);
-//        ComplexEx::square(z);
-//        ComplexEx::add(z, c);
+        // z = Complex::square(z);
+        // z = Complex::add(z, c);
+        z.square_2();
+        z.add_2(c);
+        ComplexEx::square(z);
+        ComplexEx::add(z, c);
         let foo = ComplexEx::norm_squared(z);
         if foo > 4.0 {
             return i;
@@ -72,11 +74,11 @@ fn escape_time(c: Complex, limit: int) -> Option<int> {
     0
 }
 
-fn main() -> Complex {
+fn main() -> () {
     print("Total time: {0}s\n".format(chacha::time(plot)));
 }
 
-fn plot() -> Complex {
+fn plot() -> () {
     let width = 42;
     let height = 10;
     let upper_left = Complex { re: -2.5, im: 1.0 };
