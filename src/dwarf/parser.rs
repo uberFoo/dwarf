@@ -23,7 +23,7 @@ macro_rules! function {
 macro_rules! debug {
     ($msg:literal, $($arg:expr),*) => {
         $(
-            log::debug!(
+            log::trace!(
                 target: "parser",
                 "{}: {} --> {:?}\n  --> {}:{}:{}",
                 Colour::Green.dimmed().italic().paint(function!()),
@@ -36,7 +36,7 @@ macro_rules! debug {
         )*
     };
     ($arg:literal) => {
-        log::debug!(
+        log::trace!(
             target: "parser",
             "{}: {}\n  --> {}:{}:{}",
             Colour::Green.dimmed().italic().paint(function!()),
@@ -46,7 +46,7 @@ macro_rules! debug {
             column!())
     };
     ($arg:expr) => {
-        log::debug!(
+        log::trace!(
             target: "parser",
             "{}: {:?}\n  --> {}:{}:{}",
             Colour::Green.dimmed().italic().paint(function!()),
@@ -60,7 +60,7 @@ macro_rules! debug {
 macro_rules! error {
     ($msg:literal, $($arg:expr),*) => {
         $(
-            log::error!(
+            log::debug!(
                 target: "parser",
                 "{}: {} --> {:?}\n  --> {}:{}:{}",
                 Colour::Green.dimmed().italic().paint(function!()),
@@ -73,7 +73,7 @@ macro_rules! error {
         )*
     };
     ($arg:literal) => {
-        log::error!(
+        log::debug!(
             target: "parser",
             "{}: {}\n  --> {}:{}:{}",
             Colour::Green.dimmed().italic().paint(function!()),
@@ -83,7 +83,7 @@ macro_rules! error {
             column!())
     };
     ($arg:expr) => {
-        log::error!(
+        log::debug!(
             target: "parser",
             "{}: {:?}\n  --> {}:{}:{}",
             Colour::Green.dimmed().italic().paint(function!()),
@@ -253,11 +253,11 @@ impl DwarfParser {
 
                 self.errors.push(err);
 
-                debug!("parse_program: resynchronize looking for '}'");
+                error!("parse_program: resynchronize looking for '}'");
                 while !self.at_end() && !self.match_(&[Token::Punct('}')]) {
                     self.advance();
                 }
-                debug!("parse_program: resynchronized");
+                error!("parse_program: resynchronized");
             }
         }
 
@@ -3017,11 +3017,11 @@ impl DwarfParser {
                 Err(error) => {
                     self.errors.push(*error);
 
-                    debug!("parse_function: resynchronize looking for ')'");
+                    error!("parse_function: resynchronize looking for ')'");
                     while !self.at_end() && !self.match_(&[Token::Punct(')')]) {
                         self.advance();
                     }
-                    debug!("parse_function: resynchronized");
+                    error!("parse_function: resynchronized");
                 }
             }
         }
@@ -3050,11 +3050,11 @@ impl DwarfParser {
                 Err(error) => {
                     self.errors.push(*error);
 
-                    debug!("parse_function: resynchronize looking for '{'");
+                    error!("parse_function: resynchronize looking for '{'");
                     while !self.at_end() && !self.match_(&[Token::Punct('{')]) {
                         self.advance();
                     }
-                    debug!("parse_function: resynchronized");
+                    error!("parse_function: resynchronized");
 
                     let start = self.previous().unwrap().1.end;
                     let end = self.peek().unwrap().1.start;

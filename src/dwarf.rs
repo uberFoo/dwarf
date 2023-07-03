@@ -378,7 +378,7 @@ impl fmt::Display for Token {
             Self::Ident(ident) => write!(f, "{}", ident),
             Self::If => write!(f, "if"),
             Self::Impl => write!(f, "impl"),
-            Self::Import => write!(f, "import"),
+            Self::Import => write!(f, "use"),
             Self::In => write!(f, "in"),
             Self::Integer(num) => write!(f, "{}", num),
             Self::Let => write!(f, "let"),
