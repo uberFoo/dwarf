@@ -34,13 +34,14 @@ async fn function_handler(event: LambdaEvent<serde_json::Value>) -> Result<Respo
     let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
 
     // let message = if let Body::Text(program) = event.into_body() {
-    let handle = if let Some(body) = event.payload.get("body") {
+    // let handle = if let Some(body) = event.payload.get("body") {
+    if let Some(body) = event.payload.get("body") {
         let program = body.as_str().unwrap();
         let mut std_err = Vec::new();
 
         event!(Level::INFO, "dwarf received program: {}", program);
 
-        let ast = parse_dwarf(&program).map_err(|e| {
+        let ast = parse_dwarf("lambda", &program).map_err(|e| {
             // std_err.write(format!("{}", e).as_bytes()).unwrap();
             tx.try_send_data(format!("{}", e).into()).unwrap();
         });
@@ -53,8 +54,11 @@ async fn function_handler(event: LambdaEvent<serde_json::Value>) -> Result<Respo
                     .map_err(|errors| {
                         for e in &errors {
                             tx.try_send_data(
-                                format!("{}", dwarf::dwarf::DwarfErrorReporter(&e, &program))
-                                    .into(),
+                                format!(
+                                    "{}",
+                                    dwarf::dwarf::DwarfErrorReporter(&e, &program, "lambda")
+                                )
+                                .into(),
                             )
                             .unwrap();
                             // std_err
@@ -71,6 +75,14 @@ async fn function_handler(event: LambdaEvent<serde_json::Value>) -> Result<Respo
                     Ok(lu_dog) => {
                         let ctx = initialize_interpreter::<PathBuf>(sarzak, lu_dog, None).unwrap();
                         let std_out = ctx.get_std_out();
+
+                        // tokio::spawn(async move {
+                        //     for message in messages.iter() {
+                        //         tx.send_data((*message).into()).await.unwrap();
+                        //         thread::sleep(Duration::from_millis(500));
+                        //     }
+                        // });
+
                         let reader = tokio::task::spawn_blocking(move || loop {
                             match std_out.recv() {
                                 Ok(output) => {
@@ -127,7 +139,7 @@ async fn function_handler(event: LambdaEvent<serde_json::Value>) -> Result<Respo
                             Err(e) => {
                                 let err = ansi_to_html::convert_escaped(&format!(
                                     "{}",
-                                    dwarf::ChaChaErrorReporter(&e, &program,)
+                                    dwarf::ChaChaErrorReporter(&e, &program, "lambda")
                                 ))
                                 .unwrap();
 
@@ -139,7 +151,9 @@ async fn function_handler(event: LambdaEvent<serde_json::Value>) -> Result<Respo
                             }
                         });
 
-                        Some((reader, writer))
+                        // Some((reader, writer))
+                        reader.await.unwrap();
+                        writer.await.unwrap();
                     }
                     Err(_) => {
                         let err = String::from_utf8(std_err).unwrap();
@@ -148,7 +162,7 @@ async fn function_handler(event: LambdaEvent<serde_json::Value>) -> Result<Respo
 
                         tx.try_send_data(err.into()).unwrap();
 
-                        None
+                        // None
                     }
                 }
             }
@@ -159,13 +173,13 @@ async fn function_handler(event: LambdaEvent<serde_json::Value>) -> Result<Respo
 
                 tx.try_send_data(err.into()).unwrap();
 
-                None
+                // None
             }
         }
     } else {
         event!(Level::INFO, "dwarf received no program");
         "No program provided".to_string();
-        None
+        // None
     };
 
     // Return something that implements IntoResponse.
@@ -177,10 +191,10 @@ async fn function_handler(event: LambdaEvent<serde_json::Value>) -> Result<Respo
         .body(rx)
         .map_err(Box::new)?;
 
-    if let Some(handle) = handle {
-        handle.1.await.unwrap();
-        handle.0.await.unwrap();
-    }
+    // if let Some(handle) = handle {
+    //     handle.1.await.unwrap();
+    //     handle.0.await.unwrap();
+    // }
 
     Ok(resp)
 }

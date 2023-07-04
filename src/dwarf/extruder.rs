@@ -1122,7 +1122,7 @@ fn inter_expression(
                 // it's an object. So we look it up in the models. What if it's
                 // a UDT without a store? That's what I'm working on now, and I
                 // haven't hit any problems with this. So, I'm wondering if it's
-                // becasue it's getting caught as a woog struct below. In fact,
+                // because it's getting caught as a woog struct below. In fact,
                 // I wonder if this code is necessary at all.
                 // ValueType::Ty(ref id) => {
                 //     for model in models {
@@ -1353,7 +1353,7 @@ fn inter_expression(
 
             if let ValueTypeEnum::Unknown(_) = s_read!(ret_ty).subtype {
                 // Here's where we need to lookup the function definition.
-                panic!("🚧 we need a function definition");
+                // panic!("🚧 we need a function definition");
             }
 
             let func_call = Call::new_function_call(false, Some(&func_expr.0), lu_dog);
@@ -2066,11 +2066,6 @@ fn inter_expression(
                 sarzak,
             )?;
 
-            debug!(
-                "return type {}",
-                PrintableValueType(&instance_ty, lu_dog, sarzak, models).to_string()
-            );
-
             let meth = MethodCall::new(method.to_owned(), lu_dog);
             let call = Call::new_method_call(false, Some(&instance.0), &meth, lu_dog);
             let expr = Expression::new_call(&call, lu_dog);
@@ -2107,9 +2102,12 @@ fn inter_expression(
                 last_arg_uuid = link_argument!(last_arg_uuid, arg, lu_dog);
             }
 
-            let ty = ValueType::new_unknown(lu_dog);
-            debug!("MethodCall result ({expr:#?}, {ty:#?})");
-            Ok(((expr, span), ty))
+            debug!(
+                "MethodCall return type {}",
+                PrintableValueType(&instance_ty, lu_dog, sarzak, models).to_string()
+            );
+
+            Ok(((expr, span), instance_ty))
         }
         //
         // Negation
@@ -2418,13 +2416,10 @@ fn inter_expression(
             let ty = if type_name == "Uuid" && method == "new" {
                 ValueType::new_ty(&Ty::new_s_uuid(), lu_dog)
             } else {
-                debug!(
-                    "ParserExpression::StaticMethodCall: looking up type {}",
-                    type_name
-                );
+                debug!("ParserExpression::StaticMethodCall: looking up type {type_name}");
 
                 // 🚧  This thing below offends my senses. It needs to be cleaned up.
-                let ty = if let Some(ref id) = lu_dog.exhume_woog_struct_id_by_name(&type_name) {
+                if let Some(ref id) = lu_dog.exhume_woog_struct_id_by_name(&type_name) {
                     let woog_struct = lu_dog.exhume_woog_struct(id).unwrap();
                     let ty = if let Some(impl_) =
                         s_read!(woog_struct).r8c_implementation(lu_dog).pop()
@@ -2437,16 +2432,13 @@ fn inter_expression(
                             lu_dog.exhume_value_type(&ret_ty).unwrap()
                         })
                     } else {
-                        None
+                        debug!("ParserExpression type not found");
+                        Some(ValueType::new_unknown(lu_dog))
                     };
-                    ty
+                    debug!("ParserExpression found type: {ty:?}");
+                    ty.unwrap()
                 } else {
-                    Some(ValueType::new_unknown(lu_dog))
-                };
-
-                if let Some(ty) = ty {
-                    ty
-                } else {
+                    debug!("ParserExpression type not found");
                     ValueType::new_unknown(lu_dog)
                 }
 

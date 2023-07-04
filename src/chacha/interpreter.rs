@@ -755,9 +755,6 @@ fn eval_expression(
     // Timing goodness
     context.expr_count += 1;
 
-    fix_debug!("expression", expression);
-    fix_trace!("stack", context.memory);
-
     // context.tracy.span(span_location!("eval_expression"), 0);
     // context
     //     .tracy
@@ -787,7 +784,8 @@ fn eval_expression(
             *running = false;
         }
 
-        fix_debug!("running");
+        debug!("running: {expression:#?}");
+        trace!("stack: {:#?}", context.memory);
     }
 
     if log_enabled!(Debug) {
@@ -1393,6 +1391,8 @@ fn eval_expression(
                                 // 🚧 Check that there are two arguments
                                 let lhs = arg_values.pop_front().unwrap().0;
                                 let rhs = arg_values.pop_front().unwrap().0;
+
+                                debug!("lhs: {lhs:?}, rhs {rhs:?}");
 
                                 let value = Value::Boolean(*s_read!(lhs) == *s_read!(rhs));
 
@@ -3278,7 +3278,7 @@ impl<'a> fmt::Display for PrintableValueType<'a> {
 
         match &value.subtype {
             ValueTypeEnum::Char(c) => write!(f, "{}", TY_CLR.italic().paint(format!("'{}'", c))),
-            ValueTypeEnum::Empty(_) => write!(f, "{}", TY_CLR.italic().paint("(a)")),
+            ValueTypeEnum::Empty(_) => write!(f, "{}", TY_CLR.italic().paint("()")),
             ValueTypeEnum::Error(_) => write!(f, "{}", TY_ERR_CLR.italic().paint("error")),
             ValueTypeEnum::Function(_) => write!(f, "{}", TY_CLR.italic().paint("function")),
             ValueTypeEnum::Import(ref import) => {

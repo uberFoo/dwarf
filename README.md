@@ -5,7 +5,7 @@
 
 # The dwarf Programming Language
 
-dwarf is a programming language based heavily upon, and implementd in, [Rust](https://www.rust-lang.org).
+dwarf is a programming language based heavily upon, and implemented in, [Rust](https://www.rust-lang.org).
 The language is interpreted (and slow) with a VM (fast-ish) on the way.
 The long term plan is to turn the dwarf source into Rust source, and compile it with the Rust compiler.
 
@@ -29,9 +29,20 @@ Check out [ariadne](https://docs.rs/ariadne/latest/ariadne/) and you too can hav
 
 ## On the Horizon
 
+* VSCode integration
+* Multiple files (use items)
+* enums
+* lambdas
+* Compiler for VM
+* Visibility modifiers
+* Generics
+* Macros (Yes, and I don't know why other interpreted languages don't have them. Am I crazy?)
+* Extensions via plugins
+
 ### Supertype / subtype hierarchies
 
-There will be some sort of support for OO-like behavior
+There will be some sort of support for OO-like behavior.
+Minimally we need inheritance, and probably polymorphism.
 
 ### Virtual Machine
 
@@ -42,7 +53,7 @@ There's a sort-of hybrid-VM currently, but no compiler.
 dwarf syntax is a strict subset of Rust's.
 In fact, I use the Rust language syntax parser in `vscode` to highlight, navigate, and edit Dwarf source.
 
-The bits that are missing include iteraters, enumerations, paths, visibility modifiers, generics (for now), and the list goes on.
+The bits that are missing include iterators, enumerations, paths, visibility modifiers, generics (for now), and the list goes on.
 
 ## REPL
 
@@ -53,7 +64,7 @@ The bits that are missing include iteraters, enumerations, paths, visibility mod
 ### Parser
 
 There is a hand written parser that takes care of turning the source into an AST.
-The parser is great at parsing good code, and terrible and everyhing else.
+The parser is great at parsing good code, and terrible and everything else.
 Fixing this is on my todo list.
 
 ### Compiler
@@ -63,7 +74,7 @@ It's a model, and I should probably include pictures, or some way to look at it,
 The model looks like a standard UML class diagram, and it may as well be.
 I sort of turn it sideways and treat it as an AST.
 
-So what the compiler really does is transate one AST into another.
+So what the compiler really does is translate one AST into another.
 It really does more than that though.
 It resolves as much type information as it can.
 It resolves names.
