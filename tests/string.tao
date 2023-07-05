@@ -13,7 +13,8 @@ fn main() -> () {
 
     // Of course you can fetch the length of a string.
     // 🚧 This should be an inherent method that we know the type of.
-    let len = s.len() as int;
+    let len = s.len();
+    chacha::assert_eq(len, 15);
 
     // Note that indexing into a string is zero based. Also, we are indexing by
     // unicode graphemes, which is a "printable character".

@@ -6,6 +6,6 @@ Interpreter exited with:
  [38;5;240m  │[0m                              [31m┬[0m  
  [38;5;240m  │[0m                              [31m╰[0m[31m─[0m[31m─[0m the index is [33m7[0m
  [38;5;240m  │[0m 
- [38;5;240m  │[0m [38;5;115mNote[0m: and the length of the array is [33m7[0m --> [36msrc/chacha/interpreter.rs[0m:[33m1759[0m:[32m43[0m
+ [38;5;240m  │[0m [38;5;115mNote[0m: and the length of the array is [33m7[0m
 [38;5;246m───╯[0m
 

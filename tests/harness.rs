@@ -100,7 +100,7 @@ fn run_program(test: &str, program: &str) -> Result<Value, ()> {
                 .map(|e| {
                     format!(
                         "{}",
-                        dwarf::dwarf::DwarfErrorReporter(e, true, program, test)
+                        dwarf::dwarf::DwarfErrorReporter(e, false, program, test)
                     )
                 })
                 .collect::<Vec<_>>()
@@ -120,7 +120,7 @@ fn run_program(test: &str, program: &str) -> Result<Value, ()> {
             // 🚧 Likely as not I'll need some sort of thing here like I have above.
             let error = format!(
                 "Interpreter exited with:\n{}",
-                dwarf::ChaChaErrorReporter(&e, true, program, test)
+                dwarf::ChaChaErrorReporter(&e, false, program, test)
             )
             .trim()
             .to_owned();

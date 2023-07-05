@@ -102,7 +102,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let args = Arguments::parse();
     let bless = args.bless.is_some() && args.bless.unwrap();
-    let is_uber = bless || (args.uber.is_some() && args.uber.unwrap());
+    let is_uber = args.uber.is_some() && args.uber.unwrap();
 
     if let Some(ref source) = args.source {
         log::info!("Compiling source file {}", &source.display());

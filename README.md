@@ -29,6 +29,9 @@ Check out [ariadne](https://docs.rs/ariadne/latest/ariadne/) and you too can hav
 
 ## On the Horizon
 
+These are the thins that spring to mind when I think of what I'd most like to do next with dwarf.
+In no particular order:
+
 * VSCode integration
 * Multiple files (use items)
 * enums
@@ -38,6 +41,8 @@ Check out [ariadne](https://docs.rs/ariadne/latest/ariadne/) and you too can hav
 * Generics
 * Macros (Yes, and I don't know why other interpreted languages don't have them. Am I crazy?)
 * Extensions via plugins
+* Char type
+* if let expressions
 
 ### Supertype / subtype hierarchies
 

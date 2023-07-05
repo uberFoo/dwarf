@@ -129,6 +129,18 @@ pub enum DwarfError {
         span: Span,
     },
 
+    /// No Such Method
+    ///
+    /// The method being invoked does not exist. We can know this a priori for
+    /// built in types like `string`. We should be able to make the same claim
+    /// for user defined types. I don't think that we can know much about proxies.
+    /// Not at our current state. Well, that's not exactly true. We generate
+    /// UDTs for the proxies, so we have that information to go on. So basically
+    /// we can protect the interface, which is wide open IIRC, by checking calls
+    /// at extrusion time.
+    #[snafu(display("\n{}: no such method `{}`.", C_ERR.bold().paint("error"), C_OTHER.paint(method)))]
+    NoSuchMethod { method: String, span: Span },
+
     /// Struct Field Not Found Error
     ///
     /// This is used when a struct field is used and it's not found on the struct
@@ -217,6 +229,22 @@ impl fmt::Display for DwarfErrorReporter<'_, '_, '_> {
                     .with_label(
                         Label::new((file_name, span.to_owned()))
                             .with_message(format!("{}", desc.fg(Color::Red)))
+                            .with_color(Color::Red),
+                    )
+                    .finish()
+                    .write((file_name, Source::from(&program)), &mut std_err)
+                    .map_err(|_| fmt::Error)?;
+                write!(f, "{}", String::from_utf8_lossy(&std_err))
+            }
+            DwarfError::NoSuchMethod { method, span } => {
+                Report::build(ReportKind::Error, file_name, span.start)
+                    .with_message("no such method")
+                    .with_label(
+                        Label::new((file_name, span.to_owned()))
+                            .with_message(format!(
+                                "in this invocation: {}",
+                                C_WARN.paint(format!("{method}"))
+                            ))
                             .with_color(Color::Red),
                     )
                     .finish()

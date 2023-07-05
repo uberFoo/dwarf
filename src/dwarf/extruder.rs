@@ -202,7 +202,7 @@ impl<'a> ConveyImpl<'a> {
 /// domain.
 ///
 /// `ast` is of course the parsed AST. It's a list of items, as found in the
-/// source code. The AST is itself sort of an intermetiate representation. It's
+/// source code. The AST is itself sort of an intermediate representation. It's
 /// this program that turns it into instance is the model. I'm writing this,
 /// wondering why I did this. Why am I not just populating a LuDog model in
 /// the parser? Okay, so I'm actually doing some type analysis here. So this is
@@ -234,6 +234,25 @@ pub fn new_lu_dog(
         let _client = Client::start();
 
         let source = DwarfSourceFile::new(source, &mut lu_dog);
+
+        // I'm going to try promoting the string type to a struct and adding method
+        // definitions so that we can type check better.
+        // let string = WoogStruct::new("string".to_owned(), None, &mut lu_dog);
+        // let implementation = Implementation::new(&string, &mut lu_dog);
+        // let _ = WoogItem::new_implementation(&source, &implementation, &mut lu_dog);
+        // let block = Block::new(Uuid::new_v4(), None, &mut lu_dog);
+        // let ret_ty = Ty::new_s_string();
+        // let ret_ty = ValueType::new_ty(&ret_ty, &mut lu_dog);
+        // let func = Function::new(
+        //     "len".to_owned(),
+        //     &block,
+        //     Some(&implementation),
+        //     &ret_ty,
+        //     &mut lu_dog,
+        // );
+        // let _ = WoogItem::new_function(&source, &func, &mut lu_dog);
+        // Create a type for our function
+        // let _ = ValueType::new_function(&func, &mut lu_dog);
 
         walk_tree(out_dir, ast, &source, &mut lu_dog, models, sarzak)?;
     }
@@ -275,7 +294,7 @@ fn walk_tree(
     let mut errors = Vec::new();
     // Put the type information in first.
     for ConveyStruct { name, span, fields } in structs {
-        debug!("Intering struct {}", name);
+        debug!("Interning struct {}", name);
         let _ =
             inter_struct(name, fields, span, source, lu_dog, models, sarzak).map_err(|mut e| {
                 errors.append(&mut e);
@@ -284,7 +303,7 @@ fn walk_tree(
 
     // Using the type information, and the input, inter the implementation blocks.
     for ConveyImpl { name, span, funcs } in implementations {
-        debug!("Intering implementation {}", name);
+        debug!("Interning implementation {}", name);
         let _ = inter_implementation(name, funcs, span, source, lu_dog, models, sarzak).map_err(
             |mut e| {
                 errors.append(&mut e);
@@ -301,7 +320,7 @@ fn walk_tree(
         statements,
     } in funcs
     {
-        debug!("Intering function {}", name);
+        debug!("Interning function {}", name);
         let _ = inter_func(
             name,
             params,
@@ -858,7 +877,7 @@ fn inter_expression(
         //         .collect::<Result<Vec<_>, _>>()?;
 
         //     let static_method_call =
-        //         StaticMethodCall::new("execute_asm".to_owend(), "chacha".to_owned(), lu_dog);
+        //         StaticMethodCall::new("execute_asm".to_owned(), "chacha".to_owned(), lu_dog);
         //     //     &exprs
         //     //         .iter()
         //     //         .map(|expr| &expr.0)
@@ -1174,45 +1193,6 @@ fn inter_expression(
             let ty_read = s_read!(ty);
 
             match &ty_read.subtype {
-                // So the lhs is is a sarzak type, which (probably?) means that
-                // it's an object. So we look it up in the models. What if it's
-                // a UDT without a store? That's what I'm working on now, and I
-                // haven't hit any problems with this. So, I'm wondering if it's
-                // because it's getting caught as a woog struct below. In fact,
-                // I wonder if this code is necessary at all.
-                // ValueType::Ty(ref id) => {
-                //     for model in models {
-                //         if let Some(Ty::Object(ref _object)) = model.exhume_ty(id) {
-                //             // let object = model.exhume_object(object).unwrap();
-                //             let expr = FieldAccess::new(rhs, &lhs.0, lu_dog);
-                //             let expr = Expression::new_field_access(&expr, lu_dog);
-
-                //             // 🚧 Can we not do better?
-                //             let ty = ValueType::new_unknown(lu_dog);
-
-                //             let value = XValue::new_expression(block, &ty, &expr, lu_dog);
-                //             s_write!(span).x_value = Some(s_read!(value).id);
-
-                //             return Ok(((expr, span), ty));
-                //         }
-                //     }
-
-                //     // Return an error (really need to get result in here) if it wasn't
-                //     // in one of the models.
-                //     let error = ErrorExpression::new(
-                //         format!("💥 {:?} is not a proxy object\n", ty),
-                //         lu_dog,
-                //     );
-                //     let expr = Expression::new_error_expression(&error, lu_dog);
-                //     // 🚧
-                //     // Returning an empty, because the error stuff in ValueType is fucked.
-                //     let ty = ValueType::new_empty(lu_dog);
-
-                //     let value = XValue::new_expression(block, &ty, &expr, lu_dog);
-                //     s_write!(span).x_value = Some(s_read!(value).id);
-
-                //     return Ok(((expr, span), ty));
-                // }
                 // We matched on the lhs type.
                 ValueTypeEnum::Function(ref _id) => {
                     // let func = lu_dog.exhume_function(id).unwrap();
@@ -1315,7 +1295,7 @@ fn inter_expression(
         // For Loop
         //
         ParserExpression::For(iter, collection, body) => {
-            debug!("ParserExpresssion::For");
+            debug!("For");
 
             let cspan = &collection.1;
             let collection = new_ref!(ParserExpression, collection.0.clone());
@@ -1339,7 +1319,7 @@ fn inter_expression(
             // Note to future self!
             //
             // The commented out code is what I'd like to insert into the block
-            // body that I'm creating just belaw. The problem is that I need the
+            // body that I'm creating just below. The problem is that I need the
             // body before it's been interred. So instead I turn off type checking.
             // Thats the best I could come up with. I'd like a better resolution.
             //
@@ -1946,7 +1926,7 @@ fn inter_expression(
         //
         ParserExpression::LocalVariable(name) => {
             // We need to return an expression and a type.
-            debug!("localvariable name {}", name);
+            debug!("local variable name {}", name);
             // We look for a value in the current block. We need to clone them
             // to be able to modify lu_dog below.
             //
@@ -2081,9 +2061,9 @@ fn inter_expression(
             // ```
             //
             // `b` is being evaluated in the assignment handler. It's getting back
-            // "yes", which I guess is correct, but they type is `()`. So that's werid.
+            // "yes", which I guess is correct, but they type is `()`. So that's weird.
             // Also, there are two different places that b shows up. I'm taking the
-            // last one, which maybe corresponts to `b` being in rhs of the previous
+            // last one, which maybe corresponds to `b` being in rhs of the previous
             // storage allocation. I'm figuring that out now. In that case, it sort
             // of makes sense that the type is `()`.
             //
@@ -2104,7 +2084,7 @@ fn inter_expression(
             } else if let Some(ref id) =
                 lu_dog.exhume_function_id_by_name(&name.to_upper_camel_case())
             {
-                // 🚧 The exhumation above is sort of messed up. I dan't like that
+                // 🚧 The exhumation above is sort of messed up. I don't like that
                 // I have to turn it into upper-camel-case.
                 // We get here because there was no local variable info, so we are
                 // going to check if it's a function.
@@ -2154,8 +2134,8 @@ fn inter_expression(
         //
         // MethodCall
         //
-        ParserExpression::MethodCall(instance, (method, _meth_span), args) => {
-            debug!("ParserExpression::MethodCall {:?}", instance);
+        ParserExpression::MethodCall(instance, (method, meth_span), args) => {
+            debug!("MethodCall Enter: {:?}.{method}", instance);
 
             let (instance, instance_ty) = inter_expression(
                 &new_ref!(ParserExpression, instance.0.to_owned()),
@@ -2167,6 +2147,39 @@ fn inter_expression(
                 models,
                 sarzak,
             )?;
+
+            debug!("MethodCall inter method: expr: ty {instance:?}: {instance_ty:?}");
+
+            let ret_ty = if let ValueTypeEnum::WoogStruct(id) = s_read!(instance_ty).subtype {
+                let woog_struct = lu_dog.exhume_woog_struct(&id).unwrap();
+                let x = lookup_woog_struct_method_type(&s_read!(woog_struct).name, method, lu_dog);
+
+                x
+            } else if let ValueTypeEnum::Ty(id) = s_read!(instance_ty).subtype {
+                let ty = sarzak.exhume_ty(&id).unwrap();
+                if let Ty::SString(_) = ty {
+                    match method.as_str() {
+                        "len" => {
+                            let ty = Ty::new_integer();
+                            ValueType::new_ty(&ty, lu_dog)
+                        }
+                        "format" => {
+                            let ty = Ty::new_s_string();
+                            ValueType::new_ty(&ty, lu_dog)
+                        }
+                        _ => {
+                            return Err(vec![DwarfError::NoSuchMethod {
+                                method: method.to_owned(),
+                                span: meth_span.to_owned(),
+                            }])
+                        }
+                    }
+                } else {
+                    ValueType::new_unknown(lu_dog)
+                }
+            } else {
+                ValueType::new_unknown(lu_dog)
+            };
 
             let meth = MethodCall::new(method.to_owned(), lu_dog);
             let call = Call::new_method_call(false, Some(&instance.0), &meth, lu_dog);
@@ -2205,11 +2218,27 @@ fn inter_expression(
             }
 
             debug!(
-                "MethodCall return type {}",
-                PrintableValueType(&instance_ty, lu_dog, sarzak, models).to_string()
+                "{} return type {}",
+                Colour::Red.dimmed().italic().paint("MethodCall"),
+                PrintableValueType(&ret_ty, lu_dog, sarzak, models).to_string()
             );
 
-            Ok(((expr, span), instance_ty))
+            // If we return unknown then things like a[a.len() - 1] work because
+            // a.len() is unknown, and we let that pass knowing the interpreter
+            // will catch a type mismatch. This breaks field access because the
+            // extruder doesn't know that the instance is really an instance.
+            // If we return the type of the instance, then the field access
+            // stuff works, and the first example does not.
+            //
+            // I could maybe fix the field code to be ok with an unknown type.
+            //
+            // I think the right thing to do, and it's affecting other things,
+            // like type resolution, is to look up the method in the model and
+            // return it's type. We just need to rip though the method
+            // signatures first, and then take care of the deets.
+            //
+            let ty = ValueType::new_unknown(lu_dog);
+            Ok(((expr, span), ret_ty))
         }
         //
         // Negation
@@ -2548,30 +2577,9 @@ fn inter_expression(
             } else {
                 debug!("ParserExpression::StaticMethodCall: looking up type {type_name}");
 
-                // 🚧  This thing below offends my senses. It needs to be cleaned up.
-                if let Some(ref id) = lu_dog.exhume_woog_struct_id_by_name(&type_name) {
-                    let woog_struct = lu_dog.exhume_woog_struct(id).unwrap();
-                    let ty = if let Some(impl_) =
-                        s_read!(woog_struct).r8c_implementation(lu_dog).pop()
-                    {
-                        let impl_ = s_read!(impl_);
+                lookup_woog_struct_method_type(&type_name, method, lu_dog)
 
-                        let funcs = impl_.r9_function(lu_dog);
-                        funcs.iter().find(|f| s_read!(f).name == *method).map(|f| {
-                            let ret_ty = s_read!(f).return_type;
-                            lu_dog.exhume_value_type(&ret_ty).unwrap()
-                        })
-                    } else {
-                        debug!("ParserExpression type not found");
-                        Some(ValueType::new_unknown(lu_dog))
-                    };
-                    debug!("ParserExpression found type: {ty:?}");
-                    ty.unwrap()
-                } else {
-                    debug!("ParserExpression type not found");
-                    ValueType::new_unknown(lu_dog)
-                }
-
+                // Look up the struct in the imported models.
                 // I'll revisit this model business after I get the basics working.
                 // for model in models {
                 //     if let Some(obj) = model.exhume_object_id_by_name(&type_name) {
@@ -2639,7 +2647,7 @@ fn inter_expression(
                 obj
             } else {
                 return Err(vec![DwarfError::Internal {
-                    description: "Expected a local varible in struct expression".to_owned(),
+                    description: "Expected a local variable in struct expression".to_owned(),
                     location: location!(),
                 }]);
             };
@@ -3090,6 +3098,38 @@ fn get_value_type(
     }
 }
 
+fn lookup_woog_struct_method_type(
+    type_name: &str,
+    method: &str,
+    lu_dog: &mut LuDogStore,
+) -> RefType<ValueType> {
+    // Look up the type in lu_dog structs.
+    if let Some(ref id) = lu_dog.exhume_woog_struct_id_by_name(&type_name) {
+        let woog_struct = lu_dog.exhume_woog_struct(id).unwrap();
+        let ty = if let Some(impl_) = s_read!(woog_struct).r8c_implementation(lu_dog).pop() {
+            let impl_ = s_read!(impl_);
+
+            let funcs = impl_.r9_function(lu_dog);
+            funcs.iter().find(|f| s_read!(f).name == *method).map(|f| {
+                let ret_ty = s_read!(f).return_type;
+                lu_dog.exhume_value_type(&ret_ty).unwrap()
+            })
+        } else {
+            debug!("ParserExpression type not found");
+            Some(ValueType::new_unknown(lu_dog))
+        };
+        debug!("ParserExpression found type: {ty:?}");
+        if ty.is_some() {
+            ty.unwrap()
+        } else {
+            ValueType::new_unknown(lu_dog)
+        }
+    } else {
+        debug!("ParserExpression type not found");
+        ValueType::new_unknown(lu_dog)
+    }
+}
+
 trait DeSanitize {
     fn de_sanitize(&self) -> &str;
 }
@@ -3189,8 +3229,8 @@ fn typecheck(
                 }
             }
         }
-        (ValueTypeEnum::Unknown(_), _) => Ok(()),
-        (_, ValueTypeEnum::Unknown(_)) => Ok(()),
+        // (ValueTypeEnum::Unknown(_), _) => Ok(()),
+        // (_, ValueTypeEnum::Unknown(_)) => Ok(()),
         (lhs_t, rhs_t) => {
             // dbg!(PrintableValueType(lhs, lu_dog, sarzak, models).to_string());
             // dbg!(PrintableValueType(rhs, lu_dog, sarzak, models).to_string());
