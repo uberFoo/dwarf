@@ -351,6 +351,7 @@ pub enum ChaChaError {
         index: usize,
         len: usize,
         span: Span,
+        location: Location,
     },
     #[snafu(display("\n{}: internal error: {}", ERR_CLR.bold().paint("error"), message))]
     InternalCompilerChannel {
@@ -418,6 +419,7 @@ pub enum ChaChaError {
         // expected_span: Span,
         // found_span: Span,
         span: Span,
+        location: Location,
     },
     /// A Variable was not found
     ///
@@ -443,38 +445,56 @@ pub enum ChaChaError {
 
 type Result<T, E = ChaChaError> = std::result::Result<T, E>;
 
-pub struct ChaChaErrorReporter<'a, 'b, 'c>(pub &'a Error, pub &'b str, pub &'c str);
+pub struct ChaChaErrorReporter<'a, 'b, 'c>(pub &'a Error, pub bool, pub &'b str, pub &'c str);
 impl fmt::Display for ChaChaErrorReporter<'_, '_, '_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let program = &self.1;
+        let is_uber = self.1;
+        let program = &self.2;
+        let file_name = &self.3;
+
         let mut std_err = Vec::new();
 
         match &self.0 .0 {
-            ChaChaError::IndexOutOfBounds { index, len, span } => {
-                Report::build(ReportKind::Error, self.2, span.start)
-                    .with_message("index out of bounds")
+            ChaChaError::IndexOutOfBounds {
+                index,
+                len,
+                span,
+                location,
+            } => {
+                let mut note = format!(
+                    "and the length of the array is {}",
+                    POP_CLR.paint(format!("{len}"))
+                );
+                if is_uber {
+                    note += &format!(
+                        " --> {}:{}:{}",
+                        OTH_CLR.paint(format!("{}", location.file)),
+                        POP_CLR.paint(format!("{}", location.line)),
+                        OK_CLR.paint(format!("{}", location.column)),
+                    );
+                }
+
+                Report::build(ReportKind::Error, file_name, span.start)
+                    .with_message("index out of bounds 💥")
                     .with_label(
-                        Label::new((self.2, span.to_owned()))
+                        Label::new((file_name, span.to_owned()))
                             .with_message(format!(
                                 "the index is {}",
                                 POP_CLR.paint(format!("{index}"))
                             ))
                             .with_color(Color::Red),
                     )
-                    .with_note(format!(
-                        "and the length of the array is {}",
-                        POP_CLR.paint(format!("{len}"))
-                    ))
+                    .with_note(note)
                     .finish()
-                    .write((self.2, Source::from(&program)), &mut std_err)
+                    .write((file_name, Source::from(&program)), &mut std_err)
                     .map_err(|_| fmt::Error)?;
                 write!(f, "{}", String::from_utf8_lossy(&std_err))
             }
             ChaChaError::NoSuchMethod { method, span } => {
-                Report::build(ReportKind::Error, self.2, span.start)
+                Report::build(ReportKind::Error, file_name, span.start)
                     .with_message("no such method")
                     .with_label(
-                        Label::new((self.2, span.to_owned()))
+                        Label::new((file_name, span.to_owned()))
                             .with_message(format!(
                                 "in this invocation: {}",
                                 POP_CLR.paint(format!("{method}"))
@@ -482,15 +502,15 @@ impl fmt::Display for ChaChaErrorReporter<'_, '_, '_> {
                             .with_color(Color::Red),
                     )
                     .finish()
-                    .write((self.2, Source::from(&program)), &mut std_err)
+                    .write((file_name, Source::from(&program)), &mut std_err)
                     .map_err(|_| fmt::Error)?;
                 write!(f, "{}", String::from_utf8_lossy(&std_err))
             }
             ChaChaError::NoSuchStaticMethod { method, ty, span } => {
-                Report::build(ReportKind::Error, self.2, span.start)
+                Report::build(ReportKind::Error, file_name, span.start)
                     .with_message("no such static method")
                     .with_label(
-                        Label::new((self.2, span.to_owned()))
+                        Label::new((file_name, span.to_owned()))
                             .with_message(format!("in this invocation"))
                             .with_color(Color::Red),
                     )
@@ -500,7 +520,7 @@ impl fmt::Display for ChaChaErrorReporter<'_, '_, '_> {
                         POP_CLR.paint(format!("{method}"))
                     ))
                     .finish()
-                    .write((self.2, Source::from(&program)), &mut std_err)
+                    .write((file_name, Source::from(&program)), &mut std_err)
                     .map_err(|_| fmt::Error)?;
                 write!(f, "{}", String::from_utf8_lossy(&std_err))
             }
@@ -510,45 +530,59 @@ impl fmt::Display for ChaChaErrorReporter<'_, '_, '_> {
                 // expected_span,
                 // found_span,
                 span,
+                location,
             } => {
                 let msg = format!("Type mismatch: expected `{expected}`, found `{found}`.");
 
-                Report::build(ReportKind::Error, self.2, span.start)
+                let report = Report::build(ReportKind::Error, file_name, span.start)
                     .with_message(&msg)
                     .with_label(
-                        Label::new((self.2, span.to_owned()))
+                        Label::new((file_name, span.to_owned()))
                             .with_message(format!("expected {}", POP_CLR.paint(expected)))
                             .with_color(Color::Yellow),
                     )
                     .with_label(
-                        Label::new((self.2, span.to_owned()))
+                        Label::new((file_name, span.to_owned()))
                             .with_message(format!("found {}", POP_CLR.paint(found)))
                             .with_color(Color::Red),
-                    )
+                    );
+
+                let report = if is_uber {
+                    report.with_note(format!(
+                        "{}:{}:{}",
+                        OTH_CLR.paint(format!("{}", location.file)),
+                        POP_CLR.paint(format!("{}", location.line)),
+                        OK_CLR.paint(format!("{}", location.column)),
+                    ))
+                } else {
+                    report
+                };
+
+                report
                     .finish()
-                    .write((self.2, Source::from(&program)), &mut std_err)
+                    .write((file_name, Source::from(&program)), &mut std_err)
                     .map_err(|_| fmt::Error)?;
                 write!(f, "{}", String::from_utf8_lossy(&std_err))
             }
             ChaChaError::NotAFunction { value, span } => {
-                Report::build(ReportKind::Error, self.2, span.start)
+                Report::build(ReportKind::Error, file_name, span.start)
                     .with_message("not a function")
                     .with_label(
-                        Label::new((self.2, span.clone()))
+                        Label::new((file_name, span.clone()))
                             .with_message("found here")
                             .with_color(Color::Red),
                     )
                     .with_note(value.to_string())
                     .finish()
-                    .write((self.2, Source::from(&program)), &mut std_err)
+                    .write((file_name, Source::from(&program)), &mut std_err)
                     .map_err(|_| fmt::Error)?;
                 write!(f, "{}", String::from_utf8_lossy(&std_err))
             }
             ChaChaError::VariableNotFound { var, span } => {
-                let report = Report::build(ReportKind::Error, self.2, span.start)
+                let report = Report::build(ReportKind::Error, file_name, span.start)
                     .with_message("variable not found")
                     .with_label(
-                        Label::new((self.2, span.clone()))
+                        Label::new((file_name, span.clone()))
                             .with_message("used here")
                             .with_color(Color::Red),
                     );
@@ -569,7 +603,7 @@ impl fmt::Display for ChaChaErrorReporter<'_, '_, '_> {
                         POP_CLR.paint(var)
                     ))
                     .finish()
-                    .write((self.2, Source::from(&program)), &mut std_err)
+                    .write((file_name, Source::from(&program)), &mut std_err)
                     .map_err(|_| fmt::Error)?;
                 write!(f, "{}", String::from_utf8_lossy(&std_err))
             }
@@ -581,20 +615,20 @@ impl fmt::Display for ChaChaErrorReporter<'_, '_, '_> {
             } => {
                 let msg = format!("expected `{expected}`, found `{got}`.");
 
-                Report::build(ReportKind::Error, self.2, invocation_span.start)
+                Report::build(ReportKind::Error, file_name, invocation_span.start)
                     .with_message("wrong number of arguments")
                     .with_label(
-                        Label::new((self.2, defn_span.clone()))
+                        Label::new((file_name, defn_span.clone()))
                             .with_message("for function defined here")
                             .with_color(Color::Yellow),
                     )
                     .with_label(
-                        Label::new((self.2, invocation_span.clone()))
+                        Label::new((file_name, invocation_span.clone()))
                             .with_message(msg)
                             .with_color(Color::Red),
                     )
                     .finish()
-                    .write((self.2, Source::from(&program)), &mut std_err)
+                    .write((file_name, Source::from(&program)), &mut std_err)
                     .map_err(|_| fmt::Error)?;
                 write!(f, "{}", String::from_utf8_lossy(&std_err))
             }

@@ -562,7 +562,8 @@ dependencies = [
 [[package]]
 name = "dap"
 version = "0.2.0-alpha1"
-source = "git+https://github.com/sztomi/dap-rs.git#4fa38f1b7dc6dfb8af11748e50ffe2f866d3a255"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "85b03f0c23c75d79d10ae9e6ea850f795db0b11bb9610d55f7751d8a92272db2"
 dependencies = [
  "serde",
  "serde_json",

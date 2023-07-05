@@ -47,6 +47,11 @@ struct Args {
     /// location. It must exist, and must be part of a Rust package.
     #[arg(long, short)]
     package_dir: Option<PathBuf>,
+    /// Do uber stuff
+    ///
+    /// This is like sudo mode. You probably don't want this.
+    #[arg(long, action=ArgAction::SetTrue)]
+    uber: Option<bool>,
 }
 
 fn find_package_dir(start_dir: &Option<PathBuf>) -> Result<PathBuf> {
@@ -95,6 +100,8 @@ fn main() -> Result<()> {
     pretty_env_logger::init();
 
     let args = Args::parse();
+
+    let is_uber = args.uber.is_some() && args.uber.unwrap();
 
     let model = if let Some(ref model) = args.model {
         vec![DomainBuilder::new()
@@ -162,6 +169,7 @@ fn main() -> Result<()> {
                     "{}",
                     dwarf::dwarf::DwarfErrorReporter(
                         &err,
+                        is_uber,
                         &source_code,
                         args.source.to_str().unwrap()
                     )

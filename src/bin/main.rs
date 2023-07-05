@@ -77,6 +77,11 @@ struct Arguments {
     /// 🚧 Hack on clap
     #[arg(long, action=ArgAction::SetTrue)]
     bless: Option<bool>,
+    /// Do uber stuff
+    ///
+    /// This is like sudo mode. You probably don't want this.
+    #[arg(long, action=ArgAction::SetTrue)]
+    uber: Option<bool>,
 }
 
 #[derive(Clone, Debug, Args)]
@@ -96,12 +101,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let lu_dog = LuDogStore::new();
 
     let args = Arguments::parse();
+    let bless = args.bless.is_some() && args.bless.unwrap();
+    let is_uber = bless || (args.uber.is_some() && args.uber.unwrap());
 
     if let Some(ref source) = args.source {
         log::info!("Compiling source file {}", &source.display());
 
         let file = args.source.clone().unwrap();
-        let file = if args.bless.is_some() && args.bless.unwrap() {
+        let file = if bless {
             file.file_stem().unwrap().to_str().unwrap()
         } else {
             file.to_str().unwrap()
@@ -126,7 +133,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 for err in errors {
                     eprintln!(
                         "{}",
-                        dwarf::dwarf::DwarfErrorReporter(&err, &source_code, &file)
+                        dwarf::dwarf::DwarfErrorReporter(&err, is_uber, &source_code, &file)
                     );
                 }
                 return Ok(());
@@ -144,7 +151,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             Ok((_, ctx)) => ctx,
             Err(e) => {
                 eprintln!("Interpreter exited with:");
-                eprintln!("{}", dwarf::ChaChaErrorReporter(&e, &source_code, &file));
+                eprintln!(
+                    "{}",
+                    dwarf::ChaChaErrorReporter(&e, is_uber, &source_code, &file)
+                );
                 return Ok(());
             }
         };

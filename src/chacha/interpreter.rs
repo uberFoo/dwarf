@@ -652,7 +652,7 @@ fn eval_function_call(
                 let x_value = &s_read!(expr).r11_x_value(&s_read!(lu_dog))[0];
                 let span = &s_read!(x_value).r63_span(&s_read!(lu_dog))[0];
 
-                typecheck(&param_ty, &arg_ty, span, context)?;
+                typecheck(&param_ty, &arg_ty, span, location!(), context)?;
             }
 
             context.memory.insert(name.clone(), value);
@@ -1729,6 +1729,7 @@ fn eval_expression(
                                 index: index,
                                 len: vec.len(),
                                 span,
+                                location: location!(),
                             })
                         }
                     } else if let Value::String(str) = &*list {
@@ -1755,6 +1756,7 @@ fn eval_expression(
                                 index: index,
                                 len: str.len(),
                                 span,
+                                location: location!(),
                             })
                         }
                     } else {
@@ -1781,6 +1783,7 @@ fn eval_expression(
                                 index: range.end,
                                 len: vec.len(),
                                 span,
+                                location: location!(),
                             })
                         }
                     } else if let Value::String(str) = &*list {
@@ -2295,7 +2298,7 @@ fn eval_expression(
                     let x_value = &s_read!(expr).r11_x_value(&lu_dog)[0];
                     let span = &s_read!(x_value).r63_span(&lu_dog)[0];
 
-                    typecheck(&struct_ty, &ty, span, context)?;
+                    typecheck(&struct_ty, &ty, span, location!(), context)?;
 
                     // This is where we add the attribute value to the user type.
                     user_type.add_attr(&name, value);
@@ -3405,6 +3408,7 @@ fn typecheck(
     lhs: &RefType<ValueType>,
     rhs: &RefType<ValueType>,
     span: &RefType<Span>,
+    location: Location,
     context: &Context,
 ) -> Result<()> {
     cfg_if::cfg_if! {
@@ -3435,6 +3439,7 @@ fn typecheck(
                     expected: lhs.to_string(),
                     found: rhs.to_string(),
                     span: s_read!(span).start as usize..s_read!(span).end as usize,
+                    location,
                 })
             }
         }

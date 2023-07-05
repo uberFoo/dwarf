@@ -64,7 +64,7 @@ fn run_program(test: &str, program: &str) -> Result<Value, ()> {
             let error = error.trim();
             eprintln!("{error}");
             // The first line may be different, and there's not much I can do about
-            // it. It's becasue the expected tokens are an opaque type on the error
+            // it. It's because the expected tokens are an opaque type on the error
             // type I'm using in the parser. I suppose I could use a different error
             // type to get around it. But that's a low priority item atm.
             match diff_errors(test, error) {
@@ -97,7 +97,12 @@ fn run_program(test: &str, program: &str) -> Result<Value, ()> {
             // Look for a .stderr file.
             let errors = e
                 .iter()
-                .map(|e| format!("{}", dwarf::dwarf::DwarfErrorReporter(e, program, test)))
+                .map(|e| {
+                    format!(
+                        "{}",
+                        dwarf::dwarf::DwarfErrorReporter(e, true, program, test)
+                    )
+                })
                 .collect::<Vec<_>>()
                 .join("\n")
                 .trim()
@@ -115,7 +120,7 @@ fn run_program(test: &str, program: &str) -> Result<Value, ()> {
             // 🚧 Likely as not I'll need some sort of thing here like I have above.
             let error = format!(
                 "Interpreter exited with:\n{}",
-                dwarf::ChaChaErrorReporter(&e, program, test)
+                dwarf::ChaChaErrorReporter(&e, true, program, test)
             )
             .trim()
             .to_owned();

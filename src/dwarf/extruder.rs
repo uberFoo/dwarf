@@ -454,6 +454,7 @@ fn inter_func(
             &block_ty,
             &span,
             &block_span,
+            location!(),
             lu_dog,
             sarzak,
             models,
@@ -558,7 +559,16 @@ pub fn inter_statement(
             let ty = if let Some((type_, span)) = type_ {
                 if check_types {
                     let lhs_ty = type_.into_value_type(span, lu_dog, models, sarzak)?;
-                    typecheck(&lhs_ty, &ty, span, expr_span, lu_dog, sarzak, models)?;
+                    typecheck(
+                        &lhs_ty,
+                        &ty,
+                        span,
+                        expr_span,
+                        location!(),
+                        lu_dog,
+                        sarzak,
+                        models,
+                    )?;
                     lhs_ty
                 } else {
                     ty
@@ -723,7 +733,16 @@ fn inter_expression(
             // 🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧
 
             if check_types {
-                typecheck(&lhs_ty, &rhs_ty, &lhs_p.1, &rhs_p.1, lu_dog, sarzak, models)?;
+                typecheck(
+                    &lhs_ty,
+                    &rhs_ty,
+                    &lhs_p.1,
+                    &rhs_p.1,
+                    location!(),
+                    lu_dog,
+                    sarzak,
+                    models,
+                )?;
             }
 
             let expr = Binary::new_addition(lu_dog);
@@ -770,11 +789,21 @@ fn inter_expression(
                     expected: "bool".to_string(),
                     found_span: lhs_p.1.to_owned(),
                     expected_span: rhs_p.1.to_owned(),
+                    location: location!(),
                 }]);
             }
 
             if check_types {
-                typecheck(&lhs_ty, &rhs_ty, &lhs_p.1, &rhs_p.1, lu_dog, sarzak, models)?;
+                typecheck(
+                    &lhs_ty,
+                    &rhs_ty,
+                    &lhs_p.1,
+                    &rhs_p.1,
+                    location!(),
+                    lu_dog,
+                    sarzak,
+                    models,
+                )?;
             }
 
             let expr = BooleanOperator::new_and(lu_dog);
@@ -865,7 +894,16 @@ fn inter_expression(
             )?;
 
             if check_types {
-                typecheck(&lhs_ty, &rhs_ty, &lhs_p.1, &rhs_p.1, lu_dog, sarzak, models)?;
+                typecheck(
+                    &lhs_ty,
+                    &rhs_ty,
+                    &lhs_p.1,
+                    &rhs_p.1,
+                    location!(),
+                    lu_dog,
+                    sarzak,
+                    models,
+                )?;
             }
 
             let expr = Binary::new_assignment(lu_dog);
@@ -993,7 +1031,16 @@ fn inter_expression(
             // 🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧
 
             if check_types {
-                typecheck(&lhs_ty, &rhs_ty, &lhs_p.1, &rhs_p.1, lu_dog, sarzak, models)?;
+                typecheck(
+                    &lhs_ty,
+                    &rhs_ty,
+                    &lhs_p.1,
+                    &rhs_p.1,
+                    location!(),
+                    lu_dog,
+                    sarzak,
+                    models,
+                )?;
             }
 
             let expr = Binary::new_division(lu_dog);
@@ -1080,7 +1127,16 @@ fn inter_expression(
             )?;
 
             if check_types {
-                typecheck(&lhs_ty, &rhs_ty, &lhs_p.1, &rhs_p.1, lu_dog, sarzak, models)?;
+                typecheck(
+                    &lhs_ty,
+                    &rhs_ty,
+                    &lhs_p.1,
+                    &rhs_p.1,
+                    location!(),
+                    lu_dog,
+                    sarzak,
+                    models,
+                )?;
             }
 
             let expr = Comparison::new_equal(lu_dog);
@@ -1424,7 +1480,16 @@ fn inter_expression(
             // 🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧
 
             if check_types {
-                typecheck(&lhs_ty, &rhs_ty, &lhs_p.1, &rhs_p.1, lu_dog, sarzak, models)?;
+                typecheck(
+                    &lhs_ty,
+                    &rhs_ty,
+                    &lhs_p.1,
+                    &rhs_p.1,
+                    location!(),
+                    lu_dog,
+                    sarzak,
+                    models,
+                )?;
             }
 
             let expr = Comparison::new_greater_than(lu_dog);
@@ -1474,7 +1539,16 @@ fn inter_expression(
             // 🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧
 
             if check_types {
-                typecheck(&lhs_ty, &rhs_ty, &lhs_p.1, &rhs_p.1, lu_dog, sarzak, models)?;
+                typecheck(
+                    &lhs_ty,
+                    &rhs_ty,
+                    &lhs_p.1,
+                    &rhs_p.1,
+                    location!(),
+                    lu_dog,
+                    sarzak,
+                    models,
+                )?;
             }
 
             let expr = Comparison::new_greater_than_or_equal(lu_dog);
@@ -1538,6 +1612,7 @@ fn inter_expression(
                         found: ty.to_string(),
                         expected_span: cspan.to_owned(),
                         found_span: cspan.to_owned(),
+                        location: location!(),
                     }]);
                 }
             } else {
@@ -1547,6 +1622,7 @@ fn inter_expression(
                     found: ty.to_string(),
                     expected_span: cspan.to_owned(),
                     found_span: cspan.to_owned(),
+                    location: location!(),
                 }]);
             }
 
@@ -1639,6 +1715,7 @@ fn inter_expression(
                     &index_ty,
                     &index_span,
                     &index_p.1,
+                    location!(),
                     lu_dog,
                     sarzak,
                     models,
@@ -1703,7 +1780,16 @@ fn inter_expression(
             // 🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧
 
             if check_types {
-                typecheck(&lhs_ty, &rhs_ty, &lhs_p.1, &rhs_p.1, lu_dog, sarzak, models)?;
+                typecheck(
+                    &lhs_ty,
+                    &rhs_ty,
+                    &lhs_p.1,
+                    &rhs_p.1,
+                    location!(),
+                    lu_dog,
+                    sarzak,
+                    models,
+                )?;
             }
 
             let expr = Comparison::new_less_than(lu_dog);
@@ -1753,7 +1839,16 @@ fn inter_expression(
             // 🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧
 
             if check_types {
-                typecheck(&lhs_ty, &rhs_ty, &lhs_p.1, &rhs_p.1, lu_dog, sarzak, models)?;
+                typecheck(
+                    &lhs_ty,
+                    &rhs_ty,
+                    &lhs_p.1,
+                    &rhs_p.1,
+                    location!(),
+                    lu_dog,
+                    sarzak,
+                    models,
+                )?;
             }
 
             let expr = Comparison::new_less_than_or_equal(lu_dog);
@@ -1820,7 +1915,14 @@ fn inter_expression(
 
                     if check_types {
                         typecheck(
-                            &first_ty, &elt_ty, span1, &element.1, lu_dog, sarzak, models,
+                            &first_ty,
+                            &elt_ty,
+                            span1,
+                            &element.1,
+                            location!(),
+                            lu_dog,
+                            sarzak,
+                            models,
                         )?;
                     }
 
@@ -2157,7 +2259,16 @@ fn inter_expression(
             )?;
 
             if check_types {
-                typecheck(&lhs_ty, &rhs_ty, &lhs_p.1, &rhs_p.1, lu_dog, sarzak, models)?;
+                typecheck(
+                    &lhs_ty,
+                    &rhs_ty,
+                    &lhs_p.1,
+                    &rhs_p.1,
+                    location!(),
+                    lu_dog,
+                    sarzak,
+                    models,
+                )?;
             }
 
             let expr = Comparison::new_not_equal(lu_dog);
@@ -2226,7 +2337,16 @@ fn inter_expression(
             // 🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧
 
             if check_types {
-                typecheck(&lhs_ty, &rhs_ty, &lhs_p.1, &rhs_p.1, lu_dog, sarzak, models)?;
+                typecheck(
+                    &lhs_ty,
+                    &rhs_ty,
+                    &lhs_p.1,
+                    &rhs_p.1,
+                    location!(),
+                    lu_dog,
+                    sarzak,
+                    models,
+                )?;
             }
 
             let expr = Binary::new_multiplication(lu_dog);
@@ -2287,11 +2407,21 @@ fn inter_expression(
                     expected: "bool".to_string(),
                     found_span: lhs_p.1.to_owned(),
                     expected_span: rhs_p.1.to_owned(),
+                    location: location!(),
                 }]);
             }
 
             if check_types {
-                typecheck(&lhs_ty, &rhs_ty, &lhs_p.1, &rhs_p.1, lu_dog, sarzak, models)?;
+                typecheck(
+                    &lhs_ty,
+                    &rhs_ty,
+                    &lhs_p.1,
+                    &rhs_p.1,
+                    location!(),
+                    lu_dog,
+                    sarzak,
+                    models,
+                )?;
             }
 
             let expr = BooleanOperator::new_or(lu_dog);
@@ -3012,6 +3142,7 @@ fn typecheck(
     rhs: &RefType<ValueType>,
     lhs_span: &Span,
     rhs_span: &Span,
+    location: Location,
     lu_dog: &LuDogStore,
     sarzak: &SarzakStore,
     models: &[SarzakStore],
@@ -3052,6 +3183,7 @@ fn typecheck(
                             found: b.to_string(),
                             expected_span: lhs_span.to_owned(),
                             found_span: rhs_span.to_owned(),
+                            location,
                         }])
                     }
                 }
@@ -3073,6 +3205,7 @@ fn typecheck(
                     found: rhs.to_string(),
                     expected_span: lhs_span.to_owned(),
                     found_span: rhs_span.to_owned(),
+                    location: location!(),
                 }])
             }
         }
@@ -3137,7 +3270,7 @@ impl<'d, 'a, 'b, 'c> fmt::Display for PrintableValueType<'d, 'a, 'b, 'c> {
                                 write!(f, "<unknown object>")
                             }
                         }
-                        Ty::SString(_) => write!(f, "String"),
+                        Ty::SString(_) => write!(f, "string"),
                         Ty::SUuid(_) => write!(f, "Uuid"),
                         gamma => {
                             error!("deal with sarzak type {:?}", gamma);
