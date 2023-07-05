@@ -468,7 +468,7 @@ impl fmt::Display for ChaChaErrorReporter<'_, '_, '_> {
                 if is_uber {
                     note += &format!(
                         " --> {}:{}:{}",
-                        OTH_CLR.paint(format!("{}", location.file)),
+                        OTH_CLR.paint(location.file.to_string()),
                         POP_CLR.paint(format!("{}", location.line)),
                         OK_CLR.paint(format!("{}", location.column)),
                     );
@@ -497,7 +497,7 @@ impl fmt::Display for ChaChaErrorReporter<'_, '_, '_> {
                         Label::new((file_name, span.to_owned()))
                             .with_message(format!(
                                 "in this invocation: {}",
-                                POP_CLR.paint(format!("{method}"))
+                                POP_CLR.paint(method.to_string())
                             ))
                             .with_color(Color::Red),
                     )
@@ -511,13 +511,13 @@ impl fmt::Display for ChaChaErrorReporter<'_, '_, '_> {
                     .with_message("no such static method")
                     .with_label(
                         Label::new((file_name, span.to_owned()))
-                            .with_message(format!("in this invocation"))
+                            .with_message("in this invocation".to_string())
                             .with_color(Color::Red),
                     )
                     .with_note(format!(
                         "{} does not have a static method named {}",
-                        POP_CLR.paint(format!("{ty}")),
-                        POP_CLR.paint(format!("{method}"))
+                        POP_CLR.paint(ty.to_string()),
+                        POP_CLR.paint(method.to_string())
                     ))
                     .finish()
                     .write((file_name, Source::from(&program)), &mut std_err)
@@ -550,7 +550,7 @@ impl fmt::Display for ChaChaErrorReporter<'_, '_, '_> {
                 let report = if is_uber {
                     report.with_note(format!(
                         "{}:{}:{}",
-                        OTH_CLR.paint(format!("{}", location.file)),
+                        OTH_CLR.paint(location.file.to_string()),
                         POP_CLR.paint(format!("{}", location.line)),
                         OK_CLR.paint(format!("{}", location.column)),
                     ))

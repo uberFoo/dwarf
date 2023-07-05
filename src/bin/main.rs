@@ -117,9 +117,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let mut dwarf_args = vec![source.to_string_lossy().to_string()];
         dwarf_args.extend(args.dwarf_args.args);
 
-        let source_code = fs::read_to_string(&source)?;
+        let source_code = fs::read_to_string(source)?;
 
-        let ast = match parse_dwarf(&file, &source_code) {
+        let ast = match parse_dwarf(file, &source_code) {
             Ok(ast) => ast,
             Err(_) => {
                 // eprintln!("{}", dwarf::dwarf::DwarfErrorReporter(&e, &source_code));
@@ -133,7 +133,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 for err in errors {
                     eprintln!(
                         "{}",
-                        dwarf::dwarf::DwarfErrorReporter(&err, is_uber, &source_code, &file)
+                        dwarf::dwarf::DwarfErrorReporter(&err, is_uber, &source_code, file)
                     );
                 }
                 return Ok(());
@@ -153,7 +153,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 eprintln!("Interpreter exited with:");
                 eprintln!(
                     "{}",
-                    dwarf::ChaChaErrorReporter(&e, is_uber, &source_code, &file)
+                    dwarf::ChaChaErrorReporter(&e, is_uber, &source_code, file)
                 );
                 return Ok(());
             }

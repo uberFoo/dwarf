@@ -469,10 +469,8 @@ fn inter_func(
 
     if check_types {
         typecheck(
-            &ret_ty,
-            &block_ty,
-            &span,
-            &block_span,
+            (&ret_ty, span),
+            (&block_ty, &block_span),
             location!(),
             lu_dog,
             sarzak,
@@ -579,10 +577,8 @@ pub fn inter_statement(
                 if check_types {
                     let lhs_ty = type_.into_value_type(span, lu_dog, models, sarzak)?;
                     typecheck(
-                        &lhs_ty,
-                        &ty,
-                        span,
-                        expr_span,
+                        (&lhs_ty, span),
+                        (&ty, expr_span),
                         location!(),
                         lu_dog,
                         sarzak,
@@ -645,6 +641,7 @@ pub fn inter_statement(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn inter_statements(
     statements: &[RefType<ParserStatement>],
     span: &Span,
@@ -693,6 +690,7 @@ fn inter_statements(
 /// I may have spoken too soon. We need to be populating the store, in addition
 /// to returning the type. Duh. And we should return the expression so that we
 /// can create a value from it.
+#[allow(clippy::too_many_arguments)]
 fn inter_expression(
     expr: &RefType<ParserExpression>,
     check_types: bool,
@@ -753,10 +751,8 @@ fn inter_expression(
 
             if check_types {
                 typecheck(
-                    &lhs_ty,
-                    &rhs_ty,
-                    &lhs_p.1,
-                    &rhs_p.1,
+                    (&lhs_ty, &lhs_p.1),
+                    (&rhs_ty, &rhs_p.1),
                     location!(),
                     lu_dog,
                     sarzak,
@@ -814,10 +810,8 @@ fn inter_expression(
 
             if check_types {
                 typecheck(
-                    &lhs_ty,
-                    &rhs_ty,
-                    &lhs_p.1,
-                    &rhs_p.1,
+                    (&lhs_ty, &lhs_p.1),
+                    (&rhs_ty, &rhs_p.1),
                     location!(),
                     lu_dog,
                     sarzak,
@@ -914,10 +908,8 @@ fn inter_expression(
 
             if check_types {
                 typecheck(
-                    &lhs_ty,
-                    &rhs_ty,
-                    &lhs_p.1,
-                    &rhs_p.1,
+                    (&lhs_ty, &lhs_p.1),
+                    (&rhs_ty, &rhs_p.1),
                     location!(),
                     lu_dog,
                     sarzak,
@@ -1051,10 +1043,8 @@ fn inter_expression(
 
             if check_types {
                 typecheck(
-                    &lhs_ty,
-                    &rhs_ty,
-                    &lhs_p.1,
-                    &rhs_p.1,
+                    (&lhs_ty, &lhs_p.1),
+                    (&rhs_ty, &rhs_p.1),
                     location!(),
                     lu_dog,
                     sarzak,
@@ -1147,10 +1137,8 @@ fn inter_expression(
 
             if check_types {
                 typecheck(
-                    &lhs_ty,
-                    &rhs_ty,
-                    &lhs_p.1,
-                    &rhs_p.1,
+                    (&lhs_ty, &lhs_p.1),
+                    (&rhs_ty, &rhs_p.1),
                     location!(),
                     lu_dog,
                     sarzak,
@@ -1461,10 +1449,8 @@ fn inter_expression(
 
             if check_types {
                 typecheck(
-                    &lhs_ty,
-                    &rhs_ty,
-                    &lhs_p.1,
-                    &rhs_p.1,
+                    (&lhs_ty, &lhs_p.1),
+                    (&rhs_ty, &rhs_p.1),
                     location!(),
                     lu_dog,
                     sarzak,
@@ -1520,10 +1506,8 @@ fn inter_expression(
 
             if check_types {
                 typecheck(
-                    &lhs_ty,
-                    &rhs_ty,
-                    &lhs_p.1,
-                    &rhs_p.1,
+                    (&lhs_ty, &lhs_p.1),
+                    (&rhs_ty, &rhs_p.1),
                     location!(),
                     lu_dog,
                     sarzak,
@@ -1691,10 +1675,8 @@ fn inter_expression(
                 // let tc_span = s_read!(span).start as usize..s_read!(span).end as usize;
                 let index_span = s_read!(index.1).start as usize..s_read!(index.1).end as usize;
                 typecheck(
-                    &int_ty,
-                    &index_ty,
-                    &index_span,
-                    &index_p.1,
+                    (&int_ty, &index_span),
+                    (&index_ty, &index_p.1),
                     location!(),
                     lu_dog,
                     sarzak,
@@ -1761,10 +1743,8 @@ fn inter_expression(
 
             if check_types {
                 typecheck(
-                    &lhs_ty,
-                    &rhs_ty,
-                    &lhs_p.1,
-                    &rhs_p.1,
+                    (&lhs_ty, &lhs_p.1),
+                    (&rhs_ty, &rhs_p.1),
                     location!(),
                     lu_dog,
                     sarzak,
@@ -1820,10 +1800,8 @@ fn inter_expression(
 
             if check_types {
                 typecheck(
-                    &lhs_ty,
-                    &rhs_ty,
-                    &lhs_p.1,
-                    &rhs_p.1,
+                    (&lhs_ty, &lhs_p.1),
+                    (&rhs_ty, &rhs_p.1),
                     location!(),
                     lu_dog,
                     sarzak,
@@ -1895,10 +1873,8 @@ fn inter_expression(
 
                     if check_types {
                         typecheck(
-                            &first_ty,
-                            &elt_ty,
-                            span1,
-                            &element.1,
+                            (&first_ty, span1),
+                            (&elt_ty, &element.1),
                             location!(),
                             lu_dog,
                             sarzak,
@@ -2237,7 +2213,7 @@ fn inter_expression(
             // return it's type. We just need to rip though the method
             // signatures first, and then take care of the deets.
             //
-            let ty = ValueType::new_unknown(lu_dog);
+            let _ty = ValueType::new_unknown(lu_dog);
             Ok(((expr, span), ret_ty))
         }
         //
@@ -2289,10 +2265,8 @@ fn inter_expression(
 
             if check_types {
                 typecheck(
-                    &lhs_ty,
-                    &rhs_ty,
-                    &lhs_p.1,
-                    &rhs_p.1,
+                    (&lhs_ty, &lhs_p.1),
+                    (&rhs_ty, &rhs_p.1),
                     location!(),
                     lu_dog,
                     sarzak,
@@ -2367,10 +2341,8 @@ fn inter_expression(
 
             if check_types {
                 typecheck(
-                    &lhs_ty,
-                    &rhs_ty,
-                    &lhs_p.1,
-                    &rhs_p.1,
+                    (&lhs_ty, &lhs_p.1),
+                    (&rhs_ty, &rhs_p.1),
                     location!(),
                     lu_dog,
                     sarzak,
@@ -2442,10 +2414,8 @@ fn inter_expression(
 
             if check_types {
                 typecheck(
-                    &lhs_ty,
-                    &rhs_ty,
-                    &lhs_p.1,
-                    &rhs_p.1,
+                    (&lhs_ty, &lhs_p.1),
+                    (&rhs_ty, &rhs_p.1),
                     location!(),
                     lu_dog,
                     sarzak,
@@ -3064,7 +3034,7 @@ fn get_value_type(
                         }
                         _ => false,
                     }) {
-                        return Ok(ValueType::new_ty(&ty, lu_dog));
+                        return Ok(ValueType::new_ty(ty, lu_dog));
                     }
                 }
 
@@ -3078,7 +3048,7 @@ fn get_value_type(
                     }
                     _ => false,
                 }) {
-                    Ok(ValueType::new_ty(&ty, lu_dog))
+                    Ok(ValueType::new_ty(ty, lu_dog))
                 } else if let Some(ref id) = lu_dog.exhume_woog_struct_id_by_name(name) {
                     let ws = lu_dog.exhume_woog_struct(id).unwrap();
                     Ok(ValueType::new_woog_struct(&ws, lu_dog))
@@ -3104,7 +3074,7 @@ fn lookup_woog_struct_method_type(
     lu_dog: &mut LuDogStore,
 ) -> RefType<ValueType> {
     // Look up the type in lu_dog structs.
-    if let Some(ref id) = lu_dog.exhume_woog_struct_id_by_name(&type_name) {
+    if let Some(ref id) = lu_dog.exhume_woog_struct_id_by_name(type_name) {
         let woog_struct = lu_dog.exhume_woog_struct(id).unwrap();
         let ty = if let Some(impl_) = s_read!(woog_struct).r8c_implementation(lu_dog).pop() {
             let impl_ = s_read!(impl_);
@@ -3119,8 +3089,8 @@ fn lookup_woog_struct_method_type(
             Some(ValueType::new_unknown(lu_dog))
         };
         debug!("ParserExpression found type: {ty:?}");
-        if ty.is_some() {
-            ty.unwrap()
+        if let Some(ty) = ty {
+            ty
         } else {
             ValueType::new_unknown(lu_dog)
         }
@@ -3178,15 +3148,18 @@ fn de_sanitize(string: &str) -> Option<&str> {
 }
 
 fn typecheck(
-    lhs: &RefType<ValueType>,
-    rhs: &RefType<ValueType>,
-    lhs_span: &Span,
-    rhs_span: &Span,
+    lhs: (&RefType<ValueType>, &Span),
+    rhs: (&RefType<ValueType>, &Span),
     location: Location,
     lu_dog: &LuDogStore,
     sarzak: &SarzakStore,
     models: &[SarzakStore],
 ) -> Result<()> {
+    let lhs_span = lhs.1;
+    let lhs = lhs.0;
+    let rhs_span = rhs.1;
+    let rhs = rhs.0;
+
     cfg_if::cfg_if! {
         if #[cfg(any(feature = "single", feature = "single-vec"))] {
             if std::rc::Rc::as_ptr(lhs) == std::rc::Rc::as_ptr(rhs) {

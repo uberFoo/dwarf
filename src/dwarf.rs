@@ -243,7 +243,7 @@ impl fmt::Display for DwarfErrorReporter<'_, '_, '_> {
                         Label::new((file_name, span.to_owned()))
                             .with_message(format!(
                                 "in this invocation: {}",
-                                C_WARN.paint(format!("{method}"))
+                                C_WARN.paint(method.to_string())
                             ))
                             .with_color(Color::Red),
                     )
@@ -277,7 +277,7 @@ impl fmt::Display for DwarfErrorReporter<'_, '_, '_> {
                 let report = if is_uber {
                     report.with_note(format!(
                         "{}:{}:{}",
-                        C_OTHER.paint(format!("{}", location.file)),
+                        C_OTHER.paint(location.file.to_string()),
                         C_WARN.paint(format!("{}", location.line)),
                         C_OK.paint(format!("{}", location.column)),
                     ))
@@ -481,8 +481,7 @@ impl Type {
         models: &[SarzakStore],
         sarzak: &SarzakStore,
     ) -> Result<bool> {
-        self.into_value_type(span, store, models, sarzak)
-            .and_then(|_| Ok(true))
+        self.into_value_type(span, store, models, sarzak).map(|_| true)
     }
 
     pub fn into_value_type(
@@ -550,7 +549,7 @@ impl Type {
                 // If it's not in one of the models, it must be in sarzak.
                 if let Some(obj_id) = sarzak.exhume_object_id_by_name(name) {
                     let ty = sarzak.exhume_ty(&obj_id).unwrap();
-                    Ok(ValueType::new_ty(&ty, store))
+                    Ok(ValueType::new_ty(ty, store))
                 } else {
                     Err(vec![DwarfError::UnknownType {
                         ty: name.to_owned(),

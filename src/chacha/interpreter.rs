@@ -1611,14 +1611,14 @@ fn eval_expression(
                 Value::ProxyType(value) => {
                     let value = s_read!(value);
                     let value = value.get_attr_value(&field_name)?;
-                    let ty = s_read!(value).get_type(&mut s_read!(lu_dog));
+                    let ty = s_read!(value).get_type(&s_read!(lu_dog));
 
                     Ok((value, ty))
                 }
                 Value::UserType(value) => {
                     let value = s_read!(value);
                     let value = value.get_attr_value(field_name).unwrap();
-                    let ty = s_read!(value).get_type(&mut s_read!(lu_dog));
+                    let ty = s_read!(value).get_type(&s_read!(lu_dog));
 
                     Ok((value.clone(), ty))
                 }
@@ -1726,7 +1726,7 @@ fn eval_expression(
                             let span = read.start as usize..read.end as usize;
 
                             Err(ChaChaError::IndexOutOfBounds {
-                                index: index,
+                                index,
                                 len: vec.len(),
                                 span,
                                 location: location!(),
@@ -1753,7 +1753,7 @@ fn eval_expression(
                             let span = read.start as usize..read.end as usize;
 
                             Err(ChaChaError::IndexOutOfBounds {
-                                index: index,
+                                index,
                                 len: str.len(),
                                 span,
                                 location: location!(),
@@ -2026,7 +2026,7 @@ fn eval_expression(
                                     else { unreachable!() };
                                     let expr = s_read!(lu_dog).exhume_expression(expr).unwrap();
                                     let expr = s_read!(lu_dog)
-                                        .exhume_variable_expression(&(*s_read!(expr)).id)
+                                        .exhume_variable_expression(&s_read!(expr).id)
                                         .unwrap();
 
                                     let value = context.memory.get(&s_read!(expr).name);
@@ -2404,7 +2404,7 @@ fn eval_expression(
             // already borrowed error. Anyway, I needed the type, and swapped them
             // to how they are now and it seems to be working. I'm just leaving
             // this for my future self, just in case.
-            let ty = s_read!(value).get_type(&mut s_read!(lu_dog));
+            let ty = s_read!(value).get_type(&s_read!(lu_dog));
 
             Ok((value, ty))
         }
@@ -3423,25 +3423,17 @@ fn typecheck(
         }
     }
 
-    match (&s_read!(lhs).subtype, &s_read!(rhs).subtype) {
-        // (_, ValueTypeEnum::Empty(_)) => Ok(()),
-        // (ValueTypeEnum::Empty(_), _) => Ok(()),
-        // (_, ValueTypeEnum::Unknown(_)) => Ok(()),
-        // (ValueTypeEnum::Unknown(_), _) => Ok(()),
-        (lhs_t, rhs_t) => {
-            if lhs_t == rhs_t {
-                Ok(())
-            } else {
-                let lhs = PrintableValueType(lhs, context);
-                let rhs = PrintableValueType(rhs, context);
-
-                Err(ChaChaError::TypeMismatch {
-                    expected: lhs.to_string(),
-                    found: rhs.to_string(),
-                    span: s_read!(span).start as usize..s_read!(span).end as usize,
-                    location,
-                })
-            }
-        }
+    let (lhs_t, rhs_t) = (&s_read!(lhs).subtype, &s_read!(rhs).subtype);
+    if lhs_t == rhs_t {
+        Ok(())
+    } else {
+        let lhs = PrintableValueType(lhs, context);
+        let rhs = PrintableValueType(rhs, context);
+        Err(ChaChaError::TypeMismatch {
+            expected: lhs.to_string(),
+            found: rhs.to_string(),
+            span: s_read!(span).start as usize..s_read!(span).end as usize,
+            location,
+        })
     }
 }
