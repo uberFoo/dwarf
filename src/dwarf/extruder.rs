@@ -4,10 +4,7 @@ use std::{fs::File, io::prelude::*, ops::Range, path::PathBuf};
 use ansi_term::Colour;
 use heck::{ToShoutySnakeCase, ToUpperCamelCase};
 use log;
-use sarzak::{
-    lu_dog::{ExpressionEnum, ItemStatement, ValueTypeEnum},
-    sarzak::{store::ObjectStore as SarzakStore, types::Ty, Object},
-};
+use sarzak::sarzak::{store::ObjectStore as SarzakStore, types::Ty, Object};
 use snafu::{location, Location};
 use tracy_client::Client;
 use uuid::Uuid;
@@ -20,12 +17,12 @@ use crate::{
     lu_dog::{
         store::ObjectStore as LuDogStore,
         types::{
-            Block, BooleanOperator, Call, ErrorExpression, Expression, ExpressionStatement, Field,
-            FieldExpression, ForLoop, Function, Implementation, Index, IntegerLiteral,
-            Item as WoogItem, LetStatement, Literal, LocalVariable, Parameter, Print,
-            RangeExpression, Span as LuDogSpan, Statement, StaticMethodCall, StringLiteral,
-            StructExpression, ValueType, Variable, VariableExpression, WoogOption, WoogStruct, XIf,
-            XValue, XValueEnum, ZSome,
+            Block, BooleanOperator, Call, ErrorExpression, Expression, ExpressionEnum,
+            ExpressionStatement, Field, FieldExpression, ForLoop, Function, Implementation, Index,
+            IntegerLiteral, Item as WoogItem, ItemStatement, Lambda, LambdaParameter, LetStatement,
+            Literal, LocalVariable, Parameter, Print, RangeExpression, Span as LuDogSpan,
+            Statement, StaticMethodCall, StringLiteral, StructExpression, ValueType, ValueTypeEnum,
+            Variable, VariableExpression, WoogOption, WoogStruct, XIf, XValue, XValueEnum, ZSome,
         },
         Argument, Binary, BooleanLiteral, Comparison, DwarfSourceFile, FieldAccess,
         FieldAccessTarget, FloatLiteral, List, ListElement, ListExpression, MethodCall, Operator,
@@ -1708,6 +1705,92 @@ fn inter_expression(
             Ok(((expr, span), ty))
         }
         //
+        // Lambda
+        //
+        ParserExpression::Lambda(params, return_type, body) => {
+            let block = Block::new(Uuid::new_v4(), None, lu_dog);
+            let stmts = if let ParserExpression::Block(body) = &body.0 {
+                body
+            } else {
+                unreachable!();
+            };
+
+            let ret_ty =
+                get_value_type(&return_type.0, &return_type.1, None, lu_dog, models, sarzak)?;
+
+            let lambda = Lambda::new(&block, &ret_ty, lu_dog);
+            let _ = ValueType::new_lambda(&lambda, lu_dog);
+
+            let mut errors = Vec::new();
+            let mut last_param_uuid: Option<usize> = None;
+            for ((param_name, name_span), (param_ty, param_span)) in params {
+                debug!("param name {}", param_name);
+                debug!("param ty {}", param_ty);
+
+                let param = LambdaParameter::new(&lambda, None, lu_dog);
+
+                debug!("param {:?}", param);
+
+                let var = Variable::new_lambda_parameter(param_name.to_owned(), &param, lu_dog);
+                debug!("var {:?}", var);
+                // We need to introduce the values into the block, so that we don't
+                // error out when parsing the statements.
+                //
+                let param_ty =
+                    match get_value_type(param_ty, param_span, None, lu_dog, models, sarzak) {
+                        Ok(ty) => ty,
+                        Err(mut e) => {
+                            errors.append(&mut e);
+                            continue;
+                        }
+                    };
+                debug!("param_ty {:?}", param_ty);
+                let value = XValue::new_variable(&block, &param_ty, &var, lu_dog);
+                LuDogSpan::new(
+                    name_span.end as i64,
+                    name_span.start as i64,
+                    source,
+                    None,
+                    Some(&value),
+                    lu_dog,
+                );
+                last_param_uuid = link_parameter!(last_param_uuid, param, lu_dog);
+            }
+
+            let stmts: Vec<RefType<ParserStatement>> = stmts
+                .iter()
+                .map(|stmt| new_ref!(ParserStatement, stmt.0.clone()))
+                .collect();
+
+            let (block_ty, block_span) = inter_statements(
+                &stmts,
+                &body.1,
+                &block,
+                check_types,
+                source,
+                lu_dog,
+                models,
+                sarzak,
+            )?;
+
+            if check_types {
+                typecheck(
+                    (&ret_ty, &return_type.1),
+                    (&block_ty, &block_span),
+                    location!(),
+                    lu_dog,
+                    sarzak,
+                    models,
+                )?;
+            }
+
+            let expr = Expression::new_lambda(&lambda, lu_dog);
+            let value = XValue::new_expression(&block, &ret_ty, &expr, lu_dog);
+            s_write!(span).x_value = Some(s_read!(value).id);
+
+            Ok(((expr, span), ret_ty))
+        }
+        //
         // LessThan: <
         //
         ParserExpression::LessThan(ref lhs_p, ref rhs_p) => {
@@ -1967,7 +2050,9 @@ fn inter_expression(
                             // Check the name
                             if var.name == *name {
                                 match var.subtype {
-                                    VariableEnum::LocalVariable(_) | VariableEnum::Parameter(_) => {
+                                    VariableEnum::LocalVariable(_) |
+                                    VariableEnum::Parameter(_) |
+                                    VariableEnum::LambdaParameter(_)=> {
                                         // let value =
                                             // s_read!(var.r11_x_value(lu_dog)[0]).clone();
                                         let ty = value.r24_value_type(lu_dog)[0].clone();
@@ -1977,16 +2062,6 @@ fn inter_expression(
 
                                         debug!("{}, {:?}, {}", name, &value, lhs_ty.to_string());
 
-                                        // 🚧
-                                        // Ok, so I parsed a local variable expression. We need to create
-                                        // a VariableExpression, and it in turn needs an Expression, which
-                                        // needs a Value, and finally   a ValueType.
-                                        // Except that I don't think we want to create values in the walker.
-                                        // Doing so wreaks havoc downstream in the interpreter, because
-                                        // It sees that value and expects that it's been evaluated.
-                                        // And we got here by searching for a value anyway.
-                                        //
-                                        // We don't want to create more than one of these.
                                         let expr = lu_dog
                                             .iter_variable_expression()
                                             .find(|expr| s_read!(expr).name == *name);
@@ -3218,7 +3293,7 @@ fn typecheck(
                     found: rhs.to_string(),
                     expected_span: lhs_span.to_owned(),
                     found_span: rhs_span.to_owned(),
-                    location: location!(),
+                    location,
                 }])
             }
         }
@@ -3234,6 +3309,10 @@ pub(crate) struct PrintableValueType<'d, 'a, 'b, 'c>(
 
 impl<'d, 'a, 'b, 'c> fmt::Display for PrintableValueType<'d, 'a, 'b, 'c> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        const TY_CLR: Colour = Colour::Purple;
+        const TY_WARN_CLR: Colour = Colour::Yellow;
+        const TY_ERR_CLR: Colour = Colour::Red;
+
         let value = s_read!(self.0);
         let lu_dog = self.1;
         let sarzak = self.2;
@@ -3253,6 +3332,7 @@ impl<'d, 'a, 'b, 'c> fmt::Display for PrintableValueType<'d, 'a, 'b, 'c> {
                     write!(f, "{}", import.name)
                 }
             }
+            ValueTypeEnum::Lambda(_) => write!(f, "{}", TY_CLR.italic().paint("<lambda>")),
             ValueTypeEnum::List(ref list) => {
                 let list = lu_dog.exhume_list(list).unwrap();
                 let list = s_read!(list);

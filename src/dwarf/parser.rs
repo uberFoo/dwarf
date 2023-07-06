@@ -116,6 +116,7 @@ const COMP: (u8, u8) = (30, 31);
 const BOOL: (u8, u8) = (25, 26);
 const RANGE: (u8, u8) = (20, 21);
 const ASSIGN: (u8, u8) = (11, 10);
+// Literal, closure, break, return, etc.
 const LITERAL: (u8, u8) = (0, 1);
 const BLOCK: (u8, u8) = (0, 0);
 const STRUCT: (u8, u8) = (0, 0);
@@ -219,7 +220,7 @@ impl DwarfParser {
 
     /// Parse a program
     ///
-    /// A proram is a list of items
+    /// A program is a list of items
     ///
     /// program -> item*
     fn parse_program(&mut self) -> (Vec<Spanned<Item>>, Vec<Simple<String>>) {
@@ -228,7 +229,7 @@ impl DwarfParser {
         let mut result = Vec::new();
 
         while !self.at_end() {
-            debug!("parsse_item");
+            debug!("parse_item");
             if let Some(item) = self.parse_item() {
                 debug!("item", item);
                 result.push(item);
@@ -964,7 +965,7 @@ impl DwarfParser {
 
     /// Parse an subtraction operator
     ///
-    /// subtraciton = expression - expression
+    /// subtraction = expression - expression
     fn parse_subtraction_operator(
         &mut self,
         left: &Expression,
@@ -1544,7 +1545,7 @@ impl DwarfParser {
             return Ok(Some(expression));
         }
 
-        // parse an interger literal
+        // parse an integer literal
         if let Some(expression) = self.parse_integer_literal() {
             debug!("integer literal", expression);
             return Ok(Some(expression));
@@ -1653,34 +1654,37 @@ impl DwarfParser {
     ///               list | method_call |print |
     ///               static_method_call | struct
     fn parse_expression_with_block(&mut self) -> Result<Option<Expression>> {
-        debug!("enter parse_expression_with_block");
+        debug!("enter");
 
         // parse a block expression
         if let Some(expression) = self.parse_block_expression()? {
-            debug!("parse_expression_with_block: block expression", expression);
+            debug!("block expression", expression);
             return Ok(Some(expression));
         }
 
         // parse a for loop expression
         if let Some(expression) = self.parse_for_loop_expression()? {
-            debug!(
-                "parse_expression_with_block: for loop expression",
-                expression
-            );
+            debug!("for loop expression", expression);
             return Ok(Some(expression));
         }
 
         // parse an if expression
         if let Some(expression) = self.parse_if_expression()? {
-            debug!("parse_expression_with_block: if expression", expression);
+            debug!("if expression", expression);
             return Ok(Some(expression));
         }
 
-        debug!("exit parse_expression_with_block with None");
+        // parse a lambda expression
+        if let Some(expression) = self.parse_lambda_expression()? {
+            debug!("lambda expression", expression);
+            return Ok(Some(expression));
+        }
+
+        debug!("None");
         Ok(None)
     }
 
-    /// Parse a Boolean Litearal
+    /// Parse a Boolean Literal
     ///
     /// boolean_literal -> true | false
     fn parse_boolean_literal(&mut self) -> Option<Expression> {
@@ -1759,7 +1763,7 @@ impl DwarfParser {
 
     /// Parse a Float Literal
     ///
-    /// float_litearl -> FLOAT
+    /// float_literal -> FLOAT
     fn parse_float_literal(&mut self) -> Option<Expression> {
         debug!("enter parse_float_literal");
 
@@ -2488,7 +2492,7 @@ impl DwarfParser {
         };
 
         //
-        // FIrst we can take care of the triviial case.
+        // FIrst we can take care of the trivial case.
         if self.match_(&[Token::Punct(';')]) {
             debug!("empty statement");
             // 🚧 We need to implement our own error type so that we can
@@ -2600,7 +2604,7 @@ impl DwarfParser {
     /// of flexibility.
     ///
     /// Anyway, the type part of the static method call has already been parsed
-    /// as a local variable. If the next two tokens (yes, I'm pasing that as two
+    /// as a local variable. If the next two tokens (yes, I'm passing that as two
     /// tokens and not one. I may pay for that later.) are ':' and ':' then I
     /// am going to change the type of the passed in thing.
     ///
@@ -2887,7 +2891,7 @@ impl DwarfParser {
 
     /// Parse a String Literal
     ///
-    /// string_siteral -> STRING
+    /// string_literal -> STRING
     fn parse_string_literal(&mut self) -> Option<Expression> {
         debug!("enter parse_string_literal");
 
@@ -3013,15 +3017,22 @@ impl DwarfParser {
                         self.advance();
                     }
                 }
-                Ok(None) => error!("parse_function: no param"),
-                Err(error) => {
-                    self.errors.push(*error);
-
-                    error!("parse_function: resynchronize looking for ')'");
+                Ok(None) => {
+                    error!("no param");
+                    error!("resynchronize looking for ')'");
                     while !self.at_end() && !self.match_(&[Token::Punct(')')]) {
                         self.advance();
                     }
-                    error!("parse_function: resynchronized");
+                    error!("resynchronized");
+                }
+                Err(error) => {
+                    self.errors.push(*error);
+
+                    error!("resynchronize looking for ')'");
+                    while !self.at_end() && !self.match_(&[Token::Punct(')')]) {
+                        self.advance();
+                    }
+                    error!("resynchronized");
                 }
             }
         }
@@ -3035,7 +3046,7 @@ impl DwarfParser {
                     [Some("'>'".to_owned())],
                     Some(token.0.to_string()),
                 );
-                debug!("exit parse_function: got '-', but no '>'");
+                debug!("exit: got '-', but no '>'");
                 return Err(Box::new(err));
             }
 
@@ -3070,8 +3081,9 @@ impl DwarfParser {
         let body = if let Some(body) = self.parse_block_expression()? {
             body
         } else {
-            let start = self.previous().unwrap().1.end;
-            let end = self.peek().unwrap().1.start;
+            let prev = self.previous().unwrap();
+            let start = prev.1.start;
+            let end = prev.1.end;
             let err = Simple::custom(start..end, "missing body");
             debug!("exit parse_function: no body");
             return Err(Box::new(err));
@@ -3087,11 +3099,128 @@ impl DwarfParser {
         )))
     }
 
+    /// Parse a lambda expression
+    ///
+    /// lambda --> |expression,*| (-> type)? { BLOCK }
+    fn parse_lambda_expression(&mut self) -> Result<Option<Expression>> {
+        debug!("enter");
+
+        let start = if let Some(tok) = self.peek() {
+            tok.1.start
+        } else {
+            debug!("exit: no token");
+            return Ok(None);
+        };
+
+        if !self.match_(&[Token::Punct('|')]) {
+            debug!("exit parse_function: no fn");
+            return Ok(None);
+        }
+
+        let mut params = Vec::new();
+
+        while !self.at_end() && !self.match_(&[Token::Punct('|')]) {
+            match self.parse_param() {
+                Ok(Some(param)) => {
+                    params.push(param);
+                    if self.peek().unwrap().0 == Token::Punct(',') {
+                        self.advance();
+                    }
+                }
+                Ok(None) => {
+                    error!("no param");
+                    error!("resynchronize looking for '|'");
+                    while !self.at_end() && !self.match_(&[Token::Punct('|')]) {
+                        self.advance();
+                    }
+                    error!("resynchronized");
+                }
+                Err(error) => {
+                    self.errors.push(*error);
+
+                    error!("resynchronize looking for '|'");
+                    while !self.at_end() && !self.match_(&[Token::Punct('|')]) {
+                        self.advance();
+                    }
+                    error!("resynchronized");
+                }
+            }
+        }
+
+        let return_type = if self.match_(&[Token::Punct('-')]) {
+            if !self.match_(&[Token::Punct('>')]) {
+                let token = self.previous().unwrap();
+                // 🚧 use the unclosed_delimiter constructor
+                let err = Simple::expected_input_found(
+                    token.1.clone(),
+                    [Some("'>'".to_owned())],
+                    Some(token.0.to_string()),
+                );
+                error!("exit: got '-', but no '>'");
+                return Err(Box::new(err));
+            }
+
+            match self.parse_type() {
+                Ok(Some(ty)) => ty,
+                Ok(None) => {
+                    let span = self.previous().unwrap();
+                    let start = span.1.start;
+                    let end = span.1.end;
+                    error!("exit: no type");
+                    return Err(Box::new(Simple::custom(start..end, "missing type")));
+                }
+                Err(error) => {
+                    self.errors.push(*error);
+
+                    error!("resynchronize looking for '|'");
+                    while !self.at_end() && !self.match_(&[Token::Punct('|')]) {
+                        self.advance();
+                    }
+                    error!("resynchronized");
+
+                    let span = self.previous().unwrap();
+                    let start = span.1.start;
+                    let end = span.1.end;
+                    (Type::Empty, start..end)
+                }
+            }
+        } else {
+            let span = self.previous().unwrap();
+            let start = span.1.start;
+            let end = span.1.end;
+
+            (Type::Empty, start..end)
+        };
+
+        let body = if let Some(body) = self.parse_block_expression()? {
+            body
+        } else {
+            let prev = self.previous().unwrap();
+            let start = prev.1.start;
+            let end = prev.1.end;
+            let err = Simple::custom(start..end, "missing body");
+            debug!("exit no body");
+            return Err(Box::new(err));
+        };
+
+        let end = body.0 .1.end;
+
+        debug!("exit");
+
+        Ok(Some((
+            (
+                DwarfExpression::Lambda(params, return_type, Box::new(body.0)),
+                start..end,
+            ),
+            LITERAL,
+        )))
+    }
+
     /// Parse a parameter
     ///
     /// param -> ident : type
     fn parse_param(&mut self) -> Result<Option<(Spanned<String>, Spanned<Type>)>> {
-        debug!("enter parse_param");
+        debug!("enter");
 
         let name = if let Some(ident) = self.parse_ident() {
             ident
@@ -3107,6 +3236,8 @@ impl DwarfParser {
                     [Some("':'".to_owned())],
                     Some(token.0.to_string()),
                 );
+                debug!("exit: no ':'");
+
                 return Err(Box::new(err));
             }
 
@@ -3116,13 +3247,15 @@ impl DwarfParser {
                 let start = self.previous().unwrap().1.end;
                 let end = self.peek().unwrap().1.start;
                 let err = Simple::custom(start..end, "missing type");
+                debug!("exit: no type");
+
                 return Err(Box::new(err));
             }
         } else {
             (Type::Self_, name.1.clone())
         };
 
-        debug!("exit parse_param: ", (&name, &ty));
+        debug!("exit: ", (&name, &ty));
 
         Ok(Some((name, ty)))
     }
@@ -3480,7 +3613,7 @@ impl DwarfParser {
 
     fn peek(&self) -> Option<&Spanned<Token>> {
         let current = self.tokens.get(self.current);
-        debug!("peking", current);
+        debug!("Peking", current);
 
         current
     }
@@ -4144,6 +4277,30 @@ mod tests {
                     "nop",
                     foo
                 );
+            }
+        "#;
+
+        let ast = parse_dwarf("test_asm", src);
+        assert!(ast.is_ok());
+    }
+
+    #[test]
+    fn test_lambda() {
+        let _ = env_logger::builder().is_test(true).try_init();
+
+        let src = r#"
+            fn main() {
+                test(|| {
+                    print("Hello, World!");
+                });
+
+                test(|a: int| {
+                    print(a);
+                });
+
+                test(|a: int, b: int| -> int {
+                    a + b
+                });
             }
         "#;
 

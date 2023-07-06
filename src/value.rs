@@ -7,7 +7,7 @@ use sarzak::lu_dog::ValueTypeEnum;
 use uuid::Uuid;
 
 use crate::{
-    lu_dog::{Function, ObjectStore as LuDogStore, ValueType},
+    lu_dog::{Function, Lambda, ObjectStore as LuDogStore, ValueType},
     new_ref, s_read,
     sarzak::Ty,
     ChaChaError, DwarfFloat, DwarfInteger, NewRef, RefType, Result,
@@ -103,6 +103,7 @@ pub enum Value {
     Function(RefType<Function>),
     // Future(RefType<dyn std::future::Future<Output = RefType<Value>>>),
     Integer(DwarfInteger),
+    Lambda(RefType<Lambda>),
     Option(Option<RefType<Self>>),
     /// User Defined Type Proxy
     ///
@@ -180,6 +181,11 @@ impl Value {
                 }
                 unreachable!()
             }
+            Value::Lambda(ref ƛ) => {
+                let ƛ = lu_dog.exhume_lambda(&s_read!(ƛ).id).unwrap();
+                let ƛ_type = s_read!(ƛ).r1_value_type(lu_dog)[0].clone();
+                ƛ_type
+            }
             // 🚧 ProxyType
             // Value::ProxyType(ref pt) => lu_dog
             //     .exhume_value_type(&s_read!(pt).struct_uuid())
@@ -230,6 +236,7 @@ impl fmt::Display for Value {
             Self::Float(num) => write!(f, "{}", num),
             Self::Function(_) => write!(f, "<function>"),
             Self::Integer(num) => write!(f, "{}", num),
+            Self::Lambda(_) => write!(f, "<lambda>"),
             Self::Option(option) => match option {
                 Some(value) => write!(f, "Some({})", s_read!(value)),
                 None => write!(f, "None"),

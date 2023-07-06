@@ -65,12 +65,12 @@ fn escape_time(c: Complex, limit: int) -> int {
         // 🚧 This let wreaks havoc -- fix it.
         // Also the chained method calls don't affect the correct z, or something.
         // let z = z.square(z).add(z, c);
-        // ComplexEx::square(z);
-        // ComplexEx::add(z, c);
+        ComplexEx::square(z);
+        ComplexEx::add(z, c);
         // z = z.square();
         // z = z.add(c);
-        z.square_2();
-        z.add_2(c);
+        // z.square_2();
+        // z.add_2(c);
         // Having the RHS of this statement on the lhs of the expression below
         // does not work.
         let foo = ComplexEx::norm_squared(z);
@@ -94,22 +94,20 @@ fn main() {
 
     let iterations = chacha::args()[1];
     print("iterations {1},  type is {0}\n".format(chacha::typeof(iterations), iterations));
-    print("Total time: {0}s.\n".format(chacha::time(plot(iterations))));
+    print("Total time: {0}s.\n".format(chacha::time(|| { plot(iterations); })));
 }
 
 fn plot(t: int) {
-    // 🚧 Need to fix this multiple let let-down. Oh, no! 😫
-    // let width = 21;
-    // let height = 5;
-    // let width = 42;
-    // let height = 10;
-    // let width = 84;
-    // let height = 20;
-    // debugger;
+    let width = 7;
+    let height = 2;
+    let width = 21;
+    let height = 5;
+    let width = 42;
+    let height = 10;
+    let width = 84;
+    let height = 20;
     let width = 168;
     let height = 40;
-    // let width = 7;
-    // let height = 2;
     let upper_left = Complex { re: -2.5, im: 1.0 };
     let lower_right = Complex { re: 2.0, im: -1.0 };
     // let upper_left = Complex {
@@ -140,6 +138,7 @@ fn plot(t: int) {
         // debugger;
         // }
             do_column(t, row, width, height, upper_left, lower_right);
+            // debugger;
         }
     // This is busted too.
     // print(chacha::eps() + "\n");

@@ -1,0 +1,11 @@
+fn main() {
+    let foo = |bar: int| -> int {
+        // this comment is to trick the formatter
+        //
+        // I'm not sure how to handle this in the extruder. I'm surprised that
+        // it hasn't come up with functions.
+        bar as int
+    };
+    chacha::assert_eq(foo(42), 42);
+    // chacha::assert_eq(|| -> int { 42 }(), 42);
+}

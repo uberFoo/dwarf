@@ -7,5 +7,7 @@ fn fib(n: int) -> int {
 }
 
 fn main() {
-    chacha::time(fib(10));
+    print("{0}s\n".format(chacha::time(|| {
+        fib(2);
+    })));
 }

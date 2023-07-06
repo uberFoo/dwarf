@@ -481,7 +481,8 @@ impl Type {
         models: &[SarzakStore],
         sarzak: &SarzakStore,
     ) -> Result<bool> {
-        self.into_value_type(span, store, models, sarzak).map(|_| true)
+        self.into_value_type(span, store, models, sarzak)
+            .map(|_| true)
     }
 
     pub fn into_value_type(
@@ -655,6 +656,11 @@ pub enum Expression {
     ),
     Index(Box<Spanned<Self>>, Box<Spanned<Self>>),
     IntegerLiteral(i64),
+    Lambda(
+        Vec<(Spanned<String>, Spanned<Type>)>,
+        Spanned<Type>,
+        Box<Spanned<Self>>,
+    ),
     LessThan(Box<Spanned<Self>>, Box<Spanned<Self>>),
     LessThanOrEqual(Box<Spanned<Self>>, Box<Spanned<Self>>),
     List(Vec<Spanned<Self>>),

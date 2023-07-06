@@ -35,13 +35,15 @@ async fn function_handler(event: LambdaEvent<serde_json::Value>) -> Result<Respo
 
     // let message = if let Body::Text(program) = event.into_body() {
     // let handle = if let Some(body) = event.payload.get("body") {
-    if let Some(body) = event.payload.get("body") {
-        let program = body.as_str().unwrap();
+    let payload = event.payload.clone();
+    let body = payload.get("body");
+    if let Some(body) = body {
+        let program = body.clone();
         let mut std_err = Vec::new();
 
         event!(Level::INFO, "dwarf received program: {}", program);
 
-        let ast = parse_dwarf("lambda", &program).map_err(|e| {
+        let ast = parse_dwarf("lambda", &program.as_str().unwrap()).map_err(|e| {
             // std_err.write(format!("{}", e).as_bytes()).unwrap();
             tx.try_send_data(format!("{}", e).into()).unwrap();
         });
@@ -50,26 +52,36 @@ async fn function_handler(event: LambdaEvent<serde_json::Value>) -> Result<Respo
 
         match ast {
             Ok(ast) => {
-                let lu_dog = new_lu_dog(None, Some((program.to_owned(), &ast)), &[], &sarzak)
-                    .map_err(|errors| {
-                        for e in &errors {
-                            tx.try_send_data(
-                                format!(
-                                    "{}",
-                                    dwarf::dwarf::DwarfErrorReporter(&e, &program, "lambda")
+                let lu_dog = new_lu_dog(
+                    None,
+                    Some((program.as_str().unwrap().to_owned(), &ast)),
+                    &[],
+                    &sarzak,
+                )
+                .map_err(|errors| {
+                    for e in &errors {
+                        tx.try_send_data(
+                            format!(
+                                "{}",
+                                dwarf::dwarf::DwarfErrorReporter(
+                                    &e,
+                                    false,
+                                    &program.as_str().unwrap(),
+                                    "lambda"
                                 )
-                                .into(),
                             )
-                            .unwrap();
-                            // std_err
-                            //     .write(
-                            //         format!("{}", dwarf::dwarf::DwarfErrorReporter(&e, &program))
-                            //             .as_bytes(),
-                            //     )
-                            //     .unwrap();
-                        }
-                        errors
-                    });
+                            .into(),
+                        )
+                        .unwrap();
+                        // std_err
+                        //     .write(
+                        //         format!("{}", dwarf::dwarf::DwarfErrorReporter(&e, &program))
+                        //             .as_bytes(),
+                        //     )
+                        //     .unwrap();
+                    }
+                    errors
+                });
 
                 match lu_dog {
                     Ok(lu_dog) => {
@@ -123,33 +135,42 @@ async fn function_handler(event: LambdaEvent<serde_json::Value>) -> Result<Respo
                             }
                         });
                         let ctx = ctx.clone();
-                        let writer = tokio::task::spawn_blocking(|| match start_main(false, ctx) {
-                            Ok((result, ctx)) => {
-                                let result = result.to_string();
-                                let result = ansi_to_html::convert_escaped(&result).unwrap();
-                                // let std_out = ctx.drain_std_out();
-                                // let std_out = std_out
-                                //     .iter()
-                                //     .map(|line| ansi_to_html::convert_escaped(&line).unwrap())
-                                //     .collect::<Vec<String>>()
-                                //     .join("");
-                                // std_out + &ansi_to_html::convert_escaped(&result).unwrap()
-                                result
-                            }
-                            Err(e) => {
-                                let err = ansi_to_html::convert_escaped(&format!(
-                                    "{}",
-                                    dwarf::ChaChaErrorReporter(&e, &program, "lambda")
-                                ))
-                                .unwrap();
+                        let writer =
+                            tokio::task::spawn_blocking(move || match start_main(false, ctx) {
+                                Ok((result, _ctx)) => {
+                                    event!(Level::INFO, "dwarf finished successfully");
+                                    let result = result.to_string();
+                                    let result = ansi_to_html::convert_escaped(&result).unwrap();
+                                    // let std_out = ctx.drain_std_out();
+                                    // let std_out = std_out
+                                    //     .iter()
+                                    //     .map(|line| ansi_to_html::convert_escaped(&line).unwrap())
+                                    //     .collect::<Vec<String>>()
+                                    //     .join("");
+                                    // std_out + &ansi_to_html::convert_escaped(&result).unwrap()
+                                    otx.send(result).unwrap();
+                                }
+                                Err(e) => {
+                                    let err = ansi_to_html::convert_escaped(&format!(
+                                        "{}",
+                                        dwarf::ChaChaErrorReporter(
+                                            &e,
+                                            false,
+                                            &program.as_str().unwrap(),
+                                            "lambda"
+                                        )
+                                    ))
+                                    .unwrap();
 
-                                event!(Level::INFO, "{}", err.clone());
+                                    event!(
+                                        Level::INFO,
+                                        "dwarf finished with error: {}",
+                                        err.clone()
+                                    );
 
-                                otx.send(err).unwrap();
-
-                                "error".to_owned()
-                            }
-                        });
+                                    otx.send(err).unwrap();
+                                }
+                            });
 
                         // Some((reader, writer))
                         reader.await.unwrap();

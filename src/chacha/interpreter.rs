@@ -11,9 +11,12 @@ use log::{self, log_enabled, Level::Debug};
 
 use parking_lot::{Condvar, Mutex};
 
-use sarzak::lu_dog::{
-    BinaryEnum, BooleanLiteralEnum, BooleanOperatorEnum, ComparisonEnum, ExpressionEnum,
-    FieldAccessTargetEnum, LiteralEnum, UnaryEnum, ValueTypeEnum,
+use sarzak::{
+    lu_dog::{
+        BinaryEnum, BooleanLiteralEnum, BooleanOperatorEnum, ComparisonEnum, ExpressionEnum,
+        FieldAccessTargetEnum, LiteralEnum, UnaryEnum, ValueTypeEnum,
+    },
+    sarzak::MODEL as SARZAK_MODEL,
 };
 // use rayon::prelude::*;
 use snafu::{location, prelude::*, Location};
@@ -27,7 +30,7 @@ use crate::{
     },
     dwarf::{inter_statement, parse_line},
     lu_dog::{
-        Argument, Block, CallEnum, DwarfSourceFile, Expression, Function, Import, List,
+        Argument, Block, CallEnum, DwarfSourceFile, Expression, Function, Import, Lambda, List,
         LocalVariable, ObjectStore as LuDogStore, OperatorEnum, Span, Statement, StatementEnum,
         ValueType, Variable, WoogOptionEnum, XValue, XValueEnum,
     },
@@ -212,16 +215,16 @@ lazy_static! {
     pub(crate) static ref STEPPING: Mutex<bool> = Mutex::new(false);
 }
 
-pub fn initialize_interpreter_paths<P: AsRef<Path>>(_lu_dog_path: P) -> Result<Context, Error> {
-    unimplemented!();
-    // let sarzak =
-    //     SarzakStore::from_bincode(SARZAK_MODEL).map_err(|e| ChaChaError::Store { source: e })?;
+pub fn initialize_interpreter_paths<P: AsRef<Path>>(lu_dog_path: P) -> Result<Context, Error> {
+    // unimplemented!();
+    let sarzak =
+        SarzakStore::from_bincode(SARZAK_MODEL).map_err(|e| ChaChaError::Store { source: e })?;
 
-    // // This will always be a lu-dog -- it's basically compiled dwarf source.
-    // let lu_dog = LuDogStore::load_bincode(lu_dog_path.as_ref())
-    //     .map_err(|e| ChaChaError::Store { source: e })?;
+    // This will always be a lu-dog -- it's basically compiled dwarf source.
+    let lu_dog = LuDogStore::load_bincode(lu_dog_path.as_ref())
+        .map_err(|e| ChaChaError::Store { source: e })?;
 
-    // initialize_interpreter(sarzak, lu_dog, Some(lu_dog_path.as_ref()))
+    initialize_interpreter(sarzak, lu_dog, Some(lu_dog_path.as_ref()))
 }
 
 /// Initialize the interpreter
@@ -725,6 +728,204 @@ fn eval_function_call(
     }
 }
 
+fn eval_lambda_expression(
+    ƛ: RefType<Lambda>,
+    args: &[RefType<Argument>],
+    arg_check: bool,
+    span: &RefType<Span>,
+    context: &mut Context,
+    vm: &mut VM,
+) -> Result<(RefType<Value>, RefType<ValueType>)> {
+    let lu_dog = context.lu_dog.clone();
+    context.func_calls += 1;
+
+    debug!("ƛ {ƛ:?}");
+    trace!("stack {:?}", context.memory);
+
+    span!("eval_function_call");
+
+    let ƛ = s_read!(ƛ);
+    let block = s_read!(lu_dog).exhume_block(&ƛ.block).unwrap();
+    // let stmts = s_read!(block).r18_statement(&s_read!(lu_dog));
+    let has_stmts = !s_read!(block).r18_statement(&s_read!(lu_dog)).is_empty();
+
+    // if !stmts.is_empty() {
+    // if !s_read!(block).r18_statement(&s_read!(lu_dog)).is_empty() {
+    if has_stmts {
+        // Collect timing info
+        let now = Instant::now();
+        let expr_count_start = context.expr_count;
+
+        context.memory.push_frame();
+
+        // We need to evaluate the arguments, and then push them onto the stack. We
+        // also need to typecheck the arguments against the function parameters.
+        // We need to look the params up anyway to set the local variables.
+        let params = ƛ.r76_lambda_parameter(&s_read!(lu_dog));
+
+        // 🚧 I'd really like to see the source code printed out, with the function
+        // call highlighted.
+        // And can't we catch this is the compiler?
+        ensure!(params.len() == args.len(), {
+            let value_ty = &ƛ.r1_value_type(&s_read!(lu_dog))[0];
+            let defn_span = &s_read!(value_ty).r62_span(&s_read!(lu_dog))[0];
+            let read = s_read!(defn_span);
+            let defn_span = read.start as usize..read.end as usize;
+
+            let read = s_read!(span);
+            let invocation_span = read.start as usize..read.end as usize;
+
+            WrongNumberOfArgumentsSnafu {
+                expected: params.len(),
+                got: args.len(),
+                defn_span,
+                invocation_span,
+            }
+        });
+
+        let params = if !params.is_empty() {
+            let mut params = Vec::with_capacity(params.len());
+            let mut next = ƛ
+                // .clone()
+                .r76_lambda_parameter(&s_read!(lu_dog))
+                .iter()
+                .find(|p| {
+                    s_read!(p)
+                        .r75c_lambda_parameter(&s_read!(lu_dog))
+                        .is_empty()
+                })
+                .unwrap()
+                .clone();
+
+            loop {
+                let var = s_read!(s_read!(next).r12_variable(&s_read!(lu_dog))[0]).clone();
+                let value = s_read!(var.r11_x_value(&s_read!(lu_dog))[0]).clone();
+                let ty = value.r24_value_type(&s_read!(lu_dog))[0].clone();
+                params.push((var.name.clone(), ty.clone()));
+
+                let next_id = { s_read!(next).next };
+                if let Some(ref id) = next_id {
+                    next = s_read!(lu_dog).exhume_lambda_parameter(id).unwrap();
+                } else {
+                    break;
+                }
+            }
+
+            params
+        } else {
+            Vec::new()
+        };
+
+        let arg_values = if !args.is_empty() {
+            let mut arg_values = Vec::with_capacity(args.len());
+            let mut next = args
+                .iter()
+                .find(|a| s_read!(a).r27c_argument(&s_read!(lu_dog)).is_empty())
+                .unwrap()
+                .clone();
+
+            loop {
+                let expr = s_read!(next).r37_expression(&s_read!(lu_dog))[0].clone();
+                let (value, ty) = eval_expression(expr.clone(), context, vm)?;
+                arg_values.push((expr, value, ty));
+
+                let next_id = { s_read!(next).next };
+                if let Some(ref id) = next_id {
+                    next = s_read!(lu_dog).exhume_argument(id).unwrap();
+                } else {
+                    break;
+                }
+            }
+
+            arg_values
+        } else {
+            Vec::new()
+        };
+
+        let zipped = params.into_iter().zip(arg_values);
+        for ((name, param_ty), (expr, value, arg_ty)) in zipped {
+            fix_debug!("type check name", name);
+            fix_debug!("type check param_ty", param_ty);
+            fix_debug!("type check value", value);
+            fix_debug!("type check arg_ty", arg_ty);
+
+            if arg_check {
+                let x_value = &s_read!(expr).r11_x_value(&s_read!(lu_dog))[0];
+                let span = &s_read!(x_value).r63_span(&s_read!(lu_dog))[0];
+
+                typecheck(&param_ty, &arg_ty, span, location!(), context)?;
+            }
+
+            context.memory.insert(name.clone(), value);
+        }
+
+        let mut value = new_ref!(Value, Value::Empty);
+        let mut ty = Value::Empty.get_type(&s_read!(lu_dog));
+        // This is a pain.
+        // Find the first statement, by looking for the one with no previous statement.
+        // let mut next = stmts
+        //     .iter()
+        //     .find(|s| s_read!(s).r17c_statement(&s_read!(lu_dog)).is_empty())
+        //     .unwrap()
+        //     .clone();
+        if let Some(ref id) = s_read!(block).statement {
+            let mut next = s_read!(lu_dog).exhume_statement(id).unwrap();
+
+            loop {
+                let result = eval_statement(next.clone(), context, vm).map_err(|e| {
+                    // This is cool, if it does what I think it does. We basically
+                    // get the opportunity to look at the error, and do stuff with
+                    // it, and then let it continue on as if nothing happened.
+                    //
+                    // Anyway, we need to clean up the stack frame if there was an
+                    // error. I'm also considering abusing the error type to pass
+                    // through that we hit a return expression. I'm thinking more
+                    // and more that this is a Good Idea. Well, maybe just a good
+                    // idea. We can basically just do an early, successful return.
+                    //
+                    // Well, that doesn't work: return applies to the closure.
+                    context.memory.pop_frame();
+
+                    // if let ChaChaError::Return { value } = &e {
+                    //     let ty = value.get_type(&mut s_write!(lu_dog));
+                    //     return Ok((value, ty));
+                    // }
+
+                    // Err(e)
+                    e
+                });
+
+                if let Err(ChaChaError::Return { value, ty }) = &result {
+                    return Ok((value.clone(), ty.clone()));
+                }
+
+                (value, ty) = result?;
+
+                if let Some(ref id) = s_read!(next.clone()).next {
+                    next = s_read!(lu_dog).exhume_statement(id).unwrap();
+                } else {
+                    break;
+                }
+            }
+        }
+
+        // Clean up
+        context.memory.pop_frame();
+        let elapsed = now.elapsed();
+        // Counting 10k expressions per second
+        let eps =
+            (context.expr_count - expr_count_start) as f64 / elapsed.as_micros() as f64 * 10.0;
+        context.timings.push(eps);
+
+        Ok((value, ty))
+    } else {
+        Ok((
+            new_ref!(Value, Value::Empty),
+            Value::Empty.get_type(&s_read!(lu_dog)),
+        ))
+    }
+}
+
 #[allow(unused_variables)]
 fn chacha_print<S: AsRef<str>>(result: S, context: &mut Context) -> Result<()> {
     let result_style = Colour::Green.bold();
@@ -900,6 +1101,24 @@ fn eval_expression(
                             )?;
                             fix_debug!("value", value);
                             fix_debug!("ty", ty);
+                            Ok((value, ty))
+                        }
+                        Value::Lambda(ref ƛ) => {
+                            let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
+                            let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
+
+                            let ƛ = s_read!(lu_dog).exhume_lambda(&s_read!(ƛ).id).unwrap();
+                            debug!("ExpressionEnum::Call ƛ: {ƛ:?}");
+                            let (value, ty) = eval_lambda_expression(
+                                ƛ,
+                                &args,
+                                s_read!(call).arg_check,
+                                span,
+                                context,
+                                vm,
+                            )?;
+                            debug!("value {value:?}");
+                            debug!("ty {ty:?}");
                             Ok((value, ty))
                         }
                         // 🚧 ProxyType
@@ -1329,29 +1548,49 @@ fn eval_expression(
                                 // I go unwrapping it.
                                 let (func, ty) = arg_values.pop_front().unwrap();
                                 let func = s_read!(func);
-                                ensure!(matches!(&*func, Value::Function(_)), {
-                                    // 🚧 I'm not really sure what to do about this here. It's
-                                    // all really a hack for now anyway.
-                                    let ty = PrintableValueType(&ty, context);
-                                    TypeMismatchSnafu {
-                                        expected: "<function>".to_string(),
-                                        found: ty.to_string(),
-                                        span: 0..0,
+                                ensure!(
+                                    matches!(&*func, Value::Lambda(_))
+                                        || matches!(&*func, Value::Function(_)),
+                                    {
+                                        // 🚧 I'm not really sure what to do about this here. It's
+                                        // all really a hack for now anyway.
+                                        let ty = PrintableValueType(&ty, context);
+                                        TypeMismatchSnafu {
+                                            expected: "<function>".to_string(),
+                                            found: ty.to_string(),
+                                            span: 0..0,
+                                        }
                                     }
-                                });
-                                let func = if let Value::Function(f) = &*func {
-                                    f.clone()
-                                } else {
-                                    unreachable!()
-                                };
+                                );
 
                                 let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
                                 let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
 
-                                let now = Instant::now();
-                                let _result =
-                                    eval_function_call(func, &[], true, span, context, vm)?;
-                                let elapsed = now.elapsed();
+                                let elapsed = if let Value::Function(func) = &*func {
+                                    let now = Instant::now();
+                                    let _result = eval_function_call(
+                                        func.clone(),
+                                        &[],
+                                        true,
+                                        span,
+                                        context,
+                                        vm,
+                                    )?;
+                                    now.elapsed()
+                                } else if let Value::Lambda(ƛ) = &*func {
+                                    let now = Instant::now();
+                                    let _result = eval_lambda_expression(
+                                        ƛ.clone(),
+                                        &[],
+                                        true,
+                                        span,
+                                        context,
+                                        vm,
+                                    )?;
+                                    now.elapsed()
+                                } else {
+                                    unreachable!()
+                                };
 
                                 // let time = format!("{:?}\n", elapsed);
                                 // chacha_print(time, context)?;
@@ -1815,6 +2054,17 @@ fn eval_expression(
                     location: location!(),
                 }),
             }
+        }
+        //
+        // Lambda
+        //
+        // I know it's called eval_expression, but we don't actually want to
+        // evaluate the lambda, we just want to return it.
+        //
+        ExpressionEnum::Lambda(ref lambda) => {
+            let lambda = s_read!(lu_dog).exhume_lambda(lambda).unwrap();
+            let ty = s_read!(lambda).r1_value_type(&s_read!(lu_dog))[0].clone();
+            Ok((new_ref!(Value, Value::Lambda(lambda)), ty))
         }
         //
         // ListElement
@@ -2854,6 +3104,7 @@ pub fn start_tui_repl(mut context: Context) -> (Sender<DebuggerControl>, Receive
                                     &new_ref!(crate::dwarf::Statement, stmt),
                                     &DwarfSourceFile::new(input, &mut lu_dog),
                                     &block,
+                                    true,
                                     &mut lu_dog,
                                     &s_read!(models),
                                     &s_read!(sarzak),
@@ -2868,7 +3119,7 @@ pub fn start_tui_repl(mut context: Context) -> (Sender<DebuggerControl>, Receive
                                 }
                             };
 
-                            match eval_statement(stmt, &mut context, &mut vm) {
+                            match eval_statement(stmt.0, &mut context, &mut vm) {
                                 Ok((value, ty)) => {
                                     to_ui_write
                                         .send(DebuggerStatus::Stopped(value, ty))
@@ -3293,6 +3544,7 @@ impl<'a> fmt::Display for PrintableValueType<'a> {
                     write!(f, "{}", TY_CLR.italic().paint(&import.name))
                 }
             }
+            ValueTypeEnum::Lambda(_) => write!(f, "{}", TY_CLR.italic().paint("lambda")),
             ValueTypeEnum::List(ref list) => {
                 let list = s_read!(lu_dog).exhume_list(list).unwrap();
                 let list = s_read!(list);

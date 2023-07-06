@@ -128,12 +128,42 @@ cfg_if::cfg_if! {
             }
         }
 
-        // type RefType<T> = std::sync::Arc<std::sync::RwLock<T>>;
-        type RefType<T> = std::sync::Arc<no_deadlocks::RwLock<T>>;
+        type RefType<T> = std::sync::Arc<std::sync::RwLock<T>>;
+        // type RefType<T> = std::sync::Arc<no_deadlocks::RwLock<T>>;
         impl<T> NewRef<T> for RefType<T> {
             fn new_ref(value: T) -> RefType<T> {
-                // std::sync::Arc::new(std::sync::RwLock::new(value))
-                std::sync::Arc::new(no_deadlocks::RwLock::new(value))
+                std::sync::Arc::new(std::sync::RwLock::new(value))
+                // std::sync::Arc::new(no_deadlocks::RwLock::new(value))
+            }
+        }
+
+        // Macros to abstract the underlying read/write operations.
+        #[macro_export]
+        macro_rules! ref_read {
+            ($arg:expr) => {
+                $arg.read().unwrap()
+            };
+        }
+
+        #[macro_export]
+        macro_rules! ref_write {
+            ($arg:expr) => {
+                $arg.write().unwrap()
+            };
+        }
+
+   } else if #[cfg(feature = "multi-vec")] {
+        type RcType<T> = std::sync::Arc<T>;
+        impl<T> NewRcType<T> for RcType<T> {
+            fn new_rc_type(value: T) -> RcType<T> {
+                std::sync::Arc::new(value)
+            }
+        }
+
+        type RefType<T> = std::sync::Arc<std::sync::RwLock<T>>;
+        impl<T> NewRef<T> for RefType<T> {
+            fn new_ref(value: T) -> RefType<T> {
+                std::sync::Arc::new(std::sync::RwLock::new(value))
             }
         }
 
