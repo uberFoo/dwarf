@@ -7,7 +7,6 @@
 
 dwarf is a programming language based heavily upon, and implemented in, [Rust](https://www.rust-lang.org).
 The language is interpreted (and slow) with a VM (fast-ish) on the way.
-The long term plan is to turn the dwarf source into Rust source, and compile it with the Rust compiler.
 
 See the [book 📒](https://uberfoo.github.io/assets/docs/dwarf/introduction.html).
 
