@@ -1,11 +1,28 @@
+fn runner(func: fn(string, int) -> int) {
+    func();
+}
+
 fn main() {
+    let answer = 42;
+
     let foo = |bar: int| -> int {
         // this comment is to trick the formatter
-        //
-        // I'm not sure how to handle this in the extruder. I'm surprised that
-        // it hasn't come up with functions.
-        bar as int
+        bar
     };
-    chacha::assert_eq(foo(42), 42);
-    // chacha::assert_eq(|| -> int { 42 }(), 42);
+    chacha::assert_eq(foo(answer), answer);
+
+    let bar = || -> int { foo(answer) as int };
+    chacha::assert_eq(bar(), answer);
+
+    let baz = |name: string| -> string { "hello, {0}! The answer is {1}".format(name, answer) };
+    chacha::assert_eq(baz("world"), "hello, world! The answer is 42");
+
+    runner(|| {
+        chacha::assert_eq(answer, 42);
+        // This is pretty lame. I think the extent of the type checking machinery
+        // is going to need to be updated. See https://github.com/uberFoo/dwarf/issues/3.
+        answer as int = 69;
+    });
+
+    chacha::assert_eq(answer, 69);
 }

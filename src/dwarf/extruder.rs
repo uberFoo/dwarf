@@ -4,6 +4,7 @@ use std::{fs::File, io::prelude::*, ops::Range, path::PathBuf};
 use ansi_term::Colour;
 use heck::{ToShoutySnakeCase, ToUpperCamelCase};
 use log;
+use names::Generator;
 use sarzak::sarzak::{store::ObjectStore as SarzakStore, types::Ty, Object};
 use snafu::{location, Location};
 use tracy_client::Client;
@@ -36,6 +37,19 @@ macro_rules! link_parameter {
         let next = s_read!($next);
         if let Some(last) = $last {
             let last = $store.exhume_parameter(&last).unwrap().clone();
+            let mut last = s_write!(last);
+            last.next = Some(next.id);
+        }
+
+        Some(next.id)
+    }};
+}
+
+macro_rules! link_ƛ_parameter {
+    ($last:expr, $next:expr, $store:expr) => {{
+        let next = s_read!($next);
+        if let Some(last) = $last {
+            let last = $store.exhume_lambda_parameter(&last).unwrap().clone();
             let mut last = s_write!(last);
             last.next = Some(next.id);
         }
@@ -436,6 +450,8 @@ fn inter_func(
             }
         };
         debug!("param_ty {:?}", param_ty);
+        // Note that we are storing the parameter type with the variable associated
+        // with this parameter. Not with the parameter itself.
         let value = XValue::new_variable(&block, &param_ty, &var, lu_dog);
         LuDogSpan::new(
             name_span.end as i64,
@@ -830,7 +846,7 @@ fn inter_expression(
         // As
         //
         ParserExpression::As(ref expr, ref ty) => {
-            let (expr, _expr_ty) = inter_expression(
+            let (expr, expr_ty) = inter_expression(
                 &new_ref!(ParserExpression, expr.0.to_owned()),
                 check_types,
                 &expr.1,
@@ -840,6 +856,8 @@ fn inter_expression(
                 models,
                 sarzak,
             )?;
+            debug!("As lhs: {expr:?}: {expr_ty:?}");
+
             let as_type = get_value_type(&ty.0, &ty.1, None, lu_dog, models, sarzak)?;
             let as_op = TypeCast::new(&expr.0, &as_type, lu_dog);
             let expr = Expression::new_type_cast(&as_op, lu_dog);
@@ -1718,7 +1736,7 @@ fn inter_expression(
             let ret_ty =
                 get_value_type(&return_type.0, &return_type.1, None, lu_dog, models, sarzak)?;
 
-            let lambda = Lambda::new(&block, &ret_ty, lu_dog);
+            let lambda = Lambda::new(Some(&block), &ret_ty, lu_dog);
             let _ = ValueType::new_lambda(&lambda, lu_dog);
 
             let mut errors = Vec::new();
@@ -1727,7 +1745,7 @@ fn inter_expression(
                 debug!("param name {}", param_name);
                 debug!("param ty {}", param_ty);
 
-                let param = LambdaParameter::new(&lambda, None, lu_dog);
+                let param = LambdaParameter::new(&lambda, None, None, lu_dog);
 
                 debug!("param {:?}", param);
 
@@ -1754,7 +1772,7 @@ fn inter_expression(
                     Some(&value),
                     lu_dog,
                 );
-                last_param_uuid = link_parameter!(last_param_uuid, param, lu_dog);
+                last_param_uuid = link_ƛ_parameter!(last_param_uuid, param, lu_dog);
             }
 
             let stmts: Vec<RefType<ParserStatement>> = stmts
@@ -3008,6 +3026,21 @@ fn inter_struct(
 /// Note that the `new_*` methods on `Ty` just return `const`s. Also, the
 /// `ValueType::new_ty` method takes on the id of it's subtype, so neither do
 /// those take much space.
+///
+/// This is starting to look suspicious, at least for the Fn type. I'm basically
+/// interring a half baked lambda into the store. I could fully bake it by interring
+/// the parameters too, but then what's the point of the definition? Well for one
+/// to inter the body.
+///
+/// Of course they are two different things. Without a body it's a type. With a
+/// body it's an expression. I guess really I need to create a fully baked type
+/// here because otherwise it'll never get done. So this is really a type factory.
+///
+/// It's actually good that we have the implementation sort of separate. We can
+/// type check the signature against this type. But I think we need to cache it
+/// somehow. Well, it is stored as the type of something, say a parameter. So, we
+/// can look it up that way. Probably when, for instance, we type check a function
+/// before execution.
 fn get_value_type(
     type_: &Type,
     span: &Span,
@@ -3025,6 +3058,76 @@ fn get_value_type(
         Type::Float => {
             let ty = Ty::new_float();
             Ok(ValueType::new_ty(&ty, lu_dog))
+        }
+        Type::Fn(ref params, ref return_type) => {
+            let return_type =
+                get_value_type(&return_type.0, span, enclosing_type, lu_dog, models, sarzak)?;
+            let lambda = Lambda::new(None, &return_type, lu_dog);
+            let mut last_param_uuid: Option<usize> = None;
+            // for ((param_name, name_span), (param_ty, param_span)) in params {
+            //     debug!("param name {}", param_name);
+            //     debug!("param ty {}", param_ty);
+
+            //     let param = LambdaParameter::new(&lambda, None, lu_dog);
+
+            //     debug!("param {:?}", param);
+
+            //     let var = Variable::new_lambda_parameter(param_name.to_owned(), &param, lu_dog);
+            //     debug!("var {:?}", var);
+            //     // We need to introduce the values into the block, so that we don't
+            //     // error out when parsing the statements.
+            //     //
+            //     let param_ty =
+            //         match get_value_type(param_ty, param_span, None, lu_dog, models, sarzak) {
+            //             Ok(ty) => ty,
+            //             Err(mut e) => {
+            //                 errors.append(&mut e);
+            //                 continue;
+            //             }
+            //         };
+            //     debug!("param_ty {:?}", param_ty);
+            //     let value = XValue::new_variable(&block, &param_ty, &var, lu_dog);
+            //     LuDogSpan::new(
+            //         name_span.end as i64,
+            //         name_span.start as i64,
+            //         source,
+            //         None,
+            //         Some(&value),
+            //         lu_dog,
+            //     );
+            //     last_param_uuid = link_ƛ_parameter!(last_param_uuid, param, lu_dog);kts
+            // }
+            let mut names = Generator::default();
+            // let mut param_types = Vec::new();
+            for ((param_ty, param_span), param_name) in params.into_iter().zip(names) {
+                let param_ty = get_value_type(param_ty, param_span, None, lu_dog, models, sarzak)?;
+                debug!("param_ty {:?}", param_ty);
+
+                let param = LambdaParameter::new(&lambda, None, Some(&param_ty), lu_dog);
+
+                debug!("param {:?}", param);
+
+                // param_types.push(param.clone());
+
+                // let var = Variable::new_lambda_parameter(param_name.to_owned(), &param, lu_dog);
+                // debug!("var {:?}", var);
+                // We need to introduce the values into the block, so that we don't
+                // error out when parsing the statements.
+                //
+                // let value = XValue::new_variable(&block, &param_ty, &var, lu_dog);
+                // LuDogSpan::new(
+                //     name_span.end as i64,
+                //     name_span.start as i64,
+                //     source,
+                //     None,
+                //     Some(&value),
+                //     lu_dog,
+                // );
+                last_param_uuid = link_ƛ_parameter!(last_param_uuid, param, lu_dog);
+            }
+
+            let lambda = ValueType::new_lambda(&lambda, lu_dog);
+            Ok(lambda)
         }
         Type::Integer => {
             let ty = Ty::new_integer();

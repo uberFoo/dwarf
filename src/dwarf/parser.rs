@@ -3301,7 +3301,7 @@ impl DwarfParser {
             return Ok(Some((Type::Float, start..self.peek().unwrap().1.end)));
         }
 
-        // Mtatch an integer
+        // Match an integer
         if self.match_(&[Token::Type(Type::Integer)]) {
             debug!("exit parse_type: integer");
             return Ok(Some((Type::Integer, start..self.peek().unwrap().1.end)));
@@ -3332,6 +3332,103 @@ impl DwarfParser {
             debug!("exit parse_type: list");
             return Ok(Some((
                 Type::List(Box::new(ty)),
+                start..self.peek().unwrap().1.end,
+            )));
+        }
+
+        // Match a fn
+        if self.match_(&[Token::Fn]) {
+            if !self.match_(&[Token::Punct('(')]) {
+                let token = self.previous().unwrap();
+                // 🚧 use the unclosed_delimiter constructor
+                let err = Simple::expected_input_found(
+                    token.1.clone(),
+                    [Some("'('".to_owned())],
+                    Some(token.0.to_string()),
+                );
+                debug!("exit parse_function: no '('");
+                return Err(Box::new(err));
+            }
+
+            let mut params = Vec::new();
+
+            while !self.at_end() && !self.match_(&[Token::Punct(')')]) {
+                match self.parse_type() {
+                    Ok(Some(param)) => {
+                        params.push(param);
+                        if self.peek().unwrap().0 == Token::Punct(',') {
+                            self.advance();
+                        }
+                    }
+                    Ok(None) => {
+                        error!("no type");
+                        error!("resynchronize looking for ')'");
+                        while !self.at_end() && !self.match_(&[Token::Punct(')')]) {
+                            self.advance();
+                        }
+                        error!("resynchronized");
+                    }
+                    Err(error) => {
+                        self.errors.push(*error);
+
+                        error!("resynchronize looking for ')'");
+                        while !self.at_end() && !self.match_(&[Token::Punct(')')]) {
+                            self.advance();
+                        }
+                        error!("resynchronized");
+                    }
+                }
+            }
+
+            let return_type = if self.match_(&[Token::Punct('-')]) {
+                if !self.match_(&[Token::Punct('>')]) {
+                    let token = self.previous().unwrap();
+                    // 🚧 use the unclosed_delimiter constructor
+                    let err = Simple::expected_input_found(
+                        token.1.clone(),
+                        [Some("'>'".to_owned())],
+                        Some(token.0.to_string()),
+                    );
+                    debug!("exit: got '-', but no '>'");
+                    return Err(Box::new(err));
+                }
+
+                match self.parse_type() {
+                    Ok(Some(ty)) => ty,
+                    Ok(None) => {
+                        let start = self.previous().unwrap().1.end;
+                        let end = self.peek().unwrap().1.start;
+                        debug!("exit parse_function: no type");
+                        return Err(Box::new(Simple::custom(start..end, "missing type")));
+                    }
+                    Err(error) => {
+                        self.errors.push(*error);
+
+                        error!("parse_function: resynchronize looking for '{'");
+                        while !self.at_end() && !self.match_(&[Token::Punct('{')]) {
+                            self.advance();
+                        }
+                        error!("parse_function: resynchronized");
+
+                        let start = self.previous().unwrap().1.end;
+                        let end = self.peek().unwrap().1.start;
+                        (Type::Empty, start..end)
+                    }
+                }
+            } else {
+                let token = self.previous().unwrap();
+                // 🚧 use the unclosed_delimiter constructor
+                let err = Simple::expected_input_found(
+                    token.1.clone(),
+                    [Some("'-> <type>'".to_owned())],
+                    Some(token.0.to_string()),
+                );
+                debug!("exit: got {token}, and needed -> <type>");
+                return Err(Box::new(err));
+            };
+            debug!("exit parse_type: fn");
+            return Ok(Some((
+                Type::Fn(params, Box::new(return_type)),
                 start..self.peek().unwrap().1.end,
             )));
         }

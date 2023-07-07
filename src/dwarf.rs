@@ -3,10 +3,7 @@ use std::{fmt, io::Write, ops, path::PathBuf};
 use ansi_term::Colour;
 use ariadne::{Color, Fmt, Label, Report, ReportKind, Source};
 use clap::Args;
-use sarzak::{
-    lu_dog::WoogStruct,
-    sarzak::{store::ObjectStore as SarzakStore, types::Ty},
-};
+use sarzak::sarzak::{store::ObjectStore as SarzakStore, types::Ty};
 use serde::{Deserialize, Serialize};
 use snafu::{prelude::*, Location};
 use uuid::Uuid;
@@ -15,7 +12,7 @@ use crate::{
     lu_dog::{
         store::ObjectStore as LuDogStore,
         types::{ValueType, WoogOption},
-        List, Reference,
+        Lambda, List, Reference, WoogStruct,
     },
     s_read, NewRef, RefType,
 };
@@ -443,6 +440,7 @@ pub enum Type {
     Boolean,
     Empty,
     Float,
+    Fn(Vec<Spanned<Self>>, Box<Spanned<Self>>),
     Integer,
     List(Box<Spanned<Self>>),
     Option(Box<Spanned<Self>>),
@@ -460,6 +458,16 @@ impl fmt::Display for Type {
             Self::Boolean => write!(f, "bool"),
             Self::Empty => write!(f, "()"),
             Self::Float => write!(f, "float"),
+            Self::Fn(params, return_) => {
+                write!(f, "fn(")?;
+                for (i, param) in params.iter().enumerate() {
+                    if i != 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{}", param.0)?;
+                }
+                write!(f, ") -> {}", return_.0)
+            }
             Self::Integer => write!(f, "int"),
             Self::List(type_) => write!(f, "[{}]", type_.0),
             Self::Option(type_) => write!(f, "Option<{}>", type_.0),
@@ -501,6 +509,15 @@ impl Type {
             Type::Float => {
                 let ty = Ty::new_float();
                 Ok(ValueType::new_ty(&ty, store))
+            }
+            Type::Fn(params, return_) => {
+                let params = params
+                    .iter()
+                    .map(|param| param.0.into_value_type(span, store, models, sarzak))
+                    .collect::<Result<Vec<_>>>()?;
+                let return_ = return_.0.into_value_type(span, store, models, sarzak)?;
+                let ƛ = Lambda::new(None, &return_, store);
+                Ok(ValueType::new_lambda(&ƛ, store))
             }
             Type::Integer => {
                 let ty = Ty::new_integer();

@@ -592,7 +592,6 @@ fn eval_function_call(
         let params = if !params.is_empty() {
             let mut params = Vec::with_capacity(params.len());
             let mut next = func
-                // .clone()
                 .r13_parameter(&s_read!(lu_dog))
                 .iter()
                 .find(|p| s_read!(p).r14c_parameter(&s_read!(lu_dog)).is_empty())
@@ -600,6 +599,10 @@ fn eval_function_call(
                 .clone();
 
             loop {
+                // Apparently I'm being clever. I don't typecheck against an actual
+                // type associated with the parameter. No, I am looking up the variable
+                // associated with the parameter and using it's type. I guess that's cool,
+                // but it's tricky if you aren't aware.
                 let var = s_read!(s_read!(next).r12_variable(&s_read!(lu_dog))[0]).clone();
                 let value = s_read!(var.r11_x_value(&s_read!(lu_dog))[0]).clone();
                 let ty = value.r24_value_type(&s_read!(lu_dog))[0].clone();
@@ -677,11 +680,11 @@ fn eval_function_call(
                 let result = eval_statement(next.clone(), context, vm).map_err(|e| {
                     // This is cool, if it does what I think it does. We basically
                     // get the opportunity to look at the error, and do stuff with
-                    // it, and then let it contitue on as if nothing happened.
+                    // it, and then let it continue on as if nothing happened.
                     //
                     // Anyway, we need to clean up the stack frame if there was an
                     // error. I'm also considering abusing the error type to pass
-                    // through that we hit a return expression. I'm thinknig more
+                    // through that we hit a return expression. I'm thinking more
                     // and more that this is a Good Idea. Well, maybe just a good
                     // idea. We can basically just do an early, successful return.
                     //
@@ -742,10 +745,11 @@ fn eval_lambda_expression(
     debug!("ƛ {ƛ:?}");
     trace!("stack {:?}", context.memory);
 
-    span!("eval_function_call");
+    span!("eval_lambda_expression");
 
     let ƛ = s_read!(ƛ);
-    let block = s_read!(lu_dog).exhume_block(&ƛ.block).unwrap();
+    // We know that we have a block.
+    let block = &ƛ.r73_block(&s_read!(lu_dog))[0];
     // let stmts = s_read!(block).r18_statement(&s_read!(lu_dog));
     let has_stmts = !s_read!(block).r18_statement(&s_read!(lu_dog)).is_empty();
 
@@ -1016,31 +1020,9 @@ fn eval_expression(
 
                 loop {
                     let result = eval_statement(next.clone(), context, vm).map_err(|e| {
-                        // This is cool, if it does what I think it does. We basically
-                        // get the opportunity to look at the error, and do stuff with
-                        // it, and then let it contitue on as if nothing happened.
-                        //
-                        // Anyway, we need to clean up the stack frame if there was an
-                        // error. I'm also considering abusing the error type to pass
-                        // through that we hit a return expression. I'm thinknig more
-                        // and more that this is a Good Idea. Well, maybe just a good
-                        // idea. We can basically just do an early, successful return.
-                        //
-                        // Well, that doesn't work: return applies to the closure.
                         context.memory.pop_frame();
-
-                        // if let ChaChaError::Return { value } = &e {
-                        //     let ty = value.get_type(&mut s_write!(lu_dog));
-                        //     return Ok((value, ty));
-                        // }
-
-                        // Err(e)
                         e
                     });
-
-                    // if let Err(ChaChaError::Return { value, ty }) = &result {
-                    //     return Ok((value.clone(), ty.clone()));
-                    // }
 
                     (value, ty) = result?;
 
@@ -1244,7 +1226,7 @@ fn eval_expression(
                                     // The VecDeque is so that I can pop off the args, and then push them
                                     // back onto a queue in the same order.
                                     // Gotta do this goofy thing because we don't have a first pointer,
-                                    // and thery aren't in order.
+                                    // and they aren't in order.
                                     let mut arg_values = VecDeque::with_capacity(args.len());
                                     let mut next = args
                                         .iter()
@@ -1916,7 +1898,7 @@ fn eval_expression(
             // list.par_iter().for_each(|item| {
             //     // This gives each thread it's own stack frame, and read only
             //     // access to the parent stack frame. I don't know that I love
-            //     // this solution. But it's a qucik hack to threading.
+            //     // this solution. But it's a quick hack to threading.
             //     let mut stack = context.stack.clone();
             //     stack.insert(ident.clone(), item.clone());
             //     eval_expression(block.clone(), &mut context.clone()).unwrap();
@@ -2224,27 +2206,6 @@ fn eval_expression(
                         BinaryEnum::Assignment(_) => {
                             // Type checking has already been handled by the compiler.
                             match &s_read!(lhs_expr).subtype {
-                                // 🚧 I'm sort of duplicating work here. It's not exactly the same
-                                // as the general expression handling code, but I think it's close
-                                // enough that I could make it work if I wanted to. And so I should.
-                                //
-                                // Hm. I've already processed the lhs above, and I'm basically doing
-                                // it again here.
-                                ExpressionEnum::VariableExpression(expr) => {
-                                    let rhs = {
-                                        let rhs = operator.rhs.unwrap();
-                                        let rhs = s_read!(lu_dog).exhume_expression(&rhs).unwrap();
-                                        eval_expression(rhs, context, vm)?
-                                    };
-                                    let expr =
-                                        s_read!(lu_dog).exhume_variable_expression(expr).unwrap();
-                                    let expr = s_read!(expr);
-                                    let name = expr.name.clone();
-                                    let value = context.memory.get(&name).unwrap();
-                                    let mut value = s_write!(value);
-                                    *value = s_read!(rhs.0).clone();
-                                    Ok(rhs)
-                                }
                                 ExpressionEnum::FieldAccess(field) => {
                                     let rhs = {
                                         let rhs = operator.rhs.unwrap();
@@ -2318,8 +2279,61 @@ fn eval_expression(
                                         Value::Empty.get_type(&s_read!(lu_dog)),
                                     ))
                                 }
-                                _ => Err(ChaChaError::BadJuJu {
-                                    message: "Bad LHS in assignment".to_owned(),
+                                ExpressionEnum::TypeCast(expr) => {
+                                    let rhs = {
+                                        let rhs = operator.rhs.unwrap();
+                                        let rhs = s_read!(lu_dog).exhume_expression(&rhs).unwrap();
+                                        eval_expression(rhs, context, vm)?
+                                    };
+                                    let expr = s_read!(lu_dog).exhume_type_cast(expr).unwrap();
+                                    let expr =
+                                        s_read!(expr).r68_expression(&s_read!(lu_dog))[0].clone();
+                                    // We are going to assume that the lhs, that we just read, is
+                                    // in fact a variable expression. I honestly don't know what else
+                                    // it could be, since LHS expression manipulation is weird. I
+                                    // don't think it really makes any sense, but maybe I'm wrong.
+                                    let result = if let ExpressionEnum::VariableExpression(ref id) =
+                                        s_read!(expr).subtype
+                                    {
+                                        let expr =
+                                            s_read!(lu_dog).exhume_variable_expression(id).unwrap();
+                                        let name = s_read!(expr).name.clone();
+                                        let value = context.memory.get(&name).unwrap();
+                                        let mut value = s_write!(value);
+                                        *value = s_read!(rhs.0).clone();
+                                        Ok(rhs)
+                                    } else {
+                                        Err(ChaChaError::BadJuJu {
+                                            message: "Attempt to assign to non-variable".to_owned(),
+                                            location: location!(),
+                                        })
+                                    };
+
+                                    result
+                                }
+                                // 🚧 I'm sort of duplicating work here. It's not exactly the same
+                                // as the general expression handling code, but I think it's close
+                                // enough that I could make it work if I wanted to. And so I should.
+                                //
+                                // Hm. I've already processed the lhs above, and I'm basically doing
+                                // it again here.
+                                ExpressionEnum::VariableExpression(expr) => {
+                                    let rhs = {
+                                        let rhs = operator.rhs.unwrap();
+                                        let rhs = s_read!(lu_dog).exhume_expression(&rhs).unwrap();
+                                        eval_expression(rhs, context, vm)?
+                                    };
+                                    let expr =
+                                        s_read!(lu_dog).exhume_variable_expression(expr).unwrap();
+                                    let expr = s_read!(expr);
+                                    let name = expr.name.clone();
+                                    let value = context.memory.get(&name).unwrap();
+                                    let mut value = s_write!(value);
+                                    *value = s_read!(rhs.0).clone();
+                                    Ok(rhs)
+                                }
+                                lhs => Err(ChaChaError::BadJuJu {
+                                    message: format!("Bad LHS in assignment: {lhs:?}"),
                                     location: location!(),
                                 }),
                             }
@@ -3078,7 +3092,7 @@ pub fn start_tui_repl(mut context: Context) -> (Sender<DebuggerControl>, Receive
 
     // Worker thread
     //
-    // This guy listens for statemntes and executes them. It relies on the state
+    // This guy listens for statements and executes them. It relies on the state
     // of the condition variable and mutexes to know how to behave.
     thread::Builder::new()
         .name("worker".into())
@@ -3199,7 +3213,7 @@ pub fn start_vm(n: DwarfInteger) -> Result<DwarfInteger, Error> {
     thonk.add_instruction(Instruction::PushLocal(0));
     // push 1
     thonk.add_instruction(Instruction::Push(new_ref!(Value, 1.into())));
-    // Chcek if it's <= 1
+    // Check if it's <= 1
     // lte
     thonk.add_instruction(Instruction::LessThanOrEqual);
     // jne
@@ -3207,7 +3221,7 @@ pub fn start_vm(n: DwarfInteger) -> Result<DwarfInteger, Error> {
     // If false return 1
     thonk.add_instruction(Instruction::Push(new_ref!(Value, 1.into())));
     thonk.add_instruction(Instruction::Return);
-    // return fidbn-1) + fib(n-2)
+    // return fib(n-1) + fib(n-2)
     // Load fib
     thonk.add_instruction(Instruction::Push(new_ref!(Value, Value::Thonk("fib", 0))));
     // load n
