@@ -1,0 +1,13 @@
+struct Foo {}
+
+impl Foo {
+    fn new() -> Self {
+        Foo {}
+    }
+
+    struct Bar {}
+
+    fn bar(self) -> Self {
+        self
+    }
+}

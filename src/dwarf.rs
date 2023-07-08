@@ -94,7 +94,7 @@ pub enum DwarfError {
     /// Implementation Block Error
     ///
     /// An impl block may only contain functions.
-    #[snafu(display("\n{}: impl blocks may only contain functions.\n  --> {}..{}", C_ERR.bold().paint("error"), span.start, span.end))]
+    #[snafu(display("impl blocks may only contain functions."))]
     ImplementationBlock { span: Span },
 
     /// Internal Error
