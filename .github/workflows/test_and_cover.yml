@@ -1,4 +1,4 @@
-name: Rust Test and Code Coverage
+name: Test and Coverage
 
 on:
     workflow_dispatch:

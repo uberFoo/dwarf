@@ -640,7 +640,6 @@ dependencies = [
  "hyper",
  "lazy_static",
  "log",
- "names",
  "no_deadlocks",
  "num-format",
  "parking_lot",

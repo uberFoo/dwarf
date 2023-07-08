@@ -1,0 +1,21 @@
+{
+    "Role": {
+        "Path": "/",
+        "RoleName": "rust-role",
+        "RoleId": "AROAUJ2TX35FZEXNMNTFO",
+        "Arn": "arn:aws:iam::295991500619:role/rust-role",
+        "CreateDate": "2023-06-09T11:57:40Z",
+        "AssumeRolePolicyDocument": {
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Effect": "Allow",
+                    "Principal": {
+                        "Service": "lambda.amazonaws.com"
+                    },
+                    "Action": "sts:AssumeRole"
+                }
+            ]
+        }
+    }
+}

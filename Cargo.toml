@@ -51,7 +51,6 @@ heck = "0.4.1"
 hyper = { version = "0.14.26", optional = true }
 lazy_static = "1.4.0"
 log = "0.4.18"
-names = "0.14.0"
 no_deadlocks = { git = "https://github.com/uberFoo/no-deadlocks" }
 num-format = "0.4.4"
 parking_lot = { version = "0.12.1", features = [

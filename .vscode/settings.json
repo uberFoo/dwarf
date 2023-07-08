@@ -1,0 +1,28 @@
+{
+    "cSpell.words": [
+        "ariadne",
+        "bspan",
+        "codecov",
+        "codepoints",
+        "cspan",
+        "CVAR",
+        "defn",
+        "embeddable",
+        "fspan",
+        "IIRC",
+        "impls",
+        "metamodel",
+        "powi",
+        "readline",
+        "Readline",
+        "rustyline",
+        "shouty",
+        "tokio",
+        "tracy",
+        "tspan",
+        "UDT",
+        "UDTs"
+    ],
+    "rust-analyzer.showUnlinkedFileNotification": false,
+    "git.ignoreLimitWarning": true
+}

@@ -2167,6 +2167,8 @@ fn eval_expression(
                     Ok((new_ref!(Value, value), ty))
                 }
             };
+
+            #[allow(clippy::let_and_return)]
             z
         }
         //
@@ -2310,6 +2312,7 @@ fn eval_expression(
                                         })
                                     };
 
+                                    #[allow(clippy::let_and_return)]
                                     result
                                 }
                                 // 🚧 I'm sort of duplicating work here. It's not exactly the same
@@ -2568,10 +2571,14 @@ fn eval_expression(
                     // This is where we add the attribute value to the user type.
                     user_type.add_attr(&name, value);
                 } else {
+                    let x_value = &s_read!(expr).r11_x_value(&lu_dog)[0];
+                    let span = &s_read!(x_value).r63_span(&lu_dog)[0];
+                    let span = s_read!(span).start as usize..s_read!(span).end as usize;
                     ensure!(
                         false,
                         NoSuchFieldSnafu {
                             field: name.to_owned(),
+                            span,
                         }
                     );
                 }
@@ -3148,9 +3155,7 @@ pub fn start_tui_repl(mut context: Context) -> (Sender<DebuggerControl>, Receive
                             }
                         }
                         Err(e) => {
-                            to_ui_write
-                                .send(DebuggerStatus::Error(format!("{}", e)))
-                                .unwrap();
+                            to_ui_write.send(DebuggerStatus::Error(e)).unwrap();
                         }
                     },
                     Err(RecvTimeoutError::Timeout) => {}
@@ -3177,7 +3182,7 @@ pub fn start_main(stopped: bool, mut context: Context) -> Result<(Value, Context
     let vm_stack = stack.clone();
     let mut vm = VM::new(&vm_stack);
 
-    let result = if let Some(main) = stack.get("main") {
+    if let Some(main) = stack.get("main") {
         // This should fail if it's not a function. Actually, I think that it _has_
         // to be a function. Unless there's another named item that I'm not thinking
         // of. I mean, maybe `use main;`  would trigger this to return OK(()), and
@@ -3200,9 +3205,7 @@ pub fn start_main(stopped: bool, mut context: Context) -> Result<(Value, Context
         }
     } else {
         Err(Error(ChaChaError::NoMainFunction))
-    };
-
-    result
+    }
 }
 
 pub fn start_vm(n: DwarfInteger) -> Result<DwarfInteger, Error> {

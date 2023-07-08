@@ -157,6 +157,7 @@ impl Value {
             Value::Function(ref func) => {
                 let func = lu_dog.exhume_function(&s_read!(func).id).unwrap();
                 let z = s_read!(func).r1_value_type(lu_dog)[0].clone();
+                #[allow(clippy::let_and_return)]
                 z
             }
             Value::Float(_) => {
@@ -184,6 +185,7 @@ impl Value {
             Value::Lambda(ref ƛ) => {
                 let ƛ = lu_dog.exhume_lambda(&s_read!(ƛ).id).unwrap();
                 let ƛ_type = s_read!(ƛ).r1_value_type(lu_dog)[0].clone();
+                #[allow(clippy::let_and_return)]
                 ƛ_type
             }
             // 🚧 ProxyType

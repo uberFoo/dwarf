@@ -1,0 +1,122 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'chacha'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=chacha"
+                ],
+                "filter": {
+                    "name": "chacha",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'dwarfc'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=dwarfc",
+                    "--package=chacha"
+                ],
+                "filter": {
+                    "name": "dwarfc",
+                    "kind": "bin"
+                }
+            },
+            "args": [
+                "fib.tao",
+                "--sarzak",
+                "../sarzak/models/sarzak.json"
+            ],
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "RUST_LOG": "debug"
+            }
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'tui'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=tui",
+                    "--package=chacha"
+                ],
+                "filter": {
+                    "name": "tui",
+                    "kind": "bin"
+                }
+            },
+            "args": [
+                "mandelbrot.道",
+            ],
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "RUST_LOG": "debug"
+            }
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'dwarf'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=dwarf",
+                    "--package=dwarf",
+                    // "--features=\"parking-lot-mutex, print-std-out, repl\"",
+                    // "--no-default-features"
+                ],
+                "filter": {
+                    "name": "dwarf",
+                    "kind": "bin"
+                }
+            },
+            "args": [
+                "tests/string.tao",
+            ],
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "RUST_LOG": "compiler=debug"
+            },
+            "preRunCommands": [
+                "script lldb.debugger.HandleCommand('settings set target.source-map /rustc/{} \"{}/lib/rustlib/src/rust\"'.format(os.popen('rustc --version --verbose').read().split('commit-hash: ')[1].split('\\n')[0].strip(), os.popen('rustc --print sysroot').readline().strip()))"
+            ],
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'main'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=main",
+                    "--package=chacha"
+                ],
+                "filter": {
+                    "name": "main",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        }
+    ]
+}

@@ -1,0 +1,52 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'run_dwarf'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=run_dwarf",
+                    "--package=run_dwarf"
+                ],
+                "filter": {
+                    "name": "run_dwarf",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "RUST_LOG": "trace",
+                "AWS_LAMBDA_FUNCTION_VERSION": "1",
+                "AWS_LAMBDA_FUNCTION_MEMORY_SIZE": "4096",
+                "AWS_LAMBDA_RUNTIME_API": "http://[::]:9000/.rt",
+                "AWS_LAMBDA_FUNCTION_NAME": "run_dwarf",
+            }
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'run_dwarf'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=run_dwarf",
+                    "--package=run_dwarf"
+                ],
+                "filter": {
+                    "name": "run_dwarf",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        }
+    ]
+}

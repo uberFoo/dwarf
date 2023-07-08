@@ -133,8 +133,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         };
 
-        dbg!(sarzak.iter_object().collect::<Vec<_>>());
-
         let mut ctx = initialize_interpreter::<PathBuf>(sarzak, lu_dog, None)?;
         ctx.add_args(dwarf_args);
 

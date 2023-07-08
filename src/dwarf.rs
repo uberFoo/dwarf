@@ -317,7 +317,7 @@ impl fmt::Display for DwarfErrorReporter<'_, '_, '_> {
                     .with_message("struct field not found")
                     .with_label(
                         Label::new((file_name, span.to_owned()))
-                            .with_message(format!("unkwnown field {}", C_OTHER.paint(field)))
+                            .with_message(format!("unknown field {}", C_OTHER.paint(field)))
                             .with_color(Color::Red),
                     )
                     .finish()
@@ -510,11 +510,7 @@ impl Type {
                 let ty = Ty::new_float();
                 Ok(ValueType::new_ty(&ty, store))
             }
-            Type::Fn(params, return_) => {
-                let params = params
-                    .iter()
-                    .map(|param| param.0.into_value_type(span, store, models, sarzak))
-                    .collect::<Result<Vec<_>>>()?;
+            Type::Fn(_params, return_) => {
                 let return_ = return_.0.into_value_type(span, store, models, sarzak)?;
                 let ƛ = Lambda::new(None, &return_, store);
                 Ok(ValueType::new_lambda(&ƛ, store))

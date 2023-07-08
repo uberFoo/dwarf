@@ -4,7 +4,6 @@ use std::{fs::File, io::prelude::*, ops::Range, path::PathBuf};
 use ansi_term::Colour;
 use heck::{ToShoutySnakeCase, ToUpperCamelCase};
 use log;
-use names::Generator;
 use sarzak::sarzak::{store::ObjectStore as SarzakStore, types::Ty, Object};
 use snafu::{location, Location};
 use tracy_client::Client;
@@ -2223,6 +2222,7 @@ fn inter_expression(
                 let woog_struct = lu_dog.exhume_woog_struct(&id).unwrap();
                 let x = lookup_woog_struct_method_type(&s_read!(woog_struct).name, method, lu_dog);
 
+                #[allow(clippy::let_and_return)]
                 x
             } else if let ValueTypeEnum::Ty(id) = s_read!(instance_ty).subtype {
                 let ty = sarzak.exhume_ty(&id).unwrap();
@@ -3064,65 +3064,13 @@ fn get_value_type(
                 get_value_type(&return_type.0, span, enclosing_type, lu_dog, models, sarzak)?;
             let lambda = Lambda::new(None, &return_type, lu_dog);
             let mut last_param_uuid: Option<usize> = None;
-            // for ((param_name, name_span), (param_ty, param_span)) in params {
-            //     debug!("param name {}", param_name);
-            //     debug!("param ty {}", param_ty);
-
-            //     let param = LambdaParameter::new(&lambda, None, lu_dog);
-
-            //     debug!("param {:?}", param);
-
-            //     let var = Variable::new_lambda_parameter(param_name.to_owned(), &param, lu_dog);
-            //     debug!("var {:?}", var);
-            //     // We need to introduce the values into the block, so that we don't
-            //     // error out when parsing the statements.
-            //     //
-            //     let param_ty =
-            //         match get_value_type(param_ty, param_span, None, lu_dog, models, sarzak) {
-            //             Ok(ty) => ty,
-            //             Err(mut e) => {
-            //                 errors.append(&mut e);
-            //                 continue;
-            //             }
-            //         };
-            //     debug!("param_ty {:?}", param_ty);
-            //     let value = XValue::new_variable(&block, &param_ty, &var, lu_dog);
-            //     LuDogSpan::new(
-            //         name_span.end as i64,
-            //         name_span.start as i64,
-            //         source,
-            //         None,
-            //         Some(&value),
-            //         lu_dog,
-            //     );
-            //     last_param_uuid = link_ƛ_parameter!(last_param_uuid, param, lu_dog);kts
-            // }
-            let mut names = Generator::default();
-            // let mut param_types = Vec::new();
-            for ((param_ty, param_span), param_name) in params.into_iter().zip(names) {
+            for (param_ty, param_span) in params {
                 let param_ty = get_value_type(param_ty, param_span, None, lu_dog, models, sarzak)?;
                 debug!("param_ty {:?}", param_ty);
 
                 let param = LambdaParameter::new(&lambda, None, Some(&param_ty), lu_dog);
-
                 debug!("param {:?}", param);
 
-                // param_types.push(param.clone());
-
-                // let var = Variable::new_lambda_parameter(param_name.to_owned(), &param, lu_dog);
-                // debug!("var {:?}", var);
-                // We need to introduce the values into the block, so that we don't
-                // error out when parsing the statements.
-                //
-                // let value = XValue::new_variable(&block, &param_ty, &var, lu_dog);
-                // LuDogSpan::new(
-                //     name_span.end as i64,
-                //     name_span.start as i64,
-                //     source,
-                //     None,
-                //     Some(&value),
-                //     lu_dog,
-                // );
                 last_param_uuid = link_ƛ_parameter!(last_param_uuid, param, lu_dog);
             }
 
@@ -3413,8 +3361,8 @@ pub(crate) struct PrintableValueType<'d, 'a, 'b, 'c>(
 impl<'d, 'a, 'b, 'c> fmt::Display for PrintableValueType<'d, 'a, 'b, 'c> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         const TY_CLR: Colour = Colour::Purple;
-        const TY_WARN_CLR: Colour = Colour::Yellow;
-        const TY_ERR_CLR: Colour = Colour::Red;
+        const _TY_WARN_CLR: Colour = Colour::Yellow;
+        const _TY_ERR_CLR: Colour = Colour::Red;
 
         let value = s_read!(self.0);
         let lu_dog = self.1;
