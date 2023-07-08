@@ -1,6 +1,5 @@
 .DS_Store
 **/target
-*.json
 *.tracy
 *.道
 woog_structs.rs

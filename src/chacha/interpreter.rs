@@ -2273,7 +2273,8 @@ fn eval_expression(
                                             })
                                         }
                                     }
-
+                                    // 🚧 I'm not sure that I like returning empty.
+                                    // OTOH, I don't know what else I'd return.
                                     Ok((
                                         new_ref!(Value, Value::Empty),
                                         Value::Empty.get_type(&s_read!(lu_dog)),

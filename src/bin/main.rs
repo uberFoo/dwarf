@@ -12,17 +12,10 @@ use dwarf::{
     chacha::dap::DapAdapter,
     dwarf::{new_lu_dog, parse_dwarf},
     initialize_interpreter,
-    interpreter::start_repl,
-    // merlin::{ErrorExpressionProxy, ExpressionProxy},
-    // merlin::{
-    //     AnchorProxy, BisectionProxy, EdgeProxy, GlyphProxy, LineProxy, LineSegmentPointProxy,
-    //     LineSegmentProxy, PointProxy, RelationshipNameProxy, RelationshipPhraseProxy, XBoxProxy,
-    // },
-    interpreter::{banner2, start_main},
+    interpreter::{banner2, start_main, start_repl},
+    lu_dog::ObjectStore as LuDogStore,
+    sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL},
 };
-
-use sarzak::lu_dog::ObjectStore as LuDogStore;
-use sarzak::sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL};
 
 #[cfg(not(feature = "repl"))]
 compile_error!("The REPL requires the \"repl\" feature flag..");
@@ -139,6 +132,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 return Ok(());
             }
         };
+
+        dbg!(sarzak.iter_object().collect::<Vec<_>>());
 
         let mut ctx = initialize_interpreter::<PathBuf>(sarzak, lu_dog, None)?;
         ctx.add_args(dwarf_args);

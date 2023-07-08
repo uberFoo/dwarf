@@ -653,7 +653,6 @@ dependencies = [
  "serde_json",
  "snafu",
  "syntect",
- "tests",
  "tokio",
  "tracing",
  "tracy-client",
@@ -2048,12 +2047,6 @@ checksum = "be55cf8942feac5c765c2c993422806843c9a9a45d4d5c407ad6dd2ea95eb9b6"
 dependencies = [
  "winapi-util",
 ]
-
-[[package]]
-name = "tests"
-version = "0.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fad3c473829fd9e353d4b176269858a55a037e0141bea095890afdbdd316062a"
 
 [[package]]
 name = "textwrap"

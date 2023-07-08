@@ -18,8 +18,8 @@ pub mod dwarf;
 ))]
 pub mod tui;
 pub(crate) mod value;
-// pub mod merlin;
 // pub(crate) mod woog_structs;
+// pub mod lu_dog_proxy;
 
 pub use ::sarzak::{lu_dog, sarzak};
 pub use chacha::interpreter::{self, initialize_interpreter};

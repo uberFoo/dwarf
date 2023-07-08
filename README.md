@@ -2,6 +2,7 @@
 
 ![Build Status](https://github.com/uberFoo/dwarf/workflows/Rust%20Test%20and%20Code%20Coverage/badge.svg)
 [![codecov](https://codecov.io/gh/uberFoo/dwarf/branch/develop/graph/badge.svg?token=D2DEOU0S6E)](https://codecov.io/gh/uberFoo/dwarf)
+![Lines of Code](https://tokei.rs/b1/github/uberfoo/dwarf)
 
 # The dwarf Programming Language
 
