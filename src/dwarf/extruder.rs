@@ -204,6 +204,12 @@ impl<'a> ConveyImpl<'a> {
 }
 
 pub struct Context<'a> {
+    pub location: Location,
+    pub struct_fields: Vec<(
+        RefType<WoogStruct>,
+        Vec<(Spanned<String>, Spanned<Type>)>,
+        Location,
+    )>,
     pub check_types: bool,
     pub source: RefType<DwarfSourceFile>,
     pub models: &'a [SarzakStore],
@@ -251,6 +257,8 @@ pub fn new_lu_dog(
         let _client = Client::start();
 
         let mut context = Context {
+            location: location!(),
+            struct_fields: Vec::new(),
             check_types: true,
             source: DwarfSourceFile::new(source, &mut lu_dog),
             models,
@@ -294,13 +302,25 @@ fn walk_tree(
 
     let mut errors = Vec::new();
     // Put the type information in first.
-    for ConveyStruct { name, span, fields } in structs {
+    // This first pass over the structs just records the name, but not the fields.
+    // We wait until we've seen all of the structs to do that.
+    for ConveyStruct { name, span, fields } in &structs {
         debug!("Interning struct {}", name);
-        let _ = inter_struct(name, fields, span, context, lu_dog).map_err(|mut e| {
+        let _ = inter_struct(name, span, fields, context, lu_dog).map_err(|mut e| {
             errors.append(&mut e);
         });
     }
 
+    for _ in structs {
+        let params = context.struct_fields.drain(..).collect::<Vec<_>>();
+        for (woog_struct, fields, location) in params {
+            let _ = inter_struct_fields(woog_struct, &fields, location, context, lu_dog).map_err(
+                |mut e| {
+                    errors.append(&mut e);
+                },
+            );
+        }
+    }
     // Using the type information, and the input, inter the implementation blocks.
     for ConveyImpl { name, span, funcs } in implementations {
         debug!("Interning implementation {}", name);
@@ -386,6 +406,7 @@ fn inter_func(
         unreachable!()
     };
 
+    context.location = location!();
     let ret_ty = get_value_type(&return_type.0, &return_type.1, impl_ty, context, lu_dog)?;
 
     let func = Function::new(name.to_owned(), &block, impl_block, &ret_ty, lu_dog);
@@ -416,6 +437,7 @@ fn inter_func(
         // We need to introduce the values into the block, so that we don't
         // error out when parsing the statements.
         //
+        context.location = location!();
         let param_ty = match get_value_type(param_ty, param_span, impl_ty, context, lu_dog) {
             Ok(ty) => ty,
             Err(mut e) => {
@@ -513,7 +535,11 @@ pub fn inter_statement(
                 //     inter_import(path, alias, &s_read!(source).source, span, lu_dog)?
                 // }
                 Item::Struct((name, span), fields) => {
-                    inter_struct(name, fields, span, context, lu_dog)?
+                    inter_struct(name, span, fields, context, lu_dog).and_then(|_| {
+                        // There had better be one and only one.
+                        let (woog_struct, fields, location) = context.struct_fields.pop().unwrap();
+                        inter_struct_fields(woog_struct, &fields, location, context, lu_dog)
+                    })?
                 }
                 _ => unimplemented!(),
             };
@@ -524,7 +550,7 @@ pub fn inter_statement(
         //
         // Let
         //
-        ParserStatement::Let((var_name, _var_span), type_, (expr, expr_span)) => {
+        ParserStatement::Let((var_name, var_span), type_, (expr, expr_span)) => {
             // Setup the local variable that is the LHS of the statement.
             let local = LocalVariable::new(Uuid::new_v4(), lu_dog);
             let var = Variable::new_local_variable(var_name.to_owned(), &local, lu_dog);
@@ -566,16 +592,15 @@ pub fn inter_statement(
             }
 
             // Create a variable, now that we have a type from the expression.
-            let _value = XValue::new_variable(block, &ty, &var, lu_dog);
-            // 🚧 Was this causing a crash?
-            // LuDogSpan::new(
-            //     var_span.end as i64,
-            //     var_span.start as i64,
-            //     source,
-            //     Some(&value),
-            //     None,
-            //     lu_dog,
-            // );
+            let value = XValue::new_variable(block, &ty, &var, lu_dog);
+            LuDogSpan::new(
+                var_span.end as i64,
+                var_span.start as i64,
+                &context.source,
+                None,
+                Some(&value),
+                lu_dog,
+            );
 
             // Setup the let statement itself.
             let stmt = LetStatement::new(&expr.0, &local, lu_dog);
@@ -784,6 +809,7 @@ fn inter_expression(
             )?;
             debug!("As lhs: {expr:?}: {expr_ty:?}");
 
+            context.location = location!();
             let as_type = get_value_type(&ty.0, &ty.1, None, context, lu_dog)?;
             let as_op = TypeCast::new(&expr.0, &as_type, lu_dog);
             let expr = Expression::new_type_cast(&as_op, lu_dog);
@@ -825,7 +851,6 @@ fn inter_expression(
         // Assignment
         //
         ParserExpression::Assignment(ref lhs_p, ref rhs_p) => {
-            // dbg!("raw", &lhs_p, &rhs_p);
             let (lhs, lhs_ty) = inter_expression(
                 &new_ref!(ParserExpression, lhs_p.0.to_owned()),
                 &lhs_p.1,
@@ -1146,12 +1171,14 @@ fn inter_expression(
                             Err(vec![DwarfError::StructFieldNotFound {
                                 field: rhs.0.clone(),
                                 span,
+                                location: location!(),
                             }])
                         }
                     } else {
                         Err(vec![DwarfError::StructFieldNotFound {
                             field: rhs.0.clone(),
                             span: rhs.1.to_owned(),
+                            location: location!(),
                         }])
                     }
                 }
@@ -1562,6 +1589,7 @@ fn inter_expression(
                 unreachable!();
             };
 
+            context.location = location!();
             let ret_ty = get_value_type(&return_type.0, &return_type.1, None, context, lu_dog)?;
 
             let lambda = Lambda::new(Some(&block), &ret_ty, lu_dog);
@@ -1582,6 +1610,7 @@ fn inter_expression(
                 // We need to introduce the values into the block, so that we don't
                 // error out when parsing the statements.
                 //
+                context.location = location!();
                 let param_ty = match get_value_type(param_ty, param_span, None, context, lu_dog) {
                     Ok(ty) => ty,
                     Err(mut e) => {
@@ -2351,14 +2380,15 @@ fn inter_expression(
                 lu_dog,
             )?;
 
-            // 🚧 Missing span...
             let value = XValue::new_expression(block, &ty, &expr.0, lu_dog);
+            s_write!(span).x_value = Some(s_read!(value).id);
+
             let some = ZSome::new(&value, lu_dog);
             let expr = Expression::new_z_some(&some, lu_dog);
             let option = WoogOption::new_z_some(&ty, &some, lu_dog);
             let ty = ValueType::new_woog_option(&option, lu_dog);
-            let value = XValue::new_expression(block, &ty, &expr, lu_dog);
 
+            let value = XValue::new_expression(block, &ty, &expr, lu_dog);
             s_write!(span).x_value = Some(s_read!(value).id);
 
             Ok(((expr, span), ty))
@@ -2475,6 +2505,7 @@ fn inter_expression(
                     return Err(vec![DwarfError::UnknownType {
                         ty: name.to_owned(),
                         span: name_span.to_owned(),
+                        location: location!(),
                     }])
                 }
             };
@@ -2495,9 +2526,32 @@ fn inter_expression(
                 let field = FieldExpression::new(name.0.to_owned(), &field_expr.0, &expr, lu_dog);
 
                 let expr = Expression::new_field_expression(&field, lu_dog);
-                // Adding the following actually breaks shit.
                 let value = XValue::new_expression(block, &ty, &expr, lu_dog);
-                s_write!(field_expr.1).x_value = Some(s_read!(value).id);
+
+                // This is exceptional, at least so for. What's happening is that
+                // the span is already pointing at a value. We've been clobbering
+                // it successfully until the following case:
+                // ```
+                // // Does not work
+                // Foo { bar: Bar::new()}
+                // // Works
+                // Foo { bar: Uuid::new()}
+                // ```
+                // So what do we do? Well I tried not overwriting, and lot's of
+                // stuff broke. And really, it's two different values pointing at
+                // the same span. So I just cloned it and inserted it.
+                //
+                // The thing that bothers me is where else might this be happening?
+                if s_read!(field_expr.1).x_value.is_none() {
+                    s_write!(field_expr.1).x_value = Some(s_read!(value).id);
+                } else {
+                    lu_dog.inter_span(|id| {
+                        let mut span = s_read!(field_expr.1).clone();
+                        span.x_value = Some(s_read!(value).id);
+                        span.id = id;
+                        new_ref!(LuDogSpan, span)
+                    });
+                }
             }
 
             // Same name, de_sanitized, in a different model. Oh, right, this is
@@ -2625,6 +2679,7 @@ fn inter_implementation(
 ) -> Result<()> {
     let name = name.de_sanitize();
 
+    context.location = location!();
     let impl_ty = get_value_type(
         &Type::UserType((name.to_owned(), 0..0)),
         span,
@@ -2692,15 +2747,17 @@ fn inter_implementation(
 
 fn inter_struct(
     name: &str,
-    fields: &[(Spanned<String>, Spanned<Type>)],
     _span: &Span,
-    context: &Context,
+    fields: &[(Spanned<String>, Spanned<Type>)],
+    context: &mut Context,
     lu_dog: &mut LuDogStore,
 ) -> Result<()> {
-    debug!("inter_struct {}", name);
+    debug!("inter_struct {name}");
     let s_name = name.de_sanitize();
 
-    let mut errors = Vec::new();
+    // Here we are looking for an object in one of the input models with the
+    // same name as the struct that we are interring. If it's found, we attach
+    // a pointer (to the object) to the struct.
     if let Some((model, ref id)) = context
         .models
         .iter()
@@ -2712,42 +2769,69 @@ fn inter_struct(
             None => return Err(vec![DwarfError::ObjectIdNotFound { id: *id }]),
         };
 
-        let mt = WoogStruct::new(
+        let woog_struct = WoogStruct::new(
             name.to_owned(),
             Some(&new_ref!(Object, obj.to_owned())),
             lu_dog,
         );
-        let _ = WoogItem::new_woog_struct(&context.source, &mt, lu_dog);
-        let _ty = ValueType::new_woog_struct(&mt, lu_dog);
-        for ((name, _), (type_, span)) in fields {
-            let name = name.de_sanitize();
+        let _ = WoogItem::new_woog_struct(&context.source, &woog_struct, lu_dog);
+        let _ty = ValueType::new_woog_struct(&woog_struct, lu_dog);
+        context
+            .struct_fields
+            .push((woog_struct, fields.to_owned(), location!()));
 
-            let ty = match get_value_type(type_, span, None, context, lu_dog) {
-                Ok(ty) => ty,
-                Err(mut err) => {
-                    errors.append(&mut err);
-                    continue;
-                }
-            };
-            let _field = Field::new(name.to_owned(), &mt, &ty, lu_dog);
-        }
+        Ok(())
     } else {
-        let mt = WoogStruct::new(name.to_owned(), None, lu_dog);
-        let _ty = ValueType::new_woog_struct(&mt, lu_dog);
-        for ((name, _), (type_, span)) in fields {
-            let name = name.de_sanitize();
+        // This is just a plain vanilla user defined type.
+        let woog_struct = WoogStruct::new(name.to_owned(), None, lu_dog);
+        let _ty = ValueType::new_woog_struct(&woog_struct, lu_dog);
+        context
+            .struct_fields
+            .push((woog_struct, fields.to_owned(), location!()));
 
-            let ty = match get_value_type(type_, span, None, context, lu_dog) {
-                Ok(ty) => ty,
-                Err(mut err) => {
-                    errors.append(&mut err);
-                    continue;
-                }
-            };
-            let _field = Field::new(name.to_owned(), &mt, &ty, lu_dog);
-        }
+        Ok(())
+        // for ((name, _), (type_, span)) in fields {
+        //     let name = name.de_sanitize();
+
+        //     context.location = location!();
+        //     let ty = match get_value_type(type_, span, None, context, lu_dog) {
+        //         Ok(ty) => ty,
+        //         Err(mut err) => {
+        //             errors.append(&mut err);
+        //             continue;
+        //         }
+        //     };
+        //     let _field = Field::new(name.to_owned(), &woog_struct, &ty, lu_dog);
+        // }
+        // if errors.is_empty() {
+        //     Ok(())
+        // } else {
+        //     Err(errors)
+        // }
     }
+}
 
+fn inter_struct_fields(
+    woog_struct: RefType<WoogStruct>,
+    fields: &[(Spanned<String>, Spanned<Type>)],
+    location: Location,
+    context: &mut Context,
+    lu_dog: &mut LuDogStore,
+) -> Result<()> {
+    let mut errors = Vec::new();
+    for ((name, _), (type_, span)) in fields {
+        let name = name.de_sanitize();
+
+        context.location = location;
+        let ty = match get_value_type(type_, span, None, context, lu_dog) {
+            Ok(ty) => ty,
+            Err(mut err) => {
+                errors.append(&mut err);
+                continue;
+            }
+        };
+        let _field = Field::new(name.to_owned(), &woog_struct, &ty, lu_dog);
+    }
     if errors.is_empty() {
         Ok(())
     } else {
@@ -2906,12 +2990,13 @@ fn get_value_type(
                 }) {
                     Ok(ValueType::new_ty(ty, lu_dog))
                 } else if let Some(ref id) = lu_dog.exhume_woog_struct_id_by_name(name) {
-                    let ws = lu_dog.exhume_woog_struct(id).unwrap();
-                    Ok(ValueType::new_woog_struct(&ws, lu_dog))
+                    let woog_struct = lu_dog.exhume_woog_struct(id).unwrap();
+                    Ok(ValueType::new_woog_struct(&woog_struct, lu_dog))
                 } else {
                     Err(vec![DwarfError::UnknownType {
                         ty: name.to_owned(),
                         span: span.to_owned(),
+                        location: context.location,
                     }])
                 }
             }
@@ -2920,7 +3005,7 @@ fn get_value_type(
             let ty = Ty::new_s_uuid();
             Ok(ValueType::new_ty(&ty, lu_dog))
         }
-        道 => todo!("{:?}", 道),
+        道 => todo!("get_value_type missing implementation for {:?}", 道),
     }
 }
 

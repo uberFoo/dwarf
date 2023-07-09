@@ -81,19 +81,19 @@ macro_rules! debug {
     };
 }
 
-// macro_rules! error {
-//     ($($arg:tt)*) => {
-//         log::error!(
-//             target: "chacha",
-//             "{}: {}\n  --> {}:{}:{}",
-//             Colour::Red.dimmed().italic().paint(function!()),
-//             format_args!($($arg)*),
-//             file!(),
-//             line!(),
-//             column!()
-//         );
-//     };
-// }
+macro_rules! error {
+    ($($arg:tt)*) => {
+        log::error!(
+            target: "chacha",
+            "{}: {}\n  --> {}:{}:{}",
+            Colour::Red.dimmed().italic().paint(function!()),
+            format_args!($($arg)*),
+            file!(),
+            line!(),
+            column!()
+        );
+    };
+}
 
 macro_rules! fix_debug {
     ($msg:literal, $($arg:expr),*) => {
@@ -1430,8 +1430,8 @@ fn eval_expression(
 
                     let ty = &s_read!(meth).ty;
                     let func = &s_read!(meth).func;
-                    fix_debug!("StaticMethodCall ty", ty);
-                    fix_debug!("StaticMethodCall func", func);
+                    debug!("StaticMethodCall ty {ty:?}");
+                    debug!("StaticMethodCall func {func:?}");
 
                     // This is dirty. Down and dirty...
                     if ty == "Uuid" && func == "new" {
@@ -1664,14 +1664,15 @@ fn eval_expression(
                             }
                         }
                     } else if let Some(value) = context.memory.get_meta(ty, func) {
-                        fix_debug!("StaticMethodCall meta value", value);
+                        debug!("StaticMethodCall meta value {value:?}");
                         match &*s_read!(value) {
                             Value::Function(ref func) => {
                                 let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
+                                debug!("StaticMethodCall::Function {value:?}");
                                 let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
                                 let func =
                                     s_read!(lu_dog).exhume_function(&s_read!(func).id).unwrap();
-                                fix_debug!("StaticMethodCall meta func", func);
+                                debug!("StaticMethodCall meta func {func:?}");
                                 let (value, ty) = eval_function_call(
                                     func,
                                     &args,
@@ -1680,12 +1681,12 @@ fn eval_expression(
                                     context,
                                     vm,
                                 )?;
-                                fix_debug!("StaticMethodCall meta value", value);
-                                fix_debug!("StaticMethodCall meta ty", ty);
+                                debug!("StaticMethodCall meta value {value:?}");
+                                debug!("StaticMethodCall meta ty {ty:?}");
                                 Ok((value, ty))
                             }
                             value => {
-                                fix_error!("deal with call expression", value);
+                                error!("deal with call expression {value:?}");
                                 Ok((
                                     new_ref!(Value, Value::Empty),
                                     Value::Empty.get_type(&s_read!(lu_dog)),
@@ -1693,7 +1694,7 @@ fn eval_expression(
                             }
                         }
                     } else if let Some(value) = context.memory.get(ty) {
-                        fix_debug!("StaticMethodCall frame value", value);
+                        debug!("StaticMethodCall frame value {value:?}");
                         match &mut *s_write!(value) {
                             Value::Function(ref func) => {
                                 let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
@@ -3126,6 +3127,8 @@ pub fn start_tui_repl(mut context: Context) -> (Sender<DebuggerControl>, Receive
                                     &new_ref!(crate::dwarf::Statement, stmt),
                                     &block,
                                     &mut ExtruderContext {
+                                        location: location!(),
+                                        struct_fields: Vec::new(),
                                         check_types: true,
                                         source: DwarfSourceFile::new(input, &mut lu_dog),
                                         models: &s_read!(models),
@@ -3376,6 +3379,8 @@ pub fn start_repl(mut context: Context) -> Result<(), Error> {
                             &new_ref!(crate::dwarf::Statement, stmt),
                             &block,
                             &mut ExtruderContext {
+                                location: location!(),
+                                struct_fields: Vec::new(),
                                 check_types: true,
                                 source: DwarfSourceFile::new(line.clone(), &mut lu_dog),
                                 models: &s_read!(models),

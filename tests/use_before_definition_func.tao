@@ -1,0 +1,7 @@
+fn main() {
+    chacha::assert_eq(foo(42), 42);
+}
+
+fn foo(x: int) -> int {
+    x
+}

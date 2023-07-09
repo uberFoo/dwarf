@@ -1,8 +1,26 @@
+struct UnoDosTresQuatro {
+    uno: int,
+    dos: int,
+    tres: int,
+    quatro: int,
+}
+
+impl UnoDosTresQuatro {
+    fn new() -> UnoDosTresQuatro {
+        UnoDosTresQuatro {
+            uno: 1,
+            dos: 2,
+            tres: 3,
+            quatro: 4,
+        }
+    }
+}
 struct Test {
     a: int,
     b: float,
     c: string,
     d: Uuid,
+    e: UnoDosTresQuatro,
 }
 
 fn main() {
@@ -11,5 +29,6 @@ fn main() {
         b: 3.14,
         c: "hello",
         d: Uuid::new(),
+        e: UnoDosTresQuatro::new(),
     };
 }
