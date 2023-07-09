@@ -1,0 +1,23 @@
+struct Foo {
+    bar: Bar,
+}
+
+struct Bar {
+    value: int,
+}
+
+impl Bar {
+    fn new(value: int) -> Bar {
+        Bar { value: value }
+    }
+
+    fn value(self) -> int {
+        self.value
+    }
+}
+
+fn main() {
+    let bar = Bar::new(42);
+    let foo = Foo { bar: bar };
+    chacha::assert_eq(foo.bar.value(), 42);
+}

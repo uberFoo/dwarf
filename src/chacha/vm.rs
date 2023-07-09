@@ -922,7 +922,7 @@ mod tests {
         let ty_name = PrintableValueType(&struct_ty, &ctx);
         let mut foo_inst = UserType::new(ty_name.to_string(), &struct_ty);
         foo_inst.add_attr("bar", new_ref!(Value, 42.into()));
-        foo_inst.add_attr("baz", new_ref!(Value, 3.14.into()));
+        foo_inst.add_attr("baz", new_ref!(Value, std::f64::consts::PI.into()));
 
         let memory = Memory::new();
         let mut vm = VM::new(&memory.0);
@@ -950,7 +950,7 @@ mod tests {
         assert!(result.is_ok());
 
         let result: DwarfFloat = (&*s_read!(result.unwrap())).try_into().unwrap();
-        assert_eq!(result, 3.14);
+        assert_eq!(result, std::f64::consts::PI);
     }
 
     #[test]

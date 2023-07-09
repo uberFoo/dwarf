@@ -5,7 +5,7 @@ use ariadne::{Color, Fmt, Label, Report, ReportKind, Source};
 use clap::Args;
 use sarzak::sarzak::{store::ObjectStore as SarzakStore, types::Ty};
 use serde::{Deserialize, Serialize};
-use snafu::{prelude::*, Location};
+use snafu::{location, prelude::*, Location};
 use uuid::Uuid;
 
 use crate::{
@@ -20,7 +20,7 @@ use crate::{
 pub mod extruder;
 pub mod parser;
 
-pub use extruder::{inter_statement, new_lu_dog};
+pub use extruder::{inter_statement, new_lu_dog, Context};
 pub use parser::{parse_dwarf, parse_line};
 
 pub type Span = ops::Range<usize>;
@@ -143,7 +143,11 @@ pub enum DwarfError {
     /// This is used when a struct field is used and it's not found on the struct
     /// definition.
     #[snafu(display("\n{}: Struct field not found: {field}\n  --> {}:{}", C_ERR.bold().paint("error"), span.start, span.end))]
-    StructFieldNotFound { field: String, span: Span },
+    StructFieldNotFound {
+        field: String,
+        span: Span,
+        location: Location,
+    },
 
     /// Object ID Lookup Error
     ///
@@ -185,7 +189,11 @@ pub enum DwarfError {
     ///
     /// This is used when a type is not found in any domain.
     #[snafu(display("\n{}: Unknown type: {ty}", C_ERR.bold().paint("error")))]
-    UnknownType { ty: String, span: Span },
+    UnknownType {
+        ty: String,
+        span: Span,
+        location: Location,
+    },
 }
 
 pub struct DwarfErrorReporter<'a, 'b, 'c>(pub &'a DwarfError, pub bool, pub &'b str, pub &'c str);
@@ -312,20 +320,37 @@ impl fmt::Display for DwarfErrorReporter<'_, '_, '_> {
                 }
                 Ok(())
             }
-            DwarfError::StructFieldNotFound { field, span } => {
-                Report::build(ReportKind::Error, file_name, span.start)
+            DwarfError::StructFieldNotFound {
+                field,
+                span,
+                location,
+            } => {
+                let report = Report::build(ReportKind::Error, file_name, span.start)
                     .with_message("struct field not found")
                     .with_label(
                         Label::new((file_name, span.to_owned()))
                             .with_message(format!("unknown field {}", C_OTHER.paint(field)))
                             .with_color(Color::Red),
-                    )
+                    );
+
+                let report = if is_uber {
+                    report.with_note(format!(
+                        "{}:{}:{}",
+                        C_OTHER.paint(location.file.to_string()),
+                        C_WARN.paint(format!("{}", location.line)),
+                        C_OK.paint(format!("{}", location.column)),
+                    ))
+                } else {
+                    report
+                };
+
+                report
                     .finish()
                     .write((file_name, Source::from(&program)), &mut std_err)
                     .map_err(|_| fmt::Error)?;
                 write!(f, "{}", String::from_utf8_lossy(&std_err))
             }
-            DwarfError::UnknownType { ty, span } => {
+            DwarfError::UnknownType { ty, span, location } => {
                 let msg = format!("Unknown type: `{}`.", ty);
 
                 let report = Report::build(ReportKind::Error, file_name, span.start)
@@ -336,7 +361,14 @@ impl fmt::Display for DwarfErrorReporter<'_, '_, '_> {
                             .with_color(Color::Red),
                     );
 
-                let report = if ty.contains('8')
+                let report = if is_uber {
+                    report.with_note(format!(
+                        "{}:{}:{}",
+                        C_OTHER.paint(location.file.to_string()),
+                        C_WARN.paint(format!("{}", location.line)),
+                        C_OK.paint(format!("{}", location.column)),
+                    ))
+                } else if ty.contains('8')
                     || ty.contains("16")
                     || ty.contains("32")
                     || ty.contains("64")
@@ -568,6 +600,7 @@ impl Type {
                     Err(vec![DwarfError::UnknownType {
                         ty: name.to_owned(),
                         span: span.to_owned(),
+                        location: location!(),
                     }])
                 }
             }

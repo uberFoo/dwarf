@@ -15,7 +15,7 @@ const FIB_SOURCE_FILE: &str = "./benches/fib.tao";
 fn mandelbrot(c: &mut Criterion) {
     let _client = Client::start();
     let source = fs::read_to_string(&MANDEL_SOURCE_FILE).unwrap();
-    let ast = parse_dwarf(&source).unwrap();
+    let ast = parse_dwarf("mandelbrot", &source).unwrap();
     let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
     let lu_dog = new_lu_dog(None, Some((source.clone(), &ast)), &[], &sarzak).unwrap();
 
@@ -29,7 +29,7 @@ fn mandelbrot(c: &mut Criterion) {
 fn fib(c: &mut Criterion) {
     let _client = Client::start();
     let source = fs::read_to_string(&FIB_SOURCE_FILE).unwrap();
-    let ast = parse_dwarf(&source).unwrap();
+    let ast = parse_dwarf("fib", &source).unwrap();
     let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
     let lu_dog = new_lu_dog(None, Some((source.clone(), &ast)), &[], &sarzak).unwrap();
 
