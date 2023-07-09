@@ -20,7 +20,7 @@ use crate::{
 pub mod extruder;
 pub mod parser;
 
-pub use extruder::{inter_statement, new_lu_dog};
+pub use extruder::{inter_statement, new_lu_dog, Context};
 pub use parser::{parse_dwarf, parse_line};
 
 pub type Span = ops::Range<usize>;

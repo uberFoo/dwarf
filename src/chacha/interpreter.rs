@@ -28,7 +28,7 @@ use crate::{
         memory::{Memory, MemoryUpdateMessage},
         vm::{CallFrame, Instruction, Thonk, VM},
     },
-    dwarf::{inter_statement, parse_line},
+    dwarf::{inter_statement, parse_line, Context as ExtruderContext},
     lu_dog::{
         Argument, Block, CallEnum, DwarfSourceFile, Expression, Function, Import, Lambda, List,
         LocalVariable, ObjectStore as LuDogStore, OperatorEnum, Span, Statement, StatementEnum,
@@ -3124,12 +3124,14 @@ pub fn start_tui_repl(mut context: Context) -> (Sender<DebuggerControl>, Receive
                                 let mut lu_dog = s_write!(lu_dog);
                                 match inter_statement(
                                     &new_ref!(crate::dwarf::Statement, stmt),
-                                    &DwarfSourceFile::new(input, &mut lu_dog),
                                     &block,
-                                    true,
+                                    &mut ExtruderContext {
+                                        check_types: true,
+                                        source: DwarfSourceFile::new(input, &mut lu_dog),
+                                        models: &s_read!(models),
+                                        sarzak: &s_read!(sarzak),
+                                    },
                                     &mut lu_dog,
-                                    &s_read!(models),
-                                    &s_read!(sarzak),
                                 ) {
                                     Ok(stmt) => stmt.0,
                                     Err(e) => {
@@ -3372,12 +3374,14 @@ pub fn start_repl(mut context: Context) -> Result<(), Error> {
                         let mut lu_dog = s_write!(lu_dog);
                         match inter_statement(
                             &new_ref!(crate::dwarf::Statement, stmt),
-                            &DwarfSourceFile::new(line.clone(), &mut lu_dog),
                             &block,
-                            true,
+                            &mut ExtruderContext {
+                                check_types: true,
+                                source: DwarfSourceFile::new(line.clone(), &mut lu_dog),
+                                models: &s_read!(models),
+                                sarzak: &s_read!(sarzak),
+                            },
                             &mut lu_dog,
-                            &s_read!(models),
-                            &s_read!(sarzak),
                         ) {
                             Ok(stmt) => stmt.0,
                             Err(errors) => {
