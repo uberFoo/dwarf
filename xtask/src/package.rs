@@ -146,12 +146,12 @@ impl Target {
         };
         let out_path = project_root.join("target").join(&name).join("release");
         let (exe_suffix, symbols_path) = if name.contains("-windows-") {
-            (".exe".into(), Some(out_path.join("rust_analyzer.pdb")))
+            (".exe".into(), Some(out_path.join("dwarf.pdb")))
         } else {
             (String::new(), None)
         };
-        let server_path = out_path.join(format!("rust-analyzer{exe_suffix}"));
-        let artifact_name = format!("rust-analyzer-{name}{exe_suffix}");
+        let server_path = out_path.join(format!("dwarf{exe_suffix}"));
+        let artifact_name = format!("dwarf-{name}{exe_suffix}");
         Self {
             name,
             server_path,
