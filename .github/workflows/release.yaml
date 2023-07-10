@@ -71,7 +71,9 @@ jobs:
 
             - name: Update apt repositories
               if: matrix.target == 'aarch64-unknown-linux-gnu' || matrix.target == 'arm-unknown-linux-gnueabihf'
-              run: sudo apt-get update
+              run: |
+                  sudo apt-get update
+                  sudo apt install libonig-dev
 
             - name: Install AArch64 target toolchain
               if: matrix.target == 'aarch64-unknown-linux-gnu'
