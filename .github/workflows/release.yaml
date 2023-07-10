@@ -1,4 +1,4 @@
-name: release
+name: Release
 on:
     schedule:
         - cron: '0 0 * * *' # midnight UTC
@@ -82,7 +82,7 @@ jobs:
               run: sudo apt-get install gcc-arm-linux-gnueabihf
 
             - name: Dist
-              run: cargo xtask dist --client-patch-version ${{ github.run_number }}
+              run: cargo xtask package --client-patch-version ${{ github.run_number }}
 
             - name: Run benchmarks
               if: matrix.target == 'x86_64-unknown-linux-gnu'
