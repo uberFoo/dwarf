@@ -188,4 +188,4 @@ jobs:
               with:
                   files: 'dist/*'
                   name: ${{ env.TAG }}
-                  token: ${{ secrets.PERSONAL_TOKEN }}
+                  token: ${{ secrets.DWARF_GITHUB_TOKEN }}
