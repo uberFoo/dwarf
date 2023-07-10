@@ -11,7 +11,10 @@
         "fspan",
         "IIRC",
         "impls",
+        "jemalloc",
         "metamodel",
+        "mimalloc",
+        "msvc",
         "powi",
         "readline",
         "Readline",
@@ -21,7 +24,8 @@
         "tracy",
         "tspan",
         "UDT",
-        "UDTs"
+        "UDTs",
+        "xflags"
     ],
     "rust-analyzer.showUnlinkedFileNotification": false,
     "git.ignoreLimitWarning": true
