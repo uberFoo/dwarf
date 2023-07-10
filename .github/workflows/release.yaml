@@ -132,7 +132,7 @@ jobs:
         needs: ['dist']
         steps:
             - run: echo "TAG=$(date --iso -u)" >> $GITHUB_ENV
-              if: github.ref == 'refs/heads/develop'
+              if: github.ref == 'refs/heads/master'
             - run: echo "TAG=nightly" >> $GITHUB_ENV
               if: github.ref != 'refs/heads/develop'
             - run: 'echo "TAG: $TAG"'
@@ -188,4 +188,4 @@ jobs:
               with:
                   files: 'dist/*'
                   name: ${{ env.TAG }}
-                  token: ${{ secrets.GITHUB_TOKEN }}
+                  token: ${{ secrets.PERSONAL_TOKEN }}
