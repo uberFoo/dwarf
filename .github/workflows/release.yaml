@@ -17,7 +17,7 @@ env:
     FETCH_DEPTH: 0 # pull in the tags for the version string
     MACOSX_DEPLOYMENT_TARGET: 10.15
     CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
-    CARGO_TARGET_ARM_UNKNOWN_LINUX_GNUEABIHF_LINKER: arm-linux-gnueabihf-gcc
+    # CARGO_TARGET_ARM_UNKNOWN_LINUX_GNUEABIHF_LINKER: arm-linux-gnueabihf-gcc
 
 jobs:
     dist:
@@ -35,8 +35,8 @@ jobs:
                       container: ubuntu:18.04
                     - os: ubuntu-20.04
                       target: aarch64-unknown-linux-gnu
-                    - os: ubuntu-20.04
-                      target: arm-unknown-linux-gnueabihf
+                    # - os: ubuntu-20.04
+                    #   target: arm-unknown-linux-gnueabihf
                     - os: macos-11
                       target: x86_64-apple-darwin
                     - os: macos-11
@@ -94,40 +94,41 @@ jobs:
                   name: dist-${{ matrix.target }}
                   path: ./dist
 
-    dist-x86_64-unknown-linux-musl:
-        name: dist (x86_64-unknown-linux-musl)
-        runs-on: ubuntu-latest
-        env:
-            RA_TARGET: x86_64-unknown-linux-musl
-            # For some reason `-crt-static` is not working for clang without lld
-            RUSTFLAGS: '-C link-arg=-fuse-ld=lld -C target-feature=-crt-static'
-        container:
-            image: rust:alpine
-            volumes:
-                - /usr/local/cargo/registry:/usr/local/cargo/registry
+    # dist-x86_64-unknown-linux-musl:
+    #     name: dist (x86_64-unknown-linux-musl)
+    #     runs-on: ubuntu-latest
+    #     env:
+    #         RA_TARGET: x86_64-unknown-linux-musl
+    #         # For some reason `-crt-static` is not working for clang without lld
+    #         RUSTFLAGS: '-C link-arg=-fuse-ld=lld -C target-feature=-crt-static'
+    #     container:
+    #         image: rust:alpine
+    #         volumes:
+    #             - /usr/local/cargo/registry:/usr/local/cargo/registry
 
-        steps:
-            - name: Install dependencies
-              run: apk add --no-cache git clang lld musl-dev nodejs npm
+    #     steps:
+    #         - name: Install dependencies
+    #           run: apk add --no-cache git clang lld musl-dev nodejs npm
 
-            - name: Checkout repository
-              uses: actions/checkout@v3
-              with:
-                  fetch-depth: ${{ env.FETCH_DEPTH }}
+    #         - name: Checkout repository
+    #           uses: actions/checkout@v3
+    #           with:
+    #               fetch-depth: ${{ env.FETCH_DEPTH }}
 
-            - name: Dist
-              run: cargo xtask dist --client-patch-version ${{ github.run_number }}
+    #         - name: Dist
+    #           run: cargo xtask package --client-patch-version ${{ github.run_number }}
 
-            - name: Upload artifacts
-              uses: actions/upload-artifact@v1
-              with:
-                  name: dist-x86_64-unknown-linux-musl
-                  path: ./dist
+    #         - name: Upload artifacts
+    #           uses: actions/upload-artifact@v1
+    #           with:
+    #               name: dist-x86_64-unknown-linux-musl
+    #               path: ./dist
 
     publish:
         name: publish
         runs-on: ubuntu-latest
-        needs: ['dist', 'dist-x86_64-unknown-linux-musl']
+        # needs: ['dist', 'dist-x86_64-unknown-linux-musl']
+        needs: ['dist']
         steps:
             - run: echo "TAG=$(date --iso -u)" >> $GITHUB_ENV
               if: github.ref == 'refs/heads/develop'
@@ -155,18 +156,18 @@ jobs:
               with:
                   name: dist-x86_64-unknown-linux-gnu
                   path: dist
-            - uses: actions/download-artifact@v1
-              with:
-                  name: dist-x86_64-unknown-linux-musl
-                  path: dist
+            # - uses: actions/download-artifact@v1
+            #   with:
+            #       name: dist-x86_64-unknown-linux-musl
+            #       path: dist
             - uses: actions/download-artifact@v1
               with:
                   name: dist-aarch64-unknown-linux-gnu
                   path: dist
-            - uses: actions/download-artifact@v1
-              with:
-                  name: dist-arm-unknown-linux-gnueabihf
-                  path: dist
+            # - uses: actions/download-artifact@v1
+            #   with:
+            #       name: dist-arm-unknown-linux-gnueabihf
+            #       path: dist
             - uses: actions/download-artifact@v1
               with:
                   name: dist-x86_64-pc-windows-msvc
