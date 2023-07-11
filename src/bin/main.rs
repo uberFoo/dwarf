@@ -1,6 +1,6 @@
 use std::{
     fs,
-    io::{BufReader, BufWriter},
+    io::{self, BufReader, BufWriter},
     net::TcpListener,
     path::PathBuf,
     thread,
@@ -16,9 +16,30 @@ use dwarf::{
     lu_dog::ObjectStore as LuDogStore,
     sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL},
 };
+use reqwest::Url;
 
 #[cfg(not(feature = "repl"))]
 compile_error!("The REPL requires the \"repl\" feature flag..");
+
+#[derive(Clone, Debug)]
+enum Source {
+    File(PathBuf),
+    Url(Url),
+}
+
+fn validate_source(s: &str) -> Result<Source, String> {
+    if s.starts_with("http") {
+        let url = Url::parse(s).map_err(|e| e.to_string())?;
+        Ok(Source::Url(url))
+    } else {
+        let path = PathBuf::from(s);
+        if path.exists() {
+            Ok(Source::File(path))
+        } else {
+            Err(format!("{} does not exist", s))
+        }
+    }
+}
 
 #[derive(Debug, Parser)]
 #[command(
@@ -46,7 +67,8 @@ struct Arguments {
     /// Dwarf Source File
     ///
     /// Path to the source file to execute.
-    source: Option<PathBuf>,
+    #[arg(value_parser=validate_source)]
+    source: Option<Source>,
     /// Debug Adapter Protocol (DAP) Backend
     ///
     /// Enable the DAP backend. This will start a TCP server on port 4711.
@@ -75,6 +97,11 @@ struct Arguments {
     /// This is like sudo mode. You probably don't want this.
     #[arg(long, action=ArgAction::SetTrue)]
     uber: Option<bool>,
+    /// Stdin
+    ///
+    /// Read source file from stdin.
+    #[arg(long, short, action=ArgAction::SetTrue)]
+    stdin: Option<bool>,
 }
 
 #[derive(Clone, Debug, Args)]
@@ -89,6 +116,7 @@ struct DwarfArgs {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     pretty_env_logger::init();
+    color_backtrace::install();
 
     let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
     let lu_dog = LuDogStore::new();
@@ -97,25 +125,51 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let bless = args.bless.is_some() && args.bless.unwrap();
     let is_uber = args.uber.is_some() && args.uber.unwrap();
 
-    if let Some(ref source) = args.source {
-        log::info!("Compiling source file {}", &source.display());
+    let input = if let Some(ref source) = args.source {
+        match source {
+            Source::File(source) => {
+                log::info!("Compiling source file {}", &source.display());
 
-        let file = args.source.clone().unwrap();
-        let file = if bless {
-            file.file_stem().unwrap().to_str().unwrap()
-        } else {
-            file.to_str().unwrap()
-        };
+                let file = source.clone();
+                let file = if bless {
+                    file.file_stem().unwrap().to_str().unwrap()
+                } else {
+                    file.to_str().unwrap()
+                };
 
-        let mut dwarf_args = vec![source.to_string_lossy().to_string()];
+                let source_code = fs::read_to_string(source)?;
+
+                let mut dwarf_args = vec![source.to_string_lossy().to_string()];
+                dwarf_args.extend(args.dwarf_args.args);
+
+                Some((source_code, dwarf_args, file.to_owned()))
+            }
+            Source::Url(url) => {
+                let response = reqwest::blocking::get(url.to_owned())?;
+                let source_code = response.text()?;
+
+                let mut dwarf_args = vec![url.to_string()];
+                dwarf_args.extend(args.dwarf_args.args);
+
+                Some((source_code, dwarf_args, url.to_string()))
+            }
+        }
+    } else if args.stdin.is_some() && args.stdin.unwrap() {
+        let mut source_code = String::new();
+        io::Read::read_to_string(&mut io::stdin(), &mut source_code)?;
+
+        let mut dwarf_args = vec!["stdin".to_owned()];
         dwarf_args.extend(args.dwarf_args.args);
 
-        let source_code = fs::read_to_string(source)?;
+        Some((source_code, dwarf_args, "stdin".to_owned()))
+    } else {
+        None
+    };
 
-        let ast = match parse_dwarf(file, &source_code) {
+    if let Some((source_code, dwarf_args, name)) = input {
+        let ast = match parse_dwarf(&name, &source_code) {
             Ok(ast) => ast,
             Err(_) => {
-                // eprintln!("{}", dwarf::dwarf::DwarfErrorReporter(&e, &source_code));
                 return Ok(());
             }
         };
@@ -126,7 +180,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 for err in errors {
                     eprintln!(
                         "{}",
-                        dwarf::dwarf::DwarfErrorReporter(&err, is_uber, &source_code, file)
+                        dwarf::dwarf::DwarfErrorReporter(&err, is_uber, &source_code, &name)
                     );
                 }
                 return Ok(());
@@ -140,23 +194,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("{}", banner2());
         }
 
-        let ctx = match start_main(false, ctx) {
-            Ok((_, ctx)) => ctx,
-            Err(e) => {
-                eprintln!("Interpreter exited with:");
-                eprintln!(
-                    "{}",
-                    dwarf::ChaChaErrorReporter(&e, is_uber, &source_code, file)
-                );
-                return Ok(());
-            }
-        };
-
         if args.repl.is_some() && args.repl.unwrap() {
             start_repl(ctx).map_err(|e| {
                 println!("Interpreter exited with: {}", e);
                 e
             })?;
+        } else {
+            match start_main(false, ctx) {
+                Ok((_, ctx)) => ctx,
+                Err(e) => {
+                    eprintln!("Interpreter exited with:");
+                    eprintln!(
+                        "{}",
+                        dwarf::ChaChaErrorReporter(&e, is_uber, &source_code, &name)
+                    );
+                    return Ok(());
+                }
+            };
         }
     } else if args.dap.is_some() && args.dap.unwrap() {
         let listener = TcpListener::bind("127.0.0.1:4711").unwrap();

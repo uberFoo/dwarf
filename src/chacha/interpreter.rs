@@ -3299,7 +3299,6 @@ pub fn start_repl(mut context: Context) -> Result<(), Error> {
     let vm_stack = context.memory.clone();
     let mut vm = VM::new(&vm_stack);
 
-    let error_style = Colour::Red;
     let prompt_style = Colour::Blue.normal();
     let result_style = Colour::Yellow.italic().dimmed();
     let type_style = Colour::Blue.italic().dimmed();
@@ -3368,60 +3367,64 @@ pub fn start_repl(mut context: Context) -> Result<(), Error> {
                     .map_err(|e| ChaChaError::RustyLine { source: e })?;
 
                 // Should do a regex here, or something.
-                if line == "@logo" {
-                    banner();
-                } else if let Ok(Some((stmt, _span))) = parse_line(&line) {
-                    fix_debug!("stmt from readline", stmt);
+                match parse_line(&line) {
+                    Ok(Some((stmt, _))) => {
+                        fix_debug!("stmt from readline", stmt);
 
-                    let stmt = {
-                        let mut lu_dog = s_write!(lu_dog);
-                        match inter_statement(
-                            &new_ref!(crate::dwarf::Statement, stmt),
-                            &block,
-                            &mut ExtruderContext {
-                                location: location!(),
-                                struct_fields: Vec::new(),
-                                check_types: true,
-                                source: DwarfSourceFile::new(line.clone(), &mut lu_dog),
-                                models: &s_read!(models),
-                                sarzak: &s_read!(sarzak),
-                            },
-                            &mut lu_dog,
-                        ) {
-                            Ok(stmt) => stmt.0,
-                            Err(errors) => {
-                                for e in errors {
-                                    println!("{}", e);
+                        let stmt = {
+                            let mut lu_dog = s_write!(lu_dog);
+                            match inter_statement(
+                                &new_ref!(crate::dwarf::Statement, stmt),
+                                &block,
+                                &mut ExtruderContext {
+                                    location: location!(),
+                                    struct_fields: Vec::new(),
+                                    check_types: true,
+                                    source: DwarfSourceFile::new(line.clone(), &mut lu_dog),
+                                    models: &s_read!(models),
+                                    sarzak: &s_read!(sarzak),
+                                },
+                                &mut lu_dog,
+                            ) {
+                                Ok(stmt) => stmt.0,
+                                Err(errors) => {
+                                    for e in errors {
+                                        println!("{}", e);
+                                    }
+                                    continue;
                                 }
-                                continue;
                             }
-                        }
-                    };
+                        };
 
-                    // 🚧 This needs fixing too.
-                    let eval = eval_statement(stmt.0, &mut context, &mut vm);
-                    // for i in context.drain_std_out() {
-                    //     println!("{}", i);
-                    // }
-                    match eval {
-                        Ok((value, ty)) => {
-                            let value = format!("{}", s_read!(value));
-                            print!("\n'{}'", result_style.paint(value));
+                        // 🚧 This needs fixing too.
+                        let eval = eval_statement(stmt.0, &mut context, &mut vm);
+                        // for i in context.drain_std_out() {
+                        //     println!("{}", i);
+                        // }
+                        match eval {
+                            Ok((value, ty)) => {
+                                let value = format!("{}", s_read!(value));
+                                print!("\n'{}'", result_style.paint(value));
 
-                            let ty = PrintableValueType(&ty, &context);
-                            let ty = format!("{}", ty);
-                            println!("\t  ──➤  {}", type_style.paint(ty));
-                        }
-                        Err(e) => {
-                            println!("{}", e);
-                            if let ChaChaError::Return { value: _, ty: _ } = e {
-                                println!("👋 Bye bye!");
-                                break;
+                                let ty = PrintableValueType(&ty, &context);
+                                let ty = format!("{}", ty);
+                                println!("\t  ──➤  {}", type_style.paint(ty));
+                            }
+                            Err(e) => {
+                                println!("{}", e);
+                                if let ChaChaError::Return { value: _, ty: _ } = e {
+                                    println!("👋 Bye bye!");
+                                    break;
+                                }
                             }
                         }
                     }
-                } else {
-                    println!("{}", error_style.paint("WTF?"));
+                    Ok(None) => {
+                        continue;
+                    }
+                    Err(e) => {
+                        eprintln!("{e}");
+                    }
                 }
             }
             Err(ReadlineError::Interrupted) => {
@@ -3439,9 +3442,10 @@ pub fn start_repl(mut context: Context) -> Result<(), Error> {
         }
     }
     // #[cfg(feature = "with-file-history")]
-    rl.save_history("history.txt")
+    rl.save_history(".dwarf.txt")
         .map_err(|e| ChaChaError::RustyLine { source: e })?;
 
+    drop(context);
     handle.join().unwrap();
 
     Ok(())

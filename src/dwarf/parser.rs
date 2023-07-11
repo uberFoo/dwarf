@@ -3749,7 +3749,7 @@ pub fn parse_line(src: &str) -> Result<Option<Spanned<Statement>>, String> {
     };
 
     if !errs.is_empty() || !parser.errors.is_empty() {
-        Err(report_errors(errs, parser.errors, "line", src))
+        Err(report_errors(errs, parser.errors, "REPL", src))
     } else {
         Ok(ast)
     }

@@ -61,6 +61,7 @@ parking_lot = { version = "0.12.1", features = [
 pretty_env_logger = "0.4.0"
 ratatui = { git = "https://github.com/uberFoo/ratatui" }
 rayon = "1.7.0"
+reqwest = { version = "0.11.18", features = ["blocking"] }
 rustyline = { version = "11.0.0", optional = true, features = [
     "derive",
     "with-file-history",
@@ -84,6 +85,7 @@ tui-textarea = { git = "https://github.com/uberFoo/tui-textarea", features = [
 tui-tree-widget = { git = "https://github.com/uberFoo/tui-rs-tree-widget" }
 unicode-segmentation = "1.10.1"
 uuid = { version = "1.3.1", features = ["v4", "serde"] }
+color-backtrace = "0.5.1"
 
 [dev-dependencies]
 criterion = { version = "0.4", features = ["html_reports"] }
