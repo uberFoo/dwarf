@@ -14,10 +14,10 @@ const FIB_SOURCE_FILE: &str = "./benches/fib.tao";
 
 fn mandelbrot(c: &mut Criterion) {
     let _client = Client::start();
-    let source = fs::read_to_string(&MANDEL_SOURCE_FILE).unwrap();
+    let source = fs::read_to_string(MANDEL_SOURCE_FILE).unwrap();
     let ast = parse_dwarf("mandelbrot", &source).unwrap();
     let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
-    let lu_dog = new_lu_dog(None, Some((source.clone(), &ast)), &[], &sarzak).unwrap();
+    let lu_dog = new_lu_dog(None, Some((source, &ast)), &[], &sarzak).unwrap();
 
     let ctx = initialize_interpreter::<PathBuf>(sarzak, lu_dog, None).unwrap();
 
@@ -28,10 +28,10 @@ fn mandelbrot(c: &mut Criterion) {
 
 fn fib(c: &mut Criterion) {
     let _client = Client::start();
-    let source = fs::read_to_string(&FIB_SOURCE_FILE).unwrap();
+    let source = fs::read_to_string(FIB_SOURCE_FILE).unwrap();
     let ast = parse_dwarf("fib", &source).unwrap();
     let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
-    let lu_dog = new_lu_dog(None, Some((source.clone(), &ast)), &[], &sarzak).unwrap();
+    let lu_dog = new_lu_dog(None, Some((source, &ast)), &[], &sarzak).unwrap();
 
     let mut ctx = initialize_interpreter::<PathBuf>(sarzak, lu_dog, None).unwrap();
     ctx.add_args(vec!["fib".to_owned(), "17".to_owned()]);

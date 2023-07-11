@@ -1,7 +1,6 @@
 use std::path::PathBuf;
 
 use ansi_term::Colour;
-use env_logger;
 
 use dwarf::{
     dwarf::{new_lu_dog, parse_dwarf},
@@ -20,10 +19,10 @@ fn diff_std_err(test: &str, errors: &str) -> Result<Value, Option<i32>> {
             .unwrap()
             .trim()
             .to_owned();
-        if &stderr == errors {
+        if stderr == errors {
             // The error message matches the .stderr file. We pass the
             // test.
-            return Ok(Value::Empty);
+            Ok(Value::Empty)
         } else {
             // The error message does not match the .stderr file. We
             // fail the test.
@@ -37,7 +36,7 @@ fn diff_std_err(test: &str, errors: &str) -> Result<Value, Option<i32>> {
             eprintln!("Found:\n{errors}");
             eprintln!("Diff:");
             let mut diff_count = 0;
-            for line in diff::lines(&stderr, &errors) {
+            for line in diff::lines(&stderr, errors) {
                 match line {
                     diff::Result::Left(expected) => {
                         if expected.starts_with("[31mError:[0m Unexpected token in input, expected")
@@ -57,10 +56,10 @@ fn diff_std_err(test: &str, errors: &str) -> Result<Value, Option<i32>> {
                     diff::Result::Both(a, _) => eprintln!("    {a}"),
                 }
             }
-            return Err(Some(diff_count));
+            Err(Some(diff_count))
         }
     } else {
-        return Err(None);
+        Err(None)
     }
 }
 
@@ -73,7 +72,7 @@ fn diff_std_out(test: &str, out: &str) -> Result<Value, i32> {
             .unwrap()
             .trim()
             .to_owned();
-        if &stdout == out {
+        if stdout == out {
             // The output matches the .stdout file. We pass the test.
             Ok(Value::Empty)
         } else {
@@ -88,7 +87,7 @@ fn diff_std_out(test: &str, out: &str) -> Result<Value, i32> {
             eprintln!("Found:\n{out}");
             eprintln!("Diff:");
             let mut diff_count = 0;
-            for line in diff::lines(&stdout, &out) {
+            for line in diff::lines(&stdout, out) {
                 match line {
                     diff::Result::Left(expected) => {
                         if expected.starts_with("[31mError:[0m Unexpected token in input, expected")
@@ -117,7 +116,7 @@ fn diff_std_out(test: &str, out: &str) -> Result<Value, i32> {
 
 fn run_program(test: &str, program: &str) -> Result<Value, ()> {
     let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
-    let ast = match parse_dwarf(&test, &program) {
+    let ast = match parse_dwarf(test, program) {
         Ok(ast) => ast,
         Err(dwarf::dwarf::DwarfError::Parse { error, ast: _ }) => {
             let error = error.trim();
@@ -207,7 +206,7 @@ fn run_program(test: &str, program: &str) -> Result<Value, ()> {
             )
             .trim()
             .to_owned();
-            return diff_std_err(test, &error).map_err(|_| ());
+            diff_std_err(test, &error).map_err(|_| ())
         }
     }
 }

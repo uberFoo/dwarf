@@ -760,7 +760,7 @@ mod tests {
         assert!(result.is_ok());
 
         let as_bool: bool = (&*s_read!(result.unwrap())).try_into().unwrap();
-        assert_eq!(as_bool, false);
+        assert!(!as_bool);
 
         // assert_eq!(frame.ip, 4);
 
@@ -787,7 +787,7 @@ mod tests {
         assert!(result.is_ok());
 
         let as_bool: bool = (&*s_read!(result.unwrap())).try_into().unwrap();
-        assert_eq!(as_bool, true);
+        assert!(as_bool);
 
         // assert_eq!(frame.ip, 4);
 
@@ -814,7 +814,7 @@ mod tests {
         assert!(result.is_ok());
 
         let as_bool: bool = (&*s_read!(result.unwrap())).try_into().unwrap();
-        assert_eq!(as_bool, true);
+        assert!(as_bool);
 
         // let mut frame = vm.frames.pop().unwrap();
         // assert_eq!(frame.ip, 4);
@@ -945,7 +945,7 @@ mod tests {
         println!("{:?}", result);
         println!("{:?}", vm);
 
-        assert!(vm.stack.len() == 0);
+        assert!(vm.stack.is_empty());
 
         assert!(result.is_ok());
 

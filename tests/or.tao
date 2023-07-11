@@ -1,4 +1,6 @@
 /// Test _Logical_ OR
-fn main() -> bool {
-    true || false
+fn main() -> () {
+    chacha::assert_eq(false, false || false);
+    chacha::assert_eq(true, true || true);
+    chacha::assert_eq(true, false || true);
 }
