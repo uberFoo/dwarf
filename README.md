@@ -25,6 +25,8 @@ File a bug report, and let me know.
 
 The easiest thing to do is to download a [release](https://github.com/uberFoo/dwarf/releases).
 
+> ⚠️ **Linux Build Problem:** I'm having some issues compiling a dependency on linux.
+
 The next easiest thing to do is to clone the repo and build it yourself.
 Of course you'll need to have [rust installed ](https://rustup.rs).
 
