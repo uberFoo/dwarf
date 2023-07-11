@@ -1,4 +1,4 @@
-![The Dwarf Logo](images/dwarf@0.5x.png)
+![Cwarf Painting](images/cwarf.png)
 
 # Introduction
 

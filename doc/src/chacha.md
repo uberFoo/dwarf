@@ -9,7 +9,7 @@ Arguments:
   [SOURCE]
           Dwarf Source File
 
-          Path to the source file to execute.
+          Local path, or URL of the source file to execute.
 
   [ARGS]...
           Dwarf main arguments
@@ -29,6 +29,21 @@ Options:
 
   -b, --banner
           Print the dwarf banner
+
+      --bless
+          Bless a test
+
+          This is only useful if you are writing tests for dwarf. I'd really like it if clap had hidden arguments.
+
+      --uber
+          Do uber stuff
+
+          This is like sudo mode. You probably don't want this.
+
+  -s, --stdin
+          Stdin
+
+          Read source file from stdin.
 
   -h, --help
           Print help (see a summary with '-h')

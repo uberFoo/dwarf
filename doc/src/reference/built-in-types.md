@@ -5,7 +5,7 @@ dwarf contains a handful of primitive {{i: types}}.
 ## String {{hi: string}}
 {{hi: format}}
 
-The string type is esentially a wrapper for Rust's `String` type.
+The string type is a wrapper for Rust's `String` type.
 That is to say that it is a proper unicode string, encoded as UTF-8.
 
 ```dwarf
@@ -45,7 +45,7 @@ print(msg.format(question, answer));
 
 ## Vector / List {{hi: vector}}
 
-The vector type is esentially a wrapper for Rust's `Vec` type.
+The vector type is a wrapper for Rust's `Vec` type.
 That is to say that it is a growable array.
 
 At this time it's not possible to name the type of this, which is why there's a slash in the heading.
@@ -57,6 +57,7 @@ This is likely to happen in the near future.
 // 🚧 I need some sort of example. What do I want to do with these? There are
 // all sorts of iterator functions that we could surface, but I'd pretty much
 // need closures to do that.
+// And now we have closures! So I need to get to this.
 let c = [1, 2, 3, 4, 5];
 
 let func = fn (x: int) -> int {

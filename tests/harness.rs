@@ -12,7 +12,7 @@ use dwarf::{
 };
 
 fn diff_std_err(test: &str, errors: &str) -> Result<Value, Option<i32>> {
-    let stderr_path = PathBuf::from(format!("tests/{}.stderr", test));
+    let stderr_path = PathBuf::from(format!("tests/{test}.stderr"));
     if stderr_path.exists() {
         // We found a .stderr file. Read it and compare it to the error
         // message.
@@ -30,24 +30,31 @@ fn diff_std_err(test: &str, errors: &str) -> Result<Value, Option<i32>> {
             eprintln!(
                 "{}",
                 Colour::Red.paint(format!(
-                    "Error message does not match .stderr file for test {}",
-                    test
+                    "Error message does not match .stderr file for test {test}"
                 ))
             );
-            eprintln!("Expected:\n{}", stderr);
-            eprintln!("Found:\n{}", errors);
+            eprintln!("Expected:\n{stderr}");
+            eprintln!("Found:\n{errors}");
             eprintln!("Diff:");
             let mut diff_count = 0;
             for line in diff::lines(&stderr, &errors) {
                 match line {
                     diff::Result::Left(expected) => {
+                        if expected.starts_with("[31mError:[0m Unexpected token in input, expected")
+                        {
+                            continue;
+                        }
                         diff_count += 1;
-                        eprintln!("{1} {0}", expected, Colour::Green.paint("+++"));
+                        eprintln!("{} {expected}", Colour::Green.paint("+++"));
                     }
                     diff::Result::Right(found) => {
-                        eprintln!("{1} {0}", found, Colour::Red.paint("---"));
+                        if found.starts_with("[31mError:[0m Unexpected token in input, expected")
+                        {
+                            continue;
+                        }
+                        eprintln!("{} {found}", Colour::Red.paint("---"));
                     }
-                    diff::Result::Both(a, _) => eprintln!("    {}", a),
+                    diff::Result::Both(a, _) => eprintln!("    {a}"),
                 }
             }
             return Err(Some(diff_count));
@@ -58,7 +65,7 @@ fn diff_std_err(test: &str, errors: &str) -> Result<Value, Option<i32>> {
 }
 
 fn diff_std_out(test: &str, out: &str) -> Result<Value, i32> {
-    let stdout_path = PathBuf::from(format!("tests/{}.stdout", test));
+    let stdout_path = PathBuf::from(format!("tests/{test}.stdout"));
     if stdout_path.exists() {
         // We found a .stdout file. Read it and compare it to the error
         // message.
@@ -74,24 +81,31 @@ fn diff_std_out(test: &str, out: &str) -> Result<Value, i32> {
             eprintln!(
                 "{}",
                 Colour::Red.paint(format!(
-                    "Error message does not match .stdout file for test {}",
-                    test
+                    "Error message does not match .stdout file for test {test}"
                 ))
             );
-            eprintln!("Expected:\n{}", stdout);
-            eprintln!("Found:\n{}", out);
+            eprintln!("Expected:\n{stdout}");
+            eprintln!("Found:\n{out}");
             eprintln!("Diff:");
             let mut diff_count = 0;
             for line in diff::lines(&stdout, &out) {
                 match line {
                     diff::Result::Left(expected) => {
+                        if expected.starts_with("[31mError:[0m Unexpected token in input, expected")
+                        {
+                            continue;
+                        }
                         diff_count += 1;
                         eprintln!("{1} {0}", expected, Colour::Green.paint("+++"));
                     }
                     diff::Result::Right(found) => {
+                        if found.starts_with("[31mError:[0m Unexpected token in input, expected")
+                        {
+                            continue;
+                        }
                         eprintln!("{1} {0}", found, Colour::Red.paint("---"));
                     }
-                    diff::Result::Both(a, _) => eprintln!("    {}", a),
+                    diff::Result::Both(a, _) => eprintln!("    {a}"),
                 }
             }
             Err(diff_count)
@@ -112,11 +126,14 @@ fn run_program(test: &str, program: &str) -> Result<Value, ()> {
             // it. It's because the expected tokens are an opaque type on the error
             // type I'm using in the parser. I suppose I could use a different error
             // type to get around it. But that's a low priority item atm.
+            //
+            // Turns out that more than the first line may differ because the output
+            // prints the "expected types" and the order changes. Multiple errors,
+            // multiple lines.
             match diff_std_err(test, error) {
                 Err(None) => return Err(()),
                 Err(Some(diff_count)) => {
-                    dbg!(diff_count);
-                    if diff_count < 2 {
+                    if diff_count == 0 {
                         return Ok(Value::Empty);
                     } else {
                         return Err(());

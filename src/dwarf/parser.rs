@@ -541,7 +541,14 @@ impl DwarfParser {
         }
 
         let mut body = Vec::new();
-        while !self.match_(&[Token::Punct('}')]) {
+        let mut end = false;
+
+        while !self.at_end() {
+            if self.match_(&[Token::Punct('}')]) {
+                end = true;
+                break;
+            }
+
             if let Some(item) = self.parse_item() {
                 debug!("item", item);
                 body.push(item);
@@ -558,6 +565,23 @@ impl DwarfParser {
                 error!("exit no `}`");
                 return None;
             }
+        }
+
+        // We got here because we reached the end of the input
+        if !end {
+            let token = self.previous().unwrap();
+            let err = Simple::unclosed_delimiter(
+                start..token.1.end,
+                "{".to_owned(),
+                token.1.clone(),
+                "}".to_owned(),
+                Some(token.0.to_string()),
+            );
+
+            debug!("exit: no '}'");
+            self.errors.push(err);
+
+            return None;
         }
 
         debug!("exit ", (&name, &body));
@@ -2730,8 +2754,14 @@ impl DwarfParser {
         }
 
         let mut fields = Vec::new();
+        let mut end = false;
 
-        while !self.at_end() && !self.match_(&[Token::Punct('}')]) {
+        while !self.at_end() {
+            if self.match_(&[Token::Punct('}')]) {
+                end = true;
+                break;
+            }
+
             let field_name = if let Some(ident) = self.parse_ident() {
                 ident
             } else {
@@ -2749,7 +2779,7 @@ impl DwarfParser {
                 let token = self.previous().unwrap();
                 let err = Simple::expected_input_found(
                     token.1.clone(),
-                    [Some("".to_owned())],
+                    [Some(":".to_owned())],
                     Some(token.0.to_string()),
                 );
                 error!("exit", err);
@@ -2773,7 +2803,24 @@ impl DwarfParser {
 
             if self.peek().unwrap().0 == Token::Punct(',') {
                 self.advance();
+            } else if self.peek().unwrap().0 != Token::Punct('}') {
+                break;
             }
+        }
+
+        // We got here because we reached the end of the input
+        if !end {
+            let token = self.previous().unwrap();
+            let err = Simple::unclosed_delimiter(
+                start..token.1.end,
+                "{".to_owned(),
+                token.1.clone(),
+                "}".to_owned(),
+                Some(token.0.to_string()),
+            );
+
+            debug!("exit: no '}'");
+            return Err(Box::new(err));
         }
 
         debug!("exit ok");
@@ -2921,10 +2968,14 @@ impl DwarfParser {
         }
 
         let mut statements = Vec::new();
+        let mut end = false;
 
-        while !self.at_end() && !self.match_(&[Token::Punct('}')]) {
-            // Ok, this is where I want to log, and then ignore errors. Now, how
-            // do I do that?
+        while !self.at_end() {
+            if self.match_(&[Token::Punct('}')]) {
+                end = true;
+                break;
+            }
+
             match self.parse_statement() {
                 Ok(Some(statement)) => {
                     debug!("parse_block_expression: statement", statement);
@@ -2954,6 +3005,21 @@ impl DwarfParser {
                     return Err(error);
                 }
             }
+        }
+
+        // We got here because we reached the end of the input
+        if !end {
+            let token = self.previous().unwrap();
+            let err = Simple::unclosed_delimiter(
+                start..token.1.end,
+                "{".to_owned(),
+                token.1.clone(),
+                "}".to_owned(),
+                Some(token.0.to_string()),
+            );
+
+            debug!("exit: no '}'");
+            return Err(Box::new(err));
         }
 
         debug!("exit parse_block_expression");
@@ -2997,7 +3063,6 @@ impl DwarfParser {
 
         if !self.match_(&[Token::Punct('(')]) {
             let token = self.previous().unwrap();
-            // 🚧 use the unclosed_delimiter constructor
             let err = Simple::expected_input_found(
                 token.1.clone(),
                 [Some("'('".to_owned())],
@@ -3275,7 +3340,13 @@ impl DwarfParser {
         // Match a boolean
         if self.match_(&[Token::Type(Type::Boolean)]) {
             debug!("exit parse_type: boolean");
-            return Ok(Some((Type::Boolean, start..self.peek().unwrap().1.end)));
+            return Ok(Some((
+                Type::Boolean,
+                start
+                    ..self
+                        .peek()
+                        .map_or(self.previous().unwrap().1.end, |t| t.1.end),
+            )));
         }
 
         // Match empty
@@ -3292,19 +3363,37 @@ impl DwarfParser {
             }
 
             debug!("exit parse_type: empty");
-            return Ok(Some((Type::Empty, start..self.peek().unwrap().1.end)));
+            return Ok(Some((
+                Type::Empty,
+                start
+                    ..self
+                        .peek()
+                        .map_or(self.previous().unwrap().1.end, |t| t.1.end),
+            )));
         }
 
         // Match a float
         if self.match_(&[Token::Type(Type::Float)]) {
             debug!("exit parse_type: float");
-            return Ok(Some((Type::Float, start..self.peek().unwrap().1.end)));
+            return Ok(Some((
+                Type::Float,
+                start
+                    ..self
+                        .peek()
+                        .map_or(self.previous().unwrap().1.end, |t| t.1.end),
+            )));
         }
 
         // Match an integer
         if self.match_(&[Token::Type(Type::Integer)]) {
             debug!("exit parse_type: integer");
-            return Ok(Some((Type::Integer, start..self.peek().unwrap().1.end)));
+            return Ok(Some((
+                Type::Integer,
+                start
+                    ..self
+                        .peek()
+                        .map_or(self.previous().unwrap().1.end, |t| t.1.end),
+            )));
         }
 
         // Match a list
@@ -3313,7 +3402,10 @@ impl DwarfParser {
                 ty
             } else {
                 let start = self.previous().unwrap().1.end;
-                let end = self.peek().unwrap().1.start;
+                let end = self
+                    .peek()
+                    .map_or(self.previous().unwrap().1.end, |t| t.1.end);
+
                 let err = Simple::custom(start..end, "missing type");
                 return Err(Box::new(err));
             };
@@ -3332,7 +3424,10 @@ impl DwarfParser {
             debug!("exit parse_type: list");
             return Ok(Some((
                 Type::List(Box::new(ty)),
-                start..self.peek().unwrap().1.end,
+                start
+                    ..self
+                        .peek()
+                        .map_or(self.previous().unwrap().1.end, |t| t.1.end),
             )));
         }
 
@@ -3397,7 +3492,10 @@ impl DwarfParser {
                     Ok(Some(ty)) => ty,
                     Ok(None) => {
                         let start = self.previous().unwrap().1.end;
-                        let end = self.peek().unwrap().1.start;
+                        let end = self
+                            .peek()
+                            .map_or(self.previous().unwrap().1.end, |t| t.1.start);
+
                         debug!("exit parse_function: no type");
                         return Err(Box::new(Simple::custom(start..end, "missing type")));
                     }
@@ -3411,7 +3509,10 @@ impl DwarfParser {
                         error!("parse_function: resynchronized");
 
                         let start = self.previous().unwrap().1.end;
-                        let end = self.peek().unwrap().1.start;
+                        let end = self
+                            .peek()
+                            .map_or(self.previous().unwrap().1.end, |t| t.1.start);
+
                         (Type::Empty, start..end)
                     }
                 }
@@ -3429,7 +3530,10 @@ impl DwarfParser {
             debug!("exit parse_type: fn");
             return Ok(Some((
                 Type::Fn(params, Box::new(return_type)),
-                start..self.peek().unwrap().1.end,
+                start
+                    ..self
+                        .peek()
+                        .map_or(self.previous().unwrap().1.end, |t| t.1.end),
             )));
         }
 
@@ -3550,8 +3654,14 @@ impl DwarfParser {
         }
 
         let mut fields = Vec::new();
+        let mut end = false;
 
-        while !self.at_end() && !self.match_(&[Token::Punct('}')]) {
+        while !self.at_end() {
+            if self.match_(&[Token::Punct('}')]) {
+                end = true;
+                break;
+            }
+
             match self.parse_struct_field() {
                 Ok(field) => {
                     fields.push(field);
@@ -3561,6 +3671,21 @@ impl DwarfParser {
                 }
             }
             self.match_(&[Token::Punct(',')]);
+        }
+
+        // We got here because we reached the end of the input
+        if !end {
+            let token = self.previous().unwrap();
+            let err = Simple::unclosed_delimiter(
+                start..token.1.end,
+                "{".to_owned(),
+                token.1.clone(),
+                "}".to_owned(),
+                Some(token.0.to_string()),
+            );
+
+            debug!("exit: no '}'");
+            return Err(Box::new(err));
         }
 
         // 🚧 This isn't right, but maybe it's good enough.
@@ -3734,7 +3859,7 @@ impl DwarfParser {
 
 /// Interpreter Entry Point
 ///
-/// Parses a single line of input.
+/// Parses a single line of input as a statement.
 pub fn parse_line(src: &str) -> Result<Option<Spanned<Statement>>, String> {
     let (tokens, errs) = lexer().parse_recovery_verbose(src);
 
@@ -3751,13 +3876,13 @@ pub fn parse_line(src: &str) -> Result<Option<Spanned<Statement>>, String> {
     if !errs.is_empty() || !parser.errors.is_empty() {
         Err(report_errors(errs, parser.errors, "REPL", src))
     } else {
+        // Ok(ParsedLine::Statement(ast))
         Ok(ast)
     }
 }
 
 // This will return as much of the parsed ast as possible, even when hitting an
 // error, which explains the return type.
-// 🚧 WTF am I talking about?
 pub fn parse_dwarf(name: &str, src: &str) -> Result<Vec<Spanned<Item>>, DwarfError> {
     let (tokens, errs) = lexer().parse_recovery_verbose(src);
 

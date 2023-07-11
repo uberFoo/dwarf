@@ -3289,16 +3289,18 @@ pub fn start_repl(mut context: Context) -> Result<(), Error> {
     use rustyline::{Completer, Helper, Highlighter, Hinter};
     use rustyline::{Editor, Result};
 
+    const HISTORY_FILE: &str = ".dwarf_history";
+
     let models = context.models.clone();
     let lu_dog = context.lu_dog.clone();
     let sarzak = context.sarzak.clone();
 
     let block = context.block.clone();
-    // let stack = &mut context.stack;
 
     let vm_stack = context.memory.clone();
     let mut vm = VM::new(&vm_stack);
 
+    let notice_style = Colour::Red.bold().italic();
     let prompt_style = Colour::Blue.normal();
     let result_style = Colour::Yellow.italic().dimmed();
     let type_style = Colour::Blue.italic().dimmed();
@@ -3309,10 +3311,10 @@ pub fn start_repl(mut context: Context) -> Result<(), Error> {
     impl DwarfValidator {
         fn validate(&self, _input: &str) -> ValidationResult {
             ValidationResult::Valid(None)
-            // if let Some((stmt, _span)) = parse_line(input) {
-            // ValidationResult::Valid(None)
-            // } else {
-            // ValidationResult::Incomplete
+            // match parse_line(input) {
+            //     Ok(Some(_)) => ValidationResult::Valid(None),
+            //     Ok(None) => ValidationResult::Incomplete,
+            //     Err(e) => ValidationResult::Invalid(Some(format!("\n{e}")))
             // }
         }
     }
@@ -3323,27 +3325,21 @@ pub fn start_repl(mut context: Context) -> Result<(), Error> {
         }
     }
 
-    //
-    // let some_value = format!("{:b}", 42);
-    // let strings: &[ANSIString<'static>] = &[
-    //     Red.paint("["),
-    //     Red.bold().paint(some_value),
-    //     Red.paint("]"),
-    // ];
-    //
-    // println!("Value: {}", ANSIStrings(strings));
-
     println!("{}", banner2());
 
-    // `()` can be used when no completer is required
     let mut rl = Editor::new().map_err(|e| ChaChaError::RustyLine { source: e })?;
     let v = DwarfValidator {};
     rl.set_helper(Some(v));
 
     // #[cfg(feature = "with-file-history")]
-    if rl.load_history("history.txt").is_err() {
+    if rl.load_history(HISTORY_FILE).is_err() {
         println!("No previous history.");
     }
+
+    println!(
+        "\n{}\n",
+        notice_style.paint("Currently the REPL only supports single line statements.")
+    );
 
     let reader = context.std_out_recv.clone();
     let handle = thread::spawn(move || loop {
@@ -3442,7 +3438,7 @@ pub fn start_repl(mut context: Context) -> Result<(), Error> {
         }
     }
     // #[cfg(feature = "with-file-history")]
-    rl.save_history(".dwarf.txt")
+    rl.save_history(HISTORY_FILE)
         .map_err(|e| ChaChaError::RustyLine { source: e })?;
 
     drop(context);

@@ -28,7 +28,7 @@ Trailing commas are just fine.
 In this specific case we have a *struct* called `Complex` that has two fields, each of type *float*.
 The first is called `re`, and the second, `im`.
 
-Initializiation of a *struct* is done by a *{{i: struct expression}}*, just like Rust.
+Initialization of a *struct* is done by a *{{i: struct expression}}*, just like Rust.
 if you are unfamiliar, a struct expression looks like the definition, but with values in place of types.
 
 ```dwarf
@@ -47,7 +47,7 @@ fn main() {
 ```
 
 The last two lines are functions provided by the runtime {{i: ChaCha}}.
-`chach::assert_eq` tests it's arguments for equality, and throws an error if they are not.
+`chacha::assert_eq` tests it's arguments for equality, and throws an error if they are not.
 
 ## Complex Methods
 

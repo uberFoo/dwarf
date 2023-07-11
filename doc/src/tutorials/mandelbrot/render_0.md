@@ -62,8 +62,8 @@ fn escape_time(c: Complex, limit: int) -> int {
     for i in 1..limit {
         // z = Complex::square(z);
         // z = Complex::add(z, c);
-        z.square_2();
-        z.add_2(c);
+        // z.square_2();
+        // z.add_2(c);
         ComplexEx::square(z);
         ComplexEx::add(z, c);
         let foo = ComplexEx::norm_squared(z);

@@ -66,7 +66,7 @@ This default behavior may be modified by using any of the options below.
 struct Arguments {
     /// Dwarf Source File
     ///
-    /// Path to the source file to execute.
+    /// Local path, or URL of the source file to execute.
     #[arg(value_parser=validate_source)]
     source: Option<Source>,
     /// Debug Adapter Protocol (DAP) Backend
@@ -89,7 +89,6 @@ struct Arguments {
     ///
     /// This is only useful if you are writing tests for dwarf. I'd really like
     /// it if clap had hidden arguments.
-    /// 🚧 Hack on clap
     #[arg(long, action=ArgAction::SetTrue)]
     bless: Option<bool>,
     /// Do uber stuff

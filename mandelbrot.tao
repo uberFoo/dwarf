@@ -62,9 +62,8 @@ fn escape_time(c: Complex, limit: int) -> int {
     // debugger;
     let z = Complex::zero();
     for i in 1..limit {
-        // 🚧 This let wreaks havoc -- fix it.
         // Also the chained method calls don't affect the correct z, or something.
-        // let z = z.square(z).add(z, c);
+        // z.square().add(c);
         ComplexEx::square(z);
         ComplexEx::add(z, c);
         // z = z.square();
@@ -75,7 +74,8 @@ fn escape_time(c: Complex, limit: int) -> int {
         // does not work.
         let foo = ComplexEx::norm_squared(z);
         if foo > 4.0 {
-        // if z.norm_squared() > 4.0 {
+            // if ComplexEx::norm_squared(z) > 4.0 {
+            // if z.norm_squared() > 4.0 {
             // debugger;
             // return Some(i);
             return i;
@@ -93,8 +93,10 @@ fn main() {
     // }
 
     let iterations = chacha::args()[1];
-    print("iterations {1},  type is {0}\n".format(chacha::typeof(iterations), iterations));
-    print("Total time: {0}s.\n".format(chacha::time(|| { plot(iterations); })));
+    // print("iterations {1},  type is {0}\n".format(chacha::typeof(iterations), iterations));
+    print("Total time: {0}s.\n".format(chacha::time(|| {
+        plot(iterations);
+    })));
 }
 
 fn plot(t: int) {
@@ -130,24 +132,27 @@ fn plot(t: int) {
     // let column = 0;
     // debugger;
     // for t in 0..255 {
-        // let t = 1024;
-        for row in 0..height {
-        // OMG, this is an ugly hack, and yet it's so badass. If it had worked. 😢
-        // ChaCha::spawn(do_column, [row, width, height, upper_left, lower_right]);
+    // let t = 1024;
+    for row in 0..height {
         // if row > 1 {
         // debugger;
         // }
-            do_column(t, row, width, height, upper_left, lower_right);
-            // debugger;
-        }
-    // This is busted too.
-    // print(chacha::eps() + "\n");
-    // }
-    print(chacha::eps());
-    print("\n");
+        do_column(t, row, width, height, upper_left, lower_right);
+        // debugger;
+    }
+
+    // print(chacha::eps());
+    // print("\n");
 }
 
-fn do_column(time: int, row: int, width: int, height: int, upper_left: Complex, lower_right: Complex) {
+fn do_column(
+    time: int,
+    row: int,
+    width: int,
+    height: int,
+    upper_left: Complex,
+    lower_right: Complex,
+) {
     for column in 0..width {
         let point = pixel_to_point(width, height, column, row, upper_left, lower_right);
         let time = escape_time(point, time);

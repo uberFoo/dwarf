@@ -9,9 +9,39 @@
 dwarf is a programming language based heavily upon, and implemented in, [Rust](https://www.rust-lang.org).
 The language is interpreted (and slow) with a VM (fast-ish) on the way.
 
-See the [book 📒](https://uberfoo.github.io/assets/docs/dwarf/introduction.html).
+There is a [book 📒](https://uberfoo.github.io/assets/docs/dwarf/introduction.html) in progress.
+Check it out!
 
-## Cool Error Messages!
+*Nota Bene*: This is a work in progress.
+The parser is pretty good, but not perfect, at recognizing the language.
+However, the errors that it reports aren't always useful.
+
+I appreciate feedback.
+Let me know if you love it, or hate it.
+There are likely as not bugs, and corner cases.
+File a bug report, and let me know.
+
+## Installation
+
+The easiest thing to do is to download a [release](https://github.com/uberFoo/dwarf/releases).
+
+The next easiest thing to do is to clone the repo and build it yourself.
+Of course you'll need to have [rust installed ](https://rustup.rs).
+
+```bash
+git clone https://github.com/uberFoo/dwarf.git
+cd dwarf
+cargo install --path . --bin dwarf`
+```
+
+
+Once you have a binary, give it a whirl:
+
+```bash
+dwarf https://raw.githubusercontent.com/uberFoo/dwarf/develop/mandelbrot.tao -- 50
+```
+
+## Beautiful Error Messages!
 ![error](doc/art/error.png)
 
 Check out [ariadne](https://docs.rs/ariadne/latest/ariadne/) and you too can have cool error messages!
@@ -101,3 +131,5 @@ If you start in the REPL, you get the execution in a loop.
 dwarf is distributed under the terms of both the MIT license and the Apache License (Version 2.0).
 
 See [LICENSE-APACHE](LICENSE-APACHE), [LICENSE-MIT](LICENSE-MIT) for details.
+
+<h1 align="center"><img width="555" src="doc/art/cwarf.png" /></h1>

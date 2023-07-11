@@ -29,7 +29,7 @@ I have no idea what I'll end up actually shipping.
 I won't bother to include the generated code upon which the stores depend.
 Regardless, there are some metrics to gain insight into the ratio of generated to hand-written code.
 
-The code genarator is called `grace`, which I began in January 2023.
+The code generator is called `grace`, which I began in January 2023.
 Dwarf is in fact necessary for me to continue work on grace.
 Once I've escaped this recursive rabbit hole, I'll publish the whole mess.
 
