@@ -2,7 +2,7 @@
 name = "dwarf"
 version = "0.1.0"
 authors = ["Keith T. Star <uberfoo@me.com>"]
-categories = ["compilers"]
+categories = ["compilers", "command-line-interface"]
 description = "A Rust-like, typed, interpreted programming language"
 documentation = "https://uberfoo.github.io/assets/docs/dwarf/introduction.html"
 homepage = "https://uberfoo.github.io/assets/docs/dwarf/introduction.html"
@@ -61,7 +61,7 @@ parking_lot = { version = "0.12.1", features = [
 pretty_env_logger = "0.4.0"
 ratatui = { git = "https://github.com/uberFoo/ratatui" }
 rayon = "1.7.0"
-reqwest = { version = "0.11.18", features = ["blocking"] }
+reqwest = { version = "0.11.18", features = ["blocking", "rustls-tls"] }
 rustyline = { version = "11.0.0", optional = true, features = [
     "derive",
     "with-file-history",

@@ -38,5 +38,7 @@ An exciting, fun, experiment
 
 — Keith Star (June 8, 2023)
 
+![Cwarf Painting](images/cwarf.png)
+
 [^std]: After benchmarking the differences between Parking Lot and std, I got to digging.
 Apparently the std sync stuff was recently updated.

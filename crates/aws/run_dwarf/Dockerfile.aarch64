@@ -1,1 +1,8 @@
 FROM ghcr.io/cross-rs/aarch64-unknown-linux-gnu:0.2.2
+
+# Install OpenSSL and libssl-dev
+RUN apt-get update && \
+    apt-get install -y pkg-config openssl libssl-dev
+
+RUN ln -n /usr/include/x86_64-linux-gnu/openssl/opensslconf.h /usr/include/openssl
+# ENV OPENSSL_DIR=/usr/include/openssl

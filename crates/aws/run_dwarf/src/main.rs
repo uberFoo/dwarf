@@ -47,7 +47,9 @@ async fn function_handler(event: Request) -> Result<Response<Body>, Error> {
                                 .write(
                                     format!(
                                         "{}",
-                                        dwarf::dwarf::DwarfErrorReporter(&e, &program, "lambda")
+                                        dwarf::dwarf::DwarfErrorReporter(
+                                            &e, false, &program, "lambda"
+                                        )
                                     )
                                     .as_bytes(),
                                 )
@@ -73,7 +75,7 @@ async fn function_handler(event: Request) -> Result<Response<Body>, Error> {
                             }
                             Err(e) => ansi_to_html::convert_escaped(&format!(
                                 "{}",
-                                dwarf::ChaChaErrorReporter(&e, &program, "lambda")
+                                dwarf::ChaChaErrorReporter(&e, false, &program, "lambda")
                             ))
                             .unwrap(),
                         }

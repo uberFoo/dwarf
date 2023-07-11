@@ -3,4 +3,4 @@
 *.tracy
 *.道
 woog_structs.rs
-history.txt
+.dwarf_history
