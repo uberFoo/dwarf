@@ -34,6 +34,7 @@ use lu_dog::ValueType;
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "single")] {
+        type SarzakStorePtr = Uuid;
         type RcType<T> = std::rc::Rc<T>;
         impl<T> NewRcType<T> for RcType<T> {
             fn new_rc_type(value: T) -> RcType<T> {
@@ -65,6 +66,7 @@ cfg_if::cfg_if! {
         }
 
     } else if #[cfg(feature = "single-vec")] {
+        type SarzakStorePtr = usize;
         type RcType<T> = std::rc::Rc<T>;
         impl<T> NewRcType<T> for RcType<T> {
             fn new_rc_type(value: T) -> RcType<T> {
@@ -98,6 +100,7 @@ cfg_if::cfg_if! {
     } else if #[cfg(feature = "multi-std-mutex")] {
         compile_error!("std mutex is not currently supported");
 
+        type SarzakStorePtr = Uuid;
         type RefType<T> = std::sync::Arc<std::sync::Mutex<T>>;
 
         impl<T> NewRef<T> for RefType<T> {
@@ -122,6 +125,7 @@ cfg_if::cfg_if! {
         }
 
    } else if #[cfg(feature = "multi-std-rwlock")] {
+        type SarzakStorePtr = Uuid;
         type RcType<T> = std::sync::Arc<T>;
         impl<T> NewRcType<T> for RcType<T> {
             fn new_rc_type(value: T) -> RcType<T> {
@@ -154,6 +158,7 @@ cfg_if::cfg_if! {
         }
 
    } else if #[cfg(feature = "multi-vec")] {
+        type SarzakStorePtr = usize;
         type RcType<T> = std::sync::Arc<T>;
         impl<T> NewRcType<T> for RcType<T> {
             fn new_rc_type(value: T) -> RcType<T> {
@@ -185,6 +190,7 @@ cfg_if::cfg_if! {
 
     } else if #[cfg(feature = "multi-parking-lot-mutex")] {
         // compile_error!("parking lot mutex is not currently supported");
+        type SarzakStorePtr = Uuid;
         type RcType<T> = std::sync::Arc<T>;
         impl<T> NewRcType<T> for RcType<T> {
             fn new_rc_type(value: T) -> RcType<T> {
@@ -216,6 +222,7 @@ cfg_if::cfg_if! {
         }
 
     } else if #[cfg(feature = "multi-parking-lot-rwlock")] {
+        type SarzakStorePtr = Uuid;
         type RefType<T> = std::sync::Arc<parking_lot::RwLock<T>>;
 
         impl<T> NewRef<T> for RefType<T> {
