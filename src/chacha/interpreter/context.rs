@@ -118,6 +118,10 @@ impl Context {
         self.mem_update_recv.clone()
     }
 
+    pub fn std_out_send(&self) -> &Sender<String> {
+        &self.std_out_send
+    }
+
     pub fn get_std_out(&self) -> Receiver<String> {
         self.std_out_recv.clone()
     }

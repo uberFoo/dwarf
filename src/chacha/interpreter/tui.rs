@@ -1,3 +1,4 @@
+#![cfg(not(any(feature = "single", feature = "single-vec")))]
 use std::thread;
 
 use ansi_term::Colour;
@@ -15,7 +16,6 @@ use crate::{
     new_ref, s_read, s_write, NewRef, RefType,
 };
 
-#[cfg(not(any(feature = "single", feature = "single-vec")))]
 pub fn start_tui_repl(mut context: Context) -> (Sender<DebuggerControl>, Receiver<DebuggerStatus>) {
     use std::time::Duration;
 

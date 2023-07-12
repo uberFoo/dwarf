@@ -29,7 +29,7 @@ fn diff_std_err(test: &str, errors: &str) -> Result<Value, Option<i32>> {
             eprintln!(
                 "{}",
                 Colour::Red.paint(format!(
-                    "Error message does not match .stderr file for test {test}"
+                    "stderr does not match .stderr file for test {test}"
                 ))
             );
             eprintln!("Expected:\n{stderr}");
@@ -80,7 +80,7 @@ fn diff_std_out(test: &str, out: &str) -> Result<Value, i32> {
             eprintln!(
                 "{}",
                 Colour::Red.paint(format!(
-                    "Error message does not match .stdout file for test {test}"
+                    "stdout does not match .stdout file for test {test}"
                 ))
             );
             eprintln!("Expected:\n{stdout}");
@@ -189,7 +189,7 @@ fn run_program(test: &str, program: &str) -> Result<Value, ()> {
     let ctx = initialize_interpreter::<PathBuf>(sarzak, lu_dog, None).unwrap();
     match start_main(false, ctx) {
         Ok(v) => {
-            let stdout = v.1.drain_std_out().join("\n").trim().to_owned();
+            let stdout = v.1.drain_std_out().join("").trim().to_owned();
             match diff_std_out(test, &stdout) {
                 // 🚧 We should check the result. Doing so will require that we parse magic
                 // out of the source file.
