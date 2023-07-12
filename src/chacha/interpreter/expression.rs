@@ -1,4 +1,10 @@
 pub mod block;
 pub mod call;
+pub mod debugger;
+pub mod error;
+pub mod field;
+pub mod for_loop;
 pub mod index;
+pub mod list;
+pub mod literal;
 pub mod operator;

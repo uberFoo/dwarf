@@ -6,16 +6,7 @@ use crossbeam::channel::unbounded;
 use heck::ToUpperCamelCase;
 use lazy_static::lazy_static;
 use log::{self, log_enabled, Level::Debug};
-
 use parking_lot::{Condvar, Mutex};
-
-use sarzak::{
-    lu_dog::{
-        BooleanLiteralEnum, ExpressionEnum, FieldAccessTargetEnum, LiteralEnum, ValueTypeEnum,
-    },
-    sarzak::MODEL as SARZAK_MODEL,
-};
-// use rayon::prelude::*;
 use snafu::{location, prelude::*, Location};
 use tracy_client::{span, Client};
 use uuid::Uuid;
@@ -28,10 +19,12 @@ use crate::{
         vm::{CallFrame, Instruction, Thonk, VM},
     },
     lu_dog::{
-        Block, Expression, List, LocalVariable, ObjectStore as LuDogStore, Span, Statement,
+        Block, Expression, LocalVariable, ObjectStore as LuDogStore, Span, Statement,
         StatementEnum, ValueType, Variable, WoogOptionEnum, XValue, XValueEnum,
     },
+    lu_dog::{ExpressionEnum, ValueTypeEnum},
     new_ref, s_read, s_write,
+    sarzak::MODEL as SARZAK_MODEL,
     sarzak::{store::ObjectStore as SarzakStore, types::Ty},
     ChaChaError, DwarfInteger, NewRef, RefType, Value,
 };
@@ -50,7 +43,7 @@ pub use repl::start_repl;
 pub use tui::start_tui_repl;
 
 use context::Context;
-use expression::{block, call, index, operator};
+use expression::{block, call, debugger, field, for_loop, index, list, literal, operator};
 use func_call::eval_function_call;
 use lambda::eval_lambda_expression;
 
@@ -613,182 +606,20 @@ fn eval_expression(
         let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
         let read = s_read!(span);
         let span = read.start as usize..read.end as usize;
-        let source = s_read!(lu_dog).iter_dwarf_source_file().next().unwrap();
-        let source = s_read!(source);
-        let source = &source.source;
+        let source = context.source();
         debug!("executing {}", source[span].to_owned());
     }
 
     match s_read!(expression).subtype {
-        //
-        // Block
-        //
         ExpressionEnum::Block(ref block) => block::eval_block(block, context, vm),
-        //
-        // Call
-        //
         ExpressionEnum::Call(ref call) => call::eval_call(call, &expression, context, vm),
-        ExpressionEnum::Debugger(_) => {
-            debug!("StatementEnum::Debugger");
-            let mut running = RUNNING.lock();
-            *running = false;
-            *STEPPING.lock() = true;
-            Ok((
-                new_ref!(Value, Value::Empty),
-                Value::Empty.get_type(&s_read!(lu_dog)),
-            ))
-        }
-        //
-        // Error Expression
-        //
-        // 🚧 This should be looked at as part of  The Great Error Overhaul
-        //
-        ExpressionEnum::ErrorExpression(ref error) => {
-            let error = s_read!(lu_dog).exhume_error_expression(error).unwrap();
-
-            // 🚧 This isn't going to cut it.
-            print!("\t{}", s_read!(error).span);
-
-            Ok((
-                new_ref!(Value, Value::Empty),
-                Value::Empty.get_type(&s_read!(lu_dog)),
-            ))
-        }
-        //
-        // FieldAccess
-        //
-        ExpressionEnum::FieldAccess(ref field) => {
-            let field = s_read!(lu_dog).exhume_field_access(field).unwrap();
-            let fat = &s_read!(field).r65_field_access_target(&s_read!(lu_dog))[0];
-            let field_name = match s_read!(fat).subtype {
-                FieldAccessTargetEnum::Field(ref field) => {
-                    let field = s_read!(lu_dog).exhume_field(field).unwrap();
-                    let field = s_read!(field);
-                    field.name.to_owned()
-                }
-                FieldAccessTargetEnum::Function(ref func) => {
-                    let func = s_read!(lu_dog).exhume_function(func).unwrap();
-                    let func = s_read!(func);
-                    func.name.to_owned()
-                }
-            };
-
-            // fix_debug!("FieldAccess field", field);
-
-            // let field_name = &s_read!(field).name;
-
-            // What we're doing below is actually dereferencing a pointer. I wonder
-            // if there is a way to make this less confusing and error prone? A
-            // macro wouldn't work because the pointer is stored under various
-            // names. So it would be a function on the referrer. Like relationship
-            // navigation, actually.
-            //      `let expr = field.expression(lu_dog).unwrap()`
-            // Something like that.
-            // A macro could maybe do it, if we pass the name of the field storing
-            // the pointer, actually.
-            //
-            let expr = &s_read!(field).expression;
-            let expr = s_read!(lu_dog).exhume_expression(expr).unwrap();
-            // dereference!(field, expression, lu_dog);
-
-            let (value, _ty) = eval_expression(expr, context, vm)?;
-            let value = s_read!(value);
-            match &*value {
-                Value::ProxyType(value) => {
-                    let value = s_read!(value);
-                    let value = value.get_attr_value(&field_name)?;
-                    let ty = s_read!(value).get_type(&s_read!(lu_dog));
-
-                    Ok((value, ty))
-                }
-                Value::UserType(value) => {
-                    let value = s_read!(value);
-                    let value = value.get_attr_value(field_name).unwrap();
-                    let ty = s_read!(value).get_type(&s_read!(lu_dog));
-
-                    Ok((value.clone(), ty))
-                }
-                // 🚧 This needs it's own error. Lazy me.
-                _ => Err(ChaChaError::BadJuJu {
-                    message: "Bad value in field access".to_owned(),
-                    location: location!(),
-                }),
-            }
-        }
-        //
-        // Field Expression
-        //
+        ExpressionEnum::Debugger(_) => debugger::eval_debugger(context),
+        ExpressionEnum::ErrorExpression(ref error) => expression::error::eval_error(error, context),
+        ExpressionEnum::FieldAccess(ref field) => field::eval_field_access(field, context, vm),
         ExpressionEnum::FieldExpression(ref field_expr) => {
-            let field_expr = s_read!(lu_dog).exhume_field_expression(field_expr).unwrap();
-            let expr = s_read!(field_expr).r38_expression(&s_read!(lu_dog))[0].clone();
-            eval_expression(expr, context, vm)
+            field::eval_field_expression(field_expr, context, vm)
         }
-        //
-        // For Loop
-        //
-        ExpressionEnum::ForLoop(ref for_loop) => {
-            fix_debug!("ForLoop", for_loop);
-
-            let for_loop = s_read!(lu_dog).exhume_for_loop(for_loop).unwrap();
-            let for_loop = s_read!(for_loop);
-            let ident = for_loop.ident.to_owned();
-            let block = s_read!(lu_dog).exhume_block(&for_loop.block).unwrap();
-            let list = s_read!(lu_dog)
-                .exhume_expression(&for_loop.expression)
-                .unwrap();
-
-            let (list, _ty) = eval_expression(list, context, vm)?;
-            let list = s_read!(list);
-            let list = if let Value::Vector(vec) = list.clone() {
-                vec
-            } else if let Value::String(str) = &*list {
-                str.chars()
-                    .map(|c| new_ref!(Value, Value::Char(c)))
-                    .collect()
-            } else if let Value::Range(range) = &*list {
-                let mut vec = Vec::new();
-                for i in (&*s_read!(range.start)).try_into()?..(&*s_read!(range.end)).try_into()? {
-                    vec.push(new_ref!(Value, Value::Integer(i)));
-                }
-                vec
-            } else {
-                return Err(ChaChaError::BadJuJu {
-                    message: "For loop expression is not a list".to_owned(),
-                    location: location!(),
-                });
-            };
-
-            let block = Expression::new_block(&block, &mut s_write!(lu_dog));
-            context.memory().push_frame();
-            // list.par_iter().for_each(|item| {
-            //     // This gives each thread it's own stack frame, and read only
-            //     // access to the parent stack frame. I don't know that I love
-            //     // this solution. But it's a quick hack to threading.
-            //     let mut stack = context.stack.clone();
-            //     stack.insert(ident.clone(), item.clone());
-            //     eval_expression(block.clone(), &mut context.clone()).unwrap();
-            // });
-            for item in list {
-                context.memory().insert(ident.clone(), item);
-                let expr_ty = eval_expression(block.clone(), context, vm);
-                match expr_ty {
-                    Ok(_) => {}
-                    Err(e) => {
-                        context.memory().pop_frame();
-                        return Err(e);
-                    }
-                }
-            }
-            context.memory().pop_frame();
-
-            Ok((
-                new_ref!(Value, Value::Empty),
-                Value::Empty.get_type(&s_read!(lu_dog)),
-            ))
-        }
-        //
-        // Index
-        //
+        ExpressionEnum::ForLoop(ref for_loop) => for_loop::eval_for_loop(for_loop, context, vm),
         ExpressionEnum::Index(ref index) => index::eval_index(index, context, vm),
         //
         // Lambda
@@ -801,132 +632,9 @@ fn eval_expression(
             let ty = s_read!(lambda).r1_value_type(&s_read!(lu_dog))[0].clone();
             Ok((new_ref!(Value, Value::Lambda(lambda)), ty))
         }
-        //
-        // ListElement
-        //
-        ExpressionEnum::ListElement(ref element) => {
-            let element = s_read!(lu_dog).exhume_list_element(element).unwrap();
-            let element = s_read!(element);
-            let expr = element.r55_expression(&s_read!(lu_dog))[0].clone();
-            eval_expression(expr, context, vm)
-        }
-        //
-        // ListExpression
-        //
-        ExpressionEnum::ListExpression(ref list) => {
-            let list = s_read!(lu_dog).exhume_list_expression(list).unwrap();
-            let list = s_read!(list);
-            if let Some(ref element) = list.elements {
-                // This is the first element in the list. We need to give this list
-                // a type, and I'm going to do the easy thing here and take the type
-                // to be whatever the first element evaluates to be. We'll then check
-                // each subsequent element to see if it can be cast into the type
-                // of the first element.
-                //
-                // 🚧 Actually do the type checking mentioned above.
-                //
-                // I'm now not so sure that I need to do all this run-time type checking.
-                // I mean, I'm doing it in the compiler, right? This would be a systemic
-                // change I think. But I still need the type when I return from here.
-                // So maybe it's just a loosening of the rules -- rules that I'm probably
-                // not implementing now anyway.
-                let element = s_read!(lu_dog).exhume_list_element(element).unwrap();
-                let element = s_read!(element);
-                let expr = element.r15_expression(&s_read!(lu_dog))[0].clone();
-                let (value, ty) = eval_expression(expr, context, vm)?;
-                let mut values = vec![value];
-
-                let mut next = element.next;
-                while let Some(ref id) = next {
-                    let element = s_read!(lu_dog).exhume_list_element(id).unwrap();
-                    let element = s_read!(element);
-                    let expr = element.r15_expression(&s_read!(lu_dog))[0].clone();
-                    let (value, _ty) = eval_expression(expr, context, vm)?;
-                    values.push(value);
-                    next = element.next;
-                }
-
-                let list = List::new(&ty, &mut s_write!(lu_dog));
-
-                Ok((
-                    new_ref!(Value, Value::Vector(values)),
-                    ValueType::new_list(&list, &mut s_write!(lu_dog)),
-                ))
-            } else {
-                let list = List::new(
-                    &Value::Empty.get_type(&s_read!(lu_dog)),
-                    &mut s_write!(lu_dog),
-                );
-
-                Ok((
-                    new_ref!(Value, Value::Vector(vec![new_ref!(Value, Value::Empty),])),
-                    ValueType::new_list(&list, &mut s_write!(lu_dog)),
-                ))
-            }
-        }
-        //
-        // Literal
-        //
-        ExpressionEnum::Literal(ref literal) => {
-            let literal = s_read!(lu_dog).exhume_literal(literal).unwrap();
-            let z = match &s_read!(literal).subtype {
-                //
-                // BooleanLiteral
-                //
-                LiteralEnum::BooleanLiteral(ref literal) => {
-                    let literal = s_read!(lu_dog).exhume_boolean_literal(literal).unwrap();
-                    let literal = s_read!(literal);
-                    let ty = Value::Boolean(true).get_type(&s_read!(lu_dog));
-
-                    match literal.subtype {
-                        BooleanLiteralEnum::FalseLiteral(_) => {
-                            Ok((new_ref!(Value, Value::Boolean(false,)), ty))
-                        }
-                        BooleanLiteralEnum::TrueLiteral(_) => {
-                            Ok((new_ref!(Value, Value::Boolean(true,)), ty))
-                        }
-                    }
-                }
-                //
-                // FloatLiteral
-                //
-                LiteralEnum::FloatLiteral(ref literal) => {
-                    let literal = s_read!(lu_dog).exhume_float_literal(literal).unwrap();
-                    let value = s_read!(literal).x_value;
-                    let value = Value::Float(value);
-                    let ty = value.get_type(&s_read!(lu_dog));
-
-                    Ok((new_ref!(Value, value), ty))
-                }
-                //
-                // IntegerLiteral
-                //
-                LiteralEnum::IntegerLiteral(ref literal) => {
-                    let literal = s_read!(lu_dog).exhume_integer_literal(literal).unwrap();
-                    let value = s_read!(literal).x_value;
-                    let value = Value::Integer(value);
-                    let ty = value.get_type(&s_read!(lu_dog));
-
-                    Ok((new_ref!(Value, value), ty))
-                }
-                //
-                // StringLiteral
-                //
-                LiteralEnum::StringLiteral(ref literal) => {
-                    let literal = s_read!(lu_dog).exhume_string_literal(literal).unwrap();
-                    // 🚧 It'd be great if this were an Rc...
-                    let value = Value::String(s_read!(literal).x_value.clone());
-                    let ty = value.get_type(&s_read!(lu_dog));
-                    Ok((new_ref!(Value, value), ty))
-                }
-            };
-
-            #[allow(clippy::let_and_return)]
-            z
-        }
-        //
-        // Operator
-        //
+        ExpressionEnum::ListElement(ref element) => list::eval_list_element(element, context, vm),
+        ExpressionEnum::ListExpression(ref list) => list::eval_list_expression(list, context, vm),
+        ExpressionEnum::Literal(ref literal) => literal::eval_literal(literal, context),
         ExpressionEnum::Operator(ref operator) => {
             operator::eval_operator(operator, &expression, context, vm)
         }
@@ -1098,7 +806,6 @@ fn eval_expression(
         //
         ExpressionEnum::VariableExpression(ref expr) => {
             let expr = s_read!(lu_dog).exhume_variable_expression(expr).unwrap();
-            fix_debug!("ExpressionEnum::VariableExpression", expr);
             let value = context.memory().get(&s_read!(expr).name);
 
             ensure!(value.is_some(), {
@@ -1111,17 +818,10 @@ fn eval_expression(
             });
 
             let value = value.unwrap();
-
             debug!(
                 "ExpressionEnum::VariableExpression value: {}",
                 s_read!(value)
             );
-
-            // 🚧 These statements were swapped, comment-status-wise. I thought
-            // it was because of a deadlock, or trying to mutably borrow whilst
-            // already borrowed error. Anyway, I needed the type, and swapped them
-            // to how they are now and it seems to be working. I'm just leaving
-            // this for my future self, just in case.
             let ty = s_read!(value).get_type(&s_read!(lu_dog));
 
             Ok((value, ty))
