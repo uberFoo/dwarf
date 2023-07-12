@@ -1,3 +1,4 @@
+#[cfg(feature = "repl")]
 use std::thread;
 
 use ansi_term::Colour;
@@ -11,7 +12,6 @@ use crate::{
     new_ref, s_read, s_write, ChaChaError, NewRef, RefType,
 };
 
-#[cfg(feature = "repl")]
 pub fn start_repl(mut context: Context) -> Result<(), Error> {
     use std::io;
 

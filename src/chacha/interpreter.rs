@@ -1,4 +1,4 @@
-use std::{fmt, io::Write, ops::Range, path::Path};
+use std::{fmt, ops::Range, path::Path};
 
 use ansi_term::Colour;
 use circular_queue::CircularQueue;
@@ -39,7 +39,11 @@ mod statement;
 mod tui;
 
 pub use banner::banner2;
+
+#[cfg(feature = "repl")]
 pub use repl::start_repl;
+
+#[cfg(not(any(feature = "single", feature = "single-vec")))]
 pub use tui::start_tui_repl;
 
 use context::Context;
@@ -548,9 +552,9 @@ fn chacha_print<S: AsRef<str>>(result: S, context: &mut Context) -> Result<()> {
             std::io::stdout().flush().unwrap();
         } else {
             context
-                .std_out_send
+                .std_out_send()
                 .send(format!("{}", result_style.paint(result.as_ref())))
-                .context(crate::InternalCompilerChannelSnafu {
+                .context(crate::chacha::error::InternalCompilerChannelSnafu {
                     message: "error writing to std out queue".to_owned(),
                 })?;
         }
