@@ -1,8 +1,8 @@
 use crate::{
-    chacha::vm::VM,
+    chacha::{error::Result, vm::VM},
     interpreter::{eval_statement, Context},
     lu_dog::ValueType,
-    new_ref, s_read, NewRef, RefType, Result, SarzakStorePtr, Value,
+    new_ref, s_read, NewRef, RefType, SarzakStorePtr, Value,
 };
 
 pub fn eval_block(
@@ -10,20 +10,20 @@ pub fn eval_block(
     context: &mut Context,
     vm: &mut VM,
 ) -> Result<(RefType<Value>, RefType<ValueType>)> {
-    let lu_dog = context.lu_dog.clone();
+    let lu_dog = context.lu_dog_heel().clone();
 
     let block = s_read!(lu_dog).exhume_block(block_id).unwrap();
     let stmts = s_read!(block).r18_statement(&s_read!(lu_dog));
 
     if !stmts.is_empty() {
-        context.memory.push_frame();
+        context.memory().push_frame();
         let mut value;
         let mut ty;
         let mut next = s_read!(block).r71_statement(&s_read!(lu_dog))[0].clone();
 
         loop {
             let result = eval_statement(next.clone(), context, vm).map_err(|e| {
-                context.memory.pop_frame();
+                context.memory().pop_frame();
                 e
             });
 
@@ -37,7 +37,7 @@ pub fn eval_block(
         }
 
         // Clean up
-        context.memory.pop_frame();
+        context.memory().pop_frame();
 
         Ok((value, ty))
     } else {

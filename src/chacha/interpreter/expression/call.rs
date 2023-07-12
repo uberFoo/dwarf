@@ -6,7 +6,10 @@ use snafu::prelude::*;
 use uuid::Uuid;
 
 use crate::{
-    chacha::vm::{CallFrame, VM},
+    chacha::{
+        error::{NoSuchStaticMethodSnafu, Result, TypeMismatchSnafu},
+        vm::{CallFrame, VM},
+    },
     interpreter::{
         debug, error, eval_expression, eval_function_call, eval_lambda_expression, function,
         ChaChaError, Context, PrintableValueType,
@@ -14,7 +17,7 @@ use crate::{
     lu_dog::{CallEnum, Expression, List, ValueType, ValueTypeEnum},
     new_ref, s_read, s_write,
     sarzak::Ty,
-    NewRef, NoSuchStaticMethodSnafu, RefType, Result, SarzakStorePtr, TypeMismatchSnafu, Value,
+    NewRef, RefType, SarzakStorePtr, Value,
 };
 
 pub fn eval_call(
@@ -23,8 +26,8 @@ pub fn eval_call(
     context: &mut Context,
     vm: &mut VM,
 ) -> Result<(RefType<Value>, RefType<ValueType>)> {
-    let lu_dog = context.lu_dog.clone();
-    let sarzak = context.sarzak.clone();
+    let lu_dog = context.lu_dog_heel().clone();
+    let sarzak = context.sarzak_heel().clone();
 
     let call = s_read!(lu_dog).exhume_call(call_id).unwrap();
     debug!("call {call:?}");
@@ -417,32 +420,32 @@ pub fn eval_call(
                 match func.as_str() {
                     "norm_squared" => {
                         let (value, ty) = arg_values.pop_front().unwrap();
-                        let thonk = context.memory.get_thonk(0).unwrap();
+                        let thonk = context.memory().get_thonk(0).unwrap();
                         let mut frame = CallFrame::new(0, 0, thonk);
                         vm.push_stack(new_ref!(Value, "norm_squared".into()));
                         vm.push_stack(value);
                         let result = vm.run(&mut frame, false);
                         vm.pop_stack();
                         vm.pop_stack();
-                        context.expr_count += 2;
+                        context.increment_expression_count(2);
 
                         Ok((result.unwrap(), ty))
                     }
                     "square" => {
                         let (value, ty) = arg_values.pop_front().unwrap();
-                        let thonk = context.memory.get_thonk(2).unwrap();
+                        let thonk = context.memory().get_thonk(2).unwrap();
                         let mut frame = CallFrame::new(0, 0, thonk);
                         vm.push_stack(new_ref!(Value, "square".into()));
                         vm.push_stack(value);
                         let result = vm.run(&mut frame, false);
                         vm.pop_stack();
                         vm.pop_stack();
-                        context.expr_count += 5;
+                        context.increment_expression_count(5);
 
                         Ok((result.unwrap(), ty))
                     }
                     "add" => {
-                        let thonk = context.memory.get_thonk(1).unwrap();
+                        let thonk = context.memory().get_thonk(1).unwrap();
                         let mut frame = CallFrame::new(0, 0, thonk);
                         vm.push_stack(new_ref!(Value, "add".into()));
                         let (value, _ty) = arg_values.pop_front().unwrap();
@@ -453,7 +456,7 @@ pub fn eval_call(
                         vm.pop_stack();
                         vm.pop_stack();
                         vm.pop_stack();
-                        context.expr_count += 2;
+                        context.increment_expression_count(2);
 
                         Ok((result.unwrap(), ty))
                     }
@@ -479,7 +482,7 @@ pub fn eval_call(
                         let ty = List::new(&ty, &mut s_write!(lu_dog));
                         let ty = ValueType::new_list(&ty, &mut s_write!(lu_dog));
 
-                        if let Some(args) = &context.args {
+                        if let Some(args) = &context.get_args() {
                             Ok((args.clone(), ty))
                         } else {
                             Ok((new_ref!(Value, Value::Vector(Vec::new())), ty))
@@ -545,7 +548,7 @@ pub fn eval_call(
                     }
                     "eps" => {
                         debug!("evaluating chacha::eps");
-                        let mut timings = context.timings.iter().cloned().collect::<Vec<_>>();
+                        let mut timings = context.get_timings().to_vec();
                         timings.sort_by(|a, b| a.partial_cmp(b).unwrap());
 
                         let mean = timings.iter().sum::<f64>() / timings.len() as f64;
@@ -619,7 +622,7 @@ pub fn eval_call(
                         })
                     }
                 }
-            } else if let Some(value) = context.memory.get_meta(ty, func) {
+            } else if let Some(value) = context.memory().get_meta(ty, func) {
                 debug!("StaticMethodCall meta value {value:?}");
                 match &*s_read!(value) {
                     Value::Function(ref func) => {
@@ -648,7 +651,7 @@ pub fn eval_call(
                         ))
                     }
                 }
-            } else if let Some(value) = context.memory.get(ty) {
+            } else if let Some(value) = context.memory().get(ty) {
                 debug!("StaticMethodCall frame value {value:?}");
                 match &mut *s_write!(value) {
                     Value::Function(ref func) => {

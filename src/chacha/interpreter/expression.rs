@@ -1,4 +1,4 @@
 pub mod block;
 pub mod call;
-pub mod lambda;
+pub mod index;
 pub mod operator;

@@ -1,12 +1,12 @@
 use ansi_term::Colour;
 
 use crate::{
-    chacha::vm::VM,
+    chacha::{error::Result, vm::VM},
     interpreter::{debug, eval_expression, function, Context},
     lu_dog::{ComparisonEnum, Expression, Operator, ValueType},
     new_ref, s_read, s_write,
     sarzak::Ty,
-    NewRef, RefType, Result, SarzakStorePtr, Value,
+    NewRef, RefType, SarzakStorePtr, Value,
 };
 
 pub fn eval_comparison(
@@ -16,7 +16,7 @@ pub fn eval_comparison(
     context: &mut Context,
     vm: &mut VM,
 ) -> Result<(RefType<Value>, RefType<ValueType>)> {
-    let lu_dog = context.lu_dog.clone();
+    let lu_dog = context.lu_dog_heel().clone();
 
     let (lhs, _lhs_ty) = eval_expression(lhs_expr.clone(), context, vm)?;
     let rhs = {

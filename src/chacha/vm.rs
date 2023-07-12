@@ -3,8 +3,8 @@ use std::fmt;
 use ansi_term::Colour;
 
 use crate::{
-    chacha::memory::Memory, new_ref, s_read, s_write, value::UserType, ChaChaError, NewRef,
-    RefType, Result, Value, ValueType,
+    chacha::{error::Result, memory::Memory, value::UserType},
+    new_ref, s_read, s_write, ChaChaError, NewRef, RefType, Value, ValueType,
 };
 
 #[derive(Clone, Debug)]
@@ -895,8 +895,8 @@ mod tests {
     #[test]
     fn test_instr_field() {
         use crate::{
+            chacha::value::UserType,
             lu_dog::{Field, ObjectStore as LuDogStore, ValueType, WoogStruct},
-            value::UserType,
         };
         use sarzak::sarzak::{ObjectStore as SarzakStore, Ty, MODEL as SARZAK_MODEL};
 

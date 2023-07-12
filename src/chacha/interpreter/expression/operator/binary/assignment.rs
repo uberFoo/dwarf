@@ -2,10 +2,13 @@ use ansi_term::Colour;
 use snafu::{location, prelude::*, Location};
 
 use crate::{
-    chacha::vm::VM,
+    chacha::{
+        error::{Result, VariableNotFoundSnafu},
+        vm::VM,
+    },
     interpreter::{debug, eval_expression, function, ChaChaError, Context},
     lu_dog::{Expression, ExpressionEnum, FieldAccessTargetEnum, Operator, ValueType},
-    new_ref, s_read, s_write, NewRef, RefType, Result, Value, VariableNotFoundSnafu,
+    new_ref, s_read, s_write, NewRef, RefType, Value,
 };
 
 pub fn eval_assignment(
@@ -15,7 +18,7 @@ pub fn eval_assignment(
     context: &mut Context,
     vm: &mut VM,
 ) -> Result<(RefType<Value>, RefType<ValueType>)> {
-    let lu_dog = context.lu_dog.clone();
+    let lu_dog = context.lu_dog_heel().clone();
 
     debug!("Evaluating assignment lhs: {lhs_expr:?}");
 
@@ -56,7 +59,7 @@ pub fn eval_assignment(
                 .exhume_variable_expression(&s_read!(expr).id)
                 .unwrap();
 
-            let value = context.memory.get(&s_read!(expr).name);
+            let value = context.memory().get(&s_read!(expr).name);
             ensure!(value.is_some(), {
                 let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
                 let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
@@ -111,7 +114,7 @@ pub fn eval_assignment(
             let result = if let ExpressionEnum::VariableExpression(ref id) = s_read!(expr).subtype {
                 let expr = s_read!(lu_dog).exhume_variable_expression(id).unwrap();
                 let name = s_read!(expr).name.clone();
-                let value = context.memory.get(&name).unwrap();
+                let value = context.memory().get(&name).unwrap();
                 let mut value = s_write!(value);
                 *value = s_read!(rhs.0).clone();
                 Ok(rhs)
@@ -140,7 +143,7 @@ pub fn eval_assignment(
             let expr = s_read!(lu_dog).exhume_variable_expression(expr).unwrap();
             let expr = s_read!(expr);
             let name = expr.name.clone();
-            let value = context.memory.get(&name).unwrap();
+            let value = context.memory().get(&name).unwrap();
             let mut value = s_write!(value);
             *value = s_read!(rhs.0).clone();
             Ok(rhs)

@@ -1,10 +1,10 @@
 use ansi_term::Colour;
 
 use crate::{
-    chacha::vm::VM,
+    chacha::{error::Result, vm::VM},
     interpreter::{debug, eval_expression, function, Context},
     lu_dog::{BooleanOperatorEnum, Expression, Operator, ValueType},
-    new_ref, s_read, NewRef, RefType, Result, SarzakStorePtr, Value,
+    new_ref, s_read, NewRef, RefType, SarzakStorePtr, Value,
 };
 
 pub fn eval_boolean_operator(
@@ -14,7 +14,7 @@ pub fn eval_boolean_operator(
     context: &mut Context,
     vm: &mut VM,
 ) -> Result<(RefType<Value>, RefType<ValueType>)> {
-    let lu_dog = context.lu_dog.clone();
+    let lu_dog = context.lu_dog_heel().clone();
 
     let (lhs, lhs_ty) = eval_expression(lhs_expr.clone(), context, vm)?;
     let rhs = {

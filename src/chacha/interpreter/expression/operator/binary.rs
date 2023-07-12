@@ -1,10 +1,10 @@
 use ansi_term::Colour;
 
 use crate::{
-    chacha::vm::VM,
+    chacha::{error::Result, vm::VM},
     interpreter::{debug, function, Context},
     lu_dog::{BinaryEnum, Expression, Operator, ValueType},
-    s_read, RefType, Result, SarzakStorePtr, Value,
+    s_read, RefType, SarzakStorePtr, Value,
 };
 
 pub mod addition;
@@ -22,7 +22,7 @@ pub fn eval_binary(
     context: &mut Context,
     vm: &mut VM,
 ) -> Result<(RefType<Value>, RefType<ValueType>)> {
-    let lu_dog = context.lu_dog.clone();
+    let lu_dog = context.lu_dog_heel().clone();
 
     let binary = s_read!(lu_dog).exhume_binary(binary).unwrap();
     let binary = s_read!(binary);

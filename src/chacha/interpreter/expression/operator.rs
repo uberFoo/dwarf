@@ -1,10 +1,10 @@
 use ansi_term::Colour;
 
 use crate::{
-    chacha::vm::VM,
+    chacha::{error::Result, vm::VM},
     interpreter::{debug, function, Context},
     lu_dog::{Expression, OperatorEnum, ValueType},
-    s_read, RefType, Result, SarzakStorePtr, Value,
+    s_read, RefType, SarzakStorePtr, Value,
 };
 
 pub mod binary;
@@ -17,7 +17,7 @@ pub fn eval_operator(
     context: &mut Context,
     vm: &mut VM,
 ) -> Result<(RefType<Value>, RefType<ValueType>)> {
-    let lu_dog = context.lu_dog.clone();
+    let lu_dog = context.lu_dog_heel().clone();
 
     let operator = s_read!(lu_dog).exhume_operator(operator).unwrap();
     let lhs_expr = s_read!(lu_dog)

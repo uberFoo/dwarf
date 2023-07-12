@@ -1,11 +1,8 @@
-use std::{fmt, io::Write, ops::Range, path::Path, thread, time::Instant};
+use std::{fmt, io::Write, ops::Range, path::Path};
 
-use ansi_term::{
-    ANSIString, ANSIStrings,
-    Colour::{self, RGB},
-};
+use ansi_term::Colour;
 use circular_queue::CircularQueue;
-use crossbeam::channel::{unbounded, Receiver, Sender};
+use crossbeam::channel::unbounded;
 use heck::ToUpperCamelCase;
 use lazy_static::lazy_static;
 use log::{self, log_enabled, Level::Debug};
@@ -25,25 +22,37 @@ use uuid::Uuid;
 
 use crate::{
     chacha::{
+        error::{Error, NoSuchFieldSnafu, Result, UnimplementedSnafu, VariableNotFoundSnafu},
         memory::{Memory, MemoryUpdateMessage},
+        value::UserType,
         vm::{CallFrame, Instruction, Thonk, VM},
     },
-    dwarf::{inter_statement, parse_line, Context as ExtruderContext},
     lu_dog::{
-        Argument, Block, DwarfSourceFile, Expression, Function, Import, List, LocalVariable,
-        ObjectStore as LuDogStore, Span, Statement, StatementEnum, ValueType, Variable,
-        WoogOptionEnum, XValue, XValueEnum,
+        Block, Expression, List, LocalVariable, ObjectStore as LuDogStore, Span, Statement,
+        StatementEnum, ValueType, Variable, WoogOptionEnum, XValue, XValueEnum,
     },
     new_ref, s_read, s_write,
     sarzak::{store::ObjectStore as SarzakStore, types::Ty},
-    value::{StoreProxy, UserType},
-    ChaChaError, DwarfInteger, Error, NewRef, NoSuchFieldSnafu, RefType, Result,
-    UnimplementedSnafu, Value, VariableNotFoundSnafu, WrongNumberOfArgumentsSnafu,
+    ChaChaError, DwarfInteger, NewRef, RefType, Value,
 };
 
+mod banner;
+mod context;
 mod expression;
-use expression::{block, call, lambda::eval_lambda_expression, operator};
+mod func_call;
+mod lambda;
+mod repl;
 mod statement;
+mod tui;
+
+pub use banner::banner2;
+pub use repl::start_repl;
+pub use tui::start_tui_repl;
+
+use context::Context;
+use expression::{block, call, index, operator};
+use func_call::eval_function_call;
+use lambda::eval_lambda_expression;
 
 macro_rules! function {
     () => {{
@@ -211,14 +220,11 @@ macro_rules! fix_trace {
     };
 }
 
-// const VM: OnceCell<VM> = OnceCell::new();
-// const CTX: OnceCell<Context> = OnceCell::new();
-
 const TIMING_COUNT: usize = 1_000;
 
 lazy_static! {
-    static ref RUNNING: Mutex<bool> = Mutex::new(true);
-    static ref CVAR: Condvar = Condvar::new();
+    pub(super) static ref RUNNING: Mutex<bool> = Mutex::new(true);
+    pub(super) static ref CVAR: Condvar = Condvar::new();
     pub(crate) static ref STEPPING: Mutex<bool> = Mutex::new(false);
 }
 
@@ -522,220 +528,22 @@ pub fn initialize_interpreter<P: AsRef<Path>>(
 
     Client::start();
 
-    Ok(Context {
-        prompt: format!("{} ", Colour::Blue.normal().paint("道:>")),
-        memory: stack,
+    Ok(Context::new(
+        format!("{} ", Colour::Blue.normal().paint("道:>")),
         block,
-        lu_dog: new_ref!(LuDogStore, lu_dog),
-        sarzak: new_ref!(SarzakStore, sarzak),
-        models: new_ref!(Vec<SarzakStore>, Vec::new()),
-        mem_update_recv: receiver,
+        stack,
+        new_ref!(LuDogStore, lu_dog),
+        new_ref!(SarzakStore, sarzak),
+        new_ref!(Vec<SarzakStore>, Vec::new()),
+        receiver,
         std_out_send,
         std_out_recv,
-        debug_status_writer: None,
-        // obj_file_path: lu_dog_path.map(|p| p.as_ref().to_owned()),
-        timings: CircularQueue::with_capacity(TIMING_COUNT),
-        expr_count: 0,
-        func_calls: 0,
-        args: None,
-    })
-}
-
-fn eval_function_call(
-    func: RefType<Function>,
-    args: &[RefType<Argument>],
-    arg_check: bool,
-    span: &RefType<Span>,
-    context: &mut Context,
-    vm: &mut VM,
-) -> Result<(RefType<Value>, RefType<ValueType>)> {
-    let lu_dog = context.lu_dog.clone();
-    context.func_calls += 1;
-
-    fix_debug!("eval_function_call func ", func);
-    fix_trace!("eval_function_call stack", context.memory);
-
-    span!("eval_function_call");
-
-    let func = s_read!(func);
-    let block = s_read!(lu_dog).exhume_block(&func.block).unwrap();
-    // let stmts = s_read!(block).r18_statement(&s_read!(lu_dog));
-    let has_stmts = !s_read!(block).r18_statement(&s_read!(lu_dog)).is_empty();
-
-    // if !stmts.is_empty() {
-    // if !s_read!(block).r18_statement(&s_read!(lu_dog)).is_empty() {
-    if has_stmts {
-        // Collect timing info
-        let now = Instant::now();
-        let expr_count_start = context.expr_count;
-
-        context.memory.push_frame();
-
-        // We need to evaluate the arguments, and then push them onto the stack. We
-        // also need to typecheck the arguments against the function parameters.
-        // We need to look the params up anyway to set the local variables.
-        let params = func.r13_parameter(&s_read!(lu_dog));
-
-        // 🚧 I'd really like to see the source code printed out, with the function
-        // call highlighted.
-        // And can't we catch this is the compiler?
-        ensure!(params.len() == args.len(), {
-            let value_ty = &func.r1_value_type(&s_read!(lu_dog))[0];
-            let defn_span = &s_read!(value_ty).r62_span(&s_read!(lu_dog))[0];
-            let read = s_read!(defn_span);
-            let defn_span = read.start as usize..read.end as usize;
-
-            let read = s_read!(span);
-            let invocation_span = read.start as usize..read.end as usize;
-
-            WrongNumberOfArgumentsSnafu {
-                expected: params.len(),
-                got: args.len(),
-                defn_span,
-                invocation_span,
-            }
-        });
-
-        let params = if !params.is_empty() {
-            let mut params = Vec::with_capacity(params.len());
-            let mut next = func
-                .r13_parameter(&s_read!(lu_dog))
-                .iter()
-                .find(|p| s_read!(p).r14c_parameter(&s_read!(lu_dog)).is_empty())
-                .unwrap()
-                .clone();
-
-            loop {
-                // Apparently I'm being clever. I don't typecheck against an actual
-                // type associated with the parameter. No, I am looking up the variable
-                // associated with the parameter and using it's type. I guess that's cool,
-                // but it's tricky if you aren't aware.
-                let var = s_read!(s_read!(next).r12_variable(&s_read!(lu_dog))[0]).clone();
-                let value = s_read!(var.r11_x_value(&s_read!(lu_dog))[0]).clone();
-                let ty = value.r24_value_type(&s_read!(lu_dog))[0].clone();
-                params.push((var.name.clone(), ty.clone()));
-
-                let next_id = { s_read!(next).next };
-                if let Some(ref id) = next_id {
-                    next = s_read!(lu_dog).exhume_parameter(id).unwrap();
-                } else {
-                    break;
-                }
-            }
-
-            params
-        } else {
-            Vec::new()
-        };
-
-        let arg_values = if !args.is_empty() {
-            let mut arg_values = Vec::with_capacity(args.len());
-            let mut next = args
-                .iter()
-                .find(|a| s_read!(a).r27c_argument(&s_read!(lu_dog)).is_empty())
-                .unwrap()
-                .clone();
-
-            loop {
-                let expr = s_read!(next).r37_expression(&s_read!(lu_dog))[0].clone();
-                let (value, ty) = eval_expression(expr.clone(), context, vm)?;
-                arg_values.push((expr, value, ty));
-
-                let next_id = { s_read!(next).next };
-                if let Some(ref id) = next_id {
-                    next = s_read!(lu_dog).exhume_argument(id).unwrap();
-                } else {
-                    break;
-                }
-            }
-
-            arg_values
-        } else {
-            Vec::new()
-        };
-
-        let zipped = params.into_iter().zip(arg_values);
-        for ((name, param_ty), (expr, value, arg_ty)) in zipped {
-            fix_debug!("type check name", name);
-            fix_debug!("type check param_ty", param_ty);
-            fix_debug!("type check value", value);
-            fix_debug!("type check arg_ty", arg_ty);
-
-            if arg_check {
-                let x_value = &s_read!(expr).r11_x_value(&s_read!(lu_dog))[0];
-                let span = &s_read!(x_value).r63_span(&s_read!(lu_dog))[0];
-
-                typecheck(&param_ty, &arg_ty, span, location!(), context)?;
-            }
-
-            context.memory.insert(name.clone(), value);
-        }
-
-        let mut value = new_ref!(Value, Value::Empty);
-        let mut ty = Value::Empty.get_type(&s_read!(lu_dog));
-        // This is a pain.
-        // Find the first statement, by looking for the one with no previous statement.
-        // let mut next = stmts
-        //     .iter()
-        //     .find(|s| s_read!(s).r17c_statement(&s_read!(lu_dog)).is_empty())
-        //     .unwrap()
-        //     .clone();
-        if let Some(ref id) = s_read!(block).statement {
-            let mut next = s_read!(lu_dog).exhume_statement(id).unwrap();
-
-            loop {
-                let result = eval_statement(next.clone(), context, vm).map_err(|e| {
-                    // This is cool, if it does what I think it does. We basically
-                    // get the opportunity to look at the error, and do stuff with
-                    // it, and then let it continue on as if nothing happened.
-                    //
-                    // Anyway, we need to clean up the stack frame if there was an
-                    // error. I'm also considering abusing the error type to pass
-                    // through that we hit a return expression. I'm thinking more
-                    // and more that this is a Good Idea. Well, maybe just a good
-                    // idea. We can basically just do an early, successful return.
-                    //
-                    // Well, that doesn't work: return applies to the closure.
-                    context.memory.pop_frame();
-
-                    // if let ChaChaError::Return { value } = &e {
-                    //     let ty = value.get_type(&mut s_write!(lu_dog));
-                    //     return Ok((value, ty));
-                    // }
-
-                    // Err(e)
-                    e
-                });
-
-                if let Err(ChaChaError::Return { value, ty }) = &result {
-                    return Ok((value.clone(), ty.clone()));
-                }
-
-                (value, ty) = result?;
-
-                if let Some(ref id) = s_read!(next.clone()).next {
-                    next = s_read!(lu_dog).exhume_statement(id).unwrap();
-                } else {
-                    break;
-                }
-            }
-        }
-
-        // Clean up
-        context.memory.pop_frame();
-        let elapsed = now.elapsed();
-        // Counting 10k expressions per second
-        let eps =
-            (context.expr_count - expr_count_start) as f64 / elapsed.as_micros() as f64 * 10.0;
-        context.timings.push(eps);
-
-        Ok((value, ty))
-    } else {
-        Ok((
-            new_ref!(Value, Value::Empty),
-            Value::Empty.get_type(&s_read!(lu_dog)),
-        ))
-    }
+        None,
+        CircularQueue::with_capacity(TIMING_COUNT),
+        0,
+        0,
+        None,
+    ))
 }
 
 #[allow(unused_variables)]
@@ -762,10 +570,10 @@ fn eval_expression(
     context: &mut Context,
     vm: &mut VM,
 ) -> Result<(RefType<Value>, RefType<ValueType>)> {
-    let lu_dog = context.lu_dog.clone();
+    let lu_dog = context.lu_dog_heel().clone();
 
     // Timing goodness
-    context.expr_count += 1;
+    context.increment_expression_count(1);
 
     // context.tracy.span(span_location!("eval_expression"), 0);
     // context
@@ -776,7 +584,7 @@ fn eval_expression(
     {
         let mut running = RUNNING.lock();
         if !*running {
-            if let Some(sender) = &context.debug_status_writer {
+            if let Some(sender) = &context.debug_status_writer() {
                 let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
                 fix_debug!("value", value);
 
@@ -797,7 +605,7 @@ fn eval_expression(
         }
 
         debug!("running: {expression:#?}");
-        trace!("stack: {:#?}", context.memory);
+        trace!("stack: {:#?}", context.memory());
     }
 
     if log_enabled!(Debug) {
@@ -951,7 +759,7 @@ fn eval_expression(
             };
 
             let block = Expression::new_block(&block, &mut s_write!(lu_dog));
-            context.memory.push_frame();
+            context.memory().push_frame();
             // list.par_iter().for_each(|item| {
             //     // This gives each thread it's own stack frame, and read only
             //     // access to the parent stack frame. I don't know that I love
@@ -961,17 +769,17 @@ fn eval_expression(
             //     eval_expression(block.clone(), &mut context.clone()).unwrap();
             // });
             for item in list {
-                context.memory.insert(ident.clone(), item);
+                context.memory().insert(ident.clone(), item);
                 let expr_ty = eval_expression(block.clone(), context, vm);
                 match expr_ty {
                     Ok(_) => {}
                     Err(e) => {
-                        context.memory.pop_frame();
+                        context.memory().pop_frame();
                         return Err(e);
                     }
                 }
             }
-            context.memory.pop_frame();
+            context.memory().pop_frame();
 
             Ok((
                 new_ref!(Value, Value::Empty),
@@ -981,119 +789,7 @@ fn eval_expression(
         //
         // Index
         //
-        ExpressionEnum::Index(ref index) => {
-            let index = s_read!(lu_dog).exhume_index(index).unwrap();
-            let index = s_read!(index);
-            let target = s_read!(lu_dog).exhume_expression(&index.target).unwrap();
-            let index_expr = s_read!(lu_dog).exhume_expression(&index.index).unwrap();
-
-            let (index, _ty) = eval_expression(index_expr.clone(), context, vm)?;
-            let index = s_read!(index).clone();
-            match &index {
-                Value::Integer(index) => {
-                    let index = *index as usize;
-                    let (list, ty) = eval_expression(target, context, vm)?;
-                    let list = s_read!(list);
-                    if let Value::Vector(vec) = list.clone() {
-                        if index < vec.len() {
-                            Ok((vec[index].to_owned(), ty))
-                        } else {
-                            let value = &s_read!(index_expr).r11_x_value(&s_read!(lu_dog))[0];
-                            let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
-                            let read = s_read!(span);
-                            let span = read.start as usize..read.end as usize;
-
-                            Err(ChaChaError::IndexOutOfBounds {
-                                index,
-                                len: vec.len(),
-                                span,
-                                location: location!(),
-                            })
-                        }
-                    } else if let Value::String(str) = &*list {
-                        let str = unicode_segmentation::UnicodeSegmentation::graphemes(
-                            str.as_str(),
-                            true,
-                        )
-                        .collect::<Vec<&str>>();
-
-                        if index < str.len() {
-                            let ty = Ty::new_s_string();
-                            let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
-                            Ok((
-                                new_ref!(Value, Value::String(str[index..index + 1].join(""),)),
-                                ty,
-                            ))
-                        } else {
-                            let value = &s_read!(index_expr).r11_x_value(&s_read!(lu_dog))[0];
-                            let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
-                            let read = s_read!(span);
-                            let span = read.start as usize..read.end as usize;
-
-                            Err(ChaChaError::IndexOutOfBounds {
-                                index,
-                                len: str.len(),
-                                span,
-                                location: location!(),
-                            })
-                        }
-                    } else {
-                        Err(ChaChaError::BadJuJu {
-                            message: "Target is not a list".to_owned(),
-                            location: location!(),
-                        })
-                    }
-                }
-                Value::Range(_) => {
-                    let range: Range<usize> = index.try_into()?;
-                    let (list, ty) = eval_expression(target, context, vm)?;
-                    let list = s_read!(list);
-                    if let Value::Vector(vec) = list.clone() {
-                        if range.end < vec.len() {
-                            Ok((new_ref!(Value, Value::Vector(vec[range].to_owned())), ty))
-                        } else {
-                            let value = &s_read!(index_expr).r11_x_value(&s_read!(lu_dog))[0];
-                            let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
-                            let read = s_read!(span);
-                            let span = read.start as usize..read.end as usize;
-
-                            Err(ChaChaError::IndexOutOfBounds {
-                                index: range.end,
-                                len: vec.len(),
-                                span,
-                                location: location!(),
-                            })
-                        }
-                    } else if let Value::String(str) = &*list {
-                        let str = unicode_segmentation::UnicodeSegmentation::graphemes(
-                            str.as_str(),
-                            true,
-                        )
-                        .collect::<Vec<&str>>();
-
-                        if range.end < str.len() {
-                            let ty = Ty::new_s_string();
-                            let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
-                            Ok((new_ref!(Value, Value::String(str[range].join(""),)), ty))
-                        } else {
-                            Err(ChaChaError::BadJuJu {
-                                message: "Index out of bounds".to_owned(),
-                                location: location!(),
-                            })
-                        }
-                    } else {
-                        Err(ChaChaError::BadJuJu {
-                            message: "Target is not a list".to_owned(),
-                            location: location!(),
-                        })
-                    }
-                }
-                _ => Err(ChaChaError::BadJuJu {
-                    message: "Index is not an integer".to_owned(),
-                    location: location!(),
-                }),
-            }
-        }
+        ExpressionEnum::Index(ref index) => index::eval_index(index, context, vm),
         //
         // Lambda
         //
@@ -1304,6 +1000,7 @@ fn eval_expression(
             let ty = s_read!(woog_struct).r1_value_type(&s_read!(lu_dog))[0].clone();
             let fields = s_read!(woog_struct).r7_field(&s_read!(lu_dog));
 
+            // 🚧 Don't I do this in the extruder? Can't I?
             // Type checking fields here
             let ty_name = PrintableValueType(&ty, context);
             let mut user_type = UserType::new(ty_name.to_string(), &ty);
@@ -1342,7 +1039,7 @@ fn eval_expression(
         // TypeCast
         //
         ExpressionEnum::TypeCast(ref expr) => {
-            let sarzak = context.sarzak.clone();
+            let sarzak = context.sarzak_heel().clone();
 
             let expr = s_read!(lu_dog).exhume_type_cast(expr).unwrap();
             fix_debug!("ExpressionEnum::TypeCast", expr);
@@ -1402,7 +1099,7 @@ fn eval_expression(
         ExpressionEnum::VariableExpression(ref expr) => {
             let expr = s_read!(lu_dog).exhume_variable_expression(expr).unwrap();
             fix_debug!("ExpressionEnum::VariableExpression", expr);
-            let value = context.memory.get(&s_read!(expr).name);
+            let value = context.memory().get(&s_read!(expr).name);
 
             ensure!(value.is_some(), {
                 let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
@@ -1532,10 +1229,10 @@ pub fn eval_statement(
     context: &mut Context,
     vm: &mut VM,
 ) -> Result<(RefType<Value>, RefType<ValueType>)> {
-    let lu_dog = context.lu_dog.clone();
+    let lu_dog = context.lu_dog_heel().clone();
 
     fix_debug!("eval_statement statement", statement);
-    fix_trace!("eval_statement stack", context.memory);
+    fix_trace!("eval_statement stack", context.memory());
 
     span!("eval_statement");
 
@@ -1570,7 +1267,7 @@ pub fn eval_statement(
             fix_debug!("var", var);
 
             debug!("inserting {} = {}", var.name, s_read!(value));
-            context.memory.insert(var.name, value);
+            context.memory().insert(var.name, value);
 
             // 🚧 I'm changing this from returning ty. If something get's wonky,
             // maybe start looking here. But TBH, why would we return the type of
@@ -1601,157 +1298,6 @@ pub fn eval_statement(
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct Context {
-    /// The prompt to display in the REPL
-    prompt: String,
-    /// The root block, used by the REPL
-    block: RefType<Block>,
-    memory: Memory,
-    lu_dog: RefType<LuDogStore>,
-    sarzak: RefType<SarzakStore>,
-    models: RefType<Vec<SarzakStore>>,
-    mem_update_recv: Receiver<MemoryUpdateMessage>,
-    #[allow(dead_code)]
-    std_out_send: Sender<String>,
-    std_out_recv: Receiver<String>,
-    debug_status_writer: Option<Sender<DebuggerStatus>>,
-    // obj_file_path: Option<PathBuf>,
-    timings: CircularQueue<f64>,
-    expr_count: usize,
-    func_calls: usize,
-    args: Option<RefType<Value>>,
-}
-
-/// Save the lu_dog model when the context is dropped
-///
-/// NB: This doesn't work. The thread that started us apparently goes away
-/// before we get a chance to run this to completion. That's my current
-/// working hypothesis.
-///
-/// Shouldn't this work if we are joining the threads? Maybe I wasn't doing that?
-/// Do I still need this?
-/// I do if we want to save the model on exit.
-impl Drop for Context {
-    fn drop(&mut self) {
-        // s_read!(self.lu_dog)
-        //     .unwrap()
-        //     .persist_bincode(&self.obj_file_path)
-        //     .unwrap();
-    }
-}
-
-impl Context {
-    pub fn add_args(&mut self, args: Vec<String>) {
-        self.args = Some(new_ref!(Value, args.into()));
-    }
-
-    pub fn register_model<P: AsRef<Path>>(&self, model_path: P) -> Result<()> {
-        let model =
-            SarzakStore::load(model_path.as_ref()).map_err(|e| ChaChaError::Store { source: e })?;
-
-        s_write!(self.models).push(model);
-
-        Ok(())
-    }
-
-    pub fn register_memory_updates(&self) -> Receiver<MemoryUpdateMessage> {
-        self.mem_update_recv.clone()
-    }
-
-    pub fn get_std_out(&self) -> Receiver<String> {
-        self.std_out_recv.clone()
-    }
-
-    pub fn drain_std_out(&self) -> Vec<String> {
-        let mut out = Vec::new();
-        while let Ok(line) = self.std_out_recv.try_recv() {
-            out.push(line);
-        }
-        out
-    }
-
-    pub fn get_stack(&self) -> &Memory {
-        &self.memory
-    }
-
-    pub fn prompt(&self) -> &str {
-        &self.prompt
-    }
-
-    pub fn source(&self) -> String {
-        let source = s_read!(self.lu_dog)
-            .iter_dwarf_source_file()
-            .next()
-            .unwrap();
-        let source = s_read!(source);
-        source.source.clone()
-    }
-
-    pub fn lu_dog_heel(&self) -> RefType<LuDogStore> {
-        self.lu_dog.clone()
-    }
-
-    pub fn block(&self) -> RefType<Block> {
-        self.block.clone()
-    }
-
-    pub fn sarzak_heel(&self) -> RefType<SarzakStore> {
-        self.sarzak.clone()
-    }
-
-    pub fn models(&self) -> RefType<Vec<SarzakStore>> {
-        self.models.clone()
-    }
-
-    pub fn register_store_proxy(&mut self, name: String, proxy: impl StoreProxy + 'static) {
-        self.memory.insert_global(
-            name.clone(),
-            new_ref!(
-                Value,
-                Value::ProxyType(new_ref!(Box<dyn StoreProxy>, Box::new(proxy)))
-            ),
-        );
-
-        let mut lu_dog = s_write!(self.lu_dog);
-        let local = LocalVariable::new(Uuid::new_v4(), &mut lu_dog);
-        let var = Variable::new_local_variable(name.clone(), &local, &mut lu_dog);
-        let import = Import::new(
-            "So ugly".to_owned(),
-            false,
-            name,
-            "path".to_owned(),
-            None,
-            &mut lu_dog,
-        );
-
-        let _value = XValue::new_variable(
-            &self.block,
-            &ValueType::new_import(&import, &mut lu_dog),
-            &var,
-            &mut lu_dog,
-        );
-        // {
-        //     // Build the ASTs
-        //     let local = LocalVariable::new(Uuid::new_v4(), &mut *s_write!(lu_dog));
-        //     let var = Variable::new_local_variable(
-        //         "MERLIN_STORE".to_owned(),
-        //         local,
-        //         &mut *s_write!(lu_dog),
-        //     );
-
-        //     let store = ZObjectStore::new("merlin".to_owned(), &mut *s_write!(lu_dog));
-        //     let mut write = s_write!(lu_dog);
-        //     let _value = LuDogValue::new_variable(
-        //         block.clone(),
-        //         ValueType::new_z_object_store(store, &mut write),
-        //         var,
-        //         &mut write,
-        //     );
-        // }
-    }
-}
-
 #[derive(Debug)]
 pub enum DebuggerStatus {
     Error(String),
@@ -1770,160 +1316,6 @@ pub enum DebuggerControl {
     Stop,
 }
 
-#[cfg(not(any(feature = "single", feature = "single-vec")))]
-pub fn start_tui_repl(mut context: Context) -> (Sender<DebuggerControl>, Receiver<DebuggerStatus>) {
-    use std::time::Duration;
-
-    use crossbeam::channel::RecvTimeoutError;
-
-    let (to_ui_write, to_ui_read) = unbounded();
-    let (from_ui_write, from_ui_read) = unbounded();
-    // let (from_worker_write, from_worker_read) = unbounded();
-    let (to_worker_write, to_worker_read) = unbounded();
-
-    context.debug_status_writer = Some(to_ui_write.clone());
-    let std_out = context.std_out_recv.clone();
-
-    // Control thread
-    //
-    // This one listens for events from the debugger (to set breakpoints, etc.).
-    // It communicates with the worker thread via mutexes and the condition
-    // variable.
-    thread::Builder::new()
-        .name("control".into())
-        .spawn(move || loop {
-            match from_ui_read.recv_timeout(Duration::from_millis(10)) {
-                Ok(DebuggerControl::SetBreakpoint(character)) => {
-                    fix_debug!("Setting breakpoint at character {}", character);
-                }
-                Ok(DebuggerControl::ExecuteInput(input)) => {
-                    fix_debug!("Executing input: {}", input);
-                    to_worker_write.send(input).unwrap();
-                }
-                Ok(DebuggerControl::StepInto) => {
-                    fix_debug!("Debugger StepInto");
-                    *RUNNING.lock() = true;
-                    CVAR.notify_all();
-                }
-                Ok(DebuggerControl::StepOver) => {
-                    fix_debug!("Debugger StepOver");
-                }
-                Ok(DebuggerControl::Run) => {
-                    fix_debug!("Debugger Run");
-                    *STEPPING.lock() = false;
-                    *RUNNING.lock() = true;
-                    CVAR.notify_all();
-                }
-                Ok(DebuggerControl::Stop) => {
-                    fix_debug!("Debugger Stop");
-                    break;
-                }
-                Err(RecvTimeoutError::Timeout) => {}
-                Err(_) => {
-                    fix_debug!("Debugger control thread exiting");
-                    break;
-                }
-            };
-        })
-        .unwrap();
-
-    // Stdout thread
-    //
-    // Really? Another fucking thread?
-    let to_ui = to_ui_write.clone();
-    thread::Builder::new()
-        .name("stdout".into())
-        .spawn(move || loop {
-            match std_out.recv_timeout(Duration::from_millis(10)) {
-                Ok(output) => {
-                    to_ui.send(DebuggerStatus::StdOut(output)).unwrap();
-                }
-                Err(RecvTimeoutError::Timeout) => {}
-                Err(_) => {
-                    fix_debug!("Debugger control thread exiting");
-                    break;
-                }
-            }
-        })
-        .unwrap();
-
-    // Worker thread
-    //
-    // This guy listens for statements and executes them. It relies on the state
-    // of the condition variable and mutexes to know how to behave.
-    thread::Builder::new()
-        .name("worker".into())
-        // .stack_size(128 * 1024)
-        .spawn(move || {
-            let stack = &mut context.memory;
-            let vm_stack = stack.clone();
-            let mut vm = VM::new(&vm_stack);
-
-            loop {
-                match to_worker_read.recv_timeout(Duration::from_millis(10)) {
-                    Ok(input) => match parse_line(&input) {
-                        Ok(None) => {}
-                        Ok(Some((stmt, _span))) => {
-                            let lu_dog = context.lu_dog_heel();
-                            let block = context.block();
-                            let sarzak = context.sarzak_heel();
-                            let models = context.models();
-
-                            let stmt = {
-                                let mut lu_dog = s_write!(lu_dog);
-                                match inter_statement(
-                                    &new_ref!(crate::dwarf::Statement, stmt),
-                                    &block,
-                                    &mut ExtruderContext {
-                                        location: location!(),
-                                        struct_fields: Vec::new(),
-                                        check_types: true,
-                                        source: DwarfSourceFile::new(input, &mut lu_dog),
-                                        models: &s_read!(models),
-                                        sarzak: &s_read!(sarzak),
-                                    },
-                                    &mut lu_dog,
-                                ) {
-                                    Ok(stmt) => stmt.0,
-                                    Err(e) => {
-                                        to_ui_write
-                                            .send(DebuggerStatus::Error(format!("{:?}", e)))
-                                            .unwrap();
-                                        continue;
-                                    }
-                                }
-                            };
-
-                            match eval_statement(stmt.0, &mut context, &mut vm) {
-                                Ok((value, ty)) => {
-                                    to_ui_write
-                                        .send(DebuggerStatus::Stopped(value, ty))
-                                        .unwrap();
-                                }
-                                Err(e) => {
-                                    to_ui_write
-                                        .send(DebuggerStatus::Error(format!("{:?}", e)))
-                                        .unwrap();
-                                }
-                            }
-                        }
-                        Err(e) => {
-                            to_ui_write.send(DebuggerStatus::Error(e)).unwrap();
-                        }
-                    },
-                    Err(RecvTimeoutError::Timeout) => {}
-                    Err(_) => {
-                        fix_debug!("Worker thread exiting");
-                        break;
-                    }
-                }
-            }
-        })
-        .unwrap();
-
-    (from_ui_write, to_ui_read)
-}
-
 /// This runs the main function, assuming it exists.
 pub fn start_main(stopped: bool, mut context: Context) -> Result<(Value, Context), Error> {
     {
@@ -1931,7 +1323,7 @@ pub fn start_main(stopped: bool, mut context: Context) -> Result<(Value, Context
         *running = !stopped;
     }
 
-    let stack = &mut context.memory;
+    let stack = &mut context.memory();
     let vm_stack = stack.clone();
     let mut vm = VM::new(&vm_stack);
 
@@ -1941,12 +1333,12 @@ pub fn start_main(stopped: bool, mut context: Context) -> Result<(Value, Context
         // of. I mean, maybe `use main;`  would trigger this to return OK(()), and
         // not do anything?
         if let Value::Function(ref main) = *s_read!(main) {
-            let main = s_read!(context.lu_dog)
+            let main = s_read!(context.lu_dog_heel())
                 .exhume_function(&s_read!(main).id)
                 .unwrap();
 
-            let value_ty = &s_read!(main).r1_value_type(&s_read!(context.lu_dog))[0];
-            let span = &s_read!(value_ty).r62_span(&s_read!(context.lu_dog))[0];
+            let value_ty = &s_read!(main).r1_value_type(&s_read!(context.lu_dog_heel()))[0];
+            let span = &s_read!(value_ty).r62_span(&s_read!(context.lu_dog_heel()))[0];
 
             let result = eval_function_call(main, &[], true, span, &mut context, &mut vm)?;
 
@@ -2028,269 +1420,6 @@ pub fn start_vm(n: DwarfInteger) -> Result<DwarfInteger, Error> {
     Ok(result)
 }
 
-#[cfg(feature = "repl")]
-pub fn start_repl(mut context: Context) -> Result<(), Error> {
-    use std::io;
-
-    use rustyline::error::ReadlineError;
-    use rustyline::validate::{ValidationContext, ValidationResult, Validator};
-    use rustyline::{Completer, Helper, Highlighter, Hinter};
-    use rustyline::{Editor, Result};
-
-    const HISTORY_FILE: &str = ".dwarf_history";
-
-    let models = context.models.clone();
-    let lu_dog = context.lu_dog.clone();
-    let sarzak = context.sarzak.clone();
-
-    let block = context.block.clone();
-
-    let vm_stack = context.memory.clone();
-    let mut vm = VM::new(&vm_stack);
-
-    let notice_style = Colour::Red.bold().italic();
-    let prompt_style = Colour::Blue.normal();
-    let result_style = Colour::Yellow.italic().dimmed();
-    let type_style = Colour::Blue.italic().dimmed();
-
-    #[derive(Completer, Helper, Highlighter, Hinter)]
-    struct DwarfValidator {}
-
-    impl DwarfValidator {
-        fn validate(&self, _input: &str) -> ValidationResult {
-            ValidationResult::Valid(None)
-            // match parse_line(input) {
-            //     Ok(Some(_)) => ValidationResult::Valid(None),
-            //     Ok(None) => ValidationResult::Incomplete,
-            //     Err(e) => ValidationResult::Invalid(Some(format!("\n{e}")))
-            // }
-        }
-    }
-
-    impl Validator for DwarfValidator {
-        fn validate(&self, ctx: &mut ValidationContext) -> Result<ValidationResult> {
-            Ok(self.validate(ctx.input()))
-        }
-    }
-
-    println!("{}", banner2());
-
-    let mut rl = Editor::new().map_err(|e| ChaChaError::RustyLine { source: e })?;
-    let v = DwarfValidator {};
-    rl.set_helper(Some(v));
-
-    // #[cfg(feature = "with-file-history")]
-    if rl.load_history(HISTORY_FILE).is_err() {
-        println!("No previous history.");
-    }
-
-    println!(
-        "\n{}\n",
-        notice_style.paint("Currently the REPL only supports single line statements.")
-    );
-
-    let reader = context.std_out_recv.clone();
-    let handle = thread::spawn(move || loop {
-        match reader.recv() {
-            Ok(line) => {
-                print!("{}", line);
-                io::stdout().flush().unwrap();
-            }
-            Err(_) => {
-                fix_debug!("Debugger control thread exiting");
-                break;
-            }
-        };
-    });
-
-    loop {
-        let readline = rl.readline(&format!("{} ", prompt_style.paint("道:>")));
-        match readline {
-            Ok(line) => {
-                rl.add_history_entry(line.as_str())
-                    .map_err(|e| ChaChaError::RustyLine { source: e })?;
-
-                // Should do a regex here, or something.
-                match parse_line(&line) {
-                    Ok(Some((stmt, _))) => {
-                        fix_debug!("stmt from readline", stmt);
-
-                        let stmt = {
-                            let mut lu_dog = s_write!(lu_dog);
-                            match inter_statement(
-                                &new_ref!(crate::dwarf::Statement, stmt),
-                                &block,
-                                &mut ExtruderContext {
-                                    location: location!(),
-                                    struct_fields: Vec::new(),
-                                    check_types: true,
-                                    source: DwarfSourceFile::new(line.clone(), &mut lu_dog),
-                                    models: &s_read!(models),
-                                    sarzak: &s_read!(sarzak),
-                                },
-                                &mut lu_dog,
-                            ) {
-                                Ok(stmt) => stmt.0,
-                                Err(errors) => {
-                                    for e in errors {
-                                        println!("{}", e);
-                                    }
-                                    continue;
-                                }
-                            }
-                        };
-
-                        // 🚧 This needs fixing too.
-                        let eval = eval_statement(stmt.0, &mut context, &mut vm);
-                        // for i in context.drain_std_out() {
-                        //     println!("{}", i);
-                        // }
-                        match eval {
-                            Ok((value, ty)) => {
-                                let value = format!("{}", s_read!(value));
-                                print!("\n'{}'", result_style.paint(value));
-
-                                let ty = PrintableValueType(&ty, &context);
-                                let ty = format!("{}", ty);
-                                println!("\t  ──➤  {}", type_style.paint(ty));
-                            }
-                            Err(e) => {
-                                println!("{}", e);
-                                if let ChaChaError::Return { value: _, ty: _ } = e {
-                                    println!("👋 Bye bye!");
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                    Ok(None) => {
-                        continue;
-                    }
-                    Err(e) => {
-                        eprintln!("{e}");
-                    }
-                }
-            }
-            Err(ReadlineError::Interrupted) => {
-                println!("👋 Bye bye!");
-                break;
-            }
-            Err(ReadlineError::Eof) => {
-                println!("👋 Bye bye!");
-                break;
-            }
-            Err(err) => {
-                println!("Error: {:?}", err);
-                break;
-            }
-        }
-    }
-    // #[cfg(feature = "with-file-history")]
-    rl.save_history(HISTORY_FILE)
-        .map_err(|e| ChaChaError::RustyLine { source: e })?;
-
-    drop(context);
-    handle.join().unwrap();
-
-    Ok(())
-}
-
-/// Display the banner
-pub fn banner() -> String {
-    let strings: &[ANSIString<'static>] = &[
-        RGB(255, 184, 0).paint(
-            r"
-⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣴⣄⠀⢠⣾⣆⠀⣠⣶⡀⠀⠀⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
-⠀⠀⠀⠀⠀⠀⠀⠀⠀⡀⠀⠀⣼⣿⣦⣼⣿⣿⣷⣿⣿⣿⣶⣿⣿⣧⣤⣾⣿⠀⠀⢀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
-⠀⠀⠀⠀⠀⠀⠀⠀⠀⣿⣷⣶⣿⣿⣿⣿⣿⣿⣿⡏⠀⢘⣿⣿⣿⣿⣿⣿⣿⣶⣾⣿⡇⠀⠀⠀⠀⠀⠀⠀⠀⠀
-⠀⠀⠀⠀⠀⠀⣶⣶⣶⣿⣿⣿⣿⡿⠟⠋⠉⠁⢹⣿⣶⣾⣿⣥⣭⣽⠛⠿⣿⣿⣿⣿⣧⣶⣶⡆⠀⠀⠀⠀⠀⠀
-⠀⠀⠀⢀⣀⣀⣿⣿⣿⣿⡿⠟⠁⠀⠀⠀⠀⠀⢸⣿⣿⣿⣿⣿⣿⣿⠀⠀⠈⠙⢿⣿⣿⣿⣿⣀⣀⣀⠀⠀⠀⠀
-",
-        ),
-        RGB(255, 156, 0).paint(
-            r"⠀⠀⠀⠘⣿⣿⣿⣿⣿⠏⠀⠀⠀⠀⠀⠀⠀⠀⠸⠿⠿⣿⣿⣿⣿⣿⠀⠀⠀⠀⠀⠙⢿⣿⣿⣿⣿⡏⠀⠀⠀⠀
-⠀⢠⣤⣤⣿⣿⣿⡿⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣿⣿⣿⣿⣿⠀⠀⠀⠀⠀⠀⠀⢻⣿⣿⣿⣦⣤⣄⠀⠀
-⠀⠈⢻⣿⣿⠿⢿⣧⠀⠀⠀⠀⠀⠀⢀⣀⣀⣀⡀⠀⠀⣿⣿⣿⣿⣿⠀⠀⠀⠀⠀⠀⠀⣰⣿⠿⢿⣿⡿⠁⠀⠀
-⢠⣴⣾⣿⣇⠀⣨⣿⡇⠀⠀⠀⣠⣾⣿⣿⣿⣿⣿⣷⣄⣿⣿⣿⣿⣿⠀⠀⠀⠀⠀⠀⢰⣿⣇⠀⣨⣿⣷⣦⣤⠀
-",
-        ),
-        RGB(255, 128, 0).paint(
-            r"⠈⠻⣿⣿⣿⡿⠟⠋⠁⠀⠀⣰⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠀⠀⠀⠀⠀⠀⠀⠉⠛⢿⣿⣿⣿⡟⠁⠀
-⣤⣶⣿⣿⣿⡇⠀⠀⠀⠀⢰⣿⣿⣿⣿⣿⠟⠛⠛⠻⣿⣿⣿⣿⣿⣿⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣿⣿⣿⣷⣦⡀
-",
-        ),
-        // Colour::Yellow.italic().paint("ChaCha:\n"),
-        RGB(255, 128, 0).paint(
-            r"⠉⠻⣿⣿⣿⡇⠀⠀⠀⠀⣿⣿⣿⣿⣿⡏⠀⠀⠀⠀⠘⣿⣿⣿⣿⣿⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣿⣿⣿⡟⠋⠀
-",
-        ),
-        // Colour::Green.italic().paint("a dwarf language REPL.\n"),
-        RGB(255, 128, 0).paint(
-            r"⢠⣾⣿⣿⣿⣧⠀⠀⠀⠀⣿⣿⣿⣿⣿⠀⠀⠀⠀⠀⠀⣿⣿⣿⣿⣿⠀⠀⠀⠀⠀⠀⠀⠀⠀⢸⣿⣿⣿⣷⣄⠀
-",
-        ),
-        RGB(255, 102, 0).paint(
-            r"⠈⠙⢻⣿⣿⣿⡄⠀⠀⠀⣿⣿⣿⣿⣿⠀⠀⠀⠀⠀⠀⣿⣿⣿⣿⣿⠀⠀⠀⠀⠀⠀⠀⠀⢀⣿⣿⣿⡟⠛⠉⠀
-⠀⢠⣾⣿⣿⣿⣷⡀⠀⠀⣿⣿⣿⣿⣿⣇⠀⠀⠀⠀⢠⣿⣿⣿⣿⣿⠀⠀⠀⠀⠀⠀⠀⠀⣼⣿⣿⣿⣿⣄⠀⠀
-⠀⠈⠉⠉⣿⣿⣿⣿⣄⠀⠸⣿⣿⣿⣿⣿⣦⣀⣀⣴⣿⣿⣿⣿⣿⣿⣀⣀⡀⠀⠀⠀⢀⣾⣿⣿⣿⡋⠉⠁⠀⠀
-⠀⠀⠀⢰⣿⣿⣿⣿⣿⣶⣶⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣶⣶⣶⣿⣿⣿⣿⣿⣧⠀⠀⠀⠀
-",
-        ),
-        RGB(255, 67, 0).paint(
-            r"⠀⠀⠀⠀⠀⠀⣿⣿⣿⣿⡁⠀⢹⣿⣿⣿⣿⣿⣿⡿⠋⣿⣿⣿⣿⣿⣿⣿⣟⠀⠈⣿⣿⣿⣿⡀⠀⠀⠀⠀⠀⠀
-⠀⠀⠀⠀⠀⠀⠟⠛⠛⣿⣿⣶⣿⣿⣿⣿⣿⣉⣉⣀⣀⣉⣉⣉⣭⣽⣿⣿⣿⣷⣾⣿⡟⠛⠻⠃⠀⠀⠀⠀⠀⠀
-⠀⠀⠀⠀⠀⠀⠀⠀⠀⣿⠿⠛⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠛⠻⢿⠇⠀⠀⠀⠀⠀⠀⠀⠀⠀
-⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢹⠿⠋⠹⣿⣿⠿⢿⣿⣿⠿⣿⣿⡟⠙⠻⡿⠀⠀⠀      ",
-        ),
-        Colour::Yellow.italic().paint("ChaCha:\n"),
-        RGB(255, 67, 0).paint(r"⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠛⠁⠀⠈⠿⠃⠀⠈⠛⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀"),
-        Colour::Green.paint("a dwarf language interpreter\n\n"),
-    ];
-
-    format!("{}", ANSIStrings(strings))
-}
-
-pub fn banner2() -> String {
-    let strings: &[ANSIString<'static>] = &[
-        RGB(255, 184, 0).paint(
-            r"
-⠀⠀⠀⠀⠀⠀⠀⠀⠀⢠⣀⠀⣿⣦⣠⣿⣦⣠⣿⡀⢀⣤⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
-⠀⠀⠀⠀⠀⠀⠀⣿⣶⣿⣿⣿⣿⣿⣿⠀⢹⣿⣿⣿⣿⣿⣶⣾⡇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
-⠀⠀⠀⠀⠸⣿⣿⣿⣿⠟⠉⠀⠀⠀⣿⣿⣿⣿⣿⣿⠉⠛⣿⣿⣿⣿⡿⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
-",
-        ),
-        RGB(255, 156, 0).paint(
-            r"⠀⠀⠈⣿⣿⣿⣿⠉⠀⠀⠀⠀⠀⠀⣿⠿⣿⣿⣿⣿⠀⠀⠀⠈⢿⣿⣿⣿⠏⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣠⣶⠛⢿⣿⣦⠀⠀⠀
-⠀⢶⣿⣿⣿⣟⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣿⣿⣿⣿⠀⠀⠀⠀⠀⢙⣿⣿⣿⣿⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣿⣿⡟⠀⠀⠉⠉⠀⠀⠀
-⣠⣶⣿⣅⠀⣿⡆⠀⠀⢠⣾⣿⣿⣿⣿⣄⣿⣿⣿⣿⠀⠀⠀⠀⠀⣿⡀⢀⣿⣶⣤⠰⣶⣶⣶⣶⠶⠀⠰⣶⣶⣶⡶⠀⠀⠶⣶⣶⡶⠀⣠⣶⠖⠲⣶⣶⡀⠀⠀⢠⣤⣶⣶⣶⢀⣶⣿⣦⣶⣶⣿⣿⣿⣶⣶⠀⠀⠀⠀⠀
-",
-        ),
-        RGB(255, 128, 0).paint(
-            r"⠀⣽⣿⣿⠉⠀⠀⠀⣼⣿⣿⣿⣿⡿⣿⣿⣿⣿⣿⣿⠀⠀⠀⠀⠀⠀⠈⣿⣿⣿⡀⠀⠀⢻⣿⣿⡄⠀⠀⠀⣿⣿⣷⠀⠀⠀⣿⠋⠀⠘⣿⡿⠀⠀⢹⣿⣿⠀⠀⠀⠀⣿⣿⣿⠉⠙⠿⠋⠀⠀⣿⣿⡟⠀⠀⠀⠀⠀⠀⠀
-⠉⢻⣿⣿⠀⠀⠀⢰⣿⣿⣿⡟⠀⠀⠀⠘⣿⣿⣿⣿⠀⠀⠀⠀⠀⠀⠀⣿⣿⣿⠋⠀⠀⠀⢿⣿⣿⡀⠀⣿⠉⣿⣿⣧⠀⣼⠋⠀⠀⠀⣠⣶⡾⠋⢹⣿⣿⠀⠀⠀⠀⣿⣿⣿⠀⠀⠀⠀⠀⠀⣿⣿⡟⠀⠀⠀⠀⠀⠀⠀
-⠺⣿⣿⣿⣆⠀⠀⢸⣿⣿⣿⡇⠀⠀⠀⠀⣿⣿⣿⣿⠀⠀⠀⠀⠀⠀⢀⣿⣿⣿⠿⠀⠀⠀⠀⣿⣿⣿⣾⠁⠀⠘⣿⣿⣶⠏⠀⠀⠀⣿⣿⣿⠀⠀⢸⣿⣿⠀⠀⠀⠀⣿⣿⣿⠀⠀⠀⠀⠀⠀⣿⣿⣿⠀⠀⠀⠀⠀⠀⠀
-",
-        ),
-        RGB(255, 102, 0).paint(
-            r"⠀⣴⣿⣿⣿⣄⠀⠘⣿⣿⣿⣷⠀⠀⠀⢠⣿⣿⣿⣿⠀⠀⠀⠀⠀⢀⣿⣿⣿⣷⠀⠀⠀⠀⠀⠀⠿⠿⠁⠀⠀⠀⠻⠿⠟⠀⠀⠀⠀⠈⠻⠿⠿⠋⠈⠿⠿⠟⠉⠐⠚⠛⠛⠛⠓⠒⠀⠀⠒⠛⠛⠛⠛⠓⠒⠀⠀⠀⠀⠀
-⠀⠀⢀⣿⣿⣿⣷⣀⣿⣿⣿⣿⣿⣶⣾⣿⣿⣿⣿⣿⣶⣶⣄⣀⣴⣿⣿⣿⡄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
-⠀⠀⠀⠀⢠⣿⣿⣿⠀⣹⣿⣿⣿⣿⡿⠋⣿⣿⣿⣿⣿⣿⠀⢹⣿⣿⣧⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
-",
-        ),
-        RGB(255, 67, 0).paint(
-            r"⠀⠀⠀⠀⠀⠀⠀⣿⣿⣿⣿⣿⣿⣶⣶⣶⣶⣶⣿⣿⣿⣿⣿⣿⡇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
-⠀⠀⠀⠀⠀⠀⠀⠀⠀⠻⠛⠉⣿⡿⠻⣿⡿⠻⣿⠋⠙⠿⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
-⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
-",
-        ),
-        // Colour::Yellow.italic().paint("ChaCha:\n"),
-        // RGB(255, 67, 0).paint(r"⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠛⠁⠀⠈⠿⠃⠀⠈⠛⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀"),
-        // Colour::Green.paint("a dwarf language interpreter\n\n"),
-    ];
-
-    format!("{}", ANSIStrings(strings))
-}
-
 pub(crate) struct PrintableValueType<'a>(pub &'a RefType<ValueType>, pub &'a Context);
 
 impl<'a> fmt::Display for PrintableValueType<'a> {
@@ -2301,9 +1430,9 @@ impl<'a> fmt::Display for PrintableValueType<'a> {
 
         let value = s_read!(self.0);
         let context = self.1;
-        let lu_dog = &context.lu_dog;
-        let sarzak = &context.sarzak;
-        let model = &context.models;
+        let lu_dog = context.lu_dog_heel();
+        let sarzak = context.sarzak_heel();
+        let model = context.models();
 
         match &value.subtype {
             ValueTypeEnum::Char(c) => write!(f, "{}", TY_CLR.italic().paint(format!("'{}'", c))),

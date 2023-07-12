@@ -7,10 +7,11 @@ use sarzak::lu_dog::ValueTypeEnum;
 use uuid::Uuid;
 
 use crate::{
+    chacha::error::Result,
     lu_dog::{Function, Lambda, ObjectStore as LuDogStore, ValueType},
     new_ref, s_read,
     sarzak::Ty,
-    ChaChaError, DwarfFloat, DwarfInteger, NewRef, RefType, Result,
+    ChaChaError, DwarfFloat, DwarfInteger, NewRef, RefType,
 };
 
 pub trait StoreProxy: fmt::Display + fmt::Debug + Send + Sync {
