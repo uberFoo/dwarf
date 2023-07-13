@@ -47,7 +47,7 @@ pub use repl::start_repl;
 pub use tui::start_tui_repl;
 
 use context::Context;
-use expression::{block, call, debugger, field, for_loop, index, list, literal, operator};
+use expression::{block, call, debugger, field, for_loop, index, list, literal, operator, print};
 use func_call::eval_function_call;
 use lambda::eval_lambda_expression;
 
@@ -642,24 +642,7 @@ fn eval_expression(
         ExpressionEnum::Operator(ref operator) => {
             operator::eval_operator(operator, &expression, context, vm)
         }
-        //
-        // Print
-        //
-        ExpressionEnum::Print(ref print) => {
-            let print = s_read!(lu_dog).exhume_print(print).unwrap();
-            fix_debug!("ExpressionEnum::Print print", print);
-            let expr = s_read!(print).r32_expression(&s_read!(lu_dog))[0].clone();
-            let (value, _) = eval_expression(expr, context, vm)?;
-            let result = format!("{}", s_read!(value));
-            let result = result.replace("\\n", "\n");
-
-            chacha_print(result, context)?;
-
-            Ok((
-                new_ref!(Value, Value::Empty),
-                Value::Empty.get_type(&s_read!(lu_dog)),
-            ))
-        }
+        ExpressionEnum::Print(ref print) => print::eval_print(print, context, vm),
         //
         // Range
         //
