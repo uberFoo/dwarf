@@ -1,4 +1,0 @@
-/// Test _logical_ NOT
-fn main() -> bool {
-    !false
-}

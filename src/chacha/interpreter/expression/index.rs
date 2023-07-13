@@ -138,9 +138,6 @@ pub fn eval_index(
                 })
             }
         }
-        _ => Err(ChaChaError::BadJuJu {
-            message: "Index is not an integer".to_owned(),
-            location: location!(),
-        }),
+        _ => unreachable!(),
     }
 }

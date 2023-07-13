@@ -780,6 +780,19 @@ impl std::cmp::PartialEq for Value {
             (Value::Boolean(a), Value::Boolean(b)) => a == b,
             (Value::Uuid(a), Value::Uuid(b)) => a == b,
             (Value::UserType(a), Value::UserType(b)) => *s_read!(a) == *s_read!(b),
+            (Value::Vector(a), Value::Vector(b)) => {
+                if a.len() != b.len() {
+                    return false;
+                }
+
+                for (i, v) in a.iter().enumerate() {
+                    if !s_read!(v).eq(&s_read!(b[i])) {
+                        return false;
+                    }
+                }
+
+                true
+            }
             (_, _) => false, //Value::Error(format!("Cannot compare {} and {}", a, b)),
         }
     }
