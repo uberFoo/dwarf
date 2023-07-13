@@ -1,0 +1,4 @@
+fn main() {
+    let name = ["u", "b", "e", "r", "F", "o", "o"];
+    let out_of_bounds = name[7];
+}

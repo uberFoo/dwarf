@@ -216,6 +216,14 @@ impl Value {
                 }
                 unreachable!()
             }
+            Value::Vector(_) => {
+                for vt in lu_dog.iter_value_type() {
+                    if let ValueTypeEnum::List(_) = s_read!(vt).subtype {
+                        return vt.clone();
+                    }
+                }
+                unreachable!()
+            }
             value => {
                 log::error!("Value::get_type() not implemented for {:?}", value);
                 for vt in lu_dog.iter_value_type() {

@@ -25,6 +25,7 @@
         "tspan",
         "UDT",
         "UDTs",
+        "walkdir",
         "xflags"
     ],
     "rust-analyzer.showUnlinkedFileNotification": false,

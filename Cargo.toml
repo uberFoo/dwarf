@@ -37,9 +37,10 @@ ariadne = "0.2.0"
 backtrace = "0.3.67"
 bincode = "1.3.3"
 cfg-if = "1.0.0"
+chumsky = "0.9.2"
 circular-queue = "0.2.6"
 clap = { version = "4.2.2", features = ["derive"] }
-chumsky = "0.9.2"
+color-backtrace = "0.5.1"
 crossbeam = { version = "0.8.2", features = ["crossbeam-channel"] }
 crossterm = "0.26.1"
 dap = "0.2.0-alpha1"
@@ -85,11 +86,13 @@ tui-textarea = { git = "https://github.com/uberFoo/tui-textarea", features = [
 tui-tree-widget = { git = "https://github.com/uberFoo/tui-rs-tree-widget" }
 unicode-segmentation = "1.10.1"
 uuid = { version = "1.3.1", features = ["v4", "serde"] }
-color-backtrace = "0.5.1"
 
 [dev-dependencies]
 criterion = { version = "0.4", features = ["html_reports"] }
 diff = "0.1.13"
+
+[build-dependencies]
+walkdir = "2.3.3"
 
 [features]
 default = ["multi-vec", "repl", "print-std-out"]

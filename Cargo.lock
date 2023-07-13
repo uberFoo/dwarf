@@ -684,6 +684,7 @@ dependencies = [
  "tui-tree-widget",
  "unicode-segmentation",
  "uuid",
+ "walkdir",
 ]
 
 [[package]]

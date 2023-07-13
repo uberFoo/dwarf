@@ -549,7 +549,7 @@ fn chacha_print<S: AsRef<str>>(result: S, context: &mut Context) -> Result<()> {
     cfg_if::cfg_if! {
         if #[cfg(feature = "print-std-out")] {
             print!("{}", result_style.paint(result.as_ref()));
-            std::io::stdout().flush().unwrap();
+            std::io::Write::flush(&mut std::io::stdout()).unwrap();
         } else {
             context
                 .std_out_send()
@@ -583,7 +583,7 @@ fn eval_expression(
         if !*running {
             if let Some(sender) = &context.debug_status_writer() {
                 let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
-                fix_debug!("value", value);
+                debug!("value {value:#?}");
 
                 let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
 
@@ -591,13 +591,13 @@ fn eval_expression(
                 let span = read.start as usize..read.end as usize;
                 sender.send(DebuggerStatus::Paused(span)).unwrap();
             }
-            fix_debug!("waiting");
+            debug!("waiting");
             CVAR.wait(&mut running);
-            fix_debug!("notified");
+            debug!("notified");
         }
 
         if *STEPPING.lock() {
-            fix_debug!("stepping");
+            debug!("stepping");
             *running = false;
         }
 

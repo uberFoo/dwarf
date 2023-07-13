@@ -66,6 +66,11 @@ pub enum ChaChaError {
     },
     #[snafu(display("\n{}: not an instance", ERR_CLR.bold().paint("error")))]
     NotAnInstance,
+    #[snafu(display("\n{}: not indexable.", ERR_CLR.bold().paint("error")))]
+    NotIndexable {
+        span: Span,
+        location: Location,
+    },
     #[snafu(display("\n{}: `main` function not found.", ERR_CLR.bold().paint("error")))]
     NoMainFunction,
     #[snafu(display("\n{}: no such field `{}`.", ERR_CLR.bold().paint("error"), POP_CLR.paint(field)))]
@@ -243,6 +248,32 @@ impl fmt::Display for ChaChaErrorReporter<'_, '_, '_> {
                         POP_CLR.paint(ty.to_string()),
                         POP_CLR.paint(method.to_string())
                     ))
+                    .finish()
+                    .write((file_name, Source::from(&program)), &mut std_err)
+                    .map_err(|_| fmt::Error)?;
+                write!(f, "{}", String::from_utf8_lossy(&std_err))
+            }
+            ChaChaError::NotIndexable { span, location } => {
+                let report = Report::build(ReportKind::Error, file_name, span.start)
+                    .with_message("not indexable")
+                    .with_label(
+                        Label::new((file_name, span.to_owned()))
+                            .with_message(format!("in this expression"))
+                            .with_color(Color::Red),
+                    );
+
+                let report = if is_uber {
+                    report.with_note(format!(
+                        "{}:{}:{}",
+                        OTH_CLR.paint(location.file.to_string()),
+                        POP_CLR.paint(format!("{}", location.line)),
+                        OK_CLR.paint(format!("{}", location.column)),
+                    ))
+                } else {
+                    report
+                };
+
+                report
                     .finish()
                     .write((file_name, Source::from(&program)), &mut std_err)
                     .map_err(|_| fmt::Error)?;
