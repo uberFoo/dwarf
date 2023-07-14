@@ -4163,6 +4163,28 @@ mod tests {
     }
 
     #[test]
+    fn test_func_attrs() {
+        let _ = env_logger::builder().is_test(true).try_init();
+
+        let src = r#"
+            #[proxy = "foo"]
+            fn foo(a: string, b: int, d: Option<Foo>) -> Option<bool> {
+                None
+            }
+
+            #[proxy = "bar"]
+            #[foo = "bar"]
+            fn bar() -> Option<string> {
+                Some("Hello, World!")
+            }
+        "#;
+
+        let ast = parse_dwarf("test_struct", src);
+
+        assert!(ast.is_ok());
+    }
+
+    #[test]
     fn test_import() {
         let _ = env_logger::builder().is_test(true).try_init();
 

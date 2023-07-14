@@ -12,7 +12,7 @@ use uuid::Uuid;
 
 use crate::{
     chacha::{
-        error::{Error, NoSuchFieldSnafu, Result, UnimplementedSnafu},
+        error::{Error, Result, UnimplementedSnafu},
         memory::{Memory, MemoryUpdateMessage},
         value::UserType,
         vm::{CallFrame, Instruction, Thonk, VM},

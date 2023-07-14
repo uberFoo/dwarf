@@ -12,7 +12,7 @@ use crate::{
     dwarf::{
         error::{DwarfError, Result},
         expression::{addition, and},
-        Expression as ParserExpression, InnerItem, Item, PrintableValueType, Spanned,
+        Attribute, Expression as ParserExpression, InnerItem, Item, PrintableValueType, Spanned,
         Statement as ParserStatement, Type,
     },
     lu_dog::{
@@ -182,13 +182,24 @@ impl<'a> ConveyFunc<'a> {
 
 struct ConveyStruct<'a> {
     name: &'a str,
+    attributes: &'a [Attribute],
     span: &'a Span,
     fields: &'a [(Spanned<String>, Spanned<Type>)],
 }
 
 impl<'a> ConveyStruct<'a> {
-    fn new(name: &'a str, span: &'a Span, fields: &'a [(Spanned<String>, Spanned<Type>)]) -> Self {
-        Self { name, span, fields }
+    fn new(
+        name: &'a str,
+        span: &'a Span,
+        attributes: &'a [Attribute],
+        fields: &'a [(Spanned<String>, Spanned<Type>)],
+    ) -> Self {
+        Self {
+            name,
+            span,
+            attributes,
+            fields,
+        }
     }
 }
 
@@ -302,8 +313,8 @@ fn walk_tree(
             } => inter_import(path, alias, &s_read!(context.source).source, span, lu_dog)?,
             Item {
                 item: (InnerItem::Struct((name, span), fields), _),
-                attributes: _,
-            } => structs.push(ConveyStruct::new(name, span, fields)),
+                attributes,
+            } => structs.push(ConveyStruct::new(name, span, attributes, fields)),
         }
     }
 
@@ -311,7 +322,13 @@ fn walk_tree(
     // Put the type information in first.
     // This first pass over the structs just records the name, but not the fields.
     // We wait until we've seen all of the structs to do that.
-    for ConveyStruct { name, span, fields } in &structs {
+    for ConveyStruct {
+        name,
+        span,
+        attributes,
+        fields,
+    } in &structs
+    {
         debug!("Interning struct {}", name);
         let _ = inter_struct(name, span, fields, context, lu_dog).map_err(|mut e| {
             errors.append(&mut e);
@@ -2425,6 +2442,7 @@ pub(super) fn inter_expression(
             };
 
             debug!("ParserExpression::Struct {}", name);
+            let struct_name = &name;
 
             // Here we don't de_sanitize the name, and we are looking it up in the
             // dwarf model.
@@ -2439,18 +2457,41 @@ pub(super) fn inter_expression(
                 }
             };
             let woog_struct = lu_dog.exhume_woog_struct(&id).unwrap();
+            let struct_fields = s_read!(woog_struct).r7_field(&lu_dog);
 
             let expr = StructExpression::new(Uuid::new_v4(), &woog_struct, lu_dog);
 
             for (name, field_expr) in fields {
+                let field_expr_span = field_expr.1.to_owned();
                 // 🚧 Do type checking here? I don't think that I have what I need.
                 let (field_expr, ty) = inter_expression(
                     &new_ref!(ParserExpression, field_expr.0.to_owned()),
-                    &field_expr.1,
+                    &field_expr_span,
                     block,
                     context,
                     lu_dog,
                 )?;
+
+                if let Some(field) = struct_fields.iter().find(|f| s_read!(f).name == name.0) {
+                    let struct_ty = lu_dog.exhume_value_type(&s_read!(field).ty).unwrap();
+
+                    if context.check_types {
+                        typecheck(
+                            (&struct_ty, &name.1),
+                            (&ty, &field_expr_span),
+                            location!(),
+                            context,
+                            lu_dog,
+                        )?;
+                    }
+                } else {
+                    return Err(vec![DwarfError::NoSuchField {
+                        name: struct_name.to_string(),
+                        name_span: name_span.to_owned(),
+                        field: name.0.to_owned(),
+                        span: name.1.to_owned(),
+                    }]);
+                }
                 debug!("field `{name:?}` is of type `{ty:?}`, expr: {field_expr:?}");
                 let field = FieldExpression::new(name.0.to_owned(), &field_expr.0, &expr, lu_dog);
 

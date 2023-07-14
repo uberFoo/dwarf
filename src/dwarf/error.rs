@@ -82,6 +82,15 @@ pub enum DwarfError {
         span: Span,
     },
 
+    /// No Such Field
+    #[snafu(display("\n{}: no such field `{}`.", C_ERR.bold().paint("error"), C_OTHER.paint(field)))]
+    NoSuchField {
+        name: String,
+        name_span: Span,
+        field: String,
+        span: Span,
+    },
+
     /// No Such Method
     ///
     /// The method being invoked does not exist. We can know this a priori for
@@ -188,6 +197,32 @@ impl fmt::Display for DwarfErrorReporter<'_, '_, '_> {
                         Label::new((file_name, span.to_owned()))
                             .with_message(format!("{}", desc.fg(Color::Red)))
                             .with_color(Color::Red),
+                    )
+                    .finish()
+                    .write((file_name, Source::from(&program)), &mut std_err)
+                    .map_err(|_| fmt::Error)?;
+                write!(f, "{}", String::from_utf8_lossy(&std_err))
+            }
+            DwarfError::NoSuchField {
+                name: _,
+                name_span,
+                field,
+                span,
+            } => {
+                Report::build(ReportKind::Error, file_name, span.start)
+                    .with_message(format!(
+                        "no such field {}",
+                        C_OTHER.paint(format!("{}", field))
+                    ))
+                    .with_label(
+                        Label::new((file_name, span.to_owned()))
+                            .with_message(format!("this field does not exist",))
+                            .with_color(Color::Red),
+                    )
+                    .with_label(
+                        Label::new((file_name, name_span.to_owned()))
+                            .with_message("on this struct")
+                            .with_color(Color::Yellow),
                     )
                     .finish()
                     .write((file_name, Source::from(&program)), &mut std_err)

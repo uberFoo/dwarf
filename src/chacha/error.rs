@@ -73,12 +73,6 @@ pub enum ChaChaError {
     },
     #[snafu(display("\n{}: `main` function not found.", ERR_CLR.bold().paint("error")))]
     NoMainFunction,
-    #[snafu(display("\n{}: no such field `{}`.", ERR_CLR.bold().paint("error"), POP_CLR.paint(field)))]
-    NoSuchField {
-        field: String,
-        span: Span,
-        location: Location,
-    },
     #[snafu(display("\n{}: no such method `{}`.", ERR_CLR.bold().paint("error"), OTH_CLR.paint(method)))]
     NoSuchMethod {
         method: String,
@@ -181,39 +175,6 @@ impl fmt::Display for ChaChaErrorReporter<'_, '_, '_> {
                             .with_color(Color::Red),
                     )
                     .with_note(note)
-                    .finish()
-                    .write((file_name, Source::from(&program)), &mut std_err)
-                    .map_err(|_| fmt::Error)?;
-                write!(f, "{}", String::from_utf8_lossy(&std_err))
-            }
-            ChaChaError::NoSuchField {
-                field,
-                span,
-                location,
-            } => {
-                let report = Report::build(ReportKind::Error, file_name, span.start)
-                    .with_message("no such field")
-                    .with_label(
-                        Label::new((file_name, span.to_owned()))
-                            .with_message(format!(
-                                "in this expression: {}",
-                                POP_CLR.paint(field.to_string())
-                            ))
-                            .with_color(Color::Red),
-                    );
-
-                let report = if is_uber {
-                    report.with_note(format!(
-                        "{}:{}:{}",
-                        OTH_CLR.paint(location.file.to_string()),
-                        POP_CLR.paint(format!("{}", location.line)),
-                        OK_CLR.paint(format!("{}", location.column)),
-                    ))
-                } else {
-                    report
-                };
-
-                report
                     .finish()
                     .write((file_name, Source::from(&program)), &mut std_err)
                     .map_err(|_| fmt::Error)?;
