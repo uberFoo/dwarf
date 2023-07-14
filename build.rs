@@ -19,7 +19,7 @@ fn main() {
             }
 
             let name = path.file_stem().unwrap().to_str().unwrap();
-            let contents = fs::read_to_string(&path).unwrap();
+            let contents = fs::read_to_string(path).unwrap();
             tests += "#[test]\n";
             tests += &format!("fn {name}() {{\n");
             tests += "    let _ = env_logger::builder().is_test(true).try_init();\n";
@@ -39,7 +39,7 @@ fn main() {
             let stdout = root.join(format!("{}.stdout", name));
             if stdout.exists() {
                 tests += &format!(
-                    "    let _ = result.and_then(|ok| {{assert!(diff_std_out(\"{stdout}\", \"{name}\", &ok.1).is_ok()); Ok(ok)}});\n",
+                    "    let _ = result.map(|ok| {{assert!(diff_std_out(\"{stdout}\", \"{name}\", &ok.1).is_ok()); ok}});\n",
                     stdout = stdout.display()
                 );
             }

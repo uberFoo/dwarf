@@ -258,7 +258,7 @@ impl fmt::Display for ChaChaErrorReporter<'_, '_, '_> {
                     .with_message("not indexable")
                     .with_label(
                         Label::new((file_name, span.to_owned()))
-                            .with_message(format!("in this expression"))
+                            .with_message("in this expression")
                             .with_color(Color::Red),
                     );
 

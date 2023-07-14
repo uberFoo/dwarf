@@ -35,5 +35,6 @@ pub fn eval_range(
         ValueType::new_range(&mut s_write!(lu_dog)),
     ));
 
+    #[allow(clippy::let_and_return)]
     result
 }

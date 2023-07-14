@@ -58,6 +58,7 @@ impl Drop for Context {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 impl Context {
     pub fn new(
         prompt: String,

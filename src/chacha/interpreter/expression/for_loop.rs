@@ -65,5 +65,6 @@ pub fn eval_for_loop(
         Value::Empty.get_type(&s_read!(lu_dog)),
     ));
 
+    #[allow(clippy::let_and_return)]
     result
 }

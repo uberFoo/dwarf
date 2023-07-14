@@ -673,7 +673,7 @@ fn inter_statements(
 /// I may have spoken too soon. We need to be populating the store, in addition
 /// to returning the type. Duh. And we should return the expression so that we
 /// can create a value from it.
-#[allow(clippy::too_many_arguments)]
+// #[allow(clippy::too_many_arguments)]
 fn inter_expression(
     expr: &RefType<ParserExpression>,
     span: &Span,
