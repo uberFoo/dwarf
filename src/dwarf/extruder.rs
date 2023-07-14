@@ -12,7 +12,7 @@ use crate::{
     dwarf::{
         error::{DwarfError, Result},
         expression::{addition, and},
-        Expression as ParserExpression, Item, PrintableValueType, Spanned,
+        Expression as ParserExpression, InnerItem, Item, PrintableValueType, Spanned,
         Statement as ParserStatement, Type,
     },
     lu_dog::{
@@ -287,19 +287,35 @@ fn walk_tree(
     // We need the structs before the impls, so we do this.
     for item in ast {
         match item {
-            (Item::Function((name, _name_span), params, return_type, stmts), span) => {
-                funcs.push(ConveyFunc::new(name, span, params, return_type, stmts))
-            }
-            (Item::Implementation((name, _name_span), funcs), span) => {
-                implementations.push(ConveyImpl::new(name, span, funcs))
-            }
+            (
+                Item {
+                    item: InnerItem::Function((name, _name_span), params, return_type, stmts),
+                    attributes: _,
+                },
+                span,
+            ) => funcs.push(ConveyFunc::new(name, span, params, return_type, stmts)),
+            (
+                Item {
+                    item: InnerItem::Implementation((name, _name_span), funcs),
+                    attributes: _,
+                },
+                span,
+            ) => implementations.push(ConveyImpl::new(name, span, funcs)),
             // Imports can happen any time, I think.
-            (Item::Import((path, _path_span), alias), span) => {
-                inter_import(path, alias, &s_read!(context.source).source, span, lu_dog)?
-            }
-            (Item::Struct((name, span), fields), _span) => {
-                structs.push(ConveyStruct::new(name, span, fields))
-            }
+            (
+                Item {
+                    item: InnerItem::Import((path, _path_span), alias),
+                    attributes: _,
+                },
+                span,
+            ) => inter_import(path, alias, &s_read!(context.source).source, span, lu_dog)?,
+            (
+                Item {
+                    item: InnerItem::Struct((name, span), fields),
+                    attributes: _,
+                },
+                _span,
+            ) => structs.push(ConveyStruct::new(name, span, fields)),
         }
     }
 
@@ -525,7 +541,10 @@ pub fn inter_statement(
         ParserStatement::Item((item, span)) => {
             match item {
                 // Item::Function((name, _name_span), params, return_type, stmts) => {
-                Item::Function(ref name, ref params, ref return_type, ref stmts) => inter_func(
+                Item {
+                    item: InnerItem::Function(ref name, ref params, ref return_type, ref stmts),
+                    attributes: _,
+                } => inter_func(
                     &name.0,
                     params,
                     return_type,
@@ -536,13 +555,17 @@ pub fn inter_statement(
                     context,
                     lu_dog,
                 )?,
-                Item::Implementation((name, _name_span), funcs) => {
-                    inter_implementation(name, funcs, span, context, lu_dog)?
-                }
+                Item {
+                    item: InnerItem::Implementation((name, _name_span), funcs),
+                    attributes: _,
+                } => inter_implementation(name, funcs, span, context, lu_dog)?,
                 // Item::Import((path, _path_span), alias) => {
                 //     inter_import(path, alias, &s_read!(source).source, span, lu_dog)?
                 // }
-                Item::Struct((name, span), fields) => {
+                Item {
+                    item: InnerItem::Struct((name, span), fields),
+                    attributes: _,
+                } => {
                     inter_struct(name, span, fields, context, lu_dog).and_then(|_| {
                         // There had better be one and only one.
                         let StructFields {
@@ -2629,20 +2652,25 @@ fn inter_implementation(
 
     for (func, span) in funcs {
         match func {
-            Item::Function(ref name, ref params, ref return_type, ref stmts) => match inter_func(
-                &name.0,
-                params,
-                return_type,
-                stmts,
-                Some(&implementation),
-                Some(&impl_ty),
-                span,
-                context,
-                lu_dog,
-            ) {
-                Ok(_) => (),
-                Err(mut err) => errors.append(&mut err),
-            },
+            Item {
+                item: InnerItem::Function(ref name, ref params, ref return_type, ref stmts),
+                attributes: _,
+            } => {
+                match inter_func(
+                    &name.0,
+                    params,
+                    return_type,
+                    stmts,
+                    Some(&implementation),
+                    Some(&impl_ty),
+                    span,
+                    context,
+                    lu_dog,
+                ) {
+                    Ok(_) => (),
+                    Err(mut err) => errors.append(&mut err),
+                }
+            }
             _ => return Err(vec![DwarfError::ImplementationBlock { span: span.clone() }]),
         }
     }

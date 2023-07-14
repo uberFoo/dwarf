@@ -385,13 +385,19 @@ pub enum Expression {
     StringLiteral(String),
     /// Structure Expression
     ///
-    /// Struct Explession, Vec<Field Name, Field Value>
+    /// Struct Expression, Vec<Field Name, Field Value>
     Struct(Box<Spanned<Self>>, Vec<(Spanned<String>, Spanned<Self>)>),
     Subtraction(Box<Spanned<Self>>, Box<Spanned<Self>>),
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub enum Item {
+pub struct Item {
+    item: InnerItem,
+    attributes: Vec<Attribute>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum InnerItem {
     /// A Function Definition
     ///
     /// name, Vec<(Parameter Name, Parameter Type)>, Return Type, Vec<Statement>
@@ -407,4 +413,10 @@ pub enum Item {
     Import(Spanned<Vec<Spanned<String>>>, Option<Spanned<String>>),
     /// name, Vec<(Field Name, Field Type)>
     Struct(Spanned<String>, Vec<(Spanned<String>, Spanned<Type>)>),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct Attribute {
+    pub name: Spanned<String>,
+    pub value: Spanned<Expression>,
 }

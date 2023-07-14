@@ -4,7 +4,8 @@ use chumsky::prelude::*;
 use log;
 
 use crate::dwarf::{
-    DwarfFloat, Expression as DwarfExpression, Item, Spanned, Statement, Token, Type,
+    Attribute, DwarfFloat, Expression as DwarfExpression, InnerItem, Item, Spanned, Statement,
+    Token, Type,
 };
 
 use super::{error::DwarfError, DwarfInteger};
@@ -229,7 +230,6 @@ impl DwarfParser {
         let mut result = Vec::new();
 
         while !self.at_end() {
-            debug!("parse_item");
             if let Some(item) = self.parse_item() {
                 debug!("item", item);
                 result.push(item);
@@ -347,6 +347,73 @@ impl DwarfParser {
             ),
             BLOCK,
         )))
+    }
+
+    fn parse_attribute(&mut self) -> Option<Attribute> {
+        debug!("enter");
+
+        if !self.match_(&[Token::Punct('#')]) {
+            debug!("exit");
+            return None;
+        }
+
+        let start = self.previous().unwrap().1.start;
+
+        if !self.match_(&[Token::Punct('[')]) {
+            debug!("exit");
+            return None;
+        }
+
+        let name = if let Some(name) = self.parse_ident() {
+            debug!("name", name);
+            name
+        } else {
+            let token = self.previous().unwrap();
+            let err = Simple::expected_input_found(
+                token.1.clone(),
+                [Some("<identifier>".to_owned())],
+                Some(token.0.to_string()),
+            );
+            self.errors.push(err);
+            debug!("exit");
+            return None;
+        };
+
+        let value = if self.match_(&[Token::Punct('=')]) {
+            debug!("getting value");
+            let value = if let Some(value) = self.parse_expression(ENTER)? {
+                debug!("value", value);
+                value
+            } else {
+                let token = self.previous().unwrap();
+                let err = Simple::expected_input_found(
+                    token.1.clone(),
+                    [Some("=".to_owned())],
+                    Some(token.0.to_string()),
+                );
+                self.errors.push(err);
+                debug!("exit");
+                return None;
+            };
+            debug!("exit getting value");
+            Some(Box::new(value.0))
+        } else {
+            None
+        };
+
+        if !self.match_(&[Token::Punct(']')]) {
+            let token = self.previous().unwrap();
+            let err = Simple::expected_input_found(
+                token.1.clone(),
+                [Some("]".to_owned())],
+                Some(token.0.to_string()),
+            );
+            self.errors.push(err);
+            debug!("exit");
+            return None;
+        }
+
+        debug!("exit");
     }
 
     /// Parse an Item
@@ -490,7 +557,10 @@ impl DwarfParser {
         debug!("exit");
 
         Some((
-            Item::Import(name, alias),
+            Item {
+                item: InnerItem::Import(name, alias),
+                attributes: Vec::new(),
+            },
             start..self.previous().unwrap().1.end,
         ))
     }
@@ -587,7 +657,10 @@ impl DwarfParser {
         debug!("exit ", (&name, &body));
 
         Some((
-            Item::Implementation(name, body),
+            Item {
+                item: InnerItem::Implementation(name, body),
+                attributes: Vec::new(),
+            },
             start..self.previous().unwrap().1.end,
         ))
     }
@@ -3159,7 +3232,10 @@ impl DwarfParser {
         debug!("exit parse_function");
 
         Ok(Some((
-            Item::Function(name, params, return_type, body.0),
+            Item {
+                item: InnerItem::Function(name, params, return_type, body.0),
+                attributes: Vec::new(),
+            },
             start..end,
         )))
     }
@@ -3695,7 +3771,13 @@ impl DwarfParser {
             self.previous().unwrap().1.end
         };
 
-        Ok(Some((Item::Struct(name, fields), start..end)))
+        Ok(Some((
+            Item {
+                item: InnerItem::Struct(name, fields),
+                attributes: Vec::new(),
+            },
+            start..end,
+        )))
     }
 
     /// Parse an identifier
@@ -4051,6 +4133,28 @@ mod tests {
                 uber: Uuid
             }
 
+            struct Bar {}
+        "#;
+
+        let ast = parse_dwarf("test_struct", src);
+
+        assert!(ast.is_ok());
+    }
+
+    #[test]
+    fn test_struct_attrs() {
+        let _ = env_logger::builder().is_test(true).try_init();
+
+        let src = r#"
+            #[proxy = "foo"]
+            struct Foo {
+                bar: Option<int>,
+                baz: string,
+                uber: Uuid
+            }
+
+            #[proxy = "bar"]
+            #[foo = "bar"]
             struct Bar {}
         "#;
 
