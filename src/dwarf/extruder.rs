@@ -10,8 +10,9 @@ use uuid::Uuid;
 
 use crate::{
     dwarf::{
+        error::{DwarfError, Result},
         expression::{addition, and},
-        DwarfError, Expression as ParserExpression, Item, PrintableValueType, Result, Spanned,
+        Expression as ParserExpression, Item, PrintableValueType, Spanned,
         Statement as ParserStatement, Type,
     },
     lu_dog::{

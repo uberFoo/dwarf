@@ -179,7 +179,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 for err in errors {
                     eprintln!(
                         "{}",
-                        dwarf::dwarf::DwarfErrorReporter(&err, is_uber, &source_code, &name)
+                        dwarf::dwarf::error::DwarfErrorReporter(&err, is_uber, &source_code, &name)
                     );
                 }
                 return Ok(());

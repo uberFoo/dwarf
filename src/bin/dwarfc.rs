@@ -9,7 +9,10 @@ use sarzak::{
     sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL},
 };
 
-use dwarf::dwarf::{new_lu_dog, parse_dwarf, FileSnafu, IOSnafu, Result};
+use dwarf::dwarf::{
+    error::{FileSnafu, IOSnafu, Result},
+    new_lu_dog, parse_dwarf,
+};
 
 const TARGET_DIR: &str = "target";
 const BUILD_DIR: &str = "sarzak";
@@ -76,7 +79,7 @@ fn find_package_dir(start_dir: &Option<PathBuf>) -> Result<PathBuf> {
         .map_err(|e| vec![e])?;
 
     if !output.status.success() {
-        return Err(vec![dwarf::dwarf::DwarfError::Generic {
+        return Err(vec![dwarf::dwarf::error::DwarfError::Generic {
             description: "cargo locate-project failed".to_owned(),
         }]);
     }
@@ -168,7 +171,7 @@ fn main() -> Result<()> {
             for err in errors {
                 eprintln!(
                     "{}",
-                    dwarf::dwarf::DwarfErrorReporter(
+                    dwarf::dwarf::error::DwarfErrorReporter(
                         &err,
                         is_uber,
                         &source_code,

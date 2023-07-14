@@ -5,8 +5,9 @@ use snafu::{location, Location};
 
 use crate::{
     dwarf::{
+        error::Result,
         extruder::{inter_expression, typecheck, Context, ExprSpan},
-        Expression as ParserExpression, Result,
+        Expression as ParserExpression,
     },
     lu_dog::{
         store::ObjectStore as LuDogStore, Binary, Block, Expression, Operator, Span, ValueType,

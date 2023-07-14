@@ -7,7 +7,7 @@ use crate::dwarf::{
     DwarfFloat, Expression as DwarfExpression, Item, Spanned, Statement, Token, Type,
 };
 
-use super::{DwarfError, DwarfInteger};
+use super::{error::DwarfError, DwarfInteger};
 
 macro_rules! function {
     () => {{

@@ -4,8 +4,9 @@ use snafu::{location, Location};
 
 use crate::{
     dwarf::{
+        error::{DwarfError, Result},
         extruder::{inter_expression, typecheck, Context, ExprSpan},
-        DwarfError, Expression as ParserExpression, PrintableValueType, Result,
+        Expression as ParserExpression, PrintableValueType,
     },
     lu_dog::{
         store::ObjectStore as LuDogStore, Binary, Block, BooleanOperator, Expression, Operator,

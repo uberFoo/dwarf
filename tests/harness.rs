@@ -106,7 +106,7 @@ fn run_program(test: &str, program: &str) -> Result<(Value, String), String> {
     let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
     let ast = match parse_dwarf(test, program) {
         Ok(ast) => ast,
-        Err(dwarf::dwarf::DwarfError::Parse { error, ast: _ }) => {
+        Err(dwarf::dwarf::error::DwarfError::Parse { error, ast: _ }) => {
             let error = error.trim();
             eprintln!("{error}");
             return Err(error.to_owned());
@@ -122,7 +122,7 @@ fn run_program(test: &str, program: &str) -> Result<(Value, String), String> {
                     .map(|e| {
                         format!(
                             "{}",
-                            dwarf::dwarf::DwarfErrorReporter(e, true, program, test)
+                            dwarf::dwarf::error::DwarfErrorReporter(e, true, program, test)
                         )
                     })
                     .collect::<Vec<_>>()
@@ -135,7 +135,7 @@ fn run_program(test: &str, program: &str) -> Result<(Value, String), String> {
                 .map(|e| {
                     format!(
                         "{}",
-                        dwarf::dwarf::DwarfErrorReporter(e, false, program, test)
+                        dwarf::dwarf::error::DwarfErrorReporter(e, false, program, test)
                     )
                 })
                 .collect::<Vec<_>>()
