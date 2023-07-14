@@ -1,4 +1,3 @@
-use core::fmt;
 use std::{fs::File, io::prelude::*, ops::Range, path::PathBuf};
 
 use ansi_term::Colour;
@@ -11,7 +10,8 @@ use uuid::Uuid;
 
 use crate::{
     dwarf::{
-        DwarfError, Expression as ParserExpression, Item, Result, Spanned,
+        expression::{addition, and},
+        DwarfError, Expression as ParserExpression, Item, PrintableValueType, Result, Spanned,
         Statement as ParserStatement, Type,
     },
     lu_dog::{
@@ -26,7 +26,7 @@ use crate::{
         },
         Argument, Binary, BooleanLiteral, Comparison, DwarfSourceFile, FieldAccess,
         FieldAccessTarget, FloatLiteral, List, ListElement, ListExpression, MethodCall, Operator,
-        Reference, ResultStatement, TypeCast, Unary, VariableEnum, WoogOptionEnum, XReturn,
+        Reference, ResultStatement, TypeCast, Unary, VariableEnum, XReturn,
     },
     new_ref, s_read, s_write, NewRef, RefType,
 };
@@ -150,7 +150,7 @@ macro_rules! error {
 }
 
 type Span = Range<usize>;
-type ExprSpan = (RefType<Expression>, RefType<LuDogSpan>);
+pub(super) type ExprSpan = (RefType<Expression>, RefType<LuDogSpan>);
 
 // These below are just to avoid cloning things.
 struct ConveyFunc<'a> {
@@ -677,13 +677,7 @@ fn inter_statements(
     }
 }
 
-/// I have a feeling that this one is going to be intense...
-/// Actually, maybe not. There's not much happening just when we are populating.
-/// It should get intense when we are evaluating for the SVM.
-/// I may have spoken too soon. We need to be populating the store, in addition
-/// to returning the type. Duh. And we should return the expression so that we
-/// can create a value from it.
-fn inter_expression(
+pub(super) fn inter_expression(
     expr: &RefType<ParserExpression>,
     span: &Span,
     block: &RefType<Block>,
@@ -705,105 +699,11 @@ fn inter_expression(
     );
 
     match &*s_read!(expr) {
-        //
-        // Addition
-        //
         ParserExpression::Addition(ref lhs_p, ref rhs_p) => {
-            debug!("Addition");
-            let (lhs, lhs_ty) = inter_expression(
-                &new_ref!(ParserExpression, lhs_p.0.to_owned()),
-                &lhs_p.1,
-                block,
-                context,
-                lu_dog,
-            )?;
-            let (rhs, rhs_ty) = inter_expression(
-                &new_ref!(ParserExpression, rhs_p.0.to_owned()),
-                &rhs_p.1,
-                block,
-                context,
-                lu_dog,
-            )?;
-
-            // 🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧
-            // 🚧                        THIS IS SUPER IMPORTANT!
-            // 🚧
-            // 🚧 We need to check the types of the LHS and RHS to make sure that they are the same.
-            // 🚧 We also need to check that the type supports addition.
-            // 🚧
-            // 🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧
-
-            if context.check_types {
-                typecheck(
-                    (&lhs_ty, &lhs_p.1),
-                    (&rhs_ty, &rhs_p.1),
-                    location!(),
-                    context,
-                    lu_dog,
-                )?;
-            }
-
-            let expr = Binary::new_addition(lu_dog);
-            let expr = Operator::new_binary(&lhs.0, Some(&rhs.0), &expr, lu_dog);
-            let expr = Expression::new_operator(&expr, lu_dog);
-
-            let value = XValue::new_expression(block, &lhs_ty, &expr, lu_dog);
-            s_write!(span).x_value = Some(s_read!(value).id);
-
-            Ok(((expr, span), lhs_ty))
+            addition::inter_addition(lhs_p, rhs_p, &span, block, context, lu_dog)
         }
-        //
-        // And
-        //
         ParserExpression::And(ref lhs_p, ref rhs_p) => {
-            let (lhs, lhs_ty) = inter_expression(
-                &new_ref!(ParserExpression, lhs_p.0.to_owned()),
-                &lhs_p.1,
-                block,
-                context,
-                lu_dog,
-            )?;
-            let (rhs, rhs_ty) = inter_expression(
-                &new_ref!(ParserExpression, rhs_p.0.to_owned()),
-                &rhs_p.1,
-                block,
-                context,
-                lu_dog,
-            )?;
-
-            if let ValueTypeEnum::Ty(ref id) = s_read!(lhs_ty).subtype {
-                let ty = context.sarzak.exhume_ty(id).unwrap();
-                matches!(ty, Ty::Boolean(_));
-            } else {
-                let lhs = PrintableValueType(&lhs_ty, context, lu_dog);
-                return Err(vec![DwarfError::TypeMismatch {
-                    found: lhs.to_string(),
-                    expected: "bool".to_string(),
-                    found_span: lhs_p.1.to_owned(),
-                    expected_span: rhs_p.1.to_owned(),
-                    location: location!(),
-                }]);
-            }
-
-            if context.check_types {
-                typecheck(
-                    (&lhs_ty, &lhs_p.1),
-                    (&rhs_ty, &rhs_p.1),
-                    location!(),
-                    context,
-                    lu_dog,
-                )?;
-            }
-
-            let expr = BooleanOperator::new_and(lu_dog);
-            let expr = Binary::new_boolean_operator(&expr, lu_dog);
-            let expr = Operator::new_binary(&lhs.0, Some(&rhs.0), &expr, lu_dog);
-            let expr = Expression::new_operator(&expr, lu_dog);
-
-            let value = XValue::new_expression(block, &lhs_ty, &expr, lu_dog);
-            s_write!(span).x_value = Some(s_read!(value).id);
-
-            Ok(((expr, span), lhs_ty))
+            and::inter_and(lhs_p, rhs_p, &span, block, context, lu_dog)
         }
         //
         // As
@@ -2803,24 +2703,6 @@ fn inter_struct(
         });
 
         Ok(())
-        // for ((name, _), (type_, span)) in fields {
-        //     let name = name.de_sanitize();
-
-        //     context.location = location!();
-        //     let ty = match get_value_type(type_, span, None, context, lu_dog) {
-        //         Ok(ty) => ty,
-        //         Err(mut err) => {
-        //             errors.append(&mut err);
-        //             continue;
-        //         }
-        //     };
-        //     let _field = Field::new(name.to_owned(), &woog_struct, &ty, lu_dog);
-        // }
-        // if errors.is_empty() {
-        //     Ok(())
-        // } else {
-        //     Err(errors)
-        // }
     }
 }
 
@@ -3101,7 +2983,7 @@ fn de_sanitize(string: &str) -> Option<&str> {
     }
 }
 
-fn typecheck(
+pub(super) fn typecheck(
     lhs: (&RefType<ValueType>, &Span),
     rhs: (&RefType<ValueType>, &Span),
     location: Location,
@@ -3173,119 +3055,6 @@ fn typecheck(
                     found_span: rhs_span.to_owned(),
                     location,
                 }])
-            }
-        }
-    }
-}
-
-pub(crate) struct PrintableValueType<'d, 'a, 'b>(
-    pub &'d RefType<ValueType>,
-    pub &'a Context<'a>,
-    pub &'b LuDogStore,
-);
-
-impl<'d, 'a, 'b> fmt::Display for PrintableValueType<'d, 'a, 'b> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        const TY_CLR: Colour = Colour::Purple;
-        const _TY_WARN_CLR: Colour = Colour::Yellow;
-        const _TY_ERR_CLR: Colour = Colour::Red;
-
-        let value = s_read!(self.0);
-        let context = self.1;
-        let lu_dog = self.2;
-
-        match value.subtype {
-            ValueTypeEnum::Char(c) => write!(f, "'{}'", c),
-            ValueTypeEnum::Empty(_) => write!(f, "()"),
-            ValueTypeEnum::Error(_) => write!(f, "<error>"),
-            ValueTypeEnum::Function(_) => write!(f, "<function>"),
-            ValueTypeEnum::Import(ref import) => {
-                let import = lu_dog.exhume_import(import).unwrap();
-                let import = s_read!(import);
-                if import.has_alias {
-                    write!(f, "{}", import.alias)
-                } else {
-                    write!(f, "{}", import.name)
-                }
-            }
-            ValueTypeEnum::Lambda(_) => write!(f, "{}", TY_CLR.italic().paint("<lambda>")),
-            ValueTypeEnum::List(ref list) => {
-                let list = lu_dog.exhume_list(list).unwrap();
-                let list = s_read!(list);
-                let ty = list.r36_value_type(lu_dog)[0].clone();
-                write!(f, "[{}]", PrintableValueType(&ty, context, lu_dog))
-            }
-            ValueTypeEnum::Range(_) => write!(f, "<range>"),
-            ValueTypeEnum::Reference(ref reference) => {
-                let reference = lu_dog.exhume_reference(reference).unwrap();
-                let reference = s_read!(reference);
-                let ty = reference.r35_value_type(lu_dog)[0].clone();
-                write!(f, "&{}", PrintableValueType(&ty, context, lu_dog))
-            }
-            ValueTypeEnum::Ty(ref ty) => {
-                // So, sometimes these show up in the model domain. It'll get really
-                // interesting when there are multiples of those in memory at once...
-                if let Some(ty) = context.sarzak.exhume_ty(ty) {
-                    match ty {
-                        Ty::Boolean(_) => write!(f, "bool"),
-                        Ty::Float(_) => write!(f, "float"),
-                        Ty::Integer(_) => write!(f, "int"),
-                        Ty::Object(ref object) => {
-                            error!("um, check this out?");
-                            // This should probably just be an unwrap().
-                            if let Some(object) = context.sarzak.exhume_object(object) {
-                                write!(f, "{}", object.name)
-                            } else {
-                                write!(f, "<unknown object>")
-                            }
-                        }
-                        Ty::SString(_) => write!(f, "string"),
-                        Ty::SUuid(_) => write!(f, "Uuid"),
-                        gamma => {
-                            error!("deal with sarzak type {:?}", gamma);
-                            write!(f, "todo")
-                        }
-                    }
-                } else {
-                    // It's not a sarzak type, so it must be an object imported from
-                    // one of the model domains.
-                    for model in context.models {
-                        if let Some(Ty::Object(ref object)) = model.exhume_ty(ty) {
-                            if let Some(object) = model.exhume_object(object) {
-                                return write!(f, "{}Proxy", object.name);
-                            }
-                        }
-                    }
-                    write!(f, "<unknown object>")
-                }
-            }
-            ValueTypeEnum::Unknown(_) => write!(f, "<unknown>"),
-            ValueTypeEnum::WoogOption(ref option) => {
-                let option = lu_dog.exhume_woog_option(option).unwrap();
-                let option = s_read!(option);
-                match option.subtype {
-                    WoogOptionEnum::ZNone(_) => write!(f, "None"),
-                    WoogOptionEnum::ZSome(ref some) => {
-                        let some = lu_dog.exhume_z_some(some).unwrap();
-                        let some = s_read!(some);
-                        let value = s_read!(some.r23_x_value(lu_dog)[0]).clone();
-                        let ty = value.r24_value_type(lu_dog)[0].clone();
-                        write!(f, "Some({})", PrintableValueType(&ty, context, lu_dog))
-                    }
-                }
-            }
-            ValueTypeEnum::WoogStruct(ref woog_struct) => {
-                debug!("woog_struct {:?}", woog_struct);
-                let woog_struct = lu_dog.exhume_woog_struct(woog_struct).unwrap();
-                let woog_struct = s_read!(woog_struct);
-                write!(f, "{}", woog_struct.name)
-            }
-            ValueTypeEnum::ZObjectStore(ref id) => {
-                let zobject_store = lu_dog.exhume_z_object_store(id).unwrap();
-                let zobject_store = s_read!(zobject_store);
-                let domain_name = &zobject_store.domain;
-
-                write!(f, "{}Store", domain_name.to_upper_camel_case())
             }
         }
     }

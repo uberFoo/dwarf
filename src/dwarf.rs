@@ -17,8 +17,12 @@ use crate::{
     s_read, NewRef, RefType,
 };
 
+mod expression;
 pub mod extruder;
 pub mod parser;
+mod pvt;
+
+use pvt::PrintableValueType;
 
 pub use extruder::{inter_statement, new_lu_dog, Context};
 pub use parser::{parse_dwarf, parse_line};

@@ -1,0 +1,68 @@
+use std::ops::Range;
+
+use log::debug;
+use snafu::{location, Location};
+
+use crate::{
+    dwarf::{
+        extruder::{inter_expression, typecheck, Context, ExprSpan},
+        Expression as ParserExpression, Result,
+    },
+    lu_dog::{
+        store::ObjectStore as LuDogStore, Binary, Block, Expression, Operator, Span, ValueType,
+        XValue,
+    },
+    new_ref, s_read, s_write, NewRef, RefType,
+};
+
+pub fn inter_addition(
+    lhs_p: &Box<(ParserExpression, Range<usize>)>,
+    rhs_p: &Box<(ParserExpression, Range<usize>)>,
+    span: &RefType<Span>,
+    block: &RefType<Block>,
+    context: &mut Context,
+    lu_dog: &mut LuDogStore,
+) -> Result<(ExprSpan, RefType<ValueType>)> {
+    debug!("Addition");
+    let (lhs, lhs_ty) = inter_expression(
+        &new_ref!(ParserExpression, lhs_p.0.to_owned()),
+        &lhs_p.1,
+        block,
+        context,
+        lu_dog,
+    )?;
+    let (rhs, rhs_ty) = inter_expression(
+        &new_ref!(ParserExpression, rhs_p.0.to_owned()),
+        &rhs_p.1,
+        block,
+        context,
+        lu_dog,
+    )?;
+
+    // 🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧
+    // 🚧                        THIS IS SUPER IMPORTANT!
+    // 🚧
+    // 🚧 We need to check the types of the LHS and RHS to make sure that they are the same.
+    // 🚧 We also need to check that the type supports addition.
+    // 🚧
+    // 🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧
+
+    if context.check_types {
+        typecheck(
+            (&lhs_ty, &lhs_p.1),
+            (&rhs_ty, &rhs_p.1),
+            location!(),
+            context,
+            lu_dog,
+        )?;
+    }
+
+    let expr = Binary::new_addition(lu_dog);
+    let expr = Operator::new_binary(&lhs.0, Some(&rhs.0), &expr, lu_dog);
+    let expr = Expression::new_operator(&expr, lu_dog);
+
+    let value = XValue::new_expression(block, &lhs_ty, &expr, lu_dog);
+    s_write!(span).x_value = Some(s_read!(value).id);
+
+    Ok(((expr, span.clone()), lhs_ty))
+}
