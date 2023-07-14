@@ -5,14 +5,17 @@ use crossbeam::channel::{Receiver, Sender};
 use uuid::Uuid;
 
 use crate::{
-    chacha::error::{ChaChaError, Result},
+    chacha::{
+        error::{ChaChaError, Result},
+        value::StoreProxy,
+    },
     interpreter::{DebuggerStatus, Memory, MemoryUpdateMessage},
     lu_dog::{
         Block, Import, LocalVariable, ObjectStore as LuDogStore, ValueType, Variable, XValue,
     },
     new_ref, s_read, s_write,
     sarzak::ObjectStore as SarzakStore,
-    NewRef, RefType, StoreProxy, Value,
+    NewRef, RefType, Value,
 };
 
 #[derive(Clone, Debug)]

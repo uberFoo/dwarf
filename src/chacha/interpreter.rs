@@ -1,31 +1,30 @@
-use std::{fmt, ops::Range, path::Path};
+use std::{ops::Range, path::Path};
 
 use ansi_term::Colour;
 use circular_queue::CircularQueue;
 use crossbeam::channel::unbounded;
-use heck::ToUpperCamelCase;
 use lazy_static::lazy_static;
 use log::{self, log_enabled, Level::Debug};
 use parking_lot::{Condvar, Mutex};
-use snafu::{location, prelude::*, Location};
+use snafu::{prelude::*, Location};
 use tracy_client::{span, Client};
 use uuid::Uuid;
 
 use crate::{
     chacha::{
-        error::{Error, NoSuchFieldSnafu, Result, UnimplementedSnafu, VariableNotFoundSnafu},
+        error::{Error, NoSuchFieldSnafu, Result, UnimplementedSnafu},
         memory::{Memory, MemoryUpdateMessage},
         value::UserType,
         vm::{CallFrame, Instruction, Thonk, VM},
     },
+    lu_dog::ExpressionEnum,
     lu_dog::{
         Block, Expression, LocalVariable, ObjectStore as LuDogStore, Span, Statement,
-        StatementEnum, ValueType, Variable, WoogOptionEnum, XValue, XValueEnum,
+        StatementEnum, ValueType, Variable, XValue,
     },
-    lu_dog::{ExpressionEnum, ValueTypeEnum},
-    new_ref, s_read, s_write,
+    new_ref, s_read,
+    sarzak::store::ObjectStore as SarzakStore,
     sarzak::MODEL as SARZAK_MODEL,
-    sarzak::{store::ObjectStore as SarzakStore, types::Ty},
     ChaChaError, DwarfInteger, NewRef, RefType, Value,
 };
 
@@ -34,11 +33,13 @@ mod context;
 mod expression;
 mod func_call;
 mod lambda;
+mod pvt;
 mod repl;
 mod statement;
 mod tui;
 
 pub use banner::banner2;
+pub(crate) use pvt::PrintableValueType;
 
 #[cfg(feature = "repl")]
 pub use repl::start_repl;
@@ -47,7 +48,10 @@ pub use repl::start_repl;
 pub use tui::start_tui_repl;
 
 use context::Context;
-use expression::{block, call, debugger, field, for_loop, index, list, literal, operator, print};
+use expression::{
+    block, call, debugger, field, for_loop, if_expr, index, list, literal, operator, print, range,
+    ret, struct_expr, typecast, variable,
+};
 use func_call::eval_function_call;
 use lambda::eval_lambda_expression;
 
@@ -108,80 +112,6 @@ macro_rules! error {
 }
 pub(crate) use error;
 
-macro_rules! fix_debug {
-    ($msg:literal, $($arg:expr),*) => {
-        $(
-            log::debug!(
-                target: "chacha",
-                "{}: {} --> {:?}\n  --> {}:{}:{}",
-                Colour::Green.dimmed().italic().paint(function!()),
-                Colour::Yellow.underline().paint($msg),
-                $arg,
-                file!(),
-                line!(),
-                column!()
-            );
-        )*
-    };
-    ($arg:literal) => {
-        log::debug!(
-            target: "chacha",
-            "{}: {}\n  --> {}:{}:{}",
-            Colour::Green.dimmed().italic().paint(function!()),
-            $arg,
-            file!(),
-            line!(),
-            column!())
-    };
-    ($arg:expr) => {
-        log::debug!(
-            target: "chacha",
-            "{}: {:?}\n  --> {}:{}:{}",
-            Colour::Green.dimmed().italic().paint(function!()),
-            $arg,
-            file!(),
-            line!(),
-            column!())
-    };
-}
-
-macro_rules! fix_error {
-    ($msg:literal, $($arg:expr),*) => {
-        $(
-            log::error!(
-                target: "chacha",
-                "{}: {} --> {:?}\n  --> {}:{}:{}",
-                Colour::Green.dimmed().italic().paint(function!()),
-                Colour::Red.underline().paint($msg),
-                $arg,
-                file!(),
-                line!(),
-                column!()
-            );
-        )*
-    };
-    ($arg:literal) => {
-        log::error!(
-            target: "chacha",
-            "{}: {}\n  --> {}:{}:{}",
-            Colour::Green.dimmed().italic().paint(function!()),
-            Colour::Red.underline().paint($arg),
-            file!(),
-            line!(),
-            column!())
-    };
-    ($arg:expr) => {
-        log::error!(
-            target: "chacha",
-            "{}: {:?}\n  --> {}:{}:{}",
-            Colour::Green.dimmed().italic().paint(function!()),
-            Colour::Ref.underline().paint($arg),
-            file!(),
-            line!(),
-            column!())
-    };
-}
-
 // what is this even for?
 macro_rules! no_debug {
     ($arg:expr) => {
@@ -191,23 +121,6 @@ macro_rules! no_debug {
         log::debug!(
             target: "chacha",
             "{} --> {}\n  --> {}:{}:{}",
-            Colour::Yellow.paint($msg),
-            $arg,
-            file!(),
-            line!(),
-            column!()
-        );
-    };
-}
-
-macro_rules! fix_trace {
-    ($arg:expr) => {
-        log::trace!("{:?}\n  --> {}:{}:{}", $arg, file!(), line!(), column!());
-    };
-    ($msg:literal, $arg:expr) => {
-        log::trace!(
-            target: "chacha",
-            "{} --> {:?}\n  --> {}:{}:{}",
             Colour::Yellow.paint($msg),
             $arg,
             file!(),
@@ -287,7 +200,7 @@ pub fn initialize_interpreter<P: AsRef<Path>>(
     for user_type in lu_dog.iter_woog_struct() {
         let user_type = s_read!(user_type);
         // Create a meta table for each struct.
-        fix_debug!("inserting meta table {}", user_type.name);
+        debug!("inserting meta table {}", user_type.name);
         stack.insert_meta_table(user_type.name.to_owned());
         let impl_ = user_type.r8c_implementation(&lu_dog);
         if !impl_.is_empty() {
@@ -295,7 +208,7 @@ pub fn initialize_interpreter<P: AsRef<Path>>(
             // check and only insert the static functions.
             // 🚧 Only insert the static functions
             for func in s_read!(impl_[0]).r9_function(&lu_dog) {
-                fix_debug!("inserting static function {}", s_read!(func).name);
+                debug!("inserting static function {}", s_read!(func).name);
                 stack.insert_meta(
                     &user_type.name,
                     s_read!(func).name.to_owned(),
@@ -643,263 +556,21 @@ fn eval_expression(
             operator::eval_operator(operator, &expression, context, vm)
         }
         ExpressionEnum::Print(ref print) => print::eval_print(print, context, vm),
-        //
-        // Range
-        //
-        ExpressionEnum::RangeExpression(ref range) => {
-            let range = s_read!(lu_dog).exhume_range_expression(range).unwrap();
-            let lhs = s_read!(range).lhs.unwrap();
-            let lhs = s_read!(lu_dog).exhume_expression(&lhs).unwrap();
-            let rhs = s_read!(range).rhs.unwrap();
-            let rhs = s_read!(lu_dog).exhume_expression(&rhs).unwrap();
-
-            let (lhs, _) = eval_expression(lhs, context, vm)?;
-            let (rhs, _) = eval_expression(rhs, context, vm)?;
-
-            let range = Range {
-                start: Box::new(lhs),
-                end: Box::new(rhs),
-            };
-
-            Ok((
-                new_ref!(Value, Value::Range(range)),
-                ValueType::new_range(&mut s_write!(lu_dog)),
-            ))
-        }
-        //
-        // StructExpression
-        //
-        // 🚧  This creates `UserType`s, but what about `ProxyType`s? I sort of
-        // think that the latter is only for imported, but I'm not sure.
-        //
+        ExpressionEnum::RangeExpression(ref range) => range::eval_range(range, context, vm),
         ExpressionEnum::StructExpression(ref expr) => {
-            let expr = s_read!(lu_dog).exhume_struct_expression(expr).unwrap();
-            let field_exprs = s_read!(expr).r26_field_expression(&s_read!(lu_dog));
-
-            // Get name, value and type for each field expression.
-            let field_exprs = field_exprs
-                .iter()
-                .map(|f| {
-                    let expr = s_read!(f).r15_expression(&s_read!(lu_dog))[0].clone();
-                    let (value, ty) = eval_expression(expr.clone(), context, vm)?;
-                    debug!(
-                        "StructExpression field value: {}, type: {:?}",
-                        s_read!(value),
-                        s_read!(ty)
-                    );
-                    Ok((s_read!(f).name.clone(), ty, value, expr))
-                })
-                .collect::<Result<Vec<_>>>()?;
-
-            let woog_struct = s_read!(expr).r39_woog_struct(&s_read!(lu_dog))[0].clone();
-            let ty = s_read!(woog_struct).r1_value_type(&s_read!(lu_dog))[0].clone();
-            let fields = s_read!(woog_struct).r7_field(&s_read!(lu_dog));
-
-            // 🚧 Don't I do this in the extruder? Can't I?
-            // Type checking fields here
-            let ty_name = PrintableValueType(&ty, context);
-            let mut user_type = UserType::new(ty_name.to_string(), &ty);
-            let lu_dog = s_read!(lu_dog);
-            for (name, ty, value, expr) in field_exprs {
-                if let Some(field) = fields.iter().find(|f| s_read!(f).name == name) {
-                    let struct_ty = lu_dog.exhume_value_type(&s_read!(field).ty).unwrap();
-
-                    let x_value = &s_read!(expr).r11_x_value(&lu_dog)[0];
-                    let span = &s_read!(x_value).r63_span(&lu_dog)[0];
-
-                    typecheck(&struct_ty, &ty, span, location!(), context)?;
-
-                    // This is where we add the attribute value to the user type.
-                    user_type.add_attr(&name, value);
-                } else {
-                    let x_value = &s_read!(expr).r11_x_value(&lu_dog)[0];
-                    let span = &s_read!(x_value).r63_span(&lu_dog)[0];
-                    let span = s_read!(span).start as usize..s_read!(span).end as usize;
-                    ensure!(
-                        false,
-                        NoSuchFieldSnafu {
-                            field: name.to_owned(),
-                            span,
-                        }
-                    );
-                }
-            }
-
-            Ok((
-                new_ref!(Value, Value::UserType(new_ref!(UserType, user_type))),
-                ty,
-            ))
+            struct_expr::eval_struct_expression(expr, context, vm)
         }
-        //
-        // TypeCast
-        //
-        ExpressionEnum::TypeCast(ref expr) => {
-            let sarzak = context.sarzak_heel().clone();
-
-            let expr = s_read!(lu_dog).exhume_type_cast(expr).unwrap();
-            fix_debug!("ExpressionEnum::TypeCast", expr);
-
-            let lhs = s_read!(expr).r68_expression(&s_read!(lu_dog))[0].clone();
-            let as_ty = s_read!(expr).r69_value_type(&s_read!(lu_dog))[0].clone();
-
-            let (lhs, _lhs_ty) = eval_expression(lhs, context, vm)?;
-
-            let value = match &s_read!(as_ty).subtype {
-                ValueTypeEnum::Ty(ref ty) => {
-                    let ty = *s_read!(sarzak).exhume_ty(ty).unwrap();
-                    match ty {
-                        Ty::Boolean(_) => {
-                            let value: bool = (&*s_read!(lhs)).try_into()?;
-                            new_ref!(Value, value.into())
-                        }
-                        Ty::Float(_) => {
-                            let value: f64 = (&*s_read!(lhs)).try_into()?;
-                            new_ref!(Value, value.into())
-                        }
-                        Ty::Integer(_) => {
-                            let value: i64 = (&*s_read!(lhs)).try_into()?;
-                            new_ref!(Value, value.into())
-                        }
-                        Ty::SString(_) => {
-                            let value: String = (&*s_read!(lhs)).try_into()?;
-                            new_ref!(Value, value.into())
-                        }
-                        ref alpha => {
-                            ensure!(
-                                false,
-                                UnimplementedSnafu {
-                                    message: format!("deal with type cast as: {:?}", alpha),
-                                }
-                            );
-                            unreachable!();
-                        }
-                    }
-                }
-                ref alpha => {
-                    ensure!(
-                        false,
-                        UnimplementedSnafu {
-                            message: format!("deal with type cast as: {:?}", alpha),
-                        }
-                    );
-                    unreachable!();
-                }
-            };
-
-            Ok((value, as_ty))
-        }
-        //
-        // VariableExpression
-        //
+        ExpressionEnum::TypeCast(ref expr) => typecast::eval_as_expression(expr, context, vm),
         ExpressionEnum::VariableExpression(ref expr) => {
-            let expr = s_read!(lu_dog).exhume_variable_expression(expr).unwrap();
-            let value = context.memory().get(&s_read!(expr).name);
-
-            ensure!(value.is_some(), {
-                let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
-                let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
-                let read = s_read!(span);
-                let span = read.start as usize..read.end as usize;
-                let var = s_read!(expr).name.clone();
-                VariableNotFoundSnafu { var, span }
-            });
-
-            let value = value.unwrap();
-            debug!(
-                "ExpressionEnum::VariableExpression value: {}",
-                s_read!(value)
-            );
-            let ty = s_read!(value).get_type(&s_read!(lu_dog));
-
-            Ok((value, ty))
+            variable::eval_variable_expression(expr, &expression, context)
         }
-        //
-        // XIf
-        //
-        ExpressionEnum::XIf(ref expr) => {
-            let expr = s_read!(lu_dog).exhume_x_if(expr).unwrap();
-            let expr = s_read!(expr);
-            fix_debug!("ExpressionEnum::XIf", expr);
-
-            let cond_expr = s_read!(lu_dog).exhume_expression(&expr.test).unwrap();
-
-            let (cond, _ty) = eval_expression(cond_expr, context, vm)?;
-            fix_debug!("ExpressionEnum::XIf conditional", cond);
-
-            let cond = s_read!(cond);
-            Ok(if (&*cond).try_into()? {
-                // Evaluate the true block
-                let block = s_read!(lu_dog).exhume_block(&expr.true_block).unwrap();
-                let block = s_read!(block).r15_expression(&s_read!(lu_dog))[0].clone();
-
-                eval_expression(block, context, vm)?
-            } else {
-                fix_debug!("ExpressionEnum::XIf else");
-                if let Some(expr) = &expr.false_block {
-                    fix_debug!("ExpressionEnum::XIf false block");
-                    // Evaluate the false block
-                    let block = s_read!(lu_dog).exhume_block(expr).unwrap();
-                    let block = s_read!(block).r15_expression(&s_read!(lu_dog))[0].clone();
-
-                    eval_expression(block, context, vm)?
-                } else {
-                    (
-                        new_ref!(Value, Value::Empty),
-                        Value::Empty.get_type(&s_read!(lu_dog)),
-                    )
-                }
-            })
-        }
-        //
-        // XReturn
-        //
-        ExpressionEnum::XReturn(ref expr) => {
-            let expr = s_read!(lu_dog).exhume_x_return(expr).unwrap();
-            fix_debug!("ExpressionEnum::XReturn", expr);
-
-            let expr = &s_read!(expr).expression;
-            let expr = s_read!(lu_dog).exhume_expression(expr).unwrap();
-
-            let (value, ty) = eval_expression(expr, context, vm)?;
-            Err(ChaChaError::Return { value, ty })
-        }
-        //
-        // ZNone
-        //
-        ExpressionEnum::ZNone(_) => Ok((
-            new_ref!(Value, Value::Empty),
-            Value::Empty.get_type(&s_read!(lu_dog)),
-        )),
-        //
-        // ZSome
-        //
-        ExpressionEnum::ZSome(ref some) => {
-            let some = s_read!(lu_dog).exhume_z_some(some).unwrap();
-            fix_debug!("ExpressionEnum::ZSome", some);
-
-            let value = &s_read!(some).r23_x_value(&s_read!(lu_dog))[0];
-            let option = &s_read!(some).r3_woog_option(&s_read!(lu_dog))[0];
-            let ty = &s_read!(option).r2_value_type(&s_read!(lu_dog))[0];
-
-            let value = match s_read!(value).subtype {
-                XValueEnum::Expression(ref expr) => {
-                    let expr = s_read!(lu_dog).exhume_expression(expr).unwrap();
-                    let (value, _ty) = eval_expression(expr, context, vm)?;
-                    value
-                }
-                XValueEnum::Variable(ref var) => {
-                    let _var = s_read!(lu_dog).exhume_variable(var).unwrap();
-                    new_ref!(Value, Value::Empty)
-                }
-            };
-
-            Ok((value, ty.clone()))
-        }
+        ExpressionEnum::XIf(ref expr) => if_expr::eval_if_expression(expr, context, vm),
+        ExpressionEnum::XReturn(ref expr) => ret::eval_return_expression(expr, context, vm),
         ref alpha => {
             ensure!(
                 false,
                 UnimplementedSnafu {
-                    message: format!("deal with expression: {:?}", alpha),
+                    message: format!("Hey! Implement expression: {:?}!", alpha),
                 }
             );
 
@@ -918,8 +589,8 @@ pub fn eval_statement(
 ) -> Result<(RefType<Value>, RefType<ValueType>)> {
     let lu_dog = context.lu_dog_heel().clone();
 
-    fix_debug!("eval_statement statement", statement);
-    fix_trace!("eval_statement stack", context.memory());
+    debug!("eval_statement statement {statement:?}");
+    trace!("eval_statement stack {:?}", context.memory());
 
     span!("eval_statement");
 
@@ -930,7 +601,7 @@ pub fn eval_statement(
             let expr = stmt.r31_expression(&s_read!(lu_dog))[0].clone();
             let (value, ty) = eval_expression(expr, context, vm)?;
             no_debug!("StatementEnum::ExpressionStatement: value", s_read!(value));
-            fix_debug!("StatementEnum::ExpressionStatement: ty", ty);
+            debug!("StatementEnum::ExpressionStatement: ty {ty:?}");
 
             Ok((
                 new_ref!(Value, Value::Empty),
@@ -940,18 +611,18 @@ pub fn eval_statement(
         StatementEnum::LetStatement(ref stmt) => {
             let stmt = s_read!(lu_dog).exhume_let_statement(stmt).unwrap();
             let stmt = s_read!(stmt);
-            fix_debug!("StatementEnum::LetStatement: stmt", stmt);
+            debug!("StatementEnum::LetStatement: stmt {stmt:?}");
 
             let expr = stmt.r20_expression(&s_read!(lu_dog))[0].clone();
-            fix_debug!("expr", expr);
+            debug!("expr {expr:?}");
 
             let (value, ty) = eval_expression(expr, context, vm)?;
-            fix_debug!("value", value);
-            fix_debug!("ty", ty);
+            debug!("value {value:?}");
+            debug!("ty {ty:?}");
 
             let var = s_read!(stmt.r21_local_variable(&s_read!(lu_dog))[0]).clone();
             let var = s_read!(var.r12_variable(&s_read!(lu_dog))[0]).clone();
-            fix_debug!("var", var);
+            debug!("var {var:?}");
 
             debug!("inserting {} = {}", var.name, s_read!(value));
             context.memory().insert(var.name, value);
@@ -967,14 +638,14 @@ pub fn eval_statement(
         StatementEnum::ResultStatement(ref stmt) => {
             let stmt = s_read!(lu_dog).exhume_result_statement(stmt).unwrap();
             let stmt = s_read!(stmt);
-            fix_debug!("StatementEnum::ResultStatement: stmt", stmt);
+            debug!("StatementEnum::ResultStatement: stmt {stmt:?}");
 
             let expr = stmt.r41_expression(&s_read!(lu_dog))[0].clone();
-            fix_debug!("StatementEnum::ResultStatement expr", expr);
+            debug!("StatementEnum::ResultStatement expr {expr:?}");
 
             let (value, ty) = eval_expression(expr, context, vm)?;
-            fix_debug!("StatementEnum::ResultStatement value", value);
-            fix_debug!("StatementEnum::ResultStatement ty", ty);
+            debug!("StatementEnum::ResultStatement value {value:?}");
+            debug!("StatementEnum::ResultStatement ty {ty:?}");
 
             Ok((value, ty))
         }
@@ -1105,146 +776,6 @@ pub fn start_vm(n: DwarfInteger) -> Result<DwarfInteger, Error> {
     let result: DwarfInteger = (&*s_read!(result.unwrap())).try_into().unwrap();
 
     Ok(result)
-}
-
-pub(crate) struct PrintableValueType<'a>(pub &'a RefType<ValueType>, pub &'a Context);
-
-impl<'a> fmt::Display for PrintableValueType<'a> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        const TY_CLR: Colour = Colour::Purple;
-        const TY_WARN_CLR: Colour = Colour::Yellow;
-        const TY_ERR_CLR: Colour = Colour::Red;
-
-        let value = s_read!(self.0);
-        let context = self.1;
-        let lu_dog = context.lu_dog_heel();
-        let sarzak = context.sarzak_heel();
-        let model = context.models();
-
-        match &value.subtype {
-            ValueTypeEnum::Char(c) => write!(f, "{}", TY_CLR.italic().paint(format!("'{}'", c))),
-            ValueTypeEnum::Empty(_) => write!(f, "{}", TY_CLR.italic().paint("()")),
-            ValueTypeEnum::Error(_) => write!(f, "{}", TY_ERR_CLR.italic().paint("error")),
-            ValueTypeEnum::Function(_) => write!(f, "{}", TY_CLR.italic().paint("function")),
-            ValueTypeEnum::Import(ref import) => {
-                let import = s_read!(lu_dog).exhume_import(import).unwrap();
-                let import = s_read!(import);
-                if import.has_alias {
-                    write!(f, "{}", TY_CLR.italic().paint(&import.alias))
-                } else {
-                    write!(f, "{}", TY_CLR.italic().paint(&import.name))
-                }
-            }
-            ValueTypeEnum::Lambda(_) => write!(f, "{}", TY_CLR.italic().paint("lambda")),
-            ValueTypeEnum::List(ref list) => {
-                let list = s_read!(lu_dog).exhume_list(list).unwrap();
-                let list = s_read!(list);
-                let ty = list.r36_value_type(&s_read!(lu_dog))[0].clone();
-                write!(
-                    f,
-                    "{}",
-                    TY_CLR
-                        .italic()
-                        .paint(format!("[{}]", PrintableValueType(&ty, context)))
-                )
-            }
-            ValueTypeEnum::Range(_) => write!(f, "{}", TY_CLR.italic().paint("range")),
-            ValueTypeEnum::Reference(ref reference) => {
-                let reference = s_read!(lu_dog).exhume_reference(reference).unwrap();
-                let reference = s_read!(reference);
-                let ty = reference.r35_value_type(&s_read!(lu_dog))[0].clone();
-                write!(
-                    f,
-                    "{}",
-                    TY_CLR
-                        .italic()
-                        .paint(format!("&{}", PrintableValueType(&ty, context)))
-                )
-            }
-            ValueTypeEnum::Ty(ref ty) => {
-                // So, sometimes these show up in the model domain. It'll get really
-                // interesting when there are multiples of those in memory at once...
-                let sarzak = s_read!(sarzak);
-                if let Some(ty) = sarzak.exhume_ty(ty) {
-                    match ty {
-                        Ty::Boolean(_) => write!(f, "{}", TY_CLR.italic().paint("bool")),
-                        Ty::Float(_) => write!(f, "{}", TY_CLR.italic().paint("float")),
-                        Ty::Integer(_) => write!(f, "{}", TY_CLR.italic().paint("int")),
-                        Ty::Object(ref object) => {
-                            // This should probably just be an unwrap().
-                            if let Some(object) = sarzak.exhume_object(object) {
-                                write!(f, "{}", TY_CLR.italic().paint(&object.name))
-                            } else {
-                                write!(f, "{}", TY_WARN_CLR.italic().paint("<unknown object>"))
-                            }
-                        }
-                        Ty::SString(_) => write!(f, "{}", TY_CLR.italic().paint("string")),
-                        Ty::SUuid(_) => write!(f, "{}", TY_CLR.italic().paint("Uuid")),
-                        gamma => {
-                            fix_error!("deal with sarzak type", gamma);
-                            write!(f, "todo")
-                        }
-                    }
-                } else {
-                    // It's not a sarzak type, so it must be an object imported from
-                    // one of the model domains.
-                    let models = s_read!(model);
-                    for model in &*models {
-                        if let Some(Ty::Object(ref object)) = model.exhume_ty(ty) {
-                            if let Some(object) = model.exhume_object(object) {
-                                return write!(
-                                    f,
-                                    "{}",
-                                    TY_CLR.italic().paint(format!("{}Proxy", object.name))
-                                );
-                            }
-                        }
-                    }
-                    write!(f, "{}", TY_WARN_CLR.italic().paint("<unknown object>"))
-                }
-            }
-            ValueTypeEnum::Unknown(_) => write!(f, "{}", TY_WARN_CLR.italic().paint("<unknown>")),
-            ValueTypeEnum::WoogOption(ref option) => {
-                let option = s_read!(lu_dog).exhume_woog_option(option).unwrap();
-                let option = s_read!(option);
-                match option.subtype {
-                    WoogOptionEnum::ZNone(_) => write!(f, "{}", TY_CLR.italic().paint("None")),
-                    WoogOptionEnum::ZSome(ref some) => {
-                        let some = s_read!(lu_dog).exhume_z_some(some).unwrap();
-                        let some = s_read!(some);
-                        let value = s_read!(some.r23_x_value(&s_read!(lu_dog))[0]).clone();
-                        let ty = value.r24_value_type(&s_read!(lu_dog))[0].clone();
-                        write!(
-                            f,
-                            "{}",
-                            TY_CLR
-                                .italic()
-                                .paint(format!("Some({})", PrintableValueType(&ty, context)))
-                        )
-                    }
-                }
-            }
-            ValueTypeEnum::WoogStruct(ref woog_struct) => {
-                let woog_struct = s_read!(lu_dog).exhume_woog_struct(woog_struct).unwrap();
-                fix_debug!("woog_struct", woog_struct);
-                let woog_struct = s_read!(woog_struct);
-                write!(f, "{}", TY_CLR.italic().paint(&woog_struct.name))
-            }
-            ValueTypeEnum::ZObjectStore(ref id) => {
-                let zobject_store = s_read!(lu_dog).exhume_z_object_store(id).unwrap();
-                let zobject_store = s_read!(zobject_store);
-                let domain_name = &zobject_store.domain;
-
-                write!(
-                    f,
-                    "{}",
-                    TY_CLR
-                        .italic()
-                        .paint(format!("{}Store", domain_name.to_upper_camel_case()))
-                )
-            }
-        }
-    }
 }
 
 fn typecheck(

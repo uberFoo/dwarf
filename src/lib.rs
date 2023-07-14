@@ -18,7 +18,7 @@ pub use ::sarzak::{lu_dog, sarzak};
 pub use chacha::{
     error::{ChaChaError, ChaChaErrorReporter},
     interpreter::{self, initialize_interpreter},
-    value::{StoreProxy, Value},
+    value::Value,
 };
 
 // These should eventually come from the domain.

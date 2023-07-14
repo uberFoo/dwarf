@@ -20,6 +20,7 @@
         "Readline",
         "rustyline",
         "shouty",
+        "thonks",
         "tokio",
         "tracy",
         "tspan",
