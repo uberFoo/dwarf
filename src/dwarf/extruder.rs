@@ -203,13 +203,15 @@ impl<'a> ConveyImpl<'a> {
     }
 }
 
+pub struct StructFields {
+    woog_struct: RefType<WoogStruct>,
+    fields: Vec<(Spanned<String>, Spanned<Type>)>,
+    location: Location,
+}
+
 pub struct Context<'a> {
     pub location: Location,
-    pub struct_fields: Vec<(
-        RefType<WoogStruct>,
-        Vec<(Spanned<String>, Spanned<Type>)>,
-        Location,
-    )>,
+    pub struct_fields: Vec<StructFields>,
     pub check_types: bool,
     pub source: RefType<DwarfSourceFile>,
     pub models: &'a [SarzakStore],
@@ -313,7 +315,12 @@ fn walk_tree(
 
     for _ in structs {
         let params = context.struct_fields.drain(..).collect::<Vec<_>>();
-        for (woog_struct, fields, location) in params {
+        for StructFields {
+            woog_struct,
+            fields,
+            location,
+        } in params
+        {
             let _ = inter_struct_fields(woog_struct, &fields, location, context, lu_dog).map_err(
                 |mut e| {
                     errors.append(&mut e);
@@ -537,7 +544,11 @@ pub fn inter_statement(
                 Item::Struct((name, span), fields) => {
                     inter_struct(name, span, fields, context, lu_dog).and_then(|_| {
                         // There had better be one and only one.
-                        let (woog_struct, fields, location) = context.struct_fields.pop().unwrap();
+                        let StructFields {
+                            woog_struct,
+                            fields,
+                            location,
+                        } = context.struct_fields.pop().unwrap();
                         inter_struct_fields(woog_struct, &fields, location, context, lu_dog)
                     })?
                 }
@@ -628,7 +639,6 @@ pub fn inter_statement(
     }
 }
 
-#[allow(clippy::too_many_arguments)]
 fn inter_statements(
     statements: &[RefType<ParserStatement>],
     span: &Span,
@@ -673,7 +683,6 @@ fn inter_statements(
 /// I may have spoken too soon. We need to be populating the store, in addition
 /// to returning the type. Duh. And we should return the expression so that we
 /// can create a value from it.
-// #[allow(clippy::too_many_arguments)]
 fn inter_expression(
     expr: &RefType<ParserExpression>,
     span: &Span,
@@ -2776,18 +2785,22 @@ fn inter_struct(
         );
         let _ = WoogItem::new_woog_struct(&context.source, &woog_struct, lu_dog);
         let _ty = ValueType::new_woog_struct(&woog_struct, lu_dog);
-        context
-            .struct_fields
-            .push((woog_struct, fields.to_owned(), location!()));
+        context.struct_fields.push(StructFields {
+            woog_struct,
+            fields: fields.to_owned(),
+            location: location!(),
+        });
 
         Ok(())
     } else {
         // This is just a plain vanilla user defined type.
         let woog_struct = WoogStruct::new(name.to_owned(), None, lu_dog);
         let _ty = ValueType::new_woog_struct(&woog_struct, lu_dog);
-        context
-            .struct_fields
-            .push((woog_struct, fields.to_owned(), location!()));
+        context.struct_fields.push(StructFields {
+            woog_struct,
+            fields: fields.to_owned(),
+            location: location!(),
+        });
 
         Ok(())
         // for ((name, _), (type_, span)) in fields {
