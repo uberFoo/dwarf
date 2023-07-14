@@ -174,7 +174,7 @@ fn lexer() -> impl Parser<char, Vec<Spanned<Token>>, Error = Simple<char>> {
     });
 
     // A parser for punctuation (delimiters, semicolons, etc.)
-    let punct = one_of("=-()[]{}:;,.|&<>+*/!").map(Token::Punct);
+    let punct = one_of("#=-()[]{}:;,.|&<>+*/!").map(Token::Punct);
 
     let option = just("Option").map(|_| Token::Option);
 
@@ -193,12 +193,12 @@ fn lexer() -> impl Parser<char, Vec<Spanned<Token>>, Error = Simple<char>> {
         .recover_with(skip_then_retry_until([]));
 
     let comment = just("//").then(take_until(just('\n'))).padded();
-    let doc_comment = just('#').padded();
+    // let doc_comment = just('#').padded();
 
     token
         .map_with_span(|tok, span| (tok, span))
         .padded_by(comment.repeated())
-        .padded_by(doc_comment.repeated())
+        // .padded_by(doc_comment.repeated())
         .padded()
         .repeated()
 }
@@ -224,7 +224,7 @@ impl DwarfParser {
     /// A program is a list of items
     ///
     /// program -> item*
-    fn parse_program(&mut self) -> (Vec<Spanned<Item>>, Vec<Simple<String>>) {
+    fn parse_program(&mut self) -> (Vec<Item>, Vec<Simple<String>>) {
         debug!("enter");
 
         let mut result = Vec::new();
@@ -357,8 +357,6 @@ impl DwarfParser {
             return None;
         }
 
-        let start = self.previous().unwrap().1.start;
-
         if !self.match_(&[Token::Punct('[')]) {
             debug!("exit");
             return None;
@@ -381,14 +379,14 @@ impl DwarfParser {
 
         let value = if self.match_(&[Token::Punct('=')]) {
             debug!("getting value");
-            let value = if let Some(value) = self.parse_expression(ENTER)? {
+            let value = if let Ok(Some(value)) = self.parse_expression(ENTER) {
                 debug!("value", value);
                 value
             } else {
                 let token = self.previous().unwrap();
                 let err = Simple::expected_input_found(
                     token.1.clone(),
-                    [Some("=".to_owned())],
+                    [Some("<expression -> there's a lot of them...>".to_owned())],
                     Some(token.0.to_string()),
                 );
                 self.errors.push(err);
@@ -396,9 +394,17 @@ impl DwarfParser {
                 return None;
             };
             debug!("exit getting value");
-            Some(Box::new(value.0))
+            value.0
         } else {
-            None
+            let token = self.previous().unwrap();
+            let err = Simple::expected_input_found(
+                token.1.clone(),
+                [Some("=".to_owned())],
+                Some(token.0.to_string()),
+            );
+            self.errors.push(err);
+            debug!("exit");
+            return None;
         };
 
         if !self.match_(&[Token::Punct(']')]) {
@@ -414,20 +420,28 @@ impl DwarfParser {
         }
 
         debug!("exit");
+
+        Some(Attribute { name, value })
     }
 
     /// Parse an Item
     ///
     /// This should probably just return an error...
     ///  item -> Struct | ImplBlock | Import | Function
-    fn parse_item(&mut self) -> Option<Spanned<Item>> {
+    fn parse_item(&mut self) -> Option<Item> {
         debug!("enter");
+
+        let mut attributes = Vec::new();
+        while let Some(attr) = self.parse_attribute() {
+            debug!("attribute", attr);
+            attributes.push(attr);
+        }
 
         // Try to parse a struct
         match self.parse_struct() {
             Ok(Some(item)) => {
                 debug!("struct", item);
-                return Some(item);
+                return Some(Item { item, attributes });
             }
             Ok(None) => {}
             Err(err) => {
@@ -438,19 +452,19 @@ impl DwarfParser {
 
         if let Some(item) = self.parse_impl_block() {
             debug!("impl", item);
-            return Some(item);
+            return Some(Item { item, attributes });
         }
 
         if let Some(item) = self.parse_import() {
             debug!("import", item);
-            return Some(item);
+            return Some(Item { item, attributes });
         }
 
         // Try to parse a function
         match self.parse_function() {
-            Ok(Some(func)) => {
-                debug!("function", func);
-                return Some(func);
+            Ok(Some(item)) => {
+                debug!("function", item);
+                return Some(Item { item, attributes });
             }
             Ok(None) => {}
             Err(err) => {
@@ -490,7 +504,7 @@ impl DwarfParser {
     /// Parse an Import
     ///
     /// import -> USE IDENTIFIER (:: IDENTIFIER)* ( AS IDENTIFIER )? ;
-    fn parse_import(&mut self) -> Option<Spanned<Item>> {
+    fn parse_import(&mut self) -> Option<Spanned<InnerItem>> {
         debug!("enter");
 
         let start = if let Some(tok) = self.peek() {
@@ -557,10 +571,7 @@ impl DwarfParser {
         debug!("exit");
 
         Some((
-            Item {
-                item: InnerItem::Import(name, alias),
-                attributes: Vec::new(),
-            },
+            InnerItem::Import(name, alias),
             start..self.previous().unwrap().1.end,
         ))
     }
@@ -568,7 +579,7 @@ impl DwarfParser {
     /// Parse an impl block
     ///
     /// impl_block -> impl IDENTIFIER  { impl_block_body }
-    fn parse_impl_block(&mut self) -> Option<Spanned<Item>> {
+    fn parse_impl_block(&mut self) -> Option<Spanned<InnerItem>> {
         debug!("enter");
 
         let start = if let Some(tok) = self.peek() {
@@ -657,10 +668,7 @@ impl DwarfParser {
         debug!("exit ", (&name, &body));
 
         Some((
-            Item {
-                item: InnerItem::Implementation(name, body),
-                attributes: Vec::new(),
-            },
+            InnerItem::Implementation(name, body),
             start..self.previous().unwrap().1.end,
         ))
     }
@@ -3106,7 +3114,7 @@ impl DwarfParser {
         )))
     }
 
-    fn parse_function(&mut self) -> Result<Option<Spanned<Item>>> {
+    fn parse_function(&mut self) -> Result<Option<Spanned<InnerItem>>> {
         debug!("enter parse_function");
 
         let start = if let Some(tok) = self.peek() {
@@ -3232,10 +3240,7 @@ impl DwarfParser {
         debug!("exit parse_function");
 
         Ok(Some((
-            Item {
-                item: InnerItem::Function(name, params, return_type, body.0),
-                attributes: Vec::new(),
-            },
+            InnerItem::Function(name, params, return_type, body.0),
             start..end,
         )))
     }
@@ -3696,7 +3701,7 @@ impl DwarfParser {
     /// Parse a Struct
     ///
     /// struct -> struct IDENT { struct_field* }
-    fn parse_struct(&mut self) -> Result<Option<Spanned<Item>>> {
+    fn parse_struct(&mut self) -> Result<Option<Spanned<InnerItem>>> {
         let start = if let Some(tok) = self.peek() {
             tok.1.start
         } else {
@@ -3771,13 +3776,7 @@ impl DwarfParser {
             self.previous().unwrap().1.end
         };
 
-        Ok(Some((
-            Item {
-                item: InnerItem::Struct(name, fields),
-                attributes: Vec::new(),
-            },
-            start..end,
-        )))
+        Ok(Some((InnerItem::Struct(name, fields), start..end)))
     }
 
     /// Parse an identifier
@@ -3965,7 +3964,7 @@ pub fn parse_line(src: &str) -> Result<Option<Spanned<Statement>>, String> {
 
 // This will return as much of the parsed ast as possible, even when hitting an
 // error, which explains the return type.
-pub fn parse_dwarf(name: &str, src: &str) -> Result<Vec<Spanned<Item>>, DwarfError> {
+pub fn parse_dwarf(name: &str, src: &str) -> Result<Vec<Item>, DwarfError> {
     let (tokens, errs) = lexer().parse_recovery_verbose(src);
 
     let mut parser = DwarfParser::new(tokens.unwrap());

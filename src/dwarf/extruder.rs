@@ -195,11 +195,11 @@ impl<'a> ConveyStruct<'a> {
 struct ConveyImpl<'a> {
     name: &'a str,
     span: &'a Span,
-    funcs: &'a [Spanned<Item>],
+    funcs: &'a [Item],
 }
 
 impl<'a> ConveyImpl<'a> {
-    fn new(name: &'a str, span: &'a Span, funcs: &'a [Spanned<Item>]) -> Self {
+    fn new(name: &'a str, span: &'a Span, funcs: &'a [Item]) -> Self {
         Self { name, span, funcs }
     }
 }
@@ -243,7 +243,7 @@ pub struct Context<'a> {
 /// that it may only be used to look up the id of the UUID type.
 pub fn new_lu_dog(
     out_dir: Option<&PathBuf>,
-    source: Option<(String, &[Spanned<Item>])>,
+    source: Option<(String, &[Item])>,
     models: &[SarzakStore],
     sarzak: &SarzakStore,
 ) -> Result<LuDogStore> {
@@ -276,7 +276,7 @@ pub fn new_lu_dog(
 
 fn walk_tree(
     out_dir: Option<&PathBuf>,
-    ast: &[Spanned<Item>],
+    ast: &[Item],
     context: &mut Context,
     lu_dog: &mut LuDogStore,
 ) -> Result<()> {
@@ -287,35 +287,23 @@ fn walk_tree(
     // We need the structs before the impls, so we do this.
     for item in ast {
         match item {
-            (
-                Item {
-                    item: InnerItem::Function((name, _name_span), params, return_type, stmts),
-                    attributes: _,
-                },
-                span,
-            ) => funcs.push(ConveyFunc::new(name, span, params, return_type, stmts)),
-            (
-                Item {
-                    item: InnerItem::Implementation((name, _name_span), funcs),
-                    attributes: _,
-                },
-                span,
-            ) => implementations.push(ConveyImpl::new(name, span, funcs)),
+            Item {
+                item: (InnerItem::Function((name, _name_span), params, return_type, stmts), span),
+                attributes: _,
+            } => funcs.push(ConveyFunc::new(name, span, params, return_type, stmts)),
+            Item {
+                item: (InnerItem::Implementation((name, _name_span), funcs), span),
+                attributes: _,
+            } => implementations.push(ConveyImpl::new(name, span, funcs)),
             // Imports can happen any time, I think.
-            (
-                Item {
-                    item: InnerItem::Import((path, _path_span), alias),
-                    attributes: _,
-                },
-                span,
-            ) => inter_import(path, alias, &s_read!(context.source).source, span, lu_dog)?,
-            (
-                Item {
-                    item: InnerItem::Struct((name, span), fields),
-                    attributes: _,
-                },
-                _span,
-            ) => structs.push(ConveyStruct::new(name, span, fields)),
+            Item {
+                item: (InnerItem::Import((path, _path_span), alias), span),
+                attributes: _,
+            } => inter_import(path, alias, &s_read!(context.source).source, span, lu_dog)?,
+            Item {
+                item: (InnerItem::Struct((name, span), fields), _),
+                attributes: _,
+            } => structs.push(ConveyStruct::new(name, span, fields)),
         }
     }
 
@@ -538,32 +526,39 @@ pub fn inter_statement(
         //
         // Item
         //
-        ParserStatement::Item((item, span)) => {
-            match item {
+        ParserStatement::Item(item) => {
+            let span = match item {
                 // Item::Function((name, _name_span), params, return_type, stmts) => {
                 Item {
-                    item: InnerItem::Function(ref name, ref params, ref return_type, ref stmts),
+                    item:
+                        (InnerItem::Function(ref name, ref params, ref return_type, ref stmts), span),
                     attributes: _,
-                } => inter_func(
-                    &name.0,
-                    params,
-                    return_type,
-                    stmts,
-                    None,
-                    None,
-                    span,
-                    context,
-                    lu_dog,
-                )?,
+                } => {
+                    inter_func(
+                        &name.0,
+                        params,
+                        return_type,
+                        stmts,
+                        None,
+                        None,
+                        span,
+                        context,
+                        lu_dog,
+                    )?;
+                    span
+                }
                 Item {
-                    item: InnerItem::Implementation((name, _name_span), funcs),
+                    item: (InnerItem::Implementation((name, _name_span), funcs), span),
                     attributes: _,
-                } => inter_implementation(name, funcs, span, context, lu_dog)?,
+                } => {
+                    inter_implementation(name, funcs, span, context, lu_dog)?;
+                    span
+                }
                 // Item::Import((path, _path_span), alias) => {
                 //     inter_import(path, alias, &s_read!(source).source, span, lu_dog)?
                 // }
                 Item {
-                    item: InnerItem::Struct((name, span), fields),
+                    item: (InnerItem::Struct((name, span), fields), outer_span),
                     attributes: _,
                 } => {
                     inter_struct(name, span, fields, context, lu_dog).and_then(|_| {
@@ -574,7 +569,8 @@ pub fn inter_statement(
                             location,
                         } = context.struct_fields.pop().unwrap();
                         inter_struct_fields(woog_struct, &fields, location, context, lu_dog)
-                    })?
+                    })?;
+                    outer_span
                 }
                 _ => unimplemented!(),
             };
@@ -2605,7 +2601,7 @@ fn inter_import(
 
 fn inter_implementation(
     name: &str,
-    funcs: &[Spanned<Item>],
+    funcs: &[Item],
     span: &Span,
     context: &mut Context,
     lu_dog: &mut LuDogStore,
@@ -2650,10 +2646,10 @@ fn inter_implementation(
 
     debug!("inter_implementation {}", name);
 
-    for (func, span) in funcs {
+    for func in funcs {
         match func {
             Item {
-                item: InnerItem::Function(ref name, ref params, ref return_type, ref stmts),
+                item: (InnerItem::Function(ref name, ref params, ref return_type, ref stmts), span),
                 attributes: _,
             } => {
                 match inter_func(

@@ -314,7 +314,7 @@ impl Type {
 pub enum Statement {
     Empty,
     Expression(Spanned<Expression>),
-    Item(Spanned<Item>),
+    Item(Item),
     Let(Spanned<String>, Option<Spanned<Type>>, Spanned<Expression>),
     Result(Spanned<Expression>),
 }
@@ -392,7 +392,7 @@ pub enum Expression {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Item {
-    item: InnerItem,
+    item: Spanned<InnerItem>,
     attributes: Vec<Attribute>,
 }
 
@@ -408,7 +408,7 @@ pub enum InnerItem {
         Spanned<Expression>,
     ),
     /// name, Vec<(Function Name, Function)>
-    Implementation(Spanned<String>, Vec<Spanned<Item>>),
+    Implementation(Spanned<String>, Vec<Item>),
     /// path, Option<Alias>
     Import(Spanned<Vec<Spanned<String>>>, Option<Spanned<String>>),
     /// name, Vec<(Field Name, Field Type)>

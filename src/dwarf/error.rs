@@ -1,11 +1,11 @@
-use std::{fmt, io::Write, path::PathBuf};
+use std::{fmt, path::PathBuf};
 
 use ansi_term::Colour;
 use ariadne::{Color, Fmt, Label, Report, ReportKind, Source};
 use snafu::{prelude::*, Location};
 use uuid::Uuid;
 
-use crate::dwarf::{Item, Span, Spanned};
+use crate::dwarf::{Item, Span};
 
 // Error handling
 const C_ERR: Colour = Colour::Red;
@@ -121,10 +121,7 @@ pub enum DwarfError {
     ///
     /// Error parsing the source code.
     #[snafu(display("\n{}: parser completed with errors:\n  --> {error}", C_ERR.bold().paint("error")))]
-    Parse {
-        error: String,
-        ast: Vec<Spanned<Item>>,
-    },
+    Parse { error: String, ast: Vec<Item> },
 
     /// Type Mismatch
     ///
@@ -251,30 +248,6 @@ impl fmt::Display for DwarfErrorReporter<'_, '_, '_> {
                     .write((file_name, Source::from(&program)), &mut std_err)
                     .map_err(|_| fmt::Error)?;
                 write!(f, "{}", String::from_utf8_lossy(&std_err))
-            }
-            DwarfError::Parse { error, ast } => {
-                // What's up with both of these? Need to write a test and see
-                // what looks good.
-                std_err.write_all(error.to_string().as_bytes()).unwrap();
-                std_err.write_all(self.0.to_string().as_bytes()).unwrap();
-
-                for a in ast {
-                    let msg = format!("{}", self.0);
-                    let span = a.1.clone();
-
-                    Report::build(ReportKind::Error, file_name, span.start)
-                        .with_message(&msg)
-                        .with_label(
-                            Label::new((file_name, span))
-                                .with_message(format!("{}", msg.fg(Color::Red)))
-                                .with_color(Color::Red),
-                        )
-                        .finish()
-                        .write((file_name, Source::from(&program)), &mut std_err)
-                        .map_err(|_| fmt::Error)?;
-                    write!(f, "{}", String::from_utf8_lossy(&std_err))?;
-                }
-                Ok(())
             }
             DwarfError::StructFieldNotFound {
                 field,
