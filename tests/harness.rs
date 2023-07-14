@@ -10,6 +10,44 @@ use dwarf::{
     Value,
 };
 
+fn output_diffs(expected: &str, found: &str, test: &str) -> Result<(), ()> {
+    let mut diff_count = 0;
+    let mut diff = String::new();
+    for line in diff::lines(expected, found) {
+        match line {
+            diff::Result::Left(expected) => {
+                if expected.starts_with("[31mError:[0m Unexpected token in input, expected") {
+                    continue;
+                }
+                diff_count += 1;
+                diff += &format!("{} {expected}\n", Colour::Green.paint("+++"));
+            }
+            diff::Result::Right(found) => {
+                if found.starts_with("[31mError:[0m Unexpected token in input, expected") {
+                    continue;
+                }
+                diff += &format!("{} {found}\n", Colour::Red.paint("---"));
+            }
+            diff::Result::Both(a, _) => eprintln!("    {a}"),
+        }
+    }
+
+    if diff_count > 0 {
+        eprintln!(
+            "{}",
+            Colour::Red.paint(format!(
+                "stderr does not match .stderr file for test {test}"
+            ))
+        );
+        eprintln!("Expected:\n{expected}");
+        eprintln!("Found:\n{found}");
+        eprintln!("Diff:\n{diff}");
+        Err(())
+    } else {
+        Ok(())
+    }
+}
+
 fn diff_std_err(path: &str, test: &str, errors: &str) -> Result<(), ()> {
     let path = PathBuf::from(path);
     let stderr = std::fs::read_to_string(path).unwrap().trim().to_owned();
@@ -20,40 +58,7 @@ fn diff_std_err(path: &str, test: &str, errors: &str) -> Result<(), ()> {
     } else {
         // The error message does not match the .stderr file. Let's do a diff and
         // see what's up.
-        let mut diff_count = 0;
-        for line in diff::lines(&stderr, errors) {
-            match line {
-                diff::Result::Left(expected) => {
-                    if expected.starts_with("[31mError:[0m Unexpected token in input, expected") {
-                        continue;
-                    }
-                    diff_count += 1;
-                    eprintln!("{} {expected}", Colour::Green.paint("+++"));
-                }
-                diff::Result::Right(found) => {
-                    if found.starts_with("[31mError:[0m Unexpected token in input, expected") {
-                        continue;
-                    }
-                    eprintln!("{} {found}", Colour::Red.paint("---"));
-                }
-                diff::Result::Both(a, _) => eprintln!("    {a}"),
-            }
-        }
-
-        if diff_count > 0 {
-            eprintln!(
-                "{}",
-                Colour::Red.paint(format!(
-                    "stderr does not match .stderr file for test {test}"
-                ))
-            );
-            eprintln!("Expected:\n{stderr}");
-            eprintln!("Found:\n{errors}");
-            eprintln!("Diff:");
-            Err(())
-        } else {
-            Ok(())
-        }
+        output_diffs(&stderr, errors, test)
     }
 }
 
@@ -65,40 +70,7 @@ fn diff_std_out(path: &str, test: &str, found: &str) -> Result<(), ()> {
         Ok(())
     } else {
         // The output does not match the .stdout file -- do a diff.
-        let mut diff_count = 0;
-        for line in diff::lines(&stdout, found) {
-            match line {
-                diff::Result::Left(expected) => {
-                    if expected.starts_with("[31mError:[0m Unexpected token in input, expected") {
-                        continue;
-                    }
-                    diff_count += 1;
-                    eprintln!("{1} {0}", expected, Colour::Green.paint("+++"));
-                }
-                diff::Result::Right(found) => {
-                    if found.starts_with("[31mError:[0m Unexpected token in input, expected") {
-                        continue;
-                    }
-                    eprintln!("{1} {0}", found, Colour::Red.paint("---"));
-                }
-                diff::Result::Both(a, _) => eprintln!("    {a}"),
-            }
-        }
-
-        if diff_count > 0 {
-            eprintln!(
-                "{}",
-                Colour::Red.paint(format!(
-                    "stdout does not match .stdout file for test {test}"
-                ))
-            );
-            eprintln!("Expected:\n{stdout}");
-            eprintln!("Found:\n{found}");
-            eprintln!("Diff:");
-            Err(())
-        } else {
-            Ok(())
-        }
+        output_diffs(&stdout, found, test)
     }
 }
 
