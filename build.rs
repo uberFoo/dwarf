@@ -6,6 +6,7 @@ fn main() {
     let mut tests = String::new();
     let mut in_dir = std::env::current_dir().unwrap();
     in_dir.push("tests");
+    in_dir.push("harness");
     for entry in WalkDir::new(&in_dir).into_iter().filter_map(|e| e.ok()) {
         let path = entry.path();
         let root = path.parent().unwrap();
@@ -50,5 +51,5 @@ fn main() {
     let out_dir = env::var_os("OUT_DIR").unwrap();
     let dest_path = Path::new(&out_dir).join("tests.rs");
     fs::write(dest_path, tests).unwrap();
-    println!("cargo:rerun-if-changed=tests");
+    println!("cargo:rerun-if-changed=tests/harness");
 }

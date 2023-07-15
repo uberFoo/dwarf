@@ -10,6 +10,9 @@ use dwarf::{
     Value,
 };
 
+#[cfg(feature = "print-std-out")]
+compile_error!("The tests don't run with the print-std-out feature enabled.");
+
 fn output_diffs(expected: &str, found: &str, test: &str) -> Result<(), ()> {
     let mut diff_count = 0;
     let mut diff = String::new();
