@@ -210,13 +210,10 @@ impl fmt::Display for DwarfErrorReporter<'_, '_, '_> {
                 span,
             } => {
                 Report::build(ReportKind::Error, file_name, span.start)
-                    .with_message(format!(
-                        "no such field {}",
-                        C_OTHER.paint(format!("{}", field))
-                    ))
+                    .with_message(format!("no such field {}", C_OTHER.paint(field)))
                     .with_label(
                         Label::new((file_name, span.to_owned()))
-                            .with_message(format!("this field does not exist",))
+                            .with_message("this field does not exist")
                             .with_color(Color::Red),
                     )
                     .with_label(

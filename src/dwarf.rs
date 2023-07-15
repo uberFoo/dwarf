@@ -1,6 +1,15 @@
+//! The Dwarf Language
+//!
+//! 🚧 Something that bothers me is that we are parsing a string into a bunch
+//! of data structures that own their string-based values. I'd much rather use
+//! references to the original input. I suppose I didn't do it that way originally
+//! to avoid the lifetime noise? I dunno. This is a big todo. Probably when I
+//! get around to refactoring the parser, which is a big todo.
+//!
 use std::{fmt, ops, path::PathBuf};
 
 use clap::Args;
+use fxhash::FxHashMap as HashMap;
 use sarzak::sarzak::{store::ObjectStore as SarzakStore, types::Ty};
 use serde::{Deserialize, Serialize};
 use snafu::{location, Location};
@@ -65,7 +74,6 @@ pub enum Token {
     Ident(String),
     If,
     Impl,
-    Import,
     In,
     Integer(String),
     Let,
@@ -81,6 +89,7 @@ pub enum Token {
     String(String),
     Struct,
     Type(Type),
+    Use,
     Uuid,
 }
 
@@ -100,7 +109,6 @@ impl fmt::Display for Token {
             Self::Ident(ident) => write!(f, "{}", ident),
             Self::If => write!(f, "if"),
             Self::Impl => write!(f, "impl"),
-            Self::Import => write!(f, "use"),
             Self::In => write!(f, "in"),
             Self::Integer(num) => write!(f, "{}", num),
             Self::Let => write!(f, "let"),
@@ -116,6 +124,7 @@ impl fmt::Display for Token {
             Self::String(str_) => write!(f, "{}", str_),
             Self::Struct => write!(f, "struct"),
             Self::Type(type_) => write!(f, "{}", type_),
+            Self::Use => write!(f, "use"),
             Self::Uuid => write!(f, "Uuid"),
         }
     }
@@ -393,7 +402,7 @@ pub enum Expression {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Item {
     item: Spanned<InnerItem>,
-    attributes: Vec<Attribute>,
+    attributes: AttributeMap,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -418,5 +427,14 @@ pub enum InnerItem {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Attribute {
     pub name: Spanned<String>,
-    pub value: Spanned<Expression>,
+    pub value: InnerAttribute,
 }
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum InnerAttribute {
+    Attribute(AttributeMap),
+    Expression(Spanned<Expression>),
+    None,
+}
+
+pub type AttributeMap = HashMap<String, (Span, InnerAttribute)>;

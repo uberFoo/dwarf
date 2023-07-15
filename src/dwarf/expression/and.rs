@@ -17,6 +17,7 @@ use crate::{
     NewRef, RefType,
 };
 
+#[allow(clippy::borrowed_box)]
 pub fn inter_and(
     lhs_p: &Box<(ParserExpression, Range<usize>)>,
     rhs_p: &Box<(ParserExpression, Range<usize>)>,

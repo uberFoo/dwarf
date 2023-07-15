@@ -12,8 +12,8 @@ use crate::{
     dwarf::{
         error::{DwarfError, Result},
         expression::{addition, and},
-        Attribute, Expression as ParserExpression, InnerItem, Item, PrintableValueType, Spanned,
-        Statement as ParserStatement, Type,
+        AttributeMap, Expression as ParserExpression, InnerAttribute, InnerItem, Item,
+        PrintableValueType, Spanned, Statement as ParserStatement, Type,
     },
     lu_dog::{
         store::ObjectStore as LuDogStore,
@@ -21,9 +21,10 @@ use crate::{
             Block, BooleanOperator, Call, ErrorExpression, Expression, ExpressionEnum,
             ExpressionStatement, Field, FieldExpression, ForLoop, Function, Implementation, Index,
             IntegerLiteral, Item as WoogItem, ItemStatement, Lambda, LambdaParameter, LetStatement,
-            Literal, LocalVariable, Parameter, Print, RangeExpression, Span as LuDogSpan,
-            Statement, StaticMethodCall, StringLiteral, StructExpression, ValueType, ValueTypeEnum,
-            Variable, VariableExpression, WoogOption, WoogStruct, XIf, XValue, XValueEnum, ZSome,
+            Literal, LiteralEnum, LocalVariable, Parameter, Print, RangeExpression,
+            Span as LuDogSpan, Statement, StaticMethodCall, StringLiteral, StructExpression,
+            ValueType, ValueTypeEnum, Variable, VariableExpression, WoogOption, WoogStruct, XIf,
+            XValue, XValueEnum, ZSome,
         },
         Argument, Binary, BooleanLiteral, Comparison, DwarfSourceFile, FieldAccess,
         FieldAccessTarget, FloatLiteral, List, ListElement, ListExpression, MethodCall, Operator,
@@ -182,21 +183,18 @@ impl<'a> ConveyFunc<'a> {
 
 struct ConveyStruct<'a> {
     name: &'a str,
-    attributes: &'a [Attribute],
-    span: &'a Span,
+    attributes: &'a AttributeMap,
     fields: &'a [(Spanned<String>, Spanned<Type>)],
 }
 
 impl<'a> ConveyStruct<'a> {
     fn new(
         name: &'a str,
-        span: &'a Span,
-        attributes: &'a [Attribute],
+        attributes: &'a AttributeMap,
         fields: &'a [(Spanned<String>, Spanned<Type>)],
     ) -> Self {
         Self {
             name,
-            span,
             attributes,
             fields,
         }
@@ -223,7 +221,18 @@ pub struct StructFields {
 
 pub struct Context<'a> {
     pub location: Location,
+    /// Struct Field Storage
+    ///
+    /// As we inter structs we store their fields here until they are all read
+    /// in. At that point we can typecheck them since any valid references will
+    /// have also been read in.
     pub struct_fields: Vec<StructFields>,
+    /// Typecheck Flag
+    ///
+    /// This is super lame, and fixing it is some work. In the for loop implementation
+    /// we have to insert the iterating variable into the block that is being iterated.
+    /// We can't insert the variable into the block before it's been created, and
+    /// once it's been created, it's already been type checked.
     pub check_types: bool,
     pub source: RefType<DwarfSourceFile>,
     pub models: &'a [SarzakStore],
@@ -312,9 +321,9 @@ fn walk_tree(
                 attributes: _,
             } => inter_import(path, alias, &s_read!(context.source).source, span, lu_dog)?,
             Item {
-                item: (InnerItem::Struct((name, span), fields), _),
+                item: (InnerItem::Struct((name, _), fields), _),
                 attributes,
-            } => structs.push(ConveyStruct::new(name, span, attributes, fields)),
+            } => structs.push(ConveyStruct::new(name, attributes, fields)),
         }
     }
 
@@ -324,13 +333,12 @@ fn walk_tree(
     // We wait until we've seen all of the structs to do that.
     for ConveyStruct {
         name,
-        span,
         attributes,
         fields,
     } in &structs
     {
         debug!("Interning struct {}", name);
-        let _ = inter_struct(name, span, fields, context, lu_dog).map_err(|mut e| {
+        let _ = inter_struct(name, attributes, fields, context, lu_dog).map_err(|mut e| {
             errors.append(&mut e);
         });
     }
@@ -575,10 +583,10 @@ pub fn inter_statement(
                 //     inter_import(path, alias, &s_read!(source).source, span, lu_dog)?
                 // }
                 Item {
-                    item: (InnerItem::Struct((name, span), fields), outer_span),
-                    attributes: _,
+                    item: (InnerItem::Struct((name, _span), fields), outer_span),
+                    attributes,
                 } => {
-                    inter_struct(name, span, fields, context, lu_dog).and_then(|_| {
+                    inter_struct(name, attributes, fields, context, lu_dog).and_then(|_| {
                         // There had better be one and only one.
                         let StructFields {
                             woog_struct,
@@ -2457,7 +2465,7 @@ pub(super) fn inter_expression(
                 }
             };
             let woog_struct = lu_dog.exhume_woog_struct(&id).unwrap();
-            let struct_fields = s_read!(woog_struct).r7_field(&lu_dog);
+            let struct_fields = s_read!(woog_struct).r7_field(lu_dog);
 
             let expr = StructExpression::new(Uuid::new_v4(), &woog_struct, lu_dog);
 
@@ -2722,13 +2730,71 @@ fn inter_implementation(
 
 fn inter_struct(
     name: &str,
-    _span: &Span,
+    attributes: &AttributeMap,
     fields: &[(Spanned<String>, Spanned<Type>)],
     context: &mut Context,
     lu_dog: &mut LuDogStore,
 ) -> Result<()> {
     debug!("inter_struct {name}");
     let s_name = name.de_sanitize();
+
+    // Go through the attributes looking for a proxy key. If we find it and if
+    // it matches an object in a model, then
+    if let Some((_, InnerAttribute::Expression(ref value))) = attributes.get("proxy") {
+        let block = Block::new(Uuid::new_v4(), None, lu_dog);
+        let (expr, _ty) = inter_expression(
+            &new_ref!(ParserExpression, value.0.clone()),
+            &value.1,
+            &block,
+            context,
+            lu_dog,
+        )?;
+        if let Expression {
+            subtype: ExpressionEnum::Literal(ref id),
+            id: _,
+        } = &*s_read!(expr.0)
+        {
+            let literal = lu_dog.exhume_literal(id).unwrap();
+            if let LiteralEnum::StringLiteral(ref s) = s_read!(literal).subtype {
+                let proxy = s_read!(lu_dog.exhume_string_literal(s).unwrap())
+                    .x_value
+                    .clone();
+                let proxy = proxy.de_sanitize();
+
+                if let Some((model, ref id)) = context
+                    .models
+                    .iter()
+                    .find_map(|model| model.exhume_object_id_by_name(proxy).map(|id| (model, id)))
+                    .map(|id| id.to_owned())
+                {
+                    let obj = match model.exhume_object(id) {
+                        Some(obj) => obj,
+                        // 🚧 This should return two errors -- one that
+                        // the object was not found and one that the proxy
+                        // attribute failed to work.
+                        None => return Err(vec![DwarfError::ObjectIdNotFound { id: *id }]),
+                    };
+
+                    let woog_struct = WoogStruct::new(
+                        proxy.to_owned(),
+                        Some(&new_ref!(Object, obj.to_owned())),
+                        lu_dog,
+                    );
+                    let _ = WoogItem::new_woog_struct(&context.source, &woog_struct, lu_dog);
+                    let _ty = ValueType::new_woog_struct(&woog_struct, lu_dog);
+
+                    // We are pushing these onto a stack of fields so that we can typecheck
+                    // them after all of the structs have been interred.
+                    context.struct_fields.push(StructFields {
+                        woog_struct,
+                        fields: fields.to_owned(),
+                        location: location!(),
+                    });
+                    return Ok(());
+                }
+            }; //kts
+        };
+    }
 
     // Here we are looking for an object in one of the input models with the
     // same name as the struct that we are interring. If it's found, we attach

@@ -1,11 +1,12 @@
 use ansi_term::Colour;
 use ariadne::{Color, Fmt, Label, Report, ReportKind, Source};
 use chumsky::prelude::*;
+use fxhash::FxHashMap as HashMap;
 use log;
 
 use crate::dwarf::{
-    Attribute, DwarfFloat, Expression as DwarfExpression, InnerItem, Item, Spanned, Statement,
-    Token, Type,
+    Attribute, DwarfFloat, Expression as DwarfExpression, InnerAttribute, InnerItem, Item, Spanned,
+    Statement, Token, Type,
 };
 
 use super::{error::DwarfError, DwarfInteger};
@@ -168,7 +169,7 @@ fn lexer() -> impl Parser<char, Vec<Spanned<Token>>, Error = Simple<char>> {
         "string" => Token::Type(Type::String),
         "struct" => Token::Struct,
         "true" => Token::Bool(true),
-        "use" => Token::Import,
+        "use" => Token::Use,
         // "Uuid" => Token::Uuid,
         _ => Token::Ident(ident),
     });
@@ -255,7 +256,7 @@ impl DwarfParser {
                 self.errors.push(err);
 
                 error!("parse_program: resynchronize looking for '}'");
-                while !self.at_end() && !self.match_(&[Token::Punct('}')]) {
+                while !self.at_end() && self.match_(&[Token::Punct('}')]).is_none() {
                     self.advance();
                 }
                 error!("parse_program: resynchronized");
@@ -280,7 +281,7 @@ impl DwarfParser {
             return Ok(None);
         };
 
-        if !self.match_(&[Token::If]) {
+        if self.match_(&[Token::If]).is_none() {
             debug!("exit");
             return Ok(None);
         }
@@ -315,7 +316,7 @@ impl DwarfParser {
             return Err(Box::new(err));
         };
 
-        let false_block = if self.match_(&[Token::Else]) {
+        let false_block = if self.match_(&[Token::Else]).is_some() {
             debug!("getting false block");
             let false_block = if let Some(expr) = self.parse_block_expression()? {
                 debug!("false block", expr);
@@ -349,79 +350,128 @@ impl DwarfParser {
         )))
     }
 
-    fn parse_attribute(&mut self) -> Option<Attribute> {
-        debug!("enter");
+    fn parse_inner_attribute(&mut self) -> Option<InnerAttribute> {
+        if let Some(Attribute { name, value }) = self.parse_attribute_key_value() {
+            debug!("parsing inner attribute^2");
 
-        if !self.match_(&[Token::Punct('#')]) {
-            debug!("exit");
-            return None;
+            let mut values = HashMap::default();
+            values.insert(name.0, (name.1, value));
+
+            if self.match_(&[Token::Punct(',')]).is_none() {
+                debug!("no comma");
+            } else {
+                while let Some(Attribute { name, value }) = self.parse_attribute_key_value() {
+                    debug!("parsed inner attribute^2", name, value);
+                    values.insert(name.0, (name.1, value));
+                    if self.match_(&[Token::Punct(',')]).is_none() {
+                        debug!("no comma");
+                        break;
+                    }
+                }
+            }
+
+            debug!("parsed inner attribute^2");
+            Some(InnerAttribute::Attribute(values))
+        } else {
+            match self.match_(&[Token::Punct('='), Token::Punct('(')]) {
+                Some(Token::Punct('=')) => {
+                    debug!("getting value for key");
+                    let value = if let Ok(Some(value)) = self.parse_expression(ENTER) {
+                        debug!("value", value);
+                        value
+                    } else {
+                        let token = self.previous().unwrap();
+                        let err = Simple::expected_input_found(
+                            token.1.clone(),
+                            [Some("<expression -> there's a lot of them...>".to_owned())],
+                            Some(token.0.to_string()),
+                        );
+                        error!("error", err);
+                        self.errors.push(err);
+                        return None;
+                    };
+                    debug!("exit getting value");
+                    Some(InnerAttribute::Expression(value.0))
+                }
+                Some(Token::Punct('(')) => {
+                    debug!("parsing inner attribute");
+                    let inner = self.parse_inner_attribute();
+                    if self.match_(&[Token::Punct(')')]).is_none() {
+                        let token = self.previous().unwrap();
+                        let err = Simple::expected_input_found(
+                            token.1.clone(),
+                            [Some(")".to_owned())],
+                            Some(token.0.to_string()),
+                        );
+                        error!("error", err);
+                        self.errors.push(err);
+                        return None;
+                    }
+                    debug!("done parsing inner attribute", inner);
+                    inner
+                }
+                None => Some(InnerAttribute::None),
+                Some(_) => unreachable!(),
+            }
         }
+    }
 
-        if !self.match_(&[Token::Punct('[')]) {
-            debug!("exit");
-            return None;
-        }
-
+    fn parse_attribute_key_value(&mut self) -> Option<Attribute> {
         let name = if let Some(name) = self.parse_ident() {
             debug!("name", name);
             name
         } else {
-            let token = self.previous().unwrap();
-            let err = Simple::expected_input_found(
-                token.1.clone(),
-                [Some("<identifier>".to_owned())],
-                Some(token.0.to_string()),
-            );
-            self.errors.push(err);
-            debug!("exit");
+            // let token = self.previous().unwrap();
+            // let err = Simple::expected_input_found(
+            //     token.1.clone(),
+            //     [Some("<identifier>".to_owned())],
+            //     Some(token.0.to_string()),
+            // );
+            // error!("error", err);
+            // self.errors.push(err);
             return None;
         };
 
-        let value = if self.match_(&[Token::Punct('=')]) {
-            debug!("getting value");
-            let value = if let Ok(Some(value)) = self.parse_expression(ENTER) {
-                debug!("value", value);
-                value
+        debug!("parsing attribute value");
+        let value = self.parse_inner_attribute()?;
+
+        Some(Attribute { name, value })
+    }
+
+    fn parse_attribute(&mut self) -> Option<Attribute> {
+        debug!("enter");
+
+        if self.match_(&[Token::Punct('#')]).is_none() {
+            debug!("exit");
+            return None;
+        }
+
+        if self.match_(&[Token::Punct('[')]).is_none() {
+            debug!("exit");
+            return None;
+        }
+
+        let attribute = self.parse_attribute_key_value()?;
+
+        if self.match_(&[Token::Punct(']')]).is_none() {
+            let token = if let Some(token) = self.peek() {
+                token
             } else {
-                let token = self.previous().unwrap();
-                let err = Simple::expected_input_found(
-                    token.1.clone(),
-                    [Some("<expression -> there's a lot of them...>".to_owned())],
-                    Some(token.0.to_string()),
-                );
-                self.errors.push(err);
-                debug!("exit");
-                return None;
+                self.previous().unwrap()
             };
-            debug!("exit getting value");
-            value.0
-        } else {
-            let token = self.previous().unwrap();
-            let err = Simple::expected_input_found(
-                token.1.clone(),
-                [Some("=".to_owned())],
-                Some(token.0.to_string()),
-            );
-            self.errors.push(err);
-            debug!("exit");
-            return None;
-        };
-
-        if !self.match_(&[Token::Punct(']')]) {
-            let token = self.previous().unwrap();
             let err = Simple::expected_input_found(
                 token.1.clone(),
                 [Some("]".to_owned())],
                 Some(token.0.to_string()),
             );
+            error!("error", err);
             self.errors.push(err);
-            debug!("exit");
             return None;
         }
 
         debug!("exit");
 
-        Some(Attribute { name, value })
+        Some(attribute)
     }
 
     /// Parse an Item
@@ -431,10 +481,11 @@ impl DwarfParser {
     fn parse_item(&mut self) -> Option<Item> {
         debug!("enter");
 
-        let mut attributes = Vec::new();
-        while let Some(attr) = self.parse_attribute() {
-            debug!("attribute", attr);
-            attributes.push(attr);
+        let mut attributes = HashMap::default();
+
+        while let Some(Attribute { name, value }) = self.parse_attribute() {
+            debug!("attribute", name, value);
+            attributes.insert(name.0, (name.1, value));
         }
 
         // Try to parse a struct
@@ -455,7 +506,7 @@ impl DwarfParser {
             return Some(Item { item, attributes });
         }
 
-        if let Some(item) = self.parse_import() {
+        if let Some(item) = self.parse_use() {
             debug!("import", item);
             return Some(Item { item, attributes });
         }
@@ -486,7 +537,9 @@ impl DwarfParser {
         let mut path = Vec::new();
         while let Some(ident) = self.parse_ident() {
             path.push(ident);
-            if !self.match_(&[Token::Punct(':')]) || !self.match_(&[Token::Punct(':')]) {
+            if self.match_(&[Token::Punct(':')]).is_some()
+                && self.match_(&[Token::Punct(':')]).is_none()
+            {
                 debug!("exit snarf", path);
                 break;
             }
@@ -501,10 +554,10 @@ impl DwarfParser {
         Some((path, span))
     }
 
-    /// Parse an Import
+    /// Parse a Use
     ///
-    /// import -> USE IDENTIFIER (:: IDENTIFIER)* ( AS IDENTIFIER )? ;
-    fn parse_import(&mut self) -> Option<Spanned<InnerItem>> {
+    /// use -> use IDENTIFIER (:: IDENTIFIER)* ( AS IDENTIFIER )? ;
+    fn parse_use(&mut self) -> Option<Spanned<InnerItem>> {
         debug!("enter");
 
         let start = if let Some(tok) = self.peek() {
@@ -514,7 +567,7 @@ impl DwarfParser {
             return None;
         };
 
-        if !self.match_(&[Token::Import]) {
+        if self.match_(&[Token::Use]).is_none() {
             debug!("exit no token");
             return None;
         }
@@ -535,7 +588,7 @@ impl DwarfParser {
             return None;
         };
 
-        let alias = if self.match_(&[Token::As]) {
+        let alias = if self.match_(&[Token::As]).is_some() {
             if let Some(ident) = self.parse_ident() {
                 debug!("alias", ident);
                 Some(ident)
@@ -555,7 +608,7 @@ impl DwarfParser {
             None
         };
 
-        if !self.match_(&[Token::Punct(';')]) {
+        if self.match_(&[Token::Punct(';')]).is_none() {
             let tok = self.previous().unwrap();
             let err = Simple::expected_input_found(
                 tok.1.clone(),
@@ -588,7 +641,7 @@ impl DwarfParser {
             return None;
         };
 
-        if !self.match_(&[Token::Impl]) {
+        if self.match_(&[Token::Impl]).is_none() {
             debug!("exit no impl");
             return None;
         }
@@ -608,7 +661,7 @@ impl DwarfParser {
             return None;
         };
 
-        if !self.match_(&[Token::Punct('{')]) {
+        if self.match_(&[Token::Punct('{')]).is_none() {
             let tok = self.previous().unwrap();
             let err = Simple::expected_input_found(
                 tok.1.clone(),
@@ -625,7 +678,7 @@ impl DwarfParser {
         let mut end = false;
 
         while !self.at_end() {
-            if self.match_(&[Token::Punct('}')]) {
+            if self.match_(&[Token::Punct('}')]).is_some() {
                 end = true;
                 break;
             }
@@ -686,7 +739,7 @@ impl DwarfParser {
             return Ok(None);
         };
 
-        if !self.match_(&[Token::Let]) {
+        if self.match_(&[Token::Let]).is_none() {
             debug!("exit no let");
             return Ok(None);
         }
@@ -705,7 +758,7 @@ impl DwarfParser {
             return Err(Box::new(err));
         };
 
-        let type_ = if self.match_(&[Token::Punct(':')]) {
+        let type_ = if self.match_(&[Token::Punct(':')]).is_some() {
             if let Some(ty) = self.parse_type()? {
                 Some(ty)
             } else {
@@ -732,7 +785,7 @@ impl DwarfParser {
             None
         };
 
-        if !self.match_(&[Token::Punct('=')]) {
+        if self.match_(&[Token::Punct('=')]).is_none() {
             let tok = self.previous().unwrap();
             let err = Simple::expected_input_found(
                 tok.1.clone(),
@@ -788,7 +841,7 @@ impl DwarfParser {
             return Ok(None);
         };
 
-        if !self.match_(&[Token::Punct('=')]) {
+        if self.match_(&[Token::Punct('=')]).is_none() {
             debug!("exit no =");
             return Ok(None);
         }
@@ -835,7 +888,7 @@ impl DwarfParser {
             return Ok(None);
         };
 
-        if !self.match_(&[Token::As]) {
+        if self.match_(&[Token::As]).is_none() {
             return Ok(None);
         }
 
@@ -885,7 +938,7 @@ impl DwarfParser {
             return Ok(None);
         };
 
-        if !self.match_(&[Token::Punct('+')]) {
+        if self.match_(&[Token::Punct('+')]).is_none() {
             return Ok(None);
         }
 
@@ -935,7 +988,7 @@ impl DwarfParser {
             return Ok(None);
         };
 
-        if !self.match_(&[Token::Punct('*')]) {
+        if self.match_(&[Token::Punct('*')]).is_none() {
             return Ok(None);
         }
 
@@ -985,7 +1038,7 @@ impl DwarfParser {
             return Ok(None);
         };
 
-        if !self.match_(&[Token::Punct('/')]) {
+        if self.match_(&[Token::Punct('/')]).is_none() {
             return Ok(None);
         }
 
@@ -1090,7 +1143,7 @@ impl DwarfParser {
             return Ok(None);
         };
 
-        if !self.match_(&[Token::Punct('-')]) {
+        if self.match_(&[Token::Punct('-')]).is_none() {
             debug!("exit no '-'");
             return Ok(None);
         }
@@ -1461,7 +1514,7 @@ impl DwarfParser {
             return Ok(None);
         };
 
-        if !self.match_(&[Token::Punct('>')]) {
+        if self.match_(&[Token::Punct('>')]).is_none() {
             debug!("exit no '>'");
             return Ok(None);
         }
@@ -1507,7 +1560,7 @@ impl DwarfParser {
             return Ok(None);
         };
 
-        if !self.match_(&[Token::Punct('<')]) {
+        if self.match_(&[Token::Punct('<')]).is_none() {
             debug!("exit no '<'");
             return Ok(None);
         }
@@ -1899,7 +1952,7 @@ impl DwarfParser {
             return Ok(None);
         };
 
-        if !self.match_(&[Token::Punct('-')]) {
+        if self.match_(&[Token::Punct('-')]).is_none() {
             debug!("exit no for");
             return Ok(None);
         }
@@ -1946,7 +1999,7 @@ impl DwarfParser {
             return Ok(None);
         };
 
-        if !self.match_(&[Token::Punct('!')]) {
+        if self.match_(&[Token::Punct('!')]).is_none() {
             debug!("exit no for");
             return Ok(None);
         }
@@ -1993,7 +2046,7 @@ impl DwarfParser {
             return Ok(None);
         };
 
-        if !self.match_(&[Token::For]) {
+        if self.match_(&[Token::For]).is_none() {
             debug!("exit no for");
             return Ok(None);
         }
@@ -2013,7 +2066,7 @@ impl DwarfParser {
             return Err(Box::new(err));
         };
 
-        if !self.match_(&[Token::In]) {
+        if self.match_(&[Token::In]).is_none() {
             let token = self.previous().unwrap();
             let err = Simple::expected_input_found(
                 token.1.clone(),
@@ -2079,13 +2132,13 @@ impl DwarfParser {
 
         let start = name.0 .1.start;
 
-        if !self.match_(&[Token::Punct('(')]) {
+        if self.match_(&[Token::Punct('(')]).is_none() {
             return Ok(None);
         }
 
         let mut arguments = Vec::new();
 
-        while !self.at_end() && !self.match_(&[Token::Punct(')')]) {
+        while !self.at_end() && self.match_(&[Token::Punct(')')]).is_none() {
             if let Some(expr) = self.parse_expression(ENTER)? {
                 arguments.push(expr.0);
                 if self.peek().unwrap().0 == Token::Punct(',') {
@@ -2128,7 +2181,7 @@ impl DwarfParser {
             return Ok(None);
         };
 
-        if !self.match_(&[Token::Punct('(')]) {
+        if self.match_(&[Token::Punct('(')]).is_none() {
             return Ok(None);
         }
 
@@ -2146,7 +2199,7 @@ impl DwarfParser {
             return Err(Box::new(err));
         };
 
-        if !self.match_(&[Token::Punct(')')]) {
+        if self.match_(&[Token::Punct(')')]).is_none() {
             let tok = self.previous().unwrap();
             let err = Simple::expected_input_found(
                 tok.1.clone(),
@@ -2182,7 +2235,7 @@ impl DwarfParser {
 
         let start = name.0 .1.start;
 
-        if !self.match_(&[Token::Punct('.')]) {
+        if self.match_(&[Token::Punct('.')]).is_none() {
             return Ok(None);
         }
 
@@ -2203,13 +2256,13 @@ impl DwarfParser {
             return Err(Box::new(err));
         };
 
-        if !self.match_(&[Token::Punct('(')]) {
+        if self.match_(&[Token::Punct('(')]).is_none() {
             return Ok(None);
         }
 
         let mut arguments = Vec::new();
 
-        while !self.at_end() && !self.match_(&[Token::Punct(')')]) {
+        while !self.at_end() && self.match_(&[Token::Punct(')')]).is_none() {
             if let Some(expr) = self.parse_expression(ENTER)? {
                 arguments.push(expr.0);
                 if self.peek().unwrap().0 == Token::Punct(',') {
@@ -2256,7 +2309,7 @@ impl DwarfParser {
 
         let start = name.0 .1.start;
 
-        if !self.match_(&[Token::Punct('[')]) {
+        if self.match_(&[Token::Punct('[')]).is_none() {
             return Ok(None);
         }
 
@@ -2274,7 +2327,7 @@ impl DwarfParser {
             return Err(Box::new(err));
         };
 
-        if !self.match_(&[Token::Punct(']')]) {
+        if self.match_(&[Token::Punct(']')]).is_none() {
             let tok = self.previous().unwrap();
             let err = Simple::expected_input_found(
                 tok.1.clone(),
@@ -2334,14 +2387,14 @@ impl DwarfParser {
             return Ok(None);
         };
 
-        if !self.match_(&[Token::Punct('[')]) {
+        if self.match_(&[Token::Punct('[')]).is_none() {
             debug!("exit parse_list_expression no token");
             return Ok(None);
         }
 
         let mut elements = Vec::new();
 
-        while !self.at_end() && !self.match_(&[Token::Punct(']')]) {
+        while !self.at_end() && self.match_(&[Token::Punct(']')]).is_none() {
             if let Some(expr) = self.parse_expression(LITERAL.1)? {
                 elements.push(expr.0);
                 if self.peek().unwrap().0 == Token::Punct(',') {
@@ -2440,7 +2493,7 @@ impl DwarfParser {
         self.advance();
         self.advance();
 
-        if !self.match_(&[Token::Punct('(')]) {
+        if self.match_(&[Token::Punct('(')]).is_none() {
             let token = self.previous().unwrap();
             let err = Simple::expected_input_found(
                 token.1.clone(),
@@ -2452,7 +2505,7 @@ impl DwarfParser {
 
         let mut arguments = Vec::new();
 
-        while !self.at_end() && !self.match_(&[Token::Punct(')')]) {
+        while !self.at_end() && self.match_(&[Token::Punct(')')]).is_none() {
             if let Some(expr) = self.parse_expression(LITERAL.1)? {
                 arguments.push(expr.0);
 
@@ -2501,11 +2554,11 @@ impl DwarfParser {
             return Ok(None);
         };
 
-        if !self.match_(&[Token::Print]) {
+        if self.match_(&[Token::Print]).is_none() {
             return Ok(None);
         }
 
-        if !self.match_(&[Token::Punct('(')]) {
+        if self.match_(&[Token::Punct('(')]).is_none() {
             let token = self.previous().unwrap();
             let err = Simple::expected_input_found(
                 token.1.clone(),
@@ -2531,7 +2584,7 @@ impl DwarfParser {
             self.advance();
         }
 
-        if !self.match_(&[Token::Punct(')')]) {
+        if self.match_(&[Token::Punct(')')]).is_none() {
             let token = self.previous().unwrap();
             // 🚧 use the unclosed_delimiter constructor
             let err = Simple::expected_input_found(
@@ -2565,7 +2618,7 @@ impl DwarfParser {
             return Ok(None);
         };
 
-        if !self.match_(&[Token::Debugger]) {
+        if self.match_(&[Token::Debugger]).is_none() {
             return Ok(None);
         }
 
@@ -2598,7 +2651,7 @@ impl DwarfParser {
 
         //
         // FIrst we can take care of the trivial case.
-        if self.match_(&[Token::Punct(';')]) {
+        if self.match_(&[Token::Punct(';')]).is_some() {
             debug!("empty statement");
             // 🚧 We need to implement our own error type so that we can
             //     report warnings and they show up in yellow.
@@ -2645,7 +2698,7 @@ impl DwarfParser {
         // brace. I feel like we've tried that. But maybe not in this context.
         if let Some(expr) = self.parse_expression_without_block(ENTER)? {
             debug!("expression", expr);
-            if self.match_(&[Token::Punct(';')]) {
+            if self.match_(&[Token::Punct(';')]).is_some() {
                 debug!("expression statement", expr);
                 return Ok(Some((
                     Statement::Expression(expr.0),
@@ -2676,7 +2729,7 @@ impl DwarfParser {
         //
         // This one is easy-peasy. Parse a let statement.
         if let Some(statement) = self.parse_let_statement()? {
-            if self.match_(&[Token::Punct(';')]) {
+            if self.match_(&[Token::Punct(';')]).is_some() {
                 debug!("parse_statement: let statement", statement);
                 return Ok(Some(statement));
             } else {
@@ -2728,12 +2781,12 @@ impl DwarfParser {
 
         let start = name.0 .1.start;
 
-        if !self.match_(&[Token::Punct(':')]) {
+        if self.match_(&[Token::Punct(':')]).is_none() {
             debug!("exit no colon");
             return Ok(None);
         }
 
-        if !self.match_(&[Token::Punct(':')]) {
+        if self.match_(&[Token::Punct(':')]).is_none() {
             debug!("exit no other colon");
             return Ok(None);
         }
@@ -2763,7 +2816,7 @@ impl DwarfParser {
             return Err(Box::new(err));
         };
 
-        if !self.match_(&[Token::Punct('(')]) {
+        if self.match_(&[Token::Punct('(')]).is_none() {
             let token = self.previous().unwrap();
             let err = Simple::expected_input_found(
                 token.1.clone(),
@@ -2776,7 +2829,7 @@ impl DwarfParser {
 
         let mut arguments = Vec::new();
 
-        while !self.at_end() && !self.match_(&[Token::Punct(')')]) {
+        while !self.at_end() && self.match_(&[Token::Punct(')')]).is_none() {
             if let Some(expr) = self.parse_expression(ENTER)? {
                 arguments.push(expr.0);
 
@@ -2829,7 +2882,7 @@ impl DwarfParser {
             return Ok(None);
         };
 
-        if !self.match_(&[Token::Punct('{')]) {
+        if self.match_(&[Token::Punct('{')]).is_none() {
             debug!("exit no open brace");
             return Ok(None);
         }
@@ -2838,7 +2891,7 @@ impl DwarfParser {
         let mut end = false;
 
         while !self.at_end() {
-            if self.match_(&[Token::Punct('}')]) {
+            if self.match_(&[Token::Punct('}')]).is_some() {
                 end = true;
                 break;
             }
@@ -2856,7 +2909,7 @@ impl DwarfParser {
                 return Err(Box::new(err));
             };
 
-            if !self.match_(&[Token::Punct(':')]) {
+            if self.match_(&[Token::Punct(':')]).is_none() {
                 let token = self.previous().unwrap();
                 let err = Simple::expected_input_found(
                     token.1.clone(),
@@ -2921,7 +2974,7 @@ impl DwarfParser {
     fn parse_return_expression(&mut self) -> Result<Option<Expression>> {
         debug!("enter");
 
-        if !self.match_(&[Token::Return]) {
+        if self.match_(&[Token::Return]).is_none() {
             debug!("exit no return");
             return Ok(None);
         }
@@ -2963,7 +3016,7 @@ impl DwarfParser {
     fn parse_some_literal(&mut self) -> Result<Option<Expression>> {
         debug!("enter parse_some_expression");
 
-        if !self.match_(&[Token::Some]) {
+        if self.match_(&[Token::Some]).is_none() {
             return Ok(None);
         }
 
@@ -2973,7 +3026,7 @@ impl DwarfParser {
             return Ok(None);
         };
 
-        if !self.match_(&[Token::Punct('(')]) {
+        if self.match_(&[Token::Punct('(')]).is_none() {
             let token = self.previous().unwrap();
             let err = Simple::expected_input_found(
                 token.1.clone(),
@@ -2995,7 +3048,7 @@ impl DwarfParser {
             return Err(Box::new(err));
         };
 
-        if !self.match_(&[Token::Punct(')')]) {
+        if self.match_(&[Token::Punct(')')]).is_none() {
             let token = self.previous().unwrap();
             // 🚧 Use the unclosed_delimiter constructor
             let err = Simple::expected_input_found(
@@ -3043,7 +3096,7 @@ impl DwarfParser {
             return Ok(None);
         };
 
-        if !self.match_(&[Token::Punct('{')]) {
+        if self.match_(&[Token::Punct('{')]).is_none() {
             debug!("parse_block_expression: no opening brace");
             return Ok(None);
         }
@@ -3052,7 +3105,7 @@ impl DwarfParser {
         let mut end = false;
 
         while !self.at_end() {
-            if self.match_(&[Token::Punct('}')]) {
+            if self.match_(&[Token::Punct('}')]).is_some() {
                 end = true;
                 break;
             }
@@ -3124,7 +3177,7 @@ impl DwarfParser {
             return Ok(None);
         };
 
-        if !self.match_(&[Token::Fn]) {
+        if self.match_(&[Token::Fn]).is_none() {
             debug!("exit parse_function: no fn");
             return Ok(None);
         }
@@ -3142,7 +3195,7 @@ impl DwarfParser {
             return Err(Box::new(err));
         };
 
-        if !self.match_(&[Token::Punct('(')]) {
+        if self.match_(&[Token::Punct('(')]).is_none() {
             let token = self.previous().unwrap();
             let err = Simple::expected_input_found(
                 token.1.clone(),
@@ -3155,7 +3208,7 @@ impl DwarfParser {
 
         let mut params = Vec::new();
 
-        while !self.at_end() && !self.match_(&[Token::Punct(')')]) {
+        while !self.at_end() && self.match_(&[Token::Punct(')')]).is_none() {
             match self.parse_param() {
                 Ok(Some(param)) => {
                     params.push(param);
@@ -3166,7 +3219,7 @@ impl DwarfParser {
                 Ok(None) => {
                     error!("no param");
                     error!("resynchronize looking for ')'");
-                    while !self.at_end() && !self.match_(&[Token::Punct(')')]) {
+                    while !self.at_end() && self.match_(&[Token::Punct(')')]).is_none() {
                         self.advance();
                     }
                     error!("resynchronized");
@@ -3175,7 +3228,7 @@ impl DwarfParser {
                     self.errors.push(*error);
 
                     error!("resynchronize looking for ')'");
-                    while !self.at_end() && !self.match_(&[Token::Punct(')')]) {
+                    while !self.at_end() && self.match_(&[Token::Punct(')')]).is_none() {
                         self.advance();
                     }
                     error!("resynchronized");
@@ -3183,8 +3236,8 @@ impl DwarfParser {
             }
         }
 
-        let return_type = if self.match_(&[Token::Punct('-')]) {
-            if !self.match_(&[Token::Punct('>')]) {
+        let return_type = if self.match_(&[Token::Punct('-')]).is_some() {
+            if self.match_(&[Token::Punct('>')]).is_none() {
                 let token = self.previous().unwrap();
                 // 🚧 use the unclosed_delimiter constructor
                 let err = Simple::expected_input_found(
@@ -3208,7 +3261,7 @@ impl DwarfParser {
                     self.errors.push(*error);
 
                     error!("parse_function: resynchronize looking for '{'");
-                    while !self.at_end() && !self.match_(&[Token::Punct('{')]) {
+                    while !self.at_end() && self.match_(&[Token::Punct('{')]).is_none() {
                         self.advance();
                     }
                     error!("parse_function: resynchronized");
@@ -3258,14 +3311,14 @@ impl DwarfParser {
             return Ok(None);
         };
 
-        if !self.match_(&[Token::Punct('|')]) {
+        if self.match_(&[Token::Punct('|')]).is_none() {
             debug!("exit parse_function: no fn");
             return Ok(None);
         }
 
         let mut params = Vec::new();
 
-        while !self.at_end() && !self.match_(&[Token::Punct('|')]) {
+        while !self.at_end() && self.match_(&[Token::Punct('|')]).is_none() {
             match self.parse_param() {
                 Ok(Some(param)) => {
                     params.push(param);
@@ -3276,7 +3329,7 @@ impl DwarfParser {
                 Ok(None) => {
                     error!("no param");
                     error!("resynchronize looking for '|'");
-                    while !self.at_end() && !self.match_(&[Token::Punct('|')]) {
+                    while !self.at_end() && self.match_(&[Token::Punct('|')]).is_none() {
                         self.advance();
                     }
                     error!("resynchronized");
@@ -3285,7 +3338,7 @@ impl DwarfParser {
                     self.errors.push(*error);
 
                     error!("resynchronize looking for '|'");
-                    while !self.at_end() && !self.match_(&[Token::Punct('|')]) {
+                    while !self.at_end() && self.match_(&[Token::Punct('|')]).is_none() {
                         self.advance();
                     }
                     error!("resynchronized");
@@ -3293,8 +3346,8 @@ impl DwarfParser {
             }
         }
 
-        let return_type = if self.match_(&[Token::Punct('-')]) {
-            if !self.match_(&[Token::Punct('>')]) {
+        let return_type = if self.match_(&[Token::Punct('-')]).is_some() {
+            if self.match_(&[Token::Punct('>')]).is_none() {
                 let token = self.previous().unwrap();
                 // 🚧 use the unclosed_delimiter constructor
                 let err = Simple::expected_input_found(
@@ -3319,7 +3372,7 @@ impl DwarfParser {
                     self.errors.push(*error);
 
                     error!("resynchronize looking for '|'");
-                    while !self.at_end() && !self.match_(&[Token::Punct('|')]) {
+                    while !self.at_end() && self.match_(&[Token::Punct('|')]).is_none() {
                         self.advance();
                     }
                     error!("resynchronized");
@@ -3375,7 +3428,7 @@ impl DwarfParser {
         };
 
         let ty = if name.0 != "self" {
-            if !self.match_(&[Token::Punct(':')]) {
+            if self.match_(&[Token::Punct(':')]).is_none() {
                 let token = self.previous().unwrap();
                 let err = Simple::expected_input_found(
                     token.1.clone(),
@@ -3419,7 +3472,7 @@ impl DwarfParser {
         };
 
         // Match a boolean
-        if self.match_(&[Token::Type(Type::Boolean)]) {
+        if self.match_(&[Token::Type(Type::Boolean)]).is_some() {
             debug!("exit parse_type: boolean");
             return Ok(Some((
                 Type::Boolean,
@@ -3431,8 +3484,8 @@ impl DwarfParser {
         }
 
         // Match empty
-        if self.match_(&[Token::Punct('(')]) {
-            if !self.match_(&[Token::Punct(')')]) {
+        if self.match_(&[Token::Punct('(')]).is_some() {
+            if self.match_(&[Token::Punct(')')]).is_none() {
                 let token = self.previous().unwrap();
                 // 🚧 use the unclosed_delimiter constructor
                 let err = Simple::expected_input_found(
@@ -3454,7 +3507,7 @@ impl DwarfParser {
         }
 
         // Match a float
-        if self.match_(&[Token::Type(Type::Float)]) {
+        if self.match_(&[Token::Type(Type::Float)]).is_some() {
             debug!("exit parse_type: float");
             return Ok(Some((
                 Type::Float,
@@ -3466,7 +3519,7 @@ impl DwarfParser {
         }
 
         // Match an integer
-        if self.match_(&[Token::Type(Type::Integer)]) {
+        if self.match_(&[Token::Type(Type::Integer)]).is_some() {
             debug!("exit parse_type: integer");
             return Ok(Some((
                 Type::Integer,
@@ -3478,7 +3531,7 @@ impl DwarfParser {
         }
 
         // Match a list
-        if self.match_(&[Token::Punct('[')]) {
+        if self.match_(&[Token::Punct('[')]).is_some() {
             let ty = if let Some(ty) = self.parse_type()? {
                 ty
             } else {
@@ -3491,7 +3544,7 @@ impl DwarfParser {
                 return Err(Box::new(err));
             };
 
-            if !self.match_(&[Token::Punct(']')]) {
+            if self.match_(&[Token::Punct(']')]).is_none() {
                 let token = self.previous().unwrap();
                 // 🚧 use the unclosed_delimiter constructor
                 let err = Simple::expected_input_found(
@@ -3513,8 +3566,8 @@ impl DwarfParser {
         }
 
         // Match a fn
-        if self.match_(&[Token::Fn]) {
-            if !self.match_(&[Token::Punct('(')]) {
+        if self.match_(&[Token::Fn]).is_some() {
+            if self.match_(&[Token::Punct('(')]).is_none() {
                 let token = self.previous().unwrap();
                 // 🚧 use the unclosed_delimiter constructor
                 let err = Simple::expected_input_found(
@@ -3528,7 +3581,7 @@ impl DwarfParser {
 
             let mut params = Vec::new();
 
-            while !self.at_end() && !self.match_(&[Token::Punct(')')]) {
+            while !self.at_end() && self.match_(&[Token::Punct(')')]).is_none() {
                 match self.parse_type() {
                     Ok(Some(param)) => {
                         params.push(param);
@@ -3539,7 +3592,7 @@ impl DwarfParser {
                     Ok(None) => {
                         error!("no type");
                         error!("resynchronize looking for ')'");
-                        while !self.at_end() && !self.match_(&[Token::Punct(')')]) {
+                        while !self.at_end() && self.match_(&[Token::Punct(')')]).is_none() {
                             self.advance();
                         }
                         error!("resynchronized");
@@ -3548,7 +3601,7 @@ impl DwarfParser {
                         self.errors.push(*error);
 
                         error!("resynchronize looking for ')'");
-                        while !self.at_end() && !self.match_(&[Token::Punct(')')]) {
+                        while !self.at_end() && self.match_(&[Token::Punct(')')]).is_none() {
                             self.advance();
                         }
                         error!("resynchronized");
@@ -3556,8 +3609,8 @@ impl DwarfParser {
                 }
             }
 
-            let return_type = if self.match_(&[Token::Punct('-')]) {
-                if !self.match_(&[Token::Punct('>')]) {
+            let return_type = if self.match_(&[Token::Punct('-')]).is_some() {
+                if self.match_(&[Token::Punct('>')]).is_none() {
                     let token = self.previous().unwrap();
                     // 🚧 use the unclosed_delimiter constructor
                     let err = Simple::expected_input_found(
@@ -3584,7 +3637,7 @@ impl DwarfParser {
                         self.errors.push(*error);
 
                         error!("parse_function: resynchronize looking for '{'");
-                        while !self.at_end() && !self.match_(&[Token::Punct('{')]) {
+                        while !self.at_end() && self.match_(&[Token::Punct('{')]).is_none() {
                             self.advance();
                         }
                         error!("parse_function: resynchronized");
@@ -3619,8 +3672,8 @@ impl DwarfParser {
         }
 
         // Match an option
-        if self.match_(&[Token::Option]) {
-            if !self.match_(&[Token::Punct('<')]) {
+        if self.match_(&[Token::Option]).is_some() {
+            if self.match_(&[Token::Punct('<')]).is_none() {
                 let token = self.previous().unwrap();
                 let err = Simple::expected_input_found(
                     token.1.clone(),
@@ -3650,7 +3703,7 @@ impl DwarfParser {
                 return Err(Box::new(err));
             }
 
-            if !self.match_(&[Token::Punct('>')]) {
+            if self.match_(&[Token::Punct('>')]).is_none() {
                 let token = self.previous().unwrap();
                 // 🚧 use the unclosed_delimiter constructor
                 let err = Simple::expected_input_found(
@@ -3669,19 +3722,19 @@ impl DwarfParser {
         }
 
         // Match Self
-        if self.match_(&[Token::Self_]) {
+        if self.match_(&[Token::Self_]).is_some() {
             debug!("exit parse_type: self");
             return Ok(Some((Type::Self_, start..self.peek().unwrap().1.end)));
         }
 
         // Match String
-        if self.match_(&[Token::Type(Type::String)]) {
+        if self.match_(&[Token::Type(Type::String)]).is_some() {
             debug!("exit parse_type: string");
             return Ok(Some((Type::String, start..self.peek().unwrap().1.end)));
         }
 
         // Match Uuid
-        if self.match_(&[Token::Uuid]) {
+        if self.match_(&[Token::Uuid]).is_some() {
             debug!("exit parse_type: uuid");
             return Ok(Some((Type::Uuid, start..self.peek().unwrap().1.end)));
         }
@@ -3708,7 +3761,7 @@ impl DwarfParser {
             return Ok(None);
         };
 
-        if !self.match_(&[Token::Struct]) {
+        if self.match_(&[Token::Struct]).is_none() {
             return Ok(None);
         }
 
@@ -3725,7 +3778,7 @@ impl DwarfParser {
             return Err(Box::new(err));
         };
 
-        if !self.match_(&[Token::Punct('{')]) {
+        if self.match_(&[Token::Punct('{')]).is_none() {
             let tok = self.previous().unwrap();
             return Err(Box::new(Simple::expected_input_found(
                 tok.1.clone(),
@@ -3738,7 +3791,7 @@ impl DwarfParser {
         let mut end = false;
 
         while !self.at_end() {
-            if self.match_(&[Token::Punct('}')]) {
+            if self.match_(&[Token::Punct('}')]).is_some() {
                 end = true;
                 break;
             }
@@ -3785,6 +3838,7 @@ impl DwarfParser {
     fn parse_ident(&mut self) -> Option<Spanned<String>> {
         debug!("enter");
 
+        // We need to clone this here so that we can mutably borrow for self.advance.
         let next = self.peek()?.clone();
 
         if let (Token::Ident(ident), span) = next {
@@ -3831,7 +3885,7 @@ impl DwarfParser {
             return Err(Box::new(err));
         };
 
-        if !self.match_(&[Token::Punct(':')]) {
+        if self.match_(&[Token::Punct(':')]).is_none() {
             let tok = self.previous().unwrap();
             let err = Simple::expected_input_found(
                 tok.1.clone(),
@@ -3868,16 +3922,16 @@ impl DwarfParser {
         Ok((name, ty))
     }
 
-    fn match_(&mut self, tokens: &[Token]) -> bool {
+    fn match_<'a>(&mut self, tokens: &'a [Token]) -> Option<&'a Token> {
         for tok in tokens {
             if self.check(tok) {
                 self.advance();
                 debug!("matched: ", tok);
-                return true;
+                return Some(tok);
             }
         }
 
-        false
+        None
     }
 
     fn check(&mut self, tok: &Token) -> bool {
@@ -4145,7 +4199,7 @@ mod tests {
         let _ = env_logger::builder().is_test(true).try_init();
 
         let src = r#"
-            #[proxy = "foo"]
+            #[proxy(name = "foo", model = "bar", baz(uber = "baz", bar, baz = "foo"))]
             struct Foo {
                 bar: Option<int>,
                 baz: string,
@@ -4153,13 +4207,61 @@ mod tests {
             }
 
             #[proxy = "bar"]
-            #[foo = "bar"]
+            #[foo]
             struct Bar {}
         "#;
 
         let ast = parse_dwarf("test_struct", src);
 
         assert!(ast.is_ok());
+        let ast = ast.unwrap();
+        let foo = &ast[0];
+        let attrs = &foo.attributes;
+
+        if let (_, InnerAttribute::Attribute(attrs)) = attrs.get("proxy").unwrap() {
+            if let (
+                _,
+                InnerAttribute::Expression((crate::dwarf::Expression::StringLiteral(name), _)),
+            ) = attrs.get("name").unwrap()
+            {
+                assert_eq!(name, "foo");
+            } else {
+                panic!("Expected name attribute");
+            }
+            if let Some((
+                _,
+                InnerAttribute::Expression((crate::dwarf::Expression::StringLiteral(model), _)),
+            )) = attrs.get("model")
+            {
+                assert_eq!(model, "bar");
+            } else {
+                panic!("Expected model attribute");
+            }
+            if let (_, InnerAttribute::Attribute(attrs)) = attrs.get("baz").unwrap() {
+                if let Some((
+                    _,
+                    InnerAttribute::Expression((crate::dwarf::Expression::StringLiteral(uber), _)),
+                )) = attrs.get("uber")
+                {
+                    assert_eq!(uber, "baz");
+                } else {
+                    panic!("Expected uber attribute");
+                }
+                if let Some((
+                    _,
+                    InnerAttribute::Expression((crate::dwarf::Expression::StringLiteral(baz), _)),
+                )) = attrs.get("baz")
+                {
+                    assert_eq!(baz, "foo");
+                } else {
+                    panic!("Expected baz attribute");
+                }
+                if let Some((_, InnerAttribute::None)) = attrs.get("bar") {
+                } else {
+                    panic!("Expected bar attribute");
+                }
+            }
+        }
     }
 
     #[test]
@@ -4167,13 +4269,13 @@ mod tests {
         let _ = env_logger::builder().is_test(true).try_init();
 
         let src = r#"
-            #[proxy = "foo"]
+            #[proxy(name = "foo", model = "bar")]
             fn foo(a: string, b: int, d: Option<Foo>) -> Option<bool> {
                 None
             }
 
             #[proxy = "bar"]
-            #[foo = "bar"]
+            #[foo]
             fn bar() -> Option<string> {
                 Some("Hello, World!")
             }
