@@ -3217,6 +3217,18 @@ impl DwarfParser {
                     }
                 }
                 Ok(None) => {
+                    let token = if let Some(token) = self.peek() {
+                        token
+                    } else {
+                        self.previous().unwrap()
+                    };
+                    let err = Simple::expected_input_found(
+                        token.1.clone(),
+                        [Some("<param -> IDENTIFIER: TYPE>".to_owned())],
+                        Some(token.0.to_string()),
+                    );
+                    self.errors.push(err);
+
                     error!("no param");
                     error!("resynchronize looking for ')'");
                     while !self.at_end() && self.match_(&[Token::Punct(')')]).is_none() {
