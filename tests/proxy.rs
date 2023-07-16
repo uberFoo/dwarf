@@ -1,6 +1,5 @@
 use std::path::PathBuf;
 
-use ansi_term::Colour;
 use rustc_hash::FxHashMap as HashMap;
 
 use dwarf::{
@@ -10,59 +9,6 @@ use dwarf::{
     sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL},
     Value,
 };
-
-#[cfg(feature = "print-std-out")]
-compile_error!("The tests don't run with the print-std-out feature enabled.");
-
-fn output_diffs(expected: &str, found: &str, test: &str) -> Result<(), ()> {
-    let mut diff_count = 0;
-    let mut diff = String::new();
-    for line in diff::lines(expected, found) {
-        match line {
-            diff::Result::Left(expected) => {
-                if expected.starts_with("[31mError:[0m Unexpected token in input, expected") {
-                    continue;
-                }
-                diff_count += 1;
-                diff += &format!("{} {expected}\n", Colour::Green.paint("+++"));
-            }
-            diff::Result::Right(found) => {
-                if found.starts_with("[31mError:[0m Unexpected token in input, expected") {
-                    continue;
-                }
-                diff += &format!("{} {found}\n", Colour::Red.paint("---"));
-            }
-            diff::Result::Both(a, _) => eprintln!("    {a}"),
-        }
-    }
-
-    if diff_count > 0 {
-        eprintln!(
-            "{}",
-            Colour::Red.paint(format!(
-                "stderr does not match .stderr file for test {test}"
-            ))
-        );
-        eprintln!("Expected:\n{expected}");
-        eprintln!("Found:\n{found}");
-        eprintln!("Diff:\n{diff}");
-        Err(())
-    } else {
-        Ok(())
-    }
-}
-
-fn diff_with_file(path: &str, test: &str, found: &str) -> Result<(), ()> {
-    let path = PathBuf::from(path);
-    let stdout = std::fs::read_to_string(path).unwrap().trim().to_owned();
-    if stdout == found {
-        // The output matches the .stdout file. We pass the test.
-        Ok(())
-    } else {
-        // The output does not match the .stdout file -- do a diff.
-        output_diffs(&stdout, found, test)
-    }
-}
 
 fn run_program(test: &str, program: &str) -> Result<(Value, String), String> {
     let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
@@ -75,12 +21,10 @@ fn run_program(test: &str, program: &str) -> Result<(Value, String), String> {
         }
         _ => unreachable!(),
     };
-    let lu_dog = match new_lu_dog(
-        None,
-        Some((program.to_owned(), &ast)),
-        &HashMap::default(),
-        &sarzak,
-    ) {
+
+    let mut models = HashMap::default();
+    models.insert("sarzak".to_owned(), sarzak.clone());
+    let lu_dog = match new_lu_dog(None, Some((program.to_owned(), &ast)), &models, &sarzak) {
         Ok(lu_dog) => lu_dog,
         Err(e) => {
             eprintln!(
@@ -89,6 +33,7 @@ fn run_program(test: &str, program: &str) -> Result<(Value, String), String> {
                     .map(|e| {
                         format!(
                             "{}",
+                            // Print the "uber" error message.
                             dwarf::dwarf::error::DwarfErrorReporter(e, true, program, test)
                         )
                     })
@@ -122,6 +67,7 @@ fn run_program(test: &str, program: &str) -> Result<(Value, String), String> {
             Ok((v.0, stdout))
         }
         Err(e) => {
+            // Print the "uber" error message.
             eprintln!("{}", dwarf::ChaChaErrorReporter(&e, true, program, test));
 
             let error = format!(
@@ -136,4 +82,8 @@ fn run_program(test: &str, program: &str) -> Result<(Value, String), String> {
     }
 }
 
-include!(concat!(env!("OUT_DIR"), "/tests.rs"));
+#[test]
+fn declaration() {
+    let program = include_str!("proxy/declare.tao");
+    run_program("proxy/declare.tao", program).unwrap();
+}

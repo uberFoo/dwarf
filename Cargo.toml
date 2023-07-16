@@ -46,8 +46,6 @@ crossterm = "0.26.1"
 dap = "0.2.0-alpha1"
 derivative = "2.2.0"
 env_logger = "0.10.0"
-fnv = "1.0.7"
-fxhash = "0.2.1"
 heck = "0.4.1"
 hyper = { version = "0.14.26", optional = true }
 lazy_static = "1.4.0"
@@ -63,6 +61,7 @@ pretty_env_logger = "0.4.0"
 ratatui = { git = "https://github.com/uberFoo/ratatui" }
 rayon = "1.7.0"
 reqwest = { version = "0.11.18", features = ["blocking", "rustls-tls"] }
+rustc-hash = "1.1.0"
 rustyline = { version = "11.0.0", optional = true, features = [
     "derive",
     "with-file-history",
@@ -101,14 +100,7 @@ default = ["single-vec", "repl", "print-std-out"]
 
 repl = ["dep:rustyline"]
 
-tracy = [
-    "tracy-client/enable",
-    "tracy-client/system-tracing",
-    "tracy-client/context-switch-tracing",
-    "tracy-client/sampling",
-    "tracy-client/code-transfer",
-    "tracy-client/broadcast",
-]
+tracy = ["tracy-client/enable", "tracy-client/system-tracing", "tracy-client/context-switch-tracing", "tracy-client/sampling", "tracy-client/code-transfer", "tracy-client/broadcast"]
 
 
 single = ["sarzak/lu-dog-rc"]

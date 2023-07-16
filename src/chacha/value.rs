@@ -1,7 +1,7 @@
 use std::{any::Any, collections::VecDeque, fmt, ops::Range};
 
 use ansi_term::Colour;
-use fxhash::FxHashMap as HashMap;
+use rustc_hash::FxHashMap as HashMap;
 use sarzak::lu_dog::ValueTypeEnum;
 // use parking_lot::Lock;
 use uuid::Uuid;
@@ -14,7 +14,7 @@ use crate::{
     ChaChaError, DwarfFloat, DwarfInteger, NewRef, RefType,
 };
 
-pub trait StoreProxy: fmt::Display + fmt::Debug + Send + Sync {
+pub trait ProxyType: fmt::Display + fmt::Debug + Send + Sync {
     /// Get the name of the type this proxy represents.
     ///
     fn name(&self) -> &str;
@@ -52,7 +52,7 @@ pub trait StoreProxy: fmt::Display + fmt::Debug + Send + Sync {
     fn set_attr_value(&mut self, name: &str, value: RefType<Value>) -> Result<()>;
 }
 
-impl StoreProxy for Box<dyn StoreProxy> {
+impl ProxyType for Box<dyn ProxyType> {
     fn name(&self) -> &str {
         self.as_ref().name()
     }
@@ -109,7 +109,7 @@ pub enum Value {
     /// User Defined Type Proxy
     ///
     ///  Feels like we'll need to generate some code to make this work.
-    ProxyType(RefType<dyn StoreProxy>),
+    ProxyType(RefType<dyn ProxyType>),
     Range(Range<Box<RefType<Self>>>),
     Reference(RefType<Self>),
     /// WTF was I thinking?

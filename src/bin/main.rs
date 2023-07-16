@@ -17,6 +17,8 @@ use dwarf::{
     sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL},
 };
 use reqwest::Url;
+use rustc_hash::FxHashMap as HashMap;
+use sarzak::domain::DomainBuilder;
 
 #[cfg(not(feature = "repl"))]
 compile_error!("The REPL requires the \"repl\" feature flag..");
@@ -69,6 +71,11 @@ struct Arguments {
     /// Local path, or URL of the source file to execute.
     #[arg(value_parser=validate_source)]
     source: Option<Source>,
+    /// Model Files
+    ///
+    /// A comma-delimited list of model files to load into the dwarf program.
+    #[arg(long, short, use_value_delimiter = true, value_delimiter = ',')]
+    models: Option<Vec<PathBuf>>,
     /// Debug Adapter Protocol (DAP) Backend
     ///
     /// Enable the DAP backend. This will start a TCP server on port 4711.
@@ -165,6 +172,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         None
     };
 
+    let models = if let Some(ref models) = args.models {
+        let mut map = HashMap::default();
+        for model in models {
+            let domain = DomainBuilder::new()
+                .cuckoo_model(model)
+                .unwrap()
+                .build_v2()
+                .unwrap();
+            map.insert(domain.name().to_owned(), domain.sarzak().clone());
+        }
+
+        map
+    } else {
+        HashMap::default()
+    };
+
     if let Some((source_code, dwarf_args, name)) = input {
         let ast = match parse_dwarf(&name, &source_code) {
             Ok(ast) => ast,
@@ -173,7 +196,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         };
 
-        let lu_dog = match new_lu_dog(None, Some((source_code.clone(), &ast)), &[], &sarzak) {
+        let lu_dog = match new_lu_dog(None, Some((source_code.clone(), &ast)), &models, &sarzak) {
             Ok(lu_dog) => lu_dog,
             Err(errors) => {
                 for err in errors {

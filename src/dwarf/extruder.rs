@@ -3,7 +3,8 @@ use std::{fs::File, io::prelude::*, ops::Range, path::PathBuf};
 use ansi_term::Colour;
 use heck::{ToShoutySnakeCase, ToUpperCamelCase};
 use log;
-use sarzak::sarzak::{store::ObjectStore as SarzakStore, types::Ty, Object};
+use rustc_hash::FxHashMap as HashMap;
+use sarzak::sarzak::{store::ObjectStore as SarzakStore, types::Ty};
 use snafu::{location, Location};
 use tracy_client::Client;
 use uuid::Uuid;
@@ -21,10 +22,10 @@ use crate::{
             Block, BooleanOperator, Call, ErrorExpression, Expression, ExpressionEnum,
             ExpressionStatement, Field, FieldExpression, ForLoop, Function, Implementation, Index,
             IntegerLiteral, Item as WoogItem, ItemStatement, Lambda, LambdaParameter, LetStatement,
-            Literal, LiteralEnum, LocalVariable, Parameter, Print, RangeExpression,
-            Span as LuDogSpan, Statement, StaticMethodCall, StringLiteral, StructExpression,
-            ValueType, ValueTypeEnum, Variable, VariableExpression, WoogOption, WoogStruct, XIf,
-            XValue, XValueEnum, ZSome,
+            Literal, LocalVariable, Parameter, Print, RangeExpression, Span as LuDogSpan,
+            Statement, StaticMethodCall, StringLiteral, StructExpression, ValueType, ValueTypeEnum,
+            Variable, VariableExpression, WoogOption, WoogStruct, XIf, XValue, XValueEnum,
+            ZObjectStore, ZSome,
         },
         Argument, Binary, BooleanLiteral, Comparison, DwarfSourceFile, FieldAccess,
         FieldAccessTarget, FloatLiteral, List, ListElement, ListExpression, MethodCall, Operator,
@@ -213,12 +214,14 @@ impl<'a> ConveyImpl<'a> {
     }
 }
 
+#[derive(Debug)]
 pub struct StructFields {
     woog_struct: RefType<WoogStruct>,
     fields: Vec<(Spanned<String>, Spanned<Type>)>,
     location: Location,
 }
 
+#[derive(Debug)]
 pub struct Context<'a> {
     pub location: Location,
     /// Struct Field Storage
@@ -235,7 +238,7 @@ pub struct Context<'a> {
     /// once it's been created, it's already been type checked.
     pub check_types: bool,
     pub source: RefType<DwarfSourceFile>,
-    pub models: &'a [SarzakStore],
+    pub models: &'a HashMap<String, SarzakStore>,
     pub sarzak: &'a SarzakStore,
 }
 
@@ -264,7 +267,7 @@ pub struct Context<'a> {
 pub fn new_lu_dog(
     out_dir: Option<&PathBuf>,
     source: Option<(String, &[Item])>,
-    models: &[SarzakStore],
+    models: &HashMap<String, SarzakStore>,
     sarzak: &SarzakStore,
 ) -> Result<LuDogStore> {
     let mut lu_dog = LuDogStore::new();
@@ -611,6 +614,8 @@ pub fn inter_statement(
             let local = LocalVariable::new(Uuid::new_v4(), lu_dog);
             let var = Variable::new_local_variable(var_name.to_owned(), &local, lu_dog);
 
+            debug!("inter let {var:?}");
+
             // Now parse the RHS, which is an expression.
             let (expr, ty) = inter_expression(
                 &new_ref!(ParserExpression, expr.to_owned()),
@@ -619,6 +624,8 @@ pub fn inter_statement(
                 context,
                 lu_dog,
             )?;
+
+            debug!("inter let expr {expr:?}, ty {ty:?}");
 
             let ty = if let Some((type_, span)) = type_ {
                 if context.check_types {
@@ -2471,7 +2478,6 @@ pub(super) fn inter_expression(
 
             for (name, field_expr) in fields {
                 let field_expr_span = field_expr.1.to_owned();
-                // 🚧 Do type checking here? I don't think that I have what I need.
                 let (field_expr, ty) = inter_expression(
                     &new_ref!(ParserExpression, field_expr.0.to_owned()),
                     &field_expr_span,
@@ -2532,24 +2538,36 @@ pub(super) fn inter_expression(
                 }
             }
 
-            // Same name, de_sanitized, in a different model. Oh, right, this is
-            // the source model. What's going on above?
-            // Here we are looking up the object in one of the models. Above we
-            // are pulling the struct and it's fields from the lu_dog. lol
-            for model in context.models {
-                if let Some(obj) = model.exhume_object_id_by_name(name.de_sanitize()) {
-                    let ty = *model.exhume_ty(&obj).unwrap();
+            // 🚧 HashMapFix
+            for (_, model) in context.models {
+                if let Some(obj_id) = model.exhume_object_id_by_name(name.de_sanitize()) {
+                    // This actually paints at the Sarzak object, which is not
+                    // what we want here.
+                    //
+                    // let ty = *model.exhume_ty(&obj).unwrap();
+                    // let ty = ValueType::new_ty(&ty, lu_dog);
 
-                    // let obj = model.exhume_object_id_by_name(name.de_sanitize()).unwrap();
-                    // let ty = model.exhume_ty(&obj).unwrap();
+                    let woog_struct = lu_dog
+                        .iter_z_object_store()
+                        .find(|os| s_read!(os).object == obj_id)
+                        .map(|os| s_read!(os).r78_woog_struct(lu_dog)[0].clone());
 
-                    let expr = Expression::new_struct_expression(&expr, lu_dog);
-                    let ty = ValueType::new_ty(&ty, lu_dog);
+                    if let Some(woog_struct) = woog_struct {
+                        dbg!(&woog_struct);
+                        let woog_struct = s_read!(woog_struct);
+                        let ty = ValueType::new_woog_struct(
+                            &<RefType<WoogStruct> as NewRef<WoogStruct>>::new_ref(
+                                woog_struct.to_owned(),
+                            ),
+                            lu_dog,
+                        );
+                        let expr = Expression::new_struct_expression(&expr, lu_dog);
 
-                    let value = XValue::new_expression(block, &ty, &expr, lu_dog);
-                    s_write!(span).x_value = Some(s_read!(value).id);
+                        let value = XValue::new_expression(block, &ty, &expr, lu_dog);
+                        s_write!(span).x_value = Some(s_read!(value).id);
 
-                    return Ok(((expr, span), ty));
+                        return Ok(((expr, span), ty));
+                    }
                 }
             }
 
@@ -2736,97 +2754,63 @@ fn inter_struct(
     lu_dog: &mut LuDogStore,
 ) -> Result<()> {
     debug!("inter_struct {name}");
-    let s_name = name.de_sanitize();
 
-    // Go through the attributes looking for a proxy key. If we find it and if
-    // it matches an object in a model, then
-    if let Some((_, InnerAttribute::Expression(ref value))) = attributes.get("proxy") {
-        let block = Block::new(Uuid::new_v4(), None, lu_dog);
-        let (expr, _ty) = inter_expression(
-            &new_ref!(ParserExpression, value.0.clone()),
-            &value.1,
-            &block,
-            context,
-            lu_dog,
-        )?;
-        if let Expression {
-            subtype: ExpressionEnum::Literal(ref id),
-            id: _,
-        } = &*s_read!(expr.0)
-        {
-            let literal = lu_dog.exhume_literal(id).unwrap();
-            if let LiteralEnum::StringLiteral(ref s) = s_read!(literal).subtype {
-                let proxy = s_read!(lu_dog.exhume_string_literal(s).unwrap())
-                    .x_value
-                    .clone();
+    // If there is a proxy attribute then we'll use it's info to attach an object
+    // from the store to this UDT.
+    if let Some((_, InnerAttribute::Attribute(ref attributes))) = attributes.get("proxy") {
+        // Get the model value
+        if let Some((_, ref value)) = attributes.get("model") {
+            let model_name: String = value.try_into().map_err(|e| vec![e])?;
+            debug!("model_name: {model_name}");
+
+            if let Some((_, ref value)) = attributes.get("name") {
+                let proxy: String = value.try_into().map_err(|e| vec![e])?;
                 let proxy = proxy.de_sanitize();
+                debug!("proxy: {proxy}");
 
-                if let Some((model, ref id)) = context
-                    .models
-                    .iter()
-                    .find_map(|model| model.exhume_object_id_by_name(proxy).map(|id| (model, id)))
-                    .map(|id| id.to_owned())
-                {
-                    let obj = match model.exhume_object(id) {
-                        Some(obj) => obj,
-                        // 🚧 This should return two errors -- one that
-                        // the object was not found and one that the proxy
-                        // attribute failed to work.
-                        None => return Err(vec![DwarfError::ObjectIdNotFound { id: *id }]),
-                    };
+                if let Some(model) = context.models.get(&model_name) {
+                    if let Some(ref obj_id) = model.exhume_object_id_by_name(proxy) {
+                        let obj = model.exhume_object(obj_id).unwrap();
+                        let woog_struct = WoogStruct::new(proxy.to_owned(), lu_dog);
+                        // 🚧 Really should check to see if it's already there.
+                        let _ = ZObjectStore::new(model_name, obj, &woog_struct, lu_dog);
+                        let _ = WoogItem::new_woog_struct(&context.source, &woog_struct, lu_dog);
+                        let _ty = ValueType::new_woog_struct(&woog_struct, lu_dog);
 
-                    let woog_struct = WoogStruct::new(
-                        proxy.to_owned(),
-                        Some(&new_ref!(Object, obj.to_owned())),
-                        lu_dog,
-                    );
-                    let _ = WoogItem::new_woog_struct(&context.source, &woog_struct, lu_dog);
-                    let _ty = ValueType::new_woog_struct(&woog_struct, lu_dog);
+                        // We are pushing these onto a stack of fields so that we can typecheck
+                        // them after all of the structs have been interred.
+                        context.struct_fields.push(StructFields {
+                            woog_struct,
+                            fields: fields.to_owned(),
+                            location: location!(),
+                        });
 
-                    // We are pushing these onto a stack of fields so that we can typecheck
-                    // them after all of the structs have been interred.
-                    context.struct_fields.push(StructFields {
-                        woog_struct,
-                        fields: fields.to_owned(),
-                        location: location!(),
-                    });
-                    return Ok(());
+                        debug!("found proxy object");
+
+                        Ok(())
+                    } else {
+                        Err(vec![DwarfError::Generic {
+                            description: format!("Object `{}` not found", proxy),
+                        }])
+                    }
+                } else {
+                    Err(vec![DwarfError::Generic {
+                        description: format!("Model `{}` not found", model_name),
+                    }])
                 }
-            }; //kts
-        };
-    }
-
-    // Here we are looking for an object in one of the input models with the
-    // same name as the struct that we are interring. If it's found, we attach
-    // a pointer (to the object) to the struct.
-    if let Some((model, ref id)) = context
-        .models
-        .iter()
-        .find_map(|model| model.exhume_object_id_by_name(s_name).map(|id| (model, id)))
-        .map(|id| id.to_owned())
-    {
-        let obj = match model.exhume_object(id) {
-            Some(obj) => obj,
-            None => return Err(vec![DwarfError::ObjectIdNotFound { id: *id }]),
-        };
-
-        let woog_struct = WoogStruct::new(
-            name.to_owned(),
-            Some(&new_ref!(Object, obj.to_owned())),
-            lu_dog,
-        );
-        let _ = WoogItem::new_woog_struct(&context.source, &woog_struct, lu_dog);
-        let _ty = ValueType::new_woog_struct(&woog_struct, lu_dog);
-        context.struct_fields.push(StructFields {
-            woog_struct,
-            fields: fields.to_owned(),
-            location: location!(),
-        });
-
-        Ok(())
+            } else {
+                Err(vec![DwarfError::Generic {
+                    description: "No name specified".to_owned(),
+                }])
+            }
+        } else {
+            Err(vec![DwarfError::Generic {
+                description: "No model specified".to_owned(),
+            }])
+        }
     } else {
         // This is just a plain vanilla user defined type.
-        let woog_struct = WoogStruct::new(name.to_owned(), None, lu_dog);
+        let woog_struct = WoogStruct::new(name.to_owned(), lu_dog);
         let _ty = ValueType::new_woog_struct(&woog_struct, lu_dog);
         context.struct_fields.push(StructFields {
             woog_struct,
@@ -2988,7 +2972,8 @@ fn get_value_type(
             } else if name == "Uuid" {
                 Ok(ValueType::new_ty(&Ty::new_s_uuid(), lu_dog))
             } else {
-                for model in context.models {
+                // 🚧 HashMapFix
+                for (_, model) in context.models {
                     // Look for the Object in the model domains first.
                     if let Some(ty) = model.iter_ty().find(|ty| match ty {
                         Ty::Object(ref obj) => {
@@ -3157,7 +3142,7 @@ pub(super) fn typecheck(
                     } else {
                         let a = PrintableValueType(lhs, context, lu_dog);
                         let b = PrintableValueType(rhs, context, lu_dog);
-
+                        dbg!(&a, &b);
                         Err(vec![DwarfError::TypeMismatch {
                             expected: a.to_string(),
                             found: b.to_string(),
@@ -3179,6 +3164,7 @@ pub(super) fn typecheck(
             } else {
                 let lhs = PrintableValueType(lhs, context, lu_dog);
                 let rhs = PrintableValueType(rhs, context, lu_dog);
+                dbg!(&lhs_t, &rhs_t);
 
                 Err(vec![DwarfError::TypeMismatch {
                     expected: lhs.to_string(),

@@ -93,7 +93,8 @@ impl<'a> fmt::Display for PrintableValueType<'a> {
                     // It's not a sarzak type, so it must be an object imported from
                     // one of the model domains.
                     let models = s_read!(model);
-                    for model in &*models {
+                    // 🚧 HashMapFix
+                    for (_, model) in &*models {
                         if let Some(Ty::Object(ref object)) = model.exhume_ty(ty) {
                             if let Some(object) = model.exhume_object(object) {
                                 return write!(

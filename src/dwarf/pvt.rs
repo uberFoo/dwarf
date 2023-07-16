@@ -13,6 +13,7 @@ use crate::{
     RefType,
 };
 
+#[derive(Debug)]
 pub(super) struct PrintableValueType<'d, 'a, 'b>(
     pub &'d RefType<ValueType>,
     pub &'a Context<'a>,
@@ -84,7 +85,8 @@ impl<'d, 'a, 'b> fmt::Display for PrintableValueType<'d, 'a, 'b> {
                 } else {
                     // It's not a sarzak type, so it must be an object imported from
                     // one of the model domains.
-                    for model in context.models {
+                    // 🚧 HashMapFix
+                    for (_, model) in context.models {
                         if let Some(Ty::Object(ref object)) = model.exhume_ty(ty) {
                             if let Some(object) = model.exhume_object(object) {
                                 return write!(f, "{}Proxy", object.name);

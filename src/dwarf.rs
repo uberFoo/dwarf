@@ -9,7 +9,7 @@
 use std::{fmt, ops, path::PathBuf};
 
 use clap::Args;
-use fxhash::FxHashMap as HashMap;
+use rustc_hash::FxHashMap as HashMap;
 use sarzak::sarzak::{store::ObjectStore as SarzakStore, types::Ty};
 use serde::{Deserialize, Serialize};
 use snafu::{location, Location};
@@ -181,7 +181,7 @@ impl Type {
         &self,
         span: &Span,
         store: &mut LuDogStore,
-        models: &[SarzakStore],
+        models: &HashMap<String, SarzakStore>,
         sarzak: &SarzakStore,
     ) -> Result<bool> {
         self.into_value_type(span, store, models, sarzak)
@@ -192,7 +192,7 @@ impl Type {
         &self,
         span: &Span,
         store: &mut LuDogStore,
-        models: &[SarzakStore],
+        models: &HashMap<String, SarzakStore>,
         sarzak: &SarzakStore,
     ) -> Result<RefType<ValueType>> {
         match self {
@@ -238,26 +238,44 @@ impl Type {
             Type::UserType(type_) => {
                 let name = &type_.0;
 
-                for model in models {
+                // 🚧 HashMapFix
+                for (_, model) in models {
                     if let Some(obj_id) = model.exhume_object_id_by_name(name) {
+                        dbg!(name);
                         let woog_struct = store
-                            .iter_woog_struct()
-                            .find(|ws| s_read!(ws).object == Some(obj_id))
-                            .unwrap();
-                        let woog_struct = s_read!(woog_struct);
+                            .iter_z_object_store()
+                            .find(|os| s_read!(os).object == obj_id)
+                            .map(|os| s_read!(os).r78_woog_struct(store)[0].clone());
 
-                        return Ok(ValueType::new_woog_struct(
-                            &<RefType<WoogStruct> as NewRef<WoogStruct>>::new_ref(
-                                woog_struct.to_owned(),
-                            ),
-                            store,
-                        ));
+                        if let Some(woog_struct) = woog_struct {
+                            dbg!(&woog_struct);
+                            let woog_struct = s_read!(woog_struct);
+                            return Ok(ValueType::new_woog_struct(
+                                &<RefType<WoogStruct> as NewRef<WoogStruct>>::new_ref(
+                                    woog_struct.to_owned(),
+                                ),
+                                store,
+                            ));
+                        } else {
+                            return Err(vec![DwarfError::UnknownType {
+                                ty: name.to_owned(),
+                                span: span.to_owned(),
+                                location: location!(),
+                            }]);
+                        }
+                    } else {
+                        return Err(vec![DwarfError::UnknownType {
+                            ty: name.to_owned(),
+                            span: span.to_owned(),
+                            location: location!(),
+                        }]);
                     }
                 }
 
                 // If it's not in one of the models, it must be in sarzak.
                 if let Some(obj_id) = sarzak.exhume_object_id_by_name(name) {
                     let ty = sarzak.exhume_ty(&obj_id).unwrap();
+                    dbg!(&ty);
                     Ok(ValueType::new_ty(ty, store))
                 } else {
                     Err(vec![DwarfError::UnknownType {
@@ -424,6 +442,8 @@ pub enum InnerItem {
     Struct(Spanned<String>, Vec<(Spanned<String>, Spanned<Type>)>),
 }
 
+pub type AttributeMap = HashMap<String, (Span, InnerAttribute)>;
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct Attribute {
     pub name: Spanned<String>,
@@ -437,4 +457,17 @@ pub enum InnerAttribute {
     None,
 }
 
-pub type AttributeMap = HashMap<String, (Span, InnerAttribute)>;
+impl TryFrom<&InnerAttribute> for String {
+    type Error = DwarfError;
+
+    fn try_from(
+        inner: &InnerAttribute,
+    ) -> Result<Self, <String as TryFrom<&InnerAttribute>>::Error> {
+        match inner {
+            InnerAttribute::Expression((Expression::StringLiteral(s), _)) => Ok(s.to_string()),
+            _ => Err(DwarfError::Generic {
+                description: format!("Error converting InnerAttribute to String: {inner:?}."),
+            }),
+        }
+    }
+}

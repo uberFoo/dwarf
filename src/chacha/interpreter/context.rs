@@ -2,12 +2,13 @@ use std::path::Path;
 
 use circular_queue::CircularQueue;
 use crossbeam::channel::{Receiver, Sender};
+use rustc_hash::FxHashMap as HashMap;
 use uuid::Uuid;
 
 use crate::{
     chacha::{
         error::{ChaChaError, Result},
-        value::StoreProxy,
+        value::ProxyType,
     },
     interpreter::{DebuggerStatus, Memory, MemoryUpdateMessage},
     lu_dog::{
@@ -27,7 +28,7 @@ pub struct Context {
     memory: Memory,
     lu_dog: RefType<LuDogStore>,
     sarzak: RefType<SarzakStore>,
-    models: RefType<Vec<SarzakStore>>,
+    models: RefType<HashMap<String, SarzakStore>>,
     mem_update_recv: Receiver<MemoryUpdateMessage>,
     #[allow(dead_code)]
     std_out_send: Sender<String>,
@@ -66,7 +67,7 @@ impl Context {
         memory: Memory,
         lu_dog: RefType<LuDogStore>,
         sarzak: RefType<SarzakStore>,
-        models: RefType<Vec<SarzakStore>>,
+        models: RefType<HashMap<String, SarzakStore>>,
         mem_update_recv: Receiver<MemoryUpdateMessage>,
         std_out_send: Sender<String>,
         std_out_recv: Receiver<String>,
@@ -109,11 +110,14 @@ impl Context {
         self.args = Some(new_ref!(Value, args.into()));
     }
 
-    pub fn register_model<P: AsRef<Path>>(&self, model_path: P) -> Result<()> {
+    pub fn register_model<P>(&self, model_name: String, model_path: P) -> Result<()>
+    where
+        P: AsRef<Path>,
+    {
         let model =
             SarzakStore::load(model_path.as_ref()).map_err(|e| ChaChaError::Store { source: e })?;
 
-        s_write!(self.models).push(model);
+        s_write!(self.models).insert(model_name, model);
 
         Ok(())
     }
@@ -195,16 +199,16 @@ impl Context {
         &self.sarzak
     }
 
-    pub fn models(&self) -> &RefType<Vec<SarzakStore>> {
+    pub fn models(&self) -> &RefType<HashMap<String, SarzakStore>> {
         &self.models
     }
 
-    pub fn register_store_proxy(&mut self, name: String, proxy: impl StoreProxy + 'static) {
+    pub fn register_store_proxy(&mut self, name: String, proxy: impl ProxyType + 'static) {
         self.memory.insert_global(
             name.clone(),
             new_ref!(
                 Value,
-                Value::ProxyType(new_ref!(Box<dyn StoreProxy>, Box::new(proxy)))
+                Value::ProxyType(new_ref!(Box<dyn ProxyType>, Box::new(proxy)))
             ),
         );
 

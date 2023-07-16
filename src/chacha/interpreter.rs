@@ -6,6 +6,7 @@ use crossbeam::channel::unbounded;
 use lazy_static::lazy_static;
 use log::{self, log_enabled, Level::Debug};
 use parking_lot::{Condvar, Mutex};
+use rustc_hash::FxHashMap as HashMap;
 use snafu::{prelude::*, Location};
 use tracy_client::{span, Client};
 use uuid::Uuid;
@@ -14,7 +15,7 @@ use crate::{
     chacha::{
         error::{Error, Result, UnimplementedSnafu},
         memory::{Memory, MemoryUpdateMessage},
-        value::UserType,
+        value::{ProxyType, UserType},
         vm::{CallFrame, Instruction, Thonk, VM},
     },
     lu_dog::ExpressionEnum,
@@ -444,7 +445,7 @@ pub fn initialize_interpreter<P: AsRef<Path>>(
         stack,
         new_ref!(LuDogStore, lu_dog),
         new_ref!(SarzakStore, sarzak),
-        new_ref!(Vec<SarzakStore>, Vec::new()),
+        new_ref!(HashMap<String, SarzakStore>, HashMap::default()),
         receiver,
         std_out_send,
         std_out_recv,

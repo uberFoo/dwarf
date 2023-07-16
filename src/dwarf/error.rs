@@ -271,6 +271,9 @@ impl fmt::Display for DwarfErrorReporter<'_, '_, '_> {
                         C_WARN.paint(format!("{}", location.line)),
                         C_OK.paint(format!("{}", location.column)),
                     ))
+                } else if expected == found {
+                    report
+                        .with_note("The types have the same name, but they are two distinct types.")
                 } else {
                     report
                 };

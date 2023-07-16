@@ -1,0 +1,14 @@
+#[proxy(model = "sarzak", name = "Object")]
+struct Object {
+    id: Uuid,
+    name: String,
+}
+
+fn main() {
+    let object: Object = Object {
+        id: Uuid::new(),
+        name: "Merlin",
+    };
+
+    print("id: {0} name: {1}".format(object.id, object.name));
+}

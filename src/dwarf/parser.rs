@@ -1,8 +1,8 @@
 use ansi_term::Colour;
 use ariadne::{Color, Fmt, Label, Report, ReportKind, Source};
 use chumsky::prelude::*;
-use fxhash::FxHashMap as HashMap;
 use log;
+use rustc_hash::FxHashMap as HashMap;
 
 use crate::dwarf::{
     Attribute, DwarfFloat, Expression as DwarfExpression, InnerAttribute, InnerItem, Item, Spanned,
@@ -4149,7 +4149,7 @@ mod tests {
 
         let ast = parse_line(src);
 
-        dbg!(&ast);
+        // dbg!(&ast);
 
         assert!(ast.is_ok());
         // assert_eq!(ast, Ok(Some((Statement::Empty, (13..14)))));
@@ -4623,7 +4623,7 @@ mod tests {
 
         let ast = parse_dwarf("test_struct_expression", src);
 
-        dbg!(&ast);
+        // dbg!(&ast);
         assert!(ast.is_ok());
     }
 
@@ -4642,7 +4642,7 @@ mod tests {
         "#;
 
         let ast = parse_dwarf("test_assignment", src);
-        dbg!(&ast);
+        // dbg!(&ast);
         assert!(ast.is_ok());
     }
 
@@ -4659,7 +4659,7 @@ mod tests {
         "#;
 
         let ast = parse_dwarf("test_index_expression", src);
-        dbg!(&ast);
+        // dbg!(&ast);
         assert!(ast.is_ok());
     }
 

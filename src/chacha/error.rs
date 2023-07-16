@@ -299,7 +299,7 @@ impl fmt::Display for ChaChaErrorReporter<'_, '_, '_> {
                     .with_message("variable not found")
                     .with_label(
                         Label::new((file_name, span.clone()))
-                            .with_message("used here")
+                            .with_message("fonud here")
                             .with_color(Color::Red),
                     );
 

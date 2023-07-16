@@ -1,7 +1,7 @@
 use std::{ffi::OsString, fs, os::unix::ffi::OsStringExt, path::PathBuf, process};
 
 use clap::{ArgAction, Parser};
-
+use rustc_hash::FxHashMap as HashMap;
 use snafu::prelude::*;
 
 use sarzak::{
@@ -33,12 +33,11 @@ struct Args {
     /// file.
     #[arg(long, short, action=ArgAction::SetTrue)]
     debug: Option<bool>,
-    /// Model File
+    /// Model Files
     ///
-    /// Path to the model, corresponding to the source file, to build the
-    /// Lu-Dog domain.
-    #[arg(long, short)]
-    model: Option<PathBuf>,
+    /// A comma-delimited list of model files to load into the dwarf program.
+    #[arg(long, short, use_value_delimiter = true, value_delimiter = ',')]
+    models: Option<Vec<PathBuf>>,
     /// Meta-Model File
     ///
     /// Path to the meta-model, sarzak.
@@ -107,16 +106,20 @@ fn main() -> Result<()> {
 
     let is_uber = args.uber.is_some() && args.uber.unwrap();
 
-    let model = if let Some(ref model) = args.model {
-        vec![DomainBuilder::new()
-            .cuckoo_model(model)
-            .unwrap()
-            .build_v2()
-            .unwrap()
-            .sarzak()
-            .clone()]
+    let models = if let Some(ref models) = args.models {
+        let mut map = HashMap::default();
+        for model in models {
+            let domain = DomainBuilder::new()
+                .cuckoo_model(model)
+                .unwrap()
+                .build_v2()
+                .unwrap();
+            map.insert(domain.name().to_owned(), domain.sarzak().clone());
+        }
+
+        map
     } else {
-        vec![]
+        HashMap::default()
     };
 
     let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
@@ -163,7 +166,7 @@ fn main() -> Result<()> {
     let lu_dog = match new_lu_dog(
         Some(&path),
         Some((source_code.clone(), &ast)),
-        &model,
+        &models,
         &sarzak,
     ) {
         Ok(lu_dog) => lu_dog,

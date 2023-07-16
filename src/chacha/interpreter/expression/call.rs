@@ -1,7 +1,7 @@
 use std::{collections::VecDeque, time::Instant};
 
 use ansi_term::Colour;
-use fxhash::FxHashMap as HashMap;
+use rustc_hash::FxHashMap as HashMap;
 use snafu::prelude::*;
 use uuid::Uuid;
 

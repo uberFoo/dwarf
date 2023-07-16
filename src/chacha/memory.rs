@@ -4,7 +4,7 @@ use std::fmt;
 
 use ansi_term::Colour;
 use crossbeam::channel::{unbounded, Receiver, Sender};
-use fxhash::FxHashMap as HashMap;
+use rustc_hash::FxHashMap as HashMap;
 
 use crate::{
     chacha::vm::Thonk, debug, function, interpreter::STEPPING, new_ref, s_read, s_write, NewRef,
