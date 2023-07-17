@@ -355,14 +355,20 @@ impl DwarfParser {
             debug!("parsing inner attribute^2");
 
             let mut values = HashMap::default();
-            values.insert(name.0, (name.1, value));
+            values
+                .entry(name.0)
+                .or_insert_with(Vec::new)
+                .push((name.1, value));
 
             if self.match_(&[Token::Punct(',')]).is_none() {
                 debug!("no comma");
             } else {
                 while let Some(Attribute { name, value }) = self.parse_attribute_key_value() {
                     debug!("parsed inner attribute^2", name, value);
-                    values.insert(name.0, (name.1, value));
+                    values
+                        .entry(name.0)
+                        .or_insert_with(Vec::new)
+                        .push((name.1, value));
                     if self.match_(&[Token::Punct(',')]).is_none() {
                         debug!("no comma");
                         break;
@@ -485,7 +491,10 @@ impl DwarfParser {
 
         while let Some(Attribute { name, value }) = self.parse_attribute() {
             debug!("attribute", name, value);
-            attributes.insert(name.0, (name.1, value));
+            attributes
+                .entry(name.0)
+                .or_insert_with(Vec::new)
+                .push((name.1, value));
         }
 
         // Try to parse a struct
@@ -3289,23 +3298,29 @@ impl DwarfParser {
             (Type::Empty, start..end)
         };
 
-        let body = if let Some(body) = self.parse_block_expression()? {
-            body
+        let (body, end) = if self.match_(&[Token::Punct(';')]).is_none() {
+            if let Some(body) = self.parse_block_expression()? {
+                let end = body.0 .1.end;
+                (Some(body.0), end)
+            } else {
+                let prev = self.previous().unwrap();
+                let start = prev.1.start;
+                let end = prev.1.end;
+                let err = Simple::custom(
+                    start..end,
+                    "missing body. If this is meant to be a declaration, add a ';'",
+                );
+                debug!("exit parse_function: no body");
+                return Err(Box::new(err));
+            }
         } else {
-            let prev = self.previous().unwrap();
-            let start = prev.1.start;
-            let end = prev.1.end;
-            let err = Simple::custom(start..end, "missing body");
-            debug!("exit parse_function: no body");
-            return Err(Box::new(err));
+            (None, return_type.1.end)
         };
-
-        let end = body.0 .1.end;
 
         debug!("exit parse_function");
 
         Ok(Some((
-            InnerItem::Function(name, params, return_type, body.0),
+            InnerItem::Function(name, params, return_type, body),
             start..end,
         )))
     }
@@ -4036,7 +4051,7 @@ pub fn parse_dwarf(name: &str, src: &str) -> Result<Vec<Item>, DwarfError> {
     let mut parser = DwarfParser::new(tokens.unwrap());
     let (ast, parse_errs) = parser.parse_program();
 
-    log::debug!("parse_dwarf: {:#?}", ast);
+    debug!("parse_dwarf: {:#?}", ast);
 
     if !errs.is_empty() || !parse_errs.is_empty() {
         let error = report_errors(errs, parse_errs, name, src);
@@ -4188,6 +4203,25 @@ mod tests {
     }
 
     #[test]
+    fn test_func_decl() {
+        let _ = env_logger::builder().is_test(true).try_init();
+
+        let src = r#"
+            struct Bar {}
+
+            impl Bar {
+                fn new() -> Self;
+            }
+
+            fn something(a: int, b: string) -> bool;
+        "#;
+
+        let ast = parse_dwarf("test_func_decl", src);
+
+        assert!(ast.is_ok());
+    }
+
+    #[test]
     fn test_struct() {
         let _ = env_logger::builder().is_test(true).try_init();
 
@@ -4223,52 +4257,52 @@ mod tests {
             struct Bar {}
         "#;
 
-        let ast = parse_dwarf("test_struct", src);
+        let ast = parse_dwarf("test_struct_attrs", src);
 
         assert!(ast.is_ok());
         let ast = ast.unwrap();
         let foo = &ast[0];
         let attrs = &foo.attributes;
 
-        if let (_, InnerAttribute::Attribute(attrs)) = attrs.get("proxy").unwrap() {
+        if let (_, InnerAttribute::Attribute(attrs)) = &attrs.get("proxy").unwrap()[0] {
             if let (
                 _,
                 InnerAttribute::Expression((crate::dwarf::Expression::StringLiteral(name), _)),
-            ) = attrs.get("name").unwrap()
+            ) = &attrs.get("name").unwrap()[0]
             {
                 assert_eq!(name, "foo");
             } else {
                 panic!("Expected name attribute");
             }
-            if let Some((
+            if let (
                 _,
                 InnerAttribute::Expression((crate::dwarf::Expression::StringLiteral(model), _)),
-            )) = attrs.get("model")
+            ) = &attrs.get("model").unwrap()[0]
             {
                 assert_eq!(model, "bar");
             } else {
                 panic!("Expected model attribute");
             }
-            if let (_, InnerAttribute::Attribute(attrs)) = attrs.get("baz").unwrap() {
-                if let Some((
+            if let (_, InnerAttribute::Attribute(attrs)) = &attrs.get("baz").unwrap()[0] {
+                if let (
                     _,
                     InnerAttribute::Expression((crate::dwarf::Expression::StringLiteral(uber), _)),
-                )) = attrs.get("uber")
+                ) = &attrs.get("uber").unwrap()[0]
                 {
                     assert_eq!(uber, "baz");
                 } else {
                     panic!("Expected uber attribute");
                 }
-                if let Some((
+                if let (
                     _,
                     InnerAttribute::Expression((crate::dwarf::Expression::StringLiteral(baz), _)),
-                )) = attrs.get("baz")
+                ) = &attrs.get("baz").unwrap()[0]
                 {
                     assert_eq!(baz, "foo");
                 } else {
                     panic!("Expected baz attribute");
                 }
-                if let Some((_, InnerAttribute::None)) = attrs.get("bar") {
+                if let (_, InnerAttribute::None) = &attrs.get("bar").unwrap()[0] {
                 } else {
                     panic!("Expected bar attribute");
                 }
@@ -4293,7 +4327,7 @@ mod tests {
             }
         "#;
 
-        let ast = parse_dwarf("test_struct", src);
+        let ast = parse_dwarf("test_func_attrs", src);
 
         assert!(ast.is_ok());
     }

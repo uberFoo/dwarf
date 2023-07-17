@@ -6,7 +6,7 @@ use tracy_client::span;
 
 use crate::{
     chacha::{
-        error::{Result, WrongNumberOfArgumentsSnafu},
+        error::{MissingDefinitionSnafu, Result, WrongNumberOfArgumentsSnafu},
         vm::VM,
     },
     interpreter::{
@@ -33,7 +33,16 @@ pub fn eval_function_call(
     span!("eval_function_call");
 
     let func = s_read!(func);
-    let block = s_read!(lu_dog).exhume_block(&func.block).unwrap();
+
+    ensure!(func.block.is_some(), {
+        let span = s_read!(span).start as usize..s_read!(span).end as usize;
+        MissingDefinitionSnafu {
+            name: func.name.clone(),
+            span,
+        }
+    });
+
+    let block = s_read!(lu_dog).exhume_block(&func.block.unwrap()).unwrap();
     // let stmts = s_read!(block).r18_statement(&s_read!(lu_dog));
     let has_stmts = !s_read!(block).r18_statement(&s_read!(lu_dog)).is_empty();
 

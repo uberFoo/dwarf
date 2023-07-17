@@ -59,6 +59,11 @@ pub enum ChaChaError {
     },
     #[snafu(display("\n{}: named item `main` found, but it is not a function.", ERR_CLR.bold().paint("error")))]
     MainIsNotAFunction,
+    #[snafu(display("\n{}: missing definition `{}` --> {}", ERR_CLR.bold().paint("error"), OTH_CLR.paint(name), ERR_CLR.italic().paint("this should be caught by the extruder!")))]
+    MissingDefinition {
+        name: String,
+        span: Span,
+    },
     #[snafu(display("\n{}: `{}` is not a function.", ERR_CLR.bold().paint("error"), POP_CLR.paint(value.to_string())))]
     NotAFunction {
         value: Value,

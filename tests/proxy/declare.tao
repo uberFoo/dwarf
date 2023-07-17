@@ -1,14 +1,41 @@
-#[proxy(model = "sarzak", name = "Object")]
+#[store(model = "sarzak")]
+struct SarzakStore {}
+
+// #[store(model = "sarzak")]
+// impl SarzakStore {
+//     /// Exhume (get) [`Object`] from the store.
+//     ///
+//     #[store(model = "sarzak", func = "exhume_object")]
+//     fn exhume_object(self, id: Uuid) -> Option<Object>;
+
+//     /// Exhume [`Object`] id from the store by name.
+//     ///
+//     #[store(model = "sarzak", func = "exhume_object_id_by_name")]
+//     fn exhume_object_id_by_name(self, name: string) -> Option<Uuid>;
+
+//     /// Get an iterator over the internal `HashMap<&Uuid, Object>`.
+//     ///
+//     #[store(model = "sarzak", func = "iter_object")]
+//     fn iter_object(self) -> [Object];
+// }
+
+#[proxy(model = "sarzak", object = "Object")]
 struct Object {
     id: Uuid,
     name: String,
+    description: String,
+}
+
+impl Object {
+    #[proxy(model = "sarzak", object = "Object", func = "iter_object")]
+    fn new(desc: string, kl: string, name: string) -> Self;
 }
 
 fn main() {
+    // Specifying the type of the lhs forces a type check.
     let object: Object = Object {
         id: Uuid::new(),
         name: "Merlin",
+        description: "A wizard",
     };
-
-    print("id: {0} name: {1}".format(object.id, object.name));
 }

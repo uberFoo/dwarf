@@ -1,0 +1,3 @@
+fn no_self(self) {}
+
+fn main() {}

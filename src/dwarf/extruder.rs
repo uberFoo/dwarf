@@ -161,7 +161,7 @@ struct ConveyFunc<'a> {
     span: &'a Span,
     params: &'a [(Spanned<String>, Spanned<Type>)],
     return_type: &'a Spanned<Type>,
-    statements: &'a Spanned<ParserExpression>,
+    statements: Option<&'a Spanned<ParserExpression>>,
 }
 
 impl<'a> ConveyFunc<'a> {
@@ -170,7 +170,7 @@ impl<'a> ConveyFunc<'a> {
         span: &'a Span,
         params: &'a [(Spanned<String>, Spanned<Type>)],
         return_type: &'a Spanned<Type>,
-        statements: &'a Spanned<ParserExpression>,
+        statements: Option<&'a Spanned<ParserExpression>>,
     ) -> Self {
         Self {
             name,
@@ -205,12 +205,18 @@ impl<'a> ConveyStruct<'a> {
 struct ConveyImpl<'a> {
     name: &'a str,
     span: &'a Span,
+    attributes: &'a AttributeMap,
     funcs: &'a [Item],
 }
 
 impl<'a> ConveyImpl<'a> {
-    fn new(name: &'a str, span: &'a Span, funcs: &'a [Item]) -> Self {
-        Self { name, span, funcs }
+    fn new(name: &'a str, span: &'a Span, attributes: &'a AttributeMap, funcs: &'a [Item]) -> Self {
+        Self {
+            name,
+            span,
+            attributes,
+            funcs,
+        }
     }
 }
 
@@ -313,11 +319,17 @@ fn walk_tree(
             Item {
                 item: (InnerItem::Function((name, _name_span), params, return_type, stmts), span),
                 attributes: _,
-            } => funcs.push(ConveyFunc::new(name, span, params, return_type, stmts)),
+            } => funcs.push(ConveyFunc::new(
+                name,
+                span,
+                params,
+                return_type,
+                stmts.as_ref(),
+            )),
             Item {
                 item: (InnerItem::Implementation((name, _name_span), funcs), span),
-                attributes: _,
-            } => implementations.push(ConveyImpl::new(name, span, funcs)),
+                attributes,
+            } => implementations.push(ConveyImpl::new(name, span, attributes, funcs)),
             // Imports can happen any time, I think.
             Item {
                 item: (InnerItem::Import((path, _path_span), alias), span),
@@ -340,7 +352,7 @@ fn walk_tree(
         fields,
     } in &structs
     {
-        debug!("Interning struct {}", name);
+        debug!("Interring struct `{}`", name);
         let _ = inter_struct(name, attributes, fields, context, lu_dog).map_err(|mut e| {
             errors.append(&mut e);
         });
@@ -362,11 +374,19 @@ fn walk_tree(
         }
     }
     // Using the type information, and the input, inter the implementation blocks.
-    for ConveyImpl { name, span, funcs } in implementations {
-        debug!("Interning implementation {}", name);
-        let _ = inter_implementation(name, funcs, span, context, lu_dog).map_err(|mut e| {
-            errors.append(&mut e);
-        });
+    for ConveyImpl {
+        name,
+        span,
+        attributes,
+        funcs,
+    } in implementations
+    {
+        debug!("Interring implementation `{}`", name);
+        let _ = inter_implementation(name, attributes, funcs, span, context, lu_dog).map_err(
+            |mut e| {
+                errors.append(&mut e);
+            },
+        );
     }
 
     // Finally, inter the loose functions.
@@ -378,7 +398,7 @@ fn walk_tree(
         statements,
     } in funcs
     {
-        debug!("Interning function {}", name);
+        debug!("Interring function `{}`", name);
         let _ = inter_func(
             name,
             params,
@@ -425,9 +445,10 @@ fn walk_tree(
 #[allow(clippy::too_many_arguments)]
 fn inter_func(
     name: &str,
+    // attributes: &AttributeMap,
     params: &[(Spanned<String>, Spanned<Type>)],
     return_type: &Spanned<Type>,
-    stmts_p: &Spanned<ParserExpression>,
+    stmts: Option<&Spanned<ParserExpression>>,
     impl_block: Option<&RefType<Implementation>>,
     impl_ty: Option<&RefType<ValueType>>,
     span: &Span,
@@ -436,20 +457,45 @@ fn inter_func(
 ) -> Result<()> {
     debug!("inter_func {}", name);
 
-    let block = Block::new(Uuid::new_v4(), None, lu_dog);
+    // if let Some(proxy_vec) = attributes.get("store") {
+    //     if let Some((_, InnerAttribute::Attribute(ref attributes))) = proxy_vec.get(0) {
+    //         if let Some(model_vec) = attributes.get("model") {
+    //             if let Some((_, ref value)) = model_vec.get(0) {
+    //                 let model_name: String = value.try_into().map_err(|e| vec![e])?;
+    //                 debug!("store.model: {model_name}");
 
-    let name = name.de_sanitize();
-    let stmts = if let ParserExpression::Block(stmts) = &stmts_p.0 {
-        stmts
-    } else {
-        // I don't even think that this is possible given the parser.
-        unreachable!()
-    };
+    //                 // 🚧 Really should check to see if it's already there.
+    //                 let store = ZObjectStore::new(model_name, lu_dog);
+    //                 let _ = ValueType::new_z_object_store(&store, lu_dog);
+    //             } else {
+    //                 unreachable!();
+    //             }
+    //         } else {
+    //             return Err(vec![DwarfError::Generic {
+    //                 description: "No model specified".to_owned(),
+    //             }]);
+    //         }
+    //     } else {
+    //         unreachable!();
+    //     }
+    // }
 
     context.location = location!();
     let ret_ty = get_value_type(&return_type.0, &return_type.1, impl_ty, context, lu_dog)?;
 
-    let func = Function::new(name.to_owned(), &block, impl_block, &ret_ty, lu_dog);
+    let name = name.de_sanitize();
+    let (func, block) = if let Some((ParserExpression::Block(stmts), span)) = &stmts {
+        let block = Block::new(Uuid::new_v4(), None, lu_dog);
+        let func = Function::new(name.to_owned(), Some(&block), impl_block, &ret_ty, lu_dog);
+
+        (func, Some((block, stmts, span)))
+    } else {
+        (
+            Function::new(name.to_owned(), None, impl_block, &ret_ty, lu_dog),
+            None,
+        )
+    };
+
     let _ = WoogItem::new_function(&context.source, &func, lu_dog);
     // Create a type for our function
     let ty = ValueType::new_function(&func, lu_dog);
@@ -468,12 +514,6 @@ fn inter_func(
         debug!("param name {}", param_name);
         debug!("param ty {}", param_ty);
 
-        let param = Parameter::new(&func, None, lu_dog);
-
-        debug!("param {:?}", param);
-
-        let var = Variable::new_parameter(param_name.to_owned(), &param, lu_dog);
-        debug!("var {:?}", var);
         // We need to introduce the values into the block, so that we don't
         // error out when parsing the statements.
         //
@@ -485,36 +525,46 @@ fn inter_func(
                 continue;
             }
         };
+        let param = Parameter::new(&func, None, &param_ty, lu_dog);
+
+        debug!("param {:?}", param);
         debug!("param_ty {:?}", param_ty);
-        // Note that we are storing the parameter type with the variable associated
-        // with this parameter. Not with the parameter itself.
-        let value = XValue::new_variable(&block, &param_ty, &var, lu_dog);
-        LuDogSpan::new(
-            name_span.end as i64,
-            name_span.start as i64,
-            &context.source,
-            None,
-            Some(&value),
-            lu_dog,
-        );
+
+        let var = Variable::new_parameter(param_name.to_owned(), &param, lu_dog);
+        debug!("var {:?}", var);
+
+        if let Some((ref block, _, _)) = block {
+            let value = XValue::new_variable(&block, &param_ty, &var, lu_dog);
+            LuDogSpan::new(
+                name_span.end as i64,
+                name_span.start as i64,
+                &context.source,
+                None,
+                Some(&value),
+                lu_dog,
+            );
+        }
+
         last_param_uuid = link_parameter!(last_param_uuid, param, lu_dog);
     }
 
-    let stmts: Vec<RefType<ParserStatement>> = stmts
-        .iter()
-        .map(|stmt| new_ref!(ParserStatement, stmt.0.clone()))
-        .collect();
+    if let Some((block, stmts, stmt_span)) = block {
+        let stmts: Vec<RefType<ParserStatement>> = stmts
+            .iter()
+            .map(|stmt| new_ref!(ParserStatement, stmt.0.clone()))
+            .collect();
 
-    let (block_ty, block_span) = inter_statements(&stmts, &stmts_p.1, &block, context, lu_dog)?;
+        let (block_ty, block_span) = inter_statements(&stmts, &stmt_span, &block, context, lu_dog)?;
 
-    if context.check_types {
-        typecheck(
-            (&ret_ty, span),
-            (&block_ty, &block_span),
-            location!(),
-            context,
-            lu_dog,
-        )?;
+        if context.check_types {
+            typecheck(
+                (&ret_ty, span),
+                (&block_ty, &block_span),
+                location!(),
+                context,
+                lu_dog,
+            )?;
+        }
     }
 
     debug!("func {name} saved");
@@ -566,7 +616,7 @@ pub fn inter_statement(
                         &name.0,
                         params,
                         return_type,
-                        stmts,
+                        stmts.as_ref(),
                         None,
                         None,
                         span,
@@ -577,9 +627,9 @@ pub fn inter_statement(
                 }
                 Item {
                     item: (InnerItem::Implementation((name, _name_span), funcs), span),
-                    attributes: _,
+                    attributes,
                 } => {
-                    inter_implementation(name, funcs, span, context, lu_dog)?;
+                    inter_implementation(name, attributes, funcs, span, context, lu_dog)?;
                     span
                 }
                 // Item::Import((path, _path_span), alias) => {
@@ -2538,38 +2588,46 @@ pub(super) fn inter_expression(
                 }
             }
 
-            // 🚧 HashMapFix
-            for (_, model) in context.models {
-                if let Some(obj_id) = model.exhume_object_id_by_name(name.de_sanitize()) {
-                    // This actually paints at the Sarzak object, which is not
-                    // what we want here.
-                    //
-                    // let ty = *model.exhume_ty(&obj).unwrap();
-                    // let ty = ValueType::new_ty(&ty, lu_dog);
+            // I'm not even sure what this was supposed to be about. I need to
+            // think on it some, but I'm pretty sure that we want to disallow
+            // a struct expression on a proxy object. That would be in favor of
+            // `new`.
+            //             // 🚧 HashMapFix
+            //             for (_, model) in context.models {
+            //                 if let Some(obj_id) = model.exhume_object_id_by_name(name.de_sanitize()) {
+            //                     // This actually paints at the Sarzak object, which is not
+            //                     // what we want here.
+            //                     //
+            //                     // let ty = *model.exhume_ty(&obj).unwrap();
+            //                     // let ty = ValueType::new_ty(&ty, lu_dog);
 
-                    let woog_struct = lu_dog
-                        .iter_z_object_store()
-                        .find(|os| s_read!(os).object == obj_id)
-                        .map(|os| s_read!(os).r78_woog_struct(lu_dog)[0].clone());
+            //                     let woog_struct = lu_dog
+            //                         .iter_z_object_store()
+            //                         .find(|os| {
+            //                             let wrapper = s_read!(os).object;
+            //                             let wrapper = lu_dog.exhume_object_wrapper(&wrapper).unwrap();
+            //                             let object = s_read!(wrapper).object;
+            //                             object == obj_id
+            //                         })
+            //                         .map(|os| s_read!(os).r78_woog_struct(lu_dog)[0].clone());
 
-                    if let Some(woog_struct) = woog_struct {
-                        dbg!(&woog_struct);
-                        let woog_struct = s_read!(woog_struct);
-                        let ty = ValueType::new_woog_struct(
-                            &<RefType<WoogStruct> as NewRef<WoogStruct>>::new_ref(
-                                woog_struct.to_owned(),
-                            ),
-                            lu_dog,
-                        );
-                        let expr = Expression::new_struct_expression(&expr, lu_dog);
+            //                     if let Some(woog_struct) = woog_struct {
+            //                         let woog_struct = s_read!(woog_struct);
+            //                         let ty = ValueType::new_woog_struct(
+            //                             &<RefType<WoogStruct> as NewRef<WoogStruct>>::new_ref(
+            //                                 woog_struct.to_owned(),
+            //                             ),
+            //                             lu_dog,
+            //                         );
+            //                         let expr = Expression::new_struct_expression(&expr, lu_dog);
 
-                        let value = XValue::new_expression(block, &ty, &expr, lu_dog);
-                        s_write!(span).x_value = Some(s_read!(value).id);
+            //                         let value = XValue::new_expression(block, &ty, &expr, lu_dog);
+            //                         s_write!(span).x_value = Some(s_read!(value).id);
 
-                        return Ok(((expr, span), ty));
-                    }
-                }
-            }
+            //                         return Ok(((expr, span), ty));
+            //                     }
+            //                 }
+            //             }
 
             // I love that the type of the thing is the same as the thing itself.
             let expr = Expression::new_struct_expression(&expr, lu_dog);
@@ -2668,48 +2726,65 @@ fn inter_import(
 
 fn inter_implementation(
     name: &str,
+    attributes: &AttributeMap,
     funcs: &[Item],
     span: &Span,
     context: &mut Context,
     lu_dog: &mut LuDogStore,
 ) -> Result<()> {
     let name = name.de_sanitize();
+    debug!("inter_implementation: {name}");
 
-    context.location = location!();
-    let impl_ty = get_value_type(
-        &Type::UserType((name.to_owned(), 0..0)),
-        span,
-        None,
-        context,
-        lu_dog,
-    )?;
+    let (impl_ty, implementation) = if let Some(proxy_vec) = attributes.get("store") {
+        if let Some((_, InnerAttribute::Attribute(ref attributes))) = proxy_vec.get(0) {
+            if let Some(model_vec) = attributes.get("model") {
+                if let Some((_, ref value)) = model_vec.get(0) {
+                    let model_name: String = value.try_into().map_err(|e| vec![e])?;
+                    debug!("store.model: {model_name}");
 
-    let mut errors = Vec::new();
+                    // 🚧 Really should check to see if it's already there.
+                    let store = ZObjectStore::new(model_name, lu_dog);
+                    let _ = ValueType::new_z_object_store(&store, lu_dog);
 
-    // 🚧 I think that this is completely wrong. We don't want to do this for
-    // every model, but rather, we want to find the model that contains the
-    // type.
-    // for model in models {
-    // let obj_id = model
-    //     .exhume_object_id_by_name(name)
-    //     .expect(&format!("Object {} not found", name));
+                    (None, None)
+                } else {
+                    unreachable!();
+                }
+            } else {
+                return Err(vec![DwarfError::Generic {
+                    description: "No model specified".to_owned(),
+                }]);
+            }
+        } else {
+            unreachable!();
+        }
+    } else {
+        context.location = location!();
+        let impl_ty = get_value_type(
+            &Type::UserType((name.to_owned(), 0..0)),
+            span,
+            None,
+            context,
+            lu_dog,
+        )?;
 
-    // let obj = model
-    //     .exhume_object(&obj_id)
-    //     .expect(&format!("Object {} not found", name));
-    let id = match lu_dog.exhume_woog_struct_id_by_name(name) {
-        Some(id) => id,
-        None => {
+        let id = if let Some(id) = lu_dog.exhume_woog_struct_id_by_name(name) {
+            id
+        } else {
             return Err(vec![DwarfError::ObjectNameNotFound {
                 name: name.to_owned(),
             }]);
-        }
+        };
+
+        let woog_struct = lu_dog.exhume_woog_struct(&id).unwrap();
+
+        let implementation = Implementation::new(&woog_struct, lu_dog);
+        let _ = WoogItem::new_implementation(&context.source, &implementation, lu_dog);
+
+        (Some(impl_ty), Some(implementation))
     };
 
-    let mt = lu_dog.exhume_woog_struct(&id).unwrap();
-
-    let implementation = Implementation::new(&mt, lu_dog);
-    let _ = WoogItem::new_implementation(&context.source, &implementation, lu_dog);
+    let mut errors = Vec::new();
 
     debug!("inter_implementation {}", name);
 
@@ -2723,9 +2798,9 @@ fn inter_implementation(
                     &name.0,
                     params,
                     return_type,
-                    stmts,
-                    Some(&implementation),
-                    Some(&impl_ty),
+                    stmts.as_ref(),
+                    implementation.as_ref(),
+                    impl_ty.as_ref(),
                     span,
                     context,
                     lu_dog,
@@ -2734,7 +2809,10 @@ fn inter_implementation(
                     Err(mut err) => errors.append(&mut err),
                 }
             }
-            _ => return Err(vec![DwarfError::ImplementationBlock { span: span.clone() }]),
+            Item {
+                item: (_, span),
+                attributes: _,
+            } => return Err(vec![DwarfError::ImplementationBlock { span: span.clone() }]),
         }
     }
     // }
@@ -2757,61 +2835,105 @@ fn inter_struct(
 
     // If there is a proxy attribute then we'll use it's info to attach an object
     // from the store to this UDT.
-    if let Some((_, InnerAttribute::Attribute(ref attributes))) = attributes.get("proxy") {
-        // Get the model value
-        if let Some((_, ref value)) = attributes.get("model") {
-            let model_name: String = value.try_into().map_err(|e| vec![e])?;
-            debug!("model_name: {model_name}");
+    if let Some(proxy_vec) = attributes.get("proxy") {
+        if let Some((_, InnerAttribute::Attribute(ref attributes))) = proxy_vec.get(0) {
+            // Get the model value
+            if let Some(model_vec) = attributes.get("model") {
+                if let Some((_, ref value)) = model_vec.get(0) {
+                    let model_name: String = value.try_into().map_err(|e| vec![e])?;
+                    debug!("proxy.model: {model_name}");
 
-            if let Some((_, ref value)) = attributes.get("name") {
-                let proxy: String = value.try_into().map_err(|e| vec![e])?;
-                let proxy = proxy.de_sanitize();
-                debug!("proxy: {proxy}");
+                    if let Some(name_vec) = attributes.get("object") {
+                        if let Some((_, ref value)) = name_vec.get(0) {
+                            let proxy: String = value.try_into().map_err(|e| vec![e])?;
+                            let proxy = proxy.de_sanitize();
+                            debug!("proxy.object: {proxy}");
 
-                if let Some(model) = context.models.get(&model_name) {
-                    if let Some(ref obj_id) = model.exhume_object_id_by_name(proxy) {
-                        let obj = model.exhume_object(obj_id).unwrap();
-                        let woog_struct = WoogStruct::new(proxy.to_owned(), lu_dog);
-                        // 🚧 Really should check to see if it's already there.
-                        let _ = ZObjectStore::new(model_name, obj, &woog_struct, lu_dog);
-                        let _ = WoogItem::new_woog_struct(&context.source, &woog_struct, lu_dog);
-                        let _ty = ValueType::new_woog_struct(&woog_struct, lu_dog);
+                            if let Some(model) = context.models.get(&model_name) {
+                                if let Some(ref obj_id) = model.exhume_object_id_by_name(proxy) {
+                                    let obj = model.exhume_object(obj_id).unwrap();
+                                    let woog_struct =
+                                        WoogStruct::new(proxy.to_owned(), Some(&obj), lu_dog);
+                                    let _ = WoogItem::new_woog_struct(
+                                        &context.source,
+                                        &woog_struct,
+                                        lu_dog,
+                                    );
+                                    let _ty = ValueType::new_woog_struct(&woog_struct, lu_dog);
 
-                        // We are pushing these onto a stack of fields so that we can typecheck
-                        // them after all of the structs have been interred.
-                        context.struct_fields.push(StructFields {
-                            woog_struct,
-                            fields: fields.to_owned(),
-                            location: location!(),
-                        });
+                                    // We are pushing these onto a stack of fields so that we can typecheck
+                                    // them after all of the structs have been interred.
+                                    context.struct_fields.push(StructFields {
+                                        woog_struct,
+                                        fields: fields.to_owned(),
+                                        location: location!(),
+                                    });
 
-                        debug!("found proxy object");
+                                    debug!("found proxy object");
 
-                        Ok(())
+                                    Ok(())
+                                } else {
+                                    Err(vec![DwarfError::Generic {
+                                        description: format!(
+                                            "Object `{}` not found in store",
+                                            proxy
+                                        ),
+                                    }])
+                                }
+                            } else {
+                                Err(vec![DwarfError::Generic {
+                                    description: format!(
+                                        "Model `{}` not found in store",
+                                        model_name
+                                    ),
+                                }])
+                            }
+                        } else {
+                            unreachable!();
+                        }
                     } else {
                         Err(vec![DwarfError::Generic {
-                            description: format!("Object `{}` not found", proxy),
+                            description: "No object specified".to_owned(),
                         }])
                     }
                 } else {
-                    Err(vec![DwarfError::Generic {
-                        description: format!("Model `{}` not found", model_name),
-                    }])
+                    unreachable!();
                 }
             } else {
                 Err(vec![DwarfError::Generic {
-                    description: "No name specified".to_owned(),
+                    description: "No model specified".to_owned(),
                 }])
             }
         } else {
-            Err(vec![DwarfError::Generic {
-                description: "No model specified".to_owned(),
-            }])
+            unreachable!();
+        }
+    } else if let Some(proxy_vec) = attributes.get("store") {
+        if let Some((_, InnerAttribute::Attribute(ref attributes))) = proxy_vec.get(0) {
+            if let Some(model_vec) = attributes.get("model") {
+                if let Some((_, ref value)) = model_vec.get(0) {
+                    let model_name: String = value.try_into().map_err(|e| vec![e])?;
+                    debug!("store.model: {model_name}");
+
+                    // 🚧 Really should check to see if it's already there.
+                    let store = ZObjectStore::new(model_name, lu_dog);
+                    let _ = ValueType::new_z_object_store(&store, lu_dog);
+
+                    Ok(())
+                } else {
+                    unreachable!();
+                }
+            } else {
+                Err(vec![DwarfError::Generic {
+                    description: "No model specified".to_owned(),
+                }])
+            }
+        } else {
+            unreachable!();
         }
     } else {
         // This is just a plain vanilla user defined type.
-        let woog_struct = WoogStruct::new(name.to_owned(), lu_dog);
-        let _ty = ValueType::new_woog_struct(&woog_struct, lu_dog);
+        let woog_struct = WoogStruct::new(name.to_owned(), None, lu_dog);
+        let _ = ValueType::new_woog_struct(&woog_struct, lu_dog);
         context.struct_fields.push(StructFields {
             woog_struct,
             fields: fields.to_owned(),
@@ -2927,7 +3049,10 @@ fn get_value_type(
         }
         Type::Self_ => match enclosing_type {
             Some(ty) => Ok(ty.clone()),
-            None => Err(vec![DwarfError::BadSelf { span: span.clone() }]),
+            None => Err(vec![DwarfError::BadSelf {
+                span: span.clone(),
+                location: context.location,
+            }]),
         },
         Type::String => {
             let ty = Ty::new_s_string();
@@ -2965,6 +3090,7 @@ fn get_value_type(
                     Some(ty) => Ok(ty.clone()),
                     None => Err(vec![DwarfError::BadSelf {
                         span: tok.1.clone(),
+                        location: context.location,
                     }]),
                 }
             } else if name == "String" {
@@ -3142,7 +3268,7 @@ pub(super) fn typecheck(
                     } else {
                         let a = PrintableValueType(lhs, context, lu_dog);
                         let b = PrintableValueType(rhs, context, lu_dog);
-                        dbg!(&a, &b);
+
                         Err(vec![DwarfError::TypeMismatch {
                             expected: a.to_string(),
                             found: b.to_string(),
@@ -3164,7 +3290,6 @@ pub(super) fn typecheck(
             } else {
                 let lhs = PrintableValueType(lhs, context, lu_dog);
                 let rhs = PrintableValueType(rhs, context, lu_dog);
-                dbg!(&lhs_t, &rhs_t);
 
                 Err(vec![DwarfError::TypeMismatch {
                     expected: lhs.to_string(),

@@ -100,17 +100,21 @@ default = ["single-vec", "repl", "print-std-out"]
 
 repl = ["dep:rustyline"]
 
-tracy = ["tracy-client/enable", "tracy-client/system-tracing", "tracy-client/context-switch-tracing", "tracy-client/sampling", "tracy-client/code-transfer", "tracy-client/broadcast"]
+tracy = [
+    "tracy-client/enable",
+    "tracy-client/system-tracing",
+    "tracy-client/context-switch-tracing",
+    "tracy-client/sampling",
+    "tracy-client/code-transfer",
+    "tracy-client/broadcast",
+]
 
 
 single = ["sarzak/lu-dog-rc"]
 multi = ["multi-std-rwlock"]
 single-vec = ["sarzak/lu-dog-vec"]
 multi-vec = ["sarzak/lu-dog-rwlock-vec"]
-multi-std-mutex = []
 multi-std-rwlock = ["sarzak/lu-dog-rwlock"]
-multi-parking-lot-mutex = ["sarzak/lu-dog-pl-mutex"]
-multi-parking-lot-rwlock = []
 print-std-out = []
 
 [[bench]]

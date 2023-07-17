@@ -1,0 +1,9 @@
+struct Baz {
+    x: int,
+    y: int,
+}
+
+fn main() {
+    let baz: Baz = Baz { x: 1, y: 2 };
+    print(baz);
+}

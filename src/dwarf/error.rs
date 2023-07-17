@@ -22,7 +22,7 @@ pub enum DwarfError {
     ///
     /// The Self keyword is being used outside of an impl block.
     #[snafu(display("\n{}: `{}` may only be used inside an impl block.\n  --> {}..{}", C_ERR.bold().paint("error"), C_OTHER.underline().paint("Self"), span.start, span.end))]
-    BadSelf { span: Span },
+    BadSelf { span: Span, location: Location },
 
     /// File Error
     ///
@@ -114,12 +114,6 @@ pub enum DwarfError {
         location: Location,
     },
 
-    /// Object ID Lookup Error
-    ///
-    /// This is used when a reverse object lookup in one of the domains fails.
-    #[snafu(display("\n{}: Object lookup failed for {id}", C_ERR.bold().paint("error")))]
-    ObjectIdNotFound { id: Uuid },
-
     /// Object Name Lookup Error
     ///
     /// This is used when an object lookup in one of the domains fails.
@@ -168,20 +162,30 @@ impl fmt::Display for DwarfErrorReporter<'_, '_, '_> {
         let mut std_err = Vec::new();
 
         match &self.0 {
-            DwarfError::BadSelf { span } | DwarfError::ImplementationBlock { span } => {
+            DwarfError::BadSelf { span, location } => {
                 let span = span.clone();
-                let msg = format!("{}", self.0);
-
-                Report::build(ReportKind::Error, file_name, span.start)
+                let report = Report::build(ReportKind::Error, file_name, span.start)
                     // 🚧 Figure out some error numbering scheme and use one of
                     // the snafu magic methods to provide the value here.
                     //.with_code(&code)
-                    .with_message(&msg)
+                    .with_message("self may only be used inside of an implementation block")
                     .with_label(
                         Label::new((file_name, span))
-                            .with_message(format!("{}", msg.fg(Color::Red)))
+                            .with_message(format!("used here"))
                             .with_color(Color::Red),
-                    )
+                    );
+                let report = if is_uber {
+                    report.with_note(format!(
+                        "{}:{}:{}",
+                        C_OTHER.paint(location.file.to_string()),
+                        C_WARN.paint(format!("{}", location.line)),
+                        C_OK.paint(format!("{}", location.column)),
+                    ))
+                } else {
+                    report
+                };
+
+                report
                     .finish()
                     .write((file_name, Source::from(&program)), &mut std_err)
                     .map_err(|_| fmt::Error)?;
@@ -196,6 +200,23 @@ impl fmt::Display for DwarfErrorReporter<'_, '_, '_> {
                     .with_label(
                         Label::new((file_name, span.to_owned()))
                             .with_message(format!("{}", desc.fg(Color::Red)))
+                            .with_color(Color::Red),
+                    )
+                    .finish()
+                    .write((file_name, Source::from(&program)), &mut std_err)
+                    .map_err(|_| fmt::Error)?;
+                write!(f, "{}", String::from_utf8_lossy(&std_err))
+            }
+            DwarfError::ImplementationBlock { span } => {
+                let span = span.clone();
+                Report::build(ReportKind::Error, file_name, span.start)
+                    // 🚧 Figure out some error numbering scheme and use one of
+                    // the snafu magic methods to provide the value here.
+                    //.with_code(&code)
+                    .with_message("implementation blocks may only contain functions")
+                    .with_label(
+                        Label::new((file_name, span))
+                            .with_message(format!("used here"))
                             .with_color(Color::Red),
                     )
                     .finish()

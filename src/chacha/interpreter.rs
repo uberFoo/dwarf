@@ -13,9 +13,9 @@ use uuid::Uuid;
 
 use crate::{
     chacha::{
-        error::{Error, Result, UnimplementedSnafu},
+        error::{Error, Result, UnimplementedSnafu, VariableNotFoundSnafu},
         memory::{Memory, MemoryUpdateMessage},
-        value::{ProxyType, UserType},
+        value::UserType,
         vm::{CallFrame, Instruction, Thonk, VM},
     },
     lu_dog::ExpressionEnum,
@@ -567,6 +567,50 @@ fn eval_expression(
         }
         ExpressionEnum::XIf(ref expr) => if_expr::eval_if_expression(expr, context, vm),
         ExpressionEnum::XReturn(ref expr) => ret::eval_return_expression(expr, context, vm),
+        //
+        // ZNone
+        //
+        ExpressionEnum::ZNone(_) => Ok((
+            new_ref!(Value, Value::Empty),
+            Value::Empty.get_type(&s_read!(lu_dog)),
+        )),
+        //
+        // ZSome
+        //
+        ExpressionEnum::ZSome(ref some) => {
+            let some = s_read!(lu_dog).exhume_z_some(some).unwrap();
+            debug!("ExpressionEnum::ZSome {some:?}");
+
+            let value = &s_read!(some).r23_x_value(&s_read!(lu_dog))[0];
+            let option = &s_read!(some).r3_woog_option(&s_read!(lu_dog))[0];
+            let ty = &s_read!(option).r2_value_type(&s_read!(lu_dog))[0];
+
+            use crate::lu_dog::XValueEnum;
+            let value = match s_read!(value).subtype {
+                XValueEnum::Expression(ref expr) => {
+                    let expr = s_read!(lu_dog).exhume_expression(expr).unwrap();
+                    let (value, _ty) = eval_expression(expr, context, vm)?;
+                    value
+                }
+                XValueEnum::Variable(ref var) => {
+                    let var = s_read!(lu_dog).exhume_variable(var).unwrap();
+                    let value = context.memory().get(&s_read!(var).name);
+
+                    ensure!(value.is_some(), {
+                        let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
+                        let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
+                        let read = s_read!(span);
+                        let span = read.start as usize..read.end as usize;
+                        let var = s_read!(var).name.clone();
+                        VariableNotFoundSnafu { var, span }
+                    });
+
+                    value.unwrap()
+                }
+            };
+
+            Ok((value, ty.clone()))
+        }
         ref alpha => {
             ensure!(
                 false,

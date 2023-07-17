@@ -206,7 +206,9 @@ impl Type {
                 Ok(ValueType::new_ty(&ty, store))
             }
             Type::Fn(_params, return_) => {
-                let return_ = return_.0.into_value_type(span, store, models, sarzak)?;
+                let return_ = return_
+                    .0
+                    .into_value_type(&return_.1, store, models, sarzak)?;
                 let ƛ = Lambda::new(None, &return_, store);
                 Ok(ValueType::new_lambda(&ƛ, store))
             }
@@ -215,17 +217,17 @@ impl Type {
                 Ok(ValueType::new_ty(&ty, store))
             }
             Type::List(type_) => {
-                let ty = type_.0.into_value_type(span, store, models, sarzak)?;
+                let ty = type_.0.into_value_type(&type_.1, store, models, sarzak)?;
                 let list = List::new(&ty, store);
                 Ok(ValueType::new_list(&list, store))
             }
             Type::Option(type_) => {
-                let ty = type_.0.into_value_type(span, store, models, sarzak)?;
+                let ty = type_.0.into_value_type(&type_.1, store, models, sarzak)?;
                 let option = WoogOption::new_z_none(&ty, store);
                 Ok(ValueType::new_woog_option(&option, store))
             }
             Type::Reference(type_) => {
-                let ty = type_.0.into_value_type(span, store, models, sarzak)?;
+                let ty = type_.0.into_value_type(&type_.1, store, models, sarzak)?;
                 let reference = Reference::new(Uuid::new_v4(), false, &ty, store);
                 Ok(ValueType::new_reference(&reference, store))
             }
@@ -238,46 +240,58 @@ impl Type {
             Type::UserType(type_) => {
                 let name = &type_.0;
 
+                log::debug!(target: "dwarf", "Type::UserType: {name}");
+
                 // 🚧 HashMapFix
-                for (_, model) in models {
-                    if let Some(obj_id) = model.exhume_object_id_by_name(name) {
-                        dbg!(name);
-                        let woog_struct = store
-                            .iter_z_object_store()
-                            .find(|os| s_read!(os).object == obj_id)
-                            .map(|os| s_read!(os).r78_woog_struct(store)[0].clone());
+                // for (_, model) in models {
+                //     if let Some(obj_id) = model.exhume_object_id_by_name(name) {
+                //         let woog_struct = store
+                //             .iter_z_object_store()
+                //             .find(|os| {
+                //                 let wrapper = s_read!(os).object;
+                //                 let wrapper = store.exhume_object_wrapper(&wrapper).unwrap();
+                //                 let object = s_read!(wrapper).object;
+                //                 object == obj_id
+                //             })
+                //             .map(|os| s_read!(os).r78_woog_struct(store)[0].clone());
 
-                        if let Some(woog_struct) = woog_struct {
-                            dbg!(&woog_struct);
-                            let woog_struct = s_read!(woog_struct);
-                            return Ok(ValueType::new_woog_struct(
-                                &<RefType<WoogStruct> as NewRef<WoogStruct>>::new_ref(
-                                    woog_struct.to_owned(),
-                                ),
-                                store,
-                            ));
-                        } else {
-                            return Err(vec![DwarfError::UnknownType {
-                                ty: name.to_owned(),
-                                span: span.to_owned(),
-                                location: location!(),
-                            }]);
-                        }
-                    } else {
-                        return Err(vec![DwarfError::UnknownType {
-                            ty: name.to_owned(),
-                            span: span.to_owned(),
-                            location: location!(),
-                        }]);
-                    }
-                }
+                //         if let Some(woog_struct) = woog_struct {
+                //             let woog_struct = s_read!(woog_struct);
+                //             return Ok(ValueType::new_woog_struct(
+                //                 &<RefType<WoogStruct> as NewRef<WoogStruct>>::new_ref(
+                //                     woog_struct.to_owned(),
+                //                 ),
+                //                 store,
+                //             ));
+                //         } else {
+                //             return Err(vec![DwarfError::UnknownType {
+                //                 ty: name.to_owned(),
+                //                 span: span.to_owned(),
+                //                 location: location!(),
+                //             }]);
+                //         }
+                //     } else {
+                //         return Err(vec![DwarfError::UnknownType {
+                //             ty: name.to_owned(),
+                //             span: span.to_owned(),
+                //             location: location!(),
+                //         }]);
+                //     }
+                // }
 
+                if let Some(obj_id) = store.exhume_woog_struct_id_by_name(name) {
+                    let woog_struct = store.exhume_woog_struct(&obj_id).unwrap();
+                    Ok(ValueType::new_woog_struct(&woog_struct, store))
+                } else
                 // If it's not in one of the models, it must be in sarzak.
                 if let Some(obj_id) = sarzak.exhume_object_id_by_name(name) {
                     let ty = sarzak.exhume_ty(&obj_id).unwrap();
                     dbg!(&ty);
+                    log::debug!(target: "dwarf", "into_value_type, UserType, ty: {ty:?}");
                     Ok(ValueType::new_ty(ty, store))
                 } else {
+                    dbg!("Unknown type");
+                    log::error!(target: "dwarf", "Unknown type");
                     Err(vec![DwarfError::UnknownType {
                         ty: name.to_owned(),
                         span: span.to_owned(),
@@ -432,7 +446,7 @@ pub enum InnerItem {
         Spanned<String>,
         Vec<(Spanned<String>, Spanned<Type>)>,
         Spanned<Type>,
-        Spanned<Expression>,
+        Option<Spanned<Expression>>,
     ),
     /// name, Vec<(Function Name, Function)>
     Implementation(Spanned<String>, Vec<Item>),
@@ -442,7 +456,7 @@ pub enum InnerItem {
     Struct(Spanned<String>, Vec<(Spanned<String>, Spanned<Type>)>),
 }
 
-pub type AttributeMap = HashMap<String, (Span, InnerAttribute)>;
+pub type AttributeMap = HashMap<String, Vec<(Span, InnerAttribute)>>;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Attribute {
