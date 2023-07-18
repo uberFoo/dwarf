@@ -6,13 +6,13 @@ use tracy_client::span;
 
 use crate::{
     chacha::{
-        error::{MissingDefinitionSnafu, Result, WrongNumberOfArgumentsSnafu},
+        error::{Result, WrongNumberOfArgumentsSnafu},
         vm::VM,
     },
     interpreter::{
         debug, eval_expression, eval_statement, function, trace, typecheck, ChaChaError, Context,
     },
-    lu_dog::{Argument, Function, Span, ValueType},
+    lu_dog::{Argument, BodyEnum, Function, Span, ValueType},
     new_ref, s_read, NewRef, RefType, Value,
 };
 
@@ -32,18 +32,33 @@ pub fn eval_function_call(
 
     span!("eval_function_call");
 
+    let body = s_read!(func).r19_body(&s_read!(lu_dog))[0].clone();
+
+    let body = s_read!(body);
+    match body.subtype {
+        BodyEnum::Block(id) => {
+            eval_built_in_function_call(func, &id, args, arg_check, span, context, vm)
+        }
+        BodyEnum::ExternalImplementation(_id) => {
+            unimplemented!()
+        }
+    }
+}
+
+fn eval_built_in_function_call(
+    func: RefType<Function>,
+    block_id: &usize,
+    args: &[RefType<Argument>],
+    arg_check: bool,
+    span: &RefType<Span>,
+    context: &mut Context,
+    vm: &mut VM,
+) -> Result<(RefType<Value>, RefType<ValueType>)> {
+    let lu_dog = context.lu_dog_heel().clone();
+
     let func = s_read!(func);
 
-    ensure!(func.block.is_some(), {
-        let span = s_read!(span).start as usize..s_read!(span).end as usize;
-        MissingDefinitionSnafu {
-            name: func.name.clone(),
-            span,
-        }
-    });
-
-    let block = s_read!(lu_dog).exhume_block(&func.block.unwrap()).unwrap();
-    // let stmts = s_read!(block).r18_statement(&s_read!(lu_dog));
+    let block = s_read!(lu_dog).exhume_block(block_id).unwrap();
     let has_stmts = !s_read!(block).r18_statement(&s_read!(lu_dog)).is_empty();
 
     if has_stmts {

@@ -177,7 +177,7 @@ pub fn initialize_interpreter<P: AsRef<Path>>(
     let funcs = lu_dog.iter_function().collect::<Vec<_>>();
 
     for func in funcs {
-        let imp = s_read!(func).r9_implementation(&lu_dog);
+        let imp = s_read!(func).r9_implementation_block(&lu_dog);
         if imp.is_empty() {
             let name = s_read!(func).name.clone();
             let value = Value::Function(func.clone());
@@ -203,7 +203,7 @@ pub fn initialize_interpreter<P: AsRef<Path>>(
         // Create a meta table for each struct.
         debug!("inserting meta table {}", user_type.name);
         stack.insert_meta_table(user_type.name.to_owned());
-        let impl_ = user_type.r8c_implementation(&lu_dog);
+        let impl_ = user_type.r8c_implementation_block(&lu_dog);
         if !impl_.is_empty() {
             // For each function in the impl, insert the function. I should probably
             // check and only insert the static functions.

@@ -3,7 +3,6 @@ use std::{fmt, path::PathBuf};
 use ansi_term::Colour;
 use ariadne::{Color, Fmt, Label, Report, ReportKind, Source};
 use snafu::{prelude::*, Location};
-use uuid::Uuid;
 
 use crate::dwarf::{Item, Span};
 

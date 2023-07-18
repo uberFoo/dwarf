@@ -125,6 +125,7 @@ pub enum ChaChaError {
     VariableNotFound {
         var: String,
         span: Span,
+        location: Location,
     },
     #[snafu(display("\n{}: vm panic: {}", ERR_CLR.bold().paint("error"), OTH_CLR.paint(message)))]
     VmPanic {
@@ -299,16 +300,27 @@ impl fmt::Display for ChaChaErrorReporter<'_, '_, '_> {
                     .map_err(|_| fmt::Error)?;
                 write!(f, "{}", String::from_utf8_lossy(&std_err))
             }
-            ChaChaError::VariableNotFound { var, span } => {
+            ChaChaError::VariableNotFound {
+                var,
+                span,
+                location,
+            } => {
                 let report = Report::build(ReportKind::Error, file_name, span.start)
-                    .with_message("variable not found")
+                    .with_message(format!("variable `{}` not found", POP_CLR.paint(var)))
                     .with_label(
                         Label::new((file_name, span.clone()))
-                            .with_message("fonud here")
+                            .with_message("used here")
                             .with_color(Color::Red),
                     );
 
-                let report = if var == "assert_eq" || var == "time" || var == "eps" {
+                let report = if is_uber {
+                    report.with_note(format!(
+                        "{}:{}:{}",
+                        OTH_CLR.paint(location.file.to_string()),
+                        POP_CLR.paint(format!("{}", location.line)),
+                        OK_CLR.paint(format!("{}", location.column)),
+                    ))
+                } else if var == "assert_eq" || var == "time" || var == "eps" {
                     report.with_note(format!(
                         "This is a built-in function. Try adding `chacha::` before \
                          the name, e.g. `chacha::{}`.",
@@ -319,10 +331,6 @@ impl fmt::Display for ChaChaErrorReporter<'_, '_, '_> {
                 };
 
                 report
-                    .with_note(format!(
-                        "This variable {} is not found in this scope.",
-                        POP_CLR.paint(var)
-                    ))
                     .finish()
                     .write((file_name, Source::from(&program)), &mut std_err)
                     .map_err(|_| fmt::Error)?;

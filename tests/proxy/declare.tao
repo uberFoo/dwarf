@@ -1,23 +1,27 @@
 #[store(model = "sarzak")]
 struct SarzakStore {}
 
-// #[store(model = "sarzak")]
-// impl SarzakStore {
-//     /// Exhume (get) [`Object`] from the store.
-//     ///
-//     #[store(model = "sarzak", func = "exhume_object")]
-//     fn exhume_object(self, id: Uuid) -> Option<Object>;
+#[store(model = "sarzak")]
+impl SarzakStore {
+    /// Exhume (get) [`Object`] from the store.
+    ///
+    #[proxy(model = "sarzak", object = "ObjectStore", func = "exhume_object")]
+    fn exhume_object(self, id: Uuid) -> Option<Object>;
 
-//     /// Exhume [`Object`] id from the store by name.
-//     ///
-//     #[store(model = "sarzak", func = "exhume_object_id_by_name")]
-//     fn exhume_object_id_by_name(self, name: string) -> Option<Uuid>;
+    /// Exhume [`Object`] id from the store by name.
+    ///
+    #[proxy(
+        model = "sarzak",
+        object = "ObjectStore",
+        func = "exhume_object_id_by_name"
+    )]
+    fn exhume_object_id_by_name(self, name: string) -> Option<Uuid>;
 
-//     /// Get an iterator over the internal `HashMap<&Uuid, Object>`.
-//     ///
-//     #[store(model = "sarzak", func = "iter_object")]
-//     fn iter_object(self) -> [Object];
-// }
+    /// Get an iterator over the internal `HashMap<&Uuid, Object>`.
+    ///
+    #[proxy(model = "sarzak", object = "ObjectStore", func = "iter_object")]
+    fn iter_object(self) -> [Object];
+}
 
 #[proxy(model = "sarzak", object = "Object")]
 struct Object {

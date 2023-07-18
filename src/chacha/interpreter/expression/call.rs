@@ -333,7 +333,7 @@ pub fn eval_call(
 
                     let woog_struct = s_read!(lu_dog).exhume_woog_struct(&woog_struct).unwrap();
                     let woog_struct = s_read!(woog_struct);
-                    let impl_ = &woog_struct.r8c_implementation(&s_read!(lu_dog))[0];
+                    let impl_ = &woog_struct.r8c_implementation_block(&s_read!(lu_dog))[0];
                     let x = if let Some(func) = s_read!(impl_)
                         .r9_function(&s_read!(lu_dog))
                         .iter()
