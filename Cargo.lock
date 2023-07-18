@@ -2114,6 +2114,7 @@ dependencies = [
 [[package]]
 name = "sarzak"
 version = "2.0.0"
+source = "git+https://github.com/uberFoo/sarzak?branch=develop#f8b608b6bf59d68c0db6b806dc3cdc2dae33f198"
 dependencies = [
  "ansi_term",
  "bincode",
