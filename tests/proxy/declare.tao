@@ -40,6 +40,6 @@ fn main() {
     let object: Object = Object {
         id: Uuid::new(),
         name: "Merlin",
-        description: "A wizard",
+        // description: "A wizard",
     };
 }
