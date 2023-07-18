@@ -139,6 +139,7 @@ lazy_static! {
     pub(crate) static ref STEPPING: Mutex<bool> = Mutex::new(false);
 }
 
+#[cfg(not(feature = "multi-nd-vec"))]
 pub fn initialize_interpreter_paths<P: AsRef<Path>>(lu_dog_path: P) -> Result<Context, Error> {
     // unimplemented!();
     let sarzak =
@@ -843,6 +844,7 @@ fn typecheck(
     }
 
     let (lhs_t, rhs_t) = (&s_read!(lhs).subtype, &s_read!(rhs).subtype);
+    // dbg!(&lhs_t, &rhs_t);
     if lhs_t == rhs_t {
         Ok(())
     } else {

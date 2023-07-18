@@ -1,0 +1,10 @@
+struct Foo {}
+
+impl Foo {
+    fn test(a: int, b: float, c: string) -> int {
+        a + b as int + c.len()
+    }
+}
+fn main() {
+    print(Foo::test(1, 2, "three"));
+}

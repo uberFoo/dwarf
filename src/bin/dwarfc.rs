@@ -32,6 +32,7 @@ struct Args {
     /// format, where each object is a directory and each instance is a JSOn
     /// file.
     #[arg(long, short, action=ArgAction::SetTrue)]
+    #[cfg(not(feature = "multi-nd-vec"))]
     debug: Option<bool>,
     /// Model Files
     ///
@@ -186,6 +187,7 @@ fn main() -> Result<()> {
         }
     };
 
+    #[cfg(not(feature = "multi-nd-vec"))]
     if args.debug.is_some() && args.debug.unwrap() {
         lu_dog
             .persist(&out_file)

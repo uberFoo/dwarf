@@ -109,12 +109,10 @@ tracy = [
     "tracy-client/broadcast",
 ]
 
-
-single = ["sarzak/lu-dog-rc"]
-multi = ["multi-std-rwlock"]
+single = ["single-vec"]
 single-vec = ["sarzak/lu-dog-vec"]
 multi-vec = ["sarzak/lu-dog-rwlock-vec"]
-multi-std-rwlock = ["sarzak/lu-dog-rwlock"]
+multi-nd-vec = ["sarzak/lu-dog-ndrwlock-vec"]
 print-std-out = []
 
 [[bench]]

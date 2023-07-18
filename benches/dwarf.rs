@@ -6,6 +6,7 @@ use dwarf::{
     initialize_interpreter,
     interpreter::{start_main, start_vm},
 };
+use rustc_hash::FxHashMap as HashMap;
 use sarzak::sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL};
 use tracy_client::Client;
 
@@ -17,7 +18,7 @@ fn mandelbrot(c: &mut Criterion) {
     let source = fs::read_to_string(MANDEL_SOURCE_FILE).unwrap();
     let ast = parse_dwarf("mandelbrot", &source).unwrap();
     let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
-    let lu_dog = new_lu_dog(None, Some((source, &ast)), &[], &sarzak).unwrap();
+    let lu_dog = new_lu_dog(None, Some((source, &ast)), &HashMap::default(), &sarzak).unwrap();
 
     let ctx = initialize_interpreter::<PathBuf>(sarzak, lu_dog, None).unwrap();
 
@@ -31,7 +32,7 @@ fn fib(c: &mut Criterion) {
     let source = fs::read_to_string(FIB_SOURCE_FILE).unwrap();
     let ast = parse_dwarf("fib", &source).unwrap();
     let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
-    let lu_dog = new_lu_dog(None, Some((source, &ast)), &[], &sarzak).unwrap();
+    let lu_dog = new_lu_dog(None, Some((source, &ast)), &HashMap::default(), &sarzak).unwrap();
 
     let mut ctx = initialize_interpreter::<PathBuf>(sarzak, lu_dog, None).unwrap();
     ctx.add_args(vec!["fib".to_owned(), "17".to_owned()]);

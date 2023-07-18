@@ -3,6 +3,11 @@ struct SarzakStore {}
 
 #[store(model = "sarzak")]
 impl SarzakStore {
+    /// Inter (insert) [`Object`] into the store.
+    ///
+    #[proxy(model = "sarzak", object = "ObjectStore", func = "inter_object")]
+    fn inter_object(self, object: Object);
+
     /// Exhume (get) [`Object`] from the store.
     ///
     #[proxy(model = "sarzak", object = "ObjectStore", func = "exhume_object")]
@@ -27,6 +32,7 @@ impl SarzakStore {
 struct Object {
     id: Uuid,
     name: String,
+    key_letters: String,
     description: String,
 }
 
@@ -39,7 +45,10 @@ fn main() {
     // Specifying the type of the lhs forces a type check.
     let object: Object = Object {
         id: Uuid::new(),
-        name: "Merlin",
-        // description: "A wizard",
+        key_letters: "ᚠ",
+        name: "Gandalf",
+        description: "A wandering wizard",
     };
+
+    // Object::new("A wizard", "ᚠ", "Gandalf", "A wandering wizard");
 }

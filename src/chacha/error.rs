@@ -276,6 +276,9 @@ impl fmt::Display for ChaChaErrorReporter<'_, '_, '_> {
                         POP_CLR.paint(format!("{}", location.line)),
                         OK_CLR.paint(format!("{}", location.column)),
                     ))
+                } else if expected == found {
+                    report
+                        .with_note("The types have the same name, but they are two distinct types.")
                 } else {
                     report
                 };

@@ -1,0 +1,7 @@
+fn test(a: int, b: float, c: string) -> int {
+    a + b as int + c.len()
+}
+
+fn main() {
+    print(test(1, 2, "three"));
+}

@@ -35,6 +35,11 @@ pub fn eval_call(
     debug!("args {args:?}");
     // fix_error!("arg_check", s_read!(call).arg_check);
 
+    let arg_check = s_read!(call).arg_check;
+    if arg_check {
+        s_write!(call).arg_check = false;
+    }
+
     // This optional expression is the LHS of the call.
     let (value, ty) = if let Some(ref expr) = s_read!(call).expression {
         let expr = s_read!(lu_dog).exhume_expression(expr).unwrap();
@@ -54,14 +59,8 @@ pub fn eval_call(
 
                     let func = s_read!(lu_dog).exhume_function(&s_read!(func).id).unwrap();
                     debug!("ExpressionEnum::Call func: {func:?}");
-                    let (value, ty) = eval_function_call(
-                        func,
-                        &args,
-                        s_read!(call).arg_check,
-                        span,
-                        context,
-                        vm,
-                    )?;
+                    let (value, ty) =
+                        eval_function_call(func, &args, arg_check, span, context, vm)?;
                     debug!("value {value:?}");
                     debug!("ty {ty:?}");
                     Ok((value, ty))
@@ -72,14 +71,8 @@ pub fn eval_call(
 
                     let ƛ = s_read!(lu_dog).exhume_lambda(&s_read!(ƛ).id).unwrap();
                     debug!("ExpressionEnum::Call ƛ: {ƛ:?}");
-                    let (value, ty) = eval_lambda_expression(
-                        ƛ,
-                        &args,
-                        s_read!(call).arg_check,
-                        span,
-                        context,
-                        vm,
-                    )?;
+                    let (value, ty) =
+                        eval_lambda_expression(ƛ, &args, arg_check, span, context, vm)?;
                     debug!("value {value:?}");
                     debug!("ty {ty:?}");
                     Ok((value, ty))
@@ -136,7 +129,8 @@ pub fn eval_call(
     };
 
     // So we need to figure out the type that this is being called upon.
-    let call_result = match (&s_read!(call).subtype, value, ty) {
+    let subtype = &s_read!(call).subtype;
+    let call_result = match (subtype, value, ty) {
         (CallEnum::MacroCall(_), _, _) => unimplemented!(),
         //
         // FunctionCall
@@ -342,14 +336,7 @@ pub fn eval_call(
                         let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
                         let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
 
-                        eval_function_call(
-                            (*func).clone(),
-                            &args,
-                            s_read!(call).arg_check,
-                            span,
-                            context,
-                            vm,
-                        )
+                        eval_function_call((*func).clone(), &args, arg_check, span, context, vm)
                     } else {
                         let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
                         let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
@@ -372,36 +359,41 @@ pub fn eval_call(
         (CallEnum::StaticMethodCall(meth), _, _) => {
             let meth = s_read!(lu_dog).exhume_static_method_call(meth).unwrap();
             let call = s_read!(meth).r30_call(&s_read!(lu_dog))[0].clone();
-            let args = s_read!(call).r28_argument(&s_read!(lu_dog));
 
-            // This is for method call on a store type, and we do it out here so that we
-            // don't have to borrow stack mutably more than once.
-            let mut arg_values = if !args.is_empty() {
-                let mut arg_values = VecDeque::with_capacity(args.len());
-                let mut next = args
-                    .iter()
-                    .find(|a| s_read!(a).r27c_argument(&s_read!(lu_dog)).is_empty())
-                    .unwrap()
-                    .clone();
+            let arg_check = s_read!(call).arg_check;
+            if arg_check {
+                s_write!(call).arg_check = false;
+            }
 
-                loop {
-                    let expr = s_read!(lu_dog)
-                        .exhume_expression(&s_read!(next).expression)
-                        .unwrap();
-                    let value = eval_expression(expr, context, vm)?;
-                    arg_values.push_back(value);
+            let mut arg_values = {
+                let args = s_read!(call).r28_argument(&s_read!(lu_dog));
+                if !args.is_empty() {
+                    let mut arg_values = VecDeque::with_capacity(args.len());
+                    let mut next = args
+                        .iter()
+                        .find(|a| s_read!(a).r27c_argument(&s_read!(lu_dog)).is_empty())
+                        .unwrap()
+                        .clone();
 
-                    let next_id = { s_read!(next).next };
-                    if let Some(ref id) = next_id {
-                        next = s_read!(lu_dog).exhume_argument(id).unwrap();
-                    } else {
-                        break;
+                    loop {
+                        let expr = s_read!(lu_dog)
+                            .exhume_expression(&s_read!(next).expression)
+                            .unwrap();
+                        let value = eval_expression(expr, context, vm)?;
+                        arg_values.push_back(value);
+
+                        let next_id = { s_read!(next).next };
+                        if let Some(ref id) = next_id {
+                            next = s_read!(lu_dog).exhume_argument(id).unwrap();
+                        } else {
+                            break;
+                        }
                     }
-                }
 
-                arg_values
-            } else {
-                VecDeque::new()
+                    arg_values
+                } else {
+                    VecDeque::new()
+                }
             };
 
             let ty = &s_read!(meth).ty;
@@ -631,14 +623,8 @@ pub fn eval_call(
                         let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
                         let func = s_read!(lu_dog).exhume_function(&s_read!(func).id).unwrap();
                         debug!("StaticMethodCall meta func {func:?}");
-                        let (value, ty) = eval_function_call(
-                            func,
-                            &args,
-                            s_read!(call).arg_check,
-                            span,
-                            context,
-                            vm,
-                        )?;
+                        let (value, ty) =
+                            eval_function_call(func, &args, arg_check, span, context, vm)?;
                         debug!("StaticMethodCall meta value {value:?}");
                         debug!("StaticMethodCall meta ty {ty:?}");
                         Ok((value, ty))
@@ -659,14 +645,8 @@ pub fn eval_call(
                         let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
                         let func = s_read!(lu_dog).exhume_function(&s_read!(func).id).unwrap();
                         debug!("StaticMethodCall frame func {func:?}");
-                        let (value, ty) = eval_function_call(
-                            func,
-                            &args,
-                            s_read!(call).arg_check,
-                            span,
-                            context,
-                            vm,
-                        )?;
+                        let (value, ty) =
+                            eval_function_call(func, &args, arg_check, span, context, vm)?;
                         debug!("StaticMethodCall frame value {value:?}");
                         debug!("StaticMethodCall frame ty {ty:?}");
                         Ok((value, ty))
@@ -713,9 +693,6 @@ pub fn eval_call(
             }
         }
     };
-    if s_read!(call).arg_check {
-        s_write!(call).arg_check = false;
-    }
 
     call_result
 }

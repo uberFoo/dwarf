@@ -1358,7 +1358,7 @@ pub(super) fn inter_expression(
                 // panic!("🚧 we need a function definition");
             }
 
-            let func_call = Call::new_function_call(false, Some(&func_expr.0), lu_dog);
+            let func_call = Call::new_function_call(true, Some(&func_expr.0), lu_dog);
             let func = Expression::new_call(&func_call, lu_dog);
             let value = XValue::new_expression(block, &ret_ty, &func, lu_dog);
             s_write!(span).x_value = Some(s_read!(value).id);
@@ -2131,7 +2131,7 @@ pub(super) fn inter_expression(
             };
 
             let meth = MethodCall::new(method.to_owned(), lu_dog);
-            let call = Call::new_method_call(false, Some(&instance.0), &meth, lu_dog);
+            let call = Call::new_method_call(true, Some(&instance.0), &meth, lu_dog);
             let expr = Expression::new_call(&call, lu_dog);
 
             let value = XValue::new_expression(block, &instance_ty, &expr, lu_dog);
@@ -2462,7 +2462,7 @@ pub(super) fn inter_expression(
             debug!("type_name {:?}", type_name);
 
             let meth = StaticMethodCall::new(method.to_owned(), type_name.to_owned(), lu_dog);
-            let call = Call::new_static_method_call(false, None, &meth, lu_dog);
+            let call = Call::new_static_method_call(true, None, &meth, lu_dog);
             let expr = Expression::new_call(&call, lu_dog);
 
             debug!("name {}", type_name);

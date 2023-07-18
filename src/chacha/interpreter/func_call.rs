@@ -170,37 +170,12 @@ fn eval_built_in_function_call(
 
         let mut value = new_ref!(Value, Value::Empty);
         let mut ty = Value::Empty.get_type(&s_read!(lu_dog));
-        // This is a pain.
-        // Find the first statement, by looking for the one with no previous statement.
-        // let mut next = stmts
-        //     .iter()
-        //     .find(|s| s_read!(s).r17c_statement(&s_read!(lu_dog)).is_empty())
-        //     .unwrap()
-        //     .clone();
         if let Some(ref id) = s_read!(block).statement {
             let mut next = s_read!(lu_dog).exhume_statement(id).unwrap();
 
             loop {
                 let result = eval_statement(next.clone(), context, vm).map_err(|e| {
-                    // This is cool, if it does what I think it does. We basically
-                    // get the opportunity to look at the error, and do stuff with
-                    // it, and then let it continue on as if nothing happened.
-                    //
-                    // Anyway, we need to clean up the stack frame if there was an
-                    // error. I'm also considering abusing the error type to pass
-                    // through that we hit a return expression. I'm thinking more
-                    // and more that this is a Good Idea. Well, maybe just a good
-                    // idea. We can basically just do an early, successful return.
-                    //
-                    // Well, that doesn't work: return applies to the closure.
                     context.memory().pop_frame();
-
-                    // if let ChaChaError::Return { value } = &e {
-                    //     let ty = value.get_type(&mut s_write!(lu_dog));
-                    //     return Ok((value, ty));
-                    // }
-
-                    // Err(e)
                     e
                 });
 
