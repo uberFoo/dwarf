@@ -1,5 +1,5 @@
-fn runner(func: fn(string, int) -> int) {
-    func();
+fn runner(func: fn(string, int) -> float) {
+    chacha::assert_eq(3.14, func("foo", 77));
 }
 
 fn main() {
@@ -17,11 +17,15 @@ fn main() {
     let baz = |name: string| -> string { "hello, {0}! The answer is {1}".format(name, answer) };
     chacha::assert_eq(baz("world"), "hello, world! The answer is 42");
 
-    runner(|| {
+    runner(|s: string, i: int| -> float {
+        chacha::assert_eq(s, "foo");
+        chacha::assert_eq(i, 77);
+
         chacha::assert_eq(answer, 42);
         // This is pretty lame. I think the extent of the type checking machinery
         // is going to need to be updated. See https://github.com/uberFoo/dwarf/issues/3.
         answer as int = 69;
+        3.14
     });
 
     chacha::assert_eq(answer, 69);

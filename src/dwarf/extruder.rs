@@ -552,6 +552,7 @@ fn inter_func(
 
     let mut errors = Vec::new();
     let mut last_param_uuid: Option<usize> = None;
+    let mut position = 0;
     for ((param_name, name_span), (param_ty, param_span)) in params {
         debug!("param name {}", param_name);
         debug!("param ty {}", param_ty);
@@ -567,7 +568,8 @@ fn inter_func(
                 continue;
             }
         };
-        let param = Parameter::new(&func, None, &param_ty, lu_dog);
+        let param = Parameter::new(position, &func, None, &param_ty, lu_dog);
+        position += 1;
 
         debug!("param {:?}", param);
         debug!("param_ty {:?}", param_ty);
@@ -622,6 +624,7 @@ fn inter_func(
 
 pub fn inter_statement(
     stmt: &RefType<ParserStatement>,
+    index: i64,
     block: &RefType<Block>,
     context: &mut Context,
     lu_dog: &mut LuDogStore,
@@ -641,7 +644,7 @@ pub fn inter_statement(
                 lu_dog,
             )?;
             let stmt = ExpressionStatement::new(&expr.0, lu_dog);
-            let stmt = Statement::new_expression_statement(block, None, &stmt, lu_dog);
+            let stmt = Statement::new_expression_statement(index, block, None, &stmt, lu_dog);
 
             Ok(((stmt, span.to_owned()), ValueType::new_empty(lu_dog)))
         }
@@ -698,7 +701,7 @@ pub fn inter_statement(
                 _ => unimplemented!(),
             };
             let _stmt = ItemStatement::new();
-            let stmt = Statement::new_item_statement(block, None, lu_dog);
+            let stmt = Statement::new_item_statement(index, block, None, lu_dog);
             Ok(((stmt, span.to_owned()), ValueType::new_empty(lu_dog)))
         }
         //
@@ -762,7 +765,7 @@ pub fn inter_statement(
 
             // Setup the let statement itself.
             let stmt = LetStatement::new(&expr.0, &local, lu_dog);
-            let stmt = Statement::new_let_statement(block, None, &stmt, lu_dog);
+            let stmt = Statement::new_let_statement(index, block, None, &stmt, lu_dog);
 
             Ok(((stmt, expr_span.to_owned()), ValueType::new_empty(lu_dog)))
         }
@@ -778,7 +781,7 @@ pub fn inter_statement(
                 lu_dog,
             )?;
             let stmt = ResultStatement::new(&expr.0, lu_dog);
-            let stmt = Statement::new_result_statement(block, None, &stmt, lu_dog);
+            let stmt = Statement::new_result_statement(index, block, None, &stmt, lu_dog);
 
             Ok(((stmt, span.to_owned()), ty))
         }
@@ -798,14 +801,18 @@ fn inter_statements(
     let mut errors = Vec::new();
 
     let mut last_stmt_uuid: Option<usize> = None;
+    let mut index = 0;
     for stmt in statements {
-        let (stmt, ty) = match inter_statement(stmt, block, context, lu_dog) {
+        let (stmt, ty) = match inter_statement(stmt, index, block, context, lu_dog) {
             Ok((stmt, ty)) => (stmt, ty),
             Err(err) => {
                 errors.extend(err);
                 continue;
             }
         };
+
+        index += 1;
+
         if last_stmt_uuid.is_none() {
             s_write!(block).statement = Some(s_read!(stmt.0).id);
         }
@@ -1358,12 +1365,13 @@ pub(super) fn inter_expression(
                 // panic!("🚧 we need a function definition");
             }
 
-            let func_call = Call::new_function_call(true, Some(&func_expr.0), lu_dog);
+            let func_call = Call::new_function_call(true, None, Some(&func_expr.0), lu_dog);
             let func = Expression::new_call(&func_call, lu_dog);
             let value = XValue::new_expression(block, &ret_ty, &func, lu_dog);
             s_write!(span).x_value = Some(s_read!(value).id);
 
             let mut last_arg_uuid: Option<usize> = None;
+            let mut position = 0;
             for param in params {
                 let (arg_expr, _ty) = inter_expression(
                     &new_ref!(ParserExpression, param.0.to_owned()),
@@ -1372,7 +1380,12 @@ pub(super) fn inter_expression(
                     context,
                     lu_dog,
                 )?;
-                let arg = Argument::new(&arg_expr.0, &func_call, None, lu_dog);
+                let arg = Argument::new(position, &arg_expr.0, &func_call, None, lu_dog);
+                if position == 0 {
+                    s_write!(func_call).argument = Some(s_read!(arg).id);
+                }
+                position += 1;
+
                 last_arg_uuid = link_argument!(last_arg_uuid, arg, lu_dog);
             }
 
@@ -1653,11 +1666,13 @@ pub(super) fn inter_expression(
 
             let mut errors = Vec::new();
             let mut last_param_uuid: Option<usize> = None;
+            let mut position = 0;
             for ((param_name, name_span), (param_ty, param_span)) in params {
                 debug!("param name {}", param_name);
                 debug!("param ty {}", param_ty);
 
-                let param = LambdaParameter::new(&lambda, None, None, lu_dog);
+                let param = LambdaParameter::new(position, &lambda, None, None, lu_dog);
+                position += 1;
 
                 debug!("param {:?}", param);
 
@@ -1839,13 +1854,14 @@ pub(super) fn inter_expression(
                 )?;
 
                 let list = List::new(&first_ty, lu_dog);
-                let element = ListElement::new(&first, None, lu_dog);
+                let element = ListElement::new(0, &first, None, lu_dog);
                 let expr = Expression::new_list_element(&element, lu_dog);
                 let value = XValue::new_expression(block, &first_ty, &expr, lu_dog);
                 s_write!(first_span).x_value = Some(s_read!(value).id);
                 let list_expr = ListExpression::new(Some(&element), lu_dog);
 
                 let mut last_element_uuid: Option<usize> = Some(s_read!(element).id);
+                let mut position = 1;
                 for element in elements {
                     let ((elt, elt_span), elt_ty) = inter_expression(
                         &new_ref!(ParserExpression, element.0.to_owned()),
@@ -1865,7 +1881,9 @@ pub(super) fn inter_expression(
                         )?;
                     }
 
-                    let element = ListElement::new(&elt, None, lu_dog);
+                    let element = ListElement::new(position, &elt, None, lu_dog);
+                    position += 1;
+
                     last_element_uuid = link_list_element!(last_element_uuid, element, lu_dog);
                     let expr = Expression::new_list_element(&element, lu_dog);
                     let value = XValue::new_expression(block, &elt_ty, &expr, lu_dog);
@@ -2131,17 +2149,19 @@ pub(super) fn inter_expression(
             };
 
             let meth = MethodCall::new(method.to_owned(), lu_dog);
-            let call = Call::new_method_call(true, Some(&instance.0), &meth, lu_dog);
+            let call = Call::new_method_call(true, None, Some(&instance.0), &meth, lu_dog);
             let expr = Expression::new_call(&call, lu_dog);
 
             let value = XValue::new_expression(block, &instance_ty, &expr, lu_dog);
             s_write!(span).x_value = Some(s_read!(value).id);
 
             let mut last_arg_uuid: Option<usize> = None;
+
             // This is the self parameter
-            let this = Argument::new(&instance.0, &call, None, lu_dog);
+            let this = Argument::new(0, &instance.0, &call, None, lu_dog);
             last_arg_uuid = link_argument!(last_arg_uuid, this, lu_dog);
 
+            let mut position = 1;
             for arg in args {
                 let (arg_expr, ty) = inter_expression(
                     &new_ref!(ParserExpression, arg.0.to_owned()),
@@ -2159,7 +2179,12 @@ pub(super) fn inter_expression(
                     Some(&value),
                     lu_dog,
                 );
-                let arg = Argument::new(&arg_expr.0, &call, None, lu_dog);
+                let arg = Argument::new(position, &arg_expr.0, &call, None, lu_dog);
+                if position == 0 {
+                    s_write!(call).argument = Some(s_read!(arg).id);
+                }
+                position += 1;
+
                 last_arg_uuid = link_argument!(last_arg_uuid, arg, lu_dog);
             }
 
@@ -2461,8 +2486,13 @@ pub(super) fn inter_expression(
 
             debug!("type_name {:?}", type_name);
 
-            let meth = StaticMethodCall::new(method.to_owned(), type_name.to_owned(), lu_dog);
-            let call = Call::new_static_method_call(true, None, &meth, lu_dog);
+            let meth = StaticMethodCall::new(
+                method.to_owned(),
+                type_name.to_owned(),
+                Uuid::new_v4(),
+                lu_dog,
+            );
+            let call = Call::new_static_method_call(true, None, None, &meth, lu_dog);
             let expr = Expression::new_call(&call, lu_dog);
 
             debug!("name {}", type_name);
@@ -2502,6 +2532,7 @@ pub(super) fn inter_expression(
             };
 
             let mut last_arg_uuid: Option<usize> = None;
+            let mut position = 0;
             for param in params {
                 let (arg_expr, _ty) = inter_expression(
                     &new_ref!(ParserExpression, param.0.to_owned()),
@@ -2510,7 +2541,12 @@ pub(super) fn inter_expression(
                     context,
                     lu_dog,
                 )?;
-                let arg = Argument::new(&arg_expr.0, &call, None, lu_dog);
+                let arg = Argument::new(position, &arg_expr.0, &call, None, lu_dog);
+                if position == 0 {
+                    s_write!(call).argument = Some(s_read!(arg).id);
+                }
+                position += 1;
+
                 last_arg_uuid = link_argument!(last_arg_uuid, arg, lu_dog);
             }
 
@@ -3059,13 +3095,17 @@ fn get_value_type(
             let return_type =
                 get_value_type(&return_type.0, span, enclosing_type, context, lu_dog)?;
             let lambda = Lambda::new(None, &return_type, lu_dog);
+
             let mut last_param_uuid: Option<usize> = None;
+            let mut position = 0;
             for (param_ty, param_span) in params {
                 let param_ty = get_value_type(param_ty, param_span, None, context, lu_dog)?;
                 debug!("param_ty {:?}", param_ty);
 
-                let param = LambdaParameter::new(&lambda, None, Some(&param_ty), lu_dog);
+                let param = LambdaParameter::new(position, &lambda, None, Some(&param_ty), lu_dog);
                 debug!("param {:?}", param);
+
+                position += 1;
 
                 last_param_uuid = link_ƛ_parameter!(last_param_uuid, param, lu_dog);
             }

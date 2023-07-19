@@ -86,6 +86,7 @@ pub fn start_repl(mut context: Context) -> Result<(), Error> {
         };
     });
 
+    let mut stmt_index = 0;
     loop {
         let readline = rl.readline(&format!("{} ", prompt_style.paint("道:>")));
         match readline {
@@ -102,6 +103,7 @@ pub fn start_repl(mut context: Context) -> Result<(), Error> {
                             let mut lu_dog = s_write!(lu_dog);
                             match inter_statement(
                                 &new_ref!(crate::dwarf::Statement, stmt),
+                                stmt_index,
                                 &block,
                                 &mut ExtruderContext {
                                     location: location!(),
@@ -122,6 +124,7 @@ pub fn start_repl(mut context: Context) -> Result<(), Error> {
                                 }
                             }
                         };
+                        stmt_index += 1;
 
                         // 🚧 This needs fixing too.
                         let eval = eval_statement(stmt.0, &mut context, &mut vm);

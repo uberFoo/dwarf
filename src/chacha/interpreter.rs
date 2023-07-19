@@ -21,7 +21,7 @@ use crate::{
     lu_dog::ExpressionEnum,
     lu_dog::{
         Block, Expression, LocalVariable, ObjectStore as LuDogStore, Span, Statement,
-        StatementEnum, ValueType, Variable, XValue,
+        StatementEnum, ValueType, ValueTypeEnum, Variable, XValue,
     },
     new_ref, s_read,
     sarzak::store::ObjectStore as SarzakStore,
@@ -844,6 +844,27 @@ fn typecheck(
     }
 
     let (lhs_t, rhs_t) = (&s_read!(lhs).subtype, &s_read!(rhs).subtype);
+
+    if let ValueTypeEnum::Lambda(l) = lhs_t {
+        if let ValueTypeEnum::Lambda(r) = rhs_t {
+            let l = s_read!(context.lu_dog_heel()).exhume_lambda(l).unwrap();
+            let r = s_read!(context.lu_dog_heel()).exhume_lambda(r).unwrap();
+            let lrt = s_read!(l).return_type;
+            let rrt = s_read!(r).return_type;
+            let l = s_read!(context.lu_dog_heel())
+                .exhume_value_type(&lrt)
+                .unwrap();
+            let r = s_read!(context.lu_dog_heel())
+                .exhume_value_type(&rrt)
+                .unwrap();
+            let l = &s_read!(l).subtype;
+            let r = &s_read!(r).subtype;
+            dbg!(l, r);
+            if l == r {
+                return Ok(());
+            }
+        }
+    }
     // dbg!(&lhs_t, &rhs_t);
     if lhs_t == rhs_t {
         Ok(())
