@@ -1,4 +1,5 @@
 #![allow(uncommon_codepoints)]
+#![allow(mixed_script_confusables)]
 use std::{ops, path::PathBuf};
 
 use clap::Args;

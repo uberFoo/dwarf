@@ -240,6 +240,13 @@ impl Type {
             Type::UserType(type_) => {
                 let name = &type_.0;
 
+                // This is a special case for Uuid, which is a built-in type.
+                // The parser just doesn't know that, and it's actually cleaner
+                // and easier to handle it here.
+                if name == "Uuid" {
+                    return Ok(ValueType::new_ty(&Ty::new_s_uuid(), store));
+                }
+
                 log::debug!(target: "dwarf", "Type::UserType: {name}");
 
                 // 🚧 HashMapFix
@@ -286,7 +293,7 @@ impl Type {
                 // If it's not in one of the models, it must be in sarzak.
                 if let Some(obj_id) = sarzak.exhume_object_id_by_name(name) {
                     let ty = sarzak.exhume_ty(&obj_id).unwrap();
-                    dbg!(&ty);
+                    // dbg!(&ty);
                     log::debug!(target: "dwarf", "into_value_type, UserType, ty: {ty:?}");
                     Ok(ValueType::new_ty(ty, store))
                 } else {

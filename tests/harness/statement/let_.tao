@@ -1,0 +1,7 @@
+fn main() {
+    let s: string = "Hello, world!";
+    let i: int = 42;
+    let f: float = 1.618;
+    let b: bool = false;
+    let u: Uuid = Uuid::new();
+}

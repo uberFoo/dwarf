@@ -9,5 +9,7 @@ fn main() {
     chacha::assert_eq(69 >= 42.0 as int, true);
     chacha::assert_eq(69.0 >= 42.0, true);
 
+    chacha::assert_eq(true >= false, true);
+
     chacha::assert_eq("69" >= "42", true);
 }
