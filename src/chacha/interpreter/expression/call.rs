@@ -369,6 +369,7 @@ pub fn eval_call(
                 let args = s_read!(call).r28_argument(&s_read!(lu_dog));
                 if !args.is_empty() {
                     let mut arg_values = VecDeque::with_capacity(args.len());
+                    // Find the first one.
                     let mut next = args
                         .iter()
                         .find(|a| s_read!(a).r27c_argument(&s_read!(lu_dog)).is_empty())
@@ -379,8 +380,11 @@ pub fn eval_call(
                         let expr = s_read!(lu_dog)
                             .exhume_expression(&s_read!(next).expression)
                             .unwrap();
+                        let x_value = &s_read!(expr).r11_x_value(&s_read!(lu_dog))[0];
+                        let span = &s_read!(x_value).r63_span(&s_read!(lu_dog))[0];
+                        let span = s_read!(span).start as usize..s_read!(span).end as usize;
                         let value = eval_expression(expr, context, vm)?;
-                        arg_values.push_back(value);
+                        arg_values.push_back((value, span));
 
                         let next_id = { s_read!(next).next };
                         if let Some(ref id) = next_id {
@@ -411,7 +415,7 @@ pub fn eval_call(
             } else if ty == "ComplexEx" {
                 match func.as_str() {
                     "norm_squared" => {
-                        let (value, ty) = arg_values.pop_front().unwrap();
+                        let (value, ty) = arg_values.pop_front().unwrap().0;
                         let thonk = context.memory().get_thonk(0).unwrap();
                         let mut frame = CallFrame::new(0, 0, thonk);
                         vm.push_stack(new_ref!(Value, "norm_squared".into()));
@@ -424,7 +428,7 @@ pub fn eval_call(
                         Ok((result.unwrap(), ty))
                     }
                     "square" => {
-                        let (value, ty) = arg_values.pop_front().unwrap();
+                        let (value, ty) = arg_values.pop_front().unwrap().0;
                         let thonk = context.memory().get_thonk(2).unwrap();
                         let mut frame = CallFrame::new(0, 0, thonk);
                         vm.push_stack(new_ref!(Value, "square".into()));
@@ -440,9 +444,9 @@ pub fn eval_call(
                         let thonk = context.memory().get_thonk(1).unwrap();
                         let mut frame = CallFrame::new(0, 0, thonk);
                         vm.push_stack(new_ref!(Value, "add".into()));
-                        let (value, _ty) = arg_values.pop_front().unwrap();
+                        let (value, _ty) = arg_values.pop_front().unwrap().0;
                         vm.push_stack(value);
-                        let (value, ty) = arg_values.pop_front().unwrap();
+                        let (value, ty) = arg_values.pop_front().unwrap().0;
                         vm.push_stack(value);
                         let result = vm.run(&mut frame, false);
                         vm.pop_stack();
@@ -485,7 +489,7 @@ pub fn eval_call(
                     // be able to return a proper enum.
                     "typeof" => {
                         debug!("evaluating chacha::typeof");
-                        let (_arg, ty) = arg_values.pop_front().unwrap();
+                        let (_arg, ty) = arg_values.pop_front().unwrap().0;
                         let pvt_ty = PrintableValueType(&ty, context);
                         let ty = Ty::new_s_string();
                         let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
@@ -496,7 +500,7 @@ pub fn eval_call(
                         debug!("evaluating chacha::time");
                         // 🚧 I should be checking that there is an argument before
                         // I go unwrapping it.
-                        let (func, ty) = arg_values.pop_front().unwrap();
+                        let ((func, ty), span) = arg_values.pop_front().unwrap();
                         let func = s_read!(func);
                         ensure!(
                             matches!(&*func, Value::Lambda(_))
@@ -508,7 +512,7 @@ pub fn eval_call(
                                 TypeMismatchSnafu {
                                     expected: "<function>".to_string(),
                                     found: ty.to_string(),
-                                    span: 0..0,
+                                    span,
                                 }
                             }
                         );
@@ -564,8 +568,8 @@ pub fn eval_call(
                     "assert_eq" => {
                         debug!("evaluating chacha::assert_eq");
                         // 🚧 Check that there are two arguments
-                        let lhs = arg_values.pop_front().unwrap().0;
-                        let rhs = arg_values.pop_front().unwrap().0;
+                        let lhs = arg_values.pop_front().unwrap().0 .0;
+                        let rhs = arg_values.pop_front().unwrap().0 .0;
 
                         debug!("lhs: {lhs:?}, rhs {rhs:?}");
 
@@ -653,8 +657,10 @@ pub fn eval_call(
                     }
                     Value::ProxyType(ut) => {
                         debug!("StaticMethodCall proxy {ut:?}");
-                        s_write!(ut)
-                            .call(func, &mut arg_values.iter().map(|v| v.0.clone()).collect())
+                        s_write!(ut).call(
+                            func,
+                            &mut arg_values.iter().map(|v| v.0 .0.clone()).collect(),
+                        )
                     }
                     // Value::StoreType(ref mut store_type) => {
                     //     // We should actually know what's behind the curtain, since

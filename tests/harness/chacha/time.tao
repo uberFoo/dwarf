@@ -6,8 +6,13 @@ fn fib(n: int) -> int {
     }
 }
 
+fn run_fib() -> int {
+    fib(10)
+}
+
 fn main() {
     print("{0}s\n".format(chacha::time(|| {
-        fib(2);
+        fib(10);
     })));
+    print("{0}s\n".format(chacha::time(run_fib)));
 }
