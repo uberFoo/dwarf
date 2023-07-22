@@ -1,0 +1,4 @@
+#[foo = "bar"
+struct Foo {}
+
+fn main() {}

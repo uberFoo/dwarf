@@ -1,0 +1,15 @@
+[31mError:[0m Unexpected token in input, expected <expression>
+   [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0mif_no_conditional:2:5[38;5;246m][0m
+   [38;5;246m│[0m
+ [38;5;246m2 │[0m [38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[31mi[0m[31mf[0m
+ [38;5;240m  │[0m     [31m─[0m[31m┬[0m  
+ [38;5;240m  │[0m      [31m╰[0m[31m─[0m[31m─[0m Unexpected token [31mif[0m
+[38;5;246m───╯[0m
+[31mError:[0m Unexpected token in input, expected impl, Fn, struct, use
+   [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0mif_no_conditional:3:1[38;5;246m][0m
+   [38;5;246m│[0m
+ [38;5;246m3 │[0m [31m}[0m
+ [38;5;240m  │[0m [31m┬[0m  
+ [38;5;240m  │[0m [31m╰[0m[31m─[0m[31m─[0m Unexpected token [31m}[0m
+[38;5;246m───╯[0m
+
