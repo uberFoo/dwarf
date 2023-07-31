@@ -64,7 +64,7 @@ pub fn eval_function_call(
                 if s_read!(external).function == OBJECT_STORE_GETTER {
                     let library_path = RawLibrary::path_in_directory(
                         &Path::new("./plug-ins/example/target/debug"),
-                        "sarzak",
+                        &model_name,
                         LibrarySuffix::NoSuffix,
                     );
                     let root_module = (|| {
@@ -94,8 +94,13 @@ pub fn eval_function_call(
                     //     .invoke_func(OBJECT_STORE_GETTER.into(), vec![].into());
                     // dbg!(&store);
                     let value = new_ref!(Value, Value::ObjectStore(std::rc::Rc::new(plugin)));
-                    let store =
-                        ZObjectStore::new(model_name.clone(), model_name, &mut s_write!(lu_dog));
+                    let store = s_read!(lu_dog)
+                        .iter_z_object_store()
+                        .find(|store| {
+                            let store = s_read!(store);
+                            store.domain == model_name
+                        })
+                        .unwrap();
                     let ty = ValueType::new_z_object_store(&store, &mut s_write!(lu_dog));
                     dbg!(&value, &ty);
                     Ok((value, ty))

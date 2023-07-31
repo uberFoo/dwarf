@@ -41,7 +41,7 @@ struct Object {
 
 impl Object {
     #[proxy(store = "sarzak", object = "Object", func = "new")]
-    fn new(desc: string, kl: string, name: string) -> Self;
+    fn new(desc: string, kl: string, name: string, store: SarzakStore) -> Self;
 }
 
 fn main() {

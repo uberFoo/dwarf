@@ -3070,13 +3070,9 @@ fn inter_struct_fields(
 
 /// Get a Lu-Dog ValueType from a Dwarf Type
 ///
-/// Note that the `new_*` methods on `Ty` just return `const`s. Also, the
-/// `ValueType::new_ty` method takes on the id of it's subtype, so neither do
-/// those take much space.
-///
 /// This is starting to look suspicious, at least for the Fn type. I'm basically
 /// interring a half baked lambda into the store. I could fully bake it by interring
-/// the parameters too, but then what's the point of the definition? Well for one
+/// the parameters too, but then what's the point of the definition? Well, for one,
 /// to inter the body.
 ///
 /// Of course they are two different things. Without a body it's a type. With a
@@ -3216,8 +3212,7 @@ fn get_value_type(
                     }
                 }
 
-                // Unlikely to have to reach back this far, except of course for
-                // the Uuid. So, it's not unlikely; it's the least likely.
+                // Unlikely to have to reach back this far.
                 if let Some(ty) = context.sarzak.iter_ty().find(|ty| match ty {
                     Ty::Object(ref obj) => {
                         let obj = context.sarzak.exhume_object(obj).unwrap();
@@ -3228,8 +3223,13 @@ fn get_value_type(
                 }) {
                     Ok(ValueType::new_ty(ty, lu_dog))
                 } else if let Some(ref id) = lu_dog.exhume_woog_struct_id_by_name(name) {
+                    // Here is where we look for actual user defined types, as
+                    // in types that are defined in dwarf source.
                     let woog_struct = lu_dog.exhume_woog_struct(id).unwrap();
                     Ok(ValueType::new_woog_struct(&woog_struct, lu_dog))
+                } else if let Some(ref id) = lu_dog.exhume_z_object_store_id_by_name(name) {
+                    let store = lu_dog.exhume_z_object_store(id).unwrap();
+                    Ok(ValueType::new_z_object_store(&store, lu_dog))
                 } else {
                     Err(vec![DwarfError::UnknownType {
                         ty: name.to_owned(),
