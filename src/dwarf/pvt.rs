@@ -13,7 +13,7 @@ use crate::{
     RefType,
 };
 
-#[derive(Debug)]
+// #[derive(Debug)]
 pub(super) struct PrintableValueType<'d, 'a, 'b>(
     pub &'d RefType<ValueType>,
     pub &'a Context<'a>,
@@ -77,8 +77,8 @@ impl<'d, 'a, 'b> fmt::Display for PrintableValueType<'d, 'a, 'b> {
                         }
                         Ty::SString(_) => write!(f, "string"),
                         Ty::SUuid(_) => write!(f, "Uuid"),
-                        gamma => {
-                            error!("deal with sarzak type {:?}", gamma);
+                        Γ => {
+                            error!("deal with sarzak type {:?}", Γ);
                             write!(f, "todo")
                         }
                     }
@@ -87,8 +87,8 @@ impl<'d, 'a, 'b> fmt::Display for PrintableValueType<'d, 'a, 'b> {
                     // one of the model domains.
                     // 🚧 HashMapFix
                     for (_, model) in context.models {
-                        if let Some(Ty::Object(ref object)) = model.exhume_ty(ty) {
-                            if let Some(object) = model.exhume_object(object) {
+                        if let Some(Ty::Object(ref object)) = model.0.exhume_ty(ty) {
+                            if let Some(object) = model.0.exhume_object(object) {
                                 return write!(f, "{}Proxy", object.name);
                             }
                         }

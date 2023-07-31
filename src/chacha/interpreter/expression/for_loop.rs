@@ -32,7 +32,7 @@ pub fn eval_for_loop(
             .collect()
     } else if let Value::Range(range) = &*s_read!(list) {
         let mut vec = Vec::new();
-        for i in (&*s_read!(range.start)).try_into()?..(&*s_read!(range.end)).try_into()? {
+        for i in range.start..range.end {
             vec.push(new_ref!(Value, Value::Integer(i)));
         }
         vec

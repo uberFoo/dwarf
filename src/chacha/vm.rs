@@ -358,7 +358,7 @@ impl<'b> VM<'b> {
                                 }
                             }
                             Value::UserType(ty_) => {
-                                match s_read!(ty_).get_attr_value(s_read!(field).as_ref()) {
+                                match s_read!(ty_).get_field_value(s_read!(field).as_ref()) {
                                     Some(value) => {
                                         if trace {
                                             println!(
@@ -424,7 +424,7 @@ impl<'b> VM<'b> {
                             }
                             Value::UserType(ty_) => {
                                 match s_write!(ty_)
-                                    .set_attr_value(s_read!(field).as_ref(), value.clone())
+                                    .set_field_value(s_read!(field).as_ref(), value.clone())
                                 {
                                     Some(_) => {
                                         if trace {
@@ -517,7 +517,7 @@ impl<'b> VM<'b> {
                             let name = self.stack.pop().unwrap();
                             let value = self.stack.pop().unwrap();
 
-                            inst.add_attr(s_read!(name).to_string(), value.clone());
+                            inst.define_field(s_read!(name).to_string(), value.clone());
                             if trace {
                                 println!("\t\t\t\t{}: {}", s_read!(name), s_read!(value));
                             }
@@ -585,6 +585,7 @@ impl<'b> VM<'b> {
 mod tests {
     use std::path::PathBuf;
 
+    use rustc_hash::FxHashMap as HashMap;
     use tracy_client::Client;
 
     use crate::{
@@ -918,11 +919,12 @@ mod tests {
         let _ = Field::new("baz".to_owned(), &foo, &ty, &mut lu_dog);
 
         // Now we need an instance.
-        let ctx = initialize_interpreter::<PathBuf>(sarzak, lu_dog, None).unwrap();
+        let ctx =
+            initialize_interpreter::<PathBuf>(sarzak, lu_dog, HashMap::default(), None).unwrap();
         let ty_name = PrintableValueType(&struct_ty, &ctx);
         let mut foo_inst = UserType::new(ty_name.to_string(), &struct_ty);
-        foo_inst.add_attr("bar", new_ref!(Value, 42.into()));
-        foo_inst.add_attr("baz", new_ref!(Value, std::f64::consts::PI.into()));
+        foo_inst.define_field("bar", new_ref!(Value, 42.into()));
+        foo_inst.define_field("baz", new_ref!(Value, std::f64::consts::PI.into()));
 
         let memory = Memory::new();
         let mut vm = VM::new(&memory.0);

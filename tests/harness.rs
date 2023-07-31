@@ -12,7 +12,7 @@ use dwarf::{
 };
 
 #[cfg(feature = "print-std-out")]
-compile_error!("The tests don't run with the print-std-out feature enabled.");
+compile_error!("The tests don't function with the print-std-out feature enabled.");
 
 fn output_diffs(expected: &str, found: &str, test: &str) -> Result<(), ()> {
     let mut diff_count = 0;
@@ -114,7 +114,7 @@ fn run_program(test: &str, program: &str) -> Result<(Value, String), String> {
         }
     };
 
-    let ctx = initialize_interpreter::<PathBuf>(sarzak, lu_dog, None).unwrap();
+    let ctx = initialize_interpreter::<PathBuf>(sarzak, lu_dog, HashMap::default(), None).unwrap();
     match start_main(false, ctx) {
         Ok(v) => {
             let stdout = v.1.drain_std_out().join("").trim().to_owned();

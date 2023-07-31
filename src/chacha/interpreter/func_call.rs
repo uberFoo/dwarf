@@ -1,5 +1,6 @@
-use std::time::Instant;
+use std::{path::Path, time::Instant};
 
+use abi_stable::library::{lib_header_from_path, LibrarySuffix, RawLibrary};
 use ansi_term::Colour;
 use snafu::{location, prelude::*, Location};
 use tracy_client::span;
@@ -10,11 +11,18 @@ use crate::{
         vm::VM,
     },
     interpreter::{
-        debug, eval_expression, eval_statement, function, trace, typecheck, ChaChaError, Context,
+        debug, error, eval_expression, eval_statement, function, trace, typecheck, ChaChaError,
+        Context,
     },
-    lu_dog::{Argument, BodyEnum, Function, Span, ValueType},
-    new_ref, s_read, NewRef, RefType, Value,
+    lu_dog::{Argument, BodyEnum, Function, Span, ValueType, ZObjectStore},
+    new_ref,
+    plug_in::StorePluginType,
+    plug_in::{PluginId, PluginMod_Ref},
+    s_read, s_write, NewRef, RefType, Value,
 };
+
+const OBJECT_STORE: &str = "ObjectStore";
+const OBJECT_STORE_GETTER: &str = "new";
 
 pub fn eval_function_call(
     func: RefType<Function>,
@@ -36,11 +44,75 @@ pub fn eval_function_call(
 
     let body = s_read!(body);
     match body.subtype {
-        BodyEnum::Block(id) => {
+        //
+        // This is a function defined in a dwarf file.
+        BodyEnum::Block(ref id) => {
             eval_built_in_function_call(func, &id, args, arg_check, span, context, vm)
         }
-        BodyEnum::ExternalImplementation(_id) => {
-            unimplemented!()
+        //
+        // This is an externally defined function that was declared in a dwarf file.
+        BodyEnum::ExternalImplementation(ref id) => {
+            let external = s_read!(lu_dog).exhume_external_implementation(id).unwrap();
+            dbg!(&external);
+            let model_name = s_read!(external).x_model.clone();
+            let mut model = s_write!(context.models());
+            let mut model = model.get_mut(&model_name).unwrap();
+
+            let object = &s_read!(external).object;
+            if object == OBJECT_STORE {
+                // Here we load the plug-in and create an instance of the object store.
+                if s_read!(external).function == OBJECT_STORE_GETTER {
+                    let library_path = RawLibrary::path_in_directory(
+                        &Path::new("./plug-ins/example/target/debug"),
+                        "sarzak",
+                        LibrarySuffix::NoSuffix,
+                    );
+                    let root_module = (|| {
+                        let header = lib_header_from_path(&library_path)?;
+                        header.init_root_module::<PluginMod_Ref>()
+                    })()
+                    .map_err(|e| {
+                        eprintln!("{e}");
+                        ChaChaError::BadJuJu {
+                            message: "Plug-in error".to_owned(),
+                            location: location!(),
+                        }
+                    })?;
+                    let name_key = "Sarzak".to_string();
+
+                    let ctor = root_module.load();
+                    dbg!(&ctor);
+                    let new_id = PluginId {
+                        named: name_key.clone().into(),
+                        instance: 0,
+                    };
+                    let plugin = ctor(new_id, "../sarzak/models/sarzak.v2.json".into()).unwrap();
+                    let plugin = StorePluginType { inner: plugin };
+                    // model.1.replace(plugin);
+                    // let store = model
+                    //     .1
+                    //     .invoke_func(OBJECT_STORE_GETTER.into(), vec![].into());
+                    // dbg!(&store);
+                    let value = new_ref!(Value, Value::ObjectStore(std::rc::Rc::new(plugin)));
+                    let store =
+                        ZObjectStore::new(model_name.clone(), model_name, &mut s_write!(lu_dog));
+                    let ty = ValueType::new_z_object_store(&store, &mut s_write!(lu_dog));
+                    dbg!(&value, &ty);
+                    Ok((value, ty))
+                } else {
+                    dbg!("other");
+                    unimplemented!();
+                }
+            }
+            // 🚧 Should these be wrapped in a mutex-like?
+            else if let Some(obj_id) = model.0.exhume_object_id_by_name(object) {
+                let obj = model.0.exhume_object(&obj_id).unwrap();
+                dbg!(&external, &obj);
+                unimplemented!()
+            } else {
+                error!("object not found");
+                unimplemented!()
+            }
         }
     }
 }

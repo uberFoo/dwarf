@@ -3,8 +3,6 @@ use std::{fs::File, io::prelude::*, ops::Range, path::PathBuf};
 use ansi_term::Colour;
 use heck::{ToShoutySnakeCase, ToUpperCamelCase};
 use log;
-use rustc_hash::FxHashMap as HashMap;
-use sarzak::sarzak::{store::ObjectStore as SarzakStore, types::Ty};
 use snafu::{location, Location};
 use tracy_client::Client;
 use uuid::Uuid;
@@ -31,7 +29,9 @@ use crate::{
         FieldAccessTarget, FloatLiteral, List, ListElement, ListExpression, MethodCall, Operator,
         Reference, ResultStatement, TypeCast, Unary, VariableEnum, XReturn,
     },
-    new_ref, s_read, s_write, NewRef, RefType,
+    new_ref, s_read, s_write,
+    sarzak::{store::ObjectStore as SarzakStore, types::Ty},
+    ModelStore, NewRef, RefType,
 };
 
 macro_rules! link_parameter {
@@ -230,7 +230,7 @@ pub struct StructFields {
     location: Location,
 }
 
-#[derive(Debug)]
+// #[derive(Debug)]
 pub struct Context<'a> {
     pub location: Location,
     /// Struct Field Storage
@@ -247,7 +247,7 @@ pub struct Context<'a> {
     /// once it's been created, it's already been type checked.
     pub check_types: bool,
     pub source: RefType<DwarfSourceFile>,
-    pub models: &'a HashMap<String, SarzakStore>,
+    pub models: &'a ModelStore,
     pub sarzak: &'a SarzakStore,
 }
 
@@ -276,7 +276,7 @@ pub struct Context<'a> {
 pub fn new_lu_dog(
     out_dir: Option<&PathBuf>,
     source: Option<(String, &[Item])>,
-    models: &HashMap<String, SarzakStore>,
+    models: &ModelStore,
     sarzak: &SarzakStore,
 ) -> Result<LuDogStore> {
     let mut lu_dog = LuDogStore::new();
@@ -467,23 +467,23 @@ fn inter_func(
         if let Some((_, InnerAttribute::Attribute(ref attributes))) = proxy_vec.get(0) {
             debug!("proxy");
 
-            if let Some(model_vec) = attributes.get("model") {
-                if let Some((_, ref value)) = model_vec.get(0) {
-                    let model_name: String = value.try_into().map_err(|e| vec![e])?;
-                    debug!("store.model: {model_name}");
+            if let Some(store_vec) = attributes.get("store") {
+                if let Some((_, ref value)) = store_vec.get(0) {
+                    let store_name: String = value.try_into().map_err(|e| vec![e])?;
+                    debug!("proxy.store.: {store_name}");
 
                     if let Some(func_vec) = attributes.get("func") {
                         if let Some((_, ref value)) = func_vec.get(0) {
                             let func_name: String = value.try_into().map_err(|e| vec![e])?;
-                            debug!("store.func: {func_name}");
+                            debug!("proxy.func: {func_name}");
 
                             if let Some(obj_vec) = attributes.get("object") {
                                 if let Some((_, ref value)) = obj_vec.get(0) {
                                     let obj_name: String = value.try_into().map_err(|e| vec![e])?;
-                                    debug!("store.object: {obj_name}");
+                                    debug!("proxy.object: {obj_name}");
 
                                     let external = ExternalImplementation::new(
-                                        func_name, obj_name, model_name, lu_dog,
+                                        func_name, store_name, obj_name, lu_dog,
                                     );
                                     Some(Body::new_external_implementation(&external, lu_dog))
                                 } else {
@@ -507,7 +507,7 @@ fn inter_func(
                 }
             } else {
                 return Err(vec![DwarfError::Generic {
-                    description: "No model specified".to_owned(),
+                    description: "No store specified".to_owned(),
                 }]);
             }
         } else {
@@ -524,12 +524,12 @@ fn inter_func(
     let (func, block) = if let Some((ParserExpression::Block(stmts), span)) = &stmts {
         let block = Block::new(Uuid::new_v4(), None, lu_dog);
         let body = Body::new_block(&block, lu_dog);
-        let func = Function::new(name.to_owned(), &body, impl_block, &ret_ty, lu_dog);
+        let func = Function::new(name.to_owned(), &body, None, impl_block, &ret_ty, lu_dog);
 
         (func, Some((block, stmts, span)))
     } else if let Some(body) = external {
         (
-            Function::new(name.to_owned(), &body, impl_block, &ret_ty, lu_dog),
+            Function::new(name.to_owned(), &body, None, impl_block, &ret_ty, lu_dog),
             None,
         )
     } else {
@@ -569,6 +569,10 @@ fn inter_func(
             }
         };
         let param = Parameter::new(position, &func, None, &param_ty, lu_dog);
+
+        if position == 0 {
+            s_write!(func).first_param = Some(s_read!(param).id);
+        }
         position += 1;
 
         debug!("param {:?}", param);
@@ -1175,19 +1179,7 @@ pub(super) fn inter_expression(
 
             match &ty_read.subtype {
                 // We matched on the lhs type.
-                ValueTypeEnum::Function(ref _id) => {
-                    // let func = lu_dog.exhume_function(id).unwrap();
-                    // let impl_ = &s_read!(func).r9_implementation(lu_dog)[0];
-                    // let woog_struct = &s_read!(impl_).r8_woog_struct(lu_dog)[0];
-                    // let fat = FieldAccessTarget::new_function(&func, lu_dog);
-                    // let expr = FieldAccess::new(&lhs.0, &fat, &woog_struct, lu_dog);
-                    // let expr = Expression::new_field_access(&expr, lu_dog);
-                    // let ty = s_read!(func).r10_value_type(lu_dog)[0].clone();
-                    // let value = XValue::new_expression(block, &ty, &expr, lu_dog);
-                    // s_write!(span).x_value = Some(s_read!(value).id);
-
-                    Ok((lhs, ty.clone()))
-                }
+                ValueTypeEnum::Function(ref _id) => Ok((lhs, ty.clone())),
                 ValueTypeEnum::WoogStruct(ref id) => {
                     let woog_struct = lu_dog.exhume_woog_struct(id).unwrap();
 
@@ -2118,7 +2110,11 @@ pub(super) fn inter_expression(
 
             let ret_ty = if let ValueTypeEnum::WoogStruct(id) = s_read!(instance_ty).subtype {
                 let woog_struct = lu_dog.exhume_woog_struct(&id).unwrap();
-                let x = lookup_woog_struct_method_type(&s_read!(woog_struct).name, method, lu_dog);
+                let x = lookup_woog_struct_method_return_type(
+                    &s_read!(woog_struct).name,
+                    method,
+                    lu_dog,
+                );
 
                 #[allow(clippy::let_and_return)]
                 x
@@ -2509,7 +2505,7 @@ pub(super) fn inter_expression(
             } else {
                 debug!("ParserExpression::StaticMethodCall: looking up type {type_name}");
 
-                lookup_woog_struct_method_type(&type_name, method, lu_dog)
+                lookup_woog_struct_method_return_type(&type_name, method, lu_dog)
 
                 // Look up the struct in the imported models.
                 // I'll revisit this model business after I get the basics working.
@@ -2816,18 +2812,36 @@ fn inter_implementation(
     let name = name.de_sanitize();
     debug!("inter_implementation: {name}");
 
-    let (impl_ty, implementation) = if let Some(proxy_vec) = attributes.get("store") {
-        if let Some((_, InnerAttribute::Attribute(ref attributes))) = proxy_vec.get(0) {
+    let (impl_ty, implementation) = if let Some(store_vec) = attributes.get("store") {
+        if let Some((_, InnerAttribute::Attribute(ref attributes))) = store_vec.get(0) {
             if let Some(model_vec) = attributes.get("model") {
                 if let Some((_, ref value)) = model_vec.get(0) {
                     let model_name: String = value.try_into().map_err(|e| vec![e])?;
                     debug!("store.model: {model_name}");
+                    let store = lu_dog
+                        .iter_z_object_store()
+                        .find(|store| s_read!(store).domain == model_name)
+                        .unwrap();
+                    let ty = lu_dog
+                        .iter_value_type()
+                        .find(|ty| {
+                            let ty = s_read!(ty);
+                            if let ValueTypeEnum::ZObjectStore(ref store_id) = ty.subtype {
+                                store_id == &s_read!(store).id
+                            } else {
+                                false
+                            }
+                        })
+                        .unwrap();
 
-                    // 🚧 Really should check to see if it's already there.
-                    let store = ZObjectStore::new(model_name, lu_dog);
-                    let ty = ValueType::new_z_object_store(&store, lu_dog);
+                    let implementation = ImplementationBlock::new(None, Some(&store), lu_dog);
+                    let _ = WoogItem::new_implementation_block(
+                        &context.source,
+                        &implementation,
+                        lu_dog,
+                    );
 
-                    (Some(ty), None)
+                    (Some(ty), Some(implementation))
                 } else {
                     unreachable!();
                 }
@@ -2859,7 +2873,7 @@ fn inter_implementation(
 
         let woog_struct = lu_dog.exhume_woog_struct(&id).unwrap();
 
-        let implementation = ImplementationBlock::new(&woog_struct, lu_dog);
+        let implementation = ImplementationBlock::new(Some(&woog_struct), None, lu_dog);
         let _ = WoogItem::new_implementation_block(&context.source, &implementation, lu_dog);
 
         (Some(impl_ty), Some(implementation))
@@ -2919,11 +2933,11 @@ fn inter_struct(
     // from the store to this UDT.
     if let Some(proxy_vec) = attributes.get("proxy") {
         if let Some((_, InnerAttribute::Attribute(ref attributes))) = proxy_vec.get(0) {
-            // Get the model value
-            if let Some(model_vec) = attributes.get("model") {
-                if let Some((_, ref value)) = model_vec.get(0) {
-                    let model_name: String = value.try_into().map_err(|e| vec![e])?;
-                    debug!("proxy.model: {model_name}");
+            // Get the store value
+            if let Some(store_vec) = attributes.get("store") {
+                if let Some((_, ref value)) = store_vec.get(0) {
+                    let store_name: String = value.try_into().map_err(|e| vec![e])?;
+                    debug!("proxy.store: {store_name}");
 
                     if let Some(name_vec) = attributes.get("object") {
                         if let Some((_, ref value)) = name_vec.get(0) {
@@ -2931,9 +2945,9 @@ fn inter_struct(
                             let proxy = proxy.de_sanitize();
                             debug!("proxy.object: {proxy}");
 
-                            if let Some(model) = context.models.get(&model_name) {
-                                if let Some(ref obj_id) = model.exhume_object_id_by_name(proxy) {
-                                    let obj = model.exhume_object(obj_id).unwrap();
+                            if let Some(model) = context.models.get(&store_name) {
+                                if let Some(ref obj_id) = model.0.exhume_object_id_by_name(proxy) {
+                                    let obj = model.0.exhume_object(obj_id).unwrap();
                                     let woog_struct =
                                         WoogStruct::new(proxy.to_owned(), Some(obj), lu_dog);
                                     let _ = WoogItem::new_woog_struct(
@@ -2966,7 +2980,7 @@ fn inter_struct(
                                 Err(vec![DwarfError::Generic {
                                     description: format!(
                                         "Model `{}` not found in store",
-                                        model_name
+                                        store_name
                                     ),
                                 }])
                             }
@@ -2983,21 +2997,21 @@ fn inter_struct(
                 }
             } else {
                 Err(vec![DwarfError::Generic {
-                    description: "No model specified".to_owned(),
+                    description: "No store specified".to_owned(),
                 }])
             }
         } else {
             unreachable!();
         }
-    } else if let Some(proxy_vec) = attributes.get("store") {
-        if let Some((_, InnerAttribute::Attribute(ref attributes))) = proxy_vec.get(0) {
+    } else if let Some(store_vec) = attributes.get("store") {
+        if let Some((_, InnerAttribute::Attribute(ref attributes))) = store_vec.get(0) {
             if let Some(model_vec) = attributes.get("model") {
                 if let Some((_, ref value)) = model_vec.get(0) {
                     let model_name: String = value.try_into().map_err(|e| vec![e])?;
                     debug!("store.model: {model_name}");
 
                     // 🚧 Really should check to see if it's already there.
-                    let store = ZObjectStore::new(model_name, lu_dog);
+                    let store = ZObjectStore::new(model_name, name.to_owned(), lu_dog);
                     let _ = ValueType::new_z_object_store(&store, lu_dog);
 
                     Ok(())
@@ -3187,9 +3201,9 @@ fn get_value_type(
                 // 🚧 HashMapFix
                 for (_, model) in context.models {
                     // Look for the Object in the model domains first.
-                    if let Some(ty) = model.iter_ty().find(|ty| match ty {
+                    if let Some(ty) = model.0.iter_ty().find(|ty| match ty {
                         Ty::Object(ref obj) => {
-                            let obj = model.exhume_object(obj).unwrap();
+                            let obj = model.0.exhume_object(obj).unwrap();
                             // We are going to cheat a little bit here. Say we have an
                             // object called `Point`. We want to be able to also handle
                             // proxy objects for `Point`. Those are suffixed with "Proxy".
@@ -3233,7 +3247,7 @@ fn get_value_type(
     }
 }
 
-fn lookup_woog_struct_method_type(
+fn lookup_woog_struct_method_return_type(
     type_name: &str,
     method: &str,
     lu_dog: &mut LuDogStore,

@@ -19,9 +19,10 @@ use crate::{
     lu_dog::{
         store::ObjectStore as LuDogStore,
         types::{ValueType, WoogOption},
-        Lambda, List, Reference, WoogStruct,
+        Lambda, List, Reference,
     },
-    s_read, NewRef, RefType,
+    plug_in::StorePluginType,
+    ModelStore, RefType,
 };
 
 pub mod error;
@@ -181,7 +182,7 @@ impl Type {
         &self,
         span: &Span,
         store: &mut LuDogStore,
-        models: &HashMap<String, SarzakStore>,
+        models: &ModelStore,
         sarzak: &SarzakStore,
     ) -> Result<bool> {
         self.into_value_type(span, store, models, sarzak)
@@ -192,7 +193,7 @@ impl Type {
         &self,
         span: &Span,
         store: &mut LuDogStore,
-        models: &HashMap<String, SarzakStore>,
+        models: &ModelStore,
         sarzak: &SarzakStore,
     ) -> Result<RefType<ValueType>> {
         match self {

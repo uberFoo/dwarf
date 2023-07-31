@@ -3,10 +3,13 @@
 use std::{ops, path::PathBuf};
 
 use clap::Args;
+use rustc_hash::FxHashMap as HashMap;
 use serde::{Deserialize, Serialize};
 
 pub mod chacha;
 pub mod dwarf;
+pub mod plug_in;
+
 #[cfg(all(
     not(feature = "print-std-out"),
     not(any(feature = "single", feature = "single-vec", feature = "multi-nd-vec"))
@@ -230,4 +233,6 @@ pub struct ChaChaOptions {
     sarzak: PathBuf,
 }
 
-pub type Span = ops::Range<usize>;
+pub(crate) type Span = ops::Range<usize>;
+pub(crate) type ModelStore =
+    HashMap<String, (sarzak::ObjectStore, Option<plug_in::StorePluginType>)>;

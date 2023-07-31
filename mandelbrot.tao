@@ -95,7 +95,7 @@ fn main() {
     let iterations = chacha::args()[1];
     // print("iterations {1},  type is {0}\n".format(chacha::typeof(iterations), iterations));
     print("Total time: {0}s.\n".format(chacha::time(|| {
-        plot(iterations);
+        plot(iterations as int);
     })));
 }
 

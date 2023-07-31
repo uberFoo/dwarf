@@ -694,7 +694,7 @@ pub fn eval_call(
                         span,
                     }
                 });
-                unimplemented!();
+                unreachable!();
                 // We never will get here.
             }
         }

@@ -1,6 +1,4 @@
-use std::path::PathBuf;
-
-use rustc_hash::FxHashMap as HashMap;
+use std::path::{Path, PathBuf};
 
 use dwarf::{
     dwarf::{new_lu_dog, parse_dwarf},
@@ -9,6 +7,7 @@ use dwarf::{
     sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL},
     Value,
 };
+use rustc_hash::FxHashMap as HashMap;
 
 fn run_program(test: &str, program: &str) -> Result<(Value, String), String> {
     let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
@@ -23,7 +22,9 @@ fn run_program(test: &str, program: &str) -> Result<(Value, String), String> {
     };
 
     let mut models = HashMap::default();
-    models.insert("sarzak".to_owned(), sarzak.clone());
+
+    models.insert("sarzak".to_owned(), (sarzak.clone(), None));
+
     let lu_dog = match new_lu_dog(None, Some((program.to_owned(), &ast)), &models, &sarzak) {
         Ok(lu_dog) => lu_dog,
         Err(e) => {
@@ -59,7 +60,7 @@ fn run_program(test: &str, program: &str) -> Result<(Value, String), String> {
         }
     };
 
-    let ctx = initialize_interpreter::<PathBuf>(sarzak, lu_dog, None).unwrap();
+    let ctx = initialize_interpreter::<PathBuf>(sarzak, lu_dog, models, None).unwrap();
     match start_main(false, ctx) {
         Ok(v) => {
             let stdout = v.1.drain_std_out().join("").trim().to_owned();

@@ -1,19 +1,26 @@
 use std::{any::Any, collections::VecDeque, fmt, ops::Range};
 
+use abi_stable::{
+    sabi_trait,
+    std_types::{RHashMap, RStr, RString, RVec},
+    StableAbi,
+};
 use ansi_term::Colour;
 use rustc_hash::FxHashMap as HashMap;
 use sarzak::lu_dog::ValueTypeEnum;
-// use parking_lot::Lock;
 use uuid::Uuid;
 
 use crate::{
     chacha::error::Result,
     lu_dog::{Function, Lambda, ObjectStore as LuDogStore, ValueType},
-    new_ref, s_read,
+    new_ref,
+    plug_in::StorePluginType,
+    s_read,
     sarzak::Ty,
     ChaChaError, DwarfFloat, DwarfInteger, NewRef, RefType,
 };
 
+// #[sabi_trait]
 pub trait ProxyType: fmt::Display + fmt::Debug + Send + Sync {
     /// Get the name of the type this proxy represents.
     ///
@@ -86,9 +93,36 @@ impl ProxyType for Box<dyn ProxyType> {
     }
 }
 
+#[repr(C)]
+#[derive(Clone, Debug, StableAbi)]
+pub struct FfiRange {
+    start: DwarfInteger,
+    end: DwarfInteger,
+}
+
 /// This is an actual Value
 ///
 /// This is the type used by the interpreter to represent values.
+#[repr(C)]
+#[derive(Clone, Debug, StableAbi)]
+pub enum FfiValue {
+    Boolean(bool),
+    Empty,
+    Error(RString),
+    Float(DwarfFloat),
+    Integer(DwarfInteger),
+    /// User Defined Type Proxy
+    ///
+    ///  Feels like we'll need to generate some code to make this work.
+    // ProxyType(RefType<dyn ProxyType>),
+    Range(FfiRange),
+    String(RString),
+    // Table(RHashMap<RString, RefType<Self>>),
+    Unknown,
+    Uuid(RString),
+    Vector(RVec<Self>),
+}
+
 #[derive(Clone, Debug)]
 pub enum Value {
     Boolean(bool),
@@ -105,17 +139,13 @@ pub enum Value {
     // Future(RefType<dyn std::future::Future<Output = RefType<Value>>>),
     Integer(DwarfInteger),
     Lambda(RefType<Lambda>),
+    ObjectStore(std::rc::Rc<StorePluginType>),
     Option(Option<RefType<Self>>),
     /// User Defined Type Proxy
     ///
     ///  Feels like we'll need to generate some code to make this work.
     ProxyType(RefType<dyn ProxyType>),
-    Range(Range<Box<RefType<Self>>>),
-    Reference(RefType<Self>),
-    /// WTF was I thinking?
-    ///
-    /// That means Self. Or, maybe self?
-    Reflexive,
+    Range(Range<DwarfInteger>),
     String(String),
     Table(HashMap<String, RefType<Self>>),
     Thonk(&'static str, usize),
@@ -123,6 +153,47 @@ pub enum Value {
     UserType(RefType<UserType>),
     Uuid(uuid::Uuid),
     Vector(Vec<RefType<Self>>),
+}
+
+impl From<Value> for FfiValue {
+    fn from(value: Value) -> Self {
+        match value {
+            Value::Boolean(bool_) => Self::Boolean(bool_),
+            Value::Empty => Self::Empty,
+            Value::Error(e) => Self::Error(e.into()),
+            Value::Float(num) => Self::Float(num),
+            Value::Integer(num) => Self::Integer(num),
+            Value::Range(range) => Self::Range(FfiRange {
+                start: range.start,
+                end: range.end,
+            }),
+            Value::String(str_) => Self::String(str_.into()),
+            Value::Uuid(uuid) => Self::Uuid(uuid.to_string().into()),
+            Value::Vector(vec) => {
+                Self::Vector(vec.into_iter().map(|v| s_read!(v).clone().into()).collect())
+            }
+            _ => Self::Unknown,
+        }
+    }
+}
+
+impl From<FfiValue> for Value {
+    fn from(value: FfiValue) -> Self {
+        match value {
+            FfiValue::Boolean(bool_) => Self::Boolean(bool_),
+            FfiValue::Empty => Self::Empty,
+            FfiValue::Error(e) => Self::Error(e.into()),
+            FfiValue::Float(num) => Self::Float(num),
+            FfiValue::Integer(num) => Self::Integer(num),
+            FfiValue::Range(range) => Self::Range(range.start.into()..range.end.into()),
+            FfiValue::String(str_) => Self::String(str_.into()),
+            FfiValue::Uuid(uuid) => Self::Uuid(Uuid::parse_str(&uuid.to_string()).unwrap()),
+            FfiValue::Vector(vec) => {
+                Self::Vector(vec.into_iter().map(|v| new_ref!(Value, v.into())).collect())
+            }
+            _ => Self::Unknown,
+        }
+    }
 }
 
 impl Value {
@@ -248,6 +319,7 @@ impl fmt::Display for Value {
             Self::Function(_) => write!(f, "<function>"),
             Self::Integer(num) => write!(f, "{}", num),
             Self::Lambda(_) => write!(f, "<lambda>"),
+            Self::ObjectStore(store) => write!(f, "{store}"),
             Self::Option(option) => match option {
                 Some(value) => write!(f, "Some({})", s_read!(value)),
                 None => write!(f, "None"),
@@ -256,8 +328,6 @@ impl fmt::Display for Value {
             Self::ProxyType(_p) => write!(f, "<put the other thing back>"),
             // Self::ProxyType(p) => write!(f, "{}", s_read!(p)),
             Self::Range(range) => write!(f, "{:?}", range),
-            Self::Reference(value) => write!(f, "&{}", s_read!(value)),
-            Self::Reflexive => write!(f, "self"),
             // Self::StoreType(store) => write!(f, "{:?}", store),
             Self::String(str_) => write!(f, "{}", str_),
             // Self::String(str_) => write!(f, "\"{}\"", str_),
@@ -338,16 +408,26 @@ where
     }
 }
 
+impl TryFrom<Value> for Range<DwarfInteger> {
+    type Error = ChaChaError;
+
+    fn try_from(value: Value) -> Result<Self, <Range<DwarfInteger> as TryFrom<Value>>::Error> {
+        match value {
+            Value::Range(range) => Ok(range.start..range.end),
+            _ => Err(ChaChaError::Conversion {
+                src: value.to_string(),
+                dst: "Uuid".to_owned(),
+            }),
+        }
+    }
+}
+
 impl TryFrom<Value> for Range<usize> {
     type Error = ChaChaError;
 
     fn try_from(value: Value) -> Result<Self, <Range<usize> as TryFrom<Value>>::Error> {
         match value {
-            Value::Range(range) => {
-                let start: usize = (&*s_read!(range.start)).try_into()?;
-                let end: usize = (&*s_read!(range.end)).try_into()?;
-                Ok(start..end)
-            }
+            Value::Range(range) => Ok(range.start as usize..range.end as usize),
             _ => Err(ChaChaError::Conversion {
                 src: value.to_string(),
                 dst: "Uuid".to_owned(),
@@ -847,15 +927,18 @@ impl UserType {
         }
     }
 
-    pub fn add_attr<S: AsRef<str>>(&mut self, name: S, value: RefType<Value>) {
+    /// Create a field for the user type
+    ///
+    /// This is called during type definition, from a declaration in a source file.
+    pub fn define_field<S: AsRef<str>>(&mut self, name: S, value: RefType<Value>) {
         self.attrs.0.insert(name.as_ref().to_owned(), value);
     }
 
-    pub fn get_attr_value<S: AsRef<str>>(&self, name: S) -> Option<&RefType<Value>> {
+    pub fn get_field_value<S: AsRef<str>>(&self, name: S) -> Option<&RefType<Value>> {
         self.attrs.0.get(name.as_ref())
     }
 
-    pub fn set_attr_value<S: AsRef<str>>(
+    pub fn set_field_value<S: AsRef<str>>(
         &mut self,
         name: S,
         value: RefType<Value>,

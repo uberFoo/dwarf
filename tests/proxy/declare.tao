@@ -3,20 +3,23 @@ struct SarzakStore {}
 
 #[store(model = "sarzak")]
 impl SarzakStore {
+    #[proxy(store = "sarzak", object = "ObjectStore", func = "new")]
+    fn new() -> Self;
+
     /// Inter (insert) [`Object`] into the store.
     ///
-    #[proxy(model = "sarzak", object = "ObjectStore", func = "inter_object")]
+    #[proxy(store = "sarzak", object = "ObjectStore", func = "inter_object")]
     fn inter_object(self, object: Object);
 
     /// Exhume (get) [`Object`] from the store.
     ///
-    #[proxy(model = "sarzak", object = "ObjectStore", func = "exhume_object")]
+    #[proxy(store = "sarzak", object = "ObjectStore", func = "exhume_object")]
     fn exhume_object(self, id: Uuid) -> Option<Object>;
 
     /// Exhume [`Object`] id from the store by name.
     ///
     #[proxy(
-        model = "sarzak",
+        store = "sarzak",
         object = "ObjectStore",
         func = "exhume_object_id_by_name"
     )]
@@ -24,11 +27,11 @@ impl SarzakStore {
 
     /// Get an iterator over the internal `HashMap<&Uuid, Object>`.
     ///
-    #[proxy(model = "sarzak", object = "ObjectStore", func = "iter_object")]
+    #[proxy(store = "sarzak", object = "ObjectStore", func = "iter_object")]
     fn iter_object(self) -> [Object];
 }
 
-#[proxy(model = "sarzak", object = "Object")]
+#[proxy(store = "sarzak", object = "Object")]
 struct Object {
     id: Uuid,
     name: String,
@@ -37,7 +40,7 @@ struct Object {
 }
 
 impl Object {
-    #[proxy(model = "sarzak", object = "Object", func = "iter_object")]
+    #[proxy(store = "sarzak", object = "Object", func = "new")]
     fn new(desc: string, kl: string, name: string) -> Self;
 }
 
@@ -50,5 +53,11 @@ fn main() {
         description: "A wandering wizard",
     };
 
-    // Object::new("A wizard", "ᚠ", "Gandalf", "A wandering wizard");
+    // This fails, and well done. We don't want this to be constructable.
+    // let store: SarzakStore = SarzakStore {};
+
+    let store = SarzakStore::new();
+    // print(store);
+
+    // Object::new("A wandering wizard", "ᚠ", "Gandalf");
 }

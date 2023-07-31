@@ -58,7 +58,7 @@ pub fn eval_field_access(
         }
         Value::UserType(value) => {
             let value = s_read!(value);
-            let value = value.get_attr_value(field_name).unwrap();
+            let value = value.get_field_value(field_name).unwrap();
             let ty = s_read!(value).get_type(&s_read!(lu_dog));
 
             Ok((value.clone(), ty))

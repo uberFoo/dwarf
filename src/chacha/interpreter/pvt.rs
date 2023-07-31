@@ -95,8 +95,8 @@ impl<'a> fmt::Display for PrintableValueType<'a> {
                     let models = s_read!(model);
                     // 🚧 HashMapFix
                     for (_, model) in &*models {
-                        if let Some(Ty::Object(ref object)) = model.exhume_ty(ty) {
-                            if let Some(object) = model.exhume_object(object) {
+                        if let Some(Ty::Object(ref object)) = model.0.exhume_ty(ty) {
+                            if let Some(object) = model.0.exhume_object(object) {
                                 return write!(
                                     f,
                                     "{}",

@@ -23,10 +23,12 @@ use crate::{
         Block, Expression, LocalVariable, ObjectStore as LuDogStore, Span, Statement,
         StatementEnum, ValueType, ValueTypeEnum, Variable, XValue,
     },
-    new_ref, s_read,
+    new_ref,
+    plug_in::StorePluginType,
+    s_read,
     sarzak::store::ObjectStore as SarzakStore,
     sarzak::MODEL as SARZAK_MODEL,
-    ChaChaError, DwarfInteger, NewRef, RefType, Value,
+    ChaChaError, DwarfInteger, ModelStore, NewRef, RefType, Value,
 };
 
 mod banner;
@@ -149,7 +151,12 @@ pub fn initialize_interpreter_paths<P: AsRef<Path>>(lu_dog_path: P) -> Result<Co
     let lu_dog = LuDogStore::load_bincode(lu_dog_path.as_ref())
         .map_err(|e| ChaChaError::Store { source: e })?;
 
-    initialize_interpreter(sarzak, lu_dog, Some(lu_dog_path.as_ref()))
+    initialize_interpreter(
+        sarzak,
+        lu_dog,
+        HashMap::default(),
+        Some(lu_dog_path.as_ref()),
+    )
 }
 
 /// Initialize the interpreter
@@ -168,6 +175,7 @@ pub fn initialize_interpreter_paths<P: AsRef<Path>>(lu_dog_path: P) -> Result<Co
 pub fn initialize_interpreter<P: AsRef<Path>>(
     sarzak: SarzakStore,
     mut lu_dog: LuDogStore,
+    models: ModelStore,
     _lu_dog_path: Option<P>,
 ) -> Result<Context, Error> {
     // Initialize the stack with stuff from the compiled source.
@@ -202,7 +210,7 @@ pub fn initialize_interpreter<P: AsRef<Path>>(
     for user_type in lu_dog.iter_woog_struct() {
         let user_type = s_read!(user_type);
         // Create a meta table for each struct.
-        debug!("inserting meta table {}", user_type.name);
+        debug!("inserting struct in meta table {}", user_type.name);
         stack.insert_meta_table(user_type.name.to_owned());
         let impl_ = user_type.r8c_implementation_block(&lu_dog);
         if !impl_.is_empty() {
@@ -210,12 +218,60 @@ pub fn initialize_interpreter<P: AsRef<Path>>(
             // check and only insert the static functions.
             // 🚧 Only insert the static functions
             for func in s_read!(impl_[0]).r9_function(&lu_dog) {
-                debug!("inserting static function {}", s_read!(func).name);
-                stack.insert_meta(
-                    &user_type.name,
-                    s_read!(func).name.to_owned(),
-                    new_ref!(Value, Value::Function(func.clone(),)),
-                )
+                let insert = if let Some(param) = s_read!(func).r82_parameter(&lu_dog).get(0) {
+                    let var = &s_read!(param).r12_variable(&lu_dog)[0];
+                    if s_read!(var).name != "self" {
+                        true
+                    } else {
+                        false
+                    }
+                } else {
+                    true
+                };
+
+                if insert {
+                    debug!("inserting static function {}", s_read!(func).name);
+                    stack.insert_meta(
+                        &user_type.name,
+                        s_read!(func).name.to_owned(),
+                        new_ref!(Value, Value::Function(func.clone(),)),
+                    )
+                }
+            }
+        }
+    }
+
+    // Insert static methods for each store. They go into the meta table.
+    for store in lu_dog.iter_z_object_store() {
+        let store = s_read!(store);
+        // Create a meta table for each struct.
+        debug!("inserting store in meta table {}", store.domain);
+        stack.insert_meta_table(store.name.to_owned());
+        let impl_ = store.r83c_implementation_block(&lu_dog);
+        if !impl_.is_empty() {
+            // For each function in the impl, insert the function. I should probably
+            // check and only insert the static functions.
+            // 🚧 Only insert the static functions
+            for func in s_read!(impl_[0]).r9_function(&lu_dog) {
+                let insert = if let Some(param) = s_read!(func).r82_parameter(&lu_dog).get(0) {
+                    let var = &s_read!(param).r12_variable(&lu_dog)[0];
+                    if s_read!(var).name != "self" {
+                        true
+                    } else {
+                        false
+                    }
+                } else {
+                    true
+                };
+
+                if insert {
+                    debug!("inserting static function {}", s_read!(func).name);
+                    stack.insert_meta(
+                        &store.name,
+                        s_read!(func).name.to_owned(),
+                        new_ref!(Value, Value::Function(func.clone(),)),
+                    )
+                }
             }
         }
     }
@@ -446,7 +502,7 @@ pub fn initialize_interpreter<P: AsRef<Path>>(
         stack,
         new_ref!(LuDogStore, lu_dog),
         new_ref!(SarzakStore, sarzak),
-        new_ref!(HashMap<String, SarzakStore>, HashMap::default()),
+        new_ref!(ModelStore, models),
         receiver,
         std_out_send,
         std_out_recv,
@@ -670,7 +726,7 @@ pub fn eval_statement(
             let var = s_read!(var.r12_variable(&s_read!(lu_dog))[0]).clone();
             debug!("var {var:?}");
 
-            debug!("inserting {} = {}", var.name, s_read!(value));
+            debug!("allocating space for  `{} = {}`", var.name, s_read!(value));
             context.memory().insert(var.name, value);
 
             // 🚧 I'm changing this from returning ty. If something get's wonky,

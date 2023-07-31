@@ -81,7 +81,7 @@ pub fn eval_assignment(
                 }
                 Value::UserType(value) => {
                     // dbg!(s_read!(value));
-                    s_write!(value).set_attr_value(&field_name, rhs.0);
+                    s_write!(value).set_field_value(&field_name, rhs.0);
                     // Ok(rhs)
                 }
                 // 🚧 This needs it's own error. Lazy me.
