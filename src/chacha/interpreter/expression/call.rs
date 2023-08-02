@@ -149,37 +149,38 @@ pub fn eval_call(
 
             match &*s_read!(value) {
                 Value::ProxyType(proxy_type) => {
-                    let mut arg_values = if !args.is_empty() {
-                        // The VecDeque is so that I can pop off the args, and then push them
-                        // back onto a queue in the same order.
-                        let mut arg_values = VecDeque::with_capacity(args.len());
-                        let mut next = args
-                            .iter()
-                            .find(|a| s_read!(a).r27c_argument(&s_read!(lu_dog)).is_empty())
-                            .unwrap()
-                            .clone();
+                    unimplemented!()
+                    // let mut arg_values = if !args.is_empty() {
+                    //     // The VecDeque is so that I can pop off the args, and then push them
+                    //     // back onto a queue in the same order.
+                    //     let mut arg_values = VecDeque::with_capacity(args.len());
+                    //     let mut next = args
+                    //         .iter()
+                    //         .find(|a| s_read!(a).r27c_argument(&s_read!(lu_dog)).is_empty())
+                    //         .unwrap()
+                    //         .clone();
 
-                        loop {
-                            let expr = s_read!(lu_dog)
-                                .exhume_expression(&s_read!(next).expression)
-                                .unwrap();
-                            let (value, _ty) = eval_expression(expr, context, vm)?;
-                            arg_values.push_back(value);
+                    //     loop {
+                    //         let expr = s_read!(lu_dog)
+                    //             .exhume_expression(&s_read!(next).expression)
+                    //             .unwrap();
+                    //         let (value, _ty) = eval_expression(expr, context, vm)?;
+                    //         arg_values.push_back(value);
 
-                            let next_id = { s_read!(next).next };
-                            if let Some(ref id) = next_id {
-                                next = s_read!(lu_dog).exhume_argument(id).unwrap();
-                            } else {
-                                break;
-                            }
-                        }
+                    //         let next_id = { s_read!(next).next };
+                    //         if let Some(ref id) = next_id {
+                    //             next = s_read!(lu_dog).exhume_argument(id).unwrap();
+                    //         } else {
+                    //             break;
+                    //         }
+                    //     }
 
-                        arg_values
-                    } else {
-                        VecDeque::new()
-                    };
+                    //     arg_values
+                    // } else {
+                    //     VecDeque::new()
+                    // };
 
-                    s_write!(proxy_type).call(meth, &mut arg_values)
+                    // s_write!(proxy_type).call(meth, &mut arg_values)
                 }
                 Value::String(string) => match meth.as_str() {
                     "len" => {
@@ -656,11 +657,12 @@ pub fn eval_call(
                         Ok((value, ty))
                     }
                     Value::ProxyType(ut) => {
-                        debug!("StaticMethodCall proxy {ut:?}");
-                        s_write!(ut).call(
-                            func,
-                            &mut arg_values.iter().map(|v| v.0 .0.clone()).collect(),
-                        )
+                        unimplemented!();
+                        // debug!("StaticMethodCall proxy {ut:?}");
+                        // s_write!(ut).call(
+                        //     func,
+                        //     &mut arg_values.iter().map(|v| v.0 .0.clone()).collect(),
+                        // )
                     }
                     // Value::StoreType(ref mut store_type) => {
                     //     // We should actually know what's behind the curtain, since

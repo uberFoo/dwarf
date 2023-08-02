@@ -139,12 +139,12 @@ trait NewRef<T> {
     fn new_ref(value: T) -> RefType<T>;
 }
 
-#[allow(unused_macros)]
 macro_rules! new_rc {
     ($type:ty, $value:expr) => {
         <RcType<$type> as NewRcType<$type>>::new_rc_type($value)
     };
 }
+pub(crate) use new_rc;
 
 macro_rules! new_ref {
     ($type:ty, $value:expr) => {
@@ -235,4 +235,4 @@ pub struct ChaChaOptions {
 
 pub(crate) type Span = ops::Range<usize>;
 pub(crate) type ModelStore =
-    HashMap<String, (sarzak::ObjectStore, Option<plug_in::StorePluginType>)>;
+    HashMap<String, (sarzak::ObjectStore, Option<RefType<plug_in::PluginType>>)>;

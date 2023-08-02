@@ -1,24 +1,29 @@
 use std::{path::Path, time::Instant};
 
-use abi_stable::library::{lib_header_from_path, LibrarySuffix, RawLibrary};
+use abi_stable::{
+    library::{lib_header_from_path, LibrarySuffix, RawLibrary},
+    std_types::RArc,
+};
 use ansi_term::Colour;
+use heck::ToSnakeCase;
 use snafu::{location, prelude::*, Location};
 use tracy_client::span;
 
 use crate::{
     chacha::{
         error::{Result, WrongNumberOfArgumentsSnafu},
+        value::FfiValue,
         vm::VM,
     },
     interpreter::{
         debug, error, eval_expression, eval_statement, function, trace, typecheck, ChaChaError,
-        Context,
+        Context, UserType,
     },
     lu_dog::{Argument, BodyEnum, Function, Span, ValueType, ZObjectStore},
-    new_ref,
-    plug_in::StorePluginType,
-    plug_in::{PluginId, PluginMod_Ref},
-    s_read, s_write, NewRef, RefType, Value,
+    new_rc, new_ref,
+    plug_in::PluginType,
+    plug_in::{PluginId, PluginModRef},
+    s_read, s_write, NewRcType, NewRef, RcType, RefType, Value,
 };
 
 const OBJECT_STORE: &str = "ObjectStore";
@@ -52,73 +57,160 @@ pub fn eval_function_call(
         //
         // This is an externally defined function that was declared in a dwarf file.
         BodyEnum::ExternalImplementation(ref id) => {
-            let external = s_read!(lu_dog).exhume_external_implementation(id).unwrap();
-            dbg!(&external);
-            let model_name = s_read!(external).x_model.clone();
-            let mut model = s_write!(context.models());
-            let mut model = model.get_mut(&model_name).unwrap();
+            eval_external_function_call(&id, args, arg_check, span, context, vm)
+        }
+    }
+}
 
-            let object = &s_read!(external).object;
-            if object == OBJECT_STORE {
-                // Here we load the plug-in and create an instance of the object store.
-                if s_read!(external).function == OBJECT_STORE_GETTER {
-                    let library_path = RawLibrary::path_in_directory(
-                        &Path::new("./plug-ins/example/target/debug"),
-                        &model_name,
-                        LibrarySuffix::NoSuffix,
-                    );
-                    let root_module = (|| {
-                        let header = lib_header_from_path(&library_path)?;
-                        header.init_root_module::<PluginMod_Ref>()
-                    })()
-                    .map_err(|e| {
-                        eprintln!("{e}");
-                        ChaChaError::BadJuJu {
-                            message: "Plug-in error".to_owned(),
-                            location: location!(),
-                        }
-                    })?;
-                    let name_key = "Sarzak".to_string();
+fn eval_external_function_call(
+    block_id: &usize,
+    args: &[RefType<Argument>],
+    arg_check: bool,
+    span: &RefType<Span>,
+    context: &mut Context,
+    vm: &mut VM,
+) -> Result<(RefType<Value>, RefType<ValueType>)> {
+    let lu_dog = context.lu_dog_heel().clone();
 
-                    let ctor = root_module.load();
-                    dbg!(&ctor);
-                    let new_id = PluginId {
-                        named: name_key.clone().into(),
-                        instance: 0,
-                    };
-                    let plugin = ctor(new_id, "../sarzak/models/sarzak.v2.json".into()).unwrap();
-                    let plugin = StorePluginType { inner: plugin };
-                    // model.1.replace(plugin);
-                    // let store = model
-                    //     .1
-                    //     .invoke_func(OBJECT_STORE_GETTER.into(), vec![].into());
-                    // dbg!(&store);
-                    let value = new_ref!(Value, Value::ObjectStore(std::rc::Rc::new(plugin)));
-                    let store = s_read!(lu_dog)
-                        .iter_z_object_store()
-                        .find(|store| {
-                            let store = s_read!(store);
-                            store.domain == model_name
-                        })
-                        .unwrap();
-                    let ty = ValueType::new_z_object_store(&store, &mut s_write!(lu_dog));
-                    dbg!(&value, &ty);
-                    Ok((value, ty))
-                } else {
-                    dbg!("other");
-                    unimplemented!();
-                }
-            }
-            // 🚧 Should these be wrapped in a mutex-like?
-            else if let Some(obj_id) = model.0.exhume_object_id_by_name(object) {
-                let obj = model.0.exhume_object(&obj_id).unwrap();
-                dbg!(&external, &obj);
-                unimplemented!()
+    let external = s_read!(lu_dog)
+        .exhume_external_implementation(block_id)
+        .unwrap();
+
+    let arg_values = if !args.is_empty() {
+        let mut arg_values = Vec::with_capacity(args.len());
+        let mut next = args
+            .iter()
+            .find(|a| s_read!(a).r27c_argument(&s_read!(lu_dog)).is_empty())
+            .unwrap()
+            .clone();
+
+        loop {
+            let expr = s_read!(next).r37_expression(&s_read!(lu_dog))[0].clone();
+            let (value, ty) = eval_expression(expr.clone(), context, vm)?;
+            arg_values.push((expr, value, ty));
+
+            let next_id = { s_read!(next).next };
+            if let Some(ref id) = next_id {
+                next = s_read!(lu_dog).exhume_argument(id).unwrap();
             } else {
-                error!("object not found");
-                unimplemented!()
+                break;
             }
         }
+
+        arg_values
+    } else {
+        Vec::new()
+    };
+
+    let model_name = s_read!(external).x_model.clone();
+    let mut model = s_write!(context.models());
+    let mut model = model.get_mut(&model_name).unwrap();
+    let func_name = s_read!(external).function.clone();
+
+    let object_name = &s_read!(external).object;
+    let object_name = object_name.clone();
+    if object_name == OBJECT_STORE {
+        // Here we load the plug-in and create an instance of the object store.
+        if s_read!(external).function == OBJECT_STORE_GETTER {
+            let library_path = RawLibrary::path_in_directory(
+                &Path::new("./plug-ins/example/target/debug"),
+                &model_name,
+                LibrarySuffix::NoSuffix,
+            );
+            let root_module = (|| {
+                let header = lib_header_from_path(&library_path)?;
+                header.init_root_module::<PluginModRef>()
+            })()
+            .map_err(|e| {
+                eprintln!("{e}");
+                ChaChaError::BadJuJu {
+                    message: "Plug-in error".to_owned(),
+                    location: location!(),
+                }
+            })?;
+
+            let ctor = root_module.new();
+            let plugin = new_ref!(PluginType, ctor(vec![].into()).unwrap());
+            // let plugin = new_ref!(
+            //     PluginType,
+            //     ctor(vec![Value::String("../sarzak/models/sarzak.v2.json".into()).into()].into())
+            //         .unwrap()
+            // );
+            model.1.replace(plugin.clone());
+
+            let value = new_ref!(Value, Value::PlugIn(plugin));
+            // We know that we'll find one of these because we created it when we
+            // extruded.
+            let store = s_read!(lu_dog)
+                .iter_z_object_store()
+                .find(|store| {
+                    let store = s_read!(store);
+                    store.domain == model_name
+                })
+                .unwrap();
+
+            // 🚧 I should look this up, rather than creating a new one.
+            let ty = ValueType::new_z_object_store(&store, &mut s_write!(lu_dog));
+            Ok((value, ty))
+        } else {
+            dbg!("other");
+            unimplemented!();
+        }
+    }
+    // 🚧 Should these be wrapped in a mutex-like?
+    else if let Some(obj_id) = model.0.exhume_object_id_by_name(&object_name) {
+        if let Some(plugin) = &model.1 {
+            // let proxy_obj = plugin.new()(
+            //     arg_values
+            //         .into_iter()
+            //         .map(|(_, value, _)| {
+            //             let value = s_read!(value).clone();
+            //             <Value as Into<FfiValue>>::into(value)
+            //         })
+            //         .collect::<Vec<_>>()
+            //         .into(),
+            // )
+            // .unwrap();
+            // dbg!(&proxy_obj);
+            let proxy_obj = s_write!(plugin)
+                .invoke_func(
+                    "Object".into(),
+                    func_name.as_str().into(),
+                    arg_values
+                        .into_iter()
+                        .map(|(_, value, _)| {
+                            let value = s_read!(value).clone();
+                            <Value as Into<FfiValue>>::into(value)
+                        })
+                        .collect::<Vec<_>>()
+                        .into(),
+                )
+                .unwrap();
+            if let FfiValue::ProxyType(proxy_obj) = proxy_obj {
+                dbg!(&proxy_obj);
+                // dbg!(&result);
+                let value = new_ref!(Value, Value::ProxyType((obj_id, proxy_obj.plugin)));
+                // let ty = ValueType::
+
+                let woog_struct = s_read!(lu_dog)
+                    .iter_woog_struct()
+                    .find(|woog| {
+                        let woog = s_read!(woog);
+                        woog.name == object_name
+                    })
+                    .unwrap();
+                let ty = ValueType::new_woog_struct(&woog_struct, &mut s_write!(lu_dog));
+
+                Ok((value, ty))
+            } else {
+                panic!("not a proxy");
+            }
+        } else {
+            panic!("no plugin");
+        }
+    } else {
+        error!("object not found");
+        unimplemented!()
     }
 }
 

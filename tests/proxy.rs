@@ -65,6 +65,8 @@ fn run_program(test: &str, program: &str) -> Result<(Value, String), String> {
         Ok(v) => {
             let stdout = v.1.drain_std_out().join("").trim().to_owned();
 
+            println!("{}", stdout);
+
             Ok((v.0, stdout))
         }
         Err(e) => {
@@ -86,6 +88,7 @@ fn run_program(test: &str, program: &str) -> Result<(Value, String), String> {
 #[test]
 fn declaration() {
     let _ = env_logger::builder().is_test(true).try_init();
+    color_backtrace::install();
     let program = include_str!("proxy/declare.tao");
     run_program("proxy/declare.tao", program).unwrap();
 }

@@ -1,36 +1,19 @@
+// This annotation tells the interpreter that the struct will be a proxy for
+// an `ObjectStore` called sarzak. It will find the plugin based on the name.
 #[store(model = "sarzak")]
 struct SarzakStore {}
 
+// This is just to keep the type checking happy.
 #[store(model = "sarzak")]
 impl SarzakStore {
+    // This is a function that exists on the ObjectStore, and the interpreter
+    // will invoke it in the plugin.
     #[proxy(store = "sarzak", object = "ObjectStore", func = "new")]
     fn new() -> Self;
-
-    /// Inter (insert) [`Object`] into the store.
-    ///
-    #[proxy(store = "sarzak", object = "ObjectStore", func = "inter_object")]
-    fn inter_object(self, object: Object);
-
-    /// Exhume (get) [`Object`] from the store.
-    ///
-    #[proxy(store = "sarzak", object = "ObjectStore", func = "exhume_object")]
-    fn exhume_object(self, id: Uuid) -> Option<Object>;
-
-    /// Exhume [`Object`] id from the store by name.
-    ///
-    #[proxy(
-        store = "sarzak",
-        object = "ObjectStore",
-        func = "exhume_object_id_by_name"
-    )]
-    fn exhume_object_id_by_name(self, name: string) -> Option<Uuid>;
-
-    /// Get an iterator over the internal `HashMap<&Uuid, Object>`.
-    ///
-    #[proxy(store = "sarzak", object = "ObjectStore", func = "iter_object")]
-    fn iter_object(self) -> [Object];
 }
 
+// This tells the interpreter that this struct is a proxy for an object called
+// "Object" in the store named "sarzak". In this case it's declared above.
 #[proxy(store = "sarzak", object = "Object")]
 struct Object {
     id: Uuid,
@@ -41,23 +24,36 @@ struct Object {
 
 impl Object {
     #[proxy(store = "sarzak", object = "Object", func = "new")]
-    fn new(desc: string, kl: string, name: string, store: SarzakStore) -> Self;
+    // fn new(desc: string, kl: string, name: string, store: SarzakStore) -> Self;
+    fn new(desc: string, kl: string, name: string) -> Self;
+
+    // This is a static method that will be wired up to a function called
+    // `iter_object`.
+    #[proxy(store = "sarzak", object = "Object", func = "iter_object")]
+    fn instances(store: SarzakStore) -> [Self];
 }
 
 fn main() {
     // Specifying the type of the lhs forces a type check.
+    // This will create an object, but it won't be in the store.
     let object: Object = Object {
         id: Uuid::new(),
         key_letters: "ᚠ",
         name: "Gandalf",
         description: "A wandering wizard",
     };
+    // print("{0}\n".format(object));
 
     // This fails, and well done. We don't want this to be constructable.
     // let store: SarzakStore = SarzakStore {};
 
+    // We create a new store.
     let store = SarzakStore::new();
-    // print(store);
+    print("{0}\n".format(store));
 
-    // Object::new("A wandering wizard", "ᚠ", "Gandalf");
+    // And use it here to create an object. This will be saved in the store.
+    let gandalf = Object::new("A wandering wizard", "ᚠ", "Gandalf");
+    let merlin = Object::new("Magician of Camelot", "M", "Merlin");
+    print(gandalf.name);
+    print(merlin.name);
 }

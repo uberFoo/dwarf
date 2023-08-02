@@ -333,29 +333,30 @@ impl<'b> VM<'b> {
                         let ty_ = self.stack.pop().unwrap();
                         match &*s_read!(ty_) {
                             Value::ProxyType(ty_) => {
-                                match s_read!(ty_).get_attr_value(s_read!(field).as_ref()) {
-                                    Ok(value) => {
-                                        if trace {
-                                            println!(
-                                                "\t\t{}\t{}",
-                                                Colour::Green.paint("field_read:"),
-                                                s_read!(value)
-                                            );
-                                        }
-                                        self.stack.push(value);
-                                    }
-                                    Err(_e) => {
-                                        return Err::<RefType<Value>, ChaChaError>(
-                                            ChaChaError::VmPanic {
-                                                message: format!(
-                                                    "Unknown field {} for proxy.",
-                                                    s_read!(field),
-                                                    // s_read!(ty_)
-                                                ),
-                                            },
-                                        );
-                                    }
-                                }
+                                unimplemented!();
+                                // match s_read!(ty_).get_attr_value(s_read!(field).as_ref()) {
+                                //     Ok(value) => {
+                                //         if trace {
+                                //             println!(
+                                //                 "\t\t{}\t{}",
+                                //                 Colour::Green.paint("field_read:"),
+                                //                 s_read!(value)
+                                //             );
+                                //         }
+                                //         self.stack.push(value);
+                                //     }
+                                //     Err(_e) => {
+                                //         return Err::<RefType<Value>, ChaChaError>(
+                                //             ChaChaError::VmPanic {
+                                //                 message: format!(
+                                //                     "Unknown field {} for proxy.",
+                                //                     s_read!(field),
+                                //                     // s_read!(ty_)
+                                //                 ),
+                                //             },
+                                //         );
+                                //     }
+                                // }
                             }
                             Value::UserType(ty_) => {
                                 match s_read!(ty_).get_field_value(s_read!(field).as_ref()) {
@@ -397,30 +398,32 @@ impl<'b> VM<'b> {
                         let value = self.stack.pop().unwrap();
                         match &*s_read!(ty_) {
                             Value::ProxyType(ty_) => {
-                                match s_write!(ty_)
-                                    .set_attr_value(s_read!(field).as_ref(), value.clone())
-                                {
-                                    Ok(_) => {
-                                        if trace {
-                                            println!(
-                                                "\t\t{}\t{}",
-                                                Colour::Green.paint("field_write:"),
-                                                s_read!(value)
-                                            );
-                                        }
-                                    }
-                                    Err(_e) => {
-                                        return Err::<RefType<Value>, ChaChaError>(
-                                            ChaChaError::VmPanic {
-                                                message: format!(
-                                                    "Unknown field {} for proxy.",
-                                                    s_read!(field),
-                                                    // s_read!(ty_)
-                                                ),
-                                            },
-                                        );
-                                    }
-                                }
+                                unimplemented!();
+
+                                // match s_write!(ty_)
+                                //     .set_attr_value(s_read!(field).as_ref(), value.clone())
+                                // {
+                                //     Ok(_) => {
+                                //         if trace {
+                                //             println!(
+                                //                 "\t\t{}\t{}",
+                                //                 Colour::Green.paint("field_write:"),
+                                //                 s_read!(value)
+                                //             );
+                                //         }
+                                //     }
+                                //     Err(_e) => {
+                                //         return Err::<RefType<Value>, ChaChaError>(
+                                //             ChaChaError::VmPanic {
+                                //                 message: format!(
+                                //                     "Unknown field {} for proxy.",
+                                //                     s_read!(field),
+                                //                     // s_read!(ty_)
+                                //                 ),
+                                //             },
+                                //         );
+                                //     }
+                                // }
                             }
                             Value::UserType(ty_) => {
                                 match s_write!(ty_)

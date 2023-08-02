@@ -31,7 +31,7 @@ name = "dwarfdb"
 path = "src/bin/tui.rs"
 
 [dependencies]
-abi_stable = "0.11.1"
+abi_stable = "0.11.2"
 ansi_term = "0.12.1"
 ansi-to-tui = { git = "https://github.com/uberFoo/ansi-to-tui" }
 ariadne = "0.2.0"

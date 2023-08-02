@@ -1,4 +1,5 @@
 use std::{
+    any::Any,
     collections::VecDeque,
     fmt::{self, Display},
 };
@@ -8,21 +9,21 @@ use abi_stable::{
     export_root_module,
     prefix_type::PrefixTypeTrait,
     sabi_extern_fn,
-    sabi_trait::prelude::TD_Opaque,
-    std_types::{RBoxError, ROk, RResult, RStr, RString, RVec},
+    sabi_trait::prelude::{TD_CanDowncast, TD_Opaque},
+    std_types::{RBoxError, RErr, ROk, RResult, RStr, RString, RVec},
     DynTrait,
 };
 use dwarf::{
-    chacha::value::FfiValue,
+    chacha::value::{FfiProxy, FfiUuid, FfiValue},
     plug_in::{
-        Appender, AppenderBox, Appender_TO, BoxedInterface, Error as AppError, ExampleLib,
-        ExampleLib_Ref, Plugin, PluginId, PluginMod, PluginMod_Ref, PluginType, Plugin_TO,
-        TheInterface, Unsupported,
+        Error as AppError, Plugin, PluginId, PluginModRef, PluginModule, PluginType, Plugin_TO,
+        Unsupported,
     },
+    sarzak::{Object, ObjectStore},
     Value,
 };
-use sarzak::sarzak::ObjectStore;
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 ///////////////////////////////////////////////////////////////////////////////////
 
@@ -30,113 +31,178 @@ use serde::{Deserialize, Serialize};
 ///
 /// This code isn't run until the layout of the type it returns is checked.
 #[export_root_module]
-fn instantiate_root_module() -> PluginMod_Ref {
-    PluginMod { new, load }.leak_into_prefix()
+fn instantiate_root_module() -> PluginModRef {
+    PluginModule { name, id, new }.leak_into_prefix()
 }
 
 //////////////////////////////////////////////////////////////////////////////////////
 
+#[sabi_extern_fn]
+pub fn name() -> RStr<'static> {
+    "sarzak".into()
+}
+
+#[sabi_extern_fn]
+pub fn id() -> RStr<'static> {
+    "sarzak".into()
+}
+
 /// Instantiates the plugin.
 #[sabi_extern_fn]
-pub fn new(plugin_id: PluginId) -> RResult<PluginType, AppError> {
-    let this = SarzakStore {
-        plugin_id,
-        store: ObjectStore::new(),
+pub fn new(args: RVec<FfiValue>) -> RResult<PluginType, AppError> {
+    let this = if args.len() == 0 {
+        SarzakStore {
+            store: ObjectStore::new(),
+        }
+    } else if args.len() == 1 {
+        if let FfiValue::String(path) = &args[0] {
+            SarzakStore {
+                store: ObjectStore::new(),
+            }
+        } else {
+            return RErr(AppError::Uber("Invalid arguments".into()));
+        }
+    } else {
+        return RErr(AppError::Uber("Invalid arguments".into()));
     };
+
     ROk(Plugin_TO::from_value(this, TD_Opaque))
 }
 
-#[sabi_extern_fn]
-pub fn load(plugin_id: PluginId, path: RString) -> RResult<PluginType, AppError> {
-    let store = ObjectStore::load(path.as_str())
-        .map_err(|e| {
-            AppError::unsupported_command(Unsupported {
-                plugin_name: plugin_id.named.clone().into_owned(),
-                command_name: "load".into(),
-                error: RBoxError::new(e),
-            })
-        })
-        .unwrap();
-
-    // dbg!(&store);
-    let this = SarzakStore { plugin_id, store };
-    ROk(Plugin_TO::from_value(this, TD_Opaque))
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub enum Command {
-    IterObject,
-}
-
+#[derive(Clone, Debug)]
 struct SarzakStore {
-    plugin_id: PluginId,
     store: ObjectStore,
 }
 
-impl Plugin for SarzakStore {
-    fn json_command(
-        &mut self,
-        command: RStr<'_>,
-        // app: ApplicationMut<'_>,
-    ) -> RResult<RString, AppError> {
-        (|| -> Result<RString, AppError> {
-            let command = serde_json::from_str::<Command>(command.as_str()).map_err(|e| {
-                AppError::unsupported_command(Unsupported {
-                    plugin_name: self.plugin_id().named.clone().into_owned(),
-                    command_name: command.into(),
-                    error: RBoxError::new(e),
-                    // supported_commands: this.list_commands(),
-                })
-            })?;
+impl Display for SarzakStore {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        //     f.debug_struct("SarzakStore")
+        //         .field("store", &self.store)
+        //         .field("plugin_id", &self.plugin_id)
+        //         .finish()
+        write!(f, "{:?}", self.store)
+    }
+}
 
-            match command {
-                Command::IterObject => {
-                    let mut result = String::new();
-                    let objects = self.store.iter_object();
-                    for obj in objects {
-                        result.push_str(&format!("{:?}", obj));
+impl Plugin for SarzakStore {
+    fn invoke_func(
+        &mut self,
+        ty: RStr<'_>,
+        func: RStr<'_>,
+        mut args: RVec<FfiValue>,
+    ) -> RResult<FfiValue, AppError> {
+        (|| -> Result<FfiValue, AppError> {
+            let ty = ty.as_str();
+            let func = func.as_str();
+            dbg!(&ty, &func, &args);
+            match ty {
+                "Object" => match func {
+                    "new" => {
+                        if args.len() != 3 {
+                            return Err(AppError::Uber("Expected 4 arguments".into()));
+                        }
+
+                        let mut value_args: Vec<Value> = Vec::new();
+                        args.reverse();
+                        for arg in args.into_iter() {
+                            value_args.push(arg.into());
+                        }
+                        match (|| -> Result<Object, AppError> {
+                            let id = Uuid::new_v4();
+                            let obj = Object {
+                                description: value_args.pop().unwrap().try_into().map_err(|e| {
+                                    AppError::Uber(format!("Error converting value: {}", e).into())
+                                })?,
+                                id,
+                                key_letters: value_args.pop().unwrap().try_into().map_err(|e| {
+                                    AppError::Uber(format!("Error converting value: {}", e).into())
+                                })?,
+                                name: value_args.pop().unwrap().try_into().map_err(|e| {
+                                    AppError::Uber(format!("Error converting value: {}", e).into())
+                                })?,
+                            };
+
+                            Ok(obj)
+                        })() {
+                            Ok(object) => {
+                                let this = ObjectProxy { inner: object };
+                                let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
+                                let proxy = FfiProxy {
+                                    uuid: FfiUuid {
+                                        inner: "7178e7a4-5131-504b-a7b3-c2c0cfedf343".into(),
+                                    },
+                                    plugin: plugin.clone(),
+                                };
+                                self.invoke_func(
+                                    "ObjectStore".into(),
+                                    "inter_object".into(),
+                                    vec![FfiValue::PlugIn(plugin)].into(),
+                                )
+                                .unwrap();
+                                Ok(FfiValue::ProxyType(proxy))
+                            }
+                            Err(e) => Err(e),
+                        }
                     }
-                    Ok(result.into())
-                }
+                    _ => Err(AppError::Uber("Invalid function".into())),
+                },
+                "ObjectStore" => match func {
+                    "inter_object" => {
+                        if args.len() != 1 {
+                            return Err(AppError::Uber("Expected 1 argument".into()));
+                        }
+
+                        if let FfiValue::PlugIn(obj) = args.pop().unwrap() {
+                            let obj = obj.obj.downcast_into::<ObjectProxy>().unwrap();
+                            self.store.inter_object(obj.inner.clone());
+                            dbg!(&self.store);
+                            Ok(FfiValue::Empty)
+                        } else {
+                            Err(AppError::Uber("Invalid Object".into()))
+                        }
+                    }
+                    _ => Err(AppError::Uber("Invalid function".into())),
+                },
+                _ => Err(AppError::Uber("Invalid type".into())),
             }
         })()
         .into()
     }
 
-    fn invoke_func(&mut self, name: RStr<'_>, args: RVec<RString>) -> RResult<FfiValue, AppError> {
-        (|| -> Result<FfiValue, AppError> {
-            let name = name.as_str();
-            let args: VecDeque<Value> = args
-                .into_iter()
-                .map(|s| <RString as Into<String>>::into(s).try_into().unwrap())
-                .collect::<VecDeque<_>>();
-            dbg!(&name, &args);
-            // let result = self.store.invoke_func(name, args)?;
-            // Ok(result.into())
-            let value: Value = 42.into();
-            Ok(value.into())
-        })()
-        .into()
+    fn name(&self) -> RStr<'_> {
+        "sarzak".into()
     }
 
-    // fn invoke_method(
-    //     &mut self,
-    //     id: RStr<'_>,
-    //     name: RStr<'_>,
-    //     args: RVec<RString>,
-    // ) -> RResult<RString, AppError> {
-    //     (|| -> Result<RString, AppError> {
-    //         let name = name.as_str();
-    //         let args = args.into_iter().map(|s| s.into()).collect::<Vec<_>>();
-    //         // let result = self.store.invoke_func(name, args)?;
-    //         // Ok(result.into())
-    //         Ok("".into())
-    //     })()
-    //     .into()
-    // }
+    fn close(self) {}
+}
 
-    fn plugin_id(&self) -> &PluginId {
-        &self.plugin_id
+#[derive(Clone, Debug)]
+struct ObjectProxy {
+    inner: Object,
+}
+
+impl Display for ObjectProxy {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        //     f.debug_struct("SarzakStore")
+        //         .field("store", &self.store)
+        //         .field("plugin_id", &self.plugin_id)
+        //         .finish()
+        write!(f, "{:?}", self.inner)
+    }
+}
+
+impl Plugin for ObjectProxy {
+    fn invoke_func(
+        &mut self,
+        ty: RStr<'_>,
+        name: RStr<'_>,
+        args: RVec<FfiValue>,
+    ) -> RResult<FfiValue, AppError> {
+        RErr(AppError::Uber("Invalid type".into()))
+    }
+
+    fn name(&self) -> RStr<'_> {
+        "Object".into()
     }
 
     fn close(self) {}
