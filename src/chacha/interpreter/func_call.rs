@@ -19,7 +19,7 @@ use crate::{
         debug, error, eval_expression, eval_statement, function, trace, typecheck, ChaChaError,
         Context, UserType,
     },
-    lu_dog::{Argument, BodyEnum, Function, Span, ValueType, ZObjectStore},
+    lu_dog::{Argument, BodyEnum, Function, List, Span, ValueType, ZObjectStore},
     new_rc, new_ref,
     plug_in::PluginType,
     plug_in::{PluginId, PluginModRef},
@@ -27,7 +27,7 @@ use crate::{
 };
 
 const OBJECT_STORE: &str = "ObjectStore";
-const OBJECT_STORE_GETTER: &str = "new";
+const FUNCTION_NEW: &str = "new";
 
 pub fn eval_function_call(
     func: RefType<Function>,
@@ -111,7 +111,7 @@ fn eval_external_function_call(
     let object_name = object_name.clone();
     if object_name == OBJECT_STORE {
         // Here we load the plug-in and create an instance of the object store.
-        if s_read!(external).function == OBJECT_STORE_GETTER {
+        if s_read!(external).function == FUNCTION_NEW {
             let library_path = RawLibrary::path_in_directory(
                 &Path::new("./plug-ins/example/target/debug"),
                 &model_name,
@@ -130,12 +130,12 @@ fn eval_external_function_call(
             })?;
 
             let ctor = root_module.new();
-            let plugin = new_ref!(PluginType, ctor(vec![].into()).unwrap());
-            // let plugin = new_ref!(
-            //     PluginType,
-            //     ctor(vec![Value::String("../sarzak/models/sarzak.v2.json".into()).into()].into())
-            //         .unwrap()
-            // );
+            // let plugin = new_ref!(PluginType, ctor(vec![].into()).unwrap());
+            let plugin = new_ref!(
+                PluginType,
+                ctor(vec![Value::String("../sarzak/models/sarzak.v2.json".into()).into()].into())
+                    .unwrap()
+            );
             model.1.replace(plugin.clone());
 
             let value = new_ref!(Value, Value::PlugIn(plugin));
@@ -160,21 +160,10 @@ fn eval_external_function_call(
     // 🚧 Should these be wrapped in a mutex-like?
     else if let Some(obj_id) = model.0.exhume_object_id_by_name(&object_name) {
         if let Some(plugin) = &model.1 {
-            // let proxy_obj = plugin.new()(
-            //     arg_values
-            //         .into_iter()
-            //         .map(|(_, value, _)| {
-            //             let value = s_read!(value).clone();
-            //             <Value as Into<FfiValue>>::into(value)
-            //         })
-            //         .collect::<Vec<_>>()
-            //         .into(),
-            // )
-            // .unwrap();
-            // dbg!(&proxy_obj);
+            // 🚧 Don't unwrap -- error handling.
             let proxy_obj = s_write!(plugin)
                 .invoke_func(
-                    "Object".into(),
+                    object_name.as_str().into(),
                     func_name.as_str().into(),
                     arg_values
                         .into_iter()
@@ -186,24 +175,45 @@ fn eval_external_function_call(
                         .into(),
                 )
                 .unwrap();
-            if let FfiValue::ProxyType(proxy_obj) = proxy_obj {
-                dbg!(&proxy_obj);
-                // dbg!(&result);
-                let value = new_ref!(Value, Value::ProxyType((obj_id, proxy_obj.plugin)));
-                // let ty = ValueType::
+            match proxy_obj {
+                FfiValue::ProxyType(proxy_obj) => {
+                    let value = new_ref!(Value, Value::ProxyType((obj_id, proxy_obj.plugin)));
 
-                let woog_struct = s_read!(lu_dog)
-                    .iter_woog_struct()
-                    .find(|woog| {
-                        let woog = s_read!(woog);
-                        woog.name == object_name
-                    })
-                    .unwrap();
-                let ty = ValueType::new_woog_struct(&woog_struct, &mut s_write!(lu_dog));
+                    let woog_struct = s_read!(lu_dog)
+                        .iter_woog_struct()
+                        .find(|woog| {
+                            let woog = s_read!(woog);
+                            woog.name == object_name
+                        })
+                        .unwrap();
+                    let ty = ValueType::new_woog_struct(&woog_struct, &mut s_write!(lu_dog));
 
-                Ok((value, ty))
-            } else {
-                panic!("not a proxy");
+                    Ok((value, ty))
+                }
+                FfiValue::Vector(vec) => {
+                    let vec = vec
+                        .into_iter()
+                        .map(Value::from)
+                        .map(|v| new_ref!(Value, v))
+                        .collect::<Vec<_>>();
+                    let value = new_ref!(Value, Value::Vector(vec));
+
+                    let woog_struct = s_read!(lu_dog)
+                        .iter_woog_struct()
+                        .find(|woog| {
+                            let woog = s_read!(woog);
+                            woog.name == object_name
+                        })
+                        .unwrap();
+                    let ty = ValueType::new_woog_struct(&woog_struct, &mut s_write!(lu_dog));
+                    let list = List::new(&ty, &mut s_write!(lu_dog));
+                    let ty = ValueType::new_list(&list, &mut s_write!(lu_dog));
+
+                    Ok((value, ty))
+                }
+                all_manner_of_things => {
+                    panic!("{all_manner_of_things:?} is not a proxy");
+                }
             }
         } else {
             panic!("no plugin");
@@ -338,7 +348,7 @@ fn eval_built_in_function_call(
         }
 
         let mut value = new_ref!(Value, Value::Empty);
-        let mut ty = Value::Empty.get_type(&s_read!(lu_dog));
+        let mut ty = Value::Empty.get_type(&s_read!(lu_dog), &s_read!(context.sarzak_heel()));
         if let Some(ref id) = s_read!(block).statement {
             let mut next = s_read!(lu_dog).exhume_statement(id).unwrap();
 
@@ -375,7 +385,7 @@ fn eval_built_in_function_call(
     } else {
         Ok((
             new_ref!(Value, Value::Empty),
-            Value::Empty.get_type(&s_read!(lu_dog)),
+            Value::Empty.get_type(&s_read!(lu_dog), &s_read!(context.sarzak_heel())),
         ))
     }
 }

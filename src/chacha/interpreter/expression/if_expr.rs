@@ -42,7 +42,7 @@ pub fn eval_if_expression(
         } else {
             (
                 new_ref!(Value, Value::Empty),
-                Value::Empty.get_type(&s_read!(lu_dog)),
+                Value::Empty.get_type(&s_read!(lu_dog), &s_read!(context.sarzak_heel())),
             )
         }
     })

@@ -107,16 +107,17 @@ pub fn eval_call(
         // where to put it in my brain just yet.
         // But basically it comes down to allowing things like
         // `"dwarf".len()`
-        // Or iterators things like
+        // Or iterator things like
         // `[1, 2, 3].iter().map(|x| x + 1)`
         // `["hello", "I", "am", "dwarf!"].sort();
         let x = match &s_read!(ty).subtype {
             ValueTypeEnum::Ty(ref id) => {
-                let _ty = *s_read!(sarzak).exhume_ty(id).unwrap();
-                match &_ty {
+                let _ty = s_read!(sarzak).exhume_ty(id).unwrap();
+                let x = match &*_ty.borrow() {
                     Ty::SString(_) => (value, ty.clone()),
                     _ => tuple_from_value()?,
-                }
+                };
+                x
             }
             _ => tuple_from_value()?,
         };
@@ -124,7 +125,7 @@ pub fn eval_call(
     } else {
         (
             new_ref!(Value, Value::Empty),
-            Value::Empty.get_type(&s_read!(lu_dog)),
+            Value::Empty.get_type(&s_read!(lu_dog), &s_read!(sarzak)),
         )
     };
 
@@ -191,7 +192,7 @@ pub fn eval_call(
                         )
                         .collect::<Vec<&str>>()
                         .len();
-                        let ty = Ty::new_integer();
+                        let ty = Ty::new_integer(&sarzak.borrow());
                         let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
                         Ok((new_ref!(Value, Value::Integer(len as i64)), ty))
                     }
@@ -293,7 +294,7 @@ pub fn eval_call(
                             }
                         }
 
-                        let ty = Ty::new_s_string();
+                        let ty = Ty::new_s_string(&sarzak.borrow());
                         let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
                         Ok((new_ref!(Value, Value::String(result)), ty))
                     }
@@ -409,7 +410,7 @@ pub fn eval_call(
             // This is dirty. Down and dirty...
             if ty == "Uuid" && func == "new" {
                 let value = Value::Uuid(Uuid::new_v4());
-                let ty = Ty::new_s_uuid();
+                let ty = Ty::new_s_uuid(&sarzak.borrow());
                 let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
 
                 Ok((new_ref!(Value, value), ty))
@@ -474,7 +475,7 @@ pub fn eval_call(
                 match func.as_str() {
                     "args" => {
                         debug!("evaluating chacha::args");
-                        let ty = Ty::new_s_string();
+                        let ty = Ty::new_s_string(&sarzak.borrow());
                         let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
                         let ty = List::new(&ty, &mut s_write!(lu_dog));
                         let ty = ValueType::new_list(&ty, &mut s_write!(lu_dog));
@@ -492,7 +493,7 @@ pub fn eval_call(
                         debug!("evaluating chacha::typeof");
                         let (_arg, ty) = arg_values.pop_front().unwrap().0;
                         let pvt_ty = PrintableValueType(&ty, context);
-                        let ty = Ty::new_s_string();
+                        let ty = Ty::new_s_string(&sarzak.borrow());
                         let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
 
                         Ok((new_ref!(Value, pvt_ty.to_string().into()), ty))
@@ -538,7 +539,7 @@ pub fn eval_call(
                         // let time = format!("{:?}\n", elapsed);
                         // chacha_print(time, context)?;
 
-                        let ty = Ty::new_float();
+                        let ty = Ty::new_float(&sarzak.borrow());
                         let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
 
                         Ok((new_ref!(Value, Value::Float(elapsed.as_secs_f64())), ty))
@@ -561,7 +562,7 @@ pub fn eval_call(
                                 );
                         // chacha_print(result, context)?;
 
-                        let ty = Ty::new_s_string();
+                        let ty = Ty::new_s_string(&sarzak.borrow());
                         let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
 
                         Ok((new_ref!(Value, Value::String(result)), ty))
@@ -579,7 +580,7 @@ pub fn eval_call(
                         if let Value::Boolean(result) = value {
                             // if value.into() {
                             if result {
-                                let ty = Ty::new_boolean();
+                                let ty = Ty::new_boolean(&sarzak.borrow());
                                 let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
 
                                 Ok((new_ref!(Value, value), ty))
@@ -638,7 +639,7 @@ pub fn eval_call(
                         error!("deal with call expression {value:?}");
                         Ok((
                             new_ref!(Value, Value::Empty),
-                            Value::Empty.get_type(&s_read!(lu_dog)),
+                            Value::Empty.get_type(&s_read!(lu_dog), &s_read!(sarzak)),
                         ))
                     }
                 }

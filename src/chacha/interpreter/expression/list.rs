@@ -59,7 +59,7 @@ pub fn eval_list_expression(
         ))
     } else {
         let list = List::new(
-            &Value::Empty.get_type(&s_read!(lu_dog)),
+            &Value::Empty.get_type(&s_read!(lu_dog), &s_read!(context.sarzak_heel())),
             &mut s_write!(lu_dog),
         );
 

@@ -29,8 +29,8 @@ impl Object {
 
     // This is a static method that will be wired up to a function called
     // `iter_object`.
-    #[proxy(store = "sarzak", object = "Object", func = "iter_object")]
-    fn instances(store: SarzakStore) -> [Self];
+    #[proxy(store = "sarzak", object = "Object", func = "instances")]
+    fn flubber() -> [Self];
 }
 
 fn main() {
@@ -54,6 +54,20 @@ fn main() {
     // And use it here to create an object. This will be saved in the store.
     let gandalf = Object::new("A wandering wizard", "ᚠ", "Gandalf");
     let merlin = Object::new("Magician of Camelot", "M", "Merlin");
-    print(gandalf.name);
-    print(merlin.name);
+
+    chacha::assert_eq(gandalf.name, "Gandalf");
+    chacha::assert_eq(gandalf.description, "A wandering wizard");
+    chacha::assert_eq(gandalf.key_letters, "ᚠ");
+
+    chacha::assert_eq(merlin.name, "Merlin");
+    chacha::assert_eq(merlin.description, "Magician of Camelot");
+    chacha::assert_eq(merlin.key_letters, "M");
+
+    gandalf.name = "Gandalf the Grey";
+    chacha::assert_eq(gandalf.name, "Gandalf the Grey");
+
+    for instance in Object::flubber() {
+        print(instance);
+        print("\n");
+    }
 }

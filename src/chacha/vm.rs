@@ -914,10 +914,10 @@ mod tests {
         let foo = WoogStruct::new("Foo".to_owned(), None, &mut lu_dog);
         // let _ = WoogItem::new_woog_struct(source, &mt, lu_dog);
         let struct_ty = ValueType::new_woog_struct(&foo, &mut lu_dog);
-        let ty = Ty::new_integer();
+        let ty = Ty::new_integer(&sarzak);
         let ty = ValueType::new_ty(&ty, &mut lu_dog);
         let _ = Field::new("bar".to_owned(), &foo, &ty, &mut lu_dog);
-        let ty = Ty::new_float();
+        let ty = Ty::new_float(&sarzak);
         let ty = ValueType::new_ty(&ty, &mut lu_dog);
         let _ = Field::new("baz".to_owned(), &foo, &ty, &mut lu_dog);
 

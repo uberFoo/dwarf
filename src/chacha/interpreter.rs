@@ -47,7 +47,7 @@ pub(crate) use pvt::PrintableValueType;
 #[cfg(feature = "repl")]
 pub use repl::start_repl;
 
-#[cfg(not(any(feature = "single", feature = "single-vec")))]
+#[cfg(not(any(feature = "single", feature = "single-vec", feature = "multi-nd-vec")))]
 pub use tui::start_tui_repl;
 
 use context::Context;
@@ -539,6 +539,7 @@ fn eval_expression(
     vm: &mut VM,
 ) -> Result<(RefType<Value>, RefType<ValueType>)> {
     let lu_dog = context.lu_dog_heel().clone();
+    let sarzak = context.sarzak_heel().clone();
 
     // Timing goodness
     context.increment_expression_count(1);
@@ -629,7 +630,7 @@ fn eval_expression(
         //
         ExpressionEnum::ZNone(_) => Ok((
             new_ref!(Value, Value::Empty),
-            Value::Empty.get_type(&s_read!(lu_dog)),
+            Value::Empty.get_type(&s_read!(lu_dog), &s_read!(sarzak)),
         )),
         //
         // ZSome
@@ -678,7 +679,7 @@ fn eval_expression(
 
             Ok((
                 new_ref!(Value, Value::Empty),
-                Value::Empty.get_type(&s_read!(lu_dog)),
+                Value::Empty.get_type(&s_read!(lu_dog), &s_read!(sarzak)),
             ))
         }
     }
@@ -690,6 +691,7 @@ pub fn eval_statement(
     vm: &mut VM,
 ) -> Result<(RefType<Value>, RefType<ValueType>)> {
     let lu_dog = context.lu_dog_heel().clone();
+    let sarzak = context.sarzak_heel().clone();
 
     debug!("eval_statement statement {statement:?}");
     trace!("eval_statement stack {:?}", context.memory());
@@ -707,7 +709,7 @@ pub fn eval_statement(
 
             Ok((
                 new_ref!(Value, Value::Empty),
-                Value::Empty.get_type(&s_read!(lu_dog)),
+                Value::Empty.get_type(&s_read!(lu_dog), &s_read!(sarzak)),
             ))
         }
         StatementEnum::LetStatement(ref stmt) => {
@@ -734,7 +736,7 @@ pub fn eval_statement(
             // the storage?
             Ok((
                 new_ref!(Value, Value::Empty),
-                Value::Empty.get_type(&s_read!(lu_dog)),
+                Value::Empty.get_type(&s_read!(lu_dog), &s_read!(sarzak)),
             ))
         }
         StatementEnum::ResultStatement(ref stmt) => {
@@ -753,7 +755,7 @@ pub fn eval_statement(
         }
         StatementEnum::ItemStatement(_) => Ok((
             new_ref!(Value, Value::Empty),
-            Value::Empty.get_type(&s_read!(lu_dog)),
+            Value::Empty.get_type(&s_read!(lu_dog), &s_read!(sarzak)),
         )),
     }
 }
@@ -915,7 +917,7 @@ fn typecheck(
                 .unwrap();
             let l = &s_read!(l).subtype;
             let r = &s_read!(r).subtype;
-            dbg!(l, r);
+            // dbg!(l, r);
             if l == r {
                 return Ok(());
             }

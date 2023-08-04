@@ -32,7 +32,7 @@ pub fn eval_variable_expression(
         "ExpressionEnum::VariableExpression value: {}",
         s_read!(value)
     );
-    let ty = s_read!(value).get_type(&s_read!(lu_dog));
+    let ty = s_read!(value).get_type(&s_read!(lu_dog), &s_read!(context.sarzak_heel()));
 
     Ok((value, ty))
 }

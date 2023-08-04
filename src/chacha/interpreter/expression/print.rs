@@ -25,7 +25,7 @@ pub fn eval_print(
 
     let result = Ok((
         new_ref!(Value, Value::Empty),
-        Value::Empty.get_type(&s_read!(lu_dog)),
+        Value::Empty.get_type(&s_read!(lu_dog), &s_read!(context.sarzak_heel())),
     ));
 
     #[allow(clippy::let_and_return)]

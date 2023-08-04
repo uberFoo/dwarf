@@ -11,6 +11,7 @@ pub fn eval_block(
     vm: &mut VM,
 ) -> Result<(RefType<Value>, RefType<ValueType>)> {
     let lu_dog = context.lu_dog_heel().clone();
+    let sarzak = context.sarzak_heel().clone();
 
     let block = s_read!(lu_dog).exhume_block(block_id).unwrap();
     let stmts = s_read!(block).r18_statement(&s_read!(lu_dog));
@@ -43,7 +44,7 @@ pub fn eval_block(
     } else {
         Ok((
             new_ref!(Value, Value::Empty),
-            Value::Empty.get_type(&s_read!(lu_dog)),
+            Value::Empty.get_type(&s_read!(lu_dog), &s_read!(sarzak)),
         ))
     }
 }

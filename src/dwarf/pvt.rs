@@ -62,7 +62,7 @@ impl<'d, 'a, 'b> fmt::Display for PrintableValueType<'d, 'a, 'b> {
                 // So, sometimes these show up in the model domain. It'll get really
                 // interesting when there are multiples of those in memory at once...
                 if let Some(ty) = context.sarzak.exhume_ty(ty) {
-                    match ty {
+                    match &*ty.borrow() {
                         Ty::Boolean(_) => write!(f, "bool"),
                         Ty::Float(_) => write!(f, "float"),
                         Ty::Integer(_) => write!(f, "int"),
@@ -70,7 +70,7 @@ impl<'d, 'a, 'b> fmt::Display for PrintableValueType<'d, 'a, 'b> {
                             error!("um, check this out?");
                             // This should probably just be an unwrap().
                             if let Some(object) = context.sarzak.exhume_object(object) {
-                                write!(f, "{}", object.name)
+                                write!(f, "{}", object.borrow().name)
                             } else {
                                 write!(f, "<unknown object>")
                             }
@@ -87,9 +87,11 @@ impl<'d, 'a, 'b> fmt::Display for PrintableValueType<'d, 'a, 'b> {
                     // one of the model domains.
                     // 🚧 HashMapFix
                     for (_, model) in context.models {
-                        if let Some(Ty::Object(ref object)) = model.0.exhume_ty(ty) {
-                            if let Some(object) = model.0.exhume_object(object) {
-                                return write!(f, "{}Proxy", object.name);
+                        if let Some(ty) = model.0.exhume_ty(ty) {
+                            if let Ty::Object(ref object) = &*ty.borrow() {
+                                if let Some(object) = model.0.exhume_object(object) {
+                                    return write!(f, "{}Proxy", object.borrow().name);
+                                }
                             }
                         }
                     }

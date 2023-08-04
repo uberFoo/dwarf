@@ -19,7 +19,7 @@ pub mod tui;
 // pub mod lu_dog_proxy;
 
 pub use ::sarzak::{lu_dog, sarzak};
-pub use chacha::{
+pub(crate) use chacha::{
     error::{ChaChaError, ChaChaErrorReporter},
     interpreter::{self, initialize_interpreter},
     value::Value,

@@ -282,11 +282,11 @@ pub fn new_lu_dog(
     let mut lu_dog = LuDogStore::new();
 
     // We need to stuff all of the sarzak types into the store.
-    ValueType::new_ty(&Ty::new_boolean(), &mut lu_dog);
-    ValueType::new_ty(&Ty::new_float(), &mut lu_dog);
-    ValueType::new_ty(&Ty::new_integer(), &mut lu_dog);
-    ValueType::new_ty(&Ty::new_s_string(), &mut lu_dog);
-    ValueType::new_ty(&Ty::new_s_uuid(), &mut lu_dog);
+    ValueType::new_ty(&Ty::new_boolean(sarzak), &mut lu_dog);
+    ValueType::new_ty(&Ty::new_float(sarzak), &mut lu_dog);
+    ValueType::new_ty(&Ty::new_integer(sarzak), &mut lu_dog);
+    ValueType::new_ty(&Ty::new_s_string(sarzak), &mut lu_dog);
+    ValueType::new_ty(&Ty::new_s_uuid(sarzak), &mut lu_dog);
 
     if let Some((source, ast)) = source {
         let _client = Client::start();
@@ -1006,7 +1006,7 @@ pub(super) fn inter_expression(
             };
             let expr =
                 Expression::new_literal(&Literal::new_boolean_literal(&literal, lu_dog), lu_dog);
-            let ty = ValueType::new_ty(&Ty::new_boolean(), lu_dog);
+            let ty = ValueType::new_ty(&Ty::new_boolean(&context.sarzak), lu_dog);
             let value = XValue::new_expression(block, &ty, &expr, lu_dog);
             s_write!(span).x_value = Some(s_read!(value).id);
 
@@ -1150,7 +1150,7 @@ pub(super) fn inter_expression(
             let expr = Operator::new_comparison(&lhs.0, Some(&rhs.0), &expr, lu_dog);
             let expr = Expression::new_operator(&expr, lu_dog);
 
-            let ty = Ty::new_boolean();
+            let ty = Ty::new_boolean(&context.sarzak);
             let ty = ValueType::new_ty(&ty, lu_dog);
 
             let value = XValue::new_expression(block, &ty, &expr, lu_dog);
@@ -1237,6 +1237,66 @@ pub(super) fn inter_expression(
                         }])
                     }
                 }
+                ValueTypeEnum::Ty(id) => {
+                    let woog_struct = lu_dog
+                        .iter_woog_struct()
+                        .find(|ws| s_read!(ws).object == Some(*id))
+                        .unwrap();
+
+                    if let Some(field) =
+                        lu_dog.exhume_field_id_by_name(&rhs.0.to_upper_camel_case())
+                    {
+                        let field = lu_dog.exhume_field(&field);
+                        // let field = woog_struct.r7_field(lu_dog);
+                        // let field = field.iter().find(|f| s_read!(f).name == rhs);
+                        let func = if let Some(impl_) =
+                            s_read!(woog_struct).r8c_implementation_block(lu_dog).pop()
+                        {
+                            let impl_ = s_read!(impl_);
+
+                            let funcs = impl_.r9_function(lu_dog);
+                            funcs.iter().find(|f| s_read!(f).name == rhs.0).cloned()
+                        } else {
+                            None
+                        };
+
+                        // We need to grab the type from the field: what we have above is the type
+                        // of the struct.
+                        if let Some(field) = field {
+                            let fat = FieldAccessTarget::new_field(&field, lu_dog);
+                            let expr = FieldAccess::new(&lhs.0, &fat, &woog_struct, lu_dog);
+                            let expr = Expression::new_field_access(&expr, lu_dog);
+                            let ty = s_read!(field).r5_value_type(lu_dog)[0].clone();
+                            let value = XValue::new_expression(block, &ty, &expr, lu_dog);
+                            s_write!(span).x_value = Some(s_read!(value).id);
+
+                            Ok(((expr, span), ty))
+                        } else if let Some(func) = func {
+                            let fat = FieldAccessTarget::new_function(&func, lu_dog);
+                            let expr = FieldAccess::new(&lhs.0, &fat, &woog_struct, lu_dog);
+                            let expr = Expression::new_field_access(&expr, lu_dog);
+                            let ty = s_read!(func).r10_value_type(lu_dog)[0].clone();
+                            let value = XValue::new_expression(block, &ty, &expr, lu_dog);
+                            s_write!(span).x_value = Some(s_read!(value).id);
+
+                            Ok(((expr, span), ty))
+                        } else {
+                            let span = s_read!(span);
+                            let span = span.start as usize..span.end as usize;
+                            Err(vec![DwarfError::StructFieldNotFound {
+                                field: rhs.0.clone(),
+                                span,
+                                location: location!(),
+                            }])
+                        }
+                    } else {
+                        Err(vec![DwarfError::StructFieldNotFound {
+                            field: rhs.0.clone(),
+                            span: rhs.1.to_owned(),
+                            location: location!(),
+                        }])
+                    }
+                }
                 ty => {
                     // 🚧 This should be a DwarfError.
                     let error =
@@ -1260,7 +1320,7 @@ pub(super) fn inter_expression(
                 &Literal::new_float_literal(&FloatLiteral::new(*literal, lu_dog), lu_dog),
                 lu_dog,
             );
-            let ty = ValueType::new_ty(&Ty::new_float(), lu_dog);
+            let ty = ValueType::new_ty(&Ty::new_float(&context.sarzak), lu_dog);
             let value = XValue::new_expression(block, &ty, &expr, lu_dog);
             s_write!(span).x_value = Some(s_read!(value).id);
 
@@ -1435,7 +1495,7 @@ pub(super) fn inter_expression(
             let expr = Operator::new_comparison(&lhs.0, Some(&rhs.0), &expr, lu_dog);
             let expr = Expression::new_operator(&expr, lu_dog);
 
-            let ty = Ty::new_boolean();
+            let ty = Ty::new_boolean(&context.sarzak);
             let ty = ValueType::new_ty(&ty, lu_dog);
 
             let value = XValue::new_expression(block, &ty, &expr, lu_dog);
@@ -1485,7 +1545,7 @@ pub(super) fn inter_expression(
             let expr = Operator::new_comparison(&lhs.0, Some(&rhs.0), &expr, lu_dog);
             let expr = Expression::new_operator(&expr, lu_dog);
 
-            let ty = Ty::new_boolean();
+            let ty = Ty::new_boolean(&context.sarzak);
             let ty = ValueType::new_ty(&ty, lu_dog);
 
             let value = XValue::new_expression(block, &ty, &expr, lu_dog);
@@ -1522,7 +1582,8 @@ pub(super) fn inter_expression(
             // from the lu_dog type.
             if let ValueTypeEnum::Ty(ref ty) = s_read!(conditional_ty).subtype {
                 let s_ty = context.sarzak.exhume_ty(ty).unwrap();
-                if let Ty::Boolean(_) = s_ty {
+                let s_ty = s_ty.borrow();
+                if let Ty::Boolean(_) = &*s_ty {
                     // Good Times.
                 } else {
                     let ty = PrintableValueType(&conditional_ty, context, lu_dog);
@@ -1603,7 +1664,7 @@ pub(super) fn inter_expression(
                 lu_dog,
             )?;
 
-            let int_ty = ValueType::new_ty(&Ty::new_integer(), lu_dog);
+            let int_ty = ValueType::new_ty(&Ty::new_integer(&context.sarzak), lu_dog);
             if context.check_types {
                 // let tc_span = s_read!(span).start as usize..s_read!(span).end as usize;
                 let index_span = s_read!(index.1).start as usize..s_read!(index.1).end as usize;
@@ -1633,7 +1694,7 @@ pub(super) fn inter_expression(
                 &Literal::new_integer_literal(&IntegerLiteral::new(*literal, lu_dog), lu_dog),
                 lu_dog,
             );
-            let ty = ValueType::new_ty(&Ty::new_integer(), lu_dog);
+            let ty = ValueType::new_ty(&Ty::new_integer(&context.sarzak), lu_dog);
             let value = XValue::new_expression(block, &ty, &expr, lu_dog);
             s_write!(span).x_value = Some(s_read!(value).id);
 
@@ -1760,7 +1821,7 @@ pub(super) fn inter_expression(
             let expr = Operator::new_comparison(&lhs.0, Some(&rhs.0), &expr, lu_dog);
             let expr = Expression::new_operator(&expr, lu_dog);
 
-            let ty = Ty::new_boolean();
+            let ty = Ty::new_boolean(&context.sarzak);
             let ty = ValueType::new_ty(&ty, lu_dog);
 
             let value = XValue::new_expression(block, &ty, &expr, lu_dog);
@@ -1810,7 +1871,7 @@ pub(super) fn inter_expression(
             let expr = Operator::new_comparison(&lhs.0, Some(&rhs.0), &expr, lu_dog);
             let expr = Expression::new_operator(&expr, lu_dog);
 
-            let ty = Ty::new_boolean();
+            let ty = Ty::new_boolean(&context.sarzak);
             let ty = ValueType::new_ty(&ty, lu_dog);
 
             let value = XValue::new_expression(block, &ty, &expr, lu_dog);
@@ -2120,14 +2181,15 @@ pub(super) fn inter_expression(
                 x
             } else if let ValueTypeEnum::Ty(id) = s_read!(instance_ty).subtype {
                 let ty = context.sarzak.exhume_ty(&id).unwrap();
-                if let Ty::SString(_) = ty {
+                let ty = ty.borrow();
+                if let Ty::SString(_) = &*ty {
                     match method.as_str() {
                         "len" => {
-                            let ty = Ty::new_integer();
+                            let ty = Ty::new_integer(&context.sarzak);
                             ValueType::new_ty(&ty, lu_dog)
                         }
                         "format" => {
-                            let ty = Ty::new_s_string();
+                            let ty = Ty::new_s_string(&context.sarzak);
                             ValueType::new_ty(&ty, lu_dog)
                         }
                         _ => {
@@ -2259,7 +2321,7 @@ pub(super) fn inter_expression(
             let expr = Operator::new_comparison(&lhs.0, Some(&rhs.0), &expr, lu_dog);
             let expr = Expression::new_operator(&expr, lu_dog);
 
-            let ty = Ty::new_boolean();
+            let ty = Ty::new_boolean(&context.sarzak);
             let ty = ValueType::new_ty(&ty, lu_dog);
 
             let value = XValue::new_expression(block, &ty, &expr, lu_dog);
@@ -2365,7 +2427,7 @@ pub(super) fn inter_expression(
 
             if let ValueTypeEnum::Ty(ref id) = s_read!(lhs_ty).subtype {
                 let ty = context.sarzak.exhume_ty(id).unwrap();
-                matches!(ty, Ty::Boolean(_));
+                matches!(&*ty.borrow(), Ty::Boolean(_));
             } else {
                 let lhs = PrintableValueType(&lhs_ty, context, lu_dog);
                 return Err(vec![DwarfError::TypeMismatch {
@@ -2501,7 +2563,7 @@ pub(super) fn inter_expression(
             // We could do something with the imports...
             // 🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧
             let ty = if type_name == "Uuid" && method == "new" {
-                ValueType::new_ty(&Ty::new_s_uuid(), lu_dog)
+                ValueType::new_ty(&Ty::new_s_uuid(&context.sarzak), lu_dog)
             } else {
                 debug!("ParserExpression::StaticMethodCall: looking up type {type_name}");
 
@@ -2563,7 +2625,7 @@ pub(super) fn inter_expression(
                 ),
                 lu_dog,
             );
-            let ty = ValueType::new_ty(&Ty::new_s_string(), lu_dog);
+            let ty = ValueType::new_ty(&Ty::new_s_string(&context.sarzak), lu_dog);
             let value = XValue::new_expression(block, &ty, &expr, lu_dog);
             s_write!(span).x_value = Some(s_read!(value).id);
 
@@ -2948,8 +3010,11 @@ fn inter_struct(
                             if let Some(model) = context.models.get(&store_name) {
                                 if let Some(ref obj_id) = model.0.exhume_object_id_by_name(proxy) {
                                     let obj = model.0.exhume_object(obj_id).unwrap();
-                                    let woog_struct =
-                                        WoogStruct::new(proxy.to_owned(), Some(obj), lu_dog);
+                                    let woog_struct = WoogStruct::new(
+                                        proxy.to_owned(),
+                                        Some(&*obj.borrow()),
+                                        lu_dog,
+                                    );
                                     let _ = WoogItem::new_woog_struct(
                                         &context.source,
                                         &woog_struct,
@@ -3091,14 +3156,16 @@ fn get_value_type(
     context: &Context,
     lu_dog: &mut LuDogStore,
 ) -> Result<RefType<ValueType>> {
+    let sarzak = &context.sarzak;
+
     match type_ {
         Type::Boolean => {
-            let ty = Ty::new_boolean();
+            let ty = Ty::new_boolean(sarzak);
             Ok(ValueType::new_ty(&ty, lu_dog))
         }
         Type::Empty => Ok(ValueType::new_empty(lu_dog)),
         Type::Float => {
-            let ty = Ty::new_float();
+            let ty = Ty::new_float(sarzak);
             Ok(ValueType::new_ty(&ty, lu_dog))
         }
         Type::Fn(ref params, ref return_type) => {
@@ -3124,7 +3191,7 @@ fn get_value_type(
             Ok(lambda)
         }
         Type::Integer => {
-            let ty = Ty::new_integer();
+            let ty = Ty::new_integer(sarzak);
             Ok(ValueType::new_ty(&ty, lu_dog))
         }
         Type::List(ref type_) => {
@@ -3151,7 +3218,7 @@ fn get_value_type(
             }]),
         },
         Type::String => {
-            let ty = Ty::new_s_string();
+            let ty = Ty::new_s_string(sarzak);
             Ok(ValueType::new_ty(&ty, lu_dog))
         }
         Type::UserType(tok) => {
@@ -3190,38 +3257,38 @@ fn get_value_type(
                     }]),
                 }
             } else if name == "String" {
-                Ok(ValueType::new_ty(&Ty::new_s_string(), lu_dog))
+                Ok(ValueType::new_ty(&Ty::new_s_string(sarzak), lu_dog))
             } else if name == "Uuid" {
-                Ok(ValueType::new_ty(&Ty::new_s_uuid(), lu_dog))
+                Ok(ValueType::new_ty(&Ty::new_s_uuid(sarzak), lu_dog))
             } else {
                 // 🚧 HashMapFix
                 for (_, model) in context.models {
                     // Look for the Object in the model domains first.
-                    if let Some(ty) = model.0.iter_ty().find(|ty| match ty {
+                    if let Some(ty) = model.0.iter_ty().find(|ty| match &*ty.borrow() {
                         Ty::Object(ref obj) => {
                             let obj = model.0.exhume_object(obj).unwrap();
                             // We are going to cheat a little bit here. Say we have an
                             // object called `Point`. We want to be able to also handle
                             // proxy objects for `Point`. Those are suffixed with "Proxy".
-                            let obj = obj.name.to_upper_camel_case();
+                            let obj = obj.borrow().name.to_upper_camel_case();
                             obj == *name || name == format!("{}Proxy", obj)
                         }
                         _ => false,
                     }) {
-                        return Ok(ValueType::new_ty(ty, lu_dog));
+                        return Ok(ValueType::new_ty(&ty, lu_dog));
                     }
                 }
 
                 // Unlikely to have to reach back this far.
-                if let Some(ty) = context.sarzak.iter_ty().find(|ty| match ty {
+                if let Some(ty) = context.sarzak.iter_ty().find(|ty| match &*ty.borrow() {
                     Ty::Object(ref obj) => {
                         let obj = context.sarzak.exhume_object(obj).unwrap();
-                        let obj = obj.name.to_upper_camel_case();
+                        let obj = obj.borrow().name.to_upper_camel_case();
                         obj == *name || name == format!("{}Proxy", obj)
                     }
                     _ => false,
                 }) {
-                    Ok(ValueType::new_ty(ty, lu_dog))
+                    Ok(ValueType::new_ty(&ty, lu_dog))
                 } else if let Some(ref id) = lu_dog.exhume_woog_struct_id_by_name(name) {
                     // Here is where we look for actual user defined types, as
                     // in types that are defined in dwarf source.
@@ -3240,7 +3307,7 @@ fn get_value_type(
             }
         }
         Type::Uuid => {
-            let ty = Ty::new_s_uuid();
+            let ty = Ty::new_s_uuid(sarzak);
             Ok(ValueType::new_ty(&ty, lu_dog))
         }
         道 => todo!("get_value_type missing implementation for {:?}", 道),
@@ -3354,7 +3421,9 @@ pub(super) fn typecheck(
         (ValueTypeEnum::Ty(a), ValueTypeEnum::Ty(b)) => {
             let a = context.sarzak.exhume_ty(a).unwrap();
             let b = context.sarzak.exhume_ty(b).unwrap();
-            match (a, b) {
+            let a = a.borrow();
+            let b = b.borrow();
+            match (&*a, &*b) {
                 (Ty::Integer(_), Ty::Integer(_)) => Ok(()),
                 (Ty::Float(_), Ty::Float(_)) => Ok(()),
                 (Ty::Boolean(_), Ty::Boolean(_)) => Ok(()),

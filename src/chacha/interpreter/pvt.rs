@@ -70,14 +70,14 @@ impl<'a> fmt::Display for PrintableValueType<'a> {
                 // interesting when there are multiples of those in memory at once...
                 let sarzak = s_read!(sarzak);
                 if let Some(ty) = sarzak.exhume_ty(ty) {
-                    match ty {
+                    match &*ty.borrow() {
                         Ty::Boolean(_) => write!(f, "{}", TY_CLR.italic().paint("bool")),
                         Ty::Float(_) => write!(f, "{}", TY_CLR.italic().paint("float")),
                         Ty::Integer(_) => write!(f, "{}", TY_CLR.italic().paint("int")),
                         Ty::Object(ref object) => {
                             // This should probably just be an unwrap().
                             if let Some(object) = sarzak.exhume_object(object) {
-                                write!(f, "{}", TY_CLR.italic().paint(&object.name))
+                                write!(f, "{}", TY_CLR.italic().paint(&object.borrow().name))
                             } else {
                                 write!(f, "{}", TY_WARN_CLR.italic().paint("<unknown object>"))
                             }
@@ -95,13 +95,17 @@ impl<'a> fmt::Display for PrintableValueType<'a> {
                     let models = s_read!(model);
                     // 🚧 HashMapFix
                     for (_, model) in &*models {
-                        if let Some(Ty::Object(ref object)) = model.0.exhume_ty(ty) {
-                            if let Some(object) = model.0.exhume_object(object) {
-                                return write!(
-                                    f,
-                                    "{}",
-                                    TY_CLR.italic().paint(format!("{}Proxy", object.name))
-                                );
+                        if let Some(ty) = model.0.exhume_ty(ty) {
+                            if let Ty::Object(ref object) = &*ty.borrow() {
+                                if let Some(object) = model.0.exhume_object(object) {
+                                    return write!(
+                                        f,
+                                        "{}",
+                                        TY_CLR
+                                            .italic()
+                                            .paint(format!("{}Proxy", object.borrow().name))
+                                    );
+                                }
                             }
                         }
                     }

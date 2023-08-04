@@ -73,18 +73,31 @@ pub fn eval_assignment(
 
             debug!("value: {value:?}");
 
-            match &*s_read!(value) {
-                Value::ProxyType(_value) => {
-                    // dbg!(s_read!(value));
-                    // s_write!(value).set_attr_value(&field_name, rhs.0)?;
-                    // Ok(rhs)
+            let mut value = s_write!(value);
+            match &mut *value {
+                Value::ProxyType((_, ref mut proxy)) => {
+                    let result = proxy.invoke_func(
+                        "self".into(),
+                        "set_field_value".into(),
+                        vec![
+                            Value::String(field_name.clone()).into(),
+                            // (*rhs.0).clone().into_inner().into(),
+                            (*s_read!(rhs.0)).clone().into(),
+                        ]
+                        .into(),
+                    );
+                    if let Err(e) = result.into() {
+                        // 🚧 This needs it's own error. Lazy me.
+                        return Err(ChaChaError::BadJuJu {
+                            message: format!("{e}"),
+                            location: location!(),
+                        });
+                    }
                 }
                 Value::UserType(value) => {
-                    // dbg!(s_read!(value));
                     s_write!(value).set_field_value(&field_name, rhs.0);
-                    // Ok(rhs)
                 }
-                // 🚧 This needs it's own error. Lazy me.
+                // 🚧 This needs it's own error.
                 _value => {
                     return Err(ChaChaError::BadJuJu {
                         message: "Attempt to assign to non-struct".to_owned(),
@@ -92,11 +105,10 @@ pub fn eval_assignment(
                     })
                 }
             }
-            // 🚧 I'm not sure that I like returning empty.
-            // OTOH, I don't know what else I'd return.
+
             Ok((
                 new_ref!(Value, Value::Empty),
-                Value::Empty.get_type(&s_read!(lu_dog)),
+                Value::Empty.get_type(&s_read!(lu_dog), &s_read!(context.sarzak_heel())),
             ))
         }
         ExpressionEnum::TypeCast(expr) => {

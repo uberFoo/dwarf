@@ -1,8 +1,7 @@
-use std::{any::Any, collections::VecDeque, fmt, ops::Range};
+use std::{fmt, ops::Range};
 
 use abi_stable::{
-    sabi_trait,
-    std_types::{RArc, RBox, RHashMap, RStr, RString, RVec},
+    std_types::{RString, RVec},
     StableAbi,
 };
 use ansi_term::Colour;
@@ -14,9 +13,9 @@ use crate::{
     chacha::error::Result,
     lu_dog::{Function, Lambda, ObjectStore as LuDogStore, ValueType},
     new_ref,
-    plug_in::{PluginType, StorePluginType},
+    plug_in::PluginType,
     s_read,
-    sarzak::{ObjectStore, Ty},
+    sarzak::{ObjectStore as SarzakStore, Ty},
     ChaChaError, DwarfFloat, DwarfInteger, NewRef, RcType, RefType,
 };
 
@@ -153,13 +152,13 @@ impl From<FfiValue> for Value {
 }
 
 impl Value {
-    pub fn get_type(&self, lu_dog: &LuDogStore) -> RefType<ValueType> {
+    pub fn get_type(&self, lu_dog: &LuDogStore, sarzak: &SarzakStore) -> RefType<ValueType> {
         match &self {
             Value::Boolean(_) => {
-                let ty = Ty::new_boolean();
+                let ty = Ty::new_boolean(sarzak);
                 for vt in lu_dog.iter_value_type() {
                     if let ValueTypeEnum::Ty(_ty) = s_read!(vt).subtype {
-                        if ty.id() == _ty {
+                        if ty.borrow().id() == _ty {
                             return vt.clone();
                         }
                     }
@@ -189,10 +188,10 @@ impl Value {
                 z
             }
             Value::Float(_) => {
-                let ty = Ty::new_float();
+                let ty = Ty::new_float(sarzak);
                 for vt in lu_dog.iter_value_type() {
                     if let ValueTypeEnum::Ty(_ty) = s_read!(vt).subtype {
-                        if ty.id() == _ty {
+                        if ty.borrow().id() == _ty {
                             return vt.clone();
                         }
                     }
@@ -200,10 +199,10 @@ impl Value {
                 unreachable!()
             }
             Value::Integer(_) => {
-                let ty = Ty::new_integer();
+                let ty = Ty::new_integer(sarzak);
                 for vt in lu_dog.iter_value_type() {
                     if let ValueTypeEnum::Ty(_ty) = s_read!(vt).subtype {
-                        if ty.id() == _ty {
+                        if ty.borrow().id() == _ty {
                             return vt.clone();
                         }
                     }
@@ -242,10 +241,10 @@ impl Value {
                 unreachable!()
             }
             Value::String(_) => {
-                let ty = Ty::new_s_string();
+                let ty = Ty::new_s_string(sarzak);
                 for vt in lu_dog.iter_value_type() {
                     if let ValueTypeEnum::Ty(_ty) = s_read!(vt).subtype {
-                        if ty.id() == _ty {
+                        if ty.borrow().id() == _ty {
                             return vt.clone();
                         }
                     }
@@ -254,10 +253,10 @@ impl Value {
             }
             Value::UserType(ref ut) => s_read!(ut).get_type().clone(),
             Value::Uuid(_) => {
-                let ty = Ty::new_s_uuid();
+                let ty = Ty::new_s_uuid(sarzak);
                 for vt in lu_dog.iter_value_type() {
                     if let ValueTypeEnum::Ty(_ty) = s_read!(vt).subtype {
-                        if ty.id() == _ty {
+                        if ty.borrow().id() == _ty {
                             return vt.clone();
                         }
                     }

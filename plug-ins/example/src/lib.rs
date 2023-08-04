@@ -2,6 +2,7 @@ use std::{
     any::Any,
     collections::VecDeque,
     fmt::{self, Display},
+    path::Path,
 };
 
 use abi_stable::{
@@ -19,11 +20,14 @@ use dwarf::{
         Error as AppError, Plugin, PluginId, PluginModRef, PluginModule, PluginType, Plugin_TO,
         Unsupported,
     },
-    sarzak::{Object, ObjectStore},
     Value,
 };
+use log::debug;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+
+// mod model;
+// use model::{Object, ObjectStore};
 
 ///////////////////////////////////////////////////////////////////////////////////
 
@@ -57,7 +61,8 @@ pub fn new(args: RVec<FfiValue>) -> RResult<PluginType, AppError> {
     } else if args.len() == 1 {
         if let FfiValue::String(path) = &args[0] {
             SarzakStore {
-                store: ObjectStore::new(),
+                // 🚧 fix this unwrap
+                store: ObjectStore::load(Path::new(&path.as_str())).unwrap(),
             }
         } else {
             return RErr(AppError::Uber("Invalid arguments".into()));
@@ -94,7 +99,7 @@ impl Plugin for SarzakStore {
         (|| -> Result<FfiValue, AppError> {
             let ty = ty.as_str();
             let func = func.as_str();
-            dbg!(&ty, &func, &args);
+            debug!("type: {ty}, func: {func}, args: {args:?}");
             match ty {
                 "Object" => match func {
                     "new" => {
@@ -144,6 +149,22 @@ impl Plugin for SarzakStore {
                             Err(e) => Err(e),
                         }
                     }
+                    "instances" => {
+                        let mut instances = Vec::new();
+                        for obj in self.store.iter_object() {
+                            let this = ObjectProxy { inner: obj.clone() };
+                            let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
+                            let proxy = FfiProxy {
+                                uuid: FfiUuid {
+                                    inner: "7178e7a4-5131-504b-a7b3-c2c0cfedf343".into(),
+                                },
+                                plugin: plugin.clone(),
+                            };
+
+                            instances.push(FfiValue::ProxyType(proxy));
+                        }
+                        Ok(FfiValue::Vector(instances.into()))
+                    }
                     _ => Err(AppError::Uber("Invalid function".into())),
                 },
                 "ObjectStore" => match func {
@@ -155,7 +176,6 @@ impl Plugin for SarzakStore {
                         if let FfiValue::PlugIn(obj) = args.pop().unwrap() {
                             let obj = obj.obj.downcast_into::<ObjectProxy>().unwrap();
                             self.store.inter_object(obj.inner.clone());
-                            dbg!(&self.store);
                             Ok(FfiValue::Empty)
                         } else {
                             Err(AppError::Uber("Invalid Object".into()))
@@ -195,10 +215,87 @@ impl Plugin for ObjectProxy {
     fn invoke_func(
         &mut self,
         ty: RStr<'_>,
-        name: RStr<'_>,
-        args: RVec<FfiValue>,
+        func: RStr<'_>,
+        mut args: RVec<FfiValue>,
     ) -> RResult<FfiValue, AppError> {
-        RErr(AppError::Uber("Invalid type".into()))
+        (|| -> Result<FfiValue, AppError> {
+            let ty = ty.as_str();
+            let func = func.as_str();
+            debug!("type: {ty}, func: {func}, args: {args:?}");
+            match ty {
+                "self" => match func {
+                    "get_field_value" => {
+                        if args.len() != 1 {
+                            return Err(AppError::Uber("Expected 1 argument".into()));
+                        }
+
+                        if let FfiValue::String(field) = args.pop().unwrap() {
+                            let field: &str = field.as_str();
+                            match field {
+                                "name" => Ok(FfiValue::String(self.inner.name.clone().into())),
+                                "description" => {
+                                    Ok(FfiValue::String(self.inner.description.clone().into()))
+                                }
+                                "key_letters" => {
+                                    Ok(FfiValue::String(self.inner.key_letters.clone().into()))
+                                }
+                                _ => Err(AppError::Uber("Invalid field".into())),
+                            }
+                        } else {
+                            Err(AppError::Uber("Invalid Object".into()))
+                        }
+                    }
+                    "set_field_value" => {
+                        if args.len() != 2 {
+                            return Err(AppError::Uber("Expected 2 arguments".into()));
+                        }
+
+                        args.reverse();
+
+                        if let FfiValue::String(field) = args.pop().unwrap() {
+                            let value: Value = args.pop().unwrap().into();
+                            let field: &str = field.as_str();
+                            match field {
+                                "name" => {
+                                    self.inner.name = value.try_into().map_err(|e| {
+                                        AppError::Uber(
+                                            format!("Error converting value: {}", e).into(),
+                                        )
+                                    })?
+                                }
+                                "description" => {
+                                    self.inner.description = value.try_into().map_err(|e| {
+                                        AppError::Uber(
+                                            format!("Error converting value: {}", e).into(),
+                                        )
+                                    })?
+                                }
+
+                                "key_letters" => {
+                                    self.inner.key_letters = value.try_into().map_err(|e| {
+                                        AppError::Uber(
+                                            format!("Error converting value: {}", e).into(),
+                                        )
+                                    })?
+                                }
+                                _ => {
+                                    return Err(AppError::Uber(
+                                        format!("Invalid field {field}").into(),
+                                    ))
+                                }
+                            }
+
+                            Ok(FfiValue::Empty)
+                        } else {
+                            Err(AppError::Uber("Invalid Object".into()))
+                        }
+                    }
+                    _ => Err(AppError::Uber("Invalid function".into())),
+                },
+                _ => Err(AppError::Uber("Invalid type".into())),
+            }
+        })()
+        .into()
     }
 
     fn name(&self) -> RStr<'_> {

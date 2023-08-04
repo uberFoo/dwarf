@@ -18,6 +18,7 @@ pub fn eval_index(
     vm: &mut VM,
 ) -> Result<(RefType<Value>, RefType<ValueType>)> {
     let lu_dog = context.lu_dog_heel().clone();
+    let sarzak = context.sarzak_heel().clone();
 
     let index = s_read!(lu_dog).exhume_index(index).unwrap();
     let index = s_read!(index);
@@ -54,7 +55,7 @@ pub fn eval_index(
                     .collect::<Vec<&str>>();
 
                 if index < str.len() {
-                    let ty = Ty::new_s_string();
+                    let ty = Ty::new_s_string(&sarzak.borrow());
                     let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
                     Ok((
                         new_ref!(Value, Value::String(str[index..index + 1].join(""),)),
@@ -110,7 +111,7 @@ pub fn eval_index(
                     .collect::<Vec<&str>>();
 
                 if range.end < str.len() {
-                    let ty = Ty::new_s_string();
+                    let ty = Ty::new_s_string(&sarzak.borrow());
                     let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
                     Ok((new_ref!(Value, Value::String(str[range].join(""),)), ty))
                 } else {

@@ -1,4 +1,4 @@
-#![cfg(not(any(feature = "single", feature = "single-vec")))]
+#![cfg(not(any(feature = "single", feature = "single-vec", feature = "multi-nd-vec")))]
 use std::thread;
 
 use ansi_term::Colour;
@@ -104,6 +104,7 @@ pub fn start_tui_repl(mut context: Context) -> (Sender<DebuggerControl>, Receive
             let vm_stack = stack.clone();
             let mut vm = VM::new(&vm_stack);
 
+            let mut stmt_index = 0;
             loop {
                 match to_worker_read.recv_timeout(Duration::from_millis(10)) {
                     Ok(input) => match parse_line(&input) {
@@ -118,6 +119,7 @@ pub fn start_tui_repl(mut context: Context) -> (Sender<DebuggerControl>, Receive
                                 let mut lu_dog = s_write!(lu_dog);
                                 match inter_statement(
                                     &new_ref!(crate::dwarf::Statement, stmt),
+                                    stmt_index,
                                     block,
                                     &mut ExtruderContext {
                                         location: location!(),

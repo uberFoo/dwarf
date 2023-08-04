@@ -4,11 +4,13 @@ use ansi_term::Colour;
 use rustc_hash::FxHashMap as HashMap;
 
 use dwarf::{
+    chacha::{
+        error::ChaChaErrorReporter,
+        interpreter::{initialize_interpreter, start_main},
+        value::Value,
+    },
     dwarf::{new_lu_dog, parse_dwarf},
-    initialize_interpreter,
-    interpreter::start_main,
     sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL},
-    Value,
 };
 
 #[cfg(feature = "print-std-out")]
@@ -122,11 +124,11 @@ fn run_program(test: &str, program: &str) -> Result<(Value, String), String> {
             Ok((v.0, stdout))
         }
         Err(e) => {
-            eprintln!("{}", dwarf::ChaChaErrorReporter(&e, true, program, test));
+            eprintln!("{}", ChaChaErrorReporter(&e, true, program, test));
 
             let error = format!(
                 "Interpreter exited with:\n{}",
-                dwarf::ChaChaErrorReporter(&e, false, program, test)
+                ChaChaErrorReporter(&e, false, program, test)
             )
             .trim()
             .to_owned();

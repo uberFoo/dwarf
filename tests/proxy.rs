@@ -1,11 +1,12 @@
 use std::path::{Path, PathBuf};
 
 use dwarf::{
+    chacha::{
+        error::ChaChaErrorReporter, interpreter::initialize_interpreter, interpreter::start_main,
+        value::Value,
+    },
     dwarf::{new_lu_dog, parse_dwarf},
-    initialize_interpreter,
-    interpreter::start_main,
     sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL},
-    Value,
 };
 use rustc_hash::FxHashMap as HashMap;
 
@@ -71,11 +72,11 @@ fn run_program(test: &str, program: &str) -> Result<(Value, String), String> {
         }
         Err(e) => {
             // Print the "uber" error message.
-            eprintln!("{}", dwarf::ChaChaErrorReporter(&e, true, program, test));
+            eprintln!("{}", ChaChaErrorReporter(&e, true, program, test));
 
             let error = format!(
                 "Interpreter exited with:\n{}",
-                dwarf::ChaChaErrorReporter(&e, false, program, test)
+                ChaChaErrorReporter(&e, false, program, test)
             )
             .trim()
             .to_owned();

@@ -9,12 +9,13 @@ use std::{
 use clap::{ArgAction, Args, Parser};
 use dap::{prelude::BasicClient, server::Server};
 use dwarf::{
-    chacha::dap::DapAdapter,
+    chacha::{
+        dap::DapAdapter,
+        error::ChaChaErrorReporter,
+        interpreter::{banner2, initialize_interpreter, start_main, start_repl},
+    },
     dwarf::{new_lu_dog, parse_dwarf},
-    initialize_interpreter,
-    interpreter::{banner2, start_main, start_repl},
     lu_dog::ObjectStore as LuDogStore,
-    plug_in::PluginId,
     sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL},
 };
 use reqwest::Url;
@@ -229,10 +230,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 Ok((_, ctx)) => ctx,
                 Err(e) => {
                     eprintln!("Interpreter exited with:");
-                    eprintln!(
-                        "{}",
-                        dwarf::ChaChaErrorReporter(&e, is_uber, &source_code, &name)
-                    );
+                    eprintln!("{}", ChaChaErrorReporter(&e, is_uber, &source_code, &name));
                     return Ok(());
                 }
             };
