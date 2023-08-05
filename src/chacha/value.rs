@@ -70,7 +70,7 @@ pub enum FfiValue {
     String(RString),
     // Table(RHashMap<RString, RefType<Self>>),
     Unknown,
-    Uuid(RString),
+    Uuid(FfiUuid),
     Vector(RVec<Self>),
 }
 
@@ -121,7 +121,7 @@ impl From<Value> for FfiValue {
                 end: range.end,
             }),
             Value::String(str_) => Self::String(str_.into()),
-            Value::Uuid(uuid) => Self::Uuid(uuid.to_string().into()),
+            Value::Uuid(uuid) => Self::Uuid(uuid.into()),
             Value::Vector(vec) => {
                 Self::Vector(vec.into_iter().map(|v| s_read!(v).clone().into()).collect())
             }
@@ -142,7 +142,7 @@ impl From<FfiValue> for Value {
             FfiValue::ProxyType(plugin) => Self::ProxyType((plugin.uuid.into(), plugin.plugin)),
             FfiValue::Range(range) => Self::Range(range.start.into()..range.end.into()),
             FfiValue::String(str_) => Self::String(str_.into()),
-            FfiValue::Uuid(uuid) => Self::Uuid(Uuid::parse_str(&uuid.to_string()).unwrap()),
+            FfiValue::Uuid(uuid) => Self::Uuid(uuid.into()),
             FfiValue::Vector(vec) => {
                 Self::Vector(vec.into_iter().map(|v| new_ref!(Value, v.into())).collect())
             }

@@ -1,0 +1,12 @@
+[
+  {
+    "description": "Bisection Point\n\nI think that this is specifically an implicit point that exists half-way along a line segment. It’s where a relationship name/number may be anchored.\n\nFrankly it’s been so long since I did this, and sadly I didn’t document it, so the exact thinking behind this is lost. I’ll make something up, or change the model, or whatever. No big deal.",
+    "id": "f6496c3c-adfa-5cf5-80b3-21bf2f0d7040",
+    "key_letters": "PT_BI",
+    "name": "Bisection"
+  },
+  {
+    "secs_since_epoch": 1691143082,
+    "nanos_since_epoch": 66732000
+  }
+]

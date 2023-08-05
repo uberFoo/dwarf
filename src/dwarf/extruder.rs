@@ -4,7 +4,6 @@ use ansi_term::Colour;
 use heck::{ToShoutySnakeCase, ToUpperCamelCase};
 use log;
 use snafu::{location, Location};
-use tracy_client::Client;
 use uuid::Uuid;
 
 use crate::{
@@ -289,8 +288,6 @@ pub fn new_lu_dog(
     ValueType::new_ty(&Ty::new_s_uuid(sarzak), &mut lu_dog);
 
     if let Some((source, ast)) = source {
-        let _client = Client::start();
-
         let mut context = Context {
             location: location!(),
             struct_fields: Vec::new(),

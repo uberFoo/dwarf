@@ -89,7 +89,9 @@
                 }
             },
             "args": [
-                "tests/string.tao",
+                "tests/proxy/declare.tao",
+                "-m",
+                "../sarzak/models/sarzak.json,plug-ins/merlin/models/merlin.json"
             ],
             "cwd": "${workspaceFolder}",
             "env": {

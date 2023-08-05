@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use ansi_term::Colour;
 use rustc_hash::FxHashMap as HashMap;
+use tracy_client::Client;
 
 use dwarf::{
     chacha::{

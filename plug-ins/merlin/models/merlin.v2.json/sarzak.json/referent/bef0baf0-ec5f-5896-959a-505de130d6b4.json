@@ -1,0 +1,13 @@
+[
+  {
+    "description": "renders an",
+    "id": "bef0baf0-ec5f-5896-959a-505de130d6b4",
+    "cardinality": "84d60cb6-04cf-5c82-9e38-79d3999b5d5c",
+    "conditionality": "1ef6f1f8-de66-552b-8d4a-a04215c37c1e",
+    "obj_id": "47ccc17a-dde2-54b8-8d70-33b8aa683b36"
+  },
+  {
+    "secs_since_epoch": 1691143082,
+    "nanos_since_epoch": 66736000
+  }
+]

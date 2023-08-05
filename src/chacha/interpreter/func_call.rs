@@ -113,7 +113,7 @@ fn eval_external_function_call(
         // Here we load the plug-in and create an instance of the object store.
         if s_read!(external).function == FUNCTION_NEW {
             let library_path = RawLibrary::path_in_directory(
-                &Path::new("./plug-ins/example/target/debug"),
+                &Path::new(&format!("./plug-ins/{model_name}/target/debug")),
                 &model_name,
                 LibrarySuffix::NoSuffix,
             );

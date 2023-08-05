@@ -21,6 +21,7 @@ use dwarf::{
 use reqwest::Url;
 use rustc_hash::FxHashMap as HashMap;
 use sarzak::domain::DomainBuilder;
+use tracy_client::Client;
 
 #[cfg(not(feature = "repl"))]
 compile_error!("The REPL requires the \"repl\" feature flag..");
@@ -125,6 +126,7 @@ struct DwarfArgs {
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     pretty_env_logger::init();
     color_backtrace::install();
+    let _client = Client::start();
 
     let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
     let lu_dog = LuDogStore::new();

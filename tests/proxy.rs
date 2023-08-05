@@ -9,9 +9,13 @@ use dwarf::{
     sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL},
 };
 use rustc_hash::FxHashMap as HashMap;
+use sarzak::merlin::MODEL as MERLIN_MODEL;
+use tracy_client::Client;
 
 fn run_program(test: &str, program: &str) -> Result<(Value, String), String> {
     let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
+    let merlin = SarzakStore::from_bincode(MERLIN_MODEL).unwrap();
+
     let ast = match parse_dwarf(test, program) {
         Ok(ast) => ast,
         Err(dwarf::dwarf::error::DwarfError::Parse { error, ast: _ }) => {
@@ -25,6 +29,7 @@ fn run_program(test: &str, program: &str) -> Result<(Value, String), String> {
     let mut models = HashMap::default();
 
     models.insert("sarzak".to_owned(), (sarzak.clone(), None));
+    models.insert("merlin".to_owned(), (merlin.clone(), None));
 
     let lu_dog = match new_lu_dog(None, Some((program.to_owned(), &ast)), &models, &sarzak) {
         Ok(lu_dog) => lu_dog,
@@ -89,6 +94,7 @@ fn run_program(test: &str, program: &str) -> Result<(Value, String), String> {
 #[test]
 fn declaration() {
     let _ = env_logger::builder().is_test(true).try_init();
+    let _ = Client::start();
     color_backtrace::install();
     let program = include_str!("proxy/declare.tao");
     run_program("proxy/declare.tao", program).unwrap();

@@ -17,9 +17,9 @@ impl SarzakStore {
 #[proxy(store = "sarzak", object = "Object")]
 struct Object {
     id: Uuid,
-    name: String,
-    key_letters: String,
-    description: String,
+    name: string,
+    key_letters: string,
+    description: string,
 }
 
 impl Object {
@@ -30,7 +30,34 @@ impl Object {
     // This is a static method that will be wired up to a function called
     // `iter_object`.
     #[proxy(store = "sarzak", object = "Object", func = "instances")]
-    fn flubber() -> [Self];
+    fn instances() -> [Self];
+}
+
+#[store(model = "merlin")]
+struct MerlinStore {}
+
+#[store(model = "merlin")]
+impl MerlinStore {
+    #[proxy(store = "merlin", object = "ObjectStore", func = "new")]
+    fn new() -> Self;
+}
+
+#[proxy(store = "merlin", object = "Point")]
+struct Point {
+    id: Uuid,
+    subtype: string,
+    x: int,
+    y: int,
+}
+
+impl Point {
+    #[proxy(store = "merlin", object = "Point", func = "new_inflection")]
+    fn new_inflection(x: int, y: int) -> Self;
+
+    // This is a static method that will be wired up to a function called
+    // `iter_object`.
+    #[proxy(store = "merlin", object = "Point", func = "instances")]
+    fn instances() -> [Self];
 }
 
 fn main() {
@@ -66,7 +93,14 @@ fn main() {
     gandalf.name = "Gandalf the Grey";
     chacha::assert_eq(gandalf.name, "Gandalf the Grey");
 
-    for instance in Object::flubber() {
+    for instance in Object::instances() {
+        print(instance);
+        print("\n");
+    }
+
+    let merlin = MerlinStore::new();
+
+    for instance in Point::instances() {
         print(instance);
         print("\n");
     }

@@ -1,0 +1,15 @@
+{
+  "version": "2.0.0",
+  "domain": "merlin",
+  "id": "b68c82f5-8038-55e1-98fb-1f598d8227fd",
+  "description": "This is the second iteration of the drawing domain. The first sucked.\n\nThis domain represents the visual aspect of a model.",
+  "extents": [
+    4000,
+    3200
+  ],
+  "view": [
+    -1041,
+    -172
+  ],
+  "path": "/Users/uberfoo/projects/sarzak/dwarf/plug-ins/merlin/models/merlin.json"
+}
