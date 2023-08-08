@@ -1,0 +1,12 @@
+[
+  {
+    "description": "The type of a value\n\nThere are several values available: [Integer], [Boolean], [Float], [String], and [UUID].",
+    "id": "b8ec6afc-ddbd-53d6-9be3-e4b738941c2f",
+    "key_letters": "T",
+    "name": "Type"
+  },
+  {
+    "secs_since_epoch": 1691354789,
+    "nanos_since_epoch": 940589000
+  }
+]

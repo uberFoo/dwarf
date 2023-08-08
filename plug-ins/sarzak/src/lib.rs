@@ -6,7 +6,6 @@ use std::{
 };
 
 use abi_stable::{
-    erased_types::TypeInfo,
     export_root_module,
     prefix_type::PrefixTypeTrait,
     sabi_extern_fn,

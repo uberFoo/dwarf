@@ -1,0 +1,13 @@
+[
+  {
+    "description": "formalizes the from side of an",
+    "id": "51dcc22a-e2ed-5f85-bba2-d68c80ddfc28",
+    "cardinality": "84d60cb6-04cf-5c82-9e38-79d3999b5d5c",
+    "conditionality": "17ee33a9-33bb-5998-ba89-7a9f2fe12080",
+    "obj_id": "faa5a05c-7252-5b3d-b415-ad3884269154"
+  },
+  {
+    "secs_since_epoch": 1691354789,
+    "nanos_since_epoch": 940598000
+  }
+]

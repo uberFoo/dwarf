@@ -1,0 +1,12 @@
+[
+  {
+    "description": "Associative Object\n\nThis is used in an [`Associative`] relationship to point to the Associative object itself. It's the box with the line pointing at another line.",
+    "id": "faa5a05c-7252-5b3d-b415-ad3884269154",
+    "key_letters": "ASS_FROM",
+    "name": "Associative Referrer"
+  },
+  {
+    "secs_since_epoch": 1691354789,
+    "nanos_since_epoch": 940594000
+  }
+]

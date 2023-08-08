@@ -1,0 +1,14 @@
+[
+  {
+    "description": "has a",
+    "id": "db5576e8-4bad-5b9d-a77c-15cb9d3c98dc",
+    "referential_attribute": "type",
+    "cardinality": "84d60cb6-04cf-5c82-9e38-79d3999b5d5c",
+    "conditionality": "17ee33a9-33bb-5998-ba89-7a9f2fe12080",
+    "obj_id": "63777957-b6bc-5253-b16b-6ff390f10dba"
+  },
+  {
+    "secs_since_epoch": 1691354789,
+    "nanos_since_epoch": 940601000
+  }
+]

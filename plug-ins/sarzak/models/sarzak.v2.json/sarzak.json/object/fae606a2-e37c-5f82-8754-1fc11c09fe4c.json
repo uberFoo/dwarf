@@ -1,0 +1,12 @@
+[
+  {
+    "description": "The Integer Type\n\nThis is an interger that can hold positive and negative values. This type is just a placeholder. It's implementation is determined downstream by the code generator.\n\n❗️{\"singleton_object\": true}",
+    "id": "fae606a2-e37c-5f82-8754-1fc11c09fe4c",
+    "key_letters": "T_INT",
+    "name": "Integer"
+  },
+  {
+    "secs_since_epoch": 1691354789,
+    "nanos_since_epoch": 940590000
+  }
+]

@@ -13,7 +13,7 @@ heck = "0.4.1"
 log = "0.4.19"
 rustc-hash = "1.1.0"
 sarzak = { git = "https://github.com/uberFoo/sarzak", default-features = false, branch = "develop" }
-serde = "1.0.176"
+serde = "1.0.182"
 serde_json = "1.0.104"
 tracy-client = "0.15.2"
 uuid = { version = "1.4.1", features = ["v4"] }

@@ -70,6 +70,7 @@ pub enum FfiValue {
     String(RString),
     // Table(RHashMap<RString, RefType<Self>>),
     Unknown,
+    UserType(FfiUuid),
     Uuid(FfiUuid),
     Vector(RVec<Self>),
 }

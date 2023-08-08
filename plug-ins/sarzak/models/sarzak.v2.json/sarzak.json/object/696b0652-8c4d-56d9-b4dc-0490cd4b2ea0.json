@@ -1,0 +1,12 @@
+[
+  {
+    "description": "A constant value that indicates a cardinality of _one_.\n\n❗️{\"singleton_object\": true}",
+    "id": "696b0652-8c4d-56d9-b4dc-0490cd4b2ea0",
+    "key_letters": "CARD_O",
+    "name": "One"
+  },
+  {
+    "secs_since_epoch": 1691354789,
+    "nanos_since_epoch": 940589000
+  }
+]
