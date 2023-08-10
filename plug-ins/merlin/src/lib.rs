@@ -53,13 +53,15 @@ pub fn id() -> RStr<'static> {
 pub fn new(args: RVec<FfiValue>) -> RResult<PluginType, Error> {
     let this = if args.len() == 0 {
         MerlinStore {
-            store: ObjectStore::new(),
+            store: Rc::new(RefCell::new(ObjectStore::new())),
         }
     } else if args.len() == 1 {
         if let FfiValue::String(path) = &args[0] {
             MerlinStore {
                 // 🚧 fix this unwrap
-                store: ObjectStore::load(Path::new(&path.as_str())).unwrap(),
+                store: Rc::new(RefCell::new(
+                    ObjectStore::load(Path::new(&path.as_str())).unwrap(),
+                )),
             }
         } else {
             return RErr(Error::Uber("Invalid arguments".into()));
@@ -73,7 +75,7 @@ pub fn new(args: RVec<FfiValue>) -> RResult<PluginType, Error> {
 
 #[derive(Clone, Debug)]
 struct MerlinStore {
-    store: ObjectStore,
+    store: Rc<RefCell<ObjectStore>>,
 }
 
 impl Display for MerlinStore {
@@ -102,8 +104,7 @@ impl Plugin for MerlinStore {
 
                         if let FfiValue::PlugIn(anchor) = args.pop().unwrap() {
                             let anchor = anchor.obj.downcast_into::<AnchorProxy>().unwrap();
-                            self.store
-                                .inter_anchor(Rc::new(RefCell::new(anchor.inner.clone())));
+                            self.store.borrow_mut().inter_anchor(anchor.inner.clone());
                             Ok(FfiValue::Empty)
                         } else {
                             Err(Error::Uber("Invalid Anchor".into()))
@@ -114,13 +115,14 @@ impl Plugin for MerlinStore {
                             return Err(Error::Uber("Expected 1 argument".into()));
                         }
                         if let FfiValue::Uuid(id) = args.pop().unwrap() {
-                            let anchor = self.store.exhume_anchor(&id.into()).unwrap();
+                            let anchor = self.store.borrow().exhume_anchor(&id.into()).unwrap();
                             let anchor = AnchorProxy {
                                 // 🚧 This bothers me deeply. I know that I've given
                                 // this some thought already, and I really need to
                                 // document the outcome so that I can stop worrying
                                 // over it.
-                                inner: (*anchor).clone().into_inner(),
+                                inner: anchor,
+                                store: self.store.clone(),
                             };
                             let plugin = Plugin_TO::from_value(anchor, TD_CanDowncast);
                             let proxy = FfiProxy {
@@ -142,7 +144,8 @@ impl Plugin for MerlinStore {
                             let bisection =
                                 bisection.obj.downcast_into::<BisectionProxy>().unwrap();
                             self.store
-                                .inter_bisection(Rc::new(RefCell::new(bisection.inner.clone())));
+                                .borrow_mut()
+                                .inter_bisection(bisection.inner.clone());
                             Ok(FfiValue::Empty)
                         } else {
                             Err(Error::Uber("Invalid Bisection".into()))
@@ -153,13 +156,15 @@ impl Plugin for MerlinStore {
                             return Err(Error::Uber("Expected 1 argument".into()));
                         }
                         if let FfiValue::Uuid(id) = args.pop().unwrap() {
-                            let bisection = self.store.exhume_bisection(&id.into()).unwrap();
+                            let bisection =
+                                self.store.borrow().exhume_bisection(&id.into()).unwrap();
                             let bisection = BisectionProxy {
                                 // 🚧 This bothers me deeply. I know that I've given
                                 // this some thought already, and I really need to
                                 // document the outcome so that I can stop worrying
                                 // over it.
-                                inner: (*bisection).clone().into_inner(),
+                                inner: bisection,
+                                store: self.store.clone(),
                             };
                             let plugin = Plugin_TO::from_value(bisection, TD_CanDowncast);
                             let proxy = FfiProxy {
@@ -179,8 +184,7 @@ impl Plugin for MerlinStore {
 
                         if let FfiValue::PlugIn(x_box) = args.pop().unwrap() {
                             let x_box = x_box.obj.downcast_into::<XBoxProxy>().unwrap();
-                            self.store
-                                .inter_x_box(Rc::new(RefCell::new(x_box.inner.clone())));
+                            self.store.borrow_mut().inter_x_box(x_box.inner.clone());
                             Ok(FfiValue::Empty)
                         } else {
                             Err(Error::Uber("Invalid XBox".into()))
@@ -191,13 +195,14 @@ impl Plugin for MerlinStore {
                             return Err(Error::Uber("Expected 1 argument".into()));
                         }
                         if let FfiValue::Uuid(id) = args.pop().unwrap() {
-                            let x_box = self.store.exhume_x_box(&id.into()).unwrap();
+                            let x_box = self.store.borrow().exhume_x_box(&id.into()).unwrap();
                             let x_box = XBoxProxy {
                                 // 🚧 This bothers me deeply. I know that I've given
                                 // this some thought already, and I really need to
                                 // document the outcome so that I can stop worrying
                                 // over it.
-                                inner: (*x_box).clone().into_inner(),
+                                inner: x_box,
+                                store: self.store.clone(),
                             };
                             let plugin = Plugin_TO::from_value(x_box, TD_CanDowncast);
                             let proxy = FfiProxy {
@@ -217,8 +222,7 @@ impl Plugin for MerlinStore {
 
                         if let FfiValue::PlugIn(edge) = args.pop().unwrap() {
                             let edge = edge.obj.downcast_into::<EdgeProxy>().unwrap();
-                            self.store
-                                .inter_edge(Rc::new(RefCell::new(edge.inner.clone())));
+                            self.store.borrow_mut().inter_edge(edge.inner.clone());
                             Ok(FfiValue::Empty)
                         } else {
                             Err(Error::Uber("Invalid Edge".into()))
@@ -229,13 +233,14 @@ impl Plugin for MerlinStore {
                             return Err(Error::Uber("Expected 1 argument".into()));
                         }
                         if let FfiValue::Uuid(id) = args.pop().unwrap() {
-                            let edge = self.store.exhume_edge(&id.into()).unwrap();
+                            let edge = self.store.borrow().exhume_edge(&id.into()).unwrap();
                             let edge = EdgeProxy {
                                 // 🚧 This bothers me deeply. I know that I've given
                                 // this some thought already, and I really need to
                                 // document the outcome so that I can stop worrying
                                 // over it.
-                                inner: (*edge).clone().into_inner(),
+                                inner: edge,
+                                store: self.store.clone(),
                             };
                             let plugin = Plugin_TO::from_value(edge, TD_CanDowncast);
                             let proxy = FfiProxy {
@@ -255,8 +260,7 @@ impl Plugin for MerlinStore {
 
                         if let FfiValue::PlugIn(glyph) = args.pop().unwrap() {
                             let glyph = glyph.obj.downcast_into::<GlyphProxy>().unwrap();
-                            self.store
-                                .inter_glyph(Rc::new(RefCell::new(glyph.inner.clone())));
+                            self.store.borrow_mut().inter_glyph(glyph.inner.clone());
                             Ok(FfiValue::Empty)
                         } else {
                             Err(Error::Uber("Invalid Glyph".into()))
@@ -267,13 +271,14 @@ impl Plugin for MerlinStore {
                             return Err(Error::Uber("Expected 1 argument".into()));
                         }
                         if let FfiValue::Uuid(id) = args.pop().unwrap() {
-                            let glyph = self.store.exhume_glyph(&id.into()).unwrap();
+                            let glyph = self.store.borrow().exhume_glyph(&id.into()).unwrap();
                             let glyph = GlyphProxy {
                                 // 🚧 This bothers me deeply. I know that I've given
                                 // this some thought already, and I really need to
                                 // document the outcome so that I can stop worrying
                                 // over it.
-                                inner: (*glyph).clone().into_inner(),
+                                inner: glyph,
+                                store: self.store.clone(),
                             };
                             let plugin = Plugin_TO::from_value(glyph, TD_CanDowncast);
                             let proxy = FfiProxy {
@@ -293,8 +298,7 @@ impl Plugin for MerlinStore {
 
                         if let FfiValue::PlugIn(line) = args.pop().unwrap() {
                             let line = line.obj.downcast_into::<LineProxy>().unwrap();
-                            self.store
-                                .inter_line(Rc::new(RefCell::new(line.inner.clone())));
+                            self.store.borrow_mut().inter_line(line.inner.clone());
                             Ok(FfiValue::Empty)
                         } else {
                             Err(Error::Uber("Invalid Line".into()))
@@ -305,13 +309,14 @@ impl Plugin for MerlinStore {
                             return Err(Error::Uber("Expected 1 argument".into()));
                         }
                         if let FfiValue::Uuid(id) = args.pop().unwrap() {
-                            let line = self.store.exhume_line(&id.into()).unwrap();
+                            let line = self.store.borrow().exhume_line(&id.into()).unwrap();
                             let line = LineProxy {
                                 // 🚧 This bothers me deeply. I know that I've given
                                 // this some thought already, and I really need to
                                 // document the outcome so that I can stop worrying
                                 // over it.
-                                inner: (*line).clone().into_inner(),
+                                inner: line,
+                                store: self.store.clone(),
                             };
                             let plugin = Plugin_TO::from_value(line, TD_CanDowncast);
                             let proxy = FfiProxy {
@@ -334,9 +339,9 @@ impl Plugin for MerlinStore {
                                 .obj
                                 .downcast_into::<LineSegmentProxy>()
                                 .unwrap();
-                            self.store.inter_line_segment(Rc::new(RefCell::new(
-                                line_segment.inner.clone(),
-                            )));
+                            self.store
+                                .borrow_mut()
+                                .inter_line_segment(line_segment.inner.clone());
                             Ok(FfiValue::Empty)
                         } else {
                             Err(Error::Uber("Invalid LineSegment".into()))
@@ -347,13 +352,15 @@ impl Plugin for MerlinStore {
                             return Err(Error::Uber("Expected 1 argument".into()));
                         }
                         if let FfiValue::Uuid(id) = args.pop().unwrap() {
-                            let line_segment = self.store.exhume_line_segment(&id.into()).unwrap();
+                            let line_segment =
+                                self.store.borrow().exhume_line_segment(&id.into()).unwrap();
                             let line_segment = LineSegmentProxy {
                                 // 🚧 This bothers me deeply. I know that I've given
                                 // this some thought already, and I really need to
                                 // document the outcome so that I can stop worrying
                                 // over it.
-                                inner: (*line_segment).clone().into_inner(),
+                                inner: line_segment,
+                                store: self.store.clone(),
                             };
                             let plugin = Plugin_TO::from_value(line_segment, TD_CanDowncast);
                             let proxy = FfiProxy {
@@ -376,9 +383,9 @@ impl Plugin for MerlinStore {
                                 .obj
                                 .downcast_into::<LineSegmentPointProxy>()
                                 .unwrap();
-                            self.store.inter_line_segment_point(Rc::new(RefCell::new(
-                                line_segment_point.inner.clone(),
-                            )));
+                            self.store
+                                .borrow_mut()
+                                .inter_line_segment_point(line_segment_point.inner.clone());
                             Ok(FfiValue::Empty)
                         } else {
                             Err(Error::Uber("Invalid LineSegmentPoint".into()))
@@ -389,14 +396,18 @@ impl Plugin for MerlinStore {
                             return Err(Error::Uber("Expected 1 argument".into()));
                         }
                         if let FfiValue::Uuid(id) = args.pop().unwrap() {
-                            let line_segment_point =
-                                self.store.exhume_line_segment_point(&id.into()).unwrap();
+                            let line_segment_point = self
+                                .store
+                                .borrow()
+                                .exhume_line_segment_point(&id.into())
+                                .unwrap();
                             let line_segment_point = LineSegmentPointProxy {
                                 // 🚧 This bothers me deeply. I know that I've given
                                 // this some thought already, and I really need to
                                 // document the outcome so that I can stop worrying
                                 // over it.
-                                inner: (*line_segment_point).clone().into_inner(),
+                                inner: line_segment_point,
+                                store: self.store.clone(),
                             };
                             let plugin = Plugin_TO::from_value(line_segment_point, TD_CanDowncast);
                             let proxy = FfiProxy {
@@ -416,8 +427,7 @@ impl Plugin for MerlinStore {
 
                         if let FfiValue::PlugIn(point) = args.pop().unwrap() {
                             let point = point.obj.downcast_into::<PointProxy>().unwrap();
-                            self.store
-                                .inter_point(Rc::new(RefCell::new(point.inner.clone())));
+                            self.store.borrow_mut().inter_point(point.inner.clone());
                             Ok(FfiValue::Empty)
                         } else {
                             Err(Error::Uber("Invalid Point".into()))
@@ -428,13 +438,14 @@ impl Plugin for MerlinStore {
                             return Err(Error::Uber("Expected 1 argument".into()));
                         }
                         if let FfiValue::Uuid(id) = args.pop().unwrap() {
-                            let point = self.store.exhume_point(&id.into()).unwrap();
+                            let point = self.store.borrow().exhume_point(&id.into()).unwrap();
                             let point = PointProxy {
                                 // 🚧 This bothers me deeply. I know that I've given
                                 // this some thought already, and I really need to
                                 // document the outcome so that I can stop worrying
                                 // over it.
-                                inner: (*point).clone().into_inner(),
+                                inner: point,
+                                store: self.store.clone(),
                             };
                             let plugin = Plugin_TO::from_value(point, TD_CanDowncast);
                             let proxy = FfiProxy {
@@ -457,9 +468,9 @@ impl Plugin for MerlinStore {
                                 .obj
                                 .downcast_into::<RelationshipNameProxy>()
                                 .unwrap();
-                            self.store.inter_relationship_name(Rc::new(RefCell::new(
-                                relationship_name.inner.clone(),
-                            )));
+                            self.store
+                                .borrow_mut()
+                                .inter_relationship_name(relationship_name.inner.clone());
                             Ok(FfiValue::Empty)
                         } else {
                             Err(Error::Uber("Invalid RelationshipName".into()))
@@ -470,14 +481,18 @@ impl Plugin for MerlinStore {
                             return Err(Error::Uber("Expected 1 argument".into()));
                         }
                         if let FfiValue::Uuid(id) = args.pop().unwrap() {
-                            let relationship_name =
-                                self.store.exhume_relationship_name(&id.into()).unwrap();
+                            let relationship_name = self
+                                .store
+                                .borrow()
+                                .exhume_relationship_name(&id.into())
+                                .unwrap();
                             let relationship_name = RelationshipNameProxy {
                                 // 🚧 This bothers me deeply. I know that I've given
                                 // this some thought already, and I really need to
                                 // document the outcome so that I can stop worrying
                                 // over it.
-                                inner: (*relationship_name).clone().into_inner(),
+                                inner: relationship_name,
+                                store: self.store.clone(),
                             };
                             let plugin = Plugin_TO::from_value(relationship_name, TD_CanDowncast);
                             let proxy = FfiProxy {
@@ -500,9 +515,9 @@ impl Plugin for MerlinStore {
                                 .obj
                                 .downcast_into::<RelationshipPhraseProxy>()
                                 .unwrap();
-                            self.store.inter_relationship_phrase(Rc::new(RefCell::new(
-                                relationship_phrase.inner.clone(),
-                            )));
+                            self.store
+                                .borrow_mut()
+                                .inter_relationship_phrase(relationship_phrase.inner.clone());
                             Ok(FfiValue::Empty)
                         } else {
                             Err(Error::Uber("Invalid RelationshipPhrase".into()))
@@ -513,14 +528,18 @@ impl Plugin for MerlinStore {
                             return Err(Error::Uber("Expected 1 argument".into()));
                         }
                         if let FfiValue::Uuid(id) = args.pop().unwrap() {
-                            let relationship_phrase =
-                                self.store.exhume_relationship_phrase(&id.into()).unwrap();
+                            let relationship_phrase = self
+                                .store
+                                .borrow()
+                                .exhume_relationship_phrase(&id.into())
+                                .unwrap();
                             let relationship_phrase = RelationshipPhraseProxy {
                                 // 🚧 This bothers me deeply. I know that I've given
                                 // this some thought already, and I really need to
                                 // document the outcome so that I can stop worrying
                                 // over it.
-                                inner: (*relationship_phrase).clone().into_inner(),
+                                inner: relationship_phrase,
+                                store: self.store.clone(),
                             };
                             let plugin = Plugin_TO::from_value(relationship_phrase, TD_CanDowncast);
                             let proxy = FfiProxy {
@@ -576,18 +595,18 @@ impl Plugin for MerlinStore {
                             Ok(anchor)
                         })() {
                             Ok(anchor) => {
-                                let this = AnchorProxy { inner: anchor };
+                                let anchor = Rc::new(RefCell::new(anchor));
+                                self.store.borrow_mut().inter_anchor(anchor.clone());
+                                let this = AnchorProxy {
+                                    inner: anchor,
+                                    store: self.store.clone(),
+                                };
                                 let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
                                 let proxy = FfiProxy {
                                     uuid: ANCHOR_ID.into(),
                                     plugin: plugin.clone(),
                                 };
-                                self.invoke_func(
-                                    "ObjectStore".into(),
-                                    "inter_anchor".into(),
-                                    vec![FfiValue::PlugIn(plugin)].into(),
-                                )
-                                .unwrap();
+
                                 Ok(FfiValue::ProxyType(proxy))
                             }
                             Err(e) => Err(e),
@@ -595,9 +614,10 @@ impl Plugin for MerlinStore {
                     }
                     "instances" => {
                         let mut instances = Vec::new();
-                        for anchor in self.store.iter_anchor() {
+                        for anchor in self.store.borrow().iter_anchor() {
                             let this = AnchorProxy {
-                                inner: (*anchor.borrow()).clone(),
+                                inner: anchor.clone(),
+                                store: self.store.clone(),
                             };
                             let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
                             let proxy = FfiProxy {
@@ -637,18 +657,18 @@ impl Plugin for MerlinStore {
                             Ok(bisection)
                         })() {
                             Ok(bisection) => {
-                                let this = BisectionProxy { inner: bisection };
+                                let bisection = Rc::new(RefCell::new(bisection));
+                                self.store.borrow_mut().inter_bisection(bisection.clone());
+                                let this = BisectionProxy {
+                                    inner: bisection,
+                                    store: self.store.clone(),
+                                };
                                 let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
                                 let proxy = FfiProxy {
                                     uuid: BISECTION_ID.into(),
                                     plugin: plugin.clone(),
                                 };
-                                self.invoke_func(
-                                    "ObjectStore".into(),
-                                    "inter_bisection".into(),
-                                    vec![FfiValue::PlugIn(plugin)].into(),
-                                )
-                                .unwrap();
+
                                 Ok(FfiValue::ProxyType(proxy))
                             }
                             Err(e) => Err(e),
@@ -656,9 +676,10 @@ impl Plugin for MerlinStore {
                     }
                     "instances" => {
                         let mut instances = Vec::new();
-                        for bisection in self.store.iter_bisection() {
+                        for bisection in self.store.borrow().iter_bisection() {
                             let this = BisectionProxy {
-                                inner: (*bisection.borrow()).clone(),
+                                inner: bisection.clone(),
+                                store: self.store.clone(),
                             };
                             let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
                             let proxy = FfiProxy {
@@ -707,18 +728,18 @@ impl Plugin for MerlinStore {
                             Ok(x_box)
                         })() {
                             Ok(x_box) => {
-                                let this = XBoxProxy { inner: x_box };
+                                let x_box = Rc::new(RefCell::new(x_box));
+                                self.store.borrow_mut().inter_x_box(x_box.clone());
+                                let this = XBoxProxy {
+                                    inner: x_box,
+                                    store: self.store.clone(),
+                                };
                                 let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
                                 let proxy = FfiProxy {
                                     uuid: X_BOX_ID.into(),
                                     plugin: plugin.clone(),
                                 };
-                                self.invoke_func(
-                                    "ObjectStore".into(),
-                                    "inter_x_box".into(),
-                                    vec![FfiValue::PlugIn(plugin)].into(),
-                                )
-                                .unwrap();
+
                                 Ok(FfiValue::ProxyType(proxy))
                             }
                             Err(e) => Err(e),
@@ -726,9 +747,10 @@ impl Plugin for MerlinStore {
                     }
                     "instances" => {
                         let mut instances = Vec::new();
-                        for x_box in self.store.iter_x_box() {
+                        for x_box in self.store.borrow().iter_x_box() {
                             let this = XBoxProxy {
-                                inner: (*x_box.borrow()).clone(),
+                                inner: x_box.clone(),
+                                store: self.store.clone(),
                             };
                             let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
                             let proxy = FfiProxy {
@@ -748,31 +770,16 @@ impl Plugin for MerlinStore {
                         if args.len() != 0 {
                             return Err(Error::Uber("Expected 0 arguments".into()));
                         }
-                        match (|| -> Result<Edge, Error> {
-                            let bottom = self
-                                .invoke_func(
-                                    "ObjectStore".into(),
-                                    "exhume_edge".into(),
-                                    vec![FfiValue::Uuid(BOTTOM.into())].into(),
-                                )
-                                .unwrap();
-                            let bottom = match bottom {
-                                FfiValue::ProxyType(proxy) => {
-                                    let plugin = proxy.plugin;
-                                    let this = plugin.obj.downcast_into::<EdgeProxy>().unwrap();
-                                    this.inner.clone()
-                                }
-                                _ => {
-                                    return Err(Error::Uber(
-                                        "Expected ProxyType".to_string().into(),
-                                    ))
-                                }
-                            };
+                        match (|| -> Result<Rc<RefCell<Edge>>, Error> {
+                            let bottom = self.store.borrow().exhume_edge(&BOTTOM).unwrap();
 
                             Ok(bottom)
                         })() {
                             Ok(bottom) => {
-                                let this = EdgeProxy { inner: bottom };
+                                let this = EdgeProxy {
+                                    inner: bottom,
+                                    store: self.store.clone(),
+                                };
                                 let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
                                 let proxy = FfiProxy {
                                     uuid: BOTTOM.into(),
@@ -787,31 +794,16 @@ impl Plugin for MerlinStore {
                         if args.len() != 0 {
                             return Err(Error::Uber("Expected 0 arguments".into()));
                         }
-                        match (|| -> Result<Edge, Error> {
-                            let left = self
-                                .invoke_func(
-                                    "ObjectStore".into(),
-                                    "exhume_edge".into(),
-                                    vec![FfiValue::Uuid(LEFT.into())].into(),
-                                )
-                                .unwrap();
-                            let left = match left {
-                                FfiValue::ProxyType(proxy) => {
-                                    let plugin = proxy.plugin;
-                                    let this = plugin.obj.downcast_into::<EdgeProxy>().unwrap();
-                                    this.inner.clone()
-                                }
-                                _ => {
-                                    return Err(Error::Uber(
-                                        "Expected ProxyType".to_string().into(),
-                                    ))
-                                }
-                            };
+                        match (|| -> Result<Rc<RefCell<Edge>>, Error> {
+                            let left = self.store.borrow().exhume_edge(&LEFT).unwrap();
 
                             Ok(left)
                         })() {
                             Ok(left) => {
-                                let this = EdgeProxy { inner: left };
+                                let this = EdgeProxy {
+                                    inner: left,
+                                    store: self.store.clone(),
+                                };
                                 let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
                                 let proxy = FfiProxy {
                                     uuid: LEFT.into(),
@@ -826,31 +818,16 @@ impl Plugin for MerlinStore {
                         if args.len() != 0 {
                             return Err(Error::Uber("Expected 0 arguments".into()));
                         }
-                        match (|| -> Result<Edge, Error> {
-                            let right = self
-                                .invoke_func(
-                                    "ObjectStore".into(),
-                                    "exhume_edge".into(),
-                                    vec![FfiValue::Uuid(RIGHT.into())].into(),
-                                )
-                                .unwrap();
-                            let right = match right {
-                                FfiValue::ProxyType(proxy) => {
-                                    let plugin = proxy.plugin;
-                                    let this = plugin.obj.downcast_into::<EdgeProxy>().unwrap();
-                                    this.inner.clone()
-                                }
-                                _ => {
-                                    return Err(Error::Uber(
-                                        "Expected ProxyType".to_string().into(),
-                                    ))
-                                }
-                            };
+                        match (|| -> Result<Rc<RefCell<Edge>>, Error> {
+                            let right = self.store.borrow().exhume_edge(&RIGHT).unwrap();
 
                             Ok(right)
                         })() {
                             Ok(right) => {
-                                let this = EdgeProxy { inner: right };
+                                let this = EdgeProxy {
+                                    inner: right,
+                                    store: self.store.clone(),
+                                };
                                 let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
                                 let proxy = FfiProxy {
                                     uuid: RIGHT.into(),
@@ -865,31 +842,16 @@ impl Plugin for MerlinStore {
                         if args.len() != 0 {
                             return Err(Error::Uber("Expected 0 arguments".into()));
                         }
-                        match (|| -> Result<Edge, Error> {
-                            let top = self
-                                .invoke_func(
-                                    "ObjectStore".into(),
-                                    "exhume_edge".into(),
-                                    vec![FfiValue::Uuid(TOP.into())].into(),
-                                )
-                                .unwrap();
-                            let top = match top {
-                                FfiValue::ProxyType(proxy) => {
-                                    let plugin = proxy.plugin;
-                                    let this = plugin.obj.downcast_into::<EdgeProxy>().unwrap();
-                                    this.inner.clone()
-                                }
-                                _ => {
-                                    return Err(Error::Uber(
-                                        "Expected ProxyType".to_string().into(),
-                                    ))
-                                }
-                            };
+                        match (|| -> Result<Rc<RefCell<Edge>>, Error> {
+                            let top = self.store.borrow().exhume_edge(&TOP).unwrap();
 
                             Ok(top)
                         })() {
                             Ok(top) => {
-                                let this = EdgeProxy { inner: top };
+                                let this = EdgeProxy {
+                                    inner: top,
+                                    store: self.store.clone(),
+                                };
                                 let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
                                 let proxy = FfiProxy {
                                     uuid: TOP.into(),
@@ -902,9 +864,10 @@ impl Plugin for MerlinStore {
                     }
                     "instances" => {
                         let mut instances = Vec::new();
-                        for edge in self.store.iter_edge() {
+                        for edge in self.store.borrow().iter_edge() {
                             let this = EdgeProxy {
-                                inner: (*edge.borrow()).clone(),
+                                inner: edge.clone(),
+                                store: self.store.clone(),
                             };
                             let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
                             let proxy = FfiProxy {
@@ -942,18 +905,18 @@ impl Plugin for MerlinStore {
                             Ok(many)
                         })() {
                             Ok(many) => {
-                                let this = GlyphProxy { inner: many };
+                                let many = Rc::new(RefCell::new(many));
+                                self.store.borrow_mut().inter_glyph(many.clone());
+                                let this = GlyphProxy {
+                                    inner: many,
+                                    store: self.store.clone(),
+                                };
                                 let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
                                 let proxy = FfiProxy {
                                     uuid: GLYPH_ID.into(),
                                     plugin: plugin.clone(),
                                 };
-                                self.invoke_func(
-                                    "ObjectStore".into(),
-                                    "inter_glyph".into(),
-                                    vec![FfiValue::PlugIn(plugin)].into(),
-                                )
-                                .unwrap();
+
                                 Ok(FfiValue::ProxyType(proxy))
                             }
                             Err(e) => Err(e),
@@ -981,18 +944,18 @@ impl Plugin for MerlinStore {
                             Ok(one)
                         })() {
                             Ok(one) => {
-                                let this = GlyphProxy { inner: one };
+                                let one = Rc::new(RefCell::new(one));
+                                self.store.borrow_mut().inter_glyph(one.clone());
+                                let this = GlyphProxy {
+                                    inner: one,
+                                    store: self.store.clone(),
+                                };
                                 let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
                                 let proxy = FfiProxy {
                                     uuid: GLYPH_ID.into(),
                                     plugin: plugin.clone(),
                                 };
-                                self.invoke_func(
-                                    "ObjectStore".into(),
-                                    "inter_glyph".into(),
-                                    vec![FfiValue::PlugIn(plugin)].into(),
-                                )
-                                .unwrap();
+
                                 Ok(FfiValue::ProxyType(proxy))
                             }
                             Err(e) => Err(e),
@@ -1020,18 +983,18 @@ impl Plugin for MerlinStore {
                             Ok(sub)
                         })() {
                             Ok(sub) => {
-                                let this = GlyphProxy { inner: sub };
+                                let sub = Rc::new(RefCell::new(sub));
+                                self.store.borrow_mut().inter_glyph(sub.clone());
+                                let this = GlyphProxy {
+                                    inner: sub,
+                                    store: self.store.clone(),
+                                };
                                 let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
                                 let proxy = FfiProxy {
                                     uuid: GLYPH_ID.into(),
                                     plugin: plugin.clone(),
                                 };
-                                self.invoke_func(
-                                    "ObjectStore".into(),
-                                    "inter_glyph".into(),
-                                    vec![FfiValue::PlugIn(plugin)].into(),
-                                )
-                                .unwrap();
+
                                 Ok(FfiValue::ProxyType(proxy))
                             }
                             Err(e) => Err(e),
@@ -1059,18 +1022,18 @@ impl Plugin for MerlinStore {
                             Ok(x_super)
                         })() {
                             Ok(x_super) => {
-                                let this = GlyphProxy { inner: x_super };
+                                let x_super = Rc::new(RefCell::new(x_super));
+                                self.store.borrow_mut().inter_glyph(x_super.clone());
+                                let this = GlyphProxy {
+                                    inner: x_super,
+                                    store: self.store.clone(),
+                                };
                                 let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
                                 let proxy = FfiProxy {
                                     uuid: GLYPH_ID.into(),
                                     plugin: plugin.clone(),
                                 };
-                                self.invoke_func(
-                                    "ObjectStore".into(),
-                                    "inter_glyph".into(),
-                                    vec![FfiValue::PlugIn(plugin)].into(),
-                                )
-                                .unwrap();
+
                                 Ok(FfiValue::ProxyType(proxy))
                             }
                             Err(e) => Err(e),
@@ -1078,9 +1041,10 @@ impl Plugin for MerlinStore {
                     }
                     "instances" => {
                         let mut instances = Vec::new();
-                        for glyph in self.store.iter_glyph() {
+                        for glyph in self.store.borrow().iter_glyph() {
                             let this = GlyphProxy {
-                                inner: (*glyph.borrow()).clone(),
+                                inner: glyph.clone(),
+                                store: self.store.clone(),
                             };
                             let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
                             let proxy = FfiProxy {
@@ -1117,18 +1081,18 @@ impl Plugin for MerlinStore {
                             Ok(line)
                         })() {
                             Ok(line) => {
-                                let this = LineProxy { inner: line };
+                                let line = Rc::new(RefCell::new(line));
+                                self.store.borrow_mut().inter_line(line.clone());
+                                let this = LineProxy {
+                                    inner: line,
+                                    store: self.store.clone(),
+                                };
                                 let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
                                 let proxy = FfiProxy {
                                     uuid: LINE_ID.into(),
                                     plugin: plugin.clone(),
                                 };
-                                self.invoke_func(
-                                    "ObjectStore".into(),
-                                    "inter_line".into(),
-                                    vec![FfiValue::PlugIn(plugin)].into(),
-                                )
-                                .unwrap();
+
                                 Ok(FfiValue::ProxyType(proxy))
                             }
                             Err(e) => Err(e),
@@ -1136,9 +1100,10 @@ impl Plugin for MerlinStore {
                     }
                     "instances" => {
                         let mut instances = Vec::new();
-                        for line in self.store.iter_line() {
+                        for line in self.store.borrow().iter_line() {
                             let this = LineProxy {
-                                inner: (*line.borrow()).clone(),
+                                inner: line.clone(),
+                                store: self.store.clone(),
                             };
                             let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
                             let proxy = FfiProxy {
@@ -1175,20 +1140,20 @@ impl Plugin for MerlinStore {
                             Ok(line_segment)
                         })() {
                             Ok(line_segment) => {
+                                let line_segment = Rc::new(RefCell::new(line_segment));
+                                self.store
+                                    .borrow_mut()
+                                    .inter_line_segment(line_segment.clone());
                                 let this = LineSegmentProxy {
                                     inner: line_segment,
+                                    store: self.store.clone(),
                                 };
                                 let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
                                 let proxy = FfiProxy {
                                     uuid: LINE_SEGMENT_ID.into(),
                                     plugin: plugin.clone(),
                                 };
-                                self.invoke_func(
-                                    "ObjectStore".into(),
-                                    "inter_line_segment".into(),
-                                    vec![FfiValue::PlugIn(plugin)].into(),
-                                )
-                                .unwrap();
+
                                 Ok(FfiValue::ProxyType(proxy))
                             }
                             Err(e) => Err(e),
@@ -1196,9 +1161,10 @@ impl Plugin for MerlinStore {
                     }
                     "instances" => {
                         let mut instances = Vec::new();
-                        for line_segment in self.store.iter_line_segment() {
+                        for line_segment in self.store.borrow().iter_line_segment() {
                             let this = LineSegmentProxy {
-                                inner: (*line_segment.borrow()).clone(),
+                                inner: line_segment.clone(),
+                                store: self.store.clone(),
                             };
                             let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
                             let proxy = FfiProxy {
@@ -1238,20 +1204,20 @@ impl Plugin for MerlinStore {
                             Ok(line_segment_point)
                         })() {
                             Ok(line_segment_point) => {
+                                let line_segment_point = Rc::new(RefCell::new(line_segment_point));
+                                self.store
+                                    .borrow_mut()
+                                    .inter_line_segment_point(line_segment_point.clone());
                                 let this = LineSegmentPointProxy {
                                     inner: line_segment_point,
+                                    store: self.store.clone(),
                                 };
                                 let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
                                 let proxy = FfiProxy {
                                     uuid: LINE_SEGMENT_POINT_ID.into(),
                                     plugin: plugin.clone(),
                                 };
-                                self.invoke_func(
-                                    "ObjectStore".into(),
-                                    "inter_line_segment_point".into(),
-                                    vec![FfiValue::PlugIn(plugin)].into(),
-                                )
-                                .unwrap();
+
                                 Ok(FfiValue::ProxyType(proxy))
                             }
                             Err(e) => Err(e),
@@ -1259,9 +1225,10 @@ impl Plugin for MerlinStore {
                     }
                     "instances" => {
                         let mut instances = Vec::new();
-                        for line_segment_point in self.store.iter_line_segment_point() {
+                        for line_segment_point in self.store.borrow().iter_line_segment_point() {
                             let this = LineSegmentPointProxy {
-                                inner: (*line_segment_point.borrow()).clone(),
+                                inner: line_segment_point.clone(),
+                                store: self.store.clone(),
                             };
                             let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
                             let proxy = FfiProxy {
@@ -1306,18 +1273,18 @@ impl Plugin for MerlinStore {
                             Ok(anchor)
                         })() {
                             Ok(anchor) => {
-                                let this = PointProxy { inner: anchor };
+                                let anchor = Rc::new(RefCell::new(anchor));
+                                self.store.borrow_mut().inter_point(anchor.clone());
+                                let this = PointProxy {
+                                    inner: anchor,
+                                    store: self.store.clone(),
+                                };
                                 let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
                                 let proxy = FfiProxy {
                                     uuid: POINT_ID.into(),
                                     plugin: plugin.clone(),
                                 };
-                                self.invoke_func(
-                                    "ObjectStore".into(),
-                                    "inter_point".into(),
-                                    vec![FfiValue::PlugIn(plugin)].into(),
-                                )
-                                .unwrap();
+
                                 Ok(FfiValue::ProxyType(proxy))
                             }
                             Err(e) => Err(e),
@@ -1352,18 +1319,18 @@ impl Plugin for MerlinStore {
                             Ok(bisection)
                         })() {
                             Ok(bisection) => {
-                                let this = PointProxy { inner: bisection };
+                                let bisection = Rc::new(RefCell::new(bisection));
+                                self.store.borrow_mut().inter_point(bisection.clone());
+                                let this = PointProxy {
+                                    inner: bisection,
+                                    store: self.store.clone(),
+                                };
                                 let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
                                 let proxy = FfiProxy {
                                     uuid: POINT_ID.into(),
                                     plugin: plugin.clone(),
                                 };
-                                self.invoke_func(
-                                    "ObjectStore".into(),
-                                    "inter_point".into(),
-                                    vec![FfiValue::PlugIn(plugin)].into(),
-                                )
-                                .unwrap();
+
                                 Ok(FfiValue::ProxyType(proxy))
                             }
                             Err(e) => Err(e),
@@ -1394,18 +1361,18 @@ impl Plugin for MerlinStore {
                             Ok(inflection)
                         })() {
                             Ok(inflection) => {
-                                let this = PointProxy { inner: inflection };
+                                let inflection = Rc::new(RefCell::new(inflection));
+                                self.store.borrow_mut().inter_point(inflection.clone());
+                                let this = PointProxy {
+                                    inner: inflection,
+                                    store: self.store.clone(),
+                                };
                                 let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
                                 let proxy = FfiProxy {
                                     uuid: POINT_ID.into(),
                                     plugin: plugin.clone(),
                                 };
-                                self.invoke_func(
-                                    "ObjectStore".into(),
-                                    "inter_point".into(),
-                                    vec![FfiValue::PlugIn(plugin)].into(),
-                                )
-                                .unwrap();
+
                                 Ok(FfiValue::ProxyType(proxy))
                             }
                             Err(e) => Err(e),
@@ -1413,9 +1380,10 @@ impl Plugin for MerlinStore {
                     }
                     "instances" => {
                         let mut instances = Vec::new();
-                        for point in self.store.iter_point() {
+                        for point in self.store.borrow().iter_point() {
                             let this = PointProxy {
-                                inner: (*point.borrow()).clone(),
+                                inner: point.clone(),
+                                store: self.store.clone(),
                             };
                             let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
                             let proxy = FfiProxy {
@@ -1464,20 +1432,20 @@ impl Plugin for MerlinStore {
                             Ok(relationship_name)
                         })() {
                             Ok(relationship_name) => {
+                                let relationship_name = Rc::new(RefCell::new(relationship_name));
+                                self.store
+                                    .borrow_mut()
+                                    .inter_relationship_name(relationship_name.clone());
                                 let this = RelationshipNameProxy {
                                     inner: relationship_name,
+                                    store: self.store.clone(),
                                 };
                                 let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
                                 let proxy = FfiProxy {
                                     uuid: RELATIONSHIP_NAME_ID.into(),
                                     plugin: plugin.clone(),
                                 };
-                                self.invoke_func(
-                                    "ObjectStore".into(),
-                                    "inter_relationship_name".into(),
-                                    vec![FfiValue::PlugIn(plugin)].into(),
-                                )
-                                .unwrap();
+
                                 Ok(FfiValue::ProxyType(proxy))
                             }
                             Err(e) => Err(e),
@@ -1485,9 +1453,10 @@ impl Plugin for MerlinStore {
                     }
                     "instances" => {
                         let mut instances = Vec::new();
-                        for relationship_name in self.store.iter_relationship_name() {
+                        for relationship_name in self.store.borrow().iter_relationship_name() {
                             let this = RelationshipNameProxy {
-                                inner: (*relationship_name.borrow()).clone(),
+                                inner: relationship_name.clone(),
+                                store: self.store.clone(),
                             };
                             let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
                             let proxy = FfiProxy {
@@ -1536,20 +1505,21 @@ impl Plugin for MerlinStore {
                             Ok(relationship_phrase)
                         })() {
                             Ok(relationship_phrase) => {
+                                let relationship_phrase =
+                                    Rc::new(RefCell::new(relationship_phrase));
+                                self.store
+                                    .borrow_mut()
+                                    .inter_relationship_phrase(relationship_phrase.clone());
                                 let this = RelationshipPhraseProxy {
                                     inner: relationship_phrase,
+                                    store: self.store.clone(),
                                 };
                                 let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
                                 let proxy = FfiProxy {
                                     uuid: RELATIONSHIP_PHRASE_ID.into(),
                                     plugin: plugin.clone(),
                                 };
-                                self.invoke_func(
-                                    "ObjectStore".into(),
-                                    "inter_relationship_phrase".into(),
-                                    vec![FfiValue::PlugIn(plugin)].into(),
-                                )
-                                .unwrap();
+
                                 Ok(FfiValue::ProxyType(proxy))
                             }
                             Err(e) => Err(e),
@@ -1557,9 +1527,10 @@ impl Plugin for MerlinStore {
                     }
                     "instances" => {
                         let mut instances = Vec::new();
-                        for relationship_phrase in self.store.iter_relationship_phrase() {
+                        for relationship_phrase in self.store.borrow().iter_relationship_phrase() {
                             let this = RelationshipPhraseProxy {
-                                inner: (*relationship_phrase.borrow()).clone(),
+                                inner: relationship_phrase.clone(),
+                                store: self.store.clone(),
                             };
                             let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
                             let proxy = FfiProxy {
@@ -1591,7 +1562,8 @@ const ANCHOR_ID: Uuid = uuid!("27edcc78-f257-5a0b-a2e4-c233987e0889");
 
 #[derive(Clone, Debug)]
 pub struct AnchorProxy {
-    inner: Anchor,
+    inner: Rc<RefCell<Anchor>>,
+    store: Rc<RefCell<ObjectStore>>,
 }
 
 impl Plugin for AnchorProxy {
@@ -1614,14 +1586,86 @@ impl Plugin for AnchorProxy {
 
                         if let FfiValue::String(field) = args.pop().unwrap() {
                             match field.as_str() {
-                                "id" => Ok(FfiValue::Uuid(self.inner.id.into())),
-                                "offset" => Ok(FfiValue::Float(self.inner.offset.into())),
-                                "x_offset" => Ok(FfiValue::Integer(self.inner.x_offset.into())),
-                                "y_offset" => Ok(FfiValue::Integer(self.inner.y_offset.into())),
-                                "edge" => Ok(FfiValue::UserType(self.inner.edge.into())),
-                                "glyph" => Ok(FfiValue::UserType(self.inner.glyph.into())),
-                                "x_box" => Ok(FfiValue::UserType(self.inner.x_box.into())),
-                                "line" => Ok(FfiValue::UserType(self.inner.line.into())),
+                                "id" => Ok(FfiValue::Uuid(self.inner.borrow().id.into())),
+                                "offset" => Ok(FfiValue::Float(self.inner.borrow().offset.into())),
+                                "x_offset" => {
+                                    Ok(FfiValue::Integer(self.inner.borrow().x_offset.into()))
+                                }
+                                "y_offset" => {
+                                    Ok(FfiValue::Integer(self.inner.borrow().y_offset.into()))
+                                }
+                                "edge" => {
+                                    let edge = self
+                                        .store
+                                        .borrow()
+                                        .exhume_edge(&self.inner.borrow().edge)
+                                        .unwrap();
+
+                                    let this = EdgeProxy {
+                                        inner: edge,
+                                        store: self.store.clone(),
+                                    };
+                                    let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
+                                    let proxy = FfiProxy {
+                                        uuid: EDGE_ID.into(),
+                                        plugin: plugin.clone(),
+                                    };
+                                    Ok(FfiValue::ProxyType(proxy))
+                                }
+                                "glyph" => {
+                                    let glyph = self
+                                        .store
+                                        .borrow()
+                                        .exhume_glyph(&self.inner.borrow().glyph)
+                                        .unwrap();
+
+                                    let this = GlyphProxy {
+                                        inner: glyph,
+                                        store: self.store.clone(),
+                                    };
+                                    let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
+                                    let proxy = FfiProxy {
+                                        uuid: GLYPH_ID.into(),
+                                        plugin: plugin.clone(),
+                                    };
+                                    Ok(FfiValue::ProxyType(proxy))
+                                }
+                                "x_box" => {
+                                    let x_box = self
+                                        .store
+                                        .borrow()
+                                        .exhume_x_box(&self.inner.borrow().x_box)
+                                        .unwrap();
+
+                                    let this = XBoxProxy {
+                                        inner: x_box,
+                                        store: self.store.clone(),
+                                    };
+                                    let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
+                                    let proxy = FfiProxy {
+                                        uuid: X_BOX_ID.into(),
+                                        plugin: plugin.clone(),
+                                    };
+                                    Ok(FfiValue::ProxyType(proxy))
+                                }
+                                "line" => {
+                                    let line = self
+                                        .store
+                                        .borrow()
+                                        .exhume_line(&self.inner.borrow().line)
+                                        .unwrap();
+
+                                    let this = LineProxy {
+                                        inner: line,
+                                        store: self.store.clone(),
+                                    };
+                                    let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
+                                    let proxy = FfiProxy {
+                                        uuid: LINE_ID.into(),
+                                        plugin: plugin.clone(),
+                                    };
+                                    Ok(FfiValue::ProxyType(proxy))
+                                }
                                 _ => Err(Error::Uber("Invalid field".into())),
                             }
                         } else {
@@ -1640,39 +1684,60 @@ impl Plugin for AnchorProxy {
                             let value: Value = args.pop().unwrap().into();
                             match field.as_str() {
                                 "offset" => {
-                                    self.inner.offset = value.try_into().map_err(|e| {
-                                        Error::Uber(format!("Error converting value: {e}").into())
-                                    })?
+                                    self.inner.borrow_mut().offset =
+                                        value.try_into().map_err(|e| {
+                                            Error::Uber(
+                                                format!("Error converting value: {e}").into(),
+                                            )
+                                        })?
                                 }
                                 "x_offset" => {
-                                    self.inner.x_offset = value.try_into().map_err(|e| {
-                                        Error::Uber(format!("Error converting value: {e}").into())
-                                    })?
+                                    self.inner.borrow_mut().x_offset =
+                                        value.try_into().map_err(|e| {
+                                            Error::Uber(
+                                                format!("Error converting value: {e}").into(),
+                                            )
+                                        })?
                                 }
                                 "y_offset" => {
-                                    self.inner.y_offset = value.try_into().map_err(|e| {
-                                        Error::Uber(format!("Error converting value: {e}").into())
-                                    })?
+                                    self.inner.borrow_mut().y_offset =
+                                        value.try_into().map_err(|e| {
+                                            Error::Uber(
+                                                format!("Error converting value: {e}").into(),
+                                            )
+                                        })?
                                 }
                                 "edge" => {
-                                    self.inner.edge = value.try_into().map_err(|e| {
-                                        Error::Uber(format!("Error converting value: {e}").into())
-                                    })?
+                                    self.inner.borrow_mut().edge =
+                                        value.try_into().map_err(|e| {
+                                            Error::Uber(
+                                                format!("Error converting value: {e}").into(),
+                                            )
+                                        })?
                                 }
                                 "glyph" => {
-                                    self.inner.glyph = value.try_into().map_err(|e| {
-                                        Error::Uber(format!("Error converting value: {e}").into())
-                                    })?
+                                    self.inner.borrow_mut().glyph =
+                                        value.try_into().map_err(|e| {
+                                            Error::Uber(
+                                                format!("Error converting value: {e}").into(),
+                                            )
+                                        })?
                                 }
                                 "x_box" => {
-                                    self.inner.x_box = value.try_into().map_err(|e| {
-                                        Error::Uber(format!("Error converting value: {e}").into())
-                                    })?
+                                    self.inner.borrow_mut().x_box =
+                                        value.try_into().map_err(|e| {
+                                            Error::Uber(
+                                                format!("Error converting value: {e}").into(),
+                                            )
+                                        })?
                                 }
                                 "line" => {
-                                    self.inner.line = value.try_into().map_err(|e| {
-                                        Error::Uber(format!("Error converting value: {e}").into())
-                                    })?
+                                    self.inner.borrow_mut().line =
+                                        value.try_into().map_err(|e| {
+                                            Error::Uber(
+                                                format!("Error converting value: {e}").into(),
+                                            )
+                                        })?
                                 }
                                 field => {
                                     return Err(Error::Uber(
@@ -1703,15 +1768,15 @@ impl Plugin for AnchorProxy {
 
 impl Display for AnchorProxy {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "AnchorProxy({{")?;
-        writeln!(f, "	id: {:?},", self.inner.id)?;
-        writeln!(f, "	offset: {:?},", self.inner.offset)?;
-        writeln!(f, "	x_offset: {:?},", self.inner.x_offset)?;
-        writeln!(f, "	y_offset: {:?},", self.inner.y_offset)?;
-        writeln!(f, "	edge: {:?},", self.inner.edge)?;
-        writeln!(f, "	glyph: {:?},", self.inner.glyph)?;
-        writeln!(f, "	x_box: {:?},", self.inner.x_box)?;
-        writeln!(f, "	line: {:?},", self.inner.line)?;
+        writeln!(f, "Anchor({{")?;
+        writeln!(f, "	id: {:?},", self.inner.borrow().id)?;
+        writeln!(f, "	offset: {:?},", self.inner.borrow().offset)?;
+        writeln!(f, "	x_offset: {:?},", self.inner.borrow().x_offset)?;
+        writeln!(f, "	y_offset: {:?},", self.inner.borrow().y_offset)?;
+        writeln!(f, "	edge: {:?},", self.inner.borrow().edge)?;
+        writeln!(f, "	glyph: {:?},", self.inner.borrow().glyph)?;
+        writeln!(f, "	x_box: {:?},", self.inner.borrow().x_box)?;
+        writeln!(f, "	line: {:?},", self.inner.borrow().line)?;
         writeln!(f, "}})")
     }
 }
@@ -1720,7 +1785,8 @@ const BISECTION_ID: Uuid = uuid!("f6496c3c-adfa-5cf5-80b3-21bf2f0d7040");
 
 #[derive(Clone, Debug)]
 pub struct BisectionProxy {
-    inner: Bisection,
+    inner: Rc<RefCell<Bisection>>,
+    store: Rc<RefCell<ObjectStore>>,
 }
 
 impl Plugin for BisectionProxy {
@@ -1743,9 +1809,26 @@ impl Plugin for BisectionProxy {
 
                         if let FfiValue::String(field) = args.pop().unwrap() {
                             match field.as_str() {
-                                "id" => Ok(FfiValue::Uuid(self.inner.id.into())),
-                                "offset" => Ok(FfiValue::Float(self.inner.offset.into())),
-                                "segment" => Ok(FfiValue::UserType(self.inner.segment.into())),
+                                "id" => Ok(FfiValue::Uuid(self.inner.borrow().id.into())),
+                                "offset" => Ok(FfiValue::Float(self.inner.borrow().offset.into())),
+                                "segment" => {
+                                    let segment = self
+                                        .store
+                                        .borrow()
+                                        .exhume_line_segment(&self.inner.borrow().segment)
+                                        .unwrap();
+
+                                    let this = LineSegmentProxy {
+                                        inner: segment,
+                                        store: self.store.clone(),
+                                    };
+                                    let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
+                                    let proxy = FfiProxy {
+                                        uuid: LINE_SEGMENT_ID.into(),
+                                        plugin: plugin.clone(),
+                                    };
+                                    Ok(FfiValue::ProxyType(proxy))
+                                }
                                 _ => Err(Error::Uber("Invalid field".into())),
                             }
                         } else {
@@ -1764,14 +1847,20 @@ impl Plugin for BisectionProxy {
                             let value: Value = args.pop().unwrap().into();
                             match field.as_str() {
                                 "offset" => {
-                                    self.inner.offset = value.try_into().map_err(|e| {
-                                        Error::Uber(format!("Error converting value: {e}").into())
-                                    })?
+                                    self.inner.borrow_mut().offset =
+                                        value.try_into().map_err(|e| {
+                                            Error::Uber(
+                                                format!("Error converting value: {e}").into(),
+                                            )
+                                        })?
                                 }
                                 "segment" => {
-                                    self.inner.segment = value.try_into().map_err(|e| {
-                                        Error::Uber(format!("Error converting value: {e}").into())
-                                    })?
+                                    self.inner.borrow_mut().segment =
+                                        value.try_into().map_err(|e| {
+                                            Error::Uber(
+                                                format!("Error converting value: {e}").into(),
+                                            )
+                                        })?
                                 }
                                 field => {
                                     return Err(Error::Uber(
@@ -1802,10 +1891,10 @@ impl Plugin for BisectionProxy {
 
 impl Display for BisectionProxy {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "BisectionProxy({{")?;
-        writeln!(f, "	id: {:?},", self.inner.id)?;
-        writeln!(f, "	offset: {:?},", self.inner.offset)?;
-        writeln!(f, "	segment: {:?},", self.inner.segment)?;
+        writeln!(f, "Bisection({{")?;
+        writeln!(f, "	id: {:?},", self.inner.borrow().id)?;
+        writeln!(f, "	offset: {:?},", self.inner.borrow().offset)?;
+        writeln!(f, "	segment: {:?},", self.inner.borrow().segment)?;
         writeln!(f, "}})")
     }
 }
@@ -1814,7 +1903,8 @@ const BOTTOM_ID: Uuid = uuid!("dd577182-9bf1-591f-91eb-9a368ac0db86");
 
 #[derive(Clone, Debug)]
 pub struct BottomProxy {
-    inner: Bottom,
+    inner: Rc<RefCell<Bottom>>,
+    store: Rc<RefCell<ObjectStore>>,
 }
 
 impl Plugin for BottomProxy {
@@ -1837,7 +1927,7 @@ impl Plugin for BottomProxy {
 
                         if let FfiValue::String(field) = args.pop().unwrap() {
                             match field.as_str() {
-                                "id" => Ok(FfiValue::Uuid(self.inner.id().into())),
+                                "id" => Ok(FfiValue::Uuid(self.inner.borrow().id().into())),
                                 _ => Err(Error::Uber("Invalid field".into())),
                             }
                         } else {
@@ -1884,8 +1974,8 @@ impl Plugin for BottomProxy {
 
 impl Display for BottomProxy {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "BottomProxy({{")?;
-        writeln!(f, "	id: {:?},", self.inner.id())?;
+        writeln!(f, "Bottom({{")?;
+        writeln!(f, "	id: {:?},", self.inner.borrow().id())?;
         writeln!(f, "}})")
     }
 }
@@ -1894,7 +1984,8 @@ const X_BOX_ID: Uuid = uuid!("a27db16f-fea8-5db0-9e1e-30b12486bb75");
 
 #[derive(Clone, Debug)]
 pub struct XBoxProxy {
-    inner: XBox,
+    inner: Rc<RefCell<XBox>>,
+    store: Rc<RefCell<ObjectStore>>,
 }
 
 impl Plugin for XBoxProxy {
@@ -1917,12 +2008,13 @@ impl Plugin for XBoxProxy {
 
                         if let FfiValue::String(field) = args.pop().unwrap() {
                             match field.as_str() {
-                                "height" => Ok(FfiValue::Integer(self.inner.height.into())),
-                                "id" => Ok(FfiValue::Uuid(self.inner.id.into())),
-                                "width" => Ok(FfiValue::Integer(self.inner.width.into())),
-                                "x" => Ok(FfiValue::Integer(self.inner.x.into())),
-                                "y" => Ok(FfiValue::Integer(self.inner.y.into())),
-                                "object" => Ok(FfiValue::UserType(self.inner.object.into())),
+                                "height" => {
+                                    Ok(FfiValue::Integer(self.inner.borrow().height.into()))
+                                }
+                                "id" => Ok(FfiValue::Uuid(self.inner.borrow().id.into())),
+                                "width" => Ok(FfiValue::Integer(self.inner.borrow().width.into())),
+                                "x" => Ok(FfiValue::Integer(self.inner.borrow().x.into())),
+                                "y" => Ok(FfiValue::Integer(self.inner.borrow().y.into())),
                                 _ => Err(Error::Uber("Invalid field".into())),
                             }
                         } else {
@@ -1941,29 +2033,38 @@ impl Plugin for XBoxProxy {
                             let value: Value = args.pop().unwrap().into();
                             match field.as_str() {
                                 "height" => {
-                                    self.inner.height = value.try_into().map_err(|e| {
-                                        Error::Uber(format!("Error converting value: {e}").into())
-                                    })?
+                                    self.inner.borrow_mut().height =
+                                        value.try_into().map_err(|e| {
+                                            Error::Uber(
+                                                format!("Error converting value: {e}").into(),
+                                            )
+                                        })?
                                 }
                                 "width" => {
-                                    self.inner.width = value.try_into().map_err(|e| {
-                                        Error::Uber(format!("Error converting value: {e}").into())
-                                    })?
+                                    self.inner.borrow_mut().width =
+                                        value.try_into().map_err(|e| {
+                                            Error::Uber(
+                                                format!("Error converting value: {e}").into(),
+                                            )
+                                        })?
                                 }
                                 "x" => {
-                                    self.inner.x = value.try_into().map_err(|e| {
+                                    self.inner.borrow_mut().x = value.try_into().map_err(|e| {
                                         Error::Uber(format!("Error converting value: {e}").into())
                                     })?
                                 }
                                 "y" => {
-                                    self.inner.y = value.try_into().map_err(|e| {
+                                    self.inner.borrow_mut().y = value.try_into().map_err(|e| {
                                         Error::Uber(format!("Error converting value: {e}").into())
                                     })?
                                 }
                                 "object" => {
-                                    self.inner.object = value.try_into().map_err(|e| {
-                                        Error::Uber(format!("Error converting value: {e}").into())
-                                    })?
+                                    self.inner.borrow_mut().object =
+                                        value.try_into().map_err(|e| {
+                                            Error::Uber(
+                                                format!("Error converting value: {e}").into(),
+                                            )
+                                        })?
                                 }
                                 field => {
                                     return Err(Error::Uber(
@@ -1994,13 +2095,13 @@ impl Plugin for XBoxProxy {
 
 impl Display for XBoxProxy {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "XBoxProxy({{")?;
-        writeln!(f, "	height: {:?},", self.inner.height)?;
-        writeln!(f, "	id: {:?},", self.inner.id)?;
-        writeln!(f, "	width: {:?},", self.inner.width)?;
-        writeln!(f, "	x: {:?},", self.inner.x)?;
-        writeln!(f, "	y: {:?},", self.inner.y)?;
-        writeln!(f, "	object: {:?},", self.inner.object)?;
+        writeln!(f, "XBox({{")?;
+        writeln!(f, "	height: {:?},", self.inner.borrow().height)?;
+        writeln!(f, "	id: {:?},", self.inner.borrow().id)?;
+        writeln!(f, "	width: {:?},", self.inner.borrow().width)?;
+        writeln!(f, "	x: {:?},", self.inner.borrow().x)?;
+        writeln!(f, "	y: {:?},", self.inner.borrow().y)?;
+        writeln!(f, "	object: {:?},", self.inner.borrow().object)?;
         writeln!(f, "}})")
     }
 }
@@ -2009,7 +2110,8 @@ const EDGE_ID: Uuid = uuid!("d01f2378-3539-5b5f-ad97-0d0558f7d40e");
 
 #[derive(Clone, Debug)]
 pub struct EdgeProxy {
-    inner: Edge,
+    inner: Rc<RefCell<Edge>>,
+    store: Rc<RefCell<ObjectStore>>,
 }
 
 impl Plugin for EdgeProxy {
@@ -2032,7 +2134,7 @@ impl Plugin for EdgeProxy {
 
                         if let FfiValue::String(field) = args.pop().unwrap() {
                             match field.as_str() {
-                                "id" => Ok(FfiValue::Uuid(self.inner.id().into())),
+                                "id" => Ok(FfiValue::Uuid(self.inner.borrow().id().into())),
                                 _ => Err(Error::Uber("Invalid field".into())),
                             }
                         } else {
@@ -2079,8 +2181,8 @@ impl Plugin for EdgeProxy {
 
 impl Display for EdgeProxy {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "EdgeProxy({{")?;
-        writeln!(f, "	id: {:?},", self.inner.id())?;
+        writeln!(f, "Edge({{")?;
+        writeln!(f, "	id: {:?},", self.inner.borrow().id())?;
         writeln!(f, "}})")
     }
 }
@@ -2089,7 +2191,8 @@ const GLYPH_ID: Uuid = uuid!("47ccc17a-dde2-54b8-8d70-33b8aa683b36");
 
 #[derive(Clone, Debug)]
 pub struct GlyphProxy {
-    inner: Glyph,
+    inner: Rc<RefCell<Glyph>>,
+    store: Rc<RefCell<ObjectStore>>,
 }
 
 impl Plugin for GlyphProxy {
@@ -2112,8 +2215,25 @@ impl Plugin for GlyphProxy {
 
                         if let FfiValue::String(field) = args.pop().unwrap() {
                             match field.as_str() {
-                                "id" => Ok(FfiValue::Uuid(self.inner.id.into())),
-                                "line" => Ok(FfiValue::UserType(self.inner.line.into())),
+                                "id" => Ok(FfiValue::Uuid(self.inner.borrow().id.into())),
+                                "line" => {
+                                    let line = self
+                                        .store
+                                        .borrow()
+                                        .exhume_line(&self.inner.borrow().line)
+                                        .unwrap();
+
+                                    let this = LineProxy {
+                                        inner: line,
+                                        store: self.store.clone(),
+                                    };
+                                    let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
+                                    let proxy = FfiProxy {
+                                        uuid: LINE_ID.into(),
+                                        plugin: plugin.clone(),
+                                    };
+                                    Ok(FfiValue::ProxyType(proxy))
+                                }
                                 _ => Err(Error::Uber("Invalid field".into())),
                             }
                         } else {
@@ -2132,9 +2252,12 @@ impl Plugin for GlyphProxy {
                             let value: Value = args.pop().unwrap().into();
                             match field.as_str() {
                                 "line" => {
-                                    self.inner.line = value.try_into().map_err(|e| {
-                                        Error::Uber(format!("Error converting value: {e}").into())
-                                    })?
+                                    self.inner.borrow_mut().line =
+                                        value.try_into().map_err(|e| {
+                                            Error::Uber(
+                                                format!("Error converting value: {e}").into(),
+                                            )
+                                        })?
                                 }
                                 field => {
                                     return Err(Error::Uber(
@@ -2165,9 +2288,9 @@ impl Plugin for GlyphProxy {
 
 impl Display for GlyphProxy {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "GlyphProxy({{")?;
-        writeln!(f, "	id: {:?},", self.inner.id)?;
-        writeln!(f, "	line: {:?},", self.inner.line)?;
+        writeln!(f, "Glyph({{")?;
+        writeln!(f, "	id: {:?},", self.inner.borrow().id)?;
+        writeln!(f, "	line: {:?},", self.inner.borrow().line)?;
         writeln!(f, "}})")
     }
 }
@@ -2176,7 +2299,8 @@ const INFLECTION_ID: Uuid = uuid!("5a71b258-b726-542b-b2f5-050e31b1c6ac");
 
 #[derive(Clone, Debug)]
 pub struct InflectionProxy {
-    inner: Inflection,
+    inner: Rc<RefCell<Inflection>>,
+    store: Rc<RefCell<ObjectStore>>,
 }
 
 impl Plugin for InflectionProxy {
@@ -2199,7 +2323,7 @@ impl Plugin for InflectionProxy {
 
                         if let FfiValue::String(field) = args.pop().unwrap() {
                             match field.as_str() {
-                                "id" => Ok(FfiValue::Uuid(self.inner.id().into())),
+                                "id" => Ok(FfiValue::Uuid(self.inner.borrow().id().into())),
                                 _ => Err(Error::Uber("Invalid field".into())),
                             }
                         } else {
@@ -2246,8 +2370,8 @@ impl Plugin for InflectionProxy {
 
 impl Display for InflectionProxy {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "InflectionProxy({{")?;
-        writeln!(f, "	id: {:?},", self.inner.id())?;
+        writeln!(f, "Inflection({{")?;
+        writeln!(f, "	id: {:?},", self.inner.borrow().id())?;
         writeln!(f, "}})")
     }
 }
@@ -2256,7 +2380,8 @@ const LEFT_ID: Uuid = uuid!("b1469430-1459-57f8-a932-751cc9cdc125");
 
 #[derive(Clone, Debug)]
 pub struct LeftProxy {
-    inner: Left,
+    inner: Rc<RefCell<Left>>,
+    store: Rc<RefCell<ObjectStore>>,
 }
 
 impl Plugin for LeftProxy {
@@ -2279,7 +2404,7 @@ impl Plugin for LeftProxy {
 
                         if let FfiValue::String(field) = args.pop().unwrap() {
                             match field.as_str() {
-                                "id" => Ok(FfiValue::Uuid(self.inner.id().into())),
+                                "id" => Ok(FfiValue::Uuid(self.inner.borrow().id().into())),
                                 _ => Err(Error::Uber("Invalid field".into())),
                             }
                         } else {
@@ -2326,8 +2451,8 @@ impl Plugin for LeftProxy {
 
 impl Display for LeftProxy {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "LeftProxy({{")?;
-        writeln!(f, "	id: {:?},", self.inner.id())?;
+        writeln!(f, "Left({{")?;
+        writeln!(f, "	id: {:?},", self.inner.borrow().id())?;
         writeln!(f, "}})")
     }
 }
@@ -2336,7 +2461,8 @@ const LINE_ID: Uuid = uuid!("c8778dc8-ae80-5211-99f3-48982bce758e");
 
 #[derive(Clone, Debug)]
 pub struct LineProxy {
-    inner: Line,
+    inner: Rc<RefCell<Line>>,
+    store: Rc<RefCell<ObjectStore>>,
 }
 
 impl Plugin for LineProxy {
@@ -2359,10 +2485,7 @@ impl Plugin for LineProxy {
 
                         if let FfiValue::String(field) = args.pop().unwrap() {
                             match field.as_str() {
-                                "id" => Ok(FfiValue::Uuid(self.inner.id.into())),
-                                "relationship" => {
-                                    Ok(FfiValue::UserType(self.inner.relationship.into()))
-                                }
+                                "id" => Ok(FfiValue::Uuid(self.inner.borrow().id.into())),
                                 _ => Err(Error::Uber("Invalid field".into())),
                             }
                         } else {
@@ -2381,9 +2504,12 @@ impl Plugin for LineProxy {
                             let value: Value = args.pop().unwrap().into();
                             match field.as_str() {
                                 "relationship" => {
-                                    self.inner.relationship = value.try_into().map_err(|e| {
-                                        Error::Uber(format!("Error converting value: {e}").into())
-                                    })?
+                                    self.inner.borrow_mut().relationship =
+                                        value.try_into().map_err(|e| {
+                                            Error::Uber(
+                                                format!("Error converting value: {e}").into(),
+                                            )
+                                        })?
                                 }
                                 field => {
                                     return Err(Error::Uber(
@@ -2414,9 +2540,9 @@ impl Plugin for LineProxy {
 
 impl Display for LineProxy {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "LineProxy({{")?;
-        writeln!(f, "	id: {:?},", self.inner.id)?;
-        writeln!(f, "	relationship: {:?},", self.inner.relationship)?;
+        writeln!(f, "Line({{")?;
+        writeln!(f, "	id: {:?},", self.inner.borrow().id)?;
+        writeln!(f, "	relationship: {:?},", self.inner.borrow().relationship)?;
         writeln!(f, "}})")
     }
 }
@@ -2425,7 +2551,8 @@ const LINE_SEGMENT_ID: Uuid = uuid!("f09d5cf8-9778-5b41-a50c-87e8670e93dd");
 
 #[derive(Clone, Debug)]
 pub struct LineSegmentProxy {
-    inner: LineSegment,
+    inner: Rc<RefCell<LineSegment>>,
+    store: Rc<RefCell<ObjectStore>>,
 }
 
 impl Plugin for LineSegmentProxy {
@@ -2448,8 +2575,25 @@ impl Plugin for LineSegmentProxy {
 
                         if let FfiValue::String(field) = args.pop().unwrap() {
                             match field.as_str() {
-                                "id" => Ok(FfiValue::Uuid(self.inner.id.into())),
-                                "line" => Ok(FfiValue::UserType(self.inner.line.into())),
+                                "id" => Ok(FfiValue::Uuid(self.inner.borrow().id.into())),
+                                "line" => {
+                                    let line = self
+                                        .store
+                                        .borrow()
+                                        .exhume_line(&self.inner.borrow().line)
+                                        .unwrap();
+
+                                    let this = LineProxy {
+                                        inner: line,
+                                        store: self.store.clone(),
+                                    };
+                                    let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
+                                    let proxy = FfiProxy {
+                                        uuid: LINE_ID.into(),
+                                        plugin: plugin.clone(),
+                                    };
+                                    Ok(FfiValue::ProxyType(proxy))
+                                }
                                 _ => Err(Error::Uber("Invalid field".into())),
                             }
                         } else {
@@ -2468,9 +2612,12 @@ impl Plugin for LineSegmentProxy {
                             let value: Value = args.pop().unwrap().into();
                             match field.as_str() {
                                 "line" => {
-                                    self.inner.line = value.try_into().map_err(|e| {
-                                        Error::Uber(format!("Error converting value: {e}").into())
-                                    })?
+                                    self.inner.borrow_mut().line =
+                                        value.try_into().map_err(|e| {
+                                            Error::Uber(
+                                                format!("Error converting value: {e}").into(),
+                                            )
+                                        })?
                                 }
                                 field => {
                                     return Err(Error::Uber(
@@ -2501,9 +2648,9 @@ impl Plugin for LineSegmentProxy {
 
 impl Display for LineSegmentProxy {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "LineSegmentProxy({{")?;
-        writeln!(f, "	id: {:?},", self.inner.id)?;
-        writeln!(f, "	line: {:?},", self.inner.line)?;
+        writeln!(f, "LineSegment({{")?;
+        writeln!(f, "	id: {:?},", self.inner.borrow().id)?;
+        writeln!(f, "	line: {:?},", self.inner.borrow().line)?;
         writeln!(f, "}})")
     }
 }
@@ -2512,7 +2659,8 @@ const LINE_SEGMENT_POINT_ID: Uuid = uuid!("49615ec3-09d3-54d9-b32c-ebd5741f7af8"
 
 #[derive(Clone, Debug)]
 pub struct LineSegmentPointProxy {
-    inner: LineSegmentPoint,
+    inner: Rc<RefCell<LineSegmentPoint>>,
+    store: Rc<RefCell<ObjectStore>>,
 }
 
 impl Plugin for LineSegmentPointProxy {
@@ -2535,9 +2683,43 @@ impl Plugin for LineSegmentPointProxy {
 
                         if let FfiValue::String(field) = args.pop().unwrap() {
                             match field.as_str() {
-                                "id" => Ok(FfiValue::Uuid(self.inner.id.into())),
-                                "segment" => Ok(FfiValue::UserType(self.inner.segment.into())),
-                                "point" => Ok(FfiValue::UserType(self.inner.point.into())),
+                                "id" => Ok(FfiValue::Uuid(self.inner.borrow().id.into())),
+                                "segment" => {
+                                    let segment = self
+                                        .store
+                                        .borrow()
+                                        .exhume_line_segment(&self.inner.borrow().segment)
+                                        .unwrap();
+
+                                    let this = LineSegmentProxy {
+                                        inner: segment,
+                                        store: self.store.clone(),
+                                    };
+                                    let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
+                                    let proxy = FfiProxy {
+                                        uuid: LINE_SEGMENT_ID.into(),
+                                        plugin: plugin.clone(),
+                                    };
+                                    Ok(FfiValue::ProxyType(proxy))
+                                }
+                                "point" => {
+                                    let point = self
+                                        .store
+                                        .borrow()
+                                        .exhume_point(&self.inner.borrow().point)
+                                        .unwrap();
+
+                                    let this = PointProxy {
+                                        inner: point,
+                                        store: self.store.clone(),
+                                    };
+                                    let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
+                                    let proxy = FfiProxy {
+                                        uuid: POINT_ID.into(),
+                                        plugin: plugin.clone(),
+                                    };
+                                    Ok(FfiValue::ProxyType(proxy))
+                                }
                                 _ => Err(Error::Uber("Invalid field".into())),
                             }
                         } else {
@@ -2556,14 +2738,20 @@ impl Plugin for LineSegmentPointProxy {
                             let value: Value = args.pop().unwrap().into();
                             match field.as_str() {
                                 "segment" => {
-                                    self.inner.segment = value.try_into().map_err(|e| {
-                                        Error::Uber(format!("Error converting value: {e}").into())
-                                    })?
+                                    self.inner.borrow_mut().segment =
+                                        value.try_into().map_err(|e| {
+                                            Error::Uber(
+                                                format!("Error converting value: {e}").into(),
+                                            )
+                                        })?
                                 }
                                 "point" => {
-                                    self.inner.point = value.try_into().map_err(|e| {
-                                        Error::Uber(format!("Error converting value: {e}").into())
-                                    })?
+                                    self.inner.borrow_mut().point =
+                                        value.try_into().map_err(|e| {
+                                            Error::Uber(
+                                                format!("Error converting value: {e}").into(),
+                                            )
+                                        })?
                                 }
                                 field => {
                                     return Err(Error::Uber(
@@ -2594,10 +2782,10 @@ impl Plugin for LineSegmentPointProxy {
 
 impl Display for LineSegmentPointProxy {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "LineSegmentPointProxy({{")?;
-        writeln!(f, "	id: {:?},", self.inner.id)?;
-        writeln!(f, "	segment: {:?},", self.inner.segment)?;
-        writeln!(f, "	point: {:?},", self.inner.point)?;
+        writeln!(f, "LineSegmentPoint({{")?;
+        writeln!(f, "	id: {:?},", self.inner.borrow().id)?;
+        writeln!(f, "	segment: {:?},", self.inner.borrow().segment)?;
+        writeln!(f, "	point: {:?},", self.inner.borrow().point)?;
         writeln!(f, "}})")
     }
 }
@@ -2606,7 +2794,8 @@ const MANY_ID: Uuid = uuid!("a549f635-38bd-5016-b79f-b03125fbfc02");
 
 #[derive(Clone, Debug)]
 pub struct ManyProxy {
-    inner: Many,
+    inner: Rc<RefCell<Many>>,
+    store: Rc<RefCell<ObjectStore>>,
 }
 
 impl Plugin for ManyProxy {
@@ -2629,7 +2818,7 @@ impl Plugin for ManyProxy {
 
                         if let FfiValue::String(field) = args.pop().unwrap() {
                             match field.as_str() {
-                                "id" => Ok(FfiValue::Uuid(self.inner.id().into())),
+                                "id" => Ok(FfiValue::Uuid(self.inner.borrow().id().into())),
                                 _ => Err(Error::Uber("Invalid field".into())),
                             }
                         } else {
@@ -2676,8 +2865,8 @@ impl Plugin for ManyProxy {
 
 impl Display for ManyProxy {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "ManyProxy({{")?;
-        writeln!(f, "	id: {:?},", self.inner.id())?;
+        writeln!(f, "Many({{")?;
+        writeln!(f, "	id: {:?},", self.inner.borrow().id())?;
         writeln!(f, "}})")
     }
 }
@@ -2686,7 +2875,8 @@ const ONE_ID: Uuid = uuid!("696b0652-8c4d-56d9-b4dc-0490cd4b2ea0");
 
 #[derive(Clone, Debug)]
 pub struct OneProxy {
-    inner: One,
+    inner: Rc<RefCell<One>>,
+    store: Rc<RefCell<ObjectStore>>,
 }
 
 impl Plugin for OneProxy {
@@ -2709,7 +2899,7 @@ impl Plugin for OneProxy {
 
                         if let FfiValue::String(field) = args.pop().unwrap() {
                             match field.as_str() {
-                                "id" => Ok(FfiValue::Uuid(self.inner.id().into())),
+                                "id" => Ok(FfiValue::Uuid(self.inner.borrow().id().into())),
                                 _ => Err(Error::Uber("Invalid field".into())),
                             }
                         } else {
@@ -2756,8 +2946,8 @@ impl Plugin for OneProxy {
 
 impl Display for OneProxy {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "OneProxy({{")?;
-        writeln!(f, "	id: {:?},", self.inner.id())?;
+        writeln!(f, "One({{")?;
+        writeln!(f, "	id: {:?},", self.inner.borrow().id())?;
         writeln!(f, "}})")
     }
 }
@@ -2766,7 +2956,8 @@ const POINT_ID: Uuid = uuid!("423935ca-86d2-5d0a-ad35-8e7f00663448");
 
 #[derive(Clone, Debug)]
 pub struct PointProxy {
-    inner: Point,
+    inner: Rc<RefCell<Point>>,
+    store: Rc<RefCell<ObjectStore>>,
 }
 
 impl Plugin for PointProxy {
@@ -2789,9 +2980,9 @@ impl Plugin for PointProxy {
 
                         if let FfiValue::String(field) = args.pop().unwrap() {
                             match field.as_str() {
-                                "id" => Ok(FfiValue::Uuid(self.inner.id.into())),
-                                "x" => Ok(FfiValue::Integer(self.inner.x.into())),
-                                "y" => Ok(FfiValue::Integer(self.inner.y.into())),
+                                "id" => Ok(FfiValue::Uuid(self.inner.borrow().id.into())),
+                                "x" => Ok(FfiValue::Integer(self.inner.borrow().x.into())),
+                                "y" => Ok(FfiValue::Integer(self.inner.borrow().y.into())),
                                 _ => Err(Error::Uber("Invalid field".into())),
                             }
                         } else {
@@ -2810,12 +3001,12 @@ impl Plugin for PointProxy {
                             let value: Value = args.pop().unwrap().into();
                             match field.as_str() {
                                 "x" => {
-                                    self.inner.x = value.try_into().map_err(|e| {
+                                    self.inner.borrow_mut().x = value.try_into().map_err(|e| {
                                         Error::Uber(format!("Error converting value: {e}").into())
                                     })?
                                 }
                                 "y" => {
-                                    self.inner.y = value.try_into().map_err(|e| {
+                                    self.inner.borrow_mut().y = value.try_into().map_err(|e| {
                                         Error::Uber(format!("Error converting value: {e}").into())
                                     })?
                                 }
@@ -2848,10 +3039,10 @@ impl Plugin for PointProxy {
 
 impl Display for PointProxy {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "PointProxy({{")?;
-        writeln!(f, "	id: {:?},", self.inner.id)?;
-        writeln!(f, "	x: {:?},", self.inner.x)?;
-        writeln!(f, "	y: {:?},", self.inner.y)?;
+        writeln!(f, "Point({{")?;
+        writeln!(f, "	id: {:?},", self.inner.borrow().id)?;
+        writeln!(f, "	x: {:?},", self.inner.borrow().x)?;
+        writeln!(f, "	y: {:?},", self.inner.borrow().y)?;
         writeln!(f, "}})")
     }
 }
@@ -2860,7 +3051,8 @@ const RELATIONSHIP_NAME_ID: Uuid = uuid!("a6cad864-7edb-5a36-a3d9-c43df43fd140")
 
 #[derive(Clone, Debug)]
 pub struct RelationshipNameProxy {
-    inner: RelationshipName,
+    inner: Rc<RefCell<RelationshipName>>,
+    store: Rc<RefCell<ObjectStore>>,
 }
 
 impl Plugin for RelationshipNameProxy {
@@ -2883,12 +3075,48 @@ impl Plugin for RelationshipNameProxy {
 
                         if let FfiValue::String(field) = args.pop().unwrap() {
                             match field.as_str() {
-                                "id" => Ok(FfiValue::Uuid(self.inner.id.into())),
-                                "text" => Ok(FfiValue::String(self.inner.text.clone().into())),
-                                "x" => Ok(FfiValue::Integer(self.inner.x.into())),
-                                "y" => Ok(FfiValue::Integer(self.inner.y.into())),
-                                "line" => Ok(FfiValue::UserType(self.inner.line.into())),
-                                "origin" => Ok(FfiValue::UserType(self.inner.origin.into())),
+                                "id" => Ok(FfiValue::Uuid(self.inner.borrow().id.into())),
+                                "text" => {
+                                    Ok(FfiValue::String(self.inner.borrow().text.clone().into()))
+                                }
+                                "x" => Ok(FfiValue::Integer(self.inner.borrow().x.into())),
+                                "y" => Ok(FfiValue::Integer(self.inner.borrow().y.into())),
+                                "line" => {
+                                    let line = self
+                                        .store
+                                        .borrow()
+                                        .exhume_line(&self.inner.borrow().line)
+                                        .unwrap();
+
+                                    let this = LineProxy {
+                                        inner: line,
+                                        store: self.store.clone(),
+                                    };
+                                    let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
+                                    let proxy = FfiProxy {
+                                        uuid: LINE_ID.into(),
+                                        plugin: plugin.clone(),
+                                    };
+                                    Ok(FfiValue::ProxyType(proxy))
+                                }
+                                "origin" => {
+                                    let origin = self
+                                        .store
+                                        .borrow()
+                                        .exhume_bisection(&self.inner.borrow().origin)
+                                        .unwrap();
+
+                                    let this = BisectionProxy {
+                                        inner: origin,
+                                        store: self.store.clone(),
+                                    };
+                                    let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
+                                    let proxy = FfiProxy {
+                                        uuid: BISECTION_ID.into(),
+                                        plugin: plugin.clone(),
+                                    };
+                                    Ok(FfiValue::ProxyType(proxy))
+                                }
                                 _ => Err(Error::Uber("Invalid field".into())),
                             }
                         } else {
@@ -2907,29 +3135,38 @@ impl Plugin for RelationshipNameProxy {
                             let value: Value = args.pop().unwrap().into();
                             match field.as_str() {
                                 "text" => {
-                                    self.inner.text = value.try_into().map_err(|e| {
-                                        Error::Uber(format!("Error converting value: {e}").into())
-                                    })?
+                                    self.inner.borrow_mut().text =
+                                        value.try_into().map_err(|e| {
+                                            Error::Uber(
+                                                format!("Error converting value: {e}").into(),
+                                            )
+                                        })?
                                 }
                                 "x" => {
-                                    self.inner.x = value.try_into().map_err(|e| {
+                                    self.inner.borrow_mut().x = value.try_into().map_err(|e| {
                                         Error::Uber(format!("Error converting value: {e}").into())
                                     })?
                                 }
                                 "y" => {
-                                    self.inner.y = value.try_into().map_err(|e| {
+                                    self.inner.borrow_mut().y = value.try_into().map_err(|e| {
                                         Error::Uber(format!("Error converting value: {e}").into())
                                     })?
                                 }
                                 "line" => {
-                                    self.inner.line = value.try_into().map_err(|e| {
-                                        Error::Uber(format!("Error converting value: {e}").into())
-                                    })?
+                                    self.inner.borrow_mut().line =
+                                        value.try_into().map_err(|e| {
+                                            Error::Uber(
+                                                format!("Error converting value: {e}").into(),
+                                            )
+                                        })?
                                 }
                                 "origin" => {
-                                    self.inner.origin = value.try_into().map_err(|e| {
-                                        Error::Uber(format!("Error converting value: {e}").into())
-                                    })?
+                                    self.inner.borrow_mut().origin =
+                                        value.try_into().map_err(|e| {
+                                            Error::Uber(
+                                                format!("Error converting value: {e}").into(),
+                                            )
+                                        })?
                                 }
                                 field => {
                                     return Err(Error::Uber(
@@ -2960,13 +3197,13 @@ impl Plugin for RelationshipNameProxy {
 
 impl Display for RelationshipNameProxy {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "RelationshipNameProxy({{")?;
-        writeln!(f, "	id: {:?},", self.inner.id)?;
-        writeln!(f, "	text: {:?},", self.inner.text)?;
-        writeln!(f, "	x: {:?},", self.inner.x)?;
-        writeln!(f, "	y: {:?},", self.inner.y)?;
-        writeln!(f, "	line: {:?},", self.inner.line)?;
-        writeln!(f, "	origin: {:?},", self.inner.origin)?;
+        writeln!(f, "RelationshipName({{")?;
+        writeln!(f, "	id: {:?},", self.inner.borrow().id)?;
+        writeln!(f, "	text: {:?},", self.inner.borrow().text)?;
+        writeln!(f, "	x: {:?},", self.inner.borrow().x)?;
+        writeln!(f, "	y: {:?},", self.inner.borrow().y)?;
+        writeln!(f, "	line: {:?},", self.inner.borrow().line)?;
+        writeln!(f, "	origin: {:?},", self.inner.borrow().origin)?;
         writeln!(f, "}})")
     }
 }
@@ -2975,7 +3212,8 @@ const RELATIONSHIP_PHRASE_ID: Uuid = uuid!("ba4b2db0-a361-5e9b-a3d4-1aab7ebe55b0
 
 #[derive(Clone, Debug)]
 pub struct RelationshipPhraseProxy {
-    inner: RelationshipPhrase,
+    inner: Rc<RefCell<RelationshipPhrase>>,
+    store: Rc<RefCell<ObjectStore>>,
 }
 
 impl Plugin for RelationshipPhraseProxy {
@@ -2998,12 +3236,48 @@ impl Plugin for RelationshipPhraseProxy {
 
                         if let FfiValue::String(field) = args.pop().unwrap() {
                             match field.as_str() {
-                                "id" => Ok(FfiValue::Uuid(self.inner.id.into())),
-                                "text" => Ok(FfiValue::String(self.inner.text.clone().into())),
-                                "x" => Ok(FfiValue::Integer(self.inner.x.into())),
-                                "y" => Ok(FfiValue::Integer(self.inner.y.into())),
-                                "line" => Ok(FfiValue::UserType(self.inner.line.into())),
-                                "origin" => Ok(FfiValue::UserType(self.inner.origin.into())),
+                                "id" => Ok(FfiValue::Uuid(self.inner.borrow().id.into())),
+                                "text" => {
+                                    Ok(FfiValue::String(self.inner.borrow().text.clone().into()))
+                                }
+                                "x" => Ok(FfiValue::Integer(self.inner.borrow().x.into())),
+                                "y" => Ok(FfiValue::Integer(self.inner.borrow().y.into())),
+                                "line" => {
+                                    let line = self
+                                        .store
+                                        .borrow()
+                                        .exhume_line(&self.inner.borrow().line)
+                                        .unwrap();
+
+                                    let this = LineProxy {
+                                        inner: line,
+                                        store: self.store.clone(),
+                                    };
+                                    let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
+                                    let proxy = FfiProxy {
+                                        uuid: LINE_ID.into(),
+                                        plugin: plugin.clone(),
+                                    };
+                                    Ok(FfiValue::ProxyType(proxy))
+                                }
+                                "origin" => {
+                                    let origin = self
+                                        .store
+                                        .borrow()
+                                        .exhume_anchor(&self.inner.borrow().origin)
+                                        .unwrap();
+
+                                    let this = AnchorProxy {
+                                        inner: origin,
+                                        store: self.store.clone(),
+                                    };
+                                    let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
+                                    let proxy = FfiProxy {
+                                        uuid: ANCHOR_ID.into(),
+                                        plugin: plugin.clone(),
+                                    };
+                                    Ok(FfiValue::ProxyType(proxy))
+                                }
                                 _ => Err(Error::Uber("Invalid field".into())),
                             }
                         } else {
@@ -3022,29 +3296,38 @@ impl Plugin for RelationshipPhraseProxy {
                             let value: Value = args.pop().unwrap().into();
                             match field.as_str() {
                                 "text" => {
-                                    self.inner.text = value.try_into().map_err(|e| {
-                                        Error::Uber(format!("Error converting value: {e}").into())
-                                    })?
+                                    self.inner.borrow_mut().text =
+                                        value.try_into().map_err(|e| {
+                                            Error::Uber(
+                                                format!("Error converting value: {e}").into(),
+                                            )
+                                        })?
                                 }
                                 "x" => {
-                                    self.inner.x = value.try_into().map_err(|e| {
+                                    self.inner.borrow_mut().x = value.try_into().map_err(|e| {
                                         Error::Uber(format!("Error converting value: {e}").into())
                                     })?
                                 }
                                 "y" => {
-                                    self.inner.y = value.try_into().map_err(|e| {
+                                    self.inner.borrow_mut().y = value.try_into().map_err(|e| {
                                         Error::Uber(format!("Error converting value: {e}").into())
                                     })?
                                 }
                                 "line" => {
-                                    self.inner.line = value.try_into().map_err(|e| {
-                                        Error::Uber(format!("Error converting value: {e}").into())
-                                    })?
+                                    self.inner.borrow_mut().line =
+                                        value.try_into().map_err(|e| {
+                                            Error::Uber(
+                                                format!("Error converting value: {e}").into(),
+                                            )
+                                        })?
                                 }
                                 "origin" => {
-                                    self.inner.origin = value.try_into().map_err(|e| {
-                                        Error::Uber(format!("Error converting value: {e}").into())
-                                    })?
+                                    self.inner.borrow_mut().origin =
+                                        value.try_into().map_err(|e| {
+                                            Error::Uber(
+                                                format!("Error converting value: {e}").into(),
+                                            )
+                                        })?
                                 }
                                 field => {
                                     return Err(Error::Uber(
@@ -3075,13 +3358,13 @@ impl Plugin for RelationshipPhraseProxy {
 
 impl Display for RelationshipPhraseProxy {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "RelationshipPhraseProxy({{")?;
-        writeln!(f, "	id: {:?},", self.inner.id)?;
-        writeln!(f, "	text: {:?},", self.inner.text)?;
-        writeln!(f, "	x: {:?},", self.inner.x)?;
-        writeln!(f, "	y: {:?},", self.inner.y)?;
-        writeln!(f, "	line: {:?},", self.inner.line)?;
-        writeln!(f, "	origin: {:?},", self.inner.origin)?;
+        writeln!(f, "RelationshipPhrase({{")?;
+        writeln!(f, "	id: {:?},", self.inner.borrow().id)?;
+        writeln!(f, "	text: {:?},", self.inner.borrow().text)?;
+        writeln!(f, "	x: {:?},", self.inner.borrow().x)?;
+        writeln!(f, "	y: {:?},", self.inner.borrow().y)?;
+        writeln!(f, "	line: {:?},", self.inner.borrow().line)?;
+        writeln!(f, "	origin: {:?},", self.inner.borrow().origin)?;
         writeln!(f, "}})")
     }
 }
@@ -3090,7 +3373,8 @@ const RIGHT_ID: Uuid = uuid!("45385874-931f-5e9c-a5f8-b12558e3a535");
 
 #[derive(Clone, Debug)]
 pub struct RightProxy {
-    inner: Right,
+    inner: Rc<RefCell<Right>>,
+    store: Rc<RefCell<ObjectStore>>,
 }
 
 impl Plugin for RightProxy {
@@ -3113,7 +3397,7 @@ impl Plugin for RightProxy {
 
                         if let FfiValue::String(field) = args.pop().unwrap() {
                             match field.as_str() {
-                                "id" => Ok(FfiValue::Uuid(self.inner.id().into())),
+                                "id" => Ok(FfiValue::Uuid(self.inner.borrow().id().into())),
                                 _ => Err(Error::Uber("Invalid field".into())),
                             }
                         } else {
@@ -3160,8 +3444,8 @@ impl Plugin for RightProxy {
 
 impl Display for RightProxy {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "RightProxy({{")?;
-        writeln!(f, "	id: {:?},", self.inner.id())?;
+        writeln!(f, "Right({{")?;
+        writeln!(f, "	id: {:?},", self.inner.borrow().id())?;
         writeln!(f, "}})")
     }
 }
@@ -3170,7 +3454,8 @@ const SUB_ID: Uuid = uuid!("146d7a75-c86b-59a7-a52a-ac522d748a47");
 
 #[derive(Clone, Debug)]
 pub struct SubProxy {
-    inner: Sub,
+    inner: Rc<RefCell<Sub>>,
+    store: Rc<RefCell<ObjectStore>>,
 }
 
 impl Plugin for SubProxy {
@@ -3193,7 +3478,7 @@ impl Plugin for SubProxy {
 
                         if let FfiValue::String(field) = args.pop().unwrap() {
                             match field.as_str() {
-                                "id" => Ok(FfiValue::Uuid(self.inner.id().into())),
+                                "id" => Ok(FfiValue::Uuid(self.inner.borrow().id().into())),
                                 _ => Err(Error::Uber("Invalid field".into())),
                             }
                         } else {
@@ -3240,8 +3525,8 @@ impl Plugin for SubProxy {
 
 impl Display for SubProxy {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "SubProxy({{")?;
-        writeln!(f, "	id: {:?},", self.inner.id())?;
+        writeln!(f, "Sub({{")?;
+        writeln!(f, "	id: {:?},", self.inner.borrow().id())?;
         writeln!(f, "}})")
     }
 }
@@ -3250,7 +3535,8 @@ const X_SUPER_ID: Uuid = uuid!("0cbeeb50-21ce-5e83-9f2e-65d1410d553f");
 
 #[derive(Clone, Debug)]
 pub struct XSuperProxy {
-    inner: XSuper,
+    inner: Rc<RefCell<XSuper>>,
+    store: Rc<RefCell<ObjectStore>>,
 }
 
 impl Plugin for XSuperProxy {
@@ -3273,7 +3559,7 @@ impl Plugin for XSuperProxy {
 
                         if let FfiValue::String(field) = args.pop().unwrap() {
                             match field.as_str() {
-                                "id" => Ok(FfiValue::Uuid(self.inner.id().into())),
+                                "id" => Ok(FfiValue::Uuid(self.inner.borrow().id().into())),
                                 _ => Err(Error::Uber("Invalid field".into())),
                             }
                         } else {
@@ -3320,8 +3606,8 @@ impl Plugin for XSuperProxy {
 
 impl Display for XSuperProxy {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "XSuperProxy({{")?;
-        writeln!(f, "	id: {:?},", self.inner.id())?;
+        writeln!(f, "XSuper({{")?;
+        writeln!(f, "	id: {:?},", self.inner.borrow().id())?;
         writeln!(f, "}})")
     }
 }
@@ -3330,7 +3616,8 @@ const TOP_ID: Uuid = uuid!("a04b0262-b3be-5721-a8b0-0e790b509243");
 
 #[derive(Clone, Debug)]
 pub struct TopProxy {
-    inner: Top,
+    inner: Rc<RefCell<Top>>,
+    store: Rc<RefCell<ObjectStore>>,
 }
 
 impl Plugin for TopProxy {
@@ -3353,7 +3640,7 @@ impl Plugin for TopProxy {
 
                         if let FfiValue::String(field) = args.pop().unwrap() {
                             match field.as_str() {
-                                "id" => Ok(FfiValue::Uuid(self.inner.id().into())),
+                                "id" => Ok(FfiValue::Uuid(self.inner.borrow().id().into())),
                                 _ => Err(Error::Uber("Invalid field".into())),
                             }
                         } else {
@@ -3400,8 +3687,8 @@ impl Plugin for TopProxy {
 
 impl Display for TopProxy {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "TopProxy({{")?;
-        writeln!(f, "	id: {:?},", self.inner.id())?;
+        writeln!(f, "Top({{")?;
+        writeln!(f, "	id: {:?},", self.inner.borrow().id())?;
         writeln!(f, "}})")
     }
 }

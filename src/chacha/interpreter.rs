@@ -580,8 +580,8 @@ fn eval_expression(
     if log_enabled!(Debug) {
         let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
         let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
-        let read = s_read!(span);
-        let span = read.start as usize..read.end as usize;
+        let span = s_read!(span);
+        let span = span.start as usize..span.end as usize;
         let source = context.source();
         debug!("executing {}", source[span].to_owned());
     }
@@ -903,6 +903,8 @@ fn typecheck(
 
     let (lhs_t, rhs_t) = (&s_read!(lhs).subtype, &s_read!(rhs).subtype);
 
+    // If it's a lambda we test the function signature: return type, and parameters.
+    // 🚧 looks like I'm only testing the return type.
     if let ValueTypeEnum::Lambda(l) = lhs_t {
         if let ValueTypeEnum::Lambda(r) = rhs_t {
             let l = s_read!(context.lu_dog_heel()).exhume_lambda(l).unwrap();
@@ -923,7 +925,19 @@ fn typecheck(
             }
         }
     }
-    // dbg!(&lhs_t, &rhs_t);
+
+    // Checking for proxy type/woog struct equivalence.
+    if let ValueTypeEnum::WoogStruct(rhs_id) = rhs_t {
+        if let ValueTypeEnum::Ty(lhs_id) = lhs_t {
+            let woog_struct = s_read!(context.lu_dog_heel())
+                .exhume_woog_struct(rhs_id)
+                .unwrap();
+            if s_read!(woog_struct).object == Some(*lhs_id) {
+                return Ok(());
+            }
+        }
+    }
+
     if lhs_t == rhs_t {
         Ok(())
     } else {

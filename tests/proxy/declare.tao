@@ -420,6 +420,9 @@ impl Line {
     #[proxy(store = "merlin", object = "Line", func = "new")]
     fn new(relationship: Relationship) -> Self;
 
+    #[proxy(store = "merlin", object = "Line", func = "exhume_line")]
+    fn exhume_line(id: Uuid) -> Self;
+
     #[proxy(store = "merlin", object = "Line", func = "instances")]
     fn instances() -> [Self];
 
@@ -458,6 +461,10 @@ impl LineSegment {
 
     #[proxy(store = "merlin", object = "LineSegment", func = "instances")]
     fn instances() -> [Self];
+
+    fn line_(self) -> Line {
+        Line::exhume_line(self.line.id)
+    }
 
     fn help() -> () {
         print("Part of a Line\n");

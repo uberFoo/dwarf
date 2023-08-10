@@ -2,7 +2,7 @@ use std::{collections::VecDeque, time::Instant};
 
 use ansi_term::Colour;
 use rustc_hash::FxHashMap as HashMap;
-use snafu::prelude::*;
+use snafu::{location, prelude::*, Location};
 use uuid::Uuid;
 
 use crate::{
@@ -77,13 +77,10 @@ pub fn eval_call(
                     debug!("ty {ty:?}");
                     Ok((value, ty))
                 }
-                // 🚧 ProxyType
-                // Value::ProxyType(pt) => {
-                //     let ty = s_read!(lu_dog)
-                //         .exhume_value_type(&s_read!(pt).struct_uuid())
-                //         .unwrap();
-                //     Ok((value.clone(), ty))
-                // }
+                Value::ProxyType(_proxy) => Ok((
+                    value.clone(),
+                    s_read!(value).get_type(&s_read!(lu_dog), &s_read!(sarzak)),
+                )),
                 Value::UserType(ut) => Ok((value.clone(), s_read!(ut).get_type().clone())),
                 value_ => {
                     let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
@@ -97,6 +94,7 @@ pub fn eval_call(
                     Err(ChaChaError::NotAFunction {
                         value: value_.to_owned(),
                         span,
+                        location: location!(),
                     })
                 }
             }
@@ -149,8 +147,51 @@ pub fn eval_call(
             debug!("MethodCall type {ty:?}");
 
             match &*s_read!(value) {
-                Value::ProxyType(proxy_type) => {
-                    unimplemented!()
+                Value::ProxyType((id, proxy)) => {
+                    let vt = s_read!(lu_dog);
+                    let mut vt = vt.iter_value_type();
+                    let woog_struct = loop {
+                        if let Some(vt) = vt.next() {
+                            if let ValueTypeEnum::WoogStruct(woog) = s_read!(vt).subtype {
+                                let woog = s_read!(lu_dog).exhume_woog_struct(&woog).unwrap();
+                                let object = s_read!(woog).object;
+                                if let Some(ref obj_id) = object {
+                                    if id == obj_id {
+                                        break woog;
+                                    }
+                                }
+                            }
+                        } else {
+                            unreachable!()
+                        }
+                    };
+                    // let woog_struct = s_read!(lu_dog).exhume_woog_struct_id_by_name(id).unwrap();
+                    // let woog_struct = s_read!(lu_dog).exhume_woog_struct(&woog_struct).unwrap();
+                    let woog_struct = s_read!(woog_struct);
+                    let impl_ = &woog_struct.r8c_implementation_block(&s_read!(lu_dog))[0];
+                    let x = if let Some(func) = s_read!(impl_)
+                        .r9_function(&s_read!(lu_dog))
+                        .iter()
+                        .find(|f| s_read!(f).name == *meth)
+                    {
+                        let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
+                        let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
+
+                        eval_function_call((*func).clone(), &args, arg_check, span, context, vm)
+                    } else {
+                        let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
+                        let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
+                        let read = s_read!(span);
+                        let span = read.start as usize..read.end as usize;
+
+                        return Err(ChaChaError::NoSuchMethod {
+                            method: meth.to_owned(),
+                            span,
+                            location: location!(),
+                        });
+                    };
+                    x
+
                     // let mut arg_values = if !args.is_empty() {
                     //     // The VecDeque is so that I can pop off the args, and then push them
                     //     // back onto a queue in the same order.
@@ -285,6 +326,7 @@ pub fn eval_call(
                                             return Err(ChaChaError::NoSuchMethod {
                                                 method: current.to_owned(),
                                                 span: 0..0,
+                                                location: location!(),
                                             });
                                         }
                                     } else {
@@ -310,6 +352,7 @@ pub fn eval_call(
                         return Err(ChaChaError::NoSuchMethod {
                             method: value_.to_owned(),
                             span,
+                            location: location!(),
                         });
                     }
                 },
@@ -323,6 +366,7 @@ pub fn eval_call(
                             *woog_struct
                         } else {
                             // 🚧 This should be an error.
+                            // TBH, I don't think that this is reachable?
                             panic!("I'm trying to invoke a function on a UserType, and it's not a Struct!");
                         }
                     };
@@ -348,6 +392,7 @@ pub fn eval_call(
                         return Err(ChaChaError::NoSuchMethod {
                             method: meth.to_owned(),
                             span,
+                            location: location!(),
                         });
                     };
                     x

@@ -143,6 +143,7 @@ impl From<FfiValue> for Value {
             FfiValue::ProxyType(plugin) => Self::ProxyType((plugin.uuid.into(), plugin.plugin)),
             FfiValue::Range(range) => Self::Range(range.start.into()..range.end.into()),
             FfiValue::String(str_) => Self::String(str_.into()),
+            // FfiValue::UserType(uuid) => Self::UserType(new_ref!(UserType, uuid.into())),
             FfiValue::Uuid(uuid) => Self::Uuid(uuid.into()),
             FfiValue::Vector(vec) => {
                 Self::Vector(vec.into_iter().map(|v| new_ref!(Value, v.into())).collect())

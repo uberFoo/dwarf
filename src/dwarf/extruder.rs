@@ -1197,6 +1197,9 @@ pub(super) fn inter_expression(
                             None
                         };
 
+                        debug!("field {:?}", field);
+                        debug!("func {:?}", func);
+
                         // We need to grab the type from the field: what we have above is the type
                         // of the struct.
                         if let Some(field) = field {
@@ -1235,6 +1238,7 @@ pub(super) fn inter_expression(
                     }
                 }
                 ValueTypeEnum::Ty(id) => {
+                    debug!("FieldAccess: ValueTypeEnum::Ty() {:?}", id);
                     let woog_struct = lu_dog
                         .iter_woog_struct()
                         .find(|ws| s_read!(ws).object == Some(*id))
@@ -1645,10 +1649,10 @@ pub(super) fn inter_expression(
         //
         // Index
         //
-        ParserExpression::Index(target, index_p) => {
-            let (target, _target_ty) = inter_expression(
-                &new_ref!(ParserExpression, target.0.to_owned()),
-                &target.1,
+        ParserExpression::Index(target_p, index_p) => {
+            let (target, target_ty) = inter_expression(
+                &new_ref!(ParserExpression, target_p.0.to_owned()),
+                &target_p.1,
                 block,
                 context,
                 lu_dog,
@@ -1674,14 +1678,34 @@ pub(super) fn inter_expression(
                 )?;
             }
 
+            // We need to dereference the list and return the underlying type.
+            let target_ty = if let ValueTypeEnum::List(ref ty) = s_read!(target_ty).subtype {
+                let list = lu_dog.exhume_list(ty).unwrap();
+                let ty = &s_read!(list).r36_value_type(lu_dog)[0];
+                ty.clone()
+            } else if let ValueTypeEnum::Ty(ref ty) = s_read!(target_ty).subtype {
+                let ty = context.sarzak.exhume_ty(ty).unwrap();
+                let ty = ty.borrow();
+                if let Ty::SString(ref ty) = &*ty {
+                    ValueType::new_char(lu_dog)
+                } else {
+                    return Err(vec![DwarfError::NotAList {
+                        span: target_p.1.clone(),
+                    }]);
+                }
+            } else {
+                return Err(vec![DwarfError::NotAList {
+                    span: target_p.1.clone(),
+                }]);
+            };
+
             let index = Index::new(&index.0, &target.0, lu_dog);
 
             let expr = Expression::new_index(&index, lu_dog);
-            let value = XValue::new_expression(block, &int_ty, &expr, lu_dog);
+            let value = XValue::new_expression(block, &target_ty, &expr, lu_dog);
             s_write!(span).x_value = Some(s_read!(value).id);
-            // 🚧 We should really check that the target type is some sort of list.
 
-            Ok(((expr, span), int_ty))
+            Ok(((expr, span), target_ty))
         }
         //
         // IntegerLiteral
@@ -1981,7 +2005,7 @@ pub(super) fn inter_expression(
                 .iter()
                 .inspect(|v| {
                     let ty = s_read!(v).ty;
-                    debug!("value: {v:#?}, type: {:#?}", types[ty]);
+                    debug!("value: {:#?}, type: {:#?}", s_read!(v), types[ty]);
                 })
                 .filter_map(|value| {
                     let value = s_read!(value);
@@ -2193,6 +2217,7 @@ pub(super) fn inter_expression(
                             return Err(vec![DwarfError::NoSuchMethod {
                                 method: method.to_owned(),
                                 span: meth_span.to_owned(),
+                                location: location!(),
                             }])
                         }
                     }

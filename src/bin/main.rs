@@ -223,7 +223,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         if args.repl.is_some() && args.repl.unwrap() {
-            start_repl(ctx).map_err(|e| {
+            start_repl(ctx, is_uber).map_err(|e| {
                 println!("Interpreter exited with: {}", e);
                 e
             })?;
@@ -280,7 +280,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     } else {
         let ctx = initialize_interpreter::<PathBuf>(sarzak, lu_dog, models, None)?;
 
-        start_repl(ctx).map_err(|e| {
+        start_repl(ctx, is_uber).map_err(|e| {
             println!("Interpreter exited with: {}", e);
             e
         })?;
