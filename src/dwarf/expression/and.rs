@@ -42,8 +42,8 @@ pub fn inter_and(
     )?;
 
     if let ValueTypeEnum::Ty(ref id) = s_read!(lhs_ty).subtype {
-        let ty = context.sarzak.exhume_ty(id).unwrap();
-        matches!(ty, Ty::Boolean(_));
+        let ty = context.sarzak.exhume_ty(id).unwrap().borrow();
+        matches!(&*ty, Ty::Boolean(_));
     } else {
         let lhs = PrintableValueType(&lhs_ty, context, lu_dog);
         return Err(vec![DwarfError::TypeMismatch {

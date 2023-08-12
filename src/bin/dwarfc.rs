@@ -136,7 +136,7 @@ fn main() -> Result<()> {
         path.push(BUILD_DIR);
         path
     } else {
-        // Write the output at the same loccation as the source file.
+        // Write the output at the same location as the source file.
         fs::canonicalize(&args.source)
             .unwrap()
             .parent()
@@ -146,14 +146,9 @@ fn main() -> Result<()> {
 
     let mut out_file = path.clone();
     // Build the output path
-    out_file.push("toadstool");
+    out_file.push("toadstool"); // This gets replaced below -- I'm just being silly.
     out_file.set_file_name(args.source.file_name().unwrap());
     out_file.set_extension(EXTENSIONS[1]);
-
-    // fs::create_dir_all(&path).context(FileSnafu {
-    //     description: "creating type directory".to_owned(),
-    //     path: &path,
-    // })?;
 
     let source_code = fs::read_to_string(&args.source)
         .context(FileSnafu {
@@ -164,12 +159,7 @@ fn main() -> Result<()> {
 
     let ast = parse_dwarf(args.source.to_str().unwrap(), &source_code).map_err(|e| vec![e])?;
 
-    let lu_dog = match new_lu_dog(
-        Some(&path),
-        Some((source_code.clone(), &ast)),
-        &models,
-        &sarzak,
-    ) {
+    let lu_dog = match new_lu_dog(Some((source_code.clone(), &ast)), &models, &sarzak) {
         Ok(lu_dog) => lu_dog,
         Err(errors) => {
             for err in errors {

@@ -76,7 +76,6 @@ fn run_program(test: &str, program: &str) -> Result<(Value, String), String> {
         _ => unreachable!(),
     };
     let lu_dog = match new_lu_dog(
-        None,
         Some((program.to_owned(), &ast)),
         &HashMap::default(),
         &sarzak,

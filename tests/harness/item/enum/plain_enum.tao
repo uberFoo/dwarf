@@ -1,0 +1,12 @@
+enum Foo {
+    Bar,
+    Baz,
+}
+
+fn main() {
+    let a = Foo::Bar;
+    let b = Foo::Baz;
+
+    chacha::assert_eq(a, Foo::Bar);
+    chacha::assert_eq(b, Foo::Baz);
+}

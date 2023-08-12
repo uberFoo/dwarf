@@ -55,6 +55,7 @@ fn eval_built_in_function_call(
     vm: &mut VM,
 ) -> Result<(RefType<Value>, RefType<ValueType>)> {
     let lu_dog = context.lu_dog_heel().clone();
+    let sarzak = context.sarzak_heel().clone();
 
     let func = s_read!(func);
 
@@ -169,7 +170,7 @@ fn eval_built_in_function_call(
         }
 
         let mut value = new_ref!(Value, Value::Empty);
-        let mut ty = Value::Empty.get_type(&s_read!(lu_dog));
+        let mut ty = Value::Empty.get_type(&s_read!(sarzak), &s_read!(lu_dog));
         if let Some(ref id) = s_read!(block).statement {
             let mut next = s_read!(lu_dog).exhume_statement(id).unwrap();
 
@@ -206,7 +207,7 @@ fn eval_built_in_function_call(
     } else {
         Ok((
             new_ref!(Value, Value::Empty),
-            Value::Empty.get_type(&s_read!(lu_dog)),
+            Value::Empty.get_type(&s_read!(sarzak), &s_read!(lu_dog)),
         ))
     }
 }

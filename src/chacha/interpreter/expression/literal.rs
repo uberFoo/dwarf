@@ -12,6 +12,7 @@ pub fn eval_literal(
     context: &mut Context,
 ) -> Result<(RefType<Value>, RefType<ValueType>)> {
     let lu_dog = context.lu_dog_heel().clone();
+    let sarzak = context.sarzak_heel().clone();
 
     let literal = s_read!(lu_dog).exhume_literal(literal).unwrap();
 
@@ -24,7 +25,7 @@ pub fn eval_literal(
         LiteralEnum::BooleanLiteral(ref literal) => {
             let literal = s_read!(lu_dog).exhume_boolean_literal(literal).unwrap();
             let literal = s_read!(literal);
-            let ty = Value::Boolean(true).get_type(&s_read!(lu_dog));
+            let ty = Value::Boolean(true).get_type(&s_read!(sarzak), &s_read!(lu_dog));
 
             match literal.subtype {
                 BooleanLiteralEnum::FalseLiteral(_) => {
@@ -42,7 +43,7 @@ pub fn eval_literal(
             let literal = s_read!(lu_dog).exhume_float_literal(literal).unwrap();
             let value = s_read!(literal).x_value;
             let value = Value::Float(value);
-            let ty = value.get_type(&s_read!(lu_dog));
+            let ty = value.get_type(&s_read!(sarzak), &s_read!(lu_dog));
 
             Ok((new_ref!(Value, value), ty))
         }
@@ -53,7 +54,7 @@ pub fn eval_literal(
             let literal = s_read!(lu_dog).exhume_integer_literal(literal).unwrap();
             let value = s_read!(literal).x_value;
             let value = Value::Integer(value);
-            let ty = value.get_type(&s_read!(lu_dog));
+            let ty = value.get_type(&s_read!(sarzak), &s_read!(lu_dog));
 
             Ok((new_ref!(Value, value), ty))
         }
@@ -64,7 +65,7 @@ pub fn eval_literal(
             let literal = s_read!(lu_dog).exhume_string_literal(literal).unwrap();
             // 🚧 It'd be great if this were an Rc...
             let value = Value::String(s_read!(literal).x_value.clone());
-            let ty = value.get_type(&s_read!(lu_dog));
+            let ty = value.get_type(&s_read!(sarzak), &s_read!(lu_dog));
             Ok((new_ref!(Value, value), ty))
         }
     };

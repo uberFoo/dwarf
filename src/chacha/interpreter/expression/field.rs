@@ -14,10 +14,16 @@ pub fn eval_field_access(
     vm: &mut VM,
 ) -> Result<(RefType<Value>, RefType<ValueType>)> {
     let lu_dog = context.lu_dog_heel().clone();
+    let sarzak = context.sarzak_heel().clone();
 
     let field = s_read!(lu_dog).exhume_field_access(field).unwrap();
     let fat = &s_read!(field).r65_field_access_target(&s_read!(lu_dog))[0];
     let field_name = match s_read!(fat).subtype {
+        FieldAccessTargetEnum::EnumField(ref field) => {
+            let field = s_read!(lu_dog).exhume_enum_field(field).unwrap();
+            let field = s_read!(field);
+            field.name.to_owned()
+        }
         FieldAccessTargetEnum::Field(ref field) => {
             let field = s_read!(lu_dog).exhume_field(field).unwrap();
             let field = s_read!(field);
@@ -52,14 +58,14 @@ pub fn eval_field_access(
         Value::ProxyType(value) => {
             let value = s_read!(value);
             let value = value.get_attr_value(&field_name)?;
-            let ty = s_read!(value).get_type(&s_read!(lu_dog));
+            let ty = s_read!(value).get_type(&s_read!(sarzak), &s_read!(lu_dog));
 
             Ok((value, ty))
         }
         Value::UserType(value) => {
             let value = s_read!(value);
             let value = value.get_attr_value(field_name).unwrap();
-            let ty = s_read!(value).get_type(&s_read!(lu_dog));
+            let ty = s_read!(value).get_type(&s_read!(sarzak), &s_read!(lu_dog));
 
             Ok((value.clone(), ty))
         }

@@ -14,6 +14,7 @@ pub fn eval_for_loop(
     vm: &mut VM,
 ) -> Result<(RefType<Value>, RefType<ValueType>)> {
     let lu_dog = context.lu_dog_heel().clone();
+    let sarzak = context.sarzak_heel().clone();
 
     let for_loop = s_read!(lu_dog).exhume_for_loop(for_loop).unwrap();
     let for_loop = s_read!(for_loop);
@@ -62,7 +63,7 @@ pub fn eval_for_loop(
 
     let result = Ok((
         new_ref!(Value, Value::Empty),
-        Value::Empty.get_type(&s_read!(lu_dog)),
+        Value::Empty.get_type(&s_read!(sarzak), &s_read!(lu_dog)),
     ));
 
     #[allow(clippy::let_and_return)]

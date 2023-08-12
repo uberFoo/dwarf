@@ -14,6 +14,9 @@ pub fn eval_debugger(context: &mut Context) -> Result<(RefType<Value>, RefType<V
     *STEPPING.lock() = true;
     Ok((
         new_ref!(Value, Value::Empty),
-        Value::Empty.get_type(&s_read!(context.lu_dog_heel())),
+        Value::Empty.get_type(
+            &s_read!(context.sarzak_heel()),
+            &s_read!(context.lu_dog_heel()),
+        ),
     ))
 }

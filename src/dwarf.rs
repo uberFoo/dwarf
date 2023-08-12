@@ -67,6 +67,7 @@ pub enum Token {
     Debugger,
     Else,
     Empty,
+    Enum,
     Float(String),
     Fn,
     For,
@@ -102,6 +103,7 @@ impl fmt::Display for Token {
             Self::Debugger => write!(f, "debugger"),
             Self::Else => write!(f, "else"),
             Self::Empty => write!(f, "()"),
+            Self::Enum => write!(f, "enum"),
             Self::Float(num) => write!(f, "{}", num),
             Self::Fn => write!(f, "fn"),
             Self::For => write!(f, "for"),
@@ -419,7 +421,9 @@ pub enum Expression {
     None,
     NotEquals(Box<Spanned<Self>>, Box<Spanned<Self>>),
     Or(Box<Spanned<Self>>, Box<Spanned<Self>>),
+    PlainEnum(Box<Spanned<Self>>, Spanned<String>),
     Print(Box<Spanned<Self>>),
+    PathInExpression(Vec<Type>),
     Range(Box<Spanned<Self>>, Box<Spanned<Self>>),
     Return(Box<Spanned<Self>>),
     Some(Box<Spanned<Self>>),
@@ -427,7 +431,7 @@ pub enum Expression {
     ///
     /// E.g., `Foo::bar()`.
     ///
-    StaticMethodCall(Type, Spanned<String>, Vec<Spanned<Self>>),
+    StaticMethodCall(Box<Self>, Spanned<String>, Vec<Spanned<Self>>),
     /// String Literal
     ///
     StringLiteral(String),
@@ -461,6 +465,21 @@ pub enum InnerItem {
     Import(Spanned<Vec<Spanned<String>>>, Option<Spanned<String>>),
     /// name, Vec<(Field Name, Field Type)>
     Struct(Spanned<String>, Vec<(Spanned<String>, Spanned<Type>)>),
+    Enum(Spanned<String>, Vec<(Spanned<String>, Option<EnumField>)>),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum EnumField {
+    /// Enum Tuple Field
+    ///
+    /// This is supposed to be a Tuple, which would imply that I have a list of
+    /// Types. However, I don't yet have tuples, and I don't want to fake it here.
+    /// So for now, we are just supporting a single type.
+    Tuple(Spanned<Type>),
+    /// Enum Struct Field
+    ///
+    /// This is a list of (Field Name, Field Type) pairs.
+    Struct(Vec<(Spanned<String>, Spanned<Type>)>),
 }
 
 pub type AttributeMap = HashMap<String, Vec<(Span, InnerAttribute)>>;

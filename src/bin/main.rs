@@ -196,7 +196,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         };
 
-        let lu_dog = match new_lu_dog(None, Some((source_code.clone(), &ast)), &models, &sarzak) {
+        let lu_dog = match new_lu_dog(Some((source_code.clone(), &ast)), &models, &sarzak) {
             Ok(lu_dog) => lu_dog,
             Err(errors) => {
                 for err in errors {

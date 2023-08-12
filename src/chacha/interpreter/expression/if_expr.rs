@@ -13,6 +13,7 @@ pub fn eval_if_expression(
     vm: &mut VM,
 ) -> Result<(RefType<Value>, RefType<ValueType>)> {
     let lu_dog = context.lu_dog_heel().clone();
+    let sarzak = context.sarzak_heel().clone();
 
     let expr = s_read!(lu_dog).exhume_x_if(expr).unwrap();
     let expr = s_read!(expr);
@@ -42,7 +43,7 @@ pub fn eval_if_expression(
         } else {
             (
                 new_ref!(Value, Value::Empty),
-                Value::Empty.get_type(&s_read!(lu_dog)),
+                Value::Empty.get_type(&s_read!(sarzak), &s_read!(lu_dog)),
             )
         }
     })

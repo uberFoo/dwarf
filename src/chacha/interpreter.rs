@@ -483,6 +483,7 @@ fn eval_expression(
     vm: &mut VM,
 ) -> Result<(RefType<Value>, RefType<ValueType>)> {
     let lu_dog = context.lu_dog_heel().clone();
+    let sarzak = context.sarzak_heel().clone();
 
     // Timing goodness
     context.increment_expression_count(1);
@@ -573,7 +574,7 @@ fn eval_expression(
         //
         ExpressionEnum::ZNone(_) => Ok((
             new_ref!(Value, Value::Empty),
-            Value::Empty.get_type(&s_read!(lu_dog)),
+            Value::Empty.get_type(&s_read!(sarzak), &s_read!(lu_dog)),
         )),
         //
         // ZSome
@@ -622,7 +623,7 @@ fn eval_expression(
 
             Ok((
                 new_ref!(Value, Value::Empty),
-                Value::Empty.get_type(&s_read!(lu_dog)),
+                Value::Empty.get_type(&s_read!(sarzak), &s_read!(lu_dog)),
             ))
         }
     }
@@ -634,6 +635,7 @@ pub fn eval_statement(
     vm: &mut VM,
 ) -> Result<(RefType<Value>, RefType<ValueType>)> {
     let lu_dog = context.lu_dog_heel().clone();
+    let sarzak = context.sarzak_heel().clone();
 
     debug!("eval_statement statement {statement:?}");
     trace!("eval_statement stack {:?}", context.memory());
@@ -651,7 +653,7 @@ pub fn eval_statement(
 
             Ok((
                 new_ref!(Value, Value::Empty),
-                Value::Empty.get_type(&s_read!(lu_dog)),
+                Value::Empty.get_type(&s_read!(sarzak), &s_read!(lu_dog)),
             ))
         }
         StatementEnum::LetStatement(ref stmt) => {
@@ -678,7 +680,7 @@ pub fn eval_statement(
             // the storage?
             Ok((
                 new_ref!(Value, Value::Empty),
-                Value::Empty.get_type(&s_read!(lu_dog)),
+                Value::Empty.get_type(&s_read!(sarzak), &s_read!(lu_dog)),
             ))
         }
         StatementEnum::ResultStatement(ref stmt) => {
@@ -697,7 +699,7 @@ pub fn eval_statement(
         }
         StatementEnum::ItemStatement(_) => Ok((
             new_ref!(Value, Value::Empty),
-            Value::Empty.get_type(&s_read!(lu_dog)),
+            Value::Empty.get_type(&s_read!(sarzak), &s_read!(lu_dog)),
         )),
     }
 }

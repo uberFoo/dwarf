@@ -113,7 +113,7 @@ pub fn eval_call(
         let x = match &s_read!(ty).subtype {
             ValueTypeEnum::Ty(ref id) => {
                 let _ty = *s_read!(sarzak).exhume_ty(id).unwrap();
-                match &_ty {
+                match &*_ty.borrow() {
                     Ty::SString(_) => (value, ty.clone()),
                     _ => tuple_from_value()?,
                 }
@@ -124,7 +124,7 @@ pub fn eval_call(
     } else {
         (
             new_ref!(Value, Value::Empty),
-            Value::Empty.get_type(&s_read!(lu_dog)),
+            Value::Empty.get_type(&s_read!(sarzak), &s_read!(lu_dog)),
         )
     };
 
@@ -190,7 +190,7 @@ pub fn eval_call(
                         )
                         .collect::<Vec<&str>>()
                         .len();
-                        let ty = Ty::new_integer();
+                        let ty = Ty::new_integer(&s_read!(sarzak));
                         let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
                         Ok((new_ref!(Value, Value::Integer(len as i64)), ty))
                     }
@@ -292,7 +292,7 @@ pub fn eval_call(
                             }
                         }
 
-                        let ty = Ty::new_s_string();
+                        let ty = Ty::new_s_string(&s_read!(sarzak));
                         let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
                         Ok((new_ref!(Value, Value::String(result)), ty))
                     }
@@ -408,7 +408,7 @@ pub fn eval_call(
             // This is dirty. Down and dirty...
             if ty == "Uuid" && func == "new" {
                 let value = Value::Uuid(Uuid::new_v4());
-                let ty = Ty::new_s_uuid();
+                let ty = Ty::new_s_uuid(&s_read!(sarzak));
                 let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
 
                 Ok((new_ref!(Value, value), ty))
@@ -473,7 +473,7 @@ pub fn eval_call(
                 match func.as_str() {
                     "args" => {
                         debug!("evaluating chacha::args");
-                        let ty = Ty::new_s_string();
+                        let ty = Ty::new_s_string(&s_read!(sarzak));
                         let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
                         let ty = List::new(&ty, &mut s_write!(lu_dog));
                         let ty = ValueType::new_list(&ty, &mut s_write!(lu_dog));
@@ -491,7 +491,7 @@ pub fn eval_call(
                         debug!("evaluating chacha::typeof");
                         let (_arg, ty) = arg_values.pop_front().unwrap().0;
                         let pvt_ty = PrintableValueType(&ty, context);
-                        let ty = Ty::new_s_string();
+                        let ty = Ty::new_s_string(&s_read!(sarzak));
                         let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
 
                         Ok((new_ref!(Value, pvt_ty.to_string().into()), ty))
@@ -537,7 +537,7 @@ pub fn eval_call(
                         // let time = format!("{:?}\n", elapsed);
                         // chacha_print(time, context)?;
 
-                        let ty = Ty::new_float();
+                        let ty = Ty::new_float(&s_read!(sarzak));
                         let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
 
                         Ok((new_ref!(Value, Value::Float(elapsed.as_secs_f64())), ty))
@@ -560,7 +560,7 @@ pub fn eval_call(
                                 );
                         // chacha_print(result, context)?;
 
-                        let ty = Ty::new_s_string();
+                        let ty = Ty::new_s_string(&s_read!(sarzak));
                         let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
 
                         Ok((new_ref!(Value, Value::String(result)), ty))
@@ -578,7 +578,7 @@ pub fn eval_call(
                         if let Value::Boolean(result) = value {
                             // if value.into() {
                             if result {
-                                let ty = Ty::new_boolean();
+                                let ty = Ty::new_boolean(&s_read!(sarzak));
                                 let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
 
                                 Ok((new_ref!(Value, value), ty))
@@ -637,7 +637,7 @@ pub fn eval_call(
                         error!("deal with call expression {value:?}");
                         Ok((
                             new_ref!(Value, Value::Empty),
-                            Value::Empty.get_type(&s_read!(lu_dog)),
+                            Value::Empty.get_type(&s_read!(sarzak), &s_read!(lu_dog)),
                         ))
                     }
                 }

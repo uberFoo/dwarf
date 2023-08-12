@@ -24,7 +24,7 @@ fn run_program(test: &str, program: &str) -> Result<(Value, String), String> {
 
     let mut models = HashMap::default();
     models.insert("sarzak".to_owned(), sarzak.clone());
-    let lu_dog = match new_lu_dog(None, Some((program.to_owned(), &ast)), &models, &sarzak) {
+    let lu_dog = match new_lu_dog(Some((program.to_owned(), &ast)), &models, &sarzak) {
         Ok(lu_dog) => lu_dog,
         Err(e) => {
             eprintln!(

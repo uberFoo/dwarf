@@ -1,0 +1,17 @@
+fn main() {}
+
+enum Foo {
+    Bar,
+    Baz,
+}
+
+enum Bar {
+    Foo(Foo),
+    Bar { a: int, b: int },
+    Baz(Baz),
+}
+
+struct Baz {
+    a: int,
+    b: int,
+}

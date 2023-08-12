@@ -28,6 +28,7 @@ pub fn eval_list_expression(
     vm: &mut VM,
 ) -> Result<(RefType<Value>, RefType<ValueType>)> {
     let lu_dog = context.lu_dog_heel().clone();
+    let sarzak = context.sarzak_heel().clone();
 
     let list = s_read!(lu_dog).exhume_list_expression(list).unwrap();
     let list = s_read!(list);
@@ -59,7 +60,7 @@ pub fn eval_list_expression(
         ))
     } else {
         let list = List::new(
-            &Value::Empty.get_type(&s_read!(lu_dog)),
+            &Value::Empty.get_type(&s_read!(sarzak), &s_read!(lu_dog)),
             &mut s_write!(lu_dog),
         );
 
