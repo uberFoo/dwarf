@@ -5,7 +5,7 @@ use crate::{
     chacha::{error::Result, vm::VM},
     interpreter::{debug, eval_expression, function, ChaChaError, Context},
     lu_dog::{FieldAccessTargetEnum, ValueType},
-    s_read, RefType, SarzakStorePtr, Value,
+    new_ref, s_read, NewRef, RefType, SarzakStorePtr, Value,
 };
 
 pub fn eval_field_access(
@@ -36,7 +36,7 @@ pub fn eval_field_access(
         }
     };
 
-    debug!("FieldAccess field_name: {field_name}");
+    debug!("field_name: {field_name}");
 
     // What we're doing below is actually dereferencing a pointer. I wonder
     // if there is a way to make this less confusing and error prone? A
@@ -52,26 +52,56 @@ pub fn eval_field_access(
     let expr = s_read!(lu_dog).exhume_expression(expr).unwrap();
     // dereference!(field, expression, lu_dog);
 
-    let (value, _ty) = eval_expression(expr, context, vm)?;
-    let value = s_read!(value);
-    match &*value {
-        Value::ProxyType(value) => {
-            let value = s_read!(value);
-            let value = value.get_attr_value(&field_name)?;
-            let ty = s_read!(value).get_type(&s_read!(sarzak), &s_read!(lu_dog));
+    debug!("expression: {expr:?}");
 
-            Ok((value, ty))
+    let value = {
+        let result = eval_expression(expr, context, vm)?;
+        result.0
+    };
+
+    debug!("value: {value:?}");
+
+    // 🚧 This feels dirty. Some thought is necessary...
+    let mut value = (*s_read!(value)).clone();
+    match &mut value {
+        Value::ProxyType((_, ref mut proxy)) => {
+            match proxy
+                .invoke_func(
+                    "self".into(),
+                    "get_field_value".into(),
+                    vec![Value::String(field_name.clone()).into()].into(),
+                )
+                .into()
+            {
+                Ok(value) => {
+                    debug!("ProxyType return value: {value:?}");
+
+                    let value: Value = value.into();
+                    let ty = value.get_type(&s_read!(lu_dog), &s_read!(context.sarzak_heel()));
+
+                    debug!("ProxyType value: {value:?}, type: {ty:?}");
+
+                    Ok((new_ref!(Value, value), ty))
+                }
+                Err(e) => {
+                    // 🚧 This needs it's own error. Lazy me.
+                    Err(ChaChaError::BadJuJu {
+                        message: format!("{e}: `{field_name}`"),
+                        location: location!(),
+                    })
+                }
+            }
         }
         Value::UserType(value) => {
             let value = s_read!(value);
-            let value = value.get_attr_value(field_name).unwrap();
-            let ty = s_read!(value).get_type(&s_read!(sarzak), &s_read!(lu_dog));
+            let value = value.get_field_value(field_name).unwrap();
+            let ty = s_read!(value).get_type(&s_read!(lu_dog), &s_read!(context.sarzak_heel()));
 
             Ok((value.clone(), ty))
         }
         // 🚧 This needs it's own error. Lazy me.
-        _ => Err(ChaChaError::BadJuJu {
-            message: "Bad value in field access".to_owned(),
+        bad => Err(ChaChaError::BadJuJu {
+            message: format!("Bad value ({bad}) in field access"),
             location: location!(),
         }),
     }

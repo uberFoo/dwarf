@@ -1,0 +1,14 @@
+[
+  {
+    "description": "loops in the",
+    "id": "1e0b516c-8f9a-5e9d-939e-442768ae4731",
+    "referential_attribute": "to",
+    "cardinality": "84d60cb6-04cf-5c82-9e38-79d3999b5d5c",
+    "conditionality": "17ee33a9-33bb-5998-ba89-7a9f2fe12080",
+    "obj_id": "56c5ed80-25e7-592e-ab36-a306c78ac58b"
+  },
+  {
+    "secs_since_epoch": 1691354789,
+    "nanos_since_epoch": 940601000
+  }
+]

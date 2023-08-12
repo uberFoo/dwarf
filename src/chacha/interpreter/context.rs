@@ -1,25 +1,15 @@
-use std::path::Path;
-
 use circular_queue::CircularQueue;
 use crossbeam::channel::{Receiver, Sender};
-use rustc_hash::FxHashMap as HashMap;
-use uuid::Uuid;
 
 use crate::{
-    chacha::{
-        error::{ChaChaError, Result},
-        value::ProxyType,
-    },
     interpreter::{DebuggerStatus, Memory, MemoryUpdateMessage},
-    lu_dog::{
-        Block, Import, LocalVariable, ObjectStore as LuDogStore, ValueType, Variable, XValue,
-    },
-    new_ref, s_read, s_write,
+    lu_dog::{Block, ObjectStore as LuDogStore},
+    new_ref, s_read,
     sarzak::ObjectStore as SarzakStore,
-    NewRef, RefType, Value,
+    ModelStore, NewRef, RefType, Value,
 };
 
-#[derive(Clone, Debug)]
+// #[derive(Clone, Debug)]
 pub struct Context {
     /// The prompt to display in the REPL
     prompt: String,
@@ -28,7 +18,7 @@ pub struct Context {
     memory: Memory,
     lu_dog: RefType<LuDogStore>,
     sarzak: RefType<SarzakStore>,
-    models: RefType<HashMap<String, SarzakStore>>,
+    models: RefType<ModelStore>,
     mem_update_recv: Receiver<MemoryUpdateMessage>,
     #[allow(dead_code)]
     std_out_send: Sender<String>,
@@ -67,7 +57,7 @@ impl Context {
         memory: Memory,
         lu_dog: RefType<LuDogStore>,
         sarzak: RefType<SarzakStore>,
-        models: RefType<HashMap<String, SarzakStore>>,
+        models: RefType<ModelStore>,
         mem_update_recv: Receiver<MemoryUpdateMessage>,
         std_out_send: Sender<String>,
         std_out_recv: Receiver<String>,
@@ -110,17 +100,17 @@ impl Context {
         self.args = Some(new_ref!(Value, args.into()));
     }
 
-    pub fn register_model<P>(&self, model_name: String, model_path: P) -> Result<()>
-    where
-        P: AsRef<Path>,
-    {
-        let model =
-            SarzakStore::load(model_path.as_ref()).map_err(|e| ChaChaError::Store { source: e })?;
+    // pub fn register_model<P>(&self, model_name: String, model_path: P) -> Result<()>
+    // where
+    //     P: AsRef<Path>,
+    // {
+    //     let model =
+    //         SarzakStore::load(model_path.as_ref()).map_err(|e| ChaChaError::Store { source: e })?;
 
-        s_write!(self.models).insert(model_name, model);
+    //     s_write!(self.models).insert(model_name, model);
 
-        Ok(())
-    }
+    //     Ok(())
+    // }
 
     pub fn register_memory_updates(&self) -> Receiver<MemoryUpdateMessage> {
         self.mem_update_recv.clone()
@@ -199,54 +189,54 @@ impl Context {
         &self.sarzak
     }
 
-    pub fn models(&self) -> &RefType<HashMap<String, SarzakStore>> {
+    pub fn models(&self) -> &RefType<ModelStore> {
         &self.models
     }
 
-    pub fn register_store_proxy(&mut self, name: String, proxy: impl ProxyType + 'static) {
-        self.memory.insert_global(
-            name.clone(),
-            new_ref!(
-                Value,
-                Value::ProxyType(new_ref!(Box<dyn ProxyType>, Box::new(proxy)))
-            ),
-        );
+    // pub fn register_store_proxy(&mut self, name: String, proxy: impl ProxyType + 'static) {
+    //     self.memory.insert_global(
+    //         name.clone(),
+    //         new_ref!(
+    //             Value,
+    //             Value::ProxyType(new_ref!(Box<dyn ProxyType>, Box::new(proxy)))
+    //         ),
+    //     );
 
-        let mut lu_dog = s_write!(self.lu_dog);
-        let local = LocalVariable::new(Uuid::new_v4(), &mut lu_dog);
-        let var = Variable::new_local_variable(name.clone(), &local, &mut lu_dog);
-        let import = Import::new(
-            "So ugly".to_owned(),
-            false,
-            name,
-            "path".to_owned(),
-            None,
-            &mut lu_dog,
-        );
+    //     let mut lu_dog = s_write!(self.lu_dog);
+    //     let local = LocalVariable::new(Uuid::new_v4(), &mut lu_dog);
+    //     let var = Variable::new_local_variable(name.clone(), &local, &mut lu_dog);
+    //     let import = Import::new(
+    //         "So ugly".to_owned(),
+    //         false,
+    //         name,
+    //         "path".to_owned(),
+    //         None,
+    //         &mut lu_dog,
+    //     );
 
-        let _value = XValue::new_variable(
-            &self.block,
-            &ValueType::new_import(&import, &mut lu_dog),
-            &var,
-            &mut lu_dog,
-        );
-        // {
-        //     // Build the ASTs
-        //     let local = LocalVariable::new(Uuid::new_v4(), &mut *s_write!(lu_dog));
-        //     let var = Variable::new_local_variable(
-        //         "MERLIN_STORE".to_owned(),
-        //         local,
-        //         &mut *s_write!(lu_dog),
-        //     );
+    //     let _value = XValue::new_variable(
+    //         &self.block,
+    //         &ValueType::new_import(&import, &mut lu_dog),
+    //         &var,
+    //         &mut lu_dog,
+    //     );
+    //     // {
+    //     //     // Build the ASTs
+    //     //     let local = LocalVariable::new(Uuid::new_v4(), &mut *s_write!(lu_dog));
+    //     //     let var = Variable::new_local_variable(
+    //     //         "MERLIN_STORE".to_owned(),
+    //     //         local,
+    //     //         &mut *s_write!(lu_dog),
+    //     //     );
 
-        //     let store = ZObjectStore::new("merlin".to_owned(), &mut *s_write!(lu_dog));
-        //     let mut write = s_write!(lu_dog);
-        //     let _value = LuDogValue::new_variable(
-        //         block.clone(),
-        //         ValueType::new_z_object_store(store, &mut write),
-        //         var,
-        //         &mut write,
-        //     );
-        // }
-    }
+    //     //     let store = ZObjectStore::new("merlin".to_owned(), &mut *s_write!(lu_dog));
+    //     //     let mut write = s_write!(lu_dog);
+    //     //     let _value = LuDogValue::new_variable(
+    //     //         block.clone(),
+    //     //         ValueType::new_z_object_store(store, &mut write),
+    //     //         var,
+    //     //         &mut write,
+    //     //     );
+    //     // }
+    // }
 }

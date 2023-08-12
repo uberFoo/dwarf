@@ -1,0 +1,12 @@
+[
+  {
+    "description": "The *subtype* in a *supertype-subtype* relationship.",
+    "id": "3abf0e04-6c8c-5e25-9638-43d98738ef87",
+    "key_letters": "R_SUB",
+    "name": "Subtype"
+  },
+  {
+    "secs_since_epoch": 1691354789,
+    "nanos_since_epoch": 940591000
+  }
+]

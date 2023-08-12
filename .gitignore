@@ -4,3 +4,4 @@
 *.道
 woog_structs.rs
 .dwarf_history
+coverage.lcov

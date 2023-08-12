@@ -1,0 +1,12 @@
+[
+  {
+    "description": "The UUID Type\n\nI feel like there are too many implementation details here. \n\nThis UUID is expected to be version 5. Generally we produce input\nto the hash function from other UUIDs, coupled with additional \ninformation from the creator to ensure a unique UUID.\n\nThe `ns` attribute is the namespace used to generate generate UUIDs\ngiven a particular instance of `UUID`.\n\n❗️{\"singleton_object\": true, \"translation_name\": \"SarzakUuid\"}",
+    "id": "9fcf72a7-a28e-5544-be44-af4de72db6e4",
+    "key_letters": "T_UUID",
+    "name": "UUID"
+  },
+  {
+    "secs_since_epoch": 1691354789,
+    "nanos_since_epoch": 940587000
+  }
+]

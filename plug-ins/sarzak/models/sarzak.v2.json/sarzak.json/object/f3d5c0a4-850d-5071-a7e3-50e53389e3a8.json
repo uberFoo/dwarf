@@ -1,0 +1,12 @@
+[
+  {
+    "description": "The Floating Point Type\n\nThis type holds numbers from ℝ. This type is just a placeholder. It's implementation is determined downstream by the code generator.\n\n❗️{\"singleton_object\": true}",
+    "id": "f3d5c0a4-850d-5071-a7e3-50e53389e3a8",
+    "key_letters": "T_FLOAT",
+    "name": "Float"
+  },
+  {
+    "secs_since_epoch": 1691354789,
+    "nanos_since_epoch": 940594000
+  }
+]

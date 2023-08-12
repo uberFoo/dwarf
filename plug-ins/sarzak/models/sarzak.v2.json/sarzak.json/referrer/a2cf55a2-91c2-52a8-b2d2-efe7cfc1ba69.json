@@ -1,0 +1,14 @@
+[
+  {
+    "description": "is formalized by",
+    "id": "a2cf55a2-91c2-52a8-b2d2-efe7cfc1ba69",
+    "referential_attribute": "from",
+    "cardinality": "84d60cb6-04cf-5c82-9e38-79d3999b5d5c",
+    "conditionality": "17ee33a9-33bb-5998-ba89-7a9f2fe12080",
+    "obj_id": "56c5ed80-25e7-592e-ab36-a306c78ac58b"
+  },
+  {
+    "secs_since_epoch": 1691354789,
+    "nanos_since_epoch": 940601000
+  }
+]

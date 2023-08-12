@@ -81,6 +81,11 @@ pub enum DwarfError {
         span: Span,
     },
 
+    /// Not a List Type
+    ///
+    /// List types are list/vec and string.
+    NotAList { span: Span },
+
     /// No Such Field
     #[snafu(display("\n{}: no such field `{}`.", C_ERR.bold().paint("error"), C_OTHER.paint(field)))]
     NoSuchField {
@@ -100,7 +105,11 @@ pub enum DwarfError {
     /// we can protect the interface, which is wide open IIRC, by checking calls
     /// at extrusion time.
     #[snafu(display("\n{}: no such method `{}`.", C_ERR.bold().paint("error"), C_OTHER.paint(method)))]
-    NoSuchMethod { method: String, span: Span },
+    NoSuchMethod {
+        method: String,
+        span: Span,
+        location: Location,
+    },
 
     /// Struct Field Not Found Error
     ///
@@ -170,7 +179,7 @@ impl fmt::Display for DwarfErrorReporter<'_, '_, '_> {
                     .with_message("self may only be used inside of an implementation block")
                     .with_label(
                         Label::new((file_name, span))
-                            .with_message(format!("used here"))
+                            .with_message("used here".to_string())
                             .with_color(Color::Red),
                     );
                 let report = if is_uber {
@@ -215,7 +224,24 @@ impl fmt::Display for DwarfErrorReporter<'_, '_, '_> {
                     .with_message("implementation blocks may only contain functions")
                     .with_label(
                         Label::new((file_name, span))
-                            .with_message(format!("used here"))
+                            .with_message("used here".to_string())
+                            .with_color(Color::Red),
+                    )
+                    .finish()
+                    .write((file_name, Source::from(&program)), &mut std_err)
+                    .map_err(|_| fmt::Error)?;
+                write!(f, "{}", String::from_utf8_lossy(&std_err))
+            }
+            DwarfError::NotAList { span } => {
+                let span = span.clone();
+                Report::build(ReportKind::Error, file_name, span.start)
+                    // 🚧 Figure out some error numbering scheme and use one of
+                    // the snafu magic methods to provide the value here.
+                    //.with_code(&code)
+                    .with_message("expected a list")
+                    .with_label(
+                        Label::new((file_name, span))
+                            .with_message("used here".to_string())
                             .with_color(Color::Red),
                     )
                     .finish()
@@ -246,8 +272,12 @@ impl fmt::Display for DwarfErrorReporter<'_, '_, '_> {
                     .map_err(|_| fmt::Error)?;
                 write!(f, "{}", String::from_utf8_lossy(&std_err))
             }
-            DwarfError::NoSuchMethod { method, span } => {
-                Report::build(ReportKind::Error, file_name, span.start)
+            DwarfError::NoSuchMethod {
+                method,
+                span,
+                location,
+            } => {
+                let report = Report::build(ReportKind::Error, file_name, span.start)
                     .with_message("no such method")
                     .with_label(
                         Label::new((file_name, span.to_owned()))
@@ -256,7 +286,20 @@ impl fmt::Display for DwarfErrorReporter<'_, '_, '_> {
                                 C_WARN.paint(method.to_string())
                             ))
                             .with_color(Color::Red),
-                    )
+                    );
+
+                let report = if is_uber {
+                    report.with_note(format!(
+                        "{}:{}:{}",
+                        C_OTHER.paint(location.file.to_string()),
+                        C_WARN.paint(format!("{}", location.line)),
+                        C_OK.paint(format!("{}", location.column)),
+                    ))
+                } else {
+                    report
+                };
+
+                report
                     .finish()
                     .write((file_name, Source::from(&program)), &mut std_err)
                     .map_err(|_| fmt::Error)?;

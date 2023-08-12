@@ -1,0 +1,15 @@
+{
+  "version": "2.0.0",
+  "domain": "sarzak",
+  "id": "88cd70e0-c065-5c4b-b1ce-69194ab4d0cb",
+  "description": "The _Metamodel_\n\nThis is the model of the model. From here all is generated...",
+  "extents": [
+    4000,
+    3200
+  ],
+  "view": [
+    -196,
+    -677
+  ],
+  "path": "models/sarzak.json"
+}

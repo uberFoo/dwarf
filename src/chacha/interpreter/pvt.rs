@@ -94,10 +94,10 @@ impl<'a> fmt::Display for PrintableValueType<'a> {
                     // one of the model domains.
                     let models = s_read!(model);
                     // 🚧 HashMapFix
-                    for (_, model) in &*models {
-                        if let Some(ty) = model.exhume_ty(ty) {
+                    for model in models.values() {
+                        if let Some(ty) = model.0.exhume_ty(ty) {
                             if let Ty::Object(ref object) = &*ty.borrow() {
-                                if let Some(object) = model.exhume_object(object) {
+                                if let Some(object) = model.0.exhume_object(object) {
                                     return write!(
                                         f,
                                         "{}",

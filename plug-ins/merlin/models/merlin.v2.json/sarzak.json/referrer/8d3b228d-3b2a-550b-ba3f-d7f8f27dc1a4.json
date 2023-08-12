@@ -1,0 +1,14 @@
+[
+  {
+    "description": "is anchored by",
+    "id": "8d3b228d-3b2a-550b-ba3f-d7f8f27dc1a4",
+    "referential_attribute": "origin",
+    "cardinality": "84d60cb6-04cf-5c82-9e38-79d3999b5d5c",
+    "conditionality": "17ee33a9-33bb-5998-ba89-7a9f2fe12080",
+    "obj_id": "a6cad864-7edb-5a36-a3d9-c43df43fd140"
+  },
+  {
+    "secs_since_epoch": 1691143082,
+    "nanos_since_epoch": 66736000
+  }
+]

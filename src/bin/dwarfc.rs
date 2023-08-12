@@ -115,7 +115,7 @@ fn main() -> Result<()> {
                 .unwrap()
                 .build_v2()
                 .unwrap();
-            map.insert(domain.name().to_owned(), domain.sarzak().clone());
+            map.insert(domain.name().to_owned(), (domain.sarzak().clone(), None));
         }
 
         map

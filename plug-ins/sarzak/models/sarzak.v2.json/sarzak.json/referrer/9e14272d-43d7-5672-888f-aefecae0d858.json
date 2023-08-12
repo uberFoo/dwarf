@@ -1,0 +1,14 @@
+[
+  {
+    "description": "is an instance of an",
+    "id": "9e14272d-43d7-5672-888f-aefecae0d858",
+    "referential_attribute": "obj_id",
+    "cardinality": "481a6ff0-caee-5817-8812-857f58f7c215",
+    "conditionality": "17ee33a9-33bb-5998-ba89-7a9f2fe12080",
+    "obj_id": "a9cc5d3e-8431-5302-9296-1fbd789acf73"
+  },
+  {
+    "secs_since_epoch": 1691354789,
+    "nanos_since_epoch": 940601000
+  }
+]

@@ -19,9 +19,9 @@ use crate::{
     lu_dog::{
         store::ObjectStore as LuDogStore,
         types::{ValueType, WoogOption},
-        Lambda, List, Reference, WoogStruct,
+        Lambda, List, Reference,
     },
-    s_read, NewRef, RefType,
+    ModelStore, RefType,
 };
 
 pub mod error;
@@ -183,7 +183,7 @@ impl Type {
         &self,
         span: &Span,
         store: &mut LuDogStore,
-        models: &HashMap<String, SarzakStore>,
+        models: &ModelStore,
         sarzak: &SarzakStore,
     ) -> Result<bool> {
         self.into_value_type(span, store, models, sarzak)
@@ -194,48 +194,48 @@ impl Type {
         &self,
         span: &Span,
         store: &mut LuDogStore,
-        models: &HashMap<String, SarzakStore>,
+        _models: &ModelStore,
         sarzak: &SarzakStore,
     ) -> Result<RefType<ValueType>> {
         match self {
             Type::Boolean => {
-                let ty = Ty::new_boolean();
+                let ty = Ty::new_boolean(sarzak);
                 Ok(ValueType::new_ty(&ty, store))
             }
             Type::Empty => Ok(ValueType::new_empty(store)),
             Type::Float => {
-                let ty = Ty::new_float();
+                let ty = Ty::new_float(sarzak);
                 Ok(ValueType::new_ty(&ty, store))
             }
             Type::Fn(_params, return_) => {
                 let return_ = return_
                     .0
-                    .into_value_type(&return_.1, store, models, sarzak)?;
+                    .into_value_type(&return_.1, store, _models, sarzak)?;
                 let ƛ = Lambda::new(None, &return_, store);
                 Ok(ValueType::new_lambda(&ƛ, store))
             }
             Type::Integer => {
-                let ty = Ty::new_integer();
+                let ty = Ty::new_integer(sarzak);
                 Ok(ValueType::new_ty(&ty, store))
             }
             Type::List(type_) => {
-                let ty = type_.0.into_value_type(&type_.1, store, models, sarzak)?;
+                let ty = type_.0.into_value_type(&type_.1, store, _models, sarzak)?;
                 let list = List::new(&ty, store);
                 Ok(ValueType::new_list(&list, store))
             }
             Type::Option(type_) => {
-                let ty = type_.0.into_value_type(&type_.1, store, models, sarzak)?;
+                let ty = type_.0.into_value_type(&type_.1, store, _models, sarzak)?;
                 let option = WoogOption::new_z_none(&ty, store);
                 Ok(ValueType::new_woog_option(&option, store))
             }
             Type::Reference(type_) => {
-                let ty = type_.0.into_value_type(&type_.1, store, models, sarzak)?;
+                let ty = type_.0.into_value_type(&type_.1, store, _models, sarzak)?;
                 let reference = Reference::new(Uuid::new_v4(), false, &ty, store);
                 Ok(ValueType::new_reference(&reference, store))
             }
             Type::Self_ => panic!("Self is deprecated."),
             Type::String => {
-                let ty = Ty::new_s_string();
+                let ty = Ty::new_s_string(sarzak);
                 Ok(ValueType::new_ty(&ty, store))
             }
             Type::Unknown => Ok(ValueType::new_unknown(store)),
@@ -246,7 +246,7 @@ impl Type {
                 // The parser just doesn't know that, and it's actually cleaner
                 // and easier to handle it here.
                 if name == "Uuid" {
-                    return Ok(ValueType::new_ty(&Ty::new_s_uuid(), store));
+                    return Ok(ValueType::new_ty(&Ty::new_s_uuid(sarzak), store));
                 }
 
                 log::debug!(target: "dwarf", "Type::UserType: {name}");
@@ -291,13 +291,12 @@ impl Type {
                 if let Some(obj_id) = store.exhume_woog_struct_id_by_name(name) {
                     let woog_struct = store.exhume_woog_struct(&obj_id).unwrap();
                     Ok(ValueType::new_woog_struct(&woog_struct, store))
-                } else
-                // If it's not in one of the models, it must be in sarzak.
-                if let Some(obj_id) = sarzak.exhume_object_id_by_name(name) {
+                } else if let Some(obj_id) = sarzak.exhume_object_id_by_name(name) {
+                    // If it's not in one of the models, it must be in sarzak.
                     let ty = sarzak.exhume_ty(&obj_id).unwrap();
                     // dbg!(&ty);
                     log::debug!(target: "dwarf", "into_value_type, UserType, ty: {ty:?}");
-                    Ok(ValueType::new_ty(ty, store))
+                    Ok(ValueType::new_ty(&ty, store))
                 } else {
                     dbg!("Unknown type");
                     log::error!(target: "dwarf", "Unknown type");
@@ -309,7 +308,7 @@ impl Type {
                 }
             }
             Type::Uuid => {
-                let ty = Ty::new_s_uuid();
+                let ty = Ty::new_s_uuid(sarzak);
                 Ok(ValueType::new_ty(&ty, store))
             }
         }

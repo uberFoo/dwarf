@@ -3,18 +3,15 @@ use std::ops::Range;
 use ansi_term::Colour;
 use heck::ToUpperCamelCase;
 use log;
-use rustc_hash::FxHashMap as HashMap;
-use sarzak::sarzak::{store::ObjectStore as SarzakStore, types::Ty};
 use snafu::{location, Location};
-use tracy_client::Client;
 use uuid::Uuid;
 
 use crate::{
     dwarf::{
         error::{DwarfError, Result},
         expression::{addition, and},
-        AttributeMap, EnumField, Expression as ParserExpression, InnerAttribute, InnerItem, Item,
-        PrintableValueType, Spanned, Statement as ParserStatement, Type,
+        AttributeMap, DwarfInteger, EnumField, Expression as ParserExpression, InnerAttribute,
+        InnerItem, Item, PrintableValueType, Spanned, Statement as ParserStatement, Type,
     },
     lu_dog::{
         store::ObjectStore as LuDogStore,
@@ -32,7 +29,9 @@ use crate::{
         FieldAccessTarget, FloatLiteral, List, ListElement, ListExpression, MethodCall, Operator,
         Reference, ResultStatement, TypeCast, Unary, VariableEnum, XReturn,
     },
-    new_ref, s_read, s_write, NewRef, RefType,
+    new_ref, s_read, s_write,
+    sarzak::{store::ObjectStore as SarzakStore, types::Ty},
+    ModelStore, NewRef, RefType,
 };
 
 macro_rules! link_parameter {
@@ -251,7 +250,7 @@ pub struct StructFields {
     location: Location,
 }
 
-#[derive(Debug)]
+// #[derive(Debug)]
 pub struct Context<'a> {
     pub location: Location,
     /// Struct Field Storage
@@ -268,7 +267,7 @@ pub struct Context<'a> {
     /// once it's been created, it's already been type checked.
     pub check_types: bool,
     pub source: RefType<DwarfSourceFile>,
-    pub models: &'a HashMap<String, SarzakStore>,
+    pub models: &'a ModelStore,
     pub sarzak: &'a SarzakStore,
 }
 
@@ -296,7 +295,7 @@ pub struct Context<'a> {
 /// that it may only be used to look up the id of the UUID type.
 pub fn new_lu_dog(
     source: Option<(String, &[Item])>,
-    models: &HashMap<String, SarzakStore>,
+    models: &ModelStore,
     sarzak: &SarzakStore,
 ) -> Result<LuDogStore> {
     let mut lu_dog = LuDogStore::new();
@@ -309,8 +308,6 @@ pub fn new_lu_dog(
     ValueType::new_ty(&Ty::new_s_uuid(sarzak), &mut lu_dog);
 
     if let Some((source, ast)) = source {
-        let _client = Client::start();
-
         let mut context = Context {
             location: location!(),
             struct_fields: Vec::new(),
@@ -478,23 +475,23 @@ fn inter_func(
         if let Some((_, InnerAttribute::Attribute(ref attributes))) = proxy_vec.get(0) {
             debug!("proxy");
 
-            if let Some(model_vec) = attributes.get("model") {
-                if let Some((_, ref value)) = model_vec.get(0) {
-                    let model_name: String = value.try_into().map_err(|e| vec![e])?;
-                    debug!("store.model: {model_name}");
+            if let Some(store_vec) = attributes.get("store") {
+                if let Some((_, ref value)) = store_vec.get(0) {
+                    let store_name: String = value.try_into().map_err(|e| vec![e])?;
+                    debug!("proxy.store.: {store_name}");
 
                     if let Some(func_vec) = attributes.get("func") {
                         if let Some((_, ref value)) = func_vec.get(0) {
                             let func_name: String = value.try_into().map_err(|e| vec![e])?;
-                            debug!("store.func: {func_name}");
+                            debug!("proxy.func: {func_name}");
 
                             if let Some(obj_vec) = attributes.get("object") {
                                 if let Some((_, ref value)) = obj_vec.get(0) {
                                     let obj_name: String = value.try_into().map_err(|e| vec![e])?;
-                                    debug!("store.object: {obj_name}");
+                                    debug!("proxy.object: {obj_name}");
 
                                     let external = ExternalImplementation::new(
-                                        func_name, obj_name, model_name, lu_dog,
+                                        func_name, store_name, obj_name, lu_dog,
                                     );
                                     Some(Body::new_external_implementation(&external, lu_dog))
                                 } else {
@@ -518,7 +515,7 @@ fn inter_func(
                 }
             } else {
                 return Err(vec![DwarfError::Generic {
-                    description: "No model specified".to_owned(),
+                    description: "No store specified".to_owned(),
                 }]);
             }
         } else {
@@ -535,12 +532,12 @@ fn inter_func(
     let (func, block) = if let Some((ParserExpression::Block(stmts), span)) = &stmts {
         let block = Block::new(Uuid::new_v4(), None, lu_dog);
         let body = Body::new_block(&block, lu_dog);
-        let func = Function::new(name.to_owned(), &body, impl_block, &ret_ty, lu_dog);
+        let func = Function::new(name.to_owned(), &body, None, impl_block, &ret_ty, lu_dog);
 
         (func, Some((block, stmts, span)))
     } else if let Some(body) = external {
         (
-            Function::new(name.to_owned(), &body, impl_block, &ret_ty, lu_dog),
+            Function::new(name.to_owned(), &body, None, impl_block, &ret_ty, lu_dog),
             None,
         )
     } else {
@@ -580,6 +577,10 @@ fn inter_func(
             }
         };
         let param = Parameter::new(position, &func, None, &param_ty, lu_dog);
+
+        if position == 0 {
+            s_write!(func).first_param = Some(s_read!(param).id);
+        }
         position += 1;
 
         debug!("param {:?}", param);
@@ -589,7 +590,7 @@ fn inter_func(
         debug!("var {:?}", var);
 
         if let Some((ref block, _, _)) = block {
-            let value = XValue::new_variable(&block, &param_ty, &var, lu_dog);
+            let value = XValue::new_variable(block, &param_ty, &var, lu_dog);
             LuDogSpan::new(
                 name_span.end as i64,
                 name_span.start as i64,
@@ -611,7 +612,7 @@ fn inter_func(
             .map(|stmt| new_ref!(ParserStatement, stmt.0.clone()))
             .collect();
 
-        let (block_ty, block_span) = inter_statements(&stmts, &stmt_span, &block, context, lu_dog)?;
+        let (block_ty, block_span) = inter_statements(&stmts, stmt_span, &block, context, lu_dog)?;
 
         if context.check_types {
             typecheck(
@@ -1186,21 +1187,73 @@ pub(super) fn inter_expression(
 
             match &ty_read.subtype {
                 // We matched on the lhs type.
-                ValueTypeEnum::Function(ref _id) => {
-                    // let func = lu_dog.exhume_function(id).unwrap();
-                    // let impl_ = &s_read!(func).r9_implementation(lu_dog)[0];
-                    // let woog_struct = &s_read!(impl_).r8_woog_struct(lu_dog)[0];
-                    // let fat = FieldAccessTarget::new_function(&func, lu_dog);
-                    // let expr = FieldAccess::new(&lhs.0, &fat, &woog_struct, lu_dog);
-                    // let expr = Expression::new_field_access(&expr, lu_dog);
-                    // let ty = s_read!(func).r10_value_type(lu_dog)[0].clone();
-                    // let value = XValue::new_expression(block, &ty, &expr, lu_dog);
-                    // s_write!(span).x_value = Some(s_read!(value).id);
-
-                    Ok((lhs, ty.clone()))
-                }
+                ValueTypeEnum::Function(ref _id) => Ok((lhs, ty.clone())),
                 ValueTypeEnum::WoogStruct(ref id) => {
                     let woog_struct = lu_dog.exhume_woog_struct(id).unwrap();
+
+                    if let Some(field) =
+                        lu_dog.exhume_field_id_by_name(&rhs.0.to_upper_camel_case())
+                    {
+                        let field = lu_dog.exhume_field(&field);
+                        // let field = woog_struct.r7_field(lu_dog);
+                        // let field = field.iter().find(|f| s_read!(f).name == rhs);
+                        let func = if let Some(impl_) =
+                            s_read!(woog_struct).r8c_implementation_block(lu_dog).pop()
+                        {
+                            let impl_ = s_read!(impl_);
+
+                            let funcs = impl_.r9_function(lu_dog);
+                            funcs.iter().find(|f| s_read!(f).name == rhs.0).cloned()
+                        } else {
+                            None
+                        };
+
+                        debug!("field {:?}", field);
+                        debug!("func {:?}", func);
+
+                        // We need to grab the type from the field: what we have above is the type
+                        // of the struct.
+                        if let Some(field) = field {
+                            let fat = FieldAccessTarget::new_field(&field, lu_dog);
+                            let expr = FieldAccess::new(&lhs.0, &fat, &woog_struct, lu_dog);
+                            let expr = Expression::new_field_access(&expr, lu_dog);
+                            let ty = s_read!(field).r5_value_type(lu_dog)[0].clone();
+                            let value = XValue::new_expression(block, &ty, &expr, lu_dog);
+                            s_write!(span).x_value = Some(s_read!(value).id);
+
+                            Ok(((expr, span), ty))
+                        } else if let Some(func) = func {
+                            let fat = FieldAccessTarget::new_function(&func, lu_dog);
+                            let expr = FieldAccess::new(&lhs.0, &fat, &woog_struct, lu_dog);
+                            let expr = Expression::new_field_access(&expr, lu_dog);
+                            let ty = s_read!(func).r10_value_type(lu_dog)[0].clone();
+                            let value = XValue::new_expression(block, &ty, &expr, lu_dog);
+                            s_write!(span).x_value = Some(s_read!(value).id);
+
+                            Ok(((expr, span), ty))
+                        } else {
+                            let span = s_read!(span);
+                            let span = span.start as usize..span.end as usize;
+                            Err(vec![DwarfError::StructFieldNotFound {
+                                field: rhs.0.clone(),
+                                span,
+                                location: location!(),
+                            }])
+                        }
+                    } else {
+                        Err(vec![DwarfError::StructFieldNotFound {
+                            field: rhs.0.clone(),
+                            span: rhs.1.to_owned(),
+                            location: location!(),
+                        }])
+                    }
+                }
+                ValueTypeEnum::Ty(id) => {
+                    debug!("FieldAccess: ValueTypeEnum::Ty() {:?}", id);
+                    let woog_struct = lu_dog
+                        .iter_woog_struct()
+                        .find(|ws| s_read!(ws).object == Some(*id))
+                        .unwrap();
 
                     if let Some(field) =
                         lu_dog.exhume_field_id_by_name(&rhs.0.to_upper_camel_case())
@@ -1382,8 +1435,7 @@ pub(super) fn inter_expression(
             s_write!(span).x_value = Some(s_read!(value).id);
 
             let mut last_arg_uuid: Option<usize> = None;
-            let mut position = 0;
-            for param in params {
+            for (position, param) in params.iter().enumerate() {
                 let (arg_expr, _ty) = inter_expression(
                     &new_ref!(ParserExpression, param.0.to_owned()),
                     &param.1,
@@ -1391,11 +1443,16 @@ pub(super) fn inter_expression(
                     context,
                     lu_dog,
                 )?;
-                let arg = Argument::new(position, &arg_expr.0, &func_call, None, lu_dog);
+                let arg = Argument::new(
+                    position as DwarfInteger,
+                    &arg_expr.0,
+                    &func_call,
+                    None,
+                    lu_dog,
+                );
                 if position == 0 {
                     s_write!(func_call).argument = Some(s_read!(arg).id);
                 }
-                position += 1;
 
                 last_arg_uuid = link_argument!(last_arg_uuid, arg, lu_dog);
             }
@@ -1541,7 +1598,8 @@ pub(super) fn inter_expression(
             // from the lu_dog type.
             if let ValueTypeEnum::Ty(ref ty) = s_read!(conditional_ty).subtype {
                 let s_ty = context.sarzak.exhume_ty(ty).unwrap();
-                if let Ty::Boolean(_) = &*s_ty.borrow() {
+                let s_ty = s_ty.borrow();
+                if let Ty::Boolean(_) = &*s_ty {
                     // Good Times.
                 } else {
                     let ty = PrintableValueType(&conditional_ty, context, lu_dog);
@@ -1606,10 +1664,10 @@ pub(super) fn inter_expression(
         //
         // Index
         //
-        ParserExpression::Index(target, index_p) => {
-            let (target, _target_ty) = inter_expression(
-                &new_ref!(ParserExpression, target.0.to_owned()),
-                &target.1,
+        ParserExpression::Index(target_p, index_p) => {
+            let (target, target_ty) = inter_expression(
+                &new_ref!(ParserExpression, target_p.0.to_owned()),
+                &target_p.1,
                 block,
                 context,
                 lu_dog,
@@ -1635,14 +1693,34 @@ pub(super) fn inter_expression(
                 )?;
             }
 
+            // We need to dereference the list and return the underlying type.
+            let target_ty = if let ValueTypeEnum::List(ref ty) = s_read!(target_ty).subtype {
+                let list = lu_dog.exhume_list(ty).unwrap();
+                let ty = &s_read!(list).r36_value_type(lu_dog)[0];
+                ty.clone()
+            } else if let ValueTypeEnum::Ty(ref ty) = s_read!(target_ty).subtype {
+                let ty = context.sarzak.exhume_ty(ty).unwrap();
+                let ty = ty.borrow();
+                if let Ty::SString(_) = &*ty {
+                    ValueType::new_char(lu_dog)
+                } else {
+                    return Err(vec![DwarfError::NotAList {
+                        span: target_p.1.clone(),
+                    }]);
+                }
+            } else {
+                return Err(vec![DwarfError::NotAList {
+                    span: target_p.1.clone(),
+                }]);
+            };
+
             let index = Index::new(&index.0, &target.0, lu_dog);
 
             let expr = Expression::new_index(&index, lu_dog);
-            let value = XValue::new_expression(block, &int_ty, &expr, lu_dog);
+            let value = XValue::new_expression(block, &target_ty, &expr, lu_dog);
             s_write!(span).x_value = Some(s_read!(value).id);
-            // 🚧 We should really check that the target type is some sort of list.
 
-            Ok(((expr, span), int_ty))
+            Ok(((expr, span), target_ty))
         }
         //
         // IntegerLiteral
@@ -1677,13 +1755,14 @@ pub(super) fn inter_expression(
 
             let mut errors = Vec::new();
             let mut last_param_uuid: Option<usize> = None;
-            let mut position = 0;
-            for ((param_name, name_span), (param_ty, param_span)) in params {
+            for (position, ((param_name, name_span), (param_ty, param_span))) in
+                params.iter().enumerate()
+            {
                 debug!("param name {}", param_name);
                 debug!("param ty {}", param_ty);
 
-                let param = LambdaParameter::new(position, &lambda, None, None, lu_dog);
-                position += 1;
+                let param =
+                    LambdaParameter::new(position as DwarfInteger, &lambda, None, None, lu_dog);
 
                 debug!("param {:?}", param);
 
@@ -1942,7 +2021,7 @@ pub(super) fn inter_expression(
                 .iter()
                 .inspect(|v| {
                     let ty = s_read!(v).ty;
-                    debug!("value: {v:#?}, type: {:#?}", types[ty]);
+                    debug!("value: {:#?}, type: {:#?}", s_read!(v), types[ty]);
                 })
                 .filter_map(|value| {
                     let value = s_read!(value);
@@ -2129,13 +2208,18 @@ pub(super) fn inter_expression(
 
             let ret_ty = if let ValueTypeEnum::WoogStruct(id) = s_read!(instance_ty).subtype {
                 let woog_struct = lu_dog.exhume_woog_struct(&id).unwrap();
-                let x = lookup_woog_struct_method_type(&s_read!(woog_struct).name, method, lu_dog);
+                let x = lookup_woog_struct_method_return_type(
+                    &s_read!(woog_struct).name,
+                    method,
+                    lu_dog,
+                );
 
                 #[allow(clippy::let_and_return)]
                 x
             } else if let ValueTypeEnum::Ty(id) = s_read!(instance_ty).subtype {
                 let ty = context.sarzak.exhume_ty(&id).unwrap();
-                if let Ty::SString(_) = &*ty.borrow() {
+                let ty = ty.borrow();
+                if let Ty::SString(_) = &*ty {
                     match method.as_str() {
                         "len" => {
                             let ty = Ty::new_integer(context.sarzak);
@@ -2149,6 +2233,7 @@ pub(super) fn inter_expression(
                             return Err(vec![DwarfError::NoSuchMethod {
                                 method: method.to_owned(),
                                 span: meth_span.to_owned(),
+                                location: location!(),
                             }])
                         }
                     }
@@ -2551,7 +2636,7 @@ pub(super) fn inter_expression(
             } else {
                 debug!("ParserExpression::StaticMethodCall: looking up type {type_name}");
 
-                lookup_woog_struct_method_type(&type_name, method, lu_dog)
+                lookup_woog_struct_method_return_type(&type_name, method, lu_dog)
 
                 // Look up the struct in the imported models.
                 // I'll revisit this model business after I get the basics working.
@@ -2574,8 +2659,7 @@ pub(super) fn inter_expression(
             };
 
             let mut last_arg_uuid: Option<usize> = None;
-            let mut position = 0;
-            for param in params {
+            for (position, param) in params.iter().enumerate() {
                 let (arg_expr, _ty) = inter_expression(
                     &new_ref!(ParserExpression, param.0.to_owned()),
                     &param.1,
@@ -2583,11 +2667,10 @@ pub(super) fn inter_expression(
                     context,
                     lu_dog,
                 )?;
-                let arg = Argument::new(position, &arg_expr.0, &call, None, lu_dog);
+                let arg = Argument::new(position as DwarfInteger, &arg_expr.0, &call, None, lu_dog);
                 if position == 0 {
                     s_write!(call).argument = Some(s_read!(arg).id);
                 }
-                position += 1;
 
                 last_arg_uuid = link_argument!(last_arg_uuid, arg, lu_dog);
             }
@@ -2858,18 +2941,36 @@ fn inter_implementation(
     let name = name.de_sanitize();
     debug!("inter_implementation: {name}");
 
-    let (impl_ty, implementation) = if let Some(proxy_vec) = attributes.get("store") {
-        if let Some((_, InnerAttribute::Attribute(ref attributes))) = proxy_vec.get(0) {
+    let (impl_ty, implementation) = if let Some(store_vec) = attributes.get("store") {
+        if let Some((_, InnerAttribute::Attribute(ref attributes))) = store_vec.get(0) {
             if let Some(model_vec) = attributes.get("model") {
                 if let Some((_, ref value)) = model_vec.get(0) {
                     let model_name: String = value.try_into().map_err(|e| vec![e])?;
                     debug!("store.model: {model_name}");
+                    let store = lu_dog
+                        .iter_z_object_store()
+                        .find(|store| s_read!(store).domain == model_name)
+                        .unwrap();
+                    let ty = lu_dog
+                        .iter_value_type()
+                        .find(|ty| {
+                            let ty = s_read!(ty);
+                            if let ValueTypeEnum::ZObjectStore(ref store_id) = ty.subtype {
+                                store_id == &s_read!(store).id
+                            } else {
+                                false
+                            }
+                        })
+                        .unwrap();
 
-                    // 🚧 Really should check to see if it's already there.
-                    let store = ZObjectStore::new(model_name, lu_dog);
-                    let ty = ValueType::new_z_object_store(&store, lu_dog);
+                    let implementation = ImplementationBlock::new(None, Some(&store), lu_dog);
+                    let _ = WoogItem::new_implementation_block(
+                        &context.source,
+                        &implementation,
+                        lu_dog,
+                    );
 
-                    (Some(ty), None)
+                    (Some(ty), Some(implementation))
                 } else {
                     unreachable!();
                 }
@@ -2901,7 +3002,7 @@ fn inter_implementation(
 
         let woog_struct = lu_dog.exhume_woog_struct(&id).unwrap();
 
-        let implementation = ImplementationBlock::new(&woog_struct, lu_dog);
+        let implementation = ImplementationBlock::new(Some(&woog_struct), None, lu_dog);
         let _ = WoogItem::new_implementation_block(&context.source, &implementation, lu_dog);
 
         (Some(impl_ty), Some(implementation))
@@ -2975,11 +3076,11 @@ fn inter_struct(
     // from the store to this UDT.
     if let Some(proxy_vec) = attributes.get("proxy") {
         if let Some((_, InnerAttribute::Attribute(ref attributes))) = proxy_vec.get(0) {
-            // Get the model value
-            if let Some(model_vec) = attributes.get("model") {
-                if let Some((_, ref value)) = model_vec.get(0) {
-                    let model_name: String = value.try_into().map_err(|e| vec![e])?;
-                    debug!("proxy.model: {model_name}");
+            // Get the store value
+            if let Some(store_vec) = attributes.get("store") {
+                if let Some((_, ref value)) = store_vec.get(0) {
+                    let store_name: String = value.try_into().map_err(|e| vec![e])?;
+                    debug!("proxy.store: {store_name}");
 
                     if let Some(name_vec) = attributes.get("object") {
                         if let Some((_, ref value)) = name_vec.get(0) {
@@ -2987,11 +3088,14 @@ fn inter_struct(
                             let proxy = proxy.de_sanitize();
                             debug!("proxy.object: {proxy}");
 
-                            if let Some(model) = context.models.get(&model_name) {
-                                if let Some(ref obj_id) = model.exhume_object_id_by_name(proxy) {
-                                    let obj = model.exhume_object(obj_id).unwrap();
-                                    let woog_struct =
-                                        WoogStruct::new(proxy.to_owned(), Some(obj), lu_dog);
+                            if let Some(model) = context.models.get(&store_name) {
+                                if let Some(ref obj_id) = model.0.exhume_object_id_by_name(proxy) {
+                                    let obj = model.0.exhume_object(obj_id).unwrap();
+                                    let woog_struct = WoogStruct::new(
+                                        proxy.to_owned(),
+                                        Some(&*obj.borrow()),
+                                        lu_dog,
+                                    );
                                     let _ = WoogItem::new_woog_struct(
                                         &context.source,
                                         &woog_struct,
@@ -3022,7 +3126,7 @@ fn inter_struct(
                                 Err(vec![DwarfError::Generic {
                                     description: format!(
                                         "Model `{}` not found in store",
-                                        model_name
+                                        store_name
                                     ),
                                 }])
                             }
@@ -3039,21 +3143,21 @@ fn inter_struct(
                 }
             } else {
                 Err(vec![DwarfError::Generic {
-                    description: "No model specified".to_owned(),
+                    description: "No store specified".to_owned(),
                 }])
             }
         } else {
             unreachable!();
         }
-    } else if let Some(proxy_vec) = attributes.get("store") {
-        if let Some((_, InnerAttribute::Attribute(ref attributes))) = proxy_vec.get(0) {
+    } else if let Some(store_vec) = attributes.get("store") {
+        if let Some((_, InnerAttribute::Attribute(ref attributes))) = store_vec.get(0) {
             if let Some(model_vec) = attributes.get("model") {
                 if let Some((_, ref value)) = model_vec.get(0) {
                     let model_name: String = value.try_into().map_err(|e| vec![e])?;
                     debug!("store.model: {model_name}");
 
                     // 🚧 Really should check to see if it's already there.
-                    let store = ZObjectStore::new(model_name, lu_dog);
+                    let store = ZObjectStore::new(model_name, name.to_owned(), lu_dog);
                     let _ = ValueType::new_z_object_store(&store, lu_dog);
 
                     Ok(())
@@ -3112,13 +3216,9 @@ fn inter_struct_fields(
 
 /// Get a Lu-Dog ValueType from a Dwarf Type
 ///
-/// Note that the `new_*` methods on `Ty` just return `const`s. Also, the
-/// `ValueType::new_ty` method takes on the id of it's subtype, so neither do
-/// those take much space.
-///
 /// This is starting to look suspicious, at least for the Fn type. I'm basically
 /// interring a half baked lambda into the store. I could fully bake it by interring
-/// the parameters too, but then what's the point of the definition? Well for one
+/// the parameters too, but then what's the point of the definition? Well, for one,
 /// to inter the body.
 ///
 /// Of course they are two different things. Without a body it's a type. With a
@@ -3137,14 +3237,16 @@ fn get_value_type(
     context: &Context,
     lu_dog: &mut LuDogStore,
 ) -> Result<RefType<ValueType>> {
+    let sarzak = context.sarzak;
+
     match type_ {
         Type::Boolean => {
-            let ty = Ty::new_boolean();
+            let ty = Ty::new_boolean(sarzak);
             Ok(ValueType::new_ty(&ty, lu_dog))
         }
         Type::Empty => Ok(ValueType::new_empty(lu_dog)),
         Type::Float => {
-            let ty = Ty::new_float();
+            let ty = Ty::new_float(sarzak);
             Ok(ValueType::new_ty(&ty, lu_dog))
         }
         Type::Fn(ref params, ref return_type) => {
@@ -3153,15 +3255,18 @@ fn get_value_type(
             let lambda = Lambda::new(None, &return_type, lu_dog);
 
             let mut last_param_uuid: Option<usize> = None;
-            let mut position = 0;
-            for (param_ty, param_span) in params {
+            for (position, (param_ty, param_span)) in params.iter().enumerate() {
                 let param_ty = get_value_type(param_ty, param_span, None, context, lu_dog)?;
                 debug!("param_ty {:?}", param_ty);
 
-                let param = LambdaParameter::new(position, &lambda, None, Some(&param_ty), lu_dog);
+                let param = LambdaParameter::new(
+                    position as DwarfInteger,
+                    &lambda,
+                    None,
+                    Some(&param_ty),
+                    lu_dog,
+                );
                 debug!("param {:?}", param);
-
-                position += 1;
 
                 last_param_uuid = link_ƛ_parameter!(last_param_uuid, param, lu_dog);
             }
@@ -3170,7 +3275,7 @@ fn get_value_type(
             Ok(lambda)
         }
         Type::Integer => {
-            let ty = Ty::new_integer();
+            let ty = Ty::new_integer(sarzak);
             Ok(ValueType::new_ty(&ty, lu_dog))
         }
         Type::List(ref type_) => {
@@ -3197,7 +3302,7 @@ fn get_value_type(
             }]),
         },
         Type::String => {
-            let ty = Ty::new_s_string();
+            let ty = Ty::new_s_string(sarzak);
             Ok(ValueType::new_ty(&ty, lu_dog))
         }
         Type::UserType(tok) => {
@@ -3236,42 +3341,46 @@ fn get_value_type(
                     }]),
                 }
             } else if name == "String" {
-                Ok(ValueType::new_ty(&Ty::new_s_string(), lu_dog))
+                Ok(ValueType::new_ty(&Ty::new_s_string(sarzak), lu_dog))
             } else if name == "Uuid" {
-                Ok(ValueType::new_ty(&Ty::new_s_uuid(), lu_dog))
+                Ok(ValueType::new_ty(&Ty::new_s_uuid(sarzak), lu_dog))
             } else {
                 // 🚧 HashMapFix
-                for (_, model) in context.models {
+                for model in context.models.values() {
                     // Look for the Object in the model domains first.
-                    if let Some(ty) = model.iter_ty().find(|ty| match ty {
+                    if let Some(ty) = model.0.iter_ty().find(|ty| match &*ty.borrow() {
                         Ty::Object(ref obj) => {
-                            let obj = model.exhume_object(obj).unwrap();
+                            let obj = model.0.exhume_object(obj).unwrap();
                             // We are going to cheat a little bit here. Say we have an
                             // object called `Point`. We want to be able to also handle
                             // proxy objects for `Point`. Those are suffixed with "Proxy".
-                            let obj = obj.name.to_upper_camel_case();
+                            let obj = obj.borrow().name.to_upper_camel_case();
                             obj == *name || name == format!("{}Proxy", obj)
                         }
                         _ => false,
                     }) {
-                        return Ok(ValueType::new_ty(ty, lu_dog));
+                        return Ok(ValueType::new_ty(&ty, lu_dog));
                     }
                 }
 
-                // Unlikely to have to reach back this far, except of course for
-                // the Uuid. So, it's not unlikely; it's the least likely.
-                if let Some(ty) = context.sarzak.iter_ty().find(|ty| match ty {
+                // Unlikely to have to reach back this far.
+                if let Some(ty) = sarzak.iter_ty().find(|ty| match &*ty.borrow() {
                     Ty::Object(ref obj) => {
-                        let obj = context.sarzak.exhume_object(obj).unwrap();
-                        let obj = obj.name.to_upper_camel_case();
+                        let obj = sarzak.exhume_object(obj).unwrap();
+                        let obj = obj.borrow().name.to_upper_camel_case();
                         obj == *name || name == format!("{}Proxy", obj)
                     }
                     _ => false,
                 }) {
-                    Ok(ValueType::new_ty(ty, lu_dog))
+                    Ok(ValueType::new_ty(&ty, lu_dog))
                 } else if let Some(ref id) = lu_dog.exhume_woog_struct_id_by_name(name) {
+                    // Here is where we look for actual user defined types, as
+                    // in types that are defined in dwarf source.
                     let woog_struct = lu_dog.exhume_woog_struct(id).unwrap();
                     Ok(ValueType::new_woog_struct(&woog_struct, lu_dog))
+                } else if let Some(ref id) = lu_dog.exhume_z_object_store_id_by_name(name) {
+                    let store = lu_dog.exhume_z_object_store(id).unwrap();
+                    Ok(ValueType::new_z_object_store(&store, lu_dog))
                 } else {
                     Err(vec![DwarfError::UnknownType {
                         ty: name.to_owned(),
@@ -3282,14 +3391,14 @@ fn get_value_type(
             }
         }
         Type::Uuid => {
-            let ty = Ty::new_s_uuid();
+            let ty = Ty::new_s_uuid(sarzak);
             Ok(ValueType::new_ty(&ty, lu_dog))
         }
         道 => todo!("get_value_type missing implementation for {:?}", 道),
     }
 }
 
-fn lookup_woog_struct_method_type(
+fn lookup_woog_struct_method_return_type(
     type_name: &str,
     method: &str,
     lu_dog: &mut LuDogStore,
@@ -3394,8 +3503,10 @@ pub(super) fn typecheck(
 
     match (&s_read!(lhs).subtype, &s_read!(rhs).subtype) {
         (ValueTypeEnum::Ty(a), ValueTypeEnum::Ty(b)) => {
-            let a = context.sarzak.exhume_ty(a).unwrap().borrow();
-            let b = context.sarzak.exhume_ty(b).unwrap().borrow();
+            let a = context.sarzak.exhume_ty(a).unwrap();
+            let b = context.sarzak.exhume_ty(b).unwrap();
+            let a = a.borrow();
+            let b = b.borrow();
             match (&*a, &*b) {
                 (Ty::Integer(_), Ty::Integer(_)) => Ok(()),
                 (Ty::Float(_), Ty::Float(_)) => Ok(()),

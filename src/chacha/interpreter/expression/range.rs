@@ -4,7 +4,7 @@ use crate::{
     chacha::{error::Result, vm::VM},
     interpreter::{debug, eval_expression, function, Context},
     lu_dog::ValueType,
-    new_ref, s_read, s_write, NewRef, RefType, SarzakStorePtr, Value,
+    new_ref, s_read, s_write, DwarfInteger, NewRef, RefType, SarzakStorePtr, Value,
 };
 
 pub fn eval_range(
@@ -22,12 +22,13 @@ pub fn eval_range(
 
     debug!("range lhs: {lhs:?}, range: {range:?}");
 
+    // 🚧 Should probably typecheck these.
     let (lhs, _) = eval_expression(lhs, context, vm)?;
     let (rhs, _) = eval_expression(rhs, context, vm)?;
 
     let range = std::ops::Range {
-        start: Box::new(lhs),
-        end: Box::new(rhs),
+        start: <Value as TryInto<DwarfInteger>>::try_into(s_read!(lhs).clone())?,
+        end: s_read!(rhs).clone().try_into()?,
     };
 
     let result = Ok((

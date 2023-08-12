@@ -1,0 +1,12 @@
+[
+  {
+    "description": "An `Attribute` represents a single value. Each value must have a \n[`Type`], which constrains the values of data that may be assigned to\nan `Attribute`.",
+    "id": "63777957-b6bc-5253-b16b-6ff390f10dba",
+    "key_letters": "A",
+    "name": "Attribute"
+  },
+  {
+    "secs_since_epoch": 1691354789,
+    "nanos_since_epoch": 940586000
+  }
+]

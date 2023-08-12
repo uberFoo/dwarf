@@ -2,17 +2,20 @@ use std::path::PathBuf;
 
 use ansi_term::Colour;
 use rustc_hash::FxHashMap as HashMap;
+use tracy_client::Client;
 
 use dwarf::{
+    chacha::{
+        error::ChaChaErrorReporter,
+        interpreter::{initialize_interpreter, start_main},
+        value::Value,
+    },
     dwarf::{new_lu_dog, parse_dwarf},
-    initialize_interpreter,
-    interpreter::start_main,
     sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL},
-    Value,
 };
 
 #[cfg(feature = "print-std-out")]
-compile_error!("The tests don't run with the print-std-out feature enabled.");
+compile_error!("The tests don't function with the print-std-out feature enabled.");
 
 fn output_diffs(expected: &str, found: &str, test: &str) -> Result<(), ()> {
     let mut diff_count = 0;
@@ -113,7 +116,7 @@ fn run_program(test: &str, program: &str) -> Result<(Value, String), String> {
         }
     };
 
-    let ctx = initialize_interpreter::<PathBuf>(sarzak, lu_dog, None).unwrap();
+    let ctx = initialize_interpreter::<PathBuf>(sarzak, lu_dog, HashMap::default(), None).unwrap();
     match start_main(false, ctx) {
         Ok(v) => {
             let stdout = v.1.drain_std_out().join("").trim().to_owned();
@@ -121,11 +124,11 @@ fn run_program(test: &str, program: &str) -> Result<(Value, String), String> {
             Ok((v.0, stdout))
         }
         Err(e) => {
-            eprintln!("{}", dwarf::ChaChaErrorReporter(&e, true, program, test));
+            eprintln!("{}", ChaChaErrorReporter(&e, true, program, test));
 
             let error = format!(
                 "Interpreter exited with:\n{}",
-                dwarf::ChaChaErrorReporter(&e, false, program, test)
+                ChaChaErrorReporter(&e, false, program, test)
             )
             .trim()
             .to_owned();

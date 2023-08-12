@@ -54,7 +54,7 @@ pub fn eval_struct_expression(
     let ty_name = PrintableValueType(&ty, context);
     let mut user_type = UserType::new(ty_name.to_string(), &ty);
     for (name, _ty, value, _expr) in field_exprs {
-        user_type.add_attr(&name, value);
+        user_type.define_field(&name, value);
     }
 
     Ok((

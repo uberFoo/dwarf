@@ -1,0 +1,12 @@
+[
+  {
+    "description": "An event is sent to an object, and processed by the current state. Assuming it accepts the event. Otherwise it’s dropped on the floor.",
+    "id": "dbdfade4-b61a-5e69-ab1a-c4d10e61bedd",
+    "key_letters": "E",
+    "name": "Event"
+  },
+  {
+    "secs_since_epoch": 1691354789,
+    "nanos_since_epoch": 940592000
+  }
+]
