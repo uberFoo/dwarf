@@ -1,11 +1,7 @@
 use std::{path::Path, time::Instant};
 
-use abi_stable::{
-    library::{lib_header_from_path, LibrarySuffix, RawLibrary},
-    std_types::RArc,
-};
+use abi_stable::library::{lib_header_from_path, LibrarySuffix, RawLibrary};
 use ansi_term::Colour;
-use heck::ToSnakeCase;
 use snafu::{location, prelude::*, Location};
 use tracy_client::span;
 
@@ -17,13 +13,13 @@ use crate::{
     },
     interpreter::{
         debug, error, eval_expression, eval_statement, function, trace, typecheck, ChaChaError,
-        Context, UserType,
+        Context,
     },
-    lu_dog::{Argument, BodyEnum, Function, List, Span, ValueType, ZObjectStore},
-    new_rc, new_ref,
+    lu_dog::{Argument, BodyEnum, Function, List, Span, ValueType},
+    new_ref,
+    plug_in::PluginModRef,
     plug_in::PluginType,
-    plug_in::{PluginId, PluginModRef},
-    s_read, s_write, NewRcType, NewRef, RcType, RefType, Value,
+    s_read, s_write, NewRef, RefType, Value,
 };
 
 const OBJECT_STORE: &str = "ObjectStore";
@@ -52,12 +48,12 @@ pub fn eval_function_call(
         //
         // This is a function defined in a dwarf file.
         BodyEnum::Block(ref id) => {
-            eval_built_in_function_call(func, &id, args, arg_check, span, context, vm)
+            eval_built_in_function_call(func, id, args, arg_check, span, context, vm)
         }
         //
         // This is an externally defined function that was declared in a dwarf file.
         BodyEnum::ExternalImplementation(ref id) => {
-            eval_external_function_call(&id, args, arg_check, span, context, vm)
+            eval_external_function_call(id, args, arg_check, span, context, vm)
         }
     }
 }
@@ -65,8 +61,8 @@ pub fn eval_function_call(
 fn eval_external_function_call(
     block_id: &usize,
     args: &[RefType<Argument>],
-    arg_check: bool,
-    span: &RefType<Span>,
+    _arg_check: bool,
+    _span: &RefType<Span>,
     context: &mut Context,
     vm: &mut VM,
 ) -> Result<(RefType<Value>, RefType<ValueType>)> {
@@ -104,7 +100,7 @@ fn eval_external_function_call(
 
     let model_name = s_read!(external).x_model.clone();
     let mut model = s_write!(context.models());
-    let mut model = model.get_mut(&model_name).unwrap();
+    let model = model.get_mut(&model_name).unwrap();
     let func_name = s_read!(external).function.clone();
 
     let object_name = &s_read!(external).object;
@@ -113,7 +109,7 @@ fn eval_external_function_call(
         // Here we load the plug-in and create an instance of the object store.
         if s_read!(external).function == FUNCTION_NEW {
             let library_path = RawLibrary::path_in_directory(
-                &Path::new(&format!("./plug-ins/{model_name}/target/debug")),
+                Path::new(&format!("./plug-ins/{model_name}/target/debug")),
                 &model_name,
                 LibrarySuffix::NoSuffix,
             );

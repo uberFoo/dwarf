@@ -16,7 +16,7 @@ use crate::{
     plug_in::PluginType,
     s_read,
     sarzak::{ObjectStore as SarzakStore, Ty},
-    ChaChaError, DwarfFloat, DwarfInteger, NewRef, RcType, RefType,
+    ChaChaError, DwarfFloat, DwarfInteger, NewRef, RefType,
 };
 
 #[repr(C)]
@@ -141,7 +141,7 @@ impl From<FfiValue> for Value {
             FfiValue::Integer(num) => Self::Integer(num),
             // FfiValue::PlugIn(store) => Self::PlugIn(store),
             FfiValue::ProxyType(plugin) => Self::ProxyType((plugin.uuid.into(), plugin.plugin)),
-            FfiValue::Range(range) => Self::Range(range.start.into()..range.end.into()),
+            FfiValue::Range(range) => Self::Range(range.start..range.end),
             FfiValue::String(str_) => Self::String(str_.into()),
             // FfiValue::UserType(uuid) => Self::UserType(new_ref!(UserType, uuid.into())),
             FfiValue::Uuid(uuid) => Self::Uuid(uuid.into()),
@@ -222,7 +222,7 @@ impl Value {
                     .iter_z_object_store()
                     .find(|s| {
                         let s = s_read!(s);
-                        s.domain == s_read!(store).name().to_string()
+                        s.domain == s_read!(store).name()
                     })
                     .unwrap();
                 let ty = s_read!(store).r1_value_type(lu_dog)[0].clone();

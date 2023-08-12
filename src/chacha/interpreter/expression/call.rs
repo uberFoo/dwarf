@@ -147,7 +147,7 @@ pub fn eval_call(
             debug!("MethodCall type {ty:?}");
 
             match &*s_read!(value) {
-                Value::ProxyType((id, proxy)) => {
+                Value::ProxyType((id, _proxy)) => {
                     let vt = s_read!(lu_dog);
                     let mut vt = vt.iter_value_type();
                     let woog_struct = loop {
@@ -702,7 +702,7 @@ pub fn eval_call(
                         debug!("StaticMethodCall frame ty {ty:?}");
                         Ok((value, ty))
                     }
-                    Value::ProxyType(ut) => {
+                    Value::ProxyType(_ut) => {
                         unimplemented!();
                         // debug!("StaticMethodCall proxy {ut:?}");
                         // s_write!(ut).call(

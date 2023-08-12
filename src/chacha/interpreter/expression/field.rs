@@ -5,7 +5,7 @@ use crate::{
     chacha::{error::Result, vm::VM},
     interpreter::{debug, eval_expression, function, ChaChaError, Context},
     lu_dog::{FieldAccessTargetEnum, ValueType},
-    new_ref, s_read, s_write, NewRef, RefType, SarzakStorePtr, Value,
+    new_ref, s_read, NewRef, RefType, SarzakStorePtr, Value,
 };
 
 pub fn eval_field_access(

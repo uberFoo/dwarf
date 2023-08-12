@@ -179,7 +179,7 @@ impl fmt::Display for DwarfErrorReporter<'_, '_, '_> {
                     .with_message("self may only be used inside of an implementation block")
                     .with_label(
                         Label::new((file_name, span))
-                            .with_message(format!("used here"))
+                            .with_message("used here".to_string())
                             .with_color(Color::Red),
                     );
                 let report = if is_uber {
@@ -224,7 +224,7 @@ impl fmt::Display for DwarfErrorReporter<'_, '_, '_> {
                     .with_message("implementation blocks may only contain functions")
                     .with_label(
                         Label::new((file_name, span))
-                            .with_message(format!("used here"))
+                            .with_message("used here".to_string())
                             .with_color(Color::Red),
                     )
                     .finish()
@@ -241,7 +241,7 @@ impl fmt::Display for DwarfErrorReporter<'_, '_, '_> {
                     .with_message("expected a list")
                     .with_label(
                         Label::new((file_name, span))
-                            .with_message(format!("used here"))
+                            .with_message("used here".to_string())
                             .with_color(Color::Red),
                     )
                     .finish()

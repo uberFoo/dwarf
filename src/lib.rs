@@ -19,11 +19,7 @@ pub mod tui;
 // pub mod lu_dog_proxy;
 
 pub use ::sarzak::{lu_dog, sarzak};
-pub(crate) use chacha::{
-    error::{ChaChaError, ChaChaErrorReporter},
-    interpreter::{self, initialize_interpreter},
-    value::Value,
-};
+pub(crate) use chacha::{error::ChaChaError, interpreter, value::Value};
 
 // These should eventually come from the domain.
 pub type DwarfInteger = i64;
@@ -139,11 +135,13 @@ trait NewRef<T> {
     fn new_ref(value: T) -> RefType<T>;
 }
 
+#[allow(unused_macros)]
 macro_rules! new_rc {
     ($type:ty, $value:expr) => {
         <RcType<$type> as NewRcType<$type>>::new_rc_type($value)
     };
 }
+#[allow(unused_imports)]
 pub(crate) use new_rc;
 
 macro_rules! new_ref {

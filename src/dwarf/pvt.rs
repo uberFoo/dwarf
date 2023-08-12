@@ -77,6 +77,7 @@ impl<'d, 'a, 'b> fmt::Display for PrintableValueType<'d, 'a, 'b> {
                         }
                         Ty::SString(_) => write!(f, "string"),
                         Ty::SUuid(_) => write!(f, "Uuid"),
+                        #[allow(non_snake_case)]
                         Γ => {
                             error!("deal with sarzak type {:?}", Γ);
                             write!(f, "todo")
@@ -86,7 +87,7 @@ impl<'d, 'a, 'b> fmt::Display for PrintableValueType<'d, 'a, 'b> {
                     // It's not a sarzak type, so it must be an object imported from
                     // one of the model domains.
                     // 🚧 HashMapFix
-                    for (_, model) in context.models {
+                    for model in context.models.values() {
                         if let Some(ty) = model.0.exhume_ty(ty) {
                             if let Ty::Object(ref object) = &*ty.borrow() {
                                 if let Some(object) = model.0.exhume_object(object) {

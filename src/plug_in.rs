@@ -1,17 +1,16 @@
 use std::{
     fmt,
     ops::{Deref, DerefMut},
-    path::Path,
 };
 
 use abi_stable::{
     declare_root_module_statics,
-    library::{LibraryError, RootModule},
+    library::RootModule,
     package_version_strings, sabi_trait,
     sabi_types::VersionStrings,
-    std_types::{RArc, RBox, RString, RVec},
-    std_types::{RCowStr, ROk, ROption, RResult, RSome, RStr},
-    DynTrait, StableAbi,
+    std_types::{RArc, RBox, RVec},
+    std_types::{RCowStr, RResult, RStr},
+    StableAbi,
 };
 use serde::{Deserialize, Serialize};
 

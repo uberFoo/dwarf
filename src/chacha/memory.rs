@@ -6,10 +6,7 @@ use ansi_term::Colour;
 use crossbeam::channel::{unbounded, Receiver, Sender};
 use rustc_hash::FxHashMap as HashMap;
 
-use crate::{
-    chacha::vm::Thonk, debug, function, interpreter::STEPPING, new_ref, s_read, s_write, NewRef,
-    RefType, Value,
-};
+use crate::{chacha::vm::Thonk, debug, function, interpreter::STEPPING, s_read, RefType, Value};
 
 #[derive(Clone, Debug)]
 pub struct Memory {
@@ -106,42 +103,6 @@ impl Memory {
             table.get(name).cloned()
         } else {
             None
-        }
-    }
-
-    // 🚧 Document this -- I'm not sure what the :: business is about.
-    pub(crate) fn insert_global(&mut self, name: String, value: RefType<Value>) {
-        if name.contains("::") {
-            let mut split = name.split("::");
-            let table = split.next().unwrap();
-            let name = split
-                .next()
-                .expect("name contained `::`, but no second element");
-
-            if *STEPPING.lock() {
-                self.sender
-                    .send(MemoryUpdateMessage::AddGlobal((
-                        name.to_owned(),
-                        value.clone(),
-                    )))
-                    .unwrap();
-            }
-
-            if let Some(value) = self.global.get(table) {
-                let mut write_value = s_write!(value);
-                if let Value::Table(ref mut table) = *write_value {
-                    table.insert(name.to_owned(), value.clone());
-                } else {
-                    unreachable!()
-                }
-            } else {
-                let mut map = HashMap::default();
-                map.insert(name.to_owned(), value);
-                self.global
-                    .insert(table.to_owned(), new_ref!(Value, Value::Table(map)));
-            }
-        } else {
-            self.global.insert(name, value);
         }
     }
 

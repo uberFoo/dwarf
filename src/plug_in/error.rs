@@ -8,8 +8,6 @@ use std::{
     fmt::{self, Display},
 };
 
-use core_extensions::strings::StringExt;
-
 #[repr(u8)]
 #[derive(Debug, StableAbi)]
 pub enum Error {

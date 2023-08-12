@@ -579,7 +579,7 @@ fn inter_func(
         debug!("var {:?}", var);
 
         if let Some((ref block, _, _)) = block {
-            let value = XValue::new_variable(&block, &param_ty, &var, lu_dog);
+            let value = XValue::new_variable(block, &param_ty, &var, lu_dog);
             LuDogSpan::new(
                 name_span.end as i64,
                 name_span.start as i64,
@@ -601,7 +601,7 @@ fn inter_func(
             .map(|stmt| new_ref!(ParserStatement, stmt.0.clone()))
             .collect();
 
-        let (block_ty, block_span) = inter_statements(&stmts, &stmt_span, &block, context, lu_dog)?;
+        let (block_ty, block_span) = inter_statements(&stmts, stmt_span, &block, context, lu_dog)?;
 
         if context.check_types {
             typecheck(
@@ -1003,7 +1003,7 @@ pub(super) fn inter_expression(
             };
             let expr =
                 Expression::new_literal(&Literal::new_boolean_literal(&literal, lu_dog), lu_dog);
-            let ty = ValueType::new_ty(&Ty::new_boolean(&context.sarzak), lu_dog);
+            let ty = ValueType::new_ty(&Ty::new_boolean(context.sarzak), lu_dog);
             let value = XValue::new_expression(block, &ty, &expr, lu_dog);
             s_write!(span).x_value = Some(s_read!(value).id);
 
@@ -1147,7 +1147,7 @@ pub(super) fn inter_expression(
             let expr = Operator::new_comparison(&lhs.0, Some(&rhs.0), &expr, lu_dog);
             let expr = Expression::new_operator(&expr, lu_dog);
 
-            let ty = Ty::new_boolean(&context.sarzak);
+            let ty = Ty::new_boolean(context.sarzak);
             let ty = ValueType::new_ty(&ty, lu_dog);
 
             let value = XValue::new_expression(block, &ty, &expr, lu_dog);
@@ -1321,7 +1321,7 @@ pub(super) fn inter_expression(
                 &Literal::new_float_literal(&FloatLiteral::new(*literal, lu_dog), lu_dog),
                 lu_dog,
             );
-            let ty = ValueType::new_ty(&Ty::new_float(&context.sarzak), lu_dog);
+            let ty = ValueType::new_ty(&Ty::new_float(context.sarzak), lu_dog);
             let value = XValue::new_expression(block, &ty, &expr, lu_dog);
             s_write!(span).x_value = Some(s_read!(value).id);
 
@@ -1424,8 +1424,7 @@ pub(super) fn inter_expression(
             s_write!(span).x_value = Some(s_read!(value).id);
 
             let mut last_arg_uuid: Option<usize> = None;
-            let mut position = 0;
-            for param in params {
+            for (position, param) in params.iter().enumerate() {
                 let (arg_expr, _ty) = inter_expression(
                     &new_ref!(ParserExpression, param.0.to_owned()),
                     &param.1,
@@ -1433,11 +1432,16 @@ pub(super) fn inter_expression(
                     context,
                     lu_dog,
                 )?;
-                let arg = Argument::new(position, &arg_expr.0, &func_call, None, lu_dog);
+                let arg = Argument::new(
+                    position as DwarfInteger,
+                    &arg_expr.0,
+                    &func_call,
+                    None,
+                    lu_dog,
+                );
                 if position == 0 {
                     s_write!(func_call).argument = Some(s_read!(arg).id);
                 }
-                position += 1;
 
                 last_arg_uuid = link_argument!(last_arg_uuid, arg, lu_dog);
             }
@@ -1496,7 +1500,7 @@ pub(super) fn inter_expression(
             let expr = Operator::new_comparison(&lhs.0, Some(&rhs.0), &expr, lu_dog);
             let expr = Expression::new_operator(&expr, lu_dog);
 
-            let ty = Ty::new_boolean(&context.sarzak);
+            let ty = Ty::new_boolean(context.sarzak);
             let ty = ValueType::new_ty(&ty, lu_dog);
 
             let value = XValue::new_expression(block, &ty, &expr, lu_dog);
@@ -1546,7 +1550,7 @@ pub(super) fn inter_expression(
             let expr = Operator::new_comparison(&lhs.0, Some(&rhs.0), &expr, lu_dog);
             let expr = Expression::new_operator(&expr, lu_dog);
 
-            let ty = Ty::new_boolean(&context.sarzak);
+            let ty = Ty::new_boolean(context.sarzak);
             let ty = ValueType::new_ty(&ty, lu_dog);
 
             let value = XValue::new_expression(block, &ty, &expr, lu_dog);
@@ -1665,7 +1669,7 @@ pub(super) fn inter_expression(
                 lu_dog,
             )?;
 
-            let int_ty = ValueType::new_ty(&Ty::new_integer(&context.sarzak), lu_dog);
+            let int_ty = ValueType::new_ty(&Ty::new_integer(context.sarzak), lu_dog);
             if context.check_types {
                 // let tc_span = s_read!(span).start as usize..s_read!(span).end as usize;
                 let index_span = s_read!(index.1).start as usize..s_read!(index.1).end as usize;
@@ -1686,7 +1690,7 @@ pub(super) fn inter_expression(
             } else if let ValueTypeEnum::Ty(ref ty) = s_read!(target_ty).subtype {
                 let ty = context.sarzak.exhume_ty(ty).unwrap();
                 let ty = ty.borrow();
-                if let Ty::SString(ref ty) = &*ty {
+                if let Ty::SString(_) = &*ty {
                     ValueType::new_char(lu_dog)
                 } else {
                     return Err(vec![DwarfError::NotAList {
@@ -1715,7 +1719,7 @@ pub(super) fn inter_expression(
                 &Literal::new_integer_literal(&IntegerLiteral::new(*literal, lu_dog), lu_dog),
                 lu_dog,
             );
-            let ty = ValueType::new_ty(&Ty::new_integer(&context.sarzak), lu_dog);
+            let ty = ValueType::new_ty(&Ty::new_integer(context.sarzak), lu_dog);
             let value = XValue::new_expression(block, &ty, &expr, lu_dog);
             s_write!(span).x_value = Some(s_read!(value).id);
 
@@ -1740,13 +1744,14 @@ pub(super) fn inter_expression(
 
             let mut errors = Vec::new();
             let mut last_param_uuid: Option<usize> = None;
-            let mut position = 0;
-            for ((param_name, name_span), (param_ty, param_span)) in params {
+            for (position, ((param_name, name_span), (param_ty, param_span))) in
+                params.iter().enumerate()
+            {
                 debug!("param name {}", param_name);
                 debug!("param ty {}", param_ty);
 
-                let param = LambdaParameter::new(position, &lambda, None, None, lu_dog);
-                position += 1;
+                let param =
+                    LambdaParameter::new(position as DwarfInteger, &lambda, None, None, lu_dog);
 
                 debug!("param {:?}", param);
 
@@ -1842,7 +1847,7 @@ pub(super) fn inter_expression(
             let expr = Operator::new_comparison(&lhs.0, Some(&rhs.0), &expr, lu_dog);
             let expr = Expression::new_operator(&expr, lu_dog);
 
-            let ty = Ty::new_boolean(&context.sarzak);
+            let ty = Ty::new_boolean(context.sarzak);
             let ty = ValueType::new_ty(&ty, lu_dog);
 
             let value = XValue::new_expression(block, &ty, &expr, lu_dog);
@@ -1892,7 +1897,7 @@ pub(super) fn inter_expression(
             let expr = Operator::new_comparison(&lhs.0, Some(&rhs.0), &expr, lu_dog);
             let expr = Expression::new_operator(&expr, lu_dog);
 
-            let ty = Ty::new_boolean(&context.sarzak);
+            let ty = Ty::new_boolean(context.sarzak);
             let ty = ValueType::new_ty(&ty, lu_dog);
 
             let value = XValue::new_expression(block, &ty, &expr, lu_dog);
@@ -2206,11 +2211,11 @@ pub(super) fn inter_expression(
                 if let Ty::SString(_) = &*ty {
                     match method.as_str() {
                         "len" => {
-                            let ty = Ty::new_integer(&context.sarzak);
+                            let ty = Ty::new_integer(context.sarzak);
                             ValueType::new_ty(&ty, lu_dog)
                         }
                         "format" => {
-                            let ty = Ty::new_s_string(&context.sarzak);
+                            let ty = Ty::new_s_string(context.sarzak);
                             ValueType::new_ty(&ty, lu_dog)
                         }
                         _ => {
@@ -2343,7 +2348,7 @@ pub(super) fn inter_expression(
             let expr = Operator::new_comparison(&lhs.0, Some(&rhs.0), &expr, lu_dog);
             let expr = Expression::new_operator(&expr, lu_dog);
 
-            let ty = Ty::new_boolean(&context.sarzak);
+            let ty = Ty::new_boolean(context.sarzak);
             let ty = ValueType::new_ty(&ty, lu_dog);
 
             let value = XValue::new_expression(block, &ty, &expr, lu_dog);
@@ -2585,7 +2590,7 @@ pub(super) fn inter_expression(
             // We could do something with the imports...
             // 🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧
             let ty = if type_name == "Uuid" && method == "new" {
-                ValueType::new_ty(&Ty::new_s_uuid(&context.sarzak), lu_dog)
+                ValueType::new_ty(&Ty::new_s_uuid(context.sarzak), lu_dog)
             } else {
                 debug!("ParserExpression::StaticMethodCall: looking up type {type_name}");
 
@@ -2612,8 +2617,7 @@ pub(super) fn inter_expression(
             };
 
             let mut last_arg_uuid: Option<usize> = None;
-            let mut position = 0;
-            for param in params {
+            for (position, param) in params.iter().enumerate() {
                 let (arg_expr, _ty) = inter_expression(
                     &new_ref!(ParserExpression, param.0.to_owned()),
                     &param.1,
@@ -2621,11 +2625,10 @@ pub(super) fn inter_expression(
                     context,
                     lu_dog,
                 )?;
-                let arg = Argument::new(position, &arg_expr.0, &call, None, lu_dog);
+                let arg = Argument::new(position as DwarfInteger, &arg_expr.0, &call, None, lu_dog);
                 if position == 0 {
                     s_write!(call).argument = Some(s_read!(arg).id);
                 }
-                position += 1;
 
                 last_arg_uuid = link_argument!(last_arg_uuid, arg, lu_dog);
             }
@@ -2647,7 +2650,7 @@ pub(super) fn inter_expression(
                 ),
                 lu_dog,
             );
-            let ty = ValueType::new_ty(&Ty::new_s_string(&context.sarzak), lu_dog);
+            let ty = ValueType::new_ty(&Ty::new_s_string(context.sarzak), lu_dog);
             let value = XValue::new_expression(block, &ty, &expr, lu_dog);
             s_write!(span).x_value = Some(s_read!(value).id);
 
@@ -3178,7 +3181,7 @@ fn get_value_type(
     context: &Context,
     lu_dog: &mut LuDogStore,
 ) -> Result<RefType<ValueType>> {
-    let sarzak = &context.sarzak;
+    let sarzak = context.sarzak;
 
     match type_ {
         Type::Boolean => {
@@ -3287,7 +3290,7 @@ fn get_value_type(
                 Ok(ValueType::new_ty(&Ty::new_s_uuid(sarzak), lu_dog))
             } else {
                 // 🚧 HashMapFix
-                for (_, model) in context.models {
+                for model in context.models.values() {
                     // Look for the Object in the model domains first.
                     if let Some(ty) = model.0.iter_ty().find(|ty| match &*ty.borrow() {
                         Ty::Object(ref obj) => {
@@ -3305,9 +3308,9 @@ fn get_value_type(
                 }
 
                 // Unlikely to have to reach back this far.
-                if let Some(ty) = context.sarzak.iter_ty().find(|ty| match &*ty.borrow() {
+                if let Some(ty) = sarzak.iter_ty().find(|ty| match &*ty.borrow() {
                     Ty::Object(ref obj) => {
-                        let obj = context.sarzak.exhume_object(obj).unwrap();
+                        let obj = sarzak.exhume_object(obj).unwrap();
                         let obj = obj.borrow().name.to_upper_camel_case();
                         obj == *name || name == format!("{}Proxy", obj)
                     }

@@ -141,11 +141,7 @@ pub fn start_repl(mut context: Context, is_uber: bool) -> Result<(), Error> {
                                 println!("\t  ──➤  {}", type_style.paint(ty));
                             }
                             Err(e) => {
-                                let adiós = if let ChaChaError::Return { value: _, ty: _ } = e {
-                                    true
-                                } else {
-                                    false
-                                };
+                                let adiós = matches!(e, ChaChaError::Return { value: _, ty: _ });
 
                                 println!(
                                     "{}",

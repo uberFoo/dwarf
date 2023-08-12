@@ -332,7 +332,7 @@ impl<'b> VM<'b> {
                         let field = self.stack.pop().unwrap();
                         let ty_ = self.stack.pop().unwrap();
                         match &*s_read!(ty_) {
-                            Value::ProxyType(ty_) => {
+                            Value::ProxyType(_ty_) => {
                                 unimplemented!();
                                 // match s_read!(ty_).get_attr_value(s_read!(field).as_ref()) {
                                 //     Ok(value) => {
@@ -397,7 +397,7 @@ impl<'b> VM<'b> {
                         let ty_ = self.stack.pop().unwrap();
                         let value = self.stack.pop().unwrap();
                         match &*s_read!(ty_) {
-                            Value::ProxyType(ty_) => {
+                            Value::ProxyType(_ty_) => {
                                 unimplemented!();
 
                                 // match s_write!(ty_)
@@ -593,8 +593,7 @@ mod tests {
 
     use crate::{
         dwarf::{DwarfFloat, DwarfInteger},
-        initialize_interpreter,
-        interpreter::PrintableValueType,
+        interpreter::{initialize_interpreter, PrintableValueType},
     };
 
     use super::*;

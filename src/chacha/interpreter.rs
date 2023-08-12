@@ -23,9 +23,7 @@ use crate::{
         Block, Expression, LocalVariable, ObjectStore as LuDogStore, Span, Statement,
         StatementEnum, ValueType, ValueTypeEnum, Variable, XValue,
     },
-    new_ref,
-    plug_in::StorePluginType,
-    s_read,
+    new_ref, s_read,
     sarzak::store::ObjectStore as SarzakStore,
     sarzak::MODEL as SARZAK_MODEL,
     ChaChaError, DwarfInteger, ModelStore, NewRef, RefType, Value,
@@ -220,11 +218,8 @@ pub fn initialize_interpreter<P: AsRef<Path>>(
             for func in s_read!(impl_[0]).r9_function(&lu_dog) {
                 let insert = if let Some(param) = s_read!(func).r82_parameter(&lu_dog).get(0) {
                     let var = &s_read!(param).r12_variable(&lu_dog)[0];
-                    if s_read!(var).name != "self" {
-                        true
-                    } else {
-                        false
-                    }
+                    let var = s_read!(var);
+                    var.name != "self"
                 } else {
                     true
                 };
@@ -255,11 +250,8 @@ pub fn initialize_interpreter<P: AsRef<Path>>(
             for func in s_read!(impl_[0]).r9_function(&lu_dog) {
                 let insert = if let Some(param) = s_read!(func).r82_parameter(&lu_dog).get(0) {
                     let var = &s_read!(param).r12_variable(&lu_dog)[0];
-                    if s_read!(var).name != "self" {
-                        true
-                    } else {
-                        false
-                    }
+                    let var = s_read!(var);
+                    var.name != "self"
                 } else {
                     true
                 };
