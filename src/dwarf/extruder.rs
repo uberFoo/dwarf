@@ -10,8 +10,8 @@ use crate::{
     dwarf::{
         error::{DwarfError, Result},
         expression::{addition, and},
-        AttributeMap, Expression as ParserExpression, InnerAttribute, InnerItem, Item,
-        PrintableValueType, Spanned, Statement as ParserStatement, Type,
+        AttributeMap, DwarfInteger, Expression as ParserExpression, InnerAttribute, InnerItem,
+        Item, PrintableValueType, Spanned, Statement as ParserStatement, Type,
     },
     lu_dog::{
         store::ObjectStore as LuDogStore,
@@ -3196,15 +3196,18 @@ fn get_value_type(
             let lambda = Lambda::new(None, &return_type, lu_dog);
 
             let mut last_param_uuid: Option<usize> = None;
-            let mut position = 0;
-            for (param_ty, param_span) in params {
+            for (position, (param_ty, param_span)) in params.iter().enumerate() {
                 let param_ty = get_value_type(param_ty, param_span, None, context, lu_dog)?;
                 debug!("param_ty {:?}", param_ty);
 
-                let param = LambdaParameter::new(position, &lambda, None, Some(&param_ty), lu_dog);
+                let param = LambdaParameter::new(
+                    position as DwarfInteger,
+                    &lambda,
+                    None,
+                    Some(&param_ty),
+                    lu_dog,
+                );
                 debug!("param {:?}", param);
-
-                position += 1;
 
                 last_param_uuid = link_ƛ_parameter!(last_param_uuid, param, lu_dog);
             }
