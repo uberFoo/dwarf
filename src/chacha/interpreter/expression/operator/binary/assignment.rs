@@ -100,7 +100,7 @@ pub fn eval_assignment(
                         });
                     }
                 }
-                Value::UserType(value) => {
+                Value::Struct(value) => {
                     s_write!(value).set_field_value(&field_name, rhs.0);
                 }
                 // 🚧 This needs it's own error.

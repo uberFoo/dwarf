@@ -2169,7 +2169,7 @@ impl DwarfParser {
 
         let start = name.0 .1.start;
 
-        let mut name = if let name @ (DwarfExpression::LocalVariable(..), _) = &name.0 {
+        let name = if let name @ (DwarfExpression::LocalVariable(..), _) = &name.0 {
             name.clone()
         } else {
             debug!("exit not a local variable");

@@ -15,7 +15,7 @@ use crate::{
     chacha::{
         error::{Error, Result, UnimplementedSnafu, VariableNotFoundSnafu},
         memory::{Memory, MemoryUpdateMessage},
-        value::UserType,
+        value::UserStruct,
         vm::{CallFrame, Instruction, Thonk, VM},
     },
     lu_dog::ExpressionEnum,
@@ -50,8 +50,8 @@ pub use tui::start_tui_repl;
 
 use context::Context;
 use expression::{
-    block, call, debugger, field, for_loop, if_expr, index, list, literal, operator, print, range,
-    ret, struct_expr, typecast, variable,
+    block, call, debugger, enumeration, field, for_loop, if_expr, index, list, literal, operator,
+    print, range, ret, struct_expr, typecast, variable,
 };
 use func_call::eval_function_call;
 use lambda::eval_lambda_expression;
@@ -139,42 +139,31 @@ lazy_static! {
     pub(crate) static ref STEPPING: Mutex<bool> = Mutex::new(false);
 }
 
-#[cfg(not(feature = "multi-nd-vec"))]
-pub fn initialize_interpreter_paths<P: AsRef<Path>>(lu_dog_path: P) -> Result<Context, Error> {
-    // unimplemented!();
-    let sarzak =
-        SarzakStore::from_bincode(SARZAK_MODEL).map_err(|e| ChaChaError::Store { source: e })?;
+// #[cfg(not(feature = "multi-nd-vec"))]
+// pub fn initialize_interpreter_paths<P: AsRef<Path>>(lu_dog_path: P) -> Result<Context, Error> {
+//     // unimplemented!();
+//     let sarzak =
+//         SarzakStore::from_bincode(SARZAK_MODEL).map_err(|e| ChaChaError::Store { source: e })?;
 
-    // This will always be a lu-dog -- it's basically compiled dwarf source.
-    let lu_dog = LuDogStore::load_bincode(lu_dog_path.as_ref())
-        .map_err(|e| ChaChaError::Store { source: e })?;
+//     // This will always be a lu-dog -- it's basically compiled dwarf source.
+//     let lu_dog = LuDogStore::load_bincode(lu_dog_path.as_ref())
+//         .map_err(|e| ChaChaError::Store { source: e })?;
 
-    initialize_interpreter(
-        sarzak,
-        lu_dog,
-        HashMap::default(),
-        Some(lu_dog_path.as_ref()),
-    )
-}
+//     initialize_interpreter(
+//         sarzak,
+//         lu_dog,
+//         HashMap::default(),
+//     )
+// }
 
 /// Initialize the interpreter
 ///
 /// The interpreter requires two domains to operate. The first is the metamodel:
 /// sarzak. The second is the compiled dwarf file.
-///
-/// So the metamodel is dumb. I think we use it for looking up the id of the UUID
-/// type. Otherwise, I don't think it's used.
-
-/// So, It's also used for looking up a bool type, and when printing value types.
-/// I sort of want to keep it, but bundle it with the compiled dwarf file.
-///
-/// Requiring a compiled dwarf file is also sort of stupid. I think we could just
-/// create an empty LuDog as our internal state.
-pub fn initialize_interpreter<P: AsRef<Path>>(
+pub fn initialize_interpreter(
     sarzak: SarzakStore,
     mut lu_dog: LuDogStore,
     models: ModelStore,
-    _lu_dog_path: Option<P>,
 ) -> Result<Context, Error> {
     // Initialize the stack with stuff from the compiled source.
     let block = Block::new(Uuid::new_v4(), None, &mut lu_dog);
@@ -582,6 +571,9 @@ fn eval_expression(
         ExpressionEnum::Block(ref block) => block::eval_block(block, context, vm),
         ExpressionEnum::Call(ref call) => call::eval_call(call, &expression, context, vm),
         ExpressionEnum::Debugger(_) => debugger::eval_debugger(context),
+        ExpressionEnum::EnumField(ref enum_field) => {
+            enumeration::eval_enum_field(enum_field, context, vm)
+        }
         ExpressionEnum::ErrorExpression(ref error) => expression::error::eval_error(error, context),
         ExpressionEnum::FieldAccess(ref field) => field::eval_field_access(field, context, vm),
         ExpressionEnum::FieldExpression(ref field_expr) => {

@@ -31,7 +31,7 @@ fn run_program(test: &str, program: &str) -> Result<(Value, String), String> {
     models.insert("sarzak".to_owned(), (sarzak.clone(), None));
     models.insert("merlin".to_owned(), (merlin.clone(), None));
 
-    let lu_dog = match new_lu_dog(None, Some((program.to_owned(), &ast)), &models, &sarzak) {
+    let lu_dog = match new_lu_dog(Some((program.to_owned(), &ast)), &models, &sarzak) {
         Ok(lu_dog) => lu_dog,
         Err(e) => {
             eprintln!(
@@ -66,7 +66,7 @@ fn run_program(test: &str, program: &str) -> Result<(Value, String), String> {
         }
     };
 
-    let ctx = initialize_interpreter::<PathBuf>(sarzak, lu_dog, models, None).unwrap();
+    let ctx = initialize_interpreter(sarzak, lu_dog, models).unwrap();
     match start_main(false, ctx) {
         Ok(v) => {
             let stdout = v.1.drain_std_out().join("").trim().to_owned();

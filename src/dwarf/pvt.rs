@@ -32,6 +32,12 @@ impl<'d, 'a, 'b> fmt::Display for PrintableValueType<'d, 'a, 'b> {
 
         match value.subtype {
             ValueTypeEnum::Char(c) => write!(f, "'{}'", c),
+            ValueTypeEnum::Enumeration(ref enumeration) => {
+                debug!("enumeration {:?}", enumeration);
+                let enumeration = lu_dog.exhume_enumeration(enumeration).unwrap();
+                let enumeration = s_read!(enumeration);
+                write!(f, "{}", enumeration.name)
+            }
             ValueTypeEnum::Empty(_) => write!(f, "()"),
             ValueTypeEnum::Error(_) => write!(f, "<error>"),
             ValueTypeEnum::Function(_) => write!(f, "<function>"),

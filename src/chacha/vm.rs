@@ -3,7 +3,7 @@ use std::fmt;
 use ansi_term::Colour;
 
 use crate::{
-    chacha::{error::Result, memory::Memory, value::UserType},
+    chacha::{error::Result, memory::Memory, value::UserStruct},
     new_ref, s_read, s_write, ChaChaError, NewRef, RefType, Value, ValueType,
 };
 
@@ -358,7 +358,7 @@ impl<'b> VM<'b> {
                                 //     }
                                 // }
                             }
-                            Value::UserType(ty_) => {
+                            Value::Struct(ty_) => {
                                 match s_read!(ty_).get_field_value(s_read!(field).as_ref()) {
                                     Some(value) => {
                                         if trace {
@@ -425,7 +425,7 @@ impl<'b> VM<'b> {
                                 //     }
                                 // }
                             }
-                            Value::UserType(ty_) => {
+                            Value::Struct(ty_) => {
                                 match s_write!(ty_)
                                     .set_field_value(s_read!(field).as_ref(), value.clone())
                                 {
@@ -514,7 +514,7 @@ impl<'b> VM<'b> {
                             println!("\t\t{}\t{} {{", Colour::Green.paint("new:"), name);
                         }
 
-                        let mut inst = UserType::new(name, ty);
+                        let mut inst = UserStruct::new(name, ty);
 
                         for _i in 0..*n {
                             let name = self.stack.pop().unwrap();
@@ -527,7 +527,7 @@ impl<'b> VM<'b> {
                         }
 
                         self.stack
-                            .push(new_ref!(Value, Value::UserType(new_ref!(UserType, inst))));
+                            .push(new_ref!(Value, Value::Struct(new_ref!(UserStruct, inst))));
 
                         if trace {
                             println!("\t\t\t\t}}");
@@ -898,7 +898,7 @@ mod tests {
     #[test]
     fn test_instr_field() {
         use crate::{
-            chacha::value::UserType,
+            chacha::value::UserStruct,
             lu_dog::{Field, ObjectStore as LuDogStore, ValueType, WoogStruct},
         };
         use sarzak::sarzak::{ObjectStore as SarzakStore, Ty, MODEL as SARZAK_MODEL};
@@ -921,10 +921,9 @@ mod tests {
         let _ = Field::new("baz".to_owned(), &foo, &ty, &mut lu_dog);
 
         // Now we need an instance.
-        let ctx =
-            initialize_interpreter::<PathBuf>(sarzak, lu_dog, HashMap::default(), None).unwrap();
+        let ctx = initialize_interpreter(sarzak, lu_dog, HashMap::default()).unwrap();
         let ty_name = PrintableValueType(&struct_ty, &ctx);
-        let mut foo_inst = UserType::new(ty_name.to_string(), &struct_ty);
+        let mut foo_inst = UserStruct::new(ty_name.to_string(), &struct_ty);
         foo_inst.define_field("bar", new_ref!(Value, 42.into()));
         foo_inst.define_field("baz", new_ref!(Value, std::f64::consts::PI.into()));
 
@@ -934,7 +933,7 @@ mod tests {
 
         vm.stack.push(new_ref!(
             Value,
-            Value::UserType(new_ref!(UserType, foo_inst))
+            Value::Struct(new_ref!(UserStruct, foo_inst))
         ));
         vm.stack.push(new_ref!(Value, "baz".into()));
 

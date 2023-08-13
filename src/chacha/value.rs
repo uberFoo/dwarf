@@ -12,7 +12,9 @@ use uuid::Uuid;
 use crate::{
     chacha::error::Result,
     lu_dog::{Function, Lambda, ObjectStore as LuDogStore, ValueType},
-    new_ref, s_read,
+    new_ref,
+    plug_in::PluginType,
+    s_read,
     sarzak::{ObjectStore as SarzakStore, Ty},
     ChaChaError, DwarfFloat, DwarfInteger, NewRef, RefType,
 };
@@ -78,6 +80,7 @@ pub enum Value {
     Boolean(bool),
     Char(char),
     Empty,
+    Enum(RefType<UserEnum>),
     Error(String),
     Float(DwarfFloat),
     /// Function
@@ -94,10 +97,10 @@ pub enum Value {
     ProxyType((Uuid, PluginType)),
     Range(Range<DwarfInteger>),
     String(String),
+    Struct(RefType<UserStruct>),
     Table(HashMap<String, RefType<Self>>),
     Thonk(&'static str, usize),
     Unknown,
-    UserType(RefType<UserType>),
     Uuid(uuid::Uuid),
     Vector(Vec<RefType<Self>>),
 }
@@ -181,6 +184,7 @@ impl Value {
                 }
                 unreachable!()
             }
+            Value::Enum(ref ut) => s_read!(ut).get_type().clone(),
             Value::Function(ref func) => {
                 let func = lu_dog.exhume_function(&s_read!(func).id).unwrap();
                 let z = s_read!(func).r1_value_type(lu_dog)[0].clone();
@@ -251,7 +255,7 @@ impl Value {
                 }
                 unreachable!()
             }
-            Value::UserType(ref ut) => s_read!(ut).get_type().clone(),
+            Value::Struct(ref ut) => s_read!(ut).get_type().clone(),
             Value::Uuid(_) => {
                 let ty = Ty::new_s_uuid(sarzak);
                 for vt in lu_dog.iter_value_type() {
@@ -287,13 +291,14 @@ impl Value {
 impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Self::Boolean(bool_) => write!(f, "{}", bool_),
-            Self::Char(char_) => write!(f, "{}", char_),
+            Self::Boolean(bool_) => write!(f, "{bool_}"),
+            Self::Char(char_) => write!(f, "{char_}"),
             Self::Empty => write!(f, "()"),
+            Self::Enum(ty) => write!(f, "{}", s_read!(ty)),
             Self::Error(e) => write!(f, "{}: {e}", Colour::Red.bold().paint("error")),
-            Self::Float(num) => write!(f, "{}", num),
+            Self::Float(num) => write!(f, "{num}"),
             Self::Function(_) => write!(f, "<function>"),
-            Self::Integer(num) => write!(f, "{}", num),
+            Self::Integer(num) => write!(f, "{num}"),
             Self::Lambda(_) => write!(f, "<lambda>"),
             Self::PlugIn(store) => write!(f, "Plug-in ({})", s_read!(store).name()),
             Self::Option(option) => match option {
@@ -303,16 +308,16 @@ impl fmt::Display for Value {
             // 🚧 swap these out when I'm done
             // Self::ProxyType(_p) => write!(f, "<put the other thing back>"),
             Self::ProxyType((_, p)) => write!(f, "{p}"),
-            Self::Range(range) => write!(f, "{:?}", range),
+            Self::Range(range) => write!(f, "{range:?}"),
             // Self::StoreType(store) => write!(f, "{:?}", store),
-            Self::String(str_) => write!(f, "{}", str_),
+            Self::String(str_) => write!(f, "{str_}"),
+            Self::Struct(ty) => writeln!(f, "{}", s_read!(ty)),
             // Self::String(str_) => write!(f, "\"{}\"", str_),
-            Self::Table(table) => write!(f, "{:?}", table),
-            Self::Thonk(name, number) => write!(f, "{} [{}]", name, number),
+            Self::Table(table) => write!(f, "{table:?}"),
+            Self::Thonk(name, number) => write!(f, "{name} [{number}]"),
             Self::Unknown => write!(f, "<unknown>"),
-            Self::UserType(ty) => writeln!(f, "{}", s_read!(ty)),
-            Self::Uuid(uuid) => write!(f, "{}", uuid),
-            Self::Vector(vec) => write!(f, "{:?}", vec),
+            Self::Uuid(uuid) => write!(f, "{uuid}"),
+            Self::Vector(vec) => write!(f, "{vec:?}"),
         }
     }
 }
@@ -824,16 +829,17 @@ impl Value {
 impl std::cmp::PartialEq for Value {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
+            (Value::Boolean(a), Value::Boolean(b)) => a == b,
+            (Value::Char(a), Value::Char(b)) => a == b,
+            (Value::Empty, Value::Empty) => true,
+            (Value::Enum(a), Value::Enum(b)) => *s_read!(a) == *s_read!(b),
             (Value::Float(a), Value::Float(b)) => a == b,
             (Value::Float(a), Value::Integer(b)) => a == &(*b as DwarfFloat),
             (Value::Integer(a), Value::Integer(b)) => a == b,
             (Value::Integer(a), Value::Float(b)) => (*a as DwarfFloat) == *b,
             (Value::String(a), Value::String(b)) => a == b,
-            (Value::Char(a), Value::Char(b)) => a == b,
-            (Value::Empty, Value::Empty) => true,
-            (Value::Boolean(a), Value::Boolean(b)) => a == b,
+            (Value::Struct(a), Value::Struct(b)) => *s_read!(a) == *s_read!(b),
             (Value::Uuid(a), Value::Uuid(b)) => a == b,
-            (Value::UserType(a), Value::UserType(b)) => *s_read!(a) == *s_read!(b),
             (Value::Vector(a), Value::Vector(b)) => {
                 if a.len() != b.len() {
                     return false;
@@ -878,21 +884,64 @@ impl PartialEq for UserTypeAttribute {
 impl Eq for UserTypeAttribute {}
 
 #[derive(Clone, Debug)]
-pub struct UserType {
+pub struct UserEnum {
+    type_name: String,
+    type_: RefType<ValueType>,
+    value: RefType<Value>,
+}
+
+impl PartialEq for UserEnum {
+    fn eq(&self, other: &Self) -> bool {
+        s_read!(self.type_).eq(&s_read!(other.type_)) && self.value.eq(&other.value)
+    }
+}
+
+impl Eq for UserEnum {}
+
+impl UserEnum {
+    pub fn new<S: AsRef<str>>(
+        type_name: S,
+        type_: &RefType<ValueType>,
+        value: RefType<Value>,
+    ) -> Self {
+        Self {
+            type_name: type_name.as_ref().to_owned(),
+            type_: type_.clone(),
+            value,
+        }
+    }
+
+    pub fn get_value(&self) -> RefType<Value> {
+        self.value.clone()
+    }
+
+    pub fn get_type(&self) -> &RefType<ValueType> {
+        &self.type_
+    }
+}
+
+impl fmt::Display for UserEnum {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}::{}", self.type_name, s_read!(self.value))
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct UserStruct {
     type_name: String,
     type_: RefType<ValueType>,
     attrs: UserTypeAttribute,
 }
 
-impl PartialEq for UserType {
+impl PartialEq for UserStruct {
     fn eq(&self, other: &Self) -> bool {
         s_read!(self.type_).eq(&s_read!(other.type_)) && self.attrs.eq(&other.attrs)
     }
 }
 
-impl Eq for UserType {}
+impl Eq for UserStruct {}
 
-impl UserType {
+impl UserStruct {
     pub fn new<S: AsRef<str>>(type_name: S, type_: &RefType<ValueType>) -> Self {
         Self {
             type_name: type_name.as_ref().to_owned(),
@@ -925,7 +974,7 @@ impl UserType {
     }
 }
 
-impl fmt::Display for UserType {
+impl fmt::Display for UserStruct {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut out = f.debug_struct(&self.type_name);
         let mut attrs = self.attrs.0.iter().collect::<Vec<_>>();

@@ -215,7 +215,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         };
 
-        let mut ctx = initialize_interpreter::<PathBuf>(sarzak, lu_dog, models, None)?;
+        let mut ctx = initialize_interpreter(sarzak, lu_dog, models)?;
         ctx.add_args(dwarf_args);
 
         if args.banner.is_some() && args.banner.unwrap() {
@@ -278,7 +278,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             // }
         }
     } else {
-        let ctx = initialize_interpreter::<PathBuf>(sarzak, lu_dog, models, None)?;
+        let ctx = initialize_interpreter(sarzak, lu_dog, models)?;
 
         start_repl(ctx, is_uber).map_err(|e| {
             println!("Interpreter exited with: {}", e);

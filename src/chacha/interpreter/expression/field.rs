@@ -77,7 +77,7 @@ pub fn eval_field_access(
                     debug!("ProxyType return value: {value:?}");
 
                     let value: Value = value.into();
-                    let ty = value.get_type(&s_read!(lu_dog), &s_read!(context.sarzak_heel()));
+                    let ty = value.get_type(&s_read!(context.sarzak_heel()), &s_read!(lu_dog));
 
                     debug!("ProxyType value: {value:?}, type: {ty:?}");
 
@@ -92,10 +92,10 @@ pub fn eval_field_access(
                 }
             }
         }
-        Value::UserType(value) => {
+        Value::Struct(value) => {
             let value = s_read!(value);
             let value = value.get_field_value(field_name).unwrap();
-            let ty = s_read!(value).get_type(&s_read!(lu_dog), &s_read!(context.sarzak_heel()));
+            let ty = s_read!(value).get_type(&s_read!(context.sarzak_heel()), &s_read!(lu_dog));
 
             Ok((value.clone(), ty))
         }

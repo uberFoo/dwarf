@@ -1,0 +1,27 @@
+struct Baz {
+    a: int,
+    b: int,
+}
+enum Foo {
+    Bar,
+    Baz,
+}
+
+enum Bar {
+    Plain,
+    Int(int),
+    String(string),
+    Enum(Foo),
+    Struct(Baz),
+}
+
+fn main() {
+    let a = Bar::Plain;
+    // let b = Bar::Int(42);
+
+    chacha::assert_eq(a, Bar::Plain);
+    // chacha::assert_eq(b, Bar::Int(42));
+
+    chacha::assert_eq("a = {0}".format(a), "a = Bar::Plain");
+    // chacha::assert_eq("b = {0}".format(a), "b = Bar::Int(42)");
+}

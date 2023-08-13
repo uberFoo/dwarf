@@ -16,14 +16,14 @@ use crate::{
     lu_dog::{
         store::ObjectStore as LuDogStore,
         types::{
-            Block, Body, BooleanOperator, Call, Enumeration, ErrorExpression, Expression,
-            ExpressionEnum, ExpressionStatement, ExternalImplementation, Field, FieldExpression,
-            ForLoop, Function, ImplementationBlock, Index, IntegerLiteral, Item as WoogItem,
-            ItemStatement, Lambda, LambdaParameter, LetStatement, Literal, LocalVariable,
-            Parameter, Print, RangeExpression, Span as LuDogSpan, Statement, StaticMethodCall,
-            StringLiteral, StructExpression, ValueType, ValueTypeEnum, Variable,
-            VariableExpression, WoogOption, WoogStruct, XIf, XValue, XValueEnum, ZObjectStore,
-            ZSome,
+            Block, Body, BooleanOperator, Call, EnumField as LuDogEnumField, Enumeration,
+            ErrorExpression, Expression, ExpressionEnum, ExpressionStatement,
+            ExternalImplementation, Field, FieldExpression, ForLoop, Function, ImplementationBlock,
+            Index, IntegerLiteral, Item as WoogItem, ItemStatement, Lambda, LambdaParameter,
+            LetStatement, Literal, LocalVariable, Parameter, Plain, Print, RangeExpression,
+            Span as LuDogSpan, Statement, StaticMethodCall, StringLiteral, StructExpression,
+            ValueType, ValueTypeEnum, Variable, VariableExpression, WoogOption, WoogStruct, XIf,
+            XValue, XValueEnum, ZObjectStore, ZSome,
         },
         Argument, Binary, BooleanLiteral, Comparison, DwarfSourceFile, FieldAccess,
         FieldAccessTarget, FloatLiteral, List, ListElement, ListExpression, MethodCall, Operator,
@@ -2500,25 +2500,71 @@ pub(super) fn inter_expression(
         //
         // Plain enumeration
         //
-        // ParserExpression::PlainEnum(enum_path, (field, field_span)) => {
-        //     // 🚧 this won't survive as-is
-        //     let path = if let ParserExpression::PathInExpression(path) = enum_path.as_ref() {
-        //         path
-        //     } else {
-        //         panic!(
-        //             "I don't think that we should ever see anything other than a path here: {:?}",
-        //             path
-        //         );
-        //     };
+        ParserExpression::PlainEnum(enum_path, (field_name, field_span)) => {
+            // 🚧 this won't survive as-is
+            let (path, span) =
+                if let (ParserExpression::PathInExpression(path), span) = enum_path.as_ref() {
+                    (path, span)
+                } else {
+                    panic!(
+                    "I don't think that we should ever see anything other than a path here: {:?}",
+                    enum_path
+                );
+                };
 
-        //     let enum_name = if let Some(Type::UserType((obj, _))) = path.last() {
-        //         obj.de_sanitize().to_owned()
-        //     } else {
-        //         panic!("I don't think that we should ever see anything other than a user type here: {:?}", path);
-        //     };
+            let enum_name = if let Some(Type::UserType((obj, _))) = path.last() {
+                obj.de_sanitize().to_owned()
+            } else {
+                panic!("I don't think that we should ever see anything other than a user type here: {:?}", path);
+            };
 
-        //     debug!("type_name {:?}", enum_name);
-        // }
+            debug!("enum_name {:?}", enum_name);
+
+            // Check the field name against the declaration
+            let woog_enum = lu_dog.exhume_enumeration_id_by_name(&enum_name).unwrap();
+
+            let field = lu_dog.iter_enum_field().find(|field| {
+                let field = s_read!(field);
+                &field.name == field_name
+            });
+
+            if let Some(field) = field {
+                let ty = lu_dog
+                    .iter_value_type()
+                    .inspect(|ty| {
+                        debug!("ty {:?}", ty);
+                    })
+                    .find(|ty| {
+                        if let ValueTypeEnum::Enumeration(id) = s_read!(ty).subtype {
+                            id == woog_enum
+                        } else {
+                            false
+                        }
+                    })
+                    .unwrap();
+
+                let expr = Expression::new_enum_field(&field, lu_dog);
+
+                let value = XValue::new_expression(&block, &ty, &expr, lu_dog);
+                let span = LuDogSpan::new(
+                    field_span.end as i64,
+                    span.start as i64,
+                    &context.source,
+                    None,
+                    Some(&value),
+                    lu_dog,
+                );
+
+                Ok(((expr, span), ty))
+            } else {
+                Err(vec![DwarfError::NoSuchField {
+                    name: enum_name.to_owned(),
+                    name_span: span.to_owned(),
+                    field: field_name.to_owned(),
+                    span: field_span.to_owned(),
+                }])
+            }
+        }
         //
         // Range
         //
@@ -3051,14 +3097,20 @@ fn inter_implementation(
 
 fn inter_enum(
     name: &str,
-    attributes: &AttributeMap,
+    _attributes: &AttributeMap,
     variants: &[(Spanned<String>, Option<EnumField>)],
     context: &mut Context,
     lu_dog: &mut LuDogStore,
 ) -> Result<()> {
     debug!("inter_enum {name}");
 
-    let woog_enum = Enumeration::new(None, lu_dog);
+    let woog_enum = Enumeration::new(name.to_owned(), None, lu_dog);
+    let _ = ValueType::new_enumeration(&woog_enum, lu_dog);
+
+    for (number, ((name, _), field)) in variants.iter().enumerate() {
+        let plain = Plain::new(number as DwarfInteger, lu_dog);
+        let _ = LuDogEnumField::new_plain(name.to_owned(), Some(&woog_enum), &plain, lu_dog);
+    }
 
     Ok(())
 }

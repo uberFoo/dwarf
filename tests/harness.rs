@@ -116,7 +116,7 @@ fn run_program(test: &str, program: &str) -> Result<(Value, String), String> {
         }
     };
 
-    let ctx = initialize_interpreter::<PathBuf>(sarzak, lu_dog, HashMap::default(), None).unwrap();
+    let ctx = initialize_interpreter(sarzak, lu_dog, HashMap::default()).unwrap();
     match start_main(false, ctx) {
         Ok(v) => {
             let stdout = v.1.drain_std_out().join("").trim().to_owned();
