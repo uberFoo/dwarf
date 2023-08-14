@@ -19,12 +19,14 @@ jobs:
               uses: actions-rs/toolchain@v1
               with:
                   toolchain: stable
-            - name: Download grcov
-              run: |
-                  curl -L https://github.com/mozilla/grcov/releases/download/v0.8.18/grcov-x86_64-unknown-linux-gnu.tar.bz2 | tar jxf -
-                  sudo mv grcov /usr/local/bin/
-            - name: Install llvm-tools-preview
-              run: rustup component add llvm-tools-preview
+            # - name: Download grcov
+            # run: |
+            # curl -L https://github.com/mozilla/grcov/releases/download/v0.8.18/grcov-x86_64-unknown-linux-gnu.tar.bz2 | tar jxf -
+            # sudo mv grcov /usr/local/bin/
+            # - name: Install llvm-tools-preview
+            # run: rustup component add llvm-tools-preview
+            - name: Install cargo-llvm-cov
+              uses: taiki-e/install-action@cargo-llvm-cov
             - name: Build plug-ins
               run: |
                   cd plug-ins/merlin
@@ -34,18 +36,17 @@ jobs:
                   cd ../..
             - name: Build and run tests with coverage
               run: |
-                  TRACY_NO_INVARIANT_CHECK=1 CARGO_INCREMENTAL=0 RUSTFLAGS='-Cinstrument-coverage' RUSTDOCFLAGS='-Cinstrument-coverage -Z unstable-options' LLVM_PROFILE_FILE='cargo-test-%p-%m.profraw' cargo +nightly test --no-default-features --features "single-vec, repl"
-                  grcov . --binary-path ./target/debug/deps/ -s . -t lcov --branch --ignore-not-existing --ignore '../*' --ignore "/*" -o coverage.lcov
-            - name: Install lcov
-              run: sudo apt-get install lcov
-            - name: Install lcov_cobertura
-              run: pip install lcov_cobertura
-            - name: Generate coverage report
-              run: |
-                  lcov --summary coverage.lcov
-                  lcov_cobertura coverage.lcov --output coverage.xml
-              env:
-                  CI: true
+                  TRACY_NO_INVARIANT_CHECK=1 cargo llvm-cov --lcov --output-path coverage.lcov --no-default-features --features "single-vec, repl"
+              # run: sudo apt-get install lcov
+            # - name: Install lcov
+            # - name: Install lcov_cobertura
+            # run: pip install lcov_cobertura
+            # - name: Generate coverage report
+            # run: |
+            # lcov --summary coverage.lcov
+            # lcov_cobertura coverage.lcov --output coverage.xml
+            # env:
+            # CI: true
             - name: Upload coverage reports to Codecov
               uses: codecov/codecov-action@v3
               env:
@@ -53,7 +54,8 @@ jobs:
               with:
                   directory: ./
                   fail_ci_if_error: true
-                  files: ./coverage.xml
+                  # files: ./coverage.xml
+                  files: coverage.lcov
                   flags: unittests
                   name: codecov-umbrella
                   verbose: true
