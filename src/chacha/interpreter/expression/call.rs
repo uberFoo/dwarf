@@ -2,12 +2,12 @@ use std::{collections::VecDeque, time::Instant};
 
 use ansi_term::Colour;
 use rustc_hash::FxHashMap as HashMap;
-use snafu::prelude::*;
+use snafu::{location, prelude::*, Location};
 use uuid::Uuid;
 
 use crate::{
     chacha::{
-        error::{NoSuchStaticMethodSnafu, Result, TypeMismatchSnafu},
+        error::{NoSuchStaticMethodSnafu, Result, TypeMismatchSnafu, WrongNumberOfArgumentsSnafu},
         vm::{CallFrame, VM},
     },
     interpreter::{
@@ -20,7 +20,7 @@ use crate::{
     NewRef, RefType, SarzakStorePtr, Value,
 };
 
-pub fn eval_call(
+pub fn eval(
     call_id: &SarzakStorePtr,
     expression: &RefType<Expression>,
     context: &mut Context,
@@ -77,14 +77,11 @@ pub fn eval_call(
                     debug!("ty {ty:?}");
                     Ok((value, ty))
                 }
-                // 🚧 ProxyType
-                // Value::ProxyType(pt) => {
-                //     let ty = s_read!(lu_dog)
-                //         .exhume_value_type(&s_read!(pt).struct_uuid())
-                //         .unwrap();
-                //     Ok((value.clone(), ty))
-                // }
-                Value::UserType(ut) => Ok((value.clone(), s_read!(ut).get_type().clone())),
+                Value::ProxyType(_proxy) => Ok((
+                    value.clone(),
+                    s_read!(value).get_type(&s_read!(sarzak), &s_read!(lu_dog)),
+                )),
+                Value::Struct(ut) => Ok((value.clone(), s_read!(ut).get_type().clone())),
                 value_ => {
                     let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
                     debug!("value {value:?}");
@@ -97,6 +94,7 @@ pub fn eval_call(
                     Err(ChaChaError::NotAFunction {
                         value: value_.to_owned(),
                         span,
+                        location: location!(),
                     })
                 }
             }
@@ -107,16 +105,17 @@ pub fn eval_call(
         // where to put it in my brain just yet.
         // But basically it comes down to allowing things like
         // `"dwarf".len()`
-        // Or iterators things like
+        // Or iterator things like
         // `[1, 2, 3].iter().map(|x| x + 1)`
         // `["hello", "I", "am", "dwarf!"].sort();
         let x = match &s_read!(ty).subtype {
             ValueTypeEnum::Ty(ref id) => {
-                let _ty = *s_read!(sarzak).exhume_ty(id).unwrap();
-                match &_ty {
+                let _ty = s_read!(sarzak).exhume_ty(id).unwrap();
+                let x = match &*_ty.borrow() {
                     Ty::SString(_) => (value, ty.clone()),
                     _ => tuple_from_value()?,
-                }
+                };
+                x
             }
             _ => tuple_from_value()?,
         };
@@ -124,7 +123,7 @@ pub fn eval_call(
     } else {
         (
             new_ref!(Value, Value::Empty),
-            Value::Empty.get_type(&s_read!(lu_dog)),
+            Value::Empty.get_type(&s_read!(sarzak), &s_read!(lu_dog)),
         )
     };
 
@@ -148,38 +147,82 @@ pub fn eval_call(
             debug!("MethodCall type {ty:?}");
 
             match &*s_read!(value) {
-                Value::ProxyType(proxy_type) => {
-                    let mut arg_values = if !args.is_empty() {
-                        // The VecDeque is so that I can pop off the args, and then push them
-                        // back onto a queue in the same order.
-                        let mut arg_values = VecDeque::with_capacity(args.len());
-                        let mut next = args
-                            .iter()
-                            .find(|a| s_read!(a).r27c_argument(&s_read!(lu_dog)).is_empty())
-                            .unwrap()
-                            .clone();
-
-                        loop {
-                            let expr = s_read!(lu_dog)
-                                .exhume_expression(&s_read!(next).expression)
-                                .unwrap();
-                            let (value, _ty) = eval_expression(expr, context, vm)?;
-                            arg_values.push_back(value);
-
-                            let next_id = { s_read!(next).next };
-                            if let Some(ref id) = next_id {
-                                next = s_read!(lu_dog).exhume_argument(id).unwrap();
-                            } else {
-                                break;
+                Value::ProxyType((id, _proxy)) => {
+                    let vt = s_read!(lu_dog);
+                    let mut vt = vt.iter_value_type();
+                    let woog_struct = loop {
+                        if let Some(vt) = vt.next() {
+                            if let ValueTypeEnum::WoogStruct(woog) = s_read!(vt).subtype {
+                                let woog = s_read!(lu_dog).exhume_woog_struct(&woog).unwrap();
+                                let object = s_read!(woog).object;
+                                if let Some(ref obj_id) = object {
+                                    if id == obj_id {
+                                        break woog;
+                                    }
+                                }
                             }
+                        } else {
+                            unreachable!()
                         }
-
-                        arg_values
-                    } else {
-                        VecDeque::new()
                     };
+                    // let woog_struct = s_read!(lu_dog).exhume_woog_struct_id_by_name(id).unwrap();
+                    // let woog_struct = s_read!(lu_dog).exhume_woog_struct(&woog_struct).unwrap();
+                    let woog_struct = s_read!(woog_struct);
+                    let impl_ = &woog_struct.r8c_implementation_block(&s_read!(lu_dog))[0];
+                    let x = if let Some(func) = s_read!(impl_)
+                        .r9_function(&s_read!(lu_dog))
+                        .iter()
+                        .find(|f| s_read!(f).name == *meth)
+                    {
+                        let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
+                        let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
 
-                    s_write!(proxy_type).call(meth, &mut arg_values)
+                        eval_function_call((*func).clone(), &args, arg_check, span, context, vm)
+                    } else {
+                        let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
+                        let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
+                        let read = s_read!(span);
+                        let span = read.start as usize..read.end as usize;
+
+                        return Err(ChaChaError::NoSuchMethod {
+                            method: meth.to_owned(),
+                            span,
+                            location: location!(),
+                        });
+                    };
+                    x
+
+                    // let mut arg_values = if !args.is_empty() {
+                    //     // The VecDeque is so that I can pop off the args, and then push them
+                    //     // back onto a queue in the same order.
+                    //     let mut arg_values = VecDeque::with_capacity(args.len());
+                    //     let mut next = args
+                    //         .iter()
+                    //         .find(|a| s_read!(a).r27c_argument(&s_read!(lu_dog)).is_empty())
+                    //         .unwrap()
+                    //         .clone();
+
+                    //     loop {
+                    //         let expr = s_read!(lu_dog)
+                    //             .exhume_expression(&s_read!(next).expression)
+                    //             .unwrap();
+                    //         let (value, _ty) = eval_expression(expr, context, vm)?;
+                    //         arg_values.push_back(value);
+
+                    //         let next_id = { s_read!(next).next };
+                    //         if let Some(ref id) = next_id {
+                    //             next = s_read!(lu_dog).exhume_argument(id).unwrap();
+                    //         } else {
+                    //             break;
+                    //         }
+                    //     }
+
+                    //     arg_values
+                    // } else {
+                    //     VecDeque::new()
+                    // };
+
+                    // s_write!(proxy_type).call(meth, &mut arg_values)
                 }
                 Value::String(string) => match meth.as_str() {
                     "len" => {
@@ -190,25 +233,37 @@ pub fn eval_call(
                         )
                         .collect::<Vec<&str>>()
                         .len();
-                        let ty = Ty::new_integer();
+                        let ty = Ty::new_integer(&s_read!(sarzak));
                         let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
                         Ok((new_ref!(Value, Value::Integer(len as i64)), ty))
                     }
                     "format" => {
                         debug!("evaluating String::format");
                         let mut arg_map = HashMap::default();
-                        let mut arg_values = if !args.is_empty() {
+                        let arg_values = if !args.is_empty() {
                             // The VecDeque is so that I can pop off the args, and then push them
                             // back onto a queue in the same order.
+                            // 🚧 I feel like I'm doing something stupid here -- take a look please!
+                            let mut arg_values = VecDeque::with_capacity(args.len());
+
                             // Gotta do this goofy thing because we don't have a first pointer,
                             // and they aren't in order.
-                            let mut arg_values = VecDeque::with_capacity(args.len());
                             let mut next = args
                                 .iter()
+                                .inspect(|a| {
+                                    debug!("arg: {a:?}");
+                                })
                                 .find(|a| s_read!(a).r27c_argument(&s_read!(lu_dog)).is_empty())
                                 .unwrap()
                                 .clone();
 
+                            // 🚧 ugly hack until I track down why the first argument is the string.
+                            let next_id = s_read!(next).next.unwrap();
+                            next = s_read!(lu_dog).exhume_argument(&next_id).unwrap();
+
+                            // It's not clear what's happening below really. Here's the scoop:
+                            // We iterate over the arguments to the `format` call. For each one
+                            // we evaluate it and store it in a map. And also push it onto vac.
                             loop {
                                 let expr = s_read!(lu_dog)
                                     .exhume_expression(&s_read!(next).expression)
@@ -231,9 +286,14 @@ pub fn eval_call(
                                 let (value, _ty) = eval_expression(expr, context, vm)?;
                                 arg_values.push_back(s_read!(value).to_string());
 
+                                debug!(
+                                    "insert into arg_map `{}`: `{}`",
+                                    key,
+                                    s_read!(value).to_string()
+                                );
                                 arg_map.insert(key, s_read!(value).to_string());
 
-                                let next_id = { s_read!(next).next };
+                                let next_id = s_read!(next).next;
                                 if let Some(ref id) = next_id {
                                     next = s_read!(lu_dog).exhume_argument(id).unwrap();
                                 } else {
@@ -245,10 +305,6 @@ pub fn eval_call(
                         } else {
                             VecDeque::new()
                         };
-
-                        // 🚧 Oddly, the lhs is the first argument. Not something that I want
-                        // or even need to understand atm.
-                        arg_values.pop_front();
 
                         enum State {
                             Normal,
@@ -283,6 +339,7 @@ pub fn eval_call(
                                             return Err(ChaChaError::NoSuchMethod {
                                                 method: current.to_owned(),
                                                 span: 0..0,
+                                                location: location!(),
                                             });
                                         }
                                     } else {
@@ -292,7 +349,7 @@ pub fn eval_call(
                             }
                         }
 
-                        let ty = Ty::new_s_string();
+                        let ty = Ty::new_s_string(&s_read!(sarzak));
                         let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
                         Ok((new_ref!(Value, Value::String(result)), ty))
                     }
@@ -308,10 +365,11 @@ pub fn eval_call(
                         return Err(ChaChaError::NoSuchMethod {
                             method: value_.to_owned(),
                             span,
+                            location: location!(),
                         });
                     }
                 },
-                Value::UserType(ut) => {
+                Value::Struct(ut) => {
                     // Below is all wrapped up to avoid a double borrow.
                     let woog_struct = {
                         let ut_read = s_read!(ut);
@@ -321,6 +379,7 @@ pub fn eval_call(
                             *woog_struct
                         } else {
                             // 🚧 This should be an error.
+                            // TBH, I don't think that this is reachable?
                             panic!("I'm trying to invoke a function on a UserType, and it's not a Struct!");
                         }
                     };
@@ -346,6 +405,7 @@ pub fn eval_call(
                         return Err(ChaChaError::NoSuchMethod {
                             method: meth.to_owned(),
                             span,
+                            location: location!(),
                         });
                     };
                     x
@@ -408,7 +468,7 @@ pub fn eval_call(
             // This is dirty. Down and dirty...
             if ty == "Uuid" && func == "new" {
                 let value = Value::Uuid(Uuid::new_v4());
-                let ty = Ty::new_s_uuid();
+                let ty = Ty::new_s_uuid(&s_read!(sarzak));
                 let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
 
                 Ok((new_ref!(Value, value), ty))
@@ -466,6 +526,7 @@ pub fn eval_call(
                             ty: ty.to_owned(),
                             method: method.to_owned(),
                             span,
+                            location: location!(),
                         })
                     }
                 }
@@ -473,7 +534,7 @@ pub fn eval_call(
                 match func.as_str() {
                     "args" => {
                         debug!("evaluating chacha::args");
-                        let ty = Ty::new_s_string();
+                        let ty = Ty::new_s_string(&s_read!(sarzak));
                         let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
                         let ty = List::new(&ty, &mut s_write!(lu_dog));
                         let ty = ValueType::new_list(&ty, &mut s_write!(lu_dog));
@@ -491,7 +552,7 @@ pub fn eval_call(
                         debug!("evaluating chacha::typeof");
                         let (_arg, ty) = arg_values.pop_front().unwrap().0;
                         let pvt_ty = PrintableValueType(&ty, context);
-                        let ty = Ty::new_s_string();
+                        let ty = Ty::new_s_string(&s_read!(sarzak));
                         let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
 
                         Ok((new_ref!(Value, pvt_ty.to_string().into()), ty))
@@ -537,7 +598,7 @@ pub fn eval_call(
                         // let time = format!("{:?}\n", elapsed);
                         // chacha_print(time, context)?;
 
-                        let ty = Ty::new_float();
+                        let ty = Ty::new_float(&s_read!(sarzak));
                         let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
 
                         Ok((new_ref!(Value, Value::Float(elapsed.as_secs_f64())), ty))
@@ -560,14 +621,27 @@ pub fn eval_call(
                                 );
                         // chacha_print(result, context)?;
 
-                        let ty = Ty::new_s_string();
+                        let ty = Ty::new_s_string(&s_read!(sarzak));
                         let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
 
                         Ok((new_ref!(Value, Value::String(result)), ty))
                     }
                     "assert_eq" => {
                         debug!("evaluating chacha::assert_eq");
-                        // 🚧 Check that there are two arguments
+                        ensure!(arg_values.len() == 2, {
+                            let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
+                            let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
+                            let read = s_read!(span);
+                            let span = read.start as usize..read.end as usize;
+
+                            WrongNumberOfArgumentsSnafu {
+                                expected: 2usize,
+                                got: arg_values.len(),
+                                defn_span: 0..0,
+                                invocation_span: span,
+                            }
+                        });
+
                         let lhs = arg_values.pop_front().unwrap().0 .0;
                         let rhs = arg_values.pop_front().unwrap().0 .0;
 
@@ -576,9 +650,8 @@ pub fn eval_call(
                         let value = Value::Boolean(*s_read!(lhs) == *s_read!(rhs));
 
                         if let Value::Boolean(result) = value {
-                            // if value.into() {
                             if result {
-                                let ty = Ty::new_boolean();
+                                let ty = Ty::new_boolean(&s_read!(sarzak));
                                 let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
 
                                 Ok((new_ref!(Value, value), ty))
@@ -615,6 +688,7 @@ pub fn eval_call(
                             ty: ty.to_owned(),
                             method: method.to_owned(),
                             span,
+                            location: location!(),
                         })
                     }
                 }
@@ -637,7 +711,7 @@ pub fn eval_call(
                         error!("deal with call expression {value:?}");
                         Ok((
                             new_ref!(Value, Value::Empty),
-                            Value::Empty.get_type(&s_read!(lu_dog)),
+                            Value::Empty.get_type(&s_read!(sarzak), &s_read!(lu_dog)),
                         ))
                     }
                 }
@@ -655,12 +729,13 @@ pub fn eval_call(
                         debug!("StaticMethodCall frame ty {ty:?}");
                         Ok((value, ty))
                     }
-                    Value::ProxyType(ut) => {
-                        debug!("StaticMethodCall proxy {ut:?}");
-                        s_write!(ut).call(
-                            func,
-                            &mut arg_values.iter().map(|v| v.0 .0.clone()).collect(),
-                        )
+                    Value::ProxyType(_ut) => {
+                        unimplemented!();
+                        // debug!("StaticMethodCall proxy {ut:?}");
+                        // s_write!(ut).call(
+                        //     func,
+                        //     &mut arg_values.iter().map(|v| v.0 .0.clone()).collect(),
+                        // )
                     }
                     // Value::StoreType(ref mut store_type) => {
                     //     // We should actually know what's behind the curtain, since
@@ -694,7 +769,7 @@ pub fn eval_call(
                         span,
                     }
                 });
-                unimplemented!();
+                unreachable!();
                 // We never will get here.
             }
         }

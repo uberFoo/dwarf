@@ -1,0 +1,14 @@
+[
+  {
+    "description": "triggers state transitions on",
+    "id": "e813f8de-8189-530d-92ee-fe4a042a2eeb",
+    "referential_attribute": "obj_id",
+    "cardinality": "481a6ff0-caee-5817-8812-857f58f7c215",
+    "conditionality": "17ee33a9-33bb-5998-ba89-7a9f2fe12080",
+    "obj_id": "dbdfade4-b61a-5e69-ab1a-c4d10e61bedd"
+  },
+  {
+    "secs_since_epoch": 1691354789,
+    "nanos_since_epoch": 940601000
+  }
+]

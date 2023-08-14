@@ -1,0 +1,13 @@
+[
+  {
+    "description": "formalizes a",
+    "id": "ca8a18d8-a652-527d-b436-7e0f789e34a9",
+    "cardinality": "84d60cb6-04cf-5c82-9e38-79d3999b5d5c",
+    "conditionality": "17ee33a9-33bb-5998-ba89-7a9f2fe12080",
+    "obj_id": "9c75abf3-b77e-56ee-a19c-d812898b5eaa"
+  },
+  {
+    "secs_since_epoch": 1691354789,
+    "nanos_since_epoch": 940597000
+  }
+]

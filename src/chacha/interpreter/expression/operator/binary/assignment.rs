@@ -19,6 +19,7 @@ pub fn eval_assignment(
     vm: &mut VM,
 ) -> Result<(RefType<Value>, RefType<ValueType>)> {
     let lu_dog = context.lu_dog_heel().clone();
+    let sarzak = context.sarzak_heel().clone();
 
     debug!("Evaluating assignment lhs: {lhs_expr:?}");
 
@@ -34,6 +35,11 @@ pub fn eval_assignment(
 
             let fat = &s_read!(field).r65_field_access_target(&s_read!(lu_dog))[0];
             let field_name = match s_read!(fat).subtype {
+                FieldAccessTargetEnum::EnumField(ref field) => {
+                    let field = s_read!(lu_dog).exhume_enum_field(field).unwrap();
+                    let field = s_read!(field);
+                    field.name.to_owned()
+                }
                 FieldAccessTargetEnum::Field(ref field) => {
                     let field = s_read!(lu_dog).exhume_field(field).unwrap();
                     let field = s_read!(field);
@@ -73,18 +79,31 @@ pub fn eval_assignment(
 
             debug!("value: {value:?}");
 
-            match &*s_read!(value) {
-                Value::ProxyType(_value) => {
-                    // dbg!(s_read!(value));
-                    // s_write!(value).set_attr_value(&field_name, rhs.0)?;
-                    // Ok(rhs)
+            let mut value = s_write!(value);
+            match &mut *value {
+                Value::ProxyType((_, ref mut proxy)) => {
+                    let result = proxy.invoke_func(
+                        "self".into(),
+                        "set_field_value".into(),
+                        vec![
+                            Value::String(field_name.clone()).into(),
+                            // (*rhs.0).clone().into_inner().into(),
+                            (*s_read!(rhs.0)).clone().into(),
+                        ]
+                        .into(),
+                    );
+                    if let Err(e) = result.into() {
+                        // 🚧 This needs it's own error. Lazy me.
+                        return Err(ChaChaError::BadJuJu {
+                            message: format!("{e}"),
+                            location: location!(),
+                        });
+                    }
                 }
-                Value::UserType(value) => {
-                    // dbg!(s_read!(value));
-                    s_write!(value).set_attr_value(&field_name, rhs.0);
-                    // Ok(rhs)
+                Value::Struct(value) => {
+                    s_write!(value).set_field_value(&field_name, rhs.0);
                 }
-                // 🚧 This needs it's own error. Lazy me.
+                // 🚧 This needs it's own error.
                 _value => {
                     return Err(ChaChaError::BadJuJu {
                         message: "Attempt to assign to non-struct".to_owned(),
@@ -92,11 +111,10 @@ pub fn eval_assignment(
                     })
                 }
             }
-            // 🚧 I'm not sure that I like returning empty.
-            // OTOH, I don't know what else I'd return.
+
             Ok((
                 new_ref!(Value, Value::Empty),
-                Value::Empty.get_type(&s_read!(lu_dog)),
+                Value::Empty.get_type(&s_read!(sarzak), &s_read!(lu_dog)),
             ))
         }
         ExpressionEnum::TypeCast(expr) => {

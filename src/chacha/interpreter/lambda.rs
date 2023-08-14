@@ -25,6 +25,8 @@ pub fn eval_lambda_expression(
     vm: &mut VM,
 ) -> Result<(RefType<Value>, RefType<ValueType>)> {
     let lu_dog = context.lu_dog_heel().clone();
+    let sarzak = context.sarzak_heel().clone();
+
     context.increment_call_count();
 
     debug!("ƛ {ƛ:?}");
@@ -147,7 +149,7 @@ pub fn eval_lambda_expression(
         }
 
         let mut value = new_ref!(Value, Value::Empty);
-        let mut ty = Value::Empty.get_type(&s_read!(lu_dog));
+        let mut ty = Value::Empty.get_type(&s_read!(sarzak), &s_read!(lu_dog));
         // This is a pain.
         // Find the first statement, by looking for the one with no previous statement.
         // let mut next = stmts
@@ -209,7 +211,7 @@ pub fn eval_lambda_expression(
     } else {
         Ok((
             new_ref!(Value, Value::Empty),
-            Value::Empty.get_type(&s_read!(lu_dog)),
+            Value::Empty.get_type(&s_read!(sarzak), &s_read!(lu_dog)),
         ))
     }
 }

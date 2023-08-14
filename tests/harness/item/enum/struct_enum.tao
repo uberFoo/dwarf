@@ -1,0 +1,20 @@
+struct A {
+    a: int,
+    b: int,
+}
+
+enum Foo {
+    Bar { a: int, b: int },
+    Baz,
+}
+
+fn main() {
+    let a = Foo::Bar { a: 42, b: 69 };
+    let b = Foo::Baz;
+
+    chacha::assert_eq(a, Foo::Bar { a: 42, b: 69 });
+    chacha::assert_eq(b, Foo::Baz);
+    chacha::assert_eq("a = {0}".format(a), "a = Foo::Bar { a: 42, b: 69 }");
+    chacha::assert_eq("b = {0}".format(b), "b = Foo::Baz");
+    print("{0}\n".format(a));
+}

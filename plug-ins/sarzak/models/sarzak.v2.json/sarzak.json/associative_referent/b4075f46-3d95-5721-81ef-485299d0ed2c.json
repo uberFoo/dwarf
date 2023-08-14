@@ -1,0 +1,13 @@
+[
+  {
+    "description": "may accept",
+    "id": "b4075f46-3d95-5721-81ef-485299d0ed2c",
+    "cardinality": "481a6ff0-caee-5817-8812-857f58f7c215",
+    "conditionality": "1ef6f1f8-de66-552b-8d4a-a04215c37c1e",
+    "obj_id": "63af1589-c7cf-50b2-ad7b-d30208ebfec4"
+  },
+  {
+    "secs_since_epoch": 1691354789,
+    "nanos_since_epoch": 940547000
+  }
+]

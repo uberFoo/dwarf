@@ -27,6 +27,17 @@ impl<'a> fmt::Display for PrintableValueType<'a> {
 
         match &value.subtype {
             ValueTypeEnum::Char(c) => write!(f, "{}", TY_CLR.italic().paint(format!("'{}'", c))),
+            ValueTypeEnum::Enumeration(ref enumeration) => {
+                let enumeration = s_read!(lu_dog).exhume_enumeration(enumeration).unwrap();
+                debug!("enumeration: {enumeration:?}");
+                let enumeration = s_read!(enumeration);
+                write!(
+                    f,
+                    "{} {}",
+                    TY_WARN_CLR.paint("enum"),
+                    TY_CLR.italic().paint(&enumeration.name)
+                )
+            }
             ValueTypeEnum::Empty(_) => write!(f, "{}", TY_CLR.italic().paint("()")),
             ValueTypeEnum::Error(_) => write!(f, "{}", TY_ERR_CLR.italic().paint("error")),
             ValueTypeEnum::Function(_) => write!(f, "{}", TY_CLR.italic().paint("function")),
@@ -70,14 +81,14 @@ impl<'a> fmt::Display for PrintableValueType<'a> {
                 // interesting when there are multiples of those in memory at once...
                 let sarzak = s_read!(sarzak);
                 if let Some(ty) = sarzak.exhume_ty(ty) {
-                    match ty {
+                    match &*ty.borrow() {
                         Ty::Boolean(_) => write!(f, "{}", TY_CLR.italic().paint("bool")),
                         Ty::Float(_) => write!(f, "{}", TY_CLR.italic().paint("float")),
                         Ty::Integer(_) => write!(f, "{}", TY_CLR.italic().paint("int")),
                         Ty::Object(ref object) => {
                             // This should probably just be an unwrap().
                             if let Some(object) = sarzak.exhume_object(object) {
-                                write!(f, "{}", TY_CLR.italic().paint(&object.name))
+                                write!(f, "{}", TY_CLR.italic().paint(&object.borrow().name))
                             } else {
                                 write!(f, "{}", TY_WARN_CLR.italic().paint("<unknown object>"))
                             }
@@ -94,14 +105,18 @@ impl<'a> fmt::Display for PrintableValueType<'a> {
                     // one of the model domains.
                     let models = s_read!(model);
                     // 🚧 HashMapFix
-                    for (_, model) in &*models {
-                        if let Some(Ty::Object(ref object)) = model.exhume_ty(ty) {
-                            if let Some(object) = model.exhume_object(object) {
-                                return write!(
-                                    f,
-                                    "{}",
-                                    TY_CLR.italic().paint(format!("{}Proxy", object.name))
-                                );
+                    for model in models.values() {
+                        if let Some(ty) = model.0.exhume_ty(ty) {
+                            if let Ty::Object(ref object) = &*ty.borrow() {
+                                if let Some(object) = model.0.exhume_object(object) {
+                                    return write!(
+                                        f,
+                                        "{}",
+                                        TY_CLR
+                                            .italic()
+                                            .paint(format!("{}Proxy", object.borrow().name))
+                                    );
+                                }
                             }
                         }
                     }
@@ -133,7 +148,12 @@ impl<'a> fmt::Display for PrintableValueType<'a> {
                 let woog_struct = s_read!(lu_dog).exhume_woog_struct(woog_struct).unwrap();
                 debug!("woog_struct {woog_struct:?}");
                 let woog_struct = s_read!(woog_struct);
-                write!(f, "{}", TY_CLR.italic().paint(&woog_struct.name))
+                write!(
+                    f,
+                    "{} {}",
+                    TY_WARN_CLR.paint("struct"),
+                    TY_CLR.italic().paint(&woog_struct.name)
+                )
             }
             ValueTypeEnum::ZObjectStore(ref id) => {
                 let zobject_store = s_read!(lu_dog).exhume_z_object_store(id).unwrap();

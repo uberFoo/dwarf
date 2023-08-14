@@ -5,14 +5,14 @@ use ansi_term::Colour;
 use snafu::{location, Location};
 
 use crate::{
-    chacha::vm::VM,
+    chacha::{error::ChaChaErrorReporter, vm::VM},
     dwarf::{inter_statement, parse_line, Context as ExtruderContext},
     interpreter::{banner2, debug, eval_statement, function, Context, Error, PrintableValueType},
     lu_dog::DwarfSourceFile,
     new_ref, s_read, s_write, ChaChaError, NewRef, RefType,
 };
 
-pub fn start_repl(mut context: Context) -> Result<(), Error> {
+pub fn start_repl(mut context: Context, is_uber: bool) -> Result<(), Error> {
     use std::io;
 
     use rustyline::error::ReadlineError;
@@ -141,8 +141,14 @@ pub fn start_repl(mut context: Context) -> Result<(), Error> {
                                 println!("\t  ──➤  {}", type_style.paint(ty));
                             }
                             Err(e) => {
-                                println!("{}", e);
-                                if let ChaChaError::Return { value: _, ty: _ } = e {
+                                let adiós = matches!(e, ChaChaError::Return { value: _, ty: _ });
+
+                                println!(
+                                    "{}",
+                                    ChaChaErrorReporter(&Error(e), is_uber, &line, "REPL")
+                                );
+
+                                if adiós {
                                     println!("👋 Bye bye!");
                                     break;
                                 }

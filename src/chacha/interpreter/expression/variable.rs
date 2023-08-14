@@ -14,6 +14,7 @@ pub fn eval_variable_expression(
     context: &mut Context,
 ) -> Result<(RefType<Value>, RefType<ValueType>)> {
     let lu_dog = context.lu_dog_heel().clone();
+    let sarzak = context.sarzak_heel().clone();
 
     let expr = s_read!(lu_dog).exhume_variable_expression(expr).unwrap();
     let value = context.memory().get(&s_read!(expr).name);
@@ -32,7 +33,7 @@ pub fn eval_variable_expression(
         "ExpressionEnum::VariableExpression value: {}",
         s_read!(value)
     );
-    let ty = s_read!(value).get_type(&s_read!(lu_dog));
+    let ty = s_read!(value).get_type(&s_read!(sarzak), &s_read!(lu_dog));
 
     Ok((value, ty))
 }

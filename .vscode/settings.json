@@ -1,9 +1,13 @@
 {
     "cSpell.words": [
+        "appender",
+        "Appender",
         "ariadne",
+        "borr",
         "bspan",
         "codecov",
         "codepoints",
+        "confusables",
         "cspan",
         "CVAR",
         "defn",
@@ -21,6 +25,8 @@
         "Readline",
         "rustc",
         "rustyline",
+        "rvec",
+        "sabi",
         "shouty",
         "thonks",
         "tokio",
@@ -29,7 +35,8 @@
         "UDT",
         "UDTs",
         "walkdir",
-        "xflags"
+        "xflags",
+        "xshell"
     ],
     "rust-analyzer.showUnlinkedFileNotification": false,
     "git.ignoreLimitWarning": true

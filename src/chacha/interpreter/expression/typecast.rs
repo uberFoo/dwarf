@@ -31,8 +31,8 @@ pub fn eval_as_expression(
 
     let value = match &s_read!(as_ty).subtype {
         ValueTypeEnum::Ty(ref ty) => {
-            let ty = *s_read!(sarzak).exhume_ty(ty).unwrap();
-            match ty {
+            let ty = s_read!(sarzak).exhume_ty(ty).unwrap();
+            let x = match &*ty.borrow() {
                 Ty::Boolean(_) => {
                     let value: bool = (&*s_read!(lhs)).try_into()?;
                     new_ref!(Value, value.into())
@@ -58,7 +58,8 @@ pub fn eval_as_expression(
                     );
                     unreachable!();
                 }
-            }
+            };
+            x
         }
         ref alpha => {
             ensure!(

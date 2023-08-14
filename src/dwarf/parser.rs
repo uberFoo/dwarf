@@ -5,8 +5,8 @@ use log;
 use rustc_hash::FxHashMap as HashMap;
 
 use crate::dwarf::{
-    Attribute, DwarfFloat, Expression as DwarfExpression, InnerAttribute, InnerItem, Item, Spanned,
-    Statement, Token, Type,
+    Attribute, DwarfFloat, EnumField, Expression as DwarfExpression, InnerAttribute, InnerItem,
+    Item, Spanned, Statement, Token, Type,
 };
 
 use super::{error::DwarfError, DwarfInteger};
@@ -150,6 +150,7 @@ fn lexer() -> impl Parser<char, Vec<Spanned<Token>>, Error = Simple<char>> {
         "bool" => Token::Type(Type::Boolean),
         "debugger" => Token::Debugger,
         "else" => Token::Else,
+        "enum" => Token::Enum,
         "false" => Token::Bool(false),
         "float" => Token::Type(Type::Float),
         "fn" => Token::Fn,
@@ -505,6 +506,18 @@ impl DwarfParser {
         match self.parse_struct() {
             Ok(Some(item)) => {
                 debug!("struct", item);
+                return Some(Item { item, attributes });
+            }
+            Ok(None) => {}
+            Err(err) => {
+                error!("error", err);
+                self.errors.push(*err);
+            }
+        }
+
+        match self.parse_enum() {
+            Ok(Some(item)) => {
+                debug!("enum", item);
                 return Some(Item { item, attributes });
             }
             Ok(None) => {}
@@ -1617,7 +1630,10 @@ impl DwarfParser {
             debug!("simple expression", lhs);
             // power = lhs.1 .1;
             loop {
-                let rhs = if let Some(expression) = self.parse_as_operator(&lhs, power)? {
+                let rhs = if let Some(expression) = self.parse_path_in_expression(&lhs, power)? {
+                    debug!("path in expression", expression);
+                    Some(expression)
+                } else if let Some(expression) = self.parse_as_operator(&lhs, power)? {
                     debug!("as operator", expression);
                     Some(expression)
                 } else if let Some(expression) = self.parse_addition_operator(&lhs, power)? {
@@ -1677,6 +1693,9 @@ impl DwarfParser {
                 } else if let Some(expression) = self.parse_static_method_call(&lhs, power)? {
                     debug!("static method call", expression);
                     Some(expression)
+                } else if let Some(expression) = self.parse_enum_expression_plain(&lhs, power)? {
+                    debug!("struct expression", expression);
+                    Some(expression)
                 } else {
                     debug!("exit no operator", lhs);
                     None
@@ -1693,6 +1712,7 @@ impl DwarfParser {
                         lhs = rhs;
                     }
                 } else {
+                    debug!("exit loop no rhs", lhs);
                     break Some(lhs);
                 }
             }
@@ -1768,7 +1788,7 @@ impl DwarfParser {
             return Ok(Some(expression));
         }
 
-        // parse a negation operator
+        // parse a bang operator
         if let Some(expression) = self.parse_bang_operator()? {
             debug!("boolean not operator", expression);
             return Ok(Some(expression));
@@ -2017,7 +2037,7 @@ impl DwarfParser {
         };
 
         if self.match_(&[Token::Punct('!')]).is_none() {
-            debug!("exit no for");
+            debug!("exit no !");
             return Ok(None);
         }
 
@@ -2149,6 +2169,13 @@ impl DwarfParser {
 
         let start = name.0 .1.start;
 
+        let name = if let name @ (DwarfExpression::LocalVariable(..), _) = &name.0 {
+            name.clone()
+        } else {
+            debug!("exit not a local variable");
+            return Ok(None);
+        };
+
         if self.match_(&[Token::Punct('(')]).is_none() {
             return Ok(None);
         }
@@ -2176,7 +2203,7 @@ impl DwarfParser {
 
         Ok(Some((
             (
-                DwarfExpression::FunctionCall(Box::new(name.0.clone()), arguments),
+                DwarfExpression::FunctionCall(Box::new(name), arguments),
                 start..self.previous().unwrap().1.end,
             ),
             FUNC_CALL,
@@ -2477,8 +2504,8 @@ impl DwarfParser {
             return None;
         }
 
-        let start = self.next().unwrap().1.start;
-        let end = self.next().unwrap().1.end;
+        let start = self.match_(&[Token::Punct('(')]).unwrap().1.start;
+        let end = self.match_(&[Token::Punct(')')]).unwrap().1.end;
         let span = start..end;
         Some(((DwarfExpression::Empty, span), LITERAL))
     }
@@ -2761,6 +2788,70 @@ impl DwarfParser {
         Ok(None)
     }
 
+    fn parse_path_in_expression(
+        &mut self,
+        path: &Expression,
+        power: u8,
+    ) -> Result<Option<Expression>> {
+        debug!("enter", power);
+
+        if power > PATH.0 {
+            debug!("I'll not be denied!!!", power);
+            return Ok(None);
+        }
+
+        let start = path.0 .1.start;
+
+        if self.match_(&[Token::Punct(':')]).is_none() {
+            debug!("exit no colon");
+            return Ok(None);
+        }
+
+        if self.match_(&[Token::Punct(':')]).is_none() {
+            debug!("exit no other colon");
+            return Ok(None);
+        }
+
+        let mut path = if let (DwarfExpression::LocalVariable(name), span) = &path.0 {
+            vec![Type::UserType((name.to_owned(), span.to_owned()))]
+        } else if let (DwarfExpression::PathInExpression(path), _) = &path.0 {
+            path.to_owned()
+        } else {
+            let err = Simple::expected_input_found(
+                path.0 .1.clone(),
+                [Some("<local_variable>".to_owned())],
+                Some(format!("{:?}", path.0)),
+            );
+            error!("exit", err);
+            return Err(Box::new(err));
+        };
+
+        let next_ident = if let Some(ident) = self.parse_ident() {
+            ident
+        } else {
+            let token = self.previous().unwrap();
+            let err = Simple::expected_input_found(
+                token.1.clone(),
+                [Some("<ident>".to_owned())],
+                Some(token.0.to_string()),
+            );
+            error!("exit", err);
+            return Err(Box::new(err));
+        };
+
+        path.push(Type::UserType(next_ident));
+
+        debug!("exit ok");
+
+        Ok(Some((
+            (
+                DwarfExpression::PathInExpression(path),
+                start..self.previous().unwrap().1.end,
+            ),
+            PATH,
+        )))
+    }
+
     /// Parse a static method call
     ///
     /// This is a bit goofy. Rust calls locals and the static method syntax a
@@ -2776,7 +2867,7 @@ impl DwarfParser {
     /// static_method_call -> Type '::' IDENTIFIER '(' expression,* ')'
     fn parse_static_method_call(
         &mut self,
-        name: &Expression,
+        path: &Expression,
         power: u8,
     ) -> Result<Option<Expression>> {
         debug!("enter", power);
@@ -2786,53 +2877,28 @@ impl DwarfParser {
             return Ok(None);
         }
 
-        let start = name.0 .1.start;
+        let start = path.0 .1.start;
 
-        if self.match_(&[Token::Punct(':')]).is_none() {
-            debug!("exit no colon");
+        let mut path = if let (DwarfExpression::PathInExpression(path), _) = &path.0 {
+            path.to_owned()
+        } else {
+            debug!("exit not a path");
+            return Ok(None);
+        };
+
+        let method_name = path.pop().unwrap();
+        let method_name = if let Type::UserType(name) = method_name {
+            name
+        } else {
+            unreachable!()
+        };
+
+        if !self.check(&Token::Punct('(')) {
+            debug!("exit no paren");
             return Ok(None);
         }
 
-        if self.match_(&[Token::Punct(':')]).is_none() {
-            debug!("exit no other colon");
-            return Ok(None);
-        }
-
-        let name = if let (DwarfExpression::LocalVariable(name), span) = &name.0 {
-            Type::UserType((name.to_owned(), span.to_owned()))
-        } else {
-            let err = Simple::expected_input_found(
-                name.0 .1.clone(),
-                [Some("<local_variable>".to_owned())],
-                Some(format!("{:?}", name.0)),
-            );
-            error!("exit", err);
-            return Err(Box::new(err));
-        };
-
-        let method_name = if let Some(ident) = self.parse_ident() {
-            ident
-        } else {
-            let token = self.previous().unwrap();
-            let err = Simple::expected_input_found(
-                token.1.clone(),
-                [Some("<ident>".to_owned())],
-                Some(token.0.to_string()),
-            );
-            error!("exit", err);
-            return Err(Box::new(err));
-        };
-
-        if self.match_(&[Token::Punct('(')]).is_none() {
-            let token = self.previous().unwrap();
-            let err = Simple::expected_input_found(
-                token.1.clone(),
-                [Some("(".to_owned())],
-                Some(token.0.to_string()),
-            );
-            error!("exit", err);
-            return Err(Box::new(err));
-        }
+        self.advance();
 
         let mut arguments = Vec::new();
 
@@ -2858,7 +2924,11 @@ impl DwarfParser {
 
         Ok(Some((
             (
-                DwarfExpression::StaticMethodCall(name, method_name, arguments),
+                DwarfExpression::StaticMethodCall(
+                    Box::new(DwarfExpression::PathInExpression(path)),
+                    method_name,
+                    arguments,
+                ),
                 start..self.previous().unwrap().1.end,
             ),
             LITERAL,
@@ -2969,6 +3039,51 @@ impl DwarfParser {
         Ok(Some((
             (
                 DwarfExpression::Struct(Box::new(name.0.clone()), fields),
+                start..self.previous().unwrap().1.end,
+            ),
+            LITERAL,
+        )))
+    }
+
+    /// Parse a plain enum expression
+    ///
+    /// enum_expression_plain -> PATH_IN_EXPRESSION
+    fn parse_enum_expression_plain(
+        &mut self,
+        path: &Expression,
+        power: u8,
+    ) -> Result<Option<Expression>> {
+        debug!("enter");
+
+        if power > STRUCT.0 {
+            debug!("exit no power", power);
+            return Ok(None);
+        }
+
+        let start = path.0 .1.start;
+
+        let (mut path, span) = if let (DwarfExpression::PathInExpression(path), span) = &path.0 {
+            (path.to_owned(), span)
+        } else {
+            debug!("exit not a path");
+            return Ok(None);
+        };
+
+        let method_name = path.pop().unwrap();
+        let field_name = if let Type::UserType(name) = method_name {
+            name
+        } else {
+            unreachable!()
+        };
+
+        debug!("exit ok");
+
+        Ok(Some((
+            (
+                DwarfExpression::PlainEnum(
+                    Box::new((DwarfExpression::PathInExpression(path), span.to_owned())),
+                    field_name,
+                ),
                 start..self.previous().unwrap().1.end,
             ),
             LITERAL,
@@ -3772,7 +3887,9 @@ impl DwarfParser {
 
     /// Parse a Struct
     ///
-    /// struct -> struct IDENT { struct_field* }
+    /// struct -> struct IDENT { struct_fields? }
+    /// struct_fields -> struct_field (, struct_field)? ,?
+    /// struct_field -> IDENT : TYPE
     fn parse_struct(&mut self) -> Result<Option<Spanned<InnerItem>>> {
         let start = if let Some(tok) = self.peek() {
             tok.1.start
@@ -3849,6 +3966,146 @@ impl DwarfParser {
         };
 
         Ok(Some((InnerItem::Struct(name, fields), start..end)))
+    }
+
+    /// Parse an Enum
+    ///
+    /// enum -> enum IDENT { enum_fields? }
+    /// enum_fields -> enum_field (, enum_field)? ,?
+    /// enum_field -> IDENT (tuple | struct)?
+    /// tuple -> (IDENT)
+    /// struct -> { struct_fields? }
+    fn parse_enum(&mut self) -> Result<Option<Spanned<InnerItem>>> {
+        let start = if let Some(tok) = self.peek() {
+            tok.1.start
+        } else {
+            return Ok(None);
+        };
+
+        if self.match_(&[Token::Enum]).is_none() {
+            return Ok(None);
+        }
+
+        let name = if let Some(ident) = self.parse_ident() {
+            ident
+        } else {
+            let tok = self.previous().unwrap();
+            let err = Simple::expected_input_found(
+                tok.1.clone(),
+                [Some("identifier".to_owned())],
+                Some(tok.0.to_string()),
+            );
+            let err = err.with_label("expected identifier");
+            return Err(Box::new(err));
+        };
+
+        if self.match_(&[Token::Punct('{')]).is_none() {
+            let tok = self.previous().unwrap();
+            return Err(Box::new(Simple::expected_input_found(
+                tok.1.clone(),
+                [Some("'{".to_owned())],
+                Some(tok.0.to_string()),
+            )));
+        }
+
+        let mut fields = Vec::new();
+        let mut end = false;
+
+        while !self.at_end() {
+            if self.match_(&[Token::Punct('}')]).is_some() {
+                end = true;
+                break;
+            }
+
+            let field_name = if let Some(ident) = self.parse_ident() {
+                ident
+            } else {
+                let tok = self.previous().unwrap();
+                let err = Simple::expected_input_found(
+                    tok.1.clone(),
+                    [Some("field name".to_owned())],
+                    Some(tok.0.to_string()),
+                );
+                let err = err.with_label("expected identifier");
+                return Err(Box::new(err));
+            };
+
+            let field = match self.match_(&[Token::Punct('{'), Token::Punct('(')]) {
+                Some((&Token::Punct('('), _)) => {
+                    let ty = if let Some(ty) = self.parse_type()? {
+                        ty
+                    } else {
+                        let tok = self.previous().unwrap();
+                        let err = Simple::expected_input_found(
+                            tok.1.clone(),
+                            [
+                                Some("'bool'".to_owned()),
+                                Some("'float'".to_owned()),
+                                Some("'int'".to_owned()),
+                                Some("'string'".to_owned()),
+                                Some("'Uuid'".to_owned()),
+                                Some("'Option<T>'".to_owned()),
+                                Some("'[T]'".to_owned()),
+                            ],
+                            Some(tok.0.to_string()),
+                        );
+                        let err = err.with_label("expected type");
+                        return Err(Box::new(err));
+                    };
+                    self.match_(&[Token::Punct(')')]);
+
+                    Some(EnumField::Tuple(ty))
+                }
+                Some((Token::Punct('{'), _)) => {
+                    let mut struct_fields = Vec::new();
+                    while !self.check(&Token::Punct('}')) {
+                        match self.parse_struct_field() {
+                            Ok(field) => {
+                                struct_fields.push(field);
+                            }
+                            Err(err) => {
+                                return Err(err);
+                            }
+                        }
+
+                        self.match_(&[Token::Punct(',')]);
+                    }
+                    self.match_(&[Token::Punct('}')]);
+
+                    Some(EnumField::Struct(struct_fields))
+                }
+                None => None,
+                _ => unreachable!(),
+            };
+
+            self.match_(&[Token::Punct(',')]);
+
+            fields.push((field_name, field));
+        }
+
+        // We got here because we reached the end of the input
+        if !end {
+            let token = self.previous().unwrap();
+            let err = Simple::unclosed_delimiter(
+                start..token.1.end,
+                "{".to_owned(),
+                token.1.clone(),
+                "}".to_owned(),
+                Some(token.0.to_string()),
+            );
+
+            debug!("exit: no '}'");
+            return Err(Box::new(err));
+        }
+
+        // 🚧 This isn't right, but maybe it's good enough.
+        let end = if let Some(tok) = self.peek() {
+            tok.1.end
+        } else {
+            self.previous().unwrap().1.end
+        };
+
+        Ok(Some((InnerItem::Enum(name, fields), start..end)))
     }
 
     /// Parse an identifier
@@ -4792,6 +5049,37 @@ mod tests {
         "#;
 
         let ast = parse_dwarf("test_asm", src);
+        assert!(ast.is_ok());
+    }
+
+    #[test]
+    fn test_enum() {
+        let _ = env_logger::builder().is_test(true).try_init();
+
+        let src = r#"
+            enum Foo {
+                Bar,
+                Baz,
+                Qux
+            }
+            enum Bar {
+                Foo(Foo),
+                Bar{a: int, b: int},
+                Baz(int),
+            }
+
+            fn main() {
+                let foo = Foo::Bar;
+                let bar = Foo::Baz;
+                let baz = Foo::Qux;
+
+                let a = Bar::Foo(Foo::Bar);
+                let b = Bar::Bar{a: 1, b: 2};
+                let c = Bar::Baz(42);
+            }
+        "#;
+
+        let ast = parse_dwarf("test_enum", src);
         assert!(ast.is_ok());
     }
 }

@@ -1,0 +1,12 @@
+[
+  {
+    "description": "\"Object imported from the sarzak Domain.\n\nWe don’t have a means of representing this as imported in Cuckoo, so I’m just adding it here.\n\n🐶 { \"imported_object\": { \"domain\": \"sarzak\", \"model_file\": \"models/sarzak.json\", \"id\": \"7178e7a4-5131-504b-a7b3-c2c0cfedf343\"}}",
+    "id": "7178e7a4-5131-504b-a7b3-c2c0cfedf343",
+    "key_letters": "OBJ",
+    "name": "Object"
+  },
+  {
+    "secs_since_epoch": 1691197148,
+    "nanos_since_epoch": 874292000
+  }
+]

@@ -3,7 +3,7 @@ use std::fmt;
 use ansi_term::Colour;
 
 use crate::{
-    chacha::{error::Result, memory::Memory, value::UserType},
+    chacha::{error::Result, memory::Memory, value::UserStruct},
     new_ref, s_read, s_write, ChaChaError, NewRef, RefType, Value, ValueType,
 };
 
@@ -332,33 +332,34 @@ impl<'b> VM<'b> {
                         let field = self.stack.pop().unwrap();
                         let ty_ = self.stack.pop().unwrap();
                         match &*s_read!(ty_) {
-                            Value::ProxyType(ty_) => {
-                                match s_read!(ty_).get_attr_value(s_read!(field).as_ref()) {
-                                    Ok(value) => {
-                                        if trace {
-                                            println!(
-                                                "\t\t{}\t{}",
-                                                Colour::Green.paint("field_read:"),
-                                                s_read!(value)
-                                            );
-                                        }
-                                        self.stack.push(value);
-                                    }
-                                    Err(_e) => {
-                                        return Err::<RefType<Value>, ChaChaError>(
-                                            ChaChaError::VmPanic {
-                                                message: format!(
-                                                    "Unknown field {} for proxy.",
-                                                    s_read!(field),
-                                                    // s_read!(ty_)
-                                                ),
-                                            },
-                                        );
-                                    }
-                                }
+                            Value::ProxyType(_ty_) => {
+                                unimplemented!();
+                                // match s_read!(ty_).get_attr_value(s_read!(field).as_ref()) {
+                                //     Ok(value) => {
+                                //         if trace {
+                                //             println!(
+                                //                 "\t\t{}\t{}",
+                                //                 Colour::Green.paint("field_read:"),
+                                //                 s_read!(value)
+                                //             );
+                                //         }
+                                //         self.stack.push(value);
+                                //     }
+                                //     Err(_e) => {
+                                //         return Err::<RefType<Value>, ChaChaError>(
+                                //             ChaChaError::VmPanic {
+                                //                 message: format!(
+                                //                     "Unknown field {} for proxy.",
+                                //                     s_read!(field),
+                                //                     // s_read!(ty_)
+                                //                 ),
+                                //             },
+                                //         );
+                                //     }
+                                // }
                             }
-                            Value::UserType(ty_) => {
-                                match s_read!(ty_).get_attr_value(s_read!(field).as_ref()) {
+                            Value::Struct(ty_) => {
+                                match s_read!(ty_).get_field_value(s_read!(field).as_ref()) {
                                     Some(value) => {
                                         if trace {
                                             println!(
@@ -396,35 +397,37 @@ impl<'b> VM<'b> {
                         let ty_ = self.stack.pop().unwrap();
                         let value = self.stack.pop().unwrap();
                         match &*s_read!(ty_) {
-                            Value::ProxyType(ty_) => {
-                                match s_write!(ty_)
-                                    .set_attr_value(s_read!(field).as_ref(), value.clone())
-                                {
-                                    Ok(_) => {
-                                        if trace {
-                                            println!(
-                                                "\t\t{}\t{}",
-                                                Colour::Green.paint("field_write:"),
-                                                s_read!(value)
-                                            );
-                                        }
-                                    }
-                                    Err(_e) => {
-                                        return Err::<RefType<Value>, ChaChaError>(
-                                            ChaChaError::VmPanic {
-                                                message: format!(
-                                                    "Unknown field {} for proxy.",
-                                                    s_read!(field),
-                                                    // s_read!(ty_)
-                                                ),
-                                            },
-                                        );
-                                    }
-                                }
+                            Value::ProxyType(_ty_) => {
+                                unimplemented!();
+
+                                // match s_write!(ty_)
+                                //     .set_attr_value(s_read!(field).as_ref(), value.clone())
+                                // {
+                                //     Ok(_) => {
+                                //         if trace {
+                                //             println!(
+                                //                 "\t\t{}\t{}",
+                                //                 Colour::Green.paint("field_write:"),
+                                //                 s_read!(value)
+                                //             );
+                                //         }
+                                //     }
+                                //     Err(_e) => {
+                                //         return Err::<RefType<Value>, ChaChaError>(
+                                //             ChaChaError::VmPanic {
+                                //                 message: format!(
+                                //                     "Unknown field {} for proxy.",
+                                //                     s_read!(field),
+                                //                     // s_read!(ty_)
+                                //                 ),
+                                //             },
+                                //         );
+                                //     }
+                                // }
                             }
-                            Value::UserType(ty_) => {
+                            Value::Struct(ty_) => {
                                 match s_write!(ty_)
-                                    .set_attr_value(s_read!(field).as_ref(), value.clone())
+                                    .set_field_value(s_read!(field).as_ref(), value.clone())
                                 {
                                     Some(_) => {
                                         if trace {
@@ -511,20 +514,20 @@ impl<'b> VM<'b> {
                             println!("\t\t{}\t{} {{", Colour::Green.paint("new:"), name);
                         }
 
-                        let mut inst = UserType::new(name, ty);
+                        let mut inst = UserStruct::new(name, ty);
 
                         for _i in 0..*n {
                             let name = self.stack.pop().unwrap();
                             let value = self.stack.pop().unwrap();
 
-                            inst.add_attr(s_read!(name).to_string(), value.clone());
+                            inst.define_field(s_read!(name).to_string(), value.clone());
                             if trace {
                                 println!("\t\t\t\t{}: {}", s_read!(name), s_read!(value));
                             }
                         }
 
                         self.stack
-                            .push(new_ref!(Value, Value::UserType(new_ref!(UserType, inst))));
+                            .push(new_ref!(Value, Value::Struct(new_ref!(UserStruct, inst))));
 
                         if trace {
                             println!("\t\t\t\t}}");
@@ -583,14 +586,12 @@ impl<'b> VM<'b> {
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
-
+    use rustc_hash::FxHashMap as HashMap;
     use tracy_client::Client;
 
     use crate::{
         dwarf::{DwarfFloat, DwarfInteger},
-        initialize_interpreter,
-        interpreter::PrintableValueType,
+        interpreter::{initialize_interpreter, PrintableValueType},
     };
 
     use super::*;
@@ -895,7 +896,7 @@ mod tests {
     #[test]
     fn test_instr_field() {
         use crate::{
-            chacha::value::UserType,
+            chacha::value::UserStruct,
             lu_dog::{Field, ObjectStore as LuDogStore, ValueType, WoogStruct},
         };
         use sarzak::sarzak::{ObjectStore as SarzakStore, Ty, MODEL as SARZAK_MODEL};
@@ -910,19 +911,19 @@ mod tests {
         let foo = WoogStruct::new("Foo".to_owned(), None, &mut lu_dog);
         // let _ = WoogItem::new_woog_struct(source, &mt, lu_dog);
         let struct_ty = ValueType::new_woog_struct(&foo, &mut lu_dog);
-        let ty = Ty::new_integer();
+        let ty = Ty::new_integer(&sarzak);
         let ty = ValueType::new_ty(&ty, &mut lu_dog);
         let _ = Field::new("bar".to_owned(), &foo, &ty, &mut lu_dog);
-        let ty = Ty::new_float();
+        let ty = Ty::new_float(&sarzak);
         let ty = ValueType::new_ty(&ty, &mut lu_dog);
         let _ = Field::new("baz".to_owned(), &foo, &ty, &mut lu_dog);
 
         // Now we need an instance.
-        let ctx = initialize_interpreter::<PathBuf>(sarzak, lu_dog, None).unwrap();
+        let ctx = initialize_interpreter(sarzak, lu_dog, HashMap::default()).unwrap();
         let ty_name = PrintableValueType(&struct_ty, &ctx);
-        let mut foo_inst = UserType::new(ty_name.to_string(), &struct_ty);
-        foo_inst.add_attr("bar", new_ref!(Value, 42.into()));
-        foo_inst.add_attr("baz", new_ref!(Value, std::f64::consts::PI.into()));
+        let mut foo_inst = UserStruct::new(ty_name.to_string(), &struct_ty);
+        foo_inst.define_field("bar", new_ref!(Value, 42.into()));
+        foo_inst.define_field("baz", new_ref!(Value, std::f64::consts::PI.into()));
 
         let memory = Memory::new();
         let mut vm = VM::new(&memory.0);
@@ -930,7 +931,7 @@ mod tests {
 
         vm.stack.push(new_ref!(
             Value,
-            Value::UserType(new_ref!(UserType, foo_inst))
+            Value::Struct(new_ref!(UserStruct, foo_inst))
         ));
         vm.stack.push(new_ref!(Value, "baz".into()));
 

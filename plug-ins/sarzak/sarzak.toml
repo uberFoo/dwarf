@@ -1,0 +1,17 @@
+[modules."sarzak"]
+model = "models/sarzak.json"
+
+[modules."sarzak".compiler]
+always_process = true
+compiler = "grace"
+derive = ["Clone", "Debug", "Deserialize", "PartialEq", "Serialize"]
+use_paths = ["serde::{Deserialize, Serialize}"]
+
+[modules."sarzak".compiler.target]
+optimization_level = "None"
+is_meta_model = true
+is_sarzak = true
+persist = true
+persist_timestamps = true
+uber_store = "Single"
+target = "domain"

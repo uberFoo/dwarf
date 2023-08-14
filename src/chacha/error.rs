@@ -68,6 +68,7 @@ pub enum ChaChaError {
     NotAFunction {
         value: Value,
         span: Span,
+        location: Location,
     },
     #[snafu(display("\n{}: not an instance", ERR_CLR.bold().paint("error")))]
     NotAnInstance,
@@ -82,12 +83,14 @@ pub enum ChaChaError {
     NoSuchMethod {
         method: String,
         span: Span,
+        location: Location,
     },
     #[snafu(display("\n{}: could not find static method `{}::{}`.", ERR_CLR.bold().paint("error"), OTH_CLR.paint(ty), OTH_CLR.paint(method)))]
     NoSuchStaticMethod {
         method: String,
         ty: String,
         span: Span,
+        location: Location,
     },
     #[snafu(display("\n{}: {message}\n  --> {}:{}:{}", ERR_CLR.bold().paint("error"), location.file, location.line, location.column))]
     Unimplemented {
@@ -186,8 +189,12 @@ impl fmt::Display for ChaChaErrorReporter<'_, '_, '_> {
                     .map_err(|_| fmt::Error)?;
                 write!(f, "{}", String::from_utf8_lossy(&std_err))
             }
-            ChaChaError::NoSuchMethod { method, span } => {
-                Report::build(ReportKind::Error, file_name, span.start)
+            ChaChaError::NoSuchMethod {
+                method,
+                span,
+                location,
+            } => {
+                let report = Report::build(ReportKind::Error, file_name, span.start)
                     .with_message("no such method")
                     .with_label(
                         Label::new((file_name, span.to_owned()))
@@ -196,25 +203,85 @@ impl fmt::Display for ChaChaErrorReporter<'_, '_, '_> {
                                 POP_CLR.paint(method.to_string())
                             ))
                             .with_color(Color::Red),
-                    )
+                    );
+
+                let report = if is_uber {
+                    report.with_note(format!(
+                        "{}:{}:{}",
+                        OTH_CLR.paint(location.file.to_string()),
+                        POP_CLR.paint(format!("{}", location.line)),
+                        OK_CLR.paint(format!("{}", location.column)),
+                    ))
+                } else {
+                    report
+                };
+
+                report
                     .finish()
                     .write((file_name, Source::from(&program)), &mut std_err)
                     .map_err(|_| fmt::Error)?;
                 write!(f, "{}", String::from_utf8_lossy(&std_err))
             }
-            ChaChaError::NoSuchStaticMethod { method, ty, span } => {
-                Report::build(ReportKind::Error, file_name, span.start)
+            ChaChaError::NoSuchStaticMethod {
+                method,
+                ty,
+                span,
+                location,
+            } => {
+                let report = Report::build(ReportKind::Error, file_name, span.start)
                     .with_message("no such static method")
                     .with_label(
                         Label::new((file_name, span.to_owned()))
                             .with_message("in this invocation".to_string())
                             .with_color(Color::Red),
-                    )
-                    .with_note(format!(
+                    );
+
+                let report = if is_uber {
+                    report.with_note(format!(
+                        "{}:{}:{}",
+                        OTH_CLR.paint(location.file.to_string()),
+                        POP_CLR.paint(format!("{}", location.line)),
+                        OK_CLR.paint(format!("{}", location.column)),
+                    ))
+                } else {
+                    report.with_note(format!(
                         "{} does not have a static method named {}",
                         POP_CLR.paint(ty.to_string()),
                         POP_CLR.paint(method.to_string())
                     ))
+                };
+
+                report
+                    .finish()
+                    .write((file_name, Source::from(&program)), &mut std_err)
+                    .map_err(|_| fmt::Error)?;
+                write!(f, "{}", String::from_utf8_lossy(&std_err))
+            }
+            ChaChaError::NotAFunction {
+                value,
+                span,
+                location,
+            } => {
+                let report = Report::build(ReportKind::Error, file_name, span.start)
+                    .with_message("not a function")
+                    .with_label(
+                        Label::new((file_name, span.to_owned()))
+                            .with_message("in this invocation")
+                            .with_color(Color::Red),
+                    );
+
+                let report = if is_uber {
+                    report.with_note(format!(
+                        "{}:{}:{}",
+                        OTH_CLR.paint(location.file.to_string()),
+                        POP_CLR.paint(format!("{}", location.line)),
+                        OK_CLR.paint(format!("{}", location.column)),
+                    ))
+                } else {
+                    report.with_note(value.to_string())
+                };
+
+                report
                     .finish()
                     .write((file_name, Source::from(&program)), &mut std_err)
                     .map_err(|_| fmt::Error)?;
@@ -284,20 +351,6 @@ impl fmt::Display for ChaChaErrorReporter<'_, '_, '_> {
                 };
 
                 report
-                    .finish()
-                    .write((file_name, Source::from(&program)), &mut std_err)
-                    .map_err(|_| fmt::Error)?;
-                write!(f, "{}", String::from_utf8_lossy(&std_err))
-            }
-            ChaChaError::NotAFunction { value, span } => {
-                Report::build(ReportKind::Error, file_name, span.start)
-                    .with_message("not a function")
-                    .with_label(
-                        Label::new((file_name, span.clone()))
-                            .with_message("found here")
-                            .with_color(Color::Red),
-                    )
-                    .with_note(value.to_string())
                     .finish()
                     .write((file_name, Source::from(&program)), &mut std_err)
                     .map_err(|_| fmt::Error)?;

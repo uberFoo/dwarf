@@ -1,0 +1,36 @@
+struct Baz {
+    a: int,
+    b: int,
+}
+enum Foo {
+    Bar,
+    Baz,
+}
+
+enum Bar {
+    Plain,
+    Int(int),
+    String(string),
+    Enum(Foo),
+    Struct(Baz),
+}
+
+fn main() {
+    let a = Bar::Plain;
+    let b = Bar::Int(42);
+    let c = Bar::String("Hello world!");
+    let d = Bar::Enum(Foo::Bar);
+    let e = Bar::Struct(Baz { a: 1, b: 2 });
+
+    chacha::assert_eq(a, Bar::Plain);
+    chacha::assert_eq(b, Bar::Int(42));
+    chacha::assert_eq(c, Bar::String("Hello world!"));
+    chacha::assert_eq(d, Bar::Enum(Foo::Bar));
+    chacha::assert_eq(e, Bar::Struct(Baz { a: 1, b: 2 }));
+
+    chacha::assert_eq("a = {0}".format(a), "a = Bar::Plain");
+    chacha::assert_eq("b = {0}".format(b), "b = Bar::Int(42)");
+    // chacha::assert_eq("c = {0}".format(c), "c = Bar::String(\"Hello world!\")");
+    chacha::assert_eq("d = {0}".format(d), "d = Bar::Enum(Foo::Bar)");
+    chacha::assert_eq("e = {0}".format(e), "e = Bar::Struct(Baz { a: 1, b: 2 })");
+}

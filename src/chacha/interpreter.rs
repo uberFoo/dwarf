@@ -1,4 +1,4 @@
-use std::{ops::Range, path::Path};
+use std::ops::Range;
 
 use ansi_term::Colour;
 use circular_queue::CircularQueue;
@@ -6,7 +6,6 @@ use crossbeam::channel::unbounded;
 use lazy_static::lazy_static;
 use log::{self, log_enabled, Level::Debug};
 use parking_lot::{Condvar, Mutex};
-use rustc_hash::FxHashMap as HashMap;
 use snafu::{prelude::*, Location};
 use tracy_client::{span, Client};
 use uuid::Uuid;
@@ -15,7 +14,7 @@ use crate::{
     chacha::{
         error::{Error, Result, UnimplementedSnafu, VariableNotFoundSnafu},
         memory::{Memory, MemoryUpdateMessage},
-        value::UserType,
+        value::UserStruct,
         vm::{CallFrame, Instruction, Thonk, VM},
     },
     lu_dog::ExpressionEnum,
@@ -25,8 +24,7 @@ use crate::{
     },
     new_ref, s_read,
     sarzak::store::ObjectStore as SarzakStore,
-    sarzak::MODEL as SARZAK_MODEL,
-    ChaChaError, DwarfInteger, NewRef, RefType, Value,
+    ChaChaError, DwarfInteger, ModelStore, NewRef, RefType, Value,
 };
 
 mod banner;
@@ -45,13 +43,13 @@ pub(crate) use pvt::PrintableValueType;
 #[cfg(feature = "repl")]
 pub use repl::start_repl;
 
-#[cfg(not(any(feature = "single", feature = "single-vec")))]
+#[cfg(not(any(feature = "single", feature = "single-vec", feature = "multi-nd-vec")))]
 pub use tui::start_tui_repl;
 
 use context::Context;
 use expression::{
-    block, call, debugger, field, for_loop, if_expr, index, list, literal, operator, print, range,
-    ret, struct_expr, typecast, variable,
+    block, call, debugger, enumeration, field, for_loop, if_expr, index, list, literal, operator,
+    print, range, ret, struct_expr, typecast, variable,
 };
 use func_call::eval_function_call;
 use lambda::eval_lambda_expression;
@@ -139,36 +137,31 @@ lazy_static! {
     pub(crate) static ref STEPPING: Mutex<bool> = Mutex::new(false);
 }
 
-#[cfg(not(feature = "multi-nd-vec"))]
-pub fn initialize_interpreter_paths<P: AsRef<Path>>(lu_dog_path: P) -> Result<Context, Error> {
-    // unimplemented!();
-    let sarzak =
-        SarzakStore::from_bincode(SARZAK_MODEL).map_err(|e| ChaChaError::Store { source: e })?;
+// #[cfg(not(feature = "multi-nd-vec"))]
+// pub fn initialize_interpreter_paths<P: AsRef<Path>>(lu_dog_path: P) -> Result<Context, Error> {
+//     // unimplemented!();
+//     let sarzak =
+//         SarzakStore::from_bincode(SARZAK_MODEL).map_err(|e| ChaChaError::Store { source: e })?;
 
-    // This will always be a lu-dog -- it's basically compiled dwarf source.
-    let lu_dog = LuDogStore::load_bincode(lu_dog_path.as_ref())
-        .map_err(|e| ChaChaError::Store { source: e })?;
+//     // This will always be a lu-dog -- it's basically compiled dwarf source.
+//     let lu_dog = LuDogStore::load_bincode(lu_dog_path.as_ref())
+//         .map_err(|e| ChaChaError::Store { source: e })?;
 
-    initialize_interpreter(sarzak, lu_dog, Some(lu_dog_path.as_ref()))
-}
+//     initialize_interpreter(
+//         sarzak,
+//         lu_dog,
+//         HashMap::default(),
+//     )
+// }
 
 /// Initialize the interpreter
 ///
 /// The interpreter requires two domains to operate. The first is the metamodel:
 /// sarzak. The second is the compiled dwarf file.
-///
-/// So the metamodel is dumb. I think we use it for looking up the id of the UUID
-/// type. Otherwise, I don't think it's used.
-
-/// So, It's also used for looking up a bool type, and when printing value types.
-/// I sort of want to keep it, but bundle it with the compiled dwarf file.
-///
-/// Requiring a compiled dwarf file is also sort of stupid. I think we could just
-/// create an empty LuDog as our internal state.
-pub fn initialize_interpreter<P: AsRef<Path>>(
+pub fn initialize_interpreter(
     sarzak: SarzakStore,
     mut lu_dog: LuDogStore,
-    _lu_dog_path: Option<P>,
+    models: ModelStore,
 ) -> Result<Context, Error> {
     // Initialize the stack with stuff from the compiled source.
     let block = Block::new(Uuid::new_v4(), None, &mut lu_dog);
@@ -202,7 +195,7 @@ pub fn initialize_interpreter<P: AsRef<Path>>(
     for user_type in lu_dog.iter_woog_struct() {
         let user_type = s_read!(user_type);
         // Create a meta table for each struct.
-        debug!("inserting meta table {}", user_type.name);
+        debug!("inserting struct in meta table {}", user_type.name);
         stack.insert_meta_table(user_type.name.to_owned());
         let impl_ = user_type.r8c_implementation_block(&lu_dog);
         if !impl_.is_empty() {
@@ -210,12 +203,54 @@ pub fn initialize_interpreter<P: AsRef<Path>>(
             // check and only insert the static functions.
             // 🚧 Only insert the static functions
             for func in s_read!(impl_[0]).r9_function(&lu_dog) {
-                debug!("inserting static function {}", s_read!(func).name);
-                stack.insert_meta(
-                    &user_type.name,
-                    s_read!(func).name.to_owned(),
-                    new_ref!(Value, Value::Function(func.clone(),)),
-                )
+                let insert = if let Some(param) = s_read!(func).r82_parameter(&lu_dog).get(0) {
+                    let var = &s_read!(param).r12_variable(&lu_dog)[0];
+                    let var = s_read!(var);
+                    var.name != "self"
+                } else {
+                    true
+                };
+
+                if insert {
+                    debug!("inserting static function {}", s_read!(func).name);
+                    stack.insert_meta(
+                        &user_type.name,
+                        s_read!(func).name.to_owned(),
+                        new_ref!(Value, Value::Function(func.clone(),)),
+                    )
+                }
+            }
+        }
+    }
+
+    // Insert static methods for each store. They go into the meta table.
+    for store in lu_dog.iter_z_object_store() {
+        let store = s_read!(store);
+        // Create a meta table for each struct.
+        debug!("inserting store in meta table {}", store.domain);
+        stack.insert_meta_table(store.name.to_owned());
+        let impl_ = store.r83c_implementation_block(&lu_dog);
+        if !impl_.is_empty() {
+            // For each function in the impl, insert the function. I should probably
+            // check and only insert the static functions.
+            // 🚧 Only insert the static functions
+            for func in s_read!(impl_[0]).r9_function(&lu_dog) {
+                let insert = if let Some(param) = s_read!(func).r82_parameter(&lu_dog).get(0) {
+                    let var = &s_read!(param).r12_variable(&lu_dog)[0];
+                    let var = s_read!(var);
+                    var.name != "self"
+                } else {
+                    true
+                };
+
+                if insert {
+                    debug!("inserting static function {}", s_read!(func).name);
+                    stack.insert_meta(
+                        &store.name,
+                        s_read!(func).name.to_owned(),
+                        new_ref!(Value, Value::Function(func.clone(),)),
+                    )
+                }
             }
         }
     }
@@ -446,7 +481,7 @@ pub fn initialize_interpreter<P: AsRef<Path>>(
         stack,
         new_ref!(LuDogStore, lu_dog),
         new_ref!(SarzakStore, sarzak),
-        new_ref!(HashMap<String, SarzakStore>, HashMap::default()),
+        new_ref!(ModelStore, models),
         receiver,
         std_out_send,
         std_out_recv,
@@ -483,6 +518,7 @@ fn eval_expression(
     vm: &mut VM,
 ) -> Result<(RefType<Value>, RefType<ValueType>)> {
     let lu_dog = context.lu_dog_heel().clone();
+    let sarzak = context.sarzak_heel().clone();
 
     // Timing goodness
     context.increment_expression_count(1);
@@ -523,17 +559,18 @@ fn eval_expression(
     if log_enabled!(Debug) {
         let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
         let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
-        let read = s_read!(span);
-        let span = read.start as usize..read.end as usize;
+        let span = s_read!(span);
+        let span = span.start as usize..span.end as usize;
         let source = context.source();
         debug!("executing {}", source[span].to_owned());
     }
 
     match s_read!(expression).subtype {
-        ExpressionEnum::Block(ref block) => block::eval_block(block, context, vm),
-        ExpressionEnum::Call(ref call) => call::eval_call(call, &expression, context, vm),
-        ExpressionEnum::Debugger(_) => debugger::eval_debugger(context),
-        ExpressionEnum::ErrorExpression(ref error) => expression::error::eval_error(error, context),
+        ExpressionEnum::Block(ref block) => block::eval(block, context, vm),
+        ExpressionEnum::Call(ref call) => call::eval(call, &expression, context, vm),
+        ExpressionEnum::Debugger(_) => debugger::eval(context),
+        ExpressionEnum::EnumField(ref enum_field) => enumeration::eval(enum_field, context, vm),
+        ExpressionEnum::ErrorExpression(ref error) => expression::error::eval(error, context),
         ExpressionEnum::FieldAccess(ref field) => field::eval_field_access(field, context, vm),
         ExpressionEnum::FieldExpression(ref field_expr) => {
             field::eval_field_expression(field_expr, context, vm)
@@ -573,7 +610,7 @@ fn eval_expression(
         //
         ExpressionEnum::ZNone(_) => Ok((
             new_ref!(Value, Value::Empty),
-            Value::Empty.get_type(&s_read!(lu_dog)),
+            Value::Empty.get_type(&s_read!(sarzak), &s_read!(lu_dog)),
         )),
         //
         // ZSome
@@ -622,7 +659,7 @@ fn eval_expression(
 
             Ok((
                 new_ref!(Value, Value::Empty),
-                Value::Empty.get_type(&s_read!(lu_dog)),
+                Value::Empty.get_type(&s_read!(sarzak), &s_read!(lu_dog)),
             ))
         }
     }
@@ -634,6 +671,7 @@ pub fn eval_statement(
     vm: &mut VM,
 ) -> Result<(RefType<Value>, RefType<ValueType>)> {
     let lu_dog = context.lu_dog_heel().clone();
+    let sarzak = context.sarzak_heel().clone();
 
     debug!("eval_statement statement {statement:?}");
     trace!("eval_statement stack {:?}", context.memory());
@@ -651,7 +689,7 @@ pub fn eval_statement(
 
             Ok((
                 new_ref!(Value, Value::Empty),
-                Value::Empty.get_type(&s_read!(lu_dog)),
+                Value::Empty.get_type(&s_read!(sarzak), &s_read!(lu_dog)),
             ))
         }
         StatementEnum::LetStatement(ref stmt) => {
@@ -670,7 +708,7 @@ pub fn eval_statement(
             let var = s_read!(var.r12_variable(&s_read!(lu_dog))[0]).clone();
             debug!("var {var:?}");
 
-            debug!("inserting {} = {}", var.name, s_read!(value));
+            debug!("allocating space for  `{} = {}`", var.name, s_read!(value));
             context.memory().insert(var.name, value);
 
             // 🚧 I'm changing this from returning ty. If something get's wonky,
@@ -678,7 +716,7 @@ pub fn eval_statement(
             // the storage?
             Ok((
                 new_ref!(Value, Value::Empty),
-                Value::Empty.get_type(&s_read!(lu_dog)),
+                Value::Empty.get_type(&s_read!(sarzak), &s_read!(lu_dog)),
             ))
         }
         StatementEnum::ResultStatement(ref stmt) => {
@@ -697,7 +735,7 @@ pub fn eval_statement(
         }
         StatementEnum::ItemStatement(_) => Ok((
             new_ref!(Value, Value::Empty),
-            Value::Empty.get_type(&s_read!(lu_dog)),
+            Value::Empty.get_type(&s_read!(sarzak), &s_read!(lu_dog)),
         )),
     }
 }
@@ -845,6 +883,8 @@ fn typecheck(
 
     let (lhs_t, rhs_t) = (&s_read!(lhs).subtype, &s_read!(rhs).subtype);
 
+    // If it's a lambda we test the function signature: return type, and parameters.
+    // 🚧 looks like I'm only testing the return type.
     if let ValueTypeEnum::Lambda(l) = lhs_t {
         if let ValueTypeEnum::Lambda(r) = rhs_t {
             let l = s_read!(context.lu_dog_heel()).exhume_lambda(l).unwrap();
@@ -859,13 +899,25 @@ fn typecheck(
                 .unwrap();
             let l = &s_read!(l).subtype;
             let r = &s_read!(r).subtype;
-            dbg!(l, r);
+            // dbg!(l, r);
             if l == r {
                 return Ok(());
             }
         }
     }
-    // dbg!(&lhs_t, &rhs_t);
+
+    // Checking for proxy type/woog struct equivalence.
+    if let ValueTypeEnum::WoogStruct(rhs_id) = rhs_t {
+        if let ValueTypeEnum::Ty(lhs_id) = lhs_t {
+            let woog_struct = s_read!(context.lu_dog_heel())
+                .exhume_woog_struct(rhs_id)
+                .unwrap();
+            if s_read!(woog_struct).object == Some(*lhs_id) {
+                return Ok(());
+            }
+        }
+    }
+
     if lhs_t == rhs_t {
         Ok(())
     } else {

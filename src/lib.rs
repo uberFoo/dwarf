@@ -3,10 +3,13 @@
 use std::{ops, path::PathBuf};
 
 use clap::Args;
+use rustc_hash::FxHashMap as HashMap;
 use serde::{Deserialize, Serialize};
 
 pub mod chacha;
 pub mod dwarf;
+pub mod plug_in;
+
 #[cfg(all(
     not(feature = "print-std-out"),
     not(any(feature = "single", feature = "single-vec", feature = "multi-nd-vec"))
@@ -16,11 +19,7 @@ pub mod tui;
 // pub mod lu_dog_proxy;
 
 pub use ::sarzak::{lu_dog, sarzak};
-pub use chacha::{
-    error::{ChaChaError, ChaChaErrorReporter},
-    interpreter::{self, initialize_interpreter},
-    value::Value,
-};
+pub(crate) use chacha::{error::ChaChaError, interpreter, value::Value};
 
 // These should eventually come from the domain.
 pub type DwarfInteger = i64;
@@ -142,6 +141,8 @@ macro_rules! new_rc {
         <RcType<$type> as NewRcType<$type>>::new_rc_type($value)
     };
 }
+#[allow(unused_imports)]
+pub(crate) use new_rc;
 
 macro_rules! new_ref {
     ($type:ty, $value:expr) => {
@@ -230,4 +231,6 @@ pub struct ChaChaOptions {
     sarzak: PathBuf,
 }
 
-pub type Span = ops::Range<usize>;
+pub(crate) type Span = ops::Range<usize>;
+pub(crate) type ModelStore =
+    HashMap<String, (sarzak::ObjectStore, Option<RefType<plug_in::PluginType>>)>;

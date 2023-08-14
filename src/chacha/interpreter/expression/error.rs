@@ -6,11 +6,12 @@ use crate::{
 /// Eval an error expression
 ///
 /// I think that this just needs to go away -- I don't think it's used.
-pub fn eval_error(
+pub fn eval(
     error: &SarzakStorePtr,
     context: &mut Context,
 ) -> Result<(RefType<Value>, RefType<ValueType>)> {
     let lu_dog = context.lu_dog_heel().clone();
+    let sarzak = context.sarzak_heel().clone();
 
     let error = s_read!(lu_dog).exhume_error_expression(error).unwrap();
 
@@ -19,7 +20,7 @@ pub fn eval_error(
 
     let result = Ok((
         new_ref!(Value, Value::Empty),
-        Value::Empty.get_type(&s_read!(lu_dog)),
+        Value::Empty.get_type(&s_read!(sarzak), &s_read!(lu_dog)),
     ));
 
     #[allow(clippy::let_and_return)]

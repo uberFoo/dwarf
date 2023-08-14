@@ -9,16 +9,19 @@ use std::{
 use clap::{ArgAction, Args, Parser};
 use dap::{prelude::BasicClient, server::Server};
 use dwarf::{
-    chacha::dap::DapAdapter,
+    chacha::{
+        dap::DapAdapter,
+        error::ChaChaErrorReporter,
+        interpreter::{banner2, initialize_interpreter, start_main, start_repl},
+    },
     dwarf::{new_lu_dog, parse_dwarf},
-    initialize_interpreter,
-    interpreter::{banner2, start_main, start_repl},
     lu_dog::ObjectStore as LuDogStore,
     sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL},
 };
 use reqwest::Url;
 use rustc_hash::FxHashMap as HashMap;
 use sarzak::domain::DomainBuilder;
+use tracy_client::Client;
 
 #[cfg(not(feature = "repl"))]
 compile_error!("The REPL requires the \"repl\" feature flag..");
@@ -123,6 +126,7 @@ struct DwarfArgs {
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     pretty_env_logger::init();
     color_backtrace::install();
+    let _client = Client::start();
 
     let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
     let lu_dog = LuDogStore::new();
@@ -131,6 +135,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let bless = args.bless.is_some() && args.bless.unwrap();
     let is_uber = args.uber.is_some() && args.uber.unwrap();
 
+    // Figure out what we're dealing with, input-wise.
     let input = if let Some(ref source) = args.source {
         match source {
             Source::File(source) => {
@@ -160,6 +165,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 Some((source_code, dwarf_args, url.to_string()))
             }
         }
+        // Maybe reading from stdin?
     } else if args.stdin.is_some() && args.stdin.unwrap() {
         let mut source_code = String::new();
         io::Read::read_to_string(&mut io::stdin(), &mut source_code)?;
@@ -180,7 +186,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .unwrap()
                 .build_v2()
                 .unwrap();
-            map.insert(domain.name().to_owned(), domain.sarzak().clone());
+            map.insert(domain.name().to_owned(), (domain.sarzak().clone(), None));
         }
 
         map
@@ -196,7 +202,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         };
 
-        let lu_dog = match new_lu_dog(None, Some((source_code.clone(), &ast)), &models, &sarzak) {
+        let lu_dog = match new_lu_dog(Some((source_code.clone(), &ast)), &models, &sarzak) {
             Ok(lu_dog) => lu_dog,
             Err(errors) => {
                 for err in errors {
@@ -209,7 +215,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         };
 
-        let mut ctx = initialize_interpreter::<PathBuf>(sarzak, lu_dog, None)?;
+        let mut ctx = initialize_interpreter(sarzak, lu_dog, models)?;
         ctx.add_args(dwarf_args);
 
         if args.banner.is_some() && args.banner.unwrap() {
@@ -217,7 +223,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         if args.repl.is_some() && args.repl.unwrap() {
-            start_repl(ctx).map_err(|e| {
+            start_repl(ctx, is_uber).map_err(|e| {
                 println!("Interpreter exited with: {}", e);
                 e
             })?;
@@ -226,10 +232,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 Ok((_, ctx)) => ctx,
                 Err(e) => {
                     eprintln!("Interpreter exited with:");
-                    eprintln!(
-                        "{}",
-                        dwarf::ChaChaErrorReporter(&e, is_uber, &source_code, &name)
-                    );
+                    eprintln!("{}", ChaChaErrorReporter(&e, is_uber, &source_code, &name));
                     return Ok(());
                 }
             };
@@ -275,9 +278,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             // }
         }
     } else {
-        let ctx = initialize_interpreter::<PathBuf>(sarzak, lu_dog, None)?;
+        let ctx = initialize_interpreter(sarzak, lu_dog, models)?;
 
-        start_repl(ctx).map_err(|e| {
+        start_repl(ctx, is_uber).map_err(|e| {
             println!("Interpreter exited with: {}", e);
             e
         })?;
