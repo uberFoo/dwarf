@@ -1,5 +1,10 @@
 use crate::{
-    chacha::{error::Result, value::EnumVariant, value::UserEnum, vm::VM},
+    chacha::{
+        error::Result,
+        value::EnumVariant,
+        value::{UserEnum, UserStruct},
+        vm::VM,
+    },
     interpreter::{eval_expression, Context},
     lu_dog::{EnumFieldEnum, ValueType, ValueTypeEnum},
     new_ref, s_read, NewRef, RefType, SarzakStorePtr, Value,
@@ -32,7 +37,26 @@ pub fn eval(
             Value,
             Value::EnumVariant(EnumVariant::Plain(format!("{}", field.name)))
         ),
-        EnumFieldEnum::StructField(ref sf) => panic!(),
+        EnumFieldEnum::StructField(ref sf) => {
+            let struct_field = s_read!(lu_dog).exhume_struct_field(sf).unwrap();
+            let struct_field = s_read!(struct_field);
+            let expr = struct_field.expression.unwrap();
+            let expr = s_read!(lu_dog).exhume_expression(&expr).unwrap();
+            let (value, _) = eval_expression(expr, context, vm)?;
+            let value = s_read!(value);
+            if let Value::Struct(struct_value) = &*value {
+                let struct_value = s_read!(struct_value);
+                new_ref!(
+                    Value,
+                    Value::EnumVariant(EnumVariant::Struct(
+                        field.name.to_owned(),
+                        new_ref!(UserStruct, struct_value.clone())
+                    ))
+                )
+            } else {
+                unreachable!()
+            }
+        }
         EnumFieldEnum::TupleField(ref tf) => {
             let tuple = s_read!(lu_dog).exhume_tuple_field(tf).unwrap();
             let tuple = s_read!(tuple);

@@ -21,9 +21,9 @@ use crate::{
             ExternalImplementation, Field, FieldExpression, ForLoop, Function, ImplementationBlock,
             Index, IntegerLiteral, Item as WoogItem, ItemStatement, Lambda, LambdaParameter,
             LetStatement, Literal, LocalVariable, Parameter, Plain, Print, RangeExpression,
-            Span as LuDogSpan, Statement, StringLiteral, StructExpression, TupleField, ValueType,
-            ValueTypeEnum, Variable, VariableExpression, WoogOption, WoogStruct, XIf, XValue,
-            XValueEnum, ZObjectStore, ZSome,
+            Span as LuDogSpan, Statement, StringLiteral, StructExpression, StructField, TupleField,
+            ValueType, ValueTypeEnum, Variable, VariableExpression, WoogOption, WoogStruct, XIf,
+            XValue, XValueEnum, ZObjectStore, ZSome,
         },
         Argument, Binary, BooleanLiteral, Comparison, DwarfSourceFile, FieldAccess,
         FieldAccessTarget, FloatLiteral, List, ListElement, ListExpression, MethodCall, Operator,
@@ -1178,9 +1178,7 @@ pub(super) fn inter_expression(
                 ValueTypeEnum::WoogStruct(ref id) => {
                     let woog_struct = lu_dog.exhume_woog_struct(id).unwrap();
 
-                    if let Some(field) =
-                        lu_dog.exhume_field_id_by_name(&rhs.0.to_upper_camel_case())
-                    {
+                    if let Some(field) = lu_dog.exhume_field_id_by_name(&rhs.0) {
                         let field = lu_dog.exhume_field(&field);
                         // let field = woog_struct.r7_field(lu_dog);
                         // let field = field.iter().find(|f| s_read!(f).name == rhs);
@@ -1242,9 +1240,7 @@ pub(super) fn inter_expression(
                         .find(|ws| s_read!(ws).object == Some(*id))
                         .unwrap();
 
-                    if let Some(field) =
-                        lu_dog.exhume_field_id_by_name(&rhs.0.to_upper_camel_case())
-                    {
+                    if let Some(field) = lu_dog.exhume_field_id_by_name(&rhs.0) {
                         let field = lu_dog.exhume_field(&field);
                         // let field = woog_struct.r7_field(lu_dog);
                         // let field = field.iter().find(|f| s_read!(f).name == rhs);
@@ -2127,9 +2123,7 @@ pub(super) fn inter_expression(
             if let Some(expr_ty_tuple) = expr_type_tuples.pop() {
                 debug!("returning {:?}", expr_ty_tuple);
                 Ok(expr_ty_tuple)
-            } else if let Some(ref id) =
-                lu_dog.exhume_function_id_by_name(&name.to_upper_camel_case())
-            {
+            } else if let Some(ref id) = lu_dog.exhume_function_id_by_name(&name) {
                 // 🚧 The exhumation above is sort of messed up. I don't like that
                 // I have to turn it into upper-camel-case.
                 // We get here because there was no local variable info, so we are
@@ -2648,7 +2642,28 @@ pub(super) fn inter_expression(
         ParserExpression::Struct(name, fields) => {
             let name_span = &name.1;
             let name = if let ParserExpression::LocalVariable(obj) = &name.0 {
-                obj
+                obj.to_owned()
+            } else if let ParserExpression::PathInExpression(types) = &name.0 {
+                let mut name = String::new();
+
+                for (i, ty) in types.iter().enumerate() {
+                    if let Type::UserType((type_name, _)) = ty {
+                        name.extend([type_name.as_str()]);
+                        if i != types.len() - 1 {
+                            name.extend(["::"]);
+                        }
+                    } else {
+                        return Err(vec![DwarfError::Internal {
+                            description: format!(
+                                "Expected a user type in struct expression, found {:?}",
+                                ty
+                            ),
+                            location: location!(),
+                        }]);
+                    }
+                }
+
+                name
             } else {
                 return Err(vec![DwarfError::Internal {
                     description: format!(
@@ -2660,11 +2675,10 @@ pub(super) fn inter_expression(
             };
 
             debug!("ParserExpression::Struct {}", name);
-            let struct_name = &name;
 
             // Here we don't de_sanitize the name, and we are looking it up in the
             // dwarf model.
-            let id = match lu_dog.exhume_woog_struct_id_by_name(name) {
+            let id = match lu_dog.exhume_woog_struct_id_by_name(&name) {
                 Some(id) => id,
                 None => {
                     return Err(vec![DwarfError::UnknownType {
@@ -2679,7 +2693,7 @@ pub(super) fn inter_expression(
 
             let expr = StructExpression::new(Uuid::new_v4(), &woog_struct, lu_dog);
 
-            for (name, field_expr) in fields {
+            for (field_name, field_expr) in fields {
                 let field_expr_span = field_expr.1.to_owned();
                 let (field_expr, ty) = inter_expression(
                     &new_ref!(ParserExpression, field_expr.0.to_owned()),
@@ -2689,12 +2703,15 @@ pub(super) fn inter_expression(
                     lu_dog,
                 )?;
 
-                if let Some(field) = struct_fields.iter().find(|f| s_read!(f).name == name.0) {
+                if let Some(field) = struct_fields
+                    .iter()
+                    .find(|f| s_read!(f).name == field_name.0)
+                {
                     let struct_ty = lu_dog.exhume_value_type(&s_read!(field).ty).unwrap();
 
                     if context.check_types {
                         typecheck(
-                            (&struct_ty, &name.1),
+                            (&struct_ty, &field_name.1),
                             (&ty, &field_expr_span),
                             location!(),
                             context,
@@ -2703,14 +2720,15 @@ pub(super) fn inter_expression(
                     }
                 } else {
                     return Err(vec![DwarfError::NoSuchField {
-                        name: struct_name.to_string(),
+                        name: name.to_string(),
                         name_span: name_span.to_owned(),
-                        field: name.0.to_owned(),
-                        span: name.1.to_owned(),
+                        field: field_name.0.to_owned(),
+                        span: field_name.1.to_owned(),
                     }]);
                 }
                 debug!("field `{name:?}` is of type `{ty:?}`, expr: {field_expr:?}");
-                let field = FieldExpression::new(name.0.to_owned(), &field_expr.0, &expr, lu_dog);
+                let field =
+                    FieldExpression::new(field_name.0.to_owned(), &field_expr.0, &expr, lu_dog);
 
                 let expr = Expression::new_field_expression(&field, lu_dog);
                 let value = XValue::new_expression(block, &ty, &expr, lu_dog);
@@ -2740,47 +2758,6 @@ pub(super) fn inter_expression(
                     });
                 }
             }
-
-            // I'm not even sure what this was supposed to be about. I need to
-            // think on it some, but I'm pretty sure that we want to disallow
-            // a struct expression on a proxy object. That would be in favor of
-            // `new`.
-            //             // 🚧 HashMapFix
-            //             for (_, model) in context.models {
-            //                 if let Some(obj_id) = model.exhume_object_id_by_name(name.de_sanitize()) {
-            //                     // This actually paints at the Sarzak object, which is not
-            //                     // what we want here.
-            //                     //
-            //                     // let ty = *model.exhume_ty(&obj).unwrap();
-            //                     // let ty = ValueType::new_ty(&ty, lu_dog);
-
-            //                     let woog_struct = lu_dog
-            //                         .iter_z_object_store()
-            //                         .find(|os| {
-            //                             let wrapper = s_read!(os).object;
-            //                             let wrapper = lu_dog.exhume_object_wrapper(&wrapper).unwrap();
-            //                             let object = s_read!(wrapper).object;
-            //                             object == obj_id
-            //                         })
-            //                         .map(|os| s_read!(os).r78_woog_struct(lu_dog)[0].clone());
-
-            //                     if let Some(woog_struct) = woog_struct {
-            //                         let woog_struct = s_read!(woog_struct);
-            //                         let ty = ValueType::new_woog_struct(
-            //                             &<RefType<WoogStruct> as NewRef<WoogStruct>>::new_ref(
-            //                                 woog_struct.to_owned(),
-            //                             ),
-            //                             lu_dog,
-            //                         );
-            //                         let expr = Expression::new_struct_expression(&expr, lu_dog);
-
-            //                         let value = XValue::new_expression(block, &ty, &expr, lu_dog);
-            //                         s_write!(span).x_value = Some(s_read!(value).id);
-
-            //                         return Ok(((expr, span), ty));
-            //                     }
-            //                 }
-            //             }
 
             // I love that the type of the thing is the same as the thing itself.
             let expr = Expression::new_struct_expression(&expr, lu_dog);
@@ -3008,23 +2985,32 @@ fn inter_enum(
     let woog_enum = Enumeration::new(name.to_owned(), None, lu_dog);
     let _ = ValueType::new_enumeration(&woog_enum, lu_dog);
 
-    for (number, ((name, _), field)) in variants.iter().enumerate() {
+    for (number, ((field_name, _), field)) in variants.iter().enumerate() {
         match field {
-            // Some(EnumField::Struct(ref fields)) => {
-            //     let _ = LuDogEnumField::new_struct_field(name.to_owned(), Some(&woog_enum), fields, lu_dog);
-            // }
+            Some(EnumField::Struct(ref fields)) => {
+                // We create a struct in the store here so that it's available for construction
+                // in the struct expression code.
+                // Note that the name of the struct includes the name of the enum, with a path
+                // separator. This is cheap. I really need to think about how paths and imports
+                // and the like are going to work. The model will need some updating methinks.
+                let woog_struct =
+                    WoogStruct::new(format!("{}::{}", name, field_name), None, lu_dog);
+                for ((name, _), (ty, ty_span)) in fields {
+                    let ty = get_value_type(ty, ty_span, None, context, lu_dog)?;
+                    let _ = Field::new(name.to_owned(), &woog_struct, &ty, lu_dog);
+                }
+                let field = StructField::new(field_name.to_owned(), None, lu_dog);
+                LuDogEnumField::new_struct_field(field_name.to_owned(), &woog_enum, &field, lu_dog);
+            }
             Some(EnumField::Tuple((type_, span))) => {
-                let ty = match get_value_type(type_, span, None, context, lu_dog) {
-                    Ok(ty) => ty,
-                    Err(err) => return Err(err),
-                };
-
+                let ty = get_value_type(type_, span, None, context, lu_dog)?;
                 let field = TupleField::new(None, &ty, lu_dog);
-                LuDogEnumField::new_tuple_field(name.to_owned(), &woog_enum, &field, lu_dog);
+                LuDogEnumField::new_tuple_field(field_name.to_owned(), &woog_enum, &field, lu_dog);
             }
             _ => {
                 let plain = Plain::new(number as DwarfInteger, lu_dog);
-                let _ = LuDogEnumField::new_plain(name.to_owned(), &woog_enum, &plain, lu_dog);
+                let _ =
+                    LuDogEnumField::new_plain(field_name.to_owned(), &woog_enum, &plain, lu_dog);
             }
         }
         // let plain = Plain::new(number as DwarfInteger, lu_dog);

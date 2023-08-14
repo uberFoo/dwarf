@@ -2814,7 +2814,7 @@ impl DwarfParser {
 
         let mut path = if let (DwarfExpression::LocalVariable(name), span) = &path.0 {
             vec![Type::UserType((name.to_owned(), span.to_owned()))]
-        } else if let (DwarfExpression::PathInExpression(path), span) = &path.0 {
+        } else if let (DwarfExpression::PathInExpression(path), _) = &path.0 {
             path.to_owned()
         } else {
             let err = Simple::expected_input_found(
@@ -5081,6 +5081,5 @@ mod tests {
 
         let ast = parse_dwarf("test_enum", src);
         assert!(ast.is_ok());
-        dbg!(ast);
     }
 }

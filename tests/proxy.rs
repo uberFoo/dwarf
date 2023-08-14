@@ -1,5 +1,3 @@
-use std::path::{Path, PathBuf};
-
 use dwarf::{
     chacha::{
         error::ChaChaErrorReporter, interpreter::initialize_interpreter, interpreter::start_main,

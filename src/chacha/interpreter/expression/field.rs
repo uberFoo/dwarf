@@ -14,7 +14,6 @@ pub fn eval_field_access(
     vm: &mut VM,
 ) -> Result<(RefType<Value>, RefType<ValueType>)> {
     let lu_dog = context.lu_dog_heel().clone();
-    let sarzak = context.sarzak_heel().clone();
 
     let field = s_read!(lu_dog).exhume_field_access(field).unwrap();
     let fat = &s_read!(field).r65_field_access_target(&s_read!(lu_dog))[0];
