@@ -35,7 +35,7 @@ pub fn eval(
     let value = match field.subtype {
         EnumFieldEnum::Plain(_) => new_ref!(
             Value,
-            Value::EnumVariant(EnumVariant::Plain(format!("{}", field.name)))
+            Value::EnumVariant(EnumVariant::Plain(field.name.to_string()))
         ),
         EnumFieldEnum::StructField(ref sf) => {
             let struct_field = s_read!(lu_dog).exhume_struct_field(sf).unwrap();

@@ -61,11 +61,11 @@ pub fn inter(
         // Here we are interring an enum constructor.
         let field = lu_dog.iter_enum_field().find(|field| {
             let field = s_read!(field);
-            &field.name == method
+            field.name == method
         });
 
         if let Some(field) = field {
-            match &(*s_read!(field)).subtype {
+            match &s_read!(field).subtype {
                 EnumFieldEnum::TupleField(ref id) => {
                     let field = lu_dog.exhume_tuple_field(id).unwrap();
 
@@ -99,7 +99,7 @@ pub fn inter(
 
             let expr = Expression::new_enum_field(&field, lu_dog);
 
-            let value = XValue::new_expression(&block, &ty, &expr, lu_dog);
+            let value = XValue::new_expression(block, &ty, &expr, lu_dog);
             s_write!(span).x_value = Some(s_read!(value).id);
 
             Ok(((expr, span), ty))

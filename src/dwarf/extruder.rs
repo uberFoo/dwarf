@@ -2123,7 +2123,7 @@ pub(super) fn inter_expression(
             if let Some(expr_ty_tuple) = expr_type_tuples.pop() {
                 debug!("returning {:?}", expr_ty_tuple);
                 Ok(expr_ty_tuple)
-            } else if let Some(ref id) = lu_dog.exhume_function_id_by_name(&name) {
+            } else if let Some(ref id) = lu_dog.exhume_function_id_by_name(name) {
                 // 🚧 The exhumation above is sort of messed up. I don't like that
                 // I have to turn it into upper-camel-case.
                 // We get here because there was no local variable info, so we are
@@ -2526,7 +2526,7 @@ pub(super) fn inter_expression(
 
                 let expr = Expression::new_enum_field(&field, lu_dog);
 
-                let value = XValue::new_expression(&block, &ty, &expr, lu_dog);
+                let value = XValue::new_expression(block, &ty, &expr, lu_dog);
                 s_write!(span).x_value = Some(s_read!(value).id);
 
                 Ok(((expr, span), ty))

@@ -51,7 +51,7 @@ pub fn eval_struct_expression(
     //         ty,
     //     ))
     // } else {
-    let mut user_type = UserStruct::new(s_read!(woog_struct).name.to_owned(), &ty);
+    let mut user_type = UserStruct::new(&s_read!(woog_struct).name, &ty);
     for (name, _ty, value, _expr) in field_exprs {
         user_type.define_field(&name, value);
     }
