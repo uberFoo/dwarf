@@ -155,30 +155,22 @@ fn lexer() -> impl Parser<char, Vec<Spanned<Token>>, Error = Simple<char>> {
         "float" => Token::Type(Type::Float),
         "fn" => Token::Fn,
         "for" => Token::For,
-        // "global" => Token::Global,
         "if" => Token::If,
         "impl" => Token::Impl,
         "int" => Token::Type(Type::Integer),
         "in" => Token::In,
         "let" => Token::Let,
-        "None" => Token::None,
         "print" => Token::Print,
-        // "Self" => Token::Self_,
-        // "self" => Token::SmallSelf,
         "return" => Token::Return,
-        "Some" => Token::Some,
         "string" => Token::Type(Type::String),
         "struct" => Token::Struct,
         "true" => Token::Bool(true),
         "use" => Token::Use,
-        // "Uuid" => Token::Uuid,
         _ => Token::Ident(ident),
     });
 
     // A parser for punctuation (delimiters, semicolons, etc.)
     let punct = one_of("#=-()[]{}:;,.|&<>+*/!").map(Token::Punct);
-
-    let option = just("Option").map(|_| Token::Option);
 
     // A single token can be one of the above
     let token = float
@@ -188,7 +180,6 @@ fn lexer() -> impl Parser<char, Vec<Spanned<Token>>, Error = Simple<char>> {
         // .or(double_colon)
         // .or(op)
         .or(punct)
-        .or(option)
         // .or(object)
         // .or(some)
         .or(ident)
@@ -1746,18 +1737,6 @@ impl DwarfParser {
             return Ok(Some(expression));
         }
 
-        // parse a none literal
-        if let Some(expression) = self.parse_none_literal() {
-            debug!("none literal", expression);
-            return Ok(Some(expression));
-        }
-
-        // parse a some literal
-        if let Some(expression) = self.parse_some_literal()? {
-            debug!("some literal", expression);
-            return Ok(Some(expression));
-        }
-
         // parse a string literal
         if let Some(expression) = self.parse_string_literal() {
             debug!("string literal", expression);
@@ -2478,22 +2457,6 @@ impl DwarfParser {
         }
     }
 
-    /// Parse a None expression
-    ///
-    /// none -> NONE
-    fn parse_none_literal(&mut self) -> Option<Expression> {
-        debug!("enter parse_none_expression");
-
-        let token = self.peek()?.clone();
-
-        if let (Token::None, span) = token {
-            self.advance();
-            Some(((DwarfExpression::None, span), LITERAL))
-        } else {
-            None
-        }
-    }
-
     /// Parse an empty expression
     ///
     /// () -> Empty
@@ -3132,66 +3095,6 @@ impl DwarfParser {
         )))
     }
 
-    /// Parse a Some expression
-    ///
-    /// some -> SOME
-    fn parse_some_literal(&mut self) -> Result<Option<Expression>> {
-        debug!("enter parse_some_expression");
-
-        if self.match_(&[Token::Some]).is_none() {
-            return Ok(None);
-        }
-
-        let start = if let Some(tok) = self.peek() {
-            tok.1.start
-        } else {
-            return Ok(None);
-        };
-
-        if self.match_(&[Token::Punct('(')]).is_none() {
-            let token = self.previous().unwrap();
-            let err = Simple::expected_input_found(
-                token.1.clone(),
-                [Some("(".to_owned())],
-                Some(token.0.to_string()),
-            );
-            return Err(Box::new(err));
-        }
-
-        let expression = if let Some(expr) = self.parse_expression(PATH.1)? {
-            expr
-        } else {
-            let token = self.previous().unwrap();
-            let err = Simple::expected_input_found(
-                token.1.clone(),
-                [Some("<expression>".to_owned())],
-                Some(token.0.to_string()),
-            );
-            return Err(Box::new(err));
-        };
-
-        if self.match_(&[Token::Punct(')')]).is_none() {
-            let token = self.previous().unwrap();
-            // 🚧 Use the unclosed_delimiter constructor
-            let err = Simple::expected_input_found(
-                token.1.clone(),
-                [Some(")".to_owned())],
-                Some(token.0.to_string()),
-            );
-            return Err(Box::new(err));
-        }
-
-        debug!("exit parse_some_expression");
-
-        Ok(Some((
-            (
-                DwarfExpression::Some(Box::new(expression.0)),
-                start..self.previous().unwrap().1.end,
-            ),
-            LITERAL,
-        )))
-    }
-
     /// Parse a String Literal
     ///
     /// string_literal -> STRING
@@ -3307,7 +3210,7 @@ impl DwarfParser {
         let name = if let Some(ident) = self.parse_ident() {
             ident
         } else {
-            let token = self.previous().unwrap();
+            let token = self.peek().unwrap();
             let err = Simple::expected_input_found(
                 token.1.clone(),
                 [Some("identifier".to_owned())],
@@ -3317,8 +3220,10 @@ impl DwarfParser {
             return Err(Box::new(err));
         };
 
+        self.parse_generic();
+
         if self.match_(&[Token::Punct('(')]).is_none() {
-            let token = self.previous().unwrap();
+            let token = self.peek().unwrap();
             let err = Simple::expected_input_found(
                 token.1.clone(),
                 [Some("'('".to_owned())],
@@ -3805,56 +3710,6 @@ impl DwarfParser {
             )));
         }
 
-        // Match an option
-        if self.match_(&[Token::Option]).is_some() {
-            if self.match_(&[Token::Punct('<')]).is_none() {
-                let token = self.previous().unwrap();
-                let err = Simple::expected_input_found(
-                    token.1.clone(),
-                    [Some("'<'".to_owned())],
-                    Some(token.0.to_string()),
-                );
-                return Err(Box::new(err));
-            }
-
-            let ty = self.parse_type()?;
-
-            if ty.is_none() {
-                let tok = self.previous().unwrap();
-                let err = Simple::expected_input_found(
-                    tok.1.clone(),
-                    [
-                        Some("'bool'".to_owned()),
-                        Some("'float'".to_owned()),
-                        Some("'int'".to_owned()),
-                        Some("'string'".to_owned()),
-                        Some("'Uuid'".to_owned()),
-                        Some("'Option<T>'".to_owned()),
-                        Some("'[T]'".to_owned()),
-                    ],
-                    Some(tok.0.to_string()),
-                );
-                return Err(Box::new(err));
-            }
-
-            if self.match_(&[Token::Punct('>')]).is_none() {
-                let token = self.previous().unwrap();
-                // 🚧 use the unclosed_delimiter constructor
-                let err = Simple::expected_input_found(
-                    token.1.clone(),
-                    [Some("'>'".to_owned())],
-                    Some(token.0.to_string()),
-                );
-                return Err(Box::new(err));
-            }
-
-            debug!("exit parse_type: option", ty);
-            return Ok(Some((
-                Type::Option(Box::new(ty.unwrap())),
-                start..self.peek().unwrap().1.end,
-            )));
-        }
-
         // Match Self
         if self.match_(&[Token::Self_]).is_some() {
             debug!("exit parse_type: self");
@@ -3875,6 +3730,7 @@ impl DwarfParser {
 
         // Match User Defined Type
         if let Some(ident) = self.parse_ident() {
+            self.parse_generic();
             debug!("exit parse_type: user defined", ident);
             return Ok(Some((
                 Type::UserType(ident),
@@ -3883,6 +3739,52 @@ impl DwarfParser {
         }
 
         Ok(None)
+    }
+
+    /// Parse a generic declaration
+    ///
+    /// Basically the <T> in `fn foo<T>()`
+    fn parse_generic(&mut self) -> Result<Option<Spanned<Vec<Spanned<Type>>>>> {
+        let start = if let Some(tok) = self.peek() {
+            tok.1.start
+        } else {
+            return Ok(None);
+        };
+
+        if self.match_(&[Token::Punct('<')]).is_none() {
+            return Ok(None);
+        }
+
+        let mut generics = Vec::new();
+
+        while !self.at_end() && self.match_(&[Token::Punct('>')]).is_none() {
+            match self.parse_type() {
+                Ok(Some(generic)) => {
+                    generics.push(generic);
+                    let _ = self.match_(&[Token::Punct(',')]);
+                }
+                Ok(None) => {
+                    error!("no type");
+                    error!("resynchronize looking for '>'");
+                    while !self.at_end() && self.match_(&[Token::Punct('>')]).is_none() {
+                        self.advance();
+                    }
+                    error!("resynchronized");
+                }
+                Err(error) => {
+                    self.errors.push(*error);
+
+                    error!("resynchronize looking for '>'");
+                    while !self.at_end() && self.match_(&[Token::Punct('>')]).is_none() {
+                        self.advance();
+                    }
+                    error!("resynchronized");
+                }
+            }
+        }
+
+        debug!("exit parse_generic");
+        Ok(Some((generics, start..self.peek().unwrap().1.end)))
     }
 
     /// Parse a Struct
@@ -3914,8 +3816,10 @@ impl DwarfParser {
             return Err(Box::new(err));
         };
 
+        self.parse_generic();
+
         if self.match_(&[Token::Punct('{')]).is_none() {
-            let tok = self.previous().unwrap();
+            let tok = self.peek().unwrap();
             return Err(Box::new(Simple::expected_input_found(
                 tok.1.clone(),
                 [Some("'{".to_owned())],
@@ -3998,6 +3902,8 @@ impl DwarfParser {
             let err = err.with_label("expected identifier");
             return Err(Box::new(err));
         };
+
+        self.parse_generic();
 
         if self.match_(&[Token::Punct('{')]).is_none() {
             let tok = self.previous().unwrap();
@@ -5080,6 +4986,31 @@ mod tests {
         "#;
 
         let ast = parse_dwarf("test_enum", src);
+        assert!(ast.is_ok());
+    }
+
+    #[test]
+    fn test_generic_decls() {
+        let _ = env_logger::builder().is_test(true).try_init();
+
+        let src = r#"
+            struct Foo<I, C, E> {
+                a: I,
+                b: C,
+                c: E,
+            }
+
+            enum Option<T> {
+                Some(T),
+                None,
+            }
+
+            fn foo<T>(a: T) -> T {
+                a
+            }
+        "#;
+
+        let ast = parse_dwarf("test_generics", src);
         assert!(ast.is_ok());
     }
 }
