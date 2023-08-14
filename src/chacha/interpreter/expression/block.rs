@@ -5,7 +5,7 @@ use crate::{
     new_ref, s_read, NewRef, RefType, SarzakStorePtr, Value,
 };
 
-pub fn eval_block(
+pub fn eval(
     block_id: &SarzakStorePtr,
     context: &mut Context,
     vm: &mut VM,

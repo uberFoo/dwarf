@@ -20,7 +20,7 @@ use crate::{
     NewRef, RefType, SarzakStorePtr, Value,
 };
 
-pub fn eval_call(
+pub fn eval(
     call_id: &SarzakStorePtr,
     expression: &RefType<Expression>,
     context: &mut Context,
@@ -240,7 +240,7 @@ pub fn eval_call(
                     "format" => {
                         debug!("evaluating String::format");
                         let mut arg_map = HashMap::default();
-                        let mut arg_values = if !args.is_empty() {
+                        let arg_values = if !args.is_empty() {
                             // The VecDeque is so that I can pop off the args, and then push them
                             // back onto a queue in the same order.
                             // 🚧 I feel like I'm doing something stupid here -- take a look please!

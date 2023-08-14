@@ -2,7 +2,7 @@ use ansi_term::Colour;
 
 use crate::{
     chacha::{error::Result, vm::VM},
-    interpreter::{debug, eval_expression, function, Context, PrintableValueType, UserStruct},
+    interpreter::{debug, eval_expression, function, Context, UserStruct},
     lu_dog::ValueType,
     new_ref, s_read, NewRef, RefType, SarzakStorePtr, Value,
 };
@@ -51,8 +51,7 @@ pub fn eval_struct_expression(
     //         ty,
     //     ))
     // } else {
-    let ty_name = PrintableValueType(&ty, context);
-    let mut user_type = UserStruct::new(ty_name.to_string(), &ty);
+    let mut user_type = UserStruct::new(s_read!(woog_struct).name.to_owned(), &ty);
     for (name, _ty, value, _expr) in field_exprs {
         user_type.define_field(&name, value);
     }

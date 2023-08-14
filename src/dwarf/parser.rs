@@ -5065,7 +5065,7 @@ mod tests {
             enum Bar {
                 Foo(Foo),
                 Bar{a: int, b: int},
-                Baz,
+                Baz(int),
             }
 
             fn main() {
@@ -5075,7 +5075,7 @@ mod tests {
 
                 let a = Bar::Foo(Foo::Bar);
                 let b = Bar::Bar{a: 1, b: 2};
-                let c = Bar::Baz;
+                let c = Bar::Baz(42);
             }
         "#;
 

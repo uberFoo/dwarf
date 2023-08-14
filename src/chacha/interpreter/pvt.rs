@@ -33,7 +33,7 @@ impl<'a> fmt::Display for PrintableValueType<'a> {
                 let enumeration = s_read!(enumeration);
                 write!(
                     f,
-                    "{}{}",
+                    "{} {}",
                     TY_WARN_CLR.paint("enum"),
                     TY_CLR.italic().paint(&enumeration.name)
                 )
@@ -150,7 +150,7 @@ impl<'a> fmt::Display for PrintableValueType<'a> {
                 let woog_struct = s_read!(woog_struct);
                 write!(
                     f,
-                    "{}{}",
+                    "{} {}",
                     TY_WARN_CLR.paint("struct"),
                     TY_CLR.italic().paint(&woog_struct.name)
                 )

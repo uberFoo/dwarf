@@ -6,7 +6,7 @@ use crate::{
 /// Eval an error expression
 ///
 /// I think that this just needs to go away -- I don't think it's used.
-pub fn eval_error(
+pub fn eval(
     error: &SarzakStorePtr,
     context: &mut Context,
 ) -> Result<(RefType<Value>, RefType<ValueType>)> {

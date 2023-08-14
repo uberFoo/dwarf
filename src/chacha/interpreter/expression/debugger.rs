@@ -7,7 +7,7 @@ use crate::{
     new_ref, s_read, NewRef, RefType, Value,
 };
 
-pub fn eval_debugger(context: &mut Context) -> Result<(RefType<Value>, RefType<ValueType>)> {
+pub fn eval(context: &mut Context) -> Result<(RefType<Value>, RefType<ValueType>)> {
     debug!("StatementEnum::Debugger");
     let mut running = RUNNING.lock();
     *running = false;

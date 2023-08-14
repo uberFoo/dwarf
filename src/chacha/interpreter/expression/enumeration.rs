@@ -1,11 +1,11 @@
 use crate::{
-    chacha::{error::Result, value::UserEnum, vm::VM},
-    interpreter::Context,
-    lu_dog::{ValueType, ValueTypeEnum},
+    chacha::{error::Result, value::EnumVariant, value::UserEnum, vm::VM},
+    interpreter::{eval_expression, Context},
+    lu_dog::{EnumFieldEnum, ValueType, ValueTypeEnum},
     new_ref, s_read, NewRef, RefType, SarzakStorePtr, Value,
 };
 
-pub fn eval_enum_field(
+pub fn eval(
     enum_field: &SarzakStorePtr,
     context: &mut Context,
     vm: &mut VM,
@@ -27,11 +27,26 @@ pub fn eval_enum_field(
         })
         .unwrap();
 
-    let user_enum = UserEnum::new(
-        woog_enum.name.clone(),
-        &ty,
-        new_ref!(Value, Value::String(format!("{}", field.name))),
-    );
+    let value = match field.subtype {
+        EnumFieldEnum::Plain(_) => new_ref!(
+            Value,
+            Value::EnumVariant(EnumVariant::Plain(format!("{}", field.name)))
+        ),
+        EnumFieldEnum::StructField(ref sf) => panic!(),
+        EnumFieldEnum::TupleField(ref tf) => {
+            let tuple = s_read!(lu_dog).exhume_tuple_field(tf).unwrap();
+            let tuple = s_read!(tuple);
+            let expr = tuple.expression.unwrap();
+            let expr = s_read!(lu_dog).exhume_expression(&expr).unwrap();
+            let (value, _) = eval_expression(expr, context, vm)?;
+            new_ref!(
+                Value,
+                Value::EnumVariant(EnumVariant::Tuple(field.name.to_owned(), value))
+            )
+        }
+    };
+
+    let user_enum = UserEnum::new(woog_enum.name.clone(), &ty, value);
     let user_enum = new_ref!(UserEnum, user_enum);
 
     Ok((new_ref!(Value, Value::Enum(user_enum)), ty))

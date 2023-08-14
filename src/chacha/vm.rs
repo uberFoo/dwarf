@@ -586,8 +586,6 @@ impl<'b> VM<'b> {
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
-
     use rustc_hash::FxHashMap as HashMap;
     use tracy_client::Client;
 

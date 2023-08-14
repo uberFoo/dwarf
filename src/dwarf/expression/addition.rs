@@ -19,10 +19,10 @@ use crate::{
 // Let's just say that I don't get this lint. The docs say you have to box it
 // first, but what about when it's already boxed? I don't get it.
 #[allow(clippy::borrowed_box)]
-pub fn inter_addition(
+pub fn inter(
     lhs_p: &Box<(ParserExpression, Range<usize>)>,
     rhs_p: &Box<(ParserExpression, Range<usize>)>,
-    span: &RefType<Span>,
+    span: RefType<Span>,
     block: &RefType<Block>,
     context: &mut Context,
     lu_dog: &mut LuDogStore,
@@ -68,5 +68,5 @@ pub fn inter_addition(
     let value = XValue::new_expression(block, &lhs_ty, &expr, lu_dog);
     s_write!(span).x_value = Some(s_read!(value).id);
 
-    Ok(((expr, span.clone()), lhs_ty))
+    Ok(((expr, span), lhs_ty))
 }

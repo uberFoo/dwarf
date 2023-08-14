@@ -76,11 +76,42 @@ pub enum FfiValue {
 }
 
 #[derive(Clone, Debug)]
+pub enum EnumVariant {
+    Plain(String),
+    Struct(String, RefType<UserStruct>),
+    Tuple(String, RefType<Value>),
+}
+
+impl PartialEq for EnumVariant {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Plain(a), Self::Plain(b)) => a == b,
+            (Self::Struct(a, c), Self::Struct(b, d)) => a == b && c == d,
+            (Self::Tuple(a, c), Self::Tuple(b, d)) => a == b && c == d,
+            _ => false,
+        }
+    }
+}
+
+impl Eq for EnumVariant {}
+
+impl fmt::Display for EnumVariant {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::Plain(s) => write!(f, "{s}"),
+            Self::Struct(name, s) => write!(f, "{name}{}", s_read!(s)),
+            Self::Tuple(name, t) => write!(f, "{name}({})", s_read!(t)),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
 pub enum Value {
     Boolean(bool),
     Char(char),
     Empty,
     Enum(RefType<UserEnum>),
+    EnumVariant(EnumVariant),
     Error(String),
     Float(DwarfFloat),
     /// Function
@@ -295,6 +326,7 @@ impl fmt::Display for Value {
             Self::Char(char_) => write!(f, "{char_}"),
             Self::Empty => write!(f, "()"),
             Self::Enum(ty) => write!(f, "{}", s_read!(ty)),
+            Self::EnumVariant(var) => write!(f, "{var}"),
             Self::Error(e) => write!(f, "{}: {e}", Colour::Red.bold().paint("error")),
             Self::Float(num) => write!(f, "{num}"),
             Self::Function(_) => write!(f, "<function>"),
@@ -311,7 +343,7 @@ impl fmt::Display for Value {
             Self::Range(range) => write!(f, "{range:?}"),
             // Self::StoreType(store) => write!(f, "{:?}", store),
             Self::String(str_) => write!(f, "{str_}"),
-            Self::Struct(ty) => writeln!(f, "{}", s_read!(ty)),
+            Self::Struct(ty) => write!(f, "{}", s_read!(ty)),
             // Self::String(str_) => write!(f, "\"{}\"", str_),
             Self::Table(table) => write!(f, "{table:?}"),
             Self::Thonk(name, number) => write!(f, "{name} [{number}]"),
@@ -833,6 +865,7 @@ impl std::cmp::PartialEq for Value {
             (Value::Char(a), Value::Char(b)) => a == b,
             (Value::Empty, Value::Empty) => true,
             (Value::Enum(a), Value::Enum(b)) => *s_read!(a) == *s_read!(b),
+            (Value::EnumVariant(a), Value::EnumVariant(b)) => a == b,
             (Value::Float(a), Value::Float(b)) => a == b,
             (Value::Float(a), Value::Integer(b)) => a == &(*b as DwarfFloat),
             (Value::Integer(a), Value::Integer(b)) => a == b,
@@ -976,12 +1009,12 @@ impl UserStruct {
 
 impl fmt::Display for UserStruct {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let mut out = f.debug_struct(&self.type_name);
         let mut attrs = self.attrs.0.iter().collect::<Vec<_>>();
         attrs.sort_by(|(k1, _), (k2, _)| k1.cmp(k2));
 
+        let mut out = f.debug_struct(&self.type_name);
         for (k, v) in attrs {
-            out.field(k, &s_read!(v));
+            out.field(k, &format_args!("{}", &s_read!(v)));
         }
 
         out.finish()

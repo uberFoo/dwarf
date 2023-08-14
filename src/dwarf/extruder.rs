@@ -9,7 +9,7 @@ use uuid::Uuid;
 use crate::{
     dwarf::{
         error::{DwarfError, Result},
-        expression::{addition, and},
+        expression::{addition, and, expr_as, static_method_call},
         AttributeMap, DwarfInteger, EnumField, Expression as ParserExpression, InnerAttribute,
         InnerItem, Item, PrintableValueType, Spanned, Statement as ParserStatement, Type,
     },
@@ -21,13 +21,13 @@ use crate::{
             ExternalImplementation, Field, FieldExpression, ForLoop, Function, ImplementationBlock,
             Index, IntegerLiteral, Item as WoogItem, ItemStatement, Lambda, LambdaParameter,
             LetStatement, Literal, LocalVariable, Parameter, Plain, Print, RangeExpression,
-            Span as LuDogSpan, Statement, StaticMethodCall, StringLiteral, StructExpression,
-            ValueType, ValueTypeEnum, Variable, VariableExpression, WoogOption, WoogStruct, XIf,
-            XValue, XValueEnum, ZObjectStore, ZSome,
+            Span as LuDogSpan, Statement, StringLiteral, StructExpression, TupleField, ValueType,
+            ValueTypeEnum, Variable, VariableExpression, WoogOption, WoogStruct, XIf, XValue,
+            XValueEnum, ZObjectStore, ZSome,
         },
         Argument, Binary, BooleanLiteral, Comparison, DwarfSourceFile, FieldAccess,
         FieldAccessTarget, FloatLiteral, List, ListElement, ListExpression, MethodCall, Operator,
-        Reference, ResultStatement, TypeCast, Unary, VariableEnum, XReturn,
+        Reference, ResultStatement, Unary, VariableEnum, XReturn,
     },
     new_ref, s_read, s_write,
     sarzak::{store::ObjectStore as SarzakStore, types::Ty},
@@ -73,6 +73,8 @@ macro_rules! link_argument {
     }};
 }
 
+pub(crate) use link_argument;
+
 macro_rules! link_statement {
     ($last:expr, $next:expr, $store:expr) => {{
         let next = s_read!($next);
@@ -109,6 +111,7 @@ macro_rules! function {
         name.strip_suffix("::f").unwrap()
     }};
 }
+pub(crate) use function;
 
 macro_rules! debug {
     ($($arg:tt)*) => {
@@ -123,8 +126,9 @@ macro_rules! debug {
         )
     };
 }
+pub(crate) use debug;
 
-macro_rules! warn {
+macro_rules! e_warn {
     ($($arg:tt)*) => {
         log::warn!(
             target: "extruder",
@@ -137,6 +141,7 @@ macro_rules! warn {
         )
     };
 }
+pub(crate) use e_warn;
 
 macro_rules! error {
     ($($arg:tt)*) => {
@@ -151,6 +156,7 @@ macro_rules! error {
         )
     };
 }
+pub(crate) use error;
 
 type Span = Range<usize>;
 pub(super) type ExprSpan = (RefType<Expression>, RefType<LuDogSpan>);
@@ -761,7 +767,7 @@ pub fn inter_statement(
             // entry point for the REPL, and conditionally needing to generate an
             // error would support the idea.
             if let ValueTypeEnum::Unknown(_) = s_read!(ty).subtype {
-                warn!("Unknown type for variable {}", var_name);
+                e_warn!("Unknown type for variable {}", var_name);
             }
 
             // Create a variable, now that we have a type from the expression.
@@ -866,32 +872,13 @@ pub(super) fn inter_expression(
 
     match &*s_read!(expr) {
         ParserExpression::Addition(ref lhs_p, ref rhs_p) => {
-            addition::inter_addition(lhs_p, rhs_p, &span, block, context, lu_dog)
+            addition::inter(lhs_p, rhs_p, span, block, context, lu_dog)
         }
         ParserExpression::And(ref lhs_p, ref rhs_p) => {
-            and::inter_and(lhs_p, rhs_p, &span, block, context, lu_dog)
+            and::inter(lhs_p, rhs_p, span, block, context, lu_dog)
         }
-        //
-        // As
-        //
         ParserExpression::As(ref expr, ref ty) => {
-            let (expr, expr_ty) = inter_expression(
-                &new_ref!(ParserExpression, expr.0.to_owned()),
-                &expr.1,
-                block,
-                context,
-                lu_dog,
-            )?;
-            debug!("As lhs: {expr:?}: {expr_ty:?}");
-
-            context.location = location!();
-            let as_type = get_value_type(&ty.0, &ty.1, None, context, lu_dog)?;
-            let as_op = TypeCast::new(&expr.0, &as_type, lu_dog);
-            let expr = Expression::new_type_cast(&as_op, lu_dog);
-            let value = XValue::new_expression(block, &as_type, &expr, lu_dog);
-            s_write!(span).x_value = Some(s_read!(value).id);
-
-            Ok(((expr, span), as_type))
+            expr_as::inter(expr, ty, span, block, context, lu_dog)
         }
         //
         // Asm
@@ -2502,7 +2489,7 @@ pub(super) fn inter_expression(
         //
         ParserExpression::PlainEnum(enum_path, (field_name, field_span)) => {
             // 🚧 this won't survive as-is
-            let (path, span) =
+            let (path, path_span) =
                 if let (ParserExpression::PathInExpression(path), span) = enum_path.as_ref() {
                     (path, span)
                 } else {
@@ -2546,20 +2533,13 @@ pub(super) fn inter_expression(
                 let expr = Expression::new_enum_field(&field, lu_dog);
 
                 let value = XValue::new_expression(&block, &ty, &expr, lu_dog);
-                let span = LuDogSpan::new(
-                    field_span.end as i64,
-                    span.start as i64,
-                    &context.source,
-                    None,
-                    Some(&value),
-                    lu_dog,
-                );
+                s_write!(span).x_value = Some(s_read!(value).id);
 
                 Ok(((expr, span), ty))
             } else {
                 Err(vec![DwarfError::NoSuchField {
                     name: enum_name.to_owned(),
-                    name_span: span.to_owned(),
+                    name_span: path_span.to_owned(),
                     field: field_name.to_owned(),
                     span: field_span.to_owned(),
                 }])
@@ -2642,89 +2622,7 @@ pub(super) fn inter_expression(
         // StaticMethodCall
         //
         ParserExpression::StaticMethodCall(path, (method, _), params) => {
-            let path = if let ParserExpression::PathInExpression(path) = path.as_ref() {
-                path
-            } else {
-                panic!(
-                    "I don't think that we should ever see anything other than a path here: {:?}",
-                    path
-                );
-            };
-
-            let type_name = if let Some(Type::UserType((obj, _))) = path.last() {
-                obj.de_sanitize().to_owned()
-            } else {
-                panic!("I don't think that we should ever see anything other than a user type here: {:?}", path);
-            };
-
-            debug!("type_name {:?}", type_name);
-
-            let meth = StaticMethodCall::new(
-                method.to_owned(),
-                type_name.to_owned(),
-                Uuid::new_v4(),
-                lu_dog,
-            );
-            let call = Call::new_static_method_call(true, None, None, &meth, lu_dog);
-            let expr = Expression::new_call(&call, lu_dog);
-
-            debug!("name {}", type_name);
-            debug!("method {}", method);
-
-            // 🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧
-            // So we are down to this. I suppose that we can check the obj against
-            // what's been entered thus far. Really this should be a second pass
-            // then. For now, I'm going to hack something in...
-            // We could do something with the imports...
-            // 🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧
-            let ty = if type_name == "Uuid" && method == "new" {
-                ValueType::new_ty(&Ty::new_s_uuid(context.sarzak), lu_dog)
-            } else {
-                debug!("ParserExpression::StaticMethodCall: looking up type {type_name}");
-
-                lookup_woog_struct_method_return_type(&type_name, method, lu_dog)
-
-                // Look up the struct in the imported models.
-                // I'll revisit this model business after I get the basics working.
-                // for model in models {
-                //     if let Some(obj) = model.exhume_object_id_by_name(&type_name) {
-                //         let id = if let Some(s) = lu_dog
-                //             .iter_woog_struct()
-                //             .find(|s| s_read!(s).object == Some(obj))
-                //         {
-                //             s_read!(s).id
-                //         } else {
-                //             model.exhume_ty(&obj).unwrap().id()
-                //         };
-
-                //         ty = lu_dog.exhume_value_type(&id).unwrap().clone();
-                //         break;
-                //     }
-                // }
-                // ty
-            };
-
-            let mut last_arg_uuid: Option<usize> = None;
-            for (position, param) in params.iter().enumerate() {
-                let (arg_expr, _ty) = inter_expression(
-                    &new_ref!(ParserExpression, param.0.to_owned()),
-                    &param.1,
-                    block,
-                    context,
-                    lu_dog,
-                )?;
-                let arg = Argument::new(position as DwarfInteger, &arg_expr.0, &call, None, lu_dog);
-                if position == 0 {
-                    s_write!(call).argument = Some(s_read!(arg).id);
-                }
-
-                last_arg_uuid = link_argument!(last_arg_uuid, arg, lu_dog);
-            }
-
-            let value = XValue::new_expression(block, &ty, &expr, lu_dog);
-            s_write!(span).x_value = Some(s_read!(value).id);
-
-            Ok(((expr, span), ty))
+            static_method_call::inter(path, method, span, params, block, context, lu_dog)
         }
         //
         // StringLiteral
@@ -2753,7 +2651,10 @@ pub(super) fn inter_expression(
                 obj
             } else {
                 return Err(vec![DwarfError::Internal {
-                    description: "Expected a local variable in struct expression".to_owned(),
+                    description: format!(
+                        "Expected a local variable in struct expression, found {:?}",
+                        name.0
+                    ),
                     location: location!(),
                 }]);
             };
@@ -3108,8 +3009,25 @@ fn inter_enum(
     let _ = ValueType::new_enumeration(&woog_enum, lu_dog);
 
     for (number, ((name, _), field)) in variants.iter().enumerate() {
-        let plain = Plain::new(number as DwarfInteger, lu_dog);
-        let _ = LuDogEnumField::new_plain(name.to_owned(), Some(&woog_enum), &plain, lu_dog);
+        match field {
+            // Some(EnumField::Struct(ref fields)) => {
+            //     let _ = LuDogEnumField::new_struct_field(name.to_owned(), Some(&woog_enum), fields, lu_dog);
+            // }
+            Some(EnumField::Tuple((type_, span))) => {
+                let ty = match get_value_type(type_, span, None, context, lu_dog) {
+                    Ok(ty) => ty,
+                    Err(err) => return Err(err),
+                };
+
+                let field = TupleField::new(None, &ty, lu_dog);
+                LuDogEnumField::new_tuple_field(name.to_owned(), &woog_enum, &field, lu_dog);
+            }
+            _ => {
+                let plain = Plain::new(number as DwarfInteger, lu_dog);
+                let _ = LuDogEnumField::new_plain(name.to_owned(), &woog_enum, &plain, lu_dog);
+            }
+        }
+        // let plain = Plain::new(number as DwarfInteger, lu_dog);
     }
 
     Ok(())
@@ -3282,7 +3200,7 @@ fn inter_struct_fields(
 /// somehow. Well, it is stored as the type of something, say a parameter. So, we
 /// can look it up that way. Probably when, for instance, we type check a function
 /// before execution.
-fn get_value_type(
+pub(crate) fn get_value_type(
     type_: &Type,
     span: &Span,
     enclosing_type: Option<&RefType<ValueType>>,
@@ -3430,6 +3348,10 @@ fn get_value_type(
                     // in types that are defined in dwarf source.
                     let woog_struct = lu_dog.exhume_woog_struct(id).unwrap();
                     Ok(ValueType::new_woog_struct(&woog_struct, lu_dog))
+                } else if let Some(ref id) = lu_dog.exhume_enumeration_id_by_name(name) {
+                    // Here too, but for enums.
+                    let woog_enum = lu_dog.exhume_enumeration(id).unwrap();
+                    Ok(ValueType::new_enumeration(&woog_enum, lu_dog))
                 } else if let Some(ref id) = lu_dog.exhume_z_object_store_id_by_name(name) {
                     let store = lu_dog.exhume_z_object_store(id).unwrap();
                     Ok(ValueType::new_z_object_store(&store, lu_dog))
@@ -3450,7 +3372,7 @@ fn get_value_type(
     }
 }
 
-fn lookup_woog_struct_method_return_type(
+pub(crate) fn lookup_woog_struct_method_return_type(
     type_name: &str,
     method: &str,
     lu_dog: &mut LuDogStore,
@@ -3482,7 +3404,7 @@ fn lookup_woog_struct_method_return_type(
     }
 }
 
-trait DeSanitize {
+pub(crate) trait DeSanitize {
     fn de_sanitize(&self) -> &str;
 }
 
@@ -3506,7 +3428,7 @@ impl DeSanitize for &str {
     }
 }
 
-fn de_sanitize(string: &str) -> Option<&str> {
+pub(crate) fn de_sanitize(string: &str) -> Option<&str> {
     match string {
         "Ty" => Some("Type"),
         "WoogOption" => Some("Option"),

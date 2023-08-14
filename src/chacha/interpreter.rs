@@ -1,4 +1,4 @@
-use std::{ops::Range, path::Path};
+use std::ops::Range;
 
 use ansi_term::Colour;
 use circular_queue::CircularQueue;
@@ -6,7 +6,6 @@ use crossbeam::channel::unbounded;
 use lazy_static::lazy_static;
 use log::{self, log_enabled, Level::Debug};
 use parking_lot::{Condvar, Mutex};
-use rustc_hash::FxHashMap as HashMap;
 use snafu::{prelude::*, Location};
 use tracy_client::{span, Client};
 use uuid::Uuid;
@@ -25,7 +24,6 @@ use crate::{
     },
     new_ref, s_read,
     sarzak::store::ObjectStore as SarzakStore,
-    sarzak::MODEL as SARZAK_MODEL,
     ChaChaError, DwarfInteger, ModelStore, NewRef, RefType, Value,
 };
 
@@ -568,13 +566,11 @@ fn eval_expression(
     }
 
     match s_read!(expression).subtype {
-        ExpressionEnum::Block(ref block) => block::eval_block(block, context, vm),
-        ExpressionEnum::Call(ref call) => call::eval_call(call, &expression, context, vm),
-        ExpressionEnum::Debugger(_) => debugger::eval_debugger(context),
-        ExpressionEnum::EnumField(ref enum_field) => {
-            enumeration::eval_enum_field(enum_field, context, vm)
-        }
-        ExpressionEnum::ErrorExpression(ref error) => expression::error::eval_error(error, context),
+        ExpressionEnum::Block(ref block) => block::eval(block, context, vm),
+        ExpressionEnum::Call(ref call) => call::eval(call, &expression, context, vm),
+        ExpressionEnum::Debugger(_) => debugger::eval(context),
+        ExpressionEnum::EnumField(ref enum_field) => enumeration::eval(enum_field, context, vm),
+        ExpressionEnum::ErrorExpression(ref error) => expression::error::eval(error, context),
         ExpressionEnum::FieldAccess(ref field) => field::eval_field_access(field, context, vm),
         ExpressionEnum::FieldExpression(ref field_expr) => {
             field::eval_field_expression(field_expr, context, vm)
