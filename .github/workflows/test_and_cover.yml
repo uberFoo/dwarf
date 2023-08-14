@@ -25,6 +25,13 @@ jobs:
                   sudo mv grcov /usr/local/bin/
             - name: Install llvm-tools-preview
               run: rustup component add llvm-tools-preview
+            - name: Build plug-ins
+              run: |
+                  cd plug-ins/merlin
+                  cargo build
+                  cd ../sarzak
+                  cargo build
+                  cd ../..
             - name: Build and run tests with coverage
               run: |
                   TRACY_NO_INVARIANT_CHECK=1 CARGO_INCREMENTAL=0 RUSTFLAGS='-Cinstrument-coverage' RUSTDOCFLAGS='-Cinstrument-coverage -Z unstable-options' LLVM_PROFILE_FILE='cargo-test-%p-%m.profraw' cargo +nightly test --no-default-features --features "single-vec, repl"

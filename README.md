@@ -66,13 +66,13 @@ In no particular order:
 
 - [ ] VSCode integration
 - [ ] Multiple files (use items)
-- [ ] enums
+- [x] enums
 - [x] lambdas
 - [ ] Compiler for VM
 - [ ] Visibility modifiers
 - [ ] Generics
 - [ ] Macros (Yes, and I don't know why other interpreted languages don't have them. Am I crazy?)
-- [ ] Extensions via plugins
+- [x] Extensions via plugins
 - [ ] Char type
 - [ ] if let expressions
 - [ ] Doc Comments, with Doc Tests
@@ -94,6 +94,9 @@ In fact, I use the Rust language syntax parser in `vscode` to highlight, navigat
 The bits that are missing include iterators, enumerations, paths, visibility modifiers, generics (for now), and the list goes on.
 
 ## REPL
+
+dwarf has a REPL.
+Pass the `-r` flag to start it.
 
 ## Debugger
 
