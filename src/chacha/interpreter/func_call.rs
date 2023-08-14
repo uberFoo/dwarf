@@ -126,12 +126,12 @@ fn eval_external_function_call(
             })?;
 
             let ctor = root_module.new();
-            // let plugin = new_ref!(PluginType, ctor(vec![].into()).unwrap());
-            let plugin = new_ref!(
-                PluginType,
-                ctor(vec![Value::String("../sarzak/models/sarzak.v2.json".into()).into()].into())
-                    .unwrap()
-            );
+            let plugin = new_ref!(PluginType, ctor(vec![].into()).unwrap());
+            // let plugin = new_ref!(
+            //     PluginType,
+            //     ctor(vec![Value::String("../sarzak/models/sarzak.v2.json".into()).into()].into())
+            //         .unwrap()
+            // );
             model.1.replace(plugin.clone());
 
             let value = new_ref!(Value, Value::PlugIn(plugin));
