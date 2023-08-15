@@ -5,8 +5,8 @@ use log;
 use rustc_hash::FxHashMap as HashMap;
 
 use crate::dwarf::{
-    Attribute, DwarfFloat, EnumField, Expression as DwarfExpression, InnerAttribute, InnerItem,
-    Item, Spanned, Statement, Token, Type,
+    Attribute, DwarfFloat, EnumField, Expression as DwarfExpression, Generics, InnerAttribute,
+    InnerItem, Item, Spanned, Statement, Token, Type,
 };
 
 use super::{error::DwarfError, DwarfInteger};
@@ -97,6 +97,7 @@ macro_rules! error {
 }
 
 type Result<T, E = Box<Simple<String>>> = std::result::Result<T, E>;
+type Expression = (Spanned<DwarfExpression>, (u8, u8));
 
 // These are the binding strengths of the operators used by the parser.
 // The idea comes from
@@ -123,8 +124,6 @@ const LITERAL: (u8, u8) = (0, 1);
 const BLOCK: (u8, u8) = (0, 0);
 const STRUCT: (u8, u8) = (0, 0);
 const ENTER: u8 = 0;
-
-type Expression = (Spanned<DwarfExpression>, (u8, u8));
 
 fn lexer() -> impl Parser<char, Vec<Spanned<Token>>, Error = Simple<char>> {
     // A parser for ints
@@ -2789,6 +2788,28 @@ impl DwarfParser {
             return Err(Box::new(err));
         };
 
+        if let Ok(Some(g)) = self.parse_generics() {
+            if self.match_(&[Token::Punct(':')]).is_none() {
+                debug!("exit no colon");
+                return Ok(None);
+            }
+
+            if self.match_(&[Token::Punct(':')]).is_none() {
+                debug!("exit no other colon");
+                return Ok(None);
+            }
+
+            let last_type = path.pop().unwrap();
+            let new_name = format!("{}{}", last_type, generic_to_string(&g).0);
+            let span = if let Type::UserType((_, span)) = &last_type {
+                span.to_owned()
+            } else {
+                unreachable!()
+            };
+            let new_type = Type::UserType((new_name, span.start..g.1.end));
+            path.push(new_type);
+        }
+
         let next_ident = if let Some(ident) = self.parse_ident() {
             ident
         } else {
@@ -3220,7 +3241,7 @@ impl DwarfParser {
             return Err(Box::new(err));
         };
 
-        self.parse_generic();
+        self.parse_generics();
 
         if self.match_(&[Token::Punct('(')]).is_none() {
             let token = self.peek().unwrap();
@@ -3730,7 +3751,25 @@ impl DwarfParser {
 
         // Match User Defined Type
         if let Some(ident) = self.parse_ident() {
-            self.parse_generic();
+            let ident = if let Ok(Some(generics)) = self.parse_generics() {
+                let span = ident.1;
+                let mut ident = ident.0.to_owned();
+                ident.push_str("<");
+                let mut first_time = true;
+                for (name, _) in generics.0 {
+                    if first_time {
+                        first_time = false;
+                    } else {
+                        ident.push_str(", ");
+                    }
+                    ident.push_str(&name.to_string());
+                }
+
+                ident.push_str(">");
+                (ident, span)
+            } else {
+                ident
+            };
             debug!("exit parse_type: user defined", ident);
             return Ok(Some((
                 Type::UserType(ident),
@@ -3744,7 +3783,7 @@ impl DwarfParser {
     /// Parse a generic declaration
     ///
     /// Basically the <T> in `fn foo<T>()`
-    fn parse_generic(&mut self) -> Result<Option<Spanned<Vec<Spanned<Type>>>>> {
+    fn parse_generics(&mut self) -> Result<Option<Generics>> {
         let start = if let Some(tok) = self.peek() {
             tok.1.start
         } else {
@@ -3816,7 +3855,7 @@ impl DwarfParser {
             return Err(Box::new(err));
         };
 
-        self.parse_generic();
+        self.parse_generics();
 
         if self.match_(&[Token::Punct('{')]).is_none() {
             let tok = self.peek().unwrap();
@@ -3903,7 +3942,7 @@ impl DwarfParser {
             return Err(Box::new(err));
         };
 
-        self.parse_generic();
+        let generics = self.parse_generics()?;
 
         if self.match_(&[Token::Punct('{')]).is_none() {
             let tok = self.previous().unwrap();
@@ -4011,7 +4050,7 @@ impl DwarfParser {
             self.previous().unwrap().1.end
         };
 
-        Ok(Some((InnerItem::Enum(name, fields), start..end)))
+        Ok(Some((InnerItem::Enum(name, fields, generics), start..end)))
     }
 
     /// Parse an identifier
@@ -4172,6 +4211,23 @@ impl DwarfParser {
 
         self.tokens.get(self.current - 1)
     }
+}
+
+fn generic_to_string(generic: &Generics) -> Spanned<String> {
+    let mut result = String::new();
+    let mut first_time = true;
+
+    result.push_str("<");
+    for (name, _) in &generic.0 {
+        if first_time {
+            first_time = false;
+        } else {
+            result.push_str(", ");
+        }
+        result.push_str(&name.to_string());
+    }
+    result.push_str(">");
+    (result, generic.1.clone())
 }
 
 /// Interpreter Entry Point
@@ -5007,6 +5063,10 @@ mod tests {
 
             fn foo<T>(a: T) -> T {
                 a
+            }
+
+            fn foo() {
+                let a = Option::<int>::None;
             }
         "#;
 

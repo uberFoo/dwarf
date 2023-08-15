@@ -3,6 +3,7 @@ use std::ops::Range;
 use ansi_term::Colour;
 use heck::ToUpperCamelCase;
 use log;
+use rustc_hash::FxHashSet as HashSet;
 use snafu::{location, Location};
 use uuid::Uuid;
 
@@ -10,20 +11,21 @@ use crate::{
     dwarf::{
         error::{DwarfError, Result},
         expression::{addition, and, expr_as, static_method_call},
-        AttributeMap, DwarfInteger, EnumField, Expression as ParserExpression, InnerAttribute,
-        InnerItem, Item, PrintableValueType, Spanned, Statement as ParserStatement, Type,
+        AttributeMap, DwarfInteger, EnumField, Expression as ParserExpression, Generics,
+        InnerAttribute, InnerItem, Item, PrintableValueType, Spanned, Statement as ParserStatement,
+        Type,
     },
     lu_dog::{
         store::ObjectStore as LuDogStore,
         types::{
-            Block, Body, BooleanOperator, Call, EnumField as LuDogEnumField, Enumeration,
-            ErrorExpression, Expression, ExpressionEnum, ExpressionStatement,
-            ExternalImplementation, Field, FieldExpression, ForLoop, Function, ImplementationBlock,
-            Index, IntegerLiteral, Item as WoogItem, ItemStatement, Lambda, LambdaParameter,
-            LetStatement, Literal, LocalVariable, Parameter, Plain, Print, RangeExpression,
-            Span as LuDogSpan, Statement, StringLiteral, StructExpression, StructField, TupleField,
-            ValueType, ValueTypeEnum, Variable, VariableExpression, WoogOption, WoogStruct, XIf,
-            XValue, XValueEnum, ZObjectStore, ZSome,
+            Block, Body, BooleanOperator, Call, EnumField as LuDogEnumField, EnumFieldEnum,
+            Enumeration, ErrorExpression, Expression, ExpressionEnum, ExpressionStatement,
+            ExternalImplementation, Field, FieldExpression, ForLoop, Function, Generic,
+            ImplementationBlock, Index, IntegerLiteral, Item as WoogItem, ItemStatement, Lambda,
+            LambdaParameter, LetStatement, Literal, LocalVariable, Parameter, Plain, Print,
+            RangeExpression, Span as LuDogSpan, Statement, StringLiteral, StructExpression,
+            StructField, TupleField, ValueType, ValueTypeEnum, Variable, VariableExpression,
+            WoogOption, WoogStruct, XIf, XValue, XValueEnum, ZObjectStore, ZSome,
         },
         Argument, Binary, BooleanLiteral, Comparison, DwarfSourceFile, FieldAccess,
         FieldAccessTarget, FloatLiteral, List, ListElement, ListExpression, MethodCall, Operator,
@@ -215,6 +217,7 @@ struct ConveyEnum<'a> {
     name: &'a str,
     attributes: &'a AttributeMap,
     fields: &'a [(Spanned<String>, Option<EnumField>)],
+    generics: &'a Option<Generics>,
 }
 
 impl<'a> ConveyEnum<'a> {
@@ -222,11 +225,13 @@ impl<'a> ConveyEnum<'a> {
         name: &'a str,
         attributes: &'a AttributeMap,
         fields: &'a [(Spanned<String>, Option<EnumField>)],
+        generics: &'a Option<Generics>,
     ) -> Self {
         Self {
             name,
             attributes,
             fields,
+            generics,
         }
     }
 }
@@ -339,9 +344,9 @@ fn walk_tree(ast: &[Item], context: &mut Context, lu_dog: &mut LuDogStore) -> Re
     for item in ast {
         match item {
             Item {
-                item: (InnerItem::Enum((name, _), fields), _),
+                item: (InnerItem::Enum((name, _), fields, generics), _),
                 attributes,
-            } => enums.push(ConveyEnum::new(name, attributes, fields)),
+            } => enums.push(ConveyEnum::new(name, attributes, fields, generics)),
             Item {
                 item: (InnerItem::Function((name, _name_span), params, return_type, stmts), span),
                 attributes,
@@ -390,10 +395,11 @@ fn walk_tree(ast: &[Item], context: &mut Context, lu_dog: &mut LuDogStore) -> Re
         name,
         attributes,
         fields,
+        generics,
     } in &enums
     {
         debug!("Interring enum `{}`", name);
-        let _ = inter_enum(name, attributes, fields, context, lu_dog).map_err(|mut e| {
+        let _ = inter_enum(name, attributes, fields, generics, context, lu_dog).map_err(|mut e| {
             errors.append(&mut e);
         });
     }
@@ -453,6 +459,21 @@ fn walk_tree(ast: &[Item], context: &mut Context, lu_dog: &mut LuDogStore) -> Re
             lu_dog,
         )
         .map_err(|mut e| errors.append(&mut e));
+    }
+
+    // Now we remove the generics from the store.
+    for ConveyEnum {
+        name,
+        attributes,
+        fields,
+        generics,
+    } in &enums
+    {
+        debug!("Interring enum `{}`", name);
+        let _ = exorcise_generic_enums(name, attributes, fields, generics, context, lu_dog)
+            .map_err(|mut e| {
+                errors.append(&mut e);
+            });
     }
 
     if errors.is_empty() {
@@ -2482,6 +2503,7 @@ pub(super) fn inter_expression(
         // Plain enumeration
         //
         ParserExpression::PlainEnum(enum_path, (field_name, field_span)) => {
+            debug!("PlainEnum {:?}", enum_path);
             // 🚧 this won't survive as-is
             let (path, path_span) =
                 if let (ParserExpression::PathInExpression(path), span) = enum_path.as_ref() {
@@ -2502,9 +2524,11 @@ pub(super) fn inter_expression(
             debug!("enum_name {:?}", enum_name);
 
             // Check the field name against the declaration
-            let woog_enum = lu_dog.exhume_enumeration_id_by_name(&enum_name).unwrap();
+            let woog_enum_id = lu_dog.exhume_enumeration_id_by_name(&enum_name).unwrap();
+            let woog_enum = lu_dog.exhume_enumeration(&woog_enum_id).unwrap();
 
-            let field = lu_dog.iter_enum_field().find(|field| {
+            let fuzzy = s_read!(woog_enum).r88_enum_field(lu_dog);
+            let field = fuzzy.iter().find(|field| {
                 let field = s_read!(field);
                 &field.name == field_name
             });
@@ -2517,7 +2541,7 @@ pub(super) fn inter_expression(
                     })
                     .find(|ty| {
                         if let ValueTypeEnum::Enumeration(id) = s_read!(ty).subtype {
-                            id == woog_enum
+                            id == woog_enum_id
                         } else {
                             false
                         }
@@ -2973,14 +2997,76 @@ fn inter_implementation(
     }
 }
 
+fn exorcise_generic_enums(
+    name: &str,
+    _attributes: &AttributeMap,
+    variants: &[(Spanned<String>, Option<EnumField>)],
+    generics: &Option<Generics>,
+    context: &mut Context,
+    lu_dog: &mut LuDogStore,
+) -> Result<()> {
+    debug!("exorcise_generic_enums {name}");
+
+    match generics {
+        Some(_) => {
+            let woog_enum_id = lu_dog.exhume_enumeration_id_by_name(name).unwrap();
+            let woog_enum = lu_dog.exhume_enumeration(&woog_enum_id).unwrap();
+            for field in s_read!(woog_enum).r88_enum_field(lu_dog) {
+                match s_read!(field).subtype {
+                    EnumFieldEnum::Plain(ref id) => {
+                        lu_dog.exorcise_plain(id);
+                    }
+                    EnumFieldEnum::StructField(ref id) => {
+                        lu_dog.exorcise_struct_field(id);
+                    }
+                    EnumFieldEnum::TupleField(ref id) => {
+                        let field = lu_dog.exhume_tuple_field(id).unwrap();
+                        let ty = lu_dog.exhume_value_type(&s_read!(field).ty).unwrap();
+                        let ty = s_read!(ty);
+                        if let ValueTypeEnum::Generic(_) = ty.subtype {
+                            lu_dog.exorcise_tuple_field(id);
+                        }
+                    }
+                }
+                lu_dog.exorcise_enum_field(&s_read!(field).id);
+            }
+
+            lu_dog.exorcise_enumeration(&woog_enum_id);
+        }
+        None => {}
+    };
+
+    Ok(())
+}
+
 fn inter_enum(
     name: &str,
     _attributes: &AttributeMap,
     variants: &[(Spanned<String>, Option<EnumField>)],
+    generics: &Option<Generics>,
     context: &mut Context,
     lu_dog: &mut LuDogStore,
 ) -> Result<()> {
     debug!("inter_enum {name}");
+
+    let generics = match generics {
+        Some((g, _)) => {
+            let mut set = HashSet::default();
+            for (ty, _) in g {
+                match ty {
+                    Type::UserType((name, _)) => {
+                        set.insert(name.to_owned());
+                    }
+                    _ => panic!(
+                        "throw an error here about only being able to use letters or something."
+                    ),
+                }
+            }
+
+            set
+        }
+        None => HashSet::default(),
+    };
 
     let woog_enum = Enumeration::new(name.to_owned(), None, lu_dog);
     let _ = ValueType::new_enumeration(&woog_enum, lu_dog);
@@ -2996,6 +3082,7 @@ fn inter_enum(
                 let woog_struct =
                     WoogStruct::new(format!("{}::{}", name, field_name), None, lu_dog);
                 for ((name, _), (ty, ty_span)) in fields {
+                    context.location = location!();
                     let ty = get_value_type(ty, ty_span, None, context, lu_dog)?;
                     let _ = Field::new(name.to_owned(), &woog_struct, &ty, lu_dog);
                 }
@@ -3003,7 +3090,49 @@ fn inter_enum(
                 LuDogEnumField::new_struct_field(field_name.to_owned(), &woog_enum, &field, lu_dog);
             }
             Some(EnumField::Tuple((type_, span))) => {
-                let ty = get_value_type(type_, span, None, context, lu_dog)?;
+                let ty = if let Type::UserType((ty, span)) = type_ {
+                    if let Some(g) = generics.get(ty) {
+                        let g = Generic::new(g.to_owned(), lu_dog);
+                        let ty = ValueType::new_generic(&g, lu_dog);
+                        LuDogSpan::new(
+                            span.end as i64,
+                            span.start as i64,
+                            &context.source,
+                            Some(&ty),
+                            None,
+                            lu_dog,
+                        );
+
+                        ty
+                    } else {
+                        context.location = location!();
+                        let ty = get_value_type(type_, span, None, context, lu_dog)?;
+                        LuDogSpan::new(
+                            span.end as i64,
+                            span.start as i64,
+                            &context.source,
+                            Some(&ty),
+                            None,
+                            lu_dog,
+                        );
+
+                        ty
+                    }
+                } else {
+                    context.location = location!();
+                    let ty = get_value_type(type_, span, None, context, lu_dog)?;
+                    LuDogSpan::new(
+                        span.end as i64,
+                        span.start as i64,
+                        &context.source,
+                        Some(&ty),
+                        None,
+                        lu_dog,
+                    );
+
+                    ty
+                };
+
                 let field = TupleField::new(None, &ty, lu_dog);
                 LuDogEnumField::new_tuple_field(field_name.to_owned(), &woog_enum, &field, lu_dog);
             }
@@ -3013,7 +3142,6 @@ fn inter_enum(
                     LuDogEnumField::new_plain(field_name.to_owned(), &woog_enum, &plain, lu_dog);
             }
         }
-        // let plain = Plain::new(number as DwarfInteger, lu_dog);
     }
 
     Ok(())

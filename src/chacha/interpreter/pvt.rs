@@ -41,6 +41,11 @@ impl<'a> fmt::Display for PrintableValueType<'a> {
             ValueTypeEnum::Empty(_) => write!(f, "{}", TY_CLR.italic().paint("()")),
             ValueTypeEnum::Error(_) => write!(f, "{}", TY_ERR_CLR.italic().paint("error")),
             ValueTypeEnum::Function(_) => write!(f, "{}", TY_CLR.italic().paint("function")),
+            ValueTypeEnum::Generic(g) => {
+                let g = s_read!(lu_dog).exhume_generic(g).unwrap();
+                let g = s_read!(g);
+                write!(f, "<{}>", TY_CLR.italic().paint(g.name.as_str()))
+            }
             ValueTypeEnum::Import(ref import) => {
                 let import = s_read!(lu_dog).exhume_import(import).unwrap();
                 let import = s_read!(import);
