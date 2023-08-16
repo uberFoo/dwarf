@@ -5,8 +5,8 @@ use log;
 use rustc_hash::FxHashMap as HashMap;
 
 use crate::dwarf::{
-    Attribute, DwarfFloat, EnumField, Expression as DwarfExpression, Generics, InnerAttribute,
-    InnerItem, Item, Spanned, Statement, Token, Type,
+    generic_to_string, Attribute, DwarfFloat, EnumField, Expression as DwarfExpression, Generics,
+    InnerAttribute, InnerItem, Item, Spanned, Statement, Token, Type,
 };
 
 use super::{error::DwarfError, DwarfInteger};
@@ -2788,17 +2788,35 @@ impl DwarfParser {
             return Err(Box::new(err));
         };
 
-        if let Ok(Some(g)) = self.parse_generics() {
-            if self.match_(&[Token::Punct(':')]).is_none() {
-                debug!("exit no colon");
-                return Ok(None);
-            }
+        if let Some(ident) = self.parse_ident() {
+            if let Ok(Some(g)) = self.parse_generics() {
+                let new_name = format!("{}{}", ident.0, generic_to_string(&g).0);
+                let new_type = Type::UserType((new_name, ident.1.start..g.1.end));
+                path.push(new_type);
 
-            if self.match_(&[Token::Punct(':')]).is_none() {
-                debug!("exit no other colon");
-                return Ok(None);
-            }
+                debug!("exit ok");
 
+                Ok(Some((
+                    (
+                        DwarfExpression::PathInExpression(path),
+                        start..self.previous().unwrap().1.end,
+                    ),
+                    PATH,
+                )))
+            } else {
+                path.push(Type::UserType(ident));
+
+                debug!("exit ok");
+
+                Ok(Some((
+                    (
+                        DwarfExpression::PathInExpression(path),
+                        start..self.previous().unwrap().1.end,
+                    ),
+                    PATH,
+                )))
+            }
+        } else if let Ok(Some(g)) = self.parse_generics() {
             let last_type = path.pop().unwrap();
             let new_name = format!("{}{}", last_type, generic_to_string(&g).0);
             let span = if let Type::UserType((_, span)) = &last_type {
@@ -2808,10 +2826,16 @@ impl DwarfParser {
             };
             let new_type = Type::UserType((new_name, span.start..g.1.end));
             path.push(new_type);
-        }
 
-        let next_ident = if let Some(ident) = self.parse_ident() {
-            ident
+            debug!("exit ok");
+
+            Ok(Some((
+                (
+                    DwarfExpression::PathInExpression(path),
+                    start..self.previous().unwrap().1.end,
+                ),
+                PATH,
+            )))
         } else {
             let token = self.previous().unwrap();
             let err = Simple::expected_input_found(
@@ -2821,19 +2845,7 @@ impl DwarfParser {
             );
             error!("exit", err);
             return Err(Box::new(err));
-        };
-
-        path.push(Type::UserType(next_ident));
-
-        debug!("exit ok");
-
-        Ok(Some((
-            (
-                DwarfExpression::PathInExpression(path),
-                start..self.previous().unwrap().1.end,
-            ),
-            PATH,
-        )))
+        }
     }
 
     /// Parse a static method call
@@ -3855,7 +3867,7 @@ impl DwarfParser {
             return Err(Box::new(err));
         };
 
-        self.parse_generics();
+        let generics = self.parse_generics()?;
 
         if self.match_(&[Token::Punct('{')]).is_none() {
             let tok = self.peek().unwrap();
@@ -3908,7 +3920,10 @@ impl DwarfParser {
             self.previous().unwrap().1.end
         };
 
-        Ok(Some((InnerItem::Struct(name, fields), start..end)))
+        Ok(Some((
+            InnerItem::Struct(name, fields, generics),
+            start..end,
+        )))
     }
 
     /// Parse an Enum
@@ -4211,23 +4226,6 @@ impl DwarfParser {
 
         self.tokens.get(self.current - 1)
     }
-}
-
-fn generic_to_string(generic: &Generics) -> Spanned<String> {
-    let mut result = String::new();
-    let mut first_time = true;
-
-    result.push_str("<");
-    for (name, _) in &generic.0 {
-        if first_time {
-            first_time = false;
-        } else {
-            result.push_str(", ");
-        }
-        result.push_str(&name.to_string());
-    }
-    result.push_str(">");
-    (result, generic.1.clone())
 }
 
 /// Interpreter Entry Point

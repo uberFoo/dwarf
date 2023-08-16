@@ -284,6 +284,9 @@ pub fn eval(
                                 let key = source[span].to_owned();
 
                                 let (value, _ty) = eval_expression(expr, context, vm)?;
+                                debug!("value {value:?}");
+                                debug!("ty {ty:?}");
+
                                 arg_values.push_back(s_read!(value).to_string());
 
                                 debug!(

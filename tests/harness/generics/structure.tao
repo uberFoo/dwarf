@@ -1,0 +1,42 @@
+enum Option<T> {
+    Some(T),
+    None,
+}
+
+struct Node<T> {
+    value: T,
+    next: Option<Node<T>>,
+}
+
+struct Foo<T, U, V> {
+    a: T,
+    b: U,
+    c: V,
+}
+
+fn main() {
+    let a = Node {
+        value: 42,
+        next: Option::<Node<int>>::None,
+    };
+    let b = Node {
+        value: 69,
+        next: Option::<Node<int>>::Some(a),
+    };
+    let c = Node {
+        value: 3.14,
+        next: Option::Some(b),
+    };
+
+    print("a = {0}\n".format(a));
+    print("b = {0}\n".format(b));
+    print("c = {0}\n".format(c));
+
+    let d = Foo {
+        a: 42,
+        b: "hello",
+        c: 3.14,
+    };
+
+    print("d = {0}\n".format(d));
+}

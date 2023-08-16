@@ -197,6 +197,7 @@ struct ConveyStruct<'a> {
     name: &'a str,
     attributes: &'a AttributeMap,
     fields: &'a [(Spanned<String>, Spanned<Type>)],
+    generics: &'a Option<Generics>,
 }
 
 impl<'a> ConveyStruct<'a> {
@@ -204,11 +205,13 @@ impl<'a> ConveyStruct<'a> {
         name: &'a str,
         attributes: &'a AttributeMap,
         fields: &'a [(Spanned<String>, Spanned<Type>)],
+        generics: &'a Option<Generics>,
     ) -> Self {
         Self {
             name,
             attributes,
             fields,
+            generics,
         }
     }
 }
@@ -258,6 +261,8 @@ impl<'a> ConveyImpl<'a> {
 pub struct StructFields {
     woog_struct: RefType<WoogStruct>,
     fields: Vec<(Spanned<String>, Spanned<Type>)>,
+    generics: HashSet<String>,
+
     location: Location,
 }
 
@@ -368,9 +373,9 @@ fn walk_tree(ast: &[Item], context: &mut Context, lu_dog: &mut LuDogStore) -> Re
                 attributes: _,
             } => inter_import(path, alias, &s_read!(context.source).source, span, lu_dog)?,
             Item {
-                item: (InnerItem::Struct((name, _), fields), _),
+                item: (InnerItem::Struct((name, _), fields, generics), _),
                 attributes,
-            } => structs.push(ConveyStruct::new(name, attributes, fields)),
+            } => structs.push(ConveyStruct::new(name, attributes, fields, generics)),
         }
     }
 
@@ -383,12 +388,14 @@ fn walk_tree(ast: &[Item], context: &mut Context, lu_dog: &mut LuDogStore) -> Re
         name,
         attributes,
         fields,
+        generics,
     } in &structs
     {
         debug!("Interring struct `{}`", name);
-        let _ = inter_struct(name, attributes, fields, context, lu_dog).map_err(|mut e| {
-            errors.append(&mut e);
-        });
+        let _ =
+            inter_struct(name, attributes, fields, generics, context, lu_dog).map_err(|mut e| {
+                errors.append(&mut e);
+            });
     }
     // Same exercise for enums.
     for ConveyEnum {
@@ -404,19 +411,19 @@ fn walk_tree(ast: &[Item], context: &mut Context, lu_dog: &mut LuDogStore) -> Re
         });
     }
 
-    for _ in structs {
+    for _ in &structs {
         let params = context.struct_fields.drain(..).collect::<Vec<_>>();
         for StructFields {
             woog_struct,
             fields,
+            generics,
             location,
         } in params
         {
-            let _ = inter_struct_fields(woog_struct, &fields, location, context, lu_dog).map_err(
-                |mut e| {
+            let _ = inter_struct_fields(woog_struct, &fields, generics, location, context, lu_dog)
+                .map_err(|mut e| {
                     errors.append(&mut e);
-                },
-            );
+                });
         }
     }
     // Using the type information, and the input, inter the implementation blocks.
@@ -462,6 +469,20 @@ fn walk_tree(ast: &[Item], context: &mut Context, lu_dog: &mut LuDogStore) -> Re
     }
 
     // Now we remove the generics from the store.
+    for ConveyStruct {
+        name,
+        attributes,
+        fields,
+        generics,
+    } in &structs
+    {
+        debug!("Interring struct `{}`", name);
+        let _ = exorcise_generic_struct(name, attributes, fields, generics, context, lu_dog)
+            .map_err(|mut e| {
+                errors.append(&mut e);
+            });
+    }
+
     for ConveyEnum {
         name,
         attributes,
@@ -470,10 +491,11 @@ fn walk_tree(ast: &[Item], context: &mut Context, lu_dog: &mut LuDogStore) -> Re
     } in &enums
     {
         debug!("Interring enum `{}`", name);
-        let _ = exorcise_generic_enums(name, attributes, fields, generics, context, lu_dog)
-            .map_err(|mut e| {
+        let _ = exorcise_generic_enum(name, attributes, fields, generics, context, lu_dog).map_err(
+            |mut e| {
                 errors.append(&mut e);
-            });
+            },
+        );
     }
 
     if errors.is_empty() {
@@ -723,18 +745,28 @@ pub fn inter_statement(
                 //     inter_import(path, alias, &s_read!(source).source, span, lu_dog)?
                 // }
                 Item {
-                    item: (InnerItem::Struct((name, _span), fields), outer_span),
+                    item: (InnerItem::Struct((name, _span), fields, generics), outer_span),
                     attributes,
                 } => {
-                    inter_struct(name, attributes, fields, context, lu_dog).and_then(|_| {
-                        // There had better be one and only one.
-                        let StructFields {
-                            woog_struct,
-                            fields,
-                            location,
-                        } = context.struct_fields.pop().unwrap();
-                        inter_struct_fields(woog_struct, &fields, location, context, lu_dog)
-                    })?;
+                    inter_struct(name, attributes, fields, generics, context, lu_dog).and_then(
+                        |_| {
+                            // There had better be one and only one.
+                            let StructFields {
+                                woog_struct,
+                                fields,
+                                generics,
+                                location,
+                            } = context.struct_fields.pop().unwrap();
+                            inter_struct_fields(
+                                woog_struct,
+                                &fields,
+                                generics,
+                                location,
+                                context,
+                                lu_dog,
+                            )
+                        },
+                    )?;
                     outer_span
                 }
                 _ => unimplemented!(),
@@ -2515,7 +2547,7 @@ pub(super) fn inter_expression(
                 );
                 };
 
-            let enum_name = if let Some(Type::UserType((obj, _))) = path.last() {
+            let enum_name = if let Some(Type::UserType((obj, _))) = path.first() {
                 obj.de_sanitize().to_owned()
             } else {
                 panic!("I don't think that we should ever see anything other than a user type here: {:?}", path);
@@ -2524,7 +2556,14 @@ pub(super) fn inter_expression(
             debug!("enum_name {:?}", enum_name);
 
             // Check the field name against the declaration
-            let woog_enum_id = lu_dog.exhume_enumeration_id_by_name(&enum_name).unwrap();
+            let woog_enum_id = if let Some(id) = lu_dog.exhume_enumeration_id_by_name(&enum_name) {
+                id
+            } else {
+                let new_enum = create_generic_enum(&enum_name, lu_dog);
+                let x = s_read!(new_enum).id;
+                x
+            };
+
             let woog_enum = lu_dog.exhume_enumeration(&woog_enum_id).unwrap();
 
             let fuzzy = s_read!(woog_enum).r88_enum_field(lu_dog);
@@ -2732,15 +2771,28 @@ pub(super) fn inter_expression(
                     .find(|f| s_read!(f).name == field_name.0)
                 {
                     let struct_ty = lu_dog.exhume_value_type(&s_read!(field).ty).unwrap();
+                    let naked_ty = s_read!(struct_ty);
 
-                    if context.check_types {
-                        typecheck(
-                            (&struct_ty, &field_name.1),
-                            (&ty, &field_expr_span),
-                            location!(),
-                            context,
-                            lu_dog,
-                        )?;
+                    if let ValueTypeEnum::Generic(_) = naked_ty.subtype {
+                        // OK. We are instantiating a generic. We need to create the new type first.
+                        dbg!(&name, &naked_ty, &field_name, &field_expr, &ty);
+                        let pvt = PrintableValueType(&ty, context, lu_dog);
+                        let struct_ty = format!("{name}<{pvt}>");
+                        let new_struct = create_generic_struct(&struct_ty, context.sarzak, lu_dog);
+                        dbg!(&struct_ty, &new_struct);
+                        dbg!(&expr);
+                        s_write!(expr).woog_struct = s_read!(new_struct).id;
+                        dbg!(&expr);
+                    } else {
+                        if context.check_types {
+                            typecheck(
+                                (&struct_ty, &field_name.1),
+                                (&ty, &field_expr_span),
+                                location!(),
+                                context,
+                                lu_dog,
+                            )?;
+                        }
                     }
                 } else {
                     return Err(vec![DwarfError::NoSuchField {
@@ -2997,7 +3049,7 @@ fn inter_implementation(
     }
 }
 
-fn exorcise_generic_enums(
+fn exorcise_generic_enum(
     name: &str,
     _attributes: &AttributeMap,
     variants: &[(Spanned<String>, Option<EnumField>)],
@@ -3005,26 +3057,27 @@ fn exorcise_generic_enums(
     context: &mut Context,
     lu_dog: &mut LuDogStore,
 ) -> Result<()> {
-    debug!("exorcise_generic_enums {name}");
+    debug!("exorcise_generic_enum {name}");
 
     match generics {
         Some(_) => {
+            dbg!("erasing ", &name);
             let woog_enum_id = lu_dog.exhume_enumeration_id_by_name(name).unwrap();
             let woog_enum = lu_dog.exhume_enumeration(&woog_enum_id).unwrap();
             for field in s_read!(woog_enum).r88_enum_field(lu_dog) {
                 match s_read!(field).subtype {
                     EnumFieldEnum::Plain(ref id) => {
-                        lu_dog.exorcise_plain(id);
+                        // lu_dog.exorcise_plain(id);
                     }
                     EnumFieldEnum::StructField(ref id) => {
-                        lu_dog.exorcise_struct_field(id);
+                        // lu_dog.exorcise_struct_field(id);
                     }
                     EnumFieldEnum::TupleField(ref id) => {
                         let field = lu_dog.exhume_tuple_field(id).unwrap();
                         let ty = lu_dog.exhume_value_type(&s_read!(field).ty).unwrap();
                         let ty = s_read!(ty);
                         if let ValueTypeEnum::Generic(_) = ty.subtype {
-                            lu_dog.exorcise_tuple_field(id);
+                            // lu_dog.exorcise_tuple_field(id);
                         }
                     }
                 }
@@ -3133,7 +3186,8 @@ fn inter_enum(
                     ty
                 };
 
-                let field = TupleField::new(None, &ty, lu_dog);
+                let field = TupleField::new(Uuid::new_v4(), None, &ty, lu_dog);
+                dbg!(&field);
                 LuDogEnumField::new_tuple_field(field_name.to_owned(), &woog_enum, &field, lu_dog);
             }
             _ => {
@@ -3147,14 +3201,71 @@ fn inter_enum(
     Ok(())
 }
 
+fn exorcise_generic_struct(
+    name: &str,
+    attributes: &AttributeMap,
+    fields: &[(Spanned<String>, Spanned<Type>)],
+    generics: &Option<Generics>,
+    context: &mut Context,
+    lu_dog: &mut LuDogStore,
+) -> Result<()> {
+    debug!("exorcise_generic_struct {name}");
+
+    match generics {
+        Some(_) => {
+            dbg!("erasing ", &name);
+            let woog_struct_id = lu_dog.exhume_woog_struct_id_by_name(name).unwrap();
+            let woog_struct = lu_dog.exhume_woog_struct(&woog_struct_id).unwrap();
+            for field in s_read!(woog_struct).r7_field(lu_dog) {
+                lu_dog.exorcise_field(&s_read!(field).id);
+            }
+
+            lu_dog.exorcise_woog_struct(&woog_struct_id);
+        }
+        None => {}
+    };
+    Ok(())
+}
+
 fn inter_struct(
     name: &str,
     attributes: &AttributeMap,
     fields: &[(Spanned<String>, Spanned<Type>)],
+    generics: &Option<Generics>,
     context: &mut Context,
     lu_dog: &mut LuDogStore,
 ) -> Result<()> {
-    debug!("inter_struct {name}");
+    debug!("struct {name}");
+
+    let generics = match generics {
+        Some((g, _)) => {
+            let mut set = HashSet::default();
+            for (ty, _) in g {
+                match ty {
+                    Type::UserType((name, _)) => {
+                        set.insert(name.to_owned());
+                    }
+                    _ => panic!(
+                        "throw an error here about only being able to use letters or something."
+                    ),
+                }
+            }
+
+            for ((name, _), (ty, _)) in fields {
+                match ty {
+                    Type::UserType((name, _)) => {
+                        set.insert(name.to_owned());
+                    }
+                    _ => panic!(
+                        "throw an error here about only being able to use letters or something."
+                    ),
+                }
+            }
+
+            set
+        }
+        None => HashSet::default(),
+    };
 
     // If there is a proxy attribute then we'll use it's info to attach an object
     // from the store to this UDT.
@@ -3192,6 +3303,7 @@ fn inter_struct(
                                     context.struct_fields.push(StructFields {
                                         woog_struct,
                                         fields: fields.to_owned(),
+                                        generics,
                                         location: location!(),
                                     });
 
@@ -3233,6 +3345,8 @@ fn inter_struct(
         } else {
             unreachable!();
         }
+
+        // Below we are interring as an ObjectStore, according to it's annotation.
     } else if let Some(store_vec) = attributes.get("store") {
         if let Some((_, InnerAttribute::Attribute(ref attributes))) = store_vec.get(0) {
             if let Some(model_vec) = attributes.get("model") {
@@ -3263,6 +3377,7 @@ fn inter_struct(
         context.struct_fields.push(StructFields {
             woog_struct,
             fields: fields.to_owned(),
+            generics,
             location: location!(),
         });
 
@@ -3273,6 +3388,7 @@ fn inter_struct(
 fn inter_struct_fields(
     woog_struct: RefType<WoogStruct>,
     fields: &[(Spanned<String>, Spanned<Type>)],
+    generics: HashSet<String>,
     location: Location,
     context: &mut Context,
     lu_dog: &mut LuDogStore,
@@ -3281,14 +3397,34 @@ fn inter_struct_fields(
     for ((name, _), (type_, span)) in fields {
         let name = name.de_sanitize();
 
-        context.location = location;
-        let ty = match get_value_type(type_, span, None, context, lu_dog) {
-            Ok(ty) => ty,
-            Err(mut err) => {
-                errors.append(&mut err);
-                continue;
+        debug!("field {name}");
+
+        dbg!(&name, &type_);
+
+        let ty = if let Some(g) = generics.get(&type_.to_string()) {
+            let g = Generic::new(g.to_owned(), lu_dog);
+            let ty = ValueType::new_generic(&g, lu_dog);
+            LuDogSpan::new(
+                span.end as i64,
+                span.start as i64,
+                &context.source,
+                Some(&ty),
+                None,
+                lu_dog,
+            );
+
+            ty
+        } else {
+            context.location = location;
+            match get_value_type(type_, span, None, context, lu_dog) {
+                Ok(ty) => ty,
+                Err(mut err) => {
+                    errors.append(&mut err);
+                    continue;
+                }
             }
         };
+
         let _field = Field::new(name.to_owned(), &woog_struct, &ty, lu_dog);
     }
     if errors.is_empty() {
@@ -3642,4 +3778,103 @@ pub(super) fn typecheck(
             }
         }
     }
+}
+
+pub(crate) fn create_generic_struct(
+    name: &str,
+    sarzak: &SarzakStore,
+    lu_dog: &mut LuDogStore,
+) -> RefType<WoogStruct> {
+    let name_without_generics = name.split('<').collect::<Vec<_>>()[0];
+    let woog_struct_id = lu_dog
+        .exhume_woog_struct_id_by_name(name_without_generics)
+        .unwrap();
+    let woog_struct = lu_dog.exhume_woog_struct(&woog_struct_id).unwrap();
+
+    let mut obj = s_read!(woog_struct).r4_object(sarzak);
+    let obj = if obj.len() > 0 {
+        let obj = obj.pop().unwrap();
+        let obj = s_read!(obj).clone();
+        Some(obj)
+    } else {
+        None
+    };
+
+    let new_struct = WoogStruct::new(name.to_owned(), obj.as_ref(), lu_dog);
+    let _ = ValueType::new_woog_struct(&new_struct, lu_dog);
+    for field in s_read!(woog_struct).r7_field(lu_dog) {
+        let field = s_read!(field);
+        let ty = &field.r5_value_type(lu_dog)[0];
+        let _ = Field::new(field.name.to_owned(), &new_struct, ty, lu_dog);
+    }
+
+    new_struct
+}
+
+pub(crate) fn create_generic_enum(
+    enum_name: &str,
+    lu_dog: &mut LuDogStore,
+) -> RefType<Enumeration> {
+    // 🚧 We should check that wa are actually dealing with a valid type, i.e., a generic
+    // type, e.g. `None<int>`
+    debug!("interring generic enum {enum_name}");
+    let new_enum = Enumeration::new(enum_name.to_owned(), None, lu_dog);
+    let _ = ValueType::new_enumeration(&new_enum, lu_dog);
+
+    let name_without_generics = enum_name.split('<').collect::<Vec<_>>()[0];
+
+    debug!("name_without_generics {:?}", name_without_generics);
+    dbg!(&name_without_generics);
+    let id = lu_dog
+        .exhume_enumeration_id_by_name(name_without_generics)
+        .unwrap();
+    let woog_enum = lu_dog.exhume_enumeration(&id).unwrap();
+    for field in s_read!(woog_enum).r88_enum_field(lu_dog) {
+        let field = s_read!(field);
+        match field.subtype {
+            EnumFieldEnum::Plain(ref id) => {
+                let orig = lu_dog.exhume_plain(id).unwrap();
+                dbg!(&orig);
+                let new = Plain::new(s_read!(orig).x_value, lu_dog);
+                let _ = LuDogEnumField::new_plain(field.name.to_owned(), &new_enum, &new, lu_dog);
+            }
+            EnumFieldEnum::StructField(ref id) => {
+                let orig = lu_dog.exhume_struct_field(id).unwrap();
+                dbg!(&orig);
+                // let expr = if let Some(ref id) = s_read!(orig).expression {
+                //     lu_dog.exhume_expression(id)
+                // } else {
+                //     None
+                // };
+                // let new = StructField::new(s_read!(orig).name.to_owned(), expr.as_ref(), lu_dog);
+                let new = StructField::new(s_read!(orig).name.to_owned(), None, lu_dog);
+                let _ = LuDogEnumField::new_struct_field(
+                    field.name.to_owned(),
+                    &new_enum,
+                    &new,
+                    lu_dog,
+                );
+            }
+            EnumFieldEnum::TupleField(ref id) => {
+                let orig = lu_dog.exhume_tuple_field(id).unwrap();
+                dbg!(&orig);
+                let expr = if let Some(ref id) = s_read!(orig).expression {
+                    lu_dog.exhume_expression(id)
+                } else {
+                    None
+                };
+                let new = TupleField::new(
+                    Uuid::new_v4(),
+                    expr.as_ref(),
+                    &s_read!(orig).r86_value_type(lu_dog)[0],
+                    lu_dog,
+                );
+                dbg!(&new);
+                let _ =
+                    LuDogEnumField::new_tuple_field(field.name.to_owned(), &new_enum, &new, lu_dog);
+            }
+        }
+    }
+
+    new_enum
 }

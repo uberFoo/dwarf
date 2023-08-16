@@ -424,7 +424,11 @@ pub enum InnerItem {
     /// path, Option<Alias>
     Import(Spanned<Vec<Spanned<String>>>, Option<Spanned<String>>),
     /// name, Vec<(Field Name, Field Type)>
-    Struct(Spanned<String>, Vec<(Spanned<String>, Spanned<Type>)>),
+    Struct(
+        Spanned<String>,
+        Vec<(Spanned<String>, Spanned<Type>)>,
+        Option<Generics>,
+    ),
     Enum(
         Spanned<String>,
         Vec<(Spanned<String>, Option<EnumField>)>,
@@ -474,4 +478,21 @@ impl TryFrom<&InnerAttribute> for String {
             }),
         }
     }
+}
+
+pub(crate) fn generic_to_string(generic: &Generics) -> Spanned<String> {
+    let mut result = String::new();
+    let mut first_time = true;
+
+    result.push_str("<");
+    for (name, _) in &generic.0 {
+        if first_time {
+            first_time = false;
+        } else {
+            result.push_str(", ");
+        }
+        result.push_str(&name.to_string());
+    }
+    result.push_str(">");
+    (result, generic.1.clone())
 }
