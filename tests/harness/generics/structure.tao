@@ -14,6 +14,17 @@ struct Foo<T, U, V> {
     c: V,
 }
 
+struct One<T> {
+    uno: T,
+}
+
+// impl One<T> {
+//     fn show(self) {
+//         let uber = self.uno;
+//         print("One({0})\n".format(uber));
+//     }
+// }
+
 fn main() {
     let a = Node {
         value: 42,
@@ -39,4 +50,11 @@ fn main() {
     };
 
     print("d = {0}\n".format(d));
+
+    let a = One { uno: 42 };
+    print("a = {0}\n".format(a));
+    // a.show();
+    let b = One { uno: "hello" };
+    // b.show();
+    print("b = {0}\n".format(b));
 }

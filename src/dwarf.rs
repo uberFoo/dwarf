@@ -256,7 +256,6 @@ impl Type {
                 } else if let Some(obj_id) = sarzak.exhume_object_id_by_name(name) {
                     // If it's not in one of the models, it must be in sarzak.
                     let ty = sarzak.exhume_ty(&obj_id).unwrap();
-                    // dbg!(&ty);
                     log::debug!(target: "dwarf", "into_value_type, UserType, ty: {ty:?}");
                     Ok(ValueType::new_ty(&ty, store))
                 } else {

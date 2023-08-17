@@ -53,11 +53,8 @@ pub fn eval(
             }
         }
         EnumFieldEnum::TupleField(ref tf) => {
-            // dbg!(&lu_dog);
             let tuple = s_read!(lu_dog).exhume_tuple_field(tf).unwrap();
-            dbg!(&tuple);
             let ty = s_read!(tuple).r86_value_type(&s_read!(lu_dog))[0].clone();
-            dbg!(&ty);
             let expr = s_read!(tuple).r90_expression(&s_read!(lu_dog))[0].clone();
             let (value, _) = eval_expression(expr, context, vm)?;
             new_ref!(
@@ -67,7 +64,6 @@ pub fn eval(
         }
     };
 
-    dbg!(&ty);
     let user_enum = UserEnum::new(woog_enum.name.clone(), &ty, value);
     let user_enum = new_ref!(UserEnum, user_enum);
 

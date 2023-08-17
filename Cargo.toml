@@ -101,6 +101,7 @@ walkdir = "2.3.3"
 
 [features]
 default = ["single-vec", "repl", "print-std-out"]
+# default = ["multi-nd-vec", "repl", "print-std-out"]
 
 repl = ["dep:rustyline"]
 

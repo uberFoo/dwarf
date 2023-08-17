@@ -73,12 +73,9 @@ pub fn inter(
     debug!("type_name {:?}", type_name);
     let type_name_no_generics = type_name.split('<').collect::<Vec<_>>()[0];
 
-    // dbg!(&type_name, &method);
-
     // We need to check if the type name is a struct or an enum.
     if let Some(woog_enum) = lu_dog.exhume_enumeration_id_by_name(&type_name_no_generics) {
         let woog_enum = lu_dog.exhume_enumeration(&woog_enum).unwrap();
-        // dbg!(&woog_enum);
         // Here we are interring an enum constructor.
         let fuzzy = s_read!(woog_enum).r88_enum_field(lu_dog);
         let field = fuzzy.iter().find(|field| {
@@ -91,13 +88,10 @@ pub fn inter(
                 let x = &s_read!(field).subtype;
                 x.clone()
             };
-            // dbg!(&field);
             let field = match subtype {
                 EnumFieldEnum::TupleField(ref id) => {
                     let tuple_field = lu_dog.exhume_tuple_field(id).unwrap();
                     let ty = s_read!(tuple_field).r86_value_type(lu_dog)[0].clone();
-                    dbg!(&lu_dog);
-                    dbg!(&tuple_field, &ty);
                     let span = &s_read!(ty).r62_span(lu_dog)[0];
                     let span = s_read!(span).start as usize..s_read!(span).end as usize;
 
@@ -123,15 +117,10 @@ pub fn inter(
                             type_name.to_owned()
                         };
                         let new_enum = create_generic_enum(&type_name, lu_dog);
-                        dbg!(&type_name, &new_enum);
                         let new_enum = s_read!(new_enum);
                         let field = new_enum
                             .r88_enum_field(lu_dog)
                             .iter()
-                            .inspect(|field| {
-                                let field = s_read!(field);
-                                dbg!(field);
-                            })
                             .find(|field| {
                                 let field = s_read!(field);
                                 if field.name == method {
@@ -153,10 +142,9 @@ pub fn inter(
                         match &(*s_read!(field)).subtype {
                             EnumFieldEnum::TupleField(ref id) => {
                                 let tuple_field = lu_dog.exhume_tuple_field(id).unwrap();
-                                dbg!(&tuple_field);
+
                                 s_write!(tuple_field).expression = Some(s_read!(expr.0).id);
                                 s_write!(tuple_field).ty = s_read!(expr_ty).id;
-                                dbg!(&tuple_field);
                             }
                             _ => unreachable!(),
                         }
@@ -265,7 +253,7 @@ pub fn inter(
         } else {
             debug!("ParserExpression::StaticMethodCall: looking up type {type_name}");
 
-            lookup_woog_struct_method_return_type(&type_name, method, lu_dog)
+            lookup_woog_struct_method_return_type(&type_name, method, context.sarzak, lu_dog)
 
             // Look up the struct in the imported models.
             // I'll revisit this model business after I get the basics working.

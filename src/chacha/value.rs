@@ -86,8 +86,8 @@ impl PartialEq for EnumVariant {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (Self::Plain(a), Self::Plain(b)) => a == b,
-            (Self::Struct(a, c), Self::Struct(b, d)) => a == b && c == d,
-            (Self::Tuple(a, c), Self::Tuple(b, d)) => a == b && c == d,
+            (Self::Struct(a, c), Self::Struct(b, d)) => a == b && *s_read!(c) == *s_read!(d),
+            (Self::Tuple(a, c), Self::Tuple(b, d)) => a == b && *s_read!(c) == *s_read!(d),
             _ => false,
         }
     }
@@ -925,7 +925,8 @@ pub struct UserEnum {
 
 impl PartialEq for UserEnum {
     fn eq(&self, other: &Self) -> bool {
-        s_read!(self.type_).eq(&s_read!(other.type_)) && self.value.eq(&other.value)
+        s_read!(self.type_).eq(&s_read!(other.type_))
+            && s_read!(self.value).eq(&s_read!(other.value))
     }
 }
 

@@ -663,7 +663,13 @@ impl DwarfParser {
         }
 
         let name = if let Some(ident) = self.parse_ident() {
-            ident
+            if let Ok(Some(g)) = self.parse_generics() {
+                // let g = generic_to_string(&g);
+                // (format!("{}{}", ident.0, g.0), ident.1.start..g.1.end)
+                ident
+            } else {
+                ident
+            }
         } else {
             let tok = self.previous().unwrap();
             let err = Simple::expected_input_found(

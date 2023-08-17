@@ -84,7 +84,11 @@ pub enum DwarfError {
     /// Not a List Type
     ///
     /// List types are list/vec and string.
-    NotAList { span: Span },
+    NotAList {
+        span: Span,
+        ty: String,
+        location: Location,
+    },
 
     /// No Such Field
     #[snafu(display("\n{}: no such field `{}`.", C_ERR.bold().paint("error"), C_OTHER.paint(field)))]
@@ -232,9 +236,9 @@ impl fmt::Display for DwarfErrorReporter<'_, '_, '_> {
                     .map_err(|_| fmt::Error)?;
                 write!(f, "{}", String::from_utf8_lossy(&std_err))
             }
-            DwarfError::NotAList { span } => {
+            DwarfError::NotAList { span, ty, location } => {
                 let span = span.clone();
-                Report::build(ReportKind::Error, file_name, span.start)
+                let report = Report::build(ReportKind::Error, file_name, span.start)
                     // 🚧 Figure out some error numbering scheme and use one of
                     // the snafu magic methods to provide the value here.
                     //.with_code(&code)
@@ -243,7 +247,20 @@ impl fmt::Display for DwarfErrorReporter<'_, '_, '_> {
                         Label::new((file_name, span))
                             .with_message("used here".to_string())
                             .with_color(Color::Red),
-                    )
+                    );
+
+                let report = if is_uber {
+                    report.with_note(format!(
+                        "{}:{}:{}",
+                        C_OTHER.paint(location.file.to_string()),
+                        C_WARN.paint(format!("{}", location.line)),
+                        C_OK.paint(format!("{}", location.column)),
+                    ))
+                } else {
+                    report.with_note(format!("Found {ty}"))
+                };
+
+                report
                     .finish()
                     .write((file_name, Source::from(&program)), &mut std_err)
                     .map_err(|_| fmt::Error)?;

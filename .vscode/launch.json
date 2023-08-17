@@ -89,10 +89,11 @@
                 }
             },
             "args": [
-                "tests/proxy/declare.tao",
-                "-r",
-                "-m",
-                "../sarzak/models/sarzak.json,plug-ins/merlin/models/merlin.json"
+                "tests/harness/generics/structure.tao"
+                // "tests/proxy/declare.tao",
+                // "-r",
+                // "-m",
+                // "../sarzak/models/sarzak.json,plug-ins/merlin/models/merlin.json"
             ],
             "cwd": "${workspaceFolder}",
             "env": {

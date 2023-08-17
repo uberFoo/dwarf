@@ -36,6 +36,8 @@ use crate::{
     ModelStore, NewRef, RefType,
 };
 
+const CHACHA: &str = "chacha";
+
 macro_rules! link_parameter {
     ($last:expr, $next:expr, $store:expr) => {{
         let next = s_read!($next);
@@ -1224,6 +1226,7 @@ pub(super) fn inter_expression(
             let id = s_read!(lhs_ty).id;
             let ty = lu_dog.exhume_value_type(&id).unwrap();
             let ty_read = s_read!(ty);
+            dbg!(&ty_read);
 
             match &ty_read.subtype {
                 // We matched on the lhs type.
@@ -1290,6 +1293,9 @@ pub(super) fn inter_expression(
                     debug!("FieldAccess: ValueTypeEnum::Ty() {:?}", id);
                     let woog_struct = lu_dog
                         .iter_woog_struct()
+                        .inspect(|ref ws| {
+                            dbg!(ws);
+                        })
                         .find(|ws| s_read!(ws).object == Some(*id))
                         .unwrap();
 
@@ -1701,6 +1707,7 @@ pub(super) fn inter_expression(
         // Index
         //
         ParserExpression::Index(target_p, index_p) => {
+            debug!("index {target_p:?}, {index_p:?}");
             let (target, target_ty) = inter_expression(
                 &new_ref!(ParserExpression, target_p.0.to_owned()),
                 &target_p.1,
@@ -1708,6 +1715,7 @@ pub(super) fn inter_expression(
                 context,
                 lu_dog,
             )?;
+            debug!("target: {target:?}, ty: {target_ty:?}");
             let (index, index_ty) = inter_expression(
                 &new_ref!(ParserExpression, index_p.0.to_owned()),
                 &index_p.1,
@@ -1740,13 +1748,19 @@ pub(super) fn inter_expression(
                 if let Ty::SString(_) = &*ty {
                     ValueType::new_char(lu_dog)
                 } else {
+                    let ty = PrintableValueType(&target_ty, context, lu_dog).to_string();
                     return Err(vec![DwarfError::NotAList {
                         span: target_p.1.clone(),
+                        ty,
+                        location: location!(),
                     }]);
                 }
             } else {
+                let ty = PrintableValueType(&target_ty, context, lu_dog).to_string();
                 return Err(vec![DwarfError::NotAList {
                     span: target_p.1.clone(),
+                    ty,
+                    location: location!(),
                 }]);
             };
 
@@ -2245,6 +2259,7 @@ pub(super) fn inter_expression(
                 let x = lookup_woog_struct_method_return_type(
                     &s_read!(woog_struct).name,
                     method,
+                    context.sarzak,
                     lu_dog,
                 );
 
@@ -2774,15 +2789,11 @@ pub(super) fn inter_expression(
                     let naked_ty = s_read!(struct_ty);
 
                     if let ValueTypeEnum::Generic(_) = naked_ty.subtype {
-                        // OK. We are instantiating a generic. We need to create the new type first.
-                        dbg!(&name, &naked_ty, &field_name, &field_expr, &ty);
+                        // OK. We are instantiating a generic. We need to create the new type
                         let pvt = PrintableValueType(&ty, context, lu_dog);
                         let struct_ty = format!("{name}<{pvt}>");
                         let new_struct = create_generic_struct(&struct_ty, context.sarzak, lu_dog);
-                        dbg!(&struct_ty, &new_struct);
-                        dbg!(&expr);
                         s_write!(expr).woog_struct = s_read!(new_struct).id;
-                        dbg!(&expr);
                     } else {
                         if context.check_types {
                             typecheck(
@@ -3061,7 +3072,7 @@ fn exorcise_generic_enum(
 
     match generics {
         Some(_) => {
-            dbg!("erasing ", &name);
+            debug!("erasing {}", &name);
             let woog_enum_id = lu_dog.exhume_enumeration_id_by_name(name).unwrap();
             let woog_enum = lu_dog.exhume_enumeration(&woog_enum_id).unwrap();
             for field in s_read!(woog_enum).r88_enum_field(lu_dog) {
@@ -3187,7 +3198,6 @@ fn inter_enum(
                 };
 
                 let field = TupleField::new(Uuid::new_v4(), None, &ty, lu_dog);
-                dbg!(&field);
                 LuDogEnumField::new_tuple_field(field_name.to_owned(), &woog_enum, &field, lu_dog);
             }
             _ => {
@@ -3213,7 +3223,7 @@ fn exorcise_generic_struct(
 
     match generics {
         Some(_) => {
-            dbg!("erasing ", &name);
+            debug!("erasing {}", &name);
             let woog_struct_id = lu_dog.exhume_woog_struct_id_by_name(name).unwrap();
             let woog_struct = lu_dog.exhume_woog_struct(&woog_struct_id).unwrap();
             for field in s_read!(woog_struct).r7_field(lu_dog) {
@@ -3398,8 +3408,6 @@ fn inter_struct_fields(
         let name = name.de_sanitize();
 
         debug!("field {name}");
-
-        dbg!(&name, &type_);
 
         let ty = if let Some(g) = generics.get(&type_.to_string()) {
             let g = Generic::new(g.to_owned(), lu_dog);
@@ -3625,6 +3633,7 @@ pub(crate) fn get_value_type(
 pub(crate) fn lookup_woog_struct_method_return_type(
     type_name: &str,
     method: &str,
+    sarzak: &SarzakStore,
     lu_dog: &mut LuDogStore,
 ) -> RefType<ValueType> {
     // Look up the type in lu_dog structs.
@@ -3648,8 +3657,25 @@ pub(crate) fn lookup_woog_struct_method_return_type(
         } else {
             ValueType::new_unknown(lu_dog)
         }
+    } else if type_name == CHACHA {
+        match method {
+            "args" => {
+                let ty = Ty::new_s_string(&sarzak);
+                // 🚧 Ideally we'd cache this when we startup.
+                let ty = lu_dog
+                    .iter_value_type()
+                    .find(|t| s_read!(t).subtype == ValueTypeEnum::Ty(ty.borrow().id()))
+                    .unwrap();
+                let list = List::new(&ty, lu_dog);
+                ValueType::new_list(&list, lu_dog)
+            }
+            _ => {
+                e_warn!("ParserExpression type not found");
+                ValueType::new_unknown(lu_dog)
+            }
+        }
     } else {
-        debug!("ParserExpression type not found");
+        e_warn!("ParserExpression type not found");
         ValueType::new_unknown(lu_dog)
     }
 }
@@ -3794,7 +3820,7 @@ pub(crate) fn create_generic_struct(
     let mut obj = s_read!(woog_struct).r4_object(sarzak);
     let obj = if obj.len() > 0 {
         let obj = obj.pop().unwrap();
-        let obj = s_read!(obj).clone();
+        let obj = obj.borrow().clone();
         Some(obj)
     } else {
         None
@@ -3824,7 +3850,6 @@ pub(crate) fn create_generic_enum(
     let name_without_generics = enum_name.split('<').collect::<Vec<_>>()[0];
 
     debug!("name_without_generics {:?}", name_without_generics);
-    dbg!(&name_without_generics);
     let id = lu_dog
         .exhume_enumeration_id_by_name(name_without_generics)
         .unwrap();
@@ -3834,13 +3859,11 @@ pub(crate) fn create_generic_enum(
         match field.subtype {
             EnumFieldEnum::Plain(ref id) => {
                 let orig = lu_dog.exhume_plain(id).unwrap();
-                dbg!(&orig);
                 let new = Plain::new(s_read!(orig).x_value, lu_dog);
                 let _ = LuDogEnumField::new_plain(field.name.to_owned(), &new_enum, &new, lu_dog);
             }
             EnumFieldEnum::StructField(ref id) => {
                 let orig = lu_dog.exhume_struct_field(id).unwrap();
-                dbg!(&orig);
                 // let expr = if let Some(ref id) = s_read!(orig).expression {
                 //     lu_dog.exhume_expression(id)
                 // } else {
@@ -3857,7 +3880,6 @@ pub(crate) fn create_generic_enum(
             }
             EnumFieldEnum::TupleField(ref id) => {
                 let orig = lu_dog.exhume_tuple_field(id).unwrap();
-                dbg!(&orig);
                 let expr = if let Some(ref id) = s_read!(orig).expression {
                     lu_dog.exhume_expression(id)
                 } else {
@@ -3869,7 +3891,6 @@ pub(crate) fn create_generic_enum(
                     &s_read!(orig).r86_value_type(lu_dog)[0],
                     lu_dog,
                 );
-                dbg!(&new);
                 let _ =
                     LuDogEnumField::new_tuple_field(field.name.to_owned(), &new_enum, &new, lu_dog);
             }

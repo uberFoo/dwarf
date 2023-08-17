@@ -58,10 +58,10 @@ fn pixel_to_point(
     }
 }
 
-fn escape_time(c: Complex, limit: int) -> int {
+fn escape_time(c: Complex, limit: int) -> Option<int> {
     // debugger;
     let z = Complex::zero();
-    for i in 1..limit {
+    for i in 0..limit {
         // Also the chained method calls don't affect the correct z, or something.
         // z.square().add(c);
         ComplexEx::square(z);
@@ -78,10 +78,10 @@ fn escape_time(c: Complex, limit: int) -> int {
             // if z.norm_squared() > 4.0 {
             // debugger;
             // return Some(i);
-            return i;
+            return Some(i);
         }
     }
-    0
+    None
     // None
     // limit
 }
