@@ -674,7 +674,7 @@ dependencies = [
  "reqwest",
  "rustc-hash",
  "rustyline",
- "sarzak 2.1.0",
+ "sarzak 2.2.0",
  "serde",
  "serde_json",
  "snafu",
@@ -2106,7 +2106,7 @@ dependencies = [
  "heck",
  "log",
  "rustc-hash",
- "sarzak 2.1.0",
+ "sarzak 2.2.0",
  "serde",
  "serde_json",
  "tracy-client",
@@ -2115,7 +2115,7 @@ dependencies = [
 
 [[package]]
 name = "sarzak"
-version = "2.1.0"
+version = "2.2.0"
 dependencies = [
  "ansi_term",
  "bincode",
