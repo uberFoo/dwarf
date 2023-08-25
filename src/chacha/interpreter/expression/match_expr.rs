@@ -60,8 +60,6 @@ pub fn eval(
                             } else {
                                 unreachable!()
                             }
-                        } else {
-                            unreachable!()
                         }
                     } else {
                         unreachable!()
