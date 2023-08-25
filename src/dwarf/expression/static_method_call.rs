@@ -1,20 +1,22 @@
 use std::ops::Range;
 
 use ansi_term::Colour;
+use snafu::{location, Location};
 use uuid::Uuid;
 
 use crate::{
     dwarf::{
         error::{DwarfError, Result},
         extruder::{
-            debug, function, inter_expression, link_argument,
-            lookup_woog_struct_method_return_type, Context, DeSanitize, ExprSpan,
+            create_generic_enum, debug, function, inter_expression, link_argument,
+            lookup_woog_struct_method_return_type, typecheck, Context, DeSanitize, ExprSpan,
         },
-        DwarfInteger, Expression as ParserExpression, Type,
+        DwarfInteger, Expression as ParserExpression, PrintableValueType, Type,
     },
     lu_dog::{
-        store::ObjectStore as LuDogStore, Argument, Block, Call, EnumFieldEnum, Expression, Span,
-        StaticMethodCall, ValueType, ValueTypeEnum, XValue,
+        store::ObjectStore as LuDogStore, Argument, Block, Call, EnumField as LuDogEnumField,
+        EnumFieldEnum, Enumeration, Expression, Plain, Span, StaticMethodCall, TupleField,
+        ValueType, ValueTypeEnum, XValue,
     },
     new_ref, s_read, s_write,
     sarzak::Ty,
@@ -54,24 +56,48 @@ pub fn inter(
         );
     };
 
+    // enum A<T> {
+    //     Some(T),
+    //     None,
+    // }
+    //
+    // These are both valid!
+    // let a = A::Some::<i32>(42);
+    // let b = A::<i32>::Some(42);
+
+    // 🚧 As this stands it requires the user to use a fully qualified path, even though
+    // it's not necessary, even without type solvers. For instance, `Option::Some(42)` is
+    // clearly of type `Option<int>`, but we require `Option::<int>::Some(42)`.
+    // To fix this we'd need to
+
     debug!("type_name {:?}", type_name);
+    let type_name_no_generics = type_name.split('<').collect::<Vec<_>>()[0];
 
     // We need to check if the type name is a struct or an enum.
-    if let Some(woog_enum) = lu_dog.exhume_enumeration_id_by_name(&type_name) {
+    if let Some(woog_enum) = lu_dog.exhume_enumeration_id_by_name(&type_name_no_generics) {
+        let woog_enum = lu_dog.exhume_enumeration(&woog_enum).unwrap();
         // Here we are interring an enum constructor.
-        let field = lu_dog.iter_enum_field().find(|field| {
+        let fuzzy = s_read!(woog_enum).r88_enum_field(lu_dog);
+        let field = fuzzy.iter().find(|field| {
             let field = s_read!(field);
             field.name == method
         });
 
         if let Some(field) = field {
-            match &s_read!(field).subtype {
+            let subtype = {
+                let x = &s_read!(field).subtype;
+                x.clone()
+            };
+            let field = match subtype {
                 EnumFieldEnum::TupleField(ref id) => {
-                    let field = lu_dog.exhume_tuple_field(id).unwrap();
+                    let tuple_field = lu_dog.exhume_tuple_field(id).unwrap();
+                    let ty = s_read!(tuple_field).r86_value_type(lu_dog)[0].clone();
+                    let span = &s_read!(ty).r62_span(lu_dog)[0];
+                    let span = s_read!(span).start as usize..s_read!(span).end as usize;
 
                     // We only allow a single one. Stupid restriction. Wait for tuples.
                     let param = &params[0];
-                    let (expr, _ty) = inter_expression(
+                    let (expr, expr_ty) = inter_expression(
                         &new_ref!(ParserExpression, param.0.to_owned()),
                         &param.1,
                         block,
@@ -79,10 +105,100 @@ pub fn inter(
                         lu_dog,
                     )?;
 
-                    s_write!(field).expression = Some(s_read!(expr.0).id);
+                    // If the type is `Generic` then we need to create a field with the
+                    // type of the expression. We then attach the expression to the new
+                    // field and continue.
+                    let typhoid = s_read!(ty);
+                    if let ValueTypeEnum::Generic(_) = typhoid.subtype {
+                        let type_name = if !type_name.contains("<") {
+                            let pvt = PrintableValueType(&expr_ty, context, lu_dog);
+                            format!("{type_name}<{pvt}>")
+                        } else {
+                            type_name.to_owned()
+                        };
+                        let new_enum = create_generic_enum(&type_name, lu_dog);
+                        let new_enum = s_read!(new_enum);
+                        let field = new_enum
+                            .r88_enum_field(lu_dog)
+                            .iter()
+                            .find(|field| {
+                                let field = s_read!(field);
+                                if field.name == method {
+                                    match field.subtype {
+                                        EnumFieldEnum::TupleField(ref id) => {
+                                            let tuple_field =
+                                                lu_dog.exhume_tuple_field(id).unwrap();
+                                            let tuple_field = s_read!(tuple_field);
+                                            tuple_field.expression.is_none()
+                                        }
+                                        _ => false,
+                                    }
+                                } else {
+                                    false
+                                }
+                            })
+                            .unwrap()
+                            .clone();
+                        match &(*s_read!(field)).subtype {
+                            EnumFieldEnum::TupleField(ref id) => {
+                                let tuple_field = lu_dog.exhume_tuple_field(id).unwrap();
+
+                                s_write!(tuple_field).expression = Some(s_read!(expr.0).id);
+                                s_write!(tuple_field).ty = s_read!(expr_ty).id;
+                            }
+                            _ => unreachable!(),
+                        }
+
+                        field
+
+                        // let woog_enum = Enumeration::new(name, None, lu_dog);
+                        // let _ = ValueType::new_enumeration(&woog_enum, lu_dog);
+                        // let new_field = TupleField::new(Some(&expr.0), &expr_ty, lu_dog);
+                        // // dbg!(&new_field, &woog_enum);
+
+                        // for field in &fuzzy {
+                        //     let field = s_read!(field);
+                        //     if field.name != method {
+                        //         match field.subtype {
+                        //             EnumFieldEnum::Plain(ref plain) => {
+                        //                 let plain = lu_dog.exhume_plain(plain).unwrap();
+                        //                 let new_plain = Plain::new(s_read!(plain).x_value, lu_dog);
+                        //                 LuDogEnumField::new_plain(
+                        //                     field.name.to_owned(),
+                        //                     &woog_enum,
+                        //                     &new_plain,
+                        //                     lu_dog,
+                        //                 );
+                        //             }
+                        //             _ => {}
+                        //         };
+                        //     }
+                        // }
+
+                        // LuDogEnumField::new_tuple_field(
+                        //     s_read!(field).name.to_owned(),
+                        //     &woog_enum,
+                        //     &new_field,
+                        //     lu_dog,
+                        // )
+                    } else {
+                        if context.check_types {
+                            typecheck(
+                                (&ty, &span),
+                                (&expr_ty, &param.1),
+                                location!(),
+                                context,
+                                lu_dog,
+                            )?;
+                        }
+
+                        s_write!(tuple_field).expression = Some(s_read!(expr.0).id);
+                        field.clone()
+                    }
                 }
                 _ => unreachable!(),
-            }
+            };
+            let woog_enum = s_read!(woog_enum).id;
             let ty = lu_dog
                 .iter_value_type()
                 .inspect(|ty| {
@@ -137,7 +253,7 @@ pub fn inter(
         } else {
             debug!("ParserExpression::StaticMethodCall: looking up type {type_name}");
 
-            lookup_woog_struct_method_return_type(&type_name, method, lu_dog)
+            lookup_woog_struct_method_return_type(&type_name, method, context.sarzak, lu_dog)
 
             // Look up the struct in the imported models.
             // I'll revisit this model business after I get the basics working.

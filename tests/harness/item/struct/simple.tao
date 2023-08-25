@@ -1,0 +1,14 @@
+struct Simple {
+    value: int,
+}
+
+impl Simple {
+    fn print_it(self) {
+        print("Simple({0})\n".format(self.value));
+    }
+}
+
+fn main() {
+    let a = Simple { value: 42 };
+    a.print_it();
+}

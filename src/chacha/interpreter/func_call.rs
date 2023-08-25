@@ -149,7 +149,6 @@ fn eval_external_function_call(
             let ty = ValueType::new_z_object_store(&store, &mut s_write!(lu_dog));
             Ok((value, ty))
         } else {
-            dbg!("other");
             unimplemented!();
         }
     }

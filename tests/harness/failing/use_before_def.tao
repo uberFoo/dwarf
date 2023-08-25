@@ -1,0 +1,9 @@
+enum Option<T> {
+    Some(T),
+    None,
+}
+
+fn main() {
+    let a = Option::Some(42);
+    print(a == d);
+}

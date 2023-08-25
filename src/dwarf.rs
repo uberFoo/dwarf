@@ -36,12 +36,14 @@ use pvt::PrintableValueType;
 pub use extruder::{inter_statement, new_lu_dog, Context};
 pub use parser::{parse_dwarf, parse_line};
 
+pub type Generics = Spanned<Vec<Spanned<Type>>>;
 pub type Span = ops::Range<usize>;
 pub type Spanned<T> = (T, Span);
 
 // These should eventually come from the domain.
 pub type DwarfInteger = i64;
 pub type DwarfFloat = f64;
+
 #[derive(Args, Clone, Debug, Deserialize, Serialize)]
 pub struct DwarfOptions {
     /// Dwarf Source File
@@ -78,15 +80,12 @@ pub enum Token {
     In,
     Integer(String),
     Let,
-    None,
     Op(String),
-    Option,
     Print,
     Punct(char),
     Return,
     Self_,
     SmallSelf,
-    Some,
     String(String),
     Struct,
     Type(Type),
@@ -114,15 +113,12 @@ impl fmt::Display for Token {
             Self::In => write!(f, "in"),
             Self::Integer(num) => write!(f, "{}", num),
             Self::Let => write!(f, "let"),
-            Self::None => write!(f, "None"),
             Self::Op(op) => write!(f, "{}", op),
-            Self::Option => write!(f, "Option"),
             Self::Print => write!(f, "print"),
             Self::Punct(punct) => write!(f, "{}", punct),
             Self::Return => write!(f, "return"),
             Self::Self_ => write!(f, "Self"),
             Self::SmallSelf => write!(f, "self"),
-            Self::Some => write!(f, "Some"),
             Self::String(str_) => write!(f, "{}", str_),
             Self::Struct => write!(f, "struct"),
             Self::Type(type_) => write!(f, "{}", type_),
@@ -251,54 +247,18 @@ impl Type {
 
                 log::debug!(target: "dwarf", "Type::UserType: {name}");
 
-                // 🚧 HashMapFix
-                // for (_, model) in models {
-                //     if let Some(obj_id) = model.exhume_object_id_by_name(name) {
-                //         let woog_struct = store
-                //             .iter_z_object_store()
-                //             .find(|os| {
-                //                 let wrapper = s_read!(os).object;
-                //                 let wrapper = store.exhume_object_wrapper(&wrapper).unwrap();
-                //                 let object = s_read!(wrapper).object;
-                //                 object == obj_id
-                //             })
-                //             .map(|os| s_read!(os).r78_woog_struct(store)[0].clone());
-
-                //         if let Some(woog_struct) = woog_struct {
-                //             let woog_struct = s_read!(woog_struct);
-                //             return Ok(ValueType::new_woog_struct(
-                //                 &<RefType<WoogStruct> as NewRef<WoogStruct>>::new_ref(
-                //                     woog_struct.to_owned(),
-                //                 ),
-                //                 store,
-                //             ));
-                //         } else {
-                //             return Err(vec![DwarfError::UnknownType {
-                //                 ty: name.to_owned(),
-                //                 span: span.to_owned(),
-                //                 location: location!(),
-                //             }]);
-                //         }
-                //     } else {
-                //         return Err(vec![DwarfError::UnknownType {
-                //             ty: name.to_owned(),
-                //             span: span.to_owned(),
-                //             location: location!(),
-                //         }]);
-                //     }
-                // }
-
                 if let Some(obj_id) = store.exhume_woog_struct_id_by_name(name) {
                     let woog_struct = store.exhume_woog_struct(&obj_id).unwrap();
                     Ok(ValueType::new_woog_struct(&woog_struct, store))
+                } else if let Some(enum_id) = store.exhume_enumeration_id_by_name(name) {
+                    let enumeration = store.exhume_enumeration(&enum_id).unwrap();
+                    Ok(ValueType::new_enumeration(&enumeration, store))
                 } else if let Some(obj_id) = sarzak.exhume_object_id_by_name(name) {
                     // If it's not in one of the models, it must be in sarzak.
                     let ty = sarzak.exhume_ty(&obj_id).unwrap();
-                    // dbg!(&ty);
                     log::debug!(target: "dwarf", "into_value_type, UserType, ty: {ty:?}");
                     Ok(ValueType::new_ty(&ty, store))
                 } else {
-                    dbg!("Unknown type");
                     log::error!(target: "dwarf", "Unknown type");
                     Err(vec![DwarfError::UnknownType {
                         ty: name.to_owned(),
@@ -463,8 +423,16 @@ pub enum InnerItem {
     /// path, Option<Alias>
     Import(Spanned<Vec<Spanned<String>>>, Option<Spanned<String>>),
     /// name, Vec<(Field Name, Field Type)>
-    Struct(Spanned<String>, Vec<(Spanned<String>, Spanned<Type>)>),
-    Enum(Spanned<String>, Vec<(Spanned<String>, Option<EnumField>)>),
+    Struct(
+        Spanned<String>,
+        Vec<(Spanned<String>, Spanned<Type>)>,
+        Option<Generics>,
+    ),
+    Enum(
+        Spanned<String>,
+        Vec<(Spanned<String>, Option<EnumField>)>,
+        Option<Generics>,
+    ),
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -509,4 +477,21 @@ impl TryFrom<&InnerAttribute> for String {
             }),
         }
     }
+}
+
+pub(crate) fn generic_to_string(generic: &Generics) -> Spanned<String> {
+    let mut result = String::new();
+    let mut first_time = true;
+
+    result.push_str("<");
+    for (name, _) in &generic.0 {
+        if first_time {
+            first_time = false;
+        } else {
+            result.push_str(", ");
+        }
+        result.push_str(&name.to_string());
+    }
+    result.push_str(">");
+    (result, generic.1.clone())
 }

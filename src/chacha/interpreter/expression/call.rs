@@ -283,7 +283,9 @@ pub fn eval(
 
                                 let key = source[span].to_owned();
 
-                                let (value, _ty) = eval_expression(expr, context, vm)?;
+                                let value = eval_expression(expr, context, vm)?.0;
+                                debug!("value {value:?}");
+
                                 arg_values.push_back(s_read!(value).to_string());
 
                                 debug!(
@@ -350,7 +352,14 @@ pub fn eval(
                         }
 
                         let ty = Ty::new_s_string(&s_read!(sarzak));
-                        let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
+                        // This write is bad. It's not necessary for a string for one, and
+                        // it also happens when we are holding references to lu_dog.
+                        // let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
+                        // 🚧 Ideally we'd cache this when we startup.
+                        let ty = s_read!(lu_dog)
+                            .iter_value_type()
+                            .find(|t| s_read!(t).subtype == ValueTypeEnum::Ty(ty.borrow().id()))
+                            .unwrap();
                         Ok((new_ref!(Value, Value::String(result)), ty))
                     }
                     value_ => {

@@ -1,3 +1,5 @@
+use ansi_term::Colour;
+
 use crate::{
     chacha::{
         error::Result,
@@ -5,8 +7,8 @@ use crate::{
         value::{UserEnum, UserStruct},
         vm::VM,
     },
-    interpreter::{eval_expression, Context},
-    lu_dog::{EnumFieldEnum, ValueType, ValueTypeEnum},
+    interpreter::{debug, eval_expression, function, Context},
+    lu_dog::{EnumFieldEnum, ValueType},
     new_ref, s_read, NewRef, RefType, SarzakStorePtr, Value,
 };
 
@@ -15,22 +17,15 @@ pub fn eval(
     context: &mut Context,
     vm: &mut VM,
 ) -> Result<(RefType<Value>, RefType<ValueType>)> {
+    debug!("eval enum_field: {enum_field}");
+
     let lu_dog = context.lu_dog_heel().clone();
 
     let field = s_read!(lu_dog).exhume_enum_field(enum_field).unwrap();
     let field = s_read!(field);
-    let woog_enum = field.r88_enumeration(&s_read!(lu_dog))[0].clone();
+    let woog_enum = &field.r88_enumeration(&s_read!(lu_dog))[0];
     let woog_enum = s_read!(woog_enum);
-    let ty = s_read!(lu_dog)
-        .iter_value_type()
-        .find(|ty| {
-            if let ValueTypeEnum::Enumeration(id) = s_read!(ty).subtype {
-                id == woog_enum.id
-            } else {
-                false
-            }
-        })
-        .unwrap();
+    let ty = woog_enum.r1_value_type(&s_read!(lu_dog))[0].clone();
 
     let value = match field.subtype {
         EnumFieldEnum::Plain(_) => new_ref!(
@@ -59,9 +54,8 @@ pub fn eval(
         }
         EnumFieldEnum::TupleField(ref tf) => {
             let tuple = s_read!(lu_dog).exhume_tuple_field(tf).unwrap();
-            let tuple = s_read!(tuple);
-            let expr = tuple.expression.unwrap();
-            let expr = s_read!(lu_dog).exhume_expression(&expr).unwrap();
+            let ty = s_read!(tuple).r86_value_type(&s_read!(lu_dog))[0].clone();
+            let expr = s_read!(tuple).r90_expression(&s_read!(lu_dog))[0].clone();
             let (value, _) = eval_expression(expr, context, vm)?;
             new_ref!(
                 Value,

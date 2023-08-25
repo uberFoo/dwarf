@@ -61,6 +61,8 @@ pub fn eval_field_access(
     debug!("value: {value:?}");
 
     // 🚧 This feels dirty. Some thought is necessary...
+    // I should maybe document what I'm doing. It had something to do with the
+    // plug-in stuff.
     let mut value = (*s_read!(value)).clone();
     match &mut value {
         Value::ProxyType((_, ref mut proxy)) => {
@@ -93,8 +95,11 @@ pub fn eval_field_access(
         }
         Value::Struct(value) => {
             let value = s_read!(value);
-            let value = value.get_field_value(field_name).unwrap();
-            let ty = s_read!(value).get_type(&s_read!(context.sarzak_heel()), &s_read!(lu_dog));
+            let value = value.get_field_value(&field_name).unwrap();
+            let ty = {
+                let lu_dog = s_read!(lu_dog);
+                s_read!(value).get_type(&s_read!(context.sarzak_heel()), &lu_dog)
+            };
 
             Ok((value.clone(), ty))
         }

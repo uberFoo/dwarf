@@ -768,8 +768,6 @@ fn draw_frame<B: Backend>(f: &mut Frame<B>, app: &SharedRef<App>) {
         offset
     };
 
-    // dbg!(&scroll, &app.scroll);
-
     let std_out = Paragraph::new(app.read().console.output.clone())
         // 🚧  see above
         .wrap(Wrap { trim: false })
