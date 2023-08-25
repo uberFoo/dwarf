@@ -36,6 +36,7 @@
         "UDTs",
         "walkdir",
         "xflags",
+        "xmatch",
         "xshell"
     ],
     "rust-analyzer.showUnlinkedFileNotification": false,

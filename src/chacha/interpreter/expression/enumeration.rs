@@ -3,7 +3,7 @@ use ansi_term::Colour;
 use crate::{
     chacha::{
         error::Result,
-        value::EnumVariant,
+        value::EnumFieldVariant,
         value::{UserEnum, UserStruct},
         vm::VM,
     },
@@ -30,7 +30,7 @@ pub fn eval(
     let value = match field.subtype {
         EnumFieldEnum::Plain(_) => new_ref!(
             Value,
-            Value::EnumVariant(EnumVariant::Plain(field.name.to_string()))
+            Value::EnumVariant(EnumFieldVariant::Plain(field.name.to_string()))
         ),
         EnumFieldEnum::StructField(ref sf) => {
             let struct_field = s_read!(lu_dog).exhume_struct_field(sf).unwrap();
@@ -43,7 +43,7 @@ pub fn eval(
                 let struct_value = s_read!(struct_value);
                 new_ref!(
                     Value,
-                    Value::EnumVariant(EnumVariant::Struct(
+                    Value::EnumVariant(EnumFieldVariant::Struct(
                         field.name.to_owned(),
                         new_ref!(UserStruct, struct_value.clone())
                     ))
@@ -54,12 +54,12 @@ pub fn eval(
         }
         EnumFieldEnum::TupleField(ref tf) => {
             let tuple = s_read!(lu_dog).exhume_tuple_field(tf).unwrap();
-            let ty = s_read!(tuple).r86_value_type(&s_read!(lu_dog))[0].clone();
+            let _ty = s_read!(tuple).r86_value_type(&s_read!(lu_dog))[0].clone();
             let expr = s_read!(tuple).r90_expression(&s_read!(lu_dog))[0].clone();
             let (value, _) = eval_expression(expr, context, vm)?;
             new_ref!(
                 Value,
-                Value::EnumVariant(EnumVariant::Tuple(field.name.to_owned(), value))
+                Value::EnumVariant(EnumFieldVariant::Tuple(field.name.to_owned(), value))
             )
         }
     };

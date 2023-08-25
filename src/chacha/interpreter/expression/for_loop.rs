@@ -8,7 +8,7 @@ use crate::{
     new_ref, s_read, s_write, NewRef, RefType, SarzakStorePtr, Value,
 };
 
-pub fn eval_for_loop(
+pub fn eval(
     for_loop: &SarzakStorePtr,
     context: &mut Context,
     vm: &mut VM,
@@ -46,6 +46,9 @@ pub fn eval_for_loop(
 
     debug!("for loop {ident} in {list:?}");
 
+    // 🚧 Why am I creating a block here? Why don't I just store it as an expression?
+    // Check out what I'm doing in match_exprs.rs with the tuple field variable
+    // expressions.
     let block = Expression::new_block(&block, &mut s_write!(lu_dog));
     context.memory().push_frame();
     for item in list {
@@ -60,6 +63,8 @@ pub fn eval_for_loop(
         }
     }
     context.memory().pop_frame();
+    // 🚧 Lazy me. I should accept an expression instead of a uuid.
+    s_write!(lu_dog).exorcise_expression(&s_read!(block).id);
 
     let result = Ok((
         new_ref!(Value, Value::Empty),

@@ -80,6 +80,7 @@ pub enum Token {
     In,
     Integer(String),
     Let,
+    Match,
     Op(String),
     Print,
     Punct(char),
@@ -113,6 +114,7 @@ impl fmt::Display for Token {
             Self::In => write!(f, "in"),
             Self::Integer(num) => write!(f, "{}", num),
             Self::Let => write!(f, "let"),
+            Self::Match => write!(f, "match"),
             Self::Op(op) => write!(f, "{}", op),
             Self::Print => write!(f, "print"),
             Self::Punct(punct) => write!(f, "{}", punct),
@@ -329,6 +331,71 @@ pub enum Statement {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+pub enum Pattern {
+    Identifier(Spanned<String>),
+    Literal(Spanned<String>),
+    PathPattern(Spanned<Vec<Type>>),
+    TupleStruct(Box<Self>, Spanned<Vec<Spanned<Pattern>>>),
+}
+
+impl From<Pattern> for Expression {
+    fn from(pattern: Pattern) -> Self {
+        match pattern {
+            Pattern::Identifier((name, _span)) => Expression::LocalVariable(name),
+            Pattern::Literal((_value, _span)) => {
+                unreachable!()
+            }
+            Pattern::PathPattern((path, span)) => {
+                let mut path = path.to_owned();
+                let field = path.pop().unwrap();
+                let field = if let Type::UserType(field) = field {
+                    field
+                } else {
+                    unreachable!();
+                };
+
+                Expression::PlainEnum(
+                    Box::new((Expression::PathInExpression(path), span.to_owned())),
+                    field,
+                )
+            }
+            Pattern::TupleStruct(path, (fields, _fields_span)) => {
+                let path = if let Pattern::PathPattern(path) = *path.to_owned() {
+                    path
+                } else {
+                    unreachable!()
+                };
+                // let mut path = path.to_owned();
+                let (mut path, _span) = path;
+                let field = path.pop().unwrap();
+                let field = if let Type::UserType(field) = field {
+                    field
+                } else {
+                    unreachable!();
+                };
+
+                let fields = fields
+                    .into_iter()
+                    .map(|f| (f.0.into(), f.1))
+                    .collect::<Vec<_>>();
+
+                // let pattern = Box::new((
+                Expression::StaticMethodCall(
+                    Box::new(Expression::PathInExpression(path)),
+                    field,
+                    fields,
+                )
+                //     span.to_owned(),
+                // ));
+
+                // dbg!(&pattern);
+                // unreachable!()
+            }
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub enum Expression {
     Addition(Box<Spanned<Self>>, Box<Spanned<Self>>),
     And(Box<Spanned<Self>>, Box<Spanned<Self>>),
@@ -374,6 +441,7 @@ pub enum Expression {
     LessThanOrEqual(Box<Spanned<Self>>, Box<Spanned<Self>>),
     List(Vec<Spanned<Self>>),
     LocalVariable(String),
+    Match(Box<Spanned<Self>>, Vec<Spanned<(Pattern, Self)>>),
     MethodCall(Box<Spanned<Self>>, Spanned<String>, Vec<Spanned<Self>>),
     Multiplication(Box<Spanned<Self>>, Box<Spanned<Self>>),
     Negation(Box<Spanned<Self>>),
@@ -483,7 +551,7 @@ pub(crate) fn generic_to_string(generic: &Generics) -> Spanned<String> {
     let mut result = String::new();
     let mut first_time = true;
 
-    result.push_str("<");
+    result.push('<');
     for (name, _) in &generic.0 {
         if first_time {
             first_time = false;
@@ -492,6 +560,6 @@ pub(crate) fn generic_to_string(generic: &Generics) -> Spanned<String> {
         }
         result.push_str(&name.to_string());
     }
-    result.push_str(">");
+    result.push('>');
     (result, generic.1.clone())
 }

@@ -6,7 +6,7 @@ use rustc_hash::FxHashMap as HashMap;
 
 use crate::dwarf::{
     generic_to_string, Attribute, DwarfFloat, EnumField, Expression as DwarfExpression, Generics,
-    InnerAttribute, InnerItem, Item, Spanned, Statement, Token, Type,
+    InnerAttribute, InnerItem, Item, Pattern, Spanned, Statement, Token, Type,
 };
 
 use super::{error::DwarfError, DwarfInteger};
@@ -159,6 +159,7 @@ fn lexer() -> impl Parser<char, Vec<Spanned<Token>>, Error = Simple<char>> {
         "int" => Token::Type(Type::Integer),
         "in" => Token::In,
         "let" => Token::Let,
+        "match" => Token::Match,
         "print" => Token::Print,
         "return" => Token::Return,
         "string" => Token::Type(Type::String),
@@ -259,6 +260,127 @@ impl DwarfParser {
         (result, self.errors.clone())
     }
 
+    fn parse_pattern(&mut self) -> Result<Option<Spanned<Pattern>>> {
+        let mut path_span = 0..0;
+        let mut path = Vec::new();
+        while let Some(ident) = self.parse_ident() {
+            if path_span.start == 0 {
+                path_span.start = ident.1.start;
+            }
+            path_span.end = ident.1.end;
+
+            debug!("ident", ident);
+            path.push(ident);
+
+            match self.match_(&[Token::Punct(':'), Token::Punct('('), Token::Punct('{')]) {
+                Some((Token::Punct(':'), span)) => match self.match_(&[Token::Punct(':')]) {
+                    // No need to do anything, we just matched the second colon. The loop
+                    // will iterate, and find the next element of the path.
+                    Some(_) => {
+                        let generics = self.parse_generics()?;
+                        if let Some(generics) = generics {
+                            path.push(generic_to_string(&generics));
+
+                            if self.match_(&[Token::Punct(':')]).is_none() {
+                                let err = Simple::expected_input_found(
+                                    span,
+                                    [Some(":".to_owned())],
+                                    Some(format!("{:?}", self.peek().unwrap())),
+                                );
+                                error!("exit", err);
+                                return Err(Box::new(err));
+                            }
+                            if self.match_(&[Token::Punct(':')]).is_none() {
+                                let err = Simple::expected_input_found(
+                                    span,
+                                    [Some(":".to_owned())],
+                                    Some(format!("{:?}", self.peek().unwrap())),
+                                );
+                                error!("exit", err);
+                                return Err(Box::new(err));
+                            }
+                        }
+                    }
+                    None => {
+                        let err = Simple::expected_input_found(
+                            span,
+                            [Some(":".to_owned())],
+                            Some(format!("{:?}", self.peek().unwrap())),
+                        );
+                        error!("exit", err);
+                        return Err(Box::new(err));
+                    }
+                },
+                Some((Token::Punct('('), span)) => {
+                    let mut args_span = 0..0;
+                    let mut args = Vec::new();
+                    while let Some(pat) = self.parse_pattern()? {
+                        if args_span.start == 0 {
+                            args_span.start = pat.1.start;
+                        }
+                        args_span.end = pat.1.end;
+                        debug!("arg", pat);
+                        args.push(pat);
+                        let _ = self.match_(&[Token::Punct(',')]);
+                    }
+                    match self.match_(&[Token::Punct(')')]) {
+                        Some((Token::Punct(')'), _)) => {
+                            let types = path
+                                .iter()
+                                .map(|p| Type::UserType(p.clone()))
+                                .collect::<Vec<_>>();
+                            let path = Pattern::PathPattern((types, path_span));
+                            debug!("path", path);
+                            return Ok(Some((
+                                Pattern::TupleStruct(Box::new(path), (args, args_span)),
+                                span,
+                            )));
+                        }
+                        Some((tok, span2)) => {
+                            let err = Simple::unclosed_delimiter(
+                                span,
+                                "(".to_owned(),
+                                span2,
+                                ")".to_owned(),
+                                Some(tok.to_string()),
+                            );
+                            debug!("exit no ')'");
+                            return Err(Box::new(err));
+                        }
+                        None => {}
+                    }
+                }
+                Some((Token::Punct('{'), _span)) => {}
+                Some((tok, span)) => {
+                    let err = Simple::expected_input_found(
+                        span,
+                        [
+                            Some("(".to_owned()),
+                            Some("{".to_owned()),
+                            Some(":".to_owned()),
+                        ],
+                        Some(format!("{:?}", tok)),
+                    );
+                    error!("exit", err);
+                    return Err(Box::new(err));
+                }
+                None => {}
+            }
+        }
+
+        if path.is_empty() {
+            Ok(None)
+        } else if path.len() == 1 {
+            Ok(Some((Pattern::Identifier(path[0].clone()), path_span)))
+        } else {
+            let types: Vec<_> = path.into_iter().map(Type::UserType).collect();
+            Ok(Some((
+                Pattern::PathPattern((types, path_span.clone())),
+                path_span,
+            )))
+        }
+    }
+
     /// Parse an if expression
     ///
     /// if --> IF expression { BLOCK } (ELSE { BLOCK })?
@@ -276,6 +398,24 @@ impl DwarfParser {
             debug!("exit");
             return Ok(None);
         }
+
+        let pattern = if self.match_(&[Token::Let]).is_some() {
+            let pattern = self.parse_pattern()?;
+            if self.match_(&[Token::Punct('=')]).is_none() {
+                let tok = self.peek().unwrap();
+                let err = Simple::expected_input_found(
+                    tok.1.clone(),
+                    [Some("'='".to_owned())],
+                    Some(tok.0.to_string()),
+                );
+                let err = err.with_label("expected equals");
+                error!("exit", err);
+                return Err(Box::new(err));
+            }
+            pattern
+        } else {
+            None
+        };
 
         debug!("getting conditional");
         let conditional = if let Some(cond) = self.parse_expression(LITERAL.1)? {
@@ -332,13 +472,30 @@ impl DwarfParser {
 
         debug!("exit match");
 
-        Ok(Some((
-            (
-                DwarfExpression::If(Box::new(conditional.0), Box::new(true_block.0), false_block),
-                start..self.previous().unwrap().1.end,
-            ),
-            BLOCK,
-        )))
+        if let Some(pattern) = pattern {
+            Ok(Some((
+                (
+                    DwarfExpression::Match(
+                        Box::new(conditional.clone().0),
+                        vec![((pattern.0, true_block.0 .0), true_block.0 .1)],
+                    ),
+                    start..self.previous().unwrap().1.end,
+                ),
+                BLOCK,
+            )))
+        } else {
+            Ok(Some((
+                (
+                    DwarfExpression::If(
+                        Box::new(conditional.0),
+                        Box::new(true_block.0),
+                        false_block,
+                    ),
+                    start..self.previous().unwrap().1.end,
+                ),
+                BLOCK,
+            )))
+        }
     }
 
     fn parse_inner_attribute(&mut self) -> Option<InnerAttribute> {
@@ -663,7 +820,7 @@ impl DwarfParser {
         }
 
         let name = if let Some(ident) = self.parse_ident() {
-            if let Ok(Some(g)) = self.parse_generics() {
+            if let Ok(Some(_g)) = self.parse_generics() {
                 // let g = generic_to_string(&g);
                 // (format!("{}{}", ident.0, g.0), ident.1.start..g.1.end)
                 ident
@@ -1828,10 +1985,7 @@ impl DwarfParser {
 
     /// Parse an expression with a block
     ///
-    /// expression -> assignment | block | Error | field_access |
-    ///               for | function_call | if |
-    ///               list | method_call |print |
-    ///               static_method_call | struct
+    /// expression -> block | for | if | lambda | match
     fn parse_expression_with_block(&mut self) -> Result<Option<Expression>> {
         debug!("enter");
 
@@ -1856,6 +2010,12 @@ impl DwarfParser {
         // parse a lambda expression
         if let Some(expression) = self.parse_lambda_expression()? {
             debug!("lambda expression", expression);
+            return Ok(Some(expression));
+        }
+
+        // parse a match expression
+        if let Some(expression) = self.parse_match_expression()? {
+            debug!("match expression", expression);
             return Ok(Some(expression));
         }
 
@@ -2684,13 +2844,18 @@ impl DwarfParser {
             debug!("block expression", expr);
             // The `;` is optional, so we take a peek, and if it's there we
             // snag it. Maybe print a warning?
-            self.match_(&[Token::Punct(';')]);
-
-            debug!("result statement", expr);
-            return Ok(Some((
-                Statement::Result(expr.0),
-                start..self.previous().unwrap().1.end,
-            )));
+            if self.match_(&[Token::Punct(';')]).is_some() {
+                return Ok(Some((
+                    Statement::Expression(expr.0),
+                    start..self.previous().unwrap().1.end,
+                )));
+            } else {
+                debug!("result statement", expr);
+                return Ok(Some((
+                    Statement::Result(expr.0),
+                    start..self.previous().unwrap().1.end,
+                )));
+            }
         }
 
         //
@@ -2769,9 +2934,13 @@ impl DwarfParser {
         }
 
         let start = path.0 .1.start;
+        // let mut end = path.0 .1.end;
 
         if self.match_(&[Token::Punct(':')]).is_none() {
-            debug!("exit no colon");
+            // return Ok(Some((
+            // (DwarfExpression::PathInExpression(path), start..end),
+            // PATH,
+            // )))
             return Ok(None);
         }
 
@@ -2795,7 +2964,7 @@ impl DwarfParser {
         };
 
         if let Some(ident) = self.parse_ident() {
-            if let Ok(Some(g)) = self.parse_generics() {
+            if let Some(g) = self.parse_generics()? {
                 let new_name = format!("{}{}", ident.0, generic_to_string(&g).0);
                 let new_type = Type::UserType((new_name, ident.1.start..g.1.end));
                 path.push(new_type);
@@ -2822,7 +2991,7 @@ impl DwarfParser {
                     PATH,
                 )))
             }
-        } else if let Ok(Some(g)) = self.parse_generics() {
+        } else if let Some(g) = self.parse_generics()? {
             let last_type = path.pop().unwrap();
             let new_name = format!("{}{}", last_type, generic_to_string(&g).0);
             let span = if let Type::UserType((_, span)) = &last_type {
@@ -3259,7 +3428,7 @@ impl DwarfParser {
             return Err(Box::new(err));
         };
 
-        self.parse_generics();
+        let _ = self.parse_generics();
 
         if self.match_(&[Token::Punct('(')]).is_none() {
             let token = self.peek().unwrap();
@@ -3772,7 +3941,7 @@ impl DwarfParser {
             let ident = if let Ok(Some(generics)) = self.parse_generics() {
                 let span = ident.1;
                 let mut ident = ident.0.to_owned();
-                ident.push_str("<");
+                ident.push('<');
                 let mut first_time = true;
                 for (name, _) in generics.0 {
                     if first_time {
@@ -3783,7 +3952,7 @@ impl DwarfParser {
                     ident.push_str(&name.to_string());
                 }
 
-                ident.push_str(">");
+                ident.push('>');
                 (ident, span)
             } else {
                 ident
@@ -3929,6 +4098,152 @@ impl DwarfParser {
         Ok(Some((
             InnerItem::Struct(name, fields, generics),
             start..end,
+        )))
+    }
+
+    /// Parse a match
+    ///
+    /// match -> match scrutinee { match_arms }
+    /// scrutinee -> expression
+    /// match_arms -> (match_arm => (expression_without_block, | expression_with_block,?))*
+    ///            -> match_arm => expression,?
+    /// match_arm -> pattern
+    fn parse_match_expression(&mut self) -> Result<Option<Expression>> {
+        debug!("enter");
+
+        let start = if let Some(tok) = self.peek() {
+            tok.1.start
+        } else {
+            return Ok(None);
+        };
+
+        if self.match_(&[Token::Match]).is_none() {
+            debug!("exit no match");
+            return Ok(None);
+        }
+
+        debug!("getting scrutinee");
+        let scrutinee = if let Some(cond) = self.parse_expression(LITERAL.1)? {
+            debug!("scrutinee", cond);
+            cond
+        } else {
+            let token = self.previous().unwrap();
+            let err = Simple::expected_input_found(
+                token.1.clone(),
+                [Some("<expression>".to_owned())],
+                Some(token.0.to_string()),
+            );
+            debug!("exit");
+            return Err(Box::new(err));
+        };
+
+        if self.match_(&[Token::Punct('{')]).is_none() {
+            debug!("parse_block_expression: no opening brace");
+            return Ok(None);
+        }
+
+        let mut match_arms = Vec::new();
+        let mut end = false;
+
+        while !self.at_end() {
+            if self.match_(&[Token::Punct('}')]).is_some() {
+                end = true;
+                break;
+            }
+
+            // 🚧 Should this be one token? I feel like it probably should be.
+            // I think I need to rewrite the lexer to make this happen.
+            if let Some(pattern) = self.parse_pattern()? {
+                if self.match_(&[Token::Punct('=')]).is_none() {
+                    let token = self.previous().unwrap();
+                    let err = Simple::expected_input_found(
+                        token.1.clone(),
+                        [Some("'='".to_owned())],
+                        Some(token.0.to_string()),
+                    );
+                    debug!("exit");
+                    return Err(Box::new(err));
+                }
+                if self.match_(&[Token::Punct('>')]).is_none() {
+                    let token = self.previous().unwrap();
+                    let err = Simple::expected_input_found(
+                        token.1.clone(),
+                        [Some("'>'".to_owned())],
+                        Some(token.0.to_string()),
+                    );
+                    debug!("exit");
+                    return Err(Box::new(err));
+                }
+
+                let expr = if let Some(expr) = self.parse_expression_without_block(LITERAL.1)? {
+                    if self.match_(&[Token::Punct(',')]).is_none() {
+                        let token = self.previous().unwrap();
+                        let err = Simple::expected_input_found(
+                            token.1.clone(),
+                            [Some("','".to_owned())],
+                            Some(token.0.to_string()),
+                        );
+                        debug!("exit");
+                        return Err(Box::new(err));
+                    }
+
+                    expr
+                } else if let Some(expr) = self.parse_expression_with_block()? {
+                    expr
+                } else {
+                    let token = self.previous().unwrap();
+                    let err = Simple::expected_input_found(
+                        token.1.clone(),
+                        [Some("<expression>".to_owned())],
+                        Some(token.0.to_string()),
+                    );
+                    debug!("exit");
+                    return Err(Box::new(err));
+                };
+
+                match_arms.push(((pattern.0, expr.0 .0), pattern.1.start..expr.0 .1.end));
+            } else {
+                let token = self.previous().unwrap();
+                let err = Simple::expected_input_found(
+                    token.1.clone(),
+                    [Some("<pattern>".to_owned())],
+                    Some(token.0.to_string()),
+                );
+                debug!("exit");
+                return Err(Box::new(err));
+            }
+
+            // self.match_(&[Token::Punct(',')]);
+        }
+
+        // We got here because we reached the end of the input
+        if !end {
+            let token = self.previous().unwrap();
+            let err = Simple::unclosed_delimiter(
+                start..token.1.end,
+                "{".to_owned(),
+                token.1.clone(),
+                "}".to_owned(),
+                Some(token.0.to_string()),
+            );
+
+            debug!("exit: no '}'");
+            return Err(Box::new(err));
+        }
+
+        // 🚧 This isn't right, but maybe it's good enough.
+        let end = if let Some(tok) = self.peek() {
+            tok.1.end
+        } else {
+            self.previous().unwrap().1.end
+        };
+
+        Ok(Some((
+            (
+                DwarfExpression::Match(Box::new(scrutinee.0), match_arms),
+                start..end,
+            ),
+            BLOCK,
         )))
     }
 
@@ -5074,7 +5389,34 @@ mod tests {
             }
         "#;
 
-        let ast = parse_dwarf("test_generics", src);
+        let ast = parse_dwarf("test_generic_decls", src);
         assert!(ast.is_ok());
+    }
+
+    #[test]
+    fn test_if_let() {
+        let _ = env_logger::builder().is_test(true).try_init();
+
+        let src = r#"
+            fn main() {
+                // Identifier Pattern
+                let a = 20;
+                // let a::b::c = "hello";
+
+                // Path Pattern
+                if let None = foo {}
+                if let Option::None = foo {}
+
+                // Tuple Struct Pattern
+                if let Some(a) = bar {}
+                if let Option::Some(a) = bar {}
+                if let FuBar(a, b) = foo {}
+                if let Foo::Bar::FuBar(a, b) = foo {}
+            }
+        "#;
+
+        let ast = parse_dwarf("test_if_let", src);
+        assert!(ast.is_ok());
+        dbg!(ast);
     }
 }

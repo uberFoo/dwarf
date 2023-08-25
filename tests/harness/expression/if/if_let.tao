@@ -1,0 +1,32 @@
+enum Option<T> {
+    Some(T),
+    None,
+}
+
+fn main() {
+    let x = Option::<string>::None;
+    let z = if let Option::<string>::None = x {
+        print("None\n");
+        chacha::assert_eq(true, true);
+        0
+    } else {
+        print("Some\n");
+        chacha::assert_eq(true, false);
+        1
+    };
+    print(z);
+    chacha::assert_eq(z, 0);
+
+    let y = Option::<int>::Some(42);
+    // let y = Option::Some::<int>(42);
+    let z = if let Option::<int>::Some(y) = y {
+        // if let Option::Some::<int>(y) = y {
+        print("{0}\n".format(y));
+        chacha::assert_eq(true, true);
+        y
+    } else {
+        print("None\n");
+        chacha::assert_eq(true, false);
+    };
+    chacha::assert_eq(z, 42);
+}

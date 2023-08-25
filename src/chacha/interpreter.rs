@@ -12,7 +12,7 @@ use uuid::Uuid;
 
 use crate::{
     chacha::{
-        error::{Error, Result, UnimplementedSnafu, VariableNotFoundSnafu},
+        error::{Error, Result, UnimplementedSnafu},
         memory::{Memory, MemoryUpdateMessage},
         value::UserStruct,
         vm::{CallFrame, Instruction, Thonk, VM},
@@ -48,8 +48,8 @@ pub use tui::start_tui_repl;
 
 use context::Context;
 use expression::{
-    block, call, debugger, enumeration, field, for_loop, if_expr, index, list, literal, operator,
-    print, range, ret, struct_expr, typecast, variable,
+    block, call, debugger, enumeration, field, for_loop, if_expr, index, list, literal, match_expr,
+    operator, print, range, ret, struct_expr, typecast, variable,
 };
 use func_call::eval_function_call;
 use lambda::eval_lambda_expression;
@@ -571,11 +571,11 @@ fn eval_expression(
         ExpressionEnum::Debugger(_) => debugger::eval(context),
         ExpressionEnum::EnumField(ref enum_field) => enumeration::eval(enum_field, context, vm),
         ExpressionEnum::ErrorExpression(ref error) => expression::error::eval(error, context),
-        ExpressionEnum::FieldAccess(ref field) => field::eval_field_access(field, context, vm),
+        ExpressionEnum::FieldAccess(ref field) => field::field_access::eval(field, context, vm),
         ExpressionEnum::FieldExpression(ref field_expr) => {
-            field::eval_field_expression(field_expr, context, vm)
+            field::field_expression::eval(field_expr, context, vm)
         }
-        ExpressionEnum::ForLoop(ref for_loop) => for_loop::eval_for_loop(for_loop, context, vm),
+        ExpressionEnum::ForLoop(ref for_loop) => for_loop::eval(for_loop, context, vm),
         ExpressionEnum::Index(ref index) => index::eval_index(index, context, vm),
         //
         // Lambda
@@ -604,51 +604,8 @@ fn eval_expression(
             variable::eval_variable_expression(expr, &expression, context)
         }
         ExpressionEnum::XIf(ref expr) => if_expr::eval_if_expression(expr, context, vm),
+        ExpressionEnum::XMatch(ref expr) => match_expr::eval(expr, context, vm),
         ExpressionEnum::XReturn(ref expr) => ret::eval_return_expression(expr, context, vm),
-        //
-        // ZNone
-        //
-        ExpressionEnum::ZNone(_) => Ok((
-            new_ref!(Value, Value::Empty),
-            Value::Empty.get_type(&s_read!(sarzak), &s_read!(lu_dog)),
-        )),
-        //
-        // ZSome
-        //
-        ExpressionEnum::ZSome(ref some) => {
-            let some = s_read!(lu_dog).exhume_z_some(some).unwrap();
-            debug!("ExpressionEnum::ZSome {some:?}");
-
-            let value = &s_read!(some).r23_x_value(&s_read!(lu_dog))[0];
-            let option = &s_read!(some).r3_woog_option(&s_read!(lu_dog))[0];
-            let ty = &s_read!(option).r2_value_type(&s_read!(lu_dog))[0];
-
-            use crate::lu_dog::XValueEnum;
-            let value = match s_read!(value).subtype {
-                XValueEnum::Expression(ref expr) => {
-                    let expr = s_read!(lu_dog).exhume_expression(expr).unwrap();
-                    let (value, _ty) = eval_expression(expr, context, vm)?;
-                    value
-                }
-                XValueEnum::Variable(ref var) => {
-                    let var = s_read!(lu_dog).exhume_variable(var).unwrap();
-                    let value = context.memory().get(&s_read!(var).name);
-
-                    ensure!(value.is_some(), {
-                        let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
-                        let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
-                        let read = s_read!(span);
-                        let span = read.start as usize..read.end as usize;
-                        let var = s_read!(var).name.clone();
-                        VariableNotFoundSnafu { var, span }
-                    });
-
-                    value.unwrap()
-                }
-            };
-
-            Ok((value, ty.clone()))
-        }
         ref alpha => {
             ensure!(
                 false,

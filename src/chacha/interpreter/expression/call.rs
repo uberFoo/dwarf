@@ -17,7 +17,7 @@ use crate::{
     lu_dog::{CallEnum, Expression, List, ValueType, ValueTypeEnum},
     new_ref, s_read, s_write,
     sarzak::Ty,
-    NewRef, RefType, SarzakStorePtr, Value,
+    NewRef, RefType, SarzakStorePtr, Value, CHACHA, COMPLEX_EX, FN_NEW, UUID_TYPE,
 };
 
 pub fn eval(
@@ -475,13 +475,13 @@ pub fn eval(
             debug!("StaticMethodCall func {func:?}");
 
             // This is dirty. Down and dirty...
-            if ty == "Uuid" && func == "new" {
+            if ty == UUID_TYPE && func == FN_NEW {
                 let value = Value::Uuid(Uuid::new_v4());
                 let ty = Ty::new_s_uuid(&s_read!(sarzak));
                 let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
 
                 Ok((new_ref!(Value, value), ty))
-            } else if ty == "ComplexEx" {
+            } else if ty == COMPLEX_EX {
                 match func.as_str() {
                     "norm_squared" => {
                         let (value, ty) = arg_values.pop_front().unwrap().0;
@@ -539,7 +539,7 @@ pub fn eval(
                         })
                     }
                 }
-            } else if ty == "chacha" {
+            } else if ty == CHACHA {
                 match func.as_str() {
                     "args" => {
                         debug!("evaluating chacha::args");

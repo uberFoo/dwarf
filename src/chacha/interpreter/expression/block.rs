@@ -23,12 +23,10 @@ pub fn eval(
         let mut next = s_read!(block).r71_statement(&s_read!(lu_dog))[0].clone();
 
         loop {
-            let result = eval_statement(next.clone(), context, vm).map_err(|e| {
+            (value, ty) = eval_statement(next.clone(), context, vm).map_err(|e| {
                 context.memory().pop_frame();
                 e
-            });
-
-            (value, ty) = result?;
+            })?;
 
             if let Some(ref id) = s_read!(next.clone()).next {
                 next = s_read!(lu_dog).exhume_statement(id).unwrap();
