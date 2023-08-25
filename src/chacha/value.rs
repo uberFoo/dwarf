@@ -75,14 +75,43 @@ pub enum FfiValue {
     Vector(RVec<Self>),
 }
 
+/// The type of Enumeration Field
+///
+/// There are three types of enumeration fields: Plain, Struct, and Tuple.
+///
+/// The field descriptions refer to the following enumeration, `Foo`.
+///
+/// ```ignore
+/// enum Foo {
+///     Foo,
+///     Bar(int),
+///     Baz { qux: string },
+/// }
+/// ```
+///
 #[derive(Clone, Debug)]
-pub enum EnumVariant {
+pub enum EnumFieldVariant {
+    /// Plain Enumeration Field
+    ///
+    /// This sort of enumeration is the simplest. In `Foo`, this refers to the
+    /// field `Foo`: `Foo::Foo`. The final field in the path is stored as a
+    /// string.
     Plain(String),
+    /// Struct Enumeration Field
+    ///
+    /// This type of field is for when it contains a struct, as `Baz` does above.
+    /// That is to say, `Foo::Baz { qux: string }`. We store the final path element
+    /// as a string, and the struct as a `RefType<UserStruct>`.
     Struct(String, RefType<UserStruct>),
+    /// Tuple Enumeration Field
+    ///
+    /// This type of field is for when it contains a tuple, as `Bar` does above.
+    /// That is to say, `Foo::Bar(int)`. We store the final path element as a
+    /// string, and the tuple as a `RefType<Value>`.
     Tuple(String, RefType<Value>),
 }
 
-impl PartialEq for EnumVariant {
+impl PartialEq for EnumFieldVariant {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (Self::Plain(a), Self::Plain(b)) => a == b,
@@ -93,9 +122,9 @@ impl PartialEq for EnumVariant {
     }
 }
 
-impl Eq for EnumVariant {}
+impl Eq for EnumFieldVariant {}
 
-impl fmt::Display for EnumVariant {
+impl fmt::Display for EnumFieldVariant {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Self::Plain(s) => write!(f, "{s}"),
@@ -111,7 +140,7 @@ pub enum Value {
     Char(char),
     Empty,
     Enum(RefType<UserEnum>),
-    EnumVariant(EnumVariant),
+    EnumVariant(EnumFieldVariant),
     Error(String),
     Float(DwarfFloat),
     /// Function

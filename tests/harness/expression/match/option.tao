@@ -1,0 +1,30 @@
+enum Option<T> {
+    Some(T),
+    None,
+}
+
+fn main() {
+    let x = Option::<string>::None;
+    print(x);
+    match x {
+        Option::<string>::None => {
+            chacha::assert_eq(true, true);
+        }
+        Option::<string>::Some(y) => {
+            print("top: {0}\n".format(y));
+            chacha::assert_eq(true, false);
+        }
+    };
+
+    x = Option::<string>::Some("hello");
+    print(x);
+    match x {
+        Option::<string>::None => {
+            chacha::assert_eq(" not none", "oops");
+        }
+        Option::<string>::Some(y) => {
+            print("bottom: {0}\n".format(y));
+            chacha::assert_eq(y, "hello");
+        }
+    };
+}

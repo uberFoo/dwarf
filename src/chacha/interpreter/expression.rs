@@ -9,6 +9,7 @@ pub mod if_expr;
 pub mod index;
 pub mod list;
 pub mod literal;
+pub mod match_expr;
 pub mod operator;
 pub mod print;
 pub mod range;

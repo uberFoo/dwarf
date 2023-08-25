@@ -12,8 +12,8 @@ use crate::{
         error::{DwarfError, Result},
         expression::{addition, and, expr_as, static_method_call},
         AttributeMap, DwarfInteger, EnumField, Expression as ParserExpression, Generics,
-        InnerAttribute, InnerItem, Item, PrintableValueType, Spanned, Statement as ParserStatement,
-        Type,
+        InnerAttribute, InnerItem, Item, PrintableValueType, Spanned,
+        Statement as ParserStatement, Type,
     },
     lu_dog::{
         store::ObjectStore as LuDogStore,
@@ -22,10 +22,11 @@ use crate::{
             Enumeration, ErrorExpression, Expression, ExpressionEnum, ExpressionStatement,
             ExternalImplementation, Field, FieldExpression, ForLoop, Function, Generic,
             ImplementationBlock, Index, IntegerLiteral, Item as WoogItem, ItemStatement, Lambda,
-            LambdaParameter, LetStatement, Literal, LocalVariable, Parameter, Plain, Print,
-            RangeExpression, Span as LuDogSpan, Statement, StringLiteral, StructExpression,
-            StructField, TupleField, ValueType, ValueTypeEnum, Variable, VariableExpression,
-            WoogOption, WoogStruct, XIf, XValue, XValueEnum, ZObjectStore, ZSome,
+            LambdaParameter, LetStatement, Literal, LocalVariable, Parameter, Pattern as AssocPat,
+            Plain, Print, RangeExpression, Span as LuDogSpan, Statement, StringLiteral,
+            StructExpression, StructField, TupleField, ValueType, ValueTypeEnum, Variable,
+            VariableExpression, WoogOption, WoogStruct, XIf, XMatch, XValue, XValueEnum,
+            ZObjectStore, ZSome,
         },
         Argument, Binary, BooleanLiteral, Comparison, DwarfSourceFile, FieldAccess,
         FieldAccessTarget, FloatLiteral, List, ListElement, ListExpression, MethodCall, Operator,
@@ -33,7 +34,7 @@ use crate::{
     },
     new_ref, s_read, s_write,
     sarzak::{store::ObjectStore as SarzakStore, types::Ty},
-    ModelStore, NewRef, RefType,
+    ModelStore, NewRef, RefType, UUID_TYPE,
 };
 
 const CHACHA: &str = "chacha";
@@ -1226,7 +1227,6 @@ pub(super) fn inter_expression(
             let id = s_read!(lhs_ty).id;
             let ty = lu_dog.exhume_value_type(&id).unwrap();
             let ty_read = s_read!(ty);
-            dbg!(&ty_read);
 
             match &ty_read.subtype {
                 // We matched on the lhs type.
@@ -1294,7 +1294,7 @@ pub(super) fn inter_expression(
                     let woog_struct = lu_dog
                         .iter_woog_struct()
                         .inspect(|ref ws| {
-                            dbg!(ws);
+                            debug!("{ws:?}");
                         })
                         .find(|ws| s_read!(ws).object == Some(*id))
                         .unwrap();
@@ -2191,8 +2191,6 @@ pub(super) fn inter_expression(
                 debug!("returning {:?}", expr_ty_tuple);
                 Ok(expr_ty_tuple)
             } else if let Some(ref id) = lu_dog.exhume_function_id_by_name(name) {
-                // 🚧 The exhumation above is sort of messed up. I don't like that
-                // I have to turn it into upper-camel-case.
                 // We get here because there was no local variable info, so we are
                 // going to check if it's a function.
                 // 🚧 NB: We'll only find it if it's been processed. We really need to
@@ -2211,22 +2209,6 @@ pub(super) fn inter_expression(
                 Ok(((expr, span), ty))
             } else {
                 debug!("variable not found");
-                // 🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧
-                // As neat as it is that I'm compiling this into the binary, we should actually
-                // bail here, and make the user do something about it. The issue is that this
-                // may get run from the repl, and in that case we want to return the expression.
-                // So, we need a flag...
-                // let expr = ErrorExpression::new(
-                //     format!(
-                //         "\n  ──➤  variable: `{}` not found\n",
-                //         Colour::Red.paint(name.to_owned())
-                //     ),
-                //     lu_dog,
-                // );
-                // Expression::new_error_expression(&expr, lu_dog);
-                // ValueType::new_error(&Error::new_unknown_variable(lu_dog), lu_dog);
-                // 🚧 WTF are we doing here? Above it's an error, and here we have
-                // a variable expression that we're returning?
                 let expr = VariableExpression::new(name.to_owned(), lu_dog);
                 let expr = Expression::new_variable_expression(&expr, lu_dog);
                 let ty = ValueType::new_unknown(lu_dog);
@@ -2237,6 +2219,110 @@ pub(super) fn inter_expression(
                 debug!("LocalVariable result ({expr:#?}, {ty:#?})");
                 Ok(((expr, span), ty))
             }
+        }
+        //
+        // Match
+        //
+        // The idea here is to take the pattern and see if it matches the scrutinee.
+        // Of course here we are just setting things up for the interpreter. We
+        // have a `Match` type in the model that we need to populate. It however
+        // only contains a string field. So the trick is to compile something into
+        // that string that can later be consumed by the interpreter.  The scrutinee
+        // is an expression, so it's storage should be easy. In rust it can be
+        // a place or value expression, i.e., lvalue, rvalue. In the former rust
+        // uses a temporary variable when processing a match.
+        //
+        // Let's start with a path pattern. Something like Option::None. In this
+        // case we just need to check the value of the scrutinee and see if it
+        // matches. So we need to turn that into something that we can evaluate.
+        // For this code:
+        // ```
+        // if let Option::None = x { none(); }
+        // ```
+        // we would generate this dwarf:
+        // ```
+        // match x {
+        //     Option::None => { none(); }
+        //     _ => {}
+        // }
+        // ```
+        // Which generates what? What can be interpreted?
+        // ```
+        // if x == Option::None { none(); }
+        // ```
+        //
+        // I forget that we need to do
+        // the typechecking here as well. That implies that we need to turn the
+        // pattern into a type.
+        //
+        // So let's look at another example.
+        // `if let Option::Some(y) = x { some(y); }`
+        // In this case we need a test and then we need to create a variable and assign
+        // the value of the match.
+        // ```
+        //  match x {
+        //     Option::Some(y) => { some(y); }
+        //     _ => {}
+        // }
+        // ```
+        // This one seems more difficult.
+        // ```
+        // if chacha::typeof(x) == Option::Some { let y = x; some(y); }
+        // ```
+        //
+        ParserExpression::Match(scrutinee, patterns) => {
+            debug!("scrutinee: {scrutinee:?}");
+
+            let s_span = &scrutinee.1;
+
+            let (scrutinee, scrutinee_ty) = inter_expression(
+                &new_ref!(ParserExpression, scrutinee.0.to_owned()),
+                &scrutinee.1,
+                block,
+                context,
+                lu_dog,
+            )?;
+
+            let xmatch = XMatch::new(Uuid::new_v4(), &scrutinee.0, lu_dog);
+
+            for ((pat, expr), span) in patterns {
+                debug!("pattern: {pat:?}");
+                let pat_expr: ParserExpression = pat.to_owned().into();
+                let (pat_expr, ty) = inter_expression(
+                    &new_ref!(ParserExpression, pat_expr),
+                    span,
+                    block,
+                    context,
+                    lu_dog,
+                )?;
+
+                if context.check_types {
+                    typecheck(
+                        (&scrutinee_ty, s_span),
+                        (&ty, span),
+                        location!(),
+                        context,
+                        lu_dog,
+                    )?;
+                }
+
+                let (expr, _ty) = inter_expression(
+                    &new_ref!(ParserExpression, expr.to_owned()),
+                    span,
+                    block,
+                    context,
+                    lu_dog,
+                )?;
+
+                let _pat = AssocPat::new(&expr.0, &pat_expr.0, &xmatch, lu_dog);
+            }
+
+            let expr = Expression::new_x_match(&xmatch, lu_dog);
+
+            let value = XValue::new_expression(block, &scrutinee_ty, &expr, lu_dog);
+            s_write!(span).x_value = Some(s_read!(value).id);
+
+            Ok(((expr, span), scrutinee_ty))
         }
         //
         // MethodCall
@@ -2551,7 +2637,6 @@ pub(super) fn inter_expression(
         //
         ParserExpression::PlainEnum(enum_path, (field_name, field_span)) => {
             debug!("PlainEnum {:?}", enum_path);
-            // 🚧 this won't survive as-is
             let (path, path_span) =
                 if let (ParserExpression::PathInExpression(path), span) = enum_path.as_ref() {
                     (path, span)
@@ -2562,11 +2647,13 @@ pub(super) fn inter_expression(
                 );
                 };
 
-            let enum_name = if let Some(Type::UserType((obj, _))) = path.first() {
-                obj.de_sanitize().to_owned()
-            } else {
-                panic!("I don't think that we should ever see anything other than a user type here: {:?}", path);
-            };
+            let enum_name = path.iter().map(|p| {
+                if let Type::UserType((obj, _)) = p {
+                    obj.de_sanitize().to_owned()
+                } else {
+                    panic!("I don't think that we should ever see anything other than a user type here: {:?}", p);
+                }
+            }).collect::<Vec<_>>().join("");
 
             debug!("enum_name {:?}", enum_name);
 
@@ -2574,7 +2661,7 @@ pub(super) fn inter_expression(
             let woog_enum_id = if let Some(id) = lu_dog.exhume_enumeration_id_by_name(&enum_name) {
                 id
             } else {
-                let new_enum = create_generic_enum(&enum_name, lu_dog);
+                let (new_enum, _) = create_generic_enum(&enum_name, lu_dog);
                 let x = s_read!(new_enum).id;
                 x
             };
@@ -2602,7 +2689,7 @@ pub(super) fn inter_expression(
                     })
                     .unwrap();
 
-                let expr = Expression::new_enum_field(&field, lu_dog);
+                let expr = Expression::new_enum_field(field, lu_dog);
 
                 let value = XValue::new_expression(block, &ty, &expr, lu_dog);
                 s_write!(span).x_value = Some(s_read!(value).id);
@@ -2763,7 +2850,7 @@ pub(super) fn inter_expression(
                         ty: name.to_owned(),
                         span: name_span.to_owned(),
                         location: location!(),
-                    }])
+                    }]);
                 }
             };
             let woog_struct = lu_dog.exhume_woog_struct(&id).unwrap();
@@ -2794,16 +2881,14 @@ pub(super) fn inter_expression(
                         let struct_ty = format!("{name}<{pvt}>");
                         let new_struct = create_generic_struct(&struct_ty, context.sarzak, lu_dog);
                         s_write!(expr).woog_struct = s_read!(new_struct).id;
-                    } else {
-                        if context.check_types {
-                            typecheck(
-                                (&struct_ty, &field_name.1),
-                                (&ty, &field_expr_span),
-                                location!(),
-                                context,
-                                lu_dog,
-                            )?;
-                        }
+                    } else if context.check_types {
+                        typecheck(
+                            (&struct_ty, &field_name.1),
+                            (&ty, &field_expr_span),
+                            location!(),
+                            context,
+                            lu_dog,
+                        )?;
                     }
                 } else {
                     return Err(vec![DwarfError::NoSuchField {
@@ -3063,9 +3148,9 @@ fn inter_implementation(
 fn exorcise_generic_enum(
     name: &str,
     _attributes: &AttributeMap,
-    variants: &[(Spanned<String>, Option<EnumField>)],
+    _variants: &[(Spanned<String>, Option<EnumField>)],
     generics: &Option<Generics>,
-    context: &mut Context,
+    _context: &mut Context,
     lu_dog: &mut LuDogStore,
 ) -> Result<()> {
     debug!("exorcise_generic_enum {name}");
@@ -3077,10 +3162,10 @@ fn exorcise_generic_enum(
             let woog_enum = lu_dog.exhume_enumeration(&woog_enum_id).unwrap();
             for field in s_read!(woog_enum).r88_enum_field(lu_dog) {
                 match s_read!(field).subtype {
-                    EnumFieldEnum::Plain(ref id) => {
+                    EnumFieldEnum::Plain(ref _id) => {
                         // lu_dog.exorcise_plain(id);
                     }
-                    EnumFieldEnum::StructField(ref id) => {
+                    EnumFieldEnum::StructField(ref _id) => {
                         // lu_dog.exorcise_struct_field(id);
                     }
                     EnumFieldEnum::TupleField(ref id) => {
@@ -3213,10 +3298,10 @@ fn inter_enum(
 
 fn exorcise_generic_struct(
     name: &str,
-    attributes: &AttributeMap,
-    fields: &[(Spanned<String>, Spanned<Type>)],
+    _attributes: &AttributeMap,
+    _fields: &[(Spanned<String>, Spanned<Type>)],
     generics: &Option<Generics>,
-    context: &mut Context,
+    _context: &mut Context,
     lu_dog: &mut LuDogStore,
 ) -> Result<()> {
     debug!("exorcise_generic_struct {name}");
@@ -3261,7 +3346,7 @@ fn inter_struct(
                 }
             }
 
-            for ((name, _), (ty, _)) in fields {
+            for ((_name, _), (ty, _)) in fields {
                 match ty {
                     Type::UserType((name, _)) => {
                         set.insert(name.to_owned());
@@ -3535,6 +3620,7 @@ pub(crate) fn get_value_type(
         }
         Type::UserType(tok) => {
             let name = tok.0.de_sanitize();
+            let type_name_no_generics = name.split('<').collect::<Vec<_>>()[0];
 
             // Deal with imports
             let import = lu_dog.iter_import().find(|import| {
@@ -3570,7 +3656,7 @@ pub(crate) fn get_value_type(
                 }
             } else if name == "String" {
                 Ok(ValueType::new_ty(&Ty::new_s_string(sarzak), lu_dog))
-            } else if name == "Uuid" {
+            } else if name == UUID_TYPE {
                 Ok(ValueType::new_ty(&Ty::new_s_uuid(sarzak), lu_dog))
             } else {
                 // 🚧 HashMapFix
@@ -3583,7 +3669,10 @@ pub(crate) fn get_value_type(
                             // object called `Point`. We want to be able to also handle
                             // proxy objects for `Point`. Those are suffixed with "Proxy".
                             let obj = obj.borrow().name.to_upper_camel_case();
-                            obj == *name || name == format!("{}Proxy", obj)
+                            dbg!(&obj);
+                            obj == *name
+                                || name == format!("{}Proxy", obj)
+                                || obj == *type_name_no_generics
                         }
                         _ => false,
                     }) {
@@ -3606,10 +3695,17 @@ pub(crate) fn get_value_type(
                     // in types that are defined in dwarf source.
                     let woog_struct = lu_dog.exhume_woog_struct(id).unwrap();
                     Ok(ValueType::new_woog_struct(&woog_struct, lu_dog))
-                } else if let Some(ref id) = lu_dog.exhume_enumeration_id_by_name(name) {
+                } else if let Some(ref id) =
+                    lu_dog.exhume_enumeration_id_by_name(type_name_no_generics)
+                {
                     // Here too, but for enums.
-                    let woog_enum = lu_dog.exhume_enumeration(id).unwrap();
-                    Ok(ValueType::new_enumeration(&woog_enum, lu_dog))
+                    if type_name_no_generics != name {
+                        let (_new_enum, new_ty) = create_generic_enum(name, lu_dog);
+                        Ok(new_ty)
+                    } else {
+                        let woog_enum = lu_dog.exhume_enumeration(id).unwrap();
+                        Ok(ValueType::new_enumeration(&woog_enum, lu_dog))
+                    }
                 } else if let Some(ref id) = lu_dog.exhume_z_object_store_id_by_name(name) {
                     let store = lu_dog.exhume_z_object_store(id).unwrap();
                     Ok(ValueType::new_z_object_store(&store, lu_dog))
@@ -3660,7 +3756,7 @@ pub(crate) fn lookup_woog_struct_method_return_type(
     } else if type_name == CHACHA {
         match method {
             "args" => {
-                let ty = Ty::new_s_string(&sarzak);
+                let ty = Ty::new_s_string(sarzak);
                 // 🚧 Ideally we'd cache this when we startup.
                 let ty = lu_dog
                     .iter_value_type()
@@ -3818,7 +3914,7 @@ pub(crate) fn create_generic_struct(
     let woog_struct = lu_dog.exhume_woog_struct(&woog_struct_id).unwrap();
 
     let mut obj = s_read!(woog_struct).r4_object(sarzak);
-    let obj = if obj.len() > 0 {
+    let obj = if !obj.is_empty() {
         let obj = obj.pop().unwrap();
         let obj = obj.borrow().clone();
         Some(obj)
@@ -3837,15 +3933,16 @@ pub(crate) fn create_generic_struct(
     new_struct
 }
 
+// Note that the name is expected to contain the generic component.
 pub(crate) fn create_generic_enum(
     enum_name: &str,
     lu_dog: &mut LuDogStore,
-) -> RefType<Enumeration> {
+) -> (RefType<Enumeration>, RefType<ValueType>) {
     // 🚧 We should check that wa are actually dealing with a valid type, i.e., a generic
     // type, e.g. `None<int>`
     debug!("interring generic enum {enum_name}");
     let new_enum = Enumeration::new(enum_name.to_owned(), None, lu_dog);
-    let _ = ValueType::new_enumeration(&new_enum, lu_dog);
+    let ty = ValueType::new_enumeration(&new_enum, lu_dog);
 
     let name_without_generics = enum_name.split('<').collect::<Vec<_>>()[0];
 
@@ -3897,5 +3994,5 @@ pub(crate) fn create_generic_enum(
         }
     }
 
-    new_enum
+    (new_enum, ty)
 }

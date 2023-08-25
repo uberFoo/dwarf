@@ -25,6 +25,11 @@ pub(crate) use chacha::{error::ChaChaError, interpreter, value::Value};
 pub type DwarfInteger = i64;
 pub type DwarfFloat = f64;
 
+const CHACHA: &str = "chacha";
+const UUID_TYPE: &str = "Uuid";
+const COMPLEX_EX: &str = "ComplexEx";
+const FN_NEW: &str = "new";
+
 use lu_dog::ValueType;
 
 cfg_if::cfg_if! {
