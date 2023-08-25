@@ -70,12 +70,13 @@ In no particular order:
 - [x] lambdas
 - [ ] Compiler for VM
 - [ ] Visibility modifiers
-- [ ] Generics
+- [x] Generics
 - [ ] Macros (Yes, and I don't know why other interpreted languages don't have them. Am I crazy?)
 - [x] Extensions via plugins
 - [ ] Char type
-- [ ] if let expressions
+- [x] if let expressions
 - [ ] Doc Comments, with Doc Tests
+- [x] match expression
 
 ### Supertype / subtype hierarchies
 
