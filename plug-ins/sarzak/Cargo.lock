@@ -675,7 +675,6 @@ dependencies = [
  "rustc-hash",
  "rustyline",
  "sarzak 2.2.0",
- "sarzak 2.2.0",
  "serde",
  "serde_json",
  "snafu",
