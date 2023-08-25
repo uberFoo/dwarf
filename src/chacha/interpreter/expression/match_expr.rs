@@ -1,12 +1,5 @@
-
-
-
 use crate::{
-    chacha::{
-        error::Result,
-        value::{EnumFieldVariant},
-        vm::VM,
-    },
+    chacha::{error::Result, value::EnumFieldVariant, vm::VM},
     interpreter::{eval_expression, Context},
     lu_dog::{EnumFieldEnum, ExpressionEnum, ValueType},
     new_ref, s_read, NewRef, RefType, SarzakStorePtr, Value,
@@ -36,7 +29,8 @@ pub fn eval(
         let match_expr = s_read!(pattern).r87_expression(&s_read!(lu_dog))[0].clone();
         // dbg!(&match_expr);
 
-        if let ExpressionEnum::EnumField(ref enum_field) = &s_read!(match_expr).subtype {
+        let match_expr = s_read!(match_expr);
+        if let ExpressionEnum::EnumField(ref enum_field) = &match_expr.subtype {
             let field = s_read!(lu_dog).exhume_enum_field(enum_field).unwrap();
             let field = s_read!(field);
             let woog_enum = &field.r88_enumeration(&s_read!(lu_dog))[0];
@@ -59,12 +53,18 @@ pub fn eval(
 
                                 context.memory().push_frame();
 
-                                let (_value, _ty) = eval_expression(expr, context, vm)?;
-                                // dbg!(value, ty);
+                                let (value, ty) = eval_expression(expr, context, vm)?;
 
                                 context.memory().pop_frame();
+                                return Ok((value, ty));
+                            } else {
+                                unreachable!()
                             }
+                        } else {
+                            unreachable!()
                         }
+                    } else {
+                        unreachable!()
                     }
                 }
                 // new_ref!(
@@ -76,6 +76,7 @@ pub fn eval(
                     let struct_field = s_read!(struct_field);
                     let expr = struct_field.expression.unwrap();
                     let _expr = s_read!(lu_dog).exhume_expression(&expr).unwrap();
+                    unimplemented!();
                     // dbg!("StructField", &field.name, expr);
                     //             let (value, _) = eval_expression(expr, context, vm)?;
                     //             let value = s_read!(value);
@@ -122,38 +123,29 @@ pub fn eval(
                                     context
                                         .memory()
                                         .insert(s_read!(var).name.to_owned(), value.clone());
-                                    let (_value, _ty) = eval_expression(expr, context, vm)?;
-                                    // dbg!(value, ty);
+                                    let (value, ty) = eval_expression(expr, context, vm)?;
 
                                     context.memory().pop_frame();
+
+                                    return Ok((value, ty));
+                                } else {
+                                    unreachable!()
                                 }
+                            } else {
+                                unreachable!()
                             }
+                        } else {
+                            unreachable!()
                         }
+                    } else {
+                        unreachable!()
                     }
-                    //             new_ref!(
-                    //                 Value,
-                    //                 Value::EnumVariant(EnumFieldVariant::Tuple(field.name.to_owned(), value))
-                    //             )
                 }
             };
-
-            //     let user_enum = UserEnum::new(woog_enum.name.clone(), &ty, value);
-            //     let user_enum = new_ref!(UserEnum, user_enum);
         }
-
-        // let bar = eval_expression(pat, context, vm)?;
-        // dbg!(bar);
-        let _expr = s_read!(pattern).r92_expression(&s_read!(lu_dog));
-        // dbg!(expr);
     }
 
-    let result = Ok((
-        new_ref!(Value, Value::Empty),
-        Value::Empty.get_type(&s_read!(sarzak), &s_read!(lu_dog)),
-    ));
-
-    #[allow(clippy::let_and_return)]
-    result
+    unreachable!()
 }
 
 // fn deconstruct_expression(expr: RefCell<Expression>) {}

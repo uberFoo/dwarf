@@ -1,3 +1,8 @@
+enum Option<T> {
+    None,
+    Some(T),
+}
+
 struct Complex {
     re: float,
     im: float,
@@ -78,10 +83,10 @@ fn escape_time(c: Complex, limit: int) -> Option<int> {
             // if z.norm_squared() > 4.0 {
             // debugger;
             // return Some(i);
-            return Some(i);
+            return Option::<int>::Some(i);
         }
     }
-    None
+    Option::<int>::None
     // None
     // limit
 }
@@ -156,11 +161,15 @@ fn do_column(
     for column in 0..width {
         let point = pixel_to_point(width, height, column, row, upper_left, lower_right);
         let time = escape_time(point, time);
-        if time > 0 {
-            print(" ");
-        } else {
-            print("*");
+        match time {
+            Option::<int>::None => print("*"),
+            Option::<int>::Some(time) => print(" "),
         }
+        // if time > 0 {
+        //     print(" ");
+        // } else {
+        //     print("*");
+        // }
     }
     print("\n");
 }
