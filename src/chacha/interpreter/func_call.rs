@@ -99,6 +99,11 @@ fn eval_external_function_call(
     };
 
     let model_name = s_read!(external).x_model.clone();
+    let model_name = if model_name == "merlin" {
+        "sarzak".to_owned()
+    } else {
+        model_name
+    };
     let mut model = s_write!(context.models());
     let model = model.get_mut(&model_name).unwrap();
     let func_name = s_read!(external).function.clone();
@@ -108,8 +113,12 @@ fn eval_external_function_call(
     if object_name == OBJECT_STORE {
         // Here we load the plug-in and create an instance of the object store.
         if s_read!(external).function == FUNCTION_NEW {
+            // This is where we actually instantiate the shared library.
             let library_path = RawLibrary::path_in_directory(
-                Path::new(&format!("./plug-ins/{model_name}/target/debug")),
+                Path::new(&format!(
+                    "{}/extensions/{model_name}/lib",
+                    context.get_home().display()
+                )),
                 &model_name,
                 LibrarySuffix::NoSuffix,
             );
@@ -158,6 +167,7 @@ fn eval_external_function_call(
             // 🚧 Don't unwrap -- error handling.
             let proxy_obj = s_write!(plugin)
                 .invoke_func(
+                    model_name.as_str().into(),
                     object_name.as_str().into(),
                     func_name.as_str().into(),
                     arg_values
@@ -172,7 +182,10 @@ fn eval_external_function_call(
                 .unwrap();
             match proxy_obj {
                 FfiValue::ProxyType(proxy_obj) => {
-                    let value = new_ref!(Value, Value::ProxyType((obj_id, proxy_obj.plugin)));
+                    let value = new_ref!(
+                        Value,
+                        Value::ProxyType((model_name, obj_id, proxy_obj.plugin))
+                    );
 
                     let woog_struct = s_read!(lu_dog)
                         .iter_woog_struct()
@@ -207,7 +220,7 @@ fn eval_external_function_call(
                     Ok((value, ty))
                 }
                 all_manner_of_things => {
-                    panic!("{all_manner_of_things:?} is not a proxy");
+                    panic!("{all_manner_of_things:?} is not a proxy for model {model_name}.");
                 }
             }
         } else {

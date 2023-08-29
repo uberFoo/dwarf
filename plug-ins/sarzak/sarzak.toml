@@ -15,3 +15,22 @@ persist = true
 persist_timestamps = true
 uber_store = "Single"
 target = "domain"
+
+[modules."merlin"]
+model = "models/merlin.json"
+
+[modules."merlin".compiler]
+always_process = true
+compiler = "grace"
+derive = ["Clone", "Debug", "Deserialize", "PartialEq", "Serialize"]
+imported_domains = ["sarzak"]
+use_paths = ["serde::{Deserialize, Serialize}"]
+
+[modules."merlin".compiler.target]
+optimization_level = "None"
+is_meta_model = true
+is_sarzak = false
+persist = true
+persist_timestamps = false
+uber_store = "Single"
+target = "domain"

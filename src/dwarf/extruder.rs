@@ -1,18 +1,18 @@
-use std::ops::Range;
+use std::{env, fs, ops::Range, path::PathBuf};
 
 use ansi_term::Colour;
 use heck::ToUpperCamelCase;
 use log;
 use rustc_hash::FxHashSet as HashSet;
-use snafu::{location, Location};
+use snafu::{ensure, location, Location};
 use uuid::Uuid;
 
 use crate::{
     dwarf::{
         error::{DwarfError, Result},
         expression::{addition, and, expr_as, static_method_call},
-        AttributeMap, DwarfInteger, EnumField, Expression as ParserExpression, Generics,
-        InnerAttribute, InnerItem, Item, PrintableValueType, Spanned,
+        parse_dwarf, AttributeMap, DwarfInteger, EnumField, Expression as ParserExpression,
+        Generics, InnerAttribute, InnerItem, Item, PrintableValueType, Spanned,
         Statement as ParserStatement, Type,
     },
     lu_dog::{
@@ -21,11 +21,11 @@ use crate::{
             Block, Body, BooleanOperator, Call, EnumField as LuDogEnumField, EnumFieldEnum,
             Enumeration, ErrorExpression, Expression, ExpressionEnum, ExpressionStatement,
             ExternalImplementation, Field, FieldExpression, ForLoop, Function, Generic,
-            ImplementationBlock, Index, IntegerLiteral, Item as WoogItem, ItemStatement, Lambda,
-            LambdaParameter, LetStatement, Literal, LocalVariable, Parameter, Pattern as AssocPat,
-            Plain, Print, RangeExpression, Span as LuDogSpan, Statement, StringLiteral,
-            StructExpression, StructField, TupleField, ValueType, ValueTypeEnum, Variable,
-            VariableExpression, WoogOption, WoogStruct, XIf, XMatch, XValue, XValueEnum,
+            ImplementationBlock, Import, Index, IntegerLiteral, Item as WoogItem, ItemStatement,
+            Lambda, LambdaParameter, LetStatement, Literal, LocalVariable, Parameter,
+            Pattern as AssocPat, Plain, Print, RangeExpression, Span as LuDogSpan, Statement,
+            StringLiteral, StructExpression, StructField, TupleField, ValueType, ValueTypeEnum,
+            Variable, VariableExpression, WoogOption, WoogStruct, XIf, XMatch, XValue, XValueEnum,
             ZObjectStore, ZSome,
         },
         Argument, Binary, BooleanLiteral, Comparison, DwarfSourceFile, FieldAccess,
@@ -34,7 +34,7 @@ use crate::{
     },
     new_ref, s_read, s_write,
     sarzak::{store::ObjectStore as SarzakStore, types::Ty},
-    ModelStore, NewRef, RefType, UUID_TYPE,
+    ModelStore, NewRef, RefType, EXTENSION_DIR, LIB_TAO, SRC_DIR, TAO_EXT, UUID_TYPE,
 };
 
 const CHACHA: &str = "chacha";
@@ -271,6 +271,10 @@ pub struct StructFields {
 
 // #[derive(Debug)]
 pub struct Context<'a> {
+    /// Location of the current item
+    ///
+    /// We keep this here because we sometimes report errors far away from where
+    /// they occur.
     pub location: Location,
     /// Struct Field Storage
     ///
@@ -288,6 +292,8 @@ pub struct Context<'a> {
     pub source: RefType<DwarfSourceFile>,
     pub models: &'a ModelStore,
     pub sarzak: &'a SarzakStore,
+    pub dwarf_home: &'a PathBuf,
+    pub cwd: PathBuf,
 }
 
 /// The main entry point
@@ -314,6 +320,7 @@ pub struct Context<'a> {
 /// that it may only be used to look up the id of the UUID type.
 pub fn new_lu_dog(
     source: Option<(String, &[Item])>,
+    dwarf_home: &PathBuf,
     models: &ModelStore,
     sarzak: &SarzakStore,
 ) -> Result<LuDogStore> {
@@ -334,6 +341,8 @@ pub fn new_lu_dog(
             source: DwarfSourceFile::new(source, &mut lu_dog),
             models,
             sarzak,
+            dwarf_home,
+            cwd: env::current_dir().unwrap(),
         };
 
         walk_tree(ast, &mut context, &mut lu_dog)?;
@@ -374,7 +383,11 @@ fn walk_tree(ast: &[Item], context: &mut Context, lu_dog: &mut LuDogStore) -> Re
             Item {
                 item: (InnerItem::Import((path, _path_span), alias), span),
                 attributes: _,
-            } => inter_import(path, alias, &s_read!(context.source).source, span, lu_dog)?,
+            } => inter_import(path, alias, context, lu_dog)?,
+            Item {
+                item: (InnerItem::Module((name, _name_span)), span),
+                attributes: _,
+            } => inter_module(name, context, lu_dog)?,
             Item {
                 item: (InnerItem::Struct((name, _), fields, generics), _),
                 attributes,
@@ -744,9 +757,13 @@ pub fn inter_statement(
                     inter_implementation(name, attributes, funcs, span, context, lu_dog)?;
                     span
                 }
-                // Item::Import((path, _path_span), alias) => {
-                //     inter_import(path, alias, &s_read!(source).source, span, lu_dog)?
-                // }
+                Item {
+                    item: (InnerItem::Import((path, _path_span), alias), span),
+                    attributes: _,
+                } => {
+                    inter_import(path, alias, context, lu_dog)?;
+                    span
+                }
                 Item {
                     item: (InnerItem::Struct((name, _span), fields, generics), outer_span),
                     attributes,
@@ -2989,41 +3006,113 @@ pub(super) fn inter_expression(
     }
 }
 
+fn inter_module(name: &str, context: &mut Context, lu_dog: &mut LuDogStore) -> Result<()> {
+    debug!("inter_module: {name}");
+
+    let mut errors = Vec::new();
+
+    let mut path = context.cwd.clone();
+    path.set_file_name(name);
+    path.set_extension(TAO_EXT);
+
+    match fs::read_to_string(&path) {
+        Ok(source_code) => {
+            // parse, and extrude the dwarf file
+            match parse_dwarf(&path.to_str().unwrap(), &source_code) {
+                Ok(ast) => {
+                    let old_cwd = context.cwd.clone();
+                    context.cwd = path.clone();
+                    // Extrusion time
+                    walk_tree(&ast, context, lu_dog)?;
+                    context.cwd = old_cwd;
+                }
+                Err(_) => {
+                    return Ok(());
+                }
+            }
+        }
+        Err(mut e) => {
+            errors.push(DwarfError::File {
+                description: "Attempting to open import".to_owned(),
+                path: path.to_owned(),
+                source: e,
+                location: location!(),
+            });
+        }
+    }
+
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        Err(errors)
+    }
+}
+
 fn inter_import(
-    _path: &[Spanned<String>],
-    _alias: &Option<(String, Range<usize>)>,
-    source: &str,
-    span: &Range<usize>,
-    _lu_dog: &mut LuDogStore,
+    path: &Vec<Spanned<String>>,
+    alias: &Option<(String, Range<usize>)>,
+    context: &mut Context,
+    lu_dog: &mut LuDogStore,
 ) -> Result<()> {
-    error!("Do something with the use statement");
+    let mut errors = Vec::new();
 
-    // let mut path_root = path;
-    // path_root.pop().expect("Path root not found");
-    // let path_root = path_root.join("::");
-    // let obj_name = path.split("::").last().unwrap();
-    // let (has_alias, alias) = if let Some((alias, _)) = alias {
-    //     (true, alias.to_owned())
-    // } else {
-    //     (false, "".to_owned())
-    // };
+    let mut path_root = path.iter().map(|p| p.0.to_owned()).collect::<Vec<_>>();
+    path_root.pop().expect("Path root not found");
+    let path_root = path_root.join("::");
+    let obj_name = path.last().unwrap();
+    let (has_alias, alias) = if let Some((alias, _)) = alias {
+        (true, alias.to_owned())
+    } else {
+        (false, "".to_owned())
+    };
 
-    // let import = Import::new(
-    //     alias,
-    //     has_alias,
-    //     obj_name.to_owned(),
-    //     path_root,
-    //     None,
-    //     lu_dog,
-    // );
-    // debug!("import", import);
+    let mut path = context.dwarf_home.clone();
+    path.push(EXTENSION_DIR);
+    path.push(&path_root);
+    path.push(SRC_DIR);
+    path.push(LIB_TAO);
 
-    Err(vec![DwarfError::NoImplementation {
-        missing: "Use statement not implemented yet".to_owned(),
-        // span: path[0].1.start..path[path.len() - 1].1.end,
-        span: span.to_owned(),
-        code: source[span.to_owned()].to_owned(),
-    }])
+    match fs::read_to_string(&path) {
+        Ok(source_code) => {
+            // parse, and extrude the dwarf file
+            match parse_dwarf(&path.to_str().unwrap(), &source_code) {
+                Ok(ast) => {
+                    let old_cwd = context.cwd.clone();
+                    context.cwd = path.clone();
+                    // Extrusion time
+                    walk_tree(&ast, context, lu_dog)?;
+                    context.cwd = old_cwd;
+                }
+                Err(_) => {
+                    return Ok(());
+                }
+            }
+        }
+        Err(e) => {
+            errors.push(DwarfError::File {
+                description: "Attempting to open import".to_owned(),
+                path: path.to_owned(),
+                source: e,
+                location: location!(),
+            });
+        }
+    }
+
+    let import = Import::new(
+        alias,
+        has_alias,
+        obj_name.0.to_owned(),
+        path_root,
+        None,
+        lu_dog,
+    );
+    debug!("import {import:?}");
+
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        Err(errors)
+    }
 }
 
 fn inter_implementation(
@@ -3377,8 +3466,8 @@ fn inter_struct(
                             let proxy: String = value.try_into().map_err(|e| vec![e])?;
                             let proxy = proxy.de_sanitize();
                             debug!("proxy.object: {proxy}");
-
                             if let Some(model) = context.models.get(&store_name) {
+                                // dbg!(&proxy, model.0.iter_object().collect::<Vec<_>>());
                                 if let Some(ref obj_id) = model.0.exhume_object_id_by_name(proxy) {
                                     let obj = model.0.exhume_object(obj_id).unwrap();
                                     let woog_struct = WoogStruct::new(
@@ -3669,7 +3758,7 @@ pub(crate) fn get_value_type(
                             // object called `Point`. We want to be able to also handle
                             // proxy objects for `Point`. Those are suffixed with "Proxy".
                             let obj = obj.borrow().name.to_upper_camel_case();
-                            dbg!(&obj);
+                            // dbg!(&obj);
                             obj == *name
                                 || name == format!("{}Proxy", obj)
                                 || obj == *type_name_no_generics

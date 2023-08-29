@@ -160,6 +160,7 @@ fn lexer() -> impl Parser<char, Vec<Spanned<Token>>, Error = Simple<char>> {
         "in" => Token::In,
         "let" => Token::Let,
         "match" => Token::Match,
+        "mod" => Token::Mod,
         "print" => Token::Print,
         "return" => Token::Return,
         "string" => Token::Type(Type::String),
@@ -684,6 +685,11 @@ impl DwarfParser {
             return Some(Item { item, attributes });
         }
 
+        if let Some(item) = self.parse_module() {
+            debug!("import", item);
+            return Some(Item { item, attributes });
+        }
+
         // Try to parse a function
         match self.parse_function() {
             Ok(Some(item)) => {
@@ -725,6 +731,61 @@ impl DwarfParser {
         debug!("exit", path);
         let span = path[0].1.start..path[path.len() - 1].1.end;
         Some((path, span))
+    }
+
+    /// Parse a mod
+    ///
+    /// mod -> mod IDENTIFIER ;
+    fn parse_module(&mut self) -> Option<Spanned<InnerItem>> {
+        debug!("enter");
+
+        let start = if let Some(tok) = self.peek() {
+            tok.1.start
+        } else {
+            debug!("exit");
+            return None;
+        };
+
+        if self.match_(&[Token::Mod]).is_none() {
+            debug!("exit no token");
+            return None;
+        }
+
+        let name = if let Some(ident) = self.parse_ident() {
+            debug!("path", ident);
+            ident
+        } else {
+            let tok = self.previous().unwrap();
+            let err = Simple::expected_input_found(
+                tok.1.clone(),
+                [Some("<path -> IDENTIFIER (:: IDENTIFIER)*>".to_owned())],
+                Some(tok.0.to_string()),
+            );
+            let err = err.with_label("expected path");
+            self.errors.push(err);
+            error!("exit no path");
+            return None;
+        };
+
+        if self.match_(&[Token::Punct(';')]).is_none() {
+            let tok = self.previous().unwrap();
+            let err = Simple::expected_input_found(
+                tok.1.clone(),
+                [Some("';'".to_owned())],
+                Some(tok.0.to_string()),
+            );
+            let err = err.with_label("expected ;");
+            self.errors.push(err);
+            error!("exit no semicolon");
+            return None;
+        }
+
+        debug!("exit");
+
+        Some((
+            InnerItem::Module(name),
+            start..self.previous().unwrap().1.end,
+        ))
     }
 
     /// Parse a Use

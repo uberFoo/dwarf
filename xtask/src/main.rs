@@ -17,6 +17,7 @@
 mod flags;
 
 mod package;
+mod plugin;
 
 use anyhow::bail;
 use std::{
@@ -33,6 +34,7 @@ fn main() -> anyhow::Result<()> {
 
     match flags.subcommand {
         flags::XtaskCmd::Package(cmd) => cmd.run(sh),
+        flags::XtaskCmd::Plugins(cmd) => cmd.run(sh),
     }
 }
 

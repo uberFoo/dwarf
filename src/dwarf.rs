@@ -81,6 +81,7 @@ pub enum Token {
     Integer(String),
     Let,
     Match,
+    Mod,
     Op(String),
     Print,
     Punct(char),
@@ -115,6 +116,7 @@ impl fmt::Display for Token {
             Self::Integer(num) => write!(f, "{}", num),
             Self::Let => write!(f, "let"),
             Self::Match => write!(f, "match"),
+            Self::Mod => write!(f, "mod"),
             Self::Op(op) => write!(f, "{}", op),
             Self::Print => write!(f, "print"),
             Self::Punct(punct) => write!(f, "{}", punct),
@@ -477,6 +479,11 @@ pub struct Item {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum InnerItem {
+    Enum(
+        Spanned<String>,
+        Vec<(Spanned<String>, Option<EnumField>)>,
+        Option<Generics>,
+    ),
     /// A Function Definition
     ///
     /// name, Vec<(Parameter Name, Parameter Type)>, Return Type, Vec<Statement>
@@ -490,15 +497,11 @@ pub enum InnerItem {
     Implementation(Spanned<String>, Vec<Item>),
     /// path, Option<Alias>
     Import(Spanned<Vec<Spanned<String>>>, Option<Spanned<String>>),
+    Module(Spanned<String>),
     /// name, Vec<(Field Name, Field Type)>
     Struct(
         Spanned<String>,
         Vec<(Spanned<String>, Spanned<Type>)>,
-        Option<Generics>,
-    ),
-    Enum(
-        Spanned<String>,
-        Vec<(Spanned<String>, Option<EnumField>)>,
         Option<Generics>,
     ),
 }

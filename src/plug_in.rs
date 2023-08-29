@@ -67,6 +67,7 @@ impl std::fmt::Display for StorePluginType {
 pub trait Plugin: Clone + Debug + Display {
     fn invoke_func(
         &mut self,
+        module: RStr<'_>,
         ty: RStr<'_>,
         name: RStr<'_>,
         args: RVec<FfiValue>,

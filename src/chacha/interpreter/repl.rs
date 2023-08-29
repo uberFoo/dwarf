@@ -1,5 +1,5 @@
 #[cfg(feature = "repl")]
-use std::thread;
+use std::{env, thread};
 
 use ansi_term::Colour;
 use snafu::{location, Location};
@@ -86,6 +86,14 @@ pub fn start_repl(mut context: Context, is_uber: bool) -> Result<(), Error> {
         };
     });
 
+    let dwarf_home = env::var("DWARF_HOME")
+        .unwrap_or_else(|_| {
+            let mut home = env::var("HOME").unwrap();
+            home.push_str("/.dwarf");
+            home
+        })
+        .into();
+
     let mut stmt_index = 0;
     loop {
         let readline = rl.readline(&format!("{} ", prompt_style.paint("道:>")));
@@ -112,6 +120,8 @@ pub fn start_repl(mut context: Context, is_uber: bool) -> Result<(), Error> {
                                     source: DwarfSourceFile::new(line.clone(), &mut lu_dog),
                                     models: &s_read!(models),
                                     sarzak: &s_read!(sarzak),
+                                    dwarf_home: &dwarf_home,
+                                    cwd: env::current_dir().unwrap(),
                                 },
                                 &mut lu_dog,
                             ) {

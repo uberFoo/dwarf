@@ -1,5 +1,5 @@
 use std::{
-    fs,
+    env, fs,
     io::{self, BufReader, BufWriter},
     net::TcpListener,
     path::PathBuf,
@@ -181,11 +181,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let models = if let Some(ref models) = args.models {
         let mut map = HashMap::default();
         for model in models {
-            let domain = DomainBuilder::new()
-                .cuckoo_model(model)
-                .unwrap()
-                .build_v2()
-                .unwrap();
+            let domain = DomainBuilder::new().cuckoo_model(model)?.build_v2()?;
             map.insert(domain.name().to_owned(), (domain.sarzak().clone(), None));
         }
 
@@ -193,6 +189,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     } else {
         HashMap::default()
     };
+
+    let dwarf_home = env::var("DWARF_HOME")
+        .unwrap_or_else(|_| {
+            let mut home = env::var("HOME").unwrap();
+            home.push_str("/.dwarf");
+            home
+        })
+        .into();
+
+    if !fs::metadata(&dwarf_home).is_ok() {
+        fs::create_dir_all(&dwarf_home)?;
+    }
 
     if let Some((source_code, dwarf_args, name)) = input {
         let ast = match parse_dwarf(&name, &source_code) {
@@ -202,7 +210,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         };
 
-        let lu_dog = match new_lu_dog(Some((source_code.clone(), &ast)), &models, &sarzak) {
+        let lu_dog = match new_lu_dog(
+            Some((source_code.clone(), &ast)),
+            &dwarf_home,
+            &models,
+            &sarzak,
+        ) {
             Ok(lu_dog) => lu_dog,
             Err(errors) => {
                 for err in errors {
@@ -215,7 +228,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         };
 
-        let mut ctx = initialize_interpreter(sarzak, lu_dog, models)?;
+        let mut ctx = initialize_interpreter(dwarf_home, sarzak, lu_dog, models)?;
         ctx.add_args(dwarf_args);
 
         if args.banner.is_some() && args.banner.unwrap() {
@@ -278,7 +291,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             // }
         }
     } else {
-        let ctx = initialize_interpreter(sarzak, lu_dog, models)?;
+        let ctx = initialize_interpreter(dwarf_home, sarzak, lu_dog, models)?;
 
         start_repl(ctx, is_uber).map_err(|e| {
             println!("Interpreter exited with: {}", e);

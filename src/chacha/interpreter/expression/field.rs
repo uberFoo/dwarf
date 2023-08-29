@@ -68,9 +68,10 @@ pub mod field_access {
         // plug-in stuff.
         let mut value = (*s_read!(value)).clone();
         match &mut value {
-            Value::ProxyType((_, ref mut proxy)) => {
+            Value::ProxyType((module, _, ref mut proxy)) => {
                 match proxy
                     .invoke_func(
+                        module.as_str().into(),
                         "self".into(),
                         "get_field_value".into(),
                         vec![Value::String(field_name.clone()).into()].into(),

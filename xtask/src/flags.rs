@@ -5,6 +5,7 @@ xflags::xflags! {
 
     /// Run custom build command.
     cmd xtask {
+        cmd plugins {}
         cmd package {
             optional --client-patch-version version: String
         }
@@ -21,8 +22,12 @@ pub struct Xtask {
 
 #[derive(Debug)]
 pub enum XtaskCmd {
+    Plugins(Plugins),
     Package(Package),
 }
+
+#[derive(Debug)]
+pub struct Plugins;
 
 #[derive(Debug)]
 pub struct Package {

@@ -1,3 +1,5 @@
+use std::env;
+
 use dwarf::{
     chacha::{
         error::ChaChaErrorReporter, interpreter::initialize_interpreter, interpreter::start_main,
@@ -14,6 +16,14 @@ fn run_program(test: &str, program: &str) -> Result<(Value, String), String> {
     let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
     let merlin = SarzakStore::from_bincode(MERLIN_MODEL).unwrap();
 
+    let dwarf_home = env::var("DWARF_HOME")
+        .unwrap_or_else(|_| {
+            let mut home = env::var("HOME").unwrap();
+            home.push_str("/.dwarf");
+            home
+        })
+        .into();
+
     let ast = match parse_dwarf(test, program) {
         Ok(ast) => ast,
         Err(dwarf::dwarf::error::DwarfError::Parse { error, ast: _ }) => {
@@ -29,7 +39,12 @@ fn run_program(test: &str, program: &str) -> Result<(Value, String), String> {
     models.insert("sarzak".to_owned(), (sarzak.clone(), None));
     models.insert("merlin".to_owned(), (merlin.clone(), None));
 
-    let lu_dog = match new_lu_dog(Some((program.to_owned(), &ast)), &models, &sarzak) {
+    let lu_dog = match new_lu_dog(
+        Some((program.to_owned(), &ast)),
+        &dwarf_home,
+        &models,
+        &sarzak,
+    ) {
         Ok(lu_dog) => lu_dog,
         Err(e) => {
             eprintln!(
@@ -64,7 +79,7 @@ fn run_program(test: &str, program: &str) -> Result<(Value, String), String> {
         }
     };
 
-    let ctx = initialize_interpreter(sarzak, lu_dog, models).unwrap();
+    let ctx = initialize_interpreter(dwarf_home, sarzak, lu_dog, models).unwrap();
     match start_main(false, ctx) {
         Ok(v) => {
             let stdout = v.1.drain_std_out().join("").trim().to_owned();

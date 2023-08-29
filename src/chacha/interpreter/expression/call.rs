@@ -147,7 +147,7 @@ pub fn eval(
             debug!("MethodCall type {ty:?}");
 
             match &*s_read!(value) {
-                Value::ProxyType((id, _proxy)) => {
+                Value::ProxyType((_, id, _proxy)) => {
                     let vt = s_read!(lu_dog);
                     let mut vt = vt.iter_value_type();
                     let woog_struct = loop {
@@ -165,8 +165,6 @@ pub fn eval(
                             unreachable!()
                         }
                     };
-                    // let woog_struct = s_read!(lu_dog).exhume_woog_struct_id_by_name(id).unwrap();
-                    // let woog_struct = s_read!(lu_dog).exhume_woog_struct(&woog_struct).unwrap();
                     let woog_struct = s_read!(woog_struct);
                     let impl_ = &woog_struct.r8c_implementation_block(&s_read!(lu_dog))[0];
                     let x = if let Some(func) = s_read!(impl_)
@@ -191,38 +189,6 @@ pub fn eval(
                         });
                     };
                     x
-
-                    // let mut arg_values = if !args.is_empty() {
-                    //     // The VecDeque is so that I can pop off the args, and then push them
-                    //     // back onto a queue in the same order.
-                    //     let mut arg_values = VecDeque::with_capacity(args.len());
-                    //     let mut next = args
-                    //         .iter()
-                    //         .find(|a| s_read!(a).r27c_argument(&s_read!(lu_dog)).is_empty())
-                    //         .unwrap()
-                    //         .clone();
-
-                    //     loop {
-                    //         let expr = s_read!(lu_dog)
-                    //             .exhume_expression(&s_read!(next).expression)
-                    //             .unwrap();
-                    //         let (value, _ty) = eval_expression(expr, context, vm)?;
-                    //         arg_values.push_back(value);
-
-                    //         let next_id = { s_read!(next).next };
-                    //         if let Some(ref id) = next_id {
-                    //             next = s_read!(lu_dog).exhume_argument(id).unwrap();
-                    //         } else {
-                    //             break;
-                    //         }
-                    //     }
-
-                    //     arg_values
-                    // } else {
-                    //     VecDeque::new()
-                    // };
-
-                    // s_write!(proxy_type).call(meth, &mut arg_values)
                 }
                 Value::String(string) => match meth.as_str() {
                     "len" => {

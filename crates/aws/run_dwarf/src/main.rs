@@ -2,8 +2,7 @@ use std::{io::Write, path::PathBuf};
 
 use dwarf::{
     dwarf::{new_lu_dog, parse_dwarf},
-    initialize_interpreter,
-    interpreter::start_main,
+    interpreter::{initialize_interpreter, start_main},
     sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL},
 };
 use lambda_http::{
@@ -40,14 +39,14 @@ async fn function_handler(event: Request) -> Result<Response<Body>, Error> {
 
         match ast {
             Ok(ast) => {
-                let lu_dog = new_lu_dog(None, Some((program.to_owned(), &ast)), &[], &sarzak)
-                    .map_err(|errors| {
+                let lu_dog =
+                    new_lu_dog(None, Some((program.to_owned(), &ast)), &sarzak).map_err(|errors| {
                         for e in &errors {
                             std_err
                                 .write(
                                     format!(
                                         "{}",
-                                        dwarf::dwarf::DwarfErrorReporter(
+                                        dwarf::dwarf::error::DwarfErrorReporter(
                                             &e, false, &program, "lambda"
                                         )
                                     )
@@ -75,7 +74,9 @@ async fn function_handler(event: Request) -> Result<Response<Body>, Error> {
                             }
                             Err(e) => ansi_to_html::convert_escaped(&format!(
                                 "{}",
-                                dwarf::ChaChaErrorReporter(&e, false, &program, "lambda")
+                                dwarf::chacha::error::ChaChaErrorReporter(
+                                    &e, false, &program, "lambda"
+                                )
                             ))
                             .unwrap(),
                         }

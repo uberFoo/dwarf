@@ -49,6 +49,7 @@ impl From<FfiUuid> for Uuid {
 #[repr(C)]
 #[derive(Clone, Debug, StableAbi)]
 pub struct FfiProxy {
+    pub module: RString,
     pub uuid: FfiUuid,
     pub plugin: PluginType,
 }
@@ -154,7 +155,7 @@ pub enum Value {
     Lambda(RefType<Lambda>),
     Option(Option<RefType<Self>>),
     PlugIn(RefType<PluginType>),
-    ProxyType((Uuid, PluginType)),
+    ProxyType((String, Uuid, PluginType)),
     Range(Range<DwarfInteger>),
     String(String),
     Struct(RefType<UserStruct>),
@@ -174,7 +175,8 @@ impl From<Value> for FfiValue {
             Value::Float(num) => Self::Float(num),
             Value::Integer(num) => Self::Integer(num),
             // Value::PlugIn(plugin) => Self::PlugIn(*plugin),
-            Value::ProxyType((uuid, plugin)) => Self::ProxyType(FfiProxy {
+            Value::ProxyType((module, uuid, plugin)) => Self::ProxyType(FfiProxy {
+                module: module.into(),
                 uuid: uuid.into(),
                 plugin,
             }),
@@ -201,7 +203,9 @@ impl From<FfiValue> for Value {
             FfiValue::Float(num) => Self::Float(num),
             FfiValue::Integer(num) => Self::Integer(num),
             // FfiValue::PlugIn(store) => Self::PlugIn(store),
-            FfiValue::ProxyType(plugin) => Self::ProxyType((plugin.uuid.into(), plugin.plugin)),
+            FfiValue::ProxyType(plugin) => {
+                Self::ProxyType((plugin.module.into(), plugin.uuid.into(), plugin.plugin))
+            }
             FfiValue::Range(range) => Self::Range(range.start..range.end),
             FfiValue::String(str_) => Self::String(str_.into()),
             // FfiValue::UserType(uuid) => Self::UserType(new_ref!(UserType, uuid.into())),
@@ -290,7 +294,7 @@ impl Value {
                 let ty = s_read!(store).r1_value_type(lu_dog)[0].clone();
                 ty
             }
-            Value::ProxyType((uuid, _plugin)) => {
+            Value::ProxyType((_module, uuid, _plugin)) => {
                 for vt in lu_dog.iter_value_type() {
                     if let ValueTypeEnum::WoogStruct(woog) = s_read!(vt).subtype {
                         let woog = lu_dog.exhume_woog_struct(&woog).unwrap();
@@ -368,7 +372,7 @@ impl fmt::Display for Value {
             },
             // 🚧 swap these out when I'm done
             // Self::ProxyType(_p) => write!(f, "<put the other thing back>"),
-            Self::ProxyType((_, p)) => write!(f, "{p}"),
+            Self::ProxyType((_, _, p)) => write!(f, "{p}"),
             Self::Range(range) => write!(f, "{range:?}"),
             // Self::StoreType(store) => write!(f, "{:?}", store),
             Self::String(str_) => write!(f, "{str_}"),

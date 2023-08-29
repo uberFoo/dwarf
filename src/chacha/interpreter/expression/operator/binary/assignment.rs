@@ -58,8 +58,9 @@ pub fn eval_assignment(
             let expr = &s_read!(field).expression;
             let expr = s_read!(lu_dog).exhume_expression(expr).unwrap();
 
-            let ExpressionEnum::VariableExpression(expr) = &s_read!(expr).subtype
-                else { unreachable!() };
+            let ExpressionEnum::VariableExpression(expr) = &s_read!(expr).subtype else {
+                unreachable!()
+            };
             let expr = s_read!(lu_dog).exhume_expression(expr).unwrap();
             let expr = s_read!(lu_dog)
                 .exhume_variable_expression(&s_read!(expr).id)
@@ -81,13 +82,13 @@ pub fn eval_assignment(
 
             let mut value = s_write!(value);
             match &mut *value {
-                Value::ProxyType((_, ref mut proxy)) => {
+                Value::ProxyType((module, _, ref mut proxy)) => {
                     let result = proxy.invoke_func(
+                        module.as_str().into(),
                         "self".into(),
                         "set_field_value".into(),
                         vec![
                             Value::String(field_name.clone()).into(),
-                            // (*rhs.0).clone().into_inner().into(),
                             (*s_read!(rhs.0)).clone().into(),
                         ]
                         .into(),

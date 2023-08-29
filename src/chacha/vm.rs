@@ -1,4 +1,4 @@
-use std::fmt;
+use std::{env, fmt};
 
 use ansi_term::Colour;
 
@@ -919,7 +919,15 @@ mod tests {
         let _ = Field::new("baz".to_owned(), &foo, &ty, &mut lu_dog);
 
         // Now we need an instance.
-        let ctx = initialize_interpreter(sarzak, lu_dog, HashMap::default()).unwrap();
+        let dwarf_home = env::var("DWARF_HOME")
+            .unwrap_or_else(|_| {
+                let mut home = env::var("HOME").unwrap();
+                home.push_str("/.dwarf");
+                home
+            })
+            .into();
+
+        let ctx = initialize_interpreter(dwarf_home, sarzak, lu_dog, HashMap::default()).unwrap();
         let ty_name = PrintableValueType(&struct_ty, &ctx);
         let mut foo_inst = UserStruct::new(ty_name.to_string(), &struct_ty);
         foo_inst.define_field("bar", new_ref!(Value, 42.into()));

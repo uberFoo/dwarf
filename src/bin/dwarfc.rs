@@ -1,4 +1,4 @@
-use std::{ffi::OsString, fs, os::unix::ffi::OsStringExt, path::PathBuf, process};
+use std::{env, ffi::OsString, fs, os::unix::ffi::OsStringExt, path::PathBuf, process};
 
 use clap::{ArgAction, Parser};
 use rustc_hash::FxHashMap as HashMap;
@@ -159,7 +159,20 @@ fn main() -> Result<()> {
 
     let ast = parse_dwarf(args.source.to_str().unwrap(), &source_code).map_err(|e| vec![e])?;
 
-    let lu_dog = match new_lu_dog(Some((source_code.clone(), &ast)), &models, &sarzak) {
+    let dwarf_home = env::var("DWARF_HOME")
+        .unwrap_or_else(|_| {
+            let mut home = env::var("HOME").unwrap();
+            home.push_str("/.dwarf");
+            home
+        })
+        .into();
+
+    let lu_dog = match new_lu_dog(
+        Some((source_code.clone(), &ast)),
+        &dwarf_home,
+        &models,
+        &sarzak,
+    ) {
         Ok(lu_dog) => lu_dog,
         Err(errors) => {
             for err in errors {

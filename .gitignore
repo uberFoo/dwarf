@@ -5,3 +5,4 @@
 woog_structs.rs
 .dwarf_history
 coverage.lcov
+*.v2.json

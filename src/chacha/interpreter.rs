@@ -1,4 +1,4 @@
-use std::ops::Range;
+use std::{ops::Range, path::PathBuf};
 
 use ansi_term::Colour;
 use circular_queue::CircularQueue;
@@ -159,6 +159,7 @@ lazy_static! {
 /// The interpreter requires two domains to operate. The first is the metamodel:
 /// sarzak. The second is the compiled dwarf file.
 pub fn initialize_interpreter(
+    dwarf_home: PathBuf,
     sarzak: SarzakStore,
     mut lu_dog: LuDogStore,
     models: ModelStore,
@@ -490,6 +491,7 @@ pub fn initialize_interpreter(
         0,
         0,
         None,
+        dwarf_home,
     ))
 }
 

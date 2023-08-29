@@ -26,9 +26,13 @@ pub type DwarfInteger = i64;
 pub type DwarfFloat = f64;
 
 const CHACHA: &str = "chacha";
-const UUID_TYPE: &str = "Uuid";
 const COMPLEX_EX: &str = "ComplexEx";
+const EXTENSION_DIR: &str = "extensions";
 const FN_NEW: &str = "new";
+const LIB_TAO: &str = "lib.tao";
+const SRC_DIR: &str = "src";
+const TAO_EXT: &str = "tao";
+const UUID_TYPE: &str = "Uuid";
 
 use lu_dog::ValueType;
 
