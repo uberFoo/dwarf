@@ -74,11 +74,6 @@ struct Arguments {
     /// Local path, or URL of the source file to execute.
     #[arg(value_parser=validate_source)]
     source: Option<Source>,
-    /// Model Files
-    ///
-    /// A comma-delimited list of model files to load into the dwarf program.
-    #[arg(long, short, use_value_delimiter = true, value_delimiter = ',')]
-    models: Option<Vec<PathBuf>>,
     /// Debug Adapter Protocol (DAP) Backend
     ///
     /// Enable the DAP backend. This will start a TCP server on port 4711.
@@ -129,7 +124,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let _client = Client::start();
 
     let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
-    let lu_dog = LuDogStore::new();
 
     let args = Arguments::parse();
     let bless = args.bless.is_some() && args.bless.unwrap();
@@ -178,18 +172,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         None
     };
 
-    let models = if let Some(ref models) = args.models {
-        let mut map = HashMap::default();
-        for model in models {
-            let domain = DomainBuilder::new().cuckoo_model(model)?.build_v2()?;
-            map.insert(domain.name().to_owned(), (domain.sarzak().clone(), None));
-        }
-
-        map
-    } else {
-        HashMap::default()
-    };
-
     let dwarf_home = env::var("DWARF_HOME")
         .unwrap_or_else(|_| {
             let mut home = env::var("HOME").unwrap();
@@ -210,25 +192,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         };
 
-        let lu_dog = match new_lu_dog(
-            Some((source_code.clone(), &ast)),
-            &dwarf_home,
-            &models,
-            &sarzak,
-        ) {
-            Ok(lu_dog) => lu_dog,
-            Err(errors) => {
-                for err in errors {
-                    eprintln!(
-                        "{}",
-                        dwarf::dwarf::error::DwarfErrorReporter(&err, is_uber, &source_code, &name)
-                    );
+        let (lu_dog, models, dirty) =
+            match new_lu_dog(Some((source_code.clone(), &ast)), &dwarf_home, &sarzak) {
+                Ok(lu_dog) => lu_dog,
+                Err(errors) => {
+                    for err in errors {
+                        eprintln!(
+                            "{}",
+                            dwarf::dwarf::error::DwarfErrorReporter(
+                                &err,
+                                is_uber,
+                                &source_code,
+                                &name
+                            )
+                        );
+                    }
+                    return Ok(());
                 }
-                return Ok(());
-            }
-        };
+            };
 
-        let mut ctx = initialize_interpreter(dwarf_home, sarzak, lu_dog, models)?;
+        let mut ctx = initialize_interpreter(dwarf_home, dirty, models, lu_dog, sarzak)?;
         ctx.add_args(dwarf_args);
 
         if args.banner.is_some() && args.banner.unwrap() {
@@ -291,7 +274,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             // }
         }
     } else {
-        let ctx = initialize_interpreter(dwarf_home, sarzak, lu_dog, models)?;
+        let ctx = initialize_interpreter(
+            dwarf_home,
+            Vec::new(),
+            HashMap::default(),
+            LuDogStore::new(),
+            sarzak,
+        )?;
 
         start_repl(ctx, is_uber).map_err(|e| {
             println!("Interpreter exited with: {}", e);

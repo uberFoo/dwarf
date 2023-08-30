@@ -24,7 +24,7 @@ use crate::{
     },
     new_ref, s_read,
     sarzak::store::ObjectStore as SarzakStore,
-    ChaChaError, DwarfInteger, ModelStore, NewRef, RefType, Value,
+    ChaChaError, Dirty, DwarfInteger, ModelStore, NewRef, RefType, Value,
 };
 
 mod banner;
@@ -160,9 +160,10 @@ lazy_static! {
 /// sarzak. The second is the compiled dwarf file.
 pub fn initialize_interpreter(
     dwarf_home: PathBuf,
-    sarzak: SarzakStore,
-    mut lu_dog: LuDogStore,
+    dirty: Vec<Dirty>,
     models: ModelStore,
+    mut lu_dog: LuDogStore,
+    sarzak: SarzakStore,
 ) -> Result<Context, Error> {
     // Initialize the stack with stuff from the compiled source.
     let block = Block::new(Uuid::new_v4(), None, &mut lu_dog);
@@ -202,7 +203,6 @@ pub fn initialize_interpreter(
         if !impl_.is_empty() {
             // For each function in the impl, insert the function. I should probably
             // check and only insert the static functions.
-            // 🚧 Only insert the static functions
             for func in s_read!(impl_[0]).r9_function(&lu_dog) {
                 let insert = if let Some(param) = s_read!(func).r82_parameter(&lu_dog).get(0) {
                     let var = &s_read!(param).r12_variable(&lu_dog)[0];
@@ -492,6 +492,7 @@ pub fn initialize_interpreter(
         0,
         None,
         dwarf_home,
+        dirty,
     ))
 }
 

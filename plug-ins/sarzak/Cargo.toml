@@ -18,8 +18,8 @@ serde_json = "1.0.104"
 tracy-client = "0.15.2"
 uuid = { version = "1.4.1", features = ["v4"] }
 
-# [patch."https://github.com/uberFoo/sarzak"]
-# sarzak = { path = "../../../sarzak" }
+[patch."https://github.com/uberFoo/sarzak"]
+sarzak = { path = "../../../sarzak" }
 
 [lib]
 name = "sarzak"

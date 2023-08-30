@@ -1,10 +1,15 @@
 use std::{env, fs};
 
+use glob::glob;
 use xshell::{cmd, Shell};
 
 use crate::flags;
 
+const EXT_DIR: &str = "extensions";
+const LIB_DIR: &str = "lib";
 const PLUGIN_DIR: &str = "plug-ins";
+const MODEL_DIR: &str = "models";
+const SRC_DIR: &str = "src";
 const TAO_DIR: &str = "tao";
 
 impl flags::Plugins {
@@ -30,10 +35,12 @@ impl flags::Plugins {
 
                 let name = entry.file_name();
                 let name = name.to_str().unwrap();
-                let lib_dir = format!("{}/extensions/{}/lib", dwarf_home, name);
-                let src_dir = format!("{}/extensions/{}/src", dwarf_home, name);
+                let lib_dir = format!("{dwarf_home}/{EXT_DIR}/{name}/{LIB_DIR}");
+                let src_dir = format!("{dwarf_home}/{EXT_DIR}/{name}/{SRC_DIR}");
+                let model_dir = format!("{dwarf_home}/{EXT_DIR}/{name}/{MODEL_DIR}");
                 fs::create_dir_all(&lib_dir)?;
                 fs::create_dir_all(&src_dir)?;
+                fs::create_dir_all(&model_dir)?;
 
                 println!("Copying lib{}.dylib", name);
                 sh.copy_file(format!("target/debug/lib{}.dylib", name), lib_dir)?;
@@ -41,11 +48,20 @@ impl flags::Plugins {
                 current_dir.push(entry.path());
                 current_dir.push(TAO_DIR);
 
-                dbg!(&current_dir);
                 for entry in fs::read_dir(&current_dir)? {
                     let path = entry?.path();
                     println!("Copying {}", path.display());
                     sh.copy_file(path, &src_dir)?;
+                }
+
+                current_dir.pop();
+                current_dir.push(MODEL_DIR);
+                sh.change_dir(&current_dir);
+
+                for entry in glob("*.json")? {
+                    let path = entry?;
+                    println!("Copying {}", path.display());
+                    sh.copy_file(path, &model_dir)?;
                 }
             }
         }

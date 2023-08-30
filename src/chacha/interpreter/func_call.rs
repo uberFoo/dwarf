@@ -15,7 +15,7 @@ use crate::{
         debug, error, eval_expression, eval_statement, function, trace, typecheck, ChaChaError,
         Context,
     },
-    lu_dog::{Argument, BodyEnum, Function, List, Span, ValueType},
+    lu_dog::{Argument, BodyEnum, Function, List, Span, ValueType, ValueTypeEnum},
     new_ref,
     plug_in::PluginModRef,
     plug_in::PluginType,
@@ -24,6 +24,8 @@ use crate::{
 
 const OBJECT_STORE: &str = "ObjectStore";
 const FUNCTION_NEW: &str = "new";
+const MERLIN: &str = "merlin";
+const SARZAK: &str = "sarzak";
 
 pub fn eval_function_call(
     func: RefType<Function>,
@@ -99,8 +101,8 @@ fn eval_external_function_call(
     };
 
     let model_name = s_read!(external).x_model.clone();
-    let model_name = if model_name == "merlin" {
-        "sarzak".to_owned()
+    let model_name = if model_name == MERLIN {
+        SARZAK.to_owned()
     } else {
         model_name
     };
@@ -154,8 +156,18 @@ fn eval_external_function_call(
                 })
                 .unwrap();
 
-            // 🚧 I should look this up, rather than creating a new one.
-            let ty = ValueType::new_z_object_store(&store, &mut s_write!(lu_dog));
+            let ty = s_read!(lu_dog)
+                .iter_value_type()
+                .find(|ty| {
+                    let ty = s_read!(ty);
+                    if let ValueTypeEnum::ZObjectStore(store_id) = ty.subtype {
+                        store_id == s_read!(store).id
+                    } else {
+                        false
+                    }
+                })
+                .unwrap();
+
             Ok((value, ty))
         } else {
             unimplemented!();
@@ -194,7 +206,18 @@ fn eval_external_function_call(
                             woog.name == object_name
                         })
                         .unwrap();
-                    let ty = ValueType::new_woog_struct(&woog_struct, &mut s_write!(lu_dog));
+
+                    let ty = s_read!(lu_dog)
+                        .iter_value_type()
+                        .find(|ty| {
+                            let ty = s_read!(ty);
+                            if let ValueTypeEnum::WoogStruct(struct_id) = ty.subtype {
+                                struct_id == s_read!(woog_struct).id
+                            } else {
+                                false
+                            }
+                        })
+                        .unwrap();
 
                     Ok((value, ty))
                 }
@@ -213,7 +236,20 @@ fn eval_external_function_call(
                             woog.name == object_name
                         })
                         .unwrap();
-                    let ty = ValueType::new_woog_struct(&woog_struct, &mut s_write!(lu_dog));
+
+                    let ty = s_read!(lu_dog)
+                        .iter_value_type()
+                        .find(|ty| {
+                            let ty = s_read!(ty);
+                            if let ValueTypeEnum::WoogStruct(struct_id) = ty.subtype {
+                                struct_id == s_read!(woog_struct).id
+                            } else {
+                                false
+                            }
+                        })
+                        .unwrap();
+
+                    dbg!("fucker");
                     let list = List::new(&ty, &mut s_write!(lu_dog));
                     let ty = ValueType::new_list(&list, &mut s_write!(lu_dog));
 

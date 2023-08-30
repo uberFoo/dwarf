@@ -27,11 +27,7 @@ pub type DwarfFloat = f64;
 
 const CHACHA: &str = "chacha";
 const COMPLEX_EX: &str = "ComplexEx";
-const EXTENSION_DIR: &str = "extensions";
 const FN_NEW: &str = "new";
-const LIB_TAO: &str = "lib.tao";
-const SRC_DIR: &str = "src";
-const TAO_EXT: &str = "tao";
 const UUID_TYPE: &str = "Uuid";
 
 use lu_dog::ValueType;
@@ -243,3 +239,15 @@ pub struct ChaChaOptions {
 pub(crate) type Span = ops::Range<usize>;
 pub(crate) type ModelStore =
     HashMap<String, (sarzak::ObjectStore, Option<RefType<plug_in::PluginType>>)>;
+
+/// Things that need updating.
+///
+/// This type is used to signify that a struct, enum, or ObjectStore have been
+/// added in the extruder. The information is picked up by the interpreter and
+/// used to update the corresponding structures in the interpreter.
+#[derive(Clone)]
+pub enum Dirty {
+    Struct(SarzakStorePtr),
+    Enum(SarzakStorePtr),
+    Store(SarzakStorePtr),
+}

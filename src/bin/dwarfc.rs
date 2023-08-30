@@ -34,11 +34,6 @@ struct Args {
     #[arg(long, short, action=ArgAction::SetTrue)]
     #[cfg(not(feature = "multi-nd-vec"))]
     debug: Option<bool>,
-    /// Model Files
-    ///
-    /// A comma-delimited list of model files to load into the dwarf program.
-    #[arg(long, short, use_value_delimiter = true, value_delimiter = ',')]
-    models: Option<Vec<PathBuf>>,
     /// Meta-Model File
     ///
     /// Path to the meta-model, sarzak.
@@ -107,22 +102,6 @@ fn main() -> Result<()> {
 
     let is_uber = args.uber.is_some() && args.uber.unwrap();
 
-    let models = if let Some(ref models) = args.models {
-        let mut map = HashMap::default();
-        for model in models {
-            let domain = DomainBuilder::new()
-                .cuckoo_model(model)
-                .unwrap()
-                .build_v2()
-                .unwrap();
-            map.insert(domain.name().to_owned(), (domain.sarzak().clone(), None));
-        }
-
-        map
-    } else {
-        HashMap::default()
-    };
-
     let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
 
     let path = if args.package_dir.is_some() {
@@ -167,28 +146,24 @@ fn main() -> Result<()> {
         })
         .into();
 
-    let lu_dog = match new_lu_dog(
-        Some((source_code.clone(), &ast)),
-        &dwarf_home,
-        &models,
-        &sarzak,
-    ) {
-        Ok(lu_dog) => lu_dog,
-        Err(errors) => {
-            for err in errors {
-                eprintln!(
-                    "{}",
-                    dwarf::dwarf::error::DwarfErrorReporter(
-                        &err,
-                        is_uber,
-                        &source_code,
-                        args.source.to_str().unwrap()
-                    )
-                );
+    let (lu_dog, _models, dirty) =
+        match new_lu_dog(Some((source_code.clone(), &ast)), &dwarf_home, &sarzak) {
+            Ok(lu_dog) => lu_dog,
+            Err(errors) => {
+                for err in errors {
+                    eprintln!(
+                        "{}",
+                        dwarf::dwarf::error::DwarfErrorReporter(
+                            &err,
+                            is_uber,
+                            &source_code,
+                            args.source.to_str().unwrap()
+                        )
+                    );
+                }
+                return Ok(());
             }
-            return Ok(());
-        }
-    };
+        };
 
     #[cfg(not(feature = "multi-nd-vec"))]
     if args.debug.is_some() && args.debug.unwrap() {

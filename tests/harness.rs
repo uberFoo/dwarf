@@ -86,46 +86,43 @@ fn run_program(test: &str, program: &str) -> Result<(Value, String), String> {
         }
         _ => unreachable!(),
     };
-    let lu_dog = match new_lu_dog(
-        Some((program.to_owned(), &ast)),
-        &dwarf_home,
-        &HashMap::default(),
-        &sarzak,
-    ) {
-        Ok(lu_dog) => lu_dog,
-        Err(e) => {
-            eprintln!(
-                "{}",
-                e.iter()
+    let (lu_dog, models, dirty) =
+        match new_lu_dog(Some((program.to_owned(), &ast)), &dwarf_home, &sarzak) {
+            Ok(lu_dog) => lu_dog,
+            Err(e) => {
+                eprintln!(
+                    "{}",
+                    e.iter()
+                        .map(|e| {
+                            format!(
+                                "{}",
+                                dwarf::dwarf::error::DwarfErrorReporter(e, true, program, test)
+                            )
+                        })
+                        .collect::<Vec<_>>()
+                        .join("\n")
+                        .trim()
+                );
+
+                let errors = e
+                    .iter()
                     .map(|e| {
                         format!(
                             "{}",
-                            dwarf::dwarf::error::DwarfErrorReporter(e, true, program, test)
+                            dwarf::dwarf::error::DwarfErrorReporter(e, false, program, test)
                         )
                     })
                     .collect::<Vec<_>>()
                     .join("\n")
                     .trim()
-            );
+                    .to_owned();
 
-            let errors = e
-                .iter()
-                .map(|e| {
-                    format!(
-                        "{}",
-                        dwarf::dwarf::error::DwarfErrorReporter(e, false, program, test)
-                    )
-                })
-                .collect::<Vec<_>>()
-                .join("\n")
-                .trim()
-                .to_owned();
+                return Err(errors);
+            }
+        };
 
-            return Err(errors);
-        }
-    };
-
-    let ctx = initialize_interpreter(dwarf_home, sarzak, lu_dog, HashMap::default()).unwrap();
+    let ctx =
+        initialize_interpreter(dwarf_home, dirty, HashMap::default(), lu_dog, sarzak).unwrap();
     match start_main(false, ctx) {
         Ok(v) => {
             let stdout = v.1.drain_std_out().join("").trim().to_owned();

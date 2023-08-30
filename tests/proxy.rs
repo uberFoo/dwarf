@@ -8,13 +8,10 @@ use dwarf::{
     dwarf::{new_lu_dog, parse_dwarf},
     sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL},
 };
-use rustc_hash::FxHashMap as HashMap;
-use sarzak::merlin::MODEL as MERLIN_MODEL;
 use tracy_client::Client;
 
 fn run_program(test: &str, program: &str) -> Result<(Value, String), String> {
     let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
-    let merlin = SarzakStore::from_bincode(MERLIN_MODEL).unwrap();
 
     let dwarf_home = env::var("DWARF_HOME")
         .unwrap_or_else(|_| {
@@ -34,52 +31,43 @@ fn run_program(test: &str, program: &str) -> Result<(Value, String), String> {
         _ => unreachable!(),
     };
 
-    let mut models = HashMap::default();
+    let (lu_dog, models, dirty) =
+        match new_lu_dog(Some((program.to_owned(), &ast)), &dwarf_home, &sarzak) {
+            Ok(lu_dog) => lu_dog,
+            Err(e) => {
+                eprintln!(
+                    "{}",
+                    e.iter()
+                        .map(|e| {
+                            format!(
+                                "{}",
+                                // Print the "uber" error message.
+                                dwarf::dwarf::error::DwarfErrorReporter(e, true, program, test)
+                            )
+                        })
+                        .collect::<Vec<_>>()
+                        .join("\n")
+                        .trim()
+                );
 
-    models.insert("sarzak".to_owned(), (sarzak.clone(), None));
-    models.insert("merlin".to_owned(), (merlin.clone(), None));
-
-    let lu_dog = match new_lu_dog(
-        Some((program.to_owned(), &ast)),
-        &dwarf_home,
-        &models,
-        &sarzak,
-    ) {
-        Ok(lu_dog) => lu_dog,
-        Err(e) => {
-            eprintln!(
-                "{}",
-                e.iter()
+                let errors = e
+                    .iter()
                     .map(|e| {
                         format!(
                             "{}",
-                            // Print the "uber" error message.
-                            dwarf::dwarf::error::DwarfErrorReporter(e, true, program, test)
+                            dwarf::dwarf::error::DwarfErrorReporter(e, false, program, test)
                         )
                     })
                     .collect::<Vec<_>>()
                     .join("\n")
                     .trim()
-            );
+                    .to_owned();
 
-            let errors = e
-                .iter()
-                .map(|e| {
-                    format!(
-                        "{}",
-                        dwarf::dwarf::error::DwarfErrorReporter(e, false, program, test)
-                    )
-                })
-                .collect::<Vec<_>>()
-                .join("\n")
-                .trim()
-                .to_owned();
+                return Err(errors);
+            }
+        };
 
-            return Err(errors);
-        }
-    };
-
-    let ctx = initialize_interpreter(dwarf_home, sarzak, lu_dog, models).unwrap();
+    let ctx = initialize_interpreter(dwarf_home, dirty, models, lu_dog, sarzak).unwrap();
     match start_main(false, ctx) {
         Ok(v) => {
             let stdout = v.1.drain_std_out().join("").trim().to_owned();

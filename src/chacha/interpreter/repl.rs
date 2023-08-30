@@ -107,6 +107,7 @@ pub fn start_repl(mut context: Context, is_uber: bool) -> Result<(), Error> {
                     Ok(Some((stmt, _))) => {
                         debug!("stmt from readline {stmt:?}");
 
+                        let mut dirty = Vec::new();
                         let stmt = {
                             let mut lu_dog = s_write!(lu_dog);
                             match inter_statement(
@@ -118,10 +119,11 @@ pub fn start_repl(mut context: Context, is_uber: bool) -> Result<(), Error> {
                                     struct_fields: Vec::new(),
                                     check_types: true,
                                     source: DwarfSourceFile::new(line.clone(), &mut lu_dog),
-                                    models: &s_read!(models),
+                                    models: &mut s_write!(models),
                                     sarzak: &s_read!(sarzak),
                                     dwarf_home: &dwarf_home,
                                     cwd: env::current_dir().unwrap(),
+                                    dirty: &mut dirty,
                                 },
                                 &mut lu_dog,
                             ) {
@@ -136,12 +138,9 @@ pub fn start_repl(mut context: Context, is_uber: bool) -> Result<(), Error> {
                         };
                         stmt_index += 1;
 
-                        // 🚧 This needs fixing too.
-                        let eval = eval_statement(stmt.0, &mut context, &mut vm);
-                        // for i in context.drain_std_out() {
-                        //     println!("{}", i);
-                        // }
-                        match eval {
+                        context.set_dirty(dirty);
+
+                        match eval_statement(stmt.0, &mut context, &mut vm) {
                             Ok((value, ty)) => {
                                 let value = format!("{}", s_read!(value));
                                 print!("\n'{}'", result_style.paint(value));

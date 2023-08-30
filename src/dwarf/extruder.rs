@@ -3,8 +3,10 @@ use std::{env, fs, ops::Range, path::PathBuf};
 use ansi_term::Colour;
 use heck::ToUpperCamelCase;
 use log;
+use rustc_hash::FxHashMap as HashMap;
 use rustc_hash::FxHashSet as HashSet;
-use snafu::{ensure, location, Location};
+use sarzak::domain::DomainBuilder;
+use snafu::{location, Location};
 use uuid::Uuid;
 
 use crate::{
@@ -21,11 +23,11 @@ use crate::{
             Block, Body, BooleanOperator, Call, EnumField as LuDogEnumField, EnumFieldEnum,
             Enumeration, ErrorExpression, Expression, ExpressionEnum, ExpressionStatement,
             ExternalImplementation, Field, FieldExpression, ForLoop, Function, Generic,
-            ImplementationBlock, Import, Index, IntegerLiteral, Item as WoogItem, ItemStatement,
-            Lambda, LambdaParameter, LetStatement, Literal, LocalVariable, Parameter,
-            Pattern as AssocPat, Plain, Print, RangeExpression, Span as LuDogSpan, Statement,
-            StringLiteral, StructExpression, StructField, TupleField, ValueType, ValueTypeEnum,
-            Variable, VariableExpression, WoogOption, WoogStruct, XIf, XMatch, XValue, XValueEnum,
+            ImplementationBlock, Index, IntegerLiteral, Item as WoogItem, ItemStatement, Lambda,
+            LambdaParameter, LetStatement, Literal, LocalVariable, Parameter, Pattern as AssocPat,
+            Plain, Print, RangeExpression, Span as LuDogSpan, Statement, StringLiteral,
+            StructExpression, StructField, TupleField, ValueType, ValueTypeEnum, Variable,
+            VariableExpression, WoogOption, WoogStruct, XIf, XMatch, XValue, XValueEnum,
             ZObjectStore, ZSome,
         },
         Argument, Binary, BooleanLiteral, Comparison, DwarfSourceFile, FieldAccess,
@@ -34,10 +36,15 @@ use crate::{
     },
     new_ref, s_read, s_write,
     sarzak::{store::ObjectStore as SarzakStore, types::Ty},
-    ModelStore, NewRef, RefType, EXTENSION_DIR, LIB_TAO, SRC_DIR, TAO_EXT, UUID_TYPE,
+    Dirty, ModelStore, NewRef, RefType, CHACHA, UUID_TYPE,
 };
 
-const CHACHA: &str = "chacha";
+const LIB_TAO: &str = "lib.tao";
+const SRC_DIR: &str = "src";
+const MODEL_DIR: &str = "models";
+const TAO_EXT: &str = "tao";
+const EXTENSION_DIR: &str = "extensions";
+const JSON_EXT: &str = "json";
 
 macro_rules! link_parameter {
     ($last:expr, $next:expr, $store:expr) => {{
@@ -269,7 +276,6 @@ pub struct StructFields {
     location: Location,
 }
 
-// #[derive(Debug)]
 pub struct Context<'a> {
     /// Location of the current item
     ///
@@ -290,10 +296,11 @@ pub struct Context<'a> {
     /// once it's been created, it's already been type checked.
     pub check_types: bool,
     pub source: RefType<DwarfSourceFile>,
-    pub models: &'a ModelStore,
+    pub models: &'a mut ModelStore,
     pub sarzak: &'a SarzakStore,
     pub dwarf_home: &'a PathBuf,
     pub cwd: PathBuf,
+    pub dirty: &'a mut Vec<Dirty>,
 }
 
 /// The main entry point
@@ -321,9 +328,8 @@ pub struct Context<'a> {
 pub fn new_lu_dog(
     source: Option<(String, &[Item])>,
     dwarf_home: &PathBuf,
-    models: &ModelStore,
     sarzak: &SarzakStore,
-) -> Result<LuDogStore> {
+) -> Result<(LuDogStore, ModelStore, Vec<Dirty>)> {
     let mut lu_dog = LuDogStore::new();
 
     // We need to stuff all of the sarzak types into the store.
@@ -333,22 +339,26 @@ pub fn new_lu_dog(
     ValueType::new_ty(&Ty::new_s_string(sarzak), &mut lu_dog);
     ValueType::new_ty(&Ty::new_s_uuid(sarzak), &mut lu_dog);
 
+    let mut models = HashMap::default();
+    let mut dirty = Vec::new();
+
     if let Some((source, ast)) = source {
         let mut context = Context {
             location: location!(),
             struct_fields: Vec::new(),
             check_types: true,
             source: DwarfSourceFile::new(source, &mut lu_dog),
-            models,
+            models: &mut models,
             sarzak,
             dwarf_home,
             cwd: env::current_dir().unwrap(),
+            dirty: &mut dirty,
         };
 
         walk_tree(ast, &mut context, &mut lu_dog)?;
     }
 
-    Ok(lu_dog)
+    Ok((lu_dog, models, dirty))
 }
 
 fn walk_tree(ast: &[Item], context: &mut Context, lu_dog: &mut LuDogStore) -> Result<()> {
@@ -3012,6 +3022,7 @@ fn inter_module(name: &str, context: &mut Context, lu_dog: &mut LuDogStore) -> R
     let mut errors = Vec::new();
 
     let mut path = context.cwd.clone();
+    path.push("sacrifice");
     path.set_file_name(name);
     path.set_extension(TAO_EXT);
 
@@ -3020,11 +3031,11 @@ fn inter_module(name: &str, context: &mut Context, lu_dog: &mut LuDogStore) -> R
             // parse, and extrude the dwarf file
             match parse_dwarf(&path.to_str().unwrap(), &source_code) {
                 Ok(ast) => {
-                    let old_cwd = context.cwd.clone();
-                    context.cwd = path.clone();
+                    // let old_cwd = context.cwd.clone();
+                    // context.cwd = path.clone();
                     // Extrusion time
                     walk_tree(&ast, context, lu_dog)?;
-                    context.cwd = old_cwd;
+                    // context.cwd = old_cwd;
                 }
                 Err(_) => {
                     return Ok(());
@@ -3050,26 +3061,30 @@ fn inter_module(name: &str, context: &mut Context, lu_dog: &mut LuDogStore) -> R
 
 fn inter_import(
     path: &Vec<Spanned<String>>,
-    alias: &Option<(String, Range<usize>)>,
+    _alias: &Option<(String, Range<usize>)>,
     context: &mut Context,
     lu_dog: &mut LuDogStore,
 ) -> Result<()> {
     let mut errors = Vec::new();
 
-    let mut path_root = path.iter().map(|p| p.0.to_owned()).collect::<Vec<_>>();
-    path_root.pop().expect("Path root not found");
-    let path_root = path_root.join("::");
-    let obj_name = path.last().unwrap();
-    let (has_alias, alias) = if let Some((alias, _)) = alias {
-        (true, alias.to_owned())
-    } else {
-        (false, "".to_owned())
-    };
+    let path_root = path.iter().map(|p| p.0.to_owned()).collect::<Vec<_>>();
+    let module = path_root.get(0).unwrap(); // This will have _something_.
+
+    // path_root.pop().expect("Path root not found");
+    // let path_root = path_root.join("/");
+    // let obj_name = path.last().unwrap();
+    // let (has_alias, alias) = if let Some((alias, _)) = alias {
+    //     (true, alias.to_owned())
+    // } else {
+    //     (false, "".to_owned())
+    // };
 
     let mut path = context.dwarf_home.clone();
     path.push(EXTENSION_DIR);
-    path.push(&path_root);
+    path.push(&module);
     path.push(SRC_DIR);
+    let dir = path.clone();
+
     path.push(LIB_TAO);
 
     match fs::read_to_string(&path) {
@@ -3078,7 +3093,7 @@ fn inter_import(
             match parse_dwarf(&path.to_str().unwrap(), &source_code) {
                 Ok(ast) => {
                     let old_cwd = context.cwd.clone();
-                    context.cwd = path.clone();
+                    context.cwd = dir;
                     // Extrusion time
                     walk_tree(&ast, context, lu_dog)?;
                     context.cwd = old_cwd;
@@ -3098,15 +3113,15 @@ fn inter_import(
         }
     }
 
-    let import = Import::new(
-        alias,
-        has_alias,
-        obj_name.0.to_owned(),
-        path_root,
-        None,
-        lu_dog,
-    );
-    debug!("import {import:?}");
+    // let import = Import::new(
+    //     alias,
+    //     has_alias,
+    //     obj_name.0.to_owned(),
+    //     path_root,
+    //     None,
+    //     lu_dog,
+    // );
+    // debug!("import {import:?}");
 
     if errors.is_empty() {
         Ok(())
@@ -3126,9 +3141,9 @@ fn inter_implementation(
     let name = name.de_sanitize();
     debug!("inter_implementation: {name}");
 
-    let (impl_ty, implementation) = if let Some(store_vec) = attributes.get("store") {
+    let (impl_ty, implementation) = if let Some(store_vec) = attributes.get(STORE) {
         if let Some((_, InnerAttribute::Attribute(ref attributes))) = store_vec.get(0) {
-            if let Some(model_vec) = attributes.get("model") {
+            if let Some(model_vec) = attributes.get(MODEL) {
                 if let Some((_, ref value)) = model_vec.get(0) {
                     let model_name: String = value.try_into().map_err(|e| vec![e])?;
                     debug!("store.model: {model_name}");
@@ -3307,6 +3322,7 @@ fn inter_enum(
     };
 
     let woog_enum = Enumeration::new(name.to_owned(), None, lu_dog);
+    context.dirty.push(Dirty::Enum(s_read!(woog_enum).id));
     let _ = ValueType::new_enumeration(&woog_enum, lu_dog);
 
     for (number, ((field_name, _), field)) in variants.iter().enumerate() {
@@ -3411,6 +3427,11 @@ fn exorcise_generic_struct(
     Ok(())
 }
 
+const PROXY: &str = "proxy";
+const STORE: &str = "store";
+const OBJECT: &str = "object";
+const MODEL: &str = "model";
+
 fn inter_struct(
     name: &str,
     attributes: &AttributeMap,
@@ -3453,15 +3474,15 @@ fn inter_struct(
 
     // If there is a proxy attribute then we'll use it's info to attach an object
     // from the store to this UDT.
-    if let Some(proxy_vec) = attributes.get("proxy") {
+    if let Some(proxy_vec) = attributes.get(PROXY) {
         if let Some((_, InnerAttribute::Attribute(ref attributes))) = proxy_vec.get(0) {
             // Get the store value
-            if let Some(store_vec) = attributes.get("store") {
+            if let Some(store_vec) = attributes.get(STORE) {
                 if let Some((_, ref value)) = store_vec.get(0) {
                     let store_name: String = value.try_into().map_err(|e| vec![e])?;
                     debug!("proxy.store: {store_name}");
 
-                    if let Some(name_vec) = attributes.get("object") {
+                    if let Some(name_vec) = attributes.get(OBJECT) {
                         if let Some((_, ref value)) = name_vec.get(0) {
                             let proxy: String = value.try_into().map_err(|e| vec![e])?;
                             let proxy = proxy.de_sanitize();
@@ -3531,15 +3552,42 @@ fn inter_struct(
         }
 
         // Below we are interring as an ObjectStore, according to it's annotation.
-    } else if let Some(store_vec) = attributes.get("store") {
+    } else if let Some(store_vec) = attributes.get(STORE) {
         if let Some((_, InnerAttribute::Attribute(ref attributes))) = store_vec.get(0) {
-            if let Some(model_vec) = attributes.get("model") {
+            if let Some(model_vec) = attributes.get(MODEL) {
                 if let Some((_, ref value)) = model_vec.get(0) {
                     let model_name: String = value.try_into().map_err(|e| vec![e])?;
                     debug!("store.model: {model_name}");
 
+                    // Load the model.
+                    let mut path = context.cwd.clone();
+                    path.pop();
+                    path.push(MODEL_DIR);
+                    path.push("this is annoying");
+                    path.set_file_name(&model_name);
+                    path.set_extension(JSON_EXT);
+
+                    let domain = DomainBuilder::new()
+                        .cuckoo_model(path)
+                        .map_err(|e| {
+                            vec![DwarfError::Generic {
+                                description: e.to_string(),
+                            }]
+                        })?
+                        .build_v2()
+                        .map_err(|e| {
+                            vec![DwarfError::Generic {
+                                description: e.to_string(),
+                            }]
+                        })?;
+
+                    context
+                        .models
+                        .insert(domain.name().to_owned(), (domain.sarzak().clone(), None));
+
                     // 🚧 Really should check to see if it's already there.
                     let store = ZObjectStore::new(model_name, name.to_owned(), lu_dog);
+                    context.dirty.push(Dirty::Store(s_read!(store).id));
                     let _ = ValueType::new_z_object_store(&store, lu_dog);
 
                     Ok(())
@@ -3557,6 +3605,7 @@ fn inter_struct(
     } else {
         // This is just a plain vanilla user defined type.
         let woog_struct = WoogStruct::new(name.to_owned(), None, lu_dog);
+        context.dirty.push(Dirty::Struct(s_read!(woog_struct).id));
         let _ = ValueType::new_woog_struct(&woog_struct, lu_dog);
         context.struct_fields.push(StructFields {
             woog_struct,

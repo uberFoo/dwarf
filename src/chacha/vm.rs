@@ -927,7 +927,9 @@ mod tests {
             })
             .into();
 
-        let ctx = initialize_interpreter(dwarf_home, sarzak, lu_dog, HashMap::default()).unwrap();
+        let ctx =
+            initialize_interpreter(dwarf_home, Vec::new(), HashMap::default(), lu_dog, sarzak)
+                .unwrap();
         let ty_name = PrintableValueType(&struct_ty, &ctx);
         let mut foo_inst = UserStruct::new(ty_name.to_string(), &struct_ty);
         foo_inst.define_field("bar", new_ref!(Value, 42.into()));

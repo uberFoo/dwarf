@@ -8,10 +8,10 @@ use crate::{
     lu_dog::{Block, ObjectStore as LuDogStore},
     new_ref, s_read,
     sarzak::ObjectStore as SarzakStore,
-    ModelStore, NewRef, RefType, Value,
+    Dirty, ModelStore, NewRef, RefType, Value,
 };
 
-// #[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct Context {
     /// The prompt to display in the REPL
     prompt: String,
@@ -32,6 +32,7 @@ pub struct Context {
     func_calls: usize,
     args: Option<RefType<Value>>,
     dwarf_home: PathBuf,
+    dirty: Vec<Dirty>,
 }
 
 /// Save the lu_dog model when the context is dropped
@@ -70,6 +71,7 @@ impl Context {
         func_calls: usize,
         args: Option<RefType<Value>>,
         dwarf_home: PathBuf,
+        dirty: Vec<Dirty>,
     ) -> Self {
         Self {
             prompt,
@@ -87,8 +89,18 @@ impl Context {
             func_calls,
             args,
             dwarf_home,
+            dirty,
         }
     }
+
+    pub fn dirty(&mut self) -> &mut [Dirty] {
+        &mut self.dirty
+    }
+
+    pub fn set_dirty(&mut self, dirty: Vec<Dirty>) {
+        self.dirty = dirty;
+    }
+
     pub fn std_out_recv(&self) -> &Receiver<String> {
         &self.std_out_recv
     }

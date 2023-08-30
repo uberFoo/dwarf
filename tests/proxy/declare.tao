@@ -39,7 +39,7 @@ fn main() {
         print("\n");
     }
 
-    print(Object::help());
+    Object::help();
 
     // let merlin = MerlinStore::new();
 

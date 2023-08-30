@@ -1,10 +1,9 @@
-use std::{fs, path::PathBuf};
+use std::{env, fs, path::PathBuf};
 
 use criterion::{criterion_group, criterion_main, Criterion};
 use dwarf::{
+    chacha::interpreter::{initialize_interpreter, start_main, start_vm},
     dwarf::{new_lu_dog, parse_dwarf},
-    initialize_interpreter,
-    interpreter::{start_main, start_vm},
 };
 use rustc_hash::FxHashMap as HashMap;
 use sarzak::sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL};
@@ -18,9 +17,18 @@ fn mandelbrot(c: &mut Criterion) {
     let source = fs::read_to_string(MANDEL_SOURCE_FILE).unwrap();
     let ast = parse_dwarf("mandelbrot", &source).unwrap();
     let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
-    let lu_dog = new_lu_dog(None, Some((source, &ast)), &HashMap::default(), &sarzak).unwrap();
 
-    let ctx = initialize_interpreter::<PathBuf>(sarzak, lu_dog, None).unwrap();
+    let dwarf_home = env::var("DWARF_HOME")
+        .unwrap_or_else(|_| {
+            let mut home = env::var("HOME").unwrap();
+            home.push_str("/.dwarf");
+            home
+        })
+        .into();
+
+    let (lu_dog, models, dirty) = new_lu_dog(Some((source, &ast)), &dwarf_home, &sarzak).unwrap();
+
+    let ctx = initialize_interpreter(dwarf_home, dirty, models, lu_dog, sarzak).unwrap();
 
     c.bench_function("mandelbrot-14x4", |b| {
         b.iter(|| start_main(false, ctx.clone()).unwrap())
@@ -32,9 +40,18 @@ fn fib(c: &mut Criterion) {
     let source = fs::read_to_string(FIB_SOURCE_FILE).unwrap();
     let ast = parse_dwarf("fib", &source).unwrap();
     let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
-    let lu_dog = new_lu_dog(None, Some((source, &ast)), &HashMap::default(), &sarzak).unwrap();
 
-    let mut ctx = initialize_interpreter::<PathBuf>(sarzak, lu_dog, None).unwrap();
+    let dwarf_home = env::var("DWARF_HOME")
+        .unwrap_or_else(|_| {
+            let mut home = env::var("HOME").unwrap();
+            home.push_str("/.dwarf");
+            home
+        })
+        .into();
+
+    let (lu_dog, models, dirty) = new_lu_dog(Some((source, &ast)), &dwarf_home, &sarzak).unwrap();
+
+    let mut ctx = initialize_interpreter(dwarf_home, dirty, models, lu_dog, sarzak).unwrap();
     ctx.add_args(vec!["fib".to_owned(), "17".to_owned()]);
 
     c.bench_function("fib-17", |b| {
