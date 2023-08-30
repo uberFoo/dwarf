@@ -93,8 +93,12 @@ impl Context {
         }
     }
 
-    pub fn dirty(&mut self) -> &mut [Dirty] {
-        &mut self.dirty
+    pub fn dirty(&self) -> Vec<Dirty> {
+        self.dirty.clone()
+    }
+
+    pub fn clear_dirty(&mut self) {
+        self.dirty.clear();
     }
 
     pub fn set_dirty(&mut self, dirty: Vec<Dirty>) {

@@ -22,7 +22,7 @@ use crate::{
         Block, Expression, LocalVariable, ObjectStore as LuDogStore, Span, Statement,
         StatementEnum, ValueType, ValueTypeEnum, Variable, XValue,
     },
-    new_ref, s_read,
+    new_ref, s_read, s_write,
     sarzak::store::ObjectStore as SarzakStore,
     ChaChaError, Dirty, DwarfInteger, ModelStore, NewRef, RefType, Value,
 };
@@ -137,30 +137,13 @@ lazy_static! {
     pub(crate) static ref STEPPING: Mutex<bool> = Mutex::new(false);
 }
 
-// #[cfg(not(feature = "multi-nd-vec"))]
-// pub fn initialize_interpreter_paths<P: AsRef<Path>>(lu_dog_path: P) -> Result<Context, Error> {
-//     // unimplemented!();
-//     let sarzak =
-//         SarzakStore::from_bincode(SARZAK_MODEL).map_err(|e| ChaChaError::Store { source: e })?;
-
-//     // This will always be a lu-dog -- it's basically compiled dwarf source.
-//     let lu_dog = LuDogStore::load_bincode(lu_dog_path.as_ref())
-//         .map_err(|e| ChaChaError::Store { source: e })?;
-
-//     initialize_interpreter(
-//         sarzak,
-//         lu_dog,
-//         HashMap::default(),
-//     )
-// }
-
 /// Initialize the interpreter
 ///
 /// The interpreter requires two domains to operate. The first is the metamodel:
 /// sarzak. The second is the compiled dwarf file.
 pub fn initialize_interpreter(
     dwarf_home: PathBuf,
-    dirty: Vec<Dirty>,
+    _dirty: Vec<Dirty>,
     models: ModelStore,
     mut lu_dog: LuDogStore,
     sarzak: SarzakStore,
@@ -169,91 +152,24 @@ pub fn initialize_interpreter(
     let block = Block::new(Uuid::new_v4(), None, &mut lu_dog);
     let (mut stack, receiver) = Memory::new();
 
+    // We don't really care about the dirty flag because we are just stuffing
+    // everything in below.
+    let dirty = vec![];
+
     // Insert the functions in the root frame.
     let funcs = lu_dog.iter_function().collect::<Vec<_>>();
-
     for func in funcs {
-        let imp = s_read!(func).r9_implementation_block(&lu_dog);
-        if imp.is_empty() {
-            let name = s_read!(func).name.clone();
-            let value = Value::Function(func.clone());
-
-            // Build the local in the AST.
-            let local = LocalVariable::new(Uuid::new_v4(), &mut lu_dog);
-            let var = Variable::new_local_variable(name.clone(), &local, &mut lu_dog);
-            let _value = XValue::new_variable(
-                &block,
-                &ValueType::new_function(&func, &mut lu_dog),
-                &var,
-                &mut lu_dog,
-            );
-
-            trace!("inserting local function {}", name);
-            stack.insert(name, new_ref!(Value, value));
-        }
+        inter_func(func, &block, &mut stack, &mut lu_dog);
     }
 
     // Insert static methods for each struct. They go into the meta table.
     for user_type in lu_dog.iter_woog_struct() {
-        let user_type = s_read!(user_type);
-        // Create a meta table for each struct.
-        debug!("inserting struct in meta table {}", user_type.name);
-        stack.insert_meta_table(user_type.name.to_owned());
-        let impl_ = user_type.r8c_implementation_block(&lu_dog);
-        if !impl_.is_empty() {
-            // For each function in the impl, insert the function. I should probably
-            // check and only insert the static functions.
-            for func in s_read!(impl_[0]).r9_function(&lu_dog) {
-                let insert = if let Some(param) = s_read!(func).r82_parameter(&lu_dog).get(0) {
-                    let var = &s_read!(param).r12_variable(&lu_dog)[0];
-                    let var = s_read!(var);
-                    var.name != "self"
-                } else {
-                    true
-                };
-
-                if insert {
-                    debug!("inserting static function {}", s_read!(func).name);
-                    stack.insert_meta(
-                        &user_type.name,
-                        s_read!(func).name.to_owned(),
-                        new_ref!(Value, Value::Function(func.clone(),)),
-                    )
-                }
-            }
-        }
+        inter_struct(user_type, &mut stack, &lu_dog);
     }
 
     // Insert static methods for each store. They go into the meta table.
     for store in lu_dog.iter_z_object_store() {
-        let store = s_read!(store);
-        // Create a meta table for each struct.
-        debug!("inserting store in meta table {}", store.domain);
-        stack.insert_meta_table(store.name.to_owned());
-        let impl_ = store.r83c_implementation_block(&lu_dog);
-        if !impl_.is_empty() {
-            // For each function in the impl, insert the function. I should probably
-            // check and only insert the static functions.
-            // 🚧 Only insert the static functions
-            for func in s_read!(impl_[0]).r9_function(&lu_dog) {
-                let insert = if let Some(param) = s_read!(func).r82_parameter(&lu_dog).get(0) {
-                    let var = &s_read!(param).r12_variable(&lu_dog)[0];
-                    let var = s_read!(var);
-                    var.name != "self"
-                } else {
-                    true
-                };
-
-                if insert {
-                    debug!("inserting static function {}", s_read!(func).name);
-                    stack.insert_meta(
-                        &store.name,
-                        s_read!(func).name.to_owned(),
-                        new_ref!(Value, Value::Function(func.clone(),)),
-                    )
-                }
-            }
-        }
+        inter_store(store, &mut stack, &lu_dog);
     }
 
     if let Some(_id) = lu_dog.exhume_woog_struct_id_by_name("Complex") {
@@ -638,6 +554,29 @@ pub fn eval_statement(
 
     span!("eval_statement");
 
+    // This is the entrypoint from the REPL, which is where the dirty thing comes
+    // into play.
+    for dirty in context.dirty() {
+        match dirty {
+            // Dirty::Func(f) => inter_func(
+            //     f.clone(),
+            //     &context.block().clone(),
+            //     context.memory(),
+            //     &mut s_write!(lu_dog),
+            // ),
+            Dirty::Store(ref s_id) => {
+                let store = s_read!(lu_dog).exhume_z_object_store(s_id).unwrap();
+                inter_store(store, context.memory(), &s_read!(lu_dog));
+            }
+            Dirty::Struct(s) => inter_struct(s.clone(), context.memory(), &s_read!(lu_dog)),
+            foo => {
+                // dbg!(foo);
+            }
+        }
+    }
+
+    context.clear_dirty();
+
     match s_read!(statement).subtype {
         StatementEnum::ExpressionStatement(ref stmt) => {
             let stmt = s_read!(lu_dog).exhume_expression_statement(stmt).unwrap();
@@ -889,5 +828,100 @@ fn typecheck(
             span: s_read!(span).start as usize..s_read!(span).end as usize,
             location,
         })
+    }
+}
+
+fn inter_func(
+    func: RefType<crate::lu_dog::Function>,
+    block: &RefType<Block>,
+    stack: &mut Memory,
+    mut lu_dog: &mut LuDogStore,
+) {
+    let imp = s_read!(func).r9_implementation_block(&lu_dog);
+    if imp.is_empty() {
+        let name = s_read!(func).name.clone();
+        let value = Value::Function(func.clone());
+
+        // Build the local in the AST.
+        let local = LocalVariable::new(Uuid::new_v4(), &mut lu_dog);
+        let var = Variable::new_local_variable(name.clone(), &local, &mut lu_dog);
+        let _value = XValue::new_variable(
+            block,
+            &ValueType::new_function(&func, &mut lu_dog),
+            &var,
+            &mut lu_dog,
+        );
+
+        trace!("inserting local function {}", name);
+        stack.insert(name, new_ref!(Value, value));
+    }
+}
+
+fn inter_struct(
+    woog_struct: RefType<crate::lu_dog::WoogStruct>,
+    stack: &mut Memory,
+    lu_dog: &LuDogStore,
+) {
+    let woog_struct = s_read!(woog_struct);
+    // Create a meta table for each struct.
+    debug!("inserting struct in meta table {}", woog_struct.name);
+    stack.insert_meta_table(woog_struct.name.to_owned());
+    let impl_ = woog_struct.r8c_implementation_block(&lu_dog);
+    if !impl_.is_empty() {
+        // For each function in the impl, insert the function. I should probably
+        // check and only insert the static functions.
+        for func in s_read!(impl_[0]).r9_function(&lu_dog) {
+            let insert = if let Some(param) = s_read!(func).r82_parameter(&lu_dog).get(0) {
+                let var = &s_read!(param).r12_variable(&lu_dog)[0];
+                let var = s_read!(var);
+                var.name != "self"
+            } else {
+                true
+            };
+
+            if insert {
+                debug!("inserting static function {}", s_read!(func).name);
+                stack.insert_meta(
+                    &woog_struct.name,
+                    s_read!(func).name.to_owned(),
+                    new_ref!(Value, Value::Function(func.clone(),)),
+                )
+            }
+        }
+    }
+}
+
+fn inter_store(
+    store: RefType<crate::lu_dog::ZObjectStore>,
+    stack: &mut Memory,
+    lu_dog: &LuDogStore,
+) {
+    let store = s_read!(store);
+    // Create a meta table for each struct.
+    debug!("inserting store in meta table {}", store.domain);
+    stack.insert_meta_table(store.name.to_owned());
+    let impl_ = store.r83c_implementation_block(&lu_dog);
+    if !impl_.is_empty() {
+        // For each function in the impl, insert the function. I should probably
+        // check and only insert the static functions.
+        // 🚧 Only insert the static functions
+        for func in s_read!(impl_[0]).r9_function(&lu_dog) {
+            let insert = if let Some(param) = s_read!(func).r82_parameter(&lu_dog).get(0) {
+                let var = &s_read!(param).r12_variable(&lu_dog)[0];
+                let var = s_read!(var);
+                var.name != "self"
+            } else {
+                true
+            };
+
+            if insert {
+                debug!("inserting static function {}", s_read!(func).name);
+                stack.insert_meta(
+                    &store.name,
+                    s_read!(func).name.to_owned(),
+                    new_ref!(Value, Value::Function(func.clone(),)),
+                )
+            }
+        }
     }
 }

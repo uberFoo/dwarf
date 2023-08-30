@@ -444,6 +444,7 @@ pub fn eval(
             if ty == UUID_TYPE && func == FN_NEW {
                 let value = Value::Uuid(Uuid::new_v4());
                 let ty = Ty::new_s_uuid(&s_read!(sarzak));
+                // 🚧 Look this up.
                 let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
 
                 Ok((new_ref!(Value, value), ty))
@@ -510,6 +511,7 @@ pub fn eval(
                     "args" => {
                         debug!("evaluating chacha::args");
                         let ty = Ty::new_s_string(&s_read!(sarzak));
+                        // 🚧 Look these up
                         let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
                         let ty = List::new(&ty, &mut s_write!(lu_dog));
                         let ty = ValueType::new_list(&ty, &mut s_write!(lu_dog));
@@ -527,6 +529,7 @@ pub fn eval(
                         debug!("evaluating chacha::typeof");
                         let (_arg, ty) = arg_values.pop_front().unwrap().0;
                         let pvt_ty = PrintableValueType(&ty, context);
+                        // 🚧 Maybe even cache this somehow? Or maybe have a lookup by type?
                         let ty = Ty::new_s_string(&s_read!(sarzak));
                         let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
 
@@ -573,6 +576,7 @@ pub fn eval(
                         // let time = format!("{:?}\n", elapsed);
                         // chacha_print(time, context)?;
 
+                        // 🚧 Lookup/cache
                         let ty = Ty::new_float(&s_read!(sarzak));
                         let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
 
@@ -596,6 +600,7 @@ pub fn eval(
                                 );
                         // chacha_print(result, context)?;
 
+                        // 🚧 Lookup/cache
                         let ty = Ty::new_s_string(&s_read!(sarzak));
                         let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
 
@@ -626,6 +631,7 @@ pub fn eval(
 
                         if let Value::Boolean(result) = value {
                             if result {
+                                // 🚧 lookup
                                 let ty = Ty::new_boolean(&s_read!(sarzak));
                                 let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
 
@@ -730,92 +736,6 @@ pub fn eval(
                         panic!("fix this");
                     }
                 }
-            } else if let Some(ref id) = s_read!(lu_dog).exhume_woog_struct_id_by_name(ty) {
-                // Here we want to lookup the static method call on a Struct from
-                //  the store, and if we find it we cache it in the meta table.
-                // 🚧 What if it already exists?
-                context.memory().insert_meta_table(ty.to_owned());
-                let woog_struct = s_read!(lu_dog).exhume_woog_struct(id).unwrap();
-                let impl_ = &s_read!(woog_struct).r8c_implementation_block(&s_read!(lu_dog))[0];
-                let funcs = s_read!(impl_).r9_function(&s_read!(lu_dog));
-                if let Some(method) = funcs.iter().find(|f| {
-                    let f = s_read!(lu_dog).exhume_function(&s_read!(f).id).unwrap();
-                    let f = s_read!(f);
-                    f.name == *func
-                }) {
-                    let value = new_ref!(Value, Value::Function(method.clone()));
-                    context
-                        .memory()
-                        .insert_meta(ty, func.to_owned(), value.clone());
-
-                    debug!("StaticMethodCall meta func {method:?}");
-                    let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
-                    debug!("StaticMethodCall::Function {value:?}");
-                    let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
-                    let (value, ty) =
-                        eval_function_call(method.clone(), &args, arg_check, span, context, vm)?;
-                    debug!("StaticMethodCall meta value {value:?}");
-                    debug!("StaticMethodCall meta ty {ty:?}");
-                    return Ok((value, ty));
-                } else {
-                    ensure!(false, {
-                        let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
-                        let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
-                        let read = s_read!(span);
-                        let span = read.start as usize..read.end as usize;
-
-                        NoSuchStaticMethodSnafu {
-                            ty: ty.to_owned(),
-                            method: func.to_owned(),
-                            span,
-                        }
-                    });
-                }
-
-                unreachable!()
-            } else if let Some(ref id) = s_read!(lu_dog).exhume_z_object_store_id_by_name(ty) {
-                // Here we want to lookup the static method call on an ObjectStore
-                // from, well, the ObjectSTore. If we find it we cache it in the meta table.
-                // 🚧 What if it already exists?
-                context.memory().insert_meta_table(ty.to_owned());
-                let woog_struct = s_read!(lu_dog).exhume_z_object_store(id).unwrap();
-                let impl_ = &s_read!(woog_struct).r83c_implementation_block(&s_read!(lu_dog))[0];
-                let funcs = s_read!(impl_).r9_function(&s_read!(lu_dog));
-                if let Some(method) = funcs.iter().find(|f| {
-                    let f = s_read!(lu_dog).exhume_function(&s_read!(f).id).unwrap();
-                    let f = s_read!(f);
-                    f.name == *func
-                }) {
-                    let value = new_ref!(Value, Value::Function(method.clone()));
-                    context
-                        .memory()
-                        .insert_meta(ty, func.to_owned(), value.clone());
-
-                    debug!("StaticMethodCall meta func {method:?}");
-                    let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
-                    debug!("StaticMethodCall::Function {value:?}");
-                    let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
-                    let (value, ty) =
-                        eval_function_call(method.clone(), &args, arg_check, span, context, vm)?;
-                    debug!("StaticMethodCall meta value {value:?}");
-                    debug!("StaticMethodCall meta ty {ty:?}");
-                    return Ok((value, ty));
-                } else {
-                    ensure!(false, {
-                        let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
-                        let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
-                        let read = s_read!(span);
-                        let span = read.start as usize..read.end as usize;
-
-                        NoSuchStaticMethodSnafu {
-                            ty: ty.to_owned(),
-                            method: func.to_owned(),
-                            span,
-                        }
-                    });
-                }
-
-                unreachable!()
             } else {
                 ensure!(false, {
                     let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];

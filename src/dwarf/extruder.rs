@@ -608,6 +608,8 @@ fn inter_func(
         let block = Block::new(Uuid::new_v4(), None, lu_dog);
         let body = Body::new_block(&block, lu_dog);
         let func = Function::new(name.to_owned(), &body, None, impl_block, &ret_ty, lu_dog);
+        context.dirty.push(Dirty::Func(func.clone()));
+        let _ = ValueType::new_function(&func, lu_dog);
 
         (func, Some((block, stmts, span)))
     } else if let Some(body) = external {
@@ -2906,7 +2908,8 @@ pub(super) fn inter_expression(
                         // OK. We are instantiating a generic. We need to create the new type
                         let pvt = PrintableValueType(&ty, context, lu_dog);
                         let struct_ty = format!("{name}<{pvt}>");
-                        let new_struct = create_generic_struct(&struct_ty, context.sarzak, lu_dog);
+                        let new_struct =
+                            create_generic_struct(&struct_ty, context, context.sarzak, lu_dog);
                         s_write!(expr).woog_struct = s_read!(new_struct).id;
                     } else if context.check_types {
                         typecheck(
@@ -3042,7 +3045,7 @@ fn inter_module(name: &str, context: &mut Context, lu_dog: &mut LuDogStore) -> R
                 }
             }
         }
-        Err(mut e) => {
+        Err(e) => {
             errors.push(DwarfError::File {
                 description: "Attempting to open import".to_owned(),
                 path: path.to_owned(),
@@ -3322,7 +3325,7 @@ fn inter_enum(
     };
 
     let woog_enum = Enumeration::new(name.to_owned(), None, lu_dog);
-    context.dirty.push(Dirty::Enum(s_read!(woog_enum).id));
+    context.dirty.push(Dirty::Enum(woog_enum.clone()));
     let _ = ValueType::new_enumeration(&woog_enum, lu_dog);
 
     for (number, ((field_name, _), field)) in variants.iter().enumerate() {
@@ -3335,6 +3338,8 @@ fn inter_enum(
                 // and the like are going to work. The model will need some updating methinks.
                 let woog_struct =
                     WoogStruct::new(format!("{}::{}", name, field_name), None, lu_dog);
+                context.dirty.push(Dirty::Struct(woog_struct.clone()));
+                let _ = ValueType::new_woog_struct(&woog_struct, lu_dog);
                 for ((name, _), (ty, ty_span)) in fields {
                     context.location = location!();
                     let ty = get_value_type(ty, ty_span, None, context, lu_dog)?;
@@ -3496,6 +3501,7 @@ fn inter_struct(
                                         Some(&*obj.borrow()),
                                         lu_dog,
                                     );
+                                    context.dirty.push(Dirty::Struct(woog_struct.clone()));
                                     let _ = WoogItem::new_woog_struct(
                                         &context.source,
                                         &woog_struct,
@@ -3605,7 +3611,7 @@ fn inter_struct(
     } else {
         // This is just a plain vanilla user defined type.
         let woog_struct = WoogStruct::new(name.to_owned(), None, lu_dog);
-        context.dirty.push(Dirty::Struct(s_read!(woog_struct).id));
+        context.dirty.push(Dirty::Struct(woog_struct.clone()));
         let _ = ValueType::new_woog_struct(&woog_struct, lu_dog);
         context.struct_fields.push(StructFields {
             woog_struct,
@@ -4042,6 +4048,7 @@ pub(super) fn typecheck(
 
 pub(crate) fn create_generic_struct(
     name: &str,
+    context: &mut Context,
     sarzak: &SarzakStore,
     lu_dog: &mut LuDogStore,
 ) -> RefType<WoogStruct> {
@@ -4061,6 +4068,7 @@ pub(crate) fn create_generic_struct(
     };
 
     let new_struct = WoogStruct::new(name.to_owned(), obj.as_ref(), lu_dog);
+    context.dirty.push(Dirty::Struct(new_struct.clone()));
     let _ = ValueType::new_woog_struct(&new_struct, lu_dog);
     for field in s_read!(woog_struct).r7_field(lu_dog) {
         let field = s_read!(field);

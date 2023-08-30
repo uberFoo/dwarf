@@ -245,9 +245,10 @@ pub(crate) type ModelStore =
 /// This type is used to signify that a struct, enum, or ObjectStore have been
 /// added in the extruder. The information is picked up by the interpreter and
 /// used to update the corresponding structures in the interpreter.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum Dirty {
-    Struct(SarzakStorePtr),
-    Enum(SarzakStorePtr),
+    Enum(RefType<lu_dog::Enumeration>),
+    Func(RefType<lu_dog::Function>),
     Store(SarzakStorePtr),
+    Struct(RefType<lu_dog::WoogStruct>),
 }

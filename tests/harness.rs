@@ -121,8 +121,7 @@ fn run_program(test: &str, program: &str) -> Result<(Value, String), String> {
             }
         };
 
-    let ctx =
-        initialize_interpreter(dwarf_home, dirty, HashMap::default(), lu_dog, sarzak).unwrap();
+    let ctx = initialize_interpreter(dwarf_home, dirty, models, lu_dog, sarzak).unwrap();
     match start_main(false, ctx) {
         Ok(v) => {
             let stdout = v.1.drain_std_out().join("").trim().to_owned();

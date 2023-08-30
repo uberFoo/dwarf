@@ -249,7 +249,6 @@ fn eval_external_function_call(
                         })
                         .unwrap();
 
-                    dbg!("fucker");
                     let list = List::new(&ty, &mut s_write!(lu_dog));
                     let ty = ValueType::new_list(&list, &mut s_write!(lu_dog));
 
