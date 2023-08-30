@@ -39,17 +39,10 @@ fn pixel_to_point(
 fn escape_time(c: Complex, limit: int) -> int {
     let z = Complex::zero();
     for i in 1..limit {
-        // 🚧 This let wreaks havoc -- fix it.
-        // Also the chained method calls don't affect the correct z, or something.
-        // let z = z.square(z).add(z, c);
-        // 🚧 This breaks things badly.
-        // z = ComplexEx::square(z);
         ComplexEx::square(z);
         ComplexEx::add(z, c);
-        // z = z.square_2();
-        // z = z.add_2(c);
-        // z = square(z);
-        // z = z.add(z, c);
+
+        // 🚧 This temp should not be explicitly necessary.
         let foo = ComplexEx::norm_squared(z);
         if foo > 4.0 {
             // if z.norm_squared(z) > 4.0 {

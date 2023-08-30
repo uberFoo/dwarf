@@ -58,7 +58,7 @@ pub struct FfiProxy {
 ///
 /// This is the type used by the interpreter to represent values.
 #[repr(C)]
-#[derive(Debug, StableAbi)]
+#[derive(Clone, Debug, StableAbi)]
 pub enum FfiValue {
     Boolean(bool),
     Empty,

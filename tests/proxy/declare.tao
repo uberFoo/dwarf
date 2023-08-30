@@ -44,7 +44,7 @@ fn main() {
     // let merlin = MerlinStore::new();
 
     // for instance in Point::instances() {
-    //     print(instance);
-    //     print("\n");
+    // print(instance);
+    // print("\n");
     // }
 }

@@ -24,6 +24,7 @@ use crate::{
 
 const OBJECT_STORE: &str = "ObjectStore";
 const FUNCTION_NEW: &str = "new";
+const FUNCTION_LOAD: &str = "load";
 const MERLIN: &str = "merlin";
 const SARZAK: &str = "sarzak";
 
@@ -74,7 +75,7 @@ fn eval_external_function_call(
         .exhume_external_implementation(block_id)
         .unwrap();
 
-    let arg_values = if !args.is_empty() {
+    let mut arg_values = if !args.is_empty() {
         let mut arg_values = Vec::with_capacity(args.len());
         let mut next = args
             .iter()
@@ -114,63 +115,120 @@ fn eval_external_function_call(
     let object_name = object_name.clone();
     if object_name == OBJECT_STORE {
         // Here we load the plug-in and create an instance of the object store.
-        if s_read!(external).function == FUNCTION_NEW {
-            // This is where we actually instantiate the shared library.
-            let library_path = RawLibrary::path_in_directory(
-                Path::new(&format!(
-                    "{}/extensions/{model_name}/lib",
-                    context.get_home().display()
-                )),
-                &model_name,
-                LibrarySuffix::NoSuffix,
-            );
-            let root_module = (|| {
-                let header = lib_header_from_path(&library_path)?;
-                header.init_root_module::<PluginModRef>()
-            })()
-            .map_err(|e| {
-                eprintln!("{e}");
-                ChaChaError::BadJuJu {
-                    message: "Plug-in error".to_owned(),
-                    location: location!(),
-                }
-            })?;
-
-            let ctor = root_module.new();
-            let plugin = new_ref!(PluginType, ctor(vec![].into()).unwrap());
-            // let plugin = new_ref!(
-            //     PluginType,
-            //     ctor(vec![Value::String("../sarzak/models/sarzak.v2.json".into()).into()].into())
-            //         .unwrap()
-            // );
-            model.1.replace(plugin.clone());
-
-            let value = new_ref!(Value, Value::PlugIn(plugin));
-            // We know that we'll find one of these because we created it when we
-            // extruded.
-            let store = s_read!(lu_dog)
-                .iter_z_object_store()
-                .find(|store| {
-                    let store = s_read!(store);
-                    store.domain == model_name
-                })
-                .unwrap();
-
-            let ty = s_read!(lu_dog)
-                .iter_value_type()
-                .find(|ty| {
-                    let ty = s_read!(ty);
-                    if let ValueTypeEnum::ZObjectStore(store_id) = ty.subtype {
-                        store_id == s_read!(store).id
-                    } else {
-                        false
+        match s_read!(external).function.as_str() {
+            FUNCTION_NEW => {
+                // This is where we actually instantiate the shared library.
+                let library_path = RawLibrary::path_in_directory(
+                    Path::new(&format!(
+                        "{}/extensions/{model_name}/lib",
+                        context.get_home().display()
+                    )),
+                    &model_name,
+                    LibrarySuffix::NoSuffix,
+                );
+                let root_module = (|| {
+                    let header = lib_header_from_path(&library_path)?;
+                    header.init_root_module::<PluginModRef>()
+                })()
+                .map_err(|e| {
+                    eprintln!("{e}");
+                    ChaChaError::BadJuJu {
+                        message: "Plug-in error".to_owned(),
+                        location: location!(),
                     }
-                })
-                .unwrap();
+                })?;
 
-            Ok((value, ty))
-        } else {
-            unimplemented!();
+                let ctor = root_module.new();
+                let plugin = new_ref!(PluginType, ctor(vec![].into()).unwrap());
+                model.1.replace(plugin.clone());
+
+                let value = new_ref!(Value, Value::PlugIn(plugin));
+                // We know that we'll find one of these because we created it when we
+                // extruded.
+                let store = s_read!(lu_dog)
+                    .iter_z_object_store()
+                    .find(|store| {
+                        let store = s_read!(store);
+                        store.domain == model_name
+                    })
+                    .unwrap();
+
+                let ty = s_read!(lu_dog)
+                    .iter_value_type()
+                    .find(|ty| {
+                        let ty = s_read!(ty);
+                        if let ValueTypeEnum::ZObjectStore(store_id) = ty.subtype {
+                            store_id == s_read!(store).id
+                        } else {
+                            false
+                        }
+                    })
+                    .unwrap();
+
+                Ok((value, ty))
+            }
+            FUNCTION_LOAD => {
+                dbg!(&"hello");
+                // This is where we actually instantiate the shared library.
+                let library_path = RawLibrary::path_in_directory(
+                    Path::new(&format!(
+                        "{}/extensions/{model_name}/lib",
+                        context.get_home().display()
+                    )),
+                    &model_name,
+                    LibrarySuffix::NoSuffix,
+                );
+                let root_module = (|| {
+                    let header = lib_header_from_path(&library_path)?;
+                    header.init_root_module::<PluginModRef>()
+                })()
+                .map_err(|e| {
+                    eprintln!("{e}");
+                    ChaChaError::BadJuJu {
+                        message: "Plug-in error".to_owned(),
+                        location: location!(),
+                    }
+                })?;
+
+                let ctor = root_module.new();
+                // let plugin = new_ref!(PluginType, ctor(vec![].into()).unwrap());
+                // let plugin = new_ref!(
+                //     PluginType,
+                //     ctor(vec![Value::String("../sarzak/models/sarzak.v2.json".into()).into()].into())
+                //         .unwrap()
+                // );
+                let (_, path, _) = arg_values.pop().unwrap();
+                let path = s_read!(path).clone();
+                dbg!(&path);
+                let plugin = new_ref!(PluginType, ctor(vec![path.into()].into()).unwrap());
+                model.1.replace(plugin.clone());
+
+                let value = new_ref!(Value, Value::PlugIn(plugin));
+                // We know that we'll find one of these because we created it when we
+                // extruded.
+                let store = s_read!(lu_dog)
+                    .iter_z_object_store()
+                    .find(|store| {
+                        let store = s_read!(store);
+                        store.domain == model_name
+                    })
+                    .unwrap();
+
+                let ty = s_read!(lu_dog)
+                    .iter_value_type()
+                    .find(|ty| {
+                        let ty = s_read!(ty);
+                        if let ValueTypeEnum::ZObjectStore(store_id) = ty.subtype {
+                            store_id == s_read!(store).id
+                        } else {
+                            false
+                        }
+                    })
+                    .unwrap();
+
+                Ok((value, ty))
+            }
+            _ => unimplemented!(),
         }
     }
     // 🚧 Should these be wrapped in a mutex-like?

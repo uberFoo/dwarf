@@ -48,26 +48,27 @@ pub fn id() -> RStr<'static> {
 /// Instantiates the plugin.
 #[sabi_extern_fn]
 pub fn new(args: RVec<FfiValue>) -> RResult<PluginType, Error> {
-    let this = if args.len() == 0 {
-        SarzakStore {
-            store: Rc::new(RefCell::new(ObjectStore::new())),
-        }
-    } else if args.len() == 1 {
-        if let FfiValue::String(path) = &args[0] {
-            SarzakStore {
-                // 🚧 fix this unwrap
-                store: Rc::new(RefCell::new(
-                    ObjectStore::load(Path::new(&path.as_str())).unwrap(),
-                )),
+    match (|| {
+        if args.len() == 0 {
+            Ok(SarzakStore {
+                store: Rc::new(RefCell::new(ObjectStore::new())),
+            })
+        } else if args.len() == 1 {
+            if let FfiValue::String(path) = &args[0] {
+                let store = ObjectStore::load(Path::new(&path.as_str())).unwrap();
+                Ok(SarzakStore {
+                    store: Rc::new(RefCell::new(store)),
+                })
+            } else {
+                Err(Error::Uber("Invalid arguments".into()))
             }
         } else {
-            return RErr(Error::Uber("Invalid arguments".into()));
+            Err(Error::Uber("Invalid arguments".into()))
         }
-    } else {
-        return RErr(Error::Uber("Invalid arguments".into()));
-    };
-
-    ROk(Plugin_TO::from_value(this, TD_Opaque))
+    })() {
+        Ok(this) => ROk(Plugin_TO::from_value(this, TD_Opaque)),
+        Err(e) => RErr(e.into()),
+    }
 }
 
 #[derive(Clone, Debug)]

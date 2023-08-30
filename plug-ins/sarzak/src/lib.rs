@@ -50,19 +50,15 @@ pub fn new(args: RVec<FfiValue>) -> RResult<PluginType, Error> {
 
         Model { sarzak, merlin }
     } else if args.len() == 1 {
-        if let FfiValue::String(path) = &args[0] {
-            let sarzak = sarzak::instantiate_root_module();
-            let sarzak = sarzak.new();
-            let sarzak = sarzak(vec![].into()).unwrap();
+        let sarzak = sarzak::instantiate_root_module();
+        let sarzak = sarzak.new();
+        let sarzak = sarzak(args.clone()).unwrap();
 
-            let merlin = merlin::instantiate_root_module();
-            let merlin = merlin.new();
-            let merlin = merlin(vec![].into()).unwrap();
+        let merlin = merlin::instantiate_root_module();
+        let merlin = merlin.new();
+        let merlin = merlin(args).unwrap();
 
-            Model { sarzak, merlin }
-        } else {
-            return RErr(Error::Uber("Invalid arguments".into()));
-        }
+        Model { sarzak, merlin }
     } else {
         return RErr(Error::Uber("Invalid arguments".into()));
     };
