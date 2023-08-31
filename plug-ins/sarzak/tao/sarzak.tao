@@ -13,6 +13,8 @@ impl SarzakStore {
     // will invoke it in the plugin.
     #[proxy(store = "sarzak", object = "ObjectStore", func = "new")]
     fn new() -> Self;
+    #[proxy(store = "sarzak", object = "ObjectStore", func = "load")]
+    fn load(path: string) -> Self;
 }
 
 // An Event that Does Something

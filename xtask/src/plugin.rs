@@ -60,6 +60,10 @@ impl flags::Plugins {
 
                 for entry in glob("*.json")? {
                     let path = entry?;
+                    let metadata = fs::metadata(&path)?;
+                    if metadata.is_dir() {
+                        continue;
+                    }
                     println!("Copying {}", path.display());
                     sh.copy_file(path, &model_dir)?;
                 }

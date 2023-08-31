@@ -13,6 +13,8 @@ impl MerlinStore {
     // will invoke it in the plugin.
     #[proxy(store = "merlin", object = "ObjectStore", func = "new")]
     fn new() -> Self;
+    #[proxy(store = "merlin", object = "ObjectStore", func = "load")]
+    fn load(path: string) -> Self;
 }
 
 // An Anchor Point for Lines
