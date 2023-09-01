@@ -9,7 +9,7 @@ pub fn eval(
     block_id: &SarzakStorePtr,
     context: &mut Context,
     vm: &mut VM,
-) -> Result<(RefType<Value>, RefType<ValueType>)> {
+) -> Result<RefType<Value>> {
     let lu_dog = context.lu_dog_heel().clone();
     let sarzak = context.sarzak_heel().clone();
 
@@ -19,11 +19,10 @@ pub fn eval(
     if !stmts.is_empty() {
         context.memory().push_frame();
         let mut value;
-        let mut ty;
         let mut next = s_read!(block).r71_statement(&s_read!(lu_dog))[0].clone();
 
         loop {
-            (value, ty) = eval_statement(next.clone(), context, vm).map_err(|e| {
+            value = eval_statement(next.clone(), context, vm).map_err(|e| {
                 context.memory().pop_frame();
                 e
             })?;
@@ -38,11 +37,8 @@ pub fn eval(
         // Clean up
         context.memory().pop_frame();
 
-        Ok((value, ty))
+        Ok(value)
     } else {
-        Ok((
-            new_ref!(Value, Value::Empty),
-            Value::Empty.get_type(&s_read!(sarzak), &s_read!(lu_dog)),
-        ))
+        Ok(new_ref!(Value, Value::Empty))
     }
 }

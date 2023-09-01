@@ -12,11 +12,11 @@ pub fn eval_division(
     operator: &RefType<Operator>,
     context: &mut Context,
     vm: &mut VM,
-) -> Result<(RefType<Value>, RefType<ValueType>)> {
+) -> Result<RefType<Value>> {
     let lu_dog = context.lu_dog_heel().clone();
 
-    let (lhs, lhs_ty) = eval_expression(lhs_expr.clone(), context, vm)?;
-    let (rhs, _) = {
+    let lhs = eval_expression(lhs_expr.clone(), context, vm)?;
+    let rhs = {
         let rhs = s_read!(operator).rhs.unwrap();
         let rhs = s_read!(lu_dog).exhume_expression(&rhs).unwrap();
         eval_expression(rhs, context, vm)?
@@ -25,5 +25,5 @@ pub fn eval_division(
 
     debug!("Evaluating division: {lhs:?} / {rhs:?} = {value:?}");
 
-    Ok((new_ref!(Value, value), lhs_ty))
+    Ok(new_ref!(Value, value))
 }

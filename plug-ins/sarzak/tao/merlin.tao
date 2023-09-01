@@ -15,6 +15,10 @@ impl MerlinStore {
     fn new() -> Self;
     #[proxy(store = "merlin", object = "ObjectStore", func = "load")]
     fn load(path: string) -> Self;
+    #[proxy(store = "merlin", object = "ObjectStore", func = "save")]
+    fn save(self) -> Self;
+    #[proxy(store = "merlin", object = "ObjectStore", func = "save_as")]
+    fn save_as(self, path: string) -> Self;
 }
 
 // An Anchor Point for Lines

@@ -89,7 +89,7 @@
                 }
             },
             "args": [
-                "tests/harness/generics/structure.tao"
+                "tests/harness/expression/function_call/instances.tao"
                 // "tests/proxy/declare.tao",
                 // "-r",
                 // "-m",
@@ -97,7 +97,7 @@
             ],
             "cwd": "${workspaceFolder}",
             "env": {
-                "RUST_LOG": "extruder=debug"
+                "RUST_LOG": "extruder=debug,chacha=debug"
             },
             "preRunCommands": [
                 "script lldb.debugger.HandleCommand('settings set target.source-map /rustc/{} \"{}/lib/rustlib/src/rust\"'.format(os.popen('rustc --version --verbose').read().split('commit-hash: ')[1].split('\\n')[0].strip(), os.popen('rustc --print sysroot').readline().strip()))"

@@ -4,19 +4,19 @@ use snafu::prelude::*;
 use crate::{
     chacha::error::{Result, VariableNotFoundSnafu},
     interpreter::{debug, function, Context},
-    lu_dog::{Expression, ValueType},
+    lu_dog::Expression,
     s_read, RefType, SarzakStorePtr, Value,
 };
 
-pub fn eval_variable_expression(
+pub fn eval(
     expr: &SarzakStorePtr,
     expression: &RefType<Expression>,
     context: &mut Context,
-) -> Result<(RefType<Value>, RefType<ValueType>)> {
+) -> Result<RefType<Value>> {
     let lu_dog = context.lu_dog_heel().clone();
-    let sarzak = context.sarzak_heel().clone();
 
     let expr = s_read!(lu_dog).exhume_variable_expression(expr).unwrap();
+    debug!("ExpressionEnum::VariableExpression expr: {:?}", expr);
     let value = context.memory().get(&s_read!(expr).name);
 
     ensure!(value.is_some(), {
@@ -33,10 +33,5 @@ pub fn eval_variable_expression(
         "ExpressionEnum::VariableExpression value: {}",
         s_read!(value)
     );
-    let ty = {
-        let lu_dog = s_read!(lu_dog);
-        s_read!(value).get_type(&s_read!(sarzak), &lu_dog)
-    };
-
-    Ok((value, ty))
+    Ok(value)
 }

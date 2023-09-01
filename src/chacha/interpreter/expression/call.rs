@@ -25,7 +25,7 @@ pub fn eval(
     expression: &RefType<Expression>,
     context: &mut Context,
     vm: &mut VM,
-) -> Result<(RefType<Value>, RefType<ValueType>)> {
+) -> Result<RefType<Value>> {
     let lu_dog = context.lu_dog_heel().clone();
     let sarzak = context.sarzak_heel().clone();
 
@@ -41,14 +41,13 @@ pub fn eval(
     }
 
     // This optional expression is the LHS of the call.
-    let (value, ty) = if let Some(ref expr) = s_read!(call).expression {
+    let value = if let Some(ref expr) = s_read!(call).expression {
         let expr = s_read!(lu_dog).exhume_expression(expr).unwrap();
-        // Evaluate the LHS to get at the function.
-        let (value, ty) = eval_expression(expr, context, vm)?;
+        // Evaluate the LHS to get at the underlying value/instance.
+        let value = eval_expression(expr, context, vm)?;
         debug!("ExpressionEnum::Call LHS value {:?}", s_read!(value));
-        debug!("ExpressionEnum::Call LHS ty {ty:?}");
 
-        let mut tuple_from_value = || -> Result<(RefType<Value>, RefType<ValueType>)> {
+        let mut eval_lhs = || -> Result<RefType<Value>> {
             // Below we are reading the value of the LHS, and then using that
             // to determine what to do with the RHS.
             let read_value = s_read!(value);
@@ -59,11 +58,9 @@ pub fn eval(
 
                     let func = s_read!(lu_dog).exhume_function(&s_read!(func).id).unwrap();
                     debug!("ExpressionEnum::Call func: {func:?}");
-                    let (value, ty) =
-                        eval_function_call(func, &args, arg_check, span, context, vm)?;
+                    let value = eval_function_call(func, &args, arg_check, span, context, vm)?;
                     debug!("value {value:?}");
-                    debug!("ty {ty:?}");
-                    Ok((value, ty))
+                    Ok(value)
                 }
                 Value::Lambda(ref ƛ) => {
                     let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
@@ -71,18 +68,29 @@ pub fn eval(
 
                     let ƛ = s_read!(lu_dog).exhume_lambda(&s_read!(ƛ).id).unwrap();
                     debug!("ExpressionEnum::Call ƛ: {ƛ:?}");
-                    let (value, ty) =
-                        eval_lambda_expression(ƛ, &args, arg_check, span, context, vm)?;
+                    let value = eval_lambda_expression(ƛ, &args, arg_check, span, context, vm)?;
                     debug!("value {value:?}");
-                    debug!("ty {ty:?}");
-                    Ok((value, ty))
+                    Ok(value)
                 }
-                Value::ProxyType(_proxy) => Ok((
-                    value.clone(),
-                    s_read!(value).get_type(&s_read!(sarzak), &s_read!(lu_dog)),
-                )),
-                Value::Struct(ut) => Ok((value.clone(), s_read!(ut).get_type().clone())),
+                Value::ProxyType(_proxy) => Ok(value.clone()),
+                Value::Struct(ut) => Ok(value.clone()),
+                Value::PlugIn((store, plugin)) => {
+                    // let ty = s_read!(lu_dog)
+                    //     .iter_value_type()
+                    //     .find(|ty| {
+                    //         let ty = s_read!(ty);
+                    //         if let ValueTypeEnum::ZObjectStore(store_id) = ty.subtype {
+                    //             store_id == s_read!(store).id
+                    //         } else {
+                    //             false
+                    //         }
+                    //     })
+                    //     .unwrap();
+
+                    Ok(value.clone())
+                }
                 value_ => {
+                    dbg!(&value_);
                     let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
                     debug!("value {value:?}");
 
@@ -100,6 +108,11 @@ pub fn eval(
             }
         };
 
+        let ty = {
+            let lu_dog = s_read!(lu_dog);
+            s_read!(value).get_type(&s_read!(sarzak), &lu_dog)
+        };
+
         // First we need to check the type of the LHS to see if there are
         // any instance methods on the type. This seems weird. I'm not sure
         // where to put it in my brain just yet.
@@ -111,43 +124,72 @@ pub fn eval(
         let x = match &s_read!(ty).subtype {
             ValueTypeEnum::Ty(ref id) => {
                 let _ty = s_read!(sarzak).exhume_ty(id).unwrap();
+                // SString is here because we have methods on that type
+                // 🚧 We need to add Vector or whatever as well.
                 let x = match &*_ty.borrow() {
-                    Ty::SString(_) => (value, ty.clone()),
-                    _ => tuple_from_value()?,
+                    Ty::SString(_) => value,
+                    _ => eval_lhs()?,
                 };
                 x
             }
-            _ => tuple_from_value()?,
+            _ => eval_lhs()?,
         };
         x
     } else {
-        (
-            new_ref!(Value, Value::Empty),
-            Value::Empty.get_type(&s_read!(sarzak), &s_read!(lu_dog)),
-        )
+        new_ref!(Value, Value::Empty)
     };
 
     // So we need to figure out the type that this is being called upon.
     let subtype = &s_read!(call).subtype;
-    let call_result = match (subtype, value, ty) {
-        (CallEnum::MacroCall(_), _, _) => unimplemented!(),
+    let call_result = match (subtype, value) {
+        (CallEnum::MacroCall(_), _) => unimplemented!(),
         //
         // FunctionCall
         //
         // We already handled this above.
-        (CallEnum::FunctionCall(_), value, ty) => Ok((value, ty)),
+        (CallEnum::FunctionCall(_), value) => Ok(value),
         //
         // MethodCall
         //
-        (CallEnum::MethodCall(meth), value, ty) => {
+        (CallEnum::MethodCall(ref meth), value) => {
             let meth = s_read!(lu_dog).exhume_method_call(meth).unwrap();
             let meth = &s_read!(meth).name;
             debug!("MethodCall method {meth:?}");
             debug!("MethodCall value {value:?}");
-            debug!("MethodCall type {ty:?}");
 
             match &*s_read!(value) {
-                Value::ProxyType((_, id, _proxy)) => {
+                Value::PlugIn((store, _plugin)) => {
+                    let impl_ = &s_read!(store).r83c_implementation_block(&s_read!(lu_dog))[0];
+                    let x = if let Some(func) = s_read!(impl_)
+                        .r9_function(&s_read!(lu_dog))
+                        .iter()
+                        .find(|f| s_read!(f).name == *meth)
+                    {
+                        let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
+                        let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
+
+                        eval_function_call((*func).clone(), &args, arg_check, span, context, vm)
+                    } else {
+                        let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
+                        let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
+                        let read = s_read!(span);
+                        let span = read.start as usize..read.end as usize;
+
+                        return Err(ChaChaError::NoSuchMethod {
+                            method: meth.to_owned(),
+                            span,
+                            location: location!(),
+                        });
+                    };
+                    x
+                }
+                Value::ProxyType((_, ref id, _proxy)) => {
+                    // Q: How do I invoke a function on an instance without
+                    // actually grabbing the instance from memory?
+                    // A: It's eval'd above, and in the `value` variable, which
+                    // is deconstructed into this ProxyType. So that is bad.
+                    // 🚧 We need to store a pointer to an in-memory value of
+                    // this struct so that
                     let vt = s_read!(lu_dog);
                     let mut vt = vt.iter_value_type();
                     let woog_struct = loop {
@@ -199,9 +241,7 @@ pub fn eval(
                         )
                         .collect::<Vec<&str>>()
                         .len();
-                        let ty = Ty::new_integer(&s_read!(sarzak));
-                        let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
-                        Ok((new_ref!(Value, Value::Integer(len as i64)), ty))
+                        Ok(new_ref!(Value, Value::Integer(len as i64)))
                     }
                     "format" => {
                         debug!("evaluating String::format");
@@ -249,7 +289,7 @@ pub fn eval(
 
                                 let key = source[span].to_owned();
 
-                                let value = eval_expression(expr, context, vm)?.0;
+                                let value = eval_expression(expr, context, vm)?;
                                 debug!("value {value:?}");
 
                                 arg_values.push_back(s_read!(value).to_string());
@@ -317,16 +357,7 @@ pub fn eval(
                             }
                         }
 
-                        let ty = Ty::new_s_string(&s_read!(sarzak));
-                        // This write is bad. It's not necessary for a string for one, and
-                        // it also happens when we are holding references to lu_dog.
-                        // let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
-                        // 🚧 Ideally we'd cache this when we startup.
-                        let ty = s_read!(lu_dog)
-                            .iter_value_type()
-                            .find(|t| s_read!(t).subtype == ValueTypeEnum::Ty(ty.borrow().id()))
-                            .unwrap();
-                        Ok((new_ref!(Value, Value::String(result)), ty))
+                        Ok(new_ref!(Value, Value::String(result)))
                     }
                     value_ => {
                         let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
@@ -353,9 +384,7 @@ pub fn eval(
                         if let ValueTypeEnum::WoogStruct(woog_struct) = &ty.subtype {
                             *woog_struct
                         } else {
-                            // 🚧 This should be an error.
-                            // TBH, I don't think that this is reachable?
-                            panic!("I'm trying to invoke a function on a UserType, and it's not a Struct!");
+                            unreachable!();
                         }
                     };
 
@@ -391,7 +420,7 @@ pub fn eval(
         //
         // StaticMethodCall
         //
-        (CallEnum::StaticMethodCall(meth), _, _) => {
+        (CallEnum::StaticMethodCall(ref meth), _) => {
             let meth = s_read!(lu_dog).exhume_static_method_call(meth).unwrap();
             let call = s_read!(meth).r30_call(&s_read!(lu_dog))[0].clone();
 
@@ -443,15 +472,12 @@ pub fn eval(
             // This is dirty. Down and dirty...
             if ty == UUID_TYPE && func == FN_NEW {
                 let value = Value::Uuid(Uuid::new_v4());
-                let ty = Ty::new_s_uuid(&s_read!(sarzak));
-                // 🚧 Look this up.
-                let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
 
-                Ok((new_ref!(Value, value), ty))
+                Ok(new_ref!(Value, value))
             } else if ty == COMPLEX_EX {
                 match func.as_str() {
                     "norm_squared" => {
-                        let (value, ty) = arg_values.pop_front().unwrap().0;
+                        let value = arg_values.pop_front().unwrap().0;
                         let thonk = context.memory().get_thonk(0).unwrap();
                         let mut frame = CallFrame::new(0, 0, thonk);
                         vm.push_stack(new_ref!(Value, "norm_squared".into()));
@@ -461,10 +487,10 @@ pub fn eval(
                         vm.pop_stack();
                         context.increment_expression_count(2);
 
-                        Ok((result.unwrap(), ty))
+                        Ok(result.unwrap())
                     }
                     "square" => {
-                        let (value, ty) = arg_values.pop_front().unwrap().0;
+                        let value = arg_values.pop_front().unwrap().0;
                         let thonk = context.memory().get_thonk(2).unwrap();
                         let mut frame = CallFrame::new(0, 0, thonk);
                         vm.push_stack(new_ref!(Value, "square".into()));
@@ -474,15 +500,15 @@ pub fn eval(
                         vm.pop_stack();
                         context.increment_expression_count(5);
 
-                        Ok((result.unwrap(), ty))
+                        Ok(result.unwrap())
                     }
                     "add" => {
                         let thonk = context.memory().get_thonk(1).unwrap();
                         let mut frame = CallFrame::new(0, 0, thonk);
                         vm.push_stack(new_ref!(Value, "add".into()));
-                        let (value, _ty) = arg_values.pop_front().unwrap().0;
+                        let value = arg_values.pop_front().unwrap().0;
                         vm.push_stack(value);
-                        let (value, ty) = arg_values.pop_front().unwrap().0;
+                        let value = arg_values.pop_front().unwrap().0;
                         vm.push_stack(value);
                         let result = vm.run(&mut frame, false);
                         vm.pop_stack();
@@ -490,7 +516,7 @@ pub fn eval(
                         vm.pop_stack();
                         context.increment_expression_count(2);
 
-                        Ok((result.unwrap(), ty))
+                        Ok(result.unwrap())
                     }
                     method => {
                         let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
@@ -517,9 +543,9 @@ pub fn eval(
                         let ty = ValueType::new_list(&ty, &mut s_write!(lu_dog));
 
                         if let Some(args) = &context.get_args() {
-                            Ok((args.clone(), ty))
+                            Ok(args.clone())
                         } else {
-                            Ok((new_ref!(Value, Value::Vector(Vec::new())), ty))
+                            Ok(new_ref!(Value, Value::Vector(Vec::new())))
                         }
                     }
                     // This returns a string because that's the easy button given what
@@ -527,19 +553,23 @@ pub fn eval(
                     // be able to return a proper enum.
                     "typeof" => {
                         debug!("evaluating chacha::typeof");
-                        let (_arg, ty) = arg_values.pop_front().unwrap().0;
+                        let arg = arg_values.pop_front().unwrap().0;
+                        let ty = s_read!(arg).get_type(&s_read!(sarzak), &s_read!(lu_dog));
                         let pvt_ty = PrintableValueType(&ty, context);
                         // 🚧 Maybe even cache this somehow? Or maybe have a lookup by type?
                         let ty = Ty::new_s_string(&s_read!(sarzak));
-                        let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
+                        let ty = s_read!(lu_dog)
+                            .iter_value_type()
+                            .find(|t| s_read!(t).subtype == ValueTypeEnum::Ty(ty.borrow().id()))
+                            .unwrap();
 
-                        Ok((new_ref!(Value, pvt_ty.to_string().into()), ty))
+                        Ok(new_ref!(Value, pvt_ty.to_string().into()))
                     }
                     "time" => {
                         debug!("evaluating chacha::time");
                         // 🚧 I should be checking that there is an argument before
                         // I go unwrapping it.
-                        let ((func, ty), span) = arg_values.pop_front().unwrap();
+                        let (func, span) = arg_values.pop_front().unwrap();
                         let func = s_read!(func);
                         ensure!(
                             matches!(&*func, Value::Lambda(_))
@@ -547,6 +577,7 @@ pub fn eval(
                             {
                                 // 🚧 I'm not really sure what to do about this here. It's
                                 // all really a hack for now anyway.
+                                let ty = func.get_type(&s_read!(sarzak), &s_read!(lu_dog));
                                 let ty = PrintableValueType(&ty, context);
                                 TypeMismatchSnafu {
                                     expected: "<function>".to_string(),
@@ -570,17 +601,14 @@ pub fn eval(
                                 eval_lambda_expression(ƛ.clone(), &[], true, span, context, vm)?;
                             now.elapsed()
                         } else {
-                            unreachable!()
+                            panic!("missing implementation for timing this type: {func:?}");
                         };
-
-                        // let time = format!("{:?}\n", elapsed);
-                        // chacha_print(time, context)?;
 
                         // 🚧 Lookup/cache
                         let ty = Ty::new_float(&s_read!(sarzak));
                         let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
 
-                        Ok((new_ref!(Value, Value::Float(elapsed.as_secs_f64())), ty))
+                        Ok(new_ref!(Value, Value::Float(elapsed.as_secs_f64())))
                     }
                     "eps" => {
                         debug!("evaluating chacha::eps");
@@ -604,7 +632,7 @@ pub fn eval(
                         let ty = Ty::new_s_string(&s_read!(sarzak));
                         let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
 
-                        Ok((new_ref!(Value, Value::String(result)), ty))
+                        Ok(new_ref!(Value, Value::String(result)))
                     }
                     "assert_eq" => {
                         debug!("evaluating chacha::assert_eq");
@@ -622,8 +650,8 @@ pub fn eval(
                             }
                         });
 
-                        let lhs = arg_values.pop_front().unwrap().0 .0;
-                        let rhs = arg_values.pop_front().unwrap().0 .0;
+                        let lhs = arg_values.pop_front().unwrap().0;
+                        let rhs = arg_values.pop_front().unwrap().0;
 
                         debug!("lhs: {lhs:?}, rhs {rhs:?}");
 
@@ -635,7 +663,7 @@ pub fn eval(
                                 let ty = Ty::new_boolean(&s_read!(sarzak));
                                 let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
 
-                                Ok((new_ref!(Value, value), ty))
+                                Ok(new_ref!(Value, value))
                             } else {
                                 let source =
                                     s_read!(lu_dog).iter_dwarf_source_file().next().unwrap();
@@ -681,18 +709,14 @@ pub fn eval(
                         let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
                         debug!("StaticMethodCall::Function {value:?}");
                         let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
-                        let (value, ty) =
+                        let value =
                             eval_function_call(func.clone(), &args, arg_check, span, context, vm)?;
                         debug!("StaticMethodCall meta value {value:?}");
-                        debug!("StaticMethodCall meta ty {ty:?}");
-                        Ok((value, ty))
+                        Ok(value)
                     }
                     value => {
                         error!("deal with call expression {value:?}");
-                        Ok((
-                            new_ref!(Value, Value::Empty),
-                            Value::Empty.get_type(&s_read!(sarzak), &s_read!(lu_dog)),
-                        ))
+                        Ok(new_ref!(Value, Value::Empty))
                     }
                 }
             } else if let Some(value) = context.memory().get(ty) {
@@ -703,11 +727,9 @@ pub fn eval(
                         let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
                         let func = s_read!(lu_dog).exhume_function(&s_read!(func).id).unwrap();
                         debug!("StaticMethodCall frame func {func:?}");
-                        let (value, ty) =
-                            eval_function_call(func, &args, arg_check, span, context, vm)?;
+                        let value = eval_function_call(func, &args, arg_check, span, context, vm)?;
                         debug!("StaticMethodCall frame value {value:?}");
-                        debug!("StaticMethodCall frame ty {ty:?}");
-                        Ok((value, ty))
+                        Ok(value)
                     }
                     Value::ProxyType(_ut) => {
                         unimplemented!();

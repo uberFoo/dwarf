@@ -1,3 +1,5 @@
+use std::ptr;
+
 use ansi_term::Colour;
 use snafu::{location, Location};
 
@@ -5,7 +7,7 @@ use crate::{
     chacha::{error::Result, vm::VM},
     interpreter::{debug, eval_expression, function, ChaChaError, Context},
     lu_dog::{FieldAccessTargetEnum, ValueType},
-    new_ref, s_read, NewRef, RefType, SarzakStorePtr, Value,
+    new_ref, s_read, s_write, NewRef, RefType, SarzakStorePtr, Value,
 };
 
 pub mod field_access {
@@ -15,7 +17,7 @@ pub mod field_access {
         field: &SarzakStorePtr,
         context: &mut Context,
         vm: &mut VM,
-    ) -> Result<(RefType<Value>, RefType<ValueType>)> {
+    ) -> Result<RefType<Value>> {
         let lu_dog = context.lu_dog_heel().clone();
 
         let field = s_read!(lu_dog).exhume_field_access(field).unwrap();
@@ -56,19 +58,14 @@ pub mod field_access {
 
         debug!("expression: {expr:?}");
 
-        let value = {
-            let result = eval_expression(expr, context, vm)?;
-            result.0
-        };
+        let value = eval_expression(expr, context, vm)?;
 
         debug!("value: {value:?}");
 
-        // 🚧 This feels dirty. Some thought is necessary...
-        // I should maybe document what I'm doing. It had something to do with the
-        // plug-in stuff.
-        let mut value = (*s_read!(value)).clone();
-        match &mut value {
-            Value::ProxyType((module, _, ref mut proxy)) => {
+        let value = s_read!(value).clone();
+        match value {
+            Value::ProxyType((module, _, ref proxy)) => {
+                let mut proxy = s_write!(proxy);
                 match proxy
                     .invoke_func(
                         module.as_str().into(),
@@ -82,11 +79,9 @@ pub mod field_access {
                         debug!("ProxyType return value: {value:?}");
 
                         let value: Value = value.into();
-                        let ty = value.get_type(&s_read!(context.sarzak_heel()), &s_read!(lu_dog));
+                        debug!("ProxyType value: {value:?}");
 
-                        debug!("ProxyType value: {value:?}, type: {ty:?}");
-
-                        Ok((new_ref!(Value, value), ty))
+                        Ok(new_ref!(Value, value))
                     }
                     Err(e) => {
                         // 🚧 This needs it's own error. Lazy me.
@@ -99,13 +94,10 @@ pub mod field_access {
             }
             Value::Struct(value) => {
                 let value = s_read!(value);
-                let value = value.get_field_value(&field_name).unwrap();
-                let ty = {
-                    let lu_dog = s_read!(lu_dog);
-                    s_read!(value).get_type(&s_read!(context.sarzak_heel()), &lu_dog)
-                };
+                let value = value.get_field_value(&field_name).unwrap().clone();
+                let value = s_read!(value).clone();
 
-                Ok((value.clone(), ty))
+                Ok(new_ref!(Value, value))
             }
             // 🚧 This needs it's own error. Lazy me.
             bad => Err(ChaChaError::BadJuJu {
@@ -123,7 +115,7 @@ pub mod field_expression {
         field_expr: &SarzakStorePtr,
         context: &mut Context,
         vm: &mut VM,
-    ) -> Result<(RefType<Value>, RefType<ValueType>)> {
+    ) -> Result<RefType<Value>> {
         let lu_dog = context.lu_dog_heel().clone();
 
         let field_expr = s_read!(lu_dog).exhume_field_expression(field_expr).unwrap();

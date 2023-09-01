@@ -9,7 +9,7 @@ pub fn eval(
     match_expr: &SarzakStorePtr,
     context: &mut Context,
     vm: &mut VM,
-) -> Result<(RefType<Value>, RefType<ValueType>)> {
+) -> Result<RefType<Value>> {
     let lu_dog = context.lu_dog_heel().clone();
     let sarzak = context.sarzak_heel().clone();
 
@@ -40,7 +40,7 @@ pub fn eval(
             match field.subtype {
                 EnumFieldEnum::Plain(_) => {
                     // dbg!("Plain", &field.name);
-                    if let Value::Enum(e) = &*s_read!(scrutinee.0) {
+                    if let Value::Enum(e) = &*s_read!(scrutinee) {
                         let value = s_read!(e).get_value();
                         // dbg!(&value);
                         let value = s_read!(value);
@@ -53,10 +53,10 @@ pub fn eval(
 
                                 context.memory().push_frame();
 
-                                let (value, ty) = eval_expression(expr, context, vm)?;
+                                let value = eval_expression(expr, context, vm)?;
 
                                 context.memory().pop_frame();
-                                return Ok((value, ty));
+                                return Ok(value);
                             } else {
                                 unreachable!()
                             }
@@ -103,7 +103,7 @@ pub fn eval(
                             .exhume_variable_expression(var_expr)
                             .unwrap();
                         // dbg!("VariableExpression", &var);
-                        if let Value::Enum(e) = &*s_read!(scrutinee.0) {
+                        if let Value::Enum(e) = &*s_read!(scrutinee) {
                             let value = s_read!(e).get_value();
                             // dbg!(&value);
                             let value = s_read!(value);
@@ -121,11 +121,11 @@ pub fn eval(
                                     context
                                         .memory()
                                         .insert(s_read!(var).name.to_owned(), value.clone());
-                                    let (value, ty) = eval_expression(expr, context, vm)?;
+                                    let value = eval_expression(expr, context, vm)?;
 
                                     context.memory().pop_frame();
 
-                                    return Ok((value, ty));
+                                    return Ok(value);
                                 } else {
                                     unreachable!()
                                 }

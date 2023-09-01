@@ -13,11 +13,7 @@ use crate::{
     NewRef, RefType, SarzakStorePtr, Value,
 };
 
-pub fn eval_as_expression(
-    expr: &SarzakStorePtr,
-    context: &mut Context,
-    vm: &mut VM,
-) -> Result<(RefType<Value>, RefType<ValueType>)> {
+pub fn eval(expr: &SarzakStorePtr, context: &mut Context, vm: &mut VM) -> Result<RefType<Value>> {
     let lu_dog = context.lu_dog_heel().clone();
     let sarzak = context.sarzak_heel().clone();
 
@@ -27,7 +23,7 @@ pub fn eval_as_expression(
     let lhs = s_read!(expr).r68_expression(&s_read!(lu_dog))[0].clone();
     let as_ty = s_read!(expr).r69_value_type(&s_read!(lu_dog))[0].clone();
 
-    let (lhs, _lhs_ty) = eval_expression(lhs, context, vm)?;
+    let lhs = eval_expression(lhs, context, vm)?;
 
     let value = match &s_read!(as_ty).subtype {
         ValueTypeEnum::Ty(ref ty) => {
@@ -72,5 +68,5 @@ pub fn eval_as_expression(
         }
     };
 
-    Ok((value, as_ty))
+    Ok(value)
 }

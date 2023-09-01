@@ -6,15 +6,10 @@ use crate::{
         vm::VM,
     },
     interpreter::{debug, eval_expression, function, Context},
-    lu_dog::ValueType,
     s_read, RefType, SarzakStorePtr, Value,
 };
 
-pub fn eval_return_expression(
-    expr: &SarzakStorePtr,
-    context: &mut Context,
-    vm: &mut VM,
-) -> Result<(RefType<Value>, RefType<ValueType>)> {
+pub fn eval(expr: &SarzakStorePtr, context: &mut Context, vm: &mut VM) -> Result<RefType<Value>> {
     let lu_dog = context.lu_dog_heel().clone();
 
     let expr = s_read!(lu_dog).exhume_x_return(expr).unwrap();
@@ -23,6 +18,7 @@ pub fn eval_return_expression(
     let expr = &s_read!(expr).expression;
     let expr = s_read!(lu_dog).exhume_expression(expr).unwrap();
 
-    let (value, ty) = eval_expression(expr, context, vm)?;
+    let value = eval_expression(expr, context, vm)?;
+    let ty = s_read!(value).get_type(&s_read!(context.sarzak_heel()), &s_read!(lu_dog));
     Err(ChaChaError::Return { value, ty })
 }

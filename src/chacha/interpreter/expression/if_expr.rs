@@ -11,7 +11,7 @@ pub fn eval_if_expression(
     expr: &SarzakStorePtr,
     context: &mut Context,
     vm: &mut VM,
-) -> Result<(RefType<Value>, RefType<ValueType>)> {
+) -> Result<RefType<Value>> {
     let lu_dog = context.lu_dog_heel().clone();
     let sarzak = context.sarzak_heel().clone();
 
@@ -21,7 +21,7 @@ pub fn eval_if_expression(
 
     let cond_expr = s_read!(lu_dog).exhume_expression(&expr.test).unwrap();
 
-    let (cond, _ty) = eval_expression(cond_expr, context, vm)?;
+    let cond = eval_expression(cond_expr, context, vm)?;
     debug!("ExpressionEnum::XIf conditional {cond:?}");
 
     let cond = s_read!(cond);
@@ -41,10 +41,7 @@ pub fn eval_if_expression(
 
             eval_expression(block, context, vm)?
         } else {
-            (
-                new_ref!(Value, Value::Empty),
-                Value::Empty.get_type(&s_read!(sarzak), &s_read!(lu_dog)),
-            )
+            new_ref!(Value, Value::Empty)
         }
     })
 }

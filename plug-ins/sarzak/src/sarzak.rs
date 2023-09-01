@@ -96,6 +96,10 @@ impl Plugin for SarzakStore {
             debug!("type: {ty}, func: {func}, args: {args:?}");
             match ty {
                 "ObjectStore" => match func {
+                    "save" => {
+                        dbg!("save");
+                        Ok(FfiValue::Empty)
+                    }
                     "inter_acknowledged_event" => {
                         if args.len() != 1 {
                             return Err(Error::Uber("Expected 1 argument".into()));
@@ -2343,7 +2347,7 @@ impl Plugin for SarzakStore {
                     func => Err(Error::Uber(format!("Invalid function: {func:?}").into())),
                 },
 
-                "Ty" => match func {
+                "Type" => match func {
                     "new_boolean" => {
                         if args.len() != 1 {
                             return Err(Error::Uber("Expected 1 arguments".into()));

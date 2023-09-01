@@ -13,10 +13,10 @@ pub fn eval_boolean_operator(
     operator: &RefType<Operator>,
     context: &mut Context,
     vm: &mut VM,
-) -> Result<(RefType<Value>, RefType<ValueType>)> {
+) -> Result<RefType<Value>> {
     let lu_dog = context.lu_dog_heel().clone();
 
-    let (lhs, lhs_ty) = eval_expression(lhs_expr.clone(), context, vm)?;
+    let lhs = eval_expression(lhs_expr.clone(), context, vm)?;
     let rhs = {
         let rhs = s_read!(operator).rhs.unwrap();
         let rhs = s_read!(lu_dog).exhume_expression(&rhs).unwrap();
@@ -33,15 +33,15 @@ pub fn eval_boolean_operator(
     match &boolean_operator.subtype {
         BooleanOperatorEnum::And(_) => {
             let value = Value::Boolean(
-                (&*s_read!(lhs)).try_into().unwrap() && (&*s_read!(rhs.0)).try_into().unwrap(),
+                (&*s_read!(lhs)).try_into().unwrap() && (&*s_read!(rhs)).try_into().unwrap(),
             );
-            Ok((new_ref!(Value, value), lhs_ty))
+            Ok(new_ref!(Value, value))
         }
         BooleanOperatorEnum::Or(_) => {
             let value = Value::Boolean(
-                (&*s_read!(lhs)).try_into().unwrap() || (&*s_read!(rhs.0)).try_into().unwrap(),
+                (&*s_read!(lhs)).try_into().unwrap() || (&*s_read!(rhs)).try_into().unwrap(),
             );
-            Ok((new_ref!(Value, value), lhs_ty))
+            Ok(new_ref!(Value, value))
         }
     }
 }

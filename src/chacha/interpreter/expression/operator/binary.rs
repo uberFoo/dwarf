@@ -14,14 +14,14 @@ pub mod division;
 pub mod multiplication;
 pub mod subtraction;
 
-pub fn eval_binary(
+pub fn eval(
     binary: &SarzakStorePtr,
     lhs_expr: &RefType<Expression>,
     operator: &RefType<Operator>,
     expression: &RefType<Expression>,
     context: &mut Context,
     vm: &mut VM,
-) -> Result<(RefType<Value>, RefType<ValueType>)> {
+) -> Result<RefType<Value>> {
     let lu_dog = context.lu_dog_heel().clone();
 
     let binary = s_read!(lu_dog).exhume_binary(binary).unwrap();

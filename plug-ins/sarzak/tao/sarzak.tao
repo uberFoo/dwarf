@@ -15,6 +15,10 @@ impl SarzakStore {
     fn new() -> Self;
     #[proxy(store = "sarzak", object = "ObjectStore", func = "load")]
     fn load(path: string) -> Self;
+    #[proxy(store = "sarzak", object = "ObjectStore", func = "save")]
+    fn save(self) -> Self;
+    #[proxy(store = "sarzak", object = "ObjectStore", func = "save_as")]
+    fn save_as(self, path: string) -> Self;
 }
 
 // An Event that Does Something

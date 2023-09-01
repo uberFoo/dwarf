@@ -17,7 +17,7 @@ pub fn eval_assignment(
     expression: &RefType<Expression>,
     context: &mut Context,
     vm: &mut VM,
-) -> Result<(RefType<Value>, RefType<ValueType>)> {
+) -> Result<RefType<Value>> {
     let lu_dog = context.lu_dog_heel().clone();
     let sarzak = context.sarzak_heel().clone();
 
@@ -80,16 +80,17 @@ pub fn eval_assignment(
 
             debug!("value: {value:?}");
 
-            let mut value = s_write!(value);
-            match &mut *value {
-                Value::ProxyType((module, _, ref mut proxy)) => {
+            let value = s_read!(value);
+            match &*value {
+                Value::ProxyType((module, _, ref proxy)) => {
+                    let mut proxy = s_write!(proxy);
                     let result = proxy.invoke_func(
                         module.as_str().into(),
                         "self".into(),
                         "set_field_value".into(),
                         vec![
                             Value::String(field_name.clone()).into(),
-                            (*s_read!(rhs.0)).clone().into(),
+                            (*s_read!(rhs)).clone().into(),
                         ]
                         .into(),
                     );
@@ -102,7 +103,7 @@ pub fn eval_assignment(
                     }
                 }
                 Value::Struct(value) => {
-                    s_write!(value).set_field_value(&field_name, rhs.0);
+                    s_write!(value).set_field_value(&field_name, rhs);
                 }
                 // 🚧 This needs it's own error.
                 _value => {
@@ -113,10 +114,7 @@ pub fn eval_assignment(
                 }
             }
 
-            Ok((
-                new_ref!(Value, Value::Empty),
-                Value::Empty.get_type(&s_read!(sarzak), &s_read!(lu_dog)),
-            ))
+            Ok(new_ref!(Value, Value::Empty))
         }
         ExpressionEnum::TypeCast(expr) => {
             let rhs = {
@@ -135,7 +133,7 @@ pub fn eval_assignment(
                 let name = s_read!(expr).name.clone();
                 let value = context.memory().get(&name).unwrap();
                 let mut value = s_write!(value);
-                *value = s_read!(rhs.0).clone();
+                *value = s_read!(rhs).clone();
                 Ok(rhs)
             } else {
                 Err(ChaChaError::BadJuJu {
@@ -164,7 +162,7 @@ pub fn eval_assignment(
             let name = expr.name.clone();
             let value = context.memory().get(&name).unwrap();
             let mut value = s_write!(value);
-            *value = s_read!(rhs.0).clone();
+            *value = s_read!(rhs).clone();
             Ok(rhs)
         }
         lhs => Err(ChaChaError::BadJuJu {

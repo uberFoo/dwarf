@@ -16,7 +16,7 @@ pub fn eval(
     enum_field: &SarzakStorePtr,
     context: &mut Context,
     vm: &mut VM,
-) -> Result<(RefType<Value>, RefType<ValueType>)> {
+) -> Result<RefType<Value>> {
     debug!("eval enum_field: {enum_field}");
 
     let lu_dog = context.lu_dog_heel().clone();
@@ -37,7 +37,7 @@ pub fn eval(
             let struct_field = s_read!(struct_field);
             let expr = struct_field.expression.unwrap();
             let expr = s_read!(lu_dog).exhume_expression(&expr).unwrap();
-            let (value, _) = eval_expression(expr, context, vm)?;
+            let value = eval_expression(expr, context, vm)?;
             let value = s_read!(value);
             if let Value::Struct(struct_value) = &*value {
                 let struct_value = s_read!(struct_value);
@@ -56,7 +56,7 @@ pub fn eval(
             let tuple = s_read!(lu_dog).exhume_tuple_field(tf).unwrap();
             let _ty = s_read!(tuple).r86_value_type(&s_read!(lu_dog))[0].clone();
             let expr = s_read!(tuple).r90_expression(&s_read!(lu_dog))[0].clone();
-            let (value, _) = eval_expression(expr, context, vm)?;
+            let value = eval_expression(expr, context, vm)?;
             new_ref!(
                 Value,
                 Value::EnumVariant(EnumFieldVariant::Tuple(field.name.to_owned(), value))
@@ -67,5 +67,5 @@ pub fn eval(
     let user_enum = UserEnum::new(woog_enum.name.clone(), &ty, value);
     let user_enum = new_ref!(UserEnum, user_enum);
 
-    Ok((new_ref!(Value, Value::Enum(user_enum)), ty))
+    Ok(new_ref!(Value, Value::Enum(user_enum)))
 }

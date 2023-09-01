@@ -126,6 +126,8 @@ fn run_program(test: &str, program: &str) -> Result<(Value, String), String> {
         Ok(v) => {
             let stdout = v.1.drain_std_out().join("").trim().to_owned();
 
+            println!("{stdout}");
+
             Ok((v.0, stdout))
         }
         Err(e) => {

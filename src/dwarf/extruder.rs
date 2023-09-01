@@ -546,16 +546,16 @@ fn inter_func(
 ) -> Result<()> {
     debug!("inter_func {}", name);
 
-    let external = if let Some(proxy_vec) = attributes.get("proxy") {
+    let external = if let Some(proxy_vec) = attributes.get(PROXY) {
         if let Some((_, InnerAttribute::Attribute(ref attributes))) = proxy_vec.get(0) {
             debug!("proxy");
 
-            if let Some(store_vec) = attributes.get("store") {
+            if let Some(store_vec) = attributes.get(STORE) {
                 if let Some((_, ref value)) = store_vec.get(0) {
                     let store_name: String = value.try_into().map_err(|e| vec![e])?;
                     debug!("proxy.store.: {store_name}");
 
-                    if let Some(func_vec) = attributes.get("func") {
+                    if let Some(func_vec) = attributes.get(FUNC) {
                         if let Some((_, ref value)) = func_vec.get(0) {
                             let func_name: String = value.try_into().map_err(|e| vec![e])?;
                             debug!("proxy.func: {func_name}");
@@ -3432,10 +3432,11 @@ fn exorcise_generic_struct(
     Ok(())
 }
 
+const FUNC: &str = "func";
+const MODEL: &str = "model";
+const OBJECT: &str = "object";
 const PROXY: &str = "proxy";
 const STORE: &str = "store";
-const OBJECT: &str = "object";
-const MODEL: &str = "model";
 
 fn inter_struct(
     name: &str,

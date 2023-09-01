@@ -7,10 +7,7 @@ use crate::{
     new_ref, s_read, NewRef, RefType, SarzakStorePtr, Value,
 };
 
-pub fn eval_literal(
-    literal: &SarzakStorePtr,
-    context: &mut Context,
-) -> Result<(RefType<Value>, RefType<ValueType>)> {
+pub fn eval(literal: &SarzakStorePtr, context: &mut Context) -> Result<RefType<Value>> {
     let lu_dog = context.lu_dog_heel().clone();
     let sarzak = context.sarzak_heel().clone();
 
@@ -28,12 +25,8 @@ pub fn eval_literal(
             let ty = Value::Boolean(true).get_type(&s_read!(sarzak), &s_read!(lu_dog));
 
             match literal.subtype {
-                BooleanLiteralEnum::FalseLiteral(_) => {
-                    Ok((new_ref!(Value, Value::Boolean(false,)), ty))
-                }
-                BooleanLiteralEnum::TrueLiteral(_) => {
-                    Ok((new_ref!(Value, Value::Boolean(true,)), ty))
-                }
+                BooleanLiteralEnum::FalseLiteral(_) => Ok(new_ref!(Value, Value::Boolean(false,))),
+                BooleanLiteralEnum::TrueLiteral(_) => Ok(new_ref!(Value, Value::Boolean(true,))),
             }
         }
         //
@@ -43,9 +36,7 @@ pub fn eval_literal(
             let literal = s_read!(lu_dog).exhume_float_literal(literal).unwrap();
             let value = s_read!(literal).x_value;
             let value = Value::Float(value);
-            let ty = value.get_type(&s_read!(sarzak), &s_read!(lu_dog));
-
-            Ok((new_ref!(Value, value), ty))
+            Ok(new_ref!(Value, value))
         }
         //
         // IntegerLiteral
@@ -54,9 +45,7 @@ pub fn eval_literal(
             let literal = s_read!(lu_dog).exhume_integer_literal(literal).unwrap();
             let value = s_read!(literal).x_value;
             let value = Value::Integer(value);
-            let ty = value.get_type(&s_read!(sarzak), &s_read!(lu_dog));
-
-            Ok((new_ref!(Value, value), ty))
+            Ok(new_ref!(Value, value))
         }
         //
         // StringLiteral
@@ -65,8 +54,7 @@ pub fn eval_literal(
             let literal = s_read!(lu_dog).exhume_string_literal(literal).unwrap();
             // 🚧 It'd be great if this were an Rc...
             let value = Value::String(s_read!(literal).x_value.clone());
-            let ty = value.get_type(&s_read!(sarzak), &s_read!(lu_dog));
-            Ok((new_ref!(Value, value), ty))
+            Ok(new_ref!(Value, value))
         }
     };
 

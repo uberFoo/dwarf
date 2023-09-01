@@ -9,17 +9,17 @@ use crate::{
     NewRef, RefType, SarzakStorePtr, Value,
 };
 
-pub fn eval_comparison(
+pub fn eval(
     comp: &SarzakStorePtr,
     lhs_expr: &RefType<Expression>,
     operator: &RefType<Operator>,
     context: &mut Context,
     vm: &mut VM,
-) -> Result<(RefType<Value>, RefType<ValueType>)> {
+) -> Result<RefType<Value>> {
     let lu_dog = context.lu_dog_heel().clone();
     let sarzak = context.sarzak_heel().clone();
 
-    let (lhs, _lhs_ty) = eval_expression(lhs_expr.clone(), context, vm)?;
+    let lhs = eval_expression(lhs_expr.clone(), context, vm)?;
     let rhs = {
         let rhs = s_read!(operator).rhs.unwrap();
         let rhs = s_read!(lu_dog).exhume_expression(&rhs).unwrap();
@@ -32,52 +32,52 @@ pub fn eval_comparison(
     let comp = s_read!(comp);
     match &comp.subtype {
         ComparisonEnum::Equal(_) => {
-            let value = *s_read!(lhs) == *s_read!(rhs.0);
+            let value = *s_read!(lhs) == *s_read!(rhs);
             let value = Value::Boolean(value);
             let ty = Ty::new_boolean(&s_read!(sarzak));
             let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
 
-            Ok((new_ref!(Value, value), ty))
+            Ok(new_ref!(Value, value))
         }
         ComparisonEnum::GreaterThan(_) => {
-            let value = s_read!(lhs).gt(&s_read!(rhs.0));
+            let value = s_read!(lhs).gt(&s_read!(rhs));
             let value = Value::Boolean(value);
             let ty = Ty::new_boolean(&s_read!(sarzak));
             let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
 
-            Ok((new_ref!(Value, value), ty))
+            Ok(new_ref!(Value, value))
         }
         ComparisonEnum::GreaterThanOrEqual(_) => {
-            let value = s_read!(lhs).gte(&s_read!(rhs.0));
+            let value = s_read!(lhs).gte(&s_read!(rhs));
             let value = Value::Boolean(value);
             let ty = Ty::new_boolean(&s_read!(sarzak));
             let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
 
-            Ok((new_ref!(Value, value), ty))
+            Ok(new_ref!(Value, value))
         }
         ComparisonEnum::LessThan(_) => {
-            let value = s_read!(lhs).lt(&s_read!(rhs.0));
+            let value = s_read!(lhs).lt(&s_read!(rhs));
             let value = Value::Boolean(value);
             let ty = Ty::new_boolean(&s_read!(sarzak));
             let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
 
-            Ok((new_ref!(Value, value), ty))
+            Ok(new_ref!(Value, value))
         }
         ComparisonEnum::LessThanOrEqual(_) => {
-            let value = s_read!(lhs).lte(&s_read!(rhs.0));
+            let value = s_read!(lhs).lte(&s_read!(rhs));
             let value = Value::Boolean(value);
             let ty = Ty::new_boolean(&s_read!(sarzak));
             let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
 
-            Ok((new_ref!(Value, value), ty))
+            Ok(new_ref!(Value, value))
         }
         ComparisonEnum::NotEqual(_) => {
-            let value = *s_read!(lhs) != *s_read!(rhs.0);
+            let value = *s_read!(lhs) != *s_read!(rhs);
             let value = Value::Boolean(value);
             let ty = Ty::new_boolean(&s_read!(sarzak));
             let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
 
-            Ok((new_ref!(Value, value), ty))
+            Ok(new_ref!(Value, value))
         }
     }
 }

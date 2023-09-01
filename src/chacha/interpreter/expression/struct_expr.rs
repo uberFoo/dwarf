@@ -7,11 +7,7 @@ use crate::{
     new_ref, s_read, NewRef, RefType, SarzakStorePtr, Value,
 };
 
-pub fn eval_struct_expression(
-    expr: &SarzakStorePtr,
-    context: &mut Context,
-    vm: &mut VM,
-) -> Result<(RefType<Value>, RefType<ValueType>)> {
+pub fn eval(expr: &SarzakStorePtr, context: &mut Context, vm: &mut VM) -> Result<RefType<Value>> {
     let lu_dog = context.lu_dog_heel().clone();
 
     let expr = s_read!(lu_dog).exhume_struct_expression(expr).unwrap();
@@ -22,13 +18,9 @@ pub fn eval_struct_expression(
         .iter()
         .map(|f| {
             let expr = s_read!(f).r15_expression(&s_read!(lu_dog))[0].clone();
-            let (value, ty) = eval_expression(expr.clone(), context, vm)?;
-            debug!(
-                "StructExpression field value: {}, type: {:?}",
-                s_read!(value),
-                s_read!(ty)
-            );
-            Ok((s_read!(f).name.clone(), ty, value, expr))
+            let value = eval_expression(expr.clone(), context, vm)?;
+            debug!("StructExpression field value: {}", s_read!(value),);
+            Ok((s_read!(f).name.clone(), value, expr))
         })
         .collect::<Result<Vec<_>>>()?;
 
@@ -52,13 +44,13 @@ pub fn eval_struct_expression(
     //     ))
     // } else {
     let mut user_type = UserStruct::new(&s_read!(woog_struct).name, &ty);
-    for (name, _ty, value, _expr) in field_exprs {
+    for (name, value, _expr) in field_exprs {
         user_type.define_field(&name, value);
     }
 
-    Ok((
-        new_ref!(Value, Value::Struct(new_ref!(UserStruct, user_type))),
-        ty,
+    Ok(new_ref!(
+        Value,
+        Value::Struct(new_ref!(UserStruct, user_type))
     ))
     // }
 }

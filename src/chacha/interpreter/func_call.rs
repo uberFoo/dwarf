@@ -1,6 +1,9 @@
 use std::{path::Path, time::Instant};
 
-use abi_stable::library::{lib_header_from_path, LibrarySuffix, RawLibrary};
+use abi_stable::{
+    library::{lib_header_from_path, LibrarySuffix, RawLibrary},
+    std_types::ROk,
+};
 use ansi_term::Colour;
 use snafu::{location, prelude::*, Location};
 use tracy_client::span;
@@ -25,6 +28,8 @@ use crate::{
 const OBJECT_STORE: &str = "ObjectStore";
 const FUNCTION_NEW: &str = "new";
 const FUNCTION_LOAD: &str = "load";
+const FUNCTION_SAVE: &str = "save";
+const FUNCTION_SAVE_AS: &str = "save_as";
 const MERLIN: &str = "merlin";
 const SARZAK: &str = "sarzak";
 
@@ -35,7 +40,7 @@ pub fn eval_function_call(
     span: &RefType<Span>,
     context: &mut Context,
     vm: &mut VM,
-) -> Result<(RefType<Value>, RefType<ValueType>)> {
+) -> Result<RefType<Value>> {
     let lu_dog = context.lu_dog_heel().clone();
     context.increment_call_count();
 
@@ -61,14 +66,21 @@ pub fn eval_function_call(
     }
 }
 
+/// Evaluate a function call in a dynamic library.
+///
+/// Note that the func_name below comes from the annotation, as below (in this
+/// example, the answer is "flubber"):
+/// ```ignore
+///#[proxy(store = "sarzak", object = "Boolean", func = "flubber")]
+///```
 fn eval_external_function_call(
     block_id: &usize,
     args: &[RefType<Argument>],
     _arg_check: bool,
-    _span: &RefType<Span>,
+    span: &RefType<Span>,
     context: &mut Context,
     vm: &mut VM,
-) -> Result<(RefType<Value>, RefType<ValueType>)> {
+) -> Result<RefType<Value>> {
     let lu_dog = context.lu_dog_heel().clone();
 
     let external = s_read!(lu_dog)
@@ -85,8 +97,8 @@ fn eval_external_function_call(
 
         loop {
             let expr = s_read!(next).r37_expression(&s_read!(lu_dog))[0].clone();
-            let (value, ty) = eval_expression(expr.clone(), context, vm)?;
-            arg_values.push((expr, value, ty));
+            let value = eval_expression(expr.clone(), context, vm)?;
+            arg_values.push((expr, value));
 
             let next_id = { s_read!(next).next };
             if let Some(ref id) = next_id {
@@ -114,8 +126,61 @@ fn eval_external_function_call(
     let object_name = &s_read!(external).object;
     let object_name = object_name.clone();
     if object_name == OBJECT_STORE {
-        // Here we load the plug-in and create an instance of the object store.
+        // We know that we'll find one of these because we created it when we
+        // extruded.
+        let store = s_read!(lu_dog)
+            .iter_z_object_store()
+            .find(|store| {
+                let store = s_read!(store);
+                store.domain == model_name
+            })
+            .unwrap();
+
+        let ty = s_read!(lu_dog)
+            .iter_value_type()
+            .find(|ty| {
+                let ty = s_read!(ty);
+                if let ValueTypeEnum::ZObjectStore(store_id) = ty.subtype {
+                    store_id == s_read!(store).id
+                } else {
+                    false
+                }
+            })
+            .unwrap();
+
         match s_read!(external).function.as_str() {
+            FUNCTION_LOAD => {
+                // This is where we actually instantiate the shared library.
+                let library_path = RawLibrary::path_in_directory(
+                    Path::new(&format!(
+                        "{}/extensions/{model_name}/lib",
+                        context.get_home().display()
+                    )),
+                    &model_name,
+                    LibrarySuffix::NoSuffix,
+                );
+                let root_module = (|| {
+                    let header = lib_header_from_path(&library_path)?;
+                    header.init_root_module::<PluginModRef>()
+                })()
+                .map_err(|e| {
+                    eprintln!("{e}");
+                    ChaChaError::BadJuJu {
+                        message: "Plug-in error".to_owned(),
+                        location: location!(),
+                    }
+                })?;
+
+                let ctor = root_module.new();
+                let (_, path) = arg_values.pop().unwrap();
+                let path = s_read!(path).clone();
+                let plugin = new_ref!(PluginType, ctor(vec![path.into()].into()).unwrap());
+                model.1.replace(plugin.clone());
+
+                let value = new_ref!(Value, Value::PlugIn((store, plugin)));
+
+                Ok(value)
+            }
             FUNCTION_NEW => {
                 // This is where we actually instantiate the shared library.
                 let library_path = RawLibrary::path_in_directory(
@@ -142,179 +207,107 @@ fn eval_external_function_call(
                 let plugin = new_ref!(PluginType, ctor(vec![].into()).unwrap());
                 model.1.replace(plugin.clone());
 
-                let value = new_ref!(Value, Value::PlugIn(plugin));
-                // We know that we'll find one of these because we created it when we
-                // extruded.
-                let store = s_read!(lu_dog)
-                    .iter_z_object_store()
-                    .find(|store| {
-                        let store = s_read!(store);
-                        store.domain == model_name
-                    })
-                    .unwrap();
+                let value = new_ref!(Value, Value::PlugIn((store, plugin)));
 
-                let ty = s_read!(lu_dog)
-                    .iter_value_type()
-                    .find(|ty| {
-                        let ty = s_read!(ty);
-                        if let ValueTypeEnum::ZObjectStore(store_id) = ty.subtype {
-                            store_id == s_read!(store).id
-                        } else {
-                            false
-                        }
-                    })
-                    .unwrap();
-
-                Ok((value, ty))
+                Ok(value)
             }
-            FUNCTION_LOAD => {
-                dbg!(&"hello");
-                // This is where we actually instantiate the shared library.
-                let library_path = RawLibrary::path_in_directory(
-                    Path::new(&format!(
-                        "{}/extensions/{model_name}/lib",
-                        context.get_home().display()
-                    )),
-                    &model_name,
-                    LibrarySuffix::NoSuffix,
-                );
-                let root_module = (|| {
-                    let header = lib_header_from_path(&library_path)?;
-                    header.init_root_module::<PluginModRef>()
-                })()
-                .map_err(|e| {
-                    eprintln!("{e}");
-                    ChaChaError::BadJuJu {
-                        message: "Plug-in error".to_owned(),
-                        location: location!(),
-                    }
-                })?;
-
-                let ctor = root_module.new();
-                // let plugin = new_ref!(PluginType, ctor(vec![].into()).unwrap());
-                // let plugin = new_ref!(
-                //     PluginType,
-                //     ctor(vec![Value::String("../sarzak/models/sarzak.v2.json".into()).into()].into())
-                //         .unwrap()
-                // );
-                let (_, path, _) = arg_values.pop().unwrap();
-                let path = s_read!(path).clone();
-                dbg!(&path);
-                let plugin = new_ref!(PluginType, ctor(vec![path.into()].into()).unwrap());
-                model.1.replace(plugin.clone());
-
-                let value = new_ref!(Value, Value::PlugIn(plugin));
-                // We know that we'll find one of these because we created it when we
-                // extruded.
-                let store = s_read!(lu_dog)
-                    .iter_z_object_store()
-                    .find(|store| {
-                        let store = s_read!(store);
-                        store.domain == model_name
-                    })
-                    .unwrap();
-
-                let ty = s_read!(lu_dog)
-                    .iter_value_type()
-                    .find(|ty| {
-                        let ty = s_read!(ty);
-                        if let ValueTypeEnum::ZObjectStore(store_id) = ty.subtype {
-                            store_id == s_read!(store).id
-                        } else {
-                            false
-                        }
-                    })
-                    .unwrap();
-
-                Ok((value, ty))
+            FUNCTION_SAVE => {
+                panic!("save not implemented")
             }
-            _ => unimplemented!(),
+            FUNCTION_SAVE_AS => {
+                panic!("save_as not implemented")
+            }
+            method => {
+                let span = s_read!(span).start as usize..s_read!(span).end as usize;
+                Err(ChaChaError::NoSuchMethod {
+                    method: method.to_owned(),
+                    span,
+                    location: location!(),
+                })
+            }
         }
     }
     // 🚧 Should these be wrapped in a mutex-like?
     else if let Some(obj_id) = model.0.exhume_object_id_by_name(&object_name) {
         if let Some(plugin) = &model.1 {
             // 🚧 Don't unwrap -- error handling.
-            let proxy_obj = s_write!(plugin)
-                .invoke_func(
-                    model_name.as_str().into(),
-                    object_name.as_str().into(),
-                    func_name.as_str().into(),
-                    arg_values
-                        .into_iter()
-                        .map(|(_, value, _)| {
-                            let value = s_read!(value).clone();
-                            <Value as Into<FfiValue>>::into(value)
-                        })
-                        .collect::<Vec<_>>()
-                        .into(),
-                )
-                .unwrap();
-            match proxy_obj {
-                FfiValue::ProxyType(proxy_obj) => {
-                    let value = new_ref!(
-                        Value,
-                        Value::ProxyType((model_name, obj_id, proxy_obj.plugin))
-                    );
+            if let ROk(proxy_obj) = s_write!(plugin).invoke_func(
+                model_name.as_str().into(),
+                object_name.as_str().into(),
+                func_name.as_str().into(),
+                arg_values
+                    .into_iter()
+                    .map(|(_, value)| {
+                        let value = s_read!(value).clone();
+                        <Value as Into<FfiValue>>::into(value)
+                    })
+                    .collect::<Vec<_>>()
+                    .into(),
+            ) {
+                match proxy_obj {
+                    FfiValue::ProxyType(proxy_obj) => {
+                        let value = new_ref!(
+                            Value,
+                            Value::ProxyType((
+                                model_name,
+                                obj_id,
+                                new_ref!(PluginType, proxy_obj.plugin)
+                            ))
+                        );
 
-                    let woog_struct = s_read!(lu_dog)
-                        .iter_woog_struct()
-                        .find(|woog| {
-                            let woog = s_read!(woog);
-                            woog.name == object_name
-                        })
-                        .unwrap();
+                        let woog_struct = s_read!(lu_dog)
+                            .iter_woog_struct()
+                            .find(|woog| {
+                                let woog = s_read!(woog);
+                                woog.name == object_name
+                            })
+                            .unwrap();
 
-                    let ty = s_read!(lu_dog)
-                        .iter_value_type()
-                        .find(|ty| {
-                            let ty = s_read!(ty);
-                            if let ValueTypeEnum::WoogStruct(struct_id) = ty.subtype {
-                                struct_id == s_read!(woog_struct).id
-                            } else {
-                                false
-                            }
-                        })
-                        .unwrap();
+                        Ok(value)
+                    }
+                    FfiValue::Vector(vec) => {
+                        let vec = vec
+                            .into_iter()
+                            .map(Value::from)
+                            .map(|v| new_ref!(Value, v))
+                            .collect::<Vec<_>>();
+                        let value = new_ref!(Value, Value::Vector(vec));
 
-                    Ok((value, ty))
+                        let woog_struct = s_read!(lu_dog)
+                            .iter_woog_struct()
+                            .find(|woog| {
+                                let woog = s_read!(woog);
+                                woog.name == object_name
+                            })
+                            .unwrap();
+
+                        let ty = s_read!(lu_dog)
+                            .iter_value_type()
+                            .find(|ty| {
+                                let ty = s_read!(ty);
+                                if let ValueTypeEnum::WoogStruct(struct_id) = ty.subtype {
+                                    struct_id == s_read!(woog_struct).id
+                                } else {
+                                    false
+                                }
+                            })
+                            .unwrap();
+
+                        let list = List::new(&ty, &mut s_write!(lu_dog));
+                        let ty = ValueType::new_list(&list, &mut s_write!(lu_dog));
+
+                        Ok(value)
+                    }
+                    all_manner_of_things => {
+                        panic!("{all_manner_of_things:?} is not a proxy for model {model_name}.");
+                    }
                 }
-                FfiValue::Vector(vec) => {
-                    let vec = vec
-                        .into_iter()
-                        .map(Value::from)
-                        .map(|v| new_ref!(Value, v))
-                        .collect::<Vec<_>>();
-                    let value = new_ref!(Value, Value::Vector(vec));
-
-                    let woog_struct = s_read!(lu_dog)
-                        .iter_woog_struct()
-                        .find(|woog| {
-                            let woog = s_read!(woog);
-                            woog.name == object_name
-                        })
-                        .unwrap();
-
-                    let ty = s_read!(lu_dog)
-                        .iter_value_type()
-                        .find(|ty| {
-                            let ty = s_read!(ty);
-                            if let ValueTypeEnum::WoogStruct(struct_id) = ty.subtype {
-                                struct_id == s_read!(woog_struct).id
-                            } else {
-                                false
-                            }
-                        })
-                        .unwrap();
-
-                    let list = List::new(&ty, &mut s_write!(lu_dog));
-                    let ty = ValueType::new_list(&list, &mut s_write!(lu_dog));
-
-                    Ok((value, ty))
-                }
-                all_manner_of_things => {
-                    panic!("{all_manner_of_things:?} is not a proxy for model {model_name}.");
-                }
+            } else {
+                Err(ChaChaError::NoSuchMethod {
+                    method: func_name,
+                    span: s_read!(span).start as usize..s_read!(span).end as usize,
+                    location: location!(),
+                })
             }
         } else {
             panic!("no plugin");
@@ -333,7 +326,7 @@ fn eval_built_in_function_call(
     span: &RefType<Span>,
     context: &mut Context,
     vm: &mut VM,
-) -> Result<(RefType<Value>, RefType<ValueType>)> {
+) -> Result<RefType<Value>> {
     let lu_dog = context.lu_dog_heel().clone();
     let sarzak = context.sarzak_heel().clone();
 
@@ -416,8 +409,8 @@ fn eval_built_in_function_call(
 
             loop {
                 let expr = s_read!(next).r37_expression(&s_read!(lu_dog))[0].clone();
-                let (value, ty) = eval_expression(expr.clone(), context, vm)?;
-                arg_values.push((expr, value, ty));
+                let value = eval_expression(expr.clone(), context, vm)?;
+                arg_values.push((expr, value));
 
                 let next_id = { s_read!(next).next };
                 if let Some(ref id) = next_id {
@@ -433,16 +426,16 @@ fn eval_built_in_function_call(
         };
 
         let zipped = params.into_iter().zip(arg_values);
-        for ((name, param_ty), (expr, value, arg_ty)) in zipped {
+        for ((name, param_ty), (expr, value)) in zipped {
             debug!("type check name {name:?}");
             debug!("type check param_ty {param_ty:?}");
             debug!("type check value {value:?}");
-            debug!("type check arg_ty {arg_ty:?}");
 
             if arg_check {
                 let x_value = &s_read!(expr).r11_x_value(&s_read!(lu_dog))[0];
                 let span = &s_read!(x_value).r63_span(&s_read!(lu_dog))[0];
 
+                let arg_ty = s_read!(value).get_type(&s_read!(sarzak), &s_read!(lu_dog));
                 typecheck(&param_ty, &arg_ty, span, location!(), context)?;
             }
 
@@ -450,7 +443,6 @@ fn eval_built_in_function_call(
         }
 
         let mut value = new_ref!(Value, Value::Empty);
-        let mut ty = Value::Empty.get_type(&s_read!(sarzak), &s_read!(lu_dog));
         if let Some(ref id) = s_read!(block).statement {
             let mut next = s_read!(lu_dog).exhume_statement(id).unwrap();
 
@@ -461,10 +453,10 @@ fn eval_built_in_function_call(
                 });
 
                 if let Err(ChaChaError::Return { value, ty }) = &result {
-                    return Ok((value.clone(), ty.clone()));
+                    return Ok(value.clone());
                 }
 
-                (value, ty) = result?;
+                value = result?;
 
                 if let Some(ref id) = s_read!(next.clone()).next {
                     next = s_read!(lu_dog).exhume_statement(id).unwrap();
@@ -483,11 +475,8 @@ fn eval_built_in_function_call(
             * 10.0;
         context.new_timing(eps);
 
-        Ok((value, ty))
+        Ok(value)
     } else {
-        Ok((
-            new_ref!(Value, Value::Empty),
-            Value::Empty.get_type(&s_read!(sarzak), &s_read!(lu_dog)),
-        ))
+        Ok(new_ref!(Value, Value::Empty))
     }
 }

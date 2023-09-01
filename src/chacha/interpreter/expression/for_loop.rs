@@ -12,7 +12,7 @@ pub fn eval(
     for_loop: &SarzakStorePtr,
     context: &mut Context,
     vm: &mut VM,
-) -> Result<(RefType<Value>, RefType<ValueType>)> {
+) -> Result<RefType<Value>> {
     let lu_dog = context.lu_dog_heel().clone();
     let sarzak = context.sarzak_heel().clone();
 
@@ -24,7 +24,7 @@ pub fn eval(
         .exhume_expression(&for_loop.expression)
         .unwrap();
 
-    let (list, _ty) = eval_expression(list, context, vm)?;
+    let list = eval_expression(list, context, vm)?;
     let list = if let Value::Vector(vec) = s_read!(list).clone() {
         vec
     } else if let Value::String(str) = &*s_read!(list) {
@@ -66,10 +66,7 @@ pub fn eval(
     // 🚧 Lazy me. I should accept an expression instead of a uuid.
     s_write!(lu_dog).exorcise_expression(&s_read!(block).id);
 
-    let result = Ok((
-        new_ref!(Value, Value::Empty),
-        Value::Empty.get_type(&s_read!(sarzak), &s_read!(lu_dog)),
-    ));
+    let result = Ok(new_ref!(Value, Value::Empty));
 
     #[allow(clippy::let_and_return)]
     result

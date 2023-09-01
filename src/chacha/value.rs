@@ -11,7 +11,7 @@ use uuid::Uuid;
 
 use crate::{
     chacha::error::Result,
-    lu_dog::{Function, Lambda, ObjectStore as LuDogStore, ValueType},
+    lu_dog::{Function, Lambda, ObjectStore as LuDogStore, ValueType, ZObjectStore},
     new_ref,
     plug_in::PluginType,
     s_read,
@@ -154,8 +154,8 @@ pub enum Value {
     Integer(DwarfInteger),
     Lambda(RefType<Lambda>),
     Option(Option<RefType<Self>>),
-    PlugIn(RefType<PluginType>),
-    ProxyType((String, Uuid, PluginType)),
+    PlugIn((RefType<ZObjectStore>, RefType<PluginType>)),
+    ProxyType((String, Uuid, RefType<PluginType>)),
     Range(Range<DwarfInteger>),
     String(String),
     Struct(RefType<UserStruct>),
@@ -178,7 +178,7 @@ impl From<Value> for FfiValue {
             Value::ProxyType((module, uuid, plugin)) => Self::ProxyType(FfiProxy {
                 module: module.into(),
                 uuid: uuid.into(),
-                plugin,
+                plugin: s_read!(plugin).clone(),
             }),
             Value::Range(range) => Self::Range(FfiRange {
                 start: range.start,
@@ -203,9 +203,11 @@ impl From<FfiValue> for Value {
             FfiValue::Float(num) => Self::Float(num),
             FfiValue::Integer(num) => Self::Integer(num),
             // FfiValue::PlugIn(store) => Self::PlugIn(store),
-            FfiValue::ProxyType(plugin) => {
-                Self::ProxyType((plugin.module.into(), plugin.uuid.into(), plugin.plugin))
-            }
+            FfiValue::ProxyType(plugin) => Self::ProxyType((
+                plugin.module.into(),
+                plugin.uuid.into(),
+                new_ref!(PluginType, plugin.plugin),
+            )),
             FfiValue::Range(range) => Self::Range(range.start..range.end),
             FfiValue::String(str_) => Self::String(str_.into()),
             // FfiValue::UserType(uuid) => Self::UserType(new_ref!(UserType, uuid.into())),
@@ -283,17 +285,7 @@ impl Value {
                 #[allow(clippy::let_and_return)]
                 ƛ_type
             }
-            Value::PlugIn(store) => {
-                let store = lu_dog
-                    .iter_z_object_store()
-                    .find(|s| {
-                        let s = s_read!(s);
-                        s.domain == s_read!(store).name()
-                    })
-                    .unwrap();
-                let ty = s_read!(store).r1_value_type(lu_dog)[0].clone();
-                ty
-            }
+            Value::PlugIn((store, plugin)) => s_read!(store).r1_value_type(lu_dog)[0].clone(),
             Value::ProxyType((_module, uuid, _plugin)) => {
                 for vt in lu_dog.iter_value_type() {
                     if let ValueTypeEnum::WoogStruct(woog) = s_read!(vt).subtype {
@@ -365,14 +357,14 @@ impl fmt::Display for Value {
             Self::Function(_) => write!(f, "<function>"),
             Self::Integer(num) => write!(f, "{num}"),
             Self::Lambda(_) => write!(f, "<lambda>"),
-            Self::PlugIn(store) => write!(f, "Plug-in ({})", s_read!(store).name()),
+            Self::PlugIn((store, plugin)) => write!(f, "Plug-in ({})", s_read!(plugin).name()),
             Self::Option(option) => match option {
                 Some(value) => write!(f, "Some({})", s_read!(value)),
                 None => write!(f, "None"),
             },
             // 🚧 swap these out when I'm done
             // Self::ProxyType(_p) => write!(f, "<put the other thing back>"),
-            Self::ProxyType((_, _, p)) => write!(f, "{p}"),
+            Self::ProxyType((_, _, p)) => write!(f, "{}", s_read!(p)),
             Self::Range(range) => write!(f, "{range:?}"),
             // Self::StoreType(store) => write!(f, "{:?}", store),
             Self::String(str_) => write!(f, "{str_}"),

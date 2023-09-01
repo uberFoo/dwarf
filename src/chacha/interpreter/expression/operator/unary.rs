@@ -7,15 +7,15 @@ use crate::{
     new_ref, s_read, NewRef, RefType, SarzakStorePtr, Value,
 };
 
-pub fn eval_unary(
+pub fn eval(
     unary: &SarzakStorePtr,
     lhs_expr: &RefType<Expression>,
     context: &mut Context,
     vm: &mut VM,
-) -> Result<(RefType<Value>, RefType<ValueType>)> {
+) -> Result<RefType<Value>> {
     let lu_dog = context.lu_dog_heel().clone();
 
-    let (lhs, lhs_ty) = eval_expression(lhs_expr.clone(), context, vm)?;
+    let lhs = eval_expression(lhs_expr.clone(), context, vm)?;
     let unary = s_read!(lu_dog).exhume_unary(unary).unwrap();
 
     debug!("unary {unary:?}");
@@ -28,12 +28,12 @@ pub fn eval_unary(
         UnaryEnum::Negation(_) => {
             let value = -s_read!(lhs).clone();
 
-            Ok((new_ref!(Value, value), lhs_ty))
+            Ok(new_ref!(Value, value))
         }
         UnaryEnum::Not(_) => {
             let value = !s_read!(lhs).clone();
 
-            Ok((new_ref!(Value, value), lhs_ty))
+            Ok(new_ref!(Value, value))
         }
     }
 }

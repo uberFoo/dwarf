@@ -16,7 +16,7 @@ pub fn eval_index(
     index: &SarzakStorePtr,
     context: &mut Context,
     vm: &mut VM,
-) -> Result<(RefType<Value>, RefType<ValueType>)> {
+) -> Result<RefType<Value>> {
     let lu_dog = context.lu_dog_heel().clone();
     let sarzak = context.sarzak_heel().clone();
 
@@ -27,16 +27,16 @@ pub fn eval_index(
 
     debug!("index {target:?}[{index:?}]");
 
-    let (index, _ty) = eval_expression(index_expr.clone(), context, vm)?;
+    let index = eval_expression(index_expr.clone(), context, vm)?;
     let index = s_read!(index).clone();
     match &index {
         Value::Integer(index) => {
             let index = *index as usize;
-            let (list, ty) = eval_expression(target.clone(), context, vm)?;
+            let list = eval_expression(target.clone(), context, vm)?;
             let list = s_read!(list);
             if let Value::Vector(vec) = list.clone() {
                 if index < vec.len() {
-                    Ok((vec[index].to_owned(), ty))
+                    Ok(vec[index].to_owned())
                 } else {
                     let value = &s_read!(index_expr).r11_x_value(&s_read!(lu_dog))[0];
                     let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
@@ -57,9 +57,9 @@ pub fn eval_index(
                 if index < str.len() {
                     let ty = Ty::new_s_string(&s_read!(sarzak));
                     let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
-                    Ok((
-                        new_ref!(Value, Value::String(str[index..index + 1].join(""),)),
-                        ty,
+                    Ok(new_ref!(
+                        Value,
+                        Value::String(str[index..index + 1].join(""),)
                     ))
                 } else {
                     let value = &s_read!(index_expr).r11_x_value(&s_read!(lu_dog))[0];
@@ -88,11 +88,11 @@ pub fn eval_index(
         }
         Value::Range(_) => {
             let range: Range<usize> = index.try_into()?;
-            let (list, ty) = eval_expression(target.clone(), context, vm)?;
+            let list = eval_expression(target.clone(), context, vm)?;
             let list = s_read!(list);
             if let Value::Vector(vec) = list.clone() {
                 if range.end < vec.len() {
-                    Ok((new_ref!(Value, Value::Vector(vec[range].to_owned())), ty))
+                    Ok(new_ref!(Value, Value::Vector(vec[range].to_owned())))
                 } else {
                     let value = &s_read!(index_expr).r11_x_value(&s_read!(lu_dog))[0];
                     let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
@@ -113,7 +113,7 @@ pub fn eval_index(
                 if range.end < str.len() {
                     let ty = Ty::new_s_string(&s_read!(sarzak));
                     let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
-                    Ok((new_ref!(Value, Value::String(str[range].join(""),)), ty))
+                    Ok(new_ref!(Value, Value::String(str[range].join(""),)))
                 } else {
                     let value = &s_read!(index_expr).r11_x_value(&s_read!(lu_dog))[0];
                     let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];

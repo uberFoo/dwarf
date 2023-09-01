@@ -435,9 +435,8 @@ fn eval_expression(
     expression: RefType<Expression>,
     context: &mut Context,
     vm: &mut VM,
-) -> Result<(RefType<Value>, RefType<ValueType>)> {
+) -> Result<RefType<Value>> {
     let lu_dog = context.lu_dog_heel().clone();
-    let sarzak = context.sarzak_heel().clone();
 
     // Timing goodness
     context.increment_expression_count(1);
@@ -504,27 +503,22 @@ fn eval_expression(
         //
         ExpressionEnum::Lambda(ref lambda) => {
             let lambda = s_read!(lu_dog).exhume_lambda(lambda).unwrap();
-            let ty = s_read!(lambda).r1_value_type(&s_read!(lu_dog))[0].clone();
-            Ok((new_ref!(Value, Value::Lambda(lambda)), ty))
+            Ok(new_ref!(Value, Value::Lambda(lambda)))
         }
         ExpressionEnum::ListElement(ref element) => list::eval_list_element(element, context, vm),
         ExpressionEnum::ListExpression(ref list) => list::eval_list_expression(list, context, vm),
-        ExpressionEnum::Literal(ref literal) => literal::eval_literal(literal, context),
+        ExpressionEnum::Literal(ref literal) => literal::eval(literal, context),
         ExpressionEnum::Operator(ref operator) => {
             operator::eval_operator(operator, &expression, context, vm)
         }
-        ExpressionEnum::Print(ref print) => print::eval_print(print, context, vm),
+        ExpressionEnum::Print(ref print) => print::eval(print, context, vm),
         ExpressionEnum::RangeExpression(ref range) => range::eval_range(range, context, vm),
-        ExpressionEnum::StructExpression(ref expr) => {
-            struct_expr::eval_struct_expression(expr, context, vm)
-        }
-        ExpressionEnum::TypeCast(ref expr) => typecast::eval_as_expression(expr, context, vm),
-        ExpressionEnum::VariableExpression(ref expr) => {
-            variable::eval_variable_expression(expr, &expression, context)
-        }
+        ExpressionEnum::StructExpression(ref expr) => struct_expr::eval(expr, context, vm),
+        ExpressionEnum::TypeCast(ref expr) => typecast::eval(expr, context, vm),
+        ExpressionEnum::VariableExpression(ref expr) => variable::eval(expr, &expression, context),
         ExpressionEnum::XIf(ref expr) => if_expr::eval_if_expression(expr, context, vm),
         ExpressionEnum::XMatch(ref expr) => match_expr::eval(expr, context, vm),
-        ExpressionEnum::XReturn(ref expr) => ret::eval_return_expression(expr, context, vm),
+        ExpressionEnum::XReturn(ref expr) => ret::eval(expr, context, vm),
         ref alpha => {
             ensure!(
                 false,
@@ -533,10 +527,7 @@ fn eval_expression(
                 }
             );
 
-            Ok((
-                new_ref!(Value, Value::Empty),
-                Value::Empty.get_type(&s_read!(sarzak), &s_read!(lu_dog)),
-            ))
+            Ok(new_ref!(Value, Value::Empty))
         }
     }
 }
@@ -545,7 +536,7 @@ pub fn eval_statement(
     statement: RefType<Statement>,
     context: &mut Context,
     vm: &mut VM,
-) -> Result<(RefType<Value>, RefType<ValueType>)> {
+) -> Result<RefType<Value>> {
     let lu_dog = context.lu_dog_heel().clone();
     let sarzak = context.sarzak_heel().clone();
 
@@ -582,14 +573,10 @@ pub fn eval_statement(
             let stmt = s_read!(lu_dog).exhume_expression_statement(stmt).unwrap();
             let stmt = s_read!(stmt);
             let expr = stmt.r31_expression(&s_read!(lu_dog))[0].clone();
-            let (value, ty) = eval_expression(expr, context, vm)?;
+            let value = eval_expression(expr, context, vm)?;
             no_debug!("StatementEnum::ExpressionStatement: value", s_read!(value));
-            debug!("StatementEnum::ExpressionStatement: ty {ty:?}");
 
-            Ok((
-                new_ref!(Value, Value::Empty),
-                Value::Empty.get_type(&s_read!(sarzak), &s_read!(lu_dog)),
-            ))
+            Ok(new_ref!(Value, Value::Empty))
         }
         StatementEnum::LetStatement(ref stmt) => {
             let stmt = s_read!(lu_dog).exhume_let_statement(stmt).unwrap();
@@ -599,9 +586,8 @@ pub fn eval_statement(
             let expr = stmt.r20_expression(&s_read!(lu_dog))[0].clone();
             debug!("expr {expr:?}");
 
-            let (value, ty) = eval_expression(expr, context, vm)?;
+            let value = eval_expression(expr, context, vm)?;
             debug!("value {value:?}");
-            debug!("ty {ty:?}");
 
             let var = s_read!(stmt.r21_local_variable(&s_read!(lu_dog))[0]).clone();
             let var = s_read!(var.r12_variable(&s_read!(lu_dog))[0]).clone();
@@ -613,10 +599,7 @@ pub fn eval_statement(
             // 🚧 I'm changing this from returning ty. If something get's wonky,
             // maybe start looking here. But TBH, why would we return the type of
             // the storage?
-            Ok((
-                new_ref!(Value, Value::Empty),
-                Value::Empty.get_type(&s_read!(sarzak), &s_read!(lu_dog)),
-            ))
+            Ok(new_ref!(Value, Value::Empty))
         }
         StatementEnum::ResultStatement(ref stmt) => {
             let stmt = s_read!(lu_dog).exhume_result_statement(stmt).unwrap();
@@ -626,16 +609,12 @@ pub fn eval_statement(
             let expr = stmt.r41_expression(&s_read!(lu_dog))[0].clone();
             debug!("StatementEnum::ResultStatement expr {expr:?}");
 
-            let (value, ty) = eval_expression(expr, context, vm)?;
+            let value = eval_expression(expr, context, vm)?;
             debug!("StatementEnum::ResultStatement value {value:?}");
-            debug!("StatementEnum::ResultStatement ty {ty:?}");
 
-            Ok((value, ty))
+            Ok(value)
         }
-        StatementEnum::ItemStatement(_) => Ok((
-            new_ref!(Value, Value::Empty),
-            Value::Empty.get_type(&s_read!(sarzak), &s_read!(lu_dog)),
-        )),
+        StatementEnum::ItemStatement(_) => Ok(new_ref!(Value, Value::Empty)),
     }
 }
 
@@ -685,7 +664,7 @@ pub fn start_main(stopped: bool, mut context: Context) -> Result<(Value, Context
 
             #[allow(clippy::redundant_clone)]
             //              ^^^^^^^^^^^^^^^ : It's not -- the macro is just hiding the fact that it isn't.
-            Ok((s_read!(result.0.clone()).clone(), context))
+            Ok((s_read!(result.clone()).clone(), context))
         } else {
             Err(Error(ChaChaError::MainIsNotAFunction))
         }

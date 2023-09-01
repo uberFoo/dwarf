@@ -23,7 +23,7 @@ pub fn eval_lambda_expression(
     span: &RefType<Span>,
     context: &mut Context,
     vm: &mut VM,
-) -> Result<(RefType<Value>, RefType<ValueType>)> {
+) -> Result<RefType<Value>> {
     let lu_dog = context.lu_dog_heel().clone();
     let sarzak = context.sarzak_heel().clone();
 
@@ -115,8 +115,8 @@ pub fn eval_lambda_expression(
 
             loop {
                 let expr = s_read!(next).r37_expression(&s_read!(lu_dog))[0].clone();
-                let (value, ty) = eval_expression(expr.clone(), context, vm)?;
-                arg_values.push((expr, value, ty));
+                let value = eval_expression(expr.clone(), context, vm)?;
+                arg_values.push((expr, value));
 
                 let next_id = { s_read!(next).next };
                 if let Some(ref id) = next_id {
@@ -132,16 +132,16 @@ pub fn eval_lambda_expression(
         };
 
         let zipped = params.into_iter().zip(arg_values);
-        for ((name, param_ty), (expr, value, arg_ty)) in zipped {
+        for ((name, param_ty), (expr, value)) in zipped {
             debug!("type check name {name:?}");
             debug!("type check param_ty {param_ty:?}");
             debug!("type check value {value:?}");
-            debug!("type check arg_ty {arg_ty:?}");
 
             if arg_check {
                 let x_value = &s_read!(expr).r11_x_value(&s_read!(lu_dog))[0];
                 let span = &s_read!(x_value).r63_span(&s_read!(lu_dog))[0];
 
+                let arg_ty = s_read!(value).get_type(&s_read!(sarzak), &s_read!(lu_dog));
                 typecheck(&param_ty, &arg_ty, span, location!(), context)?;
             }
 
@@ -185,10 +185,10 @@ pub fn eval_lambda_expression(
                 });
 
                 if let Err(ChaChaError::Return { value, ty }) = &result {
-                    return Ok((value.clone(), ty.clone()));
+                    return Ok(value.clone());
                 }
 
-                (value, ty) = result?;
+                value = result?;
 
                 if let Some(ref id) = s_read!(next.clone()).next {
                     next = s_read!(lu_dog).exhume_statement(id).unwrap();
@@ -207,11 +207,8 @@ pub fn eval_lambda_expression(
             * 10.0;
         context.new_timing(eps);
 
-        Ok((value, ty))
+        Ok(value)
     } else {
-        Ok((
-            new_ref!(Value, Value::Empty),
-            Value::Empty.get_type(&s_read!(sarzak), &s_read!(lu_dog)),
-        ))
+        Ok(new_ref!(Value, Value::Empty))
     }
 }
