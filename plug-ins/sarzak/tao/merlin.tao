@@ -15,10 +15,64 @@ impl MerlinStore {
     fn new() -> Self;
     #[proxy(store = "merlin", object = "ObjectStore", func = "load")]
     fn load(path: string) -> Self;
-    #[proxy(store = "merlin", object = "ObjectStore", func = "save")]
+    #[proxy(store = "merlin", object = "ObjectStore", func = "persist")]
     fn save(self) -> Self;
-    #[proxy(store = "merlin", object = "ObjectStore", func = "save_as")]
-    fn save_as(self, path: string) -> Self;
+
+
+    #[proxy(store = "merlin", object = "ObjectStore", func = "inter_anchor")]
+    fn inter_anchor(self, anchor: Anchor);
+    #[proxy(store = "merlin", object = "ObjectStore", func = "exhume_anchor")]
+    fn exhume_anchor(self, anchor: Uuid) -> Anchor;
+
+    #[proxy(store = "merlin", object = "ObjectStore", func = "inter_bisection")]
+    fn inter_bisection(self, bisection: Bisection);
+    #[proxy(store = "merlin", object = "ObjectStore", func = "exhume_bisection")]
+    fn exhume_bisection(self, bisection: Uuid) -> Bisection;
+
+    #[proxy(store = "merlin", object = "ObjectStore", func = "inter_box")]
+    fn inter_box(self, box: Box);
+    #[proxy(store = "merlin", object = "ObjectStore", func = "exhume_box")]
+    fn exhume_box(self, box: Uuid) -> Box;
+
+    #[proxy(store = "merlin", object = "ObjectStore", func = "inter_edge")]
+    fn inter_edge(self, edge: Edge);
+    #[proxy(store = "merlin", object = "ObjectStore", func = "exhume_edge")]
+    fn exhume_edge(self, edge: Uuid) -> Edge;
+
+    #[proxy(store = "merlin", object = "ObjectStore", func = "inter_glyph")]
+    fn inter_glyph(self, glyph: Glyph);
+    #[proxy(store = "merlin", object = "ObjectStore", func = "exhume_glyph")]
+    fn exhume_glyph(self, glyph: Uuid) -> Glyph;
+
+    #[proxy(store = "merlin", object = "ObjectStore", func = "inter_line")]
+    fn inter_line(self, line: Line);
+    #[proxy(store = "merlin", object = "ObjectStore", func = "exhume_line")]
+    fn exhume_line(self, line: Uuid) -> Line;
+
+    #[proxy(store = "merlin", object = "ObjectStore", func = "inter_line_segment")]
+    fn inter_line_segment(self, line_segment: LineSegment);
+    #[proxy(store = "merlin", object = "ObjectStore", func = "exhume_line_segment")]
+    fn exhume_line_segment(self, line_segment: Uuid) -> LineSegment;
+
+    #[proxy(store = "merlin", object = "ObjectStore", func = "inter_line_segment_point")]
+    fn inter_line_segment_point(self, line_segment_point: LineSegmentPoint);
+    #[proxy(store = "merlin", object = "ObjectStore", func = "exhume_line_segment_point")]
+    fn exhume_line_segment_point(self, line_segment_point: Uuid) -> LineSegmentPoint;
+
+    #[proxy(store = "merlin", object = "ObjectStore", func = "inter_point")]
+    fn inter_point(self, point: Point);
+    #[proxy(store = "merlin", object = "ObjectStore", func = "exhume_point")]
+    fn exhume_point(self, point: Uuid) -> Point;
+
+    #[proxy(store = "merlin", object = "ObjectStore", func = "inter_relationship_name")]
+    fn inter_relationship_name(self, relationship_name: RelationshipName);
+    #[proxy(store = "merlin", object = "ObjectStore", func = "exhume_relationship_name")]
+    fn exhume_relationship_name(self, relationship_name: Uuid) -> RelationshipName;
+
+    #[proxy(store = "merlin", object = "ObjectStore", func = "inter_relationship_phrase")]
+    fn inter_relationship_phrase(self, relationship_phrase: RelationshipPhrase);
+    #[proxy(store = "merlin", object = "ObjectStore", func = "exhume_relationship_phrase")]
+    fn exhume_relationship_phrase(self, relationship_phrase: Uuid) -> RelationshipPhrase;
 }
 
 // An Anchor Point for Lines

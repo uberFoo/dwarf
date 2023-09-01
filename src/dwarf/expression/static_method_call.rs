@@ -65,20 +65,6 @@ pub fn inter(
         .collect::<Vec<_>>()
         .join("");
 
-    // enum A<T> {
-    //     Some(T),
-    //     None,
-    // }
-    //
-    // These are both valid!
-    // let a = A::Some::<i32>(42);
-    // let b = A::<i32>::Some(42);
-
-    // 🚧 As this stands it requires the user to use a fully qualified path, even though
-    // it's not necessary, even without type solvers. For instance, `Option::Some(42)` is
-    // clearly of type `Option<int>`, but we require `Option::<int>::Some(42)`.
-    // I'm not sure how to fix this exactly.
-
     debug!("type_name {:?}", type_name);
 
     // dbg!(&lu_dog.iter_woog_struct().collect::<Vec<_>>());
@@ -105,38 +91,8 @@ pub fn inter(
         debug!("name {}", type_name);
         debug!("method {}", method);
 
-        // 🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧
-        // So we are down to this. I suppose that we can check the obj against
-        // what's been entered thus far. Really this should be a second pass
-        // then. For now, I'm going to hack something in...
-        // We could do something with the imports...
-        // 🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧
-        let ty = if type_name == UUID_TYPE && method == FN_NEW {
-            ValueType::new_ty(&Ty::new_s_uuid(context.sarzak), lu_dog)
-        } else {
-            debug!("ParserExpression::StaticMethodCall: looking up type {type_name}");
-
-            lookup_woog_struct_method_return_type(&type_name, method, context.sarzak, lu_dog)
-
-            // Look up the struct in the imported models.
-            // I'll revisit this model business after I get the basics working.
-            // for model in models {
-            //     if let Some(obj) = model.exhume_object_id_by_name(&type_name) {
-            //         let id = if let Some(s) = lu_dog
-            //             .iter_woog_struct()
-            //             .find(|s| s_read!(s).object == Some(obj))
-            //         {
-            //             s_read!(s).id
-            //         } else {
-            //             model.exhume_ty(&obj).unwrap().id()
-            //         };
-
-            //         ty = lu_dog.exhume_value_type(&id).unwrap().clone();
-            //         break;
-            //     }
-            // }
-            // ty
-        };
+        debug!("ParserExpression::StaticMethodCall: looking up type {type_name}");
+        let ty = lookup_woog_struct_method_return_type(&type_name, method, context.sarzak, lu_dog);
 
         let mut last_arg_uuid: Option<usize> = None;
         for (position, param) in params.iter().enumerate() {
@@ -160,7 +116,19 @@ pub fn inter(
 
         Ok(((expr, span), ty))
     } else {
-        // It's an enum
+        // enum A<T> {
+        //     Some(T),
+        //     None,
+        // }
+        //
+        // These are both valid!
+        // let a = A::Some::<i32>(42);
+        // let b = A::<i32>::Some(42);
+
+        // 🚧 As this stands it requires the user to use a fully qualified path, even though
+        // it's not necessary, even without type solvers. For instance, `Option::Some(42)` is
+        // clearly of type `Option<int>`, but we require `Option::<int>::Some(42)`.
+        // I'm not sure how to fix this exactly.
         let type_name_no_generics = type_name.split('<').collect::<Vec<_>>()[0];
         if let Some(woog_enum) = lu_dog.exhume_enumeration_id_by_name(type_name_no_generics) {
             let woog_enum = lu_dog.exhume_enumeration(&woog_enum).unwrap();
@@ -289,7 +257,8 @@ pub fn inter(
             let span = s_read!(span).start as usize..s_read!(span).end as usize;
             Err(vec![DwarfError::ObjectNameNotFound {
                 name: type_name.to_owned(),
-                // span,
+                span,
+                location: location!(),
             }])
         }
     }

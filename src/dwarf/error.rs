@@ -130,7 +130,11 @@ pub enum DwarfError {
     ///
     /// This is used when an object lookup in one of the domains fails.
     #[snafu(display("\n{}: Object lookup failed for {name}", C_ERR.bold().paint("error")))]
-    ObjectNameNotFound { name: String },
+    ObjectNameNotFound {
+        name: String,
+        span: Span,
+        location: Location,
+    },
 
     /// Parse Error
     ///
@@ -301,6 +305,39 @@ impl fmt::Display for DwarfErrorReporter<'_, '_, '_> {
                             .with_message(format!(
                                 "in this invocation: {}",
                                 C_WARN.paint(method.to_string())
+                            ))
+                            .with_color(Color::Red),
+                    );
+
+                let report = if is_uber {
+                    report.with_note(format!(
+                        "{}:{}:{}",
+                        C_OTHER.paint(location.file.to_string()),
+                        C_WARN.paint(format!("{}", location.line)),
+                        C_OK.paint(format!("{}", location.column)),
+                    ))
+                } else {
+                    report
+                };
+
+                report
+                    .finish()
+                    .write((file_name, Source::from(&program)), &mut std_err)
+                    .map_err(|_| fmt::Error)?;
+                write!(f, "{}", String::from_utf8_lossy(&std_err))
+            }
+            DwarfError::ObjectNameNotFound {
+                name,
+                span,
+                location,
+            } => {
+                let report = Report::build(ReportKind::Error, file_name, span.start)
+                    .with_message("Object not found")
+                    .with_label(
+                        Label::new((file_name, span.to_owned()))
+                            .with_message(format!(
+                                "in this location: {}",
+                                C_WARN.paint(name.to_string())
                             ))
                             .with_color(Color::Red),
                     );

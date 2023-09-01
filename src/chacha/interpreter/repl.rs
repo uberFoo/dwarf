@@ -6,7 +6,7 @@ use snafu::{location, Location};
 
 use crate::{
     chacha::{error::ChaChaErrorReporter, vm::VM},
-    dwarf::{inter_statement, parse_line, Context as ExtruderContext},
+    dwarf::{error::DwarfErrorReporter, inter_statement, parse_line, Context as ExtruderContext},
     interpreter::{banner2, debug, eval_statement, function, Context, Error, PrintableValueType},
     lu_dog::DwarfSourceFile,
     new_ref, s_read, s_write, ChaChaError, NewRef, RefType,
@@ -130,7 +130,10 @@ pub fn start_repl(mut context: Context, is_uber: bool) -> Result<(), Error> {
                                 Ok(stmt) => stmt.0,
                                 Err(errors) => {
                                     for e in errors {
-                                        println!("{}", e);
+                                        println!(
+                                            "{}",
+                                            DwarfErrorReporter(&e, is_uber, &line, "REPL")
+                                        );
                                     }
                                     continue;
                                 }

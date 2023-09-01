@@ -96,10 +96,22 @@ impl Plugin for SarzakStore {
             debug!("type: {ty}, func: {func}, args: {args:?}");
             match ty {
                 "ObjectStore" => match func {
-                    "save" => {
-                        dbg!("save");
-                        Ok(FfiValue::Empty)
+                    "persist" => {
+                        if args.len() != 1 {
+                            return Err(Error::Uber("Expected 1 argument".into()));
+                        }
+
+                        if let FfiValue::String(path) = args.pop().unwrap() {
+                            self.store
+                                .borrow()
+                                .persist(Path::new(&path.as_str()))
+                                .unwrap();
+                            Ok(FfiValue::Empty)
+                        } else {
+                            Err(Error::Uber("Invalid path".into()))
+                        }
                     }
+
                     "inter_acknowledged_event" => {
                         if args.len() != 1 {
                             return Err(Error::Uber("Expected 1 argument".into()));
@@ -2347,7 +2359,7 @@ impl Plugin for SarzakStore {
                     func => Err(Error::Uber(format!("Invalid function: {func:?}").into())),
                 },
 
-                "Type" => match func {
+                "Ty" => match func {
                     "new_boolean" => {
                         if args.len() != 1 {
                             return Err(Error::Uber("Expected 1 arguments".into()));

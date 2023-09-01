@@ -36,7 +36,7 @@ use crate::{
     },
     new_ref, s_read, s_write,
     sarzak::{store::ObjectStore as SarzakStore, types::Ty},
-    Dirty, ModelStore, NewRef, RefType, CHACHA, UUID_TYPE,
+    Dirty, ModelStore, NewRef, RefType, CHACHA, FN_NEW, UUID_TYPE,
 };
 
 const LIB_TAO: &str = "lib.tao";
@@ -2454,21 +2454,6 @@ pub(super) fn inter_expression(
                 PrintableValueType(&ret_ty, context, lu_dog).to_string()
             );
 
-            // If we return unknown then things like a[a.len() - 1] work because
-            // a.len() is unknown, and we let that pass knowing the interpreter
-            // will catch a type mismatch. This breaks field access because the
-            // extruder doesn't know that the instance is really an instance.
-            // If we return the type of the instance, then the field access
-            // stuff works, and the first example does not.
-            //
-            // I could maybe fix the field code to be ok with an unknown type.
-            //
-            // I think the right thing to do, and it's affecting other things,
-            // like type resolution, is to look up the method in the model and
-            // return it's type. We just need to rip though the method
-            // signatures first, and then take care of the deets.
-            //
-            let _ty = ValueType::new_unknown(lu_dog);
             Ok(((expr, span), ret_ty))
         }
         //
@@ -3200,6 +3185,8 @@ fn inter_implementation(
         } else {
             return Err(vec![DwarfError::ObjectNameNotFound {
                 name: name.to_owned(),
+                span: span.start as usize..span.end as usize,
+                location: location!(),
             }]);
         };
 
@@ -3915,6 +3902,8 @@ pub(crate) fn lookup_woog_struct_method_return_type(
                 ValueType::new_unknown(lu_dog)
             }
         }
+    } else if type_name == UUID_TYPE && method == FN_NEW {
+        ValueType::new_ty(&Ty::new_s_uuid(sarzak), lu_dog)
     } else {
         e_warn!("ParserExpression type not found");
         ValueType::new_unknown(lu_dog)

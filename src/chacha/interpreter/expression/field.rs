@@ -85,7 +85,7 @@ pub mod field_access {
                     }
                     Err(e) => {
                         // 🚧 This needs it's own error. Lazy me.
-                        Err(ChaChaError::BadJuJu {
+                        Err(ChaChaError::BadnessHappened {
                             message: format!("{e}: `{field_name}`"),
                             location: location!(),
                         })
@@ -100,7 +100,7 @@ pub mod field_access {
                 Ok(new_ref!(Value, value))
             }
             // 🚧 This needs it's own error. Lazy me.
-            bad => Err(ChaChaError::BadJuJu {
+            bad => Err(ChaChaError::BadnessHappened {
                 message: format!("Bad value ({bad}) in field access"),
                 location: location!(),
             }),

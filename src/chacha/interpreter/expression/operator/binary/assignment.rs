@@ -46,7 +46,7 @@ pub fn eval_assignment(
                     field.name.to_owned()
                 }
                 FieldAccessTargetEnum::Function(_) => {
-                    return Err(ChaChaError::BadJuJu {
+                    return Err(ChaChaError::BadnessHappened {
                         message: "Attempt to assign to function".to_owned(),
                         location: location!(),
                     })
@@ -96,7 +96,7 @@ pub fn eval_assignment(
                     );
                     if let Err(e) = result.into() {
                         // 🚧 This needs it's own error. Lazy me.
-                        return Err(ChaChaError::BadJuJu {
+                        return Err(ChaChaError::BadnessHappened {
                             message: format!("{e}"),
                             location: location!(),
                         });
@@ -107,7 +107,7 @@ pub fn eval_assignment(
                 }
                 // 🚧 This needs it's own error.
                 _value => {
-                    return Err(ChaChaError::BadJuJu {
+                    return Err(ChaChaError::BadnessHappened {
                         message: "Attempt to assign to non-struct".to_owned(),
                         location: location!(),
                     })
@@ -136,7 +136,7 @@ pub fn eval_assignment(
                 *value = s_read!(rhs).clone();
                 Ok(rhs)
             } else {
-                Err(ChaChaError::BadJuJu {
+                Err(ChaChaError::BadnessHappened {
                     message: "Attempt to assign to non-variable".to_owned(),
                     location: location!(),
                 })
@@ -165,7 +165,7 @@ pub fn eval_assignment(
             *value = s_read!(rhs).clone();
             Ok(rhs)
         }
-        lhs => Err(ChaChaError::BadJuJu {
+        lhs => Err(ChaChaError::BadnessHappened {
             message: format!("Bad LHS in assignment: {lhs:?}"),
             location: location!(),
         }),

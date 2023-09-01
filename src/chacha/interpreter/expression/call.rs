@@ -11,8 +11,8 @@ use crate::{
         vm::{CallFrame, VM},
     },
     interpreter::{
-        debug, error, eval_expression, eval_function_call, eval_lambda_expression, function,
-        ChaChaError, Context, PrintableValueType,
+        debug, error, eval_expression, eval_function_call, eval_lambda_expression,
+        func_call::eval_external_method, function, ChaChaError, Context, PrintableValueType,
     },
     lu_dog::{CallEnum, Expression, List, ValueType, ValueTypeEnum},
     new_ref, s_read, s_write,
@@ -74,7 +74,7 @@ pub fn eval(
                 }
                 Value::ProxyType(_proxy) => Ok(value.clone()),
                 Value::Struct(ut) => Ok(value.clone()),
-                Value::PlugIn((store, plugin)) => {
+                Value::PlugIn((_store, _plugin)) => {
                     // let ty = s_read!(lu_dog)
                     //     .iter_value_type()
                     //     .find(|ty| {
@@ -168,7 +168,7 @@ pub fn eval(
                         let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
                         let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
 
-                        eval_function_call((*func).clone(), &args, arg_check, span, context, vm)
+                        eval_external_method((*func).clone(), &args, arg_check, span, context, vm)
                     } else {
                         let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
                         let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
@@ -556,12 +556,6 @@ pub fn eval(
                         let arg = arg_values.pop_front().unwrap().0;
                         let ty = s_read!(arg).get_type(&s_read!(sarzak), &s_read!(lu_dog));
                         let pvt_ty = PrintableValueType(&ty, context);
-                        // 🚧 Maybe even cache this somehow? Or maybe have a lookup by type?
-                        let ty = Ty::new_s_string(&s_read!(sarzak));
-                        let ty = s_read!(lu_dog)
-                            .iter_value_type()
-                            .find(|t| s_read!(t).subtype == ValueTypeEnum::Ty(ty.borrow().id()))
-                            .unwrap();
 
                         Ok(new_ref!(Value, pvt_ty.to_string().into()))
                     }

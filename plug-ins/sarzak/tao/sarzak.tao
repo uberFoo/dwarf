@@ -15,10 +15,109 @@ impl SarzakStore {
     fn new() -> Self;
     #[proxy(store = "sarzak", object = "ObjectStore", func = "load")]
     fn load(path: string) -> Self;
-    #[proxy(store = "sarzak", object = "ObjectStore", func = "save")]
+    #[proxy(store = "sarzak", object = "ObjectStore", func = "persist")]
     fn save(self) -> Self;
-    #[proxy(store = "sarzak", object = "ObjectStore", func = "save_as")]
-    fn save_as(self, path: string) -> Self;
+
+
+    #[proxy(store = "sarzak", object = "ObjectStore", func = "inter_acknowledged_event")]
+    fn inter_acknowledged_event(self, acknowledged_event: AcknowledgedEvent);
+    #[proxy(store = "sarzak", object = "ObjectStore", func = "exhume_acknowledged_event")]
+    fn exhume_acknowledged_event(self, acknowledged_event: Uuid) -> AcknowledgedEvent;
+
+    #[proxy(store = "sarzak", object = "ObjectStore", func = "inter_an_associative_referent")]
+    fn inter_an_associative_referent(self, an_associative_referent: AnAssociativeReferent);
+    #[proxy(store = "sarzak", object = "ObjectStore", func = "exhume_an_associative_referent")]
+    fn exhume_an_associative_referent(self, an_associative_referent: Uuid) -> AnAssociativeReferent;
+
+    #[proxy(store = "sarzak", object = "ObjectStore", func = "inter_associative")]
+    fn inter_associative(self, associative: Associative);
+    #[proxy(store = "sarzak", object = "ObjectStore", func = "exhume_associative")]
+    fn exhume_associative(self, associative: Uuid) -> Associative;
+
+    #[proxy(store = "sarzak", object = "ObjectStore", func = "inter_associative_referent")]
+    fn inter_associative_referent(self, associative_referent: AssociativeReferent);
+    #[proxy(store = "sarzak", object = "ObjectStore", func = "exhume_associative_referent")]
+    fn exhume_associative_referent(self, associative_referent: Uuid) -> AssociativeReferent;
+
+    #[proxy(store = "sarzak", object = "ObjectStore", func = "inter_associative_referrer")]
+    fn inter_associative_referrer(self, associative_referrer: AssociativeReferrer);
+    #[proxy(store = "sarzak", object = "ObjectStore", func = "exhume_associative_referrer")]
+    fn exhume_associative_referrer(self, associative_referrer: Uuid) -> AssociativeReferrer;
+
+    #[proxy(store = "sarzak", object = "ObjectStore", func = "inter_attribute")]
+    fn inter_attribute(self, attribute: Attribute);
+    #[proxy(store = "sarzak", object = "ObjectStore", func = "exhume_attribute")]
+    fn exhume_attribute(self, attribute: Uuid) -> Attribute;
+
+    #[proxy(store = "sarzak", object = "ObjectStore", func = "inter_binary")]
+    fn inter_binary(self, binary: Binary);
+    #[proxy(store = "sarzak", object = "ObjectStore", func = "exhume_binary")]
+    fn exhume_binary(self, binary: Uuid) -> Binary;
+
+    #[proxy(store = "sarzak", object = "ObjectStore", func = "inter_cardinality")]
+    fn inter_cardinality(self, cardinality: Cardinality);
+    #[proxy(store = "sarzak", object = "ObjectStore", func = "exhume_cardinality")]
+    fn exhume_cardinality(self, cardinality: Uuid) -> Cardinality;
+
+    #[proxy(store = "sarzak", object = "ObjectStore", func = "inter_conditionality")]
+    fn inter_conditionality(self, conditionality: Conditionality);
+    #[proxy(store = "sarzak", object = "ObjectStore", func = "exhume_conditionality")]
+    fn exhume_conditionality(self, conditionality: Uuid) -> Conditionality;
+
+    #[proxy(store = "sarzak", object = "ObjectStore", func = "inter_event")]
+    fn inter_event(self, event: Event);
+    #[proxy(store = "sarzak", object = "ObjectStore", func = "exhume_event")]
+    fn exhume_event(self, event: Uuid) -> Event;
+
+    #[proxy(store = "sarzak", object = "ObjectStore", func = "inter_external")]
+    fn inter_external(self, external: External);
+    #[proxy(store = "sarzak", object = "ObjectStore", func = "exhume_external")]
+    fn exhume_external(self, external: Uuid) -> External;
+
+    #[proxy(store = "sarzak", object = "ObjectStore", func = "inter_isa")]
+    fn inter_isa(self, isa: Isa);
+    #[proxy(store = "sarzak", object = "ObjectStore", func = "exhume_isa")]
+    fn exhume_isa(self, isa: Uuid) -> Isa;
+
+    #[proxy(store = "sarzak", object = "ObjectStore", func = "inter_object")]
+    fn inter_object(self, object: Object);
+    #[proxy(store = "sarzak", object = "ObjectStore", func = "exhume_object")]
+    fn exhume_object(self, object: Uuid) -> Object;
+
+    #[proxy(store = "sarzak", object = "ObjectStore", func = "inter_referent")]
+    fn inter_referent(self, referent: Referent);
+    #[proxy(store = "sarzak", object = "ObjectStore", func = "exhume_referent")]
+    fn exhume_referent(self, referent: Uuid) -> Referent;
+
+    #[proxy(store = "sarzak", object = "ObjectStore", func = "inter_referrer")]
+    fn inter_referrer(self, referrer: Referrer);
+    #[proxy(store = "sarzak", object = "ObjectStore", func = "exhume_referrer")]
+    fn exhume_referrer(self, referrer: Uuid) -> Referrer;
+
+    #[proxy(store = "sarzak", object = "ObjectStore", func = "inter_relationship")]
+    fn inter_relationship(self, relationship: Relationship);
+    #[proxy(store = "sarzak", object = "ObjectStore", func = "exhume_relationship")]
+    fn exhume_relationship(self, relationship: Uuid) -> Relationship;
+
+    #[proxy(store = "sarzak", object = "ObjectStore", func = "inter_state")]
+    fn inter_state(self, state: State);
+    #[proxy(store = "sarzak", object = "ObjectStore", func = "exhume_state")]
+    fn exhume_state(self, state: Uuid) -> State;
+
+    #[proxy(store = "sarzak", object = "ObjectStore", func = "inter_subtype")]
+    fn inter_subtype(self, subtype: Subtype);
+    #[proxy(store = "sarzak", object = "ObjectStore", func = "exhume_subtype")]
+    fn exhume_subtype(self, subtype: Uuid) -> Subtype;
+
+    #[proxy(store = "sarzak", object = "ObjectStore", func = "inter_supertype")]
+    fn inter_supertype(self, supertype: Supertype);
+    #[proxy(store = "sarzak", object = "ObjectStore", func = "exhume_supertype")]
+    fn exhume_supertype(self, supertype: Uuid) -> Supertype;
+
+    #[proxy(store = "sarzak", object = "ObjectStore", func = "inter_type")]
+    fn inter_type(self, type: Type);
+    #[proxy(store = "sarzak", object = "ObjectStore", func = "exhume_type")]
+    fn exhume_type(self, type: Uuid) -> Type;
 }
 
 // An Event that Does Something

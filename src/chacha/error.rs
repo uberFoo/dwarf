@@ -28,7 +28,7 @@ pub enum ChaChaError {
         code: String,
     },
     #[snafu(display("\n{}: internal error: {message}\n  --> {}:{}:{}", ERR_CLR.bold().paint("error"), location.file, location.line, location.column))]
-    BadJuJu {
+    BadnessHappened {
         message: String,
         location: Location,
     },

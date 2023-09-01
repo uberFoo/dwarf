@@ -38,7 +38,7 @@ pub fn eval(
         }
         vec
     } else {
-        return Err(ChaChaError::BadJuJu {
+        return Err(ChaChaError::BadnessHappened {
             message: "For loop expression is not a list".to_owned(),
             location: location!(),
         });
