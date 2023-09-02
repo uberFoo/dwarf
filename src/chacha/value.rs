@@ -1,7 +1,7 @@
 use std::{fmt, ops::Range};
 
 use abi_stable::{
-    std_types::{RString, RVec},
+    std_types::{RBox, ROption, RString, RVec},
     StableAbi,
 };
 use ansi_term::Colour;
@@ -65,6 +65,7 @@ pub enum FfiValue {
     Error(RString),
     Float(DwarfFloat),
     Integer(DwarfInteger),
+    Option(ROption<RBox<Self>>),
     PlugIn(PluginType),
     ProxyType(FfiProxy),
     Range(FfiRange),
@@ -174,7 +175,10 @@ impl From<Value> for FfiValue {
             Value::Error(e) => Self::Error(e.into()),
             Value::Float(num) => Self::Float(num),
             Value::Integer(num) => Self::Integer(num),
-            // Value::PlugIn(plugin) => Self::PlugIn(*plugin),
+            Value::Option(opt) => Self::Option(match opt {
+                Some(value) => ROption::RSome(RBox::new(s_read!(value).clone().into())),
+                None => ROption::RNone,
+            }),
             Value::ProxyType((module, uuid, plugin)) => Self::ProxyType(FfiProxy {
                 module: module.into(),
                 uuid: uuid.into(),
@@ -202,7 +206,10 @@ impl From<FfiValue> for Value {
             FfiValue::Error(e) => Self::Error(e.into()),
             FfiValue::Float(num) => Self::Float(num),
             FfiValue::Integer(num) => Self::Integer(num),
-            // FfiValue::PlugIn(store) => Self::PlugIn(store),
+            FfiValue::Option(opt) => Self::Option(match opt {
+                ROption::RSome(value) => Some(new_ref!(Value, (*value).clone().into())),
+                ROption::RNone => None,
+            }),
             FfiValue::ProxyType(plugin) => Self::ProxyType((
                 plugin.module.into(),
                 plugin.uuid.into(),
@@ -445,6 +452,39 @@ where
         Self::Vector(value)
     }
 }
+
+impl<T> From<Option<T>> for Value
+where
+    T: Into<Value>,
+{
+    fn from(value: Option<T>) -> Self {
+        match value {
+            Some(value) => Self::Option(Some(new_ref!(Value, value.into()))),
+            None => Self::Option(None),
+        }
+    }
+}
+
+impl From<Value> for Option<Uuid> {
+    fn from(option: Value) -> Self {
+        match option {
+            Value::Uuid(uuid) => Some(uuid),
+            _ => None,
+        }
+    }
+}
+
+// impl<T> From<Value> for Option<T> {
+//     fn from(option: Value) -> Self {
+//         match option {
+//             Value::Option(opt) => match opt {
+//                 Some(value) => Some(value.into()),
+//                 None => None,
+//             },
+//             _ => None,
+//         }
+//     }
+// }
 
 impl TryFrom<Value> for Range<DwarfInteger> {
     type Error = ChaChaError;

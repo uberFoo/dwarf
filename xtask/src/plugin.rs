@@ -30,7 +30,6 @@ impl flags::Plugins {
                 sh.change_dir(entry.path());
                 println!("Building {}", entry.path().display());
                 cmd!(sh, "sarzak gen").run()?;
-                cmd!(sh, "sarzak gen grace dwarf").run()?;
                 cmd!(sh, "cargo build").run()?;
 
                 let name = entry.file_name();
@@ -58,6 +57,7 @@ impl flags::Plugins {
                 current_dir.push(MODEL_DIR);
                 sh.change_dir(&current_dir);
 
+                env::set_current_dir(&current_dir)?;
                 for entry in glob("*.json")? {
                     let path = entry?;
                     let metadata = fs::metadata(&path)?;

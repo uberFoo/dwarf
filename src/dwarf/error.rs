@@ -26,7 +26,7 @@ pub enum DwarfError {
     /// File Error
     ///
     /// Something went wrong with the file system.
-    #[snafu(display("\n{}: {description}: {}:{}:{}\n  --> {source} ({})", C_ERR.bold().paint("error"), location.file, location.line, location.column, path.display()))]
+    #[snafu(display("\n{}: {description}\n{}:{}:{}\n  --> {source} ({})", C_ERR.bold().paint("error"), location.file, location.line, location.column, path.display()))]
     File {
         location: Location,
         description: String,

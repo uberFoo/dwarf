@@ -1,36 +1,54 @@
-[modules."sarzak"]
-model = "models/sarzak.json"
-
-[modules."sarzak".compiler]
-always_process = true
-compiler = "grace"
-derive = ["Clone", "Debug", "Deserialize", "PartialEq", "Serialize"]
-use_paths = ["serde::{Deserialize, Serialize}"]
-
-[modules."sarzak".compiler.target]
-optimization_level = "None"
-is_meta_model = true
-is_sarzak = true
-persist = true
-persist_timestamps = true
-uber_store = "Single"
-target = "domain"
-
-[modules."merlin"]
+[modules.merlin]
 model = "models/merlin.json"
 
-[modules."merlin".compiler]
+[[modules.merlin.compiler]]
 always_process = true
 compiler = "grace"
 derive = ["Clone", "Debug", "Deserialize", "PartialEq", "Serialize"]
-imported_domains = ["sarzak"]
+imported_domains = ["crate/sarzak"]
 use_paths = ["serde::{Deserialize, Serialize}"]
 
-[modules."merlin".compiler.target]
-optimization_level = "None"
+[modules.merlin.compiler.target]
 is_meta_model = true
 is_sarzak = false
+optimization_level = "None"
 persist = true
 persist_timestamps = false
-uber_store = "Single"
 target = "domain"
+uber_store = "Single"
+
+[[modules.merlin.compiler]]
+always_process = true
+compiler = "grace"
+
+[modules.merlin.compiler.target]
+is_meta_model = true
+is_sarzak = false
+target = "dwarf"
+
+[modules.sarzak]
+model = "models/sarzak.json"
+
+[[modules.sarzak.compiler]]
+always_process = true
+compiler = "grace"
+
+[modules.sarzak.compiler.target]
+is_meta_model = true
+is_sarzak = true
+target = "dwarf"
+
+[[modules.sarzak.compiler]]
+always_process = true
+compiler = "grace"
+derive = ["Clone", "Debug", "Deserialize", "PartialEq", "Serialize"]
+use_paths = ["serde::{Deserialize, Serialize}"]
+
+[modules.sarzak.compiler.target]
+is_meta_model = true
+is_sarzak = true
+optimization_level = "None"
+persist = true
+persist_timestamps = true
+target = "domain"
+uber_store = "Single"

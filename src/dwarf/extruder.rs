@@ -3093,7 +3093,7 @@ fn inter_import(
         }
         Err(e) => {
             errors.push(DwarfError::File {
-                description: "Attempting to open import".to_owned(),
+                description: format!("Attempting to open import: {module}"),
                 path: path.to_owned(),
                 source: e,
                 location: location!(),
@@ -3936,23 +3936,28 @@ impl DeSanitize for &str {
 
 pub(crate) fn de_sanitize(string: &str) -> Option<&str> {
     match string {
+        "False Literal" => Some("False"),
+        "FalseLiteral" => Some("False"),
+        "SString" => Some("String"),
+        "SUuid" => Some("Uuid"),
+        "True Literal" => Some("True"),
+        "TrueLiteral" => Some("True"),
         "Ty" => Some("Type"),
         "WoogOption" => Some("Option"),
         "WoogStruct" => Some("Struct"),
-        "False Literal" => Some("False"),
-        "FalseLiteral" => Some("False"),
-        "True Literal" => Some("True"),
-        "TrueLiteral" => Some("True"),
         "XSuper" => Some("Super"),
         "XSuperProxy" => Some("SuperProxy"),
         "XBox" => Some("Box"),
         "XBoxProxy" => Some("BoxProxy"),
+        "XIf" => Some("If"),
+        "XMacro" => Some("Macro"),
+        "XMatch" => Some("Match"),
+        "XPrint" => Some("Print"),
+        "XReturn" => Some("Return"),
+        "XValue" => Some("Value"),
         "ZObjectStore" => Some("ObjectStore"),
         "ZSome" => Some("Some"),
         "ZNone" => Some("None"),
-        "XIf" => Some("If"),
-        "XReturn" => Some("Return"),
-        "XValue" => Some("Value"),
         _ => None,
     }
 }

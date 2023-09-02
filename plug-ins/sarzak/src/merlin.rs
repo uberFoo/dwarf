@@ -30,7 +30,6 @@ pub use types::*;
 /// Exports the root module of this library.
 ///
 /// This code isn't run until the layout of the type it returns is checked.
-// #[export_root_module]
 pub fn instantiate_root_module() -> PluginModRef {
     PluginModule { name, id, new }.leak_into_prefix()
 }

@@ -29,10 +29,10 @@ impl MerlinStore {
     #[proxy(store = "merlin", object = "ObjectStore", func = "exhume_bisection")]
     fn exhume_bisection(self, bisection: Uuid) -> Bisection;
 
-    #[proxy(store = "merlin", object = "ObjectStore", func = "inter_box")]
-    fn inter_box(self, box: Box);
-    #[proxy(store = "merlin", object = "ObjectStore", func = "exhume_box")]
-    fn exhume_box(self, box: Uuid) -> Box;
+    #[proxy(store = "merlin", object = "ObjectStore", func = "inter_x_box")]
+    fn inter_x_box(self, x_box: XBox);
+    #[proxy(store = "merlin", object = "ObjectStore", func = "exhume_x_box")]
+    fn exhume_x_box(self, x_box: Uuid) -> XBox;
 
     #[proxy(store = "merlin", object = "ObjectStore", func = "inter_edge")]
     fn inter_edge(self, edge: Edge);
@@ -95,14 +95,14 @@ struct Anchor {
     y_offset: int,
     edge: Edge,
     glyph: Glyph,
-    x_box: Box,
+    x_box: XBox,
     line: Line,
     // Non-formalizing relationships
 }
 
 impl Anchor {
     #[proxy(store = "merlin", object = "Anchor", func = "new")]
-    fn new(offset: float, x_offset: int, y_offset: int, edge: Edge, glyph: Glyph, x_box: Box, line: Line) -> Self;
+    fn new(offset: float, x_offset: int, y_offset: int, edge: Edge, glyph: Glyph, x_box: XBox, line: Line) -> Self;
 
     #[proxy(store = "merlin", object = "Anchor", func = "instances")]
     fn instances() -> [Self];
@@ -128,7 +128,7 @@ impl Anchor {
         print("    y_offset: int,\n");
         print("    edge: Edge,\n");
         print("    glyph: Glyph,\n");
-        print("    x_box: Box,\n");
+        print("    x_box: XBox,\n");
         print("    line: Line,\n");
         print("}\n");
     }
@@ -214,9 +214,9 @@ impl Bottom {
 // It's a rectangle with parameters.
 // 
 // This tells the interpreter that this struct is a proxy for an object called
-// "Box" in the store named "merlin"; declared above.
-#[proxy(store = "merlin", object = "Box")]
-struct Box {
+// "XBox" in the store named "merlin"; declared above.
+#[proxy(store = "merlin", object = "XBox")]
+struct XBox {
     height: int,
     id: Uuid,
     width: int,
@@ -226,11 +226,11 @@ struct Box {
     // Non-formalizing relationships
 }
 
-impl Box {
-    #[proxy(store = "merlin", object = "Box", func = "new")]
+impl XBox {
+    #[proxy(store = "merlin", object = "XBox", func = "new")]
     fn new(height: int, width: int, x: int, y: int, object: Object) -> Self;
 
-    #[proxy(store = "merlin", object = "Box", func = "instances")]
+    #[proxy(store = "merlin", object = "XBox", func = "instances")]
     fn instances() -> [Self];
 
     fn help() -> () {
@@ -244,7 +244,7 @@ impl Box {
     }
 
     fn info() -> () {
-        print("struct Box {\n");
+        print("struct XBox {\n");
         print("    height: int,\n");
         print("    id: Uuid,\n");
         print("    width: int,\n");
@@ -311,8 +311,8 @@ impl Glyph {
     fn new_sub(line: Line, sub: Sub
 ) -> Self;
 
-    #[proxy(store = "merlin", object = "Glyph", func = "new_super")]
-    fn new_super(line: Line, super: Super
+    #[proxy(store = "merlin", object = "Glyph", func = "new_x_super")]
+    fn new_x_super(line: Line, x_super: XSuper
 ) -> Self;
 
     #[proxy(store = "merlin", object = "Glyph", func = "instances")]
@@ -709,25 +709,25 @@ impl Sub {
 }
 
 // This tells the interpreter that this struct is a proxy for an object called
-// "Super" in the store named "merlin"; declared above.
-#[proxy(store = "merlin", object = "Super")]
-struct Super {
+// "XSuper" in the store named "merlin"; declared above.
+#[proxy(store = "merlin", object = "XSuper")]
+struct XSuper {
     id: Uuid,
     // Non-formalizing relationships
 }
 
-impl Super {
-    #[proxy(store = "merlin", object = "Super", func = "new")]
+impl XSuper {
+    #[proxy(store = "merlin", object = "XSuper", func = "new")]
     fn new() -> Self;
 
-    #[proxy(store = "merlin", object = "Super", func = "instances")]
+    #[proxy(store = "merlin", object = "XSuper", func = "instances")]
     fn instances() -> [Self];
 
     fn help() -> () {
     }
 
     fn info() -> () {
-        print("struct Super {\n");
+        print("struct XSuper {\n");
         print("    id: Uuid,\n");
         print("}\n");
     }
