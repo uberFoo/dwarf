@@ -411,7 +411,13 @@ pub enum Expression {
     /// and the second is the right-hand side, representing the value to be stored.
     Assignment(Box<Spanned<Self>>, Box<Spanned<Self>>),
     Bang(Box<Spanned<Self>>),
-    Block(Vec<Spanned<Statement>>),
+    Block(
+        Vec<Spanned<Statement>>,
+        /// A list of variable names to insert into the top of the block
+        Vec<String>,
+        /// The types of the above variables
+        Vec<RefType<ValueType>>,
+    ),
     BooleanLiteral(bool),
     Debug,
     Division(Box<Spanned<Self>>, Box<Spanned<Self>>),

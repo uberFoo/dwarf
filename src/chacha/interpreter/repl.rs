@@ -117,7 +117,6 @@ pub fn start_repl(mut context: Context, is_uber: bool) -> Result<(), Error> {
                                 &mut ExtruderContext {
                                     location: location!(),
                                     struct_fields: Vec::new(),
-                                    check_types: true,
                                     source: DwarfSourceFile::new(line.clone(), &mut lu_dog),
                                     models: &mut s_write!(models),
                                     sarzak: &s_read!(sarzak),

@@ -26,7 +26,7 @@ impl<'a> fmt::Display for PrintableValueType<'a> {
         let model = context.models();
 
         match &value.subtype {
-            ValueTypeEnum::Char(c) => write!(f, "{}", TY_CLR.italic().paint(format!("'{}'", c))),
+            ValueTypeEnum::Char(_) => write!(f, "{}", TY_CLR.italic().paint("char")),
             ValueTypeEnum::Enumeration(ref enumeration) => {
                 let enumeration = s_read!(lu_dog).exhume_enumeration(enumeration).unwrap();
                 debug!("enumeration: {enumeration:?}");
@@ -99,7 +99,7 @@ impl<'a> fmt::Display for PrintableValueType<'a> {
                             }
                         }
                         Ty::SString(_) => write!(f, "{}", TY_CLR.italic().paint("string")),
-                        Ty::SUuid(_) => write!(f, "{}", TY_CLR.italic().paint("Uuid")),
+                        Ty::SUuid(_) => write!(f, "{}", TY_CLR.italic().paint("uuid")),
                         gamma => {
                             error!("deal with sarzak type {gamma:?}");
                             write!(f, "todo")

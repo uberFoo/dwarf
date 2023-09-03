@@ -31,16 +31,16 @@ impl<'d, 'a, 'b> fmt::Display for PrintableValueType<'d, 'a, 'b> {
         let lu_dog = self.2;
 
         match value.subtype {
-            ValueTypeEnum::Char(c) => write!(f, "'{}'", c),
+            ValueTypeEnum::Char(_) => write!(f, "{}", TY_CLR.italic().paint("char")),
             ValueTypeEnum::Enumeration(ref enumeration) => {
                 debug!("enumeration {:?}", enumeration);
                 let enumeration = lu_dog.exhume_enumeration(enumeration).unwrap();
                 let enumeration = s_read!(enumeration);
                 write!(f, "{}", enumeration.name)
             }
-            ValueTypeEnum::Empty(_) => write!(f, "()"),
-            ValueTypeEnum::Error(_) => write!(f, "<error>"),
-            ValueTypeEnum::Function(_) => write!(f, "<function>"),
+            ValueTypeEnum::Empty(_) => write!(f, "{}", TY_CLR.italic().paint("()")),
+            ValueTypeEnum::Error(_) => write!(f, "{}", TY_CLR.italic().paint("<error>")),
+            ValueTypeEnum::Function(_) => write!(f, "{}", TY_CLR.italic().paint("<function>")),
             ValueTypeEnum::Generic(ref g) => {
                 let g = lu_dog.exhume_generic(g).unwrap();
                 let g = s_read!(g);
@@ -74,9 +74,9 @@ impl<'d, 'a, 'b> fmt::Display for PrintableValueType<'d, 'a, 'b> {
                 // interesting when there are multiples of those in memory at once...
                 if let Some(ty) = context.sarzak.exhume_ty(ty) {
                     match &*ty.borrow() {
-                        Ty::Boolean(_) => write!(f, "bool"),
-                        Ty::Float(_) => write!(f, "float"),
-                        Ty::Integer(_) => write!(f, "int"),
+                        Ty::Boolean(_) => write!(f, "{}", TY_CLR.italic().paint("bool")),
+                        Ty::Float(_) => write!(f, "{}", TY_CLR.italic().paint("float")),
+                        Ty::Integer(_) => write!(f, "{}", TY_CLR.italic().paint("int")),
                         Ty::Object(ref object) => {
                             error!("um, check this out?");
                             // This should probably just be an unwrap().
@@ -86,8 +86,8 @@ impl<'d, 'a, 'b> fmt::Display for PrintableValueType<'d, 'a, 'b> {
                                 write!(f, "<unknown object>")
                             }
                         }
-                        Ty::SString(_) => write!(f, "string"),
-                        Ty::SUuid(_) => write!(f, "Uuid"),
+                        Ty::SString(_) => write!(f, "{}", TY_CLR.italic().paint("string")),
+                        Ty::SUuid(_) => write!(f, "{}", TY_CLR.italic().paint("uuid")),
                         #[allow(non_snake_case)]
                         Γ => {
                             error!("deal with sarzak type {:?}", Γ);

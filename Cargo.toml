@@ -48,7 +48,6 @@ core_extensions = { version = "1.5.3", default_features = false, features = [
 crossbeam = { version = "0.8.2", features = ["crossbeam-channel"] }
 crossterm = "0.26.1"
 dap = "0.2.0-alpha1"
-derivative = "2.2.0"
 env_logger = "0.10.0"
 heck = "0.4.1"
 hyper = { version = "0.14.26", optional = true }

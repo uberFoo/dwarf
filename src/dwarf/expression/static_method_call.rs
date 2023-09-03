@@ -206,15 +206,13 @@ pub fn inter(
 
                             (new_enum, field)
                         } else {
-                            if context.check_types {
-                                typecheck(
-                                    (&ty, &span),
-                                    (&expr_ty, &param.1),
-                                    location!(),
-                                    context,
-                                    lu_dog,
-                                )?;
-                            }
+                            typecheck(
+                                (&ty, &span),
+                                (&expr_ty, &param.1),
+                                location!(),
+                                context,
+                                lu_dog,
+                            )?;
 
                             s_write!(tuple_field).expression = Some(s_read!(expr.0).id);
                             (woog_enum, field.clone())

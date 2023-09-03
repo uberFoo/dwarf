@@ -245,7 +245,7 @@ pub fn eval(
                     }
                     "format" => {
                         debug!("evaluating String::format");
-                        let mut arg_map = HashMap::default();
+                        // let mut arg_map = HashMap::default();
                         let arg_values = if !args.is_empty() {
                             // The VecDeque is so that I can pop off the args, and then push them
                             // back onto a queue in the same order.
@@ -287,19 +287,19 @@ pub fn eval(
                                 let read = s_read!(span);
                                 let span = read.start as usize..read.end as usize;
 
-                                let key = source[span].to_owned();
+                                // let key = source[span].to_owned();
 
                                 let value = eval_expression(expr, context, vm)?;
                                 debug!("value {value:?}");
 
                                 arg_values.push_back(s_read!(value).to_string());
 
-                                debug!(
-                                    "insert into arg_map `{}`: `{}`",
-                                    key,
-                                    s_read!(value).to_string()
-                                );
-                                arg_map.insert(key, s_read!(value).to_string());
+                                // debug!(
+                                // "insert into arg_map `{}`: `{}`",
+                                // key,
+                                // s_read!(value).to_string()
+                                // );
+                                // arg_map.insert(key, s_read!(value).to_string());
 
                                 let next_id = s_read!(next).next;
                                 if let Some(ref id) = next_id {
@@ -653,10 +653,6 @@ pub fn eval(
 
                         if let Value::Boolean(result) = value {
                             if result {
-                                // 🚧 lookup
-                                let ty = Ty::new_boolean(&s_read!(sarzak));
-                                let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
-
                                 Ok(new_ref!(Value, value))
                             } else {
                                 let source =

@@ -57,15 +57,13 @@ pub fn inter(
         }]);
     }
 
-    if context.check_types {
-        typecheck(
-            (&lhs_ty, &lhs_p.1),
-            (&rhs_ty, &rhs_p.1),
-            location!(),
-            context,
-            lu_dog,
-        )?;
-    }
+    typecheck(
+        (&lhs_ty, &lhs_p.1),
+        (&rhs_ty, &rhs_p.1),
+        location!(),
+        context,
+        lu_dog,
+    )?;
 
     let expr = BooleanOperator::new_and(lu_dog);
     let expr = Binary::new_boolean_operator(&expr, lu_dog);

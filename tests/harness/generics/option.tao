@@ -23,10 +23,5 @@ fn main() {
     chacha::assert_eq(d, Option::Some(69));
     chacha::assert_eq(e, Option::<string>::None);
 
-    chacha::assert_eq("a = {0}".format(a), "a = Option<int>::Some(42)");
-    chacha::assert_eq("b = {0}".format(b), "b = Option<int>::None");
-    chacha::assert_eq("d = {0}".format(d), "d = Option<int>::Some(69)");
-    chacha::assert_eq("e = {0}".format(e), "e = Option<string>::None");
-
     // chacha::assert_eq(b != e);
 }

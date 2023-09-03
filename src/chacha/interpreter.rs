@@ -22,7 +22,7 @@ use crate::{
         Block, Expression, LocalVariable, ObjectStore as LuDogStore, Span, Statement,
         StatementEnum, ValueType, ValueTypeEnum, Variable, XValue,
     },
-    new_ref, s_read, s_write,
+    new_ref, s_read,
     sarzak::store::ObjectStore as SarzakStore,
     ChaChaError, Dirty, DwarfInteger, ModelStore, NewRef, RefType, Value,
 };

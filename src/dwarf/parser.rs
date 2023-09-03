@@ -3454,7 +3454,7 @@ impl DwarfParser {
 
         Ok(Some((
             (
-                DwarfExpression::Block(statements),
+                DwarfExpression::Block(statements, vec![], vec![]),
                 start..self.previous().unwrap().1.end,
             ),
             PATH,

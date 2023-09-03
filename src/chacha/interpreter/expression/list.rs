@@ -3,7 +3,7 @@ use ansi_term::Colour;
 use crate::{
     chacha::{error::Result, vm::VM},
     interpreter::{debug, eval_expression, function, Context},
-    lu_dog::{List, ValueType},
+    lu_dog::List,
     new_ref, s_read, s_write, NewRef, RefType, SarzakStorePtr, Value,
 };
 

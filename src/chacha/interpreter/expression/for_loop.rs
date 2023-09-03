@@ -14,7 +14,6 @@ pub fn eval(
     vm: &mut VM,
 ) -> Result<RefType<Value>> {
     let lu_dog = context.lu_dog_heel().clone();
-    let sarzak = context.sarzak_heel().clone();
 
     let for_loop = s_read!(lu_dog).exhume_for_loop(for_loop).unwrap();
     let for_loop = s_read!(for_loop);
@@ -49,6 +48,8 @@ pub fn eval(
     // 🚧 Why am I creating a block here? Why don't I just store it as an expression?
     // Check out what I'm doing in match_exprs.rs with the tuple field variable
     // expressions.
+    // Well, it's a block expression, so we are storing a block, just not as an
+    // expression.
     let block = Expression::new_block(&block, &mut s_write!(lu_dog));
     context.memory().push_frame();
     for item in list {

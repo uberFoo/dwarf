@@ -51,15 +51,13 @@ pub fn inter(
     // 🚧
     // 🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧
 
-    if context.check_types {
-        typecheck(
-            (&lhs_ty, &lhs_p.1),
-            (&rhs_ty, &rhs_p.1),
-            location!(),
-            context,
-            lu_dog,
-        )?;
-    }
+    typecheck(
+        (&lhs_ty, &lhs_p.1),
+        (&rhs_ty, &rhs_p.1),
+        location!(),
+        context,
+        lu_dog,
+    )?;
 
     let expr = Binary::new_addition(lu_dog);
     let expr = Operator::new_binary(&lhs.0, Some(&rhs.0), &expr, lu_dog);
