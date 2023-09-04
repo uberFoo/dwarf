@@ -105,7 +105,7 @@ pub(crate) fn eval_external_method(
     let plug_in = eval_expression(expr.clone(), context, vm)?;
     let plug_in = s_read!(plug_in).clone();
 
-    let plug_in = if let Value::PlugIn((_, plug_in)) = plug_in {
+    let plug_in = if let Value::PlugIn(_, plug_in) = plug_in {
         plug_in
     } else {
         panic!("not a proxy");
@@ -182,11 +182,12 @@ pub(crate) fn eval_external_method(
                     FfiValue::ProxyType(proxy_obj) => {
                         let value = new_ref!(
                             Value,
-                            Value::ProxyType((
-                                model_name,
-                                obj_id,
-                                new_ref!(PluginType, proxy_obj.plugin)
-                            ))
+                            Value::ProxyType {
+                                module: model_name,
+                                obj_ty: obj_id,
+                                id: proxy_obj.id.into(),
+                                plugin: new_ref!(PluginType, proxy_obj.plugin)
+                            }
                         );
 
                         Ok(value)
@@ -335,11 +336,12 @@ fn eval_external_static_method(
                     FfiValue::ProxyType(proxy_obj) => {
                         let value = new_ref!(
                             Value,
-                            Value::ProxyType((
-                                model_name,
-                                obj_id,
-                                new_ref!(PluginType, proxy_obj.plugin)
-                            ))
+                            Value::ProxyType {
+                                module: model_name,
+                                obj_ty: obj_id,
+                                id: proxy_obj.id.into(),
+                                plugin: new_ref!(PluginType, proxy_obj.plugin)
+                            }
                         );
 
                         Ok(value)
@@ -620,7 +622,7 @@ fn objectstore_static_methods(
             let plugin = new_ref!(PluginType, ctor(vec![path.into()].into()).unwrap());
             model.1.replace(plugin.clone());
 
-            let value = new_ref!(Value, Value::PlugIn((store, plugin)));
+            let value = new_ref!(Value, Value::PlugIn(store, plugin));
 
             Ok(value)
         }
@@ -650,7 +652,7 @@ fn objectstore_static_methods(
             let plugin = new_ref!(PluginType, ctor(vec![].into()).unwrap());
             model.1.replace(plugin.clone());
 
-            let value = new_ref!(Value, Value::PlugIn((store, plugin)));
+            let value = new_ref!(Value, Value::PlugIn(store, plugin));
 
             Ok(value)
         }

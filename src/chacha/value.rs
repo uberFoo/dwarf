@@ -51,6 +51,7 @@ impl From<FfiUuid> for Uuid {
 pub struct FfiProxy {
     pub module: RString,
     pub uuid: FfiUuid,
+    pub id: FfiUuid,
     pub plugin: PluginType,
 }
 
@@ -155,8 +156,13 @@ pub enum Value {
     Integer(DwarfInteger),
     Lambda(RefType<Lambda>),
     Option(Option<RefType<Self>>),
-    PlugIn((RefType<ZObjectStore>, RefType<PluginType>)),
-    ProxyType((String, Uuid, RefType<PluginType>)),
+    PlugIn(RefType<ZObjectStore>, RefType<PluginType>),
+    ProxyType {
+        module: String,
+        obj_ty: Uuid,
+        id: Uuid,
+        plugin: RefType<PluginType>,
+    },
     Range(Range<DwarfInteger>),
     String(String),
     Struct(RefType<UserStruct>),
@@ -179,9 +185,15 @@ impl From<Value> for FfiValue {
                 Some(value) => ROption::RSome(RBox::new(s_read!(value).clone().into())),
                 None => ROption::RNone,
             }),
-            Value::ProxyType((module, uuid, plugin)) => Self::ProxyType(FfiProxy {
+            Value::ProxyType {
+                module,
+                obj_ty,
+                id,
+                plugin,
+            } => Self::ProxyType(FfiProxy {
                 module: module.into(),
-                uuid: uuid.into(),
+                uuid: obj_ty.into(),
+                id: id.into(),
                 plugin: s_read!(plugin).clone(),
             }),
             Value::Range(range) => Self::Range(FfiRange {
@@ -210,11 +222,12 @@ impl From<FfiValue> for Value {
                 ROption::RSome(value) => Some(new_ref!(Value, (*value).clone().into())),
                 ROption::RNone => None,
             }),
-            FfiValue::ProxyType(plugin) => Self::ProxyType((
-                plugin.module.into(),
-                plugin.uuid.into(),
-                new_ref!(PluginType, plugin.plugin),
-            )),
+            FfiValue::ProxyType(plugin) => Self::ProxyType {
+                module: plugin.module.into(),
+                obj_ty: plugin.uuid.into(),
+                id: plugin.id.into(),
+                plugin: new_ref!(PluginType, plugin.plugin),
+            },
             FfiValue::Range(range) => Self::Range(range.start..range.end),
             FfiValue::String(str_) => Self::String(str_.into()),
             // FfiValue::UserType(uuid) => Self::UserType(new_ref!(UserType, uuid.into())),
@@ -292,8 +305,13 @@ impl Value {
                 #[allow(clippy::let_and_return)]
                 ƛ_type
             }
-            Value::PlugIn((store, plugin)) => s_read!(store).r1_value_type(lu_dog)[0].clone(),
-            Value::ProxyType((_module, uuid, _plugin)) => {
+            Value::PlugIn(store, plugin) => s_read!(store).r1_value_type(lu_dog)[0].clone(),
+            Value::ProxyType {
+                module: _,
+                obj_ty: uuid,
+                id: _,
+                plugin: _,
+            } => {
                 for vt in lu_dog.iter_value_type() {
                     if let ValueTypeEnum::WoogStruct(woog) = s_read!(vt).subtype {
                         let woog = lu_dog.exhume_woog_struct(&woog).unwrap();
@@ -364,14 +382,19 @@ impl fmt::Display for Value {
             Self::Function(_) => write!(f, "<function>"),
             Self::Integer(num) => write!(f, "{num}"),
             Self::Lambda(_) => write!(f, "<lambda>"),
-            Self::PlugIn((store, plugin)) => write!(f, "Plug-in ({})", s_read!(plugin).name()),
+            Self::PlugIn(store, plugin) => write!(f, "Plug-in ({})", s_read!(plugin).name()),
             Self::Option(option) => match option {
                 Some(value) => write!(f, "Some({})", s_read!(value)),
                 None => write!(f, "None"),
             },
             // 🚧 swap these out when I'm done
             // Self::ProxyType(_p) => write!(f, "<put the other thing back>"),
-            Self::ProxyType((_, _, p)) => write!(f, "{}", s_read!(p)),
+            Self::ProxyType {
+                module: _,
+                obj_ty: _,
+                id: _,
+                plugin,
+            } => write!(f, "{}", s_read!(plugin)),
             Self::Range(range) => write!(f, "{range:?}"),
             // Self::StoreType(store) => write!(f, "{:?}", store),
             Self::String(str_) => write!(f, "{str_}"),
@@ -437,6 +460,12 @@ impl From<&str> for Value {
 impl From<String> for Value {
     fn from(value: String) -> Self {
         Self::String(value)
+    }
+}
+
+impl From<Uuid> for Value {
+    fn from(value: Uuid) -> Self {
+        Self::Uuid(value)
     }
 }
 
@@ -935,6 +964,20 @@ impl std::cmp::PartialEq for Value {
             (Value::Float(a), Value::Integer(b)) => a == &(*b as DwarfFloat),
             (Value::Integer(a), Value::Integer(b)) => a == b,
             (Value::Integer(a), Value::Float(b)) => (*a as DwarfFloat) == *b,
+            (
+                Value::ProxyType {
+                    module: _,
+                    obj_ty: _,
+                    id: a,
+                    plugin: _,
+                },
+                Value::ProxyType {
+                    module: _,
+                    obj_ty: _,
+                    id: b,
+                    plugin: _,
+                },
+            ) => a == b,
             (Value::String(a), Value::String(b)) => a == b,
             (Value::Struct(a), Value::Struct(b)) => *s_read!(a) == *s_read!(b),
             (Value::Uuid(a), Value::Uuid(b)) => a == b,

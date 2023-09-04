@@ -82,7 +82,12 @@ pub fn eval_assignment(
 
             let value = s_read!(value);
             match &*value {
-                Value::ProxyType((module, _, ref proxy)) => {
+                Value::ProxyType {
+                    module,
+                    obj_ty: _,
+                    id: _,
+                    plugin: ref proxy,
+                } => {
                     let mut proxy = s_write!(proxy);
                     let result = proxy.invoke_func(
                         module.as_str().into(),

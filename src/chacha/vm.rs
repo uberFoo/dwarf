@@ -332,7 +332,12 @@ impl<'b> VM<'b> {
                         let field = self.stack.pop().unwrap();
                         let ty_ = self.stack.pop().unwrap();
                         match &*s_read!(ty_) {
-                            Value::ProxyType(_ty_) => {
+                            Value::ProxyType {
+                                module: _,
+                                obj_ty: _,
+                                id: _,
+                                plugin: _,
+                            } => {
                                 unimplemented!();
                                 // match s_read!(ty_).get_attr_value(s_read!(field).as_ref()) {
                                 //     Ok(value) => {
@@ -397,7 +402,12 @@ impl<'b> VM<'b> {
                         let ty_ = self.stack.pop().unwrap();
                         let value = self.stack.pop().unwrap();
                         match &*s_read!(ty_) {
-                            Value::ProxyType(_ty_) => {
+                            Value::ProxyType {
+                                module: _,
+                                obj_ty: _,
+                                id: _,
+                                plugin: _,
+                            } => {
                                 unimplemented!();
 
                                 // match s_write!(ty_)

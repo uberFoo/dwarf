@@ -72,9 +72,14 @@ pub fn eval(
                     debug!("value {value:?}");
                     Ok(value)
                 }
-                Value::ProxyType(_proxy) => Ok(value.clone()),
+                Value::ProxyType {
+                    module: _,
+                    obj_ty: _,
+                    id: _,
+                    plugin: _,
+                } => Ok(value.clone()),
                 Value::Struct(ut) => Ok(value.clone()),
-                Value::PlugIn((_store, _plugin)) => {
+                Value::PlugIn(_store, _plugin) => {
                     // let ty = s_read!(lu_dog)
                     //     .iter_value_type()
                     //     .find(|ty| {
@@ -158,7 +163,7 @@ pub fn eval(
             debug!("MethodCall value {value:?}");
 
             match &*s_read!(value) {
-                Value::PlugIn((store, _plugin)) => {
+                Value::PlugIn(store, _plugin) => {
                     let impl_ = &s_read!(store).r83c_implementation_block(&s_read!(lu_dog))[0];
                     let x = if let Some(func) = s_read!(impl_)
                         .r9_function(&s_read!(lu_dog))
@@ -183,7 +188,12 @@ pub fn eval(
                     };
                     x
                 }
-                Value::ProxyType((_, ref id, _proxy)) => {
+                Value::ProxyType {
+                    module: _,
+                    obj_ty: ref id,
+                    id: _,
+                    plugin: _proxy,
+                } => {
                     // Q: How do I invoke a function on an instance without
                     // actually grabbing the instance from memory?
                     // A: It's eval'd above, and in the `value` variable, which
@@ -721,7 +731,12 @@ pub fn eval(
                         debug!("StaticMethodCall frame value {value:?}");
                         Ok(value)
                     }
-                    Value::ProxyType(_ut) => {
+                    Value::ProxyType {
+                        module: _,
+                        obj_ty: _,
+                        id: _,
+                        plugin: _,
+                    } => {
                         unimplemented!();
                         // debug!("StaticMethodCall proxy {ut:?}");
                         // s_write!(ut).call(

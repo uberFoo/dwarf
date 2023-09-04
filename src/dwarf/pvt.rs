@@ -39,7 +39,7 @@ impl<'d, 'a, 'b> fmt::Display for PrintableValueType<'d, 'a, 'b> {
                 write!(f, "{}", enumeration.name)
             }
             ValueTypeEnum::Empty(_) => write!(f, "{}", TY_CLR.italic().paint("()")),
-            ValueTypeEnum::Error(_) => write!(f, "{}", TY_CLR.italic().paint("<error>")),
+            ValueTypeEnum::XError(_) => write!(f, "{}", TY_CLR.italic().paint("<error>")),
             ValueTypeEnum::Function(_) => write!(f, "{}", TY_CLR.italic().paint("<function>")),
             ValueTypeEnum::Generic(ref g) => {
                 let g = lu_dog.exhume_generic(g).unwrap();
@@ -78,8 +78,7 @@ impl<'d, 'a, 'b> fmt::Display for PrintableValueType<'d, 'a, 'b> {
                         Ty::Float(_) => write!(f, "{}", TY_CLR.italic().paint("float")),
                         Ty::Integer(_) => write!(f, "{}", TY_CLR.italic().paint("int")),
                         Ty::Object(ref object) => {
-                            error!("um, check this out?");
-                            // This should probably just be an unwrap().
+                            // This could probably just be an unwrap().
                             if let Some(object) = context.sarzak.exhume_object(object) {
                                 write!(f, "{}", object.borrow().name)
                             } else {
@@ -87,7 +86,7 @@ impl<'d, 'a, 'b> fmt::Display for PrintableValueType<'d, 'a, 'b> {
                             }
                         }
                         Ty::SString(_) => write!(f, "{}", TY_CLR.italic().paint("string")),
-                        Ty::SUuid(_) => write!(f, "{}", TY_CLR.italic().paint("uuid")),
+                        Ty::SUuid(_) => write!(f, "{}", TY_CLR.italic().paint("Uuid")),
                         #[allow(non_snake_case)]
                         Γ => {
                             error!("deal with sarzak type {:?}", Γ);

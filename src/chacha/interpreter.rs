@@ -149,7 +149,7 @@ pub fn initialize_interpreter(
     sarzak: SarzakStore,
 ) -> Result<Context, Error> {
     // Initialize the stack with stuff from the compiled source.
-    let block = Block::new(Uuid::new_v4(), None, &mut lu_dog);
+    let block = Block::new(Uuid::new_v4(), None, None, &mut lu_dog);
     let (mut stack, receiver) = Memory::new();
 
     // We don't really care about the dirty flag because we are just stuffing
@@ -511,7 +511,7 @@ fn eval_expression(
         ExpressionEnum::Operator(ref operator) => {
             operator::eval_operator(operator, &expression, context, vm)
         }
-        ExpressionEnum::Print(ref print) => print::eval(print, context, vm),
+        ExpressionEnum::XPrint(ref print) => print::eval(print, context, vm),
         ExpressionEnum::RangeExpression(ref range) => range::eval_range(range, context, vm),
         ExpressionEnum::StructExpression(ref expr) => struct_expr::eval(expr, context, vm),
         ExpressionEnum::TypeCast(ref expr) => typecast::eval(expr, context, vm),

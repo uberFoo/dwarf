@@ -130,18 +130,19 @@ impl Plugin for MerlinStore {
                         }
                         if let FfiValue::Uuid(id) = args.pop().unwrap() {
                             let anchor = self.store.borrow().exhume_anchor(&id.into()).unwrap();
-                            let anchor = AnchorProxy {
+                            let anchor_proxy = AnchorProxy {
                                 // 🚧 This bothers me deeply. I know that I've given
                                 // this some thought already, and I really need to
                                 // document the outcome so that I can stop worrying
                                 // over it.
-                                inner: anchor,
+                                inner: anchor.clone(),
                                 store: self.store.clone(),
                             };
-                            let plugin = Plugin_TO::from_value(anchor, TD_CanDowncast);
+                            let plugin = Plugin_TO::from_value(anchor_proxy, TD_CanDowncast);
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: ANCHOR_ID.into(),
+                                id: anchor.borrow().id.into(), // a
                                 plugin: plugin.clone(),
                             };
 
@@ -173,18 +174,19 @@ impl Plugin for MerlinStore {
                         if let FfiValue::Uuid(id) = args.pop().unwrap() {
                             let bisection =
                                 self.store.borrow().exhume_bisection(&id.into()).unwrap();
-                            let bisection = BisectionProxy {
+                            let bisection_proxy = BisectionProxy {
                                 // 🚧 This bothers me deeply. I know that I've given
                                 // this some thought already, and I really need to
                                 // document the outcome so that I can stop worrying
                                 // over it.
-                                inner: bisection,
+                                inner: bisection.clone(),
                                 store: self.store.clone(),
                             };
-                            let plugin = Plugin_TO::from_value(bisection, TD_CanDowncast);
+                            let plugin = Plugin_TO::from_value(bisection_proxy, TD_CanDowncast);
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: BISECTION_ID.into(),
+                                id: bisection.borrow().id.into(), // a
                                 plugin: plugin.clone(),
                             };
 
@@ -212,18 +214,19 @@ impl Plugin for MerlinStore {
                         }
                         if let FfiValue::Uuid(id) = args.pop().unwrap() {
                             let x_box = self.store.borrow().exhume_x_box(&id.into()).unwrap();
-                            let x_box = XBoxProxy {
+                            let x_box_proxy = XBoxProxy {
                                 // 🚧 This bothers me deeply. I know that I've given
                                 // this some thought already, and I really need to
                                 // document the outcome so that I can stop worrying
                                 // over it.
-                                inner: x_box,
+                                inner: x_box.clone(),
                                 store: self.store.clone(),
                             };
-                            let plugin = Plugin_TO::from_value(x_box, TD_CanDowncast);
+                            let plugin = Plugin_TO::from_value(x_box_proxy, TD_CanDowncast);
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: X_BOX_ID.into(),
+                                id: x_box.borrow().id.into(), // a
                                 plugin: plugin.clone(),
                             };
 
@@ -251,18 +254,19 @@ impl Plugin for MerlinStore {
                         }
                         if let FfiValue::Uuid(id) = args.pop().unwrap() {
                             let edge = self.store.borrow().exhume_edge(&id.into()).unwrap();
-                            let edge = EdgeProxy {
+                            let edge_proxy = EdgeProxy {
                                 // 🚧 This bothers me deeply. I know that I've given
                                 // this some thought already, and I really need to
                                 // document the outcome so that I can stop worrying
                                 // over it.
-                                inner: edge,
+                                inner: edge.clone(),
                                 store: self.store.clone(),
                             };
-                            let plugin = Plugin_TO::from_value(edge, TD_CanDowncast);
+                            let plugin = Plugin_TO::from_value(edge_proxy, TD_CanDowncast);
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: EDGE_ID.into(),
+                                id: edge.borrow().id().into(), // a
                                 plugin: plugin.clone(),
                             };
 
@@ -290,18 +294,19 @@ impl Plugin for MerlinStore {
                         }
                         if let FfiValue::Uuid(id) = args.pop().unwrap() {
                             let glyph = self.store.borrow().exhume_glyph(&id.into()).unwrap();
-                            let glyph = GlyphProxy {
+                            let glyph_proxy = GlyphProxy {
                                 // 🚧 This bothers me deeply. I know that I've given
                                 // this some thought already, and I really need to
                                 // document the outcome so that I can stop worrying
                                 // over it.
-                                inner: glyph,
+                                inner: glyph.clone(),
                                 store: self.store.clone(),
                             };
-                            let plugin = Plugin_TO::from_value(glyph, TD_CanDowncast);
+                            let plugin = Plugin_TO::from_value(glyph_proxy, TD_CanDowncast);
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: GLYPH_ID.into(),
+                                id: glyph.borrow().id.into(), // a
                                 plugin: plugin.clone(),
                             };
 
@@ -329,18 +334,19 @@ impl Plugin for MerlinStore {
                         }
                         if let FfiValue::Uuid(id) = args.pop().unwrap() {
                             let line = self.store.borrow().exhume_line(&id.into()).unwrap();
-                            let line = LineProxy {
+                            let line_proxy = LineProxy {
                                 // 🚧 This bothers me deeply. I know that I've given
                                 // this some thought already, and I really need to
                                 // document the outcome so that I can stop worrying
                                 // over it.
-                                inner: line,
+                                inner: line.clone(),
                                 store: self.store.clone(),
                             };
-                            let plugin = Plugin_TO::from_value(line, TD_CanDowncast);
+                            let plugin = Plugin_TO::from_value(line_proxy, TD_CanDowncast);
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: LINE_ID.into(),
+                                id: line.borrow().id.into(), // a
                                 plugin: plugin.clone(),
                             };
 
@@ -374,18 +380,19 @@ impl Plugin for MerlinStore {
                         if let FfiValue::Uuid(id) = args.pop().unwrap() {
                             let line_segment =
                                 self.store.borrow().exhume_line_segment(&id.into()).unwrap();
-                            let line_segment = LineSegmentProxy {
+                            let line_segment_proxy = LineSegmentProxy {
                                 // 🚧 This bothers me deeply. I know that I've given
                                 // this some thought already, and I really need to
                                 // document the outcome so that I can stop worrying
                                 // over it.
-                                inner: line_segment,
+                                inner: line_segment.clone(),
                                 store: self.store.clone(),
                             };
-                            let plugin = Plugin_TO::from_value(line_segment, TD_CanDowncast);
+                            let plugin = Plugin_TO::from_value(line_segment_proxy, TD_CanDowncast);
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: LINE_SEGMENT_ID.into(),
+                                id: line_segment.borrow().id.into(), // a
                                 plugin: plugin.clone(),
                             };
 
@@ -422,18 +429,20 @@ impl Plugin for MerlinStore {
                                 .borrow()
                                 .exhume_line_segment_point(&id.into())
                                 .unwrap();
-                            let line_segment_point = LineSegmentPointProxy {
+                            let line_segment_point_proxy = LineSegmentPointProxy {
                                 // 🚧 This bothers me deeply. I know that I've given
                                 // this some thought already, and I really need to
                                 // document the outcome so that I can stop worrying
                                 // over it.
-                                inner: line_segment_point,
+                                inner: line_segment_point.clone(),
                                 store: self.store.clone(),
                             };
-                            let plugin = Plugin_TO::from_value(line_segment_point, TD_CanDowncast);
+                            let plugin =
+                                Plugin_TO::from_value(line_segment_point_proxy, TD_CanDowncast);
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: LINE_SEGMENT_POINT_ID.into(),
+                                id: line_segment_point.borrow().id.into(), // a
                                 plugin: plugin.clone(),
                             };
 
@@ -461,18 +470,19 @@ impl Plugin for MerlinStore {
                         }
                         if let FfiValue::Uuid(id) = args.pop().unwrap() {
                             let point = self.store.borrow().exhume_point(&id.into()).unwrap();
-                            let point = PointProxy {
+                            let point_proxy = PointProxy {
                                 // 🚧 This bothers me deeply. I know that I've given
                                 // this some thought already, and I really need to
                                 // document the outcome so that I can stop worrying
                                 // over it.
-                                inner: point,
+                                inner: point.clone(),
                                 store: self.store.clone(),
                             };
-                            let plugin = Plugin_TO::from_value(point, TD_CanDowncast);
+                            let plugin = Plugin_TO::from_value(point_proxy, TD_CanDowncast);
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: POINT_ID.into(),
+                                id: point.borrow().id.into(), // a
                                 plugin: plugin.clone(),
                             };
 
@@ -509,18 +519,20 @@ impl Plugin for MerlinStore {
                                 .borrow()
                                 .exhume_relationship_name(&id.into())
                                 .unwrap();
-                            let relationship_name = RelationshipNameProxy {
+                            let relationship_name_proxy = RelationshipNameProxy {
                                 // 🚧 This bothers me deeply. I know that I've given
                                 // this some thought already, and I really need to
                                 // document the outcome so that I can stop worrying
                                 // over it.
-                                inner: relationship_name,
+                                inner: relationship_name.clone(),
                                 store: self.store.clone(),
                             };
-                            let plugin = Plugin_TO::from_value(relationship_name, TD_CanDowncast);
+                            let plugin =
+                                Plugin_TO::from_value(relationship_name_proxy, TD_CanDowncast);
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: RELATIONSHIP_NAME_ID.into(),
+                                id: relationship_name.borrow().id.into(), // a
                                 plugin: plugin.clone(),
                             };
 
@@ -557,18 +569,20 @@ impl Plugin for MerlinStore {
                                 .borrow()
                                 .exhume_relationship_phrase(&id.into())
                                 .unwrap();
-                            let relationship_phrase = RelationshipPhraseProxy {
+                            let relationship_phrase_proxy = RelationshipPhraseProxy {
                                 // 🚧 This bothers me deeply. I know that I've given
                                 // this some thought already, and I really need to
                                 // document the outcome so that I can stop worrying
                                 // over it.
-                                inner: relationship_phrase,
+                                inner: relationship_phrase.clone(),
                                 store: self.store.clone(),
                             };
-                            let plugin = Plugin_TO::from_value(relationship_phrase, TD_CanDowncast);
+                            let plugin =
+                                Plugin_TO::from_value(relationship_phrase_proxy, TD_CanDowncast);
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: RELATIONSHIP_PHRASE_ID.into(),
+                                id: relationship_phrase.borrow().id.into(), // a
                                 plugin: plugin.clone(),
                             };
 
@@ -623,13 +637,14 @@ impl Plugin for MerlinStore {
                                 let anchor = Rc::new(RefCell::new(anchor));
                                 self.store.borrow_mut().inter_anchor(anchor.clone());
                                 let this = AnchorProxy {
-                                    inner: anchor,
+                                    inner: anchor.clone(),
                                     store: self.store.clone(),
                                 };
                                 let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
                                 let proxy = FfiProxy {
                                     module: module.into(),
                                     uuid: ANCHOR_ID.into(),
+                                    id: anchor.borrow().id.into(), // e
                                     plugin: plugin.clone(),
                                 };
 
@@ -649,6 +664,7 @@ impl Plugin for MerlinStore {
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: ANCHOR_ID.into(),
+                                id: anchor.borrow().id.into(), // b
                                 plugin: plugin.clone(),
                             };
 
@@ -687,13 +703,14 @@ impl Plugin for MerlinStore {
                                 let bisection = Rc::new(RefCell::new(bisection));
                                 self.store.borrow_mut().inter_bisection(bisection.clone());
                                 let this = BisectionProxy {
-                                    inner: bisection,
+                                    inner: bisection.clone(),
                                     store: self.store.clone(),
                                 };
                                 let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
                                 let proxy = FfiProxy {
                                     module: module.into(),
                                     uuid: BISECTION_ID.into(),
+                                    id: bisection.borrow().id.into(), // e
                                     plugin: plugin.clone(),
                                 };
 
@@ -713,6 +730,7 @@ impl Plugin for MerlinStore {
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: BISECTION_ID.into(),
+                                id: bisection.borrow().id.into(), // b
                                 plugin: plugin.clone(),
                             };
 
@@ -760,13 +778,14 @@ impl Plugin for MerlinStore {
                                 let x_box = Rc::new(RefCell::new(x_box));
                                 self.store.borrow_mut().inter_x_box(x_box.clone());
                                 let this = XBoxProxy {
-                                    inner: x_box,
+                                    inner: x_box.clone(),
                                     store: self.store.clone(),
                                 };
                                 let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
                                 let proxy = FfiProxy {
                                     module: module.into(),
                                     uuid: X_BOX_ID.into(),
+                                    id: x_box.borrow().id.into(), // e
                                     plugin: plugin.clone(),
                                 };
 
@@ -786,6 +805,7 @@ impl Plugin for MerlinStore {
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: X_BOX_ID.into(),
+                                id: x_box.borrow().id.into(), // b
                                 plugin: plugin.clone(),
                             };
 
@@ -813,13 +833,14 @@ impl Plugin for MerlinStore {
                         })() {
                             Ok(bottom) => {
                                 let this = EdgeProxy {
-                                    inner: bottom,
+                                    inner: bottom.clone(),
                                     store: self.store.clone(),
                                 };
                                 let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
                                 let proxy = FfiProxy {
                                     module: module.into(),
                                     uuid: BOTTOM.into(),
+                                    id: bottom.borrow().id().into(),
                                     plugin: plugin.clone(),
                                 };
                                 Ok(FfiValue::ProxyType(proxy))
@@ -843,13 +864,14 @@ impl Plugin for MerlinStore {
                         })() {
                             Ok(left) => {
                                 let this = EdgeProxy {
-                                    inner: left,
+                                    inner: left.clone(),
                                     store: self.store.clone(),
                                 };
                                 let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
                                 let proxy = FfiProxy {
                                     module: module.into(),
                                     uuid: LEFT.into(),
+                                    id: left.borrow().id().into(),
                                     plugin: plugin.clone(),
                                 };
                                 Ok(FfiValue::ProxyType(proxy))
@@ -873,13 +895,14 @@ impl Plugin for MerlinStore {
                         })() {
                             Ok(right) => {
                                 let this = EdgeProxy {
-                                    inner: right,
+                                    inner: right.clone(),
                                     store: self.store.clone(),
                                 };
                                 let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
                                 let proxy = FfiProxy {
                                     module: module.into(),
                                     uuid: RIGHT.into(),
+                                    id: right.borrow().id().into(),
                                     plugin: plugin.clone(),
                                 };
                                 Ok(FfiValue::ProxyType(proxy))
@@ -903,13 +926,14 @@ impl Plugin for MerlinStore {
                         })() {
                             Ok(top) => {
                                 let this = EdgeProxy {
-                                    inner: top,
+                                    inner: top.clone(),
                                     store: self.store.clone(),
                                 };
                                 let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
                                 let proxy = FfiProxy {
                                     module: module.into(),
                                     uuid: TOP.into(),
+                                    id: top.borrow().id().into(),
                                     plugin: plugin.clone(),
                                 };
                                 Ok(FfiValue::ProxyType(proxy))
@@ -928,6 +952,7 @@ impl Plugin for MerlinStore {
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: EDGE_ID.into(),
+                                id: edge.borrow().id().into(), // b
                                 plugin: plugin.clone(),
                             };
 
@@ -968,13 +993,14 @@ impl Plugin for MerlinStore {
                                 let many = Rc::new(RefCell::new(many));
                                 self.store.borrow_mut().inter_glyph(many.clone());
                                 let this = GlyphProxy {
-                                    inner: many,
+                                    inner: many.clone(),
                                     store: self.store.clone(),
                                 };
                                 let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
                                 let proxy = FfiProxy {
                                     module: module.into(),
                                     uuid: GLYPH_ID.into(),
+                                    id: many.borrow().id.into(), // d
                                     plugin: plugin.clone(),
                                 };
 
@@ -1012,13 +1038,14 @@ impl Plugin for MerlinStore {
                                 let one = Rc::new(RefCell::new(one));
                                 self.store.borrow_mut().inter_glyph(one.clone());
                                 let this = GlyphProxy {
-                                    inner: one,
+                                    inner: one.clone(),
                                     store: self.store.clone(),
                                 };
                                 let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
                                 let proxy = FfiProxy {
                                     module: module.into(),
                                     uuid: GLYPH_ID.into(),
+                                    id: one.borrow().id.into(), // d
                                     plugin: plugin.clone(),
                                 };
 
@@ -1056,13 +1083,14 @@ impl Plugin for MerlinStore {
                                 let sub = Rc::new(RefCell::new(sub));
                                 self.store.borrow_mut().inter_glyph(sub.clone());
                                 let this = GlyphProxy {
-                                    inner: sub,
+                                    inner: sub.clone(),
                                     store: self.store.clone(),
                                 };
                                 let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
                                 let proxy = FfiProxy {
                                     module: module.into(),
                                     uuid: GLYPH_ID.into(),
+                                    id: sub.borrow().id.into(), // d
                                     plugin: plugin.clone(),
                                 };
 
@@ -1100,13 +1128,14 @@ impl Plugin for MerlinStore {
                                 let x_super = Rc::new(RefCell::new(x_super));
                                 self.store.borrow_mut().inter_glyph(x_super.clone());
                                 let this = GlyphProxy {
-                                    inner: x_super,
+                                    inner: x_super.clone(),
                                     store: self.store.clone(),
                                 };
                                 let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
                                 let proxy = FfiProxy {
                                     module: module.into(),
                                     uuid: GLYPH_ID.into(),
+                                    id: x_super.borrow().id.into(), // d
                                     plugin: plugin.clone(),
                                 };
 
@@ -1126,6 +1155,7 @@ impl Plugin for MerlinStore {
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: GLYPH_ID.into(),
+                                id: glyph.borrow().id.into(), // b
                                 plugin: plugin.clone(),
                             };
 
@@ -1161,13 +1191,14 @@ impl Plugin for MerlinStore {
                                 let line = Rc::new(RefCell::new(line));
                                 self.store.borrow_mut().inter_line(line.clone());
                                 let this = LineProxy {
-                                    inner: line,
+                                    inner: line.clone(),
                                     store: self.store.clone(),
                                 };
                                 let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
                                 let proxy = FfiProxy {
                                     module: module.into(),
                                     uuid: LINE_ID.into(),
+                                    id: line.borrow().id.into(), // e
                                     plugin: plugin.clone(),
                                 };
 
@@ -1187,6 +1218,7 @@ impl Plugin for MerlinStore {
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: LINE_ID.into(),
+                                id: line.borrow().id.into(), // b
                                 plugin: plugin.clone(),
                             };
 
@@ -1224,13 +1256,14 @@ impl Plugin for MerlinStore {
                                     .borrow_mut()
                                     .inter_line_segment(line_segment.clone());
                                 let this = LineSegmentProxy {
-                                    inner: line_segment,
+                                    inner: line_segment.clone(),
                                     store: self.store.clone(),
                                 };
                                 let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
                                 let proxy = FfiProxy {
                                     module: module.into(),
                                     uuid: LINE_SEGMENT_ID.into(),
+                                    id: line_segment.borrow().id.into(), // e
                                     plugin: plugin.clone(),
                                 };
 
@@ -1250,6 +1283,7 @@ impl Plugin for MerlinStore {
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: LINE_SEGMENT_ID.into(),
+                                id: line_segment.borrow().id.into(), // b
                                 plugin: plugin.clone(),
                             };
 
@@ -1290,13 +1324,14 @@ impl Plugin for MerlinStore {
                                     .borrow_mut()
                                     .inter_line_segment_point(line_segment_point.clone());
                                 let this = LineSegmentPointProxy {
-                                    inner: line_segment_point,
+                                    inner: line_segment_point.clone(),
                                     store: self.store.clone(),
                                 };
                                 let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
                                 let proxy = FfiProxy {
                                     module: module.into(),
                                     uuid: LINE_SEGMENT_POINT_ID.into(),
+                                    id: line_segment_point.borrow().id.into(), // e
                                     plugin: plugin.clone(),
                                 };
 
@@ -1316,6 +1351,7 @@ impl Plugin for MerlinStore {
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: LINE_SEGMENT_POINT_ID.into(),
+                                id: line_segment_point.borrow().id.into(), // b
                                 plugin: plugin.clone(),
                             };
 
@@ -1359,13 +1395,14 @@ impl Plugin for MerlinStore {
                                 let anchor = Rc::new(RefCell::new(anchor));
                                 self.store.borrow_mut().inter_point(anchor.clone());
                                 let this = PointProxy {
-                                    inner: anchor,
+                                    inner: anchor.clone(),
                                     store: self.store.clone(),
                                 };
                                 let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
                                 let proxy = FfiProxy {
                                     module: module.into(),
                                     uuid: POINT_ID.into(),
+                                    id: anchor.borrow().id.into(), // d
                                     plugin: plugin.clone(),
                                 };
 
@@ -1406,13 +1443,14 @@ impl Plugin for MerlinStore {
                                 let bisection = Rc::new(RefCell::new(bisection));
                                 self.store.borrow_mut().inter_point(bisection.clone());
                                 let this = PointProxy {
-                                    inner: bisection,
+                                    inner: bisection.clone(),
                                     store: self.store.clone(),
                                 };
                                 let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
                                 let proxy = FfiProxy {
                                     module: module.into(),
                                     uuid: POINT_ID.into(),
+                                    id: bisection.borrow().id.into(), // d
                                     plugin: plugin.clone(),
                                 };
 
@@ -1453,13 +1491,14 @@ impl Plugin for MerlinStore {
                                 let inflection = Rc::new(RefCell::new(inflection));
                                 self.store.borrow_mut().inter_point(inflection.clone());
                                 let this = PointProxy {
-                                    inner: inflection,
+                                    inner: inflection.clone(),
                                     store: self.store.clone(),
                                 };
                                 let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
                                 let proxy = FfiProxy {
                                     module: module.into(),
                                     uuid: POINT_ID.into(),
+                                    id: inflection.borrow().id.into(), // d
                                     plugin: plugin.clone(),
                                 };
 
@@ -1479,6 +1518,7 @@ impl Plugin for MerlinStore {
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: POINT_ID.into(),
+                                id: point.borrow().id.into(), // b
                                 plugin: plugin.clone(),
                             };
 
@@ -1528,13 +1568,14 @@ impl Plugin for MerlinStore {
                                     .borrow_mut()
                                     .inter_relationship_name(relationship_name.clone());
                                 let this = RelationshipNameProxy {
-                                    inner: relationship_name,
+                                    inner: relationship_name.clone(),
                                     store: self.store.clone(),
                                 };
                                 let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
                                 let proxy = FfiProxy {
                                     module: module.into(),
                                     uuid: RELATIONSHIP_NAME_ID.into(),
+                                    id: relationship_name.borrow().id.into(), // e
                                     plugin: plugin.clone(),
                                 };
 
@@ -1554,6 +1595,7 @@ impl Plugin for MerlinStore {
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: RELATIONSHIP_NAME_ID.into(),
+                                id: relationship_name.borrow().id.into(), // b
                                 plugin: plugin.clone(),
                             };
 
@@ -1604,13 +1646,14 @@ impl Plugin for MerlinStore {
                                     .borrow_mut()
                                     .inter_relationship_phrase(relationship_phrase.clone());
                                 let this = RelationshipPhraseProxy {
-                                    inner: relationship_phrase,
+                                    inner: relationship_phrase.clone(),
                                     store: self.store.clone(),
                                 };
                                 let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
                                 let proxy = FfiProxy {
                                     module: module.into(),
                                     uuid: RELATIONSHIP_PHRASE_ID.into(),
+                                    id: relationship_phrase.borrow().id.into(), // e
                                     plugin: plugin.clone(),
                                 };
 
@@ -1630,6 +1673,7 @@ impl Plugin for MerlinStore {
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: RELATIONSHIP_PHRASE_ID.into(),
+                                id: relationship_phrase.borrow().id.into(), // b
                                 plugin: plugin.clone(),
                             };
 
@@ -1705,6 +1749,7 @@ impl Plugin for AnchorProxy {
                                     let proxy = FfiProxy {
                                         module: module.into(),
                                         uuid: EDGE_ID.into(),
+                                        id: self.inner.borrow().id.into(), // c
                                         plugin: plugin.clone(),
                                     };
                                     Ok(FfiValue::ProxyType(proxy))
@@ -1724,6 +1769,7 @@ impl Plugin for AnchorProxy {
                                     let proxy = FfiProxy {
                                         module: module.into(),
                                         uuid: GLYPH_ID.into(),
+                                        id: self.inner.borrow().id.into(), // c
                                         plugin: plugin.clone(),
                                     };
                                     Ok(FfiValue::ProxyType(proxy))
@@ -1743,6 +1789,7 @@ impl Plugin for AnchorProxy {
                                     let proxy = FfiProxy {
                                         module: module.into(),
                                         uuid: X_BOX_ID.into(),
+                                        id: self.inner.borrow().id.into(), // c
                                         plugin: plugin.clone(),
                                     };
                                     Ok(FfiValue::ProxyType(proxy))
@@ -1762,6 +1809,7 @@ impl Plugin for AnchorProxy {
                                     let proxy = FfiProxy {
                                         module: module.into(),
                                         uuid: LINE_ID.into(),
+                                        id: self.inner.borrow().id.into(), // c
                                         plugin: plugin.clone(),
                                     };
                                     Ok(FfiValue::ProxyType(proxy))
@@ -1927,6 +1975,7 @@ impl Plugin for BisectionProxy {
                                     let proxy = FfiProxy {
                                         module: module.into(),
                                         uuid: LINE_SEGMENT_ID.into(),
+                                        id: self.inner.borrow().id.into(), // c
                                         plugin: plugin.clone(),
                                     };
                                     Ok(FfiValue::ProxyType(proxy))
@@ -2340,6 +2389,7 @@ impl Plugin for GlyphProxy {
                                     let proxy = FfiProxy {
                                         module: module.into(),
                                         uuid: LINE_ID.into(),
+                                        id: self.inner.borrow().id.into(), // c
                                         plugin: plugin.clone(),
                                     };
                                     Ok(FfiValue::ProxyType(proxy))
@@ -2708,6 +2758,7 @@ impl Plugin for LineSegmentProxy {
                                     let proxy = FfiProxy {
                                         module: module.into(),
                                         uuid: LINE_ID.into(),
+                                        id: self.inner.borrow().id.into(), // c
                                         plugin: plugin.clone(),
                                     };
                                     Ok(FfiValue::ProxyType(proxy))
@@ -2818,6 +2869,7 @@ impl Plugin for LineSegmentPointProxy {
                                     let proxy = FfiProxy {
                                         module: module.into(),
                                         uuid: LINE_SEGMENT_ID.into(),
+                                        id: self.inner.borrow().id.into(), // c
                                         plugin: plugin.clone(),
                                     };
                                     Ok(FfiValue::ProxyType(proxy))
@@ -2837,6 +2889,7 @@ impl Plugin for LineSegmentPointProxy {
                                     let proxy = FfiProxy {
                                         module: module.into(),
                                         uuid: POINT_ID.into(),
+                                        id: self.inner.borrow().id.into(), // c
                                         plugin: plugin.clone(),
                                     };
                                     Ok(FfiValue::ProxyType(proxy))
@@ -3221,6 +3274,7 @@ impl Plugin for RelationshipNameProxy {
                                     let proxy = FfiProxy {
                                         module: module.into(),
                                         uuid: LINE_ID.into(),
+                                        id: self.inner.borrow().id.into(), // c
                                         plugin: plugin.clone(),
                                     };
                                     Ok(FfiValue::ProxyType(proxy))
@@ -3240,6 +3294,7 @@ impl Plugin for RelationshipNameProxy {
                                     let proxy = FfiProxy {
                                         module: module.into(),
                                         uuid: BISECTION_ID.into(),
+                                        id: self.inner.borrow().id.into(), // c
                                         plugin: plugin.clone(),
                                     };
                                     Ok(FfiValue::ProxyType(proxy))
@@ -3385,6 +3440,7 @@ impl Plugin for RelationshipPhraseProxy {
                                     let proxy = FfiProxy {
                                         module: module.into(),
                                         uuid: LINE_ID.into(),
+                                        id: self.inner.borrow().id.into(), // c
                                         plugin: plugin.clone(),
                                     };
                                     Ok(FfiValue::ProxyType(proxy))
@@ -3404,6 +3460,7 @@ impl Plugin for RelationshipPhraseProxy {
                                     let proxy = FfiProxy {
                                         module: module.into(),
                                         uuid: ANCHOR_ID.into(),
+                                        id: self.inner.borrow().id.into(), // c
                                         plugin: plugin.clone(),
                                     };
                                     Ok(FfiValue::ProxyType(proxy))

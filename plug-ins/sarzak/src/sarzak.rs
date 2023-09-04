@@ -140,18 +140,20 @@ impl Plugin for SarzakStore {
                                 .borrow()
                                 .exhume_acknowledged_event(&id.into())
                                 .unwrap();
-                            let acknowledged_event = AcknowledgedEventProxy {
+                            let acknowledged_event_proxy = AcknowledgedEventProxy {
                                 // 🚧 This bothers me deeply. I know that I've given
                                 // this some thought already, and I really need to
                                 // document the outcome so that I can stop worrying
                                 // over it.
-                                inner: acknowledged_event,
+                                inner: acknowledged_event.clone(),
                                 store: self.store.clone(),
                             };
-                            let plugin = Plugin_TO::from_value(acknowledged_event, TD_CanDowncast);
+                            let plugin =
+                                Plugin_TO::from_value(acknowledged_event_proxy, TD_CanDowncast);
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: ACKNOWLEDGED_EVENT_ID.into(),
+                                id: acknowledged_event.borrow().id.into(), // a
                                 plugin: plugin.clone(),
                             };
 
@@ -188,19 +190,22 @@ impl Plugin for SarzakStore {
                                 .borrow()
                                 .exhume_an_associative_referent(&id.into())
                                 .unwrap();
-                            let an_associative_referent = AnAssociativeReferentProxy {
+                            let an_associative_referent_proxy = AnAssociativeReferentProxy {
                                 // 🚧 This bothers me deeply. I know that I've given
                                 // this some thought already, and I really need to
                                 // document the outcome so that I can stop worrying
                                 // over it.
-                                inner: an_associative_referent,
+                                inner: an_associative_referent.clone(),
                                 store: self.store.clone(),
                             };
-                            let plugin =
-                                Plugin_TO::from_value(an_associative_referent, TD_CanDowncast);
+                            let plugin = Plugin_TO::from_value(
+                                an_associative_referent_proxy,
+                                TD_CanDowncast,
+                            );
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: AN_ASSOCIATIVE_REFERENT_ID.into(),
+                                id: an_associative_referent.borrow().id.into(), // a
                                 plugin: plugin.clone(),
                             };
 
@@ -232,18 +237,19 @@ impl Plugin for SarzakStore {
                         if let FfiValue::Uuid(id) = args.pop().unwrap() {
                             let associative =
                                 self.store.borrow().exhume_associative(&id.into()).unwrap();
-                            let associative = AssociativeProxy {
+                            let associative_proxy = AssociativeProxy {
                                 // 🚧 This bothers me deeply. I know that I've given
                                 // this some thought already, and I really need to
                                 // document the outcome so that I can stop worrying
                                 // over it.
-                                inner: associative,
+                                inner: associative.clone(),
                                 store: self.store.clone(),
                             };
-                            let plugin = Plugin_TO::from_value(associative, TD_CanDowncast);
+                            let plugin = Plugin_TO::from_value(associative_proxy, TD_CanDowncast);
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: ASSOCIATIVE_ID.into(),
+                                id: associative.borrow().id.into(), // a
                                 plugin: plugin.clone(),
                             };
 
@@ -280,19 +286,20 @@ impl Plugin for SarzakStore {
                                 .borrow()
                                 .exhume_associative_referent(&id.into())
                                 .unwrap();
-                            let associative_referent = AssociativeReferentProxy {
+                            let associative_referent_proxy = AssociativeReferentProxy {
                                 // 🚧 This bothers me deeply. I know that I've given
                                 // this some thought already, and I really need to
                                 // document the outcome so that I can stop worrying
                                 // over it.
-                                inner: associative_referent,
+                                inner: associative_referent.clone(),
                                 store: self.store.clone(),
                             };
                             let plugin =
-                                Plugin_TO::from_value(associative_referent, TD_CanDowncast);
+                                Plugin_TO::from_value(associative_referent_proxy, TD_CanDowncast);
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: ASSOCIATIVE_REFERENT_ID.into(),
+                                id: associative_referent.borrow().id.into(), // a
                                 plugin: plugin.clone(),
                             };
 
@@ -329,19 +336,20 @@ impl Plugin for SarzakStore {
                                 .borrow()
                                 .exhume_associative_referrer(&id.into())
                                 .unwrap();
-                            let associative_referrer = AssociativeReferrerProxy {
+                            let associative_referrer_proxy = AssociativeReferrerProxy {
                                 // 🚧 This bothers me deeply. I know that I've given
                                 // this some thought already, and I really need to
                                 // document the outcome so that I can stop worrying
                                 // over it.
-                                inner: associative_referrer,
+                                inner: associative_referrer.clone(),
                                 store: self.store.clone(),
                             };
                             let plugin =
-                                Plugin_TO::from_value(associative_referrer, TD_CanDowncast);
+                                Plugin_TO::from_value(associative_referrer_proxy, TD_CanDowncast);
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: ASSOCIATIVE_REFERRER_ID.into(),
+                                id: associative_referrer.borrow().id.into(), // a
                                 plugin: plugin.clone(),
                             };
 
@@ -373,18 +381,19 @@ impl Plugin for SarzakStore {
                         if let FfiValue::Uuid(id) = args.pop().unwrap() {
                             let attribute =
                                 self.store.borrow().exhume_attribute(&id.into()).unwrap();
-                            let attribute = AttributeProxy {
+                            let attribute_proxy = AttributeProxy {
                                 // 🚧 This bothers me deeply. I know that I've given
                                 // this some thought already, and I really need to
                                 // document the outcome so that I can stop worrying
                                 // over it.
-                                inner: attribute,
+                                inner: attribute.clone(),
                                 store: self.store.clone(),
                             };
-                            let plugin = Plugin_TO::from_value(attribute, TD_CanDowncast);
+                            let plugin = Plugin_TO::from_value(attribute_proxy, TD_CanDowncast);
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: ATTRIBUTE_ID.into(),
+                                id: attribute.borrow().id.into(), // a
                                 plugin: plugin.clone(),
                             };
 
@@ -412,18 +421,19 @@ impl Plugin for SarzakStore {
                         }
                         if let FfiValue::Uuid(id) = args.pop().unwrap() {
                             let binary = self.store.borrow().exhume_binary(&id.into()).unwrap();
-                            let binary = BinaryProxy {
+                            let binary_proxy = BinaryProxy {
                                 // 🚧 This bothers me deeply. I know that I've given
                                 // this some thought already, and I really need to
                                 // document the outcome so that I can stop worrying
                                 // over it.
-                                inner: binary,
+                                inner: binary.clone(),
                                 store: self.store.clone(),
                             };
-                            let plugin = Plugin_TO::from_value(binary, TD_CanDowncast);
+                            let plugin = Plugin_TO::from_value(binary_proxy, TD_CanDowncast);
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: BINARY_ID.into(),
+                                id: binary.borrow().id.into(), // a
                                 plugin: plugin.clone(),
                             };
 
@@ -455,18 +465,19 @@ impl Plugin for SarzakStore {
                         if let FfiValue::Uuid(id) = args.pop().unwrap() {
                             let cardinality =
                                 self.store.borrow().exhume_cardinality(&id.into()).unwrap();
-                            let cardinality = CardinalityProxy {
+                            let cardinality_proxy = CardinalityProxy {
                                 // 🚧 This bothers me deeply. I know that I've given
                                 // this some thought already, and I really need to
                                 // document the outcome so that I can stop worrying
                                 // over it.
-                                inner: cardinality,
+                                inner: cardinality.clone(),
                                 store: self.store.clone(),
                             };
-                            let plugin = Plugin_TO::from_value(cardinality, TD_CanDowncast);
+                            let plugin = Plugin_TO::from_value(cardinality_proxy, TD_CanDowncast);
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: CARDINALITY_ID.into(),
+                                id: cardinality.borrow().id().into(), // a
                                 plugin: plugin.clone(),
                             };
 
@@ -503,18 +514,20 @@ impl Plugin for SarzakStore {
                                 .borrow()
                                 .exhume_conditionality(&id.into())
                                 .unwrap();
-                            let conditionality = ConditionalityProxy {
+                            let conditionality_proxy = ConditionalityProxy {
                                 // 🚧 This bothers me deeply. I know that I've given
                                 // this some thought already, and I really need to
                                 // document the outcome so that I can stop worrying
                                 // over it.
-                                inner: conditionality,
+                                inner: conditionality.clone(),
                                 store: self.store.clone(),
                             };
-                            let plugin = Plugin_TO::from_value(conditionality, TD_CanDowncast);
+                            let plugin =
+                                Plugin_TO::from_value(conditionality_proxy, TD_CanDowncast);
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: CONDITIONALITY_ID.into(),
+                                id: conditionality.borrow().id().into(), // a
                                 plugin: plugin.clone(),
                             };
 
@@ -542,18 +555,19 @@ impl Plugin for SarzakStore {
                         }
                         if let FfiValue::Uuid(id) = args.pop().unwrap() {
                             let event = self.store.borrow().exhume_event(&id.into()).unwrap();
-                            let event = EventProxy {
+                            let event_proxy = EventProxy {
                                 // 🚧 This bothers me deeply. I know that I've given
                                 // this some thought already, and I really need to
                                 // document the outcome so that I can stop worrying
                                 // over it.
-                                inner: event,
+                                inner: event.clone(),
                                 store: self.store.clone(),
                             };
-                            let plugin = Plugin_TO::from_value(event, TD_CanDowncast);
+                            let plugin = Plugin_TO::from_value(event_proxy, TD_CanDowncast);
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: EVENT_ID.into(),
+                                id: event.borrow().id.into(), // a
                                 plugin: plugin.clone(),
                             };
 
@@ -583,18 +597,19 @@ impl Plugin for SarzakStore {
                         }
                         if let FfiValue::Uuid(id) = args.pop().unwrap() {
                             let external = self.store.borrow().exhume_external(&id.into()).unwrap();
-                            let external = ExternalProxy {
+                            let external_proxy = ExternalProxy {
                                 // 🚧 This bothers me deeply. I know that I've given
                                 // this some thought already, and I really need to
                                 // document the outcome so that I can stop worrying
                                 // over it.
-                                inner: external,
+                                inner: external.clone(),
                                 store: self.store.clone(),
                             };
-                            let plugin = Plugin_TO::from_value(external, TD_CanDowncast);
+                            let plugin = Plugin_TO::from_value(external_proxy, TD_CanDowncast);
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: EXTERNAL_ID.into(),
+                                id: external.borrow().id.into(), // a
                                 plugin: plugin.clone(),
                             };
 
@@ -622,18 +637,19 @@ impl Plugin for SarzakStore {
                         }
                         if let FfiValue::Uuid(id) = args.pop().unwrap() {
                             let isa = self.store.borrow().exhume_isa(&id.into()).unwrap();
-                            let isa = IsaProxy {
+                            let isa_proxy = IsaProxy {
                                 // 🚧 This bothers me deeply. I know that I've given
                                 // this some thought already, and I really need to
                                 // document the outcome so that I can stop worrying
                                 // over it.
-                                inner: isa,
+                                inner: isa.clone(),
                                 store: self.store.clone(),
                             };
-                            let plugin = Plugin_TO::from_value(isa, TD_CanDowncast);
+                            let plugin = Plugin_TO::from_value(isa_proxy, TD_CanDowncast);
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: ISA_ID.into(),
+                                id: isa.borrow().id.into(), // a
                                 plugin: plugin.clone(),
                             };
 
@@ -661,18 +677,19 @@ impl Plugin for SarzakStore {
                         }
                         if let FfiValue::Uuid(id) = args.pop().unwrap() {
                             let object = self.store.borrow().exhume_object(&id.into()).unwrap();
-                            let object = ObjectProxy {
+                            let object_proxy = ObjectProxy {
                                 // 🚧 This bothers me deeply. I know that I've given
                                 // this some thought already, and I really need to
                                 // document the outcome so that I can stop worrying
                                 // over it.
-                                inner: object,
+                                inner: object.clone(),
                                 store: self.store.clone(),
                             };
-                            let plugin = Plugin_TO::from_value(object, TD_CanDowncast);
+                            let plugin = Plugin_TO::from_value(object_proxy, TD_CanDowncast);
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: OBJECT_ID.into(),
+                                id: object.borrow().id.into(), // a
                                 plugin: plugin.clone(),
                             };
 
@@ -702,18 +719,19 @@ impl Plugin for SarzakStore {
                         }
                         if let FfiValue::Uuid(id) = args.pop().unwrap() {
                             let referent = self.store.borrow().exhume_referent(&id.into()).unwrap();
-                            let referent = ReferentProxy {
+                            let referent_proxy = ReferentProxy {
                                 // 🚧 This bothers me deeply. I know that I've given
                                 // this some thought already, and I really need to
                                 // document the outcome so that I can stop worrying
                                 // over it.
-                                inner: referent,
+                                inner: referent.clone(),
                                 store: self.store.clone(),
                             };
-                            let plugin = Plugin_TO::from_value(referent, TD_CanDowncast);
+                            let plugin = Plugin_TO::from_value(referent_proxy, TD_CanDowncast);
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: REFERENT_ID.into(),
+                                id: referent.borrow().id.into(), // a
                                 plugin: plugin.clone(),
                             };
 
@@ -743,18 +761,19 @@ impl Plugin for SarzakStore {
                         }
                         if let FfiValue::Uuid(id) = args.pop().unwrap() {
                             let referrer = self.store.borrow().exhume_referrer(&id.into()).unwrap();
-                            let referrer = ReferrerProxy {
+                            let referrer_proxy = ReferrerProxy {
                                 // 🚧 This bothers me deeply. I know that I've given
                                 // this some thought already, and I really need to
                                 // document the outcome so that I can stop worrying
                                 // over it.
-                                inner: referrer,
+                                inner: referrer.clone(),
                                 store: self.store.clone(),
                             };
-                            let plugin = Plugin_TO::from_value(referrer, TD_CanDowncast);
+                            let plugin = Plugin_TO::from_value(referrer_proxy, TD_CanDowncast);
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: REFERRER_ID.into(),
+                                id: referrer.borrow().id.into(), // a
                                 plugin: plugin.clone(),
                             };
 
@@ -788,18 +807,19 @@ impl Plugin for SarzakStore {
                         if let FfiValue::Uuid(id) = args.pop().unwrap() {
                             let relationship =
                                 self.store.borrow().exhume_relationship(&id.into()).unwrap();
-                            let relationship = RelationshipProxy {
+                            let relationship_proxy = RelationshipProxy {
                                 // 🚧 This bothers me deeply. I know that I've given
                                 // this some thought already, and I really need to
                                 // document the outcome so that I can stop worrying
                                 // over it.
-                                inner: relationship,
+                                inner: relationship.clone(),
                                 store: self.store.clone(),
                             };
-                            let plugin = Plugin_TO::from_value(relationship, TD_CanDowncast);
+                            let plugin = Plugin_TO::from_value(relationship_proxy, TD_CanDowncast);
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: RELATIONSHIP_ID.into(),
+                                id: relationship.borrow().id().into(), // a
                                 plugin: plugin.clone(),
                             };
 
@@ -827,18 +847,19 @@ impl Plugin for SarzakStore {
                         }
                         if let FfiValue::Uuid(id) = args.pop().unwrap() {
                             let state = self.store.borrow().exhume_state(&id.into()).unwrap();
-                            let state = StateProxy {
+                            let state_proxy = StateProxy {
                                 // 🚧 This bothers me deeply. I know that I've given
                                 // this some thought already, and I really need to
                                 // document the outcome so that I can stop worrying
                                 // over it.
-                                inner: state,
+                                inner: state.clone(),
                                 store: self.store.clone(),
                             };
-                            let plugin = Plugin_TO::from_value(state, TD_CanDowncast);
+                            let plugin = Plugin_TO::from_value(state_proxy, TD_CanDowncast);
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: STATE_ID.into(),
+                                id: state.borrow().id.into(), // a
                                 plugin: plugin.clone(),
                             };
 
@@ -866,18 +887,19 @@ impl Plugin for SarzakStore {
                         }
                         if let FfiValue::Uuid(id) = args.pop().unwrap() {
                             let subtype = self.store.borrow().exhume_subtype(&id.into()).unwrap();
-                            let subtype = SubtypeProxy {
+                            let subtype_proxy = SubtypeProxy {
                                 // 🚧 This bothers me deeply. I know that I've given
                                 // this some thought already, and I really need to
                                 // document the outcome so that I can stop worrying
                                 // over it.
-                                inner: subtype,
+                                inner: subtype.clone(),
                                 store: self.store.clone(),
                             };
-                            let plugin = Plugin_TO::from_value(subtype, TD_CanDowncast);
+                            let plugin = Plugin_TO::from_value(subtype_proxy, TD_CanDowncast);
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: SUBTYPE_ID.into(),
+                                id: subtype.borrow().id.into(), // a
                                 plugin: plugin.clone(),
                             };
 
@@ -909,18 +931,19 @@ impl Plugin for SarzakStore {
                         if let FfiValue::Uuid(id) = args.pop().unwrap() {
                             let supertype =
                                 self.store.borrow().exhume_supertype(&id.into()).unwrap();
-                            let supertype = SupertypeProxy {
+                            let supertype_proxy = SupertypeProxy {
                                 // 🚧 This bothers me deeply. I know that I've given
                                 // this some thought already, and I really need to
                                 // document the outcome so that I can stop worrying
                                 // over it.
-                                inner: supertype,
+                                inner: supertype.clone(),
                                 store: self.store.clone(),
                             };
-                            let plugin = Plugin_TO::from_value(supertype, TD_CanDowncast);
+                            let plugin = Plugin_TO::from_value(supertype_proxy, TD_CanDowncast);
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: SUPERTYPE_ID.into(),
+                                id: supertype.borrow().id.into(), // a
                                 plugin: plugin.clone(),
                             };
 
@@ -948,18 +971,19 @@ impl Plugin for SarzakStore {
                         }
                         if let FfiValue::Uuid(id) = args.pop().unwrap() {
                             let ty = self.store.borrow().exhume_ty(&id.into()).unwrap();
-                            let ty = TyProxy {
+                            let ty_proxy = TyProxy {
                                 // 🚧 This bothers me deeply. I know that I've given
                                 // this some thought already, and I really need to
                                 // document the outcome so that I can stop worrying
                                 // over it.
-                                inner: ty,
+                                inner: ty.clone(),
                                 store: self.store.clone(),
                             };
-                            let plugin = Plugin_TO::from_value(ty, TD_CanDowncast);
+                            let plugin = Plugin_TO::from_value(ty_proxy, TD_CanDowncast);
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: TY_ID.into(),
+                                id: ty.borrow().id().into(), // a
                                 plugin: plugin.clone(),
                             };
 
@@ -1001,13 +1025,14 @@ impl Plugin for SarzakStore {
                                     .borrow_mut()
                                     .inter_acknowledged_event(acknowledged_event.clone());
                                 let this = AcknowledgedEventProxy {
-                                    inner: acknowledged_event,
+                                    inner: acknowledged_event.clone(),
                                     store: self.store.clone(),
                                 };
                                 let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
                                 let proxy = FfiProxy {
                                     module: module.into(),
                                     uuid: ACKNOWLEDGED_EVENT_ID.into(),
+                                    id: acknowledged_event.borrow().id.into(), // e
                                     plugin: plugin.clone(),
                                 };
 
@@ -1027,6 +1052,7 @@ impl Plugin for SarzakStore {
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: ACKNOWLEDGED_EVENT_ID.into(),
+                                id: acknowledged_event.borrow().id.into(), // b
                                 plugin: plugin.clone(),
                             };
 
@@ -1075,13 +1101,14 @@ impl Plugin for SarzakStore {
                                     .borrow_mut()
                                     .inter_an_associative_referent(an_associative_referent.clone());
                                 let this = AnAssociativeReferentProxy {
-                                    inner: an_associative_referent,
+                                    inner: an_associative_referent.clone(),
                                     store: self.store.clone(),
                                 };
                                 let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
                                 let proxy = FfiProxy {
                                     module: module.into(),
                                     uuid: AN_ASSOCIATIVE_REFERENT_ID.into(),
+                                    id: an_associative_referent.borrow().id.into(), // e
                                     plugin: plugin.clone(),
                                 };
 
@@ -1103,6 +1130,7 @@ impl Plugin for SarzakStore {
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: AN_ASSOCIATIVE_REFERENT_ID.into(),
+                                id: an_associative_referent.borrow().id.into(), // b
                                 plugin: plugin.clone(),
                             };
 
@@ -1143,13 +1171,14 @@ impl Plugin for SarzakStore {
                                     .borrow_mut()
                                     .inter_associative(associative.clone());
                                 let this = AssociativeProxy {
-                                    inner: associative,
+                                    inner: associative.clone(),
                                     store: self.store.clone(),
                                 };
                                 let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
                                 let proxy = FfiProxy {
                                     module: module.into(),
                                     uuid: ASSOCIATIVE_ID.into(),
+                                    id: associative.borrow().id.into(), // e
                                     plugin: plugin.clone(),
                                 };
 
@@ -1169,6 +1198,7 @@ impl Plugin for SarzakStore {
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: ASSOCIATIVE_ID.into(),
+                                id: associative.borrow().id.into(), // b
                                 plugin: plugin.clone(),
                             };
 
@@ -1216,13 +1246,14 @@ impl Plugin for SarzakStore {
                                     .borrow_mut()
                                     .inter_associative_referent(associative_referent.clone());
                                 let this = AssociativeReferentProxy {
-                                    inner: associative_referent,
+                                    inner: associative_referent.clone(),
                                     store: self.store.clone(),
                                 };
                                 let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
                                 let proxy = FfiProxy {
                                     module: module.into(),
                                     uuid: ASSOCIATIVE_REFERENT_ID.into(),
+                                    id: associative_referent.borrow().id.into(), // e
                                     plugin: plugin.clone(),
                                 };
 
@@ -1243,6 +1274,7 @@ impl Plugin for SarzakStore {
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: ASSOCIATIVE_REFERENT_ID.into(),
+                                id: associative_referent.borrow().id.into(), // b
                                 plugin: plugin.clone(),
                             };
 
@@ -1284,13 +1316,14 @@ impl Plugin for SarzakStore {
                                     .borrow_mut()
                                     .inter_associative_referrer(associative_referrer.clone());
                                 let this = AssociativeReferrerProxy {
-                                    inner: associative_referrer,
+                                    inner: associative_referrer.clone(),
                                     store: self.store.clone(),
                                 };
                                 let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
                                 let proxy = FfiProxy {
                                     module: module.into(),
                                     uuid: ASSOCIATIVE_REFERRER_ID.into(),
+                                    id: associative_referrer.borrow().id.into(), // e
                                     plugin: plugin.clone(),
                                 };
 
@@ -1311,6 +1344,7 @@ impl Plugin for SarzakStore {
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: ASSOCIATIVE_REFERRER_ID.into(),
+                                id: associative_referrer.borrow().id.into(), // b
                                 plugin: plugin.clone(),
                             };
 
@@ -1352,13 +1386,14 @@ impl Plugin for SarzakStore {
                                 let attribute = Rc::new(RefCell::new(attribute));
                                 self.store.borrow_mut().inter_attribute(attribute.clone());
                                 let this = AttributeProxy {
-                                    inner: attribute,
+                                    inner: attribute.clone(),
                                     store: self.store.clone(),
                                 };
                                 let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
                                 let proxy = FfiProxy {
                                     module: module.into(),
                                     uuid: ATTRIBUTE_ID.into(),
+                                    id: attribute.borrow().id.into(), // e
                                     plugin: plugin.clone(),
                                 };
 
@@ -1378,6 +1413,7 @@ impl Plugin for SarzakStore {
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: ATTRIBUTE_ID.into(),
+                                id: attribute.borrow().id.into(), // b
                                 plugin: plugin.clone(),
                             };
 
@@ -1419,13 +1455,14 @@ impl Plugin for SarzakStore {
                                 let binary = Rc::new(RefCell::new(binary));
                                 self.store.borrow_mut().inter_binary(binary.clone());
                                 let this = BinaryProxy {
-                                    inner: binary,
+                                    inner: binary.clone(),
                                     store: self.store.clone(),
                                 };
                                 let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
                                 let proxy = FfiProxy {
                                     module: module.into(),
                                     uuid: BINARY_ID.into(),
+                                    id: binary.borrow().id.into(), // e
                                     plugin: plugin.clone(),
                                 };
 
@@ -1445,6 +1482,7 @@ impl Plugin for SarzakStore {
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: BINARY_ID.into(),
+                                id: binary.borrow().id.into(), // b
                                 plugin: plugin.clone(),
                             };
 
@@ -1472,13 +1510,14 @@ impl Plugin for SarzakStore {
                         })() {
                             Ok(many) => {
                                 let this = CardinalityProxy {
-                                    inner: many,
+                                    inner: many.clone(),
                                     store: self.store.clone(),
                                 };
                                 let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
                                 let proxy = FfiProxy {
                                     module: module.into(),
                                     uuid: MANY.into(),
+                                    id: many.borrow().id().into(),
                                     plugin: plugin.clone(),
                                 };
                                 Ok(FfiValue::ProxyType(proxy))
@@ -1502,13 +1541,14 @@ impl Plugin for SarzakStore {
                         })() {
                             Ok(one) => {
                                 let this = CardinalityProxy {
-                                    inner: one,
+                                    inner: one.clone(),
                                     store: self.store.clone(),
                                 };
                                 let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
                                 let proxy = FfiProxy {
                                     module: module.into(),
                                     uuid: ONE.into(),
+                                    id: one.borrow().id().into(),
                                     plugin: plugin.clone(),
                                 };
                                 Ok(FfiValue::ProxyType(proxy))
@@ -1527,6 +1567,7 @@ impl Plugin for SarzakStore {
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: CARDINALITY_ID.into(),
+                                id: cardinality.borrow().id().into(), // b
                                 plugin: plugin.clone(),
                             };
 
@@ -1558,13 +1599,14 @@ impl Plugin for SarzakStore {
                         })() {
                             Ok(conditional) => {
                                 let this = ConditionalityProxy {
-                                    inner: conditional,
+                                    inner: conditional.clone(),
                                     store: self.store.clone(),
                                 };
                                 let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
                                 let proxy = FfiProxy {
                                     module: module.into(),
                                     uuid: CONDITIONAL.into(),
+                                    id: conditional.borrow().id().into(),
                                     plugin: plugin.clone(),
                                 };
                                 Ok(FfiValue::ProxyType(proxy))
@@ -1592,13 +1634,14 @@ impl Plugin for SarzakStore {
                         })() {
                             Ok(unconditional) => {
                                 let this = ConditionalityProxy {
-                                    inner: unconditional,
+                                    inner: unconditional.clone(),
                                     store: self.store.clone(),
                                 };
                                 let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
                                 let proxy = FfiProxy {
                                     module: module.into(),
                                     uuid: UNCONDITIONAL.into(),
+                                    id: unconditional.borrow().id().into(),
                                     plugin: plugin.clone(),
                                 };
                                 Ok(FfiValue::ProxyType(proxy))
@@ -1617,6 +1660,7 @@ impl Plugin for SarzakStore {
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: CONDITIONALITY_ID.into(),
+                                id: conditionality.borrow().id().into(), // b
                                 plugin: plugin.clone(),
                             };
 
@@ -1655,13 +1699,14 @@ impl Plugin for SarzakStore {
                                 let event = Rc::new(RefCell::new(event));
                                 self.store.borrow_mut().inter_event(event.clone());
                                 let this = EventProxy {
-                                    inner: event,
+                                    inner: event.clone(),
                                     store: self.store.clone(),
                                 };
                                 let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
                                 let proxy = FfiProxy {
                                     module: module.into(),
                                     uuid: EVENT_ID.into(),
+                                    id: event.borrow().id.into(), // e
                                     plugin: plugin.clone(),
                                 };
 
@@ -1681,6 +1726,7 @@ impl Plugin for SarzakStore {
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: EVENT_ID.into(),
+                                id: event.borrow().id.into(), // b
                                 plugin: plugin.clone(),
                             };
 
@@ -1722,13 +1768,14 @@ impl Plugin for SarzakStore {
                                 let external = Rc::new(RefCell::new(external));
                                 self.store.borrow_mut().inter_external(external.clone());
                                 let this = ExternalProxy {
-                                    inner: external,
+                                    inner: external.clone(),
                                     store: self.store.clone(),
                                 };
                                 let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
                                 let proxy = FfiProxy {
                                     module: module.into(),
                                     uuid: EXTERNAL_ID.into(),
+                                    id: external.borrow().id.into(), // e
                                     plugin: plugin.clone(),
                                 };
 
@@ -1748,6 +1795,7 @@ impl Plugin for SarzakStore {
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: EXTERNAL_ID.into(),
+                                id: external.borrow().id.into(), // b
                                 plugin: plugin.clone(),
                             };
 
@@ -1786,13 +1834,14 @@ impl Plugin for SarzakStore {
                                 let isa = Rc::new(RefCell::new(isa));
                                 self.store.borrow_mut().inter_isa(isa.clone());
                                 let this = IsaProxy {
-                                    inner: isa,
+                                    inner: isa.clone(),
                                     store: self.store.clone(),
                                 };
                                 let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
                                 let proxy = FfiProxy {
                                     module: module.into(),
                                     uuid: ISA_ID.into(),
+                                    id: isa.borrow().id.into(), // e
                                     plugin: plugin.clone(),
                                 };
 
@@ -1812,6 +1861,7 @@ impl Plugin for SarzakStore {
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: ISA_ID.into(),
+                                id: isa.borrow().id.into(), // b
                                 plugin: plugin.clone(),
                             };
 
@@ -1853,13 +1903,14 @@ impl Plugin for SarzakStore {
                                 let object = Rc::new(RefCell::new(object));
                                 self.store.borrow_mut().inter_object(object.clone());
                                 let this = ObjectProxy {
-                                    inner: object,
+                                    inner: object.clone(),
                                     store: self.store.clone(),
                                 };
                                 let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
                                 let proxy = FfiProxy {
                                     module: module.into(),
                                     uuid: OBJECT_ID.into(),
+                                    id: object.borrow().id.into(), // e
                                     plugin: plugin.clone(),
                                 };
 
@@ -1879,6 +1930,7 @@ impl Plugin for SarzakStore {
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: OBJECT_ID.into(),
+                                id: object.borrow().id.into(), // b
                                 plugin: plugin.clone(),
                             };
 
@@ -1923,13 +1975,14 @@ impl Plugin for SarzakStore {
                                 let referent = Rc::new(RefCell::new(referent));
                                 self.store.borrow_mut().inter_referent(referent.clone());
                                 let this = ReferentProxy {
-                                    inner: referent,
+                                    inner: referent.clone(),
                                     store: self.store.clone(),
                                 };
                                 let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
                                 let proxy = FfiProxy {
                                     module: module.into(),
                                     uuid: REFERENT_ID.into(),
+                                    id: referent.borrow().id.into(), // e
                                     plugin: plugin.clone(),
                                 };
 
@@ -1949,6 +2002,7 @@ impl Plugin for SarzakStore {
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: REFERENT_ID.into(),
+                                id: referent.borrow().id.into(), // b
                                 plugin: plugin.clone(),
                             };
 
@@ -2000,13 +2054,14 @@ impl Plugin for SarzakStore {
                                 let referrer = Rc::new(RefCell::new(referrer));
                                 self.store.borrow_mut().inter_referrer(referrer.clone());
                                 let this = ReferrerProxy {
-                                    inner: referrer,
+                                    inner: referrer.clone(),
                                     store: self.store.clone(),
                                 };
                                 let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
                                 let proxy = FfiProxy {
                                     module: module.into(),
                                     uuid: REFERRER_ID.into(),
+                                    id: referrer.borrow().id.into(), // e
                                     plugin: plugin.clone(),
                                 };
 
@@ -2026,6 +2081,7 @@ impl Plugin for SarzakStore {
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: REFERRER_ID.into(),
+                                id: referrer.borrow().id.into(), // b
                                 plugin: plugin.clone(),
                             };
 
@@ -2061,13 +2117,14 @@ impl Plugin for SarzakStore {
                                     .borrow_mut()
                                     .inter_relationship(associative.clone());
                                 let this = RelationshipProxy {
-                                    inner: associative,
+                                    inner: associative.clone(),
                                     store: self.store.clone(),
                                 };
                                 let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
                                 let proxy = FfiProxy {
                                     module: module.into(),
                                     uuid: RELATIONSHIP_ID.into(),
+                                    id: associative.borrow().id().into(), // d
                                     plugin: plugin.clone(),
                                 };
 
@@ -2098,13 +2155,14 @@ impl Plugin for SarzakStore {
                                 let binary = Rc::new(RefCell::new(binary));
                                 self.store.borrow_mut().inter_relationship(binary.clone());
                                 let this = RelationshipProxy {
-                                    inner: binary,
+                                    inner: binary.clone(),
                                     store: self.store.clone(),
                                 };
                                 let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
                                 let proxy = FfiProxy {
                                     module: module.into(),
                                     uuid: RELATIONSHIP_ID.into(),
+                                    id: binary.borrow().id().into(), // d
                                     plugin: plugin.clone(),
                                 };
 
@@ -2134,13 +2192,14 @@ impl Plugin for SarzakStore {
                                 let isa = Rc::new(RefCell::new(isa));
                                 self.store.borrow_mut().inter_relationship(isa.clone());
                                 let this = RelationshipProxy {
-                                    inner: isa,
+                                    inner: isa.clone(),
                                     store: self.store.clone(),
                                 };
                                 let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
                                 let proxy = FfiProxy {
                                     module: module.into(),
                                     uuid: RELATIONSHIP_ID.into(),
+                                    id: isa.borrow().id().into(), // d
                                     plugin: plugin.clone(),
                                 };
 
@@ -2160,6 +2219,7 @@ impl Plugin for SarzakStore {
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: RELATIONSHIP_ID.into(),
+                                id: relationship.borrow().id().into(), // b
                                 plugin: plugin.clone(),
                             };
 
@@ -2198,13 +2258,14 @@ impl Plugin for SarzakStore {
                                 let state = Rc::new(RefCell::new(state));
                                 self.store.borrow_mut().inter_state(state.clone());
                                 let this = StateProxy {
-                                    inner: state,
+                                    inner: state.clone(),
                                     store: self.store.clone(),
                                 };
                                 let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
                                 let proxy = FfiProxy {
                                     module: module.into(),
                                     uuid: STATE_ID.into(),
+                                    id: state.borrow().id.into(), // e
                                     plugin: plugin.clone(),
                                 };
 
@@ -2224,6 +2285,7 @@ impl Plugin for SarzakStore {
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: STATE_ID.into(),
+                                id: state.borrow().id.into(), // b
                                 plugin: plugin.clone(),
                             };
 
@@ -2262,13 +2324,14 @@ impl Plugin for SarzakStore {
                                 let subtype = Rc::new(RefCell::new(subtype));
                                 self.store.borrow_mut().inter_subtype(subtype.clone());
                                 let this = SubtypeProxy {
-                                    inner: subtype,
+                                    inner: subtype.clone(),
                                     store: self.store.clone(),
                                 };
                                 let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
                                 let proxy = FfiProxy {
                                     module: module.into(),
                                     uuid: SUBTYPE_ID.into(),
+                                    id: subtype.borrow().id.into(), // e
                                     plugin: plugin.clone(),
                                 };
 
@@ -2288,6 +2351,7 @@ impl Plugin for SarzakStore {
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: SUBTYPE_ID.into(),
+                                id: subtype.borrow().id.into(), // b
                                 plugin: plugin.clone(),
                             };
 
@@ -2323,13 +2387,14 @@ impl Plugin for SarzakStore {
                                 let supertype = Rc::new(RefCell::new(supertype));
                                 self.store.borrow_mut().inter_supertype(supertype.clone());
                                 let this = SupertypeProxy {
-                                    inner: supertype,
+                                    inner: supertype.clone(),
                                     store: self.store.clone(),
                                 };
                                 let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
                                 let proxy = FfiProxy {
                                     module: module.into(),
                                     uuid: SUPERTYPE_ID.into(),
+                                    id: supertype.borrow().id.into(), // e
                                     plugin: plugin.clone(),
                                 };
 
@@ -2349,6 +2414,7 @@ impl Plugin for SarzakStore {
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: SUPERTYPE_ID.into(),
+                                id: supertype.borrow().id.into(), // b
                                 plugin: plugin.clone(),
                             };
 
@@ -2376,13 +2442,14 @@ impl Plugin for SarzakStore {
                         })() {
                             Ok(boolean) => {
                                 let this = TyProxy {
-                                    inner: boolean,
+                                    inner: boolean.clone(),
                                     store: self.store.clone(),
                                 };
                                 let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
                                 let proxy = FfiProxy {
                                     module: module.into(),
                                     uuid: BOOLEAN.into(),
+                                    id: boolean.borrow().id().into(),
                                     plugin: plugin.clone(),
                                 };
                                 Ok(FfiValue::ProxyType(proxy))
@@ -2411,13 +2478,14 @@ impl Plugin for SarzakStore {
                                 let external = Rc::new(RefCell::new(external));
                                 self.store.borrow_mut().inter_ty(external.clone());
                                 let this = TyProxy {
-                                    inner: external,
+                                    inner: external.clone(),
                                     store: self.store.clone(),
                                 };
                                 let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
                                 let proxy = FfiProxy {
                                     module: module.into(),
                                     uuid: TY_ID.into(),
+                                    id: external.borrow().id().into(), // d
                                     plugin: plugin.clone(),
                                 };
 
@@ -2442,13 +2510,14 @@ impl Plugin for SarzakStore {
                         })() {
                             Ok(float) => {
                                 let this = TyProxy {
-                                    inner: float,
+                                    inner: float.clone(),
                                     store: self.store.clone(),
                                 };
                                 let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
                                 let proxy = FfiProxy {
                                     module: module.into(),
                                     uuid: FLOAT.into(),
+                                    id: float.borrow().id().into(),
                                     plugin: plugin.clone(),
                                 };
                                 Ok(FfiValue::ProxyType(proxy))
@@ -2472,13 +2541,14 @@ impl Plugin for SarzakStore {
                         })() {
                             Ok(integer) => {
                                 let this = TyProxy {
-                                    inner: integer,
+                                    inner: integer.clone(),
                                     store: self.store.clone(),
                                 };
                                 let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
                                 let proxy = FfiProxy {
                                     module: module.into(),
                                     uuid: INTEGER.into(),
+                                    id: integer.borrow().id().into(),
                                     plugin: plugin.clone(),
                                 };
                                 Ok(FfiValue::ProxyType(proxy))
@@ -2507,13 +2577,14 @@ impl Plugin for SarzakStore {
                                 let object = Rc::new(RefCell::new(object));
                                 self.store.borrow_mut().inter_ty(object.clone());
                                 let this = TyProxy {
-                                    inner: object,
+                                    inner: object.clone(),
                                     store: self.store.clone(),
                                 };
                                 let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
                                 let proxy = FfiProxy {
                                     module: module.into(),
                                     uuid: TY_ID.into(),
+                                    id: object.borrow().id().into(), // d
                                     plugin: plugin.clone(),
                                 };
 
@@ -2538,13 +2609,14 @@ impl Plugin for SarzakStore {
                         })() {
                             Ok(s_string) => {
                                 let this = TyProxy {
-                                    inner: s_string,
+                                    inner: s_string.clone(),
                                     store: self.store.clone(),
                                 };
                                 let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
                                 let proxy = FfiProxy {
                                     module: module.into(),
                                     uuid: S_STRING.into(),
+                                    id: s_string.borrow().id().into(),
                                     plugin: plugin.clone(),
                                 };
                                 Ok(FfiValue::ProxyType(proxy))
@@ -2568,13 +2640,14 @@ impl Plugin for SarzakStore {
                         })() {
                             Ok(s_uuid) => {
                                 let this = TyProxy {
-                                    inner: s_uuid,
+                                    inner: s_uuid.clone(),
                                     store: self.store.clone(),
                                 };
                                 let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
                                 let proxy = FfiProxy {
                                     module: module.into(),
                                     uuid: S_UUID.into(),
+                                    id: s_uuid.borrow().id().into(),
                                     plugin: plugin.clone(),
                                 };
                                 Ok(FfiValue::ProxyType(proxy))
@@ -2593,6 +2666,7 @@ impl Plugin for SarzakStore {
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: TY_ID.into(),
+                                id: ty.borrow().id().into(), // b
                                 plugin: plugin.clone(),
                             };
 
@@ -2661,6 +2735,7 @@ impl Plugin for AcknowledgedEventProxy {
                                     let proxy = FfiProxy {
                                         module: module.into(),
                                         uuid: EVENT_ID.into(),
+                                        id: self.inner.borrow().id.into(), // c
                                         plugin: plugin.clone(),
                                     };
                                     Ok(FfiValue::ProxyType(proxy))
@@ -2680,6 +2755,7 @@ impl Plugin for AcknowledgedEventProxy {
                                     let proxy = FfiProxy {
                                         module: module.into(),
                                         uuid: STATE_ID.into(),
+                                        id: self.inner.borrow().id.into(), // c
                                         plugin: plugin.clone(),
                                     };
                                     Ok(FfiValue::ProxyType(proxy))
@@ -2802,6 +2878,7 @@ impl Plugin for AnAssociativeReferentProxy {
                                     let proxy = FfiProxy {
                                         module: module.into(),
                                         uuid: ASSOCIATIVE_ID.into(),
+                                        id: self.inner.borrow().id.into(), // c
                                         plugin: plugin.clone(),
                                     };
                                     Ok(FfiValue::ProxyType(proxy))
@@ -2821,6 +2898,7 @@ impl Plugin for AnAssociativeReferentProxy {
                                     let proxy = FfiProxy {
                                         module: module.into(),
                                         uuid: ASSOCIATIVE_REFERENT_ID.into(),
+                                        id: self.inner.borrow().id.into(), // c
                                         plugin: plugin.clone(),
                                     };
                                     Ok(FfiValue::ProxyType(proxy))
@@ -2956,6 +3034,7 @@ impl Plugin for AssociativeProxy {
                                     let proxy = FfiProxy {
                                         module: module.into(),
                                         uuid: ASSOCIATIVE_REFERRER_ID.into(),
+                                        id: self.inner.borrow().id.into(), // c
                                         plugin: plugin.clone(),
                                     };
                                     Ok(FfiValue::ProxyType(proxy))
@@ -3078,6 +3157,7 @@ impl Plugin for AssociativeReferentProxy {
                                     let proxy = FfiProxy {
                                         module: module.into(),
                                         uuid: CARDINALITY_ID.into(),
+                                        id: self.inner.borrow().id.into(), // c
                                         plugin: plugin.clone(),
                                     };
                                     Ok(FfiValue::ProxyType(proxy))
@@ -3097,6 +3177,7 @@ impl Plugin for AssociativeReferentProxy {
                                     let proxy = FfiProxy {
                                         module: module.into(),
                                         uuid: CONDITIONALITY_ID.into(),
+                                        id: self.inner.borrow().id.into(), // c
                                         plugin: plugin.clone(),
                                     };
                                     Ok(FfiValue::ProxyType(proxy))
@@ -3116,6 +3197,7 @@ impl Plugin for AssociativeReferentProxy {
                                     let proxy = FfiProxy {
                                         module: module.into(),
                                         uuid: OBJECT_ID.into(),
+                                        id: self.inner.borrow().id.into(), // c
                                         plugin: plugin.clone(),
                                     };
                                     Ok(FfiValue::ProxyType(proxy))
@@ -3257,6 +3339,7 @@ impl Plugin for AssociativeReferrerProxy {
                                     let proxy = FfiProxy {
                                         module: module.into(),
                                         uuid: CARDINALITY_ID.into(),
+                                        id: self.inner.borrow().id.into(), // c
                                         plugin: plugin.clone(),
                                     };
                                     Ok(FfiValue::ProxyType(proxy))
@@ -3276,6 +3359,7 @@ impl Plugin for AssociativeReferrerProxy {
                                     let proxy = FfiProxy {
                                         module: module.into(),
                                         uuid: OBJECT_ID.into(),
+                                        id: self.inner.borrow().id.into(), // c
                                         plugin: plugin.clone(),
                                     };
                                     Ok(FfiValue::ProxyType(proxy))
@@ -3398,6 +3482,7 @@ impl Plugin for AttributeProxy {
                                     let proxy = FfiProxy {
                                         module: module.into(),
                                         uuid: OBJECT_ID.into(),
+                                        id: self.inner.borrow().id.into(), // c
                                         plugin: plugin.clone(),
                                     };
                                     Ok(FfiValue::ProxyType(proxy))
@@ -3417,6 +3502,7 @@ impl Plugin for AttributeProxy {
                                     let proxy = FfiProxy {
                                         module: module.into(),
                                         uuid: TY_ID.into(),
+                                        id: self.inner.borrow().id.into(), // c
                                         plugin: plugin.clone(),
                                     };
                                     Ok(FfiValue::ProxyType(proxy))
@@ -3545,6 +3631,7 @@ impl Plugin for BinaryProxy {
                                     let proxy = FfiProxy {
                                         module: module.into(),
                                         uuid: REFERRER_ID.into(),
+                                        id: self.inner.borrow().id.into(), // c
                                         plugin: plugin.clone(),
                                     };
                                     Ok(FfiValue::ProxyType(proxy))
@@ -3564,6 +3651,7 @@ impl Plugin for BinaryProxy {
                                     let proxy = FfiProxy {
                                         module: module.into(),
                                         uuid: REFERENT_ID.into(),
+                                        id: self.inner.borrow().id.into(), // c
                                         plugin: plugin.clone(),
                                     };
                                     Ok(FfiValue::ProxyType(proxy))
@@ -4020,6 +4108,7 @@ impl Plugin for EventProxy {
                                     let proxy = FfiProxy {
                                         module: module.into(),
                                         uuid: OBJECT_ID.into(),
+                                        id: self.inner.borrow().id.into(), // c
                                         plugin: plugin.clone(),
                                     };
                                     Ok(FfiValue::ProxyType(proxy))
@@ -4424,6 +4513,7 @@ impl Plugin for IsaProxy {
                                     let proxy = FfiProxy {
                                         module: module.into(),
                                         uuid: SUPERTYPE_ID.into(),
+                                        id: self.inner.borrow().id.into(), // c
                                         plugin: plugin.clone(),
                                     };
                                     Ok(FfiValue::ProxyType(proxy))
@@ -4828,6 +4918,7 @@ impl Plugin for ReferentProxy {
                                     let proxy = FfiProxy {
                                         module: module.into(),
                                         uuid: CARDINALITY_ID.into(),
+                                        id: self.inner.borrow().id.into(), // c
                                         plugin: plugin.clone(),
                                     };
                                     Ok(FfiValue::ProxyType(proxy))
@@ -4847,6 +4938,7 @@ impl Plugin for ReferentProxy {
                                     let proxy = FfiProxy {
                                         module: module.into(),
                                         uuid: CONDITIONALITY_ID.into(),
+                                        id: self.inner.borrow().id.into(), // c
                                         plugin: plugin.clone(),
                                     };
                                     Ok(FfiValue::ProxyType(proxy))
@@ -4866,6 +4958,7 @@ impl Plugin for ReferentProxy {
                                     let proxy = FfiProxy {
                                         module: module.into(),
                                         uuid: OBJECT_ID.into(),
+                                        id: self.inner.borrow().id.into(), // c
                                         plugin: plugin.clone(),
                                     };
                                     Ok(FfiValue::ProxyType(proxy))
@@ -5013,6 +5106,7 @@ impl Plugin for ReferrerProxy {
                                     let proxy = FfiProxy {
                                         module: module.into(),
                                         uuid: CARDINALITY_ID.into(),
+                                        id: self.inner.borrow().id.into(), // c
                                         plugin: plugin.clone(),
                                     };
                                     Ok(FfiValue::ProxyType(proxy))
@@ -5032,6 +5126,7 @@ impl Plugin for ReferrerProxy {
                                     let proxy = FfiProxy {
                                         module: module.into(),
                                         uuid: CONDITIONALITY_ID.into(),
+                                        id: self.inner.borrow().id.into(), // c
                                         plugin: plugin.clone(),
                                     };
                                     Ok(FfiValue::ProxyType(proxy))
@@ -5051,6 +5146,7 @@ impl Plugin for ReferrerProxy {
                                     let proxy = FfiProxy {
                                         module: module.into(),
                                         uuid: OBJECT_ID.into(),
+                                        id: self.inner.borrow().id.into(), // c
                                         plugin: plugin.clone(),
                                     };
                                     Ok(FfiValue::ProxyType(proxy))
@@ -5290,6 +5386,7 @@ impl Plugin for StateProxy {
                                     let proxy = FfiProxy {
                                         module: module.into(),
                                         uuid: OBJECT_ID.into(),
+                                        id: self.inner.borrow().id.into(), // c
                                         plugin: plugin.clone(),
                                     };
                                     Ok(FfiValue::ProxyType(proxy))
@@ -5491,6 +5588,7 @@ impl Plugin for SubtypeProxy {
                                     let proxy = FfiProxy {
                                         module: module.into(),
                                         uuid: ISA_ID.into(),
+                                        id: self.inner.borrow().id.into(), // c
                                         plugin: plugin.clone(),
                                     };
                                     Ok(FfiValue::ProxyType(proxy))
@@ -5510,6 +5608,7 @@ impl Plugin for SubtypeProxy {
                                     let proxy = FfiProxy {
                                         module: module.into(),
                                         uuid: OBJECT_ID.into(),
+                                        id: self.inner.borrow().id.into(), // c
                                         plugin: plugin.clone(),
                                     };
                                     Ok(FfiValue::ProxyType(proxy))
@@ -5626,6 +5725,7 @@ impl Plugin for SupertypeProxy {
                                     let proxy = FfiProxy {
                                         module: module.into(),
                                         uuid: OBJECT_ID.into(),
+                                        id: self.inner.borrow().id.into(), // c
                                         plugin: plugin.clone(),
                                     };
                                     Ok(FfiValue::ProxyType(proxy))

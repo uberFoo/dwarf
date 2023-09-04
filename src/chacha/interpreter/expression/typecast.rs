@@ -45,6 +45,10 @@ pub fn eval(expr: &SarzakStorePtr, context: &mut Context, vm: &mut VM) -> Result
                     let value: String = (&*s_read!(lhs)).try_into()?;
                     new_ref!(Value, value.into())
                 }
+                Ty::SUuid(_) => {
+                    let value: uuid::Uuid = (&*s_read!(lhs)).try_into()?;
+                    new_ref!(Value, value.into())
+                }
                 ref alpha => {
                     ensure!(
                         false,

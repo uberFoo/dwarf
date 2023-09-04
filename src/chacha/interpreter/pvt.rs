@@ -39,7 +39,7 @@ impl<'a> fmt::Display for PrintableValueType<'a> {
                 )
             }
             ValueTypeEnum::Empty(_) => write!(f, "{}", TY_CLR.italic().paint("()")),
-            ValueTypeEnum::Error(_) => write!(f, "{}", TY_ERR_CLR.italic().paint("error")),
+            ValueTypeEnum::XError(_) => write!(f, "{}", TY_ERR_CLR.italic().paint("error")),
             ValueTypeEnum::Function(_) => write!(f, "{}", TY_CLR.italic().paint("function")),
             ValueTypeEnum::Generic(g) => {
                 let g = s_read!(lu_dog).exhume_generic(g).unwrap();
@@ -99,7 +99,7 @@ impl<'a> fmt::Display for PrintableValueType<'a> {
                             }
                         }
                         Ty::SString(_) => write!(f, "{}", TY_CLR.italic().paint("string")),
-                        Ty::SUuid(_) => write!(f, "{}", TY_CLR.italic().paint("uuid")),
+                        Ty::SUuid(_) => write!(f, "{}", TY_CLR.italic().paint("Uuid")),
                         gamma => {
                             error!("deal with sarzak type {gamma:?}");
                             write!(f, "todo")

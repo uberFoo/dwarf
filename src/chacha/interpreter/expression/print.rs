@@ -10,7 +10,7 @@ pub fn eval(print: &SarzakStorePtr, context: &mut Context, vm: &mut VM) -> Resul
     let lu_dog = context.lu_dog_heel().clone();
     let sarzak = context.sarzak_heel().clone();
 
-    let print = s_read!(lu_dog).exhume_print(print).unwrap();
+    let print = s_read!(lu_dog).exhume_x_print(print).unwrap();
     debug!("ExpressionEnum::Print print {print:?}");
     let expr = s_read!(print).r32_expression(&s_read!(lu_dog))[0].clone();
     let value = eval_expression(expr, context, vm)?;

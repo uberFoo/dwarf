@@ -1,0 +1,7 @@
+fn main() {
+    for a in 0..10 {
+        for b in 0..10 {
+            print("{0} + {1} = {2}\n".format(a, b, a + b));
+        }
+    }
+}

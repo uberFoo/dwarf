@@ -25,10 +25,9 @@ use crate::{
             ExternalImplementation, Field, FieldExpression, ForLoop, Function, Generic,
             ImplementationBlock, Index, IntegerLiteral, Item as WoogItem, ItemStatement, Lambda,
             LambdaParameter, LetStatement, Literal, LocalVariable, Parameter, Pattern as AssocPat,
-            Plain, Print, RangeExpression, Span as LuDogSpan, Statement, StringLiteral,
-            StructExpression, StructField, TupleField, ValueType, ValueTypeEnum, Variable,
-            VariableExpression, WoogOption, WoogStruct, XIf, XMatch, XValue, XValueEnum,
-            ZObjectStore, ZSome,
+            Plain, RangeExpression, Span as LuDogSpan, Statement, StringLiteral, StructExpression,
+            StructField, TupleField, ValueType, ValueTypeEnum, Variable, VariableExpression,
+            WoogOption, WoogStruct, XIf, XMatch, XPrint, XValue, XValueEnum, ZObjectStore, ZSome,
         },
         Argument, Binary, BooleanLiteral, Comparison, DwarfSourceFile, FieldAccess,
         FieldAccessTarget, FloatLiteral, List, ListElement, ListExpression, MethodCall, Operator,
@@ -36,7 +35,7 @@ use crate::{
     },
     new_ref, s_read, s_write,
     sarzak::{store::ObjectStore as SarzakStore, types::Ty},
-    Dirty, ModelStore, NewRef, RefType, CHACHA, FN_NEW, UUID_TYPE,
+    Dirty, ModelStore, NewRef, RefType, SarzakStorePtr, CHACHA, FN_NEW, UUID_TYPE,
 };
 
 const LIB_TAO: &str = "lib.tao";
@@ -597,7 +596,7 @@ fn inter_func(
 
     let name = name.de_sanitize();
     let (func, block) = if let Some((ParserExpression::Block(stmts, vars, tys), span)) = &stmts {
-        let block = Block::new(Uuid::new_v4(), None, lu_dog);
+        let block = Block::new(Uuid::new_v4(), None, None, lu_dog);
         for (var, ty) in vars.into_iter().zip(tys.into_iter()) {
             let local = LocalVariable::new(Uuid::new_v4(), lu_dog);
             let var = Variable::new_local_variable(var.to_owned(), &local, lu_dog);
@@ -1042,7 +1041,7 @@ pub(super) fn inter_expression(
         // Block
         //
         ParserExpression::Block(ref stmts, vars, tys) => {
-            let block = Block::new(Uuid::new_v4(), None, lu_dog);
+            let block = Block::new(Uuid::new_v4(), Some(block), None, lu_dog);
 
             for (var, ty) in vars.into_iter().zip(tys.into_iter()) {
                 let local = LocalVariable::new(Uuid::new_v4(), lu_dog);
@@ -1412,7 +1411,6 @@ pub(super) fn inter_expression(
             let (collection, collection_ty) =
                 inter_expression(&collection, cspan, block, context, lu_dog)?;
 
-            dbg!(&collection_ty);
             let collection_ty = match &(*s_read!(collection_ty)).subtype {
                 ValueTypeEnum::List(ref id) => {
                     let list = lu_dog.exhume_list(id).unwrap();
@@ -1841,7 +1839,7 @@ pub(super) fn inter_expression(
         // Lambda
         //
         ParserExpression::Lambda(params, return_type, body) => {
-            let block = Block::new(Uuid::new_v4(), None, lu_dog);
+            let block = Block::new(Uuid::new_v4(), Some(block), None, lu_dog);
             let stmts = if let ParserExpression::Block(body, _, _) = &body.0 {
                 body
             } else {
@@ -2094,15 +2092,29 @@ pub(super) fn inter_expression(
             // need one -- and it needs to be the right one...
             // To expound, there are likely to be multiple values in this block,
             // and we need to find the one that matches the variable name.
-            //
-            // ⚡️ Oh shit -- I'm in the compiler!!!
-            //
-            // So what's happening? We hit a local variable node in the ast. We need
-            // to create
-            //
+            let values = |block: SarzakStorePtr| -> Vec<RefType<XValue>> {
+                lu_dog
+                    .iter_x_value()
+                    .filter(|value| s_read!(value).block == block)
+                    .collect::<Vec<RefType<XValue>>>()
+            };
+
+            // Get all of the values from the previous, and current frame.
             let values = lu_dog
-                .iter_x_value()
-                .filter(|value| s_read!(value).block == s_read!(block).id)
+                .iter_block()
+                .map(|block| {
+                    let mut result = values(s_read!(block).id);
+                    let prev = &s_read!(block).r93c_block(lu_dog).pop();
+                    let mut prev = if let Some(prev) = prev {
+                        let prev = s_read!(prev);
+                        values(prev.id)
+                    } else {
+                        Vec::new()
+                    };
+                    result.append(&mut prev);
+                    result
+                })
+                .flatten()
                 .collect::<Vec<RefType<XValue>>>();
 
             // debug!("values", values);
@@ -2120,20 +2132,7 @@ pub(super) fn inter_expression(
                     let value = s_read!(value);
                     match value.subtype {
                         XValueEnum::Expression(ref _expr) => {
-                            // let expr = lu_dog.exhume_expression(expr).unwrap();
-                            // error!("we don't expect to be here", expr);
-                            // So we get here after all.
-                            // Must. Remember. In. Compiler.
-                            // So we need to create some nodes here. And return an expression
-                            // and a type.
-                            //
-                            // Still wondering how we get here. Debugging is showing that we've
-                            // got a Literal expression. But why's it showing up as a LocalVariable?
-                            // I got here by entering `Point::new(5, a)` in the interpreter. `a` is
-                            // an Inflection instance. I need to turn on logging and sort this out.
-                            //
-                            // Fuck me. I've been debugging something that's completely normal. What's
-                            // going on is that there are a bunch of values in the block --
+                            // What's going on is that there are a bunch of values in the block --
                             // especially when running the interpreter. So we are iterating over
                             // them all, and we are bound to find some that aren't variable expressions
                             // even though we are parsing a LocalVariable. Remember these are all of
@@ -2141,7 +2140,6 @@ pub(super) fn inter_expression(
                             // ourselves here.
                             //
                             // Hopefully this is concluded.
-                            //
 
                             None
                         }
@@ -2154,8 +2152,6 @@ pub(super) fn inter_expression(
                                     VariableEnum::LocalVariable(_) |
                                     VariableEnum::Parameter(_) |
                                     VariableEnum::LambdaParameter(_)=> {
-                                        // let value =
-                                            // s_read!(var.r11_x_value(lu_dog)[0]).clone();
                                         let ty = value.r24_value_type(lu_dog)[0].clone();
 
                                         let lhs_ty =
@@ -2213,7 +2209,7 @@ pub(super) fn inter_expression(
             // ```
             //
             // `b` is being evaluated in the assignment handler. It's getting back
-            // "yes", which I guess is correct, but they type is `()`. So that's weird.
+            // "yes", which I guess is correct, but the type is `()`. So that's weird.
             // Also, there are two different places that b shows up. I'm taking the
             // last one, which maybe corresponds to `b` being in rhs of the previous
             // storage allocation. I'm figuring that out now. In that case, it sort
@@ -2537,8 +2533,8 @@ pub(super) fn inter_expression(
                 context,
                 lu_dog,
             )?;
-            let print = Print::new(&expr.0, lu_dog);
-            let expr = Expression::new_print(&print, lu_dog);
+            let print = XPrint::new(&expr.0, lu_dog);
+            let expr = Expression::new_x_print(&print, lu_dog);
             let value = XValue::new_expression(block, &ty, &expr, lu_dog);
             s_write!(span).x_value = Some(s_read!(value).id);
 

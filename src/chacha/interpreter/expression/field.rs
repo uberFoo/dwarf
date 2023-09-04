@@ -64,7 +64,12 @@ pub mod field_access {
 
         let value = s_read!(value).clone();
         match value {
-            Value::ProxyType((module, _, ref proxy)) => {
+            Value::ProxyType {
+                module,
+                obj_ty: _,
+                id: _,
+                plugin: ref proxy,
+            } => {
                 let mut proxy = s_write!(proxy);
                 match proxy
                     .invoke_func(

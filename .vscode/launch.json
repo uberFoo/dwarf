@@ -89,7 +89,7 @@
                 }
             },
             "args": [
-                "tests/harness/expression/function_call/instances.tao"
+                // "tests/harness/expression/function_call/instances.tao"
                 // "tests/proxy/declare.tao",
                 // "-r",
                 // "-m",
