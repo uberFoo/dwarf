@@ -3,10 +3,8 @@ use ansi_term::Colour;
 use crate::{
     chacha::{error::Result, vm::VM},
     interpreter::{debug, eval_expression, function, Context},
-    lu_dog::{ComparisonEnum, Expression, Operator, ValueType},
-    new_ref, s_read, s_write,
-    sarzak::Ty,
-    NewRef, RefType, SarzakStorePtr, Value,
+    lu_dog::{ComparisonEnum, Expression, Operator},
+    new_ref, s_read, NewRef, RefType, SarzakStorePtr, Value,
 };
 
 pub fn eval(
@@ -17,7 +15,6 @@ pub fn eval(
     vm: &mut VM,
 ) -> Result<RefType<Value>> {
     let lu_dog = context.lu_dog_heel().clone();
-    let sarzak = context.sarzak_heel().clone();
 
     let lhs = eval_expression(lhs_expr.clone(), context, vm)?;
     let rhs = {

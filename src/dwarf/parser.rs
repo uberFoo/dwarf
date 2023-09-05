@@ -5478,6 +5478,5 @@ mod tests {
 
         let ast = parse_dwarf("test_if_let", src);
         assert!(ast.is_ok());
-        dbg!(ast);
     }
 }

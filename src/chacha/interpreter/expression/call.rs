@@ -1,20 +1,19 @@
 use std::{collections::VecDeque, time::Instant};
 
 use ansi_term::Colour;
-use rustc_hash::FxHashMap as HashMap;
 use snafu::{location, prelude::*, Location};
 use uuid::Uuid;
 
 use crate::{
     chacha::{
-        error::{NoSuchStaticMethodSnafu, Result, TypeMismatchSnafu, WrongNumberOfArgumentsSnafu},
+        error::{NoSuchStaticMethodSnafu, Result, TypeMismatchSnafu},
         vm::{CallFrame, VM},
     },
     interpreter::{
         debug, error, eval_expression, eval_function_call, eval_lambda_expression,
         func_call::eval_external_method, function, ChaChaError, Context, PrintableValueType,
     },
-    lu_dog::{CallEnum, Expression, List, ValueType, ValueTypeEnum},
+    lu_dog::{CallEnum, Expression, ValueTypeEnum},
     new_ref, s_read, s_write,
     sarzak::Ty,
     NewRef, RefType, SarzakStorePtr, Value, CHACHA, COMPLEX_EX, FN_NEW, UUID_TYPE,
@@ -93,7 +92,7 @@ pub fn eval(
                     id: _,
                     plugin: _,
                 } => Ok(value.clone()),
-                Value::Struct(ut) => Ok(value.clone()),
+                Value::Struct(_) => Ok(value.clone()),
                 Value::Store(_store, _plugin) => {
                     // let ty = s_read!(lu_dog)
                     //     .iter_value_type()
@@ -300,17 +299,16 @@ pub fn eval(
                                     .exhume_expression(&s_read!(next).expression)
                                     .unwrap();
 
-                                let source =
-                                    s_read!(lu_dog).iter_dwarf_source_file().next().unwrap();
-                                let source = s_read!(source);
-                                let source = &source.source;
+                                // let source =
+                                //     s_read!(lu_dog).iter_dwarf_source_file().next().unwrap();
+                                // let source = s_read!(source);
+                                // let source = &source.source;
 
-                                let value = &s_read!(expr).r11_x_value(&s_read!(lu_dog))[0];
+                                // let value = &s_read!(expr).r11_x_value(&s_read!(lu_dog))[0];
 
-                                let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
-
-                                let read = s_read!(span);
-                                let span = read.start as usize..read.end as usize;
+                                // let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
+                                // let read = s_read!(span);
+                                // let span = read.start as usize..read.end as usize;
 
                                 // let key = source[span].to_owned();
 
@@ -561,11 +559,6 @@ pub fn eval(
                 match func.as_str() {
                     ARGS => {
                         debug!("evaluating chacha::args");
-                        let ty = Ty::new_s_string(&s_read!(sarzak));
-                        // 🚧 Look these up
-                        let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
-                        let ty = List::new(&ty, &mut s_write!(lu_dog));
-                        let ty = ValueType::new_list(&ty, &mut s_write!(lu_dog));
 
                         if let Some(args) = &context.get_args() {
                             Ok(args.clone())
@@ -591,10 +584,6 @@ pub fn eval(
                                     median
                                 );
                         // chacha_print(result, context)?;
-
-                        // 🚧 Lookup/cache
-                        let ty = Ty::new_s_string(&s_read!(sarzak));
-                        let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
 
                         Ok(new_ref!(Value, Value::String(result)))
                     }
@@ -638,10 +627,6 @@ pub fn eval(
                         } else {
                             panic!("missing implementation for timing this type: {func:?}");
                         };
-
-                        // 🚧 Lookup/cache
-                        let ty = Ty::new_float(&s_read!(sarzak));
-                        let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
 
                         Ok(new_ref!(Value, Value::Float(elapsed.as_secs_f64())))
                     }

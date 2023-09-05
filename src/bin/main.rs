@@ -178,7 +178,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         })
         .into();
 
-    if !fs::metadata(&dwarf_home).is_ok() {
+    if fs::metadata(&dwarf_home).is_err() {
         fs::create_dir_all(&dwarf_home)?;
     }
 

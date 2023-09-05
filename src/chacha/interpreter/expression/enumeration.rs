@@ -8,7 +8,7 @@ use crate::{
         vm::VM,
     },
     interpreter::{debug, eval_expression, function, Context},
-    lu_dog::{EnumFieldEnum, ValueType},
+    lu_dog::EnumFieldEnum,
     new_ref, s_read, NewRef, RefType, SarzakStorePtr, Value,
 };
 

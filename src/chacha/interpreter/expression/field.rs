@@ -1,12 +1,10 @@
-use std::ptr;
-
 use ansi_term::Colour;
 use snafu::{location, Location};
 
 use crate::{
     chacha::{error::Result, vm::VM},
     interpreter::{debug, eval_expression, function, ChaChaError, Context},
-    lu_dog::{FieldAccessTargetEnum, ValueType},
+    lu_dog::FieldAccessTargetEnum,
     new_ref, s_read, s_write, NewRef, RefType, SarzakStorePtr, Value,
 };
 

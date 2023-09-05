@@ -3,7 +3,6 @@ use ansi_term::Colour;
 use crate::{
     chacha::{error::Result, vm::VM},
     interpreter::{debug, eval_expression, function, Context},
-    lu_dog::ValueType,
     new_ref, s_read, NewRef, RefType, SarzakStorePtr, Value,
 };
 
@@ -13,7 +12,6 @@ pub fn eval_if_expression(
     vm: &mut VM,
 ) -> Result<RefType<Value>> {
     let lu_dog = context.lu_dog_heel().clone();
-    let sarzak = context.sarzak_heel().clone();
 
     let expr = s_read!(lu_dog).exhume_x_if(expr).unwrap();
     let expr = s_read!(expr);

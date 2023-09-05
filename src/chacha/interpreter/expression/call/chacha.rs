@@ -1,4 +1,4 @@
-use std::{collections::VecDeque, ops::Range};
+use std::collections::VecDeque;
 
 use ansi_term::Colour;
 use snafu::prelude::*;
@@ -10,7 +10,7 @@ use crate::{
         chacha_print, debug, function, initialize_interpreter, start_func, ChaChaError, Context,
     },
     lu_dog::{Expression, ObjectStore as LuDogStore},
-    new_ref, s_read, Context as InterContext, NewRef, RefType, Span, Value,
+    new_ref, s_read, Context as InterContext, NewRef, RefType, Value,
 };
 
 /// Evaluate a parsed string

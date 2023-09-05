@@ -1,11 +1,10 @@
-use std::{env, fs, path::PathBuf};
+use std::{env, fs};
 
 use criterion::{criterion_group, criterion_main, Criterion};
 use dwarf::{
     chacha::interpreter::{initialize_interpreter, start_func, start_vm},
     dwarf::{new_lu_dog, parse_dwarf},
 };
-use rustc_hash::FxHashMap as HashMap;
 use sarzak::sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL};
 use tracy_client::Client;
 
@@ -26,12 +25,12 @@ fn mandelbrot(c: &mut Criterion) {
         })
         .into();
 
-    let (lu_dog, models, dirty) = new_lu_dog(Some((source, &ast)), &dwarf_home, &sarzak).unwrap();
+    let ctx = new_lu_dog(Some((source, &ast)), &dwarf_home, &sarzak).unwrap();
 
-    let ctx = initialize_interpreter(dwarf_home, dirty, models, lu_dog, sarzak).unwrap();
+    let ctx = initialize_interpreter(dwarf_home, ctx, sarzak).unwrap();
 
     c.bench_function("mandelbrot-14x4", |b| {
-        b.iter(|| start_func(false, ctx.clone()).unwrap())
+        b.iter(|| start_func("main", false, ctx.clone()).unwrap())
     });
 }
 
@@ -49,13 +48,13 @@ fn fib(c: &mut Criterion) {
         })
         .into();
 
-    let (lu_dog, models, dirty) = new_lu_dog(Some((source, &ast)), &dwarf_home, &sarzak).unwrap();
+    let ctx = new_lu_dog(Some((source, &ast)), &dwarf_home, &sarzak).unwrap();
 
-    let mut ctx = initialize_interpreter(dwarf_home, dirty, models, lu_dog, sarzak).unwrap();
+    let mut ctx = initialize_interpreter(dwarf_home, ctx, sarzak).unwrap();
     ctx.add_args(vec!["fib".to_owned(), "17".to_owned()]);
 
     c.bench_function("fib-17", |b| {
-        b.iter(|| start_func(false, ctx.clone()).unwrap())
+        b.iter(|| start_func("main", false, ctx.clone()).unwrap())
     });
 }
 

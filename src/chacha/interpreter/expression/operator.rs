@@ -3,7 +3,7 @@ use ansi_term::Colour;
 use crate::{
     chacha::{error::Result, vm::VM},
     interpreter::{debug, function, Context},
-    lu_dog::{Expression, OperatorEnum, ValueType},
+    lu_dog::{Expression, OperatorEnum},
     s_read, RefType, SarzakStorePtr, Value,
 };
 

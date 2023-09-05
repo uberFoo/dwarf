@@ -17,9 +17,7 @@ use crate::{
         store::ObjectStore as LuDogStore, Argument, Block, Call, EnumFieldEnum, Expression, Span,
         StaticMethodCall, ValueType, ValueTypeEnum, XValue,
     },
-    new_ref, s_read, s_write,
-    sarzak::Ty,
-    NewRef, RefType, CHACHA, COMPLEX_EX, FN_NEW, UUID_TYPE,
+    new_ref, s_read, s_write, NewRef, RefType, CHACHA, COMPLEX_EX, UUID_TYPE,
 };
 
 // Let's just say that I don't get this lint. The docs say you have to box it

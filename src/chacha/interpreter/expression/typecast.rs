@@ -7,7 +7,7 @@ use crate::{
         vm::VM,
     },
     interpreter::{debug, eval_expression, function, Context},
-    lu_dog::{ValueType, ValueTypeEnum},
+    lu_dog::ValueTypeEnum,
     new_ref, s_read,
     sarzak::Ty,
     NewRef, RefType, SarzakStorePtr, Value,

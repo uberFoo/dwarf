@@ -19,8 +19,8 @@ use crate::{
         Context,
     },
     lu_dog::{
-        Argument, BodyEnum, Expression, ExternalImplementation, Function, List,
-        ObjectStore as LuDogStore, Span, ValueType, ValueTypeEnum,
+        Argument, BodyEnum, Expression, ExternalImplementation, Function,
+        ObjectStore as LuDogStore, Span,
     },
     new_ref,
     plug_in::PluginModRef,
@@ -198,28 +198,27 @@ pub(crate) fn eval_external_method(
                             .collect::<Vec<_>>();
                         let value = new_ref!(Value, Value::Vector(vec));
 
-                        let woog_struct = s_read!(lu_dog)
-                            .iter_woog_struct()
-                            .find(|woog| {
-                                let woog = s_read!(woog);
-                                woog.name == object_name
-                            })
-                            .unwrap();
+                        // let woog_struct = s_read!(lu_dog)
+                        //     .iter_woog_struct()
+                        //     .find(|woog| {
+                        //         let woog = s_read!(woog);
+                        //         woog.name == object_name
+                        //     })
+                        //     .unwrap();
 
-                        let ty = s_read!(lu_dog)
-                            .iter_value_type()
-                            .find(|ty| {
-                                let ty = s_read!(ty);
-                                if let ValueTypeEnum::WoogStruct(struct_id) = ty.subtype {
-                                    struct_id == s_read!(woog_struct).id
-                                } else {
-                                    false
-                                }
-                            })
-                            .unwrap();
+                        // let ty = s_read!(lu_dog)
+                        //     .iter_value_type()
+                        //     .find(|ty| {
+                        //         let ty = s_read!(ty);
+                        //         if let ValueTypeEnum::WoogStruct(struct_id) = ty.subtype {
+                        //             struct_id == s_read!(woog_struct).id
+                        //         } else {
+                        //             false
+                        //         }
+                        //     })
+                        //     .unwrap();
 
-                        let list = List::new(&ty, &mut s_write!(lu_dog));
-                        let ty = ValueType::new_list(&list, &mut s_write!(lu_dog));
+                        // let list = List::new(&ty, &mut s_write!(lu_dog));
 
                         Ok(value)
                     }
@@ -352,28 +351,27 @@ fn eval_external_static_method(
                             .collect::<Vec<_>>();
                         let value = new_ref!(Value, Value::Vector(vec));
 
-                        let woog_struct = s_read!(lu_dog)
-                            .iter_woog_struct()
-                            .find(|woog| {
-                                let woog = s_read!(woog);
-                                woog.name == object_name
-                            })
-                            .unwrap();
+                        // let woog_struct = s_read!(lu_dog)
+                        //     .iter_woog_struct()
+                        //     .find(|woog| {
+                        //         let woog = s_read!(woog);
+                        //         woog.name == object_name
+                        //     })
+                        //     .unwrap();
 
-                        let ty = s_read!(lu_dog)
-                            .iter_value_type()
-                            .find(|ty| {
-                                let ty = s_read!(ty);
-                                if let ValueTypeEnum::WoogStruct(struct_id) = ty.subtype {
-                                    struct_id == s_read!(woog_struct).id
-                                } else {
-                                    false
-                                }
-                            })
-                            .unwrap();
+                        // let ty = s_read!(lu_dog)
+                        //     .iter_value_type()
+                        //     .find(|ty| {
+                        //         let ty = s_read!(ty);
+                        //         if let ValueTypeEnum::WoogStruct(struct_id) = ty.subtype {
+                        //             struct_id == s_read!(woog_struct).id
+                        //         } else {
+                        //             false
+                        //         }
+                        //     })
+                        //     .unwrap();
 
-                        let list = List::new(&ty, &mut s_write!(lu_dog));
-                        let ty = ValueType::new_list(&list, &mut s_write!(lu_dog));
+                        // let list = List::new(&ty, &mut s_write!(lu_dog));
 
                         Ok(value)
                     }
@@ -531,7 +529,7 @@ fn eval_built_in_function_call(
                     e
                 });
 
-                if let Err(ChaChaError::Return { value, ty }) = &result {
+                if let Err(ChaChaError::Return { value, ty: _ }) = &result {
                     return Ok(value.clone());
                 }
 
@@ -579,18 +577,6 @@ fn objectstore_static_methods(
         })
         .unwrap();
 
-    let ty = s_read!(lu_dog)
-        .iter_value_type()
-        .find(|ty| {
-            let ty = s_read!(ty);
-            if let ValueTypeEnum::ZObjectStore(store_id) = ty.subtype {
-                store_id == s_read!(store).id
-            } else {
-                false
-            }
-        })
-        .unwrap();
-
     match s_read!(external).function.as_str() {
         FUNCTION_LOAD => {
             // This is where we actually instantiate the shared library.
@@ -599,7 +585,7 @@ fn objectstore_static_methods(
                     "{}/extensions/{model_name}/lib",
                     context.get_home().display()
                 )),
-                &model_name,
+                model_name,
                 LibrarySuffix::NoSuffix,
             );
             let root_module = (|| {
@@ -631,7 +617,7 @@ fn objectstore_static_methods(
                     "{}/extensions/{model_name}/lib",
                     context.get_home().display()
                 )),
-                &model_name,
+                model_name,
                 LibrarySuffix::NoSuffix,
             );
             let root_module = (|| {

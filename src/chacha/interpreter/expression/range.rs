@@ -3,8 +3,7 @@ use ansi_term::Colour;
 use crate::{
     chacha::{error::Result, vm::VM},
     interpreter::{debug, eval_expression, function, Context},
-    lu_dog::ValueType,
-    new_ref, s_read, s_write, DwarfInteger, NewRef, RefType, SarzakStorePtr, Value,
+    new_ref, s_read, DwarfInteger, NewRef, RefType, SarzakStorePtr, Value,
 };
 
 pub fn eval_range(

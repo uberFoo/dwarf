@@ -8,7 +8,6 @@ use crate::{
 
 pub fn eval(print: &SarzakStorePtr, context: &mut Context, vm: &mut VM) -> Result<RefType<Value>> {
     let lu_dog = context.lu_dog_heel().clone();
-    let sarzak = context.sarzak_heel().clone();
 
     let print = s_read!(lu_dog).exhume_x_print(print).unwrap();
     debug!("ExpressionEnum::Print print {print:?}");

@@ -155,21 +155,6 @@ macro_rules! e_warn {
 }
 pub(crate) use e_warn;
 
-macro_rules! error {
-    ($($arg:tt)*) => {
-        log::error!(
-            target: "extruder",
-            "{}: {}\n  --> {}:{}:{}",
-            Colour::Red.dimmed().italic().paint(function!()),
-            format_args!($($arg)*),
-            file!(),
-            line!(),
-            column!()
-        )
-    };
-}
-pub(crate) use error;
-
 type Span = Range<usize>;
 pub(super) type ExprSpan = (RefType<Expression>, RefType<LuDogSpan>);
 
@@ -387,11 +372,11 @@ fn walk_tree(ast: &[Item], context: &mut Context, lu_dog: &mut LuDogStore) -> Re
             } => implementations.push(ConveyImpl::new(name, span, attributes, funcs)),
             // Imports can happen any time, I think.
             Item {
-                item: (InnerItem::Import((path, _path_span), alias), span),
+                item: (InnerItem::Import((path, _path_span), alias), _span),
                 attributes: _,
             } => inter_import(path, alias, context, lu_dog)?,
             Item {
-                item: (InnerItem::Module((name, _name_span)), span),
+                item: (InnerItem::Module((name, _name_span)), _span),
                 attributes: _,
             } => inter_module(name, context, lu_dog)?,
             Item {
@@ -602,10 +587,10 @@ fn inter_func(
     let name = name.de_sanitize();
     let (func, block) = if let Some((ParserExpression::Block(stmts, vars, tys), span)) = &stmts {
         let block = Block::new(Uuid::new_v4(), None, None, lu_dog);
-        for (var, ty) in vars.into_iter().zip(tys.into_iter()) {
+        for (var, ty) in vars.iter().zip(tys.iter()) {
             let local = LocalVariable::new(Uuid::new_v4(), lu_dog);
             let var = Variable::new_local_variable(var.to_owned(), &local, lu_dog);
-            let _value = XValue::new_variable(&block, &ty, &var, lu_dog);
+            let _value = XValue::new_variable(&block, ty, &var, lu_dog);
         }
 
         let body = Body::new_block(&block, lu_dog);
@@ -1416,7 +1401,7 @@ pub(super) fn inter_expression(
             let (collection, collection_ty) =
                 inter_expression(&collection, cspan, block, context, lu_dog)?;
 
-            let collection_ty = match &(*s_read!(collection_ty)).subtype {
+            let collection_ty = match s_read!(collection_ty).subtype {
                 ValueTypeEnum::List(ref id) => {
                     let list = lu_dog.exhume_list(id).unwrap();
                     let list = s_read!(list);
@@ -2107,7 +2092,7 @@ pub(super) fn inter_expression(
             // Get all of the values from the previous, and current frame.
             let values = lu_dog
                 .iter_block()
-                .map(|block| {
+                .flat_map(|block| {
                     let mut result = values(s_read!(block).id);
                     let prev = &s_read!(block).r93c_block(lu_dog).pop();
                     let mut prev = if let Some(prev) = prev {
@@ -2119,7 +2104,6 @@ pub(super) fn inter_expression(
                     result.append(&mut prev);
                     result
                 })
-                .flatten()
                 .collect::<Vec<RefType<XValue>>>();
 
             // debug!("values", values);
@@ -3025,7 +3009,7 @@ fn inter_module(name: &str, context: &mut Context, lu_dog: &mut LuDogStore) -> R
     match fs::read_to_string(&path) {
         Ok(source_code) => {
             // parse, and extrude the dwarf file
-            match parse_dwarf(&path.to_str().unwrap(), &source_code) {
+            match parse_dwarf(path.to_str().unwrap(), &source_code) {
                 Ok(ast) => {
                     // let old_cwd = context.cwd.clone();
                     // context.cwd = path.clone();
@@ -3056,7 +3040,7 @@ fn inter_module(name: &str, context: &mut Context, lu_dog: &mut LuDogStore) -> R
 }
 
 fn inter_import(
-    path: &Vec<Spanned<String>>,
+    path: &[Spanned<String>],
     _alias: &Option<(String, Range<usize>)>,
     context: &mut Context,
     lu_dog: &mut LuDogStore,
@@ -3077,7 +3061,7 @@ fn inter_import(
 
     let mut path = context.dwarf_home.clone();
     path.push(EXTENSION_DIR);
-    path.push(&module);
+    path.push(module);
     path.push(SRC_DIR);
     let dir = path.clone();
 
@@ -3086,7 +3070,7 @@ fn inter_import(
     match fs::read_to_string(&path) {
         Ok(source_code) => {
             // parse, and extrude the dwarf file
-            match parse_dwarf(&path.to_str().unwrap(), &source_code) {
+            match parse_dwarf(path.to_str().unwrap(), &source_code) {
                 Ok(ast) => {
                     let old_cwd = context.cwd.clone();
                     context.cwd = dir;
@@ -3193,7 +3177,7 @@ fn inter_implementation(
         } else {
             return Err(vec![DwarfError::ObjectNameNotFound {
                 name: name.to_owned(),
-                span: span.start as usize..span.end as usize,
+                span: span.to_owned(),
                 location: location!(),
             }]);
         };

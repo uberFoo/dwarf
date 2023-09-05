@@ -4,7 +4,7 @@ use snafu::{location, Location};
 use crate::{
     chacha::{error::Result, vm::VM},
     interpreter::{debug, eval_expression, function, ChaChaError, Context},
-    lu_dog::{Expression, ValueType},
+    lu_dog::Expression,
     new_ref, s_read, s_write, NewRef, RefType, SarzakStorePtr, Value,
 };
 

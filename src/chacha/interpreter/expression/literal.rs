@@ -3,13 +3,12 @@ use ansi_term::Colour;
 use crate::{
     chacha::error::Result,
     interpreter::{debug, function, Context},
-    lu_dog::{BooleanLiteralEnum, LiteralEnum, ValueType},
+    lu_dog::{BooleanLiteralEnum, LiteralEnum},
     new_ref, s_read, NewRef, RefType, SarzakStorePtr, Value,
 };
 
 pub fn eval(literal: &SarzakStorePtr, context: &mut Context) -> Result<RefType<Value>> {
     let lu_dog = context.lu_dog_heel().clone();
-    let sarzak = context.sarzak_heel().clone();
 
     let literal = s_read!(lu_dog).exhume_literal(literal).unwrap();
 
@@ -22,7 +21,6 @@ pub fn eval(literal: &SarzakStorePtr, context: &mut Context) -> Result<RefType<V
         LiteralEnum::BooleanLiteral(ref literal) => {
             let literal = s_read!(lu_dog).exhume_boolean_literal(literal).unwrap();
             let literal = s_read!(literal);
-            let ty = Value::Boolean(true).get_type(&s_read!(sarzak), &s_read!(lu_dog));
 
             match literal.subtype {
                 BooleanLiteralEnum::FalseLiteral(_) => Ok(new_ref!(Value, Value::Boolean(false,))),

@@ -60,10 +60,10 @@ pub fn eval_list_expression(
 
         Ok(new_ref!(Value, Value::Vector(values)))
     } else {
-        let list = List::new(
-            &Value::Empty.get_type(&s_read!(sarzak), &s_read!(lu_dog)),
-            &mut s_write!(lu_dog),
-        );
+        // let list = List::new(
+        //     &Value::Empty.get_type(&s_read!(sarzak), &s_read!(lu_dog)),
+        //     &mut s_write!(lu_dog),
+        // );
 
         Ok(new_ref!(
             Value,

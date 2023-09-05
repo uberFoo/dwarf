@@ -143,7 +143,7 @@ lazy_static! {
 /// sarzak. The second is the compiled dwarf file.
 pub fn initialize_interpreter(
     dwarf_home: PathBuf,
-    mut i_context: InterContext,
+    i_context: InterContext,
     sarzak: SarzakStore,
 ) -> Result<Context, Error> {
     let mut lu_dog = s_write!(i_context.lu_dog);
@@ -538,7 +538,6 @@ pub fn eval_statement(
     vm: &mut VM,
 ) -> Result<RefType<Value>> {
     let lu_dog = context.lu_dog_heel().clone();
-    let sarzak = context.sarzak_heel().clone();
 
     debug!("eval_statement statement {statement:?}");
     trace!("eval_statement stack {:?}", context.memory());
@@ -560,8 +559,8 @@ pub fn eval_statement(
                 inter_store(store, context.memory(), &s_read!(lu_dog));
             }
             Dirty::Struct(s) => inter_struct(s.clone(), context.memory(), &s_read!(lu_dog)),
-            foo => {
-                // dbg!(foo);
+            foobar => {
+                dbg!(foobar);
             }
         }
     }
@@ -818,22 +817,18 @@ fn inter_func(
     func: RefType<crate::lu_dog::Function>,
     block: &RefType<Block>,
     stack: &mut Memory,
-    mut lu_dog: &mut LuDogStore,
+    lu_dog: &mut LuDogStore,
 ) {
-    let imp = s_read!(func).r9_implementation_block(&lu_dog);
+    let imp = s_read!(func).r9_implementation_block(lu_dog);
     if imp.is_empty() {
         let name = s_read!(func).name.clone();
         let value = Value::Function(func.clone());
 
         // Build the local in the AST.
-        let local = LocalVariable::new(Uuid::new_v4(), &mut lu_dog);
-        let var = Variable::new_local_variable(name.clone(), &local, &mut lu_dog);
-        let _value = XValue::new_variable(
-            block,
-            &ValueType::new_function(&func, &mut lu_dog),
-            &var,
-            &mut lu_dog,
-        );
+        let local = LocalVariable::new(Uuid::new_v4(), lu_dog);
+        let var = Variable::new_local_variable(name.clone(), &local, lu_dog);
+        let _value =
+            XValue::new_variable(block, &ValueType::new_function(&func, lu_dog), &var, lu_dog);
 
         trace!("inserting local function {}", name);
         stack.insert(name, new_ref!(Value, value));
@@ -849,13 +844,13 @@ fn inter_struct(
     // Create a meta table for each struct.
     debug!("inserting struct in meta table {}", woog_struct.name);
     stack.insert_meta_table(woog_struct.name.to_owned());
-    let impl_ = woog_struct.r8c_implementation_block(&lu_dog);
+    let impl_ = woog_struct.r8c_implementation_block(lu_dog);
     if !impl_.is_empty() {
         // For each function in the impl, insert the function. I should probably
         // check and only insert the static functions.
-        for func in s_read!(impl_[0]).r9_function(&lu_dog) {
-            let insert = if let Some(param) = s_read!(func).r82_parameter(&lu_dog).get(0) {
-                let var = &s_read!(param).r12_variable(&lu_dog)[0];
+        for func in s_read!(impl_[0]).r9_function(lu_dog) {
+            let insert = if let Some(param) = s_read!(func).r82_parameter(lu_dog).get(0) {
+                let var = &s_read!(param).r12_variable(lu_dog)[0];
                 let var = s_read!(var);
                 var.name != "self"
             } else {
@@ -883,14 +878,14 @@ fn inter_store(
     // Create a meta table for each struct.
     debug!("inserting store in meta table {}", store.domain);
     stack.insert_meta_table(store.name.to_owned());
-    let impl_ = store.r83c_implementation_block(&lu_dog);
+    let impl_ = store.r83c_implementation_block(lu_dog);
     if !impl_.is_empty() {
         // For each function in the impl, insert the function. I should probably
         // check and only insert the static functions.
         // 🚧 Only insert the static functions
-        for func in s_read!(impl_[0]).r9_function(&lu_dog) {
-            let insert = if let Some(param) = s_read!(func).r82_parameter(&lu_dog).get(0) {
-                let var = &s_read!(param).r12_variable(&lu_dog)[0];
+        for func in s_read!(impl_[0]).r9_function(lu_dog) {
+            let insert = if let Some(param) = s_read!(func).r82_parameter(lu_dog).get(0) {
+                let var = &s_read!(param).r12_variable(lu_dog)[0];
                 let var = s_read!(var);
                 var.name != "self"
             } else {

@@ -3,7 +3,7 @@ use ansi_term::Colour;
 use crate::{
     chacha::{error::Result, vm::VM},
     interpreter::{debug, function, Context},
-    lu_dog::{BinaryEnum, Expression, Operator, ValueType},
+    lu_dog::{BinaryEnum, Expression, Operator},
     s_read, RefType, SarzakStorePtr, Value,
 };
 

@@ -1,7 +1,6 @@
 use crate::{
     chacha::{error::Result, vm::VM},
     interpreter::{eval_statement, Context},
-    lu_dog::ValueType,
     new_ref, s_read, NewRef, RefType, SarzakStorePtr, Value,
 };
 
@@ -11,7 +10,6 @@ pub fn eval(
     vm: &mut VM,
 ) -> Result<RefType<Value>> {
     let lu_dog = context.lu_dog_heel().clone();
-    let sarzak = context.sarzak_heel().clone();
 
     let block = s_read!(lu_dog).exhume_block(block_id).unwrap();
     let stmts = s_read!(block).r18_statement(&s_read!(lu_dog));

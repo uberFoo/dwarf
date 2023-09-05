@@ -12,7 +12,7 @@ use crate::{
     interpreter::{
         debug, eval_expression, eval_statement, function, trace, typecheck, ChaChaError, Context,
     },
-    lu_dog::{Argument, Lambda, Span, ValueType},
+    lu_dog::{Argument, Lambda, Span},
     new_ref, s_read, NewRef, RefType, Value,
 };
 
@@ -149,14 +149,6 @@ pub fn eval_lambda_expression(
         }
 
         let mut value = new_ref!(Value, Value::Empty);
-        let mut ty = Value::Empty.get_type(&s_read!(sarzak), &s_read!(lu_dog));
-        // This is a pain.
-        // Find the first statement, by looking for the one with no previous statement.
-        // let mut next = stmts
-        //     .iter()
-        //     .find(|s| s_read!(s).r17c_statement(&s_read!(lu_dog)).is_empty())
-        //     .unwrap()
-        //     .clone();
         if let Some(ref id) = s_read!(block).statement {
             let mut next = s_read!(lu_dog).exhume_statement(id).unwrap();
 
@@ -184,7 +176,7 @@ pub fn eval_lambda_expression(
                     e
                 });
 
-                if let Err(ChaChaError::Return { value, ty }) = &result {
+                if let Err(ChaChaError::Return { value, ty: _ }) = &result {
                     return Ok(value.clone());
                 }
 

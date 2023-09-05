@@ -7,7 +7,7 @@ use crate::{
         vm::VM,
     },
     interpreter::{debug, eval_expression, function, ChaChaError, Context},
-    lu_dog::{Expression, ExpressionEnum, FieldAccessTargetEnum, Operator, ValueType},
+    lu_dog::{Expression, ExpressionEnum, FieldAccessTargetEnum, Operator},
     new_ref, s_read, s_write, NewRef, RefType, Value,
 };
 
@@ -19,7 +19,6 @@ pub fn eval_assignment(
     vm: &mut VM,
 ) -> Result<RefType<Value>> {
     let lu_dog = context.lu_dog_heel().clone();
-    let sarzak = context.sarzak_heel().clone();
 
     debug!("Evaluating assignment lhs: {lhs_expr:?}");
 

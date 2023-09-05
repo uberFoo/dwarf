@@ -306,7 +306,7 @@ impl Value {
                 #[allow(clippy::let_and_return)]
                 ƛ_type
             }
-            Value::Store(store, plugin) => s_read!(store).r1_value_type(lu_dog)[0].clone(),
+            Value::Store(store, _plugin) => s_read!(store).r1_value_type(lu_dog)[0].clone(),
             Value::ProxyType {
                 module: _,
                 obj_ty: uuid,
@@ -396,7 +396,7 @@ impl fmt::Display for Value {
             } => write!(f, "{}", s_read!(plugin)),
             Self::Range(range) => write!(f, "{range:?}"),
             // Self::StoreType(store) => write!(f, "{:?}", store),
-            Self::Store(store, plugin) => write!(f, "Plug-in ({})", s_read!(plugin).name()),
+            Self::Store(_store, plugin) => write!(f, "Plug-in ({})", s_read!(plugin).name()),
             Self::String(str_) => write!(f, "{str_}"),
             Self::Struct(ty) => write!(f, "{}", s_read!(ty)),
             // Self::String(str_) => write!(f, "\"{}\"", str_),

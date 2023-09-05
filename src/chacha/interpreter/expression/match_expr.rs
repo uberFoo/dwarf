@@ -1,8 +1,8 @@
 use crate::{
     chacha::{error::Result, value::EnumFieldVariant, vm::VM},
     interpreter::{eval_expression, Context},
-    lu_dog::{EnumFieldEnum, ExpressionEnum, ValueType},
-    new_ref, s_read, NewRef, RefType, SarzakStorePtr, Value,
+    lu_dog::{EnumFieldEnum, ExpressionEnum},
+    s_read, RefType, SarzakStorePtr, Value,
 };
 
 pub fn eval(
@@ -11,7 +11,6 @@ pub fn eval(
     vm: &mut VM,
 ) -> Result<RefType<Value>> {
     let lu_dog = context.lu_dog_heel().clone();
-    let sarzak = context.sarzak_heel().clone();
 
     let match_expr = s_read!(lu_dog).exhume_x_match(match_expr).unwrap();
     let match_expr = s_read!(match_expr);

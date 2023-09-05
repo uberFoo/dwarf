@@ -1,10 +1,10 @@
-use std::{env, fmt};
+use std::fmt;
 
 use ansi_term::Colour;
 
 use crate::{
     chacha::{error::Result, memory::Memory, value::UserStruct},
-    new_ref, s_read, s_write, ChaChaError, Context, NewRef, RefType, Value, ValueType,
+    new_ref, s_read, s_write, ChaChaError, NewRef, RefType, Value, ValueType,
 };
 
 #[derive(Clone, Debug)]
@@ -596,12 +596,13 @@ impl<'b> VM<'b> {
 
 #[cfg(test)]
 mod tests {
-    use rustc_hash::FxHashMap as HashMap;
+    use std::env;
     use tracy_client::Client;
 
     use crate::{
         dwarf::{DwarfFloat, DwarfInteger},
         interpreter::{initialize_interpreter, PrintableValueType},
+        Context,
     };
 
     use super::*;
@@ -907,7 +908,7 @@ mod tests {
     fn test_instr_field() {
         use crate::{
             chacha::value::UserStruct,
-            lu_dog::{Field, ObjectStore as LuDogStore, ValueType, WoogStruct},
+            lu_dog::{Field, ValueType, WoogStruct},
         };
         use sarzak::sarzak::{ObjectStore as SarzakStore, Ty, MODEL as SARZAK_MODEL};
 
