@@ -4,7 +4,7 @@ use ansi_term::Colour;
 
 use crate::{
     chacha::{error::Result, memory::Memory, value::UserStruct},
-    new_ref, s_read, s_write, ChaChaError, NewRef, RefType, Value, ValueType,
+    new_ref, s_read, s_write, ChaChaError, Context, NewRef, RefType, Value, ValueType,
 };
 
 #[derive(Clone, Debug)]
@@ -915,18 +915,22 @@ mod tests {
 
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
 
-        let mut lu_dog = LuDogStore::new();
+        let ctx = Context::default();
+        let struct_ty = {
+            let mut lu_dog = s_write!(ctx.lu_dog);
 
-        // We need to create a WoogStruct and add some fields to it
-        let foo = WoogStruct::new("Foo".to_owned(), None, &mut lu_dog);
-        // let _ = WoogItem::new_woog_struct(source, &mt, lu_dog);
-        let struct_ty = ValueType::new_woog_struct(&foo, &mut lu_dog);
-        let ty = Ty::new_integer(&sarzak);
-        let ty = ValueType::new_ty(&ty, &mut lu_dog);
-        let _ = Field::new("bar".to_owned(), &foo, &ty, &mut lu_dog);
-        let ty = Ty::new_float(&sarzak);
-        let ty = ValueType::new_ty(&ty, &mut lu_dog);
-        let _ = Field::new("baz".to_owned(), &foo, &ty, &mut lu_dog);
+            // We need to create a WoogStruct and add some fields to it
+            let foo = WoogStruct::new("Foo".to_owned(), None, &mut lu_dog);
+            // let _ = WoogItem::new_woog_struct(source, &mt, lu_dog);
+            let struct_ty = ValueType::new_woog_struct(&foo, &mut lu_dog);
+            let ty = Ty::new_integer(&sarzak);
+            let ty = ValueType::new_ty(&ty, &mut lu_dog);
+            let _ = Field::new("bar".to_owned(), &foo, &ty, &mut lu_dog);
+            let ty = Ty::new_float(&sarzak);
+            let ty = ValueType::new_ty(&ty, &mut lu_dog);
+            let _ = Field::new("baz".to_owned(), &foo, &ty, &mut lu_dog);
+            struct_ty
+        };
 
         // Now we need an instance.
         let dwarf_home = env::var("DWARF_HOME")
@@ -937,9 +941,7 @@ mod tests {
             })
             .into();
 
-        let ctx =
-            initialize_interpreter(dwarf_home, Vec::new(), HashMap::default(), lu_dog, sarzak)
-                .unwrap();
+        let ctx = initialize_interpreter(dwarf_home, ctx, sarzak).unwrap();
         let ty_name = PrintableValueType(&struct_ty, &ctx);
         let mut foo_inst = UserStruct::new(ty_name.to_string(), &struct_ty);
         foo_inst.define_field("bar", new_ref!(Value, 42.into()));

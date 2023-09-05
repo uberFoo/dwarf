@@ -33,8 +33,6 @@ use crate::{
 const OBJECT_STORE: &str = "ObjectStore";
 const FUNCTION_NEW: &str = "new";
 const FUNCTION_LOAD: &str = "load";
-const FUNCTION_SAVE: &str = "save";
-const FUNCTION_SAVE_AS: &str = "save_as";
 const MERLIN: &str = "merlin";
 const SARZAK: &str = "sarzak";
 
@@ -105,7 +103,7 @@ pub(crate) fn eval_external_method(
     let plug_in = eval_expression(expr.clone(), context, vm)?;
     let plug_in = s_read!(plug_in).clone();
 
-    let plug_in = if let Value::PlugIn(_, plug_in) = plug_in {
+    let plug_in = if let Value::Store(_, plug_in) = plug_in {
         plug_in
     } else {
         panic!("not a proxy");
@@ -622,7 +620,7 @@ fn objectstore_static_methods(
             let plugin = new_ref!(PluginType, ctor(vec![path.into()].into()).unwrap());
             model.1.replace(plugin.clone());
 
-            let value = new_ref!(Value, Value::PlugIn(store, plugin));
+            let value = new_ref!(Value, Value::Store(store, plugin));
 
             Ok(value)
         }
@@ -652,7 +650,7 @@ fn objectstore_static_methods(
             let plugin = new_ref!(PluginType, ctor(vec![].into()).unwrap());
             model.1.replace(plugin.clone());
 
-            let value = new_ref!(Value, Value::PlugIn(store, plugin));
+            let value = new_ref!(Value, Value::Store(store, plugin));
 
             Ok(value)
         }

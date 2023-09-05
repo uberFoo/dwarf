@@ -22,9 +22,9 @@ use crate::{
         Block, Expression, LocalVariable, ObjectStore as LuDogStore, Span, Statement,
         StatementEnum, ValueType, ValueTypeEnum, Variable, XValue,
     },
-    new_ref, s_read,
+    new_ref, s_read, s_write,
     sarzak::store::ObjectStore as SarzakStore,
-    ChaChaError, Dirty, DwarfInteger, ModelStore, NewRef, RefType, Value,
+    ChaChaError, Context as InterContext, Dirty, DwarfInteger, ModelStore, NewRef, RefType, Value,
 };
 
 mod banner;
@@ -143,11 +143,11 @@ lazy_static! {
 /// sarzak. The second is the compiled dwarf file.
 pub fn initialize_interpreter(
     dwarf_home: PathBuf,
-    _dirty: Vec<Dirty>,
-    models: ModelStore,
-    mut lu_dog: LuDogStore,
+    mut i_context: InterContext,
     sarzak: SarzakStore,
 ) -> Result<Context, Error> {
+    let mut lu_dog = s_write!(i_context.lu_dog);
+
     // Initialize the stack with stuff from the compiled source.
     let block = Block::new(Uuid::new_v4(), None, None, &mut lu_dog);
     let (mut stack, receiver) = Memory::new();
@@ -396,9 +396,9 @@ pub fn initialize_interpreter(
         format!("{} ", Colour::Blue.normal().paint("道:>")),
         block,
         stack,
-        new_ref!(LuDogStore, lu_dog),
+        i_context.lu_dog.clone(),
         new_ref!(SarzakStore, sarzak),
-        new_ref!(ModelStore, models),
+        new_ref!(ModelStore, i_context.models),
         receiver,
         std_out_send,
         std_out_recv,
@@ -637,7 +637,11 @@ pub enum DebuggerControl {
 }
 
 /// This runs the main function, assuming it exists.
-pub fn start_main(stopped: bool, mut context: Context) -> Result<(Value, Context), Error> {
+pub fn start_func(
+    name: &str,
+    stopped: bool,
+    mut context: Context,
+) -> Result<(Value, Context), Error> {
     {
         let mut running = RUNNING.lock();
         *running = !stopped;
@@ -647,7 +651,7 @@ pub fn start_main(stopped: bool, mut context: Context) -> Result<(Value, Context
     let vm_stack = stack.clone();
     let mut vm = VM::new(&vm_stack);
 
-    if let Some(main) = stack.get("main") {
+    if let Some(main) = stack.get(name) {
         // This should fail if it's not a function. Actually, I think that it _has_
         // to be a function. Unless there's another named item that I'm not thinking
         // of. I mean, maybe `use main;`  would trigger this to return OK(()), and

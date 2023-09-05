@@ -7,7 +7,7 @@ use tracy_client::Client;
 use dwarf::{
     chacha::{
         error::ChaChaErrorReporter,
-        interpreter::{initialize_interpreter, start_main},
+        interpreter::{initialize_interpreter, start_func},
         value::Value,
     },
     dwarf::{new_lu_dog, parse_dwarf},
@@ -86,43 +86,42 @@ fn run_program(test: &str, program: &str) -> Result<(Value, String), String> {
         }
         _ => unreachable!(),
     };
-    let (lu_dog, models, dirty) =
-        match new_lu_dog(Some((program.to_owned(), &ast)), &dwarf_home, &sarzak) {
-            Ok(lu_dog) => lu_dog,
-            Err(e) => {
-                eprintln!(
-                    "{}",
-                    e.iter()
-                        .map(|e| {
-                            format!(
-                                "{}",
-                                dwarf::dwarf::error::DwarfErrorReporter(e, true, program, test)
-                            )
-                        })
-                        .collect::<Vec<_>>()
-                        .join("\n")
-                        .trim()
-                );
-
-                let errors = e
-                    .iter()
+    let ctx = match new_lu_dog(Some((program.to_owned(), &ast)), &dwarf_home, &sarzak) {
+        Ok(lu_dog) => lu_dog,
+        Err(e) => {
+            eprintln!(
+                "{}",
+                e.iter()
                     .map(|e| {
                         format!(
                             "{}",
-                            dwarf::dwarf::error::DwarfErrorReporter(e, false, program, test)
+                            dwarf::dwarf::error::DwarfErrorReporter(e, true, program, test)
                         )
                     })
                     .collect::<Vec<_>>()
                     .join("\n")
                     .trim()
-                    .to_owned();
+            );
 
-                return Err(errors);
-            }
-        };
+            let errors = e
+                .iter()
+                .map(|e| {
+                    format!(
+                        "{}",
+                        dwarf::dwarf::error::DwarfErrorReporter(e, false, program, test)
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join("\n")
+                .trim()
+                .to_owned();
 
-    let ctx = initialize_interpreter(dwarf_home, dirty, models, lu_dog, sarzak).unwrap();
-    match start_main(false, ctx) {
+            return Err(errors);
+        }
+    };
+
+    let ctx = initialize_interpreter(dwarf_home, ctx, sarzak).unwrap();
+    match start_func("main", false, ctx) {
         Ok(v) => {
             let stdout = v.1.drain_std_out().join("").trim().to_owned();
 

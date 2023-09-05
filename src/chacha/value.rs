@@ -16,7 +16,7 @@ use crate::{
     plug_in::PluginType,
     s_read,
     sarzak::{ObjectStore as SarzakStore, Ty},
-    ChaChaError, DwarfFloat, DwarfInteger, NewRef, RefType,
+    ChaChaError, Context, DwarfFloat, DwarfInteger, NewRef, RefType,
 };
 
 #[repr(C)]
@@ -156,7 +156,7 @@ pub enum Value {
     Integer(DwarfInteger),
     Lambda(RefType<Lambda>),
     Option(Option<RefType<Self>>),
-    PlugIn(RefType<ZObjectStore>, RefType<PluginType>),
+    ParsedDwarf(Context),
     ProxyType {
         module: String,
         obj_ty: Uuid,
@@ -164,6 +164,7 @@ pub enum Value {
         plugin: RefType<PluginType>,
     },
     Range(Range<DwarfInteger>),
+    Store(RefType<ZObjectStore>, RefType<PluginType>),
     String(String),
     Struct(RefType<UserStruct>),
     Table(HashMap<String, RefType<Self>>),
@@ -305,7 +306,7 @@ impl Value {
                 #[allow(clippy::let_and_return)]
                 ƛ_type
             }
-            Value::PlugIn(store, plugin) => s_read!(store).r1_value_type(lu_dog)[0].clone(),
+            Value::Store(store, plugin) => s_read!(store).r1_value_type(lu_dog)[0].clone(),
             Value::ProxyType {
                 module: _,
                 obj_ty: uuid,
@@ -382,13 +383,11 @@ impl fmt::Display for Value {
             Self::Function(_) => write!(f, "<function>"),
             Self::Integer(num) => write!(f, "{num}"),
             Self::Lambda(_) => write!(f, "<lambda>"),
-            Self::PlugIn(store, plugin) => write!(f, "Plug-in ({})", s_read!(plugin).name()),
             Self::Option(option) => match option {
                 Some(value) => write!(f, "Some({})", s_read!(value)),
                 None => write!(f, "None"),
             },
-            // 🚧 swap these out when I'm done
-            // Self::ProxyType(_p) => write!(f, "<put the other thing back>"),
+            Self::ParsedDwarf(_) => write!(f, "<parsed-dwarf>"),
             Self::ProxyType {
                 module: _,
                 obj_ty: _,
@@ -397,6 +396,7 @@ impl fmt::Display for Value {
             } => write!(f, "{}", s_read!(plugin)),
             Self::Range(range) => write!(f, "{range:?}"),
             // Self::StoreType(store) => write!(f, "{:?}", store),
+            Self::Store(store, plugin) => write!(f, "Plug-in ({})", s_read!(plugin).name()),
             Self::String(str_) => write!(f, "{str_}"),
             Self::Struct(ty) => write!(f, "{}", s_read!(ty)),
             // Self::String(str_) => write!(f, "\"{}\"", str_),
@@ -514,6 +514,20 @@ impl From<Value> for Option<Uuid> {
 //         }
 //     }
 // }
+
+impl TryFrom<Value> for Context {
+    type Error = ChaChaError;
+
+    fn try_from(value: Value) -> Result<Self, <Context as TryFrom<Value>>::Error> {
+        match value {
+            Value::ParsedDwarf(ctx) => Ok(ctx),
+            _ => Err(ChaChaError::Conversion {
+                src: value.to_string(),
+                dst: "Context".to_owned(),
+            }),
+        }
+    }
+}
 
 impl TryFrom<Value> for Range<DwarfInteger> {
     type Error = ChaChaError;

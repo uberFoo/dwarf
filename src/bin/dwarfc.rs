@@ -1,17 +1,16 @@
 use std::{env, ffi::OsString, fs, os::unix::ffi::OsStringExt, path::PathBuf, process};
 
 use clap::{ArgAction, Parser};
-use rustc_hash::FxHashMap as HashMap;
 use snafu::prelude::*;
 
-use sarzak::{
-    domain::DomainBuilder,
-    sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL},
-};
+use sarzak::sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL};
 
-use dwarf::dwarf::{
-    error::{FileSnafu, IOSnafu, Result},
-    new_lu_dog, parse_dwarf,
+use dwarf::{
+    dwarf::{
+        error::{FileSnafu, IOSnafu, Result},
+        new_lu_dog, parse_dwarf,
+    },
+    s_read,
 };
 
 const TARGET_DIR: &str = "target";
@@ -146,28 +145,27 @@ fn main() -> Result<()> {
         })
         .into();
 
-    let (lu_dog, _models, dirty) =
-        match new_lu_dog(Some((source_code.clone(), &ast)), &dwarf_home, &sarzak) {
-            Ok(lu_dog) => lu_dog,
-            Err(errors) => {
-                for err in errors {
-                    eprintln!(
-                        "{}",
-                        dwarf::dwarf::error::DwarfErrorReporter(
-                            &err,
-                            is_uber,
-                            &source_code,
-                            args.source.to_str().unwrap()
-                        )
-                    );
-                }
-                return Ok(());
+    let ctx = match new_lu_dog(Some((source_code.clone(), &ast)), &dwarf_home, &sarzak) {
+        Ok(lu_dog) => lu_dog,
+        Err(errors) => {
+            for err in errors {
+                eprintln!(
+                    "{}",
+                    dwarf::dwarf::error::DwarfErrorReporter(
+                        &err,
+                        is_uber,
+                        &source_code,
+                        args.source.to_str().unwrap()
+                    )
+                );
             }
-        };
+            return Ok(());
+        }
+    };
 
     #[cfg(not(feature = "multi-nd-vec"))]
     if args.debug.is_some() && args.debug.unwrap() {
-        lu_dog
+        s_read!(ctx.lu_dog)
             .persist(&out_file)
             .context(FileSnafu {
                 description: "Could not persist Lu-Dog domain".to_owned(),
@@ -175,7 +173,7 @@ fn main() -> Result<()> {
             })
             .map_err(|e| vec![e])?;
     } else {
-        lu_dog
+        s_read!(ctx.lu_dog)
             .persist_bincode(&out_file)
             .context(FileSnafu {
                 description: "Could not persist Lu-Dog domain".to_owned(),

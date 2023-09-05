@@ -30,7 +30,7 @@ const COMPLEX_EX: &str = "ComplexEx";
 const FN_NEW: &str = "new";
 const UUID_TYPE: &str = "Uuid";
 
-use lu_dog::ValueType;
+use lu_dog::{ObjectStore as LuDogStore, ValueType};
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "single-vec")] {
@@ -129,7 +129,7 @@ cfg_if::cfg_if! {
 }
 
 // This is ugly, but it's the only way I could find to get the macro to work.
-pub(crate) use ref_read as s_read;
+pub use ref_read as s_read;
 pub(crate) use ref_write as s_write;
 
 trait NewRcType<T> {
@@ -251,4 +251,32 @@ pub enum Dirty {
     Func(RefType<lu_dog::Function>),
     Store(SarzakStorePtr),
     Struct(RefType<lu_dog::WoogStruct>),
+}
+
+#[derive(Clone, Debug)]
+pub struct Context {
+    pub lu_dog: RefType<LuDogStore>,
+    pub models: ModelStore,
+    pub dirty: Vec<Dirty>,
+}
+
+impl Context {
+    pub fn source(&self) -> String {
+        let source = s_read!(self.lu_dog)
+            .iter_dwarf_source_file()
+            .next()
+            .unwrap();
+        let source = s_read!(source);
+        source.source.clone()
+    }
+}
+
+impl Default for Context {
+    fn default() -> Self {
+        Self {
+            lu_dog: new_ref!(LuDogStore, LuDogStore::new()),
+            models: HashMap::default(),
+            dirty: Vec::default(),
+        }
+    }
 }

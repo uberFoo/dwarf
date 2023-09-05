@@ -12,15 +12,13 @@ use dwarf::{
     chacha::{
         dap::DapAdapter,
         error::ChaChaErrorReporter,
-        interpreter::{banner2, initialize_interpreter, start_main, start_repl},
+        interpreter::{banner2, initialize_interpreter, start_func, start_repl},
     },
     dwarf::{new_lu_dog, parse_dwarf},
-    lu_dog::ObjectStore as LuDogStore,
     sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL},
+    Context,
 };
 use reqwest::Url;
-use rustc_hash::FxHashMap as HashMap;
-use sarzak::domain::DomainBuilder;
 use tracy_client::Client;
 
 #[cfg(not(feature = "repl"))]
@@ -192,26 +190,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         };
 
-        let (lu_dog, models, dirty) =
-            match new_lu_dog(Some((source_code.clone(), &ast)), &dwarf_home, &sarzak) {
-                Ok(lu_dog) => lu_dog,
-                Err(errors) => {
-                    for err in errors {
-                        eprintln!(
-                            "{}",
-                            dwarf::dwarf::error::DwarfErrorReporter(
-                                &err,
-                                is_uber,
-                                &source_code,
-                                &name
-                            )
-                        );
-                    }
-                    return Ok(());
+        let ctx = match new_lu_dog(Some((source_code.clone(), &ast)), &dwarf_home, &sarzak) {
+            Ok(lu_dog) => lu_dog,
+            Err(errors) => {
+                for err in errors {
+                    eprintln!(
+                        "{}",
+                        dwarf::dwarf::error::DwarfErrorReporter(&err, is_uber, &source_code, &name)
+                    );
                 }
-            };
+                return Ok(());
+            }
+        };
 
-        let mut ctx = initialize_interpreter(dwarf_home, dirty, models, lu_dog, sarzak)?;
+        let mut ctx = initialize_interpreter(dwarf_home, ctx, sarzak)?;
         ctx.add_args(dwarf_args);
 
         if args.banner.is_some() && args.banner.unwrap() {
@@ -224,7 +216,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 e
             })?;
         } else {
-            match start_main(false, ctx) {
+            match start_func("main", false, ctx) {
                 Ok((_, ctx)) => ctx,
                 Err(e) => {
                     eprintln!("Interpreter exited with:");
@@ -274,13 +266,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             // }
         }
     } else {
-        let ctx = initialize_interpreter(
-            dwarf_home,
-            Vec::new(),
-            HashMap::default(),
-            LuDogStore::new(),
-            sarzak,
-        )?;
+        let ctx = Context::default();
+        let ctx = initialize_interpreter(dwarf_home, ctx, sarzak)?;
 
         start_repl(ctx, is_uber).map_err(|e| {
             println!("Interpreter exited with: {}", e);

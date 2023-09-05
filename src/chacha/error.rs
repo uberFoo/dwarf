@@ -37,6 +37,11 @@ pub enum ChaChaError {
         src: String,
         dst: String,
     },
+    #[snafu(display("\n{}: evaluation error", ERR_CLR.bold().paint("error")))]
+    Eval {
+        src: String,
+        span: Span,
+    },
     IndexOutOfBounds {
         index: usize,
         len: usize,
@@ -91,6 +96,11 @@ pub enum ChaChaError {
         ty: String,
         span: Span,
         location: Location,
+    },
+    #[snafu(display("\n{}: parse error: {}", ERR_CLR.bold().paint("error"), src))]
+    Parse {
+        src: String,
+        span: Span,
     },
     #[snafu(display("\n{}: {message}\n  --> {}:{}:{}", ERR_CLR.bold().paint("error"), location.file, location.line, location.column))]
     Unimplemented {

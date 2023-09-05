@@ -35,7 +35,8 @@ use crate::{
     },
     new_ref, s_read, s_write,
     sarzak::{store::ObjectStore as SarzakStore, types::Ty},
-    Dirty, ModelStore, NewRef, RefType, SarzakStorePtr, CHACHA, FN_NEW, UUID_TYPE,
+    Context as InterContext, Dirty, ModelStore, NewRef, RefType, SarzakStorePtr, CHACHA, FN_NEW,
+    UUID_TYPE,
 };
 
 const LIB_TAO: &str = "lib.tao";
@@ -321,7 +322,7 @@ pub fn new_lu_dog(
     source: Option<(String, &[Item])>,
     dwarf_home: &PathBuf,
     sarzak: &SarzakStore,
-) -> Result<(LuDogStore, ModelStore, Vec<Dirty>)> {
+) -> Result<InterContext> {
     let mut lu_dog = LuDogStore::new();
 
     // We need to stuff all of the sarzak types into the store.
@@ -349,7 +350,11 @@ pub fn new_lu_dog(
         walk_tree(ast, &mut context, &mut lu_dog)?;
     }
 
-    Ok((lu_dog, models, dirty))
+    Ok(InterContext {
+        lu_dog: new_ref!(LuDogStore, lu_dog),
+        models,
+        dirty,
+    })
 }
 
 fn walk_tree(ast: &[Item], context: &mut Context, lu_dog: &mut LuDogStore) -> Result<()> {

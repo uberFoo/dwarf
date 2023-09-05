@@ -20,6 +20,21 @@ use crate::{
     NewRef, RefType, SarzakStorePtr, Value, CHACHA, COMPLEX_EX, FN_NEW, UUID_TYPE,
 };
 
+mod chacha;
+
+const ADD: &str = "add";
+const ARGS: &str = "args";
+const ASSERT_EQ: &str = "assert_eq";
+const EPS: &str = "eps";
+const EVAL: &str = "eval";
+const LEN: &str = "len";
+const FORMAT: &str = "format";
+const NORM_SQUARED: &str = "norm_squared";
+const PARSE: &str = "parse";
+const SQUARE: &str = "square";
+const TIME: &str = "time";
+const TYPEOF: &str = "typeof";
+
 pub fn eval(
     call_id: &SarzakStorePtr,
     expression: &RefType<Expression>,
@@ -79,7 +94,7 @@ pub fn eval(
                     plugin: _,
                 } => Ok(value.clone()),
                 Value::Struct(ut) => Ok(value.clone()),
-                Value::PlugIn(_store, _plugin) => {
+                Value::Store(_store, _plugin) => {
                     // let ty = s_read!(lu_dog)
                     //     .iter_value_type()
                     //     .find(|ty| {
@@ -163,7 +178,7 @@ pub fn eval(
             debug!("MethodCall value {value:?}");
 
             match &*s_read!(value) {
-                Value::PlugIn(store, _plugin) => {
+                Value::Store(store, _plugin) => {
                     let impl_ = &s_read!(store).r83c_implementation_block(&s_read!(lu_dog))[0];
                     let x = if let Some(func) = s_read!(impl_)
                         .r9_function(&s_read!(lu_dog))
@@ -243,7 +258,7 @@ pub fn eval(
                     x
                 }
                 Value::String(string) => match meth.as_str() {
-                    "len" => {
+                    LEN => {
                         debug!("evaluating String::len");
                         let len = unicode_segmentation::UnicodeSegmentation::graphemes(
                             string.as_str(),
@@ -253,7 +268,7 @@ pub fn eval(
                         .len();
                         Ok(new_ref!(Value, Value::Integer(len as i64)))
                     }
-                    "format" => {
+                    FORMAT => {
                         debug!("evaluating String::format");
                         // let mut arg_map = HashMap::default();
                         let arg_values = if !args.is_empty() {
@@ -486,7 +501,7 @@ pub fn eval(
                 Ok(new_ref!(Value, value))
             } else if ty == COMPLEX_EX {
                 match func.as_str() {
-                    "norm_squared" => {
+                    NORM_SQUARED => {
                         let value = arg_values.pop_front().unwrap().0;
                         let thonk = context.memory().get_thonk(0).unwrap();
                         let mut frame = CallFrame::new(0, 0, thonk);
@@ -499,7 +514,7 @@ pub fn eval(
 
                         Ok(result.unwrap())
                     }
-                    "square" => {
+                    SQUARE => {
                         let value = arg_values.pop_front().unwrap().0;
                         let thonk = context.memory().get_thonk(2).unwrap();
                         let mut frame = CallFrame::new(0, 0, thonk);
@@ -512,7 +527,7 @@ pub fn eval(
 
                         Ok(result.unwrap())
                     }
-                    "add" => {
+                    ADD => {
                         let thonk = context.memory().get_thonk(1).unwrap();
                         let mut frame = CallFrame::new(0, 0, thonk);
                         vm.push_stack(new_ref!(Value, "add".into()));
@@ -544,7 +559,7 @@ pub fn eval(
                 }
             } else if ty == CHACHA {
                 match func.as_str() {
-                    "args" => {
+                    ARGS => {
                         debug!("evaluating chacha::args");
                         let ty = Ty::new_s_string(&s_read!(sarzak));
                         // 🚧 Look these up
@@ -558,18 +573,34 @@ pub fn eval(
                             Ok(new_ref!(Value, Value::Vector(Vec::new())))
                         }
                     }
-                    // This returns a string because that's the easy button given what
-                    // I have to work with. Once I get enums into the language, I'll
-                    // be able to return a proper enum.
-                    "typeof" => {
-                        debug!("evaluating chacha::typeof");
-                        let arg = arg_values.pop_front().unwrap().0;
-                        let ty = s_read!(arg).get_type(&s_read!(sarzak), &s_read!(lu_dog));
-                        let pvt_ty = PrintableValueType(&ty, context);
+                    ASSERT_EQ => chacha::assert_eq(arg_values, expression, lu_dog),
+                    EPS => {
+                        debug!("evaluating chacha::eps");
+                        let mut timings = context.get_timings().to_vec();
+                        timings.sort_by(|a, b| a.partial_cmp(b).unwrap());
 
-                        Ok(new_ref!(Value, pvt_ty.to_string().into()))
+                        let mean = timings.iter().sum::<f64>() / timings.len() as f64;
+                        let std_dev = timings.iter().map(|x| (x - mean).powi(2)).sum::<f64>()
+                            / timings.len() as f64;
+                        let median = timings[timings.len() / 2];
+
+                        let result = format!(
+                                    "expressions (mean/std_dev/median) ((10k)/sec): {:.1} / {:.1} / {:.1}\n",
+                                    mean,
+                                    std_dev,
+                                    median
+                                );
+                        // chacha_print(result, context)?;
+
+                        // 🚧 Lookup/cache
+                        let ty = Ty::new_s_string(&s_read!(sarzak));
+                        let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
+
+                        Ok(new_ref!(Value, Value::String(result)))
                     }
-                    "time" => {
+                    EVAL => chacha::eval_dwarf(arg_values, expression, context),
+                    PARSE => chacha::parse_dwarf(arg_values, expression, context),
+                    TIME => {
                         debug!("evaluating chacha::time");
                         // 🚧 I should be checking that there is an argument before
                         // I go unwrapping it.
@@ -614,78 +645,16 @@ pub fn eval(
 
                         Ok(new_ref!(Value, Value::Float(elapsed.as_secs_f64())))
                     }
-                    "eps" => {
-                        debug!("evaluating chacha::eps");
-                        let mut timings = context.get_timings().to_vec();
-                        timings.sort_by(|a, b| a.partial_cmp(b).unwrap());
+                    // This returns a string because that's the easy button given what
+                    // I have to work with. Once I get enums into the language, I'll
+                    // be able to return a proper enum.
+                    TYPEOF => {
+                        debug!("evaluating chacha::typeof");
+                        let arg = arg_values.pop_front().unwrap().0;
+                        let ty = s_read!(arg).get_type(&s_read!(sarzak), &s_read!(lu_dog));
+                        let pvt_ty = PrintableValueType(&ty, context);
 
-                        let mean = timings.iter().sum::<f64>() / timings.len() as f64;
-                        let std_dev = timings.iter().map(|x| (x - mean).powi(2)).sum::<f64>()
-                            / timings.len() as f64;
-                        let median = timings[timings.len() / 2];
-
-                        let result = format!(
-                                    "expressions (mean/std_dev/median) ((10k)/sec): {:.1} / {:.1} / {:.1}\n",
-                                    mean,
-                                    std_dev,
-                                    median
-                                );
-                        // chacha_print(result, context)?;
-
-                        // 🚧 Lookup/cache
-                        let ty = Ty::new_s_string(&s_read!(sarzak));
-                        let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
-
-                        Ok(new_ref!(Value, Value::String(result)))
-                    }
-                    "assert_eq" => {
-                        debug!("evaluating chacha::assert_eq");
-                        ensure!(arg_values.len() == 2, {
-                            let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
-                            let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
-                            let read = s_read!(span);
-                            let span = read.start as usize..read.end as usize;
-
-                            WrongNumberOfArgumentsSnafu {
-                                expected: 2usize,
-                                got: arg_values.len(),
-                                defn_span: 0..0,
-                                invocation_span: span,
-                            }
-                        });
-
-                        let lhs = arg_values.pop_front().unwrap().0;
-                        let rhs = arg_values.pop_front().unwrap().0;
-
-                        debug!("lhs: {lhs:?}, rhs {rhs:?}");
-
-                        let value = Value::Boolean(*s_read!(lhs) == *s_read!(rhs));
-
-                        if let Value::Boolean(result) = value {
-                            if result {
-                                Ok(new_ref!(Value, value))
-                            } else {
-                                let source =
-                                    s_read!(lu_dog).iter_dwarf_source_file().next().unwrap();
-                                let source = s_read!(source);
-                                let source = &source.source;
-
-                                let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
-
-                                let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
-
-                                let read = s_read!(span);
-                                let span = read.start as usize..read.end as usize;
-
-                                Err(ChaChaError::Assertion {
-                                    found: lhs,
-                                    expected: rhs,
-                                    code: source[span].to_owned(),
-                                })
-                            }
-                        } else {
-                            unreachable!()
-                        }
+                        Ok(new_ref!(Value, pvt_ty.to_string().into()))
                     }
                     method => {
                         let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];

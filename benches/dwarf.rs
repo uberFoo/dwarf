@@ -2,7 +2,7 @@ use std::{env, fs, path::PathBuf};
 
 use criterion::{criterion_group, criterion_main, Criterion};
 use dwarf::{
-    chacha::interpreter::{initialize_interpreter, start_main, start_vm},
+    chacha::interpreter::{initialize_interpreter, start_func, start_vm},
     dwarf::{new_lu_dog, parse_dwarf},
 };
 use rustc_hash::FxHashMap as HashMap;
@@ -31,7 +31,7 @@ fn mandelbrot(c: &mut Criterion) {
     let ctx = initialize_interpreter(dwarf_home, dirty, models, lu_dog, sarzak).unwrap();
 
     c.bench_function("mandelbrot-14x4", |b| {
-        b.iter(|| start_main(false, ctx.clone()).unwrap())
+        b.iter(|| start_func(false, ctx.clone()).unwrap())
     });
 }
 
@@ -55,7 +55,7 @@ fn fib(c: &mut Criterion) {
     ctx.add_args(vec!["fib".to_owned(), "17".to_owned()]);
 
     c.bench_function("fib-17", |b| {
-        b.iter(|| start_main(false, ctx.clone()).unwrap())
+        b.iter(|| start_func(false, ctx.clone()).unwrap())
     });
 }
 
