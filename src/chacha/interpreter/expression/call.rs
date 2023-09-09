@@ -93,21 +93,7 @@ pub fn eval(
                     plugin: _,
                 } => Ok(value.clone()),
                 Value::Struct(_) => Ok(value.clone()),
-                Value::Store(_store, _plugin) => {
-                    // let ty = s_read!(lu_dog)
-                    //     .iter_value_type()
-                    //     .find(|ty| {
-                    //         let ty = s_read!(ty);
-                    //         if let ValueTypeEnum::ZObjectStore(store_id) = ty.subtype {
-                    //             store_id == s_read!(store).id
-                    //         } else {
-                    //             false
-                    //         }
-                    //     })
-                    //     .unwrap();
-
-                    Ok(value.clone())
-                }
+                Value::Store(_store, _plugin) => Ok(value.clone()),
                 value_ => {
                     dbg!(&value_);
                     let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
@@ -145,7 +131,7 @@ pub fn eval(
                 let _ty = s_read!(sarzak).exhume_ty(id).unwrap();
                 // SString is here because we have methods on that type
                 // 🚧 We need to add Vector or whatever as well.
-                let x = match &*_ty.borrow() {
+                let x = match &*_ty.read().unwrap() {
                     Ty::SString(_) => value,
                     _ => eval_lhs()?,
                 };
@@ -614,19 +600,17 @@ pub fn eval(
                         let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
                         let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
 
-                        let elapsed = if let Value::Function(func) = &*func {
-                            let now = Instant::now();
+                        let now = Instant::now();
+                        if let Value::Function(func) = &*func {
                             let _result =
                                 eval_function_call(func.clone(), &[], true, span, context, vm)?;
-                            now.elapsed()
                         } else if let Value::Lambda(ƛ) = &*func {
-                            let now = Instant::now();
                             let _result =
                                 eval_lambda_expression(ƛ.clone(), &[], true, span, context, vm)?;
-                            now.elapsed()
                         } else {
                             panic!("missing implementation for timing this type: {func:?}");
                         };
+                        let elapsed = now.elapsed();
 
                         Ok(new_ref!(Value, Value::Float(elapsed.as_secs_f64())))
                     }

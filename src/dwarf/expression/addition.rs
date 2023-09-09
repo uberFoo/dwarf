@@ -6,7 +6,7 @@ use snafu::{location, Location};
 use crate::{
     dwarf::{
         error::Result,
-        extruder::{inter_expression, typecheck, Context, ExprSpan},
+        extruder::{inter_expression, typecheck, update_span_value, Context, ExprSpan},
         Expression as ParserExpression,
     },
     lu_dog::{
@@ -64,7 +64,7 @@ pub fn inter(
     let expr = Expression::new_operator(&expr, lu_dog);
 
     let value = XValue::new_expression(block, &lhs_ty, &expr, lu_dog);
-    s_write!(span).x_value = Some(s_read!(value).id);
+    update_span_value(&span, &value, location!());
 
     Ok(((expr, span), lhs_ty))
 }

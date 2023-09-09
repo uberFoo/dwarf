@@ -73,14 +73,14 @@ impl<'d, 'a, 'b> fmt::Display for PrintableValueType<'d, 'a, 'b> {
                 // So, sometimes these show up in the model domain. It'll get really
                 // interesting when there are multiples of those in memory at once...
                 if let Some(ty) = context.sarzak.exhume_ty(ty) {
-                    match &*ty.borrow() {
+                    match &*ty.read().unwrap() {
                         Ty::Boolean(_) => write!(f, "{}", TY_CLR.italic().paint("bool")),
                         Ty::Float(_) => write!(f, "{}", TY_CLR.italic().paint("float")),
                         Ty::Integer(_) => write!(f, "{}", TY_CLR.italic().paint("int")),
                         Ty::Object(ref object) => {
                             // This could probably just be an unwrap().
                             if let Some(object) = context.sarzak.exhume_object(object) {
-                                write!(f, "{}", object.borrow().name)
+                                write!(f, "{}", object.read().unwrap().name)
                             } else {
                                 write!(f, "<unknown object>")
                             }
@@ -99,9 +99,9 @@ impl<'d, 'a, 'b> fmt::Display for PrintableValueType<'d, 'a, 'b> {
                     // 🚧 HashMapFix
                     for model in context.models.values() {
                         if let Some(ty) = model.0.exhume_ty(ty) {
-                            if let Ty::Object(ref object) = &*ty.borrow() {
+                            if let Ty::Object(ref object) = &*ty.read().unwrap() {
                                 if let Some(object) = model.0.exhume_object(object) {
-                                    return write!(f, "{}Proxy", object.borrow().name);
+                                    return write!(f, "{}Proxy", object.read().unwrap().name);
                                 }
                             }
                         }

@@ -65,6 +65,7 @@ pub struct DwarfOptions {
 pub enum Token {
     As,
     Asm,
+    Async,
     Bool(bool),
     Debugger,
     Else,
@@ -100,6 +101,7 @@ impl fmt::Display for Token {
         match self {
             Self::As => write!(f, "as"),
             Self::Asm => write!(f, "asm!"),
+            Self::Async => write!(f, "async"),
             Self::Bool(bool_) => write!(f, "{}", bool_),
             Self::Debugger => write!(f, "debugger"),
             Self::Else => write!(f, "else"),

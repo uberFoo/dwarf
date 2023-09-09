@@ -9,7 +9,8 @@ use crate::{
         error::{DwarfError, Result},
         extruder::{
             create_generic_enum, debug, function, inter_expression, link_argument,
-            lookup_woog_struct_method_return_type, typecheck, Context, DeSanitize, ExprSpan,
+            lookup_woog_struct_method_return_type, typecheck, update_span_value, Context,
+            DeSanitize, ExprSpan,
         },
         DwarfInteger, Expression as ParserExpression, PrintableValueType, Type,
     },
@@ -110,7 +111,7 @@ pub fn inter(
         }
 
         let value = XValue::new_expression(block, &ty, &expr, lu_dog);
-        s_write!(span).x_value = Some(s_read!(value).id);
+        update_span_value(&span, &value, location!());
 
         Ok(((expr, span), ty))
     } else {
@@ -237,7 +238,7 @@ pub fn inter(
                 let expr = Expression::new_enum_field(&field, lu_dog);
 
                 let value = XValue::new_expression(block, &ty, &expr, lu_dog);
-                s_write!(span).x_value = Some(s_read!(value).id);
+                update_span_value(&span, &value, location!());
 
                 Ok(((expr, span), ty))
             } else {

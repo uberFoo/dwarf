@@ -19,6 +19,8 @@ use crate::{
     ChaChaError, Context, DwarfFloat, DwarfInteger, NewRef, RefType,
 };
 
+pub trait FutureValue: std::future::Future<Output = RefType<Value>> + std::fmt::Debug {}
+
 #[repr(C)]
 #[derive(Clone, Debug, StableAbi)]
 pub struct FfiRange {
@@ -152,7 +154,7 @@ pub enum Value {
     /// why I need the inner Function to be behind a RefType<<T>>. It seems
     /// excessive, and yet I know I've looked into it before.
     Function(RefType<Function>),
-    // Future(RefType<dyn std::future::Future<Output = RefType<Value>>>),
+    Future(RefType<dyn FutureValue>),
     Integer(DwarfInteger),
     Lambda(RefType<Lambda>),
     Option(Option<RefType<Self>>),
@@ -248,7 +250,7 @@ impl Value {
                 let ty = Ty::new_boolean(sarzak);
                 for vt in lu_dog.iter_value_type() {
                     if let ValueTypeEnum::Ty(_ty) = s_read!(vt).subtype {
-                        if ty.borrow().id() == _ty {
+                        if ty.read().unwrap().id() == _ty {
                             return vt.clone();
                         }
                     }
@@ -282,7 +284,7 @@ impl Value {
                 let ty = Ty::new_float(sarzak);
                 for vt in lu_dog.iter_value_type() {
                     if let ValueTypeEnum::Ty(_ty) = s_read!(vt).subtype {
-                        if ty.borrow().id() == _ty {
+                        if ty.read().unwrap().id() == _ty {
                             return vt.clone();
                         }
                     }
@@ -293,7 +295,7 @@ impl Value {
                 let ty = Ty::new_integer(sarzak);
                 for vt in lu_dog.iter_value_type() {
                     if let ValueTypeEnum::Ty(_ty) = s_read!(vt).subtype {
-                        if ty.borrow().id() == _ty {
+                        if ty.read().unwrap().id() == _ty {
                             return vt.clone();
                         }
                     }
@@ -330,7 +332,7 @@ impl Value {
                 let ty = Ty::new_s_string(sarzak);
                 for vt in lu_dog.iter_value_type() {
                     if let ValueTypeEnum::Ty(_ty) = s_read!(vt).subtype {
-                        if ty.borrow().id() == _ty {
+                        if ty.read().unwrap().id() == _ty {
                             return vt.clone();
                         }
                     }
@@ -342,7 +344,7 @@ impl Value {
                 let ty = Ty::new_s_uuid(sarzak);
                 for vt in lu_dog.iter_value_type() {
                     if let ValueTypeEnum::Ty(_ty) = s_read!(vt).subtype {
-                        if ty.borrow().id() == _ty {
+                        if ty.read().unwrap().id() == _ty {
                             return vt.clone();
                         }
                     }
@@ -381,6 +383,7 @@ impl fmt::Display for Value {
             Self::Error(e) => write!(f, "{}: {e}", Colour::Red.bold().paint("error")),
             Self::Float(num) => write!(f, "{num}"),
             Self::Function(_) => write!(f, "<function>"),
+            Self::Future(_) => write!(f, "<future>"),
             Self::Integer(num) => write!(f, "{num}"),
             Self::Lambda(_) => write!(f, "<lambda>"),
             Self::Option(option) => match option {
