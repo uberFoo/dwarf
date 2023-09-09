@@ -86,14 +86,14 @@ impl<'a> fmt::Display for PrintableValueType<'a> {
                 // interesting when there are multiples of those in memory at once...
                 let sarzak = s_read!(sarzak);
                 if let Some(ty) = sarzak.exhume_ty(ty) {
-                    match &*ty.borrow() {
+                    match &*ty.read().unwrap() {
                         Ty::Boolean(_) => write!(f, "{}", TY_CLR.italic().paint("bool")),
                         Ty::Float(_) => write!(f, "{}", TY_CLR.italic().paint("float")),
                         Ty::Integer(_) => write!(f, "{}", TY_CLR.italic().paint("int")),
                         Ty::Object(ref object) => {
                             // This should probably just be an unwrap().
                             if let Some(object) = sarzak.exhume_object(object) {
-                                write!(f, "{}", TY_CLR.italic().paint(&object.borrow().name))
+                                write!(f, "{}", TY_CLR.italic().paint(&object.read().unwrap().name))
                             } else {
                                 write!(f, "{}", TY_WARN_CLR.italic().paint("<unknown object>"))
                             }
@@ -112,14 +112,14 @@ impl<'a> fmt::Display for PrintableValueType<'a> {
                     // 🚧 HashMapFix
                     for model in models.values() {
                         if let Some(ty) = model.0.exhume_ty(ty) {
-                            if let Ty::Object(ref object) = &*ty.borrow() {
+                            if let Ty::Object(ref object) = &*ty.read().unwrap() {
                                 if let Some(object) = model.0.exhume_object(object) {
                                     return write!(
                                         f,
                                         "{}",
                                         TY_CLR
                                             .italic()
-                                            .paint(format!("{}Proxy", object.borrow().name))
+                                            .paint(format!("{}Proxy", object.read().unwrap().name))
                                     );
                                 }
                             }

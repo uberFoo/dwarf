@@ -5,7 +5,7 @@ use snafu::{location, Location};
 use crate::{
     dwarf::{
         error::{DwarfError, Result},
-        extruder::{inter_expression, typecheck, Context, ExprSpan},
+        extruder::{inter_expression, typecheck, update_span_value, Context, ExprSpan},
         Expression as ParserExpression, PrintableValueType,
     },
     lu_dog::{
@@ -45,7 +45,7 @@ pub fn inter(
 
     if let ValueTypeEnum::Ty(ref id) = s_read!(lhs_ty).subtype {
         let ty = context.sarzak.exhume_ty(id).unwrap();
-        matches!(&*ty.borrow(), Ty::Boolean(_));
+        matches!(&*ty.read().unwrap(), Ty::Boolean(_));
     } else {
         let lhs = PrintableValueType(&lhs_ty, context, lu_dog);
         return Err(vec![DwarfError::TypeMismatch {
@@ -71,7 +71,7 @@ pub fn inter(
     let expr = Expression::new_operator(&expr, lu_dog);
 
     let value = XValue::new_expression(block, &lhs_ty, &expr, lu_dog);
-    s_write!(span).x_value = Some(s_read!(value).id);
+    update_span_value(&span, &value, location!());
 
     Ok(((expr, span), lhs_ty))
 }

@@ -1,0 +1,43 @@
+// enum State {
+//     On,
+//     Off,
+// }
+
+// struct Light {
+//     state: State,
+// }
+
+// impl Light {
+//     fn new() -> Light {
+//         Light { state: State::Off }
+//     }
+
+//     fn toggle(self) {
+//         self.state = match self.state {
+//             State::Off => state::On,
+//             state::On => state::Off,
+//         }
+//     }
+// }
+
+struct Event {}
+
+struct Light {
+    state: bool,
+}
+
+impl Light {
+    fn new() -> Light {
+        Light { state: false }
+    }
+
+    fn toggle(self, event: Event) {
+        self.state = !self.state;
+    }
+}
+
+fn main() {
+    let light = Light::new();
+    let event = Event {};
+    light.toggle(event);
+}

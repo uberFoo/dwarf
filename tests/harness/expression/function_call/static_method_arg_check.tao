@@ -6,5 +6,6 @@ impl Foo {
     }
 }
 fn main() {
+    // This fails
     print(Foo::test(1, 2, "three"));
 }
