@@ -1,43 +1,71 @@
-// enum State {
-//     On,
-//     Off,
-// }
+enum Event {
+    On,
+    Off,
+}
 
-// struct Light {
-//     state: State,
-// }
+enum Power {
+    On,
+    Off,
+}
 
-// impl Light {
-//     fn new() -> Light {
-//         Light { state: State::Off }
-//     }
-
-//     fn toggle(self) {
-//         self.state = match self.state {
-//             State::Off => state::On,
-//             state::On => state::Off,
-//         }
-//     }
-// }
-
-struct Event {}
+struct Color {
+    red: float,
+    green: float,
+    blue: float,
+}
 
 struct Light {
-    state: bool,
+    power: Power,
+    color: Color,
 }
 
 impl Light {
     fn new() -> Light {
-        Light { state: false }
+        Light {
+            power: Power::Off,
+            color: Color {
+                red: 0.0,
+                green: 0.0,
+                blue: 0.0,
+            },
+        }
     }
 
-    fn toggle(self, event: Event) {
-        self.state = !self.state;
+    fn receive_event(self, event: Event) {
+        match event {
+            Event::On => {
+                self.power = Power::On;
+                self.color = Color {
+                    red: 1.0,
+                    green: 1.0,
+                    blue: 1.0,
+                };
+            }
+            Event::Off => {
+                let a = Power::Off;
+                self.power = a;
+                self.color = Color {
+                    red: 0.0,
+                    green: 0.0,
+                    blue: 0.0,
+                };
+            }
+        };
     }
 }
 
 fn main() {
     let light = Light::new();
-    let event = Event {};
-    light.toggle(event);
+    chacha::assert_eq(light.power, Power::Off);
+    chacha::assert_eq(light.color.red, 0.0);
+    chacha::assert_eq(light.color.green, 0.0);
+    chacha::assert_eq(light.color.blue, 0.0);
+
+    let event = Event::On;
+    light.receive_event(event);
+
+    chacha::assert_eq(light.power, Power::On);
+    chacha::assert_eq(light.color.red, 1.0);
+    chacha::assert_eq(light.color.green, 1.0);
+    chacha::assert_eq(light.color.blue, 1.0);
 }

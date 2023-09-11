@@ -8,17 +8,20 @@ use crate::{
     dwarf::{
         error::{DwarfError, Result},
         extruder::{
-            create_generic_enum, debug, function, inter_expression, link_argument,
+            create_generic_enum, debug, e_warn, function, inter_expression, link_argument,
             lookup_woog_struct_method_return_type, typecheck, update_span_value, Context,
             DeSanitize, ExprSpan,
         },
         DwarfInteger, Expression as ParserExpression, PrintableValueType, Type,
     },
     lu_dog::{
-        store::ObjectStore as LuDogStore, Argument, Block, Call, EnumFieldEnum, Expression, Span,
-        StaticMethodCall, ValueType, ValueTypeEnum, XValue,
+        store::ObjectStore as LuDogStore, Argument, Block, Call, EnumFieldEnum, Expression, List,
+        Span, StaticMethodCall, ValueType, ValueTypeEnum, XValue,
     },
-    new_ref, s_read, s_write, NewRef, RefType, CHACHA, COMPLEX_EX, UUID_TYPE,
+    new_ref, s_read, s_write,
+    sarzak::Ty,
+    NewRef, RefType, ARGS, ASSERT_EQ, CHACHA, COMPLEX_EX, EPS, EVAL, FN_NEW, NORM_SQUARED, PARSE,
+    TIME, UUID_TYPE,
 };
 
 // Let's just say that I don't get this lint. The docs say you have to box it
@@ -90,8 +93,39 @@ pub fn inter(
         debug!("name {}", type_name);
         debug!("method {}", method);
 
-        debug!("ParserExpression::StaticMethodCall: looking up type {type_name}");
-        let ty = lookup_woog_struct_method_return_type(&type_name, method, context.sarzak, lu_dog);
+        let sarzak = context.sarzak;
+
+        let ty = if type_name == CHACHA {
+            match method {
+                ARGS => {
+                    let ty = Ty::new_s_string(sarzak);
+                    // 🚧 Ideally we'd cache this when we startup.
+                    let ty = lu_dog
+                        .iter_value_type()
+                        .find(|t| s_read!(t).subtype == ValueTypeEnum::Ty(ty.read().unwrap().id()))
+                        .unwrap();
+                    let list = List::new(&ty, lu_dog);
+                    ValueType::new_list(&list, lu_dog)
+                }
+                _ => {
+                    e_warn!("ParserExpression type not found");
+                    ValueType::new_unknown(lu_dog)
+                }
+            }
+        } else if type_name == UUID_TYPE && method == FN_NEW {
+            ValueType::new_ty(&Ty::new_s_uuid(sarzak), lu_dog)
+        } else if type_name == COMPLEX_EX {
+            match method {
+                NORM_SQUARED => ValueType::new_ty(&Ty::new_float(sarzak), lu_dog),
+                _ => {
+                    e_warn!("ParserExpression type not found");
+                    ValueType::new_unknown(lu_dog)
+                }
+            }
+        } else {
+            debug!("ParserExpression::StaticMethodCall: looking up type {type_name}");
+            lookup_woog_struct_method_return_type(&type_name, method, context.sarzak, lu_dog)
+        };
 
         let mut last_arg_uuid: Option<usize> = None;
         for (position, param) in params.iter().enumerate() {

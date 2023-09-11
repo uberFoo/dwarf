@@ -16,23 +16,11 @@ use crate::{
     lu_dog::{CallEnum, Expression, ValueTypeEnum},
     new_ref, s_read, s_write,
     sarzak::Ty,
-    NewRef, RefType, SarzakStorePtr, Value, CHACHA, COMPLEX_EX, FN_NEW, UUID_TYPE,
+    NewRef, RefType, SarzakStorePtr, Value, ADD, ARGS, ASSERT_EQ, CHACHA, COMPLEX_EX, EPS, EVAL,
+    FN_NEW, FORMAT, LEN, NORM_SQUARED, PARSE, SQUARE, TIME, TYPEOF, UUID_TYPE,
 };
 
 mod chacha;
-
-const ADD: &str = "add";
-const ARGS: &str = "args";
-const ASSERT_EQ: &str = "assert_eq";
-const EPS: &str = "eps";
-const EVAL: &str = "eval";
-const LEN: &str = "len";
-const FORMAT: &str = "format";
-const NORM_SQUARED: &str = "norm_squared";
-const PARSE: &str = "parse";
-const SQUARE: &str = "square";
-const TIME: &str = "time";
-const TYPEOF: &str = "typeof";
 
 pub fn eval(
     call_id: &SarzakStorePtr,

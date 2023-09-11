@@ -160,7 +160,7 @@ fn do_column(
 ) {
     for column in 0..width {
         let point = pixel_to_point(width, height, column, row, upper_left, lower_right);
-        let time = escape_time(point, time);
+        let time: Option<int> = escape_time(point, time);
         match time {
             Option::<int>::None => print("*"),
             Option::<int>::Some(time) => print(" "),

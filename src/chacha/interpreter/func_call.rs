@@ -11,7 +11,7 @@ use tracy_client::span;
 use crate::{
     chacha::{
         error::{Result, WrongNumberOfArgumentsSnafu},
-        value::FfiValue,
+        value::{FfiValue, FutureValue},
         vm::VM,
     },
     interpreter::{
@@ -52,8 +52,35 @@ pub fn eval_function_call(
 
     span!("eval_function_call");
 
-    let body = s_read!(func).r19_body(&s_read!(lu_dog))[0].clone();
+    if s_read!(func).a_sink {
+        let future = async { inner_eval_function_call(func, args, arg_check, span, context, vm) };
+        // let future = new_ref!(dyn FutureValue, future);
+        // let foo =         <RefType<dyn FutureValue> as NewRef<dyn FutureValue>>::new_ref(future);
+        // let future = std::rc::Rc::new(std::cell::RefCell::new(future));
+        // Ok(new_ref!(Value, Value::Future(future)))
+        Ok(new_ref!(Value, Value::Empty))
+    } else {
+        inner_eval_function_call(func, args, arg_check, span, context, vm)
+    }
+}
 
+fn inner_eval_function_call(
+    func: RefType<Function>,
+    args: &[RefType<Argument>],
+    arg_check: bool,
+    span: &RefType<Span>,
+    context: &mut Context,
+    vm: &mut VM,
+) -> Result<RefType<Value>> {
+    let lu_dog = context.lu_dog_heel().clone();
+    context.increment_call_count();
+
+    debug!("inner_eval_function_call func {func:?}");
+    trace!("inner_eval_function_call stack {:?}", context.memory());
+
+    span!("inner_eval_function_call");
+
+    let body = s_read!(func).r19_body(&s_read!(lu_dog))[0].clone();
     let body = s_read!(body);
     match body.subtype {
         //

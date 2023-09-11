@@ -14,7 +14,7 @@ use crate::{
         error::{DwarfError, Result},
         expression::{addition, and, expr_as, static_method_call},
         parse_dwarf, AttributeMap, DwarfInteger, EnumField, Expression as ParserExpression,
-        Generics, InnerAttribute, InnerItem, Item, PrintableValueType, Spanned,
+        FunctionType, Generics, InnerAttribute, InnerItem, Item, PrintableValueType, Spanned,
         Statement as ParserStatement, Type,
     },
     lu_dog::{
@@ -35,8 +35,7 @@ use crate::{
     },
     new_ref, s_read, s_write,
     sarzak::{store::ObjectStore as SarzakStore, types::Ty},
-    Context as InterContext, Dirty, ModelStore, NewRef, RefType, SarzakStorePtr, CHACHA, FN_NEW,
-    UUID_TYPE,
+    Context as InterContext, Dirty, ModelStore, NewRef, RefType, CHACHA, FN_NEW, UUID_TYPE,
 };
 
 const LIB_TAO: &str = "lib.tao";
@@ -160,6 +159,7 @@ pub(super) type ExprSpan = (RefType<Expression>, RefType<LuDogSpan>);
 
 // These below are just to avoid cloning things.
 struct ConveyFunc<'a> {
+    func_ty: &'a FunctionType,
     name: &'a str,
     attributes: &'a AttributeMap,
     span: &'a Span,
@@ -170,6 +170,7 @@ struct ConveyFunc<'a> {
 
 impl<'a> ConveyFunc<'a> {
     fn new(
+        func_ty: &'a FunctionType,
         name: &'a str,
         attributes: &'a AttributeMap,
         span: &'a Span,
@@ -178,6 +179,7 @@ impl<'a> ConveyFunc<'a> {
         statements: Option<&'a Spanned<ParserExpression>>,
     ) -> Self {
         Self {
+            func_ty,
             name,
             attributes,
             span,
@@ -359,9 +361,20 @@ fn walk_tree(ast: &[Item], context: &mut Context, lu_dog: &mut LuDogStore) -> Re
                 attributes,
             } => enums.push(ConveyEnum::new(name, attributes, fields, generics)),
             Item {
-                item: (InnerItem::Function((name, _name_span), params, return_type, stmts), span),
+                item:
+                    (
+                        InnerItem::Function(
+                            func_ty,
+                            (name, _name_span),
+                            params,
+                            return_type,
+                            stmts,
+                        ),
+                        span,
+                    ),
                 attributes,
             } => funcs.push(ConveyFunc::new(
+                func_ty,
                 name,
                 attributes,
                 span,
@@ -456,6 +469,7 @@ fn walk_tree(ast: &[Item], context: &mut Context, lu_dog: &mut LuDogStore) -> Re
 
     // Finally, inter the loose functions.
     for ConveyFunc {
+        func_ty,
         name,
         attributes,
         span,
@@ -466,6 +480,7 @@ fn walk_tree(ast: &[Item], context: &mut Context, lu_dog: &mut LuDogStore) -> Re
     {
         debug!("Interring function `{}`", name);
         let _ = inter_func(
+            func_ty,
             name,
             attributes,
             params,
@@ -520,6 +535,7 @@ fn walk_tree(ast: &[Item], context: &mut Context, lu_dog: &mut LuDogStore) -> Re
 
 #[allow(clippy::too_many_arguments)]
 fn inter_func(
+    func_ty: &FunctionType,
     name: &str,
     attributes: &AttributeMap,
     params: &[(Spanned<String>, Spanned<Type>)],
@@ -590,6 +606,11 @@ fn inter_func(
     context.location = location!();
     let ret_ty = get_value_type(&return_type.0, &return_type.1, impl_ty, context, lu_dog)?;
 
+    let a_sink = match func_ty {
+        FunctionType::Async => true,
+        FunctionType::Sync => false,
+    };
+
     let name = name.de_sanitize();
     let (func, block) = if let Some((ParserExpression::Block(stmts, vars, tys), span)) = &stmts {
         let block = Block::new(Uuid::new_v4(), None, None, lu_dog);
@@ -600,14 +621,30 @@ fn inter_func(
         }
 
         let body = Body::new_block(&block, lu_dog);
-        let func = Function::new(name.to_owned(), &body, None, impl_block, &ret_ty, lu_dog);
+        let func = Function::new(
+            a_sink,
+            name.to_owned(),
+            &body,
+            None,
+            impl_block,
+            &ret_ty,
+            lu_dog,
+        );
         context.dirty.push(Dirty::Func(func.clone()));
         let _ = ValueType::new_function(&func, lu_dog);
 
         (func, Some((block, stmts, span)))
     } else if let Some(body) = external {
         (
-            Function::new(name.to_owned(), &body, None, impl_block, &ret_ty, lu_dog),
+            Function::new(
+                a_sink,
+                name.to_owned(),
+                &body,
+                None,
+                impl_block,
+                &ret_ty,
+                lu_dog,
+            ),
             None,
         )
     } else {
@@ -749,10 +786,20 @@ pub fn inter_statement(
                 // Item::Function((name, _name_span), params, return_type, stmts) => {
                 Item {
                     item:
-                        (InnerItem::Function(ref name, ref params, ref return_type, ref stmts), span),
+                        (
+                            InnerItem::Function(
+                                ref func_ty,
+                                ref name,
+                                ref params,
+                                ref return_type,
+                                ref stmts,
+                            ),
+                            span,
+                        ),
                     attributes,
                 } => {
                     inter_func(
+                        func_ty,
                         &name.0,
                         attributes,
                         params,
@@ -1262,11 +1309,11 @@ pub(super) fn inter_expression(
                 ValueTypeEnum::Function(ref _id) => Ok((lhs, ty.clone())),
                 ValueTypeEnum::WoogStruct(ref id) => {
                     let woog_struct = lu_dog.exhume_woog_struct(id).unwrap();
+                    let fields = s_read!(woog_struct).r7_field(lu_dog);
+                    let field = fields.iter().find(|f| s_read!(f).name == rhs.0);
 
-                    if let Some(field) = lu_dog.exhume_field_id_by_name(&rhs.0) {
-                        let field = lu_dog.exhume_field(&field);
-                        // let field = woog_struct.r7_field(lu_dog);
-                        // let field = field.iter().find(|f| s_read!(f).name == rhs);
+                    if let Some(field) = field {
+                        let field = lu_dog.exhume_field(&s_read!(field).id);
                         let func = if let Some(impl_) =
                             s_read!(woog_struct).r8c_implementation_block(lu_dog).pop()
                         {
@@ -1320,64 +1367,86 @@ pub(super) fn inter_expression(
                 }
                 ValueTypeEnum::Ty(id) => {
                     debug!("FieldAccess: ValueTypeEnum::Ty() {:?}", id);
-                    let woog_struct = lu_dog
-                        .iter_woog_struct()
-                        .inspect(|ref ws| {
-                            debug!("{ws:?}");
-                        })
-                        .find(|ws| s_read!(ws).object == Some(*id))
-                        .unwrap();
+                    let ty = context.sarzak.exhume_ty(id).unwrap();
+                    let ty = ty.read().unwrap();
+                    match *ty {
+                        Ty::Object(id) => {
+                            // We get here for objects imported from a plug-in.
+                            let woog_struct = lu_dog
+                                .iter_woog_struct()
+                                .inspect(|ref ws| {
+                                    debug!("{ws:?}");
+                                })
+                                .find(|ws| s_read!(ws).object == Some(id))
+                                .unwrap();
 
-                    if let Some(field) = lu_dog.exhume_field_id_by_name(&rhs.0) {
-                        let field = lu_dog.exhume_field(&field);
-                        // let field = woog_struct.r7_field(lu_dog);
-                        // let field = field.iter().find(|f| s_read!(f).name == rhs);
-                        let func = if let Some(impl_) =
-                            s_read!(woog_struct).r8c_implementation_block(lu_dog).pop()
-                        {
-                            let impl_ = s_read!(impl_);
+                            if let Some(field) = lu_dog.exhume_field_id_by_name(&rhs.0) {
+                                let field = lu_dog.exhume_field(&field);
+                                // let field = woog_struct.r7_field(lu_dog);
+                                // let field = field.iter().find(|f| s_read!(f).name == rhs);
+                                let func = if let Some(impl_) =
+                                    s_read!(woog_struct).r8c_implementation_block(lu_dog).pop()
+                                {
+                                    let impl_ = s_read!(impl_);
 
-                            let funcs = impl_.r9_function(lu_dog);
-                            funcs.iter().find(|f| s_read!(f).name == rhs.0).cloned()
-                        } else {
-                            None
-                        };
+                                    let funcs = impl_.r9_function(lu_dog);
+                                    funcs.iter().find(|f| s_read!(f).name == rhs.0).cloned()
+                                } else {
+                                    None
+                                };
 
-                        // We need to grab the type from the field: what we have above is the type
-                        // of the struct.
-                        if let Some(field) = field {
-                            let fat = FieldAccessTarget::new_field(&field, lu_dog);
-                            let expr = FieldAccess::new(&lhs.0, &fat, &woog_struct, lu_dog);
-                            let expr = Expression::new_field_access(&expr, lu_dog);
-                            let ty = s_read!(field).r5_value_type(lu_dog)[0].clone();
-                            let value = XValue::new_expression(block, &ty, &expr, lu_dog);
-                            update_span_value(&span, &value, location!());
+                                // We need to grab the type from the field: what we have above is the type
+                                // of the struct.
+                                if let Some(field) = field {
+                                    let fat = FieldAccessTarget::new_field(&field, lu_dog);
+                                    let expr = FieldAccess::new(&lhs.0, &fat, &woog_struct, lu_dog);
+                                    let expr = Expression::new_field_access(&expr, lu_dog);
+                                    let ty = s_read!(field).r5_value_type(lu_dog)[0].clone();
+                                    let value = XValue::new_expression(block, &ty, &expr, lu_dog);
+                                    update_span_value(&span, &value, location!());
 
-                            Ok(((expr, span), ty))
-                        } else if let Some(func) = func {
-                            let fat = FieldAccessTarget::new_function(&func, lu_dog);
-                            let expr = FieldAccess::new(&lhs.0, &fat, &woog_struct, lu_dog);
-                            let expr = Expression::new_field_access(&expr, lu_dog);
-                            let ty = s_read!(func).r10_value_type(lu_dog)[0].clone();
-                            let value = XValue::new_expression(block, &ty, &expr, lu_dog);
-                            update_span_value(&span, &value, location!());
+                                    Ok(((expr, span), ty))
+                                } else if let Some(func) = func {
+                                    let fat = FieldAccessTarget::new_function(&func, lu_dog);
+                                    let expr = FieldAccess::new(&lhs.0, &fat, &woog_struct, lu_dog);
+                                    let expr = Expression::new_field_access(&expr, lu_dog);
+                                    let ty = s_read!(func).r10_value_type(lu_dog)[0].clone();
+                                    let value = XValue::new_expression(block, &ty, &expr, lu_dog);
+                                    update_span_value(&span, &value, location!());
 
-                            Ok(((expr, span), ty))
-                        } else {
-                            let span = s_read!(span);
-                            let span = span.start as usize..span.end as usize;
-                            Err(vec![DwarfError::StructFieldNotFound {
-                                field: rhs.0.clone(),
-                                span,
-                                location: location!(),
+                                    Ok(((expr, span), ty))
+                                } else {
+                                    let span = s_read!(span);
+                                    let span = span.start as usize..span.end as usize;
+                                    Err(vec![DwarfError::StructFieldNotFound {
+                                        field: rhs.0.clone(),
+                                        span,
+                                        location: location!(),
+                                    }])
+                                }
+                            } else {
+                                Err(vec![DwarfError::StructFieldNotFound {
+                                    field: rhs.0.clone(),
+                                    span: rhs.1.to_owned(),
+                                    location: location!(),
+                                }])
+                            }
+                        }
+                        _yell_away => {
+                            debug!("returning lhs");
+                            Ok((lhs, lhs_ty))
+                        }
+                        ty => {
+                            let ty = ValueType::new_ty(
+                                &std::sync::Arc::new(std::sync::RwLock::new(ty)),
+                                lu_dog,
+                            );
+                            let ty = PrintableValueType(&ty, context, lu_dog).to_string();
+                            Err(vec![DwarfError::NotAStruct {
+                                span: s_read!(lhs.1).start as usize..s_read!(lhs.1).end as usize,
+                                ty,
                             }])
                         }
-                    } else {
-                        Err(vec![DwarfError::StructFieldNotFound {
-                            field: rhs.0.clone(),
-                            span: rhs.1.to_owned(),
-                            location: location!(),
-                        }])
                     }
                 }
                 ty => {
@@ -1432,7 +1501,6 @@ pub(super) fn inter_expression(
                     // For example, what if you wanted a..f? I need to think about this, and
                     // check what rust does. I'm actually too tired right now to think about
                     // it. Related to range_type_bug.
-                    dbg!("range!!!");
                     ValueType::new_ty(&Ty::new_integer(context.sarzak), lu_dog)
                 }
                 ValueTypeEnum::Ty(ref id) => {
@@ -2648,10 +2716,34 @@ pub(super) fn inter_expression(
             Ok(((expr, span), lhs_ty))
         }
         //
+        // Path In Expression
+        //
+        // This looks like it's comping up as an enum constructor, not sure if
+        // it will come up with structs. Seems like it would/could.
+        // ParserExpression::PathInExpression(path) => {
+        //     debug!("PathInExpression {:?}", path);
+
+        //     // Lookup the type
+        //     let root = path.first().unwrap();
+        //     if let Type::UserType((root, span)) = root {
+        //         if let Some(root) = lu_dog.exhume_enumeration_id_by_name(root) {
+        //             // I'll be stupid here and assume that the next element is the last.
+        //             let last = path.last().unwrap();
+        //         } else {
+        //             Err(vec![DwarfError::EnumNotFound {
+        //                 name: root.to_owned(),
+        //                 span: span.to_owned(),
+        //             }])
+        //         }
+        //     } else {
+        //         panic!("Things fell apart -- entropy happens.");
+        //     }
+        // }
+        //
         // Plain enumeration
         //
         ParserExpression::PlainEnum(enum_path, (field_name, field_span)) => {
-            debug!("PlainEnum {:?}", enum_path);
+            debug!("PlainEnum {:?}, Field {field_name}", enum_path);
             let (path, path_span) =
                 if let (ParserExpression::PathInExpression(path), span) = enum_path.as_ref() {
                     (path, span)
@@ -2662,7 +2754,11 @@ pub(super) fn inter_expression(
                 );
                 };
 
-            let enum_name = path.iter().map(|p| {
+            debug!("path {path:?}");
+
+            // 🚧 Looks like we are validating each element of the path, but int, in Option::<int> isn't a
+            // UserType, so I'm confused.
+            let full_enum_name = path.iter().map(|p| {
                 if let Type::UserType((obj, _)) = p {
                     obj.de_sanitize().to_owned()
                 } else {
@@ -2670,52 +2766,74 @@ pub(super) fn inter_expression(
                 }
             }).collect::<Vec<_>>().join("");
 
-            debug!("enum_name {:?}", enum_name);
-
-            // Check the field name against the declaration
-            let woog_enum_id = if let Some(id) = lu_dog.exhume_enumeration_id_by_name(&enum_name) {
-                id
+            let enum_root = if let Some(root) = full_enum_name.split("<").next() {
+                root
             } else {
-                let (new_enum, _) = create_generic_enum(&enum_name, lu_dog);
-                let x = s_read!(new_enum).id;
-                x
+                full_enum_name.as_str()
             };
 
-            let woog_enum = lu_dog.exhume_enumeration(&woog_enum_id).unwrap();
+            debug!("enum_name {:?}", full_enum_name);
 
-            let fuzzy = s_read!(woog_enum).r88_enum_field(lu_dog);
-            let field = fuzzy.iter().find(|field| {
-                let field = s_read!(field);
-                field.name == field_name
-            });
+            // 🚧 What we really need to do here is lookup just the enum, to make sure that
+            // it exists. Then we can lookup the entire path and inter it as a generic
+            // if necessary.
+            // let (new_enum, _) = create_generic_enum(&enum_name, lu_dog);
+            // let x = s_read!(new_enum).id;
+            // x
+            if let Some(woog_enum_id) = lu_dog.exhume_enumeration_id_by_name(enum_root) {
+                let woog_enum_id = if enum_root != full_enum_name {
+                    if let Some(id) = lu_dog.exhume_enumeration_id_by_name(&full_enum_name) {
+                        id
+                    } else {
+                        let (new_enum, _) = create_generic_enum(&full_enum_name, lu_dog);
+                        let x = s_read!(new_enum).id;
+                        x
+                    }
+                } else {
+                    woog_enum_id
+                };
 
-            if let Some(field) = field {
-                let ty = lu_dog
-                    .iter_value_type()
-                    .inspect(|ty| {
-                        debug!("ty {:?}", ty);
-                    })
-                    .find(|ty| {
-                        if let ValueTypeEnum::Enumeration(id) = s_read!(ty).subtype {
-                            id == woog_enum_id
-                        } else {
-                            false
-                        }
-                    })
-                    .unwrap();
+                let woog_enum = lu_dog.exhume_enumeration(&woog_enum_id).unwrap();
 
-                let expr = Expression::new_enum_field(field, lu_dog);
+                let fuzzy = s_read!(woog_enum).r88_enum_field(lu_dog);
+                let field = fuzzy.iter().find(|field| {
+                    let field = s_read!(field);
+                    field.name == field_name
+                });
 
-                let value = XValue::new_expression(block, &ty, &expr, lu_dog);
-                update_span_value(&span, &value, location!());
+                if let Some(field) = field {
+                    let ty = lu_dog
+                        .iter_value_type()
+                        .inspect(|ty| {
+                            debug!("ty {:?}", ty);
+                        })
+                        .find(|ty| {
+                            if let ValueTypeEnum::Enumeration(id) = s_read!(ty).subtype {
+                                id == woog_enum_id
+                            } else {
+                                false
+                            }
+                        })
+                        .unwrap();
 
-                Ok(((expr, span), ty))
+                    let expr = Expression::new_enum_field(field, lu_dog);
+
+                    let value = XValue::new_expression(block, &ty, &expr, lu_dog);
+                    update_span_value(&span, &value, location!());
+
+                    Ok(((expr, span), ty))
+                } else {
+                    Err(vec![DwarfError::NoSuchField {
+                        name: full_enum_name.to_owned(),
+                        name_span: path_span.to_owned(),
+                        field: field_name.to_owned(),
+                        span: field_span.to_owned(),
+                    }])
+                }
             } else {
-                Err(vec![DwarfError::NoSuchField {
-                    name: enum_name.to_owned(),
-                    name_span: path_span.to_owned(),
-                    field: field_name.to_owned(),
-                    span: field_span.to_owned(),
+                Err(vec![DwarfError::EnumNotFound {
+                    name: full_enum_name.to_owned(),
+                    span: path_span.to_owned(),
                 }])
             }
         }
@@ -3207,10 +3325,21 @@ fn inter_implementation(
     for func in funcs {
         match func {
             Item {
-                item: (InnerItem::Function(ref name, ref params, ref return_type, ref stmts), span),
+                item:
+                    (
+                        InnerItem::Function(
+                            ref func_ty,
+                            ref name,
+                            ref params,
+                            ref return_type,
+                            ref stmts,
+                        ),
+                        span,
+                    ),
                 attributes,
             } => {
                 match inter_func(
+                    func_ty,
                     &name.0,
                     attributes,
                     params,

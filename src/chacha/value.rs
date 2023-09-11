@@ -1,4 +1,7 @@
-use std::{fmt, ops::Range};
+use std::{
+    fmt,
+    ops::{Deref, Range},
+};
 
 use abi_stable::{
     std_types::{RBox, ROption, RString, RVec},
@@ -154,7 +157,7 @@ pub enum Value {
     /// why I need the inner Function to be behind a RefType<<T>>. It seems
     /// excessive, and yet I know I've looked into it before.
     Function(RefType<Function>),
-    Future(RefType<dyn FutureValue>),
+    // Future(RefType<dyn FutureValue>),
     Integer(DwarfInteger),
     Lambda(RefType<Lambda>),
     Option(Option<RefType<Self>>),
@@ -383,7 +386,7 @@ impl fmt::Display for Value {
             Self::Error(e) => write!(f, "{}: {e}", Colour::Red.bold().paint("error")),
             Self::Float(num) => write!(f, "{num}"),
             Self::Function(_) => write!(f, "<function>"),
-            Self::Future(_) => write!(f, "<future>"),
+            // Self::Future(_) => write!(f, "<future>"),
             Self::Integer(num) => write!(f, "{num}"),
             Self::Lambda(_) => write!(f, "<lambda>"),
             Self::Option(option) => match option {

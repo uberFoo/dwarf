@@ -5,8 +5,9 @@ use log;
 use rustc_hash::FxHashMap as HashMap;
 
 use crate::dwarf::{
-    generic_to_string, Attribute, DwarfFloat, EnumField, Expression as DwarfExpression, Generics,
-    InnerAttribute, InnerItem, Item, Pattern, Spanned, Statement, Token, Type,
+    generic_to_string, Attribute, DwarfFloat, EnumField, Expression as DwarfExpression,
+    FunctionType, Generics, InnerAttribute, InnerItem, Item, Pattern, Spanned, Statement, Token,
+    Type,
 };
 
 use super::{error::DwarfError, DwarfInteger};
@@ -118,7 +119,7 @@ const ADD_SUB: (u8, u8) = (50, 51);
 const COMP: (u8, u8) = (30, 31);
 const BOOL: (u8, u8) = (25, 26);
 const RANGE: (u8, u8) = (20, 21);
-const ASSIGN: (u8, u8) = (11, 10);
+const ASSIGN: (u8, u8) = (11, 0);
 // Literal, closure, break, return, etc.
 const LITERAL: (u8, u8) = (0, 1);
 const BLOCK: (u8, u8) = (0, 0);
@@ -1091,6 +1092,7 @@ impl DwarfParser {
             return Ok(None);
         }
 
+        debug!("getting right");
         let right = if let Some(expr) = self.parse_expression(ASSIGN.1)? {
             expr
         } else {
@@ -1849,6 +1851,7 @@ impl DwarfParser {
                     debug!("path in expression", expression);
                     Some(expression)
                 } else if let Some(expression) = self.parse_as_operator(&lhs, power)? {
+                    // let rhs = if let Some(expression) = self.parse_as_operator(&lhs, power)? {
                     debug!("as operator", expression);
                     Some(expression)
                 } else if let Some(expression) = self.parse_addition_operator(&lhs, power)? {
@@ -1909,7 +1912,7 @@ impl DwarfParser {
                     debug!("static method call", expression);
                     Some(expression)
                 } else if let Some(expression) = self.parse_enum_expression_plain(&lhs, power)? {
-                    debug!("struct expression", expression);
+                    debug!("enum expression plain", expression);
                     Some(expression)
                 } else {
                     debug!("exit no operator", lhs);
@@ -1933,6 +1936,30 @@ impl DwarfParser {
             }
         } else {
             None
+        };
+
+        // This is an ugly hack. I don't even imagine the alternative.
+        // We just can't be returning a PathInExpression an an Expression.
+        let lhs = if let Some(((DwarfExpression::PathInExpression(mut path), span), _)) = lhs {
+            let method_name = path.pop().unwrap();
+            let field_name = if let Type::UserType(name) = method_name {
+                name
+            } else {
+                unreachable!()
+            };
+
+            Some((
+                (
+                    DwarfExpression::PlainEnum(
+                        Box::new((DwarfExpression::PathInExpression(path), span.to_owned())),
+                        field_name,
+                    ),
+                    span,
+                ),
+                LITERAL,
+            ))
+        } else {
+            lhs
         };
 
         debug!("exit", lhs);
@@ -3295,6 +3322,13 @@ impl DwarfParser {
 
         let start = path.0 .1.start;
 
+        // let path = if let Some(path) = self.parse_path_in_expression(path, power)? {
+        //     path
+        // } else {
+        //     debug!("exit no path");
+        //     return Ok(None);
+        // };
+
         let (mut path, span) = if let (DwarfExpression::PathInExpression(path), span) = &path.0 {
             (path.to_owned(), span)
         } else {
@@ -3477,7 +3511,7 @@ impl DwarfParser {
             debug!("exit parse_function: no fn or async");
             return Ok(None);
         }
-        if let Some((Token::Async, _)) = start_func {
+        let func_ty = if let Some((Token::Async, _)) = start_func {
             if self.match_tokens(&[Token::Fn]).is_none() {
                 let token = self.previous().unwrap();
                 let err = Simple::expected_input_found(
@@ -3487,8 +3521,12 @@ impl DwarfParser {
                 );
                 debug!("exit parse_function: no fn");
                 return Err(Box::new(err));
+            } else {
+                FunctionType::Async
             }
-        }
+        } else {
+            FunctionType::Sync
+        };
 
         let name = if let Some(ident) = self.parse_ident() {
             ident
@@ -3619,7 +3657,7 @@ impl DwarfParser {
         debug!("exit parse_function");
 
         Ok(Some((
-            InnerItem::Function(name, params, return_type, body),
+            InnerItem::Function(func_ty, name, params, return_type, body),
             start..end,
         )))
     }
@@ -5440,6 +5478,33 @@ mod tests {
     }
 
     #[test]
+    fn test_struct_enum() {
+        let _ = env_logger::builder().is_test(true).try_init();
+
+        let src = r#"
+            enum Foo {
+                Bar,
+                Baz,
+                Qux
+            }
+
+            struct Bar {
+                a: Foo
+            }
+
+            fn main() {
+                let a = Bar { a: Foo::Bar };
+                a.a = Foo::Baz;
+                b = Foo::Qux;
+            }
+        "#;
+
+        let ast = parse_dwarf("test_plain_enum", src);
+        dbg!(&ast);
+        assert!(ast.is_ok());
+    }
+
+    #[test]
     fn test_generic_decls() {
         let _ = env_logger::builder().is_test(true).try_init();
 
@@ -5487,6 +5552,29 @@ mod tests {
                 if let Option::Some(a) = bar {}
                 if let FuBar(a, b) = foo {}
                 if let Foo::Bar::FuBar(a, b) = foo {}
+            }
+        "#;
+
+        let ast = parse_dwarf("test_if_let", src);
+        assert!(ast.is_ok());
+    }
+
+    #[test]
+    fn test_struct_field_assignment() {
+        let _ = env_logger::builder().is_test(true).try_init();
+
+        let src = r#"
+            struct A {
+                b: B
+            }
+
+            struct B {
+                b: int
+            }
+
+            fn main() {
+                let a = A { b: B { b: 42 } };
+                a.b.b = 69;
             }
         "#;
 

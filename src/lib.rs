@@ -25,9 +25,21 @@ pub(crate) use chacha::{error::ChaChaError, interpreter, value::Value};
 pub type DwarfInteger = i64;
 pub type DwarfFloat = f64;
 
+const ADD: &str = "add";
+const ARGS: &str = "args";
+const ASSERT_EQ: &str = "assert_eq";
 const CHACHA: &str = "chacha";
 const COMPLEX_EX: &str = "ComplexEx";
+const EPS: &str = "eps";
+const EVAL: &str = "eval";
 const FN_NEW: &str = "new";
+const LEN: &str = "len";
+const FORMAT: &str = "format";
+const NORM_SQUARED: &str = "norm_squared";
+const PARSE: &str = "parse";
+const SQUARE: &str = "square";
+const TIME: &str = "time";
+const TYPEOF: &str = "typeof";
 const UUID_TYPE: &str = "Uuid";
 
 use lu_dog::{ObjectStore as LuDogStore, ValueType};
@@ -151,6 +163,7 @@ pub(crate) use new_rc;
 
 macro_rules! new_ref {
     ($type:ty, $value:expr) => {
+        // std::rc::Rc::new(std::cell::RefCell::new($value))
         <RefType<$type> as NewRef<$type>>::new_ref($value)
     };
 }
