@@ -486,6 +486,12 @@ pub struct Item {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+pub enum FunctionType {
+    Async,
+    Sync,
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub enum InnerItem {
     Enum(
         Spanned<String>,
@@ -494,8 +500,9 @@ pub enum InnerItem {
     ),
     /// A Function Definition
     ///
-    /// name, Vec<(Parameter Name, Parameter Type)>, Return Type, Vec<Statement>
+    /// async, name, Vec<(Parameter Name, Parameter Type)>, Return Type, Vec<Statement>
     Function(
+        FunctionType,
         Spanned<String>,
         Vec<(Spanned<String>, Spanned<Type>)>,
         Spanned<Type>,

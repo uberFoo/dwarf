@@ -23,6 +23,12 @@ pub enum DwarfError {
     #[snafu(display("\n{}: `{}` may only be used inside an impl block.\n  --> {}..{}", C_ERR.bold().paint("error"), C_OTHER.underline().paint("Self"), span.start, span.end))]
     BadSelf { span: Span, location: Location },
 
+    /// Enum not found
+    ///
+    /// An enum has been referenced that does not exist.
+    #[snafu(display("\n{}: enum not found: {}", C_ERR.bold().paint("error"), C_OTHER.paint(name)))]
+    EnumNotFound { name: String, span: Span },
+
     /// File Error
     ///
     /// Something went wrong with the file system.
@@ -89,6 +95,11 @@ pub enum DwarfError {
         ty: String,
         location: Location,
     },
+
+    /// Not a Struct Type
+    ///
+    #[snafu(display("\n{}: Not a struct: {ty}", C_ERR.bold().paint("error")))]
+    NotAStruct { ty: String, span: Span },
 
     /// No Such Field
     #[snafu(display("\n{}: no such field `{}`.", C_ERR.bold().paint("error"), C_OTHER.paint(field)))]
@@ -207,6 +218,20 @@ impl fmt::Display for DwarfErrorReporter<'_, '_, '_> {
                     .map_err(|_| fmt::Error)?;
                 write!(f, "{}", String::from_utf8_lossy(&std_err))
             }
+            DwarfError::EnumNotFound { name, span } => {
+                let span = span.clone();
+                Report::build(ReportKind::Error, file_name, span.start)
+                    .with_message(format!("enum not found: {}", C_OTHER.paint(name)))
+                    .with_label(
+                        Label::new((file_name, span))
+                            .with_message("this enum does not exist")
+                            .with_color(Color::Red),
+                    )
+                    .finish()
+                    .write((file_name, Source::from(&program)), &mut std_err)
+                    .map_err(|_| fmt::Error)?;
+                write!(f, "{}", String::from_utf8_lossy(&std_err))
+            }
             DwarfError::GenericWarning {
                 description: desc,
                 span,
@@ -265,6 +290,19 @@ impl fmt::Display for DwarfErrorReporter<'_, '_, '_> {
                 };
 
                 report
+                    .finish()
+                    .write((file_name, Source::from(&program)), &mut std_err)
+                    .map_err(|_| fmt::Error)?;
+                write!(f, "{}", String::from_utf8_lossy(&std_err))
+            }
+            DwarfError::NotAStruct { span, ty } => {
+                Report::build(ReportKind::Error, file_name, span.start)
+                    .with_message(format!("expected a struct, found {}", C_OTHER.paint(ty)))
+                    .with_label(
+                        Label::new((file_name, span.to_owned()))
+                            .with_message("this is not a struct")
+                            .with_color(Color::Red),
+                    )
                     .finish()
                     .write((file_name, Source::from(&program)), &mut std_err)
                     .map_err(|_| fmt::Error)?;

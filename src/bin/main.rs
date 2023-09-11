@@ -104,6 +104,10 @@ struct Arguments {
     /// Read source file from stdin.
     #[arg(long, short, action=ArgAction::SetTrue)]
     stdin: Option<bool>,
+    /// Print the AST
+    ///
+    #[arg(long, action=ArgAction::SetTrue)]
+    ast: Option<bool>,
 }
 
 #[derive(Clone, Debug, Args)]
@@ -126,6 +130,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Arguments::parse();
     let bless = args.bless.is_some() && args.bless.unwrap();
     let is_uber = args.uber.is_some() && args.uber.unwrap();
+    let print_ast = args.ast.is_some() && args.ast.unwrap();
 
     // Figure out what we're dealing with, input-wise.
     let input = if let Some(ref source) = args.source {
@@ -189,6 +194,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 return Ok(());
             }
         };
+
+        if print_ast {
+            println!("{:#?}", ast);
+        }
 
         let ctx = match new_lu_dog(Some((source_code.clone(), &ast)), &dwarf_home, &sarzak) {
             Ok(lu_dog) => lu_dog,
