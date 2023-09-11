@@ -11,7 +11,7 @@ use tracy_client::span;
 use crate::{
     chacha::{
         error::{Result, WrongNumberOfArgumentsSnafu},
-        value::FfiValue,
+        value::{FfiValue, FutureValue},
         vm::VM,
     },
     interpreter::{

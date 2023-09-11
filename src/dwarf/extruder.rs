@@ -2737,6 +2737,30 @@ pub(super) fn inter_expression(
         //     }
         // }
         //
+        // Path In Expression
+        //
+        // This looks like it's comping up as an enum constructor, not sure if
+        // it will come up with structs. Seems like it would/could.
+        // ParserExpression::PathInExpression(path) => {
+        //     debug!("PathInExpression {:?}", path);
+
+        //     // Lookup the type
+        //     let root = path.first().unwrap();
+        //     if let Type::UserType((root, span)) = root {
+        //         if let Some(root) = lu_dog.exhume_enumeration_id_by_name(root) {
+        //             // I'll be stupid here and assume that the next element is the last.
+        //             let last = path.last().unwrap();
+        //         } else {
+        //             Err(vec![DwarfError::EnumNotFound {
+        //                 name: root.to_owned(),
+        //                 span: span.to_owned(),
+        //             }])
+        //         }
+        //     } else {
+        //         panic!("Things fell apart -- entropy happens.");
+        //     }
+        // }
+        //
         // Unit enumeration
         //
         ParserExpression::UnitEnum(enum_path, (field_name, field_span)) => {
@@ -2764,16 +2788,32 @@ pub(super) fn inter_expression(
                 }
             }).collect::<Vec<_>>().join("");
 
-            debug!("enum_name {:?}", enum_name);
-
-            // Check the field name against the declaration
-            let woog_enum_id = if let Some(id) = lu_dog.exhume_enumeration_id_by_name(&enum_name) {
-                id
+            let enum_root = if let Some(root) = full_enum_name.split("<").next() {
+                root
             } else {
-                let (new_enum, _) = create_generic_enum(&enum_name, lu_dog);
-                let x = s_read!(new_enum).id;
-                x
+                full_enum_name.as_str()
             };
+
+            debug!("enum_name {:?}", full_enum_name);
+
+            // 🚧 What we really need to do here is lookup just the enum, to make sure that
+            // it exists. Then we can lookup the entire path and inter it as a generic
+            // if necessary.
+            // let (new_enum, _) = create_generic_enum(&enum_name, lu_dog);
+            // let x = s_read!(new_enum).id;
+            // x
+            if let Some(woog_enum_id) = lu_dog.exhume_enumeration_id_by_name(enum_root) {
+                let woog_enum_id = if enum_root != full_enum_name {
+                    if let Some(id) = lu_dog.exhume_enumeration_id_by_name(&full_enum_name) {
+                        id
+                    } else {
+                        let (new_enum, _) = create_generic_enum(&full_enum_name, lu_dog);
+                        let x = s_read!(new_enum).id;
+                        x
+                    }
+                } else {
+                    woog_enum_id
+                };
 
                 let woog_enum = lu_dog.exhume_enumeration(&woog_enum_id).unwrap();
 
