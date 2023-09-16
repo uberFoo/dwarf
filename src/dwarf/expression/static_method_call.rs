@@ -83,8 +83,6 @@ pub fn inter(
     elts.reverse();
     elts.push(PathElement::new(method.to_owned(), None, &x_path, lu_dog));
 
-    // dbg!(&elts);
-
     debug!("path elements: {elts:?}");
 
     let first = elts
@@ -93,14 +91,11 @@ pub fn inter(
             if let Some(prev) = prev {
                 let elt = s_read!(elt);
                 s_write!(prev).next = Some(elt.id);
-                // dbg!(&prev);
                 Some(prev)
             } else {
                 Some(elt)
             }
         });
-
-    // dbg!(&first);
 
     if let Some(first) = first {
         let first = s_read!(first).id;
@@ -241,8 +236,6 @@ pub fn inter(
                                 Some(&value),
                                 lu_dog,
                             );
-                            // dbg!("do it yourself", &expr, &value, &span);
-                            // ((expr, span), ty.clone())
                         };
 
                         let (expr, expr_ty) = inter_expression(
@@ -265,38 +258,6 @@ pub fn inter(
                                 type_name.to_owned()
                             };
                             let (new_enum, _) = create_generic_enum(&type_name, lu_dog);
-                            // let field = s_read!(new_enum)
-                            //     .r88_enum_field(lu_dog)
-                            //     .iter()
-                            //     .find(|field| {
-                            //         let field = s_read!(field);
-                            //         if field.name == method {
-                            //             match field.subtype {
-                            //                 EnumFieldEnum::TupleField(ref id) => {
-                            //                     let tuple_field =
-                            //                         lu_dog.exhume_tuple_field(id).unwrap();
-                            //                     let tuple_field = s_read!(tuple_field);
-                            //                     tuple_field.expression.is_none()
-                            //                 }
-                            //                 _ => false,
-                            //             }
-                            //         } else {
-                            //             false
-                            //         }
-                            //     })
-                            //     .unwrap()
-                            //     .clone();
-                            // match &s_read!(field).subtype {
-                            //     EnumFieldEnum::TupleField(ref id) => {
-                            //         let tuple_field = lu_dog.exhume_tuple_field(id).unwrap();
-                            //         dbg!("a");
-                            //         // Here we update the expression on the tuple field.
-                            //         s_write!(tuple_field).expression = Some(s_read!(expr.0).id);
-                            //         s_write!(tuple_field).ty = s_read!(expr_ty).id;
-                            //     }
-                            //     _ => unreachable!(),
-                            // }
-
                             (new_enum, expr)
                         } else {
                             typecheck(
@@ -306,8 +267,6 @@ pub fn inter(
                                 context,
                                 lu_dog,
                             )?;
-                            // Here we are updating the expression of the tuple field.
-                            // s_write!(tuple_field).expression = Some(s_read!(expr.0).id);
 
                             (woog_enum, expr)
                         }

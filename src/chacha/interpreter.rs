@@ -780,7 +780,6 @@ fn typecheck(
                 .unwrap();
             let l = &s_read!(l).subtype;
             let r = &s_read!(r).subtype;
-            // dbg!(l, r);
             if l == r {
                 return Ok(());
             }
