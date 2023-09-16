@@ -403,17 +403,11 @@ impl From<Pattern> for Expression {
                     .map(|f| (f.0.into(), f.1))
                     .collect::<Vec<_>>();
 
-                // let pattern = Box::new((
                 Expression::StaticMethodCall(
                     Box::new(Expression::PathInExpression(path)),
                     name,
                     fields,
                 )
-                //     span.to_owned(),
-                // ));
-
-                // dbg!(&pattern);
-                // unreachable!()
             }
         }
     }
