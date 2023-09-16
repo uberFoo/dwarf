@@ -83,7 +83,6 @@ pub fn eval(
                 Value::Struct(_) => Ok(value.clone()),
                 Value::Store(_store, _plugin) => Ok(value.clone()),
                 value_ => {
-                    dbg!(&value_);
                     let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
                     debug!("value {value:?}");
 
