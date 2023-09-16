@@ -2737,6 +2737,30 @@ pub(super) fn inter_expression(
         //     }
         // }
         //
+        // Path In Expression
+        //
+        // This looks like it's comping up as an enum constructor, not sure if
+        // it will come up with structs. Seems like it would/could.
+        // ParserExpression::PathInExpression(path) => {
+        //     debug!("PathInExpression {:?}", path);
+
+        //     // Lookup the type
+        //     let root = path.first().unwrap();
+        //     if let Type::UserType((root, span)) = root {
+        //         if let Some(root) = lu_dog.exhume_enumeration_id_by_name(root) {
+        //             // I'll be stupid here and assume that the next element is the last.
+        //             let last = path.last().unwrap();
+        //         } else {
+        //             Err(vec![DwarfError::EnumNotFound {
+        //                 name: root.to_owned(),
+        //                 span: span.to_owned(),
+        //             }])
+        //         }
+        //     } else {
+        //         panic!("Things fell apart -- entropy happens.");
+        //     }
+        // }
+        //
         // Unit enumeration
         //
         ParserExpression::UnitEnum(enum_path, (field_name, field_span)) => {
@@ -3692,7 +3716,6 @@ fn inter_struct(
                             let proxy = proxy.de_sanitize();
                             debug!("proxy.object: {proxy}");
                             if let Some(model) = context.models.get(&store_name) {
-                                // dbg!(&proxy, model.0.iter_object().collect::<Vec<_>>());
                                 if let Some(ref obj_id) = model.0.exhume_object_id_by_name(proxy) {
                                     let obj = model.0.exhume_object(obj_id).unwrap();
                                     let woog_struct = WoogStruct::new(
@@ -4021,7 +4044,6 @@ pub(crate) fn get_value_type(
                             // object called `Point`. We want to be able to also handle
                             // proxy objects for `Point`. Those are suffixed with "Proxy".
                             let obj = obj.read().unwrap().name.to_upper_camel_case();
-                            // dbg!(&obj);
                             obj == *name
                                 || name == format!("{}Proxy", obj)
                                 || obj == *type_name_no_generics
