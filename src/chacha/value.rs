@@ -1,7 +1,4 @@
-use std::{
-    fmt,
-    ops::{Deref, Range},
-};
+use std::{fmt, ops::Range};
 
 use abi_stable::{
     std_types::{RBox, ROption, RString, RVec},
@@ -22,7 +19,42 @@ use crate::{
     ChaChaError, Context, DwarfFloat, DwarfInteger, NewRef, RefType,
 };
 
-pub trait FutureValue: std::future::Future<Output = RefType<Value>> + std::fmt::Debug {}
+pub trait FutureValue: std::future::Future<Output = RefType<Value>> + std::fmt::Debug {
+    fn resolve(self) -> Self::Output;
+}
+
+impl FutureValue for Value {
+    fn resolve(self) -> Self::Output {
+        new_ref!(Value, self)
+    }
+}
+
+impl std::future::Future for Value {
+    type Output = RefType<Value>;
+
+    fn poll(
+        self: std::pin::Pin<&mut Self>,
+        _cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Self::Output> {
+        std::task::Poll::Ready(new_ref!(Value, self.clone()))
+    }
+}
+
+// impl std::future::Future for Value {
+//     type Output = RefType<Value>;
+
+//     fn poll(
+//         self: std::pin::Pin<&mut Self>,
+//         cx: &mut std::task::Context<'_>,
+//     ) -> std::task::Poll<Self::Output> {
+//         if let Value::Future(future) = *self {
+//             let future = s_read!(future);
+//             *future.poll(cx)
+//         } else {
+//             panic!("not a future")
+//         }
+//     }
+// }
 
 #[repr(C)]
 #[derive(Clone, Debug, StableAbi)]
@@ -85,7 +117,7 @@ pub enum FfiValue {
 
 /// The type of Enumeration Field
 ///
-/// There are three types of enumeration fields: Plain, Struct, and Tuple.
+/// There are three types of enumeration fields: Unit, Struct, and Tuple.
 ///
 /// The field descriptions refer to the following enumeration, `Foo`.
 ///
@@ -98,46 +130,52 @@ pub enum FfiValue {
 /// ```
 ///
 #[derive(Clone, Debug)]
-pub enum EnumFieldVariant {
-    /// Plain Enumeration Field
+pub enum EnumVariant {
+    /// Unit Enumeration Field
     ///
     /// This sort of enumeration is the simplest. In `Foo`, this refers to the
     /// field `Foo`: `Foo::Foo`. The final field in the path is stored as a
     /// string.
-    Plain(String),
+    ///
+    /// The tuple is: (Type, TypeName, FieldValue)
+    Unit(RefType<ValueType>, String, String),
     /// Struct Enumeration Field
     ///
     /// This type of field is for when it contains a struct, as `Baz` does above.
     /// That is to say, `Foo::Baz { qux: string }`. We store the final path element
     /// as a string, and the struct as a `RefType<UserStruct>`.
-    Struct(String, RefType<UserStruct>),
+    Struct(RefType<UserStruct>),
     /// Tuple Enumeration Field
     ///
     /// This type of field is for when it contains a tuple, as `Bar` does above.
-    /// That is to say, `Foo::Bar(int)`. We store the final path element as a
-    /// string, and the tuple as a `RefType<Value>`.
-    Tuple(String, RefType<Value>),
+    /// That is to say, `Foo::Bar(int)`.
+    ///
+    /// The type is stored as the first element of the tuple, and the variant
+    /// as the second.
+    Tuple((RefType<ValueType>, String), RefType<TupleEnum>),
 }
 
-impl PartialEq for EnumFieldVariant {
+impl PartialEq for EnumVariant {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
-            (Self::Plain(a), Self::Plain(b)) => a == b,
-            (Self::Struct(a, c), Self::Struct(b, d)) => a == b && *s_read!(c) == *s_read!(d),
-            (Self::Tuple(a, c), Self::Tuple(b, d)) => a == b && *s_read!(c) == *s_read!(d),
+            (Self::Unit(a, b, e), Self::Unit(c, d, f)) => a == c && b == d && e == f,
+            (Self::Struct(a), Self::Struct(b)) => *s_read!(a) == *s_read!(b),
+            (Self::Tuple(a, c), Self::Tuple(b, d)) => {
+                *s_read!(a.0) == *s_read!(b.0) && *s_read!(c) == *s_read!(d)
+            }
             _ => false,
         }
     }
 }
 
-impl Eq for EnumFieldVariant {}
+impl Eq for EnumVariant {}
 
-impl fmt::Display for EnumFieldVariant {
+impl fmt::Display for EnumVariant {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Self::Plain(s) => write!(f, "{s}"),
-            Self::Struct(name, s) => write!(f, "{name}{}", s_read!(s)),
-            Self::Tuple(name, t) => write!(f, "{name}({})", s_read!(t)),
+            Self::Unit(_, t, s) => write!(f, "{t}::{s}",),
+            Self::Struct(s) => write!(f, "{}", s_read!(s)),
+            Self::Tuple((_, t), e) => write!(f, "{t}::{}", s_read!(e)),
         }
     }
 }
@@ -147,8 +185,7 @@ pub enum Value {
     Boolean(bool),
     Char(char),
     Empty,
-    Enum(RefType<UserEnum>),
-    EnumVariant(EnumFieldVariant),
+    Enumeration(EnumVariant),
     Error(String),
     Float(DwarfFloat),
     /// Function
@@ -157,7 +194,7 @@ pub enum Value {
     /// why I need the inner Function to be behind a RefType<<T>>. It seems
     /// excessive, and yet I know I've looked into it before.
     Function(RefType<Function>),
-    // Future(RefType<dyn FutureValue>),
+    Future(RefType<dyn FutureValue>),
     Integer(DwarfInteger),
     Lambda(RefType<Lambda>),
     Option(Option<RefType<Self>>),
@@ -174,6 +211,7 @@ pub enum Value {
     Struct(RefType<UserStruct>),
     Table(HashMap<String, RefType<Self>>),
     Thonk(&'static str, usize),
+    TupleEnum(RefType<TupleEnum>),
     Unknown,
     Uuid(uuid::Uuid),
     Vector(Vec<RefType<Self>>),
@@ -276,7 +314,12 @@ impl Value {
                 }
                 unreachable!()
             }
-            Value::Enum(ref ut) => s_read!(ut).get_type().clone(),
+            // Value::Enum(ref ut) => s_read!(ut).get_type().clone(),
+            Value::Enumeration(var) => match var {
+                EnumVariant::Unit(t, _, _) => t.clone(),
+                EnumVariant::Struct(ut) => s_read!(ut).get_type().clone(),
+                EnumVariant::Tuple((ty, _), _) => ty.clone(),
+            },
             Value::Function(ref func) => {
                 let func = lu_dog.exhume_function(&s_read!(func).id).unwrap();
                 let z = s_read!(func).r1_value_type(lu_dog)[0].clone();
@@ -381,12 +424,12 @@ impl fmt::Display for Value {
             Self::Boolean(bool_) => write!(f, "{bool_}"),
             Self::Char(char_) => write!(f, "{char_}"),
             Self::Empty => write!(f, "()"),
-            Self::Enum(ty) => write!(f, "{}", s_read!(ty)),
-            Self::EnumVariant(var) => write!(f, "{var}"),
+            // Self::Enum(ty) => write!(f, "{}", s_read!(ty)),
+            Self::Enumeration(var) => write!(f, "{var}"),
             Self::Error(e) => write!(f, "{}: {e}", Colour::Red.bold().paint("error")),
             Self::Float(num) => write!(f, "{num}"),
             Self::Function(_) => write!(f, "<function>"),
-            // Self::Future(_) => write!(f, "<future>"),
+            Self::Future(_) => write!(f, "<future>"),
             Self::Integer(num) => write!(f, "{num}"),
             Self::Lambda(_) => write!(f, "<lambda>"),
             Self::Option(option) => match option {
@@ -408,6 +451,7 @@ impl fmt::Display for Value {
             // Self::String(str_) => write!(f, "\"{}\"", str_),
             Self::Table(table) => write!(f, "{table:?}"),
             Self::Thonk(name, number) => write!(f, "{name} [{number}]"),
+            Self::TupleEnum(te) => write!(f, "{}", s_read!(te)),
             Self::Unknown => write!(f, "<unknown>"),
             Self::Uuid(uuid) => write!(f, "{uuid}"),
             Self::Vector(vec) => write!(f, "{vec:?}"),
@@ -978,8 +1022,8 @@ impl std::cmp::PartialEq for Value {
             (Value::Boolean(a), Value::Boolean(b)) => a == b,
             (Value::Char(a), Value::Char(b)) => a == b,
             (Value::Empty, Value::Empty) => true,
-            (Value::Enum(a), Value::Enum(b)) => *s_read!(a) == *s_read!(b),
-            (Value::EnumVariant(a), Value::EnumVariant(b)) => a == b,
+            // (Value::Enum(a), Value::Enum(b)) => *s_read!(a) == *s_read!(b),
+            (Value::Enumeration(a), Value::Enumeration(b)) => a == b,
             (Value::Float(a), Value::Float(b)) => a == b,
             (Value::Float(a), Value::Integer(b)) => a == &(*b as DwarfFloat),
             (Value::Integer(a), Value::Integer(b)) => a == b,
@@ -1045,46 +1089,39 @@ impl PartialEq for UserTypeAttribute {
 impl Eq for UserTypeAttribute {}
 
 #[derive(Clone, Debug)]
-pub struct UserEnum {
-    type_name: String,
-    type_: RefType<ValueType>,
+pub struct TupleEnum {
+    variant: String,
     value: RefType<Value>,
 }
 
-impl PartialEq for UserEnum {
+impl PartialEq for TupleEnum {
     fn eq(&self, other: &Self) -> bool {
-        s_read!(self.type_).eq(&s_read!(other.type_))
-            && s_read!(self.value).eq(&s_read!(other.value))
+        self.variant == other.variant && s_read!(self.value).eq(&s_read!(other.value))
     }
 }
 
-impl Eq for UserEnum {}
+impl Eq for TupleEnum {}
 
-impl UserEnum {
-    pub fn new<S: AsRef<str>>(
-        type_name: S,
-        type_: &RefType<ValueType>,
-        value: RefType<Value>,
-    ) -> Self {
+impl TupleEnum {
+    pub fn new<S: AsRef<str>>(variant_name: S, value: RefType<Value>) -> Self {
         Self {
-            type_name: type_name.as_ref().to_owned(),
-            type_: type_.clone(),
+            variant: variant_name.as_ref().to_owned(),
             value,
         }
     }
 
-    pub fn get_value(&self) -> RefType<Value> {
+    pub fn value(&self) -> RefType<Value> {
         self.value.clone()
     }
 
-    pub fn get_type(&self) -> &RefType<ValueType> {
-        &self.type_
+    pub fn variant(&self) -> &str {
+        &self.variant
     }
 }
 
-impl fmt::Display for UserEnum {
+impl fmt::Display for TupleEnum {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}::{}", self.type_name, s_read!(self.value))
+        write!(f, "{}({})", self.variant(), s_read!(self.value))
     }
 }
 
@@ -1133,6 +1170,10 @@ impl UserStruct {
 
     pub fn get_type(&self) -> &RefType<ValueType> {
         &self.type_
+    }
+
+    pub fn type_name(&self) -> &str {
+        &self.type_name
     }
 }
 

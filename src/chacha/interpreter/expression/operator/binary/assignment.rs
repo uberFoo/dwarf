@@ -1,11 +1,8 @@
 use ansi_term::Colour;
-use snafu::{location, prelude::*, Location};
+use snafu::{location, Location};
 
 use crate::{
-    chacha::{
-        error::{Result, VariableNotFoundSnafu},
-        vm::VM,
-    },
+    chacha::{error::Result, vm::VM},
     interpreter::{debug, eval_expression, function, ChaChaError, Context},
     lu_dog::{Expression, ExpressionEnum, FieldAccessTargetEnum, Operator},
     new_ref, s_read, s_write, NewRef, RefType, Value,
@@ -14,7 +11,7 @@ use crate::{
 pub fn eval_assignment(
     lhs_expr: &RefType<Expression>,
     operator: &RefType<Operator>,
-    expression: &RefType<Expression>,
+    _expression: &RefType<Expression>,
     context: &mut Context,
     vm: &mut VM,
 ) -> Result<RefType<Value>> {

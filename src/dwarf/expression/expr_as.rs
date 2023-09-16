@@ -23,7 +23,7 @@ use crate::{
 pub fn inter(
     expr: &Box<(ParserExpression, Range<usize>)>,
     ty: &(Type, Range<usize>),
-    mut span: RefType<Span>,
+    span: RefType<Span>,
     block: &RefType<Block>,
     context: &mut Context,
     lu_dog: &mut LuDogStore,
@@ -42,7 +42,7 @@ pub fn inter(
     let as_op = TypeCast::new(&expr.0, &as_type, lu_dog);
     let expr = Expression::new_type_cast(&as_op, lu_dog);
     let value = XValue::new_expression(block, &as_type, &expr, lu_dog);
-    update_span_value(&mut span, &value, location!());
+    update_span_value(&span, &value, location!());
 
     Ok(((expr, span), as_type))
 }

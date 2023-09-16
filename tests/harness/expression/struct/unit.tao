@@ -1,0 +1,8 @@
+struct Unit;
+
+fn main() {
+    // let x = Unit;
+    // print(x);
+    let y = Unit {};
+    print(y);
+}

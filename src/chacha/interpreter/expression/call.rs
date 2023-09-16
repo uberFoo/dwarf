@@ -246,7 +246,7 @@ pub fn eval(
                         // let mut arg_map = HashMap::default();
                         let arg_values = if !args.is_empty() {
                             // The VecDeque is so that I can pop off the args, and then push them
-                            // back onto a queue in the same order.
+                            // back onto a queue in the same order. What? That doesn't make sense.
                             // 🚧 I feel like I'm doing something stupid here -- take a look please!
                             let mut arg_values = VecDeque::with_capacity(args.len());
 
@@ -289,6 +289,8 @@ pub fn eval(
                                 let value = eval_expression(expr, context, vm)?;
                                 debug!("value {value:?}");
 
+                                // This is where the magic happens and we turn the value
+                                // into a string.
                                 arg_values.push_back(s_read!(value).to_string());
 
                                 // debug!(

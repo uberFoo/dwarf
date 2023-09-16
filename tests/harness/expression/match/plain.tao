@@ -1,0 +1,52 @@
+enum Plain {
+    Foo,
+    Bar,
+    Baz,
+}
+
+fn main() {
+    match Plain::Foo {
+        Plain::Foo => {
+            print("Foo");
+            chacha::assert_eq(true, true);
+        }
+        Plain::Bar => {
+            print("Bar");
+            chacha::assert_eq(true, false);
+        }
+        Plain::Baz => {
+            print("Baz");
+            chacha::assert_eq(true, false);
+        }
+    }
+
+    match Plain::Bar {
+        Plain::Foo => {
+            print("Foo");
+            chacha::assert_eq(true, false);
+        }
+        Plain::Bar => {
+            print("Bar");
+            chacha::assert_eq(true, true);
+        }
+        Plain::Baz => {
+            print("Baz");
+            chacha::assert_eq(true, false);
+        }
+    }
+
+    match Plain::Baz {
+        Plain::Foo => {
+            print("Foo");
+            chacha::assert_eq(true, false);
+        }
+        Plain::Bar => {
+            print("Bar");
+            chacha::assert_eq(true, false);
+        }
+        Plain::Baz => {
+            print("Baz");
+            chacha::assert_eq(true, true);
+        }
+    }
+}

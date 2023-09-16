@@ -1,4 +1,4 @@
-enum Event {
+enum PowerEvent {
     On,
     Off,
 }
@@ -6,6 +6,12 @@ enum Event {
 enum Power {
     On,
     Off,
+}
+
+enum Event {
+    PowerEvent(PowerEvent),
+    // This is a no-op for now.
+    ColorEvent,
 }
 
 struct Color {
@@ -32,8 +38,58 @@ impl Light {
     }
 
     fn receive_event(self, event: Event) {
+        print("{0}\n".format(event));
         match event {
-            Event::On => {
+            Event::PowerEvent(power_event) => {
+                print("{0}\n".format(power_event));
+                // self.foo(power_event);
+                match power_event {
+                    PowerEvent::On => {
+                        // No point in turning on if we're already on.
+                        if let Power::On = self.power {
+                            return;
+                        }
+
+                        print("Turning on light");
+
+                        self.power = Power::On;
+                        self.color = Color {
+                            red: 1.0,
+                            green: 1.0,
+                            blue: 1.0,
+                        };
+                    }
+                    PowerEvent::Off => {
+                        if let Power::Off = self.power {
+                            return;
+                        }
+
+                        print("Turning off light");
+
+                        self.power = Power::Off;
+                        self.color = Color {
+                            red: 0.0,
+                            green: 0.0,
+                            blue: 0.0,
+                        };
+                    }
+                };
+            }
+            Event::ColorEvent => {}
+        };
+    }
+
+    fn foo(self, event: PowerEvent) {
+        print("{0}\n".format(event));
+        match event {
+            PowerEvent::On => {
+                // No point in turning on if we're already on.
+                // if let Power::On = self.power {
+                // return;
+                // }
+
+                print("Turning on light");
+
                 self.power = Power::On;
                 self.color = Color {
                     red: 1.0,
@@ -41,9 +97,14 @@ impl Light {
                     blue: 1.0,
                 };
             }
-            Event::Off => {
-                let a = Power::Off;
-                self.power = a;
+            PowerEvent::Off => {
+                // if let Power::Off = self.power {
+                // return;
+                // }
+
+                print("Turning off light");
+
+                self.power = Power::Off;
                 self.color = Color {
                     red: 0.0,
                     green: 0.0,
@@ -53,7 +114,6 @@ impl Light {
         };
     }
 }
-
 fn main() {
     let light = Light::new();
     chacha::assert_eq(light.power, Power::Off);
@@ -61,7 +121,7 @@ fn main() {
     chacha::assert_eq(light.color.green, 0.0);
     chacha::assert_eq(light.color.blue, 0.0);
 
-    let event = Event::On;
+    let event = Event::PowerEvent(PowerEvent::On);
     light.receive_event(event);
 
     chacha::assert_eq(light.power, Power::On);
