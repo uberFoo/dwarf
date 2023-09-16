@@ -55,6 +55,8 @@ pub fn eval(
         EnumFieldEnum::TupleField(ref tf) => {
             let tuple = s_read!(lu_dog).exhume_tuple_field(tf).unwrap();
             let _ty = s_read!(tuple).r86_value_type(&s_read!(lu_dog))[0].clone();
+            // 🚧 Note that indexing into this is doing an implicit unwrap on
+            // the optional expression relationship.
             let expr = s_read!(tuple).r90_expression(&s_read!(lu_dog))[0].clone();
             let value = eval_expression(expr, context, vm)?;
             new_ref!(

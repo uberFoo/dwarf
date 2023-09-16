@@ -48,8 +48,8 @@ pub use tui::start_tui_repl;
 
 use context::Context;
 use expression::{
-    block, call, debugger, enumeration, field, for_loop, if_expr, index, list, literal, match_expr,
-    operator, print, range, ret, struct_expr, typecast, variable,
+    block, call, debugger, field, for_loop, if_expr, index, list, literal, match_expr, operator,
+    print, range, ret, struct_expr, typecast, variable,
 };
 use func_call::eval_function_call;
 use lambda::eval_lambda_expression;
@@ -487,7 +487,7 @@ fn eval_expression(
         ExpressionEnum::Block(ref block) => block::eval(block, context, vm),
         ExpressionEnum::Call(ref call) => call::eval(call, &expression, context, vm),
         ExpressionEnum::Debugger(_) => debugger::eval(context),
-        ExpressionEnum::EnumField(ref enum_field) => enumeration::eval(enum_field, context, vm),
+        // ExpressionEnum::EnumField(ref enum_field) => enumeration::eval(enum_field, context, vm),
         ExpressionEnum::ErrorExpression(ref error) => expression::error::eval(error, context),
         ExpressionEnum::FieldAccess(ref field) => field::field_access::eval(field, context, vm),
         ExpressionEnum::FieldExpression(ref field_expr) => {

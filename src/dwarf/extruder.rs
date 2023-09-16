@@ -20,14 +20,15 @@ use crate::{
     lu_dog::{
         store::ObjectStore as LuDogStore,
         types::{
-            Block, Body, BooleanOperator, Call, EnumField as LuDogEnumField, EnumFieldEnum,
-            Enumeration, ErrorExpression, Expression, ExpressionEnum, ExpressionStatement,
-            ExternalImplementation, Field, FieldExpression, ForLoop, Function, Generic,
-            ImplementationBlock, Index, IntegerLiteral, Item as WoogItem, ItemStatement, Lambda,
-            LambdaParameter, LetStatement, Literal, LocalVariable, Parameter, Pattern as AssocPat,
-            Plain, RangeExpression, Span as LuDogSpan, Statement, StringLiteral, StructExpression,
-            StructField, TupleField, ValueType, ValueTypeEnum, Variable, VariableExpression,
-            WoogOption, WoogStruct, XIf, XMatch, XPrint, XValue, XValueEnum, ZObjectStore, ZSome,
+            Block, Body, BooleanOperator, Call, DataStructure, EnumField as LuDogEnumField,
+            EnumFieldEnum, Enumeration, ErrorExpression, Expression, ExpressionEnum,
+            ExpressionStatement, ExternalImplementation, Field, FieldExpression, ForLoop, Function,
+            Generic, ImplementationBlock, Index, IntegerLiteral, Item as WoogItem, ItemStatement,
+            Lambda, LambdaParameter, LetStatement, Literal, LocalVariable, NamedFieldExpression,
+            Parameter, PathElement, Pattern as AssocPat, RangeExpression, Span as LuDogSpan,
+            Statement, StringLiteral, StructExpression, StructField, TupleField, Unit, ValueType,
+            ValueTypeEnum, Variable, VariableExpression, WoogOption, WoogStruct, XIf, XMatch,
+            XPath, XPrint, XValue, XValueEnum, ZObjectStore, ZSome,
         },
         Argument, Binary, BooleanLiteral, Comparison, DwarfSourceFile, FieldAccess,
         FieldAccessTarget, FloatLiteral, List, ListElement, ListExpression, MethodCall, Operator,
@@ -496,35 +497,35 @@ fn walk_tree(ast: &[Item], context: &mut Context, lu_dog: &mut LuDogStore) -> Re
     }
 
     // Now we remove the generics from the store.
-    for ConveyStruct {
-        name,
-        span: _,
-        attributes,
-        fields,
-        generics,
-    } in &structs
-    {
-        debug!("Interring struct `{}`", name);
-        let _ = exorcise_generic_struct(name, attributes, fields, generics, context, lu_dog)
-            .map_err(|mut e| {
-                errors.append(&mut e);
-            });
-    }
+    // for ConveyStruct {
+    //     name,
+    //     span: _,
+    //     attributes,
+    //     fields,
+    //     generics,
+    // } in &structs
+    // {
+    //     debug!("Interring struct `{}`", name);
+    //     let _ = exorcise_generic_struct(name, attributes, fields, generics, context, lu_dog)
+    //         .map_err(|mut e| {
+    //             errors.append(&mut e);
+    //         });
+    // }
 
-    for ConveyEnum {
-        name,
-        attributes,
-        fields,
-        generics,
-    } in &enums
-    {
-        debug!("Interring enum `{}`", name);
-        let _ = exorcise_generic_enum(name, attributes, fields, generics, context, lu_dog).map_err(
-            |mut e| {
-                errors.append(&mut e);
-            },
-        );
-    }
+    // for ConveyEnum {
+    //     name,
+    //     attributes,
+    //     fields,
+    //     generics,
+    // } in &enums
+    // {
+    //     debug!("Interring enum `{}`", name);
+    //     let _ = exorcise_generic_enum(name, attributes, fields, generics, context, lu_dog).map_err(
+    //         |mut e| {
+    //             errors.append(&mut e);
+    //         },
+    //     );
+    // }
 
     if errors.is_empty() {
         Ok(())
@@ -618,6 +619,8 @@ fn inter_func(
             let local = LocalVariable::new(Uuid::new_v4(), lu_dog);
             let var = Variable::new_local_variable(var.to_owned(), &local, lu_dog);
             let _value = XValue::new_variable(&block, ty, &var, lu_dog);
+            // 🚧 We should really be passing a span in the Block so that
+            // we can link this XValue to it.
         }
 
         let body = Body::new_block(&block, lu_dog);
@@ -1104,6 +1107,8 @@ pub(super) fn inter_expression(
                 let local = LocalVariable::new(Uuid::new_v4(), lu_dog);
                 let var = Variable::new_local_variable(var, &local, lu_dog);
                 let _value = XValue::new_variable(&block, &ty, &var, lu_dog);
+                // 🚧 We should really be passing a span in the Block so that
+                // we can link this XValue to it.
             }
 
             // let block = create_block::<P>(None, lu_dog)?;
@@ -1432,20 +1437,9 @@ pub(super) fn inter_expression(
                                 }])
                             }
                         }
-                        _yell_away => {
+                        _ => {
                             debug!("returning lhs");
                             Ok((lhs, lhs_ty))
-                        }
-                        ty => {
-                            let ty = ValueType::new_ty(
-                                &std::sync::Arc::new(std::sync::RwLock::new(ty)),
-                                lu_dog,
-                            );
-                            let ty = PrintableValueType(&ty, context, lu_dog).to_string();
-                            Err(vec![DwarfError::NotAStruct {
-                                span: s_read!(lhs.1).start as usize..s_read!(lhs.1).end as usize,
-                                ty,
-                            }])
                         }
                     }
                 }
@@ -2171,7 +2165,7 @@ pub(super) fn inter_expression(
             // To expound, there are likely to be multiple values in this block,
             // and we need to find the one that matches the variable name.
             let mut values = Vec::new();
-            // let mut prev = s_read!(block).r93_block(lu_dog).pop();
+
             let mut prev = Some(block.clone());
             while let Some(p) = prev {
                 let mut foo = lu_dog
@@ -2182,18 +2176,12 @@ pub(super) fn inter_expression(
                 prev = s_read!(p).r93_block(lu_dog).pop();
             }
 
-            // debug!("values", values);
-            // dbg!(&values);
+            debug!("values: {values:?}");
 
-            let types = lu_dog.iter_value_type().collect::<Vec<_>>();
             // Now search for a value that's a Variable, and see if the access matches
             // the variable.
             let mut expr_type_tuples = values
                 .iter()
-                .inspect(|v| {
-                    let ty = s_read!(v).ty;
-                    debug!("value: {:#?}, type: {:#?}", s_read!(v), types[ty]);
-                })
                 .filter_map(|value| {
                     let value = s_read!(value);
                     match value.subtype {
@@ -2204,8 +2192,6 @@ pub(super) fn inter_expression(
                             // even though we are parsing a LocalVariable. Remember these are all of
                             // the values -- not just the ones that have something to do with finding
                             // ourselves here.
-                            //
-                            // Hopefully this is concluded.
 
                             None
                         }
@@ -2376,11 +2362,12 @@ pub(super) fn inter_expression(
         // if chacha::typeof(x) == Option::Some { let y = x; some(y); }
         // ```
         //
+        // 🚧 We need to check all of the types of the patterns and ensure that
+        // they are compatible.
         ParserExpression::Match(scrutinee, patterns) => {
             debug!("scrutinee: {scrutinee:?}");
 
             let s_span = &scrutinee.1;
-
             let (scrutinee, scrutinee_ty) = inter_expression(
                 &new_ref!(ParserExpression, scrutinee.0.to_owned()),
                 &scrutinee.1,
@@ -2391,11 +2378,13 @@ pub(super) fn inter_expression(
 
             let xmatch = XMatch::new(Uuid::new_v4(), &scrutinee.0, lu_dog);
 
-            for ((pat, expr), ref span) in patterns {
-                debug!("pattern: {pat:?}");
-                let pat_expr: ParserExpression = pat.to_owned().into();
-                let (pat_expr, ty) = inter_expression(
-                    &new_ref!(ParserExpression, pat_expr),
+            let mut first = true;
+            let mut match_ty = ValueType::new_unknown(lu_dog);
+            for ((pattern, match_expr), ref span) in patterns {
+                debug!("pattern: {pattern:?}");
+                let pattern_expr: ParserExpression = pattern.to_owned().into();
+                let (pattern_expr, ty) = inter_expression(
+                    &new_ref!(ParserExpression, pattern_expr),
                     span,
                     block,
                     context,
@@ -2410,23 +2399,30 @@ pub(super) fn inter_expression(
                     lu_dog,
                 )?;
 
-                let (expr, _ty) = inter_expression(
-                    &new_ref!(ParserExpression, expr.to_owned()),
+                let (expr, ty) = inter_expression(
+                    &new_ref!(ParserExpression, match_expr.to_owned()),
                     span,
                     block,
                     context,
                     lu_dog,
                 )?;
 
-                let _pat = AssocPat::new(&expr.0, &pat_expr.0, &xmatch, lu_dog);
+                if first {
+                    first = false;
+                    match_ty = ty;
+                } else {
+                    typecheck((&match_ty, span), (&ty, span), location!(), context, lu_dog)?;
+                }
+
+                let _pat = AssocPat::new(&expr.0, &pattern_expr.0, &xmatch, lu_dog);
             }
 
             let expr = Expression::new_x_match(&xmatch, lu_dog);
 
-            let value = XValue::new_expression(block, &scrutinee_ty, &expr, lu_dog);
+            let value = XValue::new_expression(block, &match_ty, &expr, lu_dog);
             update_span_value(&span, &value, location!());
 
-            Ok(((expr, span), scrutinee_ty))
+            Ok(((expr, span), match_ty))
         }
         //
         // MethodCall
@@ -2593,13 +2589,14 @@ pub(super) fn inter_expression(
         // Print
         //
         ParserExpression::Print(expr) => {
-            let (expr, ty) = inter_expression(
+            let (expr, _ty) = inter_expression(
                 &new_ref!(ParserExpression, expr.0.to_owned()),
                 &expr.1,
                 block,
                 context,
                 lu_dog,
             )?;
+            let ty = ValueType::new_empty(lu_dog);
             let print = XPrint::new(&expr.0, lu_dog);
             let expr = Expression::new_x_print(&print, lu_dog);
             let value = XValue::new_expression(block, &ty, &expr, lu_dog);
@@ -2740,10 +2737,10 @@ pub(super) fn inter_expression(
         //     }
         // }
         //
-        // Plain enumeration
+        // Unit enumeration
         //
-        ParserExpression::PlainEnum(enum_path, (field_name, field_span)) => {
-            debug!("PlainEnum {:?}, Field {field_name}", enum_path);
+        ParserExpression::UnitEnum(enum_path, (field_name, field_span)) => {
+            debug!("UnitEnum {:?}, Field {field_name}", enum_path);
             let (path, path_span) =
                 if let (ParserExpression::PathInExpression(path), span) = enum_path.as_ref() {
                     (path, span)
@@ -2758,6 +2755,7 @@ pub(super) fn inter_expression(
 
             // 🚧 Looks like we are validating each element of the path, but int, in Option::<int> isn't a
             // UserType, so I'm confused.
+            // I think that if you look, it's actually coming in as Option<int>, which can be a UserType.
             let full_enum_name = path.iter().map(|p| {
                 if let Type::UserType((obj, _)) = p {
                     obj.de_sanitize().to_owned()
@@ -2766,7 +2764,7 @@ pub(super) fn inter_expression(
                 }
             }).collect::<Vec<_>>().join("");
 
-            let enum_root = if let Some(root) = full_enum_name.split("<").next() {
+            let enum_root = if let Some(root) = full_enum_name.split('<').next() {
                 root
             } else {
                 full_enum_name.as_str()
@@ -2774,12 +2772,50 @@ pub(super) fn inter_expression(
 
             debug!("enum_name {:?}", full_enum_name);
 
-            // 🚧 What we really need to do here is lookup just the enum, to make sure that
-            // it exists. Then we can lookup the entire path and inter it as a generic
-            // if necessary.
-            // let (new_enum, _) = create_generic_enum(&enum_name, lu_dog);
-            // let x = s_read!(new_enum).id;
-            // x
+            let x_path = XPath::new(Uuid::new_v4(), None, lu_dog);
+            dbg!(&path);
+            let mut elts = path
+                .iter()
+                .inspect(|ty| {
+                    debug!("ty {:?}", ty);
+                })
+                .map(|ty| {
+                    if let Type::UserType((name, _)) = ty {
+                        PathElement::new(name.to_owned(), None, &x_path, lu_dog)
+                    } else {
+                        unreachable!()
+                    }
+                })
+                .collect::<Vec<RefType<PathElement>>>();
+            // elts.reverse();
+            elts.push(PathElement::new(
+                field_name.to_owned(),
+                None,
+                &x_path,
+                lu_dog,
+            ));
+
+            dbg!(&elts);
+
+            let first = Some(elts[0].clone());
+            let _last = elts
+                .into_iter()
+                .fold(Option::<RefType<PathElement>>::None, |prev, elt| {
+                    if let Some(prev) = prev {
+                        let elt = s_read!(elt);
+                        s_write!(prev).next = Some(elt.id);
+                        dbg!(&prev);
+                    }
+                    Some(elt)
+                });
+
+            dbg!(&first);
+
+            if let Some(first) = first {
+                let first = s_read!(first).id;
+                s_write!(x_path).first = Some(first);
+            }
+
             if let Some(woog_enum_id) = lu_dog.exhume_enumeration_id_by_name(enum_root) {
                 let woog_enum_id = if enum_root != full_enum_name {
                     if let Some(id) = lu_dog.exhume_enumeration_id_by_name(&full_enum_name) {
@@ -2795,13 +2831,15 @@ pub(super) fn inter_expression(
 
                 let woog_enum = lu_dog.exhume_enumeration(&woog_enum_id).unwrap();
 
-                let fuzzy = s_read!(woog_enum).r88_enum_field(lu_dog);
-                let field = fuzzy.iter().find(|field| {
+                let data_struct = DataStructure::new_enumeration(&woog_enum, lu_dog);
+
+                let foo = s_read!(woog_enum).r88_enum_field(lu_dog);
+                let field = foo.iter().find(|field| {
                     let field = s_read!(field);
                     field.name == field_name
                 });
 
-                if let Some(field) = field {
+                if let Some(_field) = field {
                     let ty = lu_dog
                         .iter_value_type()
                         .inspect(|ty| {
@@ -2816,7 +2854,11 @@ pub(super) fn inter_expression(
                         })
                         .unwrap();
 
-                    let expr = Expression::new_enum_field(field, lu_dog);
+                    // let expr = Expression::new_enum_field(field, lu_dog);
+                    let struct_expr =
+                        StructExpression::new(Uuid::new_v4(), &data_struct, &x_path, lu_dog);
+                    let expr = Expression::new_struct_expression(&struct_expr, lu_dog);
+                    debug!("expression {expr:?}");
 
                     let value = XValue::new_expression(block, &ty, &expr, lu_dog);
                     update_span_value(&span, &value, location!());
@@ -2871,13 +2913,28 @@ pub(super) fn inter_expression(
         // Return
         //
         ParserExpression::Return(expr) => {
-            let (expr, ty) = inter_expression(
-                &new_ref!(ParserExpression, expr.0.to_owned()),
-                &expr.1,
-                block,
-                context,
-                lu_dog,
-            )?;
+            let (expr, ty) = if let Some(expr) = expr {
+                inter_expression(
+                    &new_ref!(ParserExpression, expr.0.to_owned()),
+                    &expr.1,
+                    block,
+                    context,
+                    lu_dog,
+                )?
+            } else {
+                // 🚧 Once we have tuples, I'd prefer to return the empty tuple.
+                (
+                    (
+                        Expression::new_block(
+                            &Block::new(Uuid::new_v4(), None, None, lu_dog),
+                            lu_dog,
+                        ),
+                        span.clone(),
+                    ),
+                    ValueType::new_empty(lu_dog),
+                )
+            };
+
             let ret = XReturn::new(&expr.0, lu_dog);
             let expr = Expression::new_x_return(&ret, lu_dog);
             let value = XValue::new_expression(block, &ty, &expr, lu_dog);
@@ -2986,10 +3043,15 @@ pub(super) fn inter_expression(
                     }]);
                 }
             };
+
             let woog_struct = lu_dog.exhume_woog_struct(&id).unwrap();
             let struct_fields = s_read!(woog_struct).r7_field(lu_dog);
 
-            let expr = StructExpression::new(Uuid::new_v4(), &woog_struct, lu_dog);
+            let data_struct = DataStructure::new_woog_struct(&woog_struct, lu_dog);
+
+            // 🚧 Fix this.
+            let x_path = XPath::new(Uuid::new_v4(), None, lu_dog);
+            let struct_expr = StructExpression::new(Uuid::new_v4(), &data_struct, &x_path, lu_dog);
 
             for (field_name, field_expr) in fields {
                 let field_expr_span = field_expr.1.to_owned();
@@ -3012,9 +3074,10 @@ pub(super) fn inter_expression(
                         // OK. We are instantiating a generic. We need to create the new type
                         let pvt = PrintableValueType(&ty, context, lu_dog);
                         let struct_ty = format!("{name}<{pvt}>");
-                        let new_struct =
+                        let _new_struct =
                             create_generic_struct(&struct_ty, context, context.sarzak, lu_dog);
-                        s_write!(expr).woog_struct = s_read!(new_struct).id;
+                        let data_struct = DataStructure::new_woog_struct(&woog_struct, lu_dog);
+                        s_write!(struct_expr).data = s_read!(data_struct).id;
                     } else {
                         // 🚧 Why are we only doing the type check if it's not generic?
                         typecheck(
@@ -3033,9 +3096,15 @@ pub(super) fn inter_expression(
                         span: field_name.1.to_owned(),
                     }]);
                 }
+
                 debug!("field `{name:?}` is of type `{ty:?}`, expr: {field_expr:?}");
-                let field =
-                    FieldExpression::new(field_name.0.to_owned(), &field_expr.0, &expr, lu_dog);
+                let nfe = NamedFieldExpression::new(field_name.0.to_owned(), lu_dog);
+                let field = FieldExpression::new_named_field_expression(
+                    &field_expr.0,
+                    &struct_expr,
+                    &nfe,
+                    lu_dog,
+                );
 
                 let expr = Expression::new_field_expression(&field, lu_dog);
                 let value = XValue::new_expression(block, &ty, &expr, lu_dog);
@@ -3067,7 +3136,7 @@ pub(super) fn inter_expression(
             }
 
             // I love that the type of the thing is the same as the thing itself.
-            let expr = Expression::new_struct_expression(&expr, lu_dog);
+            let expr = Expression::new_struct_expression(&struct_expr, lu_dog);
             let ty = ValueType::new_woog_struct(&woog_struct, lu_dog);
 
             let value = XValue::new_expression(block, &ty, &expr, lu_dog);
@@ -3370,6 +3439,7 @@ fn inter_implementation(
     }
 }
 
+#[allow(dead_code)]
 fn exorcise_generic_enum(
     name: &str,
     _attributes: &AttributeMap,
@@ -3387,8 +3457,8 @@ fn exorcise_generic_enum(
             let woog_enum = lu_dog.exhume_enumeration(&woog_enum_id).unwrap();
             for field in s_read!(woog_enum).r88_enum_field(lu_dog) {
                 match s_read!(field).subtype {
-                    EnumFieldEnum::Plain(ref _id) => {
-                        // lu_dog.exorcise_plain(id);
+                    EnumFieldEnum::Unit(ref _id) => {
+                        // lu_dog.exorcise_unit(id);
                     }
                     EnumFieldEnum::StructField(ref _id) => {
                         // lu_dog.exorcise_struct_field(id);
@@ -3472,7 +3542,7 @@ fn inter_enum(
                     let ty = get_value_type(ty, ty_span, None, context, lu_dog)?;
                     let _ = Field::new(name.to_owned(), &woog_struct, &ty, lu_dog);
                 }
-                let field = StructField::new(field_name.to_owned(), None, lu_dog);
+                let field = StructField::new(field_name.to_owned(), lu_dog);
                 LuDogEnumField::new_struct_field(field_name.to_owned(), &woog_enum, &field, lu_dog);
             }
             Some(EnumField::Tuple((type_, span))) => {
@@ -3519,13 +3589,12 @@ fn inter_enum(
                     ty
                 };
 
-                let field = TupleField::new(Uuid::new_v4(), None, &ty, lu_dog);
+                let field = TupleField::new(Uuid::new_v4(), &ty, lu_dog);
                 LuDogEnumField::new_tuple_field(field_name.to_owned(), &woog_enum, &field, lu_dog);
             }
             _ => {
-                let plain = Plain::new(number as DwarfInteger, lu_dog);
-                let _ =
-                    LuDogEnumField::new_plain(field_name.to_owned(), &woog_enum, &plain, lu_dog);
+                let unit = Unit::new(number as DwarfInteger, lu_dog);
+                let _ = LuDogEnumField::new_unit(field_name.to_owned(), &woog_enum, &unit, lu_dog);
             }
         }
     }
@@ -3533,6 +3602,7 @@ fn inter_enum(
     Ok(())
 }
 
+#[allow(dead_code)]
 fn exorcise_generic_struct(
     name: &str,
     _attributes: &AttributeMap,
@@ -3567,7 +3637,7 @@ const STORE: &str = "store";
 
 fn inter_struct(
     name: &str,
-    span: &Span,
+    _span: &Span,
     attributes: &AttributeMap,
     fields: &[(Spanned<String>, Spanned<Type>)],
     generics: &Option<Generics>,
@@ -3636,7 +3706,7 @@ fn inter_struct(
                                         &woog_struct,
                                         lu_dog,
                                     );
-                                    let ty = ValueType::new_woog_struct(&woog_struct, lu_dog);
+                                    let _ty = ValueType::new_woog_struct(&woog_struct, lu_dog);
                                     // 🚧 We may want to consider putting a span in the attribute map.
                                     // LuDogSpan::new(
                                     //     span.end as i64,
@@ -4252,6 +4322,7 @@ pub(crate) fn create_generic_struct(
         let _ = Field::new(field.name.to_owned(), &new_struct, ty, lu_dog);
     }
 
+    dbg!(&new_struct);
     new_struct
 }
 
@@ -4275,11 +4346,12 @@ pub(crate) fn create_generic_enum(
     let woog_enum = lu_dog.exhume_enumeration(&id).unwrap();
     for field in s_read!(woog_enum).r88_enum_field(lu_dog) {
         let field = s_read!(field);
+        dbg!(&field);
         match field.subtype {
-            EnumFieldEnum::Plain(ref id) => {
-                let orig = lu_dog.exhume_plain(id).unwrap();
-                let new = Plain::new(s_read!(orig).x_value, lu_dog);
-                let _ = LuDogEnumField::new_plain(field.name.to_owned(), &new_enum, &new, lu_dog);
+            EnumFieldEnum::Unit(ref id) => {
+                let orig = lu_dog.exhume_unit(id).unwrap();
+                let new = Unit::new(s_read!(orig).x_value, lu_dog);
+                let _ = LuDogEnumField::new_unit(field.name.to_owned(), &new_enum, &new, lu_dog);
             }
             EnumFieldEnum::StructField(ref id) => {
                 let orig = lu_dog.exhume_struct_field(id).unwrap();
@@ -4289,7 +4361,7 @@ pub(crate) fn create_generic_enum(
                 //     None
                 // };
                 // let new = StructField::new(s_read!(orig).name.to_owned(), expr.as_ref(), lu_dog);
-                let new = StructField::new(s_read!(orig).name.to_owned(), None, lu_dog);
+                let new = StructField::new(s_read!(orig).name.to_owned(), lu_dog);
                 let _ = LuDogEnumField::new_struct_field(
                     field.name.to_owned(),
                     &new_enum,
@@ -4298,15 +4370,11 @@ pub(crate) fn create_generic_enum(
                 );
             }
             EnumFieldEnum::TupleField(ref id) => {
+                // Note that we are borrowing whatever expression may exist on
+                // the original, non-generic tuple field.
                 let orig = lu_dog.exhume_tuple_field(id).unwrap();
-                let expr = if let Some(ref id) = s_read!(orig).expression {
-                    lu_dog.exhume_expression(id)
-                } else {
-                    None
-                };
                 let new = TupleField::new(
                     Uuid::new_v4(),
-                    expr.as_ref(),
                     &s_read!(orig).r86_value_type(lu_dog)[0],
                     lu_dog,
                 );
@@ -4316,6 +4384,7 @@ pub(crate) fn create_generic_enum(
         }
     }
 
+    dbg!(&new_enum, &ty);
     (new_enum, ty)
 }
 

@@ -11,7 +11,7 @@ use tracy_client::span;
 use crate::{
     chacha::{
         error::{Result, WrongNumberOfArgumentsSnafu},
-        value::{FfiValue, FutureValue},
+        value::FfiValue,
         vm::VM,
     },
     interpreter::{
@@ -44,7 +44,6 @@ pub fn eval_function_call(
     context: &mut Context,
     vm: &mut VM,
 ) -> Result<RefType<Value>> {
-    let lu_dog = context.lu_dog_heel().clone();
     context.increment_call_count();
 
     debug!("eval_function_call func {func:?}");
@@ -53,8 +52,9 @@ pub fn eval_function_call(
     span!("eval_function_call");
 
     if s_read!(func).a_sink {
-        let future = async { inner_eval_function_call(func, args, arg_check, span, context, vm) };
-        // let future = new_ref!(dyn FutureValue, future);
+        // let future =
+        // async { inner_eval_function_call(func, args, arg_check, span, context, vm).unwrap() };
+        // let future = new_ref!(Box<dyn FutureValue>, Box::new(future));
         // let foo =         <RefType<dyn FutureValue> as NewRef<dyn FutureValue>>::new_ref(future);
         // let future = std::rc::Rc::new(std::cell::RefCell::new(future));
         // Ok(new_ref!(Value, Value::Future(future)))

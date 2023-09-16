@@ -8,7 +8,16 @@
 default_job = "check"
 
 [jobs.check]
-command = ["cargo", "check", "--color", "always"]
+command = [
+    "cargo",
+    "check",
+    "--color",
+    "always",
+    "--no-default-features",
+    "--features",
+    "single-vec, repl",
+    # "multi-vec",
+]
 need_stdout = false
 
 [jobs.check-all]

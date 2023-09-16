@@ -1,4 +1,4 @@
-#[cfg(feature = "repl")]
+#![cfg(feature = "repl")]
 use std::{env, thread};
 
 use ansi_term::Colour;

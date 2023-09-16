@@ -1,8 +1,8 @@
 use crate::{
-    chacha::{error::Result, value::EnumFieldVariant, vm::VM},
+    chacha::{error::Result, value::EnumVariant, vm::VM},
     interpreter::{eval_expression, Context},
-    lu_dog::{EnumFieldEnum, ExpressionEnum},
-    s_read, RefType, SarzakStorePtr, Value,
+    lu_dog::ExpressionEnum,
+    new_ref, s_read, NewRef, RefType, SarzakStorePtr, Value,
 };
 
 pub fn eval(
@@ -23,126 +23,119 @@ pub fn eval(
 
     // dbg!(match_expr, &patterns);
 
+    // Check each pattern for a match.
+    // 🚧 Darn. Match arms need to be ordered the same as they are written, and
+    // they are not ordered in the model.
     for pattern in patterns {
-        // 🚧 Somehow we have to decide which one of these matches the scrutinee.
+        // dbg!(&pattern);
         let match_expr = s_read!(pattern).r87_expression(&s_read!(lu_dog))[0].clone();
-        // dbg!(&match_expr);
+        let expr = s_read!(pattern).r92_expression(&s_read!(lu_dog))[0].clone();
 
         let match_expr = s_read!(match_expr);
-        if let ExpressionEnum::EnumField(ref enum_field) = &match_expr.subtype {
-            let field = s_read!(lu_dog).exhume_enum_field(enum_field).unwrap();
-            let field = s_read!(field);
-            let woog_enum = &field.r88_enumeration(&s_read!(lu_dog))[0];
-            let woog_enum = s_read!(woog_enum);
-            let _ty = woog_enum.r1_value_type(&s_read!(lu_dog))[0].clone();
+        // dbg!(&match_expr, &expr);
+        match &match_expr.subtype {
+            ExpressionEnum::StructExpression(ref id) => {
+                let struct_expr = s_read!(lu_dog).exhume_struct_expression(id).unwrap();
+                let field_exprs = s_read!(struct_expr).r26_field_expression(&s_read!(lu_dog));
+                // let data_struct = &s_read!(struct_expr).r39_data_structure(&s_read!(lu_dog))[0];
 
-            match field.subtype {
-                EnumFieldEnum::Plain(_) => {
-                    // dbg!("Plain", &field.name);
-                    if let Value::Enum(e) = &*s_read!(scrutinee) {
-                        let value = s_read!(e).get_value();
-                        // dbg!(&value);
-                        let value = s_read!(value);
-
-                        if let Value::EnumVariant(EnumFieldVariant::Plain(field_name)) = &*value {
-                            if field_name == &field.name {
-                                // dbg!("Matched");
-                                let expr =
-                                    s_read!(pattern).r92_expression(&s_read!(lu_dog))[0].clone();
-
-                                context.memory().push_frame();
-
-                                let value = eval_expression(expr, context, vm)?;
-
-                                context.memory().pop_frame();
-                                return Ok(value);
-                            } else {
-                                unreachable!()
-                            }
-                        }
-                    } else {
-                        unreachable!()
+                fn decode_value(value: RefType<Value>) -> (String, Option<RefType<Value>>) {
+                    match &*s_read!(value) {
+                        Value::Enumeration(value) => match value {
+                            // 🚧 I can't tell if this is gross, or a sweet hack.
+                            EnumVariant::Unit(_, ty, value) => (
+                                ty.to_owned(),
+                                Some(new_ref!(Value, Value::String(value.to_owned()))),
+                            ),
+                            // EnumFieldVariant::Struct(value) => (
+                            //     s_read!(value).type_name().to_owned(),
+                            //     Some(s_read!(value).get_value()),
+                            // ),
+                            EnumVariant::Tuple((_, ty), value) => (
+                                ty.to_owned(),
+                                Some(new_ref!(Value, Value::TupleEnum(value.clone()))),
+                            ),
+                            _ => unimplemented!(),
+                        },
+                        Value::String(value) => (value.to_owned(), None),
+                        Value::TupleEnum(te) => (
+                            s_read!(te).variant().to_owned(),
+                            Some(s_read!(te).value().clone()),
+                        ),
+                        _ => unreachable!(),
                     }
                 }
-                // new_ref!(
-                //             Value,
-                //             Value::EnumVariant(EnumFieldVariant::Plain(field.name.to_string()))
-                //         ),
-                EnumFieldEnum::StructField(ref sf) => {
-                    let struct_field = s_read!(lu_dog).exhume_struct_field(sf).unwrap();
-                    let struct_field = s_read!(struct_field);
-                    let expr = struct_field.expression.unwrap();
-                    let _expr = s_read!(lu_dog).exhume_expression(&expr).unwrap();
-                    unimplemented!();
-                    // dbg!("StructField", &field.name, expr);
-                    //             let (value, _) = eval_expression(expr, context, vm)?;
-                    //             let value = s_read!(value);
-                    //             if let Value::Struct(struct_value) = &*value {
-                    //                 let struct_value = s_read!(struct_value);
-                    //                 new_ref!(
-                    //                     Value,
-                    //                     Value::EnumVariant(EnumFieldVariant::Struct(
-                    //                         field.name.to_owned(),
-                    //                         new_ref!(UserStruct, struct_value.clone())
-                    //                     ))
-                    //                 )
-                    //             } else {
-                    //                 unreachable!()
-                    //             }
-                }
-                EnumFieldEnum::TupleField(ref tf) => {
-                    let tuple = s_read!(lu_dog).exhume_tuple_field(tf).unwrap();
-                    let _ty = s_read!(tuple).r86_value_type(&s_read!(lu_dog))[0].clone();
-                    let expr = s_read!(tuple).r90_expression(&s_read!(lu_dog))[0].clone();
-                    // dbg!("TupleField", &field.name, ty, &expr);
-                    // let (value, _) = eval_expression(expr, context, vm)?;
-                    let expr = s_read!(expr);
-                    if let ExpressionEnum::VariableExpression(ref var_expr) = expr.subtype {
-                        let var = s_read!(lu_dog)
-                            .exhume_variable_expression(var_expr)
-                            .unwrap();
-                        // dbg!("VariableExpression", &var);
-                        if let Value::Enum(e) = &*s_read!(scrutinee) {
-                            let value = s_read!(e).get_value();
-                            // dbg!(&value);
-                            let value = s_read!(value);
 
-                            if let Value::EnumVariant(EnumFieldVariant::Tuple(field_name, value)) =
-                                &*value
-                            {
-                                if field_name == &field.name {
-                                    // dbg!("Matched");
-                                    let expr = s_read!(pattern).r92_expression(&s_read!(lu_dog))[0]
-                                        .clone();
+                dbg!(&struct_expr, &field_exprs);
 
-                                    context.memory().push_frame();
-
-                                    context
-                                        .memory()
-                                        .insert(s_read!(var).name.to_owned(), value.clone());
-                                    let value = eval_expression(expr, context, vm)?;
-
-                                    context.memory().pop_frame();
-
-                                    return Ok(value);
-                                } else {
-                                    unreachable!()
-                                }
-                            } else {
-                                unreachable!()
-                            }
+                // if let Value::Enum(value) = &*s_read!(scrutinee) {
+                let x_path = &s_read!(lu_dog)
+                    .exhume_x_path(&s_read!(struct_expr).x_path)
+                    .unwrap();
+                // We know that there is always a pe. It's only in an option so that
+                // we can construct everything.
+                let mut pe = s_read!(x_path).r97_path_element(&s_read!(lu_dog))[0].clone();
+                dbg!(&pe, &scrutinee);
+                let mut matched = false;
+                let (name, mut scrutinee) = decode_value(scrutinee.clone());
+                dbg!(&name, &scrutinee);
+                if name == s_read!(pe).name {
+                    while s_read!(pe).next.is_some() && scrutinee.is_some() {
+                        let id = {
+                            let id = &s_read!(pe).next;
+                            #[allow(clippy::clone_on_copy)]
+                            id.as_ref().unwrap().clone()
+                        };
+                        pe = s_read!(lu_dog).exhume_path_element(&id).unwrap();
+                        let (name, s) = decode_value(scrutinee.unwrap());
+                        scrutinee = s;
+                        dbg!(&pe, &name, &scrutinee);
+                        if name == s_read!(pe).name {
+                            matched = true;
+                            continue;
                         } else {
-                            unreachable!()
+                            matched = false;
+                            break;
                         }
-                    } else {
-                        unreachable!()
                     }
                 }
-            };
+
+                dbg!(&matched, &scrutinee);
+
+                match (matched, field_exprs.len()) {
+                    (true, 0) => {
+                        let value = eval_expression(expr, context, vm)?;
+                        return Ok(value);
+                    }
+                    (true, _) => {
+                        // dbg!(&field_exprs);
+                        let field_expr =
+                            s_read!(field_exprs[0]).r38_expression(&s_read!(lu_dog))[0].clone();
+                        let field_expr = s_read!(field_expr);
+                        // dbg!(&field_expr);
+                        if let ExpressionEnum::VariableExpression(ref var) = field_expr.subtype {
+                            let var = s_read!(lu_dog).exhume_variable_expression(var).unwrap();
+                            // dbg!(&var);
+
+                            context.memory().push_frame();
+
+                            context
+                                .memory()
+                                .insert(s_read!(var).name.to_owned(), scrutinee.unwrap());
+                            let value = eval_expression(expr, context, vm)?;
+
+                            context.memory().pop_frame();
+                            dbg!(&value);
+                            return Ok(value);
+                        }
+                    }
+                    (false, _) => {}
+                }
+            }
+            _ => unreachable!(),
         }
     }
 
-    unreachable!()
+    // 🚧 What's this supposed to be?
+    Ok(new_ref!(Value, Value::Boolean(false)))
 }
-
-// fn deconstruct_expression(expr: RefCell<Expression>) {}

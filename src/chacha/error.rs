@@ -5,7 +5,7 @@ use ariadne::{Color, Label, Report, ReportKind, Source};
 use crossbeam::channel::SendError;
 #[cfg(feature = "repl")]
 use rustyline::error::ReadlineError;
-use snafu::{prelude::*, Location};
+use snafu::{prelude::*, Backtrace, Location};
 
 use crate::{chacha::vm::Instruction, lu_dog::ValueType, s_read, RefType, Span, Value};
 
@@ -139,6 +139,7 @@ pub enum ChaChaError {
         var: String,
         span: Span,
         location: Location,
+        backtrace: Backtrace,
     },
     #[snafu(display("\n{}: vm panic: {}", ERR_CLR.bold().paint("error"), OTH_CLR.paint(message)))]
     VmPanic {
@@ -370,6 +371,7 @@ impl fmt::Display for ChaChaErrorReporter<'_, '_, '_> {
                 var,
                 span,
                 location,
+                backtrace,
             } => {
                 let report = Report::build(ReportKind::Error, file_name, span.start)
                     .with_message(format!("variable `{}` not found", POP_CLR.paint(var)))
@@ -381,10 +383,11 @@ impl fmt::Display for ChaChaErrorReporter<'_, '_, '_> {
 
                 let report = if is_uber {
                     report.with_note(format!(
-                        "{}:{}:{}",
+                        "{}:{}:{}\n{}",
                         OTH_CLR.paint(location.file.to_string()),
                         POP_CLR.paint(format!("{}", location.line)),
                         OK_CLR.paint(format!("{}", location.column)),
+                        backtrace
                     ))
                 } else if var == "assert_eq" || var == "time" || var == "eps" {
                     report.with_note(format!(

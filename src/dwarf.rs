@@ -335,13 +335,33 @@ pub enum Statement {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+/// Pattern Type
+///
+/// This is how we store parsed patterns.
 pub enum Pattern {
+    /// An identifier
+    ///
+    /// E.g., `foo`
     Identifier(Spanned<String>),
+    /// A literal
+    ///
+    /// E.g., `420`
     Literal(Spanned<String>),
+    /// A path pattern
+    ///
+    /// E.g., `Foo::Bar`
     PathPattern(Spanned<Vec<Type>>),
+    /// A tuple struct
+    ///
+    /// E.g., `Foo(0, 1, 2)`
     TupleStruct(Box<Self>, Spanned<Vec<Spanned<Pattern>>>),
 }
 
+/// Turn a Pattern into an Expression
+///
+/// Deep magic happens here. We are writing code in here, more or less. We are
+/// creating static method calls and local variables. Very cool stuff happening
+/// here.
 impl From<Pattern> for Expression {
     fn from(pattern: Pattern) -> Self {
         match pattern {
@@ -358,7 +378,7 @@ impl From<Pattern> for Expression {
                     unreachable!();
                 };
 
-                Expression::PlainEnum(
+                Expression::UnitEnum(
                     Box::new((Expression::PathInExpression(path), span.to_owned())),
                     field,
                 )
@@ -369,11 +389,11 @@ impl From<Pattern> for Expression {
                 } else {
                     unreachable!()
                 };
-                // let mut path = path.to_owned();
+
                 let (mut path, _span) = path;
-                let field = path.pop().unwrap();
-                let field = if let Type::UserType(field) = field {
-                    field
+                let name = path.pop().unwrap();
+                let name = if let Type::UserType(name) = name {
+                    name
                 } else {
                     unreachable!();
                 };
@@ -386,7 +406,7 @@ impl From<Pattern> for Expression {
                 // let pattern = Box::new((
                 Expression::StaticMethodCall(
                     Box::new(Expression::PathInExpression(path)),
-                    field,
+                    name,
                     fields,
                 )
                 //     span.to_owned(),
@@ -458,11 +478,11 @@ pub enum Expression {
     None,
     NotEquals(Box<Spanned<Self>>, Box<Spanned<Self>>),
     Or(Box<Spanned<Self>>, Box<Spanned<Self>>),
-    PlainEnum(Box<Spanned<Self>>, Spanned<String>),
+    UnitEnum(Box<Spanned<Self>>, Spanned<String>),
     Print(Box<Spanned<Self>>),
     PathInExpression(Vec<Type>),
     Range(Box<Spanned<Self>>, Box<Spanned<Self>>),
-    Return(Box<Spanned<Self>>),
+    Return(Option<Box<Spanned<Self>>>),
     Some(Box<Spanned<Self>>),
     /// Static Method Call
     ///

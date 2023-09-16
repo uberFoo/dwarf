@@ -123,7 +123,7 @@ struct DwarfArgs {
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     pretty_env_logger::init();
     color_backtrace::install();
-    let _client = Client::start();
+    Client::start();
 
     let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
 

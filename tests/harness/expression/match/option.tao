@@ -6,15 +6,19 @@ enum Option<T> {
 fn main() {
     let x = Option::<string>::None;
     print(x);
-    match x {
+    let zebra = match x {
         Option::<string>::None => {
             chacha::assert_eq(true, true);
+            false
         }
         Option::<string>::Some(y) => {
             print("top: {0}\n".format(y));
             chacha::assert_eq(true, false);
+            true
         }
     };
+    chacha::assert_eq(zebra, false);
+    print(zebra);
 
     x = Option::<string>::Some("hello");
     print(x);

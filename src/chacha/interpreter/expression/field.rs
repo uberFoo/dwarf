@@ -123,6 +123,7 @@ pub mod field_expression {
 
         let field_expr = s_read!(lu_dog).exhume_field_expression(field_expr).unwrap();
         let expr = s_read!(field_expr).r38_expression(&s_read!(lu_dog))[0].clone();
+
         eval_expression(expr, context, vm)
     }
 }

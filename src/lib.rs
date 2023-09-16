@@ -1,5 +1,6 @@
 #![allow(uncommon_codepoints)]
 #![allow(mixed_script_confusables)]
+#![allow(clippy::disallowed_names)]
 use std::{ops, path::PathBuf};
 
 use clap::Args;
@@ -268,8 +269,12 @@ pub enum Dirty {
 
 #[derive(Clone, Debug)]
 pub struct Context {
+    /// This is the compiled source code.
     pub lu_dog: RefType<LuDogStore>,
+    /// These are the plugins that represent imported domains.
     pub models: ModelStore,
+    /// This contains things that the extruder added, that the interpreter
+    /// needs to know about.
     pub dirty: Vec<Dirty>,
 }
 

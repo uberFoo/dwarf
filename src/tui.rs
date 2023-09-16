@@ -14,7 +14,7 @@ use crate::{
     interpreter::{
         banner2, initialize_interpreter_paths, start_tui_repl, DebuggerControl, DebuggerStatus,
     },
-    s_read, ChaChaError,
+    s_read, ChaChaError, Context,
 };
 use ansi_to_tui::{IntoLine, IntoText};
 use clap::Parser;

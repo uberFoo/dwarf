@@ -273,7 +273,7 @@ impl DwarfParser {
             path_span.end = ident.1.end;
 
             debug!("ident", ident);
-            path.push(ident);
+            path.push(ident.clone());
 
             match self.match_tokens(&[Token::Punct(':'), Token::Punct('('), Token::Punct('{')]) {
                 Some((Token::Punct(':'), span)) => match self.match_tokens(&[Token::Punct(':')]) {
@@ -282,7 +282,10 @@ impl DwarfParser {
                     Some(_) => {
                         let generics = self.parse_generics()?;
                         if let Some(generics) = generics {
-                            path.push(generic_to_string(&generics));
+                            path.pop();
+                            let generic_string = generic_to_string(&generics);
+                            let generic_span = ident.1.start..generic_string.1.end;
+                            path.push((format!("{}{}", ident.0, generic_string.0), generic_span));
 
                             if self.match_tokens(&[Token::Punct(':')]).is_none() {
                                 let err = Simple::expected_input_found(
@@ -1911,7 +1914,7 @@ impl DwarfParser {
                 } else if let Some(expression) = self.parse_static_method_call(&lhs, power)? {
                     debug!("static method call", expression);
                     Some(expression)
-                } else if let Some(expression) = self.parse_enum_expression_plain(&lhs, power)? {
+                } else if let Some(expression) = self.parse_unit_enum_expression(&lhs, power)? {
                     debug!("enum expression plain", expression);
                     Some(expression)
                 } else {
@@ -1950,7 +1953,7 @@ impl DwarfParser {
 
             Some((
                 (
-                    DwarfExpression::PlainEnum(
+                    DwarfExpression::UnitEnum(
                         Box::new((DwarfExpression::PathInExpression(path), span.to_owned())),
                         field_name,
                     ),
@@ -3200,7 +3203,7 @@ impl DwarfParser {
     /// struct_expression -> EXPRESSION '{' (IDENTIFIER ':' expression,)* '}'
     fn parse_struct_expression(
         &mut self,
-        name: &Expression,
+        path: &Expression,
         power: u8,
     ) -> Result<Option<Expression>> {
         debug!("enter");
@@ -3217,11 +3220,18 @@ impl DwarfParser {
             return Ok(None);
         };
 
+        // if let (DwarfExpression::PathInExpression(path), span) = &path.0 {
+        // } else {
+        //     debug!("exit not a path");
+        //     return Ok(None);
+        // };
+
         if self.match_tokens(&[Token::Punct('{')]).is_none() {
-            debug!("exit no open brace");
+            debug!("exit no {");
             return Ok(None);
         }
 
+        // let fields = if self.match_tokens(&[Token::Punct('{')]).is_some() {
         let mut fields = Vec::new();
         let mut end = false;
 
@@ -3294,21 +3304,30 @@ impl DwarfParser {
             return Err(Box::new(err));
         }
 
+        //     fields
+        // } else {
+        //     if self.match_tokens(&[Token::Punct(';')]).is_none() {
+        //         return Ok(None);
+        //     }
+
+        //     Vec::new()
+        // };
+
         debug!("exit ok");
 
         Ok(Some((
             (
-                DwarfExpression::Struct(Box::new(name.0.clone()), fields),
+                DwarfExpression::Struct(Box::new(path.0.to_owned()), fields),
                 start..self.previous().unwrap().1.end,
             ),
             LITERAL,
         )))
     }
 
-    /// Parse a plain enum expression
+    /// Parse a unit enum expression
     ///
-    /// enum_expression_plain -> PATH_IN_EXPRESSION
-    fn parse_enum_expression_plain(
+    /// unit_enum_expression -> PATH_IN_EXPRESSION
+    fn parse_unit_enum_expression(
         &mut self,
         path: &Expression,
         power: u8,
@@ -3347,7 +3366,7 @@ impl DwarfParser {
 
         Ok(Some((
             (
-                DwarfExpression::PlainEnum(
+                DwarfExpression::UnitEnum(
                     Box::new((DwarfExpression::PathInExpression(path), span.to_owned())),
                     field_name,
                 ),
@@ -3376,23 +3395,16 @@ impl DwarfParser {
         };
 
         let expression = if let Some(expr) = self.parse_expression(ENTER)? {
-            expr
+            Some(Box::new(expr.0))
         } else {
-            let token = self.previous().unwrap();
-            let err = Simple::expected_input_found(
-                token.1.clone(),
-                [Some("<expression>".to_owned())],
-                Some(token.0.to_string()),
-            );
-            error!("exit", err);
-            return Err(Box::new(err));
+            None
         };
 
         debug!("exit ok");
 
         Ok(Some((
             (
-                DwarfExpression::Return(Box::new(expression.0)),
+                DwarfExpression::Return(expression),
                 start..self.previous().unwrap().1.end,
             ),
             LITERAL,
@@ -4157,49 +4169,59 @@ impl DwarfParser {
 
         let generics = self.parse_generics()?;
 
-        if self.match_tokens(&[Token::Punct('{')]).is_none() {
-            let tok = self.peek().unwrap();
-            return Err(Box::new(Simple::expected_input_found(
-                tok.1.clone(),
-                [Some("'{".to_owned())],
-                Some(tok.0.to_string()),
-            )));
-        }
+        let fields = if self.match_tokens(&[Token::Punct('{')]).is_some() {
+            let mut fields = Vec::new();
+            let mut end = false;
 
-        let mut fields = Vec::new();
-        let mut end = false;
+            while !self.at_end() {
+                if self.match_tokens(&[Token::Punct('}')]).is_some() {
+                    end = true;
+                    break;
+                }
 
-        while !self.at_end() {
-            if self.match_tokens(&[Token::Punct('}')]).is_some() {
-                end = true;
-                break;
+                match self.parse_struct_field() {
+                    Ok(field) => {
+                        fields.push(field);
+                    }
+                    Err(err) => {
+                        return Err(err);
+                    }
+                }
+                self.match_tokens(&[Token::Punct(',')]);
             }
 
-            match self.parse_struct_field() {
-                Ok(field) => {
-                    fields.push(field);
-                }
-                Err(err) => {
-                    return Err(err);
-                }
+            // We got here because we reached the end of the input
+            if !end {
+                let token = self.previous().unwrap();
+                let err = Simple::unclosed_delimiter(
+                    start..token.1.end,
+                    "{".to_owned(),
+                    token.1.clone(),
+                    "}".to_owned(),
+                    Some(token.0.to_string()),
+                );
+
+                debug!("exit: no '}'");
+                return Err(Box::new(err));
             }
-            self.match_tokens(&[Token::Punct(',')]);
-        }
 
-        // We got here because we reached the end of the input
-        if !end {
-            let token = self.previous().unwrap();
-            let err = Simple::unclosed_delimiter(
-                start..token.1.end,
-                "{".to_owned(),
-                token.1.clone(),
-                "}".to_owned(),
-                Some(token.0.to_string()),
-            );
+            fields
+        } else {
+            if self.match_tokens(&[Token::Punct(';')]).is_none() {
+                let tok = self.previous().unwrap();
+                let err = Simple::expected_input_found(
+                    tok.1.clone(),
+                    [Some("';'".to_owned())],
+                    Some(tok.0.to_string()),
+                );
+                let err = err.with_label("expected ;");
+                error!("exit no semicolon");
 
-            debug!("exit: no '}'");
-            return Err(Box::new(err));
-        }
+                return Err(Box::new(err));
+            }
+
+            vec![]
+        };
 
         // 🚧 This isn't right, but maybe it's good enough.
         let end = if let Some(tok) = self.peek() {
@@ -5578,7 +5600,7 @@ mod tests {
             }
         "#;
 
-        let ast = parse_dwarf("test_if_let", src);
+        let ast = parse_dwarf("test_struct_field_assignment", src);
         assert!(ast.is_ok());
     }
 }
