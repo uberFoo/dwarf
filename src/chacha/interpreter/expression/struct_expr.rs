@@ -16,7 +16,6 @@ pub fn eval(expr: &SarzakStorePtr, context: &mut Context, vm: &mut VM) -> Result
 
     let expr = s_read!(lu_dog).exhume_struct_expression(expr).unwrap();
     let field_exprs = s_read!(expr).r26_field_expression(&s_read!(lu_dog));
-    // dbg!(&expr);
     let data_struct = s_read!(expr).r39_data_structure(&s_read!(lu_dog))[0].clone();
 
     let subtype = &s_read!(data_struct).subtype;
