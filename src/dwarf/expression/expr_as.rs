@@ -23,7 +23,7 @@ use crate::{
 pub fn inter(
     expr: &Box<(ParserExpression, Range<usize>)>,
     ty: &(Type, Range<usize>),
-    mut span: RefType<Span>,
+    span: RefType<Span>,
     block: &RefType<Block>,
     context: &mut Context,
     lu_dog: &mut LuDogStore,

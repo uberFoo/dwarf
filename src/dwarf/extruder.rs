@@ -2788,7 +2788,7 @@ pub(super) fn inter_expression(
                 }
             }).collect::<Vec<_>>().join("");
 
-            let enum_root = if let Some(root) = full_enum_name.split("<").next() {
+            let enum_root = if let Some(root) = full_enum_name.split('<').next() {
                 root
             } else {
                 full_enum_name.as_str()
@@ -2796,12 +2796,50 @@ pub(super) fn inter_expression(
 
             debug!("enum_name {:?}", full_enum_name);
 
-            // 🚧 What we really need to do here is lookup just the enum, to make sure that
-            // it exists. Then we can lookup the entire path and inter it as a generic
-            // if necessary.
-            // let (new_enum, _) = create_generic_enum(&enum_name, lu_dog);
-            // let x = s_read!(new_enum).id;
-            // x
+            let x_path = XPath::new(Uuid::new_v4(), None, lu_dog);
+            dbg!(&path);
+            let mut elts = path
+                .iter()
+                .inspect(|ty| {
+                    debug!("ty {:?}", ty);
+                })
+                .map(|ty| {
+                    if let Type::UserType((name, _)) = ty {
+                        PathElement::new(name.to_owned(), None, &x_path, lu_dog)
+                    } else {
+                        unreachable!()
+                    }
+                })
+                .collect::<Vec<RefType<PathElement>>>();
+            // elts.reverse();
+            elts.push(PathElement::new(
+                field_name.to_owned(),
+                None,
+                &x_path,
+                lu_dog,
+            ));
+
+            dbg!(&elts);
+
+            let first = Some(elts[0].clone());
+            let _last = elts
+                .into_iter()
+                .fold(Option::<RefType<PathElement>>::None, |prev, elt| {
+                    if let Some(prev) = prev {
+                        let elt = s_read!(elt);
+                        s_write!(prev).next = Some(elt.id);
+                        dbg!(&prev);
+                    }
+                    Some(elt)
+                });
+
+            dbg!(&first);
+
+            if let Some(first) = first {
+                let first = s_read!(first).id;
+                s_write!(x_path).first = Some(first);
+            }
+
             if let Some(woog_enum_id) = lu_dog.exhume_enumeration_id_by_name(enum_root) {
                 let woog_enum_id = if enum_root != full_enum_name {
                     if let Some(id) = lu_dog.exhume_enumeration_id_by_name(&full_enum_name) {
@@ -4306,6 +4344,7 @@ pub(crate) fn create_generic_struct(
         let _ = Field::new(field.name.to_owned(), &new_struct, ty, lu_dog);
     }
 
+    dbg!(&new_struct);
     new_struct
 }
 
