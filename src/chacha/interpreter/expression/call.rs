@@ -16,8 +16,8 @@ use crate::{
     lu_dog::{CallEnum, Expression, ValueTypeEnum},
     new_ref, s_read, s_write,
     sarzak::Ty,
-    NewRef, RefType, SarzakStorePtr, Value, ADD, ARGS, ASSERT_EQ, CHACHA, COMPLEX_EX, EPS, EVAL,
-    FN_NEW, FORMAT, LEN, NORM_SQUARED, PARSE, SLEEP, SQUARE, TIME, TYPEOF, UUID_TYPE,
+    NewRef, RefType, SarzakStorePtr, Value, ADD, ARGS, ASSERT, ASSERT_EQ, CHACHA, COMPLEX_EX, EPS,
+    EVAL, FN_NEW, FORMAT, LEN, NORM_SQUARED, PARSE, SLEEP, SQUARE, TIME, TYPEOF, UUID_TYPE,
 };
 
 mod chacha;
@@ -566,6 +566,7 @@ pub fn eval(
                             Ok(new_ref!(Value, Value::Vector(Vec::new())))
                         }
                     }
+                    ASSERT => chacha::assert(arg_values, expression, lu_dog),
                     ASSERT_EQ => chacha::assert_eq(arg_values, expression, lu_dog),
                     EPS => {
                         debug!("evaluating chacha::eps");

@@ -6,9 +6,5 @@ fn main() {
 
     print("delta: {0}\n".format(delta));
 
-    if delta < 0.01 {
-        chacha::assert_eq(true, true);
-    } else {
-        chacha::assert_eq(true, false);
-    }
+    chacha::assert(delta < 0.01);
 }
