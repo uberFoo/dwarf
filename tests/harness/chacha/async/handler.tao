@@ -37,7 +37,7 @@ impl Light {
         }
     }
 
-    fn receive_event(self, event: Event) {
+    fn send_event(self, event: Event) {
         match event {
             Event::PowerEvent(power_event) => {
                 match power_event {
@@ -47,7 +47,7 @@ impl Light {
                             return;
                         }
 
-                        print("Turning on light");
+                        print("Turning on light\n");
 
                         self.power = Power::On;
                         self.color = Color {
@@ -61,7 +61,7 @@ impl Light {
                             return;
                         }
 
-                        print("Turning off light");
+                        print("Turning off light\n");
 
                         self.power = Power::Off;
                         self.color = Color {
@@ -78,14 +78,25 @@ impl Light {
 }
 fn main() {
     let light = Light::new();
+    assert_off(light);
+
+    let event = Event::PowerEvent(PowerEvent::On);
+    light.send_event(event);
+    assert_on(light);
+
+    let event = Event::PowerEvent(PowerEvent::Off);
+    light.send_event(event);
+    assert_off(light);
+}
+
+fn assert_off(light: Light) {
     chacha::assert_eq(light.power, Power::Off);
     chacha::assert_eq(light.color.red, 0.0);
     chacha::assert_eq(light.color.green, 0.0);
     chacha::assert_eq(light.color.blue, 0.0);
+}
 
-    let event = Event::PowerEvent(PowerEvent::On);
-    light.receive_event(event);
-
+fn assert_on(light: Light) {
     chacha::assert_eq(light.power, Power::On);
     chacha::assert_eq(light.color.red, 1.0);
     chacha::assert_eq(light.color.green, 1.0);

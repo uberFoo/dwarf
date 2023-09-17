@@ -32,11 +32,11 @@ pub fn eval(
     let sarzak = context.sarzak_heel().clone();
 
     let call = s_read!(lu_dog).exhume_call(call_id).unwrap();
+    let first_arg = s_read!(call).argument;
     debug!("call {call:?}");
     let args = s_read!(call).r28_argument(&s_read!(lu_dog));
     debug!("args {args:?}");
     // fix_error!("arg_check", s_read!(call).arg_check);
-
     let arg_check = s_read!(call).arg_check;
     if arg_check {
         s_write!(call).arg_check = false;
@@ -60,7 +60,8 @@ pub fn eval(
 
                     let func = s_read!(lu_dog).exhume_function(&s_read!(func).id).unwrap();
                     debug!("ExpressionEnum::Call func: {func:?}");
-                    let value = eval_function_call(func, &args, arg_check, span, context, vm)?;
+                    let value =
+                        eval_function_call(func, &args, first_arg, arg_check, span, context, vm)?;
                     debug!("value {value:?}");
                     Ok(value)
                 }
@@ -83,7 +84,6 @@ pub fn eval(
                 Value::Struct(_) => Ok(value.clone()),
                 Value::Store(_store, _plugin) => Ok(value.clone()),
                 value_ => {
-                    dbg!(&value_);
                     let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
                     debug!("value {value:?}");
 
@@ -146,7 +146,7 @@ pub fn eval(
         //
         (CallEnum::MethodCall(ref meth), value) => {
             let meth = s_read!(lu_dog).exhume_method_call(meth).unwrap();
-            let meth = &s_read!(meth).name;
+            let meth_name = &s_read!(meth).name;
             debug!("MethodCall method {meth:?}");
             debug!("MethodCall value {value:?}");
 
@@ -156,12 +156,20 @@ pub fn eval(
                     let x = if let Some(func) = s_read!(impl_)
                         .r9_function(&s_read!(lu_dog))
                         .iter()
-                        .find(|f| s_read!(f).name == *meth)
+                        .find(|f| s_read!(f).name == *meth_name)
                     {
                         let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
                         let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
 
-                        eval_external_method((*func).clone(), &args, arg_check, span, context, vm)
+                        eval_external_method(
+                            (*func).clone(),
+                            &args,
+                            s_read!(call).argument,
+                            arg_check,
+                            span,
+                            context,
+                            vm,
+                        )
                     } else {
                         let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
                         let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
@@ -169,7 +177,7 @@ pub fn eval(
                         let span = read.start as usize..read.end as usize;
 
                         return Err(ChaChaError::NoSuchMethod {
-                            method: meth.to_owned(),
+                            method: meth_name.to_owned(),
                             span,
                             location: location!(),
                         });
@@ -187,7 +195,7 @@ pub fn eval(
                     // A: It's eval'd above, and in the `value` variable, which
                     // is deconstructed into this ProxyType. So that is bad.
                     // 🚧 We need to store a pointer to an in-memory value of
-                    // this struct so that
+                    // this struct
                     let vt = s_read!(lu_dog);
                     let mut vt = vt.iter_value_type();
                     let woog_struct = loop {
@@ -210,12 +218,20 @@ pub fn eval(
                     let x = if let Some(func) = s_read!(impl_)
                         .r9_function(&s_read!(lu_dog))
                         .iter()
-                        .find(|f| s_read!(f).name == *meth)
+                        .find(|f| s_read!(f).name == *meth_name)
                     {
                         let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
                         let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
 
-                        eval_function_call((*func).clone(), &args, arg_check, span, context, vm)
+                        eval_function_call(
+                            (*func).clone(),
+                            &args,
+                            first_arg,
+                            arg_check,
+                            span,
+                            context,
+                            vm,
+                        )
                     } else {
                         let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
                         let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
@@ -223,14 +239,14 @@ pub fn eval(
                         let span = read.start as usize..read.end as usize;
 
                         return Err(ChaChaError::NoSuchMethod {
-                            method: meth.to_owned(),
+                            method: meth_name.to_owned(),
                             span,
                             location: location!(),
                         });
                     };
                     x
                 }
-                Value::String(string) => match meth.as_str() {
+                Value::String(string) => match meth_name.as_str() {
                     LEN => {
                         debug!("evaluating String::len");
                         let len = unicode_segmentation::UnicodeSegmentation::graphemes(
@@ -393,12 +409,20 @@ pub fn eval(
                     let x = if let Some(func) = s_read!(impl_)
                         .r9_function(&s_read!(lu_dog))
                         .iter()
-                        .find(|f| s_read!(f).name == *meth)
+                        .find(|f| s_read!(f).name == *meth_name)
                     {
                         let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
                         let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
 
-                        eval_function_call((*func).clone(), &args, arg_check, span, context, vm)
+                        eval_function_call(
+                            (*func).clone(),
+                            &args,
+                            first_arg,
+                            arg_check,
+                            span,
+                            context,
+                            vm,
+                        )
                     } else {
                         let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
                         let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
@@ -406,7 +430,7 @@ pub fn eval(
                         let span = read.start as usize..read.end as usize;
 
                         return Err(ChaChaError::NoSuchMethod {
-                            method: meth.to_owned(),
+                            method: meth_name.to_owned(),
                             span,
                             location: location!(),
                         });
@@ -592,8 +616,15 @@ pub fn eval(
 
                         let now = Instant::now();
                         if let Value::Function(func) = &*func {
-                            let _result =
-                                eval_function_call(func.clone(), &[], true, span, context, vm)?;
+                            let _result = eval_function_call(
+                                func.clone(),
+                                &[],
+                                None,
+                                true,
+                                span,
+                                context,
+                                vm,
+                            )?;
                         } else if let Value::Lambda(ƛ) = &*func {
                             let _result =
                                 eval_lambda_expression(ƛ.clone(), &[], true, span, context, vm)?;
@@ -637,8 +668,15 @@ pub fn eval(
                         let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
                         debug!("StaticMethodCall::Function {value:?}");
                         let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
-                        let value =
-                            eval_function_call(func.clone(), &args, arg_check, span, context, vm)?;
+                        let value = eval_function_call(
+                            func.clone(),
+                            &args,
+                            first_arg,
+                            arg_check,
+                            span,
+                            context,
+                            vm,
+                        )?;
                         debug!("StaticMethodCall meta value {value:?}");
                         Ok(value)
                     }
@@ -655,7 +693,9 @@ pub fn eval(
                         let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
                         let func = s_read!(lu_dog).exhume_function(&s_read!(func).id).unwrap();
                         debug!("StaticMethodCall frame func {func:?}");
-                        let value = eval_function_call(func, &args, arg_check, span, context, vm)?;
+                        let value = eval_function_call(
+                            func, &args, first_arg, arg_check, span, context, vm,
+                        )?;
                         debug!("StaticMethodCall frame value {value:?}");
                         Ok(value)
                     }

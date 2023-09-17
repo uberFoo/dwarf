@@ -66,7 +66,7 @@ pub fn eval(
                     }
                 }
 
-                dbg!(&struct_expr, &field_exprs);
+                // dbg!(&struct_expr, &field_exprs);
 
                 // if let Value::Enum(value) = &*s_read!(scrutinee) {
                 let x_path = &s_read!(lu_dog)
@@ -75,10 +75,10 @@ pub fn eval(
                 // We know that there is always a pe. It's only in an option so that
                 // we can construct everything.
                 let mut pe = s_read!(x_path).r97_path_element(&s_read!(lu_dog))[0].clone();
-                dbg!(&pe, &scrutinee);
+                // dbg!(&pe, &scrutinee);
                 let mut matched = false;
                 let (name, mut scrutinee) = decode_value(scrutinee.clone());
-                dbg!(&name, &scrutinee);
+                // dbg!(&name, &scrutinee);
                 if name == s_read!(pe).name {
                     while s_read!(pe).next.is_some() && scrutinee.is_some() {
                         let id = {
@@ -89,7 +89,6 @@ pub fn eval(
                         pe = s_read!(lu_dog).exhume_path_element(&id).unwrap();
                         let (name, s) = decode_value(scrutinee.unwrap());
                         scrutinee = s;
-                        dbg!(&pe, &name, &scrutinee);
                         if name == s_read!(pe).name {
                             matched = true;
                             continue;
@@ -99,8 +98,6 @@ pub fn eval(
                         }
                     }
                 }
-
-                dbg!(&matched, &scrutinee);
 
                 match (matched, field_exprs.len()) {
                     (true, 0) => {
@@ -125,7 +122,6 @@ pub fn eval(
                             let value = eval_expression(expr, context, vm)?;
 
                             context.memory().pop_frame();
-                            dbg!(&value);
                             return Ok(value);
                         }
                     }

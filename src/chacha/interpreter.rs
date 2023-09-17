@@ -663,10 +663,12 @@ pub fn start_func(
             let value_ty = &s_read!(main).r1_value_type(&s_read!(context.lu_dog_heel()))[0];
             let span = &s_read!(value_ty).r62_span(&s_read!(context.lu_dog_heel()))[0];
 
-            let result = eval_function_call(main, &[], true, span, &mut context, &mut vm)?;
+            let result = eval_function_call(main, &[], None, true, span, &mut context, &mut vm)?;
 
             #[allow(clippy::redundant_clone)]
-            //              ^^^^^^^^^^^^^^^ : It's not -- the macro is just hiding the fact that it isn't.
+            //              ^^^^^^^^^^^^^^^ : It's not redundant.
+            // The macro is just hiding the fact that it isn't.
+            // This is, btw: not redundant.
             Ok((s_read!(result.clone()).clone(), context))
         } else {
             Err(Error(ChaChaError::MainIsNotAFunction))

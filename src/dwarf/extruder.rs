@@ -155,6 +155,21 @@ macro_rules! e_warn {
 }
 pub(crate) use e_warn;
 
+macro_rules! error {
+    ($($arg:tt)*) => {
+        log::error!(
+            target: "extruder",
+            "{}: {}\n  --> {}:{}:{}",
+            Colour::Red.underline().italic().paint(function!()),
+            format_args!($($arg)*),
+            file!(),
+            line!(),
+            column!()
+        )
+    };
+}
+pub(crate) use error;
+
 type Span = Range<usize>;
 pub(super) type ExprSpan = (RefType<Expression>, RefType<LuDogSpan>);
 
@@ -1562,11 +1577,11 @@ pub(super) fn inter_expression(
         //
         // FunctionCall
         //
-        ParserExpression::FunctionCall(func, params) => {
+        ParserExpression::FunctionCall(func, args) => {
             debug!("func {:?}", func);
             let fspan = &func.1;
             let func = &func.0;
-            debug!("params {:?}", params);
+            debug!("args {:?}", args);
 
             // I think that we need to see if we have the function definition
             // in memory. This is actually tricky, because theoretically we will
@@ -1591,7 +1606,7 @@ pub(super) fn inter_expression(
 
             if let ValueTypeEnum::Unknown(_) = s_read!(ret_ty).subtype {
                 // Here's where we need to lookup the function definition.
-                // panic!("🚧 we need a function definition");
+                error!("🚧 we need a function definition");
             }
 
             let func_call = Call::new_function_call(true, None, Some(&func_expr.0), lu_dog);
@@ -1600,10 +1615,12 @@ pub(super) fn inter_expression(
             update_span_value(&span, &value, location!());
 
             let mut last_arg_uuid: Option<usize> = None;
-            for (position, param) in params.iter().enumerate() {
+            // Note that position makes each arg unique. I don't remember if
+            // that is the explicit intention or not.
+            for (position, arg) in args.iter().enumerate() {
                 let (arg_expr, _ty) = inter_expression(
-                    &new_ref!(ParserExpression, param.0.to_owned()),
-                    &param.1,
+                    &new_ref!(ParserExpression, arg.0.to_owned()),
+                    &arg.1,
                     block,
                     context,
                     lu_dog,
@@ -1615,6 +1632,7 @@ pub(super) fn inter_expression(
                     None,
                     lu_dog,
                 );
+
                 if position == 0 {
                     s_write!(func_call).argument = Some(s_read!(arg).id);
                 }
@@ -2488,10 +2506,14 @@ pub(super) fn inter_expression(
 
             let mut last_arg_uuid: Option<usize> = None;
 
+            // Self
             // This is the self parameter
+            // Self -- I can never seem to find this.
             let this = Argument::new(0, &instance.0, &call, None, lu_dog);
             last_arg_uuid = link_argument!(last_arg_uuid, this, lu_dog);
+            s_write!(call).argument = Some(s_read!(this).id);
 
+            // Note the position.
             let mut position = 1;
             for arg in args {
                 let (arg_expr, ty) = inter_expression(
@@ -2511,9 +2533,6 @@ pub(super) fn inter_expression(
                     lu_dog,
                 );
                 let arg = Argument::new(position, &arg_expr.0, &call, None, lu_dog);
-                if position == 0 {
-                    s_write!(call).argument = Some(s_read!(arg).id);
-                }
                 position += 1;
 
                 last_arg_uuid = link_argument!(last_arg_uuid, arg, lu_dog);
@@ -2797,7 +2816,7 @@ pub(super) fn inter_expression(
             debug!("enum_name {:?}", full_enum_name);
 
             let x_path = XPath::new(Uuid::new_v4(), None, lu_dog);
-            dbg!(&path);
+            // dbg!(&path);
             let mut elts = path
                 .iter()
                 .inspect(|ty| {
@@ -2819,7 +2838,7 @@ pub(super) fn inter_expression(
                 lu_dog,
             ));
 
-            dbg!(&elts);
+            // dbg!(&elts);
 
             let first = Some(elts[0].clone());
             let _last = elts
@@ -2828,12 +2847,12 @@ pub(super) fn inter_expression(
                     if let Some(prev) = prev {
                         let elt = s_read!(elt);
                         s_write!(prev).next = Some(elt.id);
-                        dbg!(&prev);
+                        // dbg!(&prev);
                     }
                     Some(elt)
                 });
 
-            dbg!(&first);
+            // dbg!(&first);
 
             if let Some(first) = first {
                 let first = s_read!(first).id;
