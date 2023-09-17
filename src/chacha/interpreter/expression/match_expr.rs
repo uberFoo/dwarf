@@ -19,20 +19,15 @@ pub fn eval(
     let scrutinee = match_expr.r91_expression(&s_read!(lu_dog))[0].clone();
 
     let scrutinee = eval_expression(scrutinee, context, vm)?;
-    // dbg!(&scrutinee);
-
-    // dbg!(match_expr, &patterns);
 
     // Check each pattern for a match.
     // 🚧 Darn. Match arms need to be ordered the same as they are written, and
     // they are not ordered in the model.
     for pattern in patterns {
-        // dbg!(&pattern);
         let match_expr = s_read!(pattern).r87_expression(&s_read!(lu_dog))[0].clone();
         let expr = s_read!(pattern).r92_expression(&s_read!(lu_dog))[0].clone();
 
         let match_expr = s_read!(match_expr);
-        // dbg!(&match_expr, &expr);
         match &match_expr.subtype {
             ExpressionEnum::StructExpression(ref id) => {
                 let struct_expr = s_read!(lu_dog).exhume_struct_expression(id).unwrap();
@@ -66,8 +61,6 @@ pub fn eval(
                     }
                 }
 
-                // dbg!(&struct_expr, &field_exprs);
-
                 // if let Value::Enum(value) = &*s_read!(scrutinee) {
                 let x_path = &s_read!(lu_dog)
                     .exhume_x_path(&s_read!(struct_expr).x_path)
@@ -75,10 +68,9 @@ pub fn eval(
                 // We know that there is always a pe. It's only in an option so that
                 // we can construct everything.
                 let mut pe = s_read!(x_path).r97_path_element(&s_read!(lu_dog))[0].clone();
-                // dbg!(&pe, &scrutinee);
+
                 let mut matched = false;
                 let (name, mut scrutinee) = decode_value(scrutinee.clone());
-                // dbg!(&name, &scrutinee);
                 if name == s_read!(pe).name {
                     while s_read!(pe).next.is_some() && scrutinee.is_some() {
                         let id = {
@@ -105,14 +97,11 @@ pub fn eval(
                         return Ok(value);
                     }
                     (true, _) => {
-                        // dbg!(&field_exprs);
                         let field_expr =
                             s_read!(field_exprs[0]).r38_expression(&s_read!(lu_dog))[0].clone();
                         let field_expr = s_read!(field_expr);
-                        // dbg!(&field_expr);
                         if let ExpressionEnum::VariableExpression(ref var) = field_expr.subtype {
                             let var = s_read!(lu_dog).exhume_variable_expression(var).unwrap();
-                            // dbg!(&var);
 
                             context.memory().push_frame();
 

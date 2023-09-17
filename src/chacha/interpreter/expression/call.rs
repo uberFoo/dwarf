@@ -1,4 +1,4 @@
-use std::{collections::VecDeque, time::Instant};
+use std::{collections::VecDeque, thread, time::Duration, time::Instant};
 
 use ansi_term::Colour;
 use snafu::{location, prelude::*, Location};
@@ -17,7 +17,7 @@ use crate::{
     new_ref, s_read, s_write,
     sarzak::Ty,
     NewRef, RefType, SarzakStorePtr, Value, ADD, ARGS, ASSERT_EQ, CHACHA, COMPLEX_EX, EPS, EVAL,
-    FN_NEW, FORMAT, LEN, NORM_SQUARED, PARSE, SQUARE, TIME, TYPEOF, UUID_TYPE,
+    FN_NEW, FORMAT, LEN, NORM_SQUARED, PARSE, SLEEP, SQUARE, TIME, TYPEOF, UUID_TYPE,
 };
 
 mod chacha;
@@ -589,6 +589,15 @@ pub fn eval(
                     }
                     EVAL => chacha::eval_dwarf(arg_values, expression, context),
                     PARSE => chacha::parse_dwarf(arg_values, expression, context),
+                    SLEEP => {
+                        let (duration, _) = arg_values.pop_front().unwrap();
+                        let millis = &*s_read!(duration);
+                        let millis: u64 = millis.try_into()?;
+
+                        thread::sleep(Duration::from_millis(millis));
+
+                        Ok(new_ref!(Value, Value::Empty))
+                    }
                     TIME => {
                         debug!("evaluating chacha::time");
                         // 🚧 I should be checking that there is an argument before

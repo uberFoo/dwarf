@@ -2816,7 +2816,7 @@ pub(super) fn inter_expression(
             debug!("enum_name {:?}", full_enum_name);
 
             let x_path = XPath::new(Uuid::new_v4(), None, lu_dog);
-            // dbg!(&path);
+
             let mut elts = path
                 .iter()
                 .inspect(|ty| {
@@ -2830,15 +2830,12 @@ pub(super) fn inter_expression(
                     }
                 })
                 .collect::<Vec<RefType<PathElement>>>();
-            // elts.reverse();
             elts.push(PathElement::new(
                 field_name.to_owned(),
                 None,
                 &x_path,
                 lu_dog,
             ));
-
-            // dbg!(&elts);
 
             let first = Some(elts[0].clone());
             let _last = elts
@@ -2847,12 +2844,9 @@ pub(super) fn inter_expression(
                     if let Some(prev) = prev {
                         let elt = s_read!(elt);
                         s_write!(prev).next = Some(elt.id);
-                        // dbg!(&prev);
                     }
                     Some(elt)
                 });
-
-            // dbg!(&first);
 
             if let Some(first) = first {
                 let first = s_read!(first).id;
@@ -4363,7 +4357,6 @@ pub(crate) fn create_generic_struct(
         let _ = Field::new(field.name.to_owned(), &new_struct, ty, lu_dog);
     }
 
-    dbg!(&new_struct);
     new_struct
 }
 
@@ -4387,7 +4380,6 @@ pub(crate) fn create_generic_enum(
     let woog_enum = lu_dog.exhume_enumeration(&id).unwrap();
     for field in s_read!(woog_enum).r88_enum_field(lu_dog) {
         let field = s_read!(field);
-        dbg!(&field);
         match field.subtype {
             EnumFieldEnum::Unit(ref id) => {
                 let orig = lu_dog.exhume_unit(id).unwrap();
@@ -4425,7 +4417,6 @@ pub(crate) fn create_generic_enum(
         }
     }
 
-    dbg!(&new_enum, &ty);
     (new_enum, ty)
 }
 

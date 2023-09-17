@@ -38,6 +38,7 @@ const LEN: &str = "len";
 const FORMAT: &str = "format";
 const NORM_SQUARED: &str = "norm_squared";
 const PARSE: &str = "parse";
+const SLEEP: &str = "sleep";
 const SQUARE: &str = "square";
 const TIME: &str = "time";
 const TYPEOF: &str = "typeof";

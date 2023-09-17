@@ -1,0 +1,14 @@
+fn main() {
+    let duration = chacha::time(|| {
+        chacha::sleep(1000);
+    });
+    let delta = duration - 1.0;
+
+    print("delta: {0}\n".format(delta));
+
+    if delta < 0.01 {
+        chacha::assert_eq(true, true);
+    } else {
+        chacha::assert_eq(true, false);
+    }
+}
