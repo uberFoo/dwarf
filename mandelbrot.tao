@@ -164,7 +164,7 @@ fn do_column(
         match time {
             Option::<int>::None => print("*"),
             Option::<int>::Some(time) => print(" "),
-        }
+        };
         // if time > 0 {
         //     print(" ");
         // } else {

@@ -721,6 +721,44 @@ impl TryFrom<&Value> for i64 {
     }
 }
 
+impl TryFrom<Value> for u64 {
+    type Error = ChaChaError;
+
+    fn try_from(value: Value) -> Result<Self, <u64 as TryFrom<Value>>::Error> {
+        match value {
+            Value::Float(num) => Ok(num as u64),
+            Value::Integer(num) => Ok(num as u64),
+            Value::String(str_) => str_.parse::<u64>().map_err(|_| ChaChaError::Conversion {
+                src: str_.to_owned(),
+                dst: "u64".to_owned(),
+            }),
+            _ => Err(ChaChaError::Conversion {
+                src: value.to_string(),
+                dst: "u64".to_owned(),
+            }),
+        }
+    }
+}
+
+impl TryFrom<&Value> for u64 {
+    type Error = ChaChaError;
+
+    fn try_from(value: &Value) -> Result<Self, <u64 as TryFrom<&Value>>::Error> {
+        match value {
+            Value::Float(num) => Ok(*num as u64),
+            Value::Integer(num) => Ok(*num as u64),
+            Value::String(str_) => str_.parse::<u64>().map_err(|_| ChaChaError::Conversion {
+                src: str_.to_owned(),
+                dst: "u64".to_owned(),
+            }),
+            _ => Err(ChaChaError::Conversion {
+                src: value.to_string(),
+                dst: "u64".to_owned(),
+            }),
+        }
+    }
+}
+
 impl TryFrom<Value> for f64 {
     type Error = ChaChaError;
 

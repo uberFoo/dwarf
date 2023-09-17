@@ -28,6 +28,7 @@ pub type DwarfFloat = f64;
 
 const ADD: &str = "add";
 const ARGS: &str = "args";
+const ASSERT: &str = "assert";
 const ASSERT_EQ: &str = "assert_eq";
 const CHACHA: &str = "chacha";
 const COMPLEX_EX: &str = "ComplexEx";
@@ -38,6 +39,7 @@ const LEN: &str = "len";
 const FORMAT: &str = "format";
 const NORM_SQUARED: &str = "norm_squared";
 const PARSE: &str = "parse";
+const SLEEP: &str = "sleep";
 const SQUARE: &str = "square";
 const TIME: &str = "time";
 const TYPEOF: &str = "typeof";

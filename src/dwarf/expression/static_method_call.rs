@@ -22,7 +22,8 @@ use crate::{
     },
     new_ref, s_read, s_write,
     sarzak::Ty,
-    NewRef, RefType, ARGS, CHACHA, COMPLEX_EX, FN_NEW, NORM_SQUARED, UUID_TYPE,
+    NewRef, RefType, ARGS, ASSERT, ASSERT_EQ, CHACHA, COMPLEX_EX, EPS, FN_NEW, NORM_SQUARED, SLEEP,
+    TIME, UUID_TYPE,
 };
 
 // Let's just say that I don't get this lint. The docs say you have to box it
@@ -137,6 +138,52 @@ pub fn inter(
                         .unwrap();
                     let list = List::new(&ty, lu_dog);
                     ValueType::new_list(&list, lu_dog)
+                }
+                ASSERT => {
+                    let ty = Ty::new_boolean(sarzak);
+                    // 🚧 Ideally we'd cache this when we startup.
+                    let ty = lu_dog
+                        .iter_value_type()
+                        .find(|t| s_read!(t).subtype == ValueTypeEnum::Ty(ty.read().unwrap().id()))
+                        .unwrap();
+                    ValueType::new_ty(&Ty::new_boolean(sarzak), lu_dog)
+                }
+                ASSERT_EQ => {
+                    let ty = Ty::new_boolean(sarzak);
+                    // 🚧 Ideally we'd cache this when we startup.
+                    let ty = lu_dog
+                        .iter_value_type()
+                        .find(|t| s_read!(t).subtype == ValueTypeEnum::Ty(ty.read().unwrap().id()))
+                        .unwrap();
+                    ValueType::new_ty(&Ty::new_boolean(sarzak), lu_dog)
+                }
+                COMPLEX_EX => {
+                    let ty = Ty::new_float(sarzak);
+                    // 🚧 Ideally we'd cache this when we startup.
+                    let ty = lu_dog
+                        .iter_value_type()
+                        .find(|t| s_read!(t).subtype == ValueTypeEnum::Ty(ty.read().unwrap().id()))
+                        .unwrap();
+                    ValueType::new_ty(&Ty::new_float(sarzak), lu_dog)
+                }
+                EPS => {
+                    let ty = Ty::new_float(sarzak);
+                    // 🚧 Ideally we'd cache this when we startup.
+                    let ty = lu_dog
+                        .iter_value_type()
+                        .find(|t| s_read!(t).subtype == ValueTypeEnum::Ty(ty.read().unwrap().id()))
+                        .unwrap();
+                    ValueType::new_ty(&Ty::new_float(sarzak), lu_dog)
+                }
+                SLEEP => ValueType::new_empty(lu_dog),
+                TIME => {
+                    let ty = Ty::new_float(sarzak);
+                    // 🚧 Ideally we'd cache this when we startup.
+                    let ty = lu_dog
+                        .iter_value_type()
+                        .find(|t| s_read!(t).subtype == ValueTypeEnum::Ty(ty.read().unwrap().id()))
+                        .unwrap();
+                    ValueType::new_ty(&Ty::new_float(sarzak), lu_dog)
                 }
                 _ => {
                     e_warn!("ParserExpression type not found");

@@ -64,6 +64,8 @@ fn main() {
 }
 ```
 
+## Parse and Eval
+
 Misfortunately I haven't hacked all the HTTP nonsense necessary to pass command line arguments from here.
 I might get to it before release.
 

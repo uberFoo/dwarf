@@ -22,9 +22,14 @@ pub(super) type Result<T, E = ChaChaError> = std::result::Result<T, E>;
 #[snafu(visibility(pub))]
 pub enum ChaChaError {
     #[snafu(display("\n{}: assertion failed at {}.\n  --> Found `{}`, expected `{}`.\n", ERR_CLR.bold().paint("error"), POP_CLR.underline().paint(code), s_read!(found), s_read!(expected)))]
-    Assertion {
+    AssertEqual {
         found: RefType<Value>,
         expected: RefType<Value>,
+        code: String,
+    },
+    #[snafu(display("\n{}: assertion failed at {}.\n  --> Found `{}`.\n", ERR_CLR.bold().paint("error"), POP_CLR.underline().paint(code), s_read!(found)))]
+    AssertTrue {
+        found: RefType<Value>,
         code: String,
     },
     #[snafu(display("\n{}: internal error: {message}\n  --> {}:{}:{}", ERR_CLR.bold().paint("error"), location.file, location.line, location.column))]

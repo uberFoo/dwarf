@@ -71,7 +71,6 @@ pub fn eval(
 
                 let mut matched = false;
                 let (name, mut scrutinee) = decode_value(scrutinee.clone());
-
                 if name == s_read!(pe).name {
                     while s_read!(pe).next.is_some() && scrutinee.is_some() {
                         let id = {

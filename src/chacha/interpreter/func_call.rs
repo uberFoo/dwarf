@@ -27,7 +27,7 @@ use crate::{
     plug_in::PluginType,
     s_read, s_write,
     sarzak::ObjectStore,
-    NewRef, RefType, Value,
+    NewRef, RefType, SarzakStorePtr, Value,
 };
 
 const OBJECT_STORE: &str = "ObjectStore";
@@ -39,6 +39,7 @@ const SARZAK: &str = "sarzak";
 pub fn eval_function_call(
     func: RefType<Function>,
     args: &[RefType<Argument>],
+    first_arg: Option<SarzakStorePtr>,
     arg_check: bool,
     span: &RefType<Span>,
     context: &mut Context,
@@ -60,13 +61,14 @@ pub fn eval_function_call(
         // Ok(new_ref!(Value, Value::Future(future)))
         Ok(new_ref!(Value, Value::Empty))
     } else {
-        inner_eval_function_call(func, args, arg_check, span, context, vm)
+        inner_eval_function_call(func, args, first_arg, arg_check, span, context, vm)
     }
 }
 
 fn inner_eval_function_call(
     func: RefType<Function>,
     args: &[RefType<Argument>],
+    first_arg: Option<SarzakStorePtr>,
     arg_check: bool,
     span: &RefType<Span>,
     context: &mut Context,
@@ -86,12 +88,12 @@ fn inner_eval_function_call(
         //
         // This is a function defined in a dwarf file.
         BodyEnum::Block(ref id) => {
-            eval_built_in_function_call(func, id, args, arg_check, span, context, vm)
+            eval_built_in_function_call(func, id, args, first_arg, arg_check, span, context, vm)
         }
         //
         // This is an externally defined function that was declared in a dwarf file.
         BodyEnum::ExternalImplementation(ref id) => {
-            eval_external_static_method(id, args, arg_check, span, context, vm)
+            eval_external_static_method(id, args, first_arg, arg_check, span, context, vm)
         }
     }
 }
@@ -99,6 +101,7 @@ fn inner_eval_function_call(
 pub(crate) fn eval_external_method(
     func: RefType<Function>,
     args: &[RefType<Argument>],
+    first_arg: Option<SarzakStorePtr>,
     _arg_check: bool,
     span: &RefType<Span>,
     context: &mut Context,
@@ -119,12 +122,10 @@ pub(crate) fn eval_external_method(
         .unwrap();
 
     // We know that args has at least self.
+    let mut next = s_read!(lu_dog)
+        .exhume_argument(&first_arg.unwrap())
+        .unwrap();
     let mut arg_values = Vec::with_capacity(args.len());
-    let mut next = args
-        .iter()
-        .find(|a| s_read!(a).r27c_argument(&s_read!(lu_dog)).is_empty())
-        .unwrap()
-        .clone();
 
     let expr = s_read!(next).r37_expression(&s_read!(lu_dog))[0].clone();
     let plug_in = eval_expression(expr.clone(), context, vm)?;
@@ -279,6 +280,7 @@ pub(crate) fn eval_external_method(
 fn eval_external_static_method(
     block_id: &usize,
     args: &[RefType<Argument>],
+    first_arg: Option<SarzakStorePtr>,
     _arg_check: bool,
     span: &RefType<Span>,
     context: &mut Context,
@@ -290,13 +292,9 @@ fn eval_external_static_method(
         .exhume_external_implementation(block_id)
         .unwrap();
 
-    let mut arg_values = if !args.is_empty() {
+    let mut arg_values = if let Some(next) = first_arg {
         let mut arg_values = Vec::with_capacity(args.len());
-        let mut next = args
-            .iter()
-            .find(|a| s_read!(a).r27c_argument(&s_read!(lu_dog)).is_empty())
-            .unwrap()
-            .clone();
+        let mut next = s_read!(lu_dog).exhume_argument(&next).unwrap();
 
         loop {
             let expr = s_read!(next).r37_expression(&s_read!(lu_dog))[0].clone();
@@ -426,6 +424,7 @@ fn eval_built_in_function_call(
     func: RefType<Function>,
     block_id: &usize,
     args: &[RefType<Argument>],
+    first_arg: Option<SarzakStorePtr>,
     arg_check: bool,
     span: &RefType<Span>,
     context: &mut Context,
@@ -503,13 +502,9 @@ fn eval_built_in_function_call(
             Vec::new()
         };
 
-        let arg_values = if !args.is_empty() {
+        let arg_values = if let Some(next) = first_arg {
             let mut arg_values = Vec::with_capacity(args.len());
-            let mut next = args
-                .iter()
-                .find(|a| s_read!(a).r27c_argument(&s_read!(lu_dog)).is_empty())
-                .unwrap()
-                .clone();
+            let mut next = s_read!(lu_dog).exhume_argument(&next).unwrap();
 
             loop {
                 let expr = s_read!(next).r37_expression(&s_read!(lu_dog))[0].clone();
