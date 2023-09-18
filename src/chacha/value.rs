@@ -18,44 +18,6 @@ use crate::{
     sarzak::{ObjectStore as SarzakStore, Ty},
     ChaChaError, Context, DwarfFloat, DwarfInteger, NewRef, RefType,
 };
-
-pub trait FutureValue: std::future::Future<Output = RefType<Value>> + std::fmt::Debug {
-    fn resolve(self) -> Self::Output;
-}
-
-impl FutureValue for Value {
-    fn resolve(self) -> Self::Output {
-        new_ref!(Value, self)
-    }
-}
-
-impl std::future::Future for Value {
-    type Output = RefType<Value>;
-
-    fn poll(
-        self: std::pin::Pin<&mut Self>,
-        _cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Self::Output> {
-        std::task::Poll::Ready(new_ref!(Value, self.clone()))
-    }
-}
-
-// impl std::future::Future for Value {
-//     type Output = RefType<Value>;
-
-//     fn poll(
-//         self: std::pin::Pin<&mut Self>,
-//         cx: &mut std::task::Context<'_>,
-//     ) -> std::task::Poll<Self::Output> {
-//         if let Value::Future(future) = *self {
-//             let future = s_read!(future);
-//             *future.poll(cx)
-//         } else {
-//             panic!("not a future")
-//         }
-//     }
-// }
-
 #[repr(C)]
 #[derive(Clone, Debug, StableAbi)]
 pub struct FfiRange {
@@ -180,7 +142,7 @@ impl fmt::Display for EnumVariant {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub enum Value {
     Boolean(bool),
     Char(char),
@@ -194,7 +156,7 @@ pub enum Value {
     /// why I need the inner Function to be behind a RefType<<T>>. It seems
     /// excessive, and yet I know I've looked into it before.
     Function(RefType<Function>),
-    Future(RefType<dyn FutureValue>),
+    Future(async_std::task::JoinHandle<RefType<Value>>),
     Integer(DwarfInteger),
     Lambda(RefType<Lambda>),
     Option(Option<RefType<Self>>),
@@ -215,6 +177,96 @@ pub enum Value {
     Unknown,
     Uuid(uuid::Uuid),
     Vector(Vec<RefType<Self>>),
+}
+
+// impl std::fmt::Debug for Value {
+//     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+//         match self {
+//             Self::Boolean(bool_) => write!(f, "{:?}", bool_),
+//             Self::Char(char_) => write!(f, "{:?}", char_),
+//             Self::Empty => write!(f, "()"),
+//             Self::Enumeration(var) => write!(f, "{:?}", var),
+//             Self::Error(e) => write!(f, "{}: {}", Colour::Red.bold().paint("error"), e),
+//             Self::Float(num) => write!(f, "{:?}", num),
+//             Self::Function(func) => write!(f, "{:?}", s_read!(func)),
+//             Self::Future(_) => write!(f, "<join_handle>"),
+//             Self::Integer(num) => write!(f, "{:?}", num),
+//             Self::Lambda(ƛ) => write!(f, "{:?}", s_read!(ƛ)),
+//             Self::Option(option) => match option {
+//                 Some(value) => write!(f, "Some({:?})", s_read!(value)),
+//                 None => write!(f, "None"),
+//             },
+//             Self::ParsedDwarf(ctx) => write!(f, "{:?}", ctx),
+//             Self::ProxyType {
+//                 module,
+//                 obj_ty,
+//                 id,
+//                 plugin,
+//             } => write!(
+//                 f,
+//                 "ProxyType {{ module: {}, obj_ty: {}, id: {}, plugin: {} }}",
+//                 module,
+//                 obj_ty,
+//                 id,
+//                 s_read!(plugin).name()
+//             ),
+//             Self::Range(range) => write!(f, "{:?}", range),
+//             Self::Store(store, plugin) => write!(
+//                 f,
+//                 "Store {{ store: {:?}, plugin: {} }}",
+//                 s_read!(store),
+//                 s_read!(plugin).name()
+//             ),
+//             Self::String(str_) => write!(f, "{:?}", str_),
+//             Self::Struct(ty) => write!(f, "{:?}", s_read!(ty)),
+//             Self::Table(table) => write!(f, "{:?}", table),
+//             Self::Thonk(name, number) => write!(f, "{:?} [{:?}]", name, number),
+//             Self::TupleEnum(te) => write!(f, "{:?}", s_read!(te)),
+//             Self::Unknown => write!(f, "<unknown>"),
+//             Self::Uuid(uuid) => write!(f, "{:?}", uuid),
+//             Self::Vector(vec) => write!(f, "{:?}", vec),
+//         }
+//     }
+// }
+
+impl Clone for Value {
+    fn clone(&self) -> Self {
+        match self {
+            Self::Boolean(bool_) => Self::Boolean(*bool_),
+            Self::Char(char_) => Self::Char(*char_),
+            Self::Empty => Self::Empty,
+            Self::Enumeration(var) => Self::Enumeration(var.clone()),
+            Self::Error(e) => Self::Error(e.clone()),
+            Self::Float(num) => Self::Float(*num),
+            Self::Function(func) => Self::Function(func.clone()),
+            Self::Future(_) => Self::Empty,
+            Self::Integer(num) => Self::Integer(*num),
+            Self::Lambda(ƛ) => Self::Lambda(ƛ.clone()),
+            Self::Option(option) => Self::Option(option.clone()),
+            Self::ParsedDwarf(ctx) => Self::ParsedDwarf(ctx.clone()),
+            Self::ProxyType {
+                module,
+                obj_ty,
+                id,
+                plugin,
+            } => Self::ProxyType {
+                module: module.clone(),
+                obj_ty: *obj_ty,
+                id: *id,
+                plugin: plugin.clone(),
+            },
+            Self::Range(range) => Self::Range(range.clone()),
+            Self::Store(store, plugin) => Self::Store(store.clone(), plugin.clone()),
+            Self::String(str_) => Self::String(str_.clone()),
+            Self::Struct(ty) => Self::Struct(ty.clone()),
+            Self::Table(table) => Self::Table(table.clone()),
+            Self::Thonk(name, number) => Self::Thonk(*name, *number),
+            Self::TupleEnum(te) => Self::TupleEnum(te.clone()),
+            Self::Unknown => Self::Unknown,
+            Self::Uuid(uuid) => Self::Uuid(*uuid),
+            Self::Vector(vec) => Self::Vector(vec.clone()),
+        }
+    }
 }
 
 impl From<Value> for FfiValue {

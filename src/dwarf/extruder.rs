@@ -2816,7 +2816,6 @@ pub(super) fn inter_expression(
             debug!("enum_name {:?}", full_enum_name);
 
             let x_path = XPath::new(Uuid::new_v4(), None, lu_dog);
-
             let mut elts = path
                 .iter()
                 .inspect(|ty| {

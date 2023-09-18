@@ -36,14 +36,14 @@ const FUNCTION_LOAD: &str = "load";
 const MERLIN: &str = "merlin";
 const SARZAK: &str = "sarzak";
 
-pub fn eval_function_call(
+pub fn eval_function_call<'a>(
     func: RefType<Function>,
     args: &[RefType<Argument>],
     first_arg: Option<SarzakStorePtr>,
     arg_check: bool,
     span: &RefType<Span>,
     context: &mut Context,
-    vm: &mut VM,
+    vm: &mut VM<'a>,
 ) -> Result<RefType<Value>> {
     context.increment_call_count();
 
@@ -53,13 +53,23 @@ pub fn eval_function_call(
     span!("eval_function_call");
 
     if s_read!(func).a_sink {
-        // let future =
-        // async { inner_eval_function_call(func, args, arg_check, span, context, vm).unwrap() };
-        // let future = new_ref!(Box<dyn FutureValue>, Box::new(future));
-        // let foo =         <RefType<dyn FutureValue> as NewRef<dyn FutureValue>>::new_ref(future);
-        // let future = std::rc::Rc::new(std::cell::RefCell::new(future));
-        // Ok(new_ref!(Value, Value::Future(future)))
-        Ok(new_ref!(Value, Value::Empty))
+        let args = args.to_owned();
+        let span = span.to_owned();
+        let mut context = context.to_owned();
+        // let mut vm = vm.to_owned();
+        let future = async move {
+            let mem = context.memory().clone();
+            let mut vm = VM::new(&mem);
+            inner_eval_function_call(func, &args, arg_check, &span, &mut context, &mut vm).unwrap()
+        };
+        let foo = async_std::task::spawn_local(future);
+
+        // let value_ref = Box::new(future);
+
+        // let static_ref: &'static Box<dyn std::future::Future<Output = RefType<Value>>> =
+        // unsafe { std::mem::transmute(value_ref) };
+
+        Ok(new_ref!(Value, Value::Future(foo)))
     } else {
         inner_eval_function_call(func, args, first_arg, arg_check, span, context, vm)
     }

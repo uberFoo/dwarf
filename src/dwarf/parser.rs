@@ -4842,8 +4842,6 @@ mod tests {
 
         let ast = parse_line(src);
 
-        // dbg!(&ast);
-
         assert!(ast.is_ok());
         // assert_eq!(ast, Ok(Some((Statement::Empty, (13..14)))));
     }
@@ -5010,8 +5008,6 @@ mod tests {
 
         let ast = parse_dwarf("test_import", src);
 
-        // dbg!(&ast);
-
         assert!(ast.is_ok());
     }
 
@@ -5059,8 +5055,6 @@ mod tests {
         "#;
 
         let ast = parse_dwarf("xyzzy", src);
-
-        // dbg!(&ast);
 
         assert!(ast.is_ok());
     }
@@ -5116,8 +5110,6 @@ mod tests {
         "#;
 
         let ast = parse_dwarf("test_impl", src);
-
-        // dbg!(&ast);
 
         assert!(ast.is_ok());
     }
@@ -5228,8 +5220,6 @@ mod tests {
 
         let ast = parse_dwarf("test_for", src);
 
-        // dbg!(&ast);
-
         assert!(ast.is_ok());
     }
 
@@ -5240,8 +5230,6 @@ mod tests {
         let src = "a.id;";
 
         let ast = parse_line(src);
-
-        // dbg!(&ast);
 
         assert!(ast.is_ok());
     }
@@ -5262,8 +5250,6 @@ mod tests {
 
         let ast = parse_dwarf("test_return", src);
 
-        // dbg!(&ast);
-
         assert!(ast.is_ok());
     }
 
@@ -5283,8 +5269,6 @@ mod tests {
 
         let ast = parse_dwarf("test_fib", src);
 
-        // dbg!(&ast);
-
         assert!(ast.is_ok());
     }
 
@@ -5299,7 +5283,6 @@ mod tests {
         let ast = parse_line(src);
 
         assert!(ast.is_ok());
-        // dbg!(ast);
     }
 
     #[test]
@@ -5313,7 +5296,6 @@ mod tests {
         let ast = parse_line(src);
 
         assert!(ast.is_ok());
-        // dbg!(ast);
     }
 
     #[test]
@@ -5335,7 +5317,6 @@ mod tests {
 
         let ast = parse_dwarf("test_struct_expression", src);
 
-        // dbg!(&ast);
         assert!(ast.is_ok());
     }
 
@@ -5354,7 +5335,6 @@ mod tests {
         "#;
 
         let ast = parse_dwarf("test_assignment", src);
-        // dbg!(&ast);
         assert!(ast.is_ok());
     }
 
@@ -5371,7 +5351,6 @@ mod tests {
         "#;
 
         let ast = parse_dwarf("test_index_expression", src);
-        // dbg!(&ast);
         assert!(ast.is_ok());
     }
 
@@ -5388,7 +5367,6 @@ mod tests {
         "#;
 
         let ast = parse_dwarf("test_trailing_commas", src);
-        // dbg!(&ast);
         assert!(ast.is_ok());
     }
 
@@ -5523,7 +5501,6 @@ mod tests {
         "#;
 
         let ast = parse_dwarf("test_plain_enum", src);
-        dbg!(&ast);
         assert!(ast.is_ok());
     }
 

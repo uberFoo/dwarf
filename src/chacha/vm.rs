@@ -211,7 +211,7 @@ impl<'a> fmt::Display for CallFrame<'a> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 // pub struct VM<'b> {
 pub struct VM<'b> {
     stack: Vec<RefType<Value>>,

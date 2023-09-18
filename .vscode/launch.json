@@ -89,7 +89,7 @@
                 }
             },
             "args": [
-                "tests/harness/generics/structure.tao"
+                "tests/harness/chacha/async/handler.tao"
             ],
             "cwd": "${workspaceFolder}",
             "env": {
