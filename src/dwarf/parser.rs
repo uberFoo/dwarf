@@ -148,6 +148,7 @@ fn lexer() -> impl Parser<char, Vec<Spanned<Token>>, Error = Simple<char>> {
         "as" => Token::As,
         "asm" => Token::Asm,
         "async" => Token::Async,
+        "await" => Token::Await,
         "bool" => Token::Type(Type::Boolean),
         "debugger" => Token::Debugger,
         "else" => Token::Else,

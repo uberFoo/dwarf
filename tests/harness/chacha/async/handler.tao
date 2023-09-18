@@ -37,7 +37,7 @@ impl Light {
         }
     }
 
-    fn send_event(self, event: Event) {
+    async fn send_event(self, event: Event) {
         match event {
             Event::PowerEvent(power_event) => {
                 match power_event {
@@ -84,8 +84,9 @@ fn main() {
     let light = Light::new();
     assert_off(light);
 
+    // let b = async {
     let event = Event::PowerEvent(PowerEvent::On);
-    light.send_event(event);
+    light.send_event(event).await;
     assert_on(light);
 
     let event = Event::PowerEvent(PowerEvent::Off);
@@ -94,6 +95,8 @@ fn main() {
 
     light.send_event(event);
     assert_off(light);
+    // };
+    // b.await;
 }
 
 fn assert_off(light: Light) {

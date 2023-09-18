@@ -66,6 +66,7 @@ pub enum Token {
     As,
     Asm,
     Async,
+    Await,
     Bool(bool),
     Debugger,
     Else,
