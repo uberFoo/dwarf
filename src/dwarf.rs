@@ -17,9 +17,7 @@ use uuid::Uuid;
 
 use crate::{
     lu_dog::{
-        store::ObjectStore as LuDogStore,
-        types::{ValueType, WoogOption},
-        Lambda, List, Reference,
+        store::ObjectStore as LuDogStore, types::ValueType, Generic, Lambda, List, Reference,
     },
     ModelStore, RefType,
 };
@@ -103,6 +101,7 @@ impl fmt::Display for Token {
             Self::As => write!(f, "as"),
             Self::Asm => write!(f, "asm!"),
             Self::Async => write!(f, "async"),
+            Self::Await => write!(f, "await"),
             Self::Bool(bool_) => write!(f, "{}", bool_),
             Self::Debugger => write!(f, "debugger"),
             Self::Else => write!(f, "else"),
@@ -141,14 +140,21 @@ pub enum Type {
     Empty,
     Float,
     Fn(Vec<Spanned<Self>>, Box<Spanned<Self>>),
+    Generic(Spanned<String>),
     Integer,
     List(Box<Spanned<Self>>),
-    Option(Box<Spanned<Self>>),
+    Path(Vec<Spanned<Self>>),
     Reference(Box<Spanned<Self>>),
     Self_,
     String,
     Unknown,
-    UserType(Spanned<String>),
+    /// User Type
+    ///
+    /// Almost everything with a name falls into this category.
+    ///
+    /// The first element is the name of the type, and the second is a list of
+    /// generic types.
+    UserType(Spanned<String>, Vec<Spanned<Self>>),
     Uuid,
 }
 
@@ -168,14 +174,36 @@ impl fmt::Display for Type {
                 }
                 write!(f, ") -> {}", return_.0)
             }
+            Self::Generic(name) => write!(f, "{}", name.0),
             Self::Integer => write!(f, "int"),
             Self::List(type_) => write!(f, "[{}]", type_.0),
-            Self::Option(type_) => write!(f, "Option<{}>", type_.0),
+            Self::Path(path) => {
+                for (i, ty) in path.iter().enumerate() {
+                    if i != 0 {
+                        write!(f, "::")?;
+                    }
+                    write!(f, "{}", ty.0)?;
+                }
+                Ok(())
+            }
             Self::Reference(type_) => write!(f, "&{}", type_.0),
             Self::Self_ => write!(f, "Self"),
             Self::String => write!(f, "string"),
             Self::Unknown => write!(f, "<unknown>"),
-            Self::UserType(type_) => write!(f, "{}", type_.0),
+            Self::UserType(type_, inner) => {
+                if !inner.is_empty() {
+                    write!(f, "{}<", type_.0)?;
+                    for (i, ty) in inner.iter().enumerate() {
+                        if i != 0 {
+                            write!(f, ", ")?;
+                        }
+                        write!(f, "{}", ty.0)?;
+                    }
+                    write!(f, ">")
+                } else {
+                    write!(f, "{}", type_.0)
+                }
+            }
             Self::Uuid => write!(f, "Uuid"),
         }
     }
@@ -217,6 +245,10 @@ impl Type {
                 let ƛ = Lambda::new(None, &return_, store);
                 Ok(ValueType::new_lambda(&ƛ, store))
             }
+            Type::Generic(name) => {
+                let generic = Generic::new(name.0.to_owned(), None, None, store);
+                Ok(ValueType::new_generic(&generic, store))
+            }
             Type::Integer => {
                 let ty = Ty::new_integer(sarzak);
                 Ok(ValueType::new_ty(&ty, store))
@@ -226,11 +258,7 @@ impl Type {
                 let list = List::new(&ty, store);
                 Ok(ValueType::new_list(&list, store))
             }
-            Type::Option(type_) => {
-                let ty = type_.0.into_value_type(&type_.1, store, _models, sarzak)?;
-                let option = WoogOption::new_z_none(&ty, store);
-                Ok(ValueType::new_woog_option(&option, store))
-            }
+            Type::Path(_) => unimplemented!(),
             Type::Reference(type_) => {
                 let ty = type_.0.into_value_type(&type_.1, store, _models, sarzak)?;
                 let reference = Reference::new(Uuid::new_v4(), false, &ty, store);
@@ -242,7 +270,7 @@ impl Type {
                 Ok(ValueType::new_ty(&ty, store))
             }
             Type::Unknown => Ok(ValueType::new_unknown(store)),
-            Type::UserType(type_) => {
+            Type::UserType(type_, generics) => {
                 let name = &type_.0;
 
                 // This is a special case for Uuid, which is a built-in type.
@@ -266,7 +294,6 @@ impl Type {
                     log::debug!(target: "dwarf", "into_value_type, UserType, ty: {ty:?}");
                     Ok(ValueType::new_ty(&ty, store))
                 } else {
-                    log::error!(target: "dwarf", "Unknown type");
                     Err(vec![DwarfError::UnknownType {
                         ty: name.to_owned(),
                         span: span.to_owned(),
@@ -366,14 +393,20 @@ pub enum Pattern {
 impl From<Pattern> for Expression {
     fn from(pattern: Pattern) -> Self {
         match pattern {
+            // transmogrify an identifier into a local variable
             Pattern::Identifier((name, _span)) => Expression::LocalVariable(name),
+            // 🚧 Need to do something about this.
             Pattern::Literal((_value, _span)) => {
                 unreachable!()
             }
+            // Here we turn a path into a unit enum, which is really just a static
+            // method call with storage.
             Pattern::PathPattern((path, span)) => {
                 let mut path = path.to_owned();
                 let field = path.pop().unwrap();
-                let field = if let Type::UserType(field) = field {
+                // 🚧 I'm not sure how this would play with generics. I don't
+                // think that it's allowed.
+                let field = if let Type::UserType(field, _generics) = field {
                     field
                 } else {
                     unreachable!();
@@ -393,7 +426,7 @@ impl From<Pattern> for Expression {
 
                 let (mut path, _span) = path;
                 let name = path.pop().unwrap();
-                let name = if let Type::UserType(name) = name {
+                let name = if let Type::UserType(name, _generics) = name {
                     name
                 } else {
                     unreachable!();
@@ -429,6 +462,7 @@ pub enum Expression {
     Assignment(Box<Spanned<Self>>, Box<Spanned<Self>>),
     Bang(Box<Spanned<Self>>),
     Block(
+        BlockType,
         Vec<Spanned<Statement>>,
         /// A list of variable names to insert into the top of the block
         Vec<String>,
@@ -501,7 +535,7 @@ pub struct Item {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub enum FunctionType {
+pub enum BlockType {
     Async,
     Sync,
 }
@@ -511,13 +545,13 @@ pub enum InnerItem {
     Enum(
         Spanned<String>,
         Vec<(Spanned<String>, Option<EnumField>)>,
-        Option<Generics>,
+        Generics,
     ),
     /// A Function Definition
     ///
     /// async, name, Vec<(Parameter Name, Parameter Type)>, Return Type, Vec<Statement>
     Function(
-        FunctionType,
+        BlockType,
         Spanned<String>,
         Vec<(Spanned<String>, Spanned<Type>)>,
         Spanned<Type>,
@@ -532,7 +566,7 @@ pub enum InnerItem {
     Struct(
         Spanned<String>,
         Vec<(Spanned<String>, Spanned<Type>)>,
-        Option<Generics>,
+        Generics,
     ),
 }
 

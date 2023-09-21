@@ -143,7 +143,6 @@ cfg_if::cfg_if! {
    }
 }
 
-// This is ugly, but it's the only way I could find to get the macro to work.
 pub use ref_read as s_read;
 pub(crate) use ref_write as s_write;
 
@@ -299,4 +298,22 @@ impl Default for Context {
             dirty: Vec::default(),
         }
     }
+}
+
+struct Node<T> {
+    value: T,
+    next: Option<Box<Node<T>>>,
+}
+
+impl<T> Node<T> {
+    fn new(value: T) -> Self {
+        Self { value, next: None }
+    }
+}
+
+fn foo() {
+    let a = Node {
+        value: 42,
+        next: Option::<Box<Node<usize>>>::None,
+    };
 }

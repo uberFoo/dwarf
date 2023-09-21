@@ -149,7 +149,7 @@ pub fn start_repl(mut context: Context, is_uber: bool) -> Result<(), Error> {
                                 let value = format!("{}", s_read!(value));
                                 print!("\n'{}'", result_style.paint(value));
 
-                                let ty = PrintableValueType(&ty, &context);
+                                let ty = PrintableValueType(true, &ty, &context);
                                 let ty = format!("{}", ty);
                                 println!("\t  ──➤  {}", type_style.paint(ty));
                             }

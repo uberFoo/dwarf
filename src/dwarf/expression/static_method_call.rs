@@ -12,7 +12,7 @@ use crate::{
             lookup_woog_struct_method_return_type, typecheck, update_span_value, Context,
             DeSanitize, ExprSpan,
         },
-        DwarfInteger, Expression as ParserExpression, PrintableValueType, Type,
+        DwarfInteger, Expression as ParserExpression, Type,
     },
     lu_dog::{
         store::ObjectStore as LuDogStore, Argument, Block, Call, DataStructure, EnumFieldEnum,
@@ -26,11 +26,8 @@ use crate::{
     TIME, UUID_TYPE,
 };
 
-// Let's just say that I don't get this lint. The docs say you have to box it
-// first, but what about when it's already boxed? I don't get it.
-#[allow(clippy::borrowed_box)]
 pub fn inter(
-    path: &Box<ParserExpression>,
+    path: &ParserExpression,
     method: &str,
     span: RefType<Span>,
     params: &[(ParserExpression, Range<usize>)],
@@ -38,7 +35,8 @@ pub fn inter(
     context: &mut Context,
     lu_dog: &mut LuDogStore,
 ) -> Result<(ExprSpan, RefType<ValueType>)> {
-    let path = if let ParserExpression::PathInExpression(path) = path.as_ref() {
+    let save_path = &path;
+    let path = if let ParserExpression::PathInExpression(path) = path {
         path
     } else {
         panic!(
@@ -52,7 +50,7 @@ pub fn inter(
     let type_vec = path
         .iter()
         .map(|p| {
-            if let Type::UserType((obj, span)) = p {
+            if let Type::UserType((obj, span), _generics) = p {
                 (obj.de_sanitize().to_owned(), span)
             } else {
                 panic!(
@@ -142,47 +140,27 @@ pub fn inter(
                 ASSERT => {
                     let ty = Ty::new_boolean(sarzak);
                     // 🚧 Ideally we'd cache this when we startup.
-                    let ty = lu_dog
-                        .iter_value_type()
-                        .find(|t| s_read!(t).subtype == ValueTypeEnum::Ty(ty.read().unwrap().id()))
-                        .unwrap();
                     ValueType::new_ty(&Ty::new_boolean(sarzak), lu_dog)
                 }
                 ASSERT_EQ => {
                     let ty = Ty::new_boolean(sarzak);
                     // 🚧 Ideally we'd cache this when we startup.
-                    let ty = lu_dog
-                        .iter_value_type()
-                        .find(|t| s_read!(t).subtype == ValueTypeEnum::Ty(ty.read().unwrap().id()))
-                        .unwrap();
                     ValueType::new_ty(&Ty::new_boolean(sarzak), lu_dog)
                 }
                 COMPLEX_EX => {
                     let ty = Ty::new_float(sarzak);
                     // 🚧 Ideally we'd cache this when we startup.
-                    let ty = lu_dog
-                        .iter_value_type()
-                        .find(|t| s_read!(t).subtype == ValueTypeEnum::Ty(ty.read().unwrap().id()))
-                        .unwrap();
                     ValueType::new_ty(&Ty::new_float(sarzak), lu_dog)
                 }
                 EPS => {
                     let ty = Ty::new_float(sarzak);
                     // 🚧 Ideally we'd cache this when we startup.
-                    let ty = lu_dog
-                        .iter_value_type()
-                        .find(|t| s_read!(t).subtype == ValueTypeEnum::Ty(ty.read().unwrap().id()))
-                        .unwrap();
                     ValueType::new_ty(&Ty::new_float(sarzak), lu_dog)
                 }
                 SLEEP => ValueType::new_empty(lu_dog),
                 TIME => {
                     let ty = Ty::new_float(sarzak);
                     // 🚧 Ideally we'd cache this when we startup.
-                    let ty = lu_dog
-                        .iter_value_type()
-                        .find(|t| s_read!(t).subtype == ValueTypeEnum::Ty(ty.read().unwrap().id()))
-                        .unwrap();
                     ValueType::new_ty(&Ty::new_float(sarzak), lu_dog)
                 }
                 _ => {
@@ -298,13 +276,24 @@ pub fn inter(
                         // field and continue.
                         let foo = s_read!(ty);
                         if let ValueTypeEnum::Generic(_) = foo.subtype {
-                            let type_name = if !type_name.contains('<') {
-                                let pvt = PrintableValueType(&expr_ty, context, lu_dog);
-                                format!("{type_name}<{pvt}>")
-                            } else {
-                                type_name.to_owned()
-                            };
-                            let (new_enum, _) = create_generic_enum(&type_name, lu_dog);
+                            let type_name = path.iter().map(|p| {
+                                if let Type::UserType((obj, _), generics) = p {
+                                    let mut name = obj.de_sanitize().to_owned();
+                                    let generics = generics.iter().map(|g| {
+                                        g.0.to_string()
+                                    }).collect::<Vec<_>>().join(", ");
+                                    if !generics.is_empty() {
+                                        name.push_str("<");
+                                        name.push_str(&generics);
+                                        name.push_str(">");
+                                    }
+                                    name
+                                } else {
+                                    panic!("I don't think that we should ever see anything other than a user type here: {:?}", p);
+                                }
+                            }).collect::<Vec<_>>().join("");
+
+                            let (new_enum, _) = create_generic_enum(&type_name, save_path, lu_dog);
                             (new_enum, expr)
                         } else {
                             typecheck(

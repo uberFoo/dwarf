@@ -14,14 +14,25 @@ fn main() {
         chacha::assert_eq(true, false);
         1
     };
-    print(z);
+    chacha::assert_eq(z, 0);
+
+    let x = Option::<string>::Some("Hello world!");
+    let z = if let Option::<string>::Some(str) = x {
+        print("Some({0})\n".format(str));
+        chacha::assert_eq(true, true);
+        0
+    } else {
+        print("None\n");
+        chacha::assert_eq(true, false);
+        1
+    };
     chacha::assert_eq(z, 0);
 
     let y = Option::<int>::Some(42);
     // let y = Option::Some::<int>(42);
     let z = if let Option::<int>::Some(y) = y {
         // if let Option::Some::<int>(y) = y {
-        print("{0}\n".format(y));
+        print("Some({0})\n".format(y));
         chacha::assert_eq(true, true);
         y
     } else {
@@ -31,4 +42,18 @@ fn main() {
         // 0
     };
     chacha::assert_eq(z, 42);
+
+    let y = Option::<int>::None;
+    // let y = Option::Some::<int>(42);
+    let z = if let Option::<int>::None = y {
+        print("None\n");
+        chacha::assert_eq(true, true);
+        y
+    } else {
+        print("Some\n");
+        chacha::assert_eq(true, false);
+        // 🚧 This shouldn't typecheck.
+        // 0
+    };
+    chacha::assert_eq(z, Option::<int>::None);
 }

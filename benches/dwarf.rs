@@ -58,6 +58,11 @@ fn fib(c: &mut Criterion) {
     });
 }
 
+fn vm_28(c: &mut Criterion) {
+    let _client = Client::start();
+    c.bench_function("vm-fib-28", |b| b.iter(|| start_vm(28.into()).unwrap()));
+}
+
 fn vm_25(c: &mut Criterion) {
     let _client = Client::start();
     c.bench_function("vm-fib-25", |b| b.iter(|| start_vm(25.into()).unwrap()));
@@ -73,5 +78,5 @@ fn vm_5(c: &mut Criterion) {
     c.bench_function("vm-fib-5", |b| b.iter(|| start_vm(5.into()).unwrap()));
 }
 
-criterion_group!(benches, mandelbrot, fib, vm_25, vm_17, vm_5);
+criterion_group!(benches, mandelbrot, fib, vm_28, vm_25, vm_17, vm_5);
 criterion_main!(benches);

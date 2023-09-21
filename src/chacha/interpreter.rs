@@ -803,8 +803,8 @@ fn typecheck(
     if lhs_t == rhs_t {
         Ok(())
     } else {
-        let lhs = PrintableValueType(lhs, context);
-        let rhs = PrintableValueType(rhs, context);
+        let lhs = PrintableValueType(true, lhs, context);
+        let rhs = PrintableValueType(true, rhs, context);
         Err(ChaChaError::TypeMismatch {
             expected: lhs.to_string(),
             found: rhs.to_string(),

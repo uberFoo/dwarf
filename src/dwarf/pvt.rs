@@ -7,7 +7,7 @@ use log::error;
 
 use crate::{
     dwarf::extruder::Context,
-    lu_dog::{store::ObjectStore as LuDogStore, ValueType, ValueTypeEnum, WoogOptionEnum},
+    lu_dog::{store::ObjectStore as LuDogStore, ValueType, ValueTypeEnum},
     s_read,
     sarzak::Ty,
     RefType,
@@ -23,7 +23,7 @@ pub(super) struct PrintableValueType<'d, 'a, 'b>(
 impl<'d, 'a, 'b> fmt::Display for PrintableValueType<'d, 'a, 'b> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         const TY_CLR: Colour = Colour::Purple;
-        const _TY_WARN_CLR: Colour = Colour::Yellow;
+        const TY_WARN_CLR: Colour = Colour::Yellow;
         const _TY_ERR_CLR: Colour = Colour::Red;
 
         let value = s_read!(self.0);
@@ -36,15 +36,27 @@ impl<'d, 'a, 'b> fmt::Display for PrintableValueType<'d, 'a, 'b> {
                 debug!("enumeration {:?}", enumeration);
                 let enumeration = lu_dog.exhume_enumeration(enumeration).unwrap();
                 let enumeration = s_read!(enumeration);
-                write!(f, "{}", enumeration.name)
+                dbg!(&enumeration.name);
+                write!(f, "{}", TY_WARN_CLR.paint(&enumeration.name))
             }
             ValueTypeEnum::Empty(_) => write!(f, "{}", TY_CLR.italic().paint("()")),
             ValueTypeEnum::XError(_) => write!(f, "{}", TY_CLR.italic().paint("<error>")),
             ValueTypeEnum::Function(_) => write!(f, "{}", TY_CLR.italic().paint("<function>")),
+            ValueTypeEnum::XFuture(ref id) => {
+                let future = lu_dog.exhume_x_future(id).unwrap();
+                let inner = s_read!(future).r2_value_type(lu_dog)[0].clone();
+                let inner = PrintableValueType(&inner, context, lu_dog);
+                write!(
+                    f,
+                    "{}<{}>",
+                    TY_WARN_CLR.italic().paint("Future"),
+                    inner.to_string()
+                )
+            }
             ValueTypeEnum::Generic(ref g) => {
                 let g = lu_dog.exhume_generic(g).unwrap();
                 let g = s_read!(g);
-                write!(f, "<{}>", g.name)
+                write!(f, "<{}>", TY_CLR.italic().paint(g.name.as_str()))
             }
             ValueTypeEnum::Import(ref import) => {
                 let import = lu_dog.exhume_import(import).unwrap();
@@ -110,25 +122,11 @@ impl<'d, 'a, 'b> fmt::Display for PrintableValueType<'d, 'a, 'b> {
                 }
             }
             ValueTypeEnum::Unknown(_) => write!(f, "<unknown>"),
-            ValueTypeEnum::WoogOption(ref option) => {
-                let option = lu_dog.exhume_woog_option(option).unwrap();
-                let option = s_read!(option);
-                match option.subtype {
-                    WoogOptionEnum::ZNone(_) => write!(f, "None"),
-                    WoogOptionEnum::ZSome(ref some) => {
-                        let some = lu_dog.exhume_z_some(some).unwrap();
-                        let some = s_read!(some);
-                        let value = s_read!(some.r23_x_value(lu_dog)[0]).clone();
-                        let ty = value.r24_value_type(lu_dog)[0].clone();
-                        write!(f, "Some({})", PrintableValueType(&ty, context, lu_dog))
-                    }
-                }
-            }
             ValueTypeEnum::WoogStruct(ref woog_struct) => {
                 debug!("woog_struct {:?}", woog_struct);
                 let woog_struct = lu_dog.exhume_woog_struct(woog_struct).unwrap();
                 let woog_struct = s_read!(woog_struct);
-                write!(f, "{}", woog_struct.name)
+                write!(f, "{}", TY_WARN_CLR.paint(&woog_struct.name))
             }
             ValueTypeEnum::ZObjectStore(ref id) => {
                 let zobject_store = lu_dog.exhume_z_object_store(id).unwrap();

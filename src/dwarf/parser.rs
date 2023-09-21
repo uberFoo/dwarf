@@ -5,9 +5,8 @@ use log;
 use rustc_hash::FxHashMap as HashMap;
 
 use crate::dwarf::{
-    generic_to_string, Attribute, DwarfFloat, EnumField, Expression as DwarfExpression,
-    FunctionType, Generics, InnerAttribute, InnerItem, Item, Pattern, Spanned, Statement, Token,
-    Type,
+    generic_to_string, Attribute, BlockType, DwarfFloat, EnumField, Expression as DwarfExpression,
+    Generics, InnerAttribute, InnerItem, Item, Pattern, Spanned, Statement, Token, Type,
 };
 
 use super::{error::DwarfError, DwarfInteger};
@@ -274,7 +273,7 @@ impl DwarfParser {
             path_span.end = ident.1.end;
 
             debug!("ident", ident);
-            path.push(ident.clone());
+            path.push(Type::UserType(ident.clone(), vec![]));
 
             match self.match_tokens(&[Token::Punct(':'), Token::Punct('('), Token::Punct('{')]) {
                 Some((Token::Punct(':'), span)) => match self.match_tokens(&[Token::Punct(':')]) {
@@ -284,9 +283,7 @@ impl DwarfParser {
                         let generics = self.parse_generics()?;
                         if let Some(generics) = generics {
                             path.pop();
-                            let generic_string = generic_to_string(&generics);
-                            let generic_span = ident.1.start..generic_string.1.end;
-                            path.push((format!("{}{}", ident.0, generic_string.0), generic_span));
+                            path.push(Type::UserType(ident.clone(), generics.0));
 
                             if self.match_tokens(&[Token::Punct(':')]).is_none() {
                                 let err = Simple::expected_input_found(
@@ -332,11 +329,7 @@ impl DwarfParser {
                     }
                     match self.match_tokens(&[Token::Punct(')')]) {
                         Some((Token::Punct(')'), _)) => {
-                            let types = path
-                                .iter()
-                                .map(|p| Type::UserType(p.clone()))
-                                .collect::<Vec<_>>();
-                            let path = Pattern::PathPattern((types, path_span));
+                            let path = Pattern::PathPattern((path, path_span));
                             debug!("path", path);
                             return Ok(Some((
                                 Pattern::TupleStruct(Box::new(path), (args, args_span)),
@@ -378,11 +371,15 @@ impl DwarfParser {
         if path.is_empty() {
             Ok(None)
         } else if path.len() == 1 {
-            Ok(Some((Pattern::Identifier(path[0].clone()), path_span)))
+            let ty = if let Type::UserType(ty, _) = path[0].clone() {
+                ty
+            } else {
+                unreachable!()
+            };
+            Ok(Some((Pattern::Identifier(ty), path_span)))
         } else {
-            let types: Vec<_> = path.into_iter().map(Type::UserType).collect();
             Ok(Some((
-                Pattern::PathPattern((types, path_span.clone())),
+                Pattern::PathPattern((path, path_span.clone())),
                 path_span,
             )))
         }
@@ -1946,7 +1943,7 @@ impl DwarfParser {
         // We just can't be returning a PathInExpression an an Expression.
         let lhs = if let Some(((DwarfExpression::PathInExpression(mut path), span), _)) = lhs {
             let method_name = path.pop().unwrap();
-            let field_name = if let Type::UserType(name) = method_name {
+            let field_name = if let Type::UserType(name, _generics) = method_name {
                 name
             } else {
                 unreachable!()
@@ -3043,7 +3040,7 @@ impl DwarfParser {
         }
 
         let mut path = if let (DwarfExpression::LocalVariable(name), span) = &path.0 {
-            vec![Type::UserType((name.to_owned(), span.to_owned()))]
+            vec![Type::UserType((name.to_owned(), span.to_owned()), vec![])]
         } else if let (DwarfExpression::PathInExpression(path), _) = &path.0 {
             path.to_owned()
         } else {
@@ -3058,8 +3055,7 @@ impl DwarfParser {
 
         if let Some(ident) = self.parse_ident() {
             if let Some(g) = self.parse_generics()? {
-                let new_name = format!("{}{}", ident.0, generic_to_string(&g).0);
-                let new_type = Type::UserType((new_name, ident.1.start..g.1.end));
+                let new_type = Type::UserType(ident, g.0);
                 path.push(new_type);
 
                 debug!("exit ok");
@@ -3072,7 +3068,7 @@ impl DwarfParser {
                     PATH,
                 )))
             } else {
-                path.push(Type::UserType(ident));
+                path.push(Type::UserType(ident, vec![]));
 
                 debug!("exit ok");
 
@@ -3085,15 +3081,13 @@ impl DwarfParser {
                 )))
             }
         } else if let Some(g) = self.parse_generics()? {
-            let last_type = path.pop().unwrap();
-            let new_name = format!("{}{}", last_type, generic_to_string(&g).0);
-            let span = if let Type::UserType((_, span)) = &last_type {
-                span.to_owned()
+            let mut last_type = path.pop().unwrap();
+            if let Type::UserType((_, _), ref mut generics) = &mut last_type {
+                *generics = g.0;
             } else {
                 unreachable!()
-            };
-            let new_type = Type::UserType((new_name, span.start..g.1.end));
-            path.push(new_type);
+            }
+            path.push(last_type);
 
             debug!("exit ok");
 
@@ -3151,7 +3145,7 @@ impl DwarfParser {
         };
 
         let method_name = path.pop().unwrap();
-        let method_name = if let Type::UserType(name) = method_name {
+        let method_name = if let Type::UserType(name, _generics) = method_name {
             name
         } else {
             unreachable!()
@@ -3357,7 +3351,7 @@ impl DwarfParser {
         };
 
         let method_name = path.pop().unwrap();
-        let field_name = if let Type::UserType(name) = method_name {
+        let field_name = if let Type::UserType(name, _generics) = method_name {
             name
         } else {
             unreachable!()
@@ -3438,10 +3432,28 @@ impl DwarfParser {
             return Ok(None);
         };
 
-        if self.match_tokens(&[Token::Punct('{')]).is_none() {
-            debug!("parse_block_expression: no opening brace");
+        let start_block = self.match_tokens(&[Token::Punct('{'), Token::Async]);
+        if start_block.is_none() {
+            debug!("exit parse_block: no '{' or async");
             return Ok(None);
         }
+        let block_ty = if let Some((Token::Async, _)) = start_block {
+            // Make sure that we parse on open curly if we have parsed `async`.
+            if self.match_tokens(&[Token::Punct('{')]).is_none() {
+                let token = self.previous().unwrap();
+                let err = Simple::expected_input_found(
+                    token.1.clone(),
+                    [Some("'{'".to_owned())],
+                    Some(token.0.to_string()),
+                );
+                debug!("exit parse_function: no '{'");
+                return Err(Box::new(err));
+            } else {
+                BlockType::Async
+            }
+        } else {
+            BlockType::Sync
+        };
 
         let mut statements = Vec::new();
         let mut end = false;
@@ -3502,7 +3514,7 @@ impl DwarfParser {
 
         Ok(Some((
             (
-                DwarfExpression::Block(statements, vec![], vec![]),
+                DwarfExpression::Block(block_ty, statements, vec![], vec![]),
                 start..self.previous().unwrap().1.end,
             ),
             PATH,
@@ -3535,10 +3547,10 @@ impl DwarfParser {
                 debug!("exit parse_function: no fn");
                 return Err(Box::new(err));
             } else {
-                FunctionType::Async
+                BlockType::Async
             }
         } else {
-            FunctionType::Sync
+            BlockType::Sync
         };
 
         let name = if let Some(ident) = self.parse_ident() {
@@ -4064,29 +4076,15 @@ impl DwarfParser {
 
         // Match User Defined Type
         if let Some(ident) = self.parse_ident() {
-            let ident = if let Ok(Some(generics)) = self.parse_generics() {
-                let span = ident.1;
-                let mut ident = ident.0.to_owned();
-                ident.push('<');
-                let mut first_time = true;
-                for (name, _) in generics.0 {
-                    if first_time {
-                        first_time = false;
-                    } else {
-                        ident.push_str(", ");
-                    }
-                    ident.push_str(&name.to_string());
-                }
-
-                ident.push('>');
-                (ident, span)
+            let inner = if let Ok(Some(generics)) = self.parse_generics() {
+                generics.0
             } else {
-                ident
+                vec![]
             };
             debug!("exit parse_type: user defined", ident);
             return Ok(Some((
-                Type::UserType(ident),
-                start..self.peek().unwrap().1.end,
+                Type::UserType(ident, inner),
+                start..self.peek().unwrap().1.start,
             )));
         }
 
@@ -4095,7 +4093,7 @@ impl DwarfParser {
 
     /// Parse a generic declaration
     ///
-    /// Basically the <T> in `fn foo<T>()`
+    /// Basically the `<T>` in `fn foo<T>()`
     fn parse_generics(&mut self) -> Result<Option<Generics>> {
         let start = if let Some(tok) = self.peek() {
             tok.1.start
@@ -4111,8 +4109,12 @@ impl DwarfParser {
 
         while !self.at_end() && self.match_tokens(&[Token::Punct('>')]).is_none() {
             match self.parse_type() {
-                Ok(Some(generic)) => {
-                    generics.push(generic);
+                Ok(Some((Type::UserType(generic, _), span))) => {
+                    generics.push((Type::Generic(generic), span));
+                    let _ = self.match_tokens(&[Token::Punct(',')]);
+                }
+                Ok(Some(a)) => {
+                    generics.push(a);
                     let _ = self.match_tokens(&[Token::Punct(',')]);
                 }
                 Ok(None) => {
@@ -4168,7 +4170,11 @@ impl DwarfParser {
             return Err(Box::new(err));
         };
 
-        let generics = self.parse_generics()?;
+        let generics = if let Some(generics) = self.parse_generics()? {
+            generics
+        } else {
+            (vec![], 0..0)
+        };
 
         let fields = if self.match_tokens(&[Token::Punct('{')]).is_some() {
             let mut fields = Vec::new();
@@ -4274,7 +4280,7 @@ impl DwarfParser {
         };
 
         if self.match_tokens(&[Token::Punct('{')]).is_none() {
-            debug!("parse_block_expression: no opening brace");
+            debug!("parse_match_expression: no opening brace");
             return Ok(None);
         }
 
@@ -4414,7 +4420,11 @@ impl DwarfParser {
             return Err(Box::new(err));
         };
 
-        let generics = self.parse_generics()?;
+        let generics = if let Some(generics) = self.parse_generics()? {
+            generics
+        } else {
+            (vec![], 0..0)
+        };
 
         if self.match_tokens(&[Token::Punct('{')]).is_none() {
             let tok = self.previous().unwrap();
@@ -5521,6 +5531,10 @@ mod tests {
             }
 
             fn foo<T>(a: T) -> T {
+                a
+            }
+
+            fn foo(a: int) -> Bar<()> {
                 a
             }
 

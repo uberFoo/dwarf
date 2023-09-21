@@ -45,6 +45,8 @@ pub fn eval_function_call<'a>(
     context: &mut Context,
     vm: &mut VM<'a>,
 ) -> Result<RefType<Value>> {
+    let lu_dog = context.lu_dog_heel().clone();
+
     context.increment_call_count();
 
     debug!("eval_function_call func {func:?}");
@@ -52,7 +54,9 @@ pub fn eval_function_call<'a>(
 
     span!("eval_function_call");
 
-    if s_read!(func).a_sink {
+    let body = s_read!(func).r19_body(&s_read!(lu_dog))[0].clone();
+
+    if s_read!(body).a_sink {
         let args = args.to_owned();
         let span = span.to_owned();
         let mut context = context.to_owned();
@@ -60,7 +64,16 @@ pub fn eval_function_call<'a>(
         let future = async move {
             let mem = context.memory().clone();
             let mut vm = VM::new(&mem);
-            inner_eval_function_call(func, &args, arg_check, &span, &mut context, &mut vm).unwrap()
+            inner_eval_function_call(
+                func,
+                &args,
+                first_arg,
+                arg_check,
+                &span,
+                &mut context,
+                &mut vm,
+            )
+            .unwrap()
         };
         let foo = async_std::task::spawn_local(future);
 
@@ -75,17 +88,16 @@ pub fn eval_function_call<'a>(
     }
 }
 
-fn inner_eval_function_call(
+fn inner_eval_function_call<'a>(
     func: RefType<Function>,
     args: &[RefType<Argument>],
     first_arg: Option<SarzakStorePtr>,
     arg_check: bool,
     span: &RefType<Span>,
     context: &mut Context,
-    vm: &mut VM,
+    vm: &mut VM<'a>,
 ) -> Result<RefType<Value>> {
     let lu_dog = context.lu_dog_heel().clone();
-    context.increment_call_count();
 
     debug!("inner_eval_function_call func {func:?}");
     trace!("inner_eval_function_call stack {:?}", context.memory());
@@ -288,7 +300,7 @@ pub(crate) fn eval_external_method(
 ///#[proxy(store = "sarzak", object = "Boolean", func = "flubber")]
 ///```
 fn eval_external_static_method(
-    block_id: &usize,
+    block_id: &SarzakStorePtr,
     args: &[RefType<Argument>],
     first_arg: Option<SarzakStorePtr>,
     _arg_check: bool,
@@ -432,7 +444,7 @@ fn eval_external_static_method(
 
 fn eval_built_in_function_call(
     func: RefType<Function>,
-    block_id: &usize,
+    block_id: &SarzakStorePtr,
     args: &[RefType<Argument>],
     first_arg: Option<SarzakStorePtr>,
     arg_check: bool,

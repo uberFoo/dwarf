@@ -142,10 +142,17 @@ impl fmt::Display for EnumVariant {
     }
 }
 
-#[derive(Debug)]
+// #[derive(Clone, Debug)]
+// pub enum FutureResult {
+//     JoinHandle(async_std::task::JoinHandle<RefType<Value>>),
+//     Result(RefType<Value>),
+// }
+
+#[derive(Debug, Default)]
 pub enum Value {
     Boolean(bool),
     Char(char),
+    #[default]
     Empty,
     Enumeration(EnumVariant),
     Error(String),
@@ -156,10 +163,10 @@ pub enum Value {
     /// why I need the inner Function to be behind a RefType<<T>>. It seems
     /// excessive, and yet I know I've looked into it before.
     Function(RefType<Function>),
+    // Future(FutureResult),
     Future(async_std::task::JoinHandle<RefType<Value>>),
     Integer(DwarfInteger),
     Lambda(RefType<Lambda>),
-    Option(Option<RefType<Self>>),
     ParsedDwarf(Context),
     ProxyType {
         module: String,
@@ -177,6 +184,21 @@ pub enum Value {
     Unknown,
     Uuid(uuid::Uuid),
     Vector(Vec<RefType<Self>>),
+}
+
+impl Value {
+    pub fn deref(&mut self) -> &Self {
+        // if let Self::Future(FutureResult::JoinHandle(mut join)) = self {
+        if let Self::Future(ref mut join) = self {
+            let value = async { join.await };
+            let value = async_std::task::block_on(value).take();
+            *self = value;
+            // *self = Value::Future(FutureResult::Result(value));
+            self
+        } else {
+            self
+        }
+    }
 }
 
 // impl std::fmt::Debug for Value {
@@ -242,7 +264,6 @@ impl Clone for Value {
             Self::Future(_) => Self::Empty,
             Self::Integer(num) => Self::Integer(*num),
             Self::Lambda(ƛ) => Self::Lambda(ƛ.clone()),
-            Self::Option(option) => Self::Option(option.clone()),
             Self::ParsedDwarf(ctx) => Self::ParsedDwarf(ctx.clone()),
             Self::ProxyType {
                 module,
@@ -277,10 +298,6 @@ impl From<Value> for FfiValue {
             Value::Error(e) => Self::Error(e.into()),
             Value::Float(num) => Self::Float(num),
             Value::Integer(num) => Self::Integer(num),
-            Value::Option(opt) => Self::Option(match opt {
-                Some(value) => ROption::RSome(RBox::new(s_read!(value).clone().into())),
-                None => ROption::RNone,
-            }),
             Value::ProxyType {
                 module,
                 obj_ty,
@@ -314,10 +331,6 @@ impl From<FfiValue> for Value {
             FfiValue::Error(e) => Self::Error(e.into()),
             FfiValue::Float(num) => Self::Float(num),
             FfiValue::Integer(num) => Self::Integer(num),
-            FfiValue::Option(opt) => Self::Option(match opt {
-                ROption::RSome(value) => Some(new_ref!(Value, (*value).clone().into())),
-                ROption::RNone => None,
-            }),
             FfiValue::ProxyType(plugin) => Self::ProxyType {
                 module: plugin.module.into(),
                 obj_ty: plugin.uuid.into(),
@@ -372,12 +385,6 @@ impl Value {
                 EnumVariant::Struct(ut) => s_read!(ut).get_type().clone(),
                 EnumVariant::Tuple((ty, _), _) => ty.clone(),
             },
-            Value::Function(ref func) => {
-                let func = lu_dog.exhume_function(&s_read!(func).id).unwrap();
-                let z = s_read!(func).r1_value_type(lu_dog)[0].clone();
-                #[allow(clippy::let_and_return)]
-                z
-            }
             Value::Float(_) => {
                 let ty = Ty::new_float(sarzak);
                 for vt in lu_dog.iter_value_type() {
@@ -385,6 +392,20 @@ impl Value {
                         if ty.read().unwrap().id() == _ty {
                             return vt.clone();
                         }
+                    }
+                }
+                unreachable!()
+            }
+            Value::Function(ref func) => {
+                let func = lu_dog.exhume_function(&s_read!(func).id).unwrap();
+                let z = s_read!(func).r1_value_type(lu_dog)[0].clone();
+                #[allow(clippy::let_and_return)]
+                z
+            }
+            Value::Future(_) => {
+                for vt in lu_dog.iter_value_type() {
+                    if let ValueTypeEnum::XFuture(_) = s_read!(vt).subtype {
+                        return vt.clone();
                     }
                 }
                 unreachable!()
@@ -484,11 +505,7 @@ impl fmt::Display for Value {
             Self::Future(_) => write!(f, "<future>"),
             Self::Integer(num) => write!(f, "{num}"),
             Self::Lambda(_) => write!(f, "<lambda>"),
-            Self::Option(option) => match option {
-                Some(value) => write!(f, "Some({})", s_read!(value)),
-                None => write!(f, "None"),
-            },
-            Self::ParsedDwarf(_) => write!(f, "<parsed-dwarf>"),
+            Self::ParsedDwarf(ctx) => write!(f, "{ctx:#?}"),
             Self::ProxyType {
                 module: _,
                 obj_ty: _,
@@ -584,18 +601,6 @@ where
     }
 }
 
-impl<T> From<Option<T>> for Value
-where
-    T: Into<Value>,
-{
-    fn from(value: Option<T>) -> Self {
-        match value {
-            Some(value) => Self::Option(Some(new_ref!(Value, value.into()))),
-            None => Self::Option(None),
-        }
-    }
-}
-
 impl From<Value> for Option<Uuid> {
     fn from(option: Value) -> Self {
         match option {
@@ -604,18 +609,6 @@ impl From<Value> for Option<Uuid> {
         }
     }
 }
-
-// impl<T> From<Value> for Option<T> {
-//     fn from(option: Value) -> Self {
-//         match option {
-//             Value::Option(opt) => match opt {
-//                 Some(value) => Some(value.into()),
-//                 None => None,
-//             },
-//             _ => None,
-//         }
-//     }
-// }
 
 impl TryFrom<Value> for Context {
     type Error = ChaChaError;

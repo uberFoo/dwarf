@@ -13,6 +13,6 @@ fn main() {
     chacha::assert_eq(a, Result::<int, string>::Ok(42));
     chacha::assert_eq(b, Result::<int, string>::Err("oops"));
 
-    chacha::assert_eq("a = {0}".format(a), "a = Result<int, string>::Ok(42)");
+    chacha::assert_eq("a = {0}".format(a), "a = Result::Ok(42)");
     // chacha::assert_eq("b = {0}".format(b), "b = Result<int, string>::Err(\"oops\")");
 }

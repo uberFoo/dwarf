@@ -612,7 +612,7 @@ pub fn eval(
                                 // 🚧 I'm not really sure what to do about this here. It's
                                 // all really a hack for now anyway.
                                 let ty = func.get_type(&s_read!(sarzak), &s_read!(lu_dog));
-                                let ty = PrintableValueType(&ty, context);
+                                let ty = PrintableValueType(true, &ty, context);
                                 TypeMismatchSnafu {
                                     expected: "<function>".to_string(),
                                     found: ty.to_string(),
@@ -652,7 +652,7 @@ pub fn eval(
                         debug!("evaluating chacha::typeof");
                         let arg = arg_values.pop_front().unwrap().0;
                         let ty = s_read!(arg).get_type(&s_read!(sarzak), &s_read!(lu_dog));
-                        let pvt_ty = PrintableValueType(&ty, context);
+                        let pvt_ty = PrintableValueType(false, &ty, context);
 
                         Ok(new_ref!(Value, pvt_ty.to_string().into()))
                     }

@@ -43,6 +43,8 @@
             - [VM]()
         - [The ObjectStore]()
     - [Code Generation]()
+    - [Dwarf Language]()
+        - [Generic Types](./hacker/dwarf/generics.md)
 
 [Index](./directory.md)
 

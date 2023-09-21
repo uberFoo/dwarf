@@ -1,3 +1,7 @@
+// struct Future<T> {
+// value: T,
+// }
+
 enum PowerEvent {
     On,
     Off,
@@ -37,7 +41,7 @@ impl Light {
         }
     }
 
-    async fn send_event(self, event: Event) {
+    async fn send_event(self, event: Event) -> Future<()> {
         match event {
             Event::PowerEvent(power_event) => {
                 match power_event {
@@ -78,25 +82,28 @@ impl Light {
             }
             Event::ColorEvent => {}
         };
+
+        Future::<()>
     }
 }
+
 fn main() {
     let light = Light::new();
     assert_off(light);
 
-    // let b = async {
     let event = Event::PowerEvent(PowerEvent::On);
-    light.send_event(event).await;
-    assert_on(light);
+    light.send_event(event).and_then(|| {
+        assert_on(light);
+    });
 
     let event = Event::PowerEvent(PowerEvent::Off);
-    light.send_event(event);
-    assert_off(light);
+    light.send_event(event).and_then(|| {
+        assert_off(light);
+    });
 
-    light.send_event(event);
-    assert_off(light);
-    // };
-    // b.await;
+    light.send_event(event).and_then(|| {
+        assert_off(light);
+    });
 }
 
 fn assert_off(light: Light) {

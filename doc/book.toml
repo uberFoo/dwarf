@@ -9,6 +9,7 @@ title = "The Dwarf Programming Language"
 git-repository-url = "https://github.com/uberfoo/dwarf"
 git-repository-icon = "fa-github"
 mathjax-support = true
+additional-js = ["mermaid.min.js", "mermaid-init.js"]
 
 [output.html.code.hidelines]
 dwarf = "#"
@@ -38,3 +39,6 @@ line-numbers = true
 
 "`string`" = "types"
 "`float`" = "types"
+
+[preprocessor.mermaid]
+command = "mdbook-mermaid"

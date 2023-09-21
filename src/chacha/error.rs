@@ -279,7 +279,7 @@ impl fmt::Display for ChaChaErrorReporter<'_, '_, '_> {
                 location,
             } => {
                 let report = Report::build(ReportKind::Error, file_name, span.start)
-                    .with_message("not a function")
+                    .with_message(format!("{value} is not a function"))
                     .with_label(
                         Label::new((file_name, span.to_owned()))
                             .with_message("in this invocation")

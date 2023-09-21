@@ -921,7 +921,7 @@ mod tests {
             let mut lu_dog = s_write!(ctx.lu_dog);
 
             // We need to create a WoogStruct and add some fields to it
-            let foo = WoogStruct::new("Foo".to_owned(), None, &mut lu_dog);
+            let foo = WoogStruct::new("Foo".to_owned(), None, None, &mut lu_dog);
             // let _ = WoogItem::new_woog_struct(source, &mt, lu_dog);
             let struct_ty = ValueType::new_woog_struct(&foo, &mut lu_dog);
             let ty = Ty::new_integer(&sarzak);
@@ -943,7 +943,7 @@ mod tests {
             .into();
 
         let ctx = initialize_interpreter(dwarf_home, ctx, sarzak).unwrap();
-        let ty_name = PrintableValueType(&struct_ty, &ctx);
+        let ty_name = PrintableValueType(false, &struct_ty, &ctx);
         let mut foo_inst = UserStruct::new(ty_name.to_string(), &struct_ty);
         foo_inst.define_field("bar", new_ref!(Value, 42.into()));
         foo_inst.define_field("baz", new_ref!(Value, std::f64::consts::PI.into()));
