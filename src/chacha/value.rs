@@ -120,7 +120,8 @@ pub enum EnumVariant {
 impl PartialEq for EnumVariant {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
-            (Self::Unit(a, b, e), Self::Unit(c, d, f)) => a == c && b == d && e == f,
+            (Self::Unit(a, b, e), Self::Unit(c, d, f)) => b == d && e == f,
+            // (Self::Unit(a, b, e), Self::Unit(c, d, f)) => a == c && b == d && e == f,
             (Self::Struct(a), Self::Struct(b)) => *s_read!(a) == *s_read!(b),
             (Self::Tuple(a, c), Self::Tuple(b, d)) => {
                 *s_read!(a.0) == *s_read!(b.0) && *s_read!(c) == *s_read!(d)
@@ -186,20 +187,32 @@ pub enum Value {
     Vector(Vec<RefType<Self>>),
 }
 
-impl Value {
-    pub fn deref(&mut self) -> &Self {
-        // if let Self::Future(FutureResult::JoinHandle(mut join)) = self {
-        if let Self::Future(ref mut join) = self {
-            let value = async { join.await };
-            let value = async_std::task::block_on(value).take();
-            *self = value;
-            // *self = Value::Future(FutureResult::Result(value));
-            self
-        } else {
-            self
+impl Drop for Value {
+    fn drop(&mut self) {
+        match self {
+            Self::Future(join) => {
+                dbg!("dropping future");
+                let _ = async_std::task::block_on(async { join.await });
+            }
+            _ => {}
         }
     }
 }
+
+// impl Value {
+//     pub fn deref(&mut self) -> &Self {
+//         // if let Self::Future(FutureResult::JoinHandle(mut join)) = self {
+//         if let Self::Future(ref mut join) = self {
+//             let value = async { join.await };
+//             let value = async_std::task::block_on(value).take();
+//             *self = value;
+//             // *self = Value::Future(FutureResult::Result(value));
+//             self
+//         } else {
+//             self
+//         }
+//     }
+// }
 
 // impl std::fmt::Debug for Value {
 //     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -292,29 +305,29 @@ impl Clone for Value {
 
 impl From<Value> for FfiValue {
     fn from(value: Value) -> Self {
-        match value {
-            Value::Boolean(bool_) => Self::Boolean(bool_),
+        match &value {
+            Value::Boolean(bool_) => Self::Boolean(bool_.to_owned()),
             Value::Empty => Self::Empty,
-            Value::Error(e) => Self::Error(e.into()),
-            Value::Float(num) => Self::Float(num),
-            Value::Integer(num) => Self::Integer(num),
+            Value::Error(e) => Self::Error(e.to_owned().into()),
+            Value::Float(num) => Self::Float(num.to_owned()),
+            Value::Integer(num) => Self::Integer(num.to_owned()),
             Value::ProxyType {
                 module,
                 obj_ty,
                 id,
                 plugin,
             } => Self::ProxyType(FfiProxy {
-                module: module.into(),
-                uuid: obj_ty.into(),
-                id: id.into(),
+                module: module.to_owned().into(),
+                uuid: obj_ty.to_owned().into(),
+                id: id.to_owned().into(),
                 plugin: s_read!(plugin).clone(),
             }),
             Value::Range(range) => Self::Range(FfiRange {
                 start: range.start,
                 end: range.end,
             }),
-            Value::String(str_) => Self::String(str_.into()),
-            Value::Uuid(uuid) => Self::Uuid(uuid.into()),
+            Value::String(str_) => Self::String(str_.to_owned().into()),
+            Value::Uuid(uuid) => Self::Uuid(uuid.to_owned().into()),
             Value::Vector(vec) => {
                 Self::Vector(vec.into_iter().map(|v| s_read!(v).clone().into()).collect())
             }
@@ -614,8 +627,8 @@ impl TryFrom<Value> for Context {
     type Error = ChaChaError;
 
     fn try_from(value: Value) -> Result<Self, <Context as TryFrom<Value>>::Error> {
-        match value {
-            Value::ParsedDwarf(ctx) => Ok(ctx),
+        match &value {
+            Value::ParsedDwarf(ctx) => Ok(ctx.to_owned()),
             _ => Err(ChaChaError::Conversion {
                 src: value.to_string(),
                 dst: "Context".to_owned(),
@@ -628,7 +641,7 @@ impl TryFrom<Value> for Range<DwarfInteger> {
     type Error = ChaChaError;
 
     fn try_from(value: Value) -> Result<Self, <Range<DwarfInteger> as TryFrom<Value>>::Error> {
-        match value {
+        match &value {
             Value::Range(range) => Ok(range.start..range.end),
             _ => Err(ChaChaError::Conversion {
                 src: value.to_string(),
@@ -642,7 +655,7 @@ impl TryFrom<Value> for Range<usize> {
     type Error = ChaChaError;
 
     fn try_from(value: Value) -> Result<Self, <Range<usize> as TryFrom<Value>>::Error> {
-        match value {
+        match &value {
             Value::Range(range) => Ok(range.start as usize..range.end as usize),
             _ => Err(ChaChaError::Conversion {
                 src: value.to_string(),
@@ -656,8 +669,8 @@ impl TryFrom<Value> for Uuid {
     type Error = ChaChaError;
 
     fn try_from(value: Value) -> Result<Self, <Uuid as TryFrom<Value>>::Error> {
-        match value {
-            Value::Uuid(uuid) => Ok(uuid),
+        match &value {
+            Value::Uuid(uuid) => Ok(uuid.to_owned()),
             Value::String(str_) => str_.parse::<Uuid>().map_err(|_| ChaChaError::Conversion {
                 src: str_.to_owned(),
                 dst: "Uuid".to_owned(),
@@ -692,14 +705,14 @@ impl TryFrom<Value> for usize {
     type Error = ChaChaError;
 
     fn try_from(value: Value) -> Result<Self, <usize as TryFrom<Value>>::Error> {
-        match value {
-            Value::Float(num) => Ok(num as usize),
-            Value::Integer(num) => Ok(num as usize),
+        match &value {
+            Value::Float(num) => Ok(num.to_owned() as usize),
+            Value::Integer(num) => Ok(num.to_owned() as usize),
             Value::String(str_) => str_.parse::<usize>().map_err(|_| ChaChaError::Conversion {
                 src: str_.to_owned(),
                 dst: "usize".to_owned(),
             }),
-            Value::Thonk(_, num) => Ok(num),
+            Value::Thonk(_, num) => Ok(num.to_owned()),
             _ => Err(ChaChaError::Conversion {
                 src: value.to_string(),
                 dst: "usize".to_owned(),
@@ -732,9 +745,9 @@ impl TryFrom<Value> for i64 {
     type Error = ChaChaError;
 
     fn try_from(value: Value) -> Result<Self, <i64 as TryFrom<Value>>::Error> {
-        match value {
-            Value::Float(num) => Ok(num as i64),
-            Value::Integer(num) => Ok(num),
+        match &value {
+            Value::Float(num) => Ok(num.to_owned() as i64),
+            Value::Integer(num) => Ok(num.to_owned()),
             Value::String(str_) => str_.parse::<i64>().map_err(|_| ChaChaError::Conversion {
                 src: str_.to_owned(),
                 dst: "i64".to_owned(),
@@ -770,9 +783,9 @@ impl TryFrom<Value> for u64 {
     type Error = ChaChaError;
 
     fn try_from(value: Value) -> Result<Self, <u64 as TryFrom<Value>>::Error> {
-        match value {
-            Value::Float(num) => Ok(num as u64),
-            Value::Integer(num) => Ok(num as u64),
+        match &value {
+            Value::Float(num) => Ok(num.to_owned() as u64),
+            Value::Integer(num) => Ok(num.to_owned() as u64),
             Value::String(str_) => str_.parse::<u64>().map_err(|_| ChaChaError::Conversion {
                 src: str_.to_owned(),
                 dst: "u64".to_owned(),
@@ -808,9 +821,9 @@ impl TryFrom<Value> for f64 {
     type Error = ChaChaError;
 
     fn try_from(value: Value) -> Result<Self, <f64 as TryFrom<Value>>::Error> {
-        match value {
-            Value::Float(num) => Ok(num),
-            Value::Integer(num) => Ok(num as f64),
+        match &value {
+            Value::Float(num) => Ok(num.to_owned()),
+            Value::Integer(num) => Ok(num.to_owned() as f64),
             Value::String(str_) => str_.parse::<f64>().map_err(|_| ChaChaError::Conversion {
                 src: str_.to_owned(),
                 dst: "f64".to_owned(),
@@ -862,9 +875,9 @@ impl TryFrom<Value> for bool {
     type Error = ChaChaError;
 
     fn try_from(value: Value) -> Result<Self, <bool as TryFrom<Value>>::Error> {
-        match value {
-            Value::Boolean(bool_) => Ok(bool_),
-            Value::Integer(num) => Ok(num != 0),
+        match &value {
+            Value::Boolean(bool_) => Ok(bool_.to_owned()),
+            Value::Integer(num) => Ok(num != &0),
             Value::String(str_) => str_.parse::<bool>().map_err(|_| ChaChaError::Conversion {
                 src: str_.to_owned(),
                 dst: "bool".to_owned(),
@@ -903,19 +916,19 @@ impl std::ops::Add for Value {
     type Output = Self;
 
     fn add(self, other: Self) -> Self {
-        match (self, other) {
+        match (&self, &other) {
             (Value::Float(a), Value::Float(b)) => Value::Float(a + b),
             // (Value::Float(a), Value::String(b)) => Value::String(a.to_string() + &b),
-            (Value::String(a), Value::Float(b)) => Value::String(a + &b.to_string()),
+            (Value::String(a), Value::Float(b)) => Value::String(a.to_owned() + &b.to_string()),
             (Value::Integer(a), Value::Integer(b)) => Value::Integer(a + b),
             // (Value::Integer(a), Value::String(b)) => Value::String(a.to_string() + &b),
             // (Value::String(a), Value::Integer(b)) => Value::String(a + &b.to_string()),
-            (Value::String(a), Value::String(b)) => Value::String(a + &b),
+            (Value::String(a), Value::String(b)) => Value::String(a.to_owned() + b),
             (Value::Char(a), Value::Char(b)) => Value::String(a.to_string() + &b.to_string()),
             (Value::Char(a), Value::String(b)) => Value::String(a.to_string() + &b),
-            (Value::String(a), Value::Char(b)) => Value::String(a + &b.to_string()),
+            (Value::String(a), Value::Char(b)) => Value::String(a.to_owned() + &b.to_string()),
             (Value::Empty, Value::Empty) => Value::Empty,
-            (Value::Boolean(a), Value::Boolean(b)) => Value::Boolean(a || b),
+            (Value::Boolean(a), Value::Boolean(b)) => Value::Boolean(*a || *b),
             // (Value::Boolean(a), Value::String(b)) => Value::String(a.to_string() + &b),
             // (Value::String(a), Value::Boolean(b)) => Value::String(a + &b.to_string()),
             (a, b) => Value::Error(format!("Cannot add {} and {}", a, b)),

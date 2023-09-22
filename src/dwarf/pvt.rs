@@ -36,7 +36,6 @@ impl<'d, 'a, 'b> fmt::Display for PrintableValueType<'d, 'a, 'b> {
                 debug!("enumeration {:?}", enumeration);
                 let enumeration = lu_dog.exhume_enumeration(enumeration).unwrap();
                 let enumeration = s_read!(enumeration);
-                dbg!(&enumeration.name);
                 write!(f, "{}", TY_WARN_CLR.paint(&enumeration.name))
             }
             ValueTypeEnum::Empty(_) => write!(f, "{}", TY_CLR.italic().paint("()")),

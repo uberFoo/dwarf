@@ -61,7 +61,7 @@ pub mod field_access {
         debug!("value: {value:?}");
 
         let value = s_read!(value).clone();
-        match value {
+        match &value {
             Value::ProxyType {
                 module,
                 obj_ty: _,

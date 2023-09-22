@@ -270,8 +270,10 @@ impl<'b> VM<'b> {
                             );
                         }
                         let c = s_read!(a).clone() + s_read!(b).clone();
-                        if let Value::Error(e) = c {
-                            return Err(ChaChaError::VmPanic { message: e });
+                        if let Value::Error(e) = &c {
+                            return Err(ChaChaError::VmPanic {
+                                message: e.to_owned(),
+                            });
                         }
                         self.stack.push(new_ref!(Value, c));
 
@@ -512,8 +514,10 @@ impl<'b> VM<'b> {
                             );
                         }
                         let c = s_read!(a).clone() * s_read!(b).clone();
-                        if let Value::Error(e) = c {
-                            return Err(ChaChaError::VmPanic { message: e });
+                        if let Value::Error(e) = &c {
+                            return Err(ChaChaError::VmPanic {
+                                message: e.to_owned(),
+                            });
                         }
                         self.stack.push(new_ref!(Value, c));
 
@@ -569,8 +573,10 @@ impl<'b> VM<'b> {
                         let b = self.stack.pop().unwrap();
                         let a = self.stack.pop().unwrap();
                         let c = s_read!(a).clone() - s_read!(b).clone();
-                        if let Value::Error(e) = c {
-                            return Err(ChaChaError::VmPanic { message: e });
+                        if let Value::Error(e) = &c {
+                            return Err(ChaChaError::VmPanic {
+                                message: e.to_owned(),
+                            });
                         }
 
                         self.stack.push(new_ref!(Value, c));

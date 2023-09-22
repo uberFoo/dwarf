@@ -812,6 +812,14 @@ fn inter_func(
 
         let (block_ty, block_span) = inter_statements(&stmts, stmt_span, &block, context, lu_dog)?;
 
+        let block_ty = match a_sink {
+            true => {
+                let future = XFuture::new(&block_ty, lu_dog);
+                ValueType::new_x_future(&future, lu_dog)
+            }
+            false => block_ty,
+        };
+
         typecheck(
             (&ret_ty, span),
             (&block_ty, &block_span),
@@ -2399,6 +2407,7 @@ pub(super) fn inter_expression(
                 let expr = VariableExpression::new(name.to_owned(), lu_dog);
                 let expr = Expression::new_variable_expression(&expr, lu_dog);
                 let ty = ValueType::new_unknown(lu_dog);
+                e_warn!("Unknown type for variable {name}");
 
                 let value = XValue::new_expression(block, &ty, &expr, lu_dog);
                 update_span_value(&span, &value, location!());
@@ -2886,7 +2895,7 @@ pub(super) fn inter_expression(
             };
 
             debug!("enum_name {:?}", full_enum_name);
-            dbg!(&enum_root, &full_enum_name, &enum_path);
+            // dbg!(&enum_root, &full_enum_name, &enum_path);
             let x_path = XPath::new(Uuid::new_v4(), None, lu_dog);
             let mut elts = path
                 .iter()
@@ -3170,51 +3179,38 @@ pub(super) fn inter_expression(
                 let pvt = PrintableValueType(&ty, context, lu_dog).to_string();
 
                 debug!("field `{name:?}` is of type `{pvt}`, expr: {field_expr:?}");
-                dbg!(&field_name, &pvt);
 
                 if let Some(field) = struct_fields
                     .iter()
                     .find(|f| s_read!(f).name == field_name.0)
                 {
-                    let struct_ty = lu_dog.exhume_value_type(&s_read!(field).ty).unwrap();
-                    let naked_ty = s_read!(struct_ty);
+                    let field_ty = lu_dog.exhume_value_type(&s_read!(field).ty).unwrap();
+                    let naked_ty = s_read!(field_ty);
 
-                    dbg!(&struct_ty);
+                    // dbg!(&field_ty);
+
+                    // Primarily we are here to check the type of the field against
+                    // the type of the expression. If only it were so easily done.
+                    // The issue is generics. If the field is generic, then we need
+                    // to initially use the type of the expression to fill in the
+                    // type of the generic parameter. *After* that however, we
+                    // need to use this new type to typecheck all subsequent uses
+                    // of the pattern.
 
                     if let ValueTypeEnum::Generic(ref id) = naked_ty.subtype {
                         // OK. We are instantiating a generic. We need to create the new type
                         let generic = lu_dog.exhume_generic(id).unwrap();
                         generic_substitutions.insert(s_read!(generic).name.to_owned(), ty.clone());
-                        // if let ParserExpression::PathInExpression(path) = save_name {
-                        //     let type_name = path.iter().map(|p| {
-                        //         if let Type::UserType((obj, _), generics) = p {
-                        //             let mut name = obj.de_sanitize().to_owned();
-                        //             let generics = generics.iter().map(|g| {
-                        //                 g.0.to_string()
-                        //             }).collect::<Vec<_>>().join(", ");
-                        //             if !generics.is_empty() {
-                        //                 name.push_str("<");
-                        //                 name.push_str(&generics);
-                        //                 name.push_str(">");
-                        //             }
-                        //             name
-                        //         } else {
-                        //             panic!("I don't think that we should ever see anything other than a user type here: {:?}", p);
-                        //         }
-                        //     }).collect::<Vec<_>>().join("");
-
-                        //     let _new_struct =
-                        //         create_generic_struct(&type_name, context, context.sarzak, lu_dog);
-                        //     let data_struct = DataStructure::new_woog_struct(&woog_struct, lu_dog);
-                        //     s_write!(struct_expr).data = s_read!(data_struct).id;
-                        // } else {
-                        // panic!("I don't think that we should ever see anything other than a path here: {:?}", save_name);
-                        // }
                     } else {
                         // We only need the type check if the type of the field in the struct
                         // is not generic. Otherwise we are explicitly defining the type above.
+                        //
+                        // This is about to get complicated. If the field is generic,
+                        // then we need to a) fill in the type value of the generic,
+                        // based on either i) the type of a previous field, or ii)
+                        // the type of this field.
                         typecheck(
-                            (&struct_ty, &field_name.1),
+                            (&field_ty, &field_name.1),
                             (&ty, &field_expr_span),
                             location!(),
                             context,
@@ -4252,12 +4248,14 @@ pub(crate) fn lookup_woog_struct_method_return_type(
             })
         } else {
             debug!("ParserExpression type not found");
+            e_warn!("Unknown type for variable {method}");
             Some(ValueType::new_unknown(lu_dog))
         };
         debug!("ParserExpression found type: {ty:?}");
         if let Some(ty) = ty {
             ty
         } else {
+            e_warn!("Unknown type for variable {method}");
             ValueType::new_unknown(lu_dog)
         }
     } else if type_name == CHACHA {

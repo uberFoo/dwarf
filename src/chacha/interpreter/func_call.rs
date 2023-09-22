@@ -20,7 +20,7 @@ use crate::{
     },
     lu_dog::{
         Argument, BodyEnum, Expression, ExternalImplementation, Function,
-        ObjectStore as LuDogStore, Span,
+        ObjectStore as LuDogStore, Span, ValueType, XFuture,
     },
     new_ref,
     plug_in::PluginModRef,
@@ -57,6 +57,15 @@ pub fn eval_function_call<'a>(
     let body = s_read!(func).r19_body(&s_read!(lu_dog))[0].clone();
 
     if s_read!(body).a_sink {
+        //     let ret_ty = {
+        //         let lu_dog = lu_dog.read().unwrap();
+        //         let ty = s_read!(func).r10_value_type(&lu_dog)[0].clone();
+        //         let x = s_read!(ty).clone();
+        //         drop(lu_dog);
+        //         let y = x.clone();
+        //         y
+        //     };
+
         let args = args.to_owned();
         let span = span.to_owned();
         let mut context = context.to_owned();
@@ -76,6 +85,10 @@ pub fn eval_function_call<'a>(
             .unwrap()
         };
         let foo = async_std::task::spawn_local(future);
+
+        // let ret_ty = new_ref!(ValueType, ret_ty);
+        // let future = XFuture::new(&ret_ty, &mut s_write!(lu_dog));
+        // ValueType::new_x_future(&future, &mut s_write!(lu_dog));
 
         // let value_ref = Box::new(future);
 
@@ -153,7 +166,7 @@ pub(crate) fn eval_external_method(
     let plug_in = eval_expression(expr.clone(), context, vm)?;
     let plug_in = s_read!(plug_in).clone();
 
-    let plug_in = if let Value::Store(_, plug_in) = plug_in {
+    let plug_in = if let Value::Store(_, plug_in) = &plug_in {
         plug_in
     } else {
         panic!("not a proxy");
@@ -247,28 +260,6 @@ pub(crate) fn eval_external_method(
                             .map(|v| new_ref!(Value, v))
                             .collect::<Vec<_>>();
                         let value = new_ref!(Value, Value::Vector(vec));
-
-                        // let woog_struct = s_read!(lu_dog)
-                        //     .iter_woog_struct()
-                        //     .find(|woog| {
-                        //         let woog = s_read!(woog);
-                        //         woog.name == object_name
-                        //     })
-                        //     .unwrap();
-
-                        // let ty = s_read!(lu_dog)
-                        //     .iter_value_type()
-                        //     .find(|ty| {
-                        //         let ty = s_read!(ty);
-                        //         if let ValueTypeEnum::WoogStruct(struct_id) = ty.subtype {
-                        //             struct_id == s_read!(woog_struct).id
-                        //         } else {
-                        //             false
-                        //         }
-                        //     })
-                        //     .unwrap();
-
-                        // let list = List::new(&ty, &mut s_write!(lu_dog));
 
                         Ok(value)
                     }

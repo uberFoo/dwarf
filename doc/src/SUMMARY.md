@@ -39,6 +39,7 @@
         - [Parser](./hacker/arch/parser.md)
         - [Compiler]()
         - [Chacha]()
+            - [Async Implementation](./hacker/arch/chacha/async.md)
             - [Interpreter]()
             - [VM]()
         - [The ObjectStore]()

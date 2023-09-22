@@ -69,7 +69,7 @@ impl Light {
                         }
 
                         print("Turning off light\n");
-                        chacha::sleep(1000);
+                        chacha::sleep(2000);
 
                         self.power = Power::Off;
                         self.color = Color {
@@ -82,8 +82,6 @@ impl Light {
             }
             Event::ColorEvent => {}
         };
-
-        Future::<()>
     }
 }
 
@@ -93,15 +91,18 @@ fn main() {
 
     let event = Event::PowerEvent(PowerEvent::On);
     light.send_event(event).and_then(|| {
+        print("On\n");
         assert_on(light);
     });
 
     let event = Event::PowerEvent(PowerEvent::Off);
     light.send_event(event).and_then(|| {
+        print("Off\n");
         assert_off(light);
     });
 
     light.send_event(event).and_then(|| {
+        print("Off\n");
         assert_off(light);
     });
 }

@@ -181,9 +181,7 @@ checksum = "a4668cab20f66d8d020e1fbc0ebe47217433c1b6c8f2040faf858554e394ace6"
 
 [[package]]
 name = "ariadne"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "367fd0ad87307588d087544707bc5fbf4805ded96c7db922b70d368fa1cb5702"
+version = "0.3.0"
 dependencies = [
  "unicode-width",
  "yansi",
@@ -884,6 +882,7 @@ dependencies = [
  "dap",
  "diff",
  "env_logger 0.10.0",
+ "futures",
  "heck",
  "hyper",
  "lazy_static",

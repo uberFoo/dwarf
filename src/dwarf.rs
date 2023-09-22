@@ -353,7 +353,7 @@ impl Type {
 //     }
 // }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub enum Statement {
     Empty,
     Expression(Spanned<Expression>),
@@ -447,7 +447,7 @@ impl From<Pattern> for Expression {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub enum Expression {
     Addition(Box<Spanned<Self>>, Box<Spanned<Self>>),
     And(Box<Spanned<Self>>, Box<Spanned<Self>>),
@@ -528,7 +528,7 @@ pub enum Expression {
     Subtraction(Box<Spanned<Self>>, Box<Spanned<Self>>),
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct Item {
     item: Spanned<InnerItem>,
     attributes: AttributeMap,
@@ -540,7 +540,7 @@ pub enum BlockType {
     Sync,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub enum InnerItem {
     Enum(
         Spanned<String>,
@@ -586,13 +586,13 @@ pub enum EnumField {
 
 pub type AttributeMap = HashMap<String, Vec<(Span, InnerAttribute)>>;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct Attribute {
     pub name: Spanned<String>,
     pub value: InnerAttribute,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub enum InnerAttribute {
     Attribute(AttributeMap),
     Expression(Spanned<Expression>),
