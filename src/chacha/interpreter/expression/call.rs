@@ -147,38 +147,39 @@ pub fn eval(
         //
         // MethodCall
         //
-        (CallEnum::MethodCall(ref meth), ref mut value) => {
+        (CallEnum::MethodCall(ref meth), ref value) => {
             let meth = s_read!(lu_dog).exhume_method_call(meth).unwrap();
             let meth_name = &s_read!(meth).name;
             debug!("MethodCall method {meth:?}");
             debug!("MethodCall value {value:?}");
-            let mut value = s_write!(value);
+            // let mut value = s_write!(value);
 
-            let x = match &mut *value {
-                Value::Future(ref mut join_handle) => {
-                    use futures::future::FutureExt;
+            // let x = match &mut *value {
+            match &*s_read!(value) {
+                // Value::Future(ref mut join_handle) => {
+                //     use futures::future::FutureExt;
 
-                    let lambda = args[0].clone();
-                    let lambda = s_read!(lambda).r37_expression(&s_read!(lu_dog))[0].clone();
-                    dbg!(&args);
-                    let mut context = context.to_owned();
-                    // let remote_handle = join_handle.remote_handle();
+                //     let lambda = args[0].clone();
+                //     let lambda = s_read!(lambda).r37_expression(&s_read!(lu_dog))[0].clone();
+                //     dbg!(&args);
+                //     let mut context = context.to_owned();
+                //     // let remote_handle = join_handle.remote_handle();
 
-                    let future = async move {
-                        let mem = context.memory().clone();
-                        let mut vm = VM::new(&mem);
+                //     let future = async move {
+                //         let mem = context.memory().clone();
+                //         let mut vm = VM::new(&mem);
 
-                        // remote_handle
-                        let value = eval_expression(lambda, &mut context, &mut vm).unwrap();
-                        dbg!(&value);
-                        // join_handle.await
-                        value
-                    };
-                    let value = async_std::task::spawn_local(future);
-                    // Ok(async_std::task::block_on(future))
+                //         // remote_handle
+                //         let value = eval_expression(lambda, &mut context, &mut vm).unwrap();
+                //         dbg!(&value);
+                //         // join_handle.await
+                //         value
+                //     };
+                //     let value = async_std::task::spawn_local(future);
+                //     // Ok(async_std::task::block_on(future))
 
-                    Ok(new_ref!(Value, Value::Future(value)))
-                }
+                //     Ok(new_ref!(Value, Value::Future(value)))
+                // }
                 Value::Store(store, _plugin) => {
                     let impl_ = &s_read!(store).r83c_implementation_block(&s_read!(lu_dog))[0];
                     let x = if let Some(func) = s_read!(impl_)
@@ -466,8 +467,7 @@ pub fn eval(
                     x
                 }
                 bar => panic!("need to deal with Value {:?}", bar),
-            };
-            x
+            }
         }
         //
         // StaticMethodCall
