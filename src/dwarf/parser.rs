@@ -3545,7 +3545,7 @@ impl DwarfParser {
                     Some(token.0.to_string()),
                 );
                 debug!("exit parse_function: no fn");
-                return Err(Box::new(err));
+                return Ok(None);
             } else {
                 BlockType::Async
             }
@@ -5593,6 +5593,22 @@ mod tests {
         "#;
 
         let ast = parse_dwarf("test_struct_field_assignment", src);
+        assert!(ast.is_ok());
+    }
+
+    #[test]
+    fn test_async_block() {
+        let _ = env_logger::builder().is_test(true).try_init();
+
+        let src = r#"
+            fn main() {
+                async {
+                    print("Hello, World!");
+                };
+            }
+        "#;
+
+        let ast = parse_dwarf("test_async_block", src);
         assert!(ast.is_ok());
     }
 }
