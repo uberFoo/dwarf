@@ -77,45 +77,6 @@ fn diff_with_file(path: &str, test: &str, found: &str) -> Result<(), ()> {
     }
 }
 
-/// Spawns a future on a new dedicated thread.
-///
-/// The returned task can be used to await the output of the future.
-#[cfg(feature = "async")]
-fn spawn_on_thread<F, T>(future: F) -> Task<T>
-where
-    F: Future<Output = T> + Send + 'static,
-    T: Send + 'static,
-{
-    // Create a channel that holds the task when it is scheduled for running.
-    let (sender, receiver) = flume::unbounded();
-    let sender = Arc::new(sender);
-    let s = Arc::downgrade(&sender);
-
-    // Wrap the future into one that disconnects the channel on completion.
-    let future = async move {
-        // When the inner future completes, the sender gets dropped and disconnects the channel.
-        let _sender = sender;
-        future.await
-    };
-
-    // Create a task that is scheduled by sending it into the channel.
-    let schedule = move |runnable| s.upgrade().unwrap().send(runnable).unwrap();
-    let (runnable, task) = async_task::spawn(future, schedule);
-
-    // Schedule the task by sending it into the channel.
-    runnable.schedule();
-
-    // Spawn a thread running the task to completion.
-    thread::spawn(move || {
-        // Keep taking the task from the channel and running it until completion.
-        for runnable in receiver {
-            runnable.run();
-        }
-    });
-
-    task
-}
-
 fn run_program(test: &str, program: &str) -> Result<(RefType<Value>, String), String> {
     let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
     let dwarf_home = env::var("DWARF_HOME")
@@ -171,12 +132,23 @@ fn run_program(test: &str, program: &str) -> Result<(RefType<Value>, String), St
 
     let ctx = initialize_interpreter(dwarf_home, ctx, sarzak).unwrap();
     match start_func("main", false, ctx) {
-        Ok(v) => {
-            let stdout = v.1.drain_std_out().join("").trim().to_owned();
+        Ok((value, ctx)) => {
+            #[cfg(feature = "async")]
+            let value = unsafe {
+                let v = std::sync::Arc::into_raw(value.clone());
+                let v = std::ptr::read(v);
+                let v = v.into_inner().unwrap();
+                match v {
+                    Value::Future(name, mut task) => task.run().unwrap(),
+                    _ => value,
+                }
+            };
+
+            let stdout = ctx.drain_std_out().join("").trim().to_owned();
 
             println!("{stdout}");
 
-            Ok((v.0, stdout))
+            Ok((value, stdout))
         }
         Err(e) => {
             eprintln!("{}", ChaChaErrorReporter(&e, true, program, test));

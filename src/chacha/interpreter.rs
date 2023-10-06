@@ -13,11 +13,13 @@ use snafu::{prelude::*, Location};
 use tracy_client::{span, Client};
 use uuid::Uuid;
 
+#[cfg(feature = "print-std-out")]
+use crate::chacha::r#async::ChaChaExecutor;
+
 use crate::{
     chacha::{
         error::{Error, Result, UnimplementedSnafu},
         memory::{Memory, MemoryUpdateMessage},
-        r#async::ChaChaExecutor,
         value::FutureResult,
         value::UserStruct,
         vm::{CallFrame, Instruction, Thonk, VM},
@@ -509,7 +511,7 @@ fn eval_expression(
                 Value::Future(name, task) => {
                     dbg!(&name, &task);
                     // Ok(context.executor_run())
-                    task.block_on()
+                    task.run()
                     // match task {
                     //     FutureResult::JoinHandle(maybe_handle) => {
                     //         if let Some(task) = maybe_handle.take() {

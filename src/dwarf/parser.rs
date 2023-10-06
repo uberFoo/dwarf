@@ -116,7 +116,7 @@ const AS_OP: (u8, u8) = (55, 56);
 const MUL_DIV: (u8, u8) = (52, 53);
 const ADD_SUB: (u8, u8) = (50, 51);
 const COMP: (u8, u8) = (30, 31);
-const BOOL: (u8, u8) = (25, 26);
+const BOOL: (u8, u8) = (33, 34);
 const RANGE: (u8, u8) = (20, 21);
 const ASSIGN: (u8, u8) = (11, 0);
 // Literal, closure, break, return, etc.

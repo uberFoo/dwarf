@@ -8,10 +8,12 @@ use ansi_term::Colour;
 use snafu::{location, prelude::*, Location};
 use tracy_client::span;
 
+#[cfg(feature = "async")]
+use crate::chacha::r#async::ChaChaExecutor;
+
 use crate::{
     chacha::{
         error::{Result, WrongNumberOfArgumentsSnafu},
-        r#async::ChaChaExecutor,
         value::{FfiValue, FutureResult},
         vm::VM,
     },
@@ -58,64 +60,43 @@ pub fn eval_function_call<'a>(
     let body = s_read!(func).r19_body(&s_read!(lu_dog))[0].clone();
 
     if s_read!(body).a_sink {
-        let args = args.to_owned();
-        let span = span.to_owned();
-        let mut cloned_context = context.clone();
-        // let mut vm = vm.to_owned();
+        #[cfg(not(feature = "async"))]
+        {
+            // compile_error!("The async feature flag is required for async functions.");
+            Ok(new_ref!(Value, Value::Empty))
+        }
+        #[cfg(feature = "async")]
+        {
+            let args = args.to_owned();
+            let span = span.to_owned();
+            let mut cloned_context = context.clone();
+            // let mut vm = vm.to_owned();
 
-        let future = async move {
-            let mem = cloned_context.memory().clone();
-            let mut vm = VM::new(&mem);
+            let future = async move {
+                let mem = cloned_context.memory().clone();
+                let mut vm = VM::new(&mem);
 
-            // dbg!("sleeping");
-            // let duration = std::time::Duration::from_millis(5000);
-            // Timer::after(duration).await;
-            // async_std::task::sleep(duration).await;
-            // dbg!("awake");
-            let value = inner_eval_function_call(
-                func,
-                &args,
-                first_arg,
-                arg_check,
-                &span,
-                &mut cloned_context,
-                &mut vm,
-            );
+                let value = inner_eval_function_call(
+                    func,
+                    &args,
+                    first_arg,
+                    arg_check,
+                    &span,
+                    &mut cloned_context,
+                    &mut vm,
+                );
 
-            dbg!(&value);
-            value
-        };
-        // let future = async_std::task::spawn_local(future);
-        // let future = executor.unwrap().spawn(future);
+                dbg!(&value);
+                value
+            };
 
-        let mut executor = ChaChaExecutor::new();
-        executor.spawn(future);
+            let mut executor = ChaChaExecutor::new();
+            executor.spawn(future);
 
-        let value = new_ref!(Value, Value::Future("bar".to_owned(), executor));
+            let value = new_ref!(Value, Value::Future("bar".to_owned(), executor));
 
-        // let future = async move {
-        //     let result = value.clone();
-        //     let value = future.await;
-
-        //     let mut result = s_write!(result);
-        //     if let Value::Future(_, ref mut result) = *result {
-        //         match result {
-        //             FutureResult::Running => *result = FutureResult::Complete(value),
-        //             FutureResult::Waiting(waker) => {
-        //                 waker.clone().wake();
-        //                 *result = FutureResult::Complete(value);
-        //             }
-        //             _ => panic!("future already complete"),
-        //         }
-        //     } else {
-        //         unreachable!()
-        //     }
-        // };
-
-        // context.executor_spawn(future);
-
-        Ok(value)
-        // Ok(new_ref!(Value, Value::Empty))
+            Ok(value)
+        }
     } else {
         inner_eval_function_call(func, args, first_arg, arg_check, span, context, vm)
     }

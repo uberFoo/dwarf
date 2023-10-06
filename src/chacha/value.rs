@@ -12,8 +12,11 @@ use rustc_hash::FxHashMap as HashMap;
 use sarzak::lu_dog::ValueTypeEnum;
 use uuid::Uuid;
 
+#[cfg(feature = "async")]
+use crate::chacha::r#async::ChaChaExecutor;
+
 use crate::{
-    chacha::{error::Result, r#async::ChaChaExecutor},
+    chacha::error::Result,
     lu_dog::{Function, Lambda, ObjectStore as LuDogStore, ValueType, ZObjectStore},
     new_ref,
     plug_in::PluginType,
@@ -193,9 +196,18 @@ impl Future for FutureResult {
 
 #[derive(Default)]
 pub enum Value {
+    /// Boolean
+    ///
+    /// True and False
     Boolean(bool),
+    /// Char
+    ///
+    /// A single character
     Char(char),
     #[default]
+    /// Empty
+    ///
+    /// ()
     Empty,
     Enumeration(EnumVariant),
     Error(String),
@@ -209,6 +221,7 @@ pub enum Value {
     // Future(FutureResult),
     // Future(String, async_std::task::JoinHandle<RefType<Value>>),
     // Future(String, FutureResult),
+    #[cfg(feature = "async")]
     Future(String, ChaChaExecutor<'static>),
     Integer(DwarfInteger),
     Lambda(RefType<Lambda>),
@@ -231,35 +244,6 @@ pub enum Value {
     Vector(Vec<RefType<Self>>),
 }
 
-// impl Drop for Value {
-//     fn drop(&mut self) {
-//         match self {
-//             Self::Future(name, task) => {
-//                 dbg!("dropping task", name, &task);
-//                 // let _ = future::block_on(async { task.await });
-//                 let _ = future::block_on(task);
-//             }
-//             _ => {}
-//         }
-//     }
-// }
-
-// impl Value {
-//     pub fn deref(&mut self) -> &Self {
-//         // if let Self::Future(FutureResult::JoinHandle(mut join)) = self {
-//         if let Self::Future(name, ref mut join) = self {
-//             dbg!("awaiting future", name);
-//             let value = async { join.await };
-//             let value = async_std::task::block_on(value).take();
-//             *self = value;
-//             // *self = Value::Future(FutureResult::Result(value));
-//             self
-//         } else {
-//             self
-//         }
-//     }
-// }
-
 impl std::fmt::Debug for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
@@ -270,6 +254,7 @@ impl std::fmt::Debug for Value {
             Self::Error(e) => write!(f, "{}: {}", Colour::Red.bold().paint("error"), e),
             Self::Float(num) => write!(f, "{:?}", num),
             Self::Function(func) => write!(f, "{:?}", s_read!(func)),
+            #[cfg(feature = "async")]
             Self::Future(name, _) => write!(f, "Executor {name}"),
             Self::Integer(num) => write!(f, "{:?}", num),
             Self::Lambda(ƛ) => write!(f, "{:?}", s_read!(ƛ)),
@@ -316,6 +301,7 @@ impl Clone for Value {
             Self::Error(e) => Self::Error(e.clone()),
             Self::Float(num) => Self::Float(*num),
             Self::Function(func) => Self::Function(func.clone()),
+            #[cfg(feature = "async")]
             Self::Future(parent, _) => Self::Future(format!("{parent}.道"), ChaChaExecutor::new()),
             Self::Integer(num) => Self::Integer(*num),
             Self::Lambda(ƛ) => Self::Lambda(ƛ.clone()),
@@ -457,6 +443,7 @@ impl Value {
                 #[allow(clippy::let_and_return)]
                 z
             }
+            #[cfg(feature = "async")]
             Value::Future(_, _) => {
                 for vt in lu_dog.iter_value_type() {
                     if let ValueTypeEnum::XFuture(_) = s_read!(vt).subtype {
@@ -557,6 +544,7 @@ impl fmt::Display for Value {
             Self::Error(e) => write!(f, "{}: {e}", Colour::Red.bold().paint("error")),
             Self::Float(num) => write!(f, "{num}"),
             Self::Function(_) => write!(f, "<function>"),
+            #[cfg(feature = "async")]
             Self::Future(_, _) => write!(f, "<future>"),
             Self::Integer(num) => write!(f, "{num}"),
             Self::Lambda(_) => write!(f, "<lambda>"),

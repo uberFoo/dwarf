@@ -8,17 +8,20 @@ use std::{
 
 use clap::{ArgAction, Args, Parser};
 use dap::{prelude::BasicClient, server::Server};
+
+#[cfg(feature = "async")]
+use dwarf::chacha::r#async::ChaChaExecutor;
+
 use dwarf::{
     chacha::{
         dap::DapAdapter,
         error::ChaChaErrorReporter,
         interpreter::{banner2, initialize_interpreter, start_func, start_repl},
-        r#async::ChaChaExecutor,
     },
     dwarf::{new_lu_dog, parse_dwarf},
     new_ref, s_write,
     sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL},
-    Context, NewRef, RefType, Value,
+    Context, NewRef, Value,
 };
 use reqwest::Url;
 use tracy_client::Client;
@@ -230,15 +233,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             match start_func("main", false, ctx) {
                 // 🚧 What's a sensible thing to do with this?
                 Ok((value, _)) => {
-                    let value = std::sync::Arc::into_raw(value);
-                    // into_inner().unwrap();
+                    #[cfg(feature = "async")]
                     unsafe {
+                        let value = std::sync::Arc::into_raw(value);
                         let value = std::ptr::read(value);
                         let value = value.into_inner().unwrap();
                         match value {
                             Value::Future(name, mut task) => {
                                 dbg!(&name);
-                                task.block_on();
+                                task.run();
                             }
                             _ => {
                                 dbg!(value);

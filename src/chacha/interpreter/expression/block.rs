@@ -1,5 +1,8 @@
+#[cfg(feature = "async")]
+use crate::chacha::r#async::ChaChaExecutor;
+
 use crate::{
-    chacha::{error::Result, r#async::ChaChaExecutor, value::FutureResult, vm::VM},
+    chacha::{error::Result, value::FutureResult, vm::VM},
     interpreter::{eval_statement, Context},
     lu_dog::Block,
     new_ref, s_read, s_write, NewRef, RefType, SarzakStorePtr, Value,

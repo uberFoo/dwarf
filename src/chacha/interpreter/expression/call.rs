@@ -1,15 +1,17 @@
 use std::{collections::VecDeque, thread, time::Duration, time::Instant};
 
 use ansi_term::Colour;
+#[cfg(feature = "async")]
 use async_io::Timer;
 use snafu::{location, prelude::*, Location};
 use uuid::Uuid;
 
+#[cfg(feature = "async")]
+use crate::chacha::r#async::ChaChaExecutor;
+
 use crate::{
     chacha::{
         error::{NoSuchStaticMethodSnafu, Result, TypeMismatchSnafu},
-        r#async::ChaChaExecutor,
-        value::FutureResult,
         vm::{CallFrame, VM},
     },
     interpreter::{
@@ -71,6 +73,7 @@ pub fn eval(
                     debug!("value {value:?}");
                     Ok(value)
                 }
+                #[cfg(feature = "async")]
                 Value::Future(_, _) => Ok(value.clone()),
                 Value::Lambda(ref ƛ) => {
                     let ƛ = s_read!(lu_dog).exhume_lambda(&s_read!(ƛ).id).unwrap();
@@ -159,13 +162,10 @@ pub fn eval(
 
             // let x = match &mut *value {
             match &*s_read!(value) {
-                // Value::Future(ref mut join_handle) => {
+                #[cfg(feature = "async")]
                 Value::Future(_, _) => {
-                    // use futures::future::FutureExt;
-
                     let lambda = args[1].clone();
                     let lambda = s_read!(lambda).r37_expression(&s_read!(lu_dog))[0].clone();
-                    // dbg!(&args);
                     let mut cloned_context = context.clone();
 
                     let future = async move {
@@ -222,35 +222,10 @@ pub fn eval(
                         }
                     };
 
-                    // let future = executor.unwrap().spawn(future);
-
                     let mut executor = ChaChaExecutor::new();
                     executor.spawn(future);
 
-                    let value = new_ref!(Value, Value::Future("foo".to_owned(), executor));
-
-                    // let future = async move {
-                    //     let result = value.clone();
-                    //     let value = future.await;
-
-                    //     let mut result = s_write!(result);
-                    //     if let Value::Future(_, ref mut result) = *result {
-                    //         match result {
-                    //             FutureResult::Running => *result = FutureResult::Complete(value),
-                    //             FutureResult::Waiting(waker) => {
-                    //                 waker.clone().wake();
-                    //                 *result = FutureResult::Complete(value);
-                    //             }
-                    //             _ => panic!("future already complete"),
-                    //         }
-                    //     } else {
-                    //         unreachable!()
-                    //     }
-                    // };
-
-                    // context.executor_spawn(future);
-
-                    Ok(value)
+                    Ok(new_ref!(Value, Value::Future("foo".to_owned(), executor)))
                 }
                 Value::Store(store, _plugin) => {
                     let impl_ = &s_read!(store).r83c_implementation_block(&s_read!(lu_dog))[0];
@@ -697,21 +672,80 @@ pub fn eval(
                         let millis: u64 = millis.try_into()?;
                         let duration = Duration::from_millis(millis);
 
-                        let future = async move {
-                            debug!("sleeping for {duration:?}");
-                            let instant = Timer::after(duration).await;
-                            debug!("done sleeping");
-                            // 🚧 Maybe we should coerce the instant and return it?
+                        #[cfg(feature = "async")]
+                        {
+                            let future = async move {
+                                debug!("sleeping for {duration:?}");
+                                let _instant = Timer::after(duration).await;
+                                debug!("done sleeping");
+                                // 🚧 Maybe we should coerce the instant and return it?
+                                Ok(new_ref!(Value, Value::Empty))
+                            };
+
+                            let mut executor = ChaChaExecutor::new();
+                            executor.spawn(future);
+
+                            let value =
+                                new_ref!(Value, Value::Future("xyzzy".to_owned(), executor));
+
+                            Ok(value)
+                        }
+                        #[cfg(not(feature = "async"))]
+                        {
+                            std::thread::sleep(duration);
                             Ok(new_ref!(Value, Value::Empty))
-                        };
-
-                        let mut executor = ChaChaExecutor::new();
-                        executor.spawn(future);
-
-                        let value = new_ref!(Value, Value::Future("xyzzy".to_owned(), executor));
-
-                        Ok(value)
+                        }
                     }
+                    // SPAWN => {
+                    //     debug!("evaluating chacha::time");
+                    //     // 🚧 I should be checking that there is an argument before
+                    //     // I go unwrapping it.
+                    //     let (func, span) = arg_values.pop_front().unwrap();
+                    //     let func = s_read!(func);
+                    //     ensure!(
+                    //         matches!(&*func, Value::Lambda(_))
+                    //             || matches!(&*func, Value::Function(_)),
+                    //         {
+                    //             // 🚧 I'm not really sure what to do about this here. It's
+                    //             // all really a hack for now anyway.
+                    //             let ty = func.get_type(&s_read!(sarzak), &s_read!(lu_dog));
+                    //             let ty = PrintableValueType(true, ty, context.models());
+                    //             let ty = ty.to_string();
+                    //             TypeMismatchSnafu {
+                    //                 expected: "<function>".to_string(),
+                    //                 found: ty,
+                    //                 span,
+                    //             }
+                    //         }
+                    //     );
+
+                    //     let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
+                    //     let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
+
+                    //     let future = async move {
+                    //     if let Value::Function(func) = &*func {
+                    //         eval_function_call(
+                    //             func.clone(),
+                    //             &[],
+                    //             None,
+                    //             true,
+                    //             span,
+                    //             context,
+                    //             vm,
+                    //         )
+                    //     } else if let Value::Lambda(ƛ) = &*func {
+                    //             eval_lambda_expression(ƛ.clone(), &[], true, span, context, vm)
+                    //     } else {
+                    //         panic!("missing implementation for timing this type: {func:?}");
+                    //     };
+                    // };
+                    //     let mut executor = ChaChaExecutor::new();
+                    //     executor.spawn(future);
+
+                    //     let value = new_ref!(Value, Value::Future("xyzzy".to_owned(), executor));
+
+                    //     Ok(value)
+                    // }
                     TIME => {
                         debug!("evaluating chacha::time");
                         // 🚧 I should be checking that there is an argument before
