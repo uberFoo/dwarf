@@ -17,6 +17,9 @@ pub type Result<T, E = Vec<DwarfError>> = std::result::Result<T, E>;
 #[derive(Debug, Snafu)]
 #[snafu(visibility(pub))]
 pub enum DwarfError {
+    /// Await non-future
+    ///
+    AwaitNotFuture { span: Span },
     /// Self Error
     ///
     /// The Self keyword is being used outside of an impl block.

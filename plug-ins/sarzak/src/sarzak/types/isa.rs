@@ -1,7 +1,7 @@
 // {"magic":"","directive":{"Start":{"directive":"allow-editing","tag":"isa-struct-definition-file"}}}
 // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"isa-use-statements"}}}
-use std::cell::RefCell;
-use std::rc::Rc;
+use std::sync::Arc;
+use std::sync::RwLock;
 use tracy_client::span;
 use uuid::Uuid;
 
@@ -28,14 +28,14 @@ impl Isa {
     /// Inter a new 'Isa' in the store, and return it's `id`.
     pub fn new(
         number: i64,
-        supertype: &Rc<RefCell<Supertype>>,
+        supertype: &Arc<RwLock<Supertype>>,
         store: &mut SarzakStore,
-    ) -> Rc<RefCell<Isa>> {
+    ) -> Arc<RwLock<Isa>> {
         let id = Uuid::new_v4();
-        let new = Rc::new(RefCell::new(Isa {
+        let new = Arc::new(RwLock::new(Isa {
             id,
             number,
-            supertype: supertype.borrow().id,
+            supertype: supertype.read().unwrap().id,
         }));
         store.inter_isa(new.clone());
         new
@@ -43,24 +43,24 @@ impl Isa {
     // {"magic":"","directive":{"End":{"directive":"ignore-orig"}}}
     // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"isa-struct-impl-nav-forward-to-supertype"}}}
     /// Navigate to [`Supertype`] across R13(1-*)
-    pub fn r13_supertype<'a>(&'a self, store: &'a SarzakStore) -> Vec<Rc<RefCell<Supertype>>> {
+    pub fn r13_supertype<'a>(&'a self, store: &'a SarzakStore) -> Vec<Arc<RwLock<Supertype>>> {
         span!("r13_supertype");
         vec![store.exhume_supertype(&self.supertype).unwrap()]
     }
     // {"magic":"","directive":{"End":{"directive":"ignore-orig"}}}
     // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"isa-struct-impl-nav-backward-1_M-to-subtype"}}}
     /// Navigate to [`Subtype`] across R27(1-M)
-    pub fn r27_subtype<'a>(&'a self, store: &'a SarzakStore) -> Vec<Rc<RefCell<Subtype>>> {
+    pub fn r27_subtype<'a>(&'a self, store: &'a SarzakStore) -> Vec<Arc<RwLock<Subtype>>> {
         span!("r27_subtype");
         store
             .iter_subtype()
-            .filter(|subtype| subtype.borrow().isa == self.id)
+            .filter(|subtype| subtype.read().unwrap().isa == self.id)
             .collect()
     }
     // {"magic":"","directive":{"End":{"directive":"ignore-orig"}}}
     // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"isa-impl-nav-subtype-to-supertype-relationship"}}}
     // Navigate to [`Relationship`] across R4(isa)
-    pub fn r4_relationship<'a>(&'a self, store: &'a SarzakStore) -> Vec<Rc<RefCell<Relationship>>> {
+    pub fn r4_relationship<'a>(&'a self, store: &'a SarzakStore) -> Vec<Arc<RwLock<Relationship>>> {
         span!("r4_relationship");
         vec![store.exhume_relationship(&self.id).unwrap()]
     }

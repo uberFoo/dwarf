@@ -4,14 +4,14 @@ use ansi_term::Colour;
 use heck::ToUpperCamelCase;
 
 use crate::{
-    interpreter::{debug, error, function, Context},
+    interpreter::{context::ModelContext, debug, error, function},
     lu_dog::{ValueType, ValueTypeEnum},
     s_read,
     sarzak::Ty,
     RefType,
 };
 
-pub(crate) struct PrintableValueType<'a>(pub bool, pub &'a RefType<ValueType>, pub &'a Context);
+pub(crate) struct PrintableValueType<'a>(pub bool, pub RefType<ValueType>, pub &'a ModelContext);
 
 impl<'a> fmt::Display for PrintableValueType<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -24,17 +24,16 @@ impl<'a> fmt::Display for PrintableValueType<'a> {
     }
 }
 
-impl PrintableValueType<'_> {
+impl<'a> PrintableValueType<'a> {
     fn print_pretty(&self, f: &mut fmt::Formatter) -> fmt::Result {
         const TY_CLR: Colour = Colour::Purple;
         const TY_WARN_CLR: Colour = Colour::Yellow;
         const TY_ERR_CLR: Colour = Colour::Red;
 
-        let pretty = self.0;
         let value = s_read!(self.1);
         let context = self.2;
-        let lu_dog = context.lu_dog_heel();
-        let sarzak = context.sarzak_heel();
+        let lu_dog = context.lu_dog();
+        let sarzak = context.sarzak();
         let model = context.models();
 
         match &value.subtype {
@@ -78,7 +77,7 @@ impl PrintableValueType<'_> {
                     "{}",
                     TY_CLR
                         .italic()
-                        .paint(format!("[{}]", PrintableValueType(true, &ty, context)))
+                        .paint(format!("[{}]", PrintableValueType(true, ty, context)))
                 )
             }
             ValueTypeEnum::Range(_) => write!(f, "{}", TY_CLR.italic().paint("range")),
@@ -91,7 +90,7 @@ impl PrintableValueType<'_> {
                     "{}",
                     TY_CLR
                         .italic()
-                        .paint(format!("&{}", PrintableValueType(true, &ty, context)))
+                        .paint(format!("&{}", PrintableValueType(true, ty, context)))
                 )
             }
             ValueTypeEnum::Ty(ref ty) => {
@@ -172,8 +171,8 @@ impl PrintableValueType<'_> {
     fn print(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let value = s_read!(self.1);
         let context = self.2;
-        let lu_dog = context.lu_dog_heel();
-        let sarzak = context.sarzak_heel();
+        let lu_dog = context.lu_dog();
+        let sarzak = context.sarzak();
         let model = context.models();
 
         match &value.subtype {
@@ -207,14 +206,14 @@ impl PrintableValueType<'_> {
                 let list = s_read!(lu_dog).exhume_list(list).unwrap();
                 let list = s_read!(list);
                 let ty = list.r36_value_type(&s_read!(lu_dog))[0].clone();
-                write!(f, "{}", PrintableValueType(false, &ty, context))
+                write!(f, "{}", PrintableValueType(false, ty, context))
             }
             ValueTypeEnum::Range(_) => write!(f, "range"),
             ValueTypeEnum::Reference(ref reference) => {
                 let reference = s_read!(lu_dog).exhume_reference(reference).unwrap();
                 let reference = s_read!(reference);
                 let ty = reference.r35_value_type(&s_read!(lu_dog))[0].clone();
-                write!(f, "{}", PrintableValueType(false, &ty, context))
+                write!(f, "{}", PrintableValueType(false, ty, context))
             }
             ValueTypeEnum::Ty(ref ty) => {
                 // So, sometimes these show up in the model domain. It'll get really

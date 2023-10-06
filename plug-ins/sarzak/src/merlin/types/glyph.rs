@@ -1,7 +1,7 @@
 // {"magic":"","directive":{"Start":{"directive":"allow-editing","tag":"glyph-struct-definition-file"}}}
 // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"glyph-use-statements"}}}
-use std::cell::RefCell;
-use std::rc::Rc;
+use std::sync::Arc;
+use std::sync::RwLock;
 use tracy_client::span;
 use uuid::Uuid;
 
@@ -38,10 +38,10 @@ pub enum GlyphEnum {
 impl Glyph {
     // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"glyph-struct-impl-new_many"}}}
     /// Inter a new Glyph in the store, and return it's `id`.
-    pub fn new_many(line: &Rc<RefCell<Line>>, store: &mut MerlinStore) -> Rc<RefCell<Glyph>> {
+    pub fn new_many(line: &Arc<RwLock<Line>>, store: &mut MerlinStore) -> Arc<RwLock<Glyph>> {
         let id = Uuid::new_v4();
-        let new = Rc::new(RefCell::new(Glyph {
-            line: line.borrow().id,
+        let new = Arc::new(RwLock::new(Glyph {
+            line: line.read().unwrap().id,
             subtype: GlyphEnum::Many(MANY),
             id,
         }));
@@ -51,10 +51,10 @@ impl Glyph {
     // {"magic":"","directive":{"End":{"directive":"ignore-orig"}}}
     // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"glyph-struct-impl-new_one"}}}
     /// Inter a new Glyph in the store, and return it's `id`.
-    pub fn new_one(line: &Rc<RefCell<Line>>, store: &mut MerlinStore) -> Rc<RefCell<Glyph>> {
+    pub fn new_one(line: &Arc<RwLock<Line>>, store: &mut MerlinStore) -> Arc<RwLock<Glyph>> {
         let id = Uuid::new_v4();
-        let new = Rc::new(RefCell::new(Glyph {
-            line: line.borrow().id,
+        let new = Arc::new(RwLock::new(Glyph {
+            line: line.read().unwrap().id,
             subtype: GlyphEnum::One(ONE),
             id,
         }));
@@ -64,10 +64,10 @@ impl Glyph {
     // {"magic":"","directive":{"End":{"directive":"ignore-orig"}}}
     // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"glyph-struct-impl-new_sub"}}}
     /// Inter a new Glyph in the store, and return it's `id`.
-    pub fn new_sub(line: &Rc<RefCell<Line>>, store: &mut MerlinStore) -> Rc<RefCell<Glyph>> {
+    pub fn new_sub(line: &Arc<RwLock<Line>>, store: &mut MerlinStore) -> Arc<RwLock<Glyph>> {
         let id = Uuid::new_v4();
-        let new = Rc::new(RefCell::new(Glyph {
-            line: line.borrow().id,
+        let new = Arc::new(RwLock::new(Glyph {
+            line: line.read().unwrap().id,
             subtype: GlyphEnum::Sub(SUB),
             id,
         }));
@@ -77,10 +77,10 @@ impl Glyph {
     // {"magic":"","directive":{"End":{"directive":"ignore-orig"}}}
     // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"glyph-struct-impl-new_x_super"}}}
     /// Inter a new Glyph in the store, and return it's `id`.
-    pub fn new_x_super(line: &Rc<RefCell<Line>>, store: &mut MerlinStore) -> Rc<RefCell<Glyph>> {
+    pub fn new_x_super(line: &Arc<RwLock<Line>>, store: &mut MerlinStore) -> Arc<RwLock<Glyph>> {
         let id = Uuid::new_v4();
-        let new = Rc::new(RefCell::new(Glyph {
-            line: line.borrow().id,
+        let new = Arc::new(RwLock::new(Glyph {
+            line: line.read().unwrap().id,
             subtype: GlyphEnum::XSuper(X_SUPER),
             id,
         }));
@@ -90,18 +90,18 @@ impl Glyph {
     // {"magic":"","directive":{"End":{"directive":"ignore-orig"}}}
     // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"glyph-struct-impl-nav-forward-to-line"}}}
     /// Navigate to [`Line`] across R16(1-*)
-    pub fn r16_line<'a>(&'a self, store: &'a MerlinStore) -> Vec<Rc<RefCell<Line>>> {
+    pub fn r16_line<'a>(&'a self, store: &'a MerlinStore) -> Vec<Arc<RwLock<Line>>> {
         span!("r16_line");
         vec![store.exhume_line(&self.line).unwrap()]
     }
     // {"magic":"","directive":{"End":{"directive":"ignore-orig"}}}
     // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"glyph-struct-impl-nav-backward-1_M-to-anchor"}}}
     /// Navigate to [`Anchor`] across R10(1-M)
-    pub fn r10_anchor<'a>(&'a self, store: &'a MerlinStore) -> Vec<Rc<RefCell<Anchor>>> {
+    pub fn r10_anchor<'a>(&'a self, store: &'a MerlinStore) -> Vec<Arc<RwLock<Anchor>>> {
         span!("r10_anchor");
         store
             .iter_anchor()
-            .filter(|anchor| anchor.borrow().glyph == self.id)
+            .filter(|anchor| anchor.read().unwrap().glyph == self.id)
             .collect()
     }
     // {"magic":"","directive":{"End":{"directive":"ignore-orig"}}}

@@ -19,8 +19,6 @@ use crate::chacha::value::FfiValue;
 pub mod error;
 pub use error::{Error, Unsupported};
 
-// pub type StorePluginType = Plugin_TO<'static, RBox<()>>;
-
 #[repr(C)]
 #[derive(Clone, StableAbi)]
 pub struct StorePluginType {
@@ -64,7 +62,7 @@ impl std::fmt::Display for StorePluginType {
 #[sabi_trait]
 /// A plugin which is loaded by the application,and provides some functionality.
 // #[sabi(debug_print)]
-pub trait Plugin: Clone + Debug + Display {
+pub trait Plugin: Clone + Debug + Display + Send + Sync {
     fn invoke_func(
         &mut self,
         module: RStr<'_>,

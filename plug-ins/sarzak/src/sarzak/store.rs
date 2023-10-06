@@ -28,8 +28,8 @@
 //! * [`Supertype`]
 //! * [`Ty`]
 // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"sarzak-object-store-definition"}}}
-use std::cell::RefCell;
-use std::rc::Rc;
+use std::sync::Arc;
+use std::sync::RwLock;
 use std::{
     fs,
     io::{self, prelude::*},
@@ -51,75 +51,75 @@ use crate::sarzak::types::{
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct ObjectStore {
-    acknowledged_event: Rc<RefCell<HashMap<Uuid, (Rc<RefCell<AcknowledgedEvent>>, SystemTime)>>>,
+    acknowledged_event: Arc<RwLock<HashMap<Uuid, (Arc<RwLock<AcknowledgedEvent>>, SystemTime)>>>,
     an_associative_referent:
-        Rc<RefCell<HashMap<Uuid, (Rc<RefCell<AnAssociativeReferent>>, SystemTime)>>>,
-    associative: Rc<RefCell<HashMap<Uuid, (Rc<RefCell<Associative>>, SystemTime)>>>,
+        Arc<RwLock<HashMap<Uuid, (Arc<RwLock<AnAssociativeReferent>>, SystemTime)>>>,
+    associative: Arc<RwLock<HashMap<Uuid, (Arc<RwLock<Associative>>, SystemTime)>>>,
     associative_referent:
-        Rc<RefCell<HashMap<Uuid, (Rc<RefCell<AssociativeReferent>>, SystemTime)>>>,
+        Arc<RwLock<HashMap<Uuid, (Arc<RwLock<AssociativeReferent>>, SystemTime)>>>,
     associative_referrer:
-        Rc<RefCell<HashMap<Uuid, (Rc<RefCell<AssociativeReferrer>>, SystemTime)>>>,
-    attribute: Rc<RefCell<HashMap<Uuid, (Rc<RefCell<Attribute>>, SystemTime)>>>,
-    binary: Rc<RefCell<HashMap<Uuid, (Rc<RefCell<Binary>>, SystemTime)>>>,
-    cardinality: Rc<RefCell<HashMap<Uuid, (Rc<RefCell<Cardinality>>, SystemTime)>>>,
-    conditionality: Rc<RefCell<HashMap<Uuid, (Rc<RefCell<Conditionality>>, SystemTime)>>>,
-    event: Rc<RefCell<HashMap<Uuid, (Rc<RefCell<Event>>, SystemTime)>>>,
-    external: Rc<RefCell<HashMap<Uuid, (Rc<RefCell<External>>, SystemTime)>>>,
-    isa: Rc<RefCell<HashMap<Uuid, (Rc<RefCell<Isa>>, SystemTime)>>>,
-    object: Rc<RefCell<HashMap<Uuid, (Rc<RefCell<Object>>, SystemTime)>>>,
-    object_id_by_name: Rc<RefCell<HashMap<String, (Uuid, SystemTime)>>>,
-    referent: Rc<RefCell<HashMap<Uuid, (Rc<RefCell<Referent>>, SystemTime)>>>,
-    referrer: Rc<RefCell<HashMap<Uuid, (Rc<RefCell<Referrer>>, SystemTime)>>>,
-    relationship: Rc<RefCell<HashMap<Uuid, (Rc<RefCell<Relationship>>, SystemTime)>>>,
-    state: Rc<RefCell<HashMap<Uuid, (Rc<RefCell<State>>, SystemTime)>>>,
-    subtype: Rc<RefCell<HashMap<Uuid, (Rc<RefCell<Subtype>>, SystemTime)>>>,
-    supertype: Rc<RefCell<HashMap<Uuid, (Rc<RefCell<Supertype>>, SystemTime)>>>,
-    ty: Rc<RefCell<HashMap<Uuid, (Rc<RefCell<Ty>>, SystemTime)>>>,
+        Arc<RwLock<HashMap<Uuid, (Arc<RwLock<AssociativeReferrer>>, SystemTime)>>>,
+    attribute: Arc<RwLock<HashMap<Uuid, (Arc<RwLock<Attribute>>, SystemTime)>>>,
+    binary: Arc<RwLock<HashMap<Uuid, (Arc<RwLock<Binary>>, SystemTime)>>>,
+    cardinality: Arc<RwLock<HashMap<Uuid, (Arc<RwLock<Cardinality>>, SystemTime)>>>,
+    conditionality: Arc<RwLock<HashMap<Uuid, (Arc<RwLock<Conditionality>>, SystemTime)>>>,
+    event: Arc<RwLock<HashMap<Uuid, (Arc<RwLock<Event>>, SystemTime)>>>,
+    external: Arc<RwLock<HashMap<Uuid, (Arc<RwLock<External>>, SystemTime)>>>,
+    isa: Arc<RwLock<HashMap<Uuid, (Arc<RwLock<Isa>>, SystemTime)>>>,
+    object: Arc<RwLock<HashMap<Uuid, (Arc<RwLock<Object>>, SystemTime)>>>,
+    object_id_by_name: Arc<RwLock<HashMap<String, (Uuid, SystemTime)>>>,
+    referent: Arc<RwLock<HashMap<Uuid, (Arc<RwLock<Referent>>, SystemTime)>>>,
+    referrer: Arc<RwLock<HashMap<Uuid, (Arc<RwLock<Referrer>>, SystemTime)>>>,
+    relationship: Arc<RwLock<HashMap<Uuid, (Arc<RwLock<Relationship>>, SystemTime)>>>,
+    state: Arc<RwLock<HashMap<Uuid, (Arc<RwLock<State>>, SystemTime)>>>,
+    subtype: Arc<RwLock<HashMap<Uuid, (Arc<RwLock<Subtype>>, SystemTime)>>>,
+    supertype: Arc<RwLock<HashMap<Uuid, (Arc<RwLock<Supertype>>, SystemTime)>>>,
+    ty: Arc<RwLock<HashMap<Uuid, (Arc<RwLock<Ty>>, SystemTime)>>>,
 }
 
 impl ObjectStore {
     pub fn new() -> Self {
         let mut store = Self {
-            acknowledged_event: Rc::new(RefCell::new(HashMap::default())),
-            an_associative_referent: Rc::new(RefCell::new(HashMap::default())),
-            associative: Rc::new(RefCell::new(HashMap::default())),
-            associative_referent: Rc::new(RefCell::new(HashMap::default())),
-            associative_referrer: Rc::new(RefCell::new(HashMap::default())),
-            attribute: Rc::new(RefCell::new(HashMap::default())),
-            binary: Rc::new(RefCell::new(HashMap::default())),
-            cardinality: Rc::new(RefCell::new(HashMap::default())),
-            conditionality: Rc::new(RefCell::new(HashMap::default())),
-            event: Rc::new(RefCell::new(HashMap::default())),
-            external: Rc::new(RefCell::new(HashMap::default())),
-            isa: Rc::new(RefCell::new(HashMap::default())),
-            object: Rc::new(RefCell::new(HashMap::default())),
-            object_id_by_name: Rc::new(RefCell::new(HashMap::default())),
-            referent: Rc::new(RefCell::new(HashMap::default())),
-            referrer: Rc::new(RefCell::new(HashMap::default())),
-            relationship: Rc::new(RefCell::new(HashMap::default())),
-            state: Rc::new(RefCell::new(HashMap::default())),
-            subtype: Rc::new(RefCell::new(HashMap::default())),
-            supertype: Rc::new(RefCell::new(HashMap::default())),
-            ty: Rc::new(RefCell::new(HashMap::default())),
+            acknowledged_event: Arc::new(RwLock::new(HashMap::default())),
+            an_associative_referent: Arc::new(RwLock::new(HashMap::default())),
+            associative: Arc::new(RwLock::new(HashMap::default())),
+            associative_referent: Arc::new(RwLock::new(HashMap::default())),
+            associative_referrer: Arc::new(RwLock::new(HashMap::default())),
+            attribute: Arc::new(RwLock::new(HashMap::default())),
+            binary: Arc::new(RwLock::new(HashMap::default())),
+            cardinality: Arc::new(RwLock::new(HashMap::default())),
+            conditionality: Arc::new(RwLock::new(HashMap::default())),
+            event: Arc::new(RwLock::new(HashMap::default())),
+            external: Arc::new(RwLock::new(HashMap::default())),
+            isa: Arc::new(RwLock::new(HashMap::default())),
+            object: Arc::new(RwLock::new(HashMap::default())),
+            object_id_by_name: Arc::new(RwLock::new(HashMap::default())),
+            referent: Arc::new(RwLock::new(HashMap::default())),
+            referrer: Arc::new(RwLock::new(HashMap::default())),
+            relationship: Arc::new(RwLock::new(HashMap::default())),
+            state: Arc::new(RwLock::new(HashMap::default())),
+            subtype: Arc::new(RwLock::new(HashMap::default())),
+            supertype: Arc::new(RwLock::new(HashMap::default())),
+            ty: Arc::new(RwLock::new(HashMap::default())),
         };
 
         // Initialize Singleton Subtypes
         // 💥 Look at how beautiful this generated code is for super/sub-type graphs!
         // I remember having a bit of a struggle making it work. It's recursive, with
         // a lot of special cases, and I think it calls other recursive functions...💥
-        store.inter_cardinality(Rc::new(RefCell::new(Cardinality::Many(MANY))));
-        store.inter_cardinality(Rc::new(RefCell::new(Cardinality::One(ONE))));
-        store.inter_conditionality(Rc::new(RefCell::new(Conditionality::Conditional(
+        store.inter_cardinality(Arc::new(RwLock::new(Cardinality::Many(MANY))));
+        store.inter_cardinality(Arc::new(RwLock::new(Cardinality::One(ONE))));
+        store.inter_conditionality(Arc::new(RwLock::new(Conditionality::Conditional(
             CONDITIONAL,
         ))));
-        store.inter_conditionality(Rc::new(RefCell::new(Conditionality::Unconditional(
+        store.inter_conditionality(Arc::new(RwLock::new(Conditionality::Unconditional(
             UNCONDITIONAL,
         ))));
-        store.inter_ty(Rc::new(RefCell::new(Ty::Boolean(BOOLEAN))));
-        store.inter_ty(Rc::new(RefCell::new(Ty::Float(FLOAT))));
-        store.inter_ty(Rc::new(RefCell::new(Ty::Integer(INTEGER))));
-        store.inter_ty(Rc::new(RefCell::new(Ty::SString(S_STRING))));
-        store.inter_ty(Rc::new(RefCell::new(Ty::SUuid(S_UUID))));
+        store.inter_ty(Arc::new(RwLock::new(Ty::Boolean(BOOLEAN))));
+        store.inter_ty(Arc::new(RwLock::new(Ty::Float(FLOAT))));
+        store.inter_ty(Arc::new(RwLock::new(Ty::Integer(INTEGER))));
+        store.inter_ty(Arc::new(RwLock::new(Ty::SString(S_STRING))));
+        store.inter_ty(Arc::new(RwLock::new(Ty::SUuid(S_UUID))));
 
         store
     }
@@ -127,18 +127,20 @@ impl ObjectStore {
     // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"sarzak-object-store-methods"}}}
     /// Inter (insert) [`AcknowledgedEvent`] into the store.
     ///
-    pub fn inter_acknowledged_event(&mut self, acknowledged_event: Rc<RefCell<AcknowledgedEvent>>) {
-        let read = acknowledged_event.borrow();
+    pub fn inter_acknowledged_event(&mut self, acknowledged_event: Arc<RwLock<AcknowledgedEvent>>) {
+        let read = acknowledged_event.read().unwrap();
         self.acknowledged_event
-            .borrow_mut()
+            .write()
+            .unwrap()
             .insert(read.id, (acknowledged_event.clone(), SystemTime::now()));
     }
 
     /// Exhume (get) [`AcknowledgedEvent`] from the store.
     ///
-    pub fn exhume_acknowledged_event(&self, id: &Uuid) -> Option<Rc<RefCell<AcknowledgedEvent>>> {
+    pub fn exhume_acknowledged_event(&self, id: &Uuid) -> Option<Arc<RwLock<AcknowledgedEvent>>> {
         self.acknowledged_event
-            .borrow()
+            .read()
+            .unwrap()
             .get(id)
             .map(|acknowledged_event| acknowledged_event.0.clone())
     }
@@ -148,9 +150,10 @@ impl ObjectStore {
     pub fn exorcise_acknowledged_event(
         &mut self,
         id: &Uuid,
-    ) -> Option<Rc<RefCell<AcknowledgedEvent>>> {
+    ) -> Option<Arc<RwLock<AcknowledgedEvent>>> {
         self.acknowledged_event
-            .borrow_mut()
+            .write()
+            .unwrap()
             .remove(id)
             .map(|acknowledged_event| acknowledged_event.0.clone())
     }
@@ -159,10 +162,11 @@ impl ObjectStore {
     ///
     pub fn iter_acknowledged_event(
         &self,
-    ) -> impl Iterator<Item = Rc<RefCell<AcknowledgedEvent>>> + '_ {
-        let values: Vec<Rc<RefCell<AcknowledgedEvent>>> = self
+    ) -> impl Iterator<Item = Arc<RwLock<AcknowledgedEvent>>> + '_ {
+        let values: Vec<Arc<RwLock<AcknowledgedEvent>>> = self
             .acknowledged_event
-            .borrow()
+            .read()
+            .unwrap()
             .values()
             .map(|acknowledged_event| acknowledged_event.0.clone())
             .collect();
@@ -177,7 +181,8 @@ impl ObjectStore {
         acknowledged_event: &AcknowledgedEvent,
     ) -> SystemTime {
         self.acknowledged_event
-            .borrow()
+            .read()
+            .unwrap()
             .get(&acknowledged_event.id)
             .map(|acknowledged_event| acknowledged_event.1)
             .unwrap_or(SystemTime::now())
@@ -187,10 +192,10 @@ impl ObjectStore {
     ///
     pub fn inter_an_associative_referent(
         &mut self,
-        an_associative_referent: Rc<RefCell<AnAssociativeReferent>>,
+        an_associative_referent: Arc<RwLock<AnAssociativeReferent>>,
     ) {
-        let read = an_associative_referent.borrow();
-        self.an_associative_referent.borrow_mut().insert(
+        let read = an_associative_referent.read().unwrap();
+        self.an_associative_referent.write().unwrap().insert(
             read.id,
             (an_associative_referent.clone(), SystemTime::now()),
         );
@@ -201,9 +206,10 @@ impl ObjectStore {
     pub fn exhume_an_associative_referent(
         &self,
         id: &Uuid,
-    ) -> Option<Rc<RefCell<AnAssociativeReferent>>> {
+    ) -> Option<Arc<RwLock<AnAssociativeReferent>>> {
         self.an_associative_referent
-            .borrow()
+            .read()
+            .unwrap()
             .get(id)
             .map(|an_associative_referent| an_associative_referent.0.clone())
     }
@@ -213,9 +219,10 @@ impl ObjectStore {
     pub fn exorcise_an_associative_referent(
         &mut self,
         id: &Uuid,
-    ) -> Option<Rc<RefCell<AnAssociativeReferent>>> {
+    ) -> Option<Arc<RwLock<AnAssociativeReferent>>> {
         self.an_associative_referent
-            .borrow_mut()
+            .write()
+            .unwrap()
             .remove(id)
             .map(|an_associative_referent| an_associative_referent.0.clone())
     }
@@ -224,10 +231,11 @@ impl ObjectStore {
     ///
     pub fn iter_an_associative_referent(
         &self,
-    ) -> impl Iterator<Item = Rc<RefCell<AnAssociativeReferent>>> + '_ {
-        let values: Vec<Rc<RefCell<AnAssociativeReferent>>> = self
+    ) -> impl Iterator<Item = Arc<RwLock<AnAssociativeReferent>>> + '_ {
+        let values: Vec<Arc<RwLock<AnAssociativeReferent>>> = self
             .an_associative_referent
-            .borrow()
+            .read()
+            .unwrap()
             .values()
             .map(|an_associative_referent| an_associative_referent.0.clone())
             .collect();
@@ -242,7 +250,8 @@ impl ObjectStore {
         an_associative_referent: &AnAssociativeReferent,
     ) -> SystemTime {
         self.an_associative_referent
-            .borrow()
+            .read()
+            .unwrap()
             .get(&an_associative_referent.id)
             .map(|an_associative_referent| an_associative_referent.1)
             .unwrap_or(SystemTime::now())
@@ -250,37 +259,41 @@ impl ObjectStore {
 
     /// Inter (insert) [`Associative`] into the store.
     ///
-    pub fn inter_associative(&mut self, associative: Rc<RefCell<Associative>>) {
-        let read = associative.borrow();
+    pub fn inter_associative(&mut self, associative: Arc<RwLock<Associative>>) {
+        let read = associative.read().unwrap();
         self.associative
-            .borrow_mut()
+            .write()
+            .unwrap()
             .insert(read.id, (associative.clone(), SystemTime::now()));
     }
 
     /// Exhume (get) [`Associative`] from the store.
     ///
-    pub fn exhume_associative(&self, id: &Uuid) -> Option<Rc<RefCell<Associative>>> {
+    pub fn exhume_associative(&self, id: &Uuid) -> Option<Arc<RwLock<Associative>>> {
         self.associative
-            .borrow()
+            .read()
+            .unwrap()
             .get(id)
             .map(|associative| associative.0.clone())
     }
 
     /// Exorcise (remove) [`Associative`] from the store.
     ///
-    pub fn exorcise_associative(&mut self, id: &Uuid) -> Option<Rc<RefCell<Associative>>> {
+    pub fn exorcise_associative(&mut self, id: &Uuid) -> Option<Arc<RwLock<Associative>>> {
         self.associative
-            .borrow_mut()
+            .write()
+            .unwrap()
             .remove(id)
             .map(|associative| associative.0.clone())
     }
 
     /// Get an iterator over the internal `HashMap<&Uuid, Associative>`.
     ///
-    pub fn iter_associative(&self) -> impl Iterator<Item = Rc<RefCell<Associative>>> + '_ {
-        let values: Vec<Rc<RefCell<Associative>>> = self
+    pub fn iter_associative(&self) -> impl Iterator<Item = Arc<RwLock<Associative>>> + '_ {
+        let values: Vec<Arc<RwLock<Associative>>> = self
             .associative
-            .borrow()
+            .read()
+            .unwrap()
             .values()
             .map(|associative| associative.0.clone())
             .collect();
@@ -292,7 +305,8 @@ impl ObjectStore {
     ///
     pub fn associative_timestamp(&self, associative: &Associative) -> SystemTime {
         self.associative
-            .borrow()
+            .read()
+            .unwrap()
             .get(&associative.id)
             .map(|associative| associative.1)
             .unwrap_or(SystemTime::now())
@@ -302,11 +316,12 @@ impl ObjectStore {
     ///
     pub fn inter_associative_referent(
         &mut self,
-        associative_referent: Rc<RefCell<AssociativeReferent>>,
+        associative_referent: Arc<RwLock<AssociativeReferent>>,
     ) {
-        let read = associative_referent.borrow();
+        let read = associative_referent.read().unwrap();
         self.associative_referent
-            .borrow_mut()
+            .write()
+            .unwrap()
             .insert(read.id, (associative_referent.clone(), SystemTime::now()));
     }
 
@@ -315,9 +330,10 @@ impl ObjectStore {
     pub fn exhume_associative_referent(
         &self,
         id: &Uuid,
-    ) -> Option<Rc<RefCell<AssociativeReferent>>> {
+    ) -> Option<Arc<RwLock<AssociativeReferent>>> {
         self.associative_referent
-            .borrow()
+            .read()
+            .unwrap()
             .get(id)
             .map(|associative_referent| associative_referent.0.clone())
     }
@@ -327,9 +343,10 @@ impl ObjectStore {
     pub fn exorcise_associative_referent(
         &mut self,
         id: &Uuid,
-    ) -> Option<Rc<RefCell<AssociativeReferent>>> {
+    ) -> Option<Arc<RwLock<AssociativeReferent>>> {
         self.associative_referent
-            .borrow_mut()
+            .write()
+            .unwrap()
             .remove(id)
             .map(|associative_referent| associative_referent.0.clone())
     }
@@ -338,10 +355,11 @@ impl ObjectStore {
     ///
     pub fn iter_associative_referent(
         &self,
-    ) -> impl Iterator<Item = Rc<RefCell<AssociativeReferent>>> + '_ {
-        let values: Vec<Rc<RefCell<AssociativeReferent>>> = self
+    ) -> impl Iterator<Item = Arc<RwLock<AssociativeReferent>>> + '_ {
+        let values: Vec<Arc<RwLock<AssociativeReferent>>> = self
             .associative_referent
-            .borrow()
+            .read()
+            .unwrap()
             .values()
             .map(|associative_referent| associative_referent.0.clone())
             .collect();
@@ -356,7 +374,8 @@ impl ObjectStore {
         associative_referent: &AssociativeReferent,
     ) -> SystemTime {
         self.associative_referent
-            .borrow()
+            .read()
+            .unwrap()
             .get(&associative_referent.id)
             .map(|associative_referent| associative_referent.1)
             .unwrap_or(SystemTime::now())
@@ -366,11 +385,12 @@ impl ObjectStore {
     ///
     pub fn inter_associative_referrer(
         &mut self,
-        associative_referrer: Rc<RefCell<AssociativeReferrer>>,
+        associative_referrer: Arc<RwLock<AssociativeReferrer>>,
     ) {
-        let read = associative_referrer.borrow();
+        let read = associative_referrer.read().unwrap();
         self.associative_referrer
-            .borrow_mut()
+            .write()
+            .unwrap()
             .insert(read.id, (associative_referrer.clone(), SystemTime::now()));
     }
 
@@ -379,9 +399,10 @@ impl ObjectStore {
     pub fn exhume_associative_referrer(
         &self,
         id: &Uuid,
-    ) -> Option<Rc<RefCell<AssociativeReferrer>>> {
+    ) -> Option<Arc<RwLock<AssociativeReferrer>>> {
         self.associative_referrer
-            .borrow()
+            .read()
+            .unwrap()
             .get(id)
             .map(|associative_referrer| associative_referrer.0.clone())
     }
@@ -391,9 +412,10 @@ impl ObjectStore {
     pub fn exorcise_associative_referrer(
         &mut self,
         id: &Uuid,
-    ) -> Option<Rc<RefCell<AssociativeReferrer>>> {
+    ) -> Option<Arc<RwLock<AssociativeReferrer>>> {
         self.associative_referrer
-            .borrow_mut()
+            .write()
+            .unwrap()
             .remove(id)
             .map(|associative_referrer| associative_referrer.0.clone())
     }
@@ -402,10 +424,11 @@ impl ObjectStore {
     ///
     pub fn iter_associative_referrer(
         &self,
-    ) -> impl Iterator<Item = Rc<RefCell<AssociativeReferrer>>> + '_ {
-        let values: Vec<Rc<RefCell<AssociativeReferrer>>> = self
+    ) -> impl Iterator<Item = Arc<RwLock<AssociativeReferrer>>> + '_ {
+        let values: Vec<Arc<RwLock<AssociativeReferrer>>> = self
             .associative_referrer
-            .borrow()
+            .read()
+            .unwrap()
             .values()
             .map(|associative_referrer| associative_referrer.0.clone())
             .collect();
@@ -420,7 +443,8 @@ impl ObjectStore {
         associative_referrer: &AssociativeReferrer,
     ) -> SystemTime {
         self.associative_referrer
-            .borrow()
+            .read()
+            .unwrap()
             .get(&associative_referrer.id)
             .map(|associative_referrer| associative_referrer.1)
             .unwrap_or(SystemTime::now())
@@ -428,37 +452,41 @@ impl ObjectStore {
 
     /// Inter (insert) [`Attribute`] into the store.
     ///
-    pub fn inter_attribute(&mut self, attribute: Rc<RefCell<Attribute>>) {
-        let read = attribute.borrow();
+    pub fn inter_attribute(&mut self, attribute: Arc<RwLock<Attribute>>) {
+        let read = attribute.read().unwrap();
         self.attribute
-            .borrow_mut()
+            .write()
+            .unwrap()
             .insert(read.id, (attribute.clone(), SystemTime::now()));
     }
 
     /// Exhume (get) [`Attribute`] from the store.
     ///
-    pub fn exhume_attribute(&self, id: &Uuid) -> Option<Rc<RefCell<Attribute>>> {
+    pub fn exhume_attribute(&self, id: &Uuid) -> Option<Arc<RwLock<Attribute>>> {
         self.attribute
-            .borrow()
+            .read()
+            .unwrap()
             .get(id)
             .map(|attribute| attribute.0.clone())
     }
 
     /// Exorcise (remove) [`Attribute`] from the store.
     ///
-    pub fn exorcise_attribute(&mut self, id: &Uuid) -> Option<Rc<RefCell<Attribute>>> {
+    pub fn exorcise_attribute(&mut self, id: &Uuid) -> Option<Arc<RwLock<Attribute>>> {
         self.attribute
-            .borrow_mut()
+            .write()
+            .unwrap()
             .remove(id)
             .map(|attribute| attribute.0.clone())
     }
 
     /// Get an iterator over the internal `HashMap<&Uuid, Attribute>`.
     ///
-    pub fn iter_attribute(&self) -> impl Iterator<Item = Rc<RefCell<Attribute>>> + '_ {
-        let values: Vec<Rc<RefCell<Attribute>>> = self
+    pub fn iter_attribute(&self) -> impl Iterator<Item = Arc<RwLock<Attribute>>> + '_ {
+        let values: Vec<Arc<RwLock<Attribute>>> = self
             .attribute
-            .borrow()
+            .read()
+            .unwrap()
             .values()
             .map(|attribute| attribute.0.clone())
             .collect();
@@ -470,7 +498,8 @@ impl ObjectStore {
     ///
     pub fn attribute_timestamp(&self, attribute: &Attribute) -> SystemTime {
         self.attribute
-            .borrow()
+            .read()
+            .unwrap()
             .get(&attribute.id)
             .map(|attribute| attribute.1)
             .unwrap_or(SystemTime::now())
@@ -478,34 +507,41 @@ impl ObjectStore {
 
     /// Inter (insert) [`Binary`] into the store.
     ///
-    pub fn inter_binary(&mut self, binary: Rc<RefCell<Binary>>) {
-        let read = binary.borrow();
+    pub fn inter_binary(&mut self, binary: Arc<RwLock<Binary>>) {
+        let read = binary.read().unwrap();
         self.binary
-            .borrow_mut()
+            .write()
+            .unwrap()
             .insert(read.id, (binary.clone(), SystemTime::now()));
     }
 
     /// Exhume (get) [`Binary`] from the store.
     ///
-    pub fn exhume_binary(&self, id: &Uuid) -> Option<Rc<RefCell<Binary>>> {
-        self.binary.borrow().get(id).map(|binary| binary.0.clone())
+    pub fn exhume_binary(&self, id: &Uuid) -> Option<Arc<RwLock<Binary>>> {
+        self.binary
+            .read()
+            .unwrap()
+            .get(id)
+            .map(|binary| binary.0.clone())
     }
 
     /// Exorcise (remove) [`Binary`] from the store.
     ///
-    pub fn exorcise_binary(&mut self, id: &Uuid) -> Option<Rc<RefCell<Binary>>> {
+    pub fn exorcise_binary(&mut self, id: &Uuid) -> Option<Arc<RwLock<Binary>>> {
         self.binary
-            .borrow_mut()
+            .write()
+            .unwrap()
             .remove(id)
             .map(|binary| binary.0.clone())
     }
 
     /// Get an iterator over the internal `HashMap<&Uuid, Binary>`.
     ///
-    pub fn iter_binary(&self) -> impl Iterator<Item = Rc<RefCell<Binary>>> + '_ {
-        let values: Vec<Rc<RefCell<Binary>>> = self
+    pub fn iter_binary(&self) -> impl Iterator<Item = Arc<RwLock<Binary>>> + '_ {
+        let values: Vec<Arc<RwLock<Binary>>> = self
             .binary
-            .borrow()
+            .read()
+            .unwrap()
             .values()
             .map(|binary| binary.0.clone())
             .collect();
@@ -517,7 +553,8 @@ impl ObjectStore {
     ///
     pub fn binary_timestamp(&self, binary: &Binary) -> SystemTime {
         self.binary
-            .borrow()
+            .read()
+            .unwrap()
             .get(&binary.id)
             .map(|binary| binary.1)
             .unwrap_or(SystemTime::now())
@@ -525,37 +562,41 @@ impl ObjectStore {
 
     /// Inter (insert) [`Cardinality`] into the store.
     ///
-    pub fn inter_cardinality(&mut self, cardinality: Rc<RefCell<Cardinality>>) {
-        let read = cardinality.borrow();
+    pub fn inter_cardinality(&mut self, cardinality: Arc<RwLock<Cardinality>>) {
+        let read = cardinality.read().unwrap();
         self.cardinality
-            .borrow_mut()
+            .write()
+            .unwrap()
             .insert(read.id(), (cardinality.clone(), SystemTime::now()));
     }
 
     /// Exhume (get) [`Cardinality`] from the store.
     ///
-    pub fn exhume_cardinality(&self, id: &Uuid) -> Option<Rc<RefCell<Cardinality>>> {
+    pub fn exhume_cardinality(&self, id: &Uuid) -> Option<Arc<RwLock<Cardinality>>> {
         self.cardinality
-            .borrow()
+            .read()
+            .unwrap()
             .get(id)
             .map(|cardinality| cardinality.0.clone())
     }
 
     /// Exorcise (remove) [`Cardinality`] from the store.
     ///
-    pub fn exorcise_cardinality(&mut self, id: &Uuid) -> Option<Rc<RefCell<Cardinality>>> {
+    pub fn exorcise_cardinality(&mut self, id: &Uuid) -> Option<Arc<RwLock<Cardinality>>> {
         self.cardinality
-            .borrow_mut()
+            .write()
+            .unwrap()
             .remove(id)
             .map(|cardinality| cardinality.0.clone())
     }
 
     /// Get an iterator over the internal `HashMap<&Uuid, Cardinality>`.
     ///
-    pub fn iter_cardinality(&self) -> impl Iterator<Item = Rc<RefCell<Cardinality>>> + '_ {
-        let values: Vec<Rc<RefCell<Cardinality>>> = self
+    pub fn iter_cardinality(&self) -> impl Iterator<Item = Arc<RwLock<Cardinality>>> + '_ {
+        let values: Vec<Arc<RwLock<Cardinality>>> = self
             .cardinality
-            .borrow()
+            .read()
+            .unwrap()
             .values()
             .map(|cardinality| cardinality.0.clone())
             .collect();
@@ -567,7 +608,8 @@ impl ObjectStore {
     ///
     pub fn cardinality_timestamp(&self, cardinality: &Cardinality) -> SystemTime {
         self.cardinality
-            .borrow()
+            .read()
+            .unwrap()
             .get(&cardinality.id())
             .map(|cardinality| cardinality.1)
             .unwrap_or(SystemTime::now())
@@ -575,37 +617,41 @@ impl ObjectStore {
 
     /// Inter (insert) [`Conditionality`] into the store.
     ///
-    pub fn inter_conditionality(&mut self, conditionality: Rc<RefCell<Conditionality>>) {
-        let read = conditionality.borrow();
+    pub fn inter_conditionality(&mut self, conditionality: Arc<RwLock<Conditionality>>) {
+        let read = conditionality.read().unwrap();
         self.conditionality
-            .borrow_mut()
+            .write()
+            .unwrap()
             .insert(read.id(), (conditionality.clone(), SystemTime::now()));
     }
 
     /// Exhume (get) [`Conditionality`] from the store.
     ///
-    pub fn exhume_conditionality(&self, id: &Uuid) -> Option<Rc<RefCell<Conditionality>>> {
+    pub fn exhume_conditionality(&self, id: &Uuid) -> Option<Arc<RwLock<Conditionality>>> {
         self.conditionality
-            .borrow()
+            .read()
+            .unwrap()
             .get(id)
             .map(|conditionality| conditionality.0.clone())
     }
 
     /// Exorcise (remove) [`Conditionality`] from the store.
     ///
-    pub fn exorcise_conditionality(&mut self, id: &Uuid) -> Option<Rc<RefCell<Conditionality>>> {
+    pub fn exorcise_conditionality(&mut self, id: &Uuid) -> Option<Arc<RwLock<Conditionality>>> {
         self.conditionality
-            .borrow_mut()
+            .write()
+            .unwrap()
             .remove(id)
             .map(|conditionality| conditionality.0.clone())
     }
 
     /// Get an iterator over the internal `HashMap<&Uuid, Conditionality>`.
     ///
-    pub fn iter_conditionality(&self) -> impl Iterator<Item = Rc<RefCell<Conditionality>>> + '_ {
-        let values: Vec<Rc<RefCell<Conditionality>>> = self
+    pub fn iter_conditionality(&self) -> impl Iterator<Item = Arc<RwLock<Conditionality>>> + '_ {
+        let values: Vec<Arc<RwLock<Conditionality>>> = self
             .conditionality
-            .borrow()
+            .read()
+            .unwrap()
             .values()
             .map(|conditionality| conditionality.0.clone())
             .collect();
@@ -617,7 +663,8 @@ impl ObjectStore {
     ///
     pub fn conditionality_timestamp(&self, conditionality: &Conditionality) -> SystemTime {
         self.conditionality
-            .borrow()
+            .read()
+            .unwrap()
             .get(&conditionality.id())
             .map(|conditionality| conditionality.1)
             .unwrap_or(SystemTime::now())
@@ -625,34 +672,41 @@ impl ObjectStore {
 
     /// Inter (insert) [`Event`] into the store.
     ///
-    pub fn inter_event(&mut self, event: Rc<RefCell<Event>>) {
-        let read = event.borrow();
+    pub fn inter_event(&mut self, event: Arc<RwLock<Event>>) {
+        let read = event.read().unwrap();
         self.event
-            .borrow_mut()
+            .write()
+            .unwrap()
             .insert(read.id, (event.clone(), SystemTime::now()));
     }
 
     /// Exhume (get) [`Event`] from the store.
     ///
-    pub fn exhume_event(&self, id: &Uuid) -> Option<Rc<RefCell<Event>>> {
-        self.event.borrow().get(id).map(|event| event.0.clone())
+    pub fn exhume_event(&self, id: &Uuid) -> Option<Arc<RwLock<Event>>> {
+        self.event
+            .read()
+            .unwrap()
+            .get(id)
+            .map(|event| event.0.clone())
     }
 
     /// Exorcise (remove) [`Event`] from the store.
     ///
-    pub fn exorcise_event(&mut self, id: &Uuid) -> Option<Rc<RefCell<Event>>> {
+    pub fn exorcise_event(&mut self, id: &Uuid) -> Option<Arc<RwLock<Event>>> {
         self.event
-            .borrow_mut()
+            .write()
+            .unwrap()
             .remove(id)
             .map(|event| event.0.clone())
     }
 
     /// Get an iterator over the internal `HashMap<&Uuid, Event>`.
     ///
-    pub fn iter_event(&self) -> impl Iterator<Item = Rc<RefCell<Event>>> + '_ {
-        let values: Vec<Rc<RefCell<Event>>> = self
+    pub fn iter_event(&self) -> impl Iterator<Item = Arc<RwLock<Event>>> + '_ {
+        let values: Vec<Arc<RwLock<Event>>> = self
             .event
-            .borrow()
+            .read()
+            .unwrap()
             .values()
             .map(|event| event.0.clone())
             .collect();
@@ -664,7 +718,8 @@ impl ObjectStore {
     ///
     pub fn event_timestamp(&self, event: &Event) -> SystemTime {
         self.event
-            .borrow()
+            .read()
+            .unwrap()
             .get(&event.id)
             .map(|event| event.1)
             .unwrap_or(SystemTime::now())
@@ -672,37 +727,41 @@ impl ObjectStore {
 
     /// Inter (insert) [`External`] into the store.
     ///
-    pub fn inter_external(&mut self, external: Rc<RefCell<External>>) {
-        let read = external.borrow();
+    pub fn inter_external(&mut self, external: Arc<RwLock<External>>) {
+        let read = external.read().unwrap();
         self.external
-            .borrow_mut()
+            .write()
+            .unwrap()
             .insert(read.id, (external.clone(), SystemTime::now()));
     }
 
     /// Exhume (get) [`External`] from the store.
     ///
-    pub fn exhume_external(&self, id: &Uuid) -> Option<Rc<RefCell<External>>> {
+    pub fn exhume_external(&self, id: &Uuid) -> Option<Arc<RwLock<External>>> {
         self.external
-            .borrow()
+            .read()
+            .unwrap()
             .get(id)
             .map(|external| external.0.clone())
     }
 
     /// Exorcise (remove) [`External`] from the store.
     ///
-    pub fn exorcise_external(&mut self, id: &Uuid) -> Option<Rc<RefCell<External>>> {
+    pub fn exorcise_external(&mut self, id: &Uuid) -> Option<Arc<RwLock<External>>> {
         self.external
-            .borrow_mut()
+            .write()
+            .unwrap()
             .remove(id)
             .map(|external| external.0.clone())
     }
 
     /// Get an iterator over the internal `HashMap<&Uuid, External>`.
     ///
-    pub fn iter_external(&self) -> impl Iterator<Item = Rc<RefCell<External>>> + '_ {
-        let values: Vec<Rc<RefCell<External>>> = self
+    pub fn iter_external(&self) -> impl Iterator<Item = Arc<RwLock<External>>> + '_ {
+        let values: Vec<Arc<RwLock<External>>> = self
             .external
-            .borrow()
+            .read()
+            .unwrap()
             .values()
             .map(|external| external.0.clone())
             .collect();
@@ -714,7 +773,8 @@ impl ObjectStore {
     ///
     pub fn external_timestamp(&self, external: &External) -> SystemTime {
         self.external
-            .borrow()
+            .read()
+            .unwrap()
             .get(&external.id)
             .map(|external| external.1)
             .unwrap_or(SystemTime::now())
@@ -722,31 +782,37 @@ impl ObjectStore {
 
     /// Inter (insert) [`Isa`] into the store.
     ///
-    pub fn inter_isa(&mut self, isa: Rc<RefCell<Isa>>) {
-        let read = isa.borrow();
+    pub fn inter_isa(&mut self, isa: Arc<RwLock<Isa>>) {
+        let read = isa.read().unwrap();
         self.isa
-            .borrow_mut()
+            .write()
+            .unwrap()
             .insert(read.id, (isa.clone(), SystemTime::now()));
     }
 
     /// Exhume (get) [`Isa`] from the store.
     ///
-    pub fn exhume_isa(&self, id: &Uuid) -> Option<Rc<RefCell<Isa>>> {
-        self.isa.borrow().get(id).map(|isa| isa.0.clone())
+    pub fn exhume_isa(&self, id: &Uuid) -> Option<Arc<RwLock<Isa>>> {
+        self.isa.read().unwrap().get(id).map(|isa| isa.0.clone())
     }
 
     /// Exorcise (remove) [`Isa`] from the store.
     ///
-    pub fn exorcise_isa(&mut self, id: &Uuid) -> Option<Rc<RefCell<Isa>>> {
-        self.isa.borrow_mut().remove(id).map(|isa| isa.0.clone())
+    pub fn exorcise_isa(&mut self, id: &Uuid) -> Option<Arc<RwLock<Isa>>> {
+        self.isa
+            .write()
+            .unwrap()
+            .remove(id)
+            .map(|isa| isa.0.clone())
     }
 
     /// Get an iterator over the internal `HashMap<&Uuid, Isa>`.
     ///
-    pub fn iter_isa(&self) -> impl Iterator<Item = Rc<RefCell<Isa>>> + '_ {
-        let values: Vec<Rc<RefCell<Isa>>> = self
+    pub fn iter_isa(&self) -> impl Iterator<Item = Arc<RwLock<Isa>>> + '_ {
+        let values: Vec<Arc<RwLock<Isa>>> = self
             .isa
-            .borrow()
+            .read()
+            .unwrap()
             .values()
             .map(|isa| isa.0.clone())
             .collect();
@@ -758,7 +824,8 @@ impl ObjectStore {
     ///
     pub fn isa_timestamp(&self, isa: &Isa) -> SystemTime {
         self.isa
-            .borrow()
+            .read()
+            .unwrap()
             .get(&isa.id)
             .map(|isa| isa.1)
             .unwrap_or(SystemTime::now())
@@ -766,26 +833,32 @@ impl ObjectStore {
 
     /// Inter (insert) [`Object`] into the store.
     ///
-    pub fn inter_object(&mut self, object: Rc<RefCell<Object>>) {
-        let read = object.borrow();
+    pub fn inter_object(&mut self, object: Arc<RwLock<Object>>) {
+        let read = object.read().unwrap();
         let value = (object.clone(), SystemTime::now());
         self.object_id_by_name
-            .borrow_mut()
+            .write()
+            .unwrap()
             .insert(read.name.to_upper_camel_case(), (read.id, value.1));
-        self.object.borrow_mut().insert(read.id, value);
+        self.object.write().unwrap().insert(read.id, value);
     }
 
     /// Exhume (get) [`Object`] from the store.
     ///
-    pub fn exhume_object(&self, id: &Uuid) -> Option<Rc<RefCell<Object>>> {
-        self.object.borrow().get(id).map(|object| object.0.clone())
+    pub fn exhume_object(&self, id: &Uuid) -> Option<Arc<RwLock<Object>>> {
+        self.object
+            .read()
+            .unwrap()
+            .get(id)
+            .map(|object| object.0.clone())
     }
 
     /// Exorcise (remove) [`Object`] from the store.
     ///
-    pub fn exorcise_object(&mut self, id: &Uuid) -> Option<Rc<RefCell<Object>>> {
+    pub fn exorcise_object(&mut self, id: &Uuid) -> Option<Arc<RwLock<Object>>> {
         self.object
-            .borrow_mut()
+            .write()
+            .unwrap()
             .remove(id)
             .map(|object| object.0.clone())
     }
@@ -794,17 +867,19 @@ impl ObjectStore {
     ///
     pub fn exhume_object_id_by_name(&self, name: &str) -> Option<Uuid> {
         self.object_id_by_name
-            .borrow()
+            .read()
+            .unwrap()
             .get(name)
             .map(|object| object.0)
     }
 
     /// Get an iterator over the internal `HashMap<&Uuid, Object>`.
     ///
-    pub fn iter_object(&self) -> impl Iterator<Item = Rc<RefCell<Object>>> + '_ {
-        let values: Vec<Rc<RefCell<Object>>> = self
+    pub fn iter_object(&self) -> impl Iterator<Item = Arc<RwLock<Object>>> + '_ {
+        let values: Vec<Arc<RwLock<Object>>> = self
             .object
-            .borrow()
+            .read()
+            .unwrap()
             .values()
             .map(|object| object.0.clone())
             .collect();
@@ -816,7 +891,8 @@ impl ObjectStore {
     ///
     pub fn object_timestamp(&self, object: &Object) -> SystemTime {
         self.object
-            .borrow()
+            .read()
+            .unwrap()
             .get(&object.id)
             .map(|object| object.1)
             .unwrap_or(SystemTime::now())
@@ -824,37 +900,41 @@ impl ObjectStore {
 
     /// Inter (insert) [`Referent`] into the store.
     ///
-    pub fn inter_referent(&mut self, referent: Rc<RefCell<Referent>>) {
-        let read = referent.borrow();
+    pub fn inter_referent(&mut self, referent: Arc<RwLock<Referent>>) {
+        let read = referent.read().unwrap();
         self.referent
-            .borrow_mut()
+            .write()
+            .unwrap()
             .insert(read.id, (referent.clone(), SystemTime::now()));
     }
 
     /// Exhume (get) [`Referent`] from the store.
     ///
-    pub fn exhume_referent(&self, id: &Uuid) -> Option<Rc<RefCell<Referent>>> {
+    pub fn exhume_referent(&self, id: &Uuid) -> Option<Arc<RwLock<Referent>>> {
         self.referent
-            .borrow()
+            .read()
+            .unwrap()
             .get(id)
             .map(|referent| referent.0.clone())
     }
 
     /// Exorcise (remove) [`Referent`] from the store.
     ///
-    pub fn exorcise_referent(&mut self, id: &Uuid) -> Option<Rc<RefCell<Referent>>> {
+    pub fn exorcise_referent(&mut self, id: &Uuid) -> Option<Arc<RwLock<Referent>>> {
         self.referent
-            .borrow_mut()
+            .write()
+            .unwrap()
             .remove(id)
             .map(|referent| referent.0.clone())
     }
 
     /// Get an iterator over the internal `HashMap<&Uuid, Referent>`.
     ///
-    pub fn iter_referent(&self) -> impl Iterator<Item = Rc<RefCell<Referent>>> + '_ {
-        let values: Vec<Rc<RefCell<Referent>>> = self
+    pub fn iter_referent(&self) -> impl Iterator<Item = Arc<RwLock<Referent>>> + '_ {
+        let values: Vec<Arc<RwLock<Referent>>> = self
             .referent
-            .borrow()
+            .read()
+            .unwrap()
             .values()
             .map(|referent| referent.0.clone())
             .collect();
@@ -866,7 +946,8 @@ impl ObjectStore {
     ///
     pub fn referent_timestamp(&self, referent: &Referent) -> SystemTime {
         self.referent
-            .borrow()
+            .read()
+            .unwrap()
             .get(&referent.id)
             .map(|referent| referent.1)
             .unwrap_or(SystemTime::now())
@@ -874,37 +955,41 @@ impl ObjectStore {
 
     /// Inter (insert) [`Referrer`] into the store.
     ///
-    pub fn inter_referrer(&mut self, referrer: Rc<RefCell<Referrer>>) {
-        let read = referrer.borrow();
+    pub fn inter_referrer(&mut self, referrer: Arc<RwLock<Referrer>>) {
+        let read = referrer.read().unwrap();
         self.referrer
-            .borrow_mut()
+            .write()
+            .unwrap()
             .insert(read.id, (referrer.clone(), SystemTime::now()));
     }
 
     /// Exhume (get) [`Referrer`] from the store.
     ///
-    pub fn exhume_referrer(&self, id: &Uuid) -> Option<Rc<RefCell<Referrer>>> {
+    pub fn exhume_referrer(&self, id: &Uuid) -> Option<Arc<RwLock<Referrer>>> {
         self.referrer
-            .borrow()
+            .read()
+            .unwrap()
             .get(id)
             .map(|referrer| referrer.0.clone())
     }
 
     /// Exorcise (remove) [`Referrer`] from the store.
     ///
-    pub fn exorcise_referrer(&mut self, id: &Uuid) -> Option<Rc<RefCell<Referrer>>> {
+    pub fn exorcise_referrer(&mut self, id: &Uuid) -> Option<Arc<RwLock<Referrer>>> {
         self.referrer
-            .borrow_mut()
+            .write()
+            .unwrap()
             .remove(id)
             .map(|referrer| referrer.0.clone())
     }
 
     /// Get an iterator over the internal `HashMap<&Uuid, Referrer>`.
     ///
-    pub fn iter_referrer(&self) -> impl Iterator<Item = Rc<RefCell<Referrer>>> + '_ {
-        let values: Vec<Rc<RefCell<Referrer>>> = self
+    pub fn iter_referrer(&self) -> impl Iterator<Item = Arc<RwLock<Referrer>>> + '_ {
+        let values: Vec<Arc<RwLock<Referrer>>> = self
             .referrer
-            .borrow()
+            .read()
+            .unwrap()
             .values()
             .map(|referrer| referrer.0.clone())
             .collect();
@@ -916,7 +1001,8 @@ impl ObjectStore {
     ///
     pub fn referrer_timestamp(&self, referrer: &Referrer) -> SystemTime {
         self.referrer
-            .borrow()
+            .read()
+            .unwrap()
             .get(&referrer.id)
             .map(|referrer| referrer.1)
             .unwrap_or(SystemTime::now())
@@ -924,37 +1010,41 @@ impl ObjectStore {
 
     /// Inter (insert) [`Relationship`] into the store.
     ///
-    pub fn inter_relationship(&mut self, relationship: Rc<RefCell<Relationship>>) {
-        let read = relationship.borrow();
+    pub fn inter_relationship(&mut self, relationship: Arc<RwLock<Relationship>>) {
+        let read = relationship.read().unwrap();
         self.relationship
-            .borrow_mut()
+            .write()
+            .unwrap()
             .insert(read.id(), (relationship.clone(), SystemTime::now()));
     }
 
     /// Exhume (get) [`Relationship`] from the store.
     ///
-    pub fn exhume_relationship(&self, id: &Uuid) -> Option<Rc<RefCell<Relationship>>> {
+    pub fn exhume_relationship(&self, id: &Uuid) -> Option<Arc<RwLock<Relationship>>> {
         self.relationship
-            .borrow()
+            .read()
+            .unwrap()
             .get(id)
             .map(|relationship| relationship.0.clone())
     }
 
     /// Exorcise (remove) [`Relationship`] from the store.
     ///
-    pub fn exorcise_relationship(&mut self, id: &Uuid) -> Option<Rc<RefCell<Relationship>>> {
+    pub fn exorcise_relationship(&mut self, id: &Uuid) -> Option<Arc<RwLock<Relationship>>> {
         self.relationship
-            .borrow_mut()
+            .write()
+            .unwrap()
             .remove(id)
             .map(|relationship| relationship.0.clone())
     }
 
     /// Get an iterator over the internal `HashMap<&Uuid, Relationship>`.
     ///
-    pub fn iter_relationship(&self) -> impl Iterator<Item = Rc<RefCell<Relationship>>> + '_ {
-        let values: Vec<Rc<RefCell<Relationship>>> = self
+    pub fn iter_relationship(&self) -> impl Iterator<Item = Arc<RwLock<Relationship>>> + '_ {
+        let values: Vec<Arc<RwLock<Relationship>>> = self
             .relationship
-            .borrow()
+            .read()
+            .unwrap()
             .values()
             .map(|relationship| relationship.0.clone())
             .collect();
@@ -966,7 +1056,8 @@ impl ObjectStore {
     ///
     pub fn relationship_timestamp(&self, relationship: &Relationship) -> SystemTime {
         self.relationship
-            .borrow()
+            .read()
+            .unwrap()
             .get(&relationship.id())
             .map(|relationship| relationship.1)
             .unwrap_or(SystemTime::now())
@@ -974,34 +1065,41 @@ impl ObjectStore {
 
     /// Inter (insert) [`State`] into the store.
     ///
-    pub fn inter_state(&mut self, state: Rc<RefCell<State>>) {
-        let read = state.borrow();
+    pub fn inter_state(&mut self, state: Arc<RwLock<State>>) {
+        let read = state.read().unwrap();
         self.state
-            .borrow_mut()
+            .write()
+            .unwrap()
             .insert(read.id, (state.clone(), SystemTime::now()));
     }
 
     /// Exhume (get) [`State`] from the store.
     ///
-    pub fn exhume_state(&self, id: &Uuid) -> Option<Rc<RefCell<State>>> {
-        self.state.borrow().get(id).map(|state| state.0.clone())
+    pub fn exhume_state(&self, id: &Uuid) -> Option<Arc<RwLock<State>>> {
+        self.state
+            .read()
+            .unwrap()
+            .get(id)
+            .map(|state| state.0.clone())
     }
 
     /// Exorcise (remove) [`State`] from the store.
     ///
-    pub fn exorcise_state(&mut self, id: &Uuid) -> Option<Rc<RefCell<State>>> {
+    pub fn exorcise_state(&mut self, id: &Uuid) -> Option<Arc<RwLock<State>>> {
         self.state
-            .borrow_mut()
+            .write()
+            .unwrap()
             .remove(id)
             .map(|state| state.0.clone())
     }
 
     /// Get an iterator over the internal `HashMap<&Uuid, State>`.
     ///
-    pub fn iter_state(&self) -> impl Iterator<Item = Rc<RefCell<State>>> + '_ {
-        let values: Vec<Rc<RefCell<State>>> = self
+    pub fn iter_state(&self) -> impl Iterator<Item = Arc<RwLock<State>>> + '_ {
+        let values: Vec<Arc<RwLock<State>>> = self
             .state
-            .borrow()
+            .read()
+            .unwrap()
             .values()
             .map(|state| state.0.clone())
             .collect();
@@ -1013,7 +1111,8 @@ impl ObjectStore {
     ///
     pub fn state_timestamp(&self, state: &State) -> SystemTime {
         self.state
-            .borrow()
+            .read()
+            .unwrap()
             .get(&state.id)
             .map(|state| state.1)
             .unwrap_or(SystemTime::now())
@@ -1021,37 +1120,41 @@ impl ObjectStore {
 
     /// Inter (insert) [`Subtype`] into the store.
     ///
-    pub fn inter_subtype(&mut self, subtype: Rc<RefCell<Subtype>>) {
-        let read = subtype.borrow();
+    pub fn inter_subtype(&mut self, subtype: Arc<RwLock<Subtype>>) {
+        let read = subtype.read().unwrap();
         self.subtype
-            .borrow_mut()
+            .write()
+            .unwrap()
             .insert(read.id, (subtype.clone(), SystemTime::now()));
     }
 
     /// Exhume (get) [`Subtype`] from the store.
     ///
-    pub fn exhume_subtype(&self, id: &Uuid) -> Option<Rc<RefCell<Subtype>>> {
+    pub fn exhume_subtype(&self, id: &Uuid) -> Option<Arc<RwLock<Subtype>>> {
         self.subtype
-            .borrow()
+            .read()
+            .unwrap()
             .get(id)
             .map(|subtype| subtype.0.clone())
     }
 
     /// Exorcise (remove) [`Subtype`] from the store.
     ///
-    pub fn exorcise_subtype(&mut self, id: &Uuid) -> Option<Rc<RefCell<Subtype>>> {
+    pub fn exorcise_subtype(&mut self, id: &Uuid) -> Option<Arc<RwLock<Subtype>>> {
         self.subtype
-            .borrow_mut()
+            .write()
+            .unwrap()
             .remove(id)
             .map(|subtype| subtype.0.clone())
     }
 
     /// Get an iterator over the internal `HashMap<&Uuid, Subtype>`.
     ///
-    pub fn iter_subtype(&self) -> impl Iterator<Item = Rc<RefCell<Subtype>>> + '_ {
-        let values: Vec<Rc<RefCell<Subtype>>> = self
+    pub fn iter_subtype(&self) -> impl Iterator<Item = Arc<RwLock<Subtype>>> + '_ {
+        let values: Vec<Arc<RwLock<Subtype>>> = self
             .subtype
-            .borrow()
+            .read()
+            .unwrap()
             .values()
             .map(|subtype| subtype.0.clone())
             .collect();
@@ -1063,7 +1166,8 @@ impl ObjectStore {
     ///
     pub fn subtype_timestamp(&self, subtype: &Subtype) -> SystemTime {
         self.subtype
-            .borrow()
+            .read()
+            .unwrap()
             .get(&subtype.id)
             .map(|subtype| subtype.1)
             .unwrap_or(SystemTime::now())
@@ -1071,37 +1175,41 @@ impl ObjectStore {
 
     /// Inter (insert) [`Supertype`] into the store.
     ///
-    pub fn inter_supertype(&mut self, supertype: Rc<RefCell<Supertype>>) {
-        let read = supertype.borrow();
+    pub fn inter_supertype(&mut self, supertype: Arc<RwLock<Supertype>>) {
+        let read = supertype.read().unwrap();
         self.supertype
-            .borrow_mut()
+            .write()
+            .unwrap()
             .insert(read.id, (supertype.clone(), SystemTime::now()));
     }
 
     /// Exhume (get) [`Supertype`] from the store.
     ///
-    pub fn exhume_supertype(&self, id: &Uuid) -> Option<Rc<RefCell<Supertype>>> {
+    pub fn exhume_supertype(&self, id: &Uuid) -> Option<Arc<RwLock<Supertype>>> {
         self.supertype
-            .borrow()
+            .read()
+            .unwrap()
             .get(id)
             .map(|supertype| supertype.0.clone())
     }
 
     /// Exorcise (remove) [`Supertype`] from the store.
     ///
-    pub fn exorcise_supertype(&mut self, id: &Uuid) -> Option<Rc<RefCell<Supertype>>> {
+    pub fn exorcise_supertype(&mut self, id: &Uuid) -> Option<Arc<RwLock<Supertype>>> {
         self.supertype
-            .borrow_mut()
+            .write()
+            .unwrap()
             .remove(id)
             .map(|supertype| supertype.0.clone())
     }
 
     /// Get an iterator over the internal `HashMap<&Uuid, Supertype>`.
     ///
-    pub fn iter_supertype(&self) -> impl Iterator<Item = Rc<RefCell<Supertype>>> + '_ {
-        let values: Vec<Rc<RefCell<Supertype>>> = self
+    pub fn iter_supertype(&self) -> impl Iterator<Item = Arc<RwLock<Supertype>>> + '_ {
+        let values: Vec<Arc<RwLock<Supertype>>> = self
             .supertype
-            .borrow()
+            .read()
+            .unwrap()
             .values()
             .map(|supertype| supertype.0.clone())
             .collect();
@@ -1113,7 +1221,8 @@ impl ObjectStore {
     ///
     pub fn supertype_timestamp(&self, supertype: &Supertype) -> SystemTime {
         self.supertype
-            .borrow()
+            .read()
+            .unwrap()
             .get(&supertype.id)
             .map(|supertype| supertype.1)
             .unwrap_or(SystemTime::now())
@@ -1121,30 +1230,36 @@ impl ObjectStore {
 
     /// Inter (insert) [`Ty`] into the store.
     ///
-    pub fn inter_ty(&mut self, ty: Rc<RefCell<Ty>>) {
-        let read = ty.borrow();
+    pub fn inter_ty(&mut self, ty: Arc<RwLock<Ty>>) {
+        let read = ty.read().unwrap();
         self.ty
-            .borrow_mut()
+            .write()
+            .unwrap()
             .insert(read.id(), (ty.clone(), SystemTime::now()));
     }
 
     /// Exhume (get) [`Ty`] from the store.
     ///
-    pub fn exhume_ty(&self, id: &Uuid) -> Option<Rc<RefCell<Ty>>> {
-        self.ty.borrow().get(id).map(|ty| ty.0.clone())
+    pub fn exhume_ty(&self, id: &Uuid) -> Option<Arc<RwLock<Ty>>> {
+        self.ty.read().unwrap().get(id).map(|ty| ty.0.clone())
     }
 
     /// Exorcise (remove) [`Ty`] from the store.
     ///
-    pub fn exorcise_ty(&mut self, id: &Uuid) -> Option<Rc<RefCell<Ty>>> {
-        self.ty.borrow_mut().remove(id).map(|ty| ty.0.clone())
+    pub fn exorcise_ty(&mut self, id: &Uuid) -> Option<Arc<RwLock<Ty>>> {
+        self.ty.write().unwrap().remove(id).map(|ty| ty.0.clone())
     }
 
     /// Get an iterator over the internal `HashMap<&Uuid, Ty>`.
     ///
-    pub fn iter_ty(&self) -> impl Iterator<Item = Rc<RefCell<Ty>>> + '_ {
-        let values: Vec<Rc<RefCell<Ty>>> =
-            self.ty.borrow().values().map(|ty| ty.0.clone()).collect();
+    pub fn iter_ty(&self) -> impl Iterator<Item = Arc<RwLock<Ty>>> + '_ {
+        let values: Vec<Arc<RwLock<Ty>>> = self
+            .ty
+            .read()
+            .unwrap()
+            .values()
+            .map(|ty| ty.0.clone())
+            .collect();
         let len = values.len();
         (0..len).map(move |i| values[i].clone())
     }
@@ -1153,7 +1268,8 @@ impl ObjectStore {
     ///
     pub fn ty_timestamp(&self, ty: &Ty) -> SystemTime {
         self.ty
-            .borrow()
+            .read()
+            .unwrap()
             .get(&ty.id())
             .map(|ty| ty.1)
             .unwrap_or(SystemTime::now())
@@ -1189,15 +1305,18 @@ impl ObjectStore {
         {
             let path = path.join("acknowledged_event");
             fs::create_dir_all(&path)?;
-            for acknowledged_event_tuple in self.acknowledged_event.borrow().values() {
-                let path = path.join(format!("{}.json", acknowledged_event_tuple.0.borrow().id));
+            for acknowledged_event_tuple in self.acknowledged_event.read().unwrap().values() {
+                let path = path.join(format!(
+                    "{}.json",
+                    acknowledged_event_tuple.0.read().unwrap().id
+                ));
                 if path.exists() {
                     let file = fs::File::open(&path)?;
                     let reader = io::BufReader::new(file);
-                    let on_disk: (Rc<RefCell<AcknowledgedEvent>>, SystemTime) =
+                    let on_disk: (Arc<RwLock<AcknowledgedEvent>>, SystemTime) =
                         serde_json::from_reader(reader)?;
-                    if on_disk.0.borrow().to_owned()
-                        != acknowledged_event_tuple.0.borrow().to_owned()
+                    if on_disk.0.read().unwrap().to_owned()
+                        != acknowledged_event_tuple.0.read().unwrap().to_owned()
                     {
                         let file = fs::File::create(path)?;
                         let mut writer = io::BufWriter::new(file);
@@ -1215,7 +1334,7 @@ impl ObjectStore {
                 let file_name = path.file_name().unwrap().to_str().unwrap();
                 let id = file_name.split('.').next().unwrap();
                 if let Ok(id) = Uuid::parse_str(id) {
-                    if !self.acknowledged_event.borrow().contains_key(&id) {
+                    if !self.acknowledged_event.read().unwrap().contains_key(&id) {
                         fs::remove_file(path)?;
                     }
                 }
@@ -1226,18 +1345,20 @@ impl ObjectStore {
         {
             let path = path.join("an_associative_referent");
             fs::create_dir_all(&path)?;
-            for an_associative_referent_tuple in self.an_associative_referent.borrow().values() {
+            for an_associative_referent_tuple in
+                self.an_associative_referent.read().unwrap().values()
+            {
                 let path = path.join(format!(
                     "{}.json",
-                    an_associative_referent_tuple.0.borrow().id
+                    an_associative_referent_tuple.0.read().unwrap().id
                 ));
                 if path.exists() {
                     let file = fs::File::open(&path)?;
                     let reader = io::BufReader::new(file);
-                    let on_disk: (Rc<RefCell<AnAssociativeReferent>>, SystemTime) =
+                    let on_disk: (Arc<RwLock<AnAssociativeReferent>>, SystemTime) =
                         serde_json::from_reader(reader)?;
-                    if on_disk.0.borrow().to_owned()
-                        != an_associative_referent_tuple.0.borrow().to_owned()
+                    if on_disk.0.read().unwrap().to_owned()
+                        != an_associative_referent_tuple.0.read().unwrap().to_owned()
                     {
                         let file = fs::File::create(path)?;
                         let mut writer = io::BufWriter::new(file);
@@ -1255,7 +1376,12 @@ impl ObjectStore {
                 let file_name = path.file_name().unwrap().to_str().unwrap();
                 let id = file_name.split('.').next().unwrap();
                 if let Ok(id) = Uuid::parse_str(id) {
-                    if !self.an_associative_referent.borrow().contains_key(&id) {
+                    if !self
+                        .an_associative_referent
+                        .read()
+                        .unwrap()
+                        .contains_key(&id)
+                    {
                         fs::remove_file(path)?;
                     }
                 }
@@ -1266,14 +1392,16 @@ impl ObjectStore {
         {
             let path = path.join("associative");
             fs::create_dir_all(&path)?;
-            for associative_tuple in self.associative.borrow().values() {
-                let path = path.join(format!("{}.json", associative_tuple.0.borrow().id));
+            for associative_tuple in self.associative.read().unwrap().values() {
+                let path = path.join(format!("{}.json", associative_tuple.0.read().unwrap().id));
                 if path.exists() {
                     let file = fs::File::open(&path)?;
                     let reader = io::BufReader::new(file);
-                    let on_disk: (Rc<RefCell<Associative>>, SystemTime) =
+                    let on_disk: (Arc<RwLock<Associative>>, SystemTime) =
                         serde_json::from_reader(reader)?;
-                    if on_disk.0.borrow().to_owned() != associative_tuple.0.borrow().to_owned() {
+                    if on_disk.0.read().unwrap().to_owned()
+                        != associative_tuple.0.read().unwrap().to_owned()
+                    {
                         let file = fs::File::create(path)?;
                         let mut writer = io::BufWriter::new(file);
                         serde_json::to_writer_pretty(&mut writer, &associative_tuple)?;
@@ -1290,7 +1418,7 @@ impl ObjectStore {
                 let file_name = path.file_name().unwrap().to_str().unwrap();
                 let id = file_name.split('.').next().unwrap();
                 if let Ok(id) = Uuid::parse_str(id) {
-                    if !self.associative.borrow().contains_key(&id) {
+                    if !self.associative.read().unwrap().contains_key(&id) {
                         fs::remove_file(path)?;
                     }
                 }
@@ -1301,15 +1429,18 @@ impl ObjectStore {
         {
             let path = path.join("associative_referent");
             fs::create_dir_all(&path)?;
-            for associative_referent_tuple in self.associative_referent.borrow().values() {
-                let path = path.join(format!("{}.json", associative_referent_tuple.0.borrow().id));
+            for associative_referent_tuple in self.associative_referent.read().unwrap().values() {
+                let path = path.join(format!(
+                    "{}.json",
+                    associative_referent_tuple.0.read().unwrap().id
+                ));
                 if path.exists() {
                     let file = fs::File::open(&path)?;
                     let reader = io::BufReader::new(file);
-                    let on_disk: (Rc<RefCell<AssociativeReferent>>, SystemTime) =
+                    let on_disk: (Arc<RwLock<AssociativeReferent>>, SystemTime) =
                         serde_json::from_reader(reader)?;
-                    if on_disk.0.borrow().to_owned()
-                        != associative_referent_tuple.0.borrow().to_owned()
+                    if on_disk.0.read().unwrap().to_owned()
+                        != associative_referent_tuple.0.read().unwrap().to_owned()
                     {
                         let file = fs::File::create(path)?;
                         let mut writer = io::BufWriter::new(file);
@@ -1327,7 +1458,7 @@ impl ObjectStore {
                 let file_name = path.file_name().unwrap().to_str().unwrap();
                 let id = file_name.split('.').next().unwrap();
                 if let Ok(id) = Uuid::parse_str(id) {
-                    if !self.associative_referent.borrow().contains_key(&id) {
+                    if !self.associative_referent.read().unwrap().contains_key(&id) {
                         fs::remove_file(path)?;
                     }
                 }
@@ -1338,15 +1469,18 @@ impl ObjectStore {
         {
             let path = path.join("associative_referrer");
             fs::create_dir_all(&path)?;
-            for associative_referrer_tuple in self.associative_referrer.borrow().values() {
-                let path = path.join(format!("{}.json", associative_referrer_tuple.0.borrow().id));
+            for associative_referrer_tuple in self.associative_referrer.read().unwrap().values() {
+                let path = path.join(format!(
+                    "{}.json",
+                    associative_referrer_tuple.0.read().unwrap().id
+                ));
                 if path.exists() {
                     let file = fs::File::open(&path)?;
                     let reader = io::BufReader::new(file);
-                    let on_disk: (Rc<RefCell<AssociativeReferrer>>, SystemTime) =
+                    let on_disk: (Arc<RwLock<AssociativeReferrer>>, SystemTime) =
                         serde_json::from_reader(reader)?;
-                    if on_disk.0.borrow().to_owned()
-                        != associative_referrer_tuple.0.borrow().to_owned()
+                    if on_disk.0.read().unwrap().to_owned()
+                        != associative_referrer_tuple.0.read().unwrap().to_owned()
                     {
                         let file = fs::File::create(path)?;
                         let mut writer = io::BufWriter::new(file);
@@ -1364,7 +1498,7 @@ impl ObjectStore {
                 let file_name = path.file_name().unwrap().to_str().unwrap();
                 let id = file_name.split('.').next().unwrap();
                 if let Ok(id) = Uuid::parse_str(id) {
-                    if !self.associative_referrer.borrow().contains_key(&id) {
+                    if !self.associative_referrer.read().unwrap().contains_key(&id) {
                         fs::remove_file(path)?;
                     }
                 }
@@ -1375,14 +1509,16 @@ impl ObjectStore {
         {
             let path = path.join("attribute");
             fs::create_dir_all(&path)?;
-            for attribute_tuple in self.attribute.borrow().values() {
-                let path = path.join(format!("{}.json", attribute_tuple.0.borrow().id));
+            for attribute_tuple in self.attribute.read().unwrap().values() {
+                let path = path.join(format!("{}.json", attribute_tuple.0.read().unwrap().id));
                 if path.exists() {
                     let file = fs::File::open(&path)?;
                     let reader = io::BufReader::new(file);
-                    let on_disk: (Rc<RefCell<Attribute>>, SystemTime) =
+                    let on_disk: (Arc<RwLock<Attribute>>, SystemTime) =
                         serde_json::from_reader(reader)?;
-                    if on_disk.0.borrow().to_owned() != attribute_tuple.0.borrow().to_owned() {
+                    if on_disk.0.read().unwrap().to_owned()
+                        != attribute_tuple.0.read().unwrap().to_owned()
+                    {
                         let file = fs::File::create(path)?;
                         let mut writer = io::BufWriter::new(file);
                         serde_json::to_writer_pretty(&mut writer, &attribute_tuple)?;
@@ -1399,7 +1535,7 @@ impl ObjectStore {
                 let file_name = path.file_name().unwrap().to_str().unwrap();
                 let id = file_name.split('.').next().unwrap();
                 if let Ok(id) = Uuid::parse_str(id) {
-                    if !self.attribute.borrow().contains_key(&id) {
+                    if !self.attribute.read().unwrap().contains_key(&id) {
                         fs::remove_file(path)?;
                     }
                 }
@@ -1410,14 +1546,16 @@ impl ObjectStore {
         {
             let path = path.join("binary");
             fs::create_dir_all(&path)?;
-            for binary_tuple in self.binary.borrow().values() {
-                let path = path.join(format!("{}.json", binary_tuple.0.borrow().id));
+            for binary_tuple in self.binary.read().unwrap().values() {
+                let path = path.join(format!("{}.json", binary_tuple.0.read().unwrap().id));
                 if path.exists() {
                     let file = fs::File::open(&path)?;
                     let reader = io::BufReader::new(file);
-                    let on_disk: (Rc<RefCell<Binary>>, SystemTime) =
+                    let on_disk: (Arc<RwLock<Binary>>, SystemTime) =
                         serde_json::from_reader(reader)?;
-                    if on_disk.0.borrow().to_owned() != binary_tuple.0.borrow().to_owned() {
+                    if on_disk.0.read().unwrap().to_owned()
+                        != binary_tuple.0.read().unwrap().to_owned()
+                    {
                         let file = fs::File::create(path)?;
                         let mut writer = io::BufWriter::new(file);
                         serde_json::to_writer_pretty(&mut writer, &binary_tuple)?;
@@ -1434,7 +1572,7 @@ impl ObjectStore {
                 let file_name = path.file_name().unwrap().to_str().unwrap();
                 let id = file_name.split('.').next().unwrap();
                 if let Ok(id) = Uuid::parse_str(id) {
-                    if !self.binary.borrow().contains_key(&id) {
+                    if !self.binary.read().unwrap().contains_key(&id) {
                         fs::remove_file(path)?;
                     }
                 }
@@ -1445,14 +1583,16 @@ impl ObjectStore {
         {
             let path = path.join("cardinality");
             fs::create_dir_all(&path)?;
-            for cardinality_tuple in self.cardinality.borrow().values() {
-                let path = path.join(format!("{}.json", cardinality_tuple.0.borrow().id()));
+            for cardinality_tuple in self.cardinality.read().unwrap().values() {
+                let path = path.join(format!("{}.json", cardinality_tuple.0.read().unwrap().id()));
                 if path.exists() {
                     let file = fs::File::open(&path)?;
                     let reader = io::BufReader::new(file);
-                    let on_disk: (Rc<RefCell<Cardinality>>, SystemTime) =
+                    let on_disk: (Arc<RwLock<Cardinality>>, SystemTime) =
                         serde_json::from_reader(reader)?;
-                    if on_disk.0.borrow().to_owned() != cardinality_tuple.0.borrow().to_owned() {
+                    if on_disk.0.read().unwrap().to_owned()
+                        != cardinality_tuple.0.read().unwrap().to_owned()
+                    {
                         let file = fs::File::create(path)?;
                         let mut writer = io::BufWriter::new(file);
                         serde_json::to_writer_pretty(&mut writer, &cardinality_tuple)?;
@@ -1469,7 +1609,7 @@ impl ObjectStore {
                 let file_name = path.file_name().unwrap().to_str().unwrap();
                 let id = file_name.split('.').next().unwrap();
                 if let Ok(id) = Uuid::parse_str(id) {
-                    if !self.cardinality.borrow().contains_key(&id) {
+                    if !self.cardinality.read().unwrap().contains_key(&id) {
                         fs::remove_file(path)?;
                     }
                 }
@@ -1480,14 +1620,19 @@ impl ObjectStore {
         {
             let path = path.join("conditionality");
             fs::create_dir_all(&path)?;
-            for conditionality_tuple in self.conditionality.borrow().values() {
-                let path = path.join(format!("{}.json", conditionality_tuple.0.borrow().id()));
+            for conditionality_tuple in self.conditionality.read().unwrap().values() {
+                let path = path.join(format!(
+                    "{}.json",
+                    conditionality_tuple.0.read().unwrap().id()
+                ));
                 if path.exists() {
                     let file = fs::File::open(&path)?;
                     let reader = io::BufReader::new(file);
-                    let on_disk: (Rc<RefCell<Conditionality>>, SystemTime) =
+                    let on_disk: (Arc<RwLock<Conditionality>>, SystemTime) =
                         serde_json::from_reader(reader)?;
-                    if on_disk.0.borrow().to_owned() != conditionality_tuple.0.borrow().to_owned() {
+                    if on_disk.0.read().unwrap().to_owned()
+                        != conditionality_tuple.0.read().unwrap().to_owned()
+                    {
                         let file = fs::File::create(path)?;
                         let mut writer = io::BufWriter::new(file);
                         serde_json::to_writer_pretty(&mut writer, &conditionality_tuple)?;
@@ -1504,7 +1649,7 @@ impl ObjectStore {
                 let file_name = path.file_name().unwrap().to_str().unwrap();
                 let id = file_name.split('.').next().unwrap();
                 if let Ok(id) = Uuid::parse_str(id) {
-                    if !self.conditionality.borrow().contains_key(&id) {
+                    if !self.conditionality.read().unwrap().contains_key(&id) {
                         fs::remove_file(path)?;
                     }
                 }
@@ -1515,14 +1660,16 @@ impl ObjectStore {
         {
             let path = path.join("event");
             fs::create_dir_all(&path)?;
-            for event_tuple in self.event.borrow().values() {
-                let path = path.join(format!("{}.json", event_tuple.0.borrow().id));
+            for event_tuple in self.event.read().unwrap().values() {
+                let path = path.join(format!("{}.json", event_tuple.0.read().unwrap().id));
                 if path.exists() {
                     let file = fs::File::open(&path)?;
                     let reader = io::BufReader::new(file);
-                    let on_disk: (Rc<RefCell<Event>>, SystemTime) =
+                    let on_disk: (Arc<RwLock<Event>>, SystemTime) =
                         serde_json::from_reader(reader)?;
-                    if on_disk.0.borrow().to_owned() != event_tuple.0.borrow().to_owned() {
+                    if on_disk.0.read().unwrap().to_owned()
+                        != event_tuple.0.read().unwrap().to_owned()
+                    {
                         let file = fs::File::create(path)?;
                         let mut writer = io::BufWriter::new(file);
                         serde_json::to_writer_pretty(&mut writer, &event_tuple)?;
@@ -1539,7 +1686,7 @@ impl ObjectStore {
                 let file_name = path.file_name().unwrap().to_str().unwrap();
                 let id = file_name.split('.').next().unwrap();
                 if let Ok(id) = Uuid::parse_str(id) {
-                    if !self.event.borrow().contains_key(&id) {
+                    if !self.event.read().unwrap().contains_key(&id) {
                         fs::remove_file(path)?;
                     }
                 }
@@ -1550,14 +1697,16 @@ impl ObjectStore {
         {
             let path = path.join("external");
             fs::create_dir_all(&path)?;
-            for external_tuple in self.external.borrow().values() {
-                let path = path.join(format!("{}.json", external_tuple.0.borrow().id));
+            for external_tuple in self.external.read().unwrap().values() {
+                let path = path.join(format!("{}.json", external_tuple.0.read().unwrap().id));
                 if path.exists() {
                     let file = fs::File::open(&path)?;
                     let reader = io::BufReader::new(file);
-                    let on_disk: (Rc<RefCell<External>>, SystemTime) =
+                    let on_disk: (Arc<RwLock<External>>, SystemTime) =
                         serde_json::from_reader(reader)?;
-                    if on_disk.0.borrow().to_owned() != external_tuple.0.borrow().to_owned() {
+                    if on_disk.0.read().unwrap().to_owned()
+                        != external_tuple.0.read().unwrap().to_owned()
+                    {
                         let file = fs::File::create(path)?;
                         let mut writer = io::BufWriter::new(file);
                         serde_json::to_writer_pretty(&mut writer, &external_tuple)?;
@@ -1574,7 +1723,7 @@ impl ObjectStore {
                 let file_name = path.file_name().unwrap().to_str().unwrap();
                 let id = file_name.split('.').next().unwrap();
                 if let Ok(id) = Uuid::parse_str(id) {
-                    if !self.external.borrow().contains_key(&id) {
+                    if !self.external.read().unwrap().contains_key(&id) {
                         fs::remove_file(path)?;
                     }
                 }
@@ -1585,13 +1734,15 @@ impl ObjectStore {
         {
             let path = path.join("isa");
             fs::create_dir_all(&path)?;
-            for isa_tuple in self.isa.borrow().values() {
-                let path = path.join(format!("{}.json", isa_tuple.0.borrow().id));
+            for isa_tuple in self.isa.read().unwrap().values() {
+                let path = path.join(format!("{}.json", isa_tuple.0.read().unwrap().id));
                 if path.exists() {
                     let file = fs::File::open(&path)?;
                     let reader = io::BufReader::new(file);
-                    let on_disk: (Rc<RefCell<Isa>>, SystemTime) = serde_json::from_reader(reader)?;
-                    if on_disk.0.borrow().to_owned() != isa_tuple.0.borrow().to_owned() {
+                    let on_disk: (Arc<RwLock<Isa>>, SystemTime) = serde_json::from_reader(reader)?;
+                    if on_disk.0.read().unwrap().to_owned()
+                        != isa_tuple.0.read().unwrap().to_owned()
+                    {
                         let file = fs::File::create(path)?;
                         let mut writer = io::BufWriter::new(file);
                         serde_json::to_writer_pretty(&mut writer, &isa_tuple)?;
@@ -1608,7 +1759,7 @@ impl ObjectStore {
                 let file_name = path.file_name().unwrap().to_str().unwrap();
                 let id = file_name.split('.').next().unwrap();
                 if let Ok(id) = Uuid::parse_str(id) {
-                    if !self.isa.borrow().contains_key(&id) {
+                    if !self.isa.read().unwrap().contains_key(&id) {
                         fs::remove_file(path)?;
                     }
                 }
@@ -1619,14 +1770,16 @@ impl ObjectStore {
         {
             let path = path.join("object");
             fs::create_dir_all(&path)?;
-            for object_tuple in self.object.borrow().values() {
-                let path = path.join(format!("{}.json", object_tuple.0.borrow().id));
+            for object_tuple in self.object.read().unwrap().values() {
+                let path = path.join(format!("{}.json", object_tuple.0.read().unwrap().id));
                 if path.exists() {
                     let file = fs::File::open(&path)?;
                     let reader = io::BufReader::new(file);
-                    let on_disk: (Rc<RefCell<Object>>, SystemTime) =
+                    let on_disk: (Arc<RwLock<Object>>, SystemTime) =
                         serde_json::from_reader(reader)?;
-                    if on_disk.0.borrow().to_owned() != object_tuple.0.borrow().to_owned() {
+                    if on_disk.0.read().unwrap().to_owned()
+                        != object_tuple.0.read().unwrap().to_owned()
+                    {
                         let file = fs::File::create(path)?;
                         let mut writer = io::BufWriter::new(file);
                         serde_json::to_writer_pretty(&mut writer, &object_tuple)?;
@@ -1643,7 +1796,7 @@ impl ObjectStore {
                 let file_name = path.file_name().unwrap().to_str().unwrap();
                 let id = file_name.split('.').next().unwrap();
                 if let Ok(id) = Uuid::parse_str(id) {
-                    if !self.object.borrow().contains_key(&id) {
+                    if !self.object.read().unwrap().contains_key(&id) {
                         fs::remove_file(path)?;
                     }
                 }
@@ -1654,14 +1807,16 @@ impl ObjectStore {
         {
             let path = path.join("referent");
             fs::create_dir_all(&path)?;
-            for referent_tuple in self.referent.borrow().values() {
-                let path = path.join(format!("{}.json", referent_tuple.0.borrow().id));
+            for referent_tuple in self.referent.read().unwrap().values() {
+                let path = path.join(format!("{}.json", referent_tuple.0.read().unwrap().id));
                 if path.exists() {
                     let file = fs::File::open(&path)?;
                     let reader = io::BufReader::new(file);
-                    let on_disk: (Rc<RefCell<Referent>>, SystemTime) =
+                    let on_disk: (Arc<RwLock<Referent>>, SystemTime) =
                         serde_json::from_reader(reader)?;
-                    if on_disk.0.borrow().to_owned() != referent_tuple.0.borrow().to_owned() {
+                    if on_disk.0.read().unwrap().to_owned()
+                        != referent_tuple.0.read().unwrap().to_owned()
+                    {
                         let file = fs::File::create(path)?;
                         let mut writer = io::BufWriter::new(file);
                         serde_json::to_writer_pretty(&mut writer, &referent_tuple)?;
@@ -1678,7 +1833,7 @@ impl ObjectStore {
                 let file_name = path.file_name().unwrap().to_str().unwrap();
                 let id = file_name.split('.').next().unwrap();
                 if let Ok(id) = Uuid::parse_str(id) {
-                    if !self.referent.borrow().contains_key(&id) {
+                    if !self.referent.read().unwrap().contains_key(&id) {
                         fs::remove_file(path)?;
                     }
                 }
@@ -1689,14 +1844,16 @@ impl ObjectStore {
         {
             let path = path.join("referrer");
             fs::create_dir_all(&path)?;
-            for referrer_tuple in self.referrer.borrow().values() {
-                let path = path.join(format!("{}.json", referrer_tuple.0.borrow().id));
+            for referrer_tuple in self.referrer.read().unwrap().values() {
+                let path = path.join(format!("{}.json", referrer_tuple.0.read().unwrap().id));
                 if path.exists() {
                     let file = fs::File::open(&path)?;
                     let reader = io::BufReader::new(file);
-                    let on_disk: (Rc<RefCell<Referrer>>, SystemTime) =
+                    let on_disk: (Arc<RwLock<Referrer>>, SystemTime) =
                         serde_json::from_reader(reader)?;
-                    if on_disk.0.borrow().to_owned() != referrer_tuple.0.borrow().to_owned() {
+                    if on_disk.0.read().unwrap().to_owned()
+                        != referrer_tuple.0.read().unwrap().to_owned()
+                    {
                         let file = fs::File::create(path)?;
                         let mut writer = io::BufWriter::new(file);
                         serde_json::to_writer_pretty(&mut writer, &referrer_tuple)?;
@@ -1713,7 +1870,7 @@ impl ObjectStore {
                 let file_name = path.file_name().unwrap().to_str().unwrap();
                 let id = file_name.split('.').next().unwrap();
                 if let Ok(id) = Uuid::parse_str(id) {
-                    if !self.referrer.borrow().contains_key(&id) {
+                    if !self.referrer.read().unwrap().contains_key(&id) {
                         fs::remove_file(path)?;
                     }
                 }
@@ -1724,14 +1881,19 @@ impl ObjectStore {
         {
             let path = path.join("relationship");
             fs::create_dir_all(&path)?;
-            for relationship_tuple in self.relationship.borrow().values() {
-                let path = path.join(format!("{}.json", relationship_tuple.0.borrow().id()));
+            for relationship_tuple in self.relationship.read().unwrap().values() {
+                let path = path.join(format!(
+                    "{}.json",
+                    relationship_tuple.0.read().unwrap().id()
+                ));
                 if path.exists() {
                     let file = fs::File::open(&path)?;
                     let reader = io::BufReader::new(file);
-                    let on_disk: (Rc<RefCell<Relationship>>, SystemTime) =
+                    let on_disk: (Arc<RwLock<Relationship>>, SystemTime) =
                         serde_json::from_reader(reader)?;
-                    if on_disk.0.borrow().to_owned() != relationship_tuple.0.borrow().to_owned() {
+                    if on_disk.0.read().unwrap().to_owned()
+                        != relationship_tuple.0.read().unwrap().to_owned()
+                    {
                         let file = fs::File::create(path)?;
                         let mut writer = io::BufWriter::new(file);
                         serde_json::to_writer_pretty(&mut writer, &relationship_tuple)?;
@@ -1748,7 +1910,7 @@ impl ObjectStore {
                 let file_name = path.file_name().unwrap().to_str().unwrap();
                 let id = file_name.split('.').next().unwrap();
                 if let Ok(id) = Uuid::parse_str(id) {
-                    if !self.relationship.borrow().contains_key(&id) {
+                    if !self.relationship.read().unwrap().contains_key(&id) {
                         fs::remove_file(path)?;
                     }
                 }
@@ -1759,14 +1921,16 @@ impl ObjectStore {
         {
             let path = path.join("state");
             fs::create_dir_all(&path)?;
-            for state_tuple in self.state.borrow().values() {
-                let path = path.join(format!("{}.json", state_tuple.0.borrow().id));
+            for state_tuple in self.state.read().unwrap().values() {
+                let path = path.join(format!("{}.json", state_tuple.0.read().unwrap().id));
                 if path.exists() {
                     let file = fs::File::open(&path)?;
                     let reader = io::BufReader::new(file);
-                    let on_disk: (Rc<RefCell<State>>, SystemTime) =
+                    let on_disk: (Arc<RwLock<State>>, SystemTime) =
                         serde_json::from_reader(reader)?;
-                    if on_disk.0.borrow().to_owned() != state_tuple.0.borrow().to_owned() {
+                    if on_disk.0.read().unwrap().to_owned()
+                        != state_tuple.0.read().unwrap().to_owned()
+                    {
                         let file = fs::File::create(path)?;
                         let mut writer = io::BufWriter::new(file);
                         serde_json::to_writer_pretty(&mut writer, &state_tuple)?;
@@ -1783,7 +1947,7 @@ impl ObjectStore {
                 let file_name = path.file_name().unwrap().to_str().unwrap();
                 let id = file_name.split('.').next().unwrap();
                 if let Ok(id) = Uuid::parse_str(id) {
-                    if !self.state.borrow().contains_key(&id) {
+                    if !self.state.read().unwrap().contains_key(&id) {
                         fs::remove_file(path)?;
                     }
                 }
@@ -1794,14 +1958,16 @@ impl ObjectStore {
         {
             let path = path.join("subtype");
             fs::create_dir_all(&path)?;
-            for subtype_tuple in self.subtype.borrow().values() {
-                let path = path.join(format!("{}.json", subtype_tuple.0.borrow().id));
+            for subtype_tuple in self.subtype.read().unwrap().values() {
+                let path = path.join(format!("{}.json", subtype_tuple.0.read().unwrap().id));
                 if path.exists() {
                     let file = fs::File::open(&path)?;
                     let reader = io::BufReader::new(file);
-                    let on_disk: (Rc<RefCell<Subtype>>, SystemTime) =
+                    let on_disk: (Arc<RwLock<Subtype>>, SystemTime) =
                         serde_json::from_reader(reader)?;
-                    if on_disk.0.borrow().to_owned() != subtype_tuple.0.borrow().to_owned() {
+                    if on_disk.0.read().unwrap().to_owned()
+                        != subtype_tuple.0.read().unwrap().to_owned()
+                    {
                         let file = fs::File::create(path)?;
                         let mut writer = io::BufWriter::new(file);
                         serde_json::to_writer_pretty(&mut writer, &subtype_tuple)?;
@@ -1818,7 +1984,7 @@ impl ObjectStore {
                 let file_name = path.file_name().unwrap().to_str().unwrap();
                 let id = file_name.split('.').next().unwrap();
                 if let Ok(id) = Uuid::parse_str(id) {
-                    if !self.subtype.borrow().contains_key(&id) {
+                    if !self.subtype.read().unwrap().contains_key(&id) {
                         fs::remove_file(path)?;
                     }
                 }
@@ -1829,14 +1995,16 @@ impl ObjectStore {
         {
             let path = path.join("supertype");
             fs::create_dir_all(&path)?;
-            for supertype_tuple in self.supertype.borrow().values() {
-                let path = path.join(format!("{}.json", supertype_tuple.0.borrow().id));
+            for supertype_tuple in self.supertype.read().unwrap().values() {
+                let path = path.join(format!("{}.json", supertype_tuple.0.read().unwrap().id));
                 if path.exists() {
                     let file = fs::File::open(&path)?;
                     let reader = io::BufReader::new(file);
-                    let on_disk: (Rc<RefCell<Supertype>>, SystemTime) =
+                    let on_disk: (Arc<RwLock<Supertype>>, SystemTime) =
                         serde_json::from_reader(reader)?;
-                    if on_disk.0.borrow().to_owned() != supertype_tuple.0.borrow().to_owned() {
+                    if on_disk.0.read().unwrap().to_owned()
+                        != supertype_tuple.0.read().unwrap().to_owned()
+                    {
                         let file = fs::File::create(path)?;
                         let mut writer = io::BufWriter::new(file);
                         serde_json::to_writer_pretty(&mut writer, &supertype_tuple)?;
@@ -1853,7 +2021,7 @@ impl ObjectStore {
                 let file_name = path.file_name().unwrap().to_str().unwrap();
                 let id = file_name.split('.').next().unwrap();
                 if let Ok(id) = Uuid::parse_str(id) {
-                    if !self.supertype.borrow().contains_key(&id) {
+                    if !self.supertype.read().unwrap().contains_key(&id) {
                         fs::remove_file(path)?;
                     }
                 }
@@ -1864,13 +2032,14 @@ impl ObjectStore {
         {
             let path = path.join("ty");
             fs::create_dir_all(&path)?;
-            for ty_tuple in self.ty.borrow().values() {
-                let path = path.join(format!("{}.json", ty_tuple.0.borrow().id()));
+            for ty_tuple in self.ty.read().unwrap().values() {
+                let path = path.join(format!("{}.json", ty_tuple.0.read().unwrap().id()));
                 if path.exists() {
                     let file = fs::File::open(&path)?;
                     let reader = io::BufReader::new(file);
-                    let on_disk: (Rc<RefCell<Ty>>, SystemTime) = serde_json::from_reader(reader)?;
-                    if on_disk.0.borrow().to_owned() != ty_tuple.0.borrow().to_owned() {
+                    let on_disk: (Arc<RwLock<Ty>>, SystemTime) = serde_json::from_reader(reader)?;
+                    if on_disk.0.read().unwrap().to_owned() != ty_tuple.0.read().unwrap().to_owned()
+                    {
                         let file = fs::File::create(path)?;
                         let mut writer = io::BufWriter::new(file);
                         serde_json::to_writer_pretty(&mut writer, &ty_tuple)?;
@@ -1887,7 +2056,7 @@ impl ObjectStore {
                 let file_name = path.file_name().unwrap().to_str().unwrap();
                 let id = file_name.split('.').next().unwrap();
                 if let Ok(id) = Uuid::parse_str(id) {
-                    if !self.ty.borrow().contains_key(&id) {
+                    if !self.ty.read().unwrap().contains_key(&id) {
                         fs::remove_file(path)?;
                     }
                 }
@@ -1930,12 +2099,12 @@ impl ObjectStore {
                 let path = entry.path();
                 let file = fs::File::open(path)?;
                 let reader = io::BufReader::new(file);
-                let acknowledged_event: (Rc<RefCell<AcknowledgedEvent>>, SystemTime) =
+                let acknowledged_event: (Arc<RwLock<AcknowledgedEvent>>, SystemTime) =
                     serde_json::from_reader(reader)?;
-                store
-                    .acknowledged_event
-                    .borrow_mut()
-                    .insert(acknowledged_event.0.borrow().id, acknowledged_event.clone());
+                store.acknowledged_event.write().unwrap().insert(
+                    acknowledged_event.0.read().unwrap().id,
+                    acknowledged_event.clone(),
+                );
             }
         }
 
@@ -1948,10 +2117,10 @@ impl ObjectStore {
                 let path = entry.path();
                 let file = fs::File::open(path)?;
                 let reader = io::BufReader::new(file);
-                let an_associative_referent: (Rc<RefCell<AnAssociativeReferent>>, SystemTime) =
+                let an_associative_referent: (Arc<RwLock<AnAssociativeReferent>>, SystemTime) =
                     serde_json::from_reader(reader)?;
-                store.an_associative_referent.borrow_mut().insert(
-                    an_associative_referent.0.borrow().id,
+                store.an_associative_referent.write().unwrap().insert(
+                    an_associative_referent.0.read().unwrap().id,
                     an_associative_referent.clone(),
                 );
             }
@@ -1966,12 +2135,13 @@ impl ObjectStore {
                 let path = entry.path();
                 let file = fs::File::open(path)?;
                 let reader = io::BufReader::new(file);
-                let associative: (Rc<RefCell<Associative>>, SystemTime) =
+                let associative: (Arc<RwLock<Associative>>, SystemTime) =
                     serde_json::from_reader(reader)?;
                 store
                     .associative
-                    .borrow_mut()
-                    .insert(associative.0.borrow().id, associative.clone());
+                    .write()
+                    .unwrap()
+                    .insert(associative.0.read().unwrap().id, associative.clone());
             }
         }
 
@@ -1984,10 +2154,10 @@ impl ObjectStore {
                 let path = entry.path();
                 let file = fs::File::open(path)?;
                 let reader = io::BufReader::new(file);
-                let associative_referent: (Rc<RefCell<AssociativeReferent>>, SystemTime) =
+                let associative_referent: (Arc<RwLock<AssociativeReferent>>, SystemTime) =
                     serde_json::from_reader(reader)?;
-                store.associative_referent.borrow_mut().insert(
-                    associative_referent.0.borrow().id,
+                store.associative_referent.write().unwrap().insert(
+                    associative_referent.0.read().unwrap().id,
                     associative_referent.clone(),
                 );
             }
@@ -2002,10 +2172,10 @@ impl ObjectStore {
                 let path = entry.path();
                 let file = fs::File::open(path)?;
                 let reader = io::BufReader::new(file);
-                let associative_referrer: (Rc<RefCell<AssociativeReferrer>>, SystemTime) =
+                let associative_referrer: (Arc<RwLock<AssociativeReferrer>>, SystemTime) =
                     serde_json::from_reader(reader)?;
-                store.associative_referrer.borrow_mut().insert(
-                    associative_referrer.0.borrow().id,
+                store.associative_referrer.write().unwrap().insert(
+                    associative_referrer.0.read().unwrap().id,
                     associative_referrer.clone(),
                 );
             }
@@ -2020,12 +2190,13 @@ impl ObjectStore {
                 let path = entry.path();
                 let file = fs::File::open(path)?;
                 let reader = io::BufReader::new(file);
-                let attribute: (Rc<RefCell<Attribute>>, SystemTime) =
+                let attribute: (Arc<RwLock<Attribute>>, SystemTime) =
                     serde_json::from_reader(reader)?;
                 store
                     .attribute
-                    .borrow_mut()
-                    .insert(attribute.0.borrow().id, attribute.clone());
+                    .write()
+                    .unwrap()
+                    .insert(attribute.0.read().unwrap().id, attribute.clone());
             }
         }
 
@@ -2038,11 +2209,12 @@ impl ObjectStore {
                 let path = entry.path();
                 let file = fs::File::open(path)?;
                 let reader = io::BufReader::new(file);
-                let binary: (Rc<RefCell<Binary>>, SystemTime) = serde_json::from_reader(reader)?;
+                let binary: (Arc<RwLock<Binary>>, SystemTime) = serde_json::from_reader(reader)?;
                 store
                     .binary
-                    .borrow_mut()
-                    .insert(binary.0.borrow().id, binary.clone());
+                    .write()
+                    .unwrap()
+                    .insert(binary.0.read().unwrap().id, binary.clone());
             }
         }
 
@@ -2055,12 +2227,13 @@ impl ObjectStore {
                 let path = entry.path();
                 let file = fs::File::open(path)?;
                 let reader = io::BufReader::new(file);
-                let cardinality: (Rc<RefCell<Cardinality>>, SystemTime) =
+                let cardinality: (Arc<RwLock<Cardinality>>, SystemTime) =
                     serde_json::from_reader(reader)?;
                 store
                     .cardinality
-                    .borrow_mut()
-                    .insert(cardinality.0.borrow().id(), cardinality.clone());
+                    .write()
+                    .unwrap()
+                    .insert(cardinality.0.read().unwrap().id(), cardinality.clone());
             }
         }
 
@@ -2073,12 +2246,12 @@ impl ObjectStore {
                 let path = entry.path();
                 let file = fs::File::open(path)?;
                 let reader = io::BufReader::new(file);
-                let conditionality: (Rc<RefCell<Conditionality>>, SystemTime) =
+                let conditionality: (Arc<RwLock<Conditionality>>, SystemTime) =
                     serde_json::from_reader(reader)?;
-                store
-                    .conditionality
-                    .borrow_mut()
-                    .insert(conditionality.0.borrow().id(), conditionality.clone());
+                store.conditionality.write().unwrap().insert(
+                    conditionality.0.read().unwrap().id(),
+                    conditionality.clone(),
+                );
             }
         }
 
@@ -2091,11 +2264,12 @@ impl ObjectStore {
                 let path = entry.path();
                 let file = fs::File::open(path)?;
                 let reader = io::BufReader::new(file);
-                let event: (Rc<RefCell<Event>>, SystemTime) = serde_json::from_reader(reader)?;
+                let event: (Arc<RwLock<Event>>, SystemTime) = serde_json::from_reader(reader)?;
                 store
                     .event
-                    .borrow_mut()
-                    .insert(event.0.borrow().id, event.clone());
+                    .write()
+                    .unwrap()
+                    .insert(event.0.read().unwrap().id, event.clone());
             }
         }
 
@@ -2108,12 +2282,13 @@ impl ObjectStore {
                 let path = entry.path();
                 let file = fs::File::open(path)?;
                 let reader = io::BufReader::new(file);
-                let external: (Rc<RefCell<External>>, SystemTime) =
+                let external: (Arc<RwLock<External>>, SystemTime) =
                     serde_json::from_reader(reader)?;
                 store
                     .external
-                    .borrow_mut()
-                    .insert(external.0.borrow().id, external.clone());
+                    .write()
+                    .unwrap()
+                    .insert(external.0.read().unwrap().id, external.clone());
             }
         }
 
@@ -2126,11 +2301,12 @@ impl ObjectStore {
                 let path = entry.path();
                 let file = fs::File::open(path)?;
                 let reader = io::BufReader::new(file);
-                let isa: (Rc<RefCell<Isa>>, SystemTime) = serde_json::from_reader(reader)?;
+                let isa: (Arc<RwLock<Isa>>, SystemTime) = serde_json::from_reader(reader)?;
                 store
                     .isa
-                    .borrow_mut()
-                    .insert(isa.0.borrow().id, isa.clone());
+                    .write()
+                    .unwrap()
+                    .insert(isa.0.read().unwrap().id, isa.clone());
             }
         }
 
@@ -2143,15 +2319,16 @@ impl ObjectStore {
                 let path = entry.path();
                 let file = fs::File::open(path)?;
                 let reader = io::BufReader::new(file);
-                let object: (Rc<RefCell<Object>>, SystemTime) = serde_json::from_reader(reader)?;
-                store.object_id_by_name.borrow_mut().insert(
-                    object.0.borrow().name.to_upper_camel_case(),
-                    (object.0.borrow().id, object.1),
+                let object: (Arc<RwLock<Object>>, SystemTime) = serde_json::from_reader(reader)?;
+                store.object_id_by_name.write().unwrap().insert(
+                    object.0.read().unwrap().name.to_upper_camel_case(),
+                    (object.0.read().unwrap().id, object.1),
                 );
                 store
                     .object
-                    .borrow_mut()
-                    .insert(object.0.borrow().id, object.clone());
+                    .write()
+                    .unwrap()
+                    .insert(object.0.read().unwrap().id, object.clone());
             }
         }
 
@@ -2164,12 +2341,13 @@ impl ObjectStore {
                 let path = entry.path();
                 let file = fs::File::open(path)?;
                 let reader = io::BufReader::new(file);
-                let referent: (Rc<RefCell<Referent>>, SystemTime) =
+                let referent: (Arc<RwLock<Referent>>, SystemTime) =
                     serde_json::from_reader(reader)?;
                 store
                     .referent
-                    .borrow_mut()
-                    .insert(referent.0.borrow().id, referent.clone());
+                    .write()
+                    .unwrap()
+                    .insert(referent.0.read().unwrap().id, referent.clone());
             }
         }
 
@@ -2182,12 +2360,13 @@ impl ObjectStore {
                 let path = entry.path();
                 let file = fs::File::open(path)?;
                 let reader = io::BufReader::new(file);
-                let referrer: (Rc<RefCell<Referrer>>, SystemTime) =
+                let referrer: (Arc<RwLock<Referrer>>, SystemTime) =
                     serde_json::from_reader(reader)?;
                 store
                     .referrer
-                    .borrow_mut()
-                    .insert(referrer.0.borrow().id, referrer.clone());
+                    .write()
+                    .unwrap()
+                    .insert(referrer.0.read().unwrap().id, referrer.clone());
             }
         }
 
@@ -2200,12 +2379,13 @@ impl ObjectStore {
                 let path = entry.path();
                 let file = fs::File::open(path)?;
                 let reader = io::BufReader::new(file);
-                let relationship: (Rc<RefCell<Relationship>>, SystemTime) =
+                let relationship: (Arc<RwLock<Relationship>>, SystemTime) =
                     serde_json::from_reader(reader)?;
                 store
                     .relationship
-                    .borrow_mut()
-                    .insert(relationship.0.borrow().id(), relationship.clone());
+                    .write()
+                    .unwrap()
+                    .insert(relationship.0.read().unwrap().id(), relationship.clone());
             }
         }
 
@@ -2218,11 +2398,12 @@ impl ObjectStore {
                 let path = entry.path();
                 let file = fs::File::open(path)?;
                 let reader = io::BufReader::new(file);
-                let state: (Rc<RefCell<State>>, SystemTime) = serde_json::from_reader(reader)?;
+                let state: (Arc<RwLock<State>>, SystemTime) = serde_json::from_reader(reader)?;
                 store
                     .state
-                    .borrow_mut()
-                    .insert(state.0.borrow().id, state.clone());
+                    .write()
+                    .unwrap()
+                    .insert(state.0.read().unwrap().id, state.clone());
             }
         }
 
@@ -2235,11 +2416,12 @@ impl ObjectStore {
                 let path = entry.path();
                 let file = fs::File::open(path)?;
                 let reader = io::BufReader::new(file);
-                let subtype: (Rc<RefCell<Subtype>>, SystemTime) = serde_json::from_reader(reader)?;
+                let subtype: (Arc<RwLock<Subtype>>, SystemTime) = serde_json::from_reader(reader)?;
                 store
                     .subtype
-                    .borrow_mut()
-                    .insert(subtype.0.borrow().id, subtype.clone());
+                    .write()
+                    .unwrap()
+                    .insert(subtype.0.read().unwrap().id, subtype.clone());
             }
         }
 
@@ -2252,12 +2434,13 @@ impl ObjectStore {
                 let path = entry.path();
                 let file = fs::File::open(path)?;
                 let reader = io::BufReader::new(file);
-                let supertype: (Rc<RefCell<Supertype>>, SystemTime) =
+                let supertype: (Arc<RwLock<Supertype>>, SystemTime) =
                     serde_json::from_reader(reader)?;
                 store
                     .supertype
-                    .borrow_mut()
-                    .insert(supertype.0.borrow().id, supertype.clone());
+                    .write()
+                    .unwrap()
+                    .insert(supertype.0.read().unwrap().id, supertype.clone());
             }
         }
 
@@ -2270,8 +2453,12 @@ impl ObjectStore {
                 let path = entry.path();
                 let file = fs::File::open(path)?;
                 let reader = io::BufReader::new(file);
-                let ty: (Rc<RefCell<Ty>>, SystemTime) = serde_json::from_reader(reader)?;
-                store.ty.borrow_mut().insert(ty.0.borrow().id(), ty.clone());
+                let ty: (Arc<RwLock<Ty>>, SystemTime) = serde_json::from_reader(reader)?;
+                store
+                    .ty
+                    .write()
+                    .unwrap()
+                    .insert(ty.0.read().unwrap().id(), ty.clone());
             }
         }
 

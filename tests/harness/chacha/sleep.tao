@@ -1,10 +1,20 @@
-fn main() {
-    let duration = chacha::time(|| {
-        chacha::sleep(1000);
-    });
-    let delta = duration - 1.0;
+async fn main() -> Future<()> {
+    async {
+        let duration = chacha::time(|| {
+            async {
+                print("sleeping\n");
+                chacha::sleep(1500);
+                chacha::sleep(1000).await;
+                print("awake\n");
+            }
+            .await
+        });
 
-    print("delta: {0}\n".format(delta));
+        let delta = duration - 1.0;
 
-    chacha::assert(delta < 0.01);
+        print("delta: {0}\n".format(delta));
+
+        chacha::assert(delta < 0.005);
+    }
+    .await;
 }

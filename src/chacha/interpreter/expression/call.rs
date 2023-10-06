@@ -1,12 +1,15 @@
 use std::{collections::VecDeque, thread, time::Duration, time::Instant};
 
 use ansi_term::Colour;
+use async_io::Timer;
 use snafu::{location, prelude::*, Location};
 use uuid::Uuid;
 
 use crate::{
     chacha::{
         error::{NoSuchStaticMethodSnafu, Result, TypeMismatchSnafu},
+        r#async::ChaChaExecutor,
+        value::FutureResult,
         vm::{CallFrame, VM},
     },
     interpreter::{
@@ -37,10 +40,15 @@ pub fn eval(
     let args = s_read!(call).r28_argument(&s_read!(lu_dog));
     debug!("args {args:?}");
     // fix_error!("arg_check", s_read!(call).arg_check);
+
     let arg_check = s_read!(call).arg_check;
     if arg_check {
+        // 🚧 Shouldn't I be checking args here?
         s_write!(call).arg_check = false;
     }
+
+    let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
+    let span = s_read!(value).r63_span(&s_read!(lu_dog))[0].clone();
 
     // This optional expression is the LHS of the call.
     let value = if let Some(ref expr) = s_read!(call).expression {
@@ -49,30 +57,25 @@ pub fn eval(
         let value = eval_expression(expr, context, vm)?;
         debug!("ExpressionEnum::Call LHS value {:?}", s_read!(value));
 
+        // 🚧 I don't remember why this is a closure.
         let mut eval_lhs = || -> Result<RefType<Value>> {
             // Below we are reading the value of the LHS, and then using that
             // to determine what to do with the RHS.
             let read_value = s_read!(value);
             match &*read_value {
                 Value::Function(ref func) => {
-                    let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
-                    let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
-
                     let func = s_read!(lu_dog).exhume_function(&s_read!(func).id).unwrap();
                     debug!("ExpressionEnum::Call func: {func:?}");
                     let value =
-                        eval_function_call(func, &args, first_arg, arg_check, span, context, vm)?;
+                        eval_function_call(func, &args, first_arg, arg_check, &span, context, vm)?;
                     debug!("value {value:?}");
                     Ok(value)
                 }
-                Value::Future(_) => Ok(value.clone()),
+                Value::Future(_, _) => Ok(value.clone()),
                 Value::Lambda(ref ƛ) => {
-                    let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
-                    let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
-
                     let ƛ = s_read!(lu_dog).exhume_lambda(&s_read!(ƛ).id).unwrap();
                     debug!("ExpressionEnum::Call ƛ: {ƛ:?}");
-                    let value = eval_lambda_expression(ƛ, &args, arg_check, span, context, vm)?;
+                    let value = eval_lambda_expression(ƛ, &args, arg_check, &span, context, vm)?;
                     debug!("value {value:?}");
                     Ok(value)
                 }
@@ -157,29 +160,98 @@ pub fn eval(
             // let x = match &mut *value {
             match &*s_read!(value) {
                 // Value::Future(ref mut join_handle) => {
-                //     use futures::future::FutureExt;
+                Value::Future(_, _) => {
+                    // use futures::future::FutureExt;
 
-                //     let lambda = args[0].clone();
-                //     let lambda = s_read!(lambda).r37_expression(&s_read!(lu_dog))[0].clone();
-                //     dbg!(&args);
-                //     let mut context = context.to_owned();
-                //     // let remote_handle = join_handle.remote_handle();
+                    let lambda = args[1].clone();
+                    let lambda = s_read!(lambda).r37_expression(&s_read!(lu_dog))[0].clone();
+                    // dbg!(&args);
+                    let mut cloned_context = context.clone();
 
-                //     let future = async move {
-                //         let mem = context.memory().clone();
-                //         let mut vm = VM::new(&mem);
+                    let future = async move {
+                        let mem = cloned_context.memory().clone();
+                        let mut vm = VM::new(&mem);
 
-                //         // remote_handle
-                //         let value = eval_expression(lambda, &mut context, &mut vm).unwrap();
-                //         dbg!(&value);
-                //         // join_handle.await
-                //         value
-                //     };
-                //     let value = async_std::task::spawn_local(future);
-                //     // Ok(async_std::task::block_on(future))
+                        let value = eval_expression(lambda, &mut cloned_context, &mut vm)?;
+                        // dbg!("bitches come!", &value);
 
-                //     Ok(new_ref!(Value, Value::Future(value)))
-                // }
+                        let read_value = s_read!(value);
+                        match &*read_value {
+                            Value::Function(ref func) => {
+                                let func =
+                                    s_read!(lu_dog).exhume_function(&s_read!(func).id).unwrap();
+                                debug!("ExpressionEnum::Call func: {func:?}");
+                                let value = eval_function_call(
+                                    func,
+                                    &args,
+                                    first_arg,
+                                    arg_check,
+                                    &span,
+                                    &mut cloned_context,
+                                    &mut vm,
+                                );
+                                debug!("value {value:?}");
+                                value
+                            }
+                            Value::Future(_, _) => Ok(value.clone()),
+                            Value::Lambda(ref ƛ) => {
+                                let mut args = args.clone();
+                                args.clear();
+                                let ƛ = s_read!(lu_dog).exhume_lambda(&s_read!(ƛ).id).unwrap();
+                                debug!("ExpressionEnum::Call ƛ: {ƛ:?}");
+                                let value = eval_lambda_expression(
+                                    ƛ,
+                                    &args,
+                                    arg_check,
+                                    &span,
+                                    &mut cloned_context,
+                                    &mut vm,
+                                );
+                                debug!("value {value:?}");
+                                value
+                            }
+                            Value::ProxyType {
+                                module: _,
+                                obj_ty: _,
+                                id: _,
+                                plugin: _,
+                            } => Ok(value.clone()),
+                            Value::Struct(_) => Ok(value.clone()),
+                            Value::Store(_store, _plugin) => Ok(value.clone()),
+                            oops => panic!("{oops}"),
+                        }
+                    };
+
+                    // let future = executor.unwrap().spawn(future);
+
+                    let mut executor = ChaChaExecutor::new();
+                    executor.spawn(future);
+
+                    let value = new_ref!(Value, Value::Future("foo".to_owned(), executor));
+
+                    // let future = async move {
+                    //     let result = value.clone();
+                    //     let value = future.await;
+
+                    //     let mut result = s_write!(result);
+                    //     if let Value::Future(_, ref mut result) = *result {
+                    //         match result {
+                    //             FutureResult::Running => *result = FutureResult::Complete(value),
+                    //             FutureResult::Waiting(waker) => {
+                    //                 waker.clone().wake();
+                    //                 *result = FutureResult::Complete(value);
+                    //             }
+                    //             _ => panic!("future already complete"),
+                    //         }
+                    //     } else {
+                    //         unreachable!()
+                    //     }
+                    // };
+
+                    // context.executor_spawn(future);
+
+                    Ok(value)
+                }
                 Value::Store(store, _plugin) => {
                     let impl_ = &s_read!(store).r83c_implementation_block(&s_read!(lu_dog))[0];
                     let x = if let Some(func) = s_read!(impl_)
@@ -623,10 +695,22 @@ pub fn eval(
                         let (duration, _) = arg_values.pop_front().unwrap();
                         let millis = &*s_read!(duration);
                         let millis: u64 = millis.try_into()?;
+                        let duration = Duration::from_millis(millis);
 
-                        thread::sleep(Duration::from_millis(millis));
+                        let future = async move {
+                            debug!("sleeping for {duration:?}");
+                            let instant = Timer::after(duration).await;
+                            debug!("done sleeping");
+                            // 🚧 Maybe we should coerce the instant and return it?
+                            Ok(new_ref!(Value, Value::Empty))
+                        };
 
-                        Ok(new_ref!(Value, Value::Empty))
+                        let mut executor = ChaChaExecutor::new();
+                        executor.spawn(future);
+
+                        let value = new_ref!(Value, Value::Future("xyzzy".to_owned(), executor));
+
+                        Ok(value)
                     }
                     TIME => {
                         debug!("evaluating chacha::time");
@@ -641,10 +725,11 @@ pub fn eval(
                                 // 🚧 I'm not really sure what to do about this here. It's
                                 // all really a hack for now anyway.
                                 let ty = func.get_type(&s_read!(sarzak), &s_read!(lu_dog));
-                                let ty = PrintableValueType(true, &ty, context);
+                                let ty = PrintableValueType(true, ty, context.models());
+                                let ty = ty.to_string();
                                 TypeMismatchSnafu {
                                     expected: "<function>".to_string(),
-                                    found: ty.to_string(),
+                                    found: ty,
                                     span,
                                 }
                             }
@@ -681,7 +766,7 @@ pub fn eval(
                         debug!("evaluating chacha::typeof");
                         let arg = arg_values.pop_front().unwrap().0;
                         let ty = s_read!(arg).get_type(&s_read!(sarzak), &s_read!(lu_dog));
-                        let pvt_ty = PrintableValueType(false, &ty, context);
+                        let pvt_ty = PrintableValueType(false, ty, context.models());
 
                         Ok(new_ref!(Value, pvt_ty.to_string().into()))
                     }

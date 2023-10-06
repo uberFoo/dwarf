@@ -1,4 +1,7 @@
-use std::{fmt, ops::Range};
+use std::{fmt, future::Future, ops::Range};
+
+#[cfg(feature = "async")]
+use smol::future;
 
 use abi_stable::{
     std_types::{RBox, ROption, RString, RVec},
@@ -10,7 +13,7 @@ use sarzak::lu_dog::ValueTypeEnum;
 use uuid::Uuid;
 
 use crate::{
-    chacha::error::Result,
+    chacha::{error::Result, r#async::ChaChaExecutor},
     lu_dog::{Function, Lambda, ObjectStore as LuDogStore, ValueType, ZObjectStore},
     new_ref,
     plug_in::PluginType,
@@ -143,13 +146,52 @@ impl fmt::Display for EnumVariant {
     }
 }
 
-// #[derive(Clone, Debug)]
-// pub enum FutureResult {
-//     JoinHandle(async_std::task::JoinHandle<RefType<Value>>),
-//     Result(RefType<Value>),
-// }
+#[derive(Clone, Debug)]
+pub enum FutureResult {
+    Running,
+    Waiting(std::task::Waker),
+    Complete(RefType<Value>),
+}
 
-#[derive(Debug, Default)]
+impl Future for FutureResult {
+    type Output = RefType<Value>;
+
+    fn poll(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Self::Output> {
+        let this = std::pin::Pin::into_inner(self);
+        match this {
+            Self::Running => {
+                *this = Self::Waiting(cx.waker().clone());
+                std::task::Poll::Pending
+            }
+            Self::Waiting(_) => {
+                unreachable!()
+            }
+            // Self::JoinHandle(join) => {
+            //     if let Some(join) = join.take() {
+            //         let waker = cx.waker().clone();
+            //         dbg!("polling");
+            //         let value = async {
+            //             waker.wake();
+            //             join.await
+            //         };
+            //         let value = future::block_on(value);
+            //         dbg!("done");
+            //         *this = Self::Result(value.clone());
+            //         std::task::Poll::Ready(value)
+            //     } else {
+            //         dbg!("pending");
+            //         std::task::Poll::Pending
+            //     }
+            // }
+            Self::Complete(value) => std::task::Poll::Ready(value.clone()),
+        }
+    }
+}
+
+#[derive(Default)]
 pub enum Value {
     Boolean(bool),
     Char(char),
@@ -165,7 +207,9 @@ pub enum Value {
     /// excessive, and yet I know I've looked into it before.
     Function(RefType<Function>),
     // Future(FutureResult),
-    Future(async_std::task::JoinHandle<RefType<Value>>),
+    // Future(String, async_std::task::JoinHandle<RefType<Value>>),
+    // Future(String, FutureResult),
+    Future(String, ChaChaExecutor<'static>),
     Integer(DwarfInteger),
     Lambda(RefType<Lambda>),
     ParsedDwarf(Context),
@@ -187,22 +231,24 @@ pub enum Value {
     Vector(Vec<RefType<Self>>),
 }
 
-impl Drop for Value {
-    fn drop(&mut self) {
-        match self {
-            Self::Future(join) => {
-                dbg!("dropping future");
-                let _ = async_std::task::block_on(async { join.await });
-            }
-            _ => {}
-        }
-    }
-}
+// impl Drop for Value {
+//     fn drop(&mut self) {
+//         match self {
+//             Self::Future(name, task) => {
+//                 dbg!("dropping task", name, &task);
+//                 // let _ = future::block_on(async { task.await });
+//                 let _ = future::block_on(task);
+//             }
+//             _ => {}
+//         }
+//     }
+// }
 
 // impl Value {
 //     pub fn deref(&mut self) -> &Self {
 //         // if let Self::Future(FutureResult::JoinHandle(mut join)) = self {
-//         if let Self::Future(ref mut join) = self {
+//         if let Self::Future(name, ref mut join) = self {
+//             dbg!("awaiting future", name);
 //             let value = async { join.await };
 //             let value = async_std::task::block_on(value).take();
 //             *self = value;
@@ -214,55 +260,51 @@ impl Drop for Value {
 //     }
 // }
 
-// impl std::fmt::Debug for Value {
-//     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-//         match self {
-//             Self::Boolean(bool_) => write!(f, "{:?}", bool_),
-//             Self::Char(char_) => write!(f, "{:?}", char_),
-//             Self::Empty => write!(f, "()"),
-//             Self::Enumeration(var) => write!(f, "{:?}", var),
-//             Self::Error(e) => write!(f, "{}: {}", Colour::Red.bold().paint("error"), e),
-//             Self::Float(num) => write!(f, "{:?}", num),
-//             Self::Function(func) => write!(f, "{:?}", s_read!(func)),
-//             Self::Future(_) => write!(f, "<join_handle>"),
-//             Self::Integer(num) => write!(f, "{:?}", num),
-//             Self::Lambda(ƛ) => write!(f, "{:?}", s_read!(ƛ)),
-//             Self::Option(option) => match option {
-//                 Some(value) => write!(f, "Some({:?})", s_read!(value)),
-//                 None => write!(f, "None"),
-//             },
-//             Self::ParsedDwarf(ctx) => write!(f, "{:?}", ctx),
-//             Self::ProxyType {
-//                 module,
-//                 obj_ty,
-//                 id,
-//                 plugin,
-//             } => write!(
-//                 f,
-//                 "ProxyType {{ module: {}, obj_ty: {}, id: {}, plugin: {} }}",
-//                 module,
-//                 obj_ty,
-//                 id,
-//                 s_read!(plugin).name()
-//             ),
-//             Self::Range(range) => write!(f, "{:?}", range),
-//             Self::Store(store, plugin) => write!(
-//                 f,
-//                 "Store {{ store: {:?}, plugin: {} }}",
-//                 s_read!(store),
-//                 s_read!(plugin).name()
-//             ),
-//             Self::String(str_) => write!(f, "{:?}", str_),
-//             Self::Struct(ty) => write!(f, "{:?}", s_read!(ty)),
-//             Self::Table(table) => write!(f, "{:?}", table),
-//             Self::Thonk(name, number) => write!(f, "{:?} [{:?}]", name, number),
-//             Self::TupleEnum(te) => write!(f, "{:?}", s_read!(te)),
-//             Self::Unknown => write!(f, "<unknown>"),
-//             Self::Uuid(uuid) => write!(f, "{:?}", uuid),
-//             Self::Vector(vec) => write!(f, "{:?}", vec),
-//         }
-//     }
-// }
+impl std::fmt::Debug for Value {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Self::Boolean(bool_) => write!(f, "{:?}", bool_),
+            Self::Char(char_) => write!(f, "{:?}", char_),
+            Self::Empty => write!(f, "()"),
+            Self::Enumeration(var) => write!(f, "{:?}", var),
+            Self::Error(e) => write!(f, "{}: {}", Colour::Red.bold().paint("error"), e),
+            Self::Float(num) => write!(f, "{:?}", num),
+            Self::Function(func) => write!(f, "{:?}", s_read!(func)),
+            Self::Future(name, _) => write!(f, "Executor {name}"),
+            Self::Integer(num) => write!(f, "{:?}", num),
+            Self::Lambda(ƛ) => write!(f, "{:?}", s_read!(ƛ)),
+            Self::ParsedDwarf(ctx) => write!(f, "{:?}", ctx),
+            Self::ProxyType {
+                module,
+                obj_ty,
+                id,
+                plugin,
+            } => write!(
+                f,
+                "ProxyType {{ module: {}, obj_ty: {}, id: {}, plugin: {} }}",
+                module,
+                obj_ty,
+                id,
+                s_read!(plugin).name()
+            ),
+            Self::Range(range) => write!(f, "{:?}", range),
+            Self::Store(store, plugin) => write!(
+                f,
+                "Store {{ store: {:?}, plugin: {} }}",
+                s_read!(store),
+                s_read!(plugin).name()
+            ),
+            Self::String(str_) => write!(f, "{:?}", str_),
+            Self::Struct(ty) => write!(f, "{:?}", s_read!(ty)),
+            Self::Table(table) => write!(f, "{:?}", table),
+            Self::Thonk(name, number) => write!(f, "{:?} [{:?}]", name, number),
+            Self::TupleEnum(te) => write!(f, "{:?}", s_read!(te)),
+            Self::Unknown => write!(f, "<unknown>"),
+            Self::Uuid(uuid) => write!(f, "{:?}", uuid),
+            Self::Vector(vec) => write!(f, "{:?}", vec),
+        }
+    }
+}
 
 impl Clone for Value {
     fn clone(&self) -> Self {
@@ -274,7 +316,7 @@ impl Clone for Value {
             Self::Error(e) => Self::Error(e.clone()),
             Self::Float(num) => Self::Float(*num),
             Self::Function(func) => Self::Function(func.clone()),
-            Self::Future(_) => Self::Empty,
+            Self::Future(parent, _) => Self::Future(format!("{parent}.道"), ChaChaExecutor::new()),
             Self::Integer(num) => Self::Integer(*num),
             Self::Lambda(ƛ) => Self::Lambda(ƛ.clone()),
             Self::ParsedDwarf(ctx) => Self::ParsedDwarf(ctx.clone()),
@@ -415,7 +457,7 @@ impl Value {
                 #[allow(clippy::let_and_return)]
                 z
             }
-            Value::Future(_) => {
+            Value::Future(_, _) => {
                 for vt in lu_dog.iter_value_type() {
                     if let ValueTypeEnum::XFuture(_) = s_read!(vt).subtype {
                         return vt.clone();
@@ -515,7 +557,7 @@ impl fmt::Display for Value {
             Self::Error(e) => write!(f, "{}: {e}", Colour::Red.bold().paint("error")),
             Self::Float(num) => write!(f, "{num}"),
             Self::Function(_) => write!(f, "<function>"),
-            Self::Future(_) => write!(f, "<future>"),
+            Self::Future(_, _) => write!(f, "<future>"),
             Self::Integer(num) => write!(f, "{num}"),
             Self::Lambda(_) => write!(f, "<lambda>"),
             Self::ParsedDwarf(ctx) => write!(f, "{ctx:#?}"),

@@ -3,7 +3,7 @@ use std::{
     io::{self, BufReader, BufWriter},
     net::TcpListener,
     path::PathBuf,
-    thread,
+    process, thread,
 };
 
 use clap::{ArgAction, Args, Parser};
@@ -13,10 +13,12 @@ use dwarf::{
         dap::DapAdapter,
         error::ChaChaErrorReporter,
         interpreter::{banner2, initialize_interpreter, start_func, start_repl},
+        r#async::ChaChaExecutor,
     },
     dwarf::{new_lu_dog, parse_dwarf},
+    new_ref, s_write,
     sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL},
-    Context,
+    Context, NewRef, RefType, Value,
 };
 use reqwest::Url;
 use tracy_client::Client;
@@ -226,7 +228,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             })?;
         } else {
             match start_func("main", false, ctx) {
-                Ok((_, ctx)) => ctx,
+                // 🚧 What's a sensible thing to do with this?
+                Ok((value, _)) => {
+                    let value = std::sync::Arc::into_raw(value);
+                    // into_inner().unwrap();
+                    unsafe {
+                        let value = std::ptr::read(value);
+                        let value = value.into_inner().unwrap();
+                        match value {
+                            Value::Future(name, mut task) => {
+                                dbg!(&name);
+                                task.block_on();
+                            }
+                            _ => {
+                                dbg!(value);
+                            }
+                        }
+                    }
+                }
                 Err(e) => {
                     eprintln!("Interpreter exited with:");
                     eprintln!("{}", ChaChaErrorReporter(&e, is_uber, &source_code, &name));

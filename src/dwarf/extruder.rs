@@ -4,9 +4,8 @@ use ansi_term::Colour;
 use heck::ToUpperCamelCase;
 use log;
 use rustc_hash::FxHashMap as HashMap;
-use rustc_hash::FxHashSet as HashSet;
 use sarzak::domain::DomainBuilder;
-use snafu::{location, Location};
+use snafu::{ensure, location, Location};
 use uuid::Uuid;
 
 use crate::{
@@ -20,7 +19,7 @@ use crate::{
     lu_dog::{
         store::ObjectStore as LuDogStore,
         types::{
-            Block, Body, BooleanOperator, Call, DataStructure, EnumField as LuDogEnumField,
+            AWait, Block, Body, BooleanOperator, Call, DataStructure, EnumField as LuDogEnumField,
             EnumFieldEnum, Enumeration, ErrorExpression, Expression, ExpressionEnum,
             ExpressionStatement, ExternalImplementation, Field, FieldExpression, ForLoop, Function,
             Generic, ImplementationBlock, Index, IntegerLiteral, Item as WoogItem, ItemStatement,
@@ -699,7 +698,13 @@ fn inter_func(
     let name = name.de_sanitize();
     let (func, block) =
         if let Some((ParserExpression::Block(block_a_sink, stmts, vars, tys), span)) = &stmts {
-            let block = Block::new(Uuid::new_v4(), None, None, lu_dog);
+            let a_sink = a_sink
+                || match block_a_sink {
+                    BlockType::Async => true,
+                    BlockType::Sync => false,
+                };
+
+            let block = Block::new(a_sink, Uuid::new_v4(), None, None, lu_dog);
             for (var, ty) in vars.iter().zip(tys.iter()) {
                 let local = LocalVariable::new(Uuid::new_v4(), lu_dog);
                 let var = Variable::new_local_variable(var.to_owned(), &local, lu_dog);
@@ -707,12 +712,6 @@ fn inter_func(
                 // 🚧 We should really be passing a span in the Block so that
                 // we can link this XValue to it.
             }
-
-            let a_sink = a_sink
-                || match block_a_sink {
-                    BlockType::Async => true,
-                    BlockType::Sync => false,
-                };
 
             let body = Body::new_block(a_sink, &block, lu_dog);
             let func = Function::new(name.to_owned(), &body, None, impl_block, &ret_ty, lu_dog);
@@ -1176,6 +1175,37 @@ pub(super) fn inter_expression(
             Ok(((expr, span), lhs_ty))
         }
         //
+        // Await
+        //
+        ParserExpression::Await(ref expr_p) => {
+            let (expr, ty) = inter_expression(
+                &new_ref!(ParserExpression, expr_p.0.to_owned()),
+                &expr_p.1,
+                block,
+                context,
+                lu_dog,
+            )?;
+
+            if !matches!(s_read!(ty).subtype, ValueTypeEnum::XFuture(_)) {
+                Err(vec![DwarfError::AwaitNotFuture {
+                    span: expr_p.1.clone(),
+                }])
+            } else {
+                dbg!(&ty);
+                let future = match s_read!(ty).subtype {
+                    ValueTypeEnum::XFuture(ref id) => lu_dog.exhume_x_future(id).unwrap(),
+                    _ => unreachable!(),
+                };
+                let ty = s_read!(future).r2_value_type(lu_dog)[0].clone();
+                let expr = AWait::new(&expr.0, lu_dog);
+                let expr = Expression::new_a_wait(&expr, lu_dog);
+                let value = XValue::new_expression(block, &ty, &expr, lu_dog);
+                update_span_value(&span, &value, location!());
+
+                Ok(((expr, span), ty))
+            }
+        }
+        //
         // Bang
         //
         ParserExpression::Bang(expr) => {
@@ -1197,8 +1227,12 @@ pub(super) fn inter_expression(
         //
         // Block
         //
-        ParserExpression::Block(_a_sink, ref stmts, vars, tys) => {
-            let block = Block::new(Uuid::new_v4(), Some(block), None, lu_dog);
+        ParserExpression::Block(a_sink, ref stmts, vars, tys) => {
+            let sync = match a_sink {
+                BlockType::Async => false,
+                BlockType::Sync => true,
+            };
+            let block = Block::new(!sync, Uuid::new_v4(), Some(block), None, lu_dog);
 
             for (var, ty) in vars.into_iter().zip(tys.into_iter()) {
                 let local = LocalVariable::new(Uuid::new_v4(), lu_dog);
@@ -1222,6 +1256,16 @@ pub(super) fn inter_expression(
 
             let expr = Expression::new_block(&block, lu_dog);
             let ty = inter_statements(&stmts_vec, &stmts_span, &block, context, lu_dog)?;
+
+            // If it's an async block then wrap it in a future.
+            let ty = match a_sink {
+                BlockType::Async => {
+                    let future = XFuture::new(&ty.0, lu_dog);
+                    (ValueType::new_x_future(&future, lu_dog), ty.1)
+                }
+                BlockType::Sync => ty,
+            };
+
             let value = XValue::new_expression(&block, &ty.0, &expr, lu_dog);
             update_span_value(&span, &value, location!());
 
@@ -2014,17 +2058,22 @@ pub(super) fn inter_expression(
         // Lambda
         //
         ParserExpression::Lambda(params, return_type, body) => {
-            let block = Block::new(Uuid::new_v4(), Some(block), None, lu_dog);
-            let stmts = if let ParserExpression::Block(_, body, _, _) = &body.0 {
-                body
+            let (stmts, a_sink) = if let ParserExpression::Block(block_ty, body, _, _) = &body.0 {
+                let a_sink = match block_ty {
+                    BlockType::Async => true,
+                    BlockType::Sync => false,
+                };
+                (body, a_sink)
             } else {
                 unreachable!();
             };
+            let block = Block::new(a_sink, Uuid::new_v4(), None, None, lu_dog);
+            let _body = Body::new_block(a_sink, &block, lu_dog);
 
             context.location = location!();
             let ret_ty = make_value_type(&return_type.0, &return_type.1, None, context, lu_dog)?;
 
-            let lambda = Lambda::new(Some(&block), &ret_ty, lu_dog);
+            let lambda = Lambda::new(Some(&_body), &ret_ty, lu_dog);
             let _ = ValueType::new_lambda(&lambda, lu_dog);
 
             let mut errors = Vec::new();
@@ -3044,7 +3093,7 @@ pub(super) fn inter_expression(
                 (
                     (
                         Expression::new_block(
-                            &Block::new(Uuid::new_v4(), None, None, lu_dog),
+                            &Block::new(false, Uuid::new_v4(), None, None, lu_dog),
                             lu_dog,
                         ),
                         span.clone(),
@@ -4453,7 +4502,7 @@ pub(crate) fn create_generic_struct(
         let next = s_read!(next);
         id = next.next;
 
-        dbg!(&next.name, &substitutions);
+        // dbg!(&next.name, &substitutions);
 
         let ty = substitutions.get(&next.name).unwrap();
         let ty = PrintableValueType(&ty, context, lu_dog).to_string();

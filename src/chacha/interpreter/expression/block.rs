@@ -1,17 +1,71 @@
 use crate::{
-    chacha::{error::Result, vm::VM},
+    chacha::{error::Result, r#async::ChaChaExecutor, value::FutureResult, vm::VM},
     interpreter::{eval_statement, Context},
-    new_ref, s_read, NewRef, RefType, SarzakStorePtr, Value,
+    lu_dog::Block,
+    new_ref, s_read, s_write, NewRef, RefType, SarzakStorePtr, Value,
 };
 
-pub fn eval(
+pub fn eval<'a>(
     block_id: &SarzakStorePtr,
+    context: &mut Context,
+    vm: &mut VM<'a>,
+) -> Result<RefType<Value>> {
+    let lu_dog = context.lu_dog_heel().clone();
+
+    let block = s_read!(lu_dog).exhume_block(block_id).unwrap();
+
+    #[cfg(feature = "async")]
+    {
+        if s_read!(block).a_sink {
+            let mut cloned_context = context.clone();
+            let future = async move {
+                let mem = cloned_context.memory().clone();
+                let mut vm = VM::new(&mem);
+                eval_inner(block, &mut cloned_context, &mut vm)
+            };
+            // let future = executor.unwrap().spawn(future);
+            let mut executor = ChaChaExecutor::new();
+            executor.spawn(future);
+
+            let value = new_ref!(Value, Value::Future("baz".to_owned(), executor));
+
+            // let future = async move {
+            //     let result = value.clone();
+            //     let value = future.await;
+
+            //     let mut result = s_write!(result);
+            //     if let Value::Future(_, ref mut result) = *result {
+            //         match result {
+            //             FutureResult::Running => *result = FutureResult::Complete(value),
+            //             FutureResult::Waiting(waker) => {
+            //                 waker.clone().wake();
+            //                 *result = FutureResult::Complete(value);
+            //             }
+            //             _ => panic!("future already complete"),
+            //         }
+            //     } else {
+            //         unreachable!()
+            //     }
+            // };
+
+            // context.executor_spawn(future);
+
+            Ok(value)
+        } else {
+            eval_inner(block, context, vm)
+        }
+    }
+    #[cfg(not(feature = "async"))]
+    eval_inner(block, context, vm)
+}
+
+pub fn eval_inner(
+    block: RefType<Block>,
     context: &mut Context,
     vm: &mut VM,
 ) -> Result<RefType<Value>> {
     let lu_dog = context.lu_dog_heel().clone();
 
-    let block = s_read!(lu_dog).exhume_block(block_id).unwrap();
     let stmts = s_read!(block).r18_statement(&s_read!(lu_dog));
 
     if !stmts.is_empty() {

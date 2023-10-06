@@ -1,5 +1,8 @@
 use std::{ops::Range, path::PathBuf};
 
+#[cfg(feature = "async")]
+use smol::future;
+
 use ansi_term::Colour;
 use circular_queue::CircularQueue;
 use crossbeam::channel::unbounded;
@@ -14,6 +17,8 @@ use crate::{
     chacha::{
         error::{Error, Result, UnimplementedSnafu},
         memory::{Memory, MemoryUpdateMessage},
+        r#async::ChaChaExecutor,
+        value::FutureResult,
         value::UserStruct,
         vm::{CallFrame, Instruction, Thonk, VM},
     },
@@ -43,7 +48,10 @@ pub(crate) use pvt::PrintableValueType;
 #[cfg(feature = "repl")]
 pub use repl::start_repl;
 
-#[cfg(not(any(feature = "single", feature = "single-vec", feature = "multi-nd-vec")))]
+#[cfg(all(
+    feature = "tui",
+    not(any(feature = "single", feature = "single-vec", feature = "multi-nd-vec"))
+))]
 pub use tui::start_tui_repl;
 
 use context::Context;
@@ -149,7 +157,7 @@ pub fn initialize_interpreter(
     let mut lu_dog = s_write!(i_context.lu_dog);
 
     // Initialize the stack with stuff from the compiled source.
-    let block = Block::new(Uuid::new_v4(), None, None, &mut lu_dog);
+    let block = Block::new(false, Uuid::new_v4(), None, None, &mut lu_dog);
     let (mut stack, receiver) = Memory::new();
 
     // We don't really care about the dirty flag because we are just stuffing
@@ -484,6 +492,41 @@ fn eval_expression(
     }
 
     match s_read!(expression).subtype {
+        #[cfg(feature = "async")]
+        ExpressionEnum::AWait(ref expression) => {
+            dbg!("wtf");
+            let expr = s_read!(lu_dog).exhume_a_wait(expression).unwrap();
+            dbg!("foo", &expr);
+            let expr = s_read!(expr).r98_expression(&s_read!(lu_dog))[0].clone();
+            let value = eval_expression(expr, context, vm)?;
+            let mut value = s_write!(value);
+            dbg!("bar", &value);
+            // Ok(value)
+
+            // Ok(new_ref!(Value, Value::Empty))
+
+            match &mut *value {
+                Value::Future(name, task) => {
+                    dbg!(&name, &task);
+                    // Ok(context.executor_run())
+                    task.block_on()
+                    // match task {
+                    //     FutureResult::JoinHandle(maybe_handle) => {
+                    //         if let Some(task) = maybe_handle.take() {
+                    //             Ok(future::block_on(task))
+                    //         } else {
+                    //             unreachable!()
+                    //         }
+                    //     }
+                    //     FutureResult::Result(result) => Ok(result.clone()),
+                    // }
+                }
+                wtf => {
+                    dbg!(wtf);
+                    unreachable!()
+                }
+            }
+        }
         ExpressionEnum::Block(ref block) => block::eval(block, context, vm),
         ExpressionEnum::Call(ref call) => call::eval(call, &expression, context, vm),
         ExpressionEnum::Debugger(_) => debugger::eval(context),
@@ -640,13 +683,14 @@ pub fn start_func(
     name: &str,
     stopped: bool,
     mut context: Context,
-) -> Result<(Value, Context), Error> {
+) -> Result<(RefType<Value>, Context), Error> {
     {
         let mut running = RUNNING.lock();
         *running = !stopped;
     }
 
     let stack = &mut context.memory();
+    // 🚧 WTF is this? They don't share memory?
     let vm_stack = stack.clone();
     let mut vm = VM::new(&vm_stack);
 
@@ -665,11 +709,27 @@ pub fn start_func(
 
             let result = eval_function_call(main, &[], None, true, span, &mut context, &mut vm)?;
 
+            // let result_wrapped = result.clone();
+            // let result_unwrapped = &mut *s_write!(result);
+            // let result = match result_unwrapped {
+            //     Value::Future(_, ref mut task) => match task {
+            //         FutureResult::JoinHandle(ref mut maybe_handle) => {
+            //             if let Some(task) = maybe_handle.take() {
+            //                 future::block_on(task)
+            //             } else {
+            //                 unreachable!()
+            //             }
+            //         }
+            //         FutureResult::Result(result) => result.clone(),
+            //     },
+            //     _ => result_wrapped,
+            // };
+
             #[allow(clippy::redundant_clone)]
             //              ^^^^^^^^^^^^^^^ : It's not redundant.
             // The macro is just hiding the fact that it isn't.
             // This is, btw: not redundant.
-            Ok((s_read!(result.clone()).clone(), context))
+            Ok((result, context))
         } else {
             Err(Error(ChaChaError::MainIsNotAFunction))
         }
@@ -803,8 +863,8 @@ fn typecheck(
     if lhs_t == rhs_t {
         Ok(())
     } else {
-        let lhs = PrintableValueType(true, lhs, context);
-        let rhs = PrintableValueType(true, rhs, context);
+        let lhs = PrintableValueType(true, lhs.to_owned(), context.models());
+        let rhs = PrintableValueType(true, rhs.to_owned(), context.models());
         Err(ChaChaError::TypeMismatch {
             expected: lhs.to_string(),
             found: rhs.to_string(),

@@ -460,6 +460,7 @@ pub enum Expression {
     /// The first element is the left-hand side expression representing the storage
     /// and the second is the right-hand side, representing the value to be stored.
     Assignment(Box<Spanned<Self>>, Box<Spanned<Self>>),
+    Await(Box<Spanned<Self>>),
     Bang(Box<Spanned<Self>>),
     Block(
         BlockType,

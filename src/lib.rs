@@ -12,6 +12,7 @@ pub mod dwarf;
 pub mod plug_in;
 
 #[cfg(all(
+    feature = "tui",
     not(feature = "print-std-out"),
     not(any(feature = "single", feature = "single-vec", feature = "multi-nd-vec"))
 ))]
@@ -20,7 +21,8 @@ pub mod tui;
 // pub mod lu_dog_proxy;
 
 pub use ::sarzak::{lu_dog, sarzak};
-pub(crate) use chacha::{error::ChaChaError, interpreter, value::Value};
+pub use chacha::value::Value;
+pub(crate) use chacha::{error::ChaChaError, interpreter};
 
 // These should eventually come from the domain.
 pub type DwarfInteger = i64;
@@ -89,7 +91,7 @@ cfg_if::cfg_if! {
             }
         }
 
-        type RefType<T> = std::sync::Arc<std::sync::RwLock<T>>;
+        pub type RefType<T> = std::sync::Arc<std::sync::RwLock<T>>;
         impl<T> NewRef<T> for RefType<T> {
             fn new_ref(value: T) -> RefType<T> {
                 std::sync::Arc::new(std::sync::RwLock::new(value))
@@ -144,13 +146,13 @@ cfg_if::cfg_if! {
 }
 
 pub use ref_read as s_read;
-pub(crate) use ref_write as s_write;
+pub use ref_write as s_write;
 
 trait NewRcType<T> {
     fn new_rc_type(value: T) -> RcType<T>;
 }
 
-trait NewRef<T> {
+pub trait NewRef<T> {
     fn new_ref(value: T) -> RefType<T>;
 }
 
@@ -163,13 +165,13 @@ macro_rules! new_rc {
 #[allow(unused_imports)]
 pub(crate) use new_rc;
 
+#[macro_export]
 macro_rules! new_ref {
     ($type:ty, $value:expr) => {
         // std::rc::Rc::new(std::cell::RefCell::new($value))
         <RefType<$type> as NewRef<$type>>::new_ref($value)
     };
 }
-pub(crate) use new_ref;
 
 macro_rules! function {
     () => {{

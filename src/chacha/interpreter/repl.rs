@@ -22,7 +22,7 @@ pub fn start_repl(mut context: Context, is_uber: bool) -> Result<(), Error> {
 
     const HISTORY_FILE: &str = ".dwarf_history";
 
-    let models = context.models().clone();
+    let models = context.models().models().clone();
     let lu_dog = context.lu_dog_heel().clone();
     let sarzak = context.sarzak_heel().clone();
 
@@ -149,7 +149,7 @@ pub fn start_repl(mut context: Context, is_uber: bool) -> Result<(), Error> {
                                 let value = format!("{}", s_read!(value));
                                 print!("\n'{}'", result_style.paint(value));
 
-                                let ty = PrintableValueType(true, &ty, &context);
+                                let ty = PrintableValueType(true, ty, context.models());
                                 let ty = format!("{}", ty);
                                 println!("\t  ──➤  {}", type_style.paint(ty));
                             }

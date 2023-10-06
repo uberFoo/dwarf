@@ -12,7 +12,7 @@ use crate::{
     interpreter::{
         debug, eval_expression, eval_statement, function, trace, typecheck, ChaChaError, Context,
     },
-    lu_dog::{Argument, Lambda, Span},
+    lu_dog::{Argument, BodyEnum, Lambda, Span},
     new_ref, s_read, NewRef, RefType, Value,
 };
 
@@ -36,8 +36,13 @@ pub fn eval_lambda_expression(
 
     let ƛ = s_read!(ƛ);
     // We know that we have a block.
-    let block = &ƛ.r73_block(&s_read!(lu_dog))[0];
-    // let stmts = s_read!(block).r18_statement(&s_read!(lu_dog));
+    let body = &ƛ.r73_body(&s_read!(lu_dog))[0];
+    // A lambda can't have an external block
+    let block = match s_read!(body).subtype {
+        BodyEnum::Block(ref block) => s_read!(lu_dog).exhume_block(block).unwrap(),
+        _ => unreachable!(),
+    };
+
     let has_stmts = !s_read!(block).r18_statement(&s_read!(lu_dog)).is_empty();
 
     if has_stmts {
@@ -51,6 +56,8 @@ pub fn eval_lambda_expression(
         // also need to typecheck the arguments against the function parameters.
         // We need to look the params up anyway to set the local variables.
         let params = ƛ.r76_lambda_parameter(&s_read!(lu_dog));
+
+        dbg!(params.len(), args.len());
 
         // 🚧 I'd really like to see the source code printed out, with the function
         // call highlighted.
@@ -115,6 +122,7 @@ pub fn eval_lambda_expression(
 
             loop {
                 let expr = s_read!(next).r37_expression(&s_read!(lu_dog))[0].clone();
+                dbg!("shit", &expr);
                 let value = eval_expression(expr.clone(), context, vm)?;
                 arg_values.push((expr, value));
 
@@ -153,6 +161,7 @@ pub fn eval_lambda_expression(
             let mut next = s_read!(lu_dog).exhume_statement(id).unwrap();
 
             loop {
+                dbg!("oh fuck", &next, id);
                 let result = eval_statement(next.clone(), context, vm).map_err(|e| {
                     // This is cool, if it does what I think it does. We basically
                     // get the opportunity to look at the error, and do stuff with

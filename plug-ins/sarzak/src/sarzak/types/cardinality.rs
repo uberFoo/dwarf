@@ -8,8 +8,8 @@ use crate::sarzak::types::one::ONE;
 use crate::sarzak::types::referent::Referent;
 use crate::sarzak::types::referrer::Referrer;
 use serde::{Deserialize, Serialize};
-use std::cell::RefCell;
-use std::rc::Rc;
+use std::sync::Arc;
+use std::sync::RwLock;
 use tracy_client::span;
 use uuid::Uuid;
 // {"magic":"","directive":{"End":{"directive":"ignore-orig"}}}
@@ -25,13 +25,13 @@ pub enum Cardinality {
 impl Cardinality {
     // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"cardinality-new-impl"}}}
     /// Create a new instance of Cardinality::Many
-    pub fn new_many(store: &SarzakStore) -> Rc<RefCell<Self>> {
+    pub fn new_many(store: &SarzakStore) -> Arc<RwLock<Self>> {
         // This is already in the store.
         store.exhume_cardinality(&MANY).unwrap()
     }
 
     /// Create a new instance of Cardinality::One
-    pub fn new_one(store: &SarzakStore) -> Rc<RefCell<Self>> {
+    pub fn new_one(store: &SarzakStore) -> Arc<RwLock<Self>> {
         // This is already in the store.
         store.exhume_cardinality(&ONE).unwrap()
     }
@@ -50,11 +50,13 @@ impl Cardinality {
     pub fn r88_associative_referent<'a>(
         &'a self,
         store: &'a SarzakStore,
-    ) -> Vec<Rc<RefCell<AssociativeReferent>>> {
+    ) -> Vec<Arc<RwLock<AssociativeReferent>>> {
         span!("r88_associative_referent");
         store
             .iter_associative_referent()
-            .filter(|associative_referent| associative_referent.borrow().cardinality == self.id())
+            .filter(|associative_referent| {
+                associative_referent.read().unwrap().cardinality == self.id()
+            })
             .collect()
     }
     // {"magic":"","directive":{"End":{"directive":"ignore-orig"}}}
@@ -63,31 +65,33 @@ impl Cardinality {
     pub fn r89_associative_referrer<'a>(
         &'a self,
         store: &'a SarzakStore,
-    ) -> Vec<Rc<RefCell<AssociativeReferrer>>> {
+    ) -> Vec<Arc<RwLock<AssociativeReferrer>>> {
         span!("r89_associative_referrer");
         store
             .iter_associative_referrer()
-            .filter(|associative_referrer| associative_referrer.borrow().cardinality == self.id())
+            .filter(|associative_referrer| {
+                associative_referrer.read().unwrap().cardinality == self.id()
+            })
             .collect()
     }
     // {"magic":"","directive":{"End":{"directive":"ignore-orig"}}}
     // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"cardinality-struct-impl-nav-backward-1_M-to-referent"}}}
     /// Navigate to [`Referent`] across R8(1-M)
-    pub fn r8_referent<'a>(&'a self, store: &'a SarzakStore) -> Vec<Rc<RefCell<Referent>>> {
+    pub fn r8_referent<'a>(&'a self, store: &'a SarzakStore) -> Vec<Arc<RwLock<Referent>>> {
         span!("r8_referent");
         store
             .iter_referent()
-            .filter(|referent| referent.borrow().cardinality == self.id())
+            .filter(|referent| referent.read().unwrap().cardinality == self.id())
             .collect()
     }
     // {"magic":"","directive":{"End":{"directive":"ignore-orig"}}}
     // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"cardinality-struct-impl-nav-backward-1_M-to-referrer"}}}
     /// Navigate to [`Referrer`] across R9(1-M)
-    pub fn r9_referrer<'a>(&'a self, store: &'a SarzakStore) -> Vec<Rc<RefCell<Referrer>>> {
+    pub fn r9_referrer<'a>(&'a self, store: &'a SarzakStore) -> Vec<Arc<RwLock<Referrer>>> {
         span!("r9_referrer");
         store
             .iter_referrer()
-            .filter(|referrer| referrer.borrow().cardinality == self.id())
+            .filter(|referrer| referrer.read().unwrap().cardinality == self.id())
             .collect()
     }
     // {"magic":"","directive":{"End":{"directive":"ignore-orig"}}}

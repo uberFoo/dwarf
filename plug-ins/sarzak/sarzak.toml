@@ -9,34 +9,26 @@ imported_domains = ["crate/sarzak"]
 use_paths = ["serde::{Deserialize, Serialize}"]
 
 [modules.merlin.compiler.target]
+target = "domain"
 is_meta_model = true
 is_sarzak = false
 optimization_level = "None"
 persist = true
 persist_timestamps = false
-target = "domain"
-uber_store = "Single"
+uber_store = "StdRwLock"
 
 [[modules.merlin.compiler]]
 always_process = true
 compiler = "grace"
 
 [modules.merlin.compiler.target]
+target = "dwarf"
 is_meta_model = true
 is_sarzak = false
-target = "dwarf"
+uber_store = "StdRwLock"
 
 [modules.sarzak]
 model = "models/sarzak.json"
-
-[[modules.sarzak.compiler]]
-always_process = true
-compiler = "grace"
-
-[modules.sarzak.compiler.target]
-is_meta_model = true
-is_sarzak = true
-target = "dwarf"
 
 [[modules.sarzak.compiler]]
 always_process = true
@@ -45,10 +37,20 @@ derive = ["Clone", "Debug", "Deserialize", "PartialEq", "Serialize"]
 use_paths = ["serde::{Deserialize, Serialize}"]
 
 [modules.sarzak.compiler.target]
+target = "domain"
 is_meta_model = true
 is_sarzak = true
 optimization_level = "None"
 persist = true
 persist_timestamps = true
-target = "domain"
-uber_store = "Single"
+uber_store = "StdRwLock"
+
+[[modules.sarzak.compiler]]
+always_process = true
+compiler = "grace"
+
+[modules.sarzak.compiler.target]
+target = "dwarf"
+is_meta_model = true
+is_sarzak = true
+uber_store = "StdRwLock"

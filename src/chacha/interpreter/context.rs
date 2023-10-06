@@ -3,24 +3,58 @@ use std::path::PathBuf;
 use circular_queue::CircularQueue;
 use crossbeam::channel::{Receiver, Sender};
 
+#[cfg(feature = "async")]
+use crate::chacha::r#async::ChaChaExecutor;
+
 use crate::{
     interpreter::{DebuggerStatus, Memory, MemoryUpdateMessage},
     lu_dog::{Block, ObjectStore as LuDogStore},
-    new_ref, s_read,
+    new_ref, s_read, s_write,
     sarzak::ObjectStore as SarzakStore,
     Dirty, ModelStore, NewRef, RefType, Value,
 };
 
 #[derive(Clone)]
+pub struct ModelContext {
+    lu_dog: RefType<LuDogStore>,
+    sarzak: RefType<SarzakStore>,
+    models: RefType<ModelStore>,
+}
+
+impl ModelContext {
+    pub fn new(
+        lu_dog: RefType<LuDogStore>,
+        sarzak: RefType<SarzakStore>,
+        models: RefType<ModelStore>,
+    ) -> Self {
+        Self {
+            lu_dog,
+            sarzak,
+            models,
+        }
+    }
+
+    pub fn lu_dog(&self) -> &RefType<LuDogStore> {
+        &self.lu_dog
+    }
+
+    pub fn sarzak(&self) -> &RefType<SarzakStore> {
+        &self.sarzak
+    }
+
+    pub fn models(&self) -> &RefType<ModelStore> {
+        &self.models
+    }
+}
+
+#[derive(Clone)]
 pub struct Context {
+    models: ModelContext,
     /// The prompt to display in the REPL
     prompt: String,
     /// The root block, used by the REPL
     block: RefType<Block>,
     memory: Memory,
-    lu_dog: RefType<LuDogStore>,
-    sarzak: RefType<SarzakStore>,
-    models: RefType<ModelStore>,
     mem_update_recv: Receiver<MemoryUpdateMessage>,
     #[allow(dead_code)]
     std_out_send: Sender<String>,
@@ -44,14 +78,14 @@ pub struct Context {
 /// Shouldn't this work if we are joining the threads? Maybe I wasn't doing that?
 /// Do I still need this?
 /// I do if we want to save the model on exit.
-impl Drop for Context {
-    fn drop(&mut self) {
-        // s_read!(self.lu_dog)
-        //     .unwrap()
-        //     .persist_bincode(&self.obj_file_path)
-        //     .unwrap();
-    }
-}
+// impl Drop for Context {
+//     fn drop(&mut self) {
+//         // s_read!(self.lu_dog)
+//         //     .unwrap()
+//         //     .persist_bincode(&self.obj_file_path)
+//         //     .unwrap();
+//     }
+// }
 
 #[allow(clippy::too_many_arguments)]
 impl Context {
@@ -77,9 +111,7 @@ impl Context {
             prompt,
             block,
             memory,
-            lu_dog,
-            sarzak,
-            models,
+            models: ModelContext::new(lu_dog, sarzak, models),
             mem_update_recv,
             std_out_send,
             std_out_recv,
@@ -194,7 +226,7 @@ impl Context {
     }
 
     pub fn source(&self) -> String {
-        let source = s_read!(self.lu_dog)
+        let source = s_read!(self.models.lu_dog())
             .iter_dwarf_source_file()
             .next()
             .unwrap();
@@ -203,7 +235,7 @@ impl Context {
     }
 
     pub fn lu_dog_heel(&self) -> &RefType<LuDogStore> {
-        &self.lu_dog
+        &self.models.lu_dog()
     }
 
     pub fn block(&self) -> &RefType<Block> {
@@ -211,10 +243,10 @@ impl Context {
     }
 
     pub fn sarzak_heel(&self) -> &RefType<SarzakStore> {
-        &self.sarzak
+        &self.models.sarzak()
     }
 
-    pub fn models(&self) -> &RefType<ModelStore> {
+    pub fn models(&self) -> &ModelContext {
         &self.models
     }
 }

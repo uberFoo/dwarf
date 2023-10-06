@@ -17,8 +17,8 @@ use crate::{
     lu_dog::{
         store::ObjectStore as LuDogStore, Argument, Block, Call, DataStructure, EnumFieldEnum,
         Expression, FieldExpression, List, LocalVariable, PathElement, Span, StaticMethodCall,
-        StructExpression, UnnamedFieldExpression, ValueType, ValueTypeEnum, Variable, XPath,
-        XValue,
+        StructExpression, UnnamedFieldExpression, ValueType, ValueTypeEnum, Variable, XFuture,
+        XPath, XValue,
     },
     new_ref, s_read, s_write,
     sarzak::Ty,
@@ -157,6 +157,15 @@ pub fn inter(
                     // 🚧 Ideally we'd cache this when we startup.
                     ValueType::new_ty(&Ty::new_float(sarzak), lu_dog)
                 }
+                #[cfg(feature = "async")]
+                SLEEP => {
+                    let inner = ValueType::new_empty(lu_dog);
+                    dbg!(&inner);
+                    let future = XFuture::new(&inner, lu_dog);
+                    dbg!(&future);
+                    ValueType::new_x_future(&future, lu_dog)
+                }
+                #[cfg(not(feature = "async"))]
                 SLEEP => ValueType::new_empty(lu_dog),
                 TIME => {
                     let ty = Ty::new_float(sarzak);

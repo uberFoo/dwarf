@@ -5,8 +5,8 @@ use log;
 use rustc_hash::FxHashMap as HashMap;
 
 use crate::dwarf::{
-    generic_to_string, Attribute, BlockType, DwarfFloat, EnumField, Expression as DwarfExpression,
-    Generics, InnerAttribute, InnerItem, Item, Pattern, Spanned, Statement, Token, Type,
+    Attribute, BlockType, DwarfFloat, EnumField, Expression as DwarfExpression, Generics,
+    InnerAttribute, InnerItem, Item, Pattern, Spanned, Statement, Token, Type,
 };
 
 use super::{error::DwarfError, DwarfInteger};
@@ -204,6 +204,7 @@ struct DwarfParser {
     tokens: Vec<Spanned<Token>>,
     current: usize,
     errors: Vec<Simple<String>>,
+    async_block: u8,
 }
 
 impl DwarfParser {
@@ -212,6 +213,7 @@ impl DwarfParser {
             tokens,
             current: 0,
             errors: Vec::new(),
+            async_block: 0,
         }
     }
 
@@ -1855,6 +1857,9 @@ impl DwarfParser {
                     // let rhs = if let Some(expression) = self.parse_as_operator(&lhs, power)? {
                     debug!("as operator", expression);
                     Some(expression)
+                } else if let Some(expression) = self.parse_await(&lhs, power)? {
+                    debug!("await expression", expression);
+                    Some(expression)
                 } else if let Some(expression) = self.parse_addition_operator(&lhs, power)? {
                     debug!("addition operator", expression);
                     Some(expression)
@@ -2082,7 +2087,11 @@ impl DwarfParser {
         // parse a block expression
         if let Some(expression) = self.parse_block_expression()? {
             debug!("block expression", expression);
-            return Ok(Some(expression));
+            if let Some(expression) = self.parse_await(&expression, BLOCK.0)? {
+                return Ok(Some(expression));
+            } else {
+                return Ok(Some(expression));
+            }
         }
 
         // parse a for loop expression
@@ -2129,6 +2138,55 @@ impl DwarfParser {
         }
     }
 
+    /// Parse await expression
+    ///
+    /// await -> <expression>.await
+    fn parse_await(&mut self, name: &Expression, power: u8) -> Result<Option<Expression>> {
+        debug!("enter", power);
+
+        if power > FIELD.0 {
+            debug!("exit no power", power);
+            return Ok(None);
+        }
+
+        let start = name.0 .1.start;
+
+        if !self.check(&Token::Punct('.'))
+        //     || self.check(&Token::Punct('.')) && self.check2(&Token::Punct('.'))
+        {
+            return Ok(None);
+        }
+
+        self.advance();
+
+        let (_, span) = if let Some(token) = self.match_tokens(&[Token::Await]) {
+            token
+        } else {
+            self.retreat();
+            return Ok(None);
+        };
+
+        let end = span.end;
+
+        if self.async_block == 0 {
+            let err = Simple::expected_input_found(
+                start..end,
+                [Some(";".to_owned())],
+                Some("await".to_owned()),
+            )
+            .with_label("await is only allowed in async blocks");
+            error!("exit", err);
+            return Err(Box::new(err));
+        }
+
+        debug!("exit ok");
+
+        Ok(Some((
+            (DwarfExpression::Await(Box::new(name.0.clone())), start..end),
+            FIELD,
+        )))
+    }
+
     /// Parse field access
     ///
     /// field _access -> expression ('.' expression)+
@@ -2162,7 +2220,6 @@ impl DwarfParser {
             return Err(Box::new(err));
         };
 
-        // let expr = if let Some(expr) = self.parse_expression(FIELD.1)? {
         let (ident, span) = if let (Token::Ident(ident), span) = token {
             self.advance();
             (ident, span)
@@ -3449,6 +3506,8 @@ impl DwarfParser {
                 debug!("exit parse_function: no '{'");
                 return Err(Box::new(err));
             } else {
+                debug!("parse_block_expression: async on");
+                self.async_block += 1;
                 BlockType::Async
             }
         } else {
@@ -3512,6 +3571,14 @@ impl DwarfParser {
 
         debug!("exit parse_block_expression");
 
+        match block_ty {
+            BlockType::Async => {
+                debug!("parse_block_expression: async off");
+                self.async_block -= 1;
+            }
+            BlockType::Sync => {}
+        };
+
         Ok(Some((
             (
                 DwarfExpression::Block(block_ty, statements, vec![], vec![]),
@@ -3538,15 +3605,12 @@ impl DwarfParser {
         }
         let func_ty = if let Some((Token::Async, _)) = start_func {
             if self.match_tokens(&[Token::Fn]).is_none() {
-                let token = self.previous().unwrap();
-                let err = Simple::expected_input_found(
-                    token.1.clone(),
-                    [Some("fn".to_owned())],
-                    Some(token.0.to_string()),
-                );
+                self.retreat();
                 debug!("exit parse_function: no fn");
                 return Ok(None);
             } else {
+                debug!("parse_block_expression: async on");
+                self.async_block += 1;
                 BlockType::Async
             }
         } else {
@@ -3681,6 +3745,14 @@ impl DwarfParser {
 
         debug!("exit parse_function");
 
+        match func_ty {
+            BlockType::Async => {
+                debug!("parse_function: async off");
+                self.async_block -= 1;
+            }
+            BlockType::Sync => {}
+        };
+
         Ok(Some((
             InnerItem::Function(func_ty, name, params, return_type, body),
             start..end,
@@ -3787,6 +3859,12 @@ impl DwarfParser {
             let err = Simple::custom(start..end, "missing body");
             debug!("exit no body");
             return Err(Box::new(err));
+        };
+
+        let body = if let Some(expression) = self.parse_await(&body, BLOCK.0)? {
+            expression
+        } else {
+            body
         };
 
         let end = body.0 .1.end;
@@ -4665,6 +4743,18 @@ impl DwarfParser {
         }
 
         self.previous()
+    }
+
+    fn retreat(&mut self) -> Option<&Spanned<Token>> {
+        if !self.at_beginning() {
+            self.current -= 1;
+        }
+
+        self.tokens.get(self.current)
+    }
+
+    fn at_beginning(&self) -> bool {
+        self.current == 0
     }
 
     fn at_end(&self) -> bool {
@@ -5609,6 +5699,24 @@ mod tests {
         "#;
 
         let ast = parse_dwarf("test_async_block", src);
+        assert!(ast.is_ok());
+    }
+
+    #[test]
+    fn parse_await() {
+        let _ = env_logger::builder().is_test(true).try_init();
+
+        let src = r#"
+            async fn main() {
+                let bar = foo().await.bar;
+
+                async {}.await;
+
+                let foo = || async {}.await;
+            }
+        "#;
+
+        let ast = parse_dwarf("test_await", src);
         assert!(ast.is_ok());
     }
 }

@@ -580,13 +580,13 @@ struct External {
     ctor: string,
     id: Uuid,
     name: string,
-    path: string,
+    x_path: string,
     // Non-formalizing relationships
 }
 
 impl External {
     #[proxy(store = "sarzak", object = "External", func = "new")]
-    fn new(ctor: string, name: string, path: string) -> Self;
+    fn new(ctor: string, name: string, x_path: string) -> Self;
 
     #[proxy(store = "sarzak", object = "External", func = "instances")]
     fn instances() -> [Self];
@@ -618,7 +618,7 @@ impl External {
         print("    ctor: string,\n");
         print("    id: Uuid,\n");
         print("    name: string,\n");
-        print("    path: string,\n");
+        print("    x_path: string,\n");
         print("}\n");
     }
 }

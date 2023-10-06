@@ -1,11 +1,11 @@
 //! The _Metamodel_
 //!
 //! This is the model of the model. From here all is generated...
+use std::sync::Arc;
+use std::sync::RwLock;
 use std::{
-    cell::RefCell,
     fmt::{self, Display},
     path::Path,
-    rc::Rc,
 };
 
 use abi_stable::{
@@ -51,13 +51,13 @@ pub fn new(args: RVec<FfiValue>) -> RResult<PluginType, Error> {
     match (|| {
         if args.len() == 0 {
             Ok(SarzakStore {
-                store: Rc::new(RefCell::new(ObjectStore::new())),
+                store: Arc::new(RwLock::new(ObjectStore::new())),
             })
         } else if args.len() == 1 {
             if let FfiValue::String(path) = &args[0] {
                 let store = ObjectStore::load(Path::new(&path.as_str())).unwrap();
                 Ok(SarzakStore {
-                    store: Rc::new(RefCell::new(store)),
+                    store: Arc::new(RwLock::new(store)),
                 })
             } else {
                 Err(Error::Uber("Invalid arguments".into()))
@@ -73,7 +73,7 @@ pub fn new(args: RVec<FfiValue>) -> RResult<PluginType, Error> {
 
 #[derive(Clone, Debug)]
 struct SarzakStore {
-    store: Rc<RefCell<ObjectStore>>,
+    store: Arc<RwLock<ObjectStore>>,
 }
 
 impl Display for SarzakStore {
@@ -103,7 +103,8 @@ impl Plugin for SarzakStore {
 
                         if let FfiValue::String(path) = args.pop().unwrap() {
                             self.store
-                                .borrow()
+                                .read()
+                                .unwrap()
                                 .persist(Path::new(&path.as_str()))
                                 .unwrap();
                             Ok(FfiValue::Empty)
@@ -123,7 +124,8 @@ impl Plugin for SarzakStore {
                                 .downcast_into::<AcknowledgedEventProxy>()
                                 .unwrap();
                             self.store
-                                .borrow_mut()
+                                .write()
+                                .unwrap()
                                 .inter_acknowledged_event(acknowledged_event.inner.clone());
                             Ok(FfiValue::Empty)
                         } else {
@@ -137,7 +139,8 @@ impl Plugin for SarzakStore {
                         if let FfiValue::Uuid(id) = args.pop().unwrap() {
                             let acknowledged_event = self
                                 .store
-                                .borrow()
+                                .read()
+                                .unwrap()
                                 .exhume_acknowledged_event(&id.into())
                                 .unwrap();
                             let acknowledged_event_proxy = AcknowledgedEventProxy {
@@ -153,7 +156,7 @@ impl Plugin for SarzakStore {
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: ACKNOWLEDGED_EVENT_ID.into(),
-                                id: acknowledged_event.borrow().id.into(), // a
+                                id: acknowledged_event.read().unwrap().id.into(), // a
                                 plugin: plugin.clone(),
                             };
 
@@ -172,7 +175,7 @@ impl Plugin for SarzakStore {
                                 .obj
                                 .downcast_into::<AnAssociativeReferentProxy>()
                                 .unwrap();
-                            self.store.borrow_mut().inter_an_associative_referent(
+                            self.store.write().unwrap().inter_an_associative_referent(
                                 an_associative_referent.inner.clone(),
                             );
                             Ok(FfiValue::Empty)
@@ -187,7 +190,8 @@ impl Plugin for SarzakStore {
                         if let FfiValue::Uuid(id) = args.pop().unwrap() {
                             let an_associative_referent = self
                                 .store
-                                .borrow()
+                                .read()
+                                .unwrap()
                                 .exhume_an_associative_referent(&id.into())
                                 .unwrap();
                             let an_associative_referent_proxy = AnAssociativeReferentProxy {
@@ -205,7 +209,7 @@ impl Plugin for SarzakStore {
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: AN_ASSOCIATIVE_REFERENT_ID.into(),
-                                id: an_associative_referent.borrow().id.into(), // a
+                                id: an_associative_referent.read().unwrap().id.into(), // a
                                 plugin: plugin.clone(),
                             };
 
@@ -223,7 +227,8 @@ impl Plugin for SarzakStore {
                             let associative =
                                 associative.obj.downcast_into::<AssociativeProxy>().unwrap();
                             self.store
-                                .borrow_mut()
+                                .write()
+                                .unwrap()
                                 .inter_associative(associative.inner.clone());
                             Ok(FfiValue::Empty)
                         } else {
@@ -235,8 +240,12 @@ impl Plugin for SarzakStore {
                             return Err(Error::Uber("Expected 1 argument".into()));
                         }
                         if let FfiValue::Uuid(id) = args.pop().unwrap() {
-                            let associative =
-                                self.store.borrow().exhume_associative(&id.into()).unwrap();
+                            let associative = self
+                                .store
+                                .read()
+                                .unwrap()
+                                .exhume_associative(&id.into())
+                                .unwrap();
                             let associative_proxy = AssociativeProxy {
                                 // 🚧 This bothers me deeply. I know that I've given
                                 // this some thought already, and I really need to
@@ -249,7 +258,7 @@ impl Plugin for SarzakStore {
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: ASSOCIATIVE_ID.into(),
-                                id: associative.borrow().id.into(), // a
+                                id: associative.read().unwrap().id.into(), // a
                                 plugin: plugin.clone(),
                             };
 
@@ -269,7 +278,8 @@ impl Plugin for SarzakStore {
                                 .downcast_into::<AssociativeReferentProxy>()
                                 .unwrap();
                             self.store
-                                .borrow_mut()
+                                .write()
+                                .unwrap()
                                 .inter_associative_referent(associative_referent.inner.clone());
                             Ok(FfiValue::Empty)
                         } else {
@@ -283,7 +293,8 @@ impl Plugin for SarzakStore {
                         if let FfiValue::Uuid(id) = args.pop().unwrap() {
                             let associative_referent = self
                                 .store
-                                .borrow()
+                                .read()
+                                .unwrap()
                                 .exhume_associative_referent(&id.into())
                                 .unwrap();
                             let associative_referent_proxy = AssociativeReferentProxy {
@@ -299,7 +310,7 @@ impl Plugin for SarzakStore {
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: ASSOCIATIVE_REFERENT_ID.into(),
-                                id: associative_referent.borrow().id.into(), // a
+                                id: associative_referent.read().unwrap().id.into(), // a
                                 plugin: plugin.clone(),
                             };
 
@@ -319,7 +330,8 @@ impl Plugin for SarzakStore {
                                 .downcast_into::<AssociativeReferrerProxy>()
                                 .unwrap();
                             self.store
-                                .borrow_mut()
+                                .write()
+                                .unwrap()
                                 .inter_associative_referrer(associative_referrer.inner.clone());
                             Ok(FfiValue::Empty)
                         } else {
@@ -333,7 +345,8 @@ impl Plugin for SarzakStore {
                         if let FfiValue::Uuid(id) = args.pop().unwrap() {
                             let associative_referrer = self
                                 .store
-                                .borrow()
+                                .read()
+                                .unwrap()
                                 .exhume_associative_referrer(&id.into())
                                 .unwrap();
                             let associative_referrer_proxy = AssociativeReferrerProxy {
@@ -349,7 +362,7 @@ impl Plugin for SarzakStore {
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: ASSOCIATIVE_REFERRER_ID.into(),
-                                id: associative_referrer.borrow().id.into(), // a
+                                id: associative_referrer.read().unwrap().id.into(), // a
                                 plugin: plugin.clone(),
                             };
 
@@ -367,7 +380,8 @@ impl Plugin for SarzakStore {
                             let attribute =
                                 attribute.obj.downcast_into::<AttributeProxy>().unwrap();
                             self.store
-                                .borrow_mut()
+                                .write()
+                                .unwrap()
                                 .inter_attribute(attribute.inner.clone());
                             Ok(FfiValue::Empty)
                         } else {
@@ -379,8 +393,12 @@ impl Plugin for SarzakStore {
                             return Err(Error::Uber("Expected 1 argument".into()));
                         }
                         if let FfiValue::Uuid(id) = args.pop().unwrap() {
-                            let attribute =
-                                self.store.borrow().exhume_attribute(&id.into()).unwrap();
+                            let attribute = self
+                                .store
+                                .read()
+                                .unwrap()
+                                .exhume_attribute(&id.into())
+                                .unwrap();
                             let attribute_proxy = AttributeProxy {
                                 // 🚧 This bothers me deeply. I know that I've given
                                 // this some thought already, and I really need to
@@ -393,7 +411,7 @@ impl Plugin for SarzakStore {
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: ATTRIBUTE_ID.into(),
-                                id: attribute.borrow().id.into(), // a
+                                id: attribute.read().unwrap().id.into(), // a
                                 plugin: plugin.clone(),
                             };
 
@@ -409,7 +427,10 @@ impl Plugin for SarzakStore {
 
                         if let FfiValue::PlugIn(binary) = args.pop().unwrap() {
                             let binary = binary.obj.downcast_into::<BinaryProxy>().unwrap();
-                            self.store.borrow_mut().inter_binary(binary.inner.clone());
+                            self.store
+                                .write()
+                                .unwrap()
+                                .inter_binary(binary.inner.clone());
                             Ok(FfiValue::Empty)
                         } else {
                             Err(Error::Uber("Invalid Binary".into()))
@@ -420,7 +441,12 @@ impl Plugin for SarzakStore {
                             return Err(Error::Uber("Expected 1 argument".into()));
                         }
                         if let FfiValue::Uuid(id) = args.pop().unwrap() {
-                            let binary = self.store.borrow().exhume_binary(&id.into()).unwrap();
+                            let binary = self
+                                .store
+                                .read()
+                                .unwrap()
+                                .exhume_binary(&id.into())
+                                .unwrap();
                             let binary_proxy = BinaryProxy {
                                 // 🚧 This bothers me deeply. I know that I've given
                                 // this some thought already, and I really need to
@@ -433,7 +459,7 @@ impl Plugin for SarzakStore {
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: BINARY_ID.into(),
-                                id: binary.borrow().id.into(), // a
+                                id: binary.read().unwrap().id.into(), // a
                                 plugin: plugin.clone(),
                             };
 
@@ -451,7 +477,8 @@ impl Plugin for SarzakStore {
                             let cardinality =
                                 cardinality.obj.downcast_into::<CardinalityProxy>().unwrap();
                             self.store
-                                .borrow_mut()
+                                .write()
+                                .unwrap()
                                 .inter_cardinality(cardinality.inner.clone());
                             Ok(FfiValue::Empty)
                         } else {
@@ -463,8 +490,12 @@ impl Plugin for SarzakStore {
                             return Err(Error::Uber("Expected 1 argument".into()));
                         }
                         if let FfiValue::Uuid(id) = args.pop().unwrap() {
-                            let cardinality =
-                                self.store.borrow().exhume_cardinality(&id.into()).unwrap();
+                            let cardinality = self
+                                .store
+                                .read()
+                                .unwrap()
+                                .exhume_cardinality(&id.into())
+                                .unwrap();
                             let cardinality_proxy = CardinalityProxy {
                                 // 🚧 This bothers me deeply. I know that I've given
                                 // this some thought already, and I really need to
@@ -477,7 +508,7 @@ impl Plugin for SarzakStore {
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: CARDINALITY_ID.into(),
-                                id: cardinality.borrow().id().into(), // a
+                                id: cardinality.read().unwrap().id().into(), // a
                                 plugin: plugin.clone(),
                             };
 
@@ -497,7 +528,8 @@ impl Plugin for SarzakStore {
                                 .downcast_into::<ConditionalityProxy>()
                                 .unwrap();
                             self.store
-                                .borrow_mut()
+                                .write()
+                                .unwrap()
                                 .inter_conditionality(conditionality.inner.clone());
                             Ok(FfiValue::Empty)
                         } else {
@@ -511,7 +543,8 @@ impl Plugin for SarzakStore {
                         if let FfiValue::Uuid(id) = args.pop().unwrap() {
                             let conditionality = self
                                 .store
-                                .borrow()
+                                .read()
+                                .unwrap()
                                 .exhume_conditionality(&id.into())
                                 .unwrap();
                             let conditionality_proxy = ConditionalityProxy {
@@ -527,7 +560,7 @@ impl Plugin for SarzakStore {
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: CONDITIONALITY_ID.into(),
-                                id: conditionality.borrow().id().into(), // a
+                                id: conditionality.read().unwrap().id().into(), // a
                                 plugin: plugin.clone(),
                             };
 
@@ -543,7 +576,7 @@ impl Plugin for SarzakStore {
 
                         if let FfiValue::PlugIn(event) = args.pop().unwrap() {
                             let event = event.obj.downcast_into::<EventProxy>().unwrap();
-                            self.store.borrow_mut().inter_event(event.inner.clone());
+                            self.store.write().unwrap().inter_event(event.inner.clone());
                             Ok(FfiValue::Empty)
                         } else {
                             Err(Error::Uber("Invalid Event".into()))
@@ -554,7 +587,8 @@ impl Plugin for SarzakStore {
                             return Err(Error::Uber("Expected 1 argument".into()));
                         }
                         if let FfiValue::Uuid(id) = args.pop().unwrap() {
-                            let event = self.store.borrow().exhume_event(&id.into()).unwrap();
+                            let event =
+                                self.store.read().unwrap().exhume_event(&id.into()).unwrap();
                             let event_proxy = EventProxy {
                                 // 🚧 This bothers me deeply. I know that I've given
                                 // this some thought already, and I really need to
@@ -567,7 +601,7 @@ impl Plugin for SarzakStore {
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: EVENT_ID.into(),
-                                id: event.borrow().id.into(), // a
+                                id: event.read().unwrap().id.into(), // a
                                 plugin: plugin.clone(),
                             };
 
@@ -584,7 +618,8 @@ impl Plugin for SarzakStore {
                         if let FfiValue::PlugIn(external) = args.pop().unwrap() {
                             let external = external.obj.downcast_into::<ExternalProxy>().unwrap();
                             self.store
-                                .borrow_mut()
+                                .write()
+                                .unwrap()
                                 .inter_external(external.inner.clone());
                             Ok(FfiValue::Empty)
                         } else {
@@ -596,7 +631,12 @@ impl Plugin for SarzakStore {
                             return Err(Error::Uber("Expected 1 argument".into()));
                         }
                         if let FfiValue::Uuid(id) = args.pop().unwrap() {
-                            let external = self.store.borrow().exhume_external(&id.into()).unwrap();
+                            let external = self
+                                .store
+                                .read()
+                                .unwrap()
+                                .exhume_external(&id.into())
+                                .unwrap();
                             let external_proxy = ExternalProxy {
                                 // 🚧 This bothers me deeply. I know that I've given
                                 // this some thought already, and I really need to
@@ -609,7 +649,7 @@ impl Plugin for SarzakStore {
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: EXTERNAL_ID.into(),
-                                id: external.borrow().id.into(), // a
+                                id: external.read().unwrap().id.into(), // a
                                 plugin: plugin.clone(),
                             };
 
@@ -625,7 +665,7 @@ impl Plugin for SarzakStore {
 
                         if let FfiValue::PlugIn(isa) = args.pop().unwrap() {
                             let isa = isa.obj.downcast_into::<IsaProxy>().unwrap();
-                            self.store.borrow_mut().inter_isa(isa.inner.clone());
+                            self.store.write().unwrap().inter_isa(isa.inner.clone());
                             Ok(FfiValue::Empty)
                         } else {
                             Err(Error::Uber("Invalid Isa".into()))
@@ -636,7 +676,7 @@ impl Plugin for SarzakStore {
                             return Err(Error::Uber("Expected 1 argument".into()));
                         }
                         if let FfiValue::Uuid(id) = args.pop().unwrap() {
-                            let isa = self.store.borrow().exhume_isa(&id.into()).unwrap();
+                            let isa = self.store.read().unwrap().exhume_isa(&id.into()).unwrap();
                             let isa_proxy = IsaProxy {
                                 // 🚧 This bothers me deeply. I know that I've given
                                 // this some thought already, and I really need to
@@ -649,7 +689,7 @@ impl Plugin for SarzakStore {
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: ISA_ID.into(),
-                                id: isa.borrow().id.into(), // a
+                                id: isa.read().unwrap().id.into(), // a
                                 plugin: plugin.clone(),
                             };
 
@@ -665,7 +705,10 @@ impl Plugin for SarzakStore {
 
                         if let FfiValue::PlugIn(object) = args.pop().unwrap() {
                             let object = object.obj.downcast_into::<ObjectProxy>().unwrap();
-                            self.store.borrow_mut().inter_object(object.inner.clone());
+                            self.store
+                                .write()
+                                .unwrap()
+                                .inter_object(object.inner.clone());
                             Ok(FfiValue::Empty)
                         } else {
                             Err(Error::Uber("Invalid Object".into()))
@@ -676,7 +719,12 @@ impl Plugin for SarzakStore {
                             return Err(Error::Uber("Expected 1 argument".into()));
                         }
                         if let FfiValue::Uuid(id) = args.pop().unwrap() {
-                            let object = self.store.borrow().exhume_object(&id.into()).unwrap();
+                            let object = self
+                                .store
+                                .read()
+                                .unwrap()
+                                .exhume_object(&id.into())
+                                .unwrap();
                             let object_proxy = ObjectProxy {
                                 // 🚧 This bothers me deeply. I know that I've given
                                 // this some thought already, and I really need to
@@ -689,7 +737,7 @@ impl Plugin for SarzakStore {
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: OBJECT_ID.into(),
-                                id: object.borrow().id.into(), // a
+                                id: object.read().unwrap().id.into(), // a
                                 plugin: plugin.clone(),
                             };
 
@@ -706,7 +754,8 @@ impl Plugin for SarzakStore {
                         if let FfiValue::PlugIn(referent) = args.pop().unwrap() {
                             let referent = referent.obj.downcast_into::<ReferentProxy>().unwrap();
                             self.store
-                                .borrow_mut()
+                                .write()
+                                .unwrap()
                                 .inter_referent(referent.inner.clone());
                             Ok(FfiValue::Empty)
                         } else {
@@ -718,7 +767,12 @@ impl Plugin for SarzakStore {
                             return Err(Error::Uber("Expected 1 argument".into()));
                         }
                         if let FfiValue::Uuid(id) = args.pop().unwrap() {
-                            let referent = self.store.borrow().exhume_referent(&id.into()).unwrap();
+                            let referent = self
+                                .store
+                                .read()
+                                .unwrap()
+                                .exhume_referent(&id.into())
+                                .unwrap();
                             let referent_proxy = ReferentProxy {
                                 // 🚧 This bothers me deeply. I know that I've given
                                 // this some thought already, and I really need to
@@ -731,7 +785,7 @@ impl Plugin for SarzakStore {
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: REFERENT_ID.into(),
-                                id: referent.borrow().id.into(), // a
+                                id: referent.read().unwrap().id.into(), // a
                                 plugin: plugin.clone(),
                             };
 
@@ -748,7 +802,8 @@ impl Plugin for SarzakStore {
                         if let FfiValue::PlugIn(referrer) = args.pop().unwrap() {
                             let referrer = referrer.obj.downcast_into::<ReferrerProxy>().unwrap();
                             self.store
-                                .borrow_mut()
+                                .write()
+                                .unwrap()
                                 .inter_referrer(referrer.inner.clone());
                             Ok(FfiValue::Empty)
                         } else {
@@ -760,7 +815,12 @@ impl Plugin for SarzakStore {
                             return Err(Error::Uber("Expected 1 argument".into()));
                         }
                         if let FfiValue::Uuid(id) = args.pop().unwrap() {
-                            let referrer = self.store.borrow().exhume_referrer(&id.into()).unwrap();
+                            let referrer = self
+                                .store
+                                .read()
+                                .unwrap()
+                                .exhume_referrer(&id.into())
+                                .unwrap();
                             let referrer_proxy = ReferrerProxy {
                                 // 🚧 This bothers me deeply. I know that I've given
                                 // this some thought already, and I really need to
@@ -773,7 +833,7 @@ impl Plugin for SarzakStore {
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: REFERRER_ID.into(),
-                                id: referrer.borrow().id.into(), // a
+                                id: referrer.read().unwrap().id.into(), // a
                                 plugin: plugin.clone(),
                             };
 
@@ -793,7 +853,8 @@ impl Plugin for SarzakStore {
                                 .downcast_into::<RelationshipProxy>()
                                 .unwrap();
                             self.store
-                                .borrow_mut()
+                                .write()
+                                .unwrap()
                                 .inter_relationship(relationship.inner.clone());
                             Ok(FfiValue::Empty)
                         } else {
@@ -805,8 +866,12 @@ impl Plugin for SarzakStore {
                             return Err(Error::Uber("Expected 1 argument".into()));
                         }
                         if let FfiValue::Uuid(id) = args.pop().unwrap() {
-                            let relationship =
-                                self.store.borrow().exhume_relationship(&id.into()).unwrap();
+                            let relationship = self
+                                .store
+                                .read()
+                                .unwrap()
+                                .exhume_relationship(&id.into())
+                                .unwrap();
                             let relationship_proxy = RelationshipProxy {
                                 // 🚧 This bothers me deeply. I know that I've given
                                 // this some thought already, and I really need to
@@ -819,7 +884,7 @@ impl Plugin for SarzakStore {
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: RELATIONSHIP_ID.into(),
-                                id: relationship.borrow().id().into(), // a
+                                id: relationship.read().unwrap().id().into(), // a
                                 plugin: plugin.clone(),
                             };
 
@@ -835,7 +900,7 @@ impl Plugin for SarzakStore {
 
                         if let FfiValue::PlugIn(state) = args.pop().unwrap() {
                             let state = state.obj.downcast_into::<StateProxy>().unwrap();
-                            self.store.borrow_mut().inter_state(state.inner.clone());
+                            self.store.write().unwrap().inter_state(state.inner.clone());
                             Ok(FfiValue::Empty)
                         } else {
                             Err(Error::Uber("Invalid State".into()))
@@ -846,7 +911,8 @@ impl Plugin for SarzakStore {
                             return Err(Error::Uber("Expected 1 argument".into()));
                         }
                         if let FfiValue::Uuid(id) = args.pop().unwrap() {
-                            let state = self.store.borrow().exhume_state(&id.into()).unwrap();
+                            let state =
+                                self.store.read().unwrap().exhume_state(&id.into()).unwrap();
                             let state_proxy = StateProxy {
                                 // 🚧 This bothers me deeply. I know that I've given
                                 // this some thought already, and I really need to
@@ -859,7 +925,7 @@ impl Plugin for SarzakStore {
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: STATE_ID.into(),
-                                id: state.borrow().id.into(), // a
+                                id: state.read().unwrap().id.into(), // a
                                 plugin: plugin.clone(),
                             };
 
@@ -875,7 +941,10 @@ impl Plugin for SarzakStore {
 
                         if let FfiValue::PlugIn(subtype) = args.pop().unwrap() {
                             let subtype = subtype.obj.downcast_into::<SubtypeProxy>().unwrap();
-                            self.store.borrow_mut().inter_subtype(subtype.inner.clone());
+                            self.store
+                                .write()
+                                .unwrap()
+                                .inter_subtype(subtype.inner.clone());
                             Ok(FfiValue::Empty)
                         } else {
                             Err(Error::Uber("Invalid Subtype".into()))
@@ -886,7 +955,12 @@ impl Plugin for SarzakStore {
                             return Err(Error::Uber("Expected 1 argument".into()));
                         }
                         if let FfiValue::Uuid(id) = args.pop().unwrap() {
-                            let subtype = self.store.borrow().exhume_subtype(&id.into()).unwrap();
+                            let subtype = self
+                                .store
+                                .read()
+                                .unwrap()
+                                .exhume_subtype(&id.into())
+                                .unwrap();
                             let subtype_proxy = SubtypeProxy {
                                 // 🚧 This bothers me deeply. I know that I've given
                                 // this some thought already, and I really need to
@@ -899,7 +973,7 @@ impl Plugin for SarzakStore {
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: SUBTYPE_ID.into(),
-                                id: subtype.borrow().id.into(), // a
+                                id: subtype.read().unwrap().id.into(), // a
                                 plugin: plugin.clone(),
                             };
 
@@ -917,7 +991,8 @@ impl Plugin for SarzakStore {
                             let supertype =
                                 supertype.obj.downcast_into::<SupertypeProxy>().unwrap();
                             self.store
-                                .borrow_mut()
+                                .write()
+                                .unwrap()
                                 .inter_supertype(supertype.inner.clone());
                             Ok(FfiValue::Empty)
                         } else {
@@ -929,8 +1004,12 @@ impl Plugin for SarzakStore {
                             return Err(Error::Uber("Expected 1 argument".into()));
                         }
                         if let FfiValue::Uuid(id) = args.pop().unwrap() {
-                            let supertype =
-                                self.store.borrow().exhume_supertype(&id.into()).unwrap();
+                            let supertype = self
+                                .store
+                                .read()
+                                .unwrap()
+                                .exhume_supertype(&id.into())
+                                .unwrap();
                             let supertype_proxy = SupertypeProxy {
                                 // 🚧 This bothers me deeply. I know that I've given
                                 // this some thought already, and I really need to
@@ -943,7 +1022,7 @@ impl Plugin for SarzakStore {
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: SUPERTYPE_ID.into(),
-                                id: supertype.borrow().id.into(), // a
+                                id: supertype.read().unwrap().id.into(), // a
                                 plugin: plugin.clone(),
                             };
 
@@ -959,7 +1038,7 @@ impl Plugin for SarzakStore {
 
                         if let FfiValue::PlugIn(ty) = args.pop().unwrap() {
                             let ty = ty.obj.downcast_into::<TyProxy>().unwrap();
-                            self.store.borrow_mut().inter_ty(ty.inner.clone());
+                            self.store.write().unwrap().inter_ty(ty.inner.clone());
                             Ok(FfiValue::Empty)
                         } else {
                             Err(Error::Uber("Invalid Ty".into()))
@@ -970,7 +1049,7 @@ impl Plugin for SarzakStore {
                             return Err(Error::Uber("Expected 1 argument".into()));
                         }
                         if let FfiValue::Uuid(id) = args.pop().unwrap() {
-                            let ty = self.store.borrow().exhume_ty(&id.into()).unwrap();
+                            let ty = self.store.read().unwrap().exhume_ty(&id.into()).unwrap();
                             let ty_proxy = TyProxy {
                                 // 🚧 This bothers me deeply. I know that I've given
                                 // this some thought already, and I really need to
@@ -983,7 +1062,7 @@ impl Plugin for SarzakStore {
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: TY_ID.into(),
-                                id: ty.borrow().id().into(), // a
+                                id: ty.read().unwrap().id().into(), // a
                                 plugin: plugin.clone(),
                             };
 
@@ -1020,9 +1099,10 @@ impl Plugin for SarzakStore {
                             Ok(acknowledged_event)
                         })() {
                             Ok(acknowledged_event) => {
-                                let acknowledged_event = Rc::new(RefCell::new(acknowledged_event));
+                                let acknowledged_event = Arc::new(RwLock::new(acknowledged_event));
                                 self.store
-                                    .borrow_mut()
+                                    .write()
+                                    .unwrap()
                                     .inter_acknowledged_event(acknowledged_event.clone());
                                 let this = AcknowledgedEventProxy {
                                     inner: acknowledged_event.clone(),
@@ -1032,7 +1112,7 @@ impl Plugin for SarzakStore {
                                 let proxy = FfiProxy {
                                     module: module.into(),
                                     uuid: ACKNOWLEDGED_EVENT_ID.into(),
-                                    id: acknowledged_event.borrow().id.into(), // e
+                                    id: acknowledged_event.read().unwrap().id.into(), // e
                                     plugin: plugin.clone(),
                                 };
 
@@ -1043,7 +1123,9 @@ impl Plugin for SarzakStore {
                     }
                     "instances" => {
                         let mut instances = Vec::new();
-                        for acknowledged_event in self.store.borrow().iter_acknowledged_event() {
+                        for acknowledged_event in
+                            self.store.read().unwrap().iter_acknowledged_event()
+                        {
                             let this = AcknowledgedEventProxy {
                                 inner: acknowledged_event.clone(),
                                 store: self.store.clone(),
@@ -1052,7 +1134,7 @@ impl Plugin for SarzakStore {
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: ACKNOWLEDGED_EVENT_ID.into(),
-                                id: acknowledged_event.borrow().id.into(), // b
+                                id: acknowledged_event.read().unwrap().id.into(), // b
                                 plugin: plugin.clone(),
                             };
 
@@ -1096,9 +1178,10 @@ impl Plugin for SarzakStore {
                         })() {
                             Ok(an_associative_referent) => {
                                 let an_associative_referent =
-                                    Rc::new(RefCell::new(an_associative_referent));
+                                    Arc::new(RwLock::new(an_associative_referent));
                                 self.store
-                                    .borrow_mut()
+                                    .write()
+                                    .unwrap()
                                     .inter_an_associative_referent(an_associative_referent.clone());
                                 let this = AnAssociativeReferentProxy {
                                     inner: an_associative_referent.clone(),
@@ -1108,7 +1191,7 @@ impl Plugin for SarzakStore {
                                 let proxy = FfiProxy {
                                     module: module.into(),
                                     uuid: AN_ASSOCIATIVE_REFERENT_ID.into(),
-                                    id: an_associative_referent.borrow().id.into(), // e
+                                    id: an_associative_referent.read().unwrap().id.into(), // e
                                     plugin: plugin.clone(),
                                 };
 
@@ -1120,7 +1203,7 @@ impl Plugin for SarzakStore {
                     "instances" => {
                         let mut instances = Vec::new();
                         for an_associative_referent in
-                            self.store.borrow().iter_an_associative_referent()
+                            self.store.read().unwrap().iter_an_associative_referent()
                         {
                             let this = AnAssociativeReferentProxy {
                                 inner: an_associative_referent.clone(),
@@ -1130,7 +1213,7 @@ impl Plugin for SarzakStore {
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: AN_ASSOCIATIVE_REFERENT_ID.into(),
-                                id: an_associative_referent.borrow().id.into(), // b
+                                id: an_associative_referent.read().unwrap().id.into(), // b
                                 plugin: plugin.clone(),
                             };
 
@@ -1166,9 +1249,10 @@ impl Plugin for SarzakStore {
                             Ok(associative)
                         })() {
                             Ok(associative) => {
-                                let associative = Rc::new(RefCell::new(associative));
+                                let associative = Arc::new(RwLock::new(associative));
                                 self.store
-                                    .borrow_mut()
+                                    .write()
+                                    .unwrap()
                                     .inter_associative(associative.clone());
                                 let this = AssociativeProxy {
                                     inner: associative.clone(),
@@ -1178,7 +1262,7 @@ impl Plugin for SarzakStore {
                                 let proxy = FfiProxy {
                                     module: module.into(),
                                     uuid: ASSOCIATIVE_ID.into(),
-                                    id: associative.borrow().id.into(), // e
+                                    id: associative.read().unwrap().id.into(), // e
                                     plugin: plugin.clone(),
                                 };
 
@@ -1189,7 +1273,7 @@ impl Plugin for SarzakStore {
                     }
                     "instances" => {
                         let mut instances = Vec::new();
-                        for associative in self.store.borrow().iter_associative() {
+                        for associative in self.store.read().unwrap().iter_associative() {
                             let this = AssociativeProxy {
                                 inner: associative.clone(),
                                 store: self.store.clone(),
@@ -1198,7 +1282,7 @@ impl Plugin for SarzakStore {
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: ASSOCIATIVE_ID.into(),
-                                id: associative.borrow().id.into(), // b
+                                id: associative.read().unwrap().id.into(), // b
                                 plugin: plugin.clone(),
                             };
 
@@ -1241,9 +1325,10 @@ impl Plugin for SarzakStore {
                         })() {
                             Ok(associative_referent) => {
                                 let associative_referent =
-                                    Rc::new(RefCell::new(associative_referent));
+                                    Arc::new(RwLock::new(associative_referent));
                                 self.store
-                                    .borrow_mut()
+                                    .write()
+                                    .unwrap()
                                     .inter_associative_referent(associative_referent.clone());
                                 let this = AssociativeReferentProxy {
                                     inner: associative_referent.clone(),
@@ -1253,7 +1338,7 @@ impl Plugin for SarzakStore {
                                 let proxy = FfiProxy {
                                     module: module.into(),
                                     uuid: ASSOCIATIVE_REFERENT_ID.into(),
-                                    id: associative_referent.borrow().id.into(), // e
+                                    id: associative_referent.read().unwrap().id.into(), // e
                                     plugin: plugin.clone(),
                                 };
 
@@ -1264,7 +1349,8 @@ impl Plugin for SarzakStore {
                     }
                     "instances" => {
                         let mut instances = Vec::new();
-                        for associative_referent in self.store.borrow().iter_associative_referent()
+                        for associative_referent in
+                            self.store.read().unwrap().iter_associative_referent()
                         {
                             let this = AssociativeReferentProxy {
                                 inner: associative_referent.clone(),
@@ -1274,7 +1360,7 @@ impl Plugin for SarzakStore {
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: ASSOCIATIVE_REFERENT_ID.into(),
-                                id: associative_referent.borrow().id.into(), // b
+                                id: associative_referent.read().unwrap().id.into(), // b
                                 plugin: plugin.clone(),
                             };
 
@@ -1311,9 +1397,10 @@ impl Plugin for SarzakStore {
                         })() {
                             Ok(associative_referrer) => {
                                 let associative_referrer =
-                                    Rc::new(RefCell::new(associative_referrer));
+                                    Arc::new(RwLock::new(associative_referrer));
                                 self.store
-                                    .borrow_mut()
+                                    .write()
+                                    .unwrap()
                                     .inter_associative_referrer(associative_referrer.clone());
                                 let this = AssociativeReferrerProxy {
                                     inner: associative_referrer.clone(),
@@ -1323,7 +1410,7 @@ impl Plugin for SarzakStore {
                                 let proxy = FfiProxy {
                                     module: module.into(),
                                     uuid: ASSOCIATIVE_REFERRER_ID.into(),
-                                    id: associative_referrer.borrow().id.into(), // e
+                                    id: associative_referrer.read().unwrap().id.into(), // e
                                     plugin: plugin.clone(),
                                 };
 
@@ -1334,7 +1421,8 @@ impl Plugin for SarzakStore {
                     }
                     "instances" => {
                         let mut instances = Vec::new();
-                        for associative_referrer in self.store.borrow().iter_associative_referrer()
+                        for associative_referrer in
+                            self.store.read().unwrap().iter_associative_referrer()
                         {
                             let this = AssociativeReferrerProxy {
                                 inner: associative_referrer.clone(),
@@ -1344,7 +1432,7 @@ impl Plugin for SarzakStore {
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: ASSOCIATIVE_REFERRER_ID.into(),
-                                id: associative_referrer.borrow().id.into(), // b
+                                id: associative_referrer.read().unwrap().id.into(), // b
                                 plugin: plugin.clone(),
                             };
 
@@ -1383,8 +1471,11 @@ impl Plugin for SarzakStore {
                             Ok(attribute)
                         })() {
                             Ok(attribute) => {
-                                let attribute = Rc::new(RefCell::new(attribute));
-                                self.store.borrow_mut().inter_attribute(attribute.clone());
+                                let attribute = Arc::new(RwLock::new(attribute));
+                                self.store
+                                    .write()
+                                    .unwrap()
+                                    .inter_attribute(attribute.clone());
                                 let this = AttributeProxy {
                                     inner: attribute.clone(),
                                     store: self.store.clone(),
@@ -1393,7 +1484,7 @@ impl Plugin for SarzakStore {
                                 let proxy = FfiProxy {
                                     module: module.into(),
                                     uuid: ATTRIBUTE_ID.into(),
-                                    id: attribute.borrow().id.into(), // e
+                                    id: attribute.read().unwrap().id.into(), // e
                                     plugin: plugin.clone(),
                                 };
 
@@ -1404,7 +1495,7 @@ impl Plugin for SarzakStore {
                     }
                     "instances" => {
                         let mut instances = Vec::new();
-                        for attribute in self.store.borrow().iter_attribute() {
+                        for attribute in self.store.read().unwrap().iter_attribute() {
                             let this = AttributeProxy {
                                 inner: attribute.clone(),
                                 store: self.store.clone(),
@@ -1413,7 +1504,7 @@ impl Plugin for SarzakStore {
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: ATTRIBUTE_ID.into(),
-                                id: attribute.borrow().id.into(), // b
+                                id: attribute.read().unwrap().id.into(), // b
                                 plugin: plugin.clone(),
                             };
 
@@ -1452,8 +1543,8 @@ impl Plugin for SarzakStore {
                             Ok(binary)
                         })() {
                             Ok(binary) => {
-                                let binary = Rc::new(RefCell::new(binary));
-                                self.store.borrow_mut().inter_binary(binary.clone());
+                                let binary = Arc::new(RwLock::new(binary));
+                                self.store.write().unwrap().inter_binary(binary.clone());
                                 let this = BinaryProxy {
                                     inner: binary.clone(),
                                     store: self.store.clone(),
@@ -1462,7 +1553,7 @@ impl Plugin for SarzakStore {
                                 let proxy = FfiProxy {
                                     module: module.into(),
                                     uuid: BINARY_ID.into(),
-                                    id: binary.borrow().id.into(), // e
+                                    id: binary.read().unwrap().id.into(), // e
                                     plugin: plugin.clone(),
                                 };
 
@@ -1473,7 +1564,7 @@ impl Plugin for SarzakStore {
                     }
                     "instances" => {
                         let mut instances = Vec::new();
-                        for binary in self.store.borrow().iter_binary() {
+                        for binary in self.store.read().unwrap().iter_binary() {
                             let this = BinaryProxy {
                                 inner: binary.clone(),
                                 store: self.store.clone(),
@@ -1482,7 +1573,7 @@ impl Plugin for SarzakStore {
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: BINARY_ID.into(),
-                                id: binary.borrow().id.into(), // b
+                                id: binary.read().unwrap().id.into(), // b
                                 plugin: plugin.clone(),
                             };
 
@@ -1503,8 +1594,13 @@ impl Plugin for SarzakStore {
                         for arg in args.into_iter() {
                             value_args.push(arg.into());
                         }
-                        match (|| -> Result<Rc<RefCell<Cardinality>>, Error> {
-                            let many = self.store.borrow().exhume_cardinality(&MANY).unwrap();
+                        match (|| -> Result<Arc<RwLock<Cardinality>>, Error> {
+                            let many = self
+                                .store
+                                .read()
+                                .unwrap()
+                                .exhume_cardinality(&MANY)
+                                .unwrap();
 
                             Ok(many)
                         })() {
@@ -1517,7 +1613,7 @@ impl Plugin for SarzakStore {
                                 let proxy = FfiProxy {
                                     module: module.into(),
                                     uuid: MANY.into(),
-                                    id: many.borrow().id().into(),
+                                    id: many.read().unwrap().id().into(),
                                     plugin: plugin.clone(),
                                 };
                                 Ok(FfiValue::ProxyType(proxy))
@@ -1534,8 +1630,8 @@ impl Plugin for SarzakStore {
                         for arg in args.into_iter() {
                             value_args.push(arg.into());
                         }
-                        match (|| -> Result<Rc<RefCell<Cardinality>>, Error> {
-                            let one = self.store.borrow().exhume_cardinality(&ONE).unwrap();
+                        match (|| -> Result<Arc<RwLock<Cardinality>>, Error> {
+                            let one = self.store.read().unwrap().exhume_cardinality(&ONE).unwrap();
 
                             Ok(one)
                         })() {
@@ -1548,7 +1644,7 @@ impl Plugin for SarzakStore {
                                 let proxy = FfiProxy {
                                     module: module.into(),
                                     uuid: ONE.into(),
-                                    id: one.borrow().id().into(),
+                                    id: one.read().unwrap().id().into(),
                                     plugin: plugin.clone(),
                                 };
                                 Ok(FfiValue::ProxyType(proxy))
@@ -1558,7 +1654,7 @@ impl Plugin for SarzakStore {
                     }
                     "instances" => {
                         let mut instances = Vec::new();
-                        for cardinality in self.store.borrow().iter_cardinality() {
+                        for cardinality in self.store.read().unwrap().iter_cardinality() {
                             let this = CardinalityProxy {
                                 inner: cardinality.clone(),
                                 store: self.store.clone(),
@@ -1567,7 +1663,7 @@ impl Plugin for SarzakStore {
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: CARDINALITY_ID.into(),
-                                id: cardinality.borrow().id().into(), // b
+                                id: cardinality.read().unwrap().id().into(), // b
                                 plugin: plugin.clone(),
                             };
 
@@ -1588,10 +1684,11 @@ impl Plugin for SarzakStore {
                         for arg in args.into_iter() {
                             value_args.push(arg.into());
                         }
-                        match (|| -> Result<Rc<RefCell<Conditionality>>, Error> {
+                        match (|| -> Result<Arc<RwLock<Conditionality>>, Error> {
                             let conditional = self
                                 .store
-                                .borrow()
+                                .read()
+                                .unwrap()
                                 .exhume_conditionality(&CONDITIONAL)
                                 .unwrap();
 
@@ -1606,7 +1703,7 @@ impl Plugin for SarzakStore {
                                 let proxy = FfiProxy {
                                     module: module.into(),
                                     uuid: CONDITIONAL.into(),
-                                    id: conditional.borrow().id().into(),
+                                    id: conditional.read().unwrap().id().into(),
                                     plugin: plugin.clone(),
                                 };
                                 Ok(FfiValue::ProxyType(proxy))
@@ -1623,10 +1720,11 @@ impl Plugin for SarzakStore {
                         for arg in args.into_iter() {
                             value_args.push(arg.into());
                         }
-                        match (|| -> Result<Rc<RefCell<Conditionality>>, Error> {
+                        match (|| -> Result<Arc<RwLock<Conditionality>>, Error> {
                             let unconditional = self
                                 .store
-                                .borrow()
+                                .read()
+                                .unwrap()
                                 .exhume_conditionality(&UNCONDITIONAL)
                                 .unwrap();
 
@@ -1641,7 +1739,7 @@ impl Plugin for SarzakStore {
                                 let proxy = FfiProxy {
                                     module: module.into(),
                                     uuid: UNCONDITIONAL.into(),
-                                    id: unconditional.borrow().id().into(),
+                                    id: unconditional.read().unwrap().id().into(),
                                     plugin: plugin.clone(),
                                 };
                                 Ok(FfiValue::ProxyType(proxy))
@@ -1651,7 +1749,7 @@ impl Plugin for SarzakStore {
                     }
                     "instances" => {
                         let mut instances = Vec::new();
-                        for conditionality in self.store.borrow().iter_conditionality() {
+                        for conditionality in self.store.read().unwrap().iter_conditionality() {
                             let this = ConditionalityProxy {
                                 inner: conditionality.clone(),
                                 store: self.store.clone(),
@@ -1660,7 +1758,7 @@ impl Plugin for SarzakStore {
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: CONDITIONALITY_ID.into(),
-                                id: conditionality.borrow().id().into(), // b
+                                id: conditionality.read().unwrap().id().into(), // b
                                 plugin: plugin.clone(),
                             };
 
@@ -1696,8 +1794,8 @@ impl Plugin for SarzakStore {
                             Ok(event)
                         })() {
                             Ok(event) => {
-                                let event = Rc::new(RefCell::new(event));
-                                self.store.borrow_mut().inter_event(event.clone());
+                                let event = Arc::new(RwLock::new(event));
+                                self.store.write().unwrap().inter_event(event.clone());
                                 let this = EventProxy {
                                     inner: event.clone(),
                                     store: self.store.clone(),
@@ -1706,7 +1804,7 @@ impl Plugin for SarzakStore {
                                 let proxy = FfiProxy {
                                     module: module.into(),
                                     uuid: EVENT_ID.into(),
-                                    id: event.borrow().id.into(), // e
+                                    id: event.read().unwrap().id.into(), // e
                                     plugin: plugin.clone(),
                                 };
 
@@ -1717,7 +1815,7 @@ impl Plugin for SarzakStore {
                     }
                     "instances" => {
                         let mut instances = Vec::new();
-                        for event in self.store.borrow().iter_event() {
+                        for event in self.store.read().unwrap().iter_event() {
                             let this = EventProxy {
                                 inner: event.clone(),
                                 store: self.store.clone(),
@@ -1726,7 +1824,7 @@ impl Plugin for SarzakStore {
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: EVENT_ID.into(),
-                                id: event.borrow().id.into(), // b
+                                id: event.read().unwrap().id.into(), // b
                                 plugin: plugin.clone(),
                             };
 
@@ -1757,7 +1855,7 @@ impl Plugin for SarzakStore {
                                 name: value_args.pop().unwrap().try_into().map_err(|e| {
                                     Error::Uber(format!("Error converting value: {e}").into())
                                 })?,
-                                path: value_args.pop().unwrap().try_into().map_err(|e| {
+                                x_path: value_args.pop().unwrap().try_into().map_err(|e| {
                                     Error::Uber(format!("Error converting value: {e}").into())
                                 })?,
                             };
@@ -1765,8 +1863,8 @@ impl Plugin for SarzakStore {
                             Ok(external)
                         })() {
                             Ok(external) => {
-                                let external = Rc::new(RefCell::new(external));
-                                self.store.borrow_mut().inter_external(external.clone());
+                                let external = Arc::new(RwLock::new(external));
+                                self.store.write().unwrap().inter_external(external.clone());
                                 let this = ExternalProxy {
                                     inner: external.clone(),
                                     store: self.store.clone(),
@@ -1775,7 +1873,7 @@ impl Plugin for SarzakStore {
                                 let proxy = FfiProxy {
                                     module: module.into(),
                                     uuid: EXTERNAL_ID.into(),
-                                    id: external.borrow().id.into(), // e
+                                    id: external.read().unwrap().id.into(), // e
                                     plugin: plugin.clone(),
                                 };
 
@@ -1786,7 +1884,7 @@ impl Plugin for SarzakStore {
                     }
                     "instances" => {
                         let mut instances = Vec::new();
-                        for external in self.store.borrow().iter_external() {
+                        for external in self.store.read().unwrap().iter_external() {
                             let this = ExternalProxy {
                                 inner: external.clone(),
                                 store: self.store.clone(),
@@ -1795,7 +1893,7 @@ impl Plugin for SarzakStore {
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: EXTERNAL_ID.into(),
-                                id: external.borrow().id.into(), // b
+                                id: external.read().unwrap().id.into(), // b
                                 plugin: plugin.clone(),
                             };
 
@@ -1831,8 +1929,8 @@ impl Plugin for SarzakStore {
                             Ok(isa)
                         })() {
                             Ok(isa) => {
-                                let isa = Rc::new(RefCell::new(isa));
-                                self.store.borrow_mut().inter_isa(isa.clone());
+                                let isa = Arc::new(RwLock::new(isa));
+                                self.store.write().unwrap().inter_isa(isa.clone());
                                 let this = IsaProxy {
                                     inner: isa.clone(),
                                     store: self.store.clone(),
@@ -1841,7 +1939,7 @@ impl Plugin for SarzakStore {
                                 let proxy = FfiProxy {
                                     module: module.into(),
                                     uuid: ISA_ID.into(),
-                                    id: isa.borrow().id.into(), // e
+                                    id: isa.read().unwrap().id.into(), // e
                                     plugin: plugin.clone(),
                                 };
 
@@ -1852,7 +1950,7 @@ impl Plugin for SarzakStore {
                     }
                     "instances" => {
                         let mut instances = Vec::new();
-                        for isa in self.store.borrow().iter_isa() {
+                        for isa in self.store.read().unwrap().iter_isa() {
                             let this = IsaProxy {
                                 inner: isa.clone(),
                                 store: self.store.clone(),
@@ -1861,7 +1959,7 @@ impl Plugin for SarzakStore {
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: ISA_ID.into(),
-                                id: isa.borrow().id.into(), // b
+                                id: isa.read().unwrap().id.into(), // b
                                 plugin: plugin.clone(),
                             };
 
@@ -1900,8 +1998,8 @@ impl Plugin for SarzakStore {
                             Ok(object)
                         })() {
                             Ok(object) => {
-                                let object = Rc::new(RefCell::new(object));
-                                self.store.borrow_mut().inter_object(object.clone());
+                                let object = Arc::new(RwLock::new(object));
+                                self.store.write().unwrap().inter_object(object.clone());
                                 let this = ObjectProxy {
                                     inner: object.clone(),
                                     store: self.store.clone(),
@@ -1910,7 +2008,7 @@ impl Plugin for SarzakStore {
                                 let proxy = FfiProxy {
                                     module: module.into(),
                                     uuid: OBJECT_ID.into(),
-                                    id: object.borrow().id.into(), // e
+                                    id: object.read().unwrap().id.into(), // e
                                     plugin: plugin.clone(),
                                 };
 
@@ -1921,7 +2019,7 @@ impl Plugin for SarzakStore {
                     }
                     "instances" => {
                         let mut instances = Vec::new();
-                        for object in self.store.borrow().iter_object() {
+                        for object in self.store.read().unwrap().iter_object() {
                             let this = ObjectProxy {
                                 inner: object.clone(),
                                 store: self.store.clone(),
@@ -1930,7 +2028,7 @@ impl Plugin for SarzakStore {
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: OBJECT_ID.into(),
-                                id: object.borrow().id.into(), // b
+                                id: object.read().unwrap().id.into(), // b
                                 plugin: plugin.clone(),
                             };
 
@@ -1972,8 +2070,8 @@ impl Plugin for SarzakStore {
                             Ok(referent)
                         })() {
                             Ok(referent) => {
-                                let referent = Rc::new(RefCell::new(referent));
-                                self.store.borrow_mut().inter_referent(referent.clone());
+                                let referent = Arc::new(RwLock::new(referent));
+                                self.store.write().unwrap().inter_referent(referent.clone());
                                 let this = ReferentProxy {
                                     inner: referent.clone(),
                                     store: self.store.clone(),
@@ -1982,7 +2080,7 @@ impl Plugin for SarzakStore {
                                 let proxy = FfiProxy {
                                     module: module.into(),
                                     uuid: REFERENT_ID.into(),
-                                    id: referent.borrow().id.into(), // e
+                                    id: referent.read().unwrap().id.into(), // e
                                     plugin: plugin.clone(),
                                 };
 
@@ -1993,7 +2091,7 @@ impl Plugin for SarzakStore {
                     }
                     "instances" => {
                         let mut instances = Vec::new();
-                        for referent in self.store.borrow().iter_referent() {
+                        for referent in self.store.read().unwrap().iter_referent() {
                             let this = ReferentProxy {
                                 inner: referent.clone(),
                                 store: self.store.clone(),
@@ -2002,7 +2100,7 @@ impl Plugin for SarzakStore {
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: REFERENT_ID.into(),
-                                id: referent.borrow().id.into(), // b
+                                id: referent.read().unwrap().id.into(), // b
                                 plugin: plugin.clone(),
                             };
 
@@ -2051,8 +2149,8 @@ impl Plugin for SarzakStore {
                             Ok(referrer)
                         })() {
                             Ok(referrer) => {
-                                let referrer = Rc::new(RefCell::new(referrer));
-                                self.store.borrow_mut().inter_referrer(referrer.clone());
+                                let referrer = Arc::new(RwLock::new(referrer));
+                                self.store.write().unwrap().inter_referrer(referrer.clone());
                                 let this = ReferrerProxy {
                                     inner: referrer.clone(),
                                     store: self.store.clone(),
@@ -2061,7 +2159,7 @@ impl Plugin for SarzakStore {
                                 let proxy = FfiProxy {
                                     module: module.into(),
                                     uuid: REFERRER_ID.into(),
-                                    id: referrer.borrow().id.into(), // e
+                                    id: referrer.read().unwrap().id.into(), // e
                                     plugin: plugin.clone(),
                                 };
 
@@ -2072,7 +2170,7 @@ impl Plugin for SarzakStore {
                     }
                     "instances" => {
                         let mut instances = Vec::new();
-                        for referrer in self.store.borrow().iter_referrer() {
+                        for referrer in self.store.read().unwrap().iter_referrer() {
                             let this = ReferrerProxy {
                                 inner: referrer.clone(),
                                 store: self.store.clone(),
@@ -2081,7 +2179,7 @@ impl Plugin for SarzakStore {
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: REFERRER_ID.into(),
-                                id: referrer.borrow().id.into(), // b
+                                id: referrer.read().unwrap().id.into(), // b
                                 plugin: plugin.clone(),
                             };
 
@@ -2112,9 +2210,10 @@ impl Plugin for SarzakStore {
                             Ok(associative)
                         })() {
                             Ok(associative) => {
-                                let associative = Rc::new(RefCell::new(associative));
+                                let associative = Arc::new(RwLock::new(associative));
                                 self.store
-                                    .borrow_mut()
+                                    .write()
+                                    .unwrap()
                                     .inter_relationship(associative.clone());
                                 let this = RelationshipProxy {
                                     inner: associative.clone(),
@@ -2124,7 +2223,7 @@ impl Plugin for SarzakStore {
                                 let proxy = FfiProxy {
                                     module: module.into(),
                                     uuid: RELATIONSHIP_ID.into(),
-                                    id: associative.borrow().id().into(), // d
+                                    id: associative.read().unwrap().id().into(), // d
                                     plugin: plugin.clone(),
                                 };
 
@@ -2152,8 +2251,11 @@ impl Plugin for SarzakStore {
                             Ok(binary)
                         })() {
                             Ok(binary) => {
-                                let binary = Rc::new(RefCell::new(binary));
-                                self.store.borrow_mut().inter_relationship(binary.clone());
+                                let binary = Arc::new(RwLock::new(binary));
+                                self.store
+                                    .write()
+                                    .unwrap()
+                                    .inter_relationship(binary.clone());
                                 let this = RelationshipProxy {
                                     inner: binary.clone(),
                                     store: self.store.clone(),
@@ -2162,7 +2264,7 @@ impl Plugin for SarzakStore {
                                 let proxy = FfiProxy {
                                     module: module.into(),
                                     uuid: RELATIONSHIP_ID.into(),
-                                    id: binary.borrow().id().into(), // d
+                                    id: binary.read().unwrap().id().into(), // d
                                     plugin: plugin.clone(),
                                 };
 
@@ -2189,8 +2291,8 @@ impl Plugin for SarzakStore {
                             Ok(isa)
                         })() {
                             Ok(isa) => {
-                                let isa = Rc::new(RefCell::new(isa));
-                                self.store.borrow_mut().inter_relationship(isa.clone());
+                                let isa = Arc::new(RwLock::new(isa));
+                                self.store.write().unwrap().inter_relationship(isa.clone());
                                 let this = RelationshipProxy {
                                     inner: isa.clone(),
                                     store: self.store.clone(),
@@ -2199,7 +2301,7 @@ impl Plugin for SarzakStore {
                                 let proxy = FfiProxy {
                                     module: module.into(),
                                     uuid: RELATIONSHIP_ID.into(),
-                                    id: isa.borrow().id().into(), // d
+                                    id: isa.read().unwrap().id().into(), // d
                                     plugin: plugin.clone(),
                                 };
 
@@ -2210,7 +2312,7 @@ impl Plugin for SarzakStore {
                     }
                     "instances" => {
                         let mut instances = Vec::new();
-                        for relationship in self.store.borrow().iter_relationship() {
+                        for relationship in self.store.read().unwrap().iter_relationship() {
                             let this = RelationshipProxy {
                                 inner: relationship.clone(),
                                 store: self.store.clone(),
@@ -2219,7 +2321,7 @@ impl Plugin for SarzakStore {
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: RELATIONSHIP_ID.into(),
-                                id: relationship.borrow().id().into(), // b
+                                id: relationship.read().unwrap().id().into(), // b
                                 plugin: plugin.clone(),
                             };
 
@@ -2255,8 +2357,8 @@ impl Plugin for SarzakStore {
                             Ok(state)
                         })() {
                             Ok(state) => {
-                                let state = Rc::new(RefCell::new(state));
-                                self.store.borrow_mut().inter_state(state.clone());
+                                let state = Arc::new(RwLock::new(state));
+                                self.store.write().unwrap().inter_state(state.clone());
                                 let this = StateProxy {
                                     inner: state.clone(),
                                     store: self.store.clone(),
@@ -2265,7 +2367,7 @@ impl Plugin for SarzakStore {
                                 let proxy = FfiProxy {
                                     module: module.into(),
                                     uuid: STATE_ID.into(),
-                                    id: state.borrow().id.into(), // e
+                                    id: state.read().unwrap().id.into(), // e
                                     plugin: plugin.clone(),
                                 };
 
@@ -2276,7 +2378,7 @@ impl Plugin for SarzakStore {
                     }
                     "instances" => {
                         let mut instances = Vec::new();
-                        for state in self.store.borrow().iter_state() {
+                        for state in self.store.read().unwrap().iter_state() {
                             let this = StateProxy {
                                 inner: state.clone(),
                                 store: self.store.clone(),
@@ -2285,7 +2387,7 @@ impl Plugin for SarzakStore {
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: STATE_ID.into(),
-                                id: state.borrow().id.into(), // b
+                                id: state.read().unwrap().id.into(), // b
                                 plugin: plugin.clone(),
                             };
 
@@ -2321,8 +2423,8 @@ impl Plugin for SarzakStore {
                             Ok(subtype)
                         })() {
                             Ok(subtype) => {
-                                let subtype = Rc::new(RefCell::new(subtype));
-                                self.store.borrow_mut().inter_subtype(subtype.clone());
+                                let subtype = Arc::new(RwLock::new(subtype));
+                                self.store.write().unwrap().inter_subtype(subtype.clone());
                                 let this = SubtypeProxy {
                                     inner: subtype.clone(),
                                     store: self.store.clone(),
@@ -2331,7 +2433,7 @@ impl Plugin for SarzakStore {
                                 let proxy = FfiProxy {
                                     module: module.into(),
                                     uuid: SUBTYPE_ID.into(),
-                                    id: subtype.borrow().id.into(), // e
+                                    id: subtype.read().unwrap().id.into(), // e
                                     plugin: plugin.clone(),
                                 };
 
@@ -2342,7 +2444,7 @@ impl Plugin for SarzakStore {
                     }
                     "instances" => {
                         let mut instances = Vec::new();
-                        for subtype in self.store.borrow().iter_subtype() {
+                        for subtype in self.store.read().unwrap().iter_subtype() {
                             let this = SubtypeProxy {
                                 inner: subtype.clone(),
                                 store: self.store.clone(),
@@ -2351,7 +2453,7 @@ impl Plugin for SarzakStore {
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: SUBTYPE_ID.into(),
-                                id: subtype.borrow().id.into(), // b
+                                id: subtype.read().unwrap().id.into(), // b
                                 plugin: plugin.clone(),
                             };
 
@@ -2384,8 +2486,11 @@ impl Plugin for SarzakStore {
                             Ok(supertype)
                         })() {
                             Ok(supertype) => {
-                                let supertype = Rc::new(RefCell::new(supertype));
-                                self.store.borrow_mut().inter_supertype(supertype.clone());
+                                let supertype = Arc::new(RwLock::new(supertype));
+                                self.store
+                                    .write()
+                                    .unwrap()
+                                    .inter_supertype(supertype.clone());
                                 let this = SupertypeProxy {
                                     inner: supertype.clone(),
                                     store: self.store.clone(),
@@ -2394,7 +2499,7 @@ impl Plugin for SarzakStore {
                                 let proxy = FfiProxy {
                                     module: module.into(),
                                     uuid: SUPERTYPE_ID.into(),
-                                    id: supertype.borrow().id.into(), // e
+                                    id: supertype.read().unwrap().id.into(), // e
                                     plugin: plugin.clone(),
                                 };
 
@@ -2405,7 +2510,7 @@ impl Plugin for SarzakStore {
                     }
                     "instances" => {
                         let mut instances = Vec::new();
-                        for supertype in self.store.borrow().iter_supertype() {
+                        for supertype in self.store.read().unwrap().iter_supertype() {
                             let this = SupertypeProxy {
                                 inner: supertype.clone(),
                                 store: self.store.clone(),
@@ -2414,7 +2519,7 @@ impl Plugin for SarzakStore {
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: SUPERTYPE_ID.into(),
-                                id: supertype.borrow().id.into(), // b
+                                id: supertype.read().unwrap().id.into(), // b
                                 plugin: plugin.clone(),
                             };
 
@@ -2435,8 +2540,8 @@ impl Plugin for SarzakStore {
                         for arg in args.into_iter() {
                             value_args.push(arg.into());
                         }
-                        match (|| -> Result<Rc<RefCell<Ty>>, Error> {
-                            let boolean = self.store.borrow().exhume_ty(&BOOLEAN).unwrap();
+                        match (|| -> Result<Arc<RwLock<Ty>>, Error> {
+                            let boolean = self.store.read().unwrap().exhume_ty(&BOOLEAN).unwrap();
 
                             Ok(boolean)
                         })() {
@@ -2449,7 +2554,7 @@ impl Plugin for SarzakStore {
                                 let proxy = FfiProxy {
                                     module: module.into(),
                                     uuid: BOOLEAN.into(),
-                                    id: boolean.borrow().id().into(),
+                                    id: boolean.read().unwrap().id().into(),
                                     plugin: plugin.clone(),
                                 };
                                 Ok(FfiValue::ProxyType(proxy))
@@ -2475,8 +2580,8 @@ impl Plugin for SarzakStore {
                             Ok(external)
                         })() {
                             Ok(external) => {
-                                let external = Rc::new(RefCell::new(external));
-                                self.store.borrow_mut().inter_ty(external.clone());
+                                let external = Arc::new(RwLock::new(external));
+                                self.store.write().unwrap().inter_ty(external.clone());
                                 let this = TyProxy {
                                     inner: external.clone(),
                                     store: self.store.clone(),
@@ -2485,7 +2590,7 @@ impl Plugin for SarzakStore {
                                 let proxy = FfiProxy {
                                     module: module.into(),
                                     uuid: TY_ID.into(),
-                                    id: external.borrow().id().into(), // d
+                                    id: external.read().unwrap().id().into(), // d
                                     plugin: plugin.clone(),
                                 };
 
@@ -2503,8 +2608,8 @@ impl Plugin for SarzakStore {
                         for arg in args.into_iter() {
                             value_args.push(arg.into());
                         }
-                        match (|| -> Result<Rc<RefCell<Ty>>, Error> {
-                            let float = self.store.borrow().exhume_ty(&FLOAT).unwrap();
+                        match (|| -> Result<Arc<RwLock<Ty>>, Error> {
+                            let float = self.store.read().unwrap().exhume_ty(&FLOAT).unwrap();
 
                             Ok(float)
                         })() {
@@ -2517,7 +2622,7 @@ impl Plugin for SarzakStore {
                                 let proxy = FfiProxy {
                                     module: module.into(),
                                     uuid: FLOAT.into(),
-                                    id: float.borrow().id().into(),
+                                    id: float.read().unwrap().id().into(),
                                     plugin: plugin.clone(),
                                 };
                                 Ok(FfiValue::ProxyType(proxy))
@@ -2534,8 +2639,8 @@ impl Plugin for SarzakStore {
                         for arg in args.into_iter() {
                             value_args.push(arg.into());
                         }
-                        match (|| -> Result<Rc<RefCell<Ty>>, Error> {
-                            let integer = self.store.borrow().exhume_ty(&INTEGER).unwrap();
+                        match (|| -> Result<Arc<RwLock<Ty>>, Error> {
+                            let integer = self.store.read().unwrap().exhume_ty(&INTEGER).unwrap();
 
                             Ok(integer)
                         })() {
@@ -2548,7 +2653,7 @@ impl Plugin for SarzakStore {
                                 let proxy = FfiProxy {
                                     module: module.into(),
                                     uuid: INTEGER.into(),
-                                    id: integer.borrow().id().into(),
+                                    id: integer.read().unwrap().id().into(),
                                     plugin: plugin.clone(),
                                 };
                                 Ok(FfiValue::ProxyType(proxy))
@@ -2574,8 +2679,8 @@ impl Plugin for SarzakStore {
                             Ok(object)
                         })() {
                             Ok(object) => {
-                                let object = Rc::new(RefCell::new(object));
-                                self.store.borrow_mut().inter_ty(object.clone());
+                                let object = Arc::new(RwLock::new(object));
+                                self.store.write().unwrap().inter_ty(object.clone());
                                 let this = TyProxy {
                                     inner: object.clone(),
                                     store: self.store.clone(),
@@ -2584,7 +2689,7 @@ impl Plugin for SarzakStore {
                                 let proxy = FfiProxy {
                                     module: module.into(),
                                     uuid: TY_ID.into(),
-                                    id: object.borrow().id().into(), // d
+                                    id: object.read().unwrap().id().into(), // d
                                     plugin: plugin.clone(),
                                 };
 
@@ -2602,8 +2707,8 @@ impl Plugin for SarzakStore {
                         for arg in args.into_iter() {
                             value_args.push(arg.into());
                         }
-                        match (|| -> Result<Rc<RefCell<Ty>>, Error> {
-                            let s_string = self.store.borrow().exhume_ty(&S_STRING).unwrap();
+                        match (|| -> Result<Arc<RwLock<Ty>>, Error> {
+                            let s_string = self.store.read().unwrap().exhume_ty(&S_STRING).unwrap();
 
                             Ok(s_string)
                         })() {
@@ -2616,7 +2721,7 @@ impl Plugin for SarzakStore {
                                 let proxy = FfiProxy {
                                     module: module.into(),
                                     uuid: S_STRING.into(),
-                                    id: s_string.borrow().id().into(),
+                                    id: s_string.read().unwrap().id().into(),
                                     plugin: plugin.clone(),
                                 };
                                 Ok(FfiValue::ProxyType(proxy))
@@ -2633,8 +2738,8 @@ impl Plugin for SarzakStore {
                         for arg in args.into_iter() {
                             value_args.push(arg.into());
                         }
-                        match (|| -> Result<Rc<RefCell<Ty>>, Error> {
-                            let s_uuid = self.store.borrow().exhume_ty(&S_UUID).unwrap();
+                        match (|| -> Result<Arc<RwLock<Ty>>, Error> {
+                            let s_uuid = self.store.read().unwrap().exhume_ty(&S_UUID).unwrap();
 
                             Ok(s_uuid)
                         })() {
@@ -2647,7 +2752,7 @@ impl Plugin for SarzakStore {
                                 let proxy = FfiProxy {
                                     module: module.into(),
                                     uuid: S_UUID.into(),
-                                    id: s_uuid.borrow().id().into(),
+                                    id: s_uuid.read().unwrap().id().into(),
                                     plugin: plugin.clone(),
                                 };
                                 Ok(FfiValue::ProxyType(proxy))
@@ -2657,7 +2762,7 @@ impl Plugin for SarzakStore {
                     }
                     "instances" => {
                         let mut instances = Vec::new();
-                        for ty in self.store.borrow().iter_ty() {
+                        for ty in self.store.read().unwrap().iter_ty() {
                             let this = TyProxy {
                                 inner: ty.clone(),
                                 store: self.store.clone(),
@@ -2666,7 +2771,7 @@ impl Plugin for SarzakStore {
                             let proxy = FfiProxy {
                                 module: module.into(),
                                 uuid: TY_ID.into(),
-                                id: ty.borrow().id().into(), // b
+                                id: ty.read().unwrap().id().into(), // b
                                 plugin: plugin.clone(),
                             };
 
@@ -2694,8 +2799,8 @@ const ACKNOWLEDGED_EVENT_ID: Uuid = uuid!("2979402f-0980-58b6-9601-62f931e7f368"
 
 #[derive(Clone, Debug)]
 pub struct AcknowledgedEventProxy {
-    inner: Rc<RefCell<AcknowledgedEvent>>,
-    store: Rc<RefCell<ObjectStore>>,
+    inner: Arc<RwLock<AcknowledgedEvent>>,
+    store: Arc<RwLock<ObjectStore>>,
 }
 
 impl Plugin for AcknowledgedEventProxy {
@@ -2719,12 +2824,13 @@ impl Plugin for AcknowledgedEventProxy {
 
                         if let FfiValue::String(field) = args.pop().unwrap() {
                             match field.as_str() {
-                                "id" => Ok(FfiValue::Uuid(self.inner.borrow().id.into())),
+                                "id" => Ok(FfiValue::Uuid(self.inner.read().unwrap().id.into())),
                                 "event_id" => {
                                     let event_id = self
                                         .store
-                                        .borrow()
-                                        .exhume_event(&self.inner.borrow().event_id)
+                                        .read()
+                                        .unwrap()
+                                        .exhume_event(&self.inner.read().unwrap().event_id)
                                         .unwrap();
 
                                     let this = EventProxy {
@@ -2735,7 +2841,7 @@ impl Plugin for AcknowledgedEventProxy {
                                     let proxy = FfiProxy {
                                         module: module.into(),
                                         uuid: EVENT_ID.into(),
-                                        id: self.inner.borrow().id.into(), // c
+                                        id: self.inner.read().unwrap().id.into(), // c
                                         plugin: plugin.clone(),
                                     };
                                     Ok(FfiValue::ProxyType(proxy))
@@ -2743,8 +2849,9 @@ impl Plugin for AcknowledgedEventProxy {
                                 "state_id" => {
                                     let state_id = self
                                         .store
-                                        .borrow()
-                                        .exhume_state(&self.inner.borrow().state_id)
+                                        .read()
+                                        .unwrap()
+                                        .exhume_state(&self.inner.read().unwrap().state_id)
                                         .unwrap();
 
                                     let this = StateProxy {
@@ -2755,7 +2862,7 @@ impl Plugin for AcknowledgedEventProxy {
                                     let proxy = FfiProxy {
                                         module: module.into(),
                                         uuid: STATE_ID.into(),
-                                        id: self.inner.borrow().id.into(), // c
+                                        id: self.inner.read().unwrap().id.into(), // c
                                         plugin: plugin.clone(),
                                     };
                                     Ok(FfiValue::ProxyType(proxy))
@@ -2778,7 +2885,7 @@ impl Plugin for AcknowledgedEventProxy {
                             let value: Value = args.pop().unwrap().into();
                             match field.as_str() {
                                 "event_id" => {
-                                    self.inner.borrow_mut().event_id =
+                                    self.inner.write().unwrap().event_id =
                                         value.try_into().map_err(|e| {
                                             Error::Uber(
                                                 format!("Error converting value: {e}").into(),
@@ -2786,7 +2893,7 @@ impl Plugin for AcknowledgedEventProxy {
                                         })?
                                 }
                                 "state_id" => {
-                                    self.inner.borrow_mut().state_id =
+                                    self.inner.write().unwrap().state_id =
                                         value.try_into().map_err(|e| {
                                             Error::Uber(
                                                 format!("Error converting value: {e}").into(),
@@ -2823,9 +2930,9 @@ impl Plugin for AcknowledgedEventProxy {
 impl Display for AcknowledgedEventProxy {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "AcknowledgedEvent({{")?;
-        writeln!(f, "	id: {:?},", self.inner.borrow().id)?;
-        writeln!(f, "	event_id: {:?},", self.inner.borrow().event_id)?;
-        writeln!(f, "	state_id: {:?},", self.inner.borrow().state_id)?;
+        writeln!(f, "	id: {:?},", self.inner.read().unwrap().id)?;
+        writeln!(f, "	event_id: {:?},", self.inner.read().unwrap().event_id)?;
+        writeln!(f, "	state_id: {:?},", self.inner.read().unwrap().state_id)?;
         writeln!(f, "}})")
     }
 }
@@ -2834,8 +2941,8 @@ const AN_ASSOCIATIVE_REFERENT_ID: Uuid = uuid!("7e899d0b-c69b-51e8-b264-d769c9ac
 
 #[derive(Clone, Debug)]
 pub struct AnAssociativeReferentProxy {
-    inner: Rc<RefCell<AnAssociativeReferent>>,
-    store: Rc<RefCell<ObjectStore>>,
+    inner: Arc<RwLock<AnAssociativeReferent>>,
+    store: Arc<RwLock<ObjectStore>>,
 }
 
 impl Plugin for AnAssociativeReferentProxy {
@@ -2859,15 +2966,21 @@ impl Plugin for AnAssociativeReferentProxy {
 
                         if let FfiValue::String(field) = args.pop().unwrap() {
                             match field.as_str() {
-                                "id" => Ok(FfiValue::Uuid(self.inner.borrow().id.into())),
+                                "id" => Ok(FfiValue::Uuid(self.inner.read().unwrap().id.into())),
                                 "referential_attribute" => Ok(FfiValue::String(
-                                    self.inner.borrow().referential_attribute.clone().into(),
+                                    self.inner
+                                        .read()
+                                        .unwrap()
+                                        .referential_attribute
+                                        .clone()
+                                        .into(),
                                 )),
                                 "associative" => {
                                     let associative = self
                                         .store
-                                        .borrow()
-                                        .exhume_associative(&self.inner.borrow().associative)
+                                        .read()
+                                        .unwrap()
+                                        .exhume_associative(&self.inner.read().unwrap().associative)
                                         .unwrap();
 
                                     let this = AssociativeProxy {
@@ -2878,7 +2991,7 @@ impl Plugin for AnAssociativeReferentProxy {
                                     let proxy = FfiProxy {
                                         module: module.into(),
                                         uuid: ASSOCIATIVE_ID.into(),
-                                        id: self.inner.borrow().id.into(), // c
+                                        id: self.inner.read().unwrap().id.into(), // c
                                         plugin: plugin.clone(),
                                     };
                                     Ok(FfiValue::ProxyType(proxy))
@@ -2886,8 +2999,11 @@ impl Plugin for AnAssociativeReferentProxy {
                                 "referent" => {
                                     let referent = self
                                         .store
-                                        .borrow()
-                                        .exhume_associative_referent(&self.inner.borrow().referent)
+                                        .read()
+                                        .unwrap()
+                                        .exhume_associative_referent(
+                                            &self.inner.read().unwrap().referent,
+                                        )
                                         .unwrap();
 
                                     let this = AssociativeReferentProxy {
@@ -2898,7 +3014,7 @@ impl Plugin for AnAssociativeReferentProxy {
                                     let proxy = FfiProxy {
                                         module: module.into(),
                                         uuid: ASSOCIATIVE_REFERENT_ID.into(),
-                                        id: self.inner.borrow().id.into(), // c
+                                        id: self.inner.read().unwrap().id.into(), // c
                                         plugin: plugin.clone(),
                                     };
                                     Ok(FfiValue::ProxyType(proxy))
@@ -2921,7 +3037,7 @@ impl Plugin for AnAssociativeReferentProxy {
                             let value: Value = args.pop().unwrap().into();
                             match field.as_str() {
                                 "referential_attribute" => {
-                                    self.inner.borrow_mut().referential_attribute =
+                                    self.inner.write().unwrap().referential_attribute =
                                         value.try_into().map_err(|e| {
                                             Error::Uber(
                                                 format!("Error converting value: {e}").into(),
@@ -2929,7 +3045,7 @@ impl Plugin for AnAssociativeReferentProxy {
                                         })?
                                 }
                                 "associative" => {
-                                    self.inner.borrow_mut().associative =
+                                    self.inner.write().unwrap().associative =
                                         value.try_into().map_err(|e| {
                                             Error::Uber(
                                                 format!("Error converting value: {e}").into(),
@@ -2937,7 +3053,7 @@ impl Plugin for AnAssociativeReferentProxy {
                                         })?
                                 }
                                 "referent" => {
-                                    self.inner.borrow_mut().referent =
+                                    self.inner.write().unwrap().referent =
                                         value.try_into().map_err(|e| {
                                             Error::Uber(
                                                 format!("Error converting value: {e}").into(),
@@ -2974,14 +3090,18 @@ impl Plugin for AnAssociativeReferentProxy {
 impl Display for AnAssociativeReferentProxy {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "AnAssociativeReferent({{")?;
-        writeln!(f, "	id: {:?},", self.inner.borrow().id)?;
+        writeln!(f, "	id: {:?},", self.inner.read().unwrap().id)?;
         writeln!(
             f,
             "	referential_attribute: {:?},",
-            self.inner.borrow().referential_attribute
+            self.inner.read().unwrap().referential_attribute
         )?;
-        writeln!(f, "	associative: {:?},", self.inner.borrow().associative)?;
-        writeln!(f, "	referent: {:?},", self.inner.borrow().referent)?;
+        writeln!(
+            f,
+            "	associative: {:?},",
+            self.inner.read().unwrap().associative
+        )?;
+        writeln!(f, "	referent: {:?},", self.inner.read().unwrap().referent)?;
         writeln!(f, "}})")
     }
 }
@@ -2990,8 +3110,8 @@ const ASSOCIATIVE_ID: Uuid = uuid!("17de0bb6-ee65-5516-b8eb-9a9a35e5fedd");
 
 #[derive(Clone, Debug)]
 pub struct AssociativeProxy {
-    inner: Rc<RefCell<Associative>>,
-    store: Rc<RefCell<ObjectStore>>,
+    inner: Arc<RwLock<Associative>>,
+    store: Arc<RwLock<ObjectStore>>,
 }
 
 impl Plugin for AssociativeProxy {
@@ -3015,15 +3135,18 @@ impl Plugin for AssociativeProxy {
 
                         if let FfiValue::String(field) = args.pop().unwrap() {
                             match field.as_str() {
-                                "id" => Ok(FfiValue::Uuid(self.inner.borrow().id.into())),
+                                "id" => Ok(FfiValue::Uuid(self.inner.read().unwrap().id.into())),
                                 "number" => {
-                                    Ok(FfiValue::Integer(self.inner.borrow().number.into()))
+                                    Ok(FfiValue::Integer(self.inner.read().unwrap().number.into()))
                                 }
                                 "from" => {
                                     let from = self
                                         .store
-                                        .borrow()
-                                        .exhume_associative_referrer(&self.inner.borrow().from)
+                                        .read()
+                                        .unwrap()
+                                        .exhume_associative_referrer(
+                                            &self.inner.read().unwrap().from,
+                                        )
                                         .unwrap();
 
                                     let this = AssociativeReferrerProxy {
@@ -3034,7 +3157,7 @@ impl Plugin for AssociativeProxy {
                                     let proxy = FfiProxy {
                                         module: module.into(),
                                         uuid: ASSOCIATIVE_REFERRER_ID.into(),
-                                        id: self.inner.borrow().id.into(), // c
+                                        id: self.inner.read().unwrap().id.into(), // c
                                         plugin: plugin.clone(),
                                     };
                                     Ok(FfiValue::ProxyType(proxy))
@@ -3057,7 +3180,7 @@ impl Plugin for AssociativeProxy {
                             let value: Value = args.pop().unwrap().into();
                             match field.as_str() {
                                 "number" => {
-                                    self.inner.borrow_mut().number =
+                                    self.inner.write().unwrap().number =
                                         value.try_into().map_err(|e| {
                                             Error::Uber(
                                                 format!("Error converting value: {e}").into(),
@@ -3065,7 +3188,7 @@ impl Plugin for AssociativeProxy {
                                         })?
                                 }
                                 "from" => {
-                                    self.inner.borrow_mut().from =
+                                    self.inner.write().unwrap().from =
                                         value.try_into().map_err(|e| {
                                             Error::Uber(
                                                 format!("Error converting value: {e}").into(),
@@ -3102,9 +3225,9 @@ impl Plugin for AssociativeProxy {
 impl Display for AssociativeProxy {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "Associative({{")?;
-        writeln!(f, "	id: {:?},", self.inner.borrow().id)?;
-        writeln!(f, "	number: {:?},", self.inner.borrow().number)?;
-        writeln!(f, "	from: {:?},", self.inner.borrow().from)?;
+        writeln!(f, "	id: {:?},", self.inner.read().unwrap().id)?;
+        writeln!(f, "	number: {:?},", self.inner.read().unwrap().number)?;
+        writeln!(f, "	from: {:?},", self.inner.read().unwrap().from)?;
         writeln!(f, "}})")
     }
 }
@@ -3113,8 +3236,8 @@ const ASSOCIATIVE_REFERENT_ID: Uuid = uuid!("e38511e6-1f25-503c-bf93-50888585244
 
 #[derive(Clone, Debug)]
 pub struct AssociativeReferentProxy {
-    inner: Rc<RefCell<AssociativeReferent>>,
-    store: Rc<RefCell<ObjectStore>>,
+    inner: Arc<RwLock<AssociativeReferent>>,
+    store: Arc<RwLock<ObjectStore>>,
 }
 
 impl Plugin for AssociativeReferentProxy {
@@ -3139,14 +3262,15 @@ impl Plugin for AssociativeReferentProxy {
                         if let FfiValue::String(field) = args.pop().unwrap() {
                             match field.as_str() {
                                 "description" => Ok(FfiValue::String(
-                                    self.inner.borrow().description.clone().into(),
+                                    self.inner.read().unwrap().description.clone().into(),
                                 )),
-                                "id" => Ok(FfiValue::Uuid(self.inner.borrow().id.into())),
+                                "id" => Ok(FfiValue::Uuid(self.inner.read().unwrap().id.into())),
                                 "cardinality" => {
                                     let cardinality = self
                                         .store
-                                        .borrow()
-                                        .exhume_cardinality(&self.inner.borrow().cardinality)
+                                        .read()
+                                        .unwrap()
+                                        .exhume_cardinality(&self.inner.read().unwrap().cardinality)
                                         .unwrap();
 
                                     let this = CardinalityProxy {
@@ -3157,7 +3281,7 @@ impl Plugin for AssociativeReferentProxy {
                                     let proxy = FfiProxy {
                                         module: module.into(),
                                         uuid: CARDINALITY_ID.into(),
-                                        id: self.inner.borrow().id.into(), // c
+                                        id: self.inner.read().unwrap().id.into(), // c
                                         plugin: plugin.clone(),
                                     };
                                     Ok(FfiValue::ProxyType(proxy))
@@ -3165,8 +3289,11 @@ impl Plugin for AssociativeReferentProxy {
                                 "conditionality" => {
                                     let conditionality = self
                                         .store
-                                        .borrow()
-                                        .exhume_conditionality(&self.inner.borrow().conditionality)
+                                        .read()
+                                        .unwrap()
+                                        .exhume_conditionality(
+                                            &self.inner.read().unwrap().conditionality,
+                                        )
                                         .unwrap();
 
                                     let this = ConditionalityProxy {
@@ -3177,7 +3304,7 @@ impl Plugin for AssociativeReferentProxy {
                                     let proxy = FfiProxy {
                                         module: module.into(),
                                         uuid: CONDITIONALITY_ID.into(),
-                                        id: self.inner.borrow().id.into(), // c
+                                        id: self.inner.read().unwrap().id.into(), // c
                                         plugin: plugin.clone(),
                                     };
                                     Ok(FfiValue::ProxyType(proxy))
@@ -3185,8 +3312,9 @@ impl Plugin for AssociativeReferentProxy {
                                 "obj_id" => {
                                     let obj_id = self
                                         .store
-                                        .borrow()
-                                        .exhume_object(&self.inner.borrow().obj_id)
+                                        .read()
+                                        .unwrap()
+                                        .exhume_object(&self.inner.read().unwrap().obj_id)
                                         .unwrap();
 
                                     let this = ObjectProxy {
@@ -3197,7 +3325,7 @@ impl Plugin for AssociativeReferentProxy {
                                     let proxy = FfiProxy {
                                         module: module.into(),
                                         uuid: OBJECT_ID.into(),
-                                        id: self.inner.borrow().id.into(), // c
+                                        id: self.inner.read().unwrap().id.into(), // c
                                         plugin: plugin.clone(),
                                     };
                                     Ok(FfiValue::ProxyType(proxy))
@@ -3220,7 +3348,7 @@ impl Plugin for AssociativeReferentProxy {
                             let value: Value = args.pop().unwrap().into();
                             match field.as_str() {
                                 "description" => {
-                                    self.inner.borrow_mut().description =
+                                    self.inner.write().unwrap().description =
                                         value.try_into().map_err(|e| {
                                             Error::Uber(
                                                 format!("Error converting value: {e}").into(),
@@ -3228,7 +3356,7 @@ impl Plugin for AssociativeReferentProxy {
                                         })?
                                 }
                                 "cardinality" => {
-                                    self.inner.borrow_mut().cardinality =
+                                    self.inner.write().unwrap().cardinality =
                                         value.try_into().map_err(|e| {
                                             Error::Uber(
                                                 format!("Error converting value: {e}").into(),
@@ -3236,7 +3364,7 @@ impl Plugin for AssociativeReferentProxy {
                                         })?
                                 }
                                 "conditionality" => {
-                                    self.inner.borrow_mut().conditionality =
+                                    self.inner.write().unwrap().conditionality =
                                         value.try_into().map_err(|e| {
                                             Error::Uber(
                                                 format!("Error converting value: {e}").into(),
@@ -3244,7 +3372,7 @@ impl Plugin for AssociativeReferentProxy {
                                         })?
                                 }
                                 "obj_id" => {
-                                    self.inner.borrow_mut().obj_id =
+                                    self.inner.write().unwrap().obj_id =
                                         value.try_into().map_err(|e| {
                                             Error::Uber(
                                                 format!("Error converting value: {e}").into(),
@@ -3281,15 +3409,23 @@ impl Plugin for AssociativeReferentProxy {
 impl Display for AssociativeReferentProxy {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "AssociativeReferent({{")?;
-        writeln!(f, "	description: {:?},", self.inner.borrow().description)?;
-        writeln!(f, "	id: {:?},", self.inner.borrow().id)?;
-        writeln!(f, "	cardinality: {:?},", self.inner.borrow().cardinality)?;
+        writeln!(
+            f,
+            "	description: {:?},",
+            self.inner.read().unwrap().description
+        )?;
+        writeln!(f, "	id: {:?},", self.inner.read().unwrap().id)?;
+        writeln!(
+            f,
+            "	cardinality: {:?},",
+            self.inner.read().unwrap().cardinality
+        )?;
         writeln!(
             f,
             "	conditionality: {:?},",
-            self.inner.borrow().conditionality
+            self.inner.read().unwrap().conditionality
         )?;
-        writeln!(f, "	obj_id: {:?},", self.inner.borrow().obj_id)?;
+        writeln!(f, "	obj_id: {:?},", self.inner.read().unwrap().obj_id)?;
         writeln!(f, "}})")
     }
 }
@@ -3298,8 +3434,8 @@ const ASSOCIATIVE_REFERRER_ID: Uuid = uuid!("faa5a05c-7252-5b3d-b415-ad388426915
 
 #[derive(Clone, Debug)]
 pub struct AssociativeReferrerProxy {
-    inner: Rc<RefCell<AssociativeReferrer>>,
-    store: Rc<RefCell<ObjectStore>>,
+    inner: Arc<RwLock<AssociativeReferrer>>,
+    store: Arc<RwLock<ObjectStore>>,
 }
 
 impl Plugin for AssociativeReferrerProxy {
@@ -3323,12 +3459,13 @@ impl Plugin for AssociativeReferrerProxy {
 
                         if let FfiValue::String(field) = args.pop().unwrap() {
                             match field.as_str() {
-                                "id" => Ok(FfiValue::Uuid(self.inner.borrow().id.into())),
+                                "id" => Ok(FfiValue::Uuid(self.inner.read().unwrap().id.into())),
                                 "cardinality" => {
                                     let cardinality = self
                                         .store
-                                        .borrow()
-                                        .exhume_cardinality(&self.inner.borrow().cardinality)
+                                        .read()
+                                        .unwrap()
+                                        .exhume_cardinality(&self.inner.read().unwrap().cardinality)
                                         .unwrap();
 
                                     let this = CardinalityProxy {
@@ -3339,7 +3476,7 @@ impl Plugin for AssociativeReferrerProxy {
                                     let proxy = FfiProxy {
                                         module: module.into(),
                                         uuid: CARDINALITY_ID.into(),
-                                        id: self.inner.borrow().id.into(), // c
+                                        id: self.inner.read().unwrap().id.into(), // c
                                         plugin: plugin.clone(),
                                     };
                                     Ok(FfiValue::ProxyType(proxy))
@@ -3347,8 +3484,9 @@ impl Plugin for AssociativeReferrerProxy {
                                 "obj_id" => {
                                     let obj_id = self
                                         .store
-                                        .borrow()
-                                        .exhume_object(&self.inner.borrow().obj_id)
+                                        .read()
+                                        .unwrap()
+                                        .exhume_object(&self.inner.read().unwrap().obj_id)
                                         .unwrap();
 
                                     let this = ObjectProxy {
@@ -3359,7 +3497,7 @@ impl Plugin for AssociativeReferrerProxy {
                                     let proxy = FfiProxy {
                                         module: module.into(),
                                         uuid: OBJECT_ID.into(),
-                                        id: self.inner.borrow().id.into(), // c
+                                        id: self.inner.read().unwrap().id.into(), // c
                                         plugin: plugin.clone(),
                                     };
                                     Ok(FfiValue::ProxyType(proxy))
@@ -3382,7 +3520,7 @@ impl Plugin for AssociativeReferrerProxy {
                             let value: Value = args.pop().unwrap().into();
                             match field.as_str() {
                                 "cardinality" => {
-                                    self.inner.borrow_mut().cardinality =
+                                    self.inner.write().unwrap().cardinality =
                                         value.try_into().map_err(|e| {
                                             Error::Uber(
                                                 format!("Error converting value: {e}").into(),
@@ -3390,7 +3528,7 @@ impl Plugin for AssociativeReferrerProxy {
                                         })?
                                 }
                                 "obj_id" => {
-                                    self.inner.borrow_mut().obj_id =
+                                    self.inner.write().unwrap().obj_id =
                                         value.try_into().map_err(|e| {
                                             Error::Uber(
                                                 format!("Error converting value: {e}").into(),
@@ -3427,9 +3565,13 @@ impl Plugin for AssociativeReferrerProxy {
 impl Display for AssociativeReferrerProxy {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "AssociativeReferrer({{")?;
-        writeln!(f, "	id: {:?},", self.inner.borrow().id)?;
-        writeln!(f, "	cardinality: {:?},", self.inner.borrow().cardinality)?;
-        writeln!(f, "	obj_id: {:?},", self.inner.borrow().obj_id)?;
+        writeln!(f, "	id: {:?},", self.inner.read().unwrap().id)?;
+        writeln!(
+            f,
+            "	cardinality: {:?},",
+            self.inner.read().unwrap().cardinality
+        )?;
+        writeln!(f, "	obj_id: {:?},", self.inner.read().unwrap().obj_id)?;
         writeln!(f, "}})")
     }
 }
@@ -3438,8 +3580,8 @@ const ATTRIBUTE_ID: Uuid = uuid!("63777957-b6bc-5253-b16b-6ff390f10dba");
 
 #[derive(Clone, Debug)]
 pub struct AttributeProxy {
-    inner: Rc<RefCell<Attribute>>,
-    store: Rc<RefCell<ObjectStore>>,
+    inner: Arc<RwLock<Attribute>>,
+    store: Arc<RwLock<ObjectStore>>,
 }
 
 impl Plugin for AttributeProxy {
@@ -3463,15 +3605,16 @@ impl Plugin for AttributeProxy {
 
                         if let FfiValue::String(field) = args.pop().unwrap() {
                             match field.as_str() {
-                                "id" => Ok(FfiValue::Uuid(self.inner.borrow().id.into())),
-                                "name" => {
-                                    Ok(FfiValue::String(self.inner.borrow().name.clone().into()))
-                                }
+                                "id" => Ok(FfiValue::Uuid(self.inner.read().unwrap().id.into())),
+                                "name" => Ok(FfiValue::String(
+                                    self.inner.read().unwrap().name.clone().into(),
+                                )),
                                 "obj_id" => {
                                     let obj_id = self
                                         .store
-                                        .borrow()
-                                        .exhume_object(&self.inner.borrow().obj_id)
+                                        .read()
+                                        .unwrap()
+                                        .exhume_object(&self.inner.read().unwrap().obj_id)
                                         .unwrap();
 
                                     let this = ObjectProxy {
@@ -3482,7 +3625,7 @@ impl Plugin for AttributeProxy {
                                     let proxy = FfiProxy {
                                         module: module.into(),
                                         uuid: OBJECT_ID.into(),
-                                        id: self.inner.borrow().id.into(), // c
+                                        id: self.inner.read().unwrap().id.into(), // c
                                         plugin: plugin.clone(),
                                     };
                                     Ok(FfiValue::ProxyType(proxy))
@@ -3490,8 +3633,9 @@ impl Plugin for AttributeProxy {
                                 "ty" => {
                                     let ty = self
                                         .store
-                                        .borrow()
-                                        .exhume_ty(&self.inner.borrow().ty)
+                                        .read()
+                                        .unwrap()
+                                        .exhume_ty(&self.inner.read().unwrap().ty)
                                         .unwrap();
 
                                     let this = TyProxy {
@@ -3502,7 +3646,7 @@ impl Plugin for AttributeProxy {
                                     let proxy = FfiProxy {
                                         module: module.into(),
                                         uuid: TY_ID.into(),
-                                        id: self.inner.borrow().id.into(), // c
+                                        id: self.inner.read().unwrap().id.into(), // c
                                         plugin: plugin.clone(),
                                     };
                                     Ok(FfiValue::ProxyType(proxy))
@@ -3525,7 +3669,7 @@ impl Plugin for AttributeProxy {
                             let value: Value = args.pop().unwrap().into();
                             match field.as_str() {
                                 "name" => {
-                                    self.inner.borrow_mut().name =
+                                    self.inner.write().unwrap().name =
                                         value.try_into().map_err(|e| {
                                             Error::Uber(
                                                 format!("Error converting value: {e}").into(),
@@ -3533,7 +3677,7 @@ impl Plugin for AttributeProxy {
                                         })?
                                 }
                                 "obj_id" => {
-                                    self.inner.borrow_mut().obj_id =
+                                    self.inner.write().unwrap().obj_id =
                                         value.try_into().map_err(|e| {
                                             Error::Uber(
                                                 format!("Error converting value: {e}").into(),
@@ -3541,9 +3685,12 @@ impl Plugin for AttributeProxy {
                                         })?
                                 }
                                 "ty" => {
-                                    self.inner.borrow_mut().ty = value.try_into().map_err(|e| {
-                                        Error::Uber(format!("Error converting value: {e}").into())
-                                    })?
+                                    self.inner.write().unwrap().ty =
+                                        value.try_into().map_err(|e| {
+                                            Error::Uber(
+                                                format!("Error converting value: {e}").into(),
+                                            )
+                                        })?
                                 }
                                 field => {
                                     return Err(Error::Uber(
@@ -3575,10 +3722,10 @@ impl Plugin for AttributeProxy {
 impl Display for AttributeProxy {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "Attribute({{")?;
-        writeln!(f, "	id: {:?},", self.inner.borrow().id)?;
-        writeln!(f, "	name: {:?},", self.inner.borrow().name)?;
-        writeln!(f, "	obj_id: {:?},", self.inner.borrow().obj_id)?;
-        writeln!(f, "	ty: {:?},", self.inner.borrow().ty)?;
+        writeln!(f, "	id: {:?},", self.inner.read().unwrap().id)?;
+        writeln!(f, "	name: {:?},", self.inner.read().unwrap().name)?;
+        writeln!(f, "	obj_id: {:?},", self.inner.read().unwrap().obj_id)?;
+        writeln!(f, "	ty: {:?},", self.inner.read().unwrap().ty)?;
         writeln!(f, "}})")
     }
 }
@@ -3587,8 +3734,8 @@ const BINARY_ID: Uuid = uuid!("56c5ed80-25e7-592e-ab36-a306c78ac58b");
 
 #[derive(Clone, Debug)]
 pub struct BinaryProxy {
-    inner: Rc<RefCell<Binary>>,
-    store: Rc<RefCell<ObjectStore>>,
+    inner: Arc<RwLock<Binary>>,
+    store: Arc<RwLock<ObjectStore>>,
 }
 
 impl Plugin for BinaryProxy {
@@ -3612,15 +3759,16 @@ impl Plugin for BinaryProxy {
 
                         if let FfiValue::String(field) = args.pop().unwrap() {
                             match field.as_str() {
-                                "id" => Ok(FfiValue::Uuid(self.inner.borrow().id.into())),
+                                "id" => Ok(FfiValue::Uuid(self.inner.read().unwrap().id.into())),
                                 "number" => {
-                                    Ok(FfiValue::Integer(self.inner.borrow().number.into()))
+                                    Ok(FfiValue::Integer(self.inner.read().unwrap().number.into()))
                                 }
                                 "from" => {
                                     let from = self
                                         .store
-                                        .borrow()
-                                        .exhume_referrer(&self.inner.borrow().from)
+                                        .read()
+                                        .unwrap()
+                                        .exhume_referrer(&self.inner.read().unwrap().from)
                                         .unwrap();
 
                                     let this = ReferrerProxy {
@@ -3631,7 +3779,7 @@ impl Plugin for BinaryProxy {
                                     let proxy = FfiProxy {
                                         module: module.into(),
                                         uuid: REFERRER_ID.into(),
-                                        id: self.inner.borrow().id.into(), // c
+                                        id: self.inner.read().unwrap().id.into(), // c
                                         plugin: plugin.clone(),
                                     };
                                     Ok(FfiValue::ProxyType(proxy))
@@ -3639,8 +3787,9 @@ impl Plugin for BinaryProxy {
                                 "to" => {
                                     let to = self
                                         .store
-                                        .borrow()
-                                        .exhume_referent(&self.inner.borrow().to)
+                                        .read()
+                                        .unwrap()
+                                        .exhume_referent(&self.inner.read().unwrap().to)
                                         .unwrap();
 
                                     let this = ReferentProxy {
@@ -3651,7 +3800,7 @@ impl Plugin for BinaryProxy {
                                     let proxy = FfiProxy {
                                         module: module.into(),
                                         uuid: REFERENT_ID.into(),
-                                        id: self.inner.borrow().id.into(), // c
+                                        id: self.inner.read().unwrap().id.into(), // c
                                         plugin: plugin.clone(),
                                     };
                                     Ok(FfiValue::ProxyType(proxy))
@@ -3674,7 +3823,7 @@ impl Plugin for BinaryProxy {
                             let value: Value = args.pop().unwrap().into();
                             match field.as_str() {
                                 "number" => {
-                                    self.inner.borrow_mut().number =
+                                    self.inner.write().unwrap().number =
                                         value.try_into().map_err(|e| {
                                             Error::Uber(
                                                 format!("Error converting value: {e}").into(),
@@ -3682,7 +3831,7 @@ impl Plugin for BinaryProxy {
                                         })?
                                 }
                                 "from" => {
-                                    self.inner.borrow_mut().from =
+                                    self.inner.write().unwrap().from =
                                         value.try_into().map_err(|e| {
                                             Error::Uber(
                                                 format!("Error converting value: {e}").into(),
@@ -3690,9 +3839,12 @@ impl Plugin for BinaryProxy {
                                         })?
                                 }
                                 "to" => {
-                                    self.inner.borrow_mut().to = value.try_into().map_err(|e| {
-                                        Error::Uber(format!("Error converting value: {e}").into())
-                                    })?
+                                    self.inner.write().unwrap().to =
+                                        value.try_into().map_err(|e| {
+                                            Error::Uber(
+                                                format!("Error converting value: {e}").into(),
+                                            )
+                                        })?
                                 }
                                 field => {
                                     return Err(Error::Uber(
@@ -3724,10 +3876,10 @@ impl Plugin for BinaryProxy {
 impl Display for BinaryProxy {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "Binary({{")?;
-        writeln!(f, "	id: {:?},", self.inner.borrow().id)?;
-        writeln!(f, "	number: {:?},", self.inner.borrow().number)?;
-        writeln!(f, "	from: {:?},", self.inner.borrow().from)?;
-        writeln!(f, "	to: {:?},", self.inner.borrow().to)?;
+        writeln!(f, "	id: {:?},", self.inner.read().unwrap().id)?;
+        writeln!(f, "	number: {:?},", self.inner.read().unwrap().number)?;
+        writeln!(f, "	from: {:?},", self.inner.read().unwrap().from)?;
+        writeln!(f, "	to: {:?},", self.inner.read().unwrap().to)?;
         writeln!(f, "}})")
     }
 }
@@ -3736,8 +3888,8 @@ const BOOLEAN_ID: Uuid = uuid!("04fbbc6c-a351-5e6d-b193-191f5510033e");
 
 #[derive(Clone, Debug)]
 pub struct BooleanProxy {
-    inner: Rc<RefCell<Boolean>>,
-    store: Rc<RefCell<ObjectStore>>,
+    inner: Arc<RwLock<Boolean>>,
+    store: Arc<RwLock<ObjectStore>>,
 }
 
 impl Plugin for BooleanProxy {
@@ -3761,7 +3913,7 @@ impl Plugin for BooleanProxy {
 
                         if let FfiValue::String(field) = args.pop().unwrap() {
                             match field.as_str() {
-                                "id" => Ok(FfiValue::Uuid(self.inner.borrow().id().into())),
+                                "id" => Ok(FfiValue::Uuid(self.inner.read().unwrap().id().into())),
                                 _ => Err(Error::Uber("Invalid field".into())),
                             }
                         } else {
@@ -3809,7 +3961,7 @@ impl Plugin for BooleanProxy {
 impl Display for BooleanProxy {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "Boolean({{")?;
-        writeln!(f, "	id: {:?},", self.inner.borrow().id())?;
+        writeln!(f, "	id: {:?},", self.inner.read().unwrap().id())?;
         writeln!(f, "}})")
     }
 }
@@ -3818,8 +3970,8 @@ const CARDINALITY_ID: Uuid = uuid!("d1b45eb7-b9fb-5fbc-90a5-f48473675fdb");
 
 #[derive(Clone, Debug)]
 pub struct CardinalityProxy {
-    inner: Rc<RefCell<Cardinality>>,
-    store: Rc<RefCell<ObjectStore>>,
+    inner: Arc<RwLock<Cardinality>>,
+    store: Arc<RwLock<ObjectStore>>,
 }
 
 impl Plugin for CardinalityProxy {
@@ -3843,7 +3995,7 @@ impl Plugin for CardinalityProxy {
 
                         if let FfiValue::String(field) = args.pop().unwrap() {
                             match field.as_str() {
-                                "id" => Ok(FfiValue::Uuid(self.inner.borrow().id().into())),
+                                "id" => Ok(FfiValue::Uuid(self.inner.read().unwrap().id().into())),
                                 _ => Err(Error::Uber("Invalid field".into())),
                             }
                         } else {
@@ -3891,7 +4043,7 @@ impl Plugin for CardinalityProxy {
 impl Display for CardinalityProxy {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "Cardinality({{")?;
-        writeln!(f, "	id: {:?},", self.inner.borrow().id())?;
+        writeln!(f, "	id: {:?},", self.inner.read().unwrap().id())?;
         writeln!(f, "}})")
     }
 }
@@ -3900,8 +4052,8 @@ const CONDITIONAL_ID: Uuid = uuid!("cbd5902d-d04b-537f-9d6a-547a3b88f9a2");
 
 #[derive(Clone, Debug)]
 pub struct ConditionalProxy {
-    inner: Rc<RefCell<Conditional>>,
-    store: Rc<RefCell<ObjectStore>>,
+    inner: Arc<RwLock<Conditional>>,
+    store: Arc<RwLock<ObjectStore>>,
 }
 
 impl Plugin for ConditionalProxy {
@@ -3925,7 +4077,7 @@ impl Plugin for ConditionalProxy {
 
                         if let FfiValue::String(field) = args.pop().unwrap() {
                             match field.as_str() {
-                                "id" => Ok(FfiValue::Uuid(self.inner.borrow().id().into())),
+                                "id" => Ok(FfiValue::Uuid(self.inner.read().unwrap().id().into())),
                                 _ => Err(Error::Uber("Invalid field".into())),
                             }
                         } else {
@@ -3973,7 +4125,7 @@ impl Plugin for ConditionalProxy {
 impl Display for ConditionalProxy {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "Conditional({{")?;
-        writeln!(f, "	id: {:?},", self.inner.borrow().id())?;
+        writeln!(f, "	id: {:?},", self.inner.read().unwrap().id())?;
         writeln!(f, "}})")
     }
 }
@@ -3982,8 +4134,8 @@ const CONDITIONALITY_ID: Uuid = uuid!("438b6783-15d1-5767-af60-900b3738fc9e");
 
 #[derive(Clone, Debug)]
 pub struct ConditionalityProxy {
-    inner: Rc<RefCell<Conditionality>>,
-    store: Rc<RefCell<ObjectStore>>,
+    inner: Arc<RwLock<Conditionality>>,
+    store: Arc<RwLock<ObjectStore>>,
 }
 
 impl Plugin for ConditionalityProxy {
@@ -4007,7 +4159,7 @@ impl Plugin for ConditionalityProxy {
 
                         if let FfiValue::String(field) = args.pop().unwrap() {
                             match field.as_str() {
-                                "id" => Ok(FfiValue::Uuid(self.inner.borrow().id().into())),
+                                "id" => Ok(FfiValue::Uuid(self.inner.read().unwrap().id().into())),
                                 _ => Err(Error::Uber("Invalid field".into())),
                             }
                         } else {
@@ -4055,7 +4207,7 @@ impl Plugin for ConditionalityProxy {
 impl Display for ConditionalityProxy {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "Conditionality({{")?;
-        writeln!(f, "	id: {:?},", self.inner.borrow().id())?;
+        writeln!(f, "	id: {:?},", self.inner.read().unwrap().id())?;
         writeln!(f, "}})")
     }
 }
@@ -4064,8 +4216,8 @@ const EVENT_ID: Uuid = uuid!("dbdfade4-b61a-5e69-ab1a-c4d10e61bedd");
 
 #[derive(Clone, Debug)]
 pub struct EventProxy {
-    inner: Rc<RefCell<Event>>,
-    store: Rc<RefCell<ObjectStore>>,
+    inner: Arc<RwLock<Event>>,
+    store: Arc<RwLock<ObjectStore>>,
 }
 
 impl Plugin for EventProxy {
@@ -4089,15 +4241,16 @@ impl Plugin for EventProxy {
 
                         if let FfiValue::String(field) = args.pop().unwrap() {
                             match field.as_str() {
-                                "id" => Ok(FfiValue::Uuid(self.inner.borrow().id.into())),
-                                "name" => {
-                                    Ok(FfiValue::String(self.inner.borrow().name.clone().into()))
-                                }
+                                "id" => Ok(FfiValue::Uuid(self.inner.read().unwrap().id.into())),
+                                "name" => Ok(FfiValue::String(
+                                    self.inner.read().unwrap().name.clone().into(),
+                                )),
                                 "obj_id" => {
                                     let obj_id = self
                                         .store
-                                        .borrow()
-                                        .exhume_object(&self.inner.borrow().obj_id)
+                                        .read()
+                                        .unwrap()
+                                        .exhume_object(&self.inner.read().unwrap().obj_id)
                                         .unwrap();
 
                                     let this = ObjectProxy {
@@ -4108,7 +4261,7 @@ impl Plugin for EventProxy {
                                     let proxy = FfiProxy {
                                         module: module.into(),
                                         uuid: OBJECT_ID.into(),
-                                        id: self.inner.borrow().id.into(), // c
+                                        id: self.inner.read().unwrap().id.into(), // c
                                         plugin: plugin.clone(),
                                     };
                                     Ok(FfiValue::ProxyType(proxy))
@@ -4131,7 +4284,7 @@ impl Plugin for EventProxy {
                             let value: Value = args.pop().unwrap().into();
                             match field.as_str() {
                                 "name" => {
-                                    self.inner.borrow_mut().name =
+                                    self.inner.write().unwrap().name =
                                         value.try_into().map_err(|e| {
                                             Error::Uber(
                                                 format!("Error converting value: {e}").into(),
@@ -4139,7 +4292,7 @@ impl Plugin for EventProxy {
                                         })?
                                 }
                                 "obj_id" => {
-                                    self.inner.borrow_mut().obj_id =
+                                    self.inner.write().unwrap().obj_id =
                                         value.try_into().map_err(|e| {
                                             Error::Uber(
                                                 format!("Error converting value: {e}").into(),
@@ -4176,9 +4329,9 @@ impl Plugin for EventProxy {
 impl Display for EventProxy {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "Event({{")?;
-        writeln!(f, "	id: {:?},", self.inner.borrow().id)?;
-        writeln!(f, "	name: {:?},", self.inner.borrow().name)?;
-        writeln!(f, "	obj_id: {:?},", self.inner.borrow().obj_id)?;
+        writeln!(f, "	id: {:?},", self.inner.read().unwrap().id)?;
+        writeln!(f, "	name: {:?},", self.inner.read().unwrap().name)?;
+        writeln!(f, "	obj_id: {:?},", self.inner.read().unwrap().obj_id)?;
         writeln!(f, "}})")
     }
 }
@@ -4187,8 +4340,8 @@ const EXTERNAL_ID: Uuid = uuid!("ab607ed4-66f7-5927-b42e-f48c07a1764a");
 
 #[derive(Clone, Debug)]
 pub struct ExternalProxy {
-    inner: Rc<RefCell<External>>,
-    store: Rc<RefCell<ObjectStore>>,
+    inner: Arc<RwLock<External>>,
+    store: Arc<RwLock<ObjectStore>>,
 }
 
 impl Plugin for ExternalProxy {
@@ -4212,16 +4365,16 @@ impl Plugin for ExternalProxy {
 
                         if let FfiValue::String(field) = args.pop().unwrap() {
                             match field.as_str() {
-                                "ctor" => {
-                                    Ok(FfiValue::String(self.inner.borrow().ctor.clone().into()))
-                                }
-                                "id" => Ok(FfiValue::Uuid(self.inner.borrow().id.into())),
-                                "name" => {
-                                    Ok(FfiValue::String(self.inner.borrow().name.clone().into()))
-                                }
-                                "path" => {
-                                    Ok(FfiValue::String(self.inner.borrow().path.clone().into()))
-                                }
+                                "ctor" => Ok(FfiValue::String(
+                                    self.inner.read().unwrap().ctor.clone().into(),
+                                )),
+                                "id" => Ok(FfiValue::Uuid(self.inner.read().unwrap().id.into())),
+                                "name" => Ok(FfiValue::String(
+                                    self.inner.read().unwrap().name.clone().into(),
+                                )),
+                                "x_path" => Ok(FfiValue::String(
+                                    self.inner.read().unwrap().x_path.clone().into(),
+                                )),
                                 _ => Err(Error::Uber("Invalid field".into())),
                             }
                         } else {
@@ -4240,7 +4393,7 @@ impl Plugin for ExternalProxy {
                             let value: Value = args.pop().unwrap().into();
                             match field.as_str() {
                                 "ctor" => {
-                                    self.inner.borrow_mut().ctor =
+                                    self.inner.write().unwrap().ctor =
                                         value.try_into().map_err(|e| {
                                             Error::Uber(
                                                 format!("Error converting value: {e}").into(),
@@ -4248,15 +4401,15 @@ impl Plugin for ExternalProxy {
                                         })?
                                 }
                                 "name" => {
-                                    self.inner.borrow_mut().name =
+                                    self.inner.write().unwrap().name =
                                         value.try_into().map_err(|e| {
                                             Error::Uber(
                                                 format!("Error converting value: {e}").into(),
                                             )
                                         })?
                                 }
-                                "path" => {
-                                    self.inner.borrow_mut().path =
+                                "x_path" => {
+                                    self.inner.write().unwrap().x_path =
                                         value.try_into().map_err(|e| {
                                             Error::Uber(
                                                 format!("Error converting value: {e}").into(),
@@ -4293,10 +4446,10 @@ impl Plugin for ExternalProxy {
 impl Display for ExternalProxy {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "External({{")?;
-        writeln!(f, "	ctor: {:?},", self.inner.borrow().ctor)?;
-        writeln!(f, "	id: {:?},", self.inner.borrow().id)?;
-        writeln!(f, "	name: {:?},", self.inner.borrow().name)?;
-        writeln!(f, "	path: {:?},", self.inner.borrow().path)?;
+        writeln!(f, "	ctor: {:?},", self.inner.read().unwrap().ctor)?;
+        writeln!(f, "	id: {:?},", self.inner.read().unwrap().id)?;
+        writeln!(f, "	name: {:?},", self.inner.read().unwrap().name)?;
+        writeln!(f, "	x_path: {:?},", self.inner.read().unwrap().x_path)?;
         writeln!(f, "}})")
     }
 }
@@ -4305,8 +4458,8 @@ const FLOAT_ID: Uuid = uuid!("f3d5c0a4-850d-5071-a7e3-50e53389e3a8");
 
 #[derive(Clone, Debug)]
 pub struct FloatProxy {
-    inner: Rc<RefCell<Float>>,
-    store: Rc<RefCell<ObjectStore>>,
+    inner: Arc<RwLock<Float>>,
+    store: Arc<RwLock<ObjectStore>>,
 }
 
 impl Plugin for FloatProxy {
@@ -4330,7 +4483,7 @@ impl Plugin for FloatProxy {
 
                         if let FfiValue::String(field) = args.pop().unwrap() {
                             match field.as_str() {
-                                "id" => Ok(FfiValue::Uuid(self.inner.borrow().id().into())),
+                                "id" => Ok(FfiValue::Uuid(self.inner.read().unwrap().id().into())),
                                 _ => Err(Error::Uber("Invalid field".into())),
                             }
                         } else {
@@ -4378,7 +4531,7 @@ impl Plugin for FloatProxy {
 impl Display for FloatProxy {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "Float({{")?;
-        writeln!(f, "	id: {:?},", self.inner.borrow().id())?;
+        writeln!(f, "	id: {:?},", self.inner.read().unwrap().id())?;
         writeln!(f, "}})")
     }
 }
@@ -4387,8 +4540,8 @@ const INTEGER_ID: Uuid = uuid!("fae606a2-e37c-5f82-8754-1fc11c09fe4c");
 
 #[derive(Clone, Debug)]
 pub struct IntegerProxy {
-    inner: Rc<RefCell<Integer>>,
-    store: Rc<RefCell<ObjectStore>>,
+    inner: Arc<RwLock<Integer>>,
+    store: Arc<RwLock<ObjectStore>>,
 }
 
 impl Plugin for IntegerProxy {
@@ -4412,7 +4565,7 @@ impl Plugin for IntegerProxy {
 
                         if let FfiValue::String(field) = args.pop().unwrap() {
                             match field.as_str() {
-                                "id" => Ok(FfiValue::Uuid(self.inner.borrow().id().into())),
+                                "id" => Ok(FfiValue::Uuid(self.inner.read().unwrap().id().into())),
                                 _ => Err(Error::Uber("Invalid field".into())),
                             }
                         } else {
@@ -4460,7 +4613,7 @@ impl Plugin for IntegerProxy {
 impl Display for IntegerProxy {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "Integer({{")?;
-        writeln!(f, "	id: {:?},", self.inner.borrow().id())?;
+        writeln!(f, "	id: {:?},", self.inner.read().unwrap().id())?;
         writeln!(f, "}})")
     }
 }
@@ -4469,8 +4622,8 @@ const ISA_ID: Uuid = uuid!("0cbeeb50-21ce-5e83-9f2e-65d1410d553f");
 
 #[derive(Clone, Debug)]
 pub struct IsaProxy {
-    inner: Rc<RefCell<Isa>>,
-    store: Rc<RefCell<ObjectStore>>,
+    inner: Arc<RwLock<Isa>>,
+    store: Arc<RwLock<ObjectStore>>,
 }
 
 impl Plugin for IsaProxy {
@@ -4494,15 +4647,16 @@ impl Plugin for IsaProxy {
 
                         if let FfiValue::String(field) = args.pop().unwrap() {
                             match field.as_str() {
-                                "id" => Ok(FfiValue::Uuid(self.inner.borrow().id.into())),
+                                "id" => Ok(FfiValue::Uuid(self.inner.read().unwrap().id.into())),
                                 "number" => {
-                                    Ok(FfiValue::Integer(self.inner.borrow().number.into()))
+                                    Ok(FfiValue::Integer(self.inner.read().unwrap().number.into()))
                                 }
                                 "supertype" => {
                                     let supertype = self
                                         .store
-                                        .borrow()
-                                        .exhume_supertype(&self.inner.borrow().supertype)
+                                        .read()
+                                        .unwrap()
+                                        .exhume_supertype(&self.inner.read().unwrap().supertype)
                                         .unwrap();
 
                                     let this = SupertypeProxy {
@@ -4513,7 +4667,7 @@ impl Plugin for IsaProxy {
                                     let proxy = FfiProxy {
                                         module: module.into(),
                                         uuid: SUPERTYPE_ID.into(),
-                                        id: self.inner.borrow().id.into(), // c
+                                        id: self.inner.read().unwrap().id.into(), // c
                                         plugin: plugin.clone(),
                                     };
                                     Ok(FfiValue::ProxyType(proxy))
@@ -4536,7 +4690,7 @@ impl Plugin for IsaProxy {
                             let value: Value = args.pop().unwrap().into();
                             match field.as_str() {
                                 "number" => {
-                                    self.inner.borrow_mut().number =
+                                    self.inner.write().unwrap().number =
                                         value.try_into().map_err(|e| {
                                             Error::Uber(
                                                 format!("Error converting value: {e}").into(),
@@ -4544,7 +4698,7 @@ impl Plugin for IsaProxy {
                                         })?
                                 }
                                 "supertype" => {
-                                    self.inner.borrow_mut().supertype =
+                                    self.inner.write().unwrap().supertype =
                                         value.try_into().map_err(|e| {
                                             Error::Uber(
                                                 format!("Error converting value: {e}").into(),
@@ -4581,9 +4735,9 @@ impl Plugin for IsaProxy {
 impl Display for IsaProxy {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "Isa({{")?;
-        writeln!(f, "	id: {:?},", self.inner.borrow().id)?;
-        writeln!(f, "	number: {:?},", self.inner.borrow().number)?;
-        writeln!(f, "	supertype: {:?},", self.inner.borrow().supertype)?;
+        writeln!(f, "	id: {:?},", self.inner.read().unwrap().id)?;
+        writeln!(f, "	number: {:?},", self.inner.read().unwrap().number)?;
+        writeln!(f, "	supertype: {:?},", self.inner.read().unwrap().supertype)?;
         writeln!(f, "}})")
     }
 }
@@ -4592,8 +4746,8 @@ const MANY_ID: Uuid = uuid!("a549f635-38bd-5016-b79f-b03125fbfc02");
 
 #[derive(Clone, Debug)]
 pub struct ManyProxy {
-    inner: Rc<RefCell<Many>>,
-    store: Rc<RefCell<ObjectStore>>,
+    inner: Arc<RwLock<Many>>,
+    store: Arc<RwLock<ObjectStore>>,
 }
 
 impl Plugin for ManyProxy {
@@ -4617,7 +4771,7 @@ impl Plugin for ManyProxy {
 
                         if let FfiValue::String(field) = args.pop().unwrap() {
                             match field.as_str() {
-                                "id" => Ok(FfiValue::Uuid(self.inner.borrow().id().into())),
+                                "id" => Ok(FfiValue::Uuid(self.inner.read().unwrap().id().into())),
                                 _ => Err(Error::Uber("Invalid field".into())),
                             }
                         } else {
@@ -4665,7 +4819,7 @@ impl Plugin for ManyProxy {
 impl Display for ManyProxy {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "Many({{")?;
-        writeln!(f, "	id: {:?},", self.inner.borrow().id())?;
+        writeln!(f, "	id: {:?},", self.inner.read().unwrap().id())?;
         writeln!(f, "}})")
     }
 }
@@ -4674,8 +4828,8 @@ const OBJECT_ID: Uuid = uuid!("7178e7a4-5131-504b-a7b3-c2c0cfedf343");
 
 #[derive(Clone, Debug)]
 pub struct ObjectProxy {
-    inner: Rc<RefCell<Object>>,
-    store: Rc<RefCell<ObjectStore>>,
+    inner: Arc<RwLock<Object>>,
+    store: Arc<RwLock<ObjectStore>>,
 }
 
 impl Plugin for ObjectProxy {
@@ -4700,15 +4854,15 @@ impl Plugin for ObjectProxy {
                         if let FfiValue::String(field) = args.pop().unwrap() {
                             match field.as_str() {
                                 "description" => Ok(FfiValue::String(
-                                    self.inner.borrow().description.clone().into(),
+                                    self.inner.read().unwrap().description.clone().into(),
                                 )),
-                                "id" => Ok(FfiValue::Uuid(self.inner.borrow().id.into())),
+                                "id" => Ok(FfiValue::Uuid(self.inner.read().unwrap().id.into())),
                                 "key_letters" => Ok(FfiValue::String(
-                                    self.inner.borrow().key_letters.clone().into(),
+                                    self.inner.read().unwrap().key_letters.clone().into(),
                                 )),
-                                "name" => {
-                                    Ok(FfiValue::String(self.inner.borrow().name.clone().into()))
-                                }
+                                "name" => Ok(FfiValue::String(
+                                    self.inner.read().unwrap().name.clone().into(),
+                                )),
                                 _ => Err(Error::Uber("Invalid field".into())),
                             }
                         } else {
@@ -4727,7 +4881,7 @@ impl Plugin for ObjectProxy {
                             let value: Value = args.pop().unwrap().into();
                             match field.as_str() {
                                 "description" => {
-                                    self.inner.borrow_mut().description =
+                                    self.inner.write().unwrap().description =
                                         value.try_into().map_err(|e| {
                                             Error::Uber(
                                                 format!("Error converting value: {e}").into(),
@@ -4735,7 +4889,7 @@ impl Plugin for ObjectProxy {
                                         })?
                                 }
                                 "key_letters" => {
-                                    self.inner.borrow_mut().key_letters =
+                                    self.inner.write().unwrap().key_letters =
                                         value.try_into().map_err(|e| {
                                             Error::Uber(
                                                 format!("Error converting value: {e}").into(),
@@ -4743,7 +4897,7 @@ impl Plugin for ObjectProxy {
                                         })?
                                 }
                                 "name" => {
-                                    self.inner.borrow_mut().name =
+                                    self.inner.write().unwrap().name =
                                         value.try_into().map_err(|e| {
                                             Error::Uber(
                                                 format!("Error converting value: {e}").into(),
@@ -4780,10 +4934,18 @@ impl Plugin for ObjectProxy {
 impl Display for ObjectProxy {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "Object({{")?;
-        writeln!(f, "	description: {:?},", self.inner.borrow().description)?;
-        writeln!(f, "	id: {:?},", self.inner.borrow().id)?;
-        writeln!(f, "	key_letters: {:?},", self.inner.borrow().key_letters)?;
-        writeln!(f, "	name: {:?},", self.inner.borrow().name)?;
+        writeln!(
+            f,
+            "	description: {:?},",
+            self.inner.read().unwrap().description
+        )?;
+        writeln!(f, "	id: {:?},", self.inner.read().unwrap().id)?;
+        writeln!(
+            f,
+            "	key_letters: {:?},",
+            self.inner.read().unwrap().key_letters
+        )?;
+        writeln!(f, "	name: {:?},", self.inner.read().unwrap().name)?;
         writeln!(f, "}})")
     }
 }
@@ -4792,8 +4954,8 @@ const ONE_ID: Uuid = uuid!("696b0652-8c4d-56d9-b4dc-0490cd4b2ea0");
 
 #[derive(Clone, Debug)]
 pub struct OneProxy {
-    inner: Rc<RefCell<One>>,
-    store: Rc<RefCell<ObjectStore>>,
+    inner: Arc<RwLock<One>>,
+    store: Arc<RwLock<ObjectStore>>,
 }
 
 impl Plugin for OneProxy {
@@ -4817,7 +4979,7 @@ impl Plugin for OneProxy {
 
                         if let FfiValue::String(field) = args.pop().unwrap() {
                             match field.as_str() {
-                                "id" => Ok(FfiValue::Uuid(self.inner.borrow().id().into())),
+                                "id" => Ok(FfiValue::Uuid(self.inner.read().unwrap().id().into())),
                                 _ => Err(Error::Uber("Invalid field".into())),
                             }
                         } else {
@@ -4865,7 +5027,7 @@ impl Plugin for OneProxy {
 impl Display for OneProxy {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "One({{")?;
-        writeln!(f, "	id: {:?},", self.inner.borrow().id())?;
+        writeln!(f, "	id: {:?},", self.inner.read().unwrap().id())?;
         writeln!(f, "}})")
     }
 }
@@ -4874,8 +5036,8 @@ const REFERENT_ID: Uuid = uuid!("952d24ad-ce6a-5812-8c6c-33ff9d2b424d");
 
 #[derive(Clone, Debug)]
 pub struct ReferentProxy {
-    inner: Rc<RefCell<Referent>>,
-    store: Rc<RefCell<ObjectStore>>,
+    inner: Arc<RwLock<Referent>>,
+    store: Arc<RwLock<ObjectStore>>,
 }
 
 impl Plugin for ReferentProxy {
@@ -4900,14 +5062,15 @@ impl Plugin for ReferentProxy {
                         if let FfiValue::String(field) = args.pop().unwrap() {
                             match field.as_str() {
                                 "description" => Ok(FfiValue::String(
-                                    self.inner.borrow().description.clone().into(),
+                                    self.inner.read().unwrap().description.clone().into(),
                                 )),
-                                "id" => Ok(FfiValue::Uuid(self.inner.borrow().id.into())),
+                                "id" => Ok(FfiValue::Uuid(self.inner.read().unwrap().id.into())),
                                 "cardinality" => {
                                     let cardinality = self
                                         .store
-                                        .borrow()
-                                        .exhume_cardinality(&self.inner.borrow().cardinality)
+                                        .read()
+                                        .unwrap()
+                                        .exhume_cardinality(&self.inner.read().unwrap().cardinality)
                                         .unwrap();
 
                                     let this = CardinalityProxy {
@@ -4918,7 +5081,7 @@ impl Plugin for ReferentProxy {
                                     let proxy = FfiProxy {
                                         module: module.into(),
                                         uuid: CARDINALITY_ID.into(),
-                                        id: self.inner.borrow().id.into(), // c
+                                        id: self.inner.read().unwrap().id.into(), // c
                                         plugin: plugin.clone(),
                                     };
                                     Ok(FfiValue::ProxyType(proxy))
@@ -4926,8 +5089,11 @@ impl Plugin for ReferentProxy {
                                 "conditionality" => {
                                     let conditionality = self
                                         .store
-                                        .borrow()
-                                        .exhume_conditionality(&self.inner.borrow().conditionality)
+                                        .read()
+                                        .unwrap()
+                                        .exhume_conditionality(
+                                            &self.inner.read().unwrap().conditionality,
+                                        )
                                         .unwrap();
 
                                     let this = ConditionalityProxy {
@@ -4938,7 +5104,7 @@ impl Plugin for ReferentProxy {
                                     let proxy = FfiProxy {
                                         module: module.into(),
                                         uuid: CONDITIONALITY_ID.into(),
-                                        id: self.inner.borrow().id.into(), // c
+                                        id: self.inner.read().unwrap().id.into(), // c
                                         plugin: plugin.clone(),
                                     };
                                     Ok(FfiValue::ProxyType(proxy))
@@ -4946,8 +5112,9 @@ impl Plugin for ReferentProxy {
                                 "obj_id" => {
                                     let obj_id = self
                                         .store
-                                        .borrow()
-                                        .exhume_object(&self.inner.borrow().obj_id)
+                                        .read()
+                                        .unwrap()
+                                        .exhume_object(&self.inner.read().unwrap().obj_id)
                                         .unwrap();
 
                                     let this = ObjectProxy {
@@ -4958,7 +5125,7 @@ impl Plugin for ReferentProxy {
                                     let proxy = FfiProxy {
                                         module: module.into(),
                                         uuid: OBJECT_ID.into(),
-                                        id: self.inner.borrow().id.into(), // c
+                                        id: self.inner.read().unwrap().id.into(), // c
                                         plugin: plugin.clone(),
                                     };
                                     Ok(FfiValue::ProxyType(proxy))
@@ -4981,7 +5148,7 @@ impl Plugin for ReferentProxy {
                             let value: Value = args.pop().unwrap().into();
                             match field.as_str() {
                                 "description" => {
-                                    self.inner.borrow_mut().description =
+                                    self.inner.write().unwrap().description =
                                         value.try_into().map_err(|e| {
                                             Error::Uber(
                                                 format!("Error converting value: {e}").into(),
@@ -4989,7 +5156,7 @@ impl Plugin for ReferentProxy {
                                         })?
                                 }
                                 "cardinality" => {
-                                    self.inner.borrow_mut().cardinality =
+                                    self.inner.write().unwrap().cardinality =
                                         value.try_into().map_err(|e| {
                                             Error::Uber(
                                                 format!("Error converting value: {e}").into(),
@@ -4997,7 +5164,7 @@ impl Plugin for ReferentProxy {
                                         })?
                                 }
                                 "conditionality" => {
-                                    self.inner.borrow_mut().conditionality =
+                                    self.inner.write().unwrap().conditionality =
                                         value.try_into().map_err(|e| {
                                             Error::Uber(
                                                 format!("Error converting value: {e}").into(),
@@ -5005,7 +5172,7 @@ impl Plugin for ReferentProxy {
                                         })?
                                 }
                                 "obj_id" => {
-                                    self.inner.borrow_mut().obj_id =
+                                    self.inner.write().unwrap().obj_id =
                                         value.try_into().map_err(|e| {
                                             Error::Uber(
                                                 format!("Error converting value: {e}").into(),
@@ -5042,15 +5209,23 @@ impl Plugin for ReferentProxy {
 impl Display for ReferentProxy {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "Referent({{")?;
-        writeln!(f, "	description: {:?},", self.inner.borrow().description)?;
-        writeln!(f, "	id: {:?},", self.inner.borrow().id)?;
-        writeln!(f, "	cardinality: {:?},", self.inner.borrow().cardinality)?;
+        writeln!(
+            f,
+            "	description: {:?},",
+            self.inner.read().unwrap().description
+        )?;
+        writeln!(f, "	id: {:?},", self.inner.read().unwrap().id)?;
+        writeln!(
+            f,
+            "	cardinality: {:?},",
+            self.inner.read().unwrap().cardinality
+        )?;
         writeln!(
             f,
             "	conditionality: {:?},",
-            self.inner.borrow().conditionality
+            self.inner.read().unwrap().conditionality
         )?;
-        writeln!(f, "	obj_id: {:?},", self.inner.borrow().obj_id)?;
+        writeln!(f, "	obj_id: {:?},", self.inner.read().unwrap().obj_id)?;
         writeln!(f, "}})")
     }
 }
@@ -5059,8 +5234,8 @@ const REFERRER_ID: Uuid = uuid!("9c75abf3-b77e-56ee-a19c-d812898b5eaa");
 
 #[derive(Clone, Debug)]
 pub struct ReferrerProxy {
-    inner: Rc<RefCell<Referrer>>,
-    store: Rc<RefCell<ObjectStore>>,
+    inner: Arc<RwLock<Referrer>>,
+    store: Arc<RwLock<ObjectStore>>,
 }
 
 impl Plugin for ReferrerProxy {
@@ -5085,17 +5260,23 @@ impl Plugin for ReferrerProxy {
                         if let FfiValue::String(field) = args.pop().unwrap() {
                             match field.as_str() {
                                 "description" => Ok(FfiValue::String(
-                                    self.inner.borrow().description.clone().into(),
+                                    self.inner.read().unwrap().description.clone().into(),
                                 )),
-                                "id" => Ok(FfiValue::Uuid(self.inner.borrow().id.into())),
+                                "id" => Ok(FfiValue::Uuid(self.inner.read().unwrap().id.into())),
                                 "referential_attribute" => Ok(FfiValue::String(
-                                    self.inner.borrow().referential_attribute.clone().into(),
+                                    self.inner
+                                        .read()
+                                        .unwrap()
+                                        .referential_attribute
+                                        .clone()
+                                        .into(),
                                 )),
                                 "cardinality" => {
                                     let cardinality = self
                                         .store
-                                        .borrow()
-                                        .exhume_cardinality(&self.inner.borrow().cardinality)
+                                        .read()
+                                        .unwrap()
+                                        .exhume_cardinality(&self.inner.read().unwrap().cardinality)
                                         .unwrap();
 
                                     let this = CardinalityProxy {
@@ -5106,7 +5287,7 @@ impl Plugin for ReferrerProxy {
                                     let proxy = FfiProxy {
                                         module: module.into(),
                                         uuid: CARDINALITY_ID.into(),
-                                        id: self.inner.borrow().id.into(), // c
+                                        id: self.inner.read().unwrap().id.into(), // c
                                         plugin: plugin.clone(),
                                     };
                                     Ok(FfiValue::ProxyType(proxy))
@@ -5114,8 +5295,11 @@ impl Plugin for ReferrerProxy {
                                 "conditionality" => {
                                     let conditionality = self
                                         .store
-                                        .borrow()
-                                        .exhume_conditionality(&self.inner.borrow().conditionality)
+                                        .read()
+                                        .unwrap()
+                                        .exhume_conditionality(
+                                            &self.inner.read().unwrap().conditionality,
+                                        )
                                         .unwrap();
 
                                     let this = ConditionalityProxy {
@@ -5126,7 +5310,7 @@ impl Plugin for ReferrerProxy {
                                     let proxy = FfiProxy {
                                         module: module.into(),
                                         uuid: CONDITIONALITY_ID.into(),
-                                        id: self.inner.borrow().id.into(), // c
+                                        id: self.inner.read().unwrap().id.into(), // c
                                         plugin: plugin.clone(),
                                     };
                                     Ok(FfiValue::ProxyType(proxy))
@@ -5134,8 +5318,9 @@ impl Plugin for ReferrerProxy {
                                 "obj_id" => {
                                     let obj_id = self
                                         .store
-                                        .borrow()
-                                        .exhume_object(&self.inner.borrow().obj_id)
+                                        .read()
+                                        .unwrap()
+                                        .exhume_object(&self.inner.read().unwrap().obj_id)
                                         .unwrap();
 
                                     let this = ObjectProxy {
@@ -5146,7 +5331,7 @@ impl Plugin for ReferrerProxy {
                                     let proxy = FfiProxy {
                                         module: module.into(),
                                         uuid: OBJECT_ID.into(),
-                                        id: self.inner.borrow().id.into(), // c
+                                        id: self.inner.read().unwrap().id.into(), // c
                                         plugin: plugin.clone(),
                                     };
                                     Ok(FfiValue::ProxyType(proxy))
@@ -5169,7 +5354,7 @@ impl Plugin for ReferrerProxy {
                             let value: Value = args.pop().unwrap().into();
                             match field.as_str() {
                                 "description" => {
-                                    self.inner.borrow_mut().description =
+                                    self.inner.write().unwrap().description =
                                         value.try_into().map_err(|e| {
                                             Error::Uber(
                                                 format!("Error converting value: {e}").into(),
@@ -5177,7 +5362,7 @@ impl Plugin for ReferrerProxy {
                                         })?
                                 }
                                 "referential_attribute" => {
-                                    self.inner.borrow_mut().referential_attribute =
+                                    self.inner.write().unwrap().referential_attribute =
                                         value.try_into().map_err(|e| {
                                             Error::Uber(
                                                 format!("Error converting value: {e}").into(),
@@ -5185,7 +5370,7 @@ impl Plugin for ReferrerProxy {
                                         })?
                                 }
                                 "cardinality" => {
-                                    self.inner.borrow_mut().cardinality =
+                                    self.inner.write().unwrap().cardinality =
                                         value.try_into().map_err(|e| {
                                             Error::Uber(
                                                 format!("Error converting value: {e}").into(),
@@ -5193,7 +5378,7 @@ impl Plugin for ReferrerProxy {
                                         })?
                                 }
                                 "conditionality" => {
-                                    self.inner.borrow_mut().conditionality =
+                                    self.inner.write().unwrap().conditionality =
                                         value.try_into().map_err(|e| {
                                             Error::Uber(
                                                 format!("Error converting value: {e}").into(),
@@ -5201,7 +5386,7 @@ impl Plugin for ReferrerProxy {
                                         })?
                                 }
                                 "obj_id" => {
-                                    self.inner.borrow_mut().obj_id =
+                                    self.inner.write().unwrap().obj_id =
                                         value.try_into().map_err(|e| {
                                             Error::Uber(
                                                 format!("Error converting value: {e}").into(),
@@ -5238,20 +5423,28 @@ impl Plugin for ReferrerProxy {
 impl Display for ReferrerProxy {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "Referrer({{")?;
-        writeln!(f, "	description: {:?},", self.inner.borrow().description)?;
-        writeln!(f, "	id: {:?},", self.inner.borrow().id)?;
+        writeln!(
+            f,
+            "	description: {:?},",
+            self.inner.read().unwrap().description
+        )?;
+        writeln!(f, "	id: {:?},", self.inner.read().unwrap().id)?;
         writeln!(
             f,
             "	referential_attribute: {:?},",
-            self.inner.borrow().referential_attribute
+            self.inner.read().unwrap().referential_attribute
         )?;
-        writeln!(f, "	cardinality: {:?},", self.inner.borrow().cardinality)?;
+        writeln!(
+            f,
+            "	cardinality: {:?},",
+            self.inner.read().unwrap().cardinality
+        )?;
         writeln!(
             f,
             "	conditionality: {:?},",
-            self.inner.borrow().conditionality
+            self.inner.read().unwrap().conditionality
         )?;
-        writeln!(f, "	obj_id: {:?},", self.inner.borrow().obj_id)?;
+        writeln!(f, "	obj_id: {:?},", self.inner.read().unwrap().obj_id)?;
         writeln!(f, "}})")
     }
 }
@@ -5260,8 +5453,8 @@ const RELATIONSHIP_ID: Uuid = uuid!("469d77d1-9ede-5919-923d-b007d614af26");
 
 #[derive(Clone, Debug)]
 pub struct RelationshipProxy {
-    inner: Rc<RefCell<Relationship>>,
-    store: Rc<RefCell<ObjectStore>>,
+    inner: Arc<RwLock<Relationship>>,
+    store: Arc<RwLock<ObjectStore>>,
 }
 
 impl Plugin for RelationshipProxy {
@@ -5285,7 +5478,7 @@ impl Plugin for RelationshipProxy {
 
                         if let FfiValue::String(field) = args.pop().unwrap() {
                             match field.as_str() {
-                                "id" => Ok(FfiValue::Uuid(self.inner.borrow().id().into())),
+                                "id" => Ok(FfiValue::Uuid(self.inner.read().unwrap().id().into())),
                                 _ => Err(Error::Uber("Invalid field".into())),
                             }
                         } else {
@@ -5333,7 +5526,7 @@ impl Plugin for RelationshipProxy {
 impl Display for RelationshipProxy {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "Relationship({{")?;
-        writeln!(f, "	id: {:?},", self.inner.borrow().id())?;
+        writeln!(f, "	id: {:?},", self.inner.read().unwrap().id())?;
         writeln!(f, "}})")
     }
 }
@@ -5342,8 +5535,8 @@ const STATE_ID: Uuid = uuid!("63af1589-c7cf-50b2-ad7b-d30208ebfec4");
 
 #[derive(Clone, Debug)]
 pub struct StateProxy {
-    inner: Rc<RefCell<State>>,
-    store: Rc<RefCell<ObjectStore>>,
+    inner: Arc<RwLock<State>>,
+    store: Arc<RwLock<ObjectStore>>,
 }
 
 impl Plugin for StateProxy {
@@ -5367,15 +5560,16 @@ impl Plugin for StateProxy {
 
                         if let FfiValue::String(field) = args.pop().unwrap() {
                             match field.as_str() {
-                                "id" => Ok(FfiValue::Uuid(self.inner.borrow().id.into())),
-                                "name" => {
-                                    Ok(FfiValue::String(self.inner.borrow().name.clone().into()))
-                                }
+                                "id" => Ok(FfiValue::Uuid(self.inner.read().unwrap().id.into())),
+                                "name" => Ok(FfiValue::String(
+                                    self.inner.read().unwrap().name.clone().into(),
+                                )),
                                 "obj_id" => {
                                     let obj_id = self
                                         .store
-                                        .borrow()
-                                        .exhume_object(&self.inner.borrow().obj_id)
+                                        .read()
+                                        .unwrap()
+                                        .exhume_object(&self.inner.read().unwrap().obj_id)
                                         .unwrap();
 
                                     let this = ObjectProxy {
@@ -5386,7 +5580,7 @@ impl Plugin for StateProxy {
                                     let proxy = FfiProxy {
                                         module: module.into(),
                                         uuid: OBJECT_ID.into(),
-                                        id: self.inner.borrow().id.into(), // c
+                                        id: self.inner.read().unwrap().id.into(), // c
                                         plugin: plugin.clone(),
                                     };
                                     Ok(FfiValue::ProxyType(proxy))
@@ -5409,7 +5603,7 @@ impl Plugin for StateProxy {
                             let value: Value = args.pop().unwrap().into();
                             match field.as_str() {
                                 "name" => {
-                                    self.inner.borrow_mut().name =
+                                    self.inner.write().unwrap().name =
                                         value.try_into().map_err(|e| {
                                             Error::Uber(
                                                 format!("Error converting value: {e}").into(),
@@ -5417,7 +5611,7 @@ impl Plugin for StateProxy {
                                         })?
                                 }
                                 "obj_id" => {
-                                    self.inner.borrow_mut().obj_id =
+                                    self.inner.write().unwrap().obj_id =
                                         value.try_into().map_err(|e| {
                                             Error::Uber(
                                                 format!("Error converting value: {e}").into(),
@@ -5454,9 +5648,9 @@ impl Plugin for StateProxy {
 impl Display for StateProxy {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "State({{")?;
-        writeln!(f, "	id: {:?},", self.inner.borrow().id)?;
-        writeln!(f, "	name: {:?},", self.inner.borrow().name)?;
-        writeln!(f, "	obj_id: {:?},", self.inner.borrow().obj_id)?;
+        writeln!(f, "	id: {:?},", self.inner.read().unwrap().id)?;
+        writeln!(f, "	name: {:?},", self.inner.read().unwrap().name)?;
+        writeln!(f, "	obj_id: {:?},", self.inner.read().unwrap().obj_id)?;
         writeln!(f, "}})")
     }
 }
@@ -5465,8 +5659,8 @@ const S_STRING_ID: Uuid = uuid!("9803e73c-4984-5179-8460-529fe4ef7921");
 
 #[derive(Clone, Debug)]
 pub struct SStringProxy {
-    inner: Rc<RefCell<SString>>,
-    store: Rc<RefCell<ObjectStore>>,
+    inner: Arc<RwLock<SString>>,
+    store: Arc<RwLock<ObjectStore>>,
 }
 
 impl Plugin for SStringProxy {
@@ -5490,7 +5684,7 @@ impl Plugin for SStringProxy {
 
                         if let FfiValue::String(field) = args.pop().unwrap() {
                             match field.as_str() {
-                                "id" => Ok(FfiValue::Uuid(self.inner.borrow().id().into())),
+                                "id" => Ok(FfiValue::Uuid(self.inner.read().unwrap().id().into())),
                                 _ => Err(Error::Uber("Invalid field".into())),
                             }
                         } else {
@@ -5538,7 +5732,7 @@ impl Plugin for SStringProxy {
 impl Display for SStringProxy {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "SString({{")?;
-        writeln!(f, "	id: {:?},", self.inner.borrow().id())?;
+        writeln!(f, "	id: {:?},", self.inner.read().unwrap().id())?;
         writeln!(f, "}})")
     }
 }
@@ -5547,8 +5741,8 @@ const SUBTYPE_ID: Uuid = uuid!("3abf0e04-6c8c-5e25-9638-43d98738ef87");
 
 #[derive(Clone, Debug)]
 pub struct SubtypeProxy {
-    inner: Rc<RefCell<Subtype>>,
-    store: Rc<RefCell<ObjectStore>>,
+    inner: Arc<RwLock<Subtype>>,
+    store: Arc<RwLock<ObjectStore>>,
 }
 
 impl Plugin for SubtypeProxy {
@@ -5572,12 +5766,13 @@ impl Plugin for SubtypeProxy {
 
                         if let FfiValue::String(field) = args.pop().unwrap() {
                             match field.as_str() {
-                                "id" => Ok(FfiValue::Uuid(self.inner.borrow().id.into())),
+                                "id" => Ok(FfiValue::Uuid(self.inner.read().unwrap().id.into())),
                                 "isa" => {
                                     let isa = self
                                         .store
-                                        .borrow()
-                                        .exhume_isa(&self.inner.borrow().isa)
+                                        .read()
+                                        .unwrap()
+                                        .exhume_isa(&self.inner.read().unwrap().isa)
                                         .unwrap();
 
                                     let this = IsaProxy {
@@ -5588,7 +5783,7 @@ impl Plugin for SubtypeProxy {
                                     let proxy = FfiProxy {
                                         module: module.into(),
                                         uuid: ISA_ID.into(),
-                                        id: self.inner.borrow().id.into(), // c
+                                        id: self.inner.read().unwrap().id.into(), // c
                                         plugin: plugin.clone(),
                                     };
                                     Ok(FfiValue::ProxyType(proxy))
@@ -5596,8 +5791,9 @@ impl Plugin for SubtypeProxy {
                                 "obj_id" => {
                                     let obj_id = self
                                         .store
-                                        .borrow()
-                                        .exhume_object(&self.inner.borrow().obj_id)
+                                        .read()
+                                        .unwrap()
+                                        .exhume_object(&self.inner.read().unwrap().obj_id)
                                         .unwrap();
 
                                     let this = ObjectProxy {
@@ -5608,7 +5804,7 @@ impl Plugin for SubtypeProxy {
                                     let proxy = FfiProxy {
                                         module: module.into(),
                                         uuid: OBJECT_ID.into(),
-                                        id: self.inner.borrow().id.into(), // c
+                                        id: self.inner.read().unwrap().id.into(), // c
                                         plugin: plugin.clone(),
                                     };
                                     Ok(FfiValue::ProxyType(proxy))
@@ -5631,12 +5827,15 @@ impl Plugin for SubtypeProxy {
                             let value: Value = args.pop().unwrap().into();
                             match field.as_str() {
                                 "isa" => {
-                                    self.inner.borrow_mut().isa = value.try_into().map_err(|e| {
-                                        Error::Uber(format!("Error converting value: {e}").into())
-                                    })?
+                                    self.inner.write().unwrap().isa =
+                                        value.try_into().map_err(|e| {
+                                            Error::Uber(
+                                                format!("Error converting value: {e}").into(),
+                                            )
+                                        })?
                                 }
                                 "obj_id" => {
-                                    self.inner.borrow_mut().obj_id =
+                                    self.inner.write().unwrap().obj_id =
                                         value.try_into().map_err(|e| {
                                             Error::Uber(
                                                 format!("Error converting value: {e}").into(),
@@ -5673,9 +5872,9 @@ impl Plugin for SubtypeProxy {
 impl Display for SubtypeProxy {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "Subtype({{")?;
-        writeln!(f, "	id: {:?},", self.inner.borrow().id)?;
-        writeln!(f, "	isa: {:?},", self.inner.borrow().isa)?;
-        writeln!(f, "	obj_id: {:?},", self.inner.borrow().obj_id)?;
+        writeln!(f, "	id: {:?},", self.inner.read().unwrap().id)?;
+        writeln!(f, "	isa: {:?},", self.inner.read().unwrap().isa)?;
+        writeln!(f, "	obj_id: {:?},", self.inner.read().unwrap().obj_id)?;
         writeln!(f, "}})")
     }
 }
@@ -5684,8 +5883,8 @@ const SUPERTYPE_ID: Uuid = uuid!("a9cc5d3e-8431-5302-9296-1fbd789acf73");
 
 #[derive(Clone, Debug)]
 pub struct SupertypeProxy {
-    inner: Rc<RefCell<Supertype>>,
-    store: Rc<RefCell<ObjectStore>>,
+    inner: Arc<RwLock<Supertype>>,
+    store: Arc<RwLock<ObjectStore>>,
 }
 
 impl Plugin for SupertypeProxy {
@@ -5709,12 +5908,13 @@ impl Plugin for SupertypeProxy {
 
                         if let FfiValue::String(field) = args.pop().unwrap() {
                             match field.as_str() {
-                                "id" => Ok(FfiValue::Uuid(self.inner.borrow().id.into())),
+                                "id" => Ok(FfiValue::Uuid(self.inner.read().unwrap().id.into())),
                                 "obj_id" => {
                                     let obj_id = self
                                         .store
-                                        .borrow()
-                                        .exhume_object(&self.inner.borrow().obj_id)
+                                        .read()
+                                        .unwrap()
+                                        .exhume_object(&self.inner.read().unwrap().obj_id)
                                         .unwrap();
 
                                     let this = ObjectProxy {
@@ -5725,7 +5925,7 @@ impl Plugin for SupertypeProxy {
                                     let proxy = FfiProxy {
                                         module: module.into(),
                                         uuid: OBJECT_ID.into(),
-                                        id: self.inner.borrow().id.into(), // c
+                                        id: self.inner.read().unwrap().id.into(), // c
                                         plugin: plugin.clone(),
                                     };
                                     Ok(FfiValue::ProxyType(proxy))
@@ -5748,7 +5948,7 @@ impl Plugin for SupertypeProxy {
                             let value: Value = args.pop().unwrap().into();
                             match field.as_str() {
                                 "obj_id" => {
-                                    self.inner.borrow_mut().obj_id =
+                                    self.inner.write().unwrap().obj_id =
                                         value.try_into().map_err(|e| {
                                             Error::Uber(
                                                 format!("Error converting value: {e}").into(),
@@ -5785,8 +5985,8 @@ impl Plugin for SupertypeProxy {
 impl Display for SupertypeProxy {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "Supertype({{")?;
-        writeln!(f, "	id: {:?},", self.inner.borrow().id)?;
-        writeln!(f, "	obj_id: {:?},", self.inner.borrow().obj_id)?;
+        writeln!(f, "	id: {:?},", self.inner.read().unwrap().id)?;
+        writeln!(f, "	obj_id: {:?},", self.inner.read().unwrap().obj_id)?;
         writeln!(f, "}})")
     }
 }
@@ -5795,8 +5995,8 @@ const TY_ID: Uuid = uuid!("b8ec6afc-ddbd-53d6-9be3-e4b738941c2f");
 
 #[derive(Clone, Debug)]
 pub struct TyProxy {
-    inner: Rc<RefCell<Ty>>,
-    store: Rc<RefCell<ObjectStore>>,
+    inner: Arc<RwLock<Ty>>,
+    store: Arc<RwLock<ObjectStore>>,
 }
 
 impl Plugin for TyProxy {
@@ -5820,7 +6020,7 @@ impl Plugin for TyProxy {
 
                         if let FfiValue::String(field) = args.pop().unwrap() {
                             match field.as_str() {
-                                "id" => Ok(FfiValue::Uuid(self.inner.borrow().id().into())),
+                                "id" => Ok(FfiValue::Uuid(self.inner.read().unwrap().id().into())),
                                 _ => Err(Error::Uber("Invalid field".into())),
                             }
                         } else {
@@ -5868,7 +6068,7 @@ impl Plugin for TyProxy {
 impl Display for TyProxy {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "Ty({{")?;
-        writeln!(f, "	id: {:?},", self.inner.borrow().id())?;
+        writeln!(f, "	id: {:?},", self.inner.read().unwrap().id())?;
         writeln!(f, "}})")
     }
 }
@@ -5877,8 +6077,8 @@ const S_UUID_ID: Uuid = uuid!("9fcf72a7-a28e-5544-be44-af4de72db6e4");
 
 #[derive(Clone, Debug)]
 pub struct SUuidProxy {
-    inner: Rc<RefCell<SUuid>>,
-    store: Rc<RefCell<ObjectStore>>,
+    inner: Arc<RwLock<SUuid>>,
+    store: Arc<RwLock<ObjectStore>>,
 }
 
 impl Plugin for SUuidProxy {
@@ -5902,7 +6102,7 @@ impl Plugin for SUuidProxy {
 
                         if let FfiValue::String(field) = args.pop().unwrap() {
                             match field.as_str() {
-                                "id" => Ok(FfiValue::Uuid(self.inner.borrow().id().into())),
+                                "id" => Ok(FfiValue::Uuid(self.inner.read().unwrap().id().into())),
                                 _ => Err(Error::Uber("Invalid field".into())),
                             }
                         } else {
@@ -5950,7 +6150,7 @@ impl Plugin for SUuidProxy {
 impl Display for SUuidProxy {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "SUuid({{")?;
-        writeln!(f, "	id: {:?},", self.inner.borrow().id())?;
+        writeln!(f, "	id: {:?},", self.inner.read().unwrap().id())?;
         writeln!(f, "}})")
     }
 }
@@ -5959,8 +6159,8 @@ const UNCONDITIONAL_ID: Uuid = uuid!("ab790409-b7ca-58d0-bb97-7c2ddd7b786f");
 
 #[derive(Clone, Debug)]
 pub struct UnconditionalProxy {
-    inner: Rc<RefCell<Unconditional>>,
-    store: Rc<RefCell<ObjectStore>>,
+    inner: Arc<RwLock<Unconditional>>,
+    store: Arc<RwLock<ObjectStore>>,
 }
 
 impl Plugin for UnconditionalProxy {
@@ -5984,7 +6184,7 @@ impl Plugin for UnconditionalProxy {
 
                         if let FfiValue::String(field) = args.pop().unwrap() {
                             match field.as_str() {
-                                "id" => Ok(FfiValue::Uuid(self.inner.borrow().id().into())),
+                                "id" => Ok(FfiValue::Uuid(self.inner.read().unwrap().id().into())),
                                 _ => Err(Error::Uber("Invalid field".into())),
                             }
                         } else {
@@ -6032,7 +6232,7 @@ impl Plugin for UnconditionalProxy {
 impl Display for UnconditionalProxy {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "Unconditional({{")?;
-        writeln!(f, "	id: {:?},", self.inner.borrow().id())?;
+        writeln!(f, "	id: {:?},", self.inner.read().unwrap().id())?;
         writeln!(f, "}})")
     }
 }

@@ -7,10 +7,11 @@ use dwarf::{
     },
     dwarf::{new_lu_dog, parse_dwarf},
     sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL},
+    RefType,
 };
 use tracy_client::Client;
 
-fn run_program(test: &str, program: &str) -> Result<(Value, String), String> {
+fn run_program(test: &str, program: &str) -> Result<(RefType<Value>, String), String> {
     let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
 
     let dwarf_home = env::var("DWARF_HOME")

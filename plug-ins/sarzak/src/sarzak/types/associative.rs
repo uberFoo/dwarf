@@ -1,7 +1,7 @@
 // {"magic":"","directive":{"Start":{"directive":"allow-editing","tag":"associative-struct-definition-file"}}}
 // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"associative-use-statements"}}}
-use std::cell::RefCell;
-use std::rc::Rc;
+use std::sync::Arc;
+use std::sync::RwLock;
 use tracy_client::span;
 use uuid::Uuid;
 
@@ -28,14 +28,14 @@ impl Associative {
     /// Inter a new 'Associative' in the store, and return it's `id`.
     pub fn new(
         number: i64,
-        from: &Rc<RefCell<AssociativeReferrer>>,
+        from: &Arc<RwLock<AssociativeReferrer>>,
         store: &mut SarzakStore,
-    ) -> Rc<RefCell<Associative>> {
+    ) -> Arc<RwLock<Associative>> {
         let id = Uuid::new_v4();
-        let new = Rc::new(RefCell::new(Associative {
+        let new = Arc::new(RwLock::new(Associative {
             id,
             number,
-            from: from.borrow().id,
+            from: from.read().unwrap().id,
         }));
         store.inter_associative(new.clone());
         new
@@ -46,7 +46,7 @@ impl Associative {
     pub fn r21_associative_referrer<'a>(
         &'a self,
         store: &'a SarzakStore,
-    ) -> Vec<Rc<RefCell<AssociativeReferrer>>> {
+    ) -> Vec<Arc<RwLock<AssociativeReferrer>>> {
         span!("r21_associative_referrer");
         vec![store.exhume_associative_referrer(&self.from).unwrap()]
     }
@@ -56,19 +56,19 @@ impl Associative {
     pub fn r22_an_associative_referent<'a>(
         &'a self,
         store: &'a SarzakStore,
-    ) -> Vec<Rc<RefCell<AnAssociativeReferent>>> {
+    ) -> Vec<Arc<RwLock<AnAssociativeReferent>>> {
         span!("r22_an_associative_referent");
         store
             .iter_an_associative_referent()
             .filter(|an_associative_referent| {
-                an_associative_referent.borrow().associative == self.id
+                an_associative_referent.read().unwrap().associative == self.id
             })
             .collect()
     }
     // {"magic":"","directive":{"End":{"directive":"ignore-orig"}}}
     // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"associative-impl-nav-subtype-to-supertype-relationship"}}}
     // Navigate to [`Relationship`] across R4(isa)
-    pub fn r4_relationship<'a>(&'a self, store: &'a SarzakStore) -> Vec<Rc<RefCell<Relationship>>> {
+    pub fn r4_relationship<'a>(&'a self, store: &'a SarzakStore) -> Vec<Arc<RwLock<Relationship>>> {
         span!("r4_relationship");
         vec![store.exhume_relationship(&self.id).unwrap()]
     }

@@ -1,3 +1,4 @@
+pub mod r#async;
 pub mod dap;
 pub mod error;
 pub mod interpreter;

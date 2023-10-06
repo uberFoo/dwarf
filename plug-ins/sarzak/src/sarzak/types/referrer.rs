@@ -1,7 +1,7 @@
 // {"magic":"","directive":{"Start":{"directive":"allow-editing","tag":"referrer-struct-definition-file"}}}
 // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"referrer-use-statements"}}}
-use std::cell::RefCell;
-use std::rc::Rc;
+use std::sync::Arc;
+use std::sync::RwLock;
 use tracy_client::span;
 use uuid::Uuid;
 
@@ -40,19 +40,19 @@ impl Referrer {
     pub fn new(
         description: String,
         referential_attribute: String,
-        cardinality: &Rc<RefCell<Cardinality>>,
-        conditionality: &Rc<RefCell<Conditionality>>,
-        obj_id: &Rc<RefCell<Object>>,
+        cardinality: &Arc<RwLock<Cardinality>>,
+        conditionality: &Arc<RwLock<Conditionality>>,
+        obj_id: &Arc<RwLock<Object>>,
         store: &mut SarzakStore,
-    ) -> Rc<RefCell<Referrer>> {
+    ) -> Arc<RwLock<Referrer>> {
         let id = Uuid::new_v4();
-        let new = Rc::new(RefCell::new(Referrer {
+        let new = Arc::new(RwLock::new(Referrer {
             description,
             id,
             referential_attribute,
-            cardinality: cardinality.borrow().id(),
-            conditionality: conditionality.borrow().id(),
-            obj_id: obj_id.borrow().id,
+            cardinality: cardinality.read().unwrap().id(),
+            conditionality: conditionality.read().unwrap().id(),
+            obj_id: obj_id.read().unwrap().id,
         }));
         store.inter_referrer(new.clone());
         new
@@ -60,7 +60,7 @@ impl Referrer {
     // {"magic":"","directive":{"End":{"directive":"ignore-orig"}}}
     // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"referrer-struct-impl-nav-forward-to-cardinality"}}}
     /// Navigate to [`Cardinality`] across R9(1-*)
-    pub fn r9_cardinality<'a>(&'a self, store: &'a SarzakStore) -> Vec<Rc<RefCell<Cardinality>>> {
+    pub fn r9_cardinality<'a>(&'a self, store: &'a SarzakStore) -> Vec<Arc<RwLock<Cardinality>>> {
         span!("r9_cardinality");
         vec![store.exhume_cardinality(&self.cardinality).unwrap()]
     }
@@ -70,25 +70,25 @@ impl Referrer {
     pub fn r11_conditionality<'a>(
         &'a self,
         store: &'a SarzakStore,
-    ) -> Vec<Rc<RefCell<Conditionality>>> {
+    ) -> Vec<Arc<RwLock<Conditionality>>> {
         span!("r11_conditionality");
         vec![store.exhume_conditionality(&self.conditionality).unwrap()]
     }
     // {"magic":"","directive":{"End":{"directive":"ignore-orig"}}}
     // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"referrer-struct-impl-nav-forward-to-obj_id"}}}
     /// Navigate to [`Object`] across R17(1-*)
-    pub fn r17_object<'a>(&'a self, store: &'a SarzakStore) -> Vec<Rc<RefCell<Object>>> {
+    pub fn r17_object<'a>(&'a self, store: &'a SarzakStore) -> Vec<Arc<RwLock<Object>>> {
         span!("r17_object");
         vec![store.exhume_object(&self.obj_id).unwrap()]
     }
     // {"magic":"","directive":{"End":{"directive":"ignore-orig"}}}
     // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"referrer-struct-impl-nav-backward-one-to-binary"}}}
     /// Navigate to [`Binary`] across R6(1-1)
-    pub fn r6_binary<'a>(&'a self, store: &'a SarzakStore) -> Vec<Rc<RefCell<Binary>>> {
+    pub fn r6_binary<'a>(&'a self, store: &'a SarzakStore) -> Vec<Arc<RwLock<Binary>>> {
         span!("r6_binary");
         vec![store
             .iter_binary()
-            .find(|binary| binary.borrow().from == self.id)
+            .find(|binary| binary.read().unwrap().from == self.id)
             .unwrap()]
     }
     // {"magic":"","directive":{"End":{"directive":"ignore-orig"}}}

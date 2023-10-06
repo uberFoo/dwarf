@@ -1,4 +1,7 @@
-#![cfg(not(any(feature = "single", feature = "single-vec", feature = "multi-nd-vec")))]
+#![cfg(all(
+    feature = "tui",
+    not(any(feature = "single", feature = "single-vec", feature = "multi-nd-vec"))
+))]
 use std::thread;
 
 use ansi_term::Colour;

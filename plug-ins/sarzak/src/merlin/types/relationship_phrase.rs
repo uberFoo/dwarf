@@ -1,7 +1,7 @@
 // {"magic":"","directive":{"Start":{"directive":"allow-editing","tag":"relationship_phrase-struct-definition-file"}}}
 // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"relationship_phrase-use-statements"}}}
-use std::cell::RefCell;
-use std::rc::Rc;
+use std::sync::Arc;
+use std::sync::RwLock;
 use tracy_client::span;
 use uuid::Uuid;
 
@@ -33,18 +33,18 @@ impl RelationshipPhrase {
         text: String,
         x: i64,
         y: i64,
-        line: &Rc<RefCell<Line>>,
-        origin: &Rc<RefCell<Anchor>>,
+        line: &Arc<RwLock<Line>>,
+        origin: &Arc<RwLock<Anchor>>,
         store: &mut MerlinStore,
-    ) -> Rc<RefCell<RelationshipPhrase>> {
+    ) -> Arc<RwLock<RelationshipPhrase>> {
         let id = Uuid::new_v4();
-        let new = Rc::new(RefCell::new(RelationshipPhrase {
+        let new = Arc::new(RwLock::new(RelationshipPhrase {
             id,
             text,
             x,
             y,
-            line: line.borrow().id,
-            origin: origin.borrow().id,
+            line: line.read().unwrap().id,
+            origin: origin.read().unwrap().id,
         }));
         store.inter_relationship_phrase(new.clone());
         new
@@ -52,14 +52,14 @@ impl RelationshipPhrase {
     // {"magic":"","directive":{"End":{"directive":"ignore-orig"}}}
     // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"relationship_phrase-struct-impl-nav-forward-to-line"}}}
     /// Navigate to [`Line`] across R12(1-*)
-    pub fn r12_line<'a>(&'a self, store: &'a MerlinStore) -> Vec<Rc<RefCell<Line>>> {
+    pub fn r12_line<'a>(&'a self, store: &'a MerlinStore) -> Vec<Arc<RwLock<Line>>> {
         span!("r12_line");
         vec![store.exhume_line(&self.line).unwrap()]
     }
     // {"magic":"","directive":{"End":{"directive":"ignore-orig"}}}
     // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"relationship_phrase-struct-impl-nav-forward-to-origin"}}}
     /// Navigate to [`Anchor`] across R13(1-*)
-    pub fn r13_anchor<'a>(&'a self, store: &'a MerlinStore) -> Vec<Rc<RefCell<Anchor>>> {
+    pub fn r13_anchor<'a>(&'a self, store: &'a MerlinStore) -> Vec<Arc<RwLock<Anchor>>> {
         span!("r13_anchor");
         vec![store.exhume_anchor(&self.origin).unwrap()]
     }

@@ -11,7 +11,18 @@ use dwarf::{
     },
     dwarf::{new_lu_dog, parse_dwarf},
     sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL},
+    RefType,
 };
+
+cfg_if::cfg_if! {
+    if #[cfg(feature = "async")] {
+        use std::future::Future;
+        use std::sync::Arc;
+        use std::thread;
+        use smol::Task;
+        use smol::future;
+    }
+}
 
 #[cfg(feature = "print-std-out")]
 compile_error!("The tests don't function with the print-std-out feature enabled.");
@@ -66,7 +77,46 @@ fn diff_with_file(path: &str, test: &str, found: &str) -> Result<(), ()> {
     }
 }
 
-fn run_program(test: &str, program: &str) -> Result<(Value, String), String> {
+/// Spawns a future on a new dedicated thread.
+///
+/// The returned task can be used to await the output of the future.
+#[cfg(feature = "async")]
+fn spawn_on_thread<F, T>(future: F) -> Task<T>
+where
+    F: Future<Output = T> + Send + 'static,
+    T: Send + 'static,
+{
+    // Create a channel that holds the task when it is scheduled for running.
+    let (sender, receiver) = flume::unbounded();
+    let sender = Arc::new(sender);
+    let s = Arc::downgrade(&sender);
+
+    // Wrap the future into one that disconnects the channel on completion.
+    let future = async move {
+        // When the inner future completes, the sender gets dropped and disconnects the channel.
+        let _sender = sender;
+        future.await
+    };
+
+    // Create a task that is scheduled by sending it into the channel.
+    let schedule = move |runnable| s.upgrade().unwrap().send(runnable).unwrap();
+    let (runnable, task) = async_task::spawn(future, schedule);
+
+    // Schedule the task by sending it into the channel.
+    runnable.schedule();
+
+    // Spawn a thread running the task to completion.
+    thread::spawn(move || {
+        // Keep taking the task from the channel and running it until completion.
+        for runnable in receiver {
+            runnable.run();
+        }
+    });
+
+    task
+}
+
+fn run_program(test: &str, program: &str) -> Result<(RefType<Value>, String), String> {
     let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
     let dwarf_home = env::var("DWARF_HOME")
         .unwrap_or_else(|_| {

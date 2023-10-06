@@ -75,7 +75,7 @@ pub(crate) fn eval_dwarf(
         }
     })?;
 
-    Ok(new_ref!(Value, result))
+    Ok(result)
 }
 
 /// Parse a string into a LuDogStore
