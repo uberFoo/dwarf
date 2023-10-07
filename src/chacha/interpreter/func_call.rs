@@ -93,7 +93,7 @@ pub fn eval_function_call<'a>(
             let mut executor = ChaChaExecutor::new();
             executor.spawn(future);
 
-            let value = new_ref!(Value, Value::Future("bar".to_owned(), executor));
+            let value = new_ref!(Value, Value::Executor("bar".to_owned(), executor));
 
             Ok(value)
         }

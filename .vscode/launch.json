@@ -89,8 +89,8 @@
                 }
             },
             "args": [
-                "tests/harness/chacha/sleep.tao"
-                // "tests/harness/chacha/async/handler.tao"
+                // "tests/harness/chacha/sleep.tao"
+                "tests/harness/chacha/async/handler.tao"
             ],
             "cwd": "${workspaceFolder}",
             "env": {

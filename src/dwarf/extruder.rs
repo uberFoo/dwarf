@@ -1186,24 +1186,28 @@ pub(super) fn inter_expression(
                 lu_dog,
             )?;
 
-            if !matches!(s_read!(ty).subtype, ValueTypeEnum::XFuture(_)) {
-                Err(vec![DwarfError::AwaitNotFuture {
-                    span: expr_p.1.clone(),
-                }])
-            } else {
-                dbg!(&ty);
-                let future = match s_read!(ty).subtype {
-                    ValueTypeEnum::XFuture(ref id) => lu_dog.exhume_x_future(id).unwrap(),
-                    _ => unreachable!(),
-                };
-                let ty = s_read!(future).r2_value_type(lu_dog)[0].clone();
-                let expr = AWait::new(&expr.0, lu_dog);
-                let expr = Expression::new_a_wait(&expr, lu_dog);
-                let value = XValue::new_expression(block, &ty, &expr, lu_dog);
-                update_span_value(&span, &value, location!());
+            // if !matches!(s_read!(ty).subtype, ValueTypeEnum::XFuture(_)) {
+            //     dbg!(ty);
+            //     Err(vec![DwarfError::AwaitNotFuture {
+            //         span: expr_p.1.clone(),
+            //     }])
+            // } else {
+            dbg!(&ty);
+            let future = match s_read!(ty).subtype {
+                ValueTypeEnum::XFuture(ref id) => lu_dog.exhume_x_future(id).unwrap(),
+                ref wtf => {
+                    dbg!(wtf);
+                    unreachable!()
+                }
+            };
+            let ty = s_read!(future).r2_value_type(lu_dog)[0].clone();
+            let expr = AWait::new(&expr.0, lu_dog);
+            let expr = Expression::new_a_wait(&expr, lu_dog);
+            let value = XValue::new_expression(block, &ty, &expr, lu_dog);
+            update_span_value(&span, &value, location!());
 
-                Ok(((expr, span), ty))
-            }
+            Ok(((expr, span), ty))
+            // }
         }
         //
         // Bang
@@ -2338,12 +2342,11 @@ pub(super) fn inter_expression(
                     let value = s_read!(value);
                     match value.subtype {
                         XValueEnum::Expression(ref _expr) => {
-                            // What's going on is that there are a bunch of values in the block --
-                            // especially when running the interpreter. So we are iterating over
-                            // them all, and we are bound to find some that aren't variable expressions
-                            // even though we are parsing a LocalVariable. Remember these are all of
-                            // the values -- not just the ones that have something to do with finding
-                            // ourselves here.
+                            // What's going on is that there are a bunch of values in the block.
+                            // We are iterating over them all, and we are bound to find some that
+                            // aren't variable expressions even though we are parsing a LocalVariable.
+                            // Remember these are all of the values -- not just the ones that have
+                            // something to do with finding ourselves here.
 
                             None
                         }
@@ -2450,6 +2453,7 @@ pub(super) fn inter_expression(
                 let value = XValue::new_expression(block, &ty, &expr, lu_dog);
                 update_span_value(&span, &value, location!());
 
+                debug!("LocalVariable result ({expr:#?}, {ty:#?})");
                 Ok(((expr, span), ty))
             } else {
                 debug!("variable not found");
@@ -2461,7 +2465,6 @@ pub(super) fn inter_expression(
                 let value = XValue::new_expression(block, &ty, &expr, lu_dog);
                 update_span_value(&span, &value, location!());
 
-                debug!("LocalVariable result ({expr:#?}, {ty:#?})");
                 Ok(((expr, span), ty))
             }
         }

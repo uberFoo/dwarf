@@ -192,6 +192,20 @@ impl fmt::Display for DwarfErrorReporter<'_, '_, '_> {
         let mut std_err = Vec::new();
 
         match &self.0 {
+            DwarfError::AwaitNotFuture { span } => {
+                let span = span.clone();
+                Report::build(ReportKind::Error, file_name, span.start)
+                    .with_message("await may only be used on a future")
+                    .with_label(
+                        Label::new((file_name, span))
+                            .with_message("this is not a future".to_string())
+                            .with_color(Color::Red),
+                    )
+                    .finish()
+                    .write((file_name, Source::from(&program)), &mut std_err)
+                    .map_err(|_| fmt::Error)?;
+                write!(f, "{}", String::from_utf8_lossy(&std_err))
+            }
             DwarfError::BadSelf { span, location } => {
                 let span = span.clone();
                 let report = Report::build(ReportKind::Error, file_name, span.start)

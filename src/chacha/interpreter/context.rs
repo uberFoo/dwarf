@@ -67,6 +67,14 @@ pub struct Context {
     args: Option<RefType<Value>>,
     dwarf_home: PathBuf,
     dirty: Vec<Dirty>,
+    // #[cfg(feature = "async")]
+    // spawn: Sender<
+    //     Box<
+    //         dyn std::future::Future<
+    //             Output = Result<RefType<Value>, crate::chacha::error::ChaChaError>,
+    //         >,
+    //     >,
+    // >,
 }
 
 /// Save the lu_dog model when the context is dropped

@@ -26,34 +26,11 @@ pub fn eval<'a>(
                 let mut vm = VM::new(&mem);
                 eval_inner(block, &mut cloned_context, &mut vm)
             };
-            // let future = executor.unwrap().spawn(future);
+
             let mut executor = ChaChaExecutor::new();
             executor.spawn(future);
 
-            let value = new_ref!(Value, Value::Future("baz".to_owned(), executor));
-
-            // let future = async move {
-            //     let result = value.clone();
-            //     let value = future.await;
-
-            //     let mut result = s_write!(result);
-            //     if let Value::Future(_, ref mut result) = *result {
-            //         match result {
-            //             FutureResult::Running => *result = FutureResult::Complete(value),
-            //             FutureResult::Waiting(waker) => {
-            //                 waker.clone().wake();
-            //                 *result = FutureResult::Complete(value);
-            //             }
-            //             _ => panic!("future already complete"),
-            //         }
-            //     } else {
-            //         unreachable!()
-            //     }
-            // };
-
-            // context.executor_spawn(future);
-
-            Ok(value)
+            Ok(new_ref!(Value, Value::Executor("baz".to_owned(), executor)))
         } else {
             eval_inner(block, context, vm)
         }

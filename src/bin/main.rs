@@ -3,14 +3,11 @@ use std::{
     io::{self, BufReader, BufWriter},
     net::TcpListener,
     path::PathBuf,
-    process, thread,
+    thread,
 };
 
 use clap::{ArgAction, Args, Parser};
 use dap::{prelude::BasicClient, server::Server};
-
-#[cfg(feature = "async")]
-use dwarf::chacha::r#async::ChaChaExecutor;
 
 use dwarf::{
     chacha::{
@@ -19,9 +16,8 @@ use dwarf::{
         interpreter::{banner2, initialize_interpreter, start_func, start_repl},
     },
     dwarf::{new_lu_dog, parse_dwarf},
-    new_ref, s_write,
     sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL},
-    Context, NewRef, Value,
+    Context, Value,
 };
 use reqwest::Url;
 use tracy_client::Client;
@@ -239,9 +235,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         let value = std::ptr::read(value);
                         let value = value.into_inner().unwrap();
                         match value {
-                            Value::Future(name, mut task) => {
+                            Value::Executor(name, mut task) => {
                                 dbg!(&name);
-                                task.run();
+                                match task.run() {
+                                    Ok(_) => {}
+                                    Err(e) => {
+                                        eprintln!("Interpreter exited with:");
+                                        eprintln!(
+                                            "{}",
+                                            ChaChaErrorReporter(
+                                                &e.into(),
+                                                is_uber,
+                                                &source_code,
+                                                &name
+                                            )
+                                        );
+                                        return Ok(());
+                                    }
+                                }
                             }
                             _ => {
                                 dbg!(value);

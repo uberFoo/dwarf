@@ -1,0 +1,1 @@
+cargo lambda build --release --compiler cross --arm64 && cargo lambda deploy --enable-function-url run_dwarf

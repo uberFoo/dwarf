@@ -139,7 +139,7 @@ fn run_program(test: &str, program: &str) -> Result<(RefType<Value>, String), St
                 let v = std::ptr::read(v);
                 let v = v.into_inner().unwrap();
                 match v {
-                    Value::Future(name, mut task) => task.run().unwrap(),
+                    Value::Executor(name, mut task) => task.run().unwrap(),
                     _ => value,
                 }
             };

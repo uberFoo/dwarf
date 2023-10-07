@@ -42,6 +42,7 @@ const FORMAT: &str = "format";
 const NORM_SQUARED: &str = "norm_squared";
 const PARSE: &str = "parse";
 const SLEEP: &str = "sleep";
+const SPAWN: &str = "spawn";
 const SQUARE: &str = "square";
 const TIME: &str = "time";
 const TYPEOF: &str = "typeof";
@@ -300,22 +301,4 @@ impl Default for Context {
             dirty: Vec::default(),
         }
     }
-}
-
-struct Node<T> {
-    value: T,
-    next: Option<Box<Node<T>>>,
-}
-
-impl<T> Node<T> {
-    fn new(value: T) -> Self {
-        Self { value, next: None }
-    }
-}
-
-fn foo() {
-    let a = Node {
-        value: 42,
-        next: Option::<Box<Node<usize>>>::None,
-    };
 }

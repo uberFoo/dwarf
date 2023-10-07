@@ -8,7 +8,7 @@ use std::thread;
 use async_executor::{Executor, Task};
 use futures_lite::{future, prelude::*};
 
-use crate::{chacha::error::ChaChaError, RefType, Value};
+use crate::{chacha::error::ChaChaError, new_ref, NewRef, RefType, Value};
 
 /// An executor with task priorities.
 ///
@@ -16,7 +16,6 @@ use crate::{chacha::error::ChaChaError, RefType, Value};
 #[derive(Debug)]
 pub struct ChaChaExecutor<'a> {
     ex: Executor<'a>,
-    running: bool,
     queue: VecDeque<async_task::Task<Result<RefType<Value>, ChaChaError>>>,
 }
 
@@ -25,11 +24,10 @@ impl<'a> ChaChaExecutor<'a> {
     pub const fn new() -> ChaChaExecutor<'a> {
         ChaChaExecutor {
             ex: Executor::new(),
-            running: true,
             queue: VecDeque::new(),
         }
     }
-    /// Spawns a task with the given priority.
+
     pub fn spawn(
         &mut self,
         future: impl Future<Output = Result<RefType<Value>, ChaChaError>> + Send + 'a,
@@ -41,6 +39,10 @@ impl<'a> ChaChaExecutor<'a> {
 
     pub fn run(&mut self) -> Result<RefType<Value>, ChaChaError> {
         log::debug!(target: "async", "run: {:?}", self.queue);
-        future::block_on(self.ex.run(self.queue.pop_front().unwrap()))
+        if let Some(task) = self.queue.pop_front() {
+            future::block_on(self.ex.run(task))
+        } else {
+            Ok(new_ref!(Value, Value::Empty))
+        }
     }
 }

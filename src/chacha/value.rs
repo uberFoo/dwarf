@@ -24,6 +24,12 @@ use crate::{
     sarzak::{ObjectStore as SarzakStore, Ty},
     ChaChaError, Context, DwarfFloat, DwarfInteger, NewRef, RefType,
 };
+
+#[cfg(feature = "async")]
+type FutureValue = Box<
+    dyn std::future::Future<Output = Result<RefType<Value>, crate::chacha::error::ChaChaError>>,
+>;
+
 #[repr(C)]
 #[derive(Clone, Debug, StableAbi)]
 pub struct FfiRange {
@@ -211,6 +217,8 @@ pub enum Value {
     Empty,
     Enumeration(EnumVariant),
     Error(String),
+    #[cfg(feature = "async")]
+    Executor(String, ChaChaExecutor<'static>),
     Float(DwarfFloat),
     /// Function
     ///
@@ -218,11 +226,8 @@ pub enum Value {
     /// why I need the inner Function to be behind a RefType<<T>>. It seems
     /// excessive, and yet I know I've looked into it before.
     Function(RefType<Function>),
-    // Future(FutureResult),
     // Future(String, async_std::task::JoinHandle<RefType<Value>>),
     // Future(String, FutureResult),
-    #[cfg(feature = "async")]
-    Future(String, ChaChaExecutor<'static>),
     Integer(DwarfInteger),
     Lambda(RefType<Lambda>),
     ParsedDwarf(Context),
@@ -252,10 +257,10 @@ impl std::fmt::Debug for Value {
             Self::Empty => write!(f, "()"),
             Self::Enumeration(var) => write!(f, "{:?}", var),
             Self::Error(e) => write!(f, "{}: {}", Colour::Red.bold().paint("error"), e),
+            #[cfg(feature = "async")]
+            Self::Executor(name, _) => write!(f, "Executor {name}"),
             Self::Float(num) => write!(f, "{:?}", num),
             Self::Function(func) => write!(f, "{:?}", s_read!(func)),
-            #[cfg(feature = "async")]
-            Self::Future(name, _) => write!(f, "Executor {name}"),
             Self::Integer(num) => write!(f, "{:?}", num),
             Self::Lambda(ƛ) => write!(f, "{:?}", s_read!(ƛ)),
             Self::ParsedDwarf(ctx) => write!(f, "{:?}", ctx),
@@ -299,10 +304,12 @@ impl Clone for Value {
             Self::Empty => Self::Empty,
             Self::Enumeration(var) => Self::Enumeration(var.clone()),
             Self::Error(e) => Self::Error(e.clone()),
+            #[cfg(feature = "async")]
+            Self::Executor(parent, _) => {
+                Self::Executor(format!("{parent}.道"), ChaChaExecutor::new())
+            }
             Self::Float(num) => Self::Float(*num),
             Self::Function(func) => Self::Function(func.clone()),
-            #[cfg(feature = "async")]
-            Self::Future(parent, _) => Self::Future(format!("{parent}.道"), ChaChaExecutor::new()),
             Self::Integer(num) => Self::Integer(*num),
             Self::Lambda(ƛ) => Self::Lambda(ƛ.clone()),
             Self::ParsedDwarf(ctx) => Self::ParsedDwarf(ctx.clone()),
@@ -444,7 +451,7 @@ impl Value {
                 z
             }
             #[cfg(feature = "async")]
-            Value::Future(_, _) => {
+            Value::Executor(_, _) => {
                 for vt in lu_dog.iter_value_type() {
                     if let ValueTypeEnum::XFuture(_) = s_read!(vt).subtype {
                         return vt.clone();
@@ -542,10 +549,10 @@ impl fmt::Display for Value {
             // Self::Enum(ty) => write!(f, "{}", s_read!(ty)),
             Self::Enumeration(var) => write!(f, "{var}"),
             Self::Error(e) => write!(f, "{}: {e}", Colour::Red.bold().paint("error")),
+            #[cfg(feature = "async")]
+            Self::Executor(_, _) => write!(f, "<executor>"),
             Self::Float(num) => write!(f, "{num}"),
             Self::Function(_) => write!(f, "<function>"),
-            #[cfg(feature = "async")]
-            Self::Future(_, _) => write!(f, "<future>"),
             Self::Integer(num) => write!(f, "{num}"),
             Self::Lambda(_) => write!(f, "<lambda>"),
             Self::ParsedDwarf(ctx) => write!(f, "{ctx:#?}"),

@@ -166,7 +166,10 @@ pub fn inter(
                     ValueType::new_x_future(&future, lu_dog)
                 }
                 #[cfg(not(feature = "async"))]
-                SLEEP => ValueType::new_empty(lu_dog),
+                SLEEP => {
+                    thread::sleep(std::time::Duration::from_millis(1000));
+                    ValueType::new_empty(lu_dog)
+                }
                 TIME => {
                     let ty = Ty::new_float(sarzak);
                     // 🚧 Ideally we'd cache this when we startup.
