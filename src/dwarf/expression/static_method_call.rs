@@ -23,7 +23,7 @@ use crate::{
     new_ref, s_read, s_write,
     sarzak::Ty,
     NewRef, RefType, ARGS, ASSERT, ASSERT_EQ, CHACHA, COMPLEX_EX, EPS, FN_NEW, NORM_SQUARED, SLEEP,
-    TIME, UUID_TYPE,
+    SPAWN, SPAWN_NAMED, TIME, UUID_TYPE,
 };
 
 pub fn inter(
@@ -160,15 +160,25 @@ pub fn inter(
                 #[cfg(feature = "async")]
                 SLEEP => {
                     let inner = ValueType::new_empty(lu_dog);
-                    dbg!(&inner);
                     let future = XFuture::new(&inner, lu_dog);
-                    dbg!(&future);
                     ValueType::new_x_future(&future, lu_dog)
                 }
                 #[cfg(not(feature = "async"))]
                 SLEEP => {
-                    thread::sleep(std::time::Duration::from_millis(1000));
+                    // thread::sleep(std::time::Duration::from_millis(1000));
                     ValueType::new_empty(lu_dog)
+                }
+                #[cfg(feature = "async")]
+                SPAWN => {
+                    let inner = ValueType::new_empty(lu_dog);
+                    let future = XFuture::new(&inner, lu_dog);
+                    ValueType::new_x_future(&future, lu_dog)
+                }
+                #[cfg(feature = "async")]
+                SPAWN_NAMED => {
+                    let inner = ValueType::new_empty(lu_dog);
+                    let future = XFuture::new(&inner, lu_dog);
+                    ValueType::new_x_future(&future, lu_dog)
                 }
                 TIME => {
                     let ty = Ty::new_float(sarzak);
@@ -351,7 +361,15 @@ pub fn inter(
                 );
 
                 let expr = Expression::new_field_expression(&strawberry, lu_dog);
-                let _value = XValue::new_expression(block, &ty, &expr, lu_dog);
+                let value = XValue::new_expression(block, &ty, &expr, lu_dog);
+                Span::new(
+                    s_read!(span).end,
+                    s_read!(span).start,
+                    &context.source,
+                    None,
+                    Some(&value),
+                    lu_dog,
+                );
                 // update_span_value(&span, &value, location!());
 
                 let expr = Expression::new_struct_expression(&struct_expr, lu_dog);

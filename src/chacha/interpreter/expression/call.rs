@@ -22,7 +22,8 @@ use crate::{
     new_ref, s_read, s_write,
     sarzak::Ty,
     NewRef, RefType, SarzakStorePtr, Value, ADD, ARGS, ASSERT, ASSERT_EQ, CHACHA, COMPLEX_EX, EPS,
-    EVAL, FN_NEW, FORMAT, LEN, NORM_SQUARED, PARSE, SLEEP, SPAWN, SQUARE, TIME, TYPEOF, UUID_TYPE,
+    EVAL, FN_NEW, FORMAT, LEN, NORM_SQUARED, PARSE, SLEEP, SPAWN, SPAWN_NAMED, SQUARE, TIME,
+    TYPEOF, UUID_TYPE,
 };
 
 mod chacha;
@@ -72,8 +73,6 @@ pub fn eval(
                     debug!("value {value:?}");
                     Ok(value)
                 }
-                #[cfg(feature = "async")]
-                Value::Executor(_, _) => Ok(value.clone()),
                 Value::Lambda(ref ƛ) => {
                     let ƛ = s_read!(lu_dog).exhume_lambda(&s_read!(ƛ).id).unwrap();
                     debug!("ExpressionEnum::Call ƛ: {ƛ:?}");
@@ -161,104 +160,102 @@ pub fn eval(
 
             // let x = match &mut *value {
             match &*s_read!(value) {
-                #[cfg(feature = "async")]
-                Value::Executor(_, _) => {
-                    let lambda = args[1].clone();
-                    let lambda = s_read!(lambda).r37_expression(&s_read!(lu_dog))[0].clone();
-                    let mut cloned_context = context.clone();
+                // #[cfg(feature = "async")]
+                // Value::Executor(_, _) => {
+                //     let lambda = args[1].clone();
+                //     let lambda = s_read!(lambda).r37_expression(&s_read!(lu_dog))[0].clone();
+                //     let mut cloned_context = context.from_context();
 
-                    let future = async move {
-                        let mem = cloned_context.memory().clone();
-                        let mut vm = VM::new(&mem);
+                //     let future = async move {
+                //         let mem = cloned_context.memory().clone();
+                //         let mut vm = VM::new(&mem);
 
-                        let value = eval_expression(lambda, &mut cloned_context, &mut vm)?;
-                        // dbg!("bitches come!", &value);
+                //         let value = eval_expression(lambda, &mut cloned_context, &mut vm)?;
 
-                        let read_value = s_read!(value);
-                        match &*read_value {
-                            Value::Function(ref func) => {
-                                let func =
-                                    s_read!(lu_dog).exhume_function(&s_read!(func).id).unwrap();
-                                debug!("ExpressionEnum::Call func: {func:?}");
-                                let value = eval_function_call(
-                                    func,
-                                    &args,
-                                    first_arg,
-                                    arg_check,
-                                    &span,
-                                    &mut cloned_context,
-                                    &mut vm,
-                                );
-                                debug!("value {value:?}");
-                                value
-                            }
-                            Value::Executor(_, _) => Ok(value.clone()),
-                            Value::Lambda(ref ƛ) => {
-                                let mut args = args.clone();
-                                args.clear();
-                                let ƛ = s_read!(lu_dog).exhume_lambda(&s_read!(ƛ).id).unwrap();
-                                debug!("ExpressionEnum::Call ƛ: {ƛ:?}");
-                                let value = eval_lambda_expression(
-                                    ƛ,
-                                    &args,
-                                    arg_check,
-                                    &span,
-                                    &mut cloned_context,
-                                    &mut vm,
-                                );
-                                debug!("value {value:?}");
-                                value
-                            }
-                            Value::ProxyType {
-                                module: _,
-                                obj_ty: _,
-                                id: _,
-                                plugin: _,
-                            } => Ok(value.clone()),
-                            Value::Struct(_) => Ok(value.clone()),
-                            Value::Store(_store, _plugin) => Ok(value.clone()),
-                            oops => panic!("{oops}"),
-                        }
-                    };
+                //         let read_value = s_read!(value);
+                //         match &*read_value {
+                //             Value::Function(ref func) => {
+                //                 let func =
+                //                     s_read!(lu_dog).exhume_function(&s_read!(func).id).unwrap();
+                //                 debug!("ExpressionEnum::Call func: {func:?}");
+                //                 let value = eval_function_call(
+                //                     func,
+                //                     &args,
+                //                     first_arg,
+                //                     arg_check,
+                //                     &span,
+                //                     &mut cloned_context,
+                //                     &mut vm,
+                //                 );
+                //                 debug!("value {value:?}");
+                //                 value
+                //             }
+                //             Value::Executor(_, _) => Ok(value.clone()),
+                //             Value::Lambda(ref ƛ) => {
+                //                 let mut args = args.clone();
+                //                 args.clear();
+                //                 let ƛ = s_read!(lu_dog).exhume_lambda(&s_read!(ƛ).id).unwrap();
+                //                 debug!("ExpressionEnum::Call ƛ: {ƛ:?}");
+                //                 let value = eval_lambda_expression(
+                //                     ƛ,
+                //                     &args,
+                //                     arg_check,
+                //                     &span,
+                //                     &mut cloned_context,
+                //                     &mut vm,
+                //                 );
+                //                 debug!("value {value:?}");
+                //                 value
+                //             }
+                //             Value::ProxyType {
+                //                 module: _,
+                //                 obj_ty: _,
+                //                 id: _,
+                //                 plugin: _,
+                //             } => Ok(value.clone()),
+                //             Value::Struct(_) => Ok(value.clone()),
+                //             Value::Store(_store, _plugin) => Ok(value.clone()),
+                //             oops => panic!("{oops}"),
+                //         }
+                //     };
 
-                    let mut executor = ChaChaExecutor::new();
-                    executor.spawn(future);
+                //     let task = context.executor().spawn(future);
 
-                    Ok(new_ref!(Value, Value::Executor("foo".to_owned(), executor)))
-                }
-                Value::Store(store, _plugin) => {
-                    let impl_ = &s_read!(store).r83c_implementation_block(&s_read!(lu_dog))[0];
-                    let x = if let Some(func) = s_read!(impl_)
-                        .r9_function(&s_read!(lu_dog))
-                        .iter()
-                        .find(|f| s_read!(f).name == *meth_name)
-                    {
-                        let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
-                        let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
+                //     Ok(new_ref!(Value, Value::Task("foo".to_owned(), Some(task))))
+                // }
+                // Value::Store(store, _plugin) => {
+                //     let impl_ = &s_read!(store).r83c_implementation_block(&s_read!(lu_dog))[0];
+                //     let x = if let Some(func) = s_read!(impl_)
+                //         .r9_function(&s_read!(lu_dog))
+                //         .iter()
+                //         .find(|f| s_read!(f).name == *meth_name)
+                //     {
+                //         let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
+                //         let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
 
-                        eval_external_method(
-                            (*func).clone(),
-                            &args,
-                            s_read!(call).argument,
-                            arg_check,
-                            span,
-                            context,
-                            vm,
-                        )
-                    } else {
-                        let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
-                        let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
-                        let read = s_read!(span);
-                        let span = read.start as usize..read.end as usize;
+                //         eval_external_method(
+                //             (*func).clone(),
+                //             &args,
+                //             s_read!(call).argument,
+                //             arg_check,
+                //             span,
+                //             context,
+                //             vm,
+                //         )
+                //     } else {
+                //         let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
+                //         let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
+                //         let read = s_read!(span);
+                //         let span = read.start as usize..read.end as usize;
 
-                        return Err(ChaChaError::NoSuchMethod {
-                            method: meth_name.to_owned(),
-                            span,
-                            location: location!(),
-                        });
-                    };
-                    x
-                }
+                //         return Err(ChaChaError::NoSuchMethod {
+                //             method: meth_name.to_owned(),
+                //             span,
+                //             location: location!(),
+                //         });
+                //     };
+                //     x
+                // }
                 Value::ProxyType {
                     module: _,
                     obj_ty: ref id,
@@ -681,11 +678,11 @@ pub fn eval(
                                 Ok(new_ref!(Value, Value::Empty))
                             };
 
-                            let mut executor = ChaChaExecutor::new();
-                            executor.spawn(future);
+                            let task = context.executor().spawn(future);
 
                             let value =
-                                new_ref!(Value, Value::Executor("xyzzy".to_owned(), executor));
+                                new_ref!(Value, Value::Task("sleep".to_owned(), Some(task)));
+                            context.executor().park_value(value.clone());
 
                             Ok(value)
                         }
@@ -696,75 +693,11 @@ pub fn eval(
                         }
                     }
                     #[cfg(feature = "async")]
-                    SPAWN => {
-                        debug!("evaluating chacha::spawn");
-                        // 🚧 I should be checking that there is an argument before
-                        // I go unwrapping it.
-                        let (func, span) = arg_values.pop_front().unwrap();
-                        let func = s_read!(func);
-                        ensure!(
-                            matches!(&*func, Value::Lambda(_))
-                                || matches!(&*func, Value::Function(_)),
-                            {
-                                // 🚧 I'm not really sure what to do about this here. It's
-                                // all really a hack for now anyway.
-                                let ty = func.get_type(&s_read!(sarzak), &s_read!(lu_dog));
-                                let ty = PrintableValueType(true, ty, context.models());
-                                let ty = ty.to_string();
-                                TypeMismatchSnafu {
-                                    expected: "<function>".to_string(),
-                                    found: ty,
-                                    span,
-                                }
-                            }
-                        );
-
-                        let func = func.to_owned();
-                        let expression = expression.clone();
-                        let mut context = context.clone();
-                        let future = async move {
-                            let mem = context.memory().clone();
-                            let mut vm = VM::new(&mem);
-                            let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
-                            let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
-                            if let Value::Function(func) = func {
-                                eval_function_call(
-                                    func.clone(),
-                                    &[],
-                                    None,
-                                    true,
-                                    span,
-                                    &mut context,
-                                    &mut vm,
-                                )
-                            } else if let Value::Lambda(ƛ) = func {
-                                eval_lambda_expression(
-                                    ƛ.clone(),
-                                    &[],
-                                    true,
-                                    span,
-                                    &mut context,
-                                    &mut vm,
-                                )
-                            } else {
-                                unreachable!()
-                            }
-                        };
-                        let mut executor = ChaChaExecutor::new();
-                        executor.spawn(future);
-
-                        // 🚧 The more I think about it, the more it seems like
-                        // I should have a Thread Value type so that we can not
-                        // on/y return the value but also so that we can join this
-                        // somehow.
-                        thread::spawn(move || {
-                            let _ = executor.run();
-                        });
-
-                        // let value = new_ref!(Value, Value::Future("xyzzy".to_owned(), executor));
-
-                        // Ok(value)
-                        Ok(new_ref!(Value, Value::Empty))
+                    SPAWN => spawn("task".to_owned(), &mut arg_values, expression, context),
+                    SPAWN_NAMED => {
+                        let (name, _) = arg_values.pop_front().unwrap();
+                        let name: String = (&*s_read!(name)).try_into()?;
+                        spawn(name, &mut arg_values, expression, context)
                     }
                     TIME => {
                         debug!("evaluating chacha::time");
@@ -929,4 +862,68 @@ pub fn eval(
     };
 
     call_result
+}
+
+fn spawn(
+    name: String,
+    arg_values: &mut VecDeque<(RefType<Value>, std::ops::Range<usize>)>,
+    expression: &RefType<Expression>,
+    context: &mut Context,
+) -> Result<RefType<Value>> {
+    let sarzak = context.sarzak_heel().clone();
+    let lu_dog = context.lu_dog_heel().clone();
+
+    debug!("evaluating chacha::spawn");
+    // 🚧 I should be checking that there is an argument before
+    // I go unwrapping it.
+    let (func, span) = arg_values.pop_front().unwrap();
+    let func = s_read!(func);
+    ensure!(
+        matches!(&*func, Value::Lambda(_)) || matches!(&*func, Value::Function(_)),
+        {
+            // 🚧 I'm not really sure what to do about this here. It's
+            // all really a hack for now anyway.
+            let ty = func.get_type(&s_read!(sarzak), &s_read!(lu_dog));
+            let ty = PrintableValueType(true, ty, context.models());
+            let ty = ty.to_string();
+            TypeMismatchSnafu {
+                expected: "<function>".to_string(),
+                found: ty,
+                span,
+            }
+        }
+    );
+
+    let func = func.to_owned();
+    let expression = expression.clone();
+    let mut context_copy = context.from_context();
+    let future = async move {
+        let mem = context_copy.memory().clone();
+        let mut vm = VM::new(&mem);
+        let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
+        let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
+        if let Value::Function(func) = &func {
+            eval_function_call(
+                func.clone(),
+                &[],
+                None,
+                true,
+                span,
+                &mut context_copy,
+                &mut vm,
+            )
+        } else if let Value::Lambda(ƛ) = &func {
+            eval_lambda_expression(ƛ.clone(), &[], true, span, &mut context_copy, &mut vm)
+        } else {
+            unreachable!()
+        }
+    };
+
+    let task = context.executor().spawn(future);
+
+    let future = new_ref!(Value, Value::Task(name, Some(task)));
+
+    context.executor().park_value(future.clone());
+
+    Ok(future)
 }

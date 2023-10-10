@@ -1186,27 +1186,24 @@ pub(super) fn inter_expression(
                 lu_dog,
             )?;
 
-            // if !matches!(s_read!(ty).subtype, ValueTypeEnum::XFuture(_)) {
-            //     dbg!(ty);
-            //     Err(vec![DwarfError::AwaitNotFuture {
-            //         span: expr_p.1.clone(),
-            //     }])
-            // } else {
-            dbg!(&ty);
-            let future = match s_read!(ty).subtype {
-                ValueTypeEnum::XFuture(ref id) => lu_dog.exhume_x_future(id).unwrap(),
-                ref wtf => {
-                    dbg!(wtf);
-                    unreachable!()
-                }
-            };
-            let ty = s_read!(future).r2_value_type(lu_dog)[0].clone();
-            let expr = AWait::new(&expr.0, lu_dog);
-            let expr = Expression::new_a_wait(&expr, lu_dog);
-            let value = XValue::new_expression(block, &ty, &expr, lu_dog);
-            update_span_value(&span, &value, location!());
+            if !matches!(s_read!(ty).subtype, ValueTypeEnum::XFuture(_)) {
+                dbg!(ty);
+                Err(vec![DwarfError::AwaitNotFuture {
+                    span: expr_p.1.clone(),
+                }])
+            } else {
+                let future = match s_read!(ty).subtype {
+                    ValueTypeEnum::XFuture(ref id) => lu_dog.exhume_x_future(id).unwrap(),
+                    _ => unreachable!(),
+                };
+                let ty = s_read!(future).r2_value_type(lu_dog)[0].clone();
+                let expr = AWait::new(&expr.0, lu_dog);
+                let expr = Expression::new_a_wait(&expr, lu_dog);
+                let value = XValue::new_expression(block, &ty, &expr, lu_dog);
+                update_span_value(&span, &value, location!());
 
-            Ok(((expr, span), ty))
+                Ok(((expr, span), ty))
+            }
             // }
         }
         //
@@ -1260,6 +1257,8 @@ pub(super) fn inter_expression(
 
             let expr = Expression::new_block(&block, lu_dog);
             let ty = inter_statements(&stmts_vec, &stmts_span, &block, context, lu_dog)?;
+            let value = XValue::new_expression(&block, &ty.0, &expr, lu_dog);
+            update_span_value(&span, &value, location!());
 
             // If it's an async block then wrap it in a future.
             let ty = match a_sink {
@@ -1269,9 +1268,6 @@ pub(super) fn inter_expression(
                 }
                 BlockType::Sync => ty,
             };
-
-            let value = XValue::new_expression(&block, &ty.0, &expr, lu_dog);
-            update_span_value(&span, &value, location!());
 
             debug!("block {expr:?}");
             Ok(((expr, span), ty.0))
@@ -2071,7 +2067,7 @@ pub(super) fn inter_expression(
             } else {
                 unreachable!();
             };
-            let block = Block::new(a_sink, Uuid::new_v4(), None, None, lu_dog);
+            let block = Block::new(a_sink, Uuid::new_v4(), Some(block), None, lu_dog);
             let _body = Body::new_block(a_sink, &block, lu_dog);
 
             context.location = location!();
@@ -2320,20 +2316,18 @@ pub(super) fn inter_expression(
             // need one -- and it needs to be the right one...
             // To expound, there are likely to be multiple values in this block,
             // and we need to find the one that matches the variable name.
+
+            // Blocks may be nested, so we collect all of the values up the chain.
             let mut values = Vec::new();
 
-            let mut prev = Some(block.clone());
-            while let Some(p) = prev {
-                let mut foo = lu_dog
-                    .iter_x_value()
-                    .filter(|value| s_read!(value).block == s_read!(p).id)
-                    .collect::<Vec<RefType<XValue>>>();
+            let mut parent = Some(block.clone());
+            while let Some(block) = parent {
+                let mut foo = s_read!(block).r33_x_value(lu_dog);
                 values.append(&mut foo);
-                prev = s_read!(p).r93_block(lu_dog).pop();
+                parent = s_read!(block).r93_block(lu_dog).pop();
             }
 
             debug!("values: {values:?}");
-
             // Now search for a value that's a Variable, and see if the access matches
             // the variable.
             let mut expr_type_tuples = values
@@ -2584,7 +2578,7 @@ pub(super) fn inter_expression(
         // MethodCall
         //
         ParserExpression::MethodCall(instance, (ref method, meth_span), args) => {
-            debug!("MethodCall Enter: {:?}.{method}", instance);
+            debug!("MethodCall Enter: instance: {instance:?}, method: `{method}`");
 
             let (instance, instance_ty) = inter_expression(
                 &new_ref!(ParserExpression, instance.0.to_owned()),
@@ -2594,7 +2588,7 @@ pub(super) fn inter_expression(
                 lu_dog,
             )?;
 
-            debug!("MethodCall inter method: expr: ty {instance:?}: {instance_ty:?}");
+            debug!("MethodCall instance: {instance:?}, type: {instance_ty:?}");
 
             let ret_ty = if let ValueTypeEnum::WoogStruct(id) = s_read!(instance_ty).subtype {
                 let woog_struct = lu_dog.exhume_woog_struct(&id).unwrap();
@@ -2630,6 +2624,21 @@ pub(super) fn inter_expression(
                     }
                 } else {
                     ValueType::new_unknown(lu_dog)
+                }
+            } else if let ValueTypeEnum::XFuture(_) = s_read!(instance_ty).subtype {
+                match method.as_str() {
+                    "and" => {
+                        let inner = ValueType::new_empty(lu_dog);
+                        let future = XFuture::new(&inner, lu_dog);
+                        ValueType::new_x_future(&future, lu_dog)
+                    }
+                    _ => {
+                        return Err(vec![DwarfError::NoSuchMethod {
+                            method: method.to_owned(),
+                            span: meth_span.to_owned(),
+                            location: location!(),
+                        }])
+                    }
                 }
             } else {
                 ValueType::new_unknown(lu_dog)
@@ -3093,16 +3102,15 @@ pub(super) fn inter_expression(
                 )?
             } else {
                 // 🚧 Once we have tuples, I'd prefer to return the empty tuple.
-                (
-                    (
-                        Expression::new_block(
-                            &Block::new(false, Uuid::new_v4(), None, None, lu_dog),
-                            lu_dog,
-                        ),
-                        span.clone(),
-                    ),
-                    ValueType::new_empty(lu_dog),
-                )
+                let expr = Expression::new_block(
+                    &Block::new(false, Uuid::new_v4(), None, None, lu_dog),
+                    lu_dog,
+                );
+                let ty = ValueType::new_empty(lu_dog);
+                let value = XValue::new_expression(&block, &ty, &expr, lu_dog);
+                update_span_value(&span, &value, location!());
+
+                ((expr, span.clone()), ty)
             };
 
             let ret = XReturn::new(&expr.0, lu_dog);
@@ -3288,6 +3296,7 @@ pub(super) fn inter_expression(
 
                 let expr = Expression::new_field_expression(&field, lu_dog);
                 let value = XValue::new_expression(block, &ty, &expr, lu_dog);
+                update_span_value(&span, &value, location!());
 
                 // This is exceptional, at least so for. What's happening is that
                 // the span is already pointing at a value. We've been clobbering
@@ -3731,7 +3740,7 @@ fn inter_enum(
                                 };
                             let generic = Generic::new(generic.to_owned(), None, None, lu_dog);
                             let ty = ValueType::new_generic(&generic, lu_dog);
-                            LuDogSpan::new(
+                            let span = LuDogSpan::new(
                                 span.end as i64,
                                 span.start as i64,
                                 &context.source,
@@ -3739,6 +3748,7 @@ fn inter_enum(
                                 None,
                                 lu_dog,
                             );
+
                             if first {
                                 first = false;
                                 first_generic = ty.clone()
@@ -4597,8 +4607,8 @@ pub(crate) fn update_span_value(
         "{}:{}:{} -- {value:?}",
         location.file, location.line, location.column
     );
-    // debug_assert!(s_read!(span).x_value.is_none());
     s_write!(span).x_value = Some(s_read!(value).id);
+    debug!("span: {:?}", s_read!(span));
 }
 
 // fn update_span_type(span: &mut RefType<LuDogSpan>, value_type: &RefType<ValueType>) {

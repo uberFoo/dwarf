@@ -14,7 +14,7 @@ use crate::{
     Dirty, ModelStore, NewRef, RefType, Value,
 };
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ModelContext {
     lu_dog: RefType<LuDogStore>,
     sarzak: RefType<SarzakStore>,
@@ -47,8 +47,9 @@ impl ModelContext {
     }
 }
 
-#[derive(Clone)]
-pub struct Context {
+// #[derive(Clone)]
+#[derive(Debug)]
+pub struct Context<'a> {
     models: ModelContext,
     /// The prompt to display in the REPL
     prompt: String,
@@ -67,14 +68,8 @@ pub struct Context {
     args: Option<RefType<Value>>,
     dwarf_home: PathBuf,
     dirty: Vec<Dirty>,
-    // #[cfg(feature = "async")]
-    // spawn: Sender<
-    //     Box<
-    //         dyn std::future::Future<
-    //             Output = Result<RefType<Value>, crate::chacha::error::ChaChaError>,
-    //         >,
-    //     >,
-    // >,
+    #[cfg(feature = "async")]
+    executors: Vec<ChaChaExecutor<'a>>,
 }
 
 /// Save the lu_dog model when the context is dropped
@@ -95,8 +90,14 @@ pub struct Context {
 //     }
 // }
 
+impl<'a> Drop for Context<'a> {
+    fn drop(&mut self) {
+        log::debug!("dropping context");
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
-impl Context {
+impl<'a> Context<'a> {
     pub fn new(
         prompt: String,
         block: RefType<Block>,
@@ -130,7 +131,40 @@ impl Context {
             args,
             dwarf_home,
             dirty,
+            #[cfg(feature = "async")]
+            executors: vec![ChaChaExecutor::new()],
         }
+    }
+
+    pub fn from_context(&self) -> Self {
+        Self {
+            prompt: self.prompt.clone(),
+            block: self.block.clone(),
+            memory: self.memory.clone(),
+            models: self.models.clone(),
+            mem_update_recv: self.mem_update_recv.clone(),
+            std_out_send: self.std_out_send.clone(),
+            std_out_recv: self.std_out_recv.clone(),
+            debug_status_writer: self.debug_status_writer.clone(),
+            timings: self.timings.clone(),
+            expr_count: 0,
+            func_calls: 0,
+            args: self.args.clone(),
+            dwarf_home: self.dwarf_home.clone(),
+            dirty: self.dirty.clone(),
+            #[cfg(feature = "async")]
+            executors: self.executors.clone(),
+        }
+    }
+
+    #[cfg(feature = "async")]
+    pub fn executor(&self) -> &ChaChaExecutor<'a> {
+        &self.executors.last().unwrap()
+    }
+
+    #[cfg(feature = "async")]
+    pub fn executors(&self) -> &[ChaChaExecutor<'a>] {
+        &self.executors
     }
 
     pub fn dirty(&self) -> Vec<Dirty> {

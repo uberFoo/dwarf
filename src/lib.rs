@@ -43,6 +43,7 @@ const NORM_SQUARED: &str = "norm_squared";
 const PARSE: &str = "parse";
 const SLEEP: &str = "sleep";
 const SPAWN: &str = "spawn";
+const SPAWN_NAMED: &str = "spawn_named";
 const SQUARE: &str = "square";
 const TIME: &str = "time";
 const TYPEOF: &str = "typeof";

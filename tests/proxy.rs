@@ -67,14 +67,14 @@ fn run_program(test: &str, program: &str) -> Result<(RefType<Value>, String), St
         }
     };
 
-    let ctx = initialize_interpreter(dwarf_home, ctx, sarzak).unwrap();
-    match start_func("main", false, ctx) {
+    let mut ctx = initialize_interpreter(dwarf_home, ctx, sarzak).unwrap();
+    match start_func("main", false, &mut ctx) {
         Ok(v) => {
-            let stdout = v.1.drain_std_out().join("").trim().to_owned();
+            let stdout = ctx.drain_std_out().join("").trim().to_owned();
 
             println!("{}", stdout);
 
-            Ok((v.0, stdout))
+            Ok((v, stdout))
         }
         Err(e) => {
             // Print the "uber" error message.

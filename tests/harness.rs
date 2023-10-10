@@ -130,25 +130,50 @@ fn run_program(test: &str, program: &str) -> Result<(RefType<Value>, String), St
         }
     };
 
-    let ctx = initialize_interpreter(dwarf_home, ctx, sarzak).unwrap();
-    match start_func("main", false, ctx) {
-        Ok((value, ctx)) => {
+    let mut ctx = initialize_interpreter(dwarf_home, ctx, sarzak).unwrap();
+    match start_func("main", false, &mut ctx) {
+        Ok(value) => {
             #[cfg(feature = "async")]
-            let value = unsafe {
+            unsafe {
                 let v = std::sync::Arc::into_raw(value.clone());
                 let v = std::ptr::read(v);
                 let v = v.into_inner().unwrap();
                 match v {
-                    Value::Executor(name, mut task) => task.run().unwrap(),
-                    _ => value,
+                    Value::Task(name, mut task) => {
+                        dbg!(&name);
+                        let task = task.take().unwrap();
+                        match ctx.executor().block_on(task) {
+                            Ok(value) => {
+                                let stdout = ctx.drain_std_out().join("").trim().to_owned();
+
+                                println!("{stdout}");
+
+                                Ok((value, stdout))
+                            }
+                            Err(e) => {
+                                let e = e.into();
+                                eprintln!("{}", ChaChaErrorReporter(&e, true, program, test));
+
+                                let error = format!(
+                                    "Interpreter exited with:\n{}",
+                                    ChaChaErrorReporter(&e, false, program, test)
+                                )
+                                .trim()
+                                .to_owned();
+
+                                Err(error)
+                            }
+                        }
+                    }
+                    _ => {
+                        let stdout = ctx.drain_std_out().join("").trim().to_owned();
+
+                        println!("{stdout}");
+
+                        Ok((value, stdout))
+                    }
                 }
-            };
-
-            let stdout = ctx.drain_std_out().join("").trim().to_owned();
-
-            println!("{stdout}");
-
-            Ok((value, stdout))
+            }
         }
         Err(e) => {
             eprintln!("{}", ChaChaErrorReporter(&e, true, program, test));

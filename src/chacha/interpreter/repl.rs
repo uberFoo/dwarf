@@ -12,7 +12,7 @@ use crate::{
     new_ref, s_read, s_write, ChaChaError, NewRef, RefType,
 };
 
-pub fn start_repl(mut context: Context, is_uber: bool) -> Result<(), Error> {
+pub fn start_repl(mut context: &mut Context, is_uber: bool) -> Result<(), Error> {
     use std::io;
 
     use rustyline::error::ReadlineError;

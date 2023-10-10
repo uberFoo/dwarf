@@ -58,6 +58,7 @@ pub fn eval_function_call<'a>(
     span!("eval_function_call");
 
     let body = s_read!(func).r19_body(&s_read!(lu_dog))[0].clone();
+    let task_name: String = s_read!(func).name.to_owned();
 
     if s_read!(body).a_sink {
         #[cfg(not(feature = "async"))]
@@ -69,14 +70,14 @@ pub fn eval_function_call<'a>(
         {
             let args = args.to_owned();
             let span = span.to_owned();
-            let mut cloned_context = context.clone();
+            let mut cloned_context = context.from_context();
             // let mut vm = vm.to_owned();
 
             let future = async move {
                 let mem = cloned_context.memory().clone();
                 let mut vm = VM::new(&mem);
 
-                let value = inner_eval_function_call(
+                inner_eval_function_call(
                     func,
                     &args,
                     first_arg,
@@ -84,18 +85,16 @@ pub fn eval_function_call<'a>(
                     &span,
                     &mut cloned_context,
                     &mut vm,
-                );
-
-                dbg!(&value);
-                value
+                )
             };
 
-            let mut executor = ChaChaExecutor::new();
-            executor.spawn(future);
+            let task = context.executor().spawn(future);
 
-            let value = new_ref!(Value, Value::Executor("bar".to_owned(), executor));
+            let future = new_ref!(Value, Value::Task(task_name, Some(task)));
 
-            Ok(value)
+            context.executor().park_value(future.clone());
+
+            Ok(future)
         }
     } else {
         inner_eval_function_call(func, args, first_arg, arg_check, span, context, vm)

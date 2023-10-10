@@ -121,24 +121,6 @@ macro_rules! error {
 }
 pub(crate) use error;
 
-// what is this even for?
-macro_rules! no_debug {
-    ($arg:expr) => {
-        log::debug!("{}\n  --> {}:{}:{}", $arg, file!(), line!(), column!());
-    };
-    ($msg:literal, $arg:expr) => {
-        log::debug!(
-            target: "chacha",
-            "{} --> {}\n  --> {}:{}:{}",
-            Colour::Yellow.paint($msg),
-            $arg,
-            file!(),
-            line!(),
-            column!()
-        );
-    };
-}
-
 const TIMING_COUNT: usize = 1_000;
 
 lazy_static! {
@@ -151,11 +133,11 @@ lazy_static! {
 ///
 /// The interpreter requires two domains to operate. The first is the metamodel:
 /// sarzak. The second is the compiled dwarf file.
-pub fn initialize_interpreter(
+pub fn initialize_interpreter<'a>(
     dwarf_home: PathBuf,
     i_context: InterContext,
     sarzak: SarzakStore,
-) -> Result<Context, Error> {
+) -> Result<Context<'a>, Error> {
     let mut lu_dog = s_write!(i_context.lu_dog);
 
     // Initialize the stack with stuff from the compiled source.
@@ -448,9 +430,6 @@ fn eval_expression(
 ) -> Result<RefType<Value>> {
     let lu_dog = context.lu_dog_heel().clone();
 
-    // Timing goodness
-    context.increment_expression_count(1);
-
     // context.tracy.span(span_location!("eval_expression"), 0);
     // context
     //     .tracy
@@ -484,50 +463,56 @@ fn eval_expression(
         trace!("stack: {:#?}", context.memory());
     }
 
-    if log_enabled!(Debug) {
+    // Timing goodness
+    context.increment_expression_count(1);
+
+    #[cfg(feature = "async")]
+    {
+        while (context.executor().try_tick()) {}
+        // let executors = context.executors();
+        // let len = executors.len();
+        // // dbg!(&len);
+        // for i in 0..len {
+        //     // dbg!(len - i - 1);
+        //     // dbg!(&executors[len - i - 1]);
+        //     while (executors[len - i - 1].tick()) {
+        //         dbg!("ticked on ", len - i - 1);
+        //         dbg!(&executors[len - i - 1]);
+        //     }
+        //     // let tick = executors[len - i - 1].tick();
+        //     // dbg!(tick);
+        // }
+    }
+
+    if log_enabled!(target: "chacha", Debug) {
         let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
         let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
         let span = s_read!(span);
         let span = span.start as usize..span.end as usize;
         let source = context.source();
-        debug!("executing {}", source[span].to_owned());
+        debug!("executing:\n`{}`", source[span].to_owned());
     }
 
     match s_read!(expression).subtype {
         #[cfg(feature = "async")]
         ExpressionEnum::AWait(ref expression) => {
-            dbg!("wtf");
             let expr = s_read!(lu_dog).exhume_a_wait(expression).unwrap();
-            dbg!("foo", &expr);
             let expr = s_read!(expr).r98_expression(&s_read!(lu_dog))[0].clone();
             let value = eval_expression(expr, context, vm)?;
-            let mut value = s_write!(value);
-            dbg!("bar", &value);
-            // Ok(value)
 
-            // Ok(new_ref!(Value, Value::Empty))
-
-            match &mut *value {
-                Value::Executor(name, task) => {
-                    dbg!(&name, &task);
-                    // Ok(context.executor_run())
-                    task.run()
-                    // match task {
-                    //     FutureResult::JoinHandle(maybe_handle) => {
-                    //         if let Some(task) = maybe_handle.take() {
-                    //             Ok(future::block_on(task))
-                    //         } else {
-                    //             unreachable!()
-                    //         }
-                    //     }
-                    //     FutureResult::Result(result) => Ok(result.clone()),
-                    // }
-                }
-                wtf => {
-                    dbg!(wtf);
-                    unreachable!()
-                }
-            }
+            Ok(value)
+            // let mut value = s_write!(value);
+            // match &mut *value {
+            //     Value::Task(name, task) => {
+            //         let task = task.take().unwrap();
+            //         // dbg!(&name, &task);
+            //         context.executor().block_on(task)
+            //     }
+            //     wtf => {
+            //         dbg!(wtf);
+            //         unreachable!()
+            //     }
+            // }
         }
         ExpressionEnum::Block(ref block) => block::eval(block, context, vm),
         ExpressionEnum::Call(ref call) => call::eval(call, &expression, context, vm),
@@ -617,8 +602,7 @@ pub fn eval_statement(
             let stmt = s_read!(lu_dog).exhume_expression_statement(stmt).unwrap();
             let stmt = s_read!(stmt);
             let expr = stmt.r31_expression(&s_read!(lu_dog))[0].clone();
-            let value = eval_expression(expr, context, vm)?;
-            no_debug!("StatementEnum::ExpressionStatement: value", s_read!(value));
+            let _value = eval_expression(expr, context, vm)?;
 
             Ok(new_ref!(Value, Value::Empty))
         }
@@ -635,14 +619,10 @@ pub fn eval_statement(
 
             let var = s_read!(stmt.r21_local_variable(&s_read!(lu_dog))[0]).clone();
             let var = s_read!(var.r12_variable(&s_read!(lu_dog))[0]).clone();
-            debug!("var {var:?}");
 
             debug!("allocating space for  `{} = {}`", var.name, s_read!(value));
             context.memory().insert(var.name, value);
 
-            // 🚧 I'm changing this from returning ty. If something get's wonky,
-            // maybe start looking here. But TBH, why would we return the type of
-            // the storage?
             Ok(new_ref!(Value, Value::Empty))
         }
         StatementEnum::ResultStatement(ref stmt) => {
@@ -681,11 +661,11 @@ pub enum DebuggerControl {
 }
 
 /// This runs the main function, assuming it exists.
-pub fn start_func(
+pub fn start_func<'a>(
     name: &str,
     stopped: bool,
-    mut context: Context,
-) -> Result<(RefType<Value>, Context), Error> {
+    mut context: &mut Context<'a>,
+) -> Result<RefType<Value>, Error> {
     {
         let mut running = RUNNING.lock();
         *running = !stopped;
@@ -731,7 +711,7 @@ pub fn start_func(
             //              ^^^^^^^^^^^^^^^ : It's not redundant.
             // The macro is just hiding the fact that it isn't.
             // This is, btw: not redundant.
-            Ok((result, context))
+            Ok(result)
         } else {
             Err(Error(ChaChaError::MainIsNotAFunction))
         }

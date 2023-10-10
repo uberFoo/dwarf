@@ -3,8 +3,10 @@ use std::{
     io::{self, BufReader, BufWriter},
     net::TcpListener,
     path::PathBuf,
-    thread,
 };
+
+#[cfg(feature = "async")]
+use std::thread;
 
 use clap::{ArgAction, Args, Parser};
 use dap::{prelude::BasicClient, server::Server};
@@ -12,7 +14,7 @@ use dap::{prelude::BasicClient, server::Server};
 use dwarf::{
     chacha::{
         dap::DapAdapter,
-        error::ChaChaErrorReporter,
+        error::{ChaChaError, ChaChaErrorReporter},
         interpreter::{banner2, initialize_interpreter, start_func, start_repl},
     },
     dwarf::{new_lu_dog, parse_dwarf},
@@ -221,24 +223,58 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         if args.repl.is_some() && args.repl.unwrap() {
-            start_repl(ctx, is_uber).map_err(|e| {
-                println!("Interpreter exited with: {}", e);
-                e
-            })?;
+            start_repl(&mut ctx, is_uber)
+                .map_err(|e| {
+                    println!("Interpreter exited with: {}", e);
+                    e
+                })
+                .unwrap();
         } else {
-            match start_func("main", false, ctx) {
+            match start_func("main", false, &mut ctx) {
                 // 🚧 What's a sensible thing to do with this?
-                Ok((value, _)) => {
+                Ok(value) => {
+                    #[cfg(feature = "async")]
+                    {
+                        while !ctx.executor().is_empty() {
+                            ctx.executor().tick();
+                        }
+                        // let mut tick = true;
+                        // while tick {
+                        //     tick = false;
+                        //     let executors = ctx.executors();
+                        //     let len = executors.len();
+                        //     dbg!(&len);
+                        //     for i in 0..len {
+                        //         log::debug!("tick .level {i}");
+                        //         log::debug!("{:?}", executors[len - i - 1]);
+                        //         while executors[len - i - 1].tick() {
+                        //             log::debug!("{:?}", executors[len - i - 1]);
+                        //             tick = true;
+                        //             dbg!("tick", len - i - 1);
+                        //         }
+                        //         // let tick = executors[len - i - 1].tick();
+                        //         // dbg!(tick);
+                        //     }
+                        // }
+                    }
+
                     #[cfg(feature = "async")]
                     unsafe {
                         let value = std::sync::Arc::into_raw(value);
                         let value = std::ptr::read(value);
                         let value = value.into_inner().unwrap();
+
                         match value {
-                            Value::Executor(name, mut task) => {
-                                dbg!(&name);
-                                match task.run() {
-                                    Ok(_) => {}
+                            Value::Task(name, Some(task)) => {
+                                dbg!(&name, &task);
+                                // Ok::<(), ChaChaError>(())
+
+                                // let task = task.take().unwrap();
+                                match ctx.executor().block_on(task) {
+                                    // Ok(_) => Ok::<(), ChaChaError>(()),
+                                    Ok(result) => {
+                                        dbg!(result);
+                                    }
                                     Err(e) => {
                                         eprintln!("Interpreter exited with:");
                                         eprintln!(
@@ -250,7 +286,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                                 &name
                                             )
                                         );
-                                        return Ok(());
                                     }
                                 }
                             }
@@ -258,14 +293,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 dbg!(value);
                             }
                         }
-                    }
+                    };
+
+                    Ok::<(), ChaChaError>(())
                 }
                 Err(e) => {
                     eprintln!("Interpreter exited with:");
                     eprintln!("{}", ChaChaErrorReporter(&e, is_uber, &source_code, &name));
-                    return Ok(());
+                    Ok(())
                 }
-            };
+            }
+            .unwrap();
         }
     } else if args.dap.is_some() && args.dap.unwrap() {
         let listener = TcpListener::bind("127.0.0.1:4711").unwrap();
@@ -309,9 +347,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     } else {
         let ctx = Context::default();
-        let ctx = initialize_interpreter(dwarf_home, ctx, sarzak)?;
+        let mut ctx = initialize_interpreter(dwarf_home, ctx, sarzak)?;
 
-        start_repl(ctx, is_uber).map_err(|e| {
+        start_repl(&mut ctx, is_uber).map_err(|e| {
             println!("Interpreter exited with: {}", e);
             e
         })?;

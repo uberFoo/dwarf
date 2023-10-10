@@ -57,7 +57,7 @@ pub fn eval_lambda_expression(
         // We need to look the params up anyway to set the local variables.
         let params = ƛ.r76_lambda_parameter(&s_read!(lu_dog));
 
-        dbg!(params.len(), args.len());
+        // dbg!(params.len(), args.len());
 
         // 🚧 I'd really like to see the source code printed out, with the function
         // call highlighted.
@@ -161,7 +161,6 @@ pub fn eval_lambda_expression(
             let mut next = s_read!(lu_dog).exhume_statement(id).unwrap();
 
             loop {
-                dbg!("oh fuck", &next, id);
                 let result = eval_statement(next.clone(), context, vm).map_err(|e| {
                     // This is cool, if it does what I think it does. We basically
                     // get the opportunity to look at the error, and do stuff with

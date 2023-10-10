@@ -20,17 +20,20 @@ pub fn eval<'a>(
     #[cfg(feature = "async")]
     {
         if s_read!(block).a_sink {
-            let mut cloned_context = context.clone();
+            let mut cloned_context = context.from_context();
             let future = async move {
                 let mem = cloned_context.memory().clone();
                 let mut vm = VM::new(&mem);
                 eval_inner(block, &mut cloned_context, &mut vm)
             };
 
-            let mut executor = ChaChaExecutor::new();
-            executor.spawn(future);
+            let task = context.executor().spawn(future);
 
-            Ok(new_ref!(Value, Value::Executor("baz".to_owned(), executor)))
+            let future = new_ref!(Value, Value::Task("block".to_owned(), Some(task)));
+
+            context.executor().park_value(future.clone());
+
+            Ok(future)
         } else {
             eval_inner(block, context, vm)
         }

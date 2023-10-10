@@ -217,8 +217,6 @@ pub enum Value {
     Empty,
     Enumeration(EnumVariant),
     Error(String),
-    #[cfg(feature = "async")]
-    Executor(String, ChaChaExecutor<'static>),
     Float(DwarfFloat),
     /// Function
     ///
@@ -242,12 +240,29 @@ pub enum Value {
     String(String),
     Struct(RefType<UserStruct>),
     Table(HashMap<String, RefType<Self>>),
+    #[cfg(feature = "async")]
+    Task(
+        String,
+        Option<smol::Task<Result<RefType<Value>, ChaChaError>>>,
+    ),
     Thonk(&'static str, usize),
     TupleEnum(RefType<TupleEnum>),
     Unknown,
     Uuid(uuid::Uuid),
     Vector(Vec<RefType<Self>>),
 }
+
+// impl Drop for Value {
+//     fn drop(&mut self) {
+//         match self {
+//             Self::Task(_, Some(task)) => {
+//                 log::debug!(target: "async", "drop task: {:?}", task);
+//                 // future::block_on(task);
+//             }
+//             _ => {}
+//         }
+//     }
+// }
 
 impl std::fmt::Debug for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -257,8 +272,6 @@ impl std::fmt::Debug for Value {
             Self::Empty => write!(f, "()"),
             Self::Enumeration(var) => write!(f, "{:?}", var),
             Self::Error(e) => write!(f, "{}: {}", Colour::Red.bold().paint("error"), e),
-            #[cfg(feature = "async")]
-            Self::Executor(name, _) => write!(f, "Executor {name}"),
             Self::Float(num) => write!(f, "{:?}", num),
             Self::Function(func) => write!(f, "{:?}", s_read!(func)),
             Self::Integer(num) => write!(f, "{:?}", num),
@@ -287,6 +300,8 @@ impl std::fmt::Debug for Value {
             Self::String(str_) => write!(f, "{:?}", str_),
             Self::Struct(ty) => write!(f, "{:?}", s_read!(ty)),
             Self::Table(table) => write!(f, "{:?}", table),
+            #[cfg(feature = "async")]
+            Self::Task(name, task) => write!(f, "Task {{ name: {name} {:?} }}", task),
             Self::Thonk(name, number) => write!(f, "{:?} [{:?}]", name, number),
             Self::TupleEnum(te) => write!(f, "{:?}", s_read!(te)),
             Self::Unknown => write!(f, "<unknown>"),
@@ -304,10 +319,6 @@ impl Clone for Value {
             Self::Empty => Self::Empty,
             Self::Enumeration(var) => Self::Enumeration(var.clone()),
             Self::Error(e) => Self::Error(e.clone()),
-            #[cfg(feature = "async")]
-            Self::Executor(parent, _) => {
-                Self::Executor(format!("{parent}.道"), ChaChaExecutor::new())
-            }
             Self::Float(num) => Self::Float(*num),
             Self::Function(func) => Self::Function(func.clone()),
             Self::Integer(num) => Self::Integer(*num),
@@ -329,6 +340,8 @@ impl Clone for Value {
             Self::String(str_) => Self::String(str_.clone()),
             Self::Struct(ty) => Self::Struct(ty.clone()),
             Self::Table(table) => Self::Table(table.clone()),
+            #[cfg(feature = "async")]
+            Self::Task(name, task) => Self::Task(name.to_owned(), None),
             Self::Thonk(name, number) => Self::Thonk(*name, *number),
             Self::TupleEnum(te) => Self::TupleEnum(te.clone()),
             Self::Unknown => Self::Unknown,
@@ -450,15 +463,6 @@ impl Value {
                 #[allow(clippy::let_and_return)]
                 z
             }
-            #[cfg(feature = "async")]
-            Value::Executor(_, _) => {
-                for vt in lu_dog.iter_value_type() {
-                    if let ValueTypeEnum::XFuture(_) = s_read!(vt).subtype {
-                        return vt.clone();
-                    }
-                }
-                unreachable!()
-            }
             Value::Integer(_) => {
                 let ty = Ty::new_integer(sarzak);
                 for vt in lu_dog.iter_value_type() {
@@ -549,8 +553,6 @@ impl fmt::Display for Value {
             // Self::Enum(ty) => write!(f, "{}", s_read!(ty)),
             Self::Enumeration(var) => write!(f, "{var}"),
             Self::Error(e) => write!(f, "{}: {e}", Colour::Red.bold().paint("error")),
-            #[cfg(feature = "async")]
-            Self::Executor(_, _) => write!(f, "<executor>"),
             Self::Float(num) => write!(f, "{num}"),
             Self::Function(_) => write!(f, "<function>"),
             Self::Integer(num) => write!(f, "{num}"),
@@ -569,6 +571,8 @@ impl fmt::Display for Value {
             Self::Struct(ty) => write!(f, "{}", s_read!(ty)),
             // Self::String(str_) => write!(f, "\"{}\"", str_),
             Self::Table(table) => write!(f, "{table:?}"),
+            #[cfg(feature = "async")]
+            Self::Task(name, task) => write!(f, "Task {{ name: {name} {:?}}}", task),
             Self::Thonk(name, number) => write!(f, "{name} [{number}]"),
             Self::TupleEnum(te) => write!(f, "{}", s_read!(te)),
             Self::Unknown => write!(f, "<unknown>"),
