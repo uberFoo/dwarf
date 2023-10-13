@@ -3434,33 +3434,26 @@ impl DwarfParser {
     fn parse_return_expression(&mut self) -> Result<Option<Expression>> {
         debug!("enter");
 
-        if self.match_tokens(&[Token::Return]).is_none() {
-            debug!("exit no return");
-            return Ok(None);
+        let mut span = match self.match_tokens(&[Token::Return]) {
+            Some((_, span)) => span,
+            None => {
+                debug!("exit no return");
+                return Ok(None);
+            }
+        };
+
+        let (expression, expr_span) = if let Some(expr) = self.parse_expression(ENTER)? {
+            let span = expr.0 .1.clone();
+            (Some(Box::new(expr.0)), Some(span))
+        } else {
+            (None, None)
+        };
+
+        if let Some(expr_span) = expr_span {
+            span.end = expr_span.end;
         }
 
-        let start = if let Some(tok) = self.peek() {
-            tok.1.start
-        } else {
-            debug!("exit no tok");
-            return Ok(None);
-        };
-
-        let expression = if let Some(expr) = self.parse_expression(ENTER)? {
-            Some(Box::new(expr.0))
-        } else {
-            None
-        };
-
-        debug!("exit ok");
-
-        Ok(Some((
-            (
-                DwarfExpression::Return(expression),
-                start..self.previous().unwrap().1.end,
-            ),
-            LITERAL,
-        )))
+        Ok(Some(((DwarfExpression::Return(expression), span), LITERAL)))
     }
 
     /// Parse a String Literal

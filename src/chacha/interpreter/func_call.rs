@@ -92,6 +92,7 @@ pub fn eval_function_call<'a>(
 
             let future = new_ref!(Value, Value::Task(task_name, Some(task)));
 
+            // Stash the future away so that it doesn't get dropped when it's done running.
             context.executor().park_value(future.clone());
 
             Ok(future)

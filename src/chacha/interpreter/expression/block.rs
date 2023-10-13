@@ -31,6 +31,7 @@ pub fn eval<'a>(
 
             let future = new_ref!(Value, Value::Task("block".to_owned(), Some(task)));
 
+            // Stash the future away so that it doesn't get dropped when it's done running.
             context.executor().park_value(future.clone());
 
             Ok(future)

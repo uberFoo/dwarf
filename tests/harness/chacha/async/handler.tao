@@ -53,7 +53,7 @@ impl Light {
                         }
 
                         print("Turning on light\n");
-                        let foo = chacha::sleep(750).await;
+                        chacha::sleep(3000).await;
                         print("on awake\n");
                         print("The light is on\n");
 
@@ -67,11 +67,12 @@ impl Light {
                     PowerEvent::Off => {
                         if let Power::Off = self.power {
                             print("The light is already off!\n");
+                            // chacha::sleep(2000);
                             return;
                         }
 
                         print("Turning off light\n");
-                        let a = chacha::sleep(200).await;
+                        chacha::sleep(2000);
                         print("off awake\n");
                         print("The light is off\n");
 
@@ -110,6 +111,7 @@ async fn main() -> Future<int> {
             assert_on(light);
         }
         .await;
+        print(foo);
     });
 
     let b = chacha::spawn(|| -> () {
@@ -124,7 +126,8 @@ async fn main() -> Future<int> {
     });
 
     let c = async {
-        chacha::sleep(1000).await;
+        chacha::sleep(2000).await;
+        print("done\n");
         42
     };
 

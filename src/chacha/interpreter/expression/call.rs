@@ -672,7 +672,9 @@ pub fn eval(
                         {
                             let future = async move {
                                 debug!("sleeping for {duration:?}");
+                                dbg!(&duration);
                                 let _instant = Timer::after(duration).await;
+                                dbg!(_instant);
                                 debug!("done sleeping");
                                 // 🚧 Maybe we should coerce the instant and return it?
                                 Ok(new_ref!(Value, Value::Empty))
@@ -682,6 +684,7 @@ pub fn eval(
 
                             let value =
                                 new_ref!(Value, Value::Task("sleep".to_owned(), Some(task)));
+                            // Stash the future away so that it doesn't get dropped when it's done running.
                             context.executor().park_value(value.clone());
 
                             Ok(value)
@@ -694,6 +697,7 @@ pub fn eval(
                     }
                     #[cfg(feature = "async")]
                     SPAWN => spawn("task".to_owned(), &mut arg_values, expression, context),
+                    #[cfg(feature = "async")]
                     SPAWN_NAMED => {
                         let (name, _) = arg_values.pop_front().unwrap();
                         let name: String = (&*s_read!(name)).try_into()?;
@@ -923,6 +927,7 @@ fn spawn(
 
     let future = new_ref!(Value, Value::Task(name, Some(task)));
 
+    // Stash the future away so that it doesn't get dropped when it's done running.
     context.executor().park_value(future.clone());
 
     Ok(future)

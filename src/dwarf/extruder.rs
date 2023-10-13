@@ -3108,7 +3108,15 @@ pub(super) fn inter_expression(
                 );
                 let ty = ValueType::new_empty(lu_dog);
                 let value = XValue::new_expression(&block, &ty, &expr, lu_dog);
-                update_span_value(&span, &value, location!());
+                // See # Span Bug
+                lu_dog.inter_span(|id| {
+                    let mut span = s_read!(span).clone();
+                    span.x_value = Some(s_read!(value).id);
+                    span.id = id;
+                    new_ref!(LuDogSpan, span)
+                });
+
+                // update_span_value(&span, &value, location!());
 
                 ((expr, span.clone()), ty)
             };
@@ -3298,6 +3306,7 @@ pub(super) fn inter_expression(
                 let value = XValue::new_expression(block, &ty, &expr, lu_dog);
                 update_span_value(&span, &value, location!());
 
+                // # Span Bug
                 // This is exceptional, at least so for. What's happening is that
                 // the span is already pointing at a value. We've been clobbering
                 // it successfully until the following case:

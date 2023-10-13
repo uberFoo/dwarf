@@ -468,7 +468,7 @@ fn eval_expression(
 
     #[cfg(feature = "async")]
     {
-        while (context.executor().try_tick()) {}
+        // while (context.executor().try_tick()) {}
         // let executors = context.executors();
         // let len = executors.len();
         // // dbg!(&len);
@@ -498,21 +498,84 @@ fn eval_expression(
         ExpressionEnum::AWait(ref expression) => {
             let expr = s_read!(lu_dog).exhume_a_wait(expression).unwrap();
             let expr = s_read!(expr).r98_expression(&s_read!(lu_dog))[0].clone();
-            let value = eval_expression(expr, context, vm)?;
 
-            Ok(value)
-            // let mut value = s_write!(value);
-            // match &mut *value {
-            //     Value::Task(name, task) => {
-            //         let task = task.take().unwrap();
-            //         // dbg!(&name, &task);
-            //         context.executor().block_on(task)
-            //     }
-            //     wtf => {
-            //         dbg!(wtf);
-            //         unreachable!()
+            // Give this guy a new executor that we'll poll below.
+            let mut child = context.getcha_some();
+            let value = eval_expression(expr, &mut child, vm)?;
+
+            let mut value = s_write!(value);
+            let (child_task, name) = match &mut *value {
+                Value::Task(name, task) => (task.take().unwrap(), name),
+                wtf => {
+                    dbg!(wtf);
+                    unreachable!()
+                }
+            };
+
+            let future = async move {
+                // child.executor().run().await;
+                //
+                // child.executor().resolve_task(child_task).await
+                child_task.await
+                // for e in child.executors() {
+                //     e.run().await;
+                // }
+                // child.executor().resolve_task(child_task).await
+            };
+
+            let task = context.executor().spawn(future);
+            // let future = new_ref!(Value, Value::Task(name.clone(), Some(task)));
+
+            while !task.is_finished() {
+                child.executor().try_tick();
+                for (i, e) in context.executors().iter().enumerate() {
+                    e.try_tick();
+                }
+            }
+
+            future::block_on(task)
+
+            // Stash the future away so that it doesn't get dropped when it's done running.
+            // context.executor().park_value(future.clone());
+
+            // unsafe {
+            //     let value = std::sync::Arc::into_raw(value);
+            //     let value = std::ptr::read(value);
+            //     let value = value.into_inner().unwrap();
+
+            //     match value {
+            //         Value::Task(_, Some(task)) => future::block_on(*task),
+            //         wtf => {
+            //             dbg!(wtf);
+            //             unreachable!()
+            //         }
             //     }
             // }
+
+            // loop {
+            //     // Now let someone else go. This won't work.
+            //     let value = s_read!(future);
+            //     match &*value {
+            //         Value::Task(_, Some(task)) if task.is_finished() => break,
+            //         Value::Task(_, Some(task)) if !task.is_finished() => {
+            //             // turn our child's crank.
+            //             // child.executor().try_tick();
+            //             // turn our ancestor's cranks, as well as our own.
+            //             for executor in context.executors() {
+            //                 executor.try_tick();
+            //             }
+            //             future::block_on(async {
+            //                 future::yield_now().await;
+            //             });
+            //         }
+            //         wtf => {
+            //             dbg!(wtf);
+            //             unreachable!()
+            //         }
+            //     };
+            // }
+
+            // Ok(future)
         }
         ExpressionEnum::Block(ref block) => block::eval(block, context, vm),
         ExpressionEnum::Call(ref call) => call::eval(call, &expression, context, vm),

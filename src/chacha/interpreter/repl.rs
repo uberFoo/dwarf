@@ -194,7 +194,6 @@ pub fn start_repl(mut context: &mut Context, is_uber: bool) -> Result<(), Error>
     rl.save_history(HISTORY_FILE)
         .map_err(|e| ChaChaError::RustyLine { source: e })?;
 
-    drop(context);
     handle.join().unwrap();
 
     Ok(())

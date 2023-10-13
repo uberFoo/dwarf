@@ -92,7 +92,13 @@ pub struct Context<'a> {
 
 impl<'a> Drop for Context<'a> {
     fn drop(&mut self) {
-        log::debug!("dropping context");
+        dbg!(self.executors.len());
+        // let executor = self.executors.pop().unwrap();
+        // while !executor.is_empty() {
+        //     dbg!("context");
+        //     executor.tick();
+        // }
+        // log::debug!("dropping context");
     }
 }
 
@@ -157,9 +163,43 @@ impl<'a> Context<'a> {
         }
     }
 
+    pub fn getcha_some(&self) -> Self {
+        Self {
+            prompt: self.prompt.clone(),
+            block: self.block.clone(),
+            memory: self.memory.clone(),
+            models: self.models.clone(),
+            mem_update_recv: self.mem_update_recv.clone(),
+            std_out_send: self.std_out_send.clone(),
+            std_out_recv: self.std_out_recv.clone(),
+            debug_status_writer: self.debug_status_writer.clone(),
+            timings: self.timings.clone(),
+            expr_count: 0,
+            func_calls: 0,
+            args: self.args.clone(),
+            dwarf_home: self.dwarf_home.clone(),
+            dirty: self.dirty.clone(),
+            #[cfg(feature = "async")]
+            executors: {
+                let mut other = self.executors.clone();
+                other.push(ChaChaExecutor::new());
+                other
+            },
+        }
+    }
+
     #[cfg(feature = "async")]
-    pub fn executor(&self) -> &ChaChaExecutor<'a> {
-        &self.executors.last().unwrap()
+    pub fn drop_it_like_its_hot(&mut self) -> Option<ChaChaExecutor<'a>> {
+        if self.executors.len() > 1 {
+            self.executors.pop()
+        } else {
+            None
+        }
+    }
+
+    #[cfg(feature = "async")]
+    pub fn executor(&mut self) -> &mut ChaChaExecutor<'a> {
+        self.executors.last_mut().unwrap()
     }
 
     #[cfg(feature = "async")]

@@ -10,6 +10,8 @@ use std::thread;
 
 use clap::{ArgAction, Args, Parser};
 use dap::{prelude::BasicClient, server::Server};
+#[cfg(feature = "async")]
+use smol::future;
 
 use dwarf::{
     chacha::{
@@ -235,9 +237,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 Ok(value) => {
                     #[cfg(feature = "async")]
                     {
-                        while !ctx.executor().is_empty() {
-                            ctx.executor().tick();
-                        }
+                        future::block_on(async { ctx.executor().run().await });
+                        // while let Some(executor) = ctx.drop_it_like_its_hot() {
+                        //     while !executor.is_empty() {
+                        //         dbg!("main");
+                        //         executor.tick();
+                        //     }
+                        //     dbg!("empty");
+                        // }
+                        // while !ctx.executor().is_empty() {
+                        //     dbg!("last");
+                        //     ctx.executor().tick();
+                        // }
                         // let mut tick = true;
                         // while tick {
                         //     tick = false;
