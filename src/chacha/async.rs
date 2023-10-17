@@ -55,9 +55,12 @@ impl<'a> ChaChaExecutor<'a> {
 
         while !self.ex.initialized() {}
 
-        while self.ex.running() && !self.ex.is_empty() {
+        while !self.ex.is_empty() {
             self.ex.tick().await;
             future::yield_now().await;
+            if !self.ex.running() {
+                break;
+            }
         }
 
         log::debug!(target: "async", "run done: {:?}", self.ex);
