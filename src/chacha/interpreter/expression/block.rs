@@ -20,7 +20,7 @@ pub fn eval<'a>(
     #[cfg(feature = "async")]
     {
         if s_read!(block).a_sink {
-            let mut cloned_context = context.from_context();
+            let mut cloned_context = context.clone();
             let future = async move {
                 let mem = cloned_context.memory().clone();
                 let mut vm = VM::new(&mem);

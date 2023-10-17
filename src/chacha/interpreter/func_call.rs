@@ -70,7 +70,7 @@ pub fn eval_function_call<'a>(
         {
             let args = args.to_owned();
             let span = span.to_owned();
-            let mut cloned_context = context.from_context();
+            let mut cloned_context = context.clone();
             // let mut vm = vm.to_owned();
 
             let future = async move {

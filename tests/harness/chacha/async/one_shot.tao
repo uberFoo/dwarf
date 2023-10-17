@@ -1,0 +1,44 @@
+fn main() {
+    // async fn main() -> Future<()> {
+    // let foo = async {
+    // let duration = chacha::time(|| {
+    async {
+        let one = chacha::spawn(|| async {
+            timer::one_shot(1000, || -> int {
+                print("slept 1 second\n");
+                42
+            })
+            .await;
+        });
+
+        let three = chacha::spawn(|| async {
+            timer::one_shot(3000, || -> int {
+                print("slept 3 seconds\n");
+                96
+            })
+            .await;
+        });
+
+        // one.join();
+        // chacha::join(two);
+
+        print(one);
+        print(three);
+
+        print("hey");
+
+        print("you");
+    };
+    // });
+    // };
+    // .await;
+    for i in 0..250 {
+        chacha::sleep(10);
+        print("{0}, ".format(i));
+    }
+
+    // print(duration);
+    // let delta = duration - 3.0;
+    // print("delta: {0}\n".format(delta));
+    // chacha::assert((delta < 0.005) && (delta > 0.0));
+}

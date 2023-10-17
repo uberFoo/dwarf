@@ -219,6 +219,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         let mut ctx = initialize_interpreter(dwarf_home, ctx, sarzak)?;
         ctx.add_args(dwarf_args);
+        #[cfg(feature = "async")]
+        {
+            let mut e = ctx.executor().clone();
+            thread::spawn(move || {
+                future::block_on(async { e.run().await });
+            });
+        }
 
         if args.banner.is_some() && args.banner.unwrap() {
             println!("{}", banner2());
@@ -237,74 +244,44 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 Ok(value) => {
                     #[cfg(feature = "async")]
                     {
+                        // thread::yield_now();
                         future::block_on(async { ctx.executor().run().await });
-                        // while let Some(executor) = ctx.drop_it_like_its_hot() {
-                        //     while !executor.is_empty() {
-                        //         dbg!("main");
-                        //         executor.tick();
-                        //     }
-                        //     dbg!("empty");
-                        // }
-                        // while !ctx.executor().is_empty() {
-                        //     dbg!("last");
-                        //     ctx.executor().tick();
-                        // }
-                        // let mut tick = true;
-                        // while tick {
-                        //     tick = false;
-                        //     let executors = ctx.executors();
-                        //     let len = executors.len();
-                        //     dbg!(&len);
-                        //     for i in 0..len {
-                        //         log::debug!("tick .level {i}");
-                        //         log::debug!("{:?}", executors[len - i - 1]);
-                        //         while executors[len - i - 1].tick() {
-                        //             log::debug!("{:?}", executors[len - i - 1]);
-                        //             tick = true;
-                        //             dbg!("tick", len - i - 1);
-                        //         }
-                        //         // let tick = executors[len - i - 1].tick();
-                        //         // dbg!(tick);
-                        //     }
-                        // }
-                    }
+                        unsafe {
+                            let value = std::sync::Arc::into_raw(value);
+                            let value = std::ptr::read(value);
+                            let value = value.into_inner().unwrap();
 
-                    #[cfg(feature = "async")]
-                    unsafe {
-                        let value = std::sync::Arc::into_raw(value);
-                        let value = std::ptr::read(value);
-                        let value = value.into_inner().unwrap();
+                            match value {
+                                Value::Task(name, Some(task)) => {
+                                    dbg!(&name, &task);
+                                    // Ok::<(), ChaChaError>(())
 
-                        match value {
-                            Value::Task(name, Some(task)) => {
-                                dbg!(&name, &task);
-                                // Ok::<(), ChaChaError>(())
-
-                                // let task = task.take().unwrap();
-                                match ctx.executor().block_on(task) {
-                                    // Ok(_) => Ok::<(), ChaChaError>(()),
-                                    Ok(result) => {
-                                        dbg!(result);
-                                    }
-                                    Err(e) => {
-                                        eprintln!("Interpreter exited with:");
-                                        eprintln!(
-                                            "{}",
-                                            ChaChaErrorReporter(
-                                                &e.into(),
-                                                is_uber,
-                                                &source_code,
-                                                &name
-                                            )
-                                        );
+                                    // let task = task.take().unwrap();
+                                    match ctx.executor().block_on(task) {
+                                        // Ok(_) => Ok::<(), ChaChaError>(()),
+                                        Ok(result) => {
+                                            dbg!(result);
+                                        }
+                                        Err(e) => {
+                                            eprintln!("Interpreter exited with:");
+                                            eprintln!(
+                                                "{}",
+                                                ChaChaErrorReporter(
+                                                    &e.into(),
+                                                    is_uber,
+                                                    &source_code,
+                                                    &name
+                                                )
+                                            );
+                                        }
                                     }
                                 }
+                                _ => {
+                                    dbg!(value);
+                                }
                             }
-                            _ => {
-                                dbg!(value);
-                            }
-                        }
-                    };
+                        };
+                    }
 
                     Ok::<(), ChaChaError>(())
                 }

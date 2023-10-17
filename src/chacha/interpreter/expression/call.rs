@@ -3,6 +3,8 @@ use std::{collections::VecDeque, thread, time::Duration, time::Instant};
 use ansi_term::Colour;
 #[cfg(feature = "async")]
 use async_io::Timer;
+#[cfg(feature = "async")]
+use smol::future;
 use snafu::{location, prelude::*, Location};
 use uuid::Uuid;
 
@@ -22,8 +24,8 @@ use crate::{
     new_ref, s_read, s_write,
     sarzak::Ty,
     NewRef, RefType, SarzakStorePtr, Value, ADD, ARGS, ASSERT, ASSERT_EQ, CHACHA, COMPLEX_EX, EPS,
-    EVAL, FN_NEW, FORMAT, LEN, NORM_SQUARED, PARSE, SLEEP, SPAWN, SPAWN_NAMED, SQUARE, TIME,
-    TYPEOF, UUID_TYPE,
+    EVAL, FN_NEW, FORMAT, INTERVAL, LEN, NORM_SQUARED, ONE_SHOT, PARSE, SLEEP, SPAWN, SPAWN_NAMED,
+    SQUARE, TIME, TIMER, TYPEOF, UUID_TYPE,
 };
 
 mod chacha;
@@ -88,6 +90,9 @@ pub fn eval(
                 } => Ok(value.clone()),
                 Value::Struct(_) => Ok(value.clone()),
                 Value::Store(_store, _plugin) => Ok(value.clone()),
+                // Value::Task(_, Some(t)) => {
+                //     future::block_on(async { context.executor().resolve_task(t).await })
+                // }
                 misc_value => {
                     let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
                     debug!("value {value:?}");
@@ -668,32 +673,8 @@ pub fn eval(
                         let millis: u64 = millis.try_into()?;
                         let duration = Duration::from_millis(millis);
 
-                        #[cfg(feature = "async")]
-                        {
-                            let future = async move {
-                                debug!("sleeping for {duration:?}");
-                                dbg!(&duration);
-                                let _instant = Timer::after(duration).await;
-                                dbg!(_instant);
-                                debug!("done sleeping");
-                                // 🚧 Maybe we should coerce the instant and return it?
-                                Ok(new_ref!(Value, Value::Empty))
-                            };
-
-                            let task = context.executor().spawn(future);
-
-                            let value =
-                                new_ref!(Value, Value::Task("sleep".to_owned(), Some(task)));
-                            // Stash the future away so that it doesn't get dropped when it's done running.
-                            context.executor().park_value(value.clone());
-
-                            Ok(value)
-                        }
-                        #[cfg(not(feature = "async"))]
-                        {
-                            std::thread::sleep(duration);
-                            Ok(new_ref!(Value, Value::Empty))
-                        }
+                        std::thread::sleep(duration);
+                        Ok(new_ref!(Value, Value::Empty))
                     }
                     #[cfg(feature = "async")]
                     SPAWN => spawn("task".to_owned(), &mut arg_values, expression, context),
@@ -775,6 +756,102 @@ pub fn eval(
                         })
                     }
                 }
+            // #[cfg(feature = "async")]
+            // {
+            } else if ty == TIMER {
+                match func.as_str() {
+                    ONE_SHOT => {
+                        dbg!("huh");
+                        // 🚧 I should be checking that there is an argument before
+                        // I go unwrapping it.
+                        let (duration, _) = arg_values.pop_front().unwrap();
+                        let millis = &*s_read!(duration);
+                        let millis: u64 = millis.try_into()?;
+                        let duration = Duration::from_millis(millis);
+
+                        let (func, span) = arg_values.pop_front().unwrap();
+                        // let read_func = s_read!(func);
+                        ensure!(
+                            matches!(&*s_read!(func), Value::Lambda(_))
+                                || matches!(&*s_read!(func), Value::Function(_)),
+                            {
+                                // 🚧 I'm not really sure what to do about this here. It's
+                                // all really a hack for now anyway.
+                                let ty = s_read!(func).get_type(&s_read!(sarzak), &s_read!(lu_dog));
+                                let ty = PrintableValueType(true, ty, context.models());
+                                let ty = ty.to_string();
+                                TypeMismatchSnafu {
+                                    expected: "<function>".to_string(),
+                                    found: ty,
+                                    span,
+                                }
+                            }
+                        );
+
+                        let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
+                        let span = s_read!(value).r63_span(&s_read!(lu_dog))[0].clone();
+                        let func = s_read!(func).clone();
+
+                        let mut fubar = context.clone();
+                        let future = async move {
+                            let mem = fubar.memory().clone();
+                            let mut vm = VM::new(&mem);
+
+                            // let func = func.clone();
+
+                            debug!("sleeping for {duration:?}");
+                            dbg!(&duration, &fubar.executor());
+                            let _instant = Timer::after(duration).await;
+                            dbg!(&duration, _instant, &fubar.executor());
+                            debug!("done sleeping");
+
+                            if let Value::Function(func) = &func {
+                                eval_function_call(
+                                    func.clone(),
+                                    &[],
+                                    None,
+                                    true,
+                                    &span,
+                                    &mut fubar,
+                                    &mut vm,
+                                )
+                            } else if let Value::Lambda(ƛ) = &func {
+                                eval_lambda_expression(
+                                    ƛ.clone(),
+                                    &[],
+                                    true,
+                                    &span,
+                                    &mut fubar,
+                                    &mut vm,
+                                )
+                            } else {
+                                panic!("missing implementation for timing this type: {func:?}");
+                            }
+                        };
+
+                        let task = context.executor().spawn(future);
+
+                        let value = new_ref!(Value, Value::Task("sleep".to_owned(), Some(task)));
+                        // Stash the future away so that it doesn't get dropped when it's done running.
+                        context.executor().park_value(value.clone());
+
+                        Ok(value)
+                    }
+                    method => {
+                        let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
+                        let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
+                        let read = s_read!(span);
+                        let span = read.start as usize..read.end as usize;
+
+                        Err(ChaChaError::NoSuchStaticMethod {
+                            ty: ty.to_owned(),
+                            method: method.to_owned(),
+                            span,
+                            location: location!(),
+                        })
+                    }
+                }
+                // }
             } else if let Some(value) = context.memory().get_meta(ty, func) {
                 debug!("StaticMethodCall meta value {value:?}");
                 match &*s_read!(value) {
@@ -900,7 +977,7 @@ fn spawn(
 
     let func = func.to_owned();
     let expression = expression.clone();
-    let mut context_copy = context.from_context();
+    let mut context_copy = context.clone();
     let future = async move {
         let mem = context_copy.memory().clone();
         let mut vm = VM::new(&mem);
@@ -922,6 +999,12 @@ fn spawn(
             unreachable!()
         }
     };
+
+    // let task = fubar.executor().spawn(future);
+    // context_copy.executor().park_value(new_ref!(Value, Value::Task(name, Some(task))));
+
+    // let future =
+    // async move { future::block_on(async { fubar.executor().resolve_task(task).await }) };
 
     let task = context.executor().spawn(future);
 

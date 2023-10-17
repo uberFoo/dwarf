@@ -63,7 +63,7 @@ pub(crate) fn eval_dwarf(
 
     ctx.add_args(args);
 
-    let result = start_func(&func, false, &mut ctx.from_context()).map_err(|e| {
+    let result = start_func(&func, false, &mut ctx.clone()).map_err(|e| {
         chacha_print(
             crate::chacha::error::ChaChaErrorReporter(&e, false, &ctx.source(), name).to_string(),
             context,

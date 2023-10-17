@@ -47,8 +47,7 @@ impl ModelContext {
     }
 }
 
-// #[derive(Clone)]
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Context<'a> {
     models: ModelContext,
     /// The prompt to display in the REPL
@@ -69,7 +68,7 @@ pub struct Context<'a> {
     dwarf_home: PathBuf,
     dirty: Vec<Dirty>,
     #[cfg(feature = "async")]
-    executors: Vec<ChaChaExecutor<'a>>,
+    executor: ChaChaExecutor<'a>,
 }
 
 /// Save the lu_dog model when the context is dropped
@@ -90,17 +89,17 @@ pub struct Context<'a> {
 //     }
 // }
 
-impl<'a> Drop for Context<'a> {
-    fn drop(&mut self) {
-        dbg!(self.executors.len());
-        // let executor = self.executors.pop().unwrap();
-        // while !executor.is_empty() {
-        //     dbg!("context");
-        //     executor.tick();
-        // }
-        // log::debug!("dropping context");
-    }
-}
+// impl<'a> Drop for Context<'a> {
+//     fn drop(&mut self) {
+//         dbg!(self.executors.len());
+//         // let executor = self.executors.pop().unwrap();
+//         // while !executor.is_empty() {
+//         //     dbg!("context");
+//         //     executor.tick();
+//         // }
+//         // log::debug!("dropping context");
+//     }
+// }
 
 #[allow(clippy::too_many_arguments)]
 impl<'a> Context<'a> {
@@ -138,73 +137,13 @@ impl<'a> Context<'a> {
             dwarf_home,
             dirty,
             #[cfg(feature = "async")]
-            executors: vec![ChaChaExecutor::new()],
-        }
-    }
-
-    pub fn from_context(&self) -> Self {
-        Self {
-            prompt: self.prompt.clone(),
-            block: self.block.clone(),
-            memory: self.memory.clone(),
-            models: self.models.clone(),
-            mem_update_recv: self.mem_update_recv.clone(),
-            std_out_send: self.std_out_send.clone(),
-            std_out_recv: self.std_out_recv.clone(),
-            debug_status_writer: self.debug_status_writer.clone(),
-            timings: self.timings.clone(),
-            expr_count: 0,
-            func_calls: 0,
-            args: self.args.clone(),
-            dwarf_home: self.dwarf_home.clone(),
-            dirty: self.dirty.clone(),
-            #[cfg(feature = "async")]
-            executors: self.executors.clone(),
-        }
-    }
-
-    pub fn getcha_some(&self) -> Self {
-        Self {
-            prompt: self.prompt.clone(),
-            block: self.block.clone(),
-            memory: self.memory.clone(),
-            models: self.models.clone(),
-            mem_update_recv: self.mem_update_recv.clone(),
-            std_out_send: self.std_out_send.clone(),
-            std_out_recv: self.std_out_recv.clone(),
-            debug_status_writer: self.debug_status_writer.clone(),
-            timings: self.timings.clone(),
-            expr_count: 0,
-            func_calls: 0,
-            args: self.args.clone(),
-            dwarf_home: self.dwarf_home.clone(),
-            dirty: self.dirty.clone(),
-            #[cfg(feature = "async")]
-            executors: {
-                let mut other = self.executors.clone();
-                other.push(ChaChaExecutor::new());
-                other
-            },
-        }
-    }
-
-    #[cfg(feature = "async")]
-    pub fn drop_it_like_its_hot(&mut self) -> Option<ChaChaExecutor<'a>> {
-        if self.executors.len() > 1 {
-            self.executors.pop()
-        } else {
-            None
+            executor: ChaChaExecutor::new(),
         }
     }
 
     #[cfg(feature = "async")]
     pub fn executor(&mut self) -> &mut ChaChaExecutor<'a> {
-        self.executors.last_mut().unwrap()
-    }
-
-    #[cfg(feature = "async")]
-    pub fn executors(&self) -> &[ChaChaExecutor<'a>] {
-        &self.executors
+        &mut self.executor
     }
 
     pub fn dirty(&self) -> Vec<Dirty> {

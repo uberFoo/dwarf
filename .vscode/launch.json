@@ -90,11 +90,11 @@
             },
             "args": [
                 // "tests/harness/chacha/sleep.tao"
-                "tests/harness/chacha/async/handler.tao"
+                "tests/harness/chacha/async/one_shot.tao"
             ],
             "cwd": "${workspaceFolder}",
             "env": {
-                // "RUST_LOG": "async=debug"
+                "RUST_LOG": "async=debug,chacha=debug"
             },
             "preRunCommands": [
                 "script lldb.debugger.HandleCommand('settings set target.source-map /rustc/{} \"{}/lib/rustlib/src/rust\"'.format(os.popen('rustc --version --verbose').read().split('commit-hash: ')[1].split('\\n')[0].strip(), os.popen('rustc --print sysroot').readline().strip()))"

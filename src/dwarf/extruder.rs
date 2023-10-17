@@ -20,13 +20,13 @@ use crate::{
         store::ObjectStore as LuDogStore,
         types::{
             AWait, Block, Body, BooleanOperator, Call, DataStructure, EnumField as LuDogEnumField,
-            EnumFieldEnum, Enumeration, ErrorExpression, Expression, ExpressionEnum,
-            ExpressionStatement, ExternalImplementation, Field, FieldExpression, ForLoop, Function,
-            Generic, ImplementationBlock, Index, IntegerLiteral, Item as WoogItem, ItemStatement,
-            Lambda, LambdaParameter, LetStatement, Literal, LocalVariable, NamedFieldExpression,
-            Parameter, PathElement, Pattern as AssocPat, RangeExpression, Span as LuDogSpan,
-            Statement, StringLiteral, StructExpression, StructField, StructGeneric, TupleField,
-            Unit, ValueType, ValueTypeEnum, Variable, VariableExpression, WoogStruct, XFuture, XIf,
+            EnumFieldEnum, Enumeration, Expression, ExpressionEnum, ExpressionStatement,
+            ExternalImplementation, Field, FieldExpression, ForLoop, Function, Generic,
+            ImplementationBlock, Index, IntegerLiteral, Item as WoogItem, ItemStatement, Lambda,
+            LambdaParameter, LetStatement, Literal, LocalVariable, NamedFieldExpression, Parameter,
+            PathElement, Pattern as AssocPat, RangeExpression, Span as LuDogSpan, Statement,
+            StringLiteral, StructExpression, StructField, StructGeneric, TupleField, Unit,
+            ValueType, ValueTypeEnum, Variable, VariableExpression, WoogStruct, XFuture, XIf,
             XMatch, XPath, XPrint, XValue, XValueEnum, ZObjectStore,
         },
         Argument, Binary, BooleanLiteral, Comparison, DwarfSourceFile, FieldAccess,
@@ -1343,50 +1343,12 @@ pub(super) fn inter_expression(
 
             Ok(((expr, span), lhs_ty))
         }
-        // 🚧 This doesn't exist. And I don't want to create a BS type for it in
-        // lu_dog. Because really the "empty" type is just an empty tuple. I
-        // think I want tuples, so I'm just going to assert that the user can't
-        // construct the empty type.
-        // //
-        // // Empty
-        // //
-        // ParserExpression::Empty => {
-        //     let expr = Expression::new_empty(lu_dog);
-        //     let ty = ValueType::new_empty(lu_dog);
-        //     let value = XValue::new_expression(block, &ty, &expr, lu_dog);
-        //     update_span_value(&span, &value, location!());
-
-        //     Ok(((expr, span), ty))
-        // }
         //
-        // Error
+        // Empty
         //
-        ParserExpression::Error => {
-            // 🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧
-            //
-            // This error stuff really needs fleshing out:
-            //
-            //  💥 The parser needs to capture the span of the error, and we need to use it
-            //    to look up the text in the source code. That, or we need to capture the
-            //    source in the error.
-            //  💥 If we look it up in the source, then we need to capture that. I'm part-
-            //    way to having that done, as there is a place to do that in the model now.
-            //  💥 We need to return an `ErrorExpression`. Right now it's got an attribute
-            //     called `span` that's a String. Probably rename that, but leave it otherwise.
-            //  💥 We need to figure out what's up with `ValueType::Error`. I plugged some
-            //     shit in a while back when stubbing something out, but I didn't put much
-            //     thought into it.
-            //
-            // 🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧
-            let error = ErrorExpression::new(
-                "🚧 Under Construction 🚧\n💥 Input is fucked up for some reason 💥\n".to_owned(),
-                lu_dog,
-            );
-            let expr = Expression::new_error_expression(&error, lu_dog);
-            // 🚧
-            // Returning an empty, because the error stuff in ValueType is fucked.
+        ParserExpression::Empty => {
+            let expr = Expression::new_empty_expression(lu_dog);
             let ty = ValueType::new_empty(lu_dog);
-
             let value = XValue::new_expression(block, &ty, &expr, lu_dog);
             update_span_value(&span, &value, location!());
 
@@ -1584,19 +1546,10 @@ pub(super) fn inter_expression(
                         }
                     }
                 }
-                ty => {
-                    // 🚧 This should be a DwarfError.
-                    let error =
-                        ErrorExpression::new(format!("💥 {:?} is not a struct\n", ty), lu_dog);
-                    let expr = Expression::new_error_expression(&error, lu_dog);
-                    // 🚧 Returning an empty, because the error stuff in ValueType is fucked.
-                    // I wonder what we mean?
-                    let ty = ValueType::new_empty(lu_dog);
-                    let value = XValue::new_expression(block, &ty, &expr, lu_dog);
-                    update_span_value(&span, &value, location!());
-
-                    Ok(((expr, span), ty))
-                }
+                _ => Err(vec![DwarfError::NotAStruct {
+                    span: rhs.1.to_owned(),
+                    ty: PrintableValueType(&ty, context, lu_dog).to_string(),
+                }]),
             }
         }
         //
@@ -2632,6 +2585,7 @@ pub(super) fn inter_expression(
                         let future = XFuture::new(&inner, lu_dog);
                         ValueType::new_x_future(&future, lu_dog)
                     }
+                    "join" => ValueType::new_unknown(lu_dog),
                     _ => {
                         return Err(vec![DwarfError::NoSuchMethod {
                             method: method.to_owned(),
@@ -4431,6 +4385,9 @@ pub(super) fn typecheck(
     }
 
     match (&s_read!(lhs).subtype, &s_read!(rhs).subtype) {
+        // Promote unknown to the other type.
+        (ValueTypeEnum::Unknown(_), _) => Ok(()),
+        (_, ValueTypeEnum::Unknown(_)) => Ok(()),
         (ValueTypeEnum::Ty(a), ValueTypeEnum::Ty(b)) => {
             let a = context.sarzak.exhume_ty(a).unwrap();
             let b = context.sarzak.exhume_ty(b).unwrap();

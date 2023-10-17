@@ -218,6 +218,18 @@ dependencies = [
 
 [[package]]
 name = "async-executor"
+version = "1.5.3"
+dependencies = [
+ "async-lock",
+ "async-task",
+ "concurrent-queue",
+ "fastrand 2.0.1",
+ "futures-lite",
+ "slab",
+]
+
+[[package]]
+name = "async-executor"
 version = "1.5.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2c1da3ae8dabd9c00f453a329dfe1fb28da3c0a72e2478cdcd93171740c20499"
@@ -249,7 +261,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f1b6f5d7df27bd294849f8eec66ecfc63d11814df7a4f5d74168a2394467b776"
 dependencies = [
  "async-channel",
- "async-executor",
+ "async-executor 1.5.4",
  "async-io",
  "async-lock",
  "blocking",
@@ -884,7 +896,7 @@ dependencies = [
  "ansi-to-tui",
  "ansi_term",
  "ariadne",
- "async-executor",
+ "async-executor 1.5.3",
  "async-io",
  "async-task",
  "backtrace",
@@ -2749,7 +2761,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "13f2b548cd8447f8de0fdf1c592929f70f4fc7039a05e47404b0d096ec6987a1"
 dependencies = [
  "async-channel",
- "async-executor",
+ "async-executor 1.5.4",
  "async-fs",
  "async-io",
  "async-lock",

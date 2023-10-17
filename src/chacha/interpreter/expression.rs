@@ -2,7 +2,6 @@ pub mod block;
 pub mod call;
 pub mod debugger;
 // pub mod enumeration;
-pub mod error;
 pub mod field;
 pub mod for_loop;
 pub mod if_expr;

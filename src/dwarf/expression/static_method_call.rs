@@ -22,8 +22,8 @@ use crate::{
     },
     new_ref, s_read, s_write,
     sarzak::Ty,
-    NewRef, RefType, ARGS, ASSERT, ASSERT_EQ, CHACHA, COMPLEX_EX, EPS, FN_NEW, NORM_SQUARED, SLEEP,
-    SPAWN, SPAWN_NAMED, TIME, UUID_TYPE,
+    NewRef, RefType, ARGS, ASSERT, ASSERT_EQ, CHACHA, COMPLEX_EX, EPS, FN_NEW, INTERVAL,
+    NORM_SQUARED, ONE_SHOT, SLEEP, SPAWN, SPAWN_NAMED, TIME, TIMER, UUID_TYPE,
 };
 
 pub fn inter(
@@ -69,6 +69,8 @@ pub fn inter(
         .collect::<Vec<_>>()
         .join("");
 
+    // dbg!(&type_name);
+
     debug!("type_name {:?}", type_name);
 
     let x_path = XPath::new(Uuid::new_v4(), None, lu_dog);
@@ -87,14 +89,17 @@ pub fn inter(
     let first = elts
         .into_iter()
         .fold(Option::<RefType<PathElement>>::None, |prev, elt| {
+            // dbg!(&prev, &elt);
             if let Some(prev) = prev {
-                let elt = s_read!(elt);
-                s_write!(prev).next = Some(elt.id);
-                Some(prev)
+                s_write!(prev).next = Some(s_read!(elt).id);
+                // dbg!(&prev, &elt);
+                Some(elt)
             } else {
                 Some(elt)
             }
         });
+
+    // dbg!(&first);
 
     if let Some(first) = first {
         let first = s_read!(first).id;
@@ -108,6 +113,7 @@ pub fn inter(
             .is_some()
         || type_name == CHACHA
         || type_name == COMPLEX_EX
+        || type_name == TIMER
         || type_name == UUID_TYPE
     {
         // Here we are interring a static method call.
@@ -157,17 +163,7 @@ pub fn inter(
                     // 🚧 Ideally we'd cache this when we startup.
                     ValueType::new_ty(&Ty::new_float(sarzak), lu_dog)
                 }
-                #[cfg(feature = "async")]
-                SLEEP => {
-                    let inner = ValueType::new_empty(lu_dog);
-                    let future = XFuture::new(&inner, lu_dog);
-                    ValueType::new_x_future(&future, lu_dog)
-                }
-                #[cfg(not(feature = "async"))]
-                SLEEP => {
-                    // thread::sleep(std::time::Duration::from_millis(1000));
-                    ValueType::new_empty(lu_dog)
-                }
+                SLEEP => ValueType::new_empty(lu_dog),
                 #[cfg(feature = "async")]
                 SPAWN => {
                     let inner = ValueType::new_empty(lu_dog);
@@ -186,8 +182,33 @@ pub fn inter(
                     ValueType::new_ty(&Ty::new_float(sarzak), lu_dog)
                 }
                 _ => {
-                    e_warn!("ParserExpression type not found");
-                    ValueType::new_unknown(lu_dog)
+                    let span = s_read!(span).start as usize..s_read!(span).end as usize;
+                    return Err(vec![DwarfError::ObjectNameNotFound {
+                        name: type_name.to_owned(),
+                        span,
+                        location: location!(),
+                    }]);
+                    // e_warn!("ParserExpression type not found");
+                    // ValueType::new_unknown(lu_dog)
+                }
+            }
+        } else if type_name == TIMER {
+            match method {
+                #[cfg(feature = "async")]
+                INTERVAL | ONE_SHOT => {
+                    let inner = ValueType::new_empty(lu_dog);
+                    let future = XFuture::new(&inner, lu_dog);
+                    ValueType::new_x_future(&future, lu_dog)
+                }
+                _ => {
+                    let span = s_read!(span).start as usize..s_read!(span).end as usize;
+                    return Err(vec![DwarfError::ObjectNameNotFound {
+                        name: type_name.to_owned(),
+                        span,
+                        location: location!(),
+                    }]);
+                    // e_warn!("ParserExpression type not found");
+                    // ValueType::new_unknown(lu_dog)
                 }
             }
         } else if type_name == UUID_TYPE && method == FN_NEW {
@@ -241,6 +262,10 @@ pub fn inter(
         // it's not necessary, even without type solvers. For instance, `Option::Some(42)` is
         // clearly of type `Option<int>`, but we require `Option::<int>::Some(42)`.
         // I'm not sure how to fix this exactly.
+        //
+        // Seems like I can just look at the type of the inner expression, and
+        // use that to build a concrete type.
+        //
         // Here we are interring an enum constructor.
         let type_name_no_generics = type_name.split('<').collect::<Vec<_>>()[0];
         if let Some(woog_enum) = lu_dog.exhume_enumeration_id_by_name(type_name_no_generics) {
