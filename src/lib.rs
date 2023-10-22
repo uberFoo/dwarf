@@ -28,29 +28,32 @@ pub(crate) use chacha::{error::ChaChaError, interpreter};
 pub type DwarfInteger = i64;
 pub type DwarfFloat = f64;
 
-const ADD: &str = "add";
-const ARGS: &str = "args";
-const ASSERT: &str = "assert";
-const ASSERT_EQ: &str = "assert_eq";
-const CHACHA: &str = "chacha";
-const COMPLEX_EX: &str = "ComplexEx";
-const EPS: &str = "eps";
-const EVAL: &str = "eval";
-const FN_NEW: &str = "new";
-const INTERVAL: &str = "interval";
-const LEN: &str = "len";
-const FORMAT: &str = "format";
-const NORM_SQUARED: &str = "norm_squared";
-const ONE_SHOT: &str = "one_shot";
-const PARSE: &str = "parse";
-const SLEEP: &str = "sleep";
-const SPAWN: &str = "spawn";
-const SPAWN_NAMED: &str = "spawn_named";
-const SQUARE: &str = "square";
-const TIME: &str = "time";
-const TIMER: &str = "timer";
-const TYPEOF: &str = "typeof";
-const UUID_TYPE: &str = "Uuid";
+mod keywords {
+    pub(crate) const ADD: &str = "add";
+    pub(crate) const ARGS: &str = "args";
+    pub(crate) const ASSERT: &str = "assert";
+    pub(crate) const ASSERT_EQ: &str = "assert_eq";
+    pub(crate) const CHACHA: &str = "chacha";
+    pub(crate) const COMPLEX_EX: &str = "ComplexEx";
+    pub(crate) const EPS: &str = "eps";
+    pub(crate) const EVAL: &str = "eval";
+    pub(crate) const FN_NEW: &str = "new";
+    pub(crate) const INTERVAL: &str = "interval";
+    pub(crate) const JOIN: &str = "join";
+    pub(crate) const LEN: &str = "len";
+    pub(crate) const FORMAT: &str = "format";
+    pub(crate) const NORM_SQUARED: &str = "norm_squared";
+    pub(crate) const ONE_SHOT: &str = "one_shot";
+    pub(crate) const PARSE: &str = "parse";
+    pub(crate) const SLEEP: &str = "sleep";
+    pub(crate) const SPAWN: &str = "spawn";
+    pub(crate) const SPAWN_NAMED: &str = "spawn_named";
+    pub(crate) const SQUARE: &str = "square";
+    pub(crate) const TIME: &str = "time";
+    pub(crate) const TIMER: &str = "timer";
+    pub(crate) const TYPEOF: &str = "typeof";
+    pub(crate) const UUID_TYPE: &str = "Uuid";
+}
 
 use lu_dog::{ObjectStore as LuDogStore, ValueType};
 

@@ -14,6 +14,10 @@ use crate::{
         },
         DwarfInteger, Expression as ParserExpression, Type,
     },
+    keywords::{
+        ARGS, ASSERT, ASSERT_EQ, CHACHA, COMPLEX_EX, EPS, FN_NEW, INTERVAL, NORM_SQUARED, ONE_SHOT,
+        SLEEP, SPAWN, SPAWN_NAMED, TIME, TIMER, UUID_TYPE,
+    },
     lu_dog::{
         store::ObjectStore as LuDogStore, Argument, Block, Call, DataStructure, EnumFieldEnum,
         Expression, FieldExpression, List, LocalVariable, PathElement, Span, StaticMethodCall,
@@ -22,8 +26,7 @@ use crate::{
     },
     new_ref, s_read, s_write,
     sarzak::Ty,
-    NewRef, RefType, ARGS, ASSERT, ASSERT_EQ, CHACHA, COMPLEX_EX, EPS, FN_NEW, INTERVAL,
-    NORM_SQUARED, ONE_SHOT, SLEEP, SPAWN, SPAWN_NAMED, TIME, TIMER, UUID_TYPE,
+    NewRef, RefType,
 };
 
 pub fn inter(

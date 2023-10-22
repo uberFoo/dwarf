@@ -16,6 +16,7 @@ use crate::{
         Expression as ParserExpression, Generics, InnerAttribute, InnerItem, Item,
         PrintableValueType, Spanned, Statement as ParserStatement, Type,
     },
+    keywords::{CHACHA, FN_NEW, FORMAT, JOIN, LEN, UUID_TYPE},
     lu_dog::{
         store::ObjectStore as LuDogStore,
         types::{
@@ -35,7 +36,7 @@ use crate::{
     },
     new_ref, s_read, s_write,
     sarzak::{store::ObjectStore as SarzakStore, types::Ty},
-    Context as InterContext, Dirty, ModelStore, NewRef, RefType, CHACHA, FN_NEW, UUID_TYPE,
+    Context as InterContext, Dirty, ModelStore, NewRef, RefType,
 };
 
 const LIB_TAO: &str = "lib.tao";
@@ -2010,9 +2011,9 @@ pub(super) fn inter_expression(
         //
         // Lambda
         //
-        ParserExpression::Lambda(params, return_type, body) => {
-            let (stmts, a_sink) = if let ParserExpression::Block(block_ty, body, _, _) = &body.0 {
-                let a_sink = match block_ty {
+        ParserExpression::Lambda(a_sink, params, return_type, body) => {
+            let (stmts, a_sink) = if let ParserExpression::Block(_, body, _, _) = &body.0 {
+                let a_sink = match a_sink {
                     BlockType::Async => true,
                     BlockType::Sync => false,
                 };
@@ -2543,49 +2544,46 @@ pub(super) fn inter_expression(
 
             debug!("MethodCall instance: {instance:?}, type: {instance_ty:?}");
 
-            let ret_ty = if let ValueTypeEnum::WoogStruct(id) = s_read!(instance_ty).subtype {
-                let woog_struct = lu_dog.exhume_woog_struct(&id).unwrap();
-                let x = lookup_woog_struct_method_return_type(
-                    &s_read!(woog_struct).name,
-                    method,
-                    context.sarzak,
-                    lu_dog,
-                );
+            let ret_ty = match s_read!(instance_ty).subtype {
+                ValueTypeEnum::WoogStruct(id) => {
+                    let woog_struct = lu_dog.exhume_woog_struct(&id).unwrap();
+                    let x = lookup_woog_struct_method_return_type(
+                        &s_read!(woog_struct).name,
+                        method,
+                        context.sarzak,
+                        lu_dog,
+                    );
 
-                #[allow(clippy::let_and_return)]
-                x
-            } else if let ValueTypeEnum::Ty(id) = s_read!(instance_ty).subtype {
-                let ty = context.sarzak.exhume_ty(&id).unwrap();
-                let ty = ty.read().unwrap();
-                if let Ty::SString(_) = &*ty {
-                    match method.as_str() {
-                        "len" => {
-                            let ty = Ty::new_integer(context.sarzak);
-                            ValueType::new_ty(&ty, lu_dog)
-                        }
-                        "format" => {
-                            let ty = Ty::new_s_string(context.sarzak);
-                            ValueType::new_ty(&ty, lu_dog)
-                        }
-                        _ => {
-                            return Err(vec![DwarfError::NoSuchMethod {
-                                method: method.to_owned(),
-                                span: meth_span.to_owned(),
-                                location: location!(),
-                            }])
-                        }
-                    }
-                } else {
-                    ValueType::new_unknown(lu_dog)
+                    #[allow(clippy::let_and_return)]
+                    x
                 }
-            } else if let ValueTypeEnum::XFuture(_) = s_read!(instance_ty).subtype {
-                match method.as_str() {
-                    "and" => {
-                        let inner = ValueType::new_empty(lu_dog);
-                        let future = XFuture::new(&inner, lu_dog);
-                        ValueType::new_x_future(&future, lu_dog)
+                ValueTypeEnum::Ty(id) => {
+                    let ty = context.sarzak.exhume_ty(&id).unwrap();
+                    let ty = ty.read().unwrap();
+                    if let Ty::SString(_) = &*ty {
+                        match method.as_str() {
+                            LEN => {
+                                let ty = Ty::new_integer(context.sarzak);
+                                ValueType::new_ty(&ty, lu_dog)
+                            }
+                            FORMAT => {
+                                let ty = Ty::new_s_string(context.sarzak);
+                                ValueType::new_ty(&ty, lu_dog)
+                            }
+                            _ => {
+                                return Err(vec![DwarfError::NoSuchMethod {
+                                    method: method.to_owned(),
+                                    span: meth_span.to_owned(),
+                                    location: location!(),
+                                }])
+                            }
+                        }
+                    } else {
+                        ValueType::new_unknown(lu_dog)
                     }
-                    "join" => ValueType::new_unknown(lu_dog),
+                }
+                ValueTypeEnum::XFuture(_) => match method.as_str() {
+                    JOIN => ValueType::new_unknown(lu_dog),
                     _ => {
                         return Err(vec![DwarfError::NoSuchMethod {
                             method: method.to_owned(),
@@ -2593,9 +2591,8 @@ pub(super) fn inter_expression(
                             location: location!(),
                         }])
                     }
-                }
-            } else {
-                ValueType::new_unknown(lu_dog)
+                },
+                _ => ValueType::new_unknown(lu_dog),
             };
 
             let meth = MethodCall::new(method.to_owned(), lu_dog);

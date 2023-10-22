@@ -50,21 +50,40 @@ impl<'a> ChaChaExecutor<'a> {
         task
     }
 
-    pub async fn run(&mut self) {
+    pub fn shutdown(&self) {
+        self.ex.shutdown();
+        log::debug!(target: "async", "shutdown: {:?}", self.ex);
+    }
+
+    pub fn finished(&self) -> bool {
+        self.ex.is_empty()
+    }
+
+    pub async fn run(&mut self) -> Result<RefType<Value>, ChaChaError> {
         log::debug!(target: "async", "run: {:?}", self.ex);
 
         while !self.ex.initialized() {}
 
-        while !self.ex.is_empty() {
+        while self.ex.running() {
+            dbg!("fucking", thread::current().id());
             self.ex.tick().await;
+            // self.ex.try_tick();
             future::yield_now().await;
-            if !self.ex.running() {
-                break;
-            }
+        }
+        while !self.ex.is_empty() {
+            dbg!("emptying", thread::current().id());
+            self.ex.tick().await;
+            //     self.ex.try_tick();
+            future::yield_now().await;
+            //     if !self.ex.running() {
+            //         break;
+            //     }
         }
 
         log::debug!(target: "async", "run done: {:?}", self.ex);
-        self.ex.shutdown();
+        // self.ex.shutdown();
+
+        Ok(new_ref!(Value, Value::Empty))
     }
 
     pub fn block_on(

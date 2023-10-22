@@ -146,6 +146,13 @@ impl<'a> Context<'a> {
         &mut self.executor
     }
 
+    #[cfg(feature = "async")]
+    pub fn hyper(&self) -> Self {
+        let mut hyper = self.clone();
+        hyper.executor = ChaChaExecutor::new();
+        hyper
+    }
+
     pub fn dirty(&self) -> Vec<Dirty> {
         self.dirty.clone()
     }

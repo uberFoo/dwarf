@@ -1,15 +1,17 @@
 use std::{collections::VecDeque, thread, time::Duration, time::Instant};
 
 use ansi_term::Colour;
+
 #[cfg(feature = "async")]
 use async_io::Timer;
 #[cfg(feature = "async")]
 use smol::future;
+
 use snafu::{location, prelude::*, Location};
 use uuid::Uuid;
 
 #[cfg(feature = "async")]
-use crate::chacha::r#async::ChaChaExecutor;
+use crate::chacha::value::ChaChaTask;
 
 use crate::{
     chacha::{
@@ -17,15 +19,18 @@ use crate::{
         vm::{CallFrame, VM},
     },
     interpreter::{
-        debug, error, eval_expression, eval_function_call, eval_lambda_expression,
-        func_call::eval_external_method, function, ChaChaError, Context, PrintableValueType,
+        debug, error, eval_expression, eval_function_call, eval_lambda_expression, function,
+        ChaChaError, Context, PrintableValueType,
+    },
+    keywords::{
+        ADD, ARGS, ASSERT, ASSERT_EQ, CHACHA, COMPLEX_EX, EPS, EVAL, FN_NEW, FORMAT, INTERVAL,
+        JOIN, LEN, NORM_SQUARED, ONE_SHOT, PARSE, SLEEP, SPAWN, SPAWN_NAMED, SQUARE, TIME, TIMER,
+        TYPEOF, UUID_TYPE,
     },
     lu_dog::{CallEnum, Expression, ValueTypeEnum},
     new_ref, s_read, s_write,
     sarzak::Ty,
-    NewRef, RefType, SarzakStorePtr, Value, ADD, ARGS, ASSERT, ASSERT_EQ, CHACHA, COMPLEX_EX, EPS,
-    EVAL, FN_NEW, FORMAT, INTERVAL, LEN, NORM_SQUARED, ONE_SHOT, PARSE, SLEEP, SPAWN, SPAWN_NAMED,
-    SQUARE, TIME, TIMER, TYPEOF, UUID_TYPE,
+    NewRef, RefType, SarzakStorePtr, Value,
 };
 
 mod chacha;
@@ -90,9 +95,8 @@ pub fn eval(
                 } => Ok(value.clone()),
                 Value::Struct(_) => Ok(value.clone()),
                 Value::Store(_store, _plugin) => Ok(value.clone()),
-                // Value::Task(_, Some(t)) => {
-                //     future::block_on(async { context.executor().resolve_task(t).await })
-                // }
+                // Value::Task(t) => Ok(future::block_on(t)),
+                Value::Task(_) => Ok(value.clone()),
                 misc_value => {
                     let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
                     debug!("value {value:?}");
@@ -113,10 +117,7 @@ pub fn eval(
             }
         };
 
-        let ty = {
-            let lu_dog = s_read!(lu_dog);
-            s_read!(value).get_type(&s_read!(sarzak), &lu_dog)
-        };
+        let ty = s_read!(value).get_type(&s_read!(sarzak), &s_read!(lu_dog));
 
         // First we need to check the type of the LHS to see if there are
         // any instance methods on the type. This seems weird. I'm not sure
@@ -164,103 +165,8 @@ pub fn eval(
             // let mut value = s_write!(value);
 
             // let x = match &mut *value {
-            match &*s_read!(value) {
-                // #[cfg(feature = "async")]
-                // Value::Executor(_, _) => {
-                //     let lambda = args[1].clone();
-                //     let lambda = s_read!(lambda).r37_expression(&s_read!(lu_dog))[0].clone();
-                //     let mut cloned_context = context.from_context();
-
-                //     let future = async move {
-                //         let mem = cloned_context.memory().clone();
-                //         let mut vm = VM::new(&mem);
-
-                //         let value = eval_expression(lambda, &mut cloned_context, &mut vm)?;
-
-                //         let read_value = s_read!(value);
-                //         match &*read_value {
-                //             Value::Function(ref func) => {
-                //                 let func =
-                //                     s_read!(lu_dog).exhume_function(&s_read!(func).id).unwrap();
-                //                 debug!("ExpressionEnum::Call func: {func:?}");
-                //                 let value = eval_function_call(
-                //                     func,
-                //                     &args,
-                //                     first_arg,
-                //                     arg_check,
-                //                     &span,
-                //                     &mut cloned_context,
-                //                     &mut vm,
-                //                 );
-                //                 debug!("value {value:?}");
-                //                 value
-                //             }
-                //             Value::Executor(_, _) => Ok(value.clone()),
-                //             Value::Lambda(ref ƛ) => {
-                //                 let mut args = args.clone();
-                //                 args.clear();
-                //                 let ƛ = s_read!(lu_dog).exhume_lambda(&s_read!(ƛ).id).unwrap();
-                //                 debug!("ExpressionEnum::Call ƛ: {ƛ:?}");
-                //                 let value = eval_lambda_expression(
-                //                     ƛ,
-                //                     &args,
-                //                     arg_check,
-                //                     &span,
-                //                     &mut cloned_context,
-                //                     &mut vm,
-                //                 );
-                //                 debug!("value {value:?}");
-                //                 value
-                //             }
-                //             Value::ProxyType {
-                //                 module: _,
-                //                 obj_ty: _,
-                //                 id: _,
-                //                 plugin: _,
-                //             } => Ok(value.clone()),
-                //             Value::Struct(_) => Ok(value.clone()),
-                //             Value::Store(_store, _plugin) => Ok(value.clone()),
-                //             oops => panic!("{oops}"),
-                //         }
-                //     };
-
-                //     let task = context.executor().spawn(future);
-
-                //     Ok(new_ref!(Value, Value::Task("foo".to_owned(), Some(task))))
-                // }
-                // Value::Store(store, _plugin) => {
-                //     let impl_ = &s_read!(store).r83c_implementation_block(&s_read!(lu_dog))[0];
-                //     let x = if let Some(func) = s_read!(impl_)
-                //         .r9_function(&s_read!(lu_dog))
-                //         .iter()
-                //         .find(|f| s_read!(f).name == *meth_name)
-                //     {
-                //         let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
-                //         let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
-
-                //         eval_external_method(
-                //             (*func).clone(),
-                //             &args,
-                //             s_read!(call).argument,
-                //             arg_check,
-                //             span,
-                //             context,
-                //             vm,
-                //         )
-                //     } else {
-                //         let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
-                //         let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
-                //         let read = s_read!(span);
-                //         let span = read.start as usize..read.end as usize;
-
-                //         return Err(ChaChaError::NoSuchMethod {
-                //             method: meth_name.to_owned(),
-                //             span,
-                //             location: location!(),
-                //         });
-                //     };
-                //     x
-                // }
+            let read_value = s_read!(value);
+            match &*read_value {
                 Value::ProxyType {
                     module: _,
                     obj_ty: ref id,
@@ -514,6 +420,50 @@ pub fn eval(
                     };
                     x
                 }
+                Value::Task(t) => match meth_name.as_str() {
+                    JOIN => {
+                        let t = unsafe {
+                            let value = std::sync::Arc::into_raw(value.clone());
+                            let value = std::ptr::read(value);
+                            let value = value.into_inner().unwrap();
+
+                            match value {
+                                Value::Task(t) => t,
+                                _ => unreachable!(),
+                            }
+                        };
+                        let future = async move {
+                            dbg!("start join");
+                            let foo = t.await;
+                            dbg!("end join", &foo);
+                            Ok(foo)
+                        };
+                        let task = context.executor().spawn(future);
+                        future::block_on(context.executor().resolve_task(task))
+                        // let value = future::block_on(t);
+                        // let v = s_read!(value);
+                        // match &*v {
+                        //     // Value::Task(t) => Ok(t.deref()),
+                        //     m => {
+                        //         dbg!("fubar", m);
+                        //         // unreachable!()
+                        //         Ok(value.clone())
+                        //     }
+                        // }
+                    }
+                    _ => {
+                        let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
+                        let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
+                        let read = s_read!(span);
+                        let span = read.start as usize..read.end as usize;
+
+                        return Err(ChaChaError::NoSuchMethod {
+                            method: meth_name.to_owned(),
+                            span,
+                            location: location!(),
+                        });
+                    }
+                },
                 bar => panic!("need to deal with Value {:?}", bar),
             }
         }
@@ -757,11 +707,10 @@ pub fn eval(
                     }
                 }
             // #[cfg(feature = "async")]
-            // {
             } else if ty == TIMER {
                 match func.as_str() {
                     ONE_SHOT => {
-                        dbg!("huh");
+                        // dbg!("huh");
                         // 🚧 I should be checking that there is an argument before
                         // I go unwrapping it.
                         let (duration, _) = arg_values.pop_front().unwrap();
@@ -800,9 +749,9 @@ pub fn eval(
                             // let func = func.clone();
 
                             debug!("sleeping for {duration:?}");
-                            dbg!(&duration, &fubar.executor());
+                            // dbg!(&duration, &fubar.executor());
                             let _instant = Timer::after(duration).await;
-                            dbg!(&duration, _instant, &fubar.executor());
+                            // dbg!(&duration, _instant, &fubar.executor());
                             debug!("done sleeping");
 
                             if let Value::Function(func) = &func {
@@ -831,13 +780,13 @@ pub fn eval(
 
                         let task = context.executor().spawn(future);
 
-                        let value = new_ref!(Value, Value::Task("sleep".to_owned(), Some(task)));
+                        let value = new_ref!(Value, Value::Future("sleep".to_owned(), Some(task)));
                         // Stash the future away so that it doesn't get dropped when it's done running.
                         context.executor().park_value(value.clone());
 
                         Ok(value)
                     }
-                    method => {
+                    missing_method => {
                         let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
                         let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
                         let read = s_read!(span);
@@ -845,7 +794,7 @@ pub fn eval(
 
                         Err(ChaChaError::NoSuchStaticMethod {
                             ty: ty.to_owned(),
-                            method: method.to_owned(),
+                            method: missing_method.to_owned(),
                             span,
                             location: location!(),
                         })
@@ -977,9 +926,10 @@ fn spawn(
 
     let func = func.to_owned();
     let expression = expression.clone();
-    let mut context_copy = context.clone();
+    let mut nested_context = context.hyper();
+    let mut nested_context_clone = nested_context.clone();
     let future = async move {
-        let mem = context_copy.memory().clone();
+        let mem = nested_context.memory().clone();
         let mut vm = VM::new(&mem);
         let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
         let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
@@ -990,11 +940,11 @@ fn spawn(
                 None,
                 true,
                 span,
-                &mut context_copy,
+                &mut nested_context,
                 &mut vm,
             )
         } else if let Value::Lambda(ƛ) = &func {
-            eval_lambda_expression(ƛ.clone(), &[], true, span, &mut context_copy, &mut vm)
+            eval_lambda_expression(ƛ.clone(), &[], true, span, &mut nested_context, &mut vm)
         } else {
             unreachable!()
         }
@@ -1005,13 +955,30 @@ fn spawn(
 
     // let future =
     // async move { future::block_on(async { fubar.executor().resolve_task(task).await }) };
+    // future::block_on(async { ctx.executor().run().await });
 
-    let task = context.executor().spawn(future);
+    let task = nested_context_clone.executor().spawn(future);
 
-    let future = new_ref!(Value, Value::Task(name, Some(task)));
+    // let future = new_ref!(Value, Value::Future(name, Some(task)));
+    let value = new_ref!(Value, Value::Task(ChaChaTask::new(name.clone(), task)));
 
     // Stash the future away so that it doesn't get dropped when it's done running.
-    context.executor().park_value(future.clone());
+    nested_context_clone.executor().park_value(value.clone());
 
-    Ok(future)
+    let bar = name.clone();
+    let future = async move {
+        dbg!("spawn begin", &bar);
+        // 🚧 This is hinky. I sort of like the idea of storing the context in the
+        // ChaChaTask
+        nested_context_clone.executor().shutdown();
+        let foo = nested_context_clone.executor().run().await;
+        dbg!("spawn end", &foo, bar);
+        foo
+    };
+
+    let task = context.executor().spawn(future);
+    let v = new_ref!(Value, Value::Task(ChaChaTask::new(name, task)));
+    context.executor().park_value(v.clone());
+
+    Ok(value)
 }

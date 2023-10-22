@@ -50,7 +50,6 @@ impl<'a> PrintableValueType<'a> {
                 )
             }
             ValueTypeEnum::Empty(_) => write!(f, "{}", TY_CLR.italic().paint("()")),
-            ValueTypeEnum::XError(_) => write!(f, "{}", TY_ERR_CLR.italic().paint("error")),
             ValueTypeEnum::Function(_) => write!(f, "{}", TY_CLR.italic().paint("function")),
             ValueTypeEnum::XFuture(_) => write!(f, "{}", TY_CLR.italic().paint("future")),
             ValueTypeEnum::Generic(g) => {
@@ -93,6 +92,7 @@ impl<'a> PrintableValueType<'a> {
                         .paint(format!("&{}", PrintableValueType(true, ty, context)))
                 )
             }
+            ValueTypeEnum::Task(_) => write!(f, "{}", TY_CLR.italic().paint("task")),
             ValueTypeEnum::Ty(ref ty) => {
                 // So, sometimes these show up in the model domain. It'll get really
                 // interesting when there are multiples of those in memory at once...
@@ -184,7 +184,6 @@ impl<'a> PrintableValueType<'a> {
                 write!(f, "enum {}", enumeration.name)
             }
             ValueTypeEnum::Empty(_) => write!(f, "()"),
-            ValueTypeEnum::XError(_) => write!(f, "error"),
             ValueTypeEnum::Function(_) => write!(f, "function"),
             ValueTypeEnum::XFuture(_) => write!(f, "future"),
             ValueTypeEnum::Generic(g) => {
@@ -215,6 +214,7 @@ impl<'a> PrintableValueType<'a> {
                 let ty = reference.r35_value_type(&s_read!(lu_dog))[0].clone();
                 write!(f, "{}", PrintableValueType(false, ty, context))
             }
+            ValueTypeEnum::Task(_) => write!(f, "task"),
             ValueTypeEnum::Ty(ref ty) => {
                 // So, sometimes these show up in the model domain. It'll get really
                 // interesting when there are multiples of those in memory at once...

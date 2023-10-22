@@ -1,4 +1,4 @@
-# The dwarf Programming Language
+# The Book of dwarf
 
 [Introduction](./introduction.md)
 [Language Walkthrough](./overview.md)

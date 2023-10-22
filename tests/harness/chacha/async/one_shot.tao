@@ -1,44 +1,51 @@
 fn main() {
-    // async fn main() -> Future<()> {
-    // let foo = async {
-    // let duration = chacha::time(|| {
-    async {
-        let one = chacha::spawn(|| async {
-            timer::one_shot(1000, || -> int {
-                print("slept 1 second\n");
-                42
-            })
-            .await;
+    let task = chacha::spawn_named("timers", async || -> int {
+        print("inner begin\n");
+
+        // let forty_two = chacha::spawn_named("42", || -> int async {
+        let forty_two = timer::one_shot(420, || -> int {
+            print("slept 420 ms\n");
+            42
         });
+        // .await;
+        // 42
+        // });
 
-        let three = chacha::spawn(|| async {
-            timer::one_shot(3000, || -> int {
-                print("slept 3 seconds\n");
-                96
-            })
-            .await;
-        });
+        // let ninety_six = chacha::spawn_named("96", || -> int async {
+        let ninety_six = timer::one_shot(960, || -> int {
+            print("slept 960 ms\n");
+            96
+        })
+        .await;
+        // 96
+        // });
 
-        // one.join();
-        // chacha::join(two);
+        let forty_two = forty_two.await;
+        print(forty_two);
+        // chacha::assert(forty_two == 42);
+        // chacha::assert(ninety_six == 96);
 
-        print(one);
-        print(three);
+        // print(one.join());
+        // print(three.join());
+        // print(one.join());
+        // print(three.join());
 
-        print("hey");
+        print("inner end\n");
 
-        print("you");
-    };
-    // });
-    // };
-    // .await;
-    for i in 0..250 {
-        chacha::sleep(10);
-        print("{0}, ".format(i));
-    }
+        238
+    });
 
-    // print(duration);
-    // let delta = duration - 3.0;
-    // print("delta: {0}\n".format(delta));
-    // chacha::assert((delta < 0.005) && (delta > 0.0));
+    let duration = chacha::time(|| {
+        print("start\n");
+
+        print(task.join());
+
+        print("end\n");
+    });
+
+    print("duration: {0}\n".format(duration));
+
+    let delta = duration - 0.960;
+    print("delta: {0}\n".format(delta));
+    chacha::assert((delta < 0.005) && (delta > 0.0));
 }

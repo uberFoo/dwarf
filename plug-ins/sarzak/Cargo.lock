@@ -198,6 +198,18 @@ dependencies = [
 [[package]]
 name = "async-executor"
 version = "1.5.3"
+dependencies = [
+ "async-lock",
+ "async-task",
+ "concurrent-queue",
+ "fastrand 2.0.0",
+ "futures-lite",
+ "slab",
+]
+
+[[package]]
+name = "async-executor"
+version = "1.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "78f2db9467baa66a700abce2a18c5ad793f6f83310aca1284796fc3921d113fd"
 dependencies = [
@@ -228,7 +240,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f1b6f5d7df27bd294849f8eec66ecfc63d11814df7a4f5d74168a2394467b776"
 dependencies = [
  "async-channel",
- "async-executor",
+ "async-executor 1.5.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "async-io",
  "async-lock",
  "blocking",
@@ -780,7 +792,7 @@ dependencies = [
  "ansi-to-tui",
  "ansi_term",
  "ariadne",
- "async-executor",
+ "async-executor 1.5.3",
  "async-io",
  "async-task",
  "backtrace",
@@ -795,7 +807,6 @@ dependencies = [
  "crossterm",
  "dap",
  "env_logger 0.10.0",
- "flume",
  "futures-lite",
  "heck",
  "lazy_static",
@@ -960,18 +971,6 @@ checksum = "c6c98ee8095e9d1dcbf2fcc6d95acccb90d1c81db1e44725c6a984b1dbdfb010"
 dependencies = [
  "crc32fast",
  "miniz_oxide",
-]
-
-[[package]]
-name = "flume"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "55ac459de2512911e4b674ce33cf20befaba382d05b62b008afc1c8b57cbf181"
-dependencies = [
- "futures-core",
- "futures-sink",
- "nanorand",
- "spin 0.9.8",
 ]
 
 [[package]]
@@ -1148,10 +1147,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "be4136b2a15dd319360be1c07d9933517ccf0be8f16bf62a3bee4f0d618df427"
 dependencies = [
  "cfg-if",
- "js-sys",
  "libc",
  "wasi 0.11.0+wasi-snapshot-preview1",
- "wasm-bindgen",
 ]
 
 [[package]]
@@ -1574,15 +1571,6 @@ checksum = "7bddcd3bf5144b6392de80e04c347cd7fab2508f6df16a85fc496ecd5cec39bc"
 dependencies = [
  "clap 3.2.25",
  "rand 0.8.5",
-]
-
-[[package]]
-name = "nanorand"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6a51313c5820b0b02bd422f4b44776fbf47961755c74ce64afc73bfad10226c3"
-dependencies = [
- "getrandom 0.2.10",
 ]
 
 [[package]]
@@ -2239,7 +2227,7 @@ dependencies = [
  "cc",
  "libc",
  "once_cell",
- "spin 0.5.2",
+ "spin",
  "untrusted",
  "web-sys",
  "winapi",
@@ -2597,7 +2585,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "13f2b548cd8447f8de0fdf1c592929f70f4fc7039a05e47404b0d096ec6987a1"
 dependencies = [
  "async-channel",
- "async-executor",
+ "async-executor 1.5.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "async-fs",
  "async-io",
  "async-lock",
@@ -2655,15 +2643,6 @@ name = "spin"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6e63cff320ae2c57904679ba7cb63280a3dc4613885beafb148ee7bf9aa9042d"
-
-[[package]]
-name = "spin"
-version = "0.9.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6980e8d7511241f8acf4aebddbb1ff938df5eebe98691418c4468d0b72a96a67"
-dependencies = [
- "lock_api",
-]
 
 [[package]]
 name = "stacker"

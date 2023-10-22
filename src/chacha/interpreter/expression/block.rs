@@ -1,11 +1,8 @@
-#[cfg(feature = "async")]
-use crate::chacha::r#async::ChaChaExecutor;
-
 use crate::{
-    chacha::{error::Result, value::FutureResult, vm::VM},
+    chacha::{error::Result, vm::VM},
     interpreter::{eval_statement, Context},
     lu_dog::Block,
-    new_ref, s_read, s_write, NewRef, RefType, SarzakStorePtr, Value,
+    new_ref, s_read, NewRef, RefType, SarzakStorePtr, Value,
 };
 
 pub fn eval<'a>(
@@ -29,7 +26,7 @@ pub fn eval<'a>(
 
             let task = context.executor().spawn(future);
 
-            let future = new_ref!(Value, Value::Task("block".to_owned(), Some(task)));
+            let future = new_ref!(Value, Value::Future("block".to_owned(), Some(task)));
 
             // Stash the future away so that it doesn't get dropped when it's done running.
             context.executor().park_value(future.clone());

@@ -488,7 +488,7 @@ fn eval_expression(
 
             let mut value = s_write!(value);
             let (child_task, _name) = match &mut *value {
-                Value::Task(name, task) => (task.take().unwrap(), name),
+                Value::Future(name, task) => (task.take().unwrap(), name),
                 wtf => {
                     dbg!(wtf);
                     unreachable!()

@@ -12,9 +12,6 @@ use rustc_hash::FxHashMap as HashMap;
 use sarzak::lu_dog::ValueTypeEnum;
 use uuid::Uuid;
 
-#[cfg(feature = "async")]
-use crate::chacha::r#async::ChaChaExecutor;
-
 use crate::{
     chacha::error::Result,
     lu_dog::{Function, Lambda, ObjectStore as LuDogStore, ValueType, ZObjectStore},
@@ -24,11 +21,6 @@ use crate::{
     sarzak::{ObjectStore as SarzakStore, Ty},
     ChaChaError, Context, DwarfFloat, DwarfInteger, NewRef, RefType,
 };
-
-#[cfg(feature = "async")]
-type FutureValue = Box<
-    dyn std::future::Future<Output = Result<RefType<Value>, crate::chacha::error::ChaChaError>>,
->;
 
 #[repr(C)]
 #[derive(Clone, Debug, StableAbi)]
@@ -155,6 +147,85 @@ impl fmt::Display for EnumVariant {
     }
 }
 
+#[derive(Debug)]
+pub enum ChaChaTask {
+    Complete((String, RefType<Value>)),
+    DummyClone(String),
+    Running((String, smol::Task<Result<RefType<Value>>>)),
+}
+
+impl ChaChaTask {
+    pub fn new(name: String, task: smol::Task<Result<RefType<Value>>>) -> Self {
+        Self::Running((name, task))
+    }
+
+    pub fn deref(&self) -> RefType<Value> {
+        match self {
+            Self::Complete((_, value)) => value.clone(),
+            Self::DummyClone(_) => new_ref!(Value, Value::Empty),
+            Self::Running((_, _)) => new_ref!(Value, Value::Empty),
+        }
+    }
+}
+
+// impl std::ops::Deref for Task {
+//     type Target = RefType<Value>;
+
+//     fn deref(&self) -> &Self::Target {
+//         match self {
+//             Self::Complete((_, ref value)) => value,
+//             Self::DummyClone(_) => &new_ref!(Value, Value::Empty),
+//             Self::Running((_, _)) => &new_ref!(Value, Value::Empty),
+//         }
+//     }
+// }
+
+impl Future for ChaChaTask {
+    type Output = RefType<Value>;
+
+    fn poll(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Self::Output> {
+        let this = std::pin::Pin::into_inner(self);
+        match this {
+            Self::Complete((_, value)) => std::task::Poll::Ready(value.clone()),
+            Self::DummyClone(_) => std::task::Poll::Ready(new_ref!(Value, Value::Empty)),
+            Self::Running((name, task)) => {
+                let waker = cx.waker().clone();
+                let value = async {
+                    waker.wake();
+                    task.await
+                };
+                let value = future::block_on(value);
+                match value {
+                    Ok(value) => {
+                        *this = Self::Complete((name.to_owned(), value.clone()));
+                        std::task::Poll::Ready(value)
+                    }
+                    Err(e) => {
+                        *this = Self::Complete((
+                            name.to_owned(),
+                            new_ref!(Value, Value::Error(e.to_string())),
+                        ));
+                        std::task::Poll::Ready(new_ref!(Value, Value::Error(e.to_string())))
+                    }
+                }
+            }
+        }
+    }
+}
+
+impl Clone for ChaChaTask {
+    fn clone(&self) -> Self {
+        match self {
+            Self::Complete((name, value)) => Self::Complete((name.to_owned(), value.clone())),
+            Self::DummyClone(name) => Self::DummyClone(name.to_owned()),
+            Self::Running((name, _)) => Self::DummyClone(name.to_owned()),
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub enum FutureResult {
     Running,
@@ -224,8 +295,11 @@ pub enum Value {
     /// why I need the inner Function to be behind a RefType<<T>>. It seems
     /// excessive, and yet I know I've looked into it before.
     Function(RefType<Function>),
-    // Future(String, async_std::task::JoinHandle<RefType<Value>>),
-    // Future(String, FutureResult),
+    #[cfg(feature = "async")]
+    Future(
+        String,
+        Option<smol::Task<Result<RefType<Value>, ChaChaError>>>,
+    ),
     Integer(DwarfInteger),
     Lambda(RefType<Lambda>),
     ParsedDwarf(Context),
@@ -241,10 +315,7 @@ pub enum Value {
     Struct(RefType<UserStruct>),
     Table(HashMap<String, RefType<Self>>),
     #[cfg(feature = "async")]
-    Task(
-        String,
-        Option<smol::Task<Result<RefType<Value>, ChaChaError>>>,
-    ),
+    Task(ChaChaTask),
     Thonk(&'static str, usize),
     TupleEnum(RefType<TupleEnum>),
     Unknown,
@@ -267,16 +338,18 @@ pub enum Value {
 impl std::fmt::Debug for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            Self::Boolean(bool_) => write!(f, "{:?}", bool_),
-            Self::Char(char_) => write!(f, "{:?}", char_),
+            Self::Boolean(b) => write!(f, "{b:?}"),
+            Self::Char(c) => write!(f, "{c:?}"),
             Self::Empty => write!(f, "()"),
-            Self::Enumeration(var) => write!(f, "{:?}", var),
-            Self::Error(e) => write!(f, "{}: {}", Colour::Red.bold().paint("error"), e),
-            Self::Float(num) => write!(f, "{:?}", num),
+            Self::Enumeration(var) => write!(f, "{var:?}"),
+            Self::Error(e) => write!(f, "{}: {e}", Colour::Red.bold().paint("error")),
+            Self::Float(num) => write!(f, "{num:?}"),
             Self::Function(func) => write!(f, "{:?}", s_read!(func)),
-            Self::Integer(num) => write!(f, "{:?}", num),
+            #[cfg(feature = "async")]
+            Self::Future(name, task) => write!(f, "Task `{name}`: {task:?}"),
+            Self::Integer(num) => write!(f, "{num:?}"),
             Self::Lambda(ƛ) => write!(f, "{:?}", s_read!(ƛ)),
-            Self::ParsedDwarf(ctx) => write!(f, "{:?}", ctx),
+            Self::ParsedDwarf(ctx) => write!(f, "{ctx:?}"),
             Self::ProxyType {
                 module,
                 obj_ty,
@@ -290,23 +363,23 @@ impl std::fmt::Debug for Value {
                 id,
                 s_read!(plugin).name()
             ),
-            Self::Range(range) => write!(f, "{:?}", range),
+            Self::Range(range) => write!(f, "{range:?}"),
             Self::Store(store, plugin) => write!(
                 f,
                 "Store {{ store: {:?}, plugin: {} }}",
                 s_read!(store),
                 s_read!(plugin).name()
             ),
-            Self::String(str_) => write!(f, "{:?}", str_),
+            Self::String(s) => write!(f, "{s:?}"),
             Self::Struct(ty) => write!(f, "{:?}", s_read!(ty)),
-            Self::Table(table) => write!(f, "{:?}", table),
+            Self::Table(table) => write!(f, "{table:?}"),
             #[cfg(feature = "async")]
-            Self::Task(name, task) => write!(f, "Task {{ name: {name} {:?} }}", task),
-            Self::Thonk(name, number) => write!(f, "{:?} [{:?}]", name, number),
+            Self::Task(task) => write!(f, "{task:?}"),
+            Self::Thonk(name, number) => write!(f, "{name:?} [{number:?}]"),
             Self::TupleEnum(te) => write!(f, "{:?}", s_read!(te)),
             Self::Unknown => write!(f, "<unknown>"),
-            Self::Uuid(uuid) => write!(f, "{:?}", uuid),
-            Self::Vector(vec) => write!(f, "{:?}", vec),
+            Self::Uuid(uuid) => write!(f, "{uuid:?}"),
+            Self::Vector(vec) => write!(f, "{vec:?}"),
         }
     }
 }
@@ -321,6 +394,8 @@ impl Clone for Value {
             Self::Error(e) => Self::Error(e.clone()),
             Self::Float(num) => Self::Float(*num),
             Self::Function(func) => Self::Function(func.clone()),
+            #[cfg(feature = "async")]
+            Self::Future(name, task) => Self::Future(name.to_owned(), None),
             Self::Integer(num) => Self::Integer(*num),
             Self::Lambda(ƛ) => Self::Lambda(ƛ.clone()),
             Self::ParsedDwarf(ctx) => Self::ParsedDwarf(ctx.clone()),
@@ -341,7 +416,7 @@ impl Clone for Value {
             Self::Struct(ty) => Self::Struct(ty.clone()),
             Self::Table(table) => Self::Table(table.clone()),
             #[cfg(feature = "async")]
-            Self::Task(name, task) => Self::Task(name.to_owned(), None),
+            Self::Task(task) => Self::Task(task.clone()),
             Self::Thonk(name, number) => Self::Thonk(*name, *number),
             Self::TupleEnum(te) => Self::TupleEnum(te.clone()),
             Self::Unknown => Self::Unknown,
@@ -480,7 +555,6 @@ impl Value {
                 #[allow(clippy::let_and_return)]
                 ƛ_type
             }
-            Value::Store(store, _plugin) => s_read!(store).r1_value_type(lu_dog)[0].clone(),
             Value::ProxyType {
                 module: _,
                 obj_ty: uuid,
@@ -500,6 +574,7 @@ impl Value {
                 }
                 unreachable!()
             }
+            Value::Store(store, _plugin) => s_read!(store).r1_value_type(lu_dog)[0].clone(),
             Value::String(_) => {
                 let ty = Ty::new_s_string(sarzak);
                 for vt in lu_dog.iter_value_type() {
@@ -512,6 +587,14 @@ impl Value {
                 unreachable!()
             }
             Value::Struct(ref ut) => s_read!(ut).get_type().clone(),
+            Value::Task(_) => {
+                for vt in lu_dog.iter_value_type() {
+                    if let ValueTypeEnum::Task(_) = s_read!(vt).subtype {
+                        return vt.clone();
+                    }
+                }
+                unreachable!()
+            }
             Value::Uuid(_) => {
                 let ty = Ty::new_s_uuid(sarzak);
                 for vt in lu_dog.iter_value_type() {
@@ -555,6 +638,8 @@ impl fmt::Display for Value {
             Self::Error(e) => write!(f, "{}: {e}", Colour::Red.bold().paint("error")),
             Self::Float(num) => write!(f, "{num}"),
             Self::Function(_) => write!(f, "<function>"),
+            #[cfg(feature = "async")]
+            Self::Future(name, task) => write!(f, "Task `{name}`: {task:?}"),
             Self::Integer(num) => write!(f, "{num}"),
             Self::Lambda(_) => write!(f, "<lambda>"),
             Self::ParsedDwarf(ctx) => write!(f, "{ctx:#?}"),
@@ -572,7 +657,7 @@ impl fmt::Display for Value {
             // Self::String(str_) => write!(f, "\"{}\"", str_),
             Self::Table(table) => write!(f, "{table:?}"),
             #[cfg(feature = "async")]
-            Self::Task(name, task) => write!(f, "Task {{ name: {name} {:?}}}", task),
+            Self::Task(task) => write!(f, "{task:?}"),
             Self::Thonk(name, number) => write!(f, "{name} [{number}]"),
             Self::TupleEnum(te) => write!(f, "{}", s_read!(te)),
             Self::Unknown => write!(f, "<unknown>"),

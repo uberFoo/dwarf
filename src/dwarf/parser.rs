@@ -2084,6 +2084,12 @@ impl DwarfParser {
     fn parse_expression_with_block(&mut self) -> Result<Option<Expression>> {
         debug!("enter");
 
+        // parse a lambda expression
+        if let Some(expression) = self.parse_lambda_expression()? {
+            debug!("lambda expression", expression);
+            return Ok(Some(expression));
+        }
+
         // parse a block expression
         if let Some(expression) = self.parse_block_expression()? {
             debug!("block expression", expression);
@@ -2103,12 +2109,6 @@ impl DwarfParser {
         // parse an if expression
         if let Some(expression) = self.parse_if_expression()? {
             debug!("if expression", expression);
-            return Ok(Some(expression));
-        }
-
-        // parse a lambda expression
-        if let Some(expression) = self.parse_lambda_expression()? {
-            debug!("lambda expression", expression);
             return Ok(Some(expression));
         }
 
@@ -3484,7 +3484,8 @@ impl DwarfParser {
 
         let start_block = self.match_tokens(&[Token::Punct('{'), Token::Async]);
         if start_block.is_none() {
-            debug!("exit parse_block: no '{' or async");
+            debug!("exit parse_block_expression: no '{' or async");
+
             return Ok(None);
         }
         let block_ty = if let Some((Token::Async, _)) = start_block {
@@ -3496,7 +3497,7 @@ impl DwarfParser {
                     [Some("'{'".to_owned())],
                     Some(token.0.to_string()),
                 );
-                debug!("exit parse_function: no '{'");
+                debug!("exit parse_block_expression: no '{'");
                 return Err(Box::new(err));
             } else {
                 debug!("parse_block_expression: async on");
@@ -3765,10 +3766,24 @@ impl DwarfParser {
             return Ok(None);
         };
 
-        if self.match_tokens(&[Token::Punct('|')]).is_none() {
-            debug!("exit parse_function: no fn");
+        let start_func = self.match_tokens(&[Token::Punct('|'), Token::Async]);
+        if start_func.is_none() {
+            debug!("exit parse_function: no `|` or async");
             return Ok(None);
         }
+        let func_ty = if let Some((Token::Async, _)) = start_func {
+            if self.match_tokens(&[Token::Punct('|')]).is_none() {
+                self.retreat();
+                debug!("exit parse_function: no `|`");
+                return Ok(None);
+            } else {
+                debug!("parse_block_expression: async on");
+                self.async_block += 1;
+                BlockType::Async
+            }
+        } else {
+            BlockType::Sync
+        };
 
         let mut params = Vec::new();
 
@@ -3862,11 +3877,19 @@ impl DwarfParser {
 
         let end = body.0 .1.end;
 
+        match func_ty {
+            BlockType::Async => {
+                debug!("parse_function: async off");
+                self.async_block -= 1;
+            }
+            BlockType::Sync => {}
+        };
+
         debug!("exit");
 
         Ok(Some((
             (
-                DwarfExpression::Lambda(params, return_type, Box::new(body.0)),
+                DwarfExpression::Lambda(func_ty, params, return_type, Box::new(body.0)),
                 start..end,
             ),
             LITERAL,

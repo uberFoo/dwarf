@@ -39,7 +39,6 @@ impl<'d, 'a, 'b> fmt::Display for PrintableValueType<'d, 'a, 'b> {
                 write!(f, "{}", TY_WARN_CLR.paint(&enumeration.name))
             }
             ValueTypeEnum::Empty(_) => write!(f, "{}", TY_CLR.italic().paint("()")),
-            ValueTypeEnum::XError(_) => write!(f, "{}", TY_CLR.italic().paint("<error>")),
             ValueTypeEnum::Function(_) => write!(f, "{}", TY_CLR.italic().paint("<function>")),
             ValueTypeEnum::XFuture(ref id) => {
                 let future = lu_dog.exhume_x_future(id).unwrap();
@@ -80,6 +79,7 @@ impl<'d, 'a, 'b> fmt::Display for PrintableValueType<'d, 'a, 'b> {
                 let ty = reference.r35_value_type(lu_dog)[0].clone();
                 write!(f, "&{}", PrintableValueType(&ty, context, lu_dog))
             }
+            ValueTypeEnum::Task(_) => write!(f, "{}", TY_CLR.italic().paint("<task>")),
             ValueTypeEnum::Ty(ref ty) => {
                 // So, sometimes these show up in the model domain. It'll get really
                 // interesting when there are multiples of those in memory at once...

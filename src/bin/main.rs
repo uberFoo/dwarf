@@ -223,7 +223,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         {
             let mut e = ctx.executor().clone();
             thread::spawn(move || {
-                future::block_on(async { e.run().await });
+                let _ = future::block_on(async { e.run().await });
             });
         }
 
@@ -245,14 +245,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     #[cfg(feature = "async")]
                     {
                         // thread::yield_now();
-                        future::block_on(async { ctx.executor().run().await });
+                        ctx.executor().shutdown();
+                        let _ = future::block_on(async { ctx.executor().run().await });
+                        // while !ctx.executor().finished() {}
                         unsafe {
                             let value = std::sync::Arc::into_raw(value);
                             let value = std::ptr::read(value);
                             let value = value.into_inner().unwrap();
 
                             match value {
-                                Value::Task(name, Some(task)) => {
+                                Value::Future(name, Some(task)) => {
                                     dbg!(&name, &task);
                                     // Ok::<(), ChaChaError>(())
 

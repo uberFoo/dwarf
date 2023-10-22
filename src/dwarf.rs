@@ -493,6 +493,7 @@ pub enum Expression {
     Index(Box<Spanned<Self>>, Box<Spanned<Self>>),
     IntegerLiteral(i64),
     Lambda(
+        BlockType,
         Vec<(Spanned<String>, Spanned<Type>)>,
         Spanned<Type>,
         Box<Spanned<Self>>,
