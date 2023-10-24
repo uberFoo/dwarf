@@ -51,6 +51,7 @@ pub fn inter(
         return Err(vec![DwarfError::TypeMismatch {
             found: lhs.to_string(),
             expected: "bool".to_string(),
+            file: context.file_name.to_owned(),
             found_span: lhs_p.1.to_owned(),
             expected_span: rhs_p.1.to_owned(),
             location: location!(),

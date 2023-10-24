@@ -15,14 +15,14 @@ use crate::{
         DwarfInteger, Expression as ParserExpression, Type,
     },
     keywords::{
-        ARGS, ASSERT, ASSERT_EQ, CHACHA, COMPLEX_EX, EPS, FN_NEW, INTERVAL, NORM_SQUARED, ONE_SHOT,
-        SLEEP, SPAWN, SPAWN_NAMED, TIME, TIMER, UUID_TYPE,
+        ARGS, ASSERT, ASSERT_EQ, CHACHA, COMPLEX_EX, EPS, FN_NEW, INTERVAL, NEW, NORM_SQUARED,
+        ONE_SHOT, PLUGIN, SLEEP, SPAWN, SPAWN_NAMED, TIME, TIMER, UUID_TYPE,
     },
     lu_dog::{
         store::ObjectStore as LuDogStore, Argument, Block, Call, DataStructure, EnumFieldEnum,
-        Expression, FieldExpression, List, LocalVariable, PathElement, Span, StaticMethodCall,
-        StructExpression, UnnamedFieldExpression, ValueType, ValueTypeEnum, Variable, XFuture,
-        XPath, XValue,
+        Expression, FieldExpression, List, LocalVariable, PathElement, Plugin, Span,
+        StaticMethodCall, StructExpression, UnnamedFieldExpression, ValueType, ValueTypeEnum,
+        Variable, XFuture, XPath, XValue,
     },
     new_ref, s_read, s_write,
     sarzak::Ty,
@@ -53,26 +53,41 @@ pub fn inter(
     let type_vec = path
         .iter()
         .map(|p| {
-            if let Type::UserType((obj, span), _generics) = p {
-                (obj.de_sanitize().to_owned(), span)
+            if let Type::UserType((obj, span), generics) = p {
+                let mut inner = Vec::new();
+                inner.push((obj.de_sanitize().to_owned(), span));
+                inner.extend(generics.iter().map(|(generic, span)| {
+                    if let Type::Generic((name, _)) = generic {
+                        (name.de_sanitize().to_owned(), span)
+                    } else {
+                        panic!("I don't think that we should ever see anything other than a generic type here: {generic:?}");
+                    }
+                }));
+                inner
             } else {
                 panic!(
-                "I don't think that we should ever see anything other than a user type here: {:?}",
-                path
-            );
+                    "I don't think that we should ever see anything other than a user type here: {:?}",
+                    path
+                );
             }
         })
+        .flatten()
         .collect::<Vec<_>>();
+
     // This is the span over the entire path.
     let type_span = type_vec.first().unwrap().1.start..type_vec.last().unwrap().1.end;
 
-    let type_name = type_vec
-        .iter()
-        .map(|p| p.0.clone())
-        .collect::<Vec<_>>()
-        .join("");
-
-    // dbg!(&type_name);
+    // let type_name = type_vec
+    //     .iter()
+    //     .map(|p| p.0.clone())
+    //     .collect::<Vec<_>>()
+    //     .join("::");
+    // 🚧 I think I was imagining the type name would be made unique here? And
+    // what's up with all the xpath business?
+    //
+    // This thing below is a complete and total hack to get an http client plugin working.
+    let type_name = type_vec[0].0.clone();
+    let plugin_type = type_vec.last().unwrap().0.clone();
 
     debug!("type_name {:?}", type_name);
 
@@ -84,30 +99,26 @@ pub fn inter(
         })
         .map(|(name, _)| PathElement::new(name.to_owned(), None, &x_path, lu_dog))
         .collect::<Vec<RefType<PathElement>>>();
-    elts.reverse();
     elts.push(PathElement::new(method.to_owned(), None, &x_path, lu_dog));
 
     debug!("path elements: {elts:?}");
 
-    let first = elts
-        .into_iter()
+    if let Some(first) = elts.first() {
+        debug!("first {first:?}");
+        let first = s_read!(first).id;
+        s_write!(x_path).first = Some(first);
+    }
+
+    // Stitch together the pointers.
+    elts.into_iter()
         .fold(Option::<RefType<PathElement>>::None, |prev, elt| {
-            // dbg!(&prev, &elt);
             if let Some(prev) = prev {
                 s_write!(prev).next = Some(s_read!(elt).id);
-                // dbg!(&prev, &elt);
                 Some(elt)
             } else {
                 Some(elt)
             }
         });
-
-    // dbg!(&first);
-
-    if let Some(first) = first {
-        let first = s_read!(first).id;
-        s_write!(x_path).first = Some(first);
-    }
 
     // We need to check if the type name is a struct or an enum.
     if lu_dog.exhume_woog_struct_id_by_name(&type_name).is_some()
@@ -116,21 +127,23 @@ pub fn inter(
             .is_some()
         || type_name == CHACHA
         || type_name == COMPLEX_EX
+        || type_name == PLUGIN
         || type_name == TIMER
         || type_name == UUID_TYPE
     {
+        // 🚧  This is so ugly. This is for the http plugin.
+        let foo = if type_name == PLUGIN {
+            format!("{type_name}::{plugin_type}")
+        } else {
+            type_name.clone()
+        };
         // Here we are interring a static method call.
-        let meth = StaticMethodCall::new(
-            method.to_owned(),
-            type_name.to_owned(),
-            Uuid::new_v4(),
-            lu_dog,
-        );
+        let meth = StaticMethodCall::new(method.to_owned(), foo.clone(), Uuid::new_v4(), lu_dog);
         let call = Call::new_static_method_call(true, None, None, &meth, lu_dog);
         let call_expr = Expression::new_call(&call, lu_dog);
 
-        debug!("name {}", type_name);
-        debug!("method {}", method);
+        debug!("name {type_name}");
+        debug!("method {method}");
 
         let sarzak = context.sarzak;
 
@@ -155,11 +168,6 @@ pub fn inter(
                     let ty = Ty::new_boolean(sarzak);
                     // 🚧 Ideally we'd cache this when we startup.
                     ValueType::new_ty(&Ty::new_boolean(sarzak), lu_dog)
-                }
-                COMPLEX_EX => {
-                    let ty = Ty::new_float(sarzak);
-                    // 🚧 Ideally we'd cache this when we startup.
-                    ValueType::new_ty(&Ty::new_float(sarzak), lu_dog)
                 }
                 EPS => {
                     let ty = Ty::new_float(sarzak);
@@ -188,11 +196,31 @@ pub fn inter(
                     let span = s_read!(span).start as usize..s_read!(span).end as usize;
                     return Err(vec![DwarfError::ObjectNameNotFound {
                         name: type_name.to_owned(),
+                        file: context.file_name.to_owned(),
                         span,
                         location: location!(),
                     }]);
                     // e_warn!("ParserExpression type not found");
                     // ValueType::new_unknown(lu_dog)
+                }
+            }
+        } else if type_name == COMPLEX_EX {
+            match method {
+                NORM_SQUARED => ValueType::new_ty(&Ty::new_float(sarzak), lu_dog),
+                _ => {
+                    e_warn!("ComplexEx method not found");
+                    ValueType::new_unknown(lu_dog)
+                }
+            }
+        } else if type_name == PLUGIN {
+            match method {
+                NEW => {
+                    let plugin = Plugin::new(plugin_type, lu_dog);
+                    ValueType::new_plugin(&plugin, lu_dog)
+                }
+                _ => {
+                    e_warn!("Plugin method not found");
+                    ValueType::new_unknown(lu_dog)
                 }
             }
         } else if type_name == TIMER {
@@ -207,6 +235,7 @@ pub fn inter(
                     let span = s_read!(span).start as usize..s_read!(span).end as usize;
                     return Err(vec![DwarfError::ObjectNameNotFound {
                         name: type_name.to_owned(),
+                        file: context.file_name.to_owned(),
                         span,
                         location: location!(),
                     }]);
@@ -216,14 +245,6 @@ pub fn inter(
             }
         } else if type_name == UUID_TYPE && method == FN_NEW {
             ValueType::new_ty(&Ty::new_s_uuid(sarzak), lu_dog)
-        } else if type_name == COMPLEX_EX {
-            match method {
-                NORM_SQUARED => ValueType::new_ty(&Ty::new_float(sarzak), lu_dog),
-                _ => {
-                    e_warn!("ParserExpression type not found");
-                    ValueType::new_unknown(lu_dog)
-                }
-            }
         } else {
             debug!("ParserExpression::StaticMethodCall: looking up type {type_name}");
             lookup_woog_struct_method_return_type(&type_name, method, context.sarzak, lu_dog)
@@ -411,6 +432,7 @@ pub fn inter(
                     name: type_name.to_owned(),
                     name_span: type_span.to_owned(),
                     field: method.to_owned(),
+                    file: context.file_name.to_owned(),
                     span,
                 }])
             }
@@ -418,6 +440,7 @@ pub fn inter(
             let span = s_read!(span).start as usize..s_read!(span).end as usize;
             Err(vec![DwarfError::ObjectNameNotFound {
                 name: type_name.to_owned(),
+                file: context.file_name.to_owned(),
                 span,
                 location: location!(),
             }])

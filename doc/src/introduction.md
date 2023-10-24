@@ -7,6 +7,20 @@
 Welcome!
 This brief introduction will outline the status of dwarf, and set the stage for what's to come.
 
+Before I get started, I need to state this this is the result of me hacking since April 2023.
+As I write this that is about seven month and 80k lines of code ago.
+So there is a lot of code, in a relatively short period of time.
+Some of it is sloppy.
+Some of it very much so.
+But it's as correct as I can make it: "in `rustc` we trust", and praise be unto Henry and Milner for.
+The one thing that it's almost guaranteed not to be is efficient.
+I'm sure that I'm copying memory unnecessarily all over the place.
+There are other areas ripe for critique, and I appreciate any and all feedback.
+I appreciate anyone taking the time to bother to read the code to be honest.
+
+In fact the code is sprinkled with notes to myself, and `// 🚧`` markers.
+The simple fact is that you can do it right, or do it quickly, and leave yourself as much context as possible.
+
 ## {{i:Hello World}}
 
 Every language deserves one, so let's get it out of the way.

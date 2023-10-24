@@ -5,8 +5,8 @@ use log;
 use rustc_hash::FxHashMap as HashMap;
 
 use crate::dwarf::{
-    Attribute, BlockType, DwarfFloat, EnumField, Expression as DwarfExpression, Generics,
-    InnerAttribute, InnerItem, Item, Pattern, Spanned, Statement, Token, Type,
+    Attribute, AttributeMap, BlockType, DwarfFloat, EnumField, Expression as DwarfExpression,
+    Generics, InnerAttribute, InnerItem, Item, Pattern, Spanned, Statement, Token, Type,
 };
 
 use super::{error::DwarfError, DwarfInteger};
@@ -646,7 +646,6 @@ impl DwarfParser {
         debug!("enter");
 
         let mut attributes = HashMap::default();
-
         while let Some(Attribute { name, value }) = self.parse_attribute() {
             debug!("attribute", name, value);
             attributes
@@ -3272,18 +3271,11 @@ impl DwarfParser {
             return Ok(None);
         };
 
-        // if let (DwarfExpression::PathInExpression(path), span) = &path.0 {
-        // } else {
-        //     debug!("exit not a path");
-        //     return Ok(None);
-        // };
-
         if self.match_tokens(&[Token::Punct('{')]).is_none() {
             debug!("exit no {");
             return Ok(None);
         }
 
-        // let fields = if self.match_tokens(&[Token::Punct('{')]).is_some() {
         let mut fields = Vec::new();
         let mut end = false;
 
@@ -3355,15 +3347,6 @@ impl DwarfParser {
             debug!("exit: no '}'");
             return Err(Box::new(err));
         }
-
-        //     fields
-        // } else {
-        //     if self.match_tokens(&[Token::Punct(';')]).is_none() {
-        //         return Ok(None);
-        //     }
-
-        //     Vec::new()
-        // };
 
         debug!("exit ok");
 
@@ -3951,6 +3934,10 @@ impl DwarfParser {
         } else {
             return Ok(None);
         };
+
+        // if let Some(ident) = self.parse_path() {
+        //     dbg!("path", ident);
+        // }
 
         // Match a boolean
         if self.match_tokens(&[Token::Type(Type::Boolean)]).is_some() {
@@ -4666,8 +4653,17 @@ impl DwarfParser {
     /// Parse a struct field
     ///
     /// field -> IDENT : TYPE
-    fn parse_struct_field(&mut self) -> Result<(Spanned<String>, Spanned<Type>)> {
+    fn parse_struct_field(&mut self) -> Result<(Spanned<String>, Spanned<Type>, AttributeMap)> {
         debug!("enter parse_struct_field");
+
+        let mut attributes = HashMap::default();
+        while let Some(Attribute { name, value }) = self.parse_attribute() {
+            debug!("attribute", name, value);
+            attributes
+                .entry(name.0)
+                .or_insert_with(Vec::new)
+                .push((name.1, value));
+        }
 
         let name = if let Some(ident) = self.parse_ident() {
             ident
@@ -4705,7 +4701,6 @@ impl DwarfParser {
                     Some("'int'".to_owned()),
                     Some("'string'".to_owned()),
                     Some("'Uuid'".to_owned()),
-                    Some("'Option<T>'".to_owned()),
                     Some("'[T]'".to_owned()),
                 ],
                 Some(tok.0.to_string()),
@@ -4716,7 +4711,7 @@ impl DwarfParser {
 
         debug!("exit parse_struct_field: ", (&name, &ty));
 
-        Ok((name, ty))
+        Ok((name, ty, attributes))
     }
 
     fn match_tokens<'a>(&mut self, tokens: &'a [Token]) -> Option<Spanned<&'a Token>> {

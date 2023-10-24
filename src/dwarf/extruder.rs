@@ -5,7 +5,7 @@ use heck::ToUpperCamelCase;
 use log;
 use rustc_hash::FxHashMap as HashMap;
 use sarzak::domain::DomainBuilder;
-use snafu::{ensure, location, Location};
+use snafu::{location, Location};
 use uuid::Uuid;
 
 use crate::{
@@ -14,7 +14,7 @@ use crate::{
         expression::{addition, and, expr_as, static_method_call},
         parse_dwarf, AttributeMap, BlockType, DwarfInteger, EnumField,
         Expression as ParserExpression, Generics, InnerAttribute, InnerItem, Item,
-        PrintableValueType, Spanned, Statement as ParserStatement, Type,
+        PrintableValueType, Spanned, Statement as ParserStatement, Type, WrappedValueType,
     },
     keywords::{CHACHA, FN_NEW, FORMAT, JOIN, LEN, UUID_TYPE},
     lu_dog::{
@@ -25,14 +25,14 @@ use crate::{
             ExternalImplementation, Field, FieldExpression, ForLoop, Function, Generic,
             ImplementationBlock, Index, IntegerLiteral, Item as WoogItem, ItemStatement, Lambda,
             LambdaParameter, LetStatement, Literal, LocalVariable, NamedFieldExpression, Parameter,
-            PathElement, Pattern as AssocPat, RangeExpression, Span as LuDogSpan, Statement,
-            StringLiteral, StructExpression, StructField, StructGeneric, TupleField, Unit,
-            ValueType, ValueTypeEnum, Variable, VariableExpression, WoogStruct, XFuture, XIf,
+            PathElement, Pattern as AssocPat, Plugin, RangeExpression, Span as LuDogSpan,
+            Statement, StringLiteral, StructExpression, StructField, StructGeneric, TupleField,
+            Unit, ValueType, ValueTypeEnum, Variable, VariableExpression, WoogStruct, XFuture, XIf,
             XMatch, XPath, XPrint, XValue, XValueEnum, ZObjectStore,
         },
         Argument, Binary, BooleanLiteral, Comparison, DwarfSourceFile, FieldAccess,
         FieldAccessTarget, FloatLiteral, List, ListElement, ListExpression, MethodCall, Operator,
-        Reference, ResultStatement, Unary, VariableEnum, XReturn,
+        ResultStatement, Unary, VariableEnum, XReturn,
     },
     new_ref, s_read, s_write,
     sarzak::{store::ObjectStore as SarzakStore, types::Ty},
@@ -236,7 +236,7 @@ struct ConveyStruct<'a> {
     name: String,
     span: &'a Span,
     attributes: &'a AttributeMap,
-    fields: &'a [(Spanned<String>, Spanned<Type>)],
+    fields: &'a [(Spanned<String>, Spanned<Type>, AttributeMap)],
     generics: HashMap<String, Type>,
 }
 
@@ -245,7 +245,7 @@ impl<'a> ConveyStruct<'a> {
         name: String,
         span: &'a Span,
         attributes: &'a AttributeMap,
-        fields: &'a [(Spanned<String>, Spanned<Type>)],
+        fields: &'a [(Spanned<String>, Spanned<Type>, AttributeMap)],
         generics: HashMap<String, Type>,
     ) -> Self {
         Self {
@@ -302,7 +302,7 @@ impl<'a> ConveyImpl<'a> {
 #[derive(Debug)]
 pub struct StructFields {
     woog_struct: RefType<WoogStruct>,
-    fields: Vec<(Spanned<String>, Spanned<Type>)>,
+    fields: Vec<(Spanned<String>, Spanned<Type>, AttributeMap)>,
     generics: HashMap<String, Type>,
 
     location: Location,
@@ -326,6 +326,7 @@ pub struct Context<'a> {
     pub dwarf_home: &'a PathBuf,
     pub cwd: PathBuf,
     pub dirty: &'a mut Vec<Dirty>,
+    pub file_name: &'a str,
 }
 
 /// The main entry point
@@ -350,7 +351,8 @@ pub struct Context<'a> {
 /// `sarzak`. This one really needs a close looking at. It's just an empty metamodel.
 /// It's used in two or three places, and it's baggage on every function call. I think
 /// that it may only be used to look up the id of the UUID type.
-pub fn new_lu_dog(
+pub fn new_lu_dog<'a>(
+    file_name: String,
     source: Option<(String, &[Item])>,
     dwarf_home: &PathBuf,
     sarzak: &SarzakStore,
@@ -377,12 +379,14 @@ pub fn new_lu_dog(
             dwarf_home,
             cwd: env::current_dir().unwrap(),
             dirty: &mut dirty,
+            file_name: file_name.as_str(),
         };
 
         walk_tree(ast, &mut context, &mut lu_dog)?;
     }
 
     Ok(InterContext {
+        source: file_name.into(),
         lu_dog: new_ref!(LuDogStore, lu_dog),
         models,
         dirty,
@@ -709,7 +713,7 @@ fn inter_func(
             for (var, ty) in vars.iter().zip(tys.iter()) {
                 let local = LocalVariable::new(Uuid::new_v4(), lu_dog);
                 let var = Variable::new_local_variable(var.to_owned(), &local, lu_dog);
-                let _value = XValue::new_variable(&block, ty, &var, lu_dog);
+                let _value = XValue::new_variable(&block, &ty.0, &var, lu_dog);
                 // 🚧 We should really be passing a span in the Block so that
                 // we can link this XValue to it.
             }
@@ -829,7 +833,7 @@ fn inter_func(
         )?;
     }
 
-    debug!("func {name} saved");
+    debug!("func `{name}` saved");
 
     if errors.is_empty() {
         Ok(())
@@ -981,7 +985,13 @@ pub fn inter_statement(
             debug!("inter let expr {expr:?}, ty {ty:?}");
 
             let ty = if let Some((type_, span)) = type_ {
-                let lhs_ty = type_.into_value_type(span, lu_dog, context.models, context.sarzak)?;
+                let lhs_ty = type_.into_value_type(
+                    context.file_name,
+                    span,
+                    lu_dog,
+                    context.models,
+                    context.sarzak,
+                )?;
                 typecheck(
                     (&lhs_ty, span),
                     (&ty, expr_span),
@@ -1190,6 +1200,7 @@ pub(super) fn inter_expression(
             if !matches!(s_read!(ty).subtype, ValueTypeEnum::XFuture(_)) {
                 dbg!(ty);
                 Err(vec![DwarfError::AwaitNotFuture {
+                    file: context.file_name.to_owned(),
                     span: expr_p.1.clone(),
                 }])
             } else {
@@ -1239,7 +1250,7 @@ pub(super) fn inter_expression(
             for (var, ty) in vars.into_iter().zip(tys.into_iter()) {
                 let local = LocalVariable::new(Uuid::new_v4(), lu_dog);
                 let var = Variable::new_local_variable(var, &local, lu_dog);
-                let _value = XValue::new_variable(&block, &ty, &var, lu_dog);
+                let _value = XValue::new_variable(&block, &ty.0, &var, lu_dog);
                 // 🚧 We should really be passing a span in the Block so that
                 // we can link this XValue to it.
             }
@@ -1462,6 +1473,7 @@ pub(super) fn inter_expression(
                             let span = span.start as usize..span.end as usize;
                             Err(vec![DwarfError::StructFieldNotFound {
                                 field: rhs.0.clone(),
+                                file: context.file_name.to_owned(),
                                 span,
                                 location: location!(),
                             }])
@@ -1469,6 +1481,7 @@ pub(super) fn inter_expression(
                     } else {
                         Err(vec![DwarfError::StructFieldNotFound {
                             field: rhs.0.clone(),
+                            file: context.file_name.to_owned(),
                             span: rhs.1.to_owned(),
                             location: location!(),
                         }])
@@ -1529,6 +1542,7 @@ pub(super) fn inter_expression(
                                     let span = span.start as usize..span.end as usize;
                                     Err(vec![DwarfError::StructFieldNotFound {
                                         field: rhs.0.clone(),
+                                        file: context.file_name.to_owned(),
                                         span,
                                         location: location!(),
                                     }])
@@ -1536,6 +1550,7 @@ pub(super) fn inter_expression(
                             } else {
                                 Err(vec![DwarfError::StructFieldNotFound {
                                     field: rhs.0.clone(),
+                                    file: context.file_name.to_owned(),
                                     span: rhs.1.to_owned(),
                                     location: location!(),
                                 }])
@@ -1548,6 +1563,7 @@ pub(super) fn inter_expression(
                     }
                 }
                 _ => Err(vec![DwarfError::NotAStruct {
+                    file: context.file_name.to_owned(),
                     span: rhs.1.to_owned(),
                     ty: PrintableValueType(&ty, context, lu_dog).to_string(),
                 }]),
@@ -1601,6 +1617,7 @@ pub(super) fn inter_expression(
                             let ty =
                                 PrintableValueType(&collection_ty, context, lu_dog).to_string();
                             return Err(vec![DwarfError::NotAList {
+                                file: context.file_name.to_owned(),
                                 span: cspan.to_owned(),
                                 ty,
                                 location: location!(),
@@ -1611,6 +1628,7 @@ pub(super) fn inter_expression(
                 _ => {
                     let ty = PrintableValueType(&collection_ty, context, lu_dog).to_string();
                     return Err(vec![DwarfError::NotAList {
+                        file: context.file_name.to_owned(),
                         span: cspan.to_owned(),
                         ty,
                         location: location!(),
@@ -1627,7 +1645,7 @@ pub(super) fn inter_expression(
                         a_sink.to_owned(),
                         body.to_owned(),
                         vec![iter.0.to_owned()],
-                        vec![collection_ty],
+                        vec![WrappedValueType(collection_ty)],
                     )
                 }
                 _ => unreachable!(),
@@ -1870,6 +1888,7 @@ pub(super) fn inter_expression(
                     return Err(vec![DwarfError::TypeMismatch {
                         expected: bty.to_string(),
                         found: ty.to_string(),
+                        file: context.file_name.to_owned(),
                         expected_span: cspan.to_owned(),
                         found_span: cspan.to_owned(),
                         location: location!(),
@@ -1882,6 +1901,7 @@ pub(super) fn inter_expression(
                 return Err(vec![DwarfError::TypeMismatch {
                     expected: bty.to_string(),
                     found: ty.to_string(),
+                    file: context.file_name.to_owned(),
                     expected_span: cspan.to_owned(),
                     found_span: cspan.to_owned(),
                     location: location!(),
@@ -1972,6 +1992,7 @@ pub(super) fn inter_expression(
                 } else {
                     let ty = PrintableValueType(&target_ty, context, lu_dog).to_string();
                     return Err(vec![DwarfError::NotAList {
+                        file: context.file_name.to_owned(),
                         span: target_p.1.clone(),
                         ty,
                         location: location!(),
@@ -1980,6 +2001,7 @@ pub(super) fn inter_expression(
             } else {
                 let ty = PrintableValueType(&target_ty, context, lu_dog).to_string();
                 return Err(vec![DwarfError::NotAList {
+                    file: context.file_name.to_owned(),
                     span: target_p.1.clone(),
                     ty,
                     location: location!(),
@@ -2573,6 +2595,7 @@ pub(super) fn inter_expression(
                             _ => {
                                 return Err(vec![DwarfError::NoSuchMethod {
                                     method: method.to_owned(),
+                                    file: context.file_name.to_owned(),
                                     span: meth_span.to_owned(),
                                     location: location!(),
                                 }])
@@ -2587,6 +2610,7 @@ pub(super) fn inter_expression(
                     _ => {
                         return Err(vec![DwarfError::NoSuchMethod {
                             method: method.to_owned(),
+                            file: context.file_name.to_owned(),
                             span: meth_span.to_owned(),
                             location: location!(),
                         }])
@@ -2791,6 +2815,7 @@ pub(super) fn inter_expression(
                 return Err(vec![DwarfError::TypeMismatch {
                     found: lhs.to_string(),
                     expected: "bool".to_string(),
+                    file: context.file_name.to_owned(),
                     found_span: lhs_p.1.to_owned(),
                     expected_span: rhs_p.1.to_owned(),
                     location: location!(),
@@ -2999,12 +3024,14 @@ pub(super) fn inter_expression(
                         name: full_enum_name.to_owned(),
                         name_span: path_span.to_owned(),
                         field: field_name.to_owned(),
+                        file: context.file_name.to_owned(),
                         span: field_span.to_owned(),
                     }])
                 }
             } else {
                 Err(vec![DwarfError::EnumNotFound {
                     name: full_enum_name.to_owned(),
+                    file: context.file_name.to_owned(),
                     span: path_span.to_owned(),
                 }])
             }
@@ -3168,6 +3195,7 @@ pub(super) fn inter_expression(
                 None => {
                     return Err(vec![DwarfError::UnknownType {
                         ty: name.to_owned(),
+                        file: context.file_name.to_owned(),
                         span: name_span.to_owned(),
                         location: location!(),
                     }]);
@@ -3215,7 +3243,6 @@ pub(super) fn inter_expression(
                     // type of the generic parameter. *After* that however, we
                     // need to use this new type to typecheck all subsequent uses
                     // of the pattern.
-
                     if let ValueTypeEnum::Generic(ref id) = naked_ty.subtype {
                         // OK. We are instantiating a generic. We need to create the new type
                         let generic = lu_dog.exhume_generic(id).unwrap();
@@ -3241,6 +3268,7 @@ pub(super) fn inter_expression(
                         name: name.to_string(),
                         name_span: name_span.to_owned(),
                         field: field_name.0.to_owned(),
+                        file: context.file_name.to_owned(),
                         span: field_name.1.to_owned(),
                     }]);
                 }
@@ -3346,6 +3374,7 @@ pub(super) fn inter_expression(
             Err(vec![DwarfError::NoImplementation {
                 missing: format!("inter_expression: {:?}", 道),
                 code: source[span.clone()].to_owned(),
+                file: context.file_name.to_owned(),
                 span,
             }])
         }
@@ -3406,6 +3435,9 @@ fn inter_import(
     let path_root = path.iter().map(|p| p.0.to_owned()).collect::<Vec<_>>();
     let module = path_root.get(0).unwrap(); // This will have _something_.
 
+    if module == "dwarf" {
+        return Ok(());
+    }
     // path_root.pop().expect("Path root not found");
     // let path_root = path_root.join("/");
     // let obj_name = path.last().unwrap();
@@ -3485,21 +3517,35 @@ fn inter_implementation(
                     debug!("store.model: {model_name}");
                     let store = lu_dog
                         .iter_z_object_store()
-                        .find(|store| s_read!(store).domain == model_name)
-                        .unwrap();
-                    let ty = lu_dog
-                        .iter_value_type()
-                        .find(|ty| {
-                            let ty = s_read!(ty);
-                            if let ValueTypeEnum::ZObjectStore(ref store_id) = ty.subtype {
-                                store_id == &s_read!(store).id
-                            } else {
-                                false
-                            }
-                        })
-                        .unwrap();
+                        .find(|store| s_read!(store).domain == model_name);
+                    let (ty, store) = if let Some(store) = store {
+                        let ty = lu_dog
+                            .iter_value_type()
+                            .find(|ty| {
+                                let ty = s_read!(ty);
+                                if let ValueTypeEnum::ZObjectStore(ref store_id) = ty.subtype {
+                                    store_id == &s_read!(store).id
+                                } else {
+                                    false
+                                }
+                            })
+                            .unwrap();
+                        (ty, Some(store))
+                    } else {
+                        // 🚧 This is a hack to get the http client plugin working.
+                        // I think that we need to use a different attribute name.
+                        context.location = location!();
+                        let ty = make_value_type(
+                            &Type::UserType((name.to_owned(), 0..0), vec![]),
+                            span,
+                            None,
+                            context,
+                            lu_dog,
+                        )?;
+                        (ty, None)
+                    };
 
-                    let implementation = ImplementationBlock::new(None, Some(&store), lu_dog);
+                    let implementation = ImplementationBlock::new(None, store.as_ref(), lu_dog);
                     let _ = WoogItem::new_implementation_block(
                         &context.source,
                         &implementation,
@@ -3533,6 +3579,7 @@ fn inter_implementation(
         } else {
             return Err(vec![DwarfError::ObjectNameNotFound {
                 name: name.to_owned(),
+                file: context.file_name.to_owned(),
                 span: span.to_owned(),
                 location: location!(),
             }]);
@@ -3586,7 +3633,12 @@ fn inter_implementation(
             Item {
                 item: (_, span),
                 attributes: _,
-            } => return Err(vec![DwarfError::ImplementationBlock { span: span.clone() }]),
+            } => {
+                return Err(vec![DwarfError::ImplementationBlock {
+                    file: context.file_name.to_owned(),
+                    span: span.clone(),
+                }])
+            }
         }
     }
     // }
@@ -3677,7 +3729,7 @@ fn inter_enum(
                     lu_dog,
                 );
 
-                for ((name, _), (ty, ty_span)) in fields {
+                for ((name, _), (ty, ty_span), attrs) in fields {
                     context.location = location!();
                     let ty = make_value_type(ty, ty_span, None, context, lu_dog)?;
                     let _ = Field::new(name.to_owned(), &woog_struct, &ty, lu_dog);
@@ -3808,13 +3860,15 @@ const FUNC: &str = "func";
 const MODEL: &str = "model";
 const OBJECT: &str = "object";
 const PROXY: &str = "proxy";
+const PLUGIN: &str = "plugin";
 const STORE: &str = "store";
+const TYPE: &str = "ty";
 
 fn inter_struct(
     name: &str,
     _span: &Span,
     attributes: &AttributeMap,
-    fields: &[(Spanned<String>, Spanned<Type>)],
+    fields: &[(Spanned<String>, Spanned<Type>, AttributeMap)],
     generics: &HashMap<String, Type>,
     context: &mut Context,
     lu_dog: &mut LuDogStore,
@@ -3901,6 +3955,12 @@ fn inter_struct(
                 } else {
                     unreachable!();
                 }
+            } else if let Some(ty_vec) = attributes.get(TYPE) {
+                if let Some((_, ref value)) = ty_vec.get(0) {
+                    let type_name: String = value.try_into().map_err(|e| vec![e])?;
+                    debug!("proxy.ty: {type_name}");
+                }
+                Ok(())
             } else {
                 Err(vec![DwarfError::Generic {
                     description: "No store specified".to_owned(),
@@ -3994,14 +4054,14 @@ fn inter_struct(
 
 fn inter_struct_fields(
     woog_struct: RefType<WoogStruct>,
-    fields: &[(Spanned<String>, Spanned<Type>)],
+    fields: &[(Spanned<String>, Spanned<Type>, AttributeMap)],
     generics: &HashMap<String, Type>,
     location: Location,
     context: &mut Context,
     lu_dog: &mut LuDogStore,
 ) -> Result<()> {
     let mut errors = Vec::new();
-    for ((name, _), (type_, span)) in fields {
+    for ((name, _), (type_, span), attrs) in fields {
         let name = name.de_sanitize();
 
         debug!("field {name}");
@@ -4020,6 +4080,49 @@ fn inter_struct_fields(
             );
 
             ty
+        } else if let Some(proxy_vec) = attrs.get(PROXY) {
+            if let Some((_, InnerAttribute::Attribute(ref attributes))) = proxy_vec.get(0) {
+                // Get the plugin value
+                if let Some(plugin_vec) = attributes.get(PLUGIN) {
+                    if let Some((_, ref value)) = plugin_vec.get(0) {
+                        let plugin_name: String = value.try_into().map_err(|e| vec![e])?;
+                        debug!("proxy.plugin: {plugin_name}");
+                        if let Type::UserType(tok, generics) = type_ {
+                            let ty_name = tok.0.de_sanitize();
+                            if ty_name == "Plugin" {
+                                let plugin = Plugin::new(plugin_name, lu_dog);
+                                let ty = ValueType::new_plugin(&plugin, lu_dog);
+                                LuDogSpan::new(
+                                    span.end as i64,
+                                    span.start as i64,
+                                    &context.source,
+                                    Some(&ty),
+                                    None,
+                                    lu_dog,
+                                );
+
+                                ty
+                            } else {
+                                return Err(vec![DwarfError::Generic {
+                                    description: format!("Expected `Plugin`, found `{ty_name}`.",),
+                                }]);
+                            }
+                        } else {
+                            return Err(vec![DwarfError::Generic {
+                                description: format!("Expected `Plugin`, found `{type_}`.",),
+                            }]);
+                        }
+                    } else {
+                        unreachable!();
+                    }
+                } else {
+                    return Err(vec![DwarfError::Generic {
+                        description: "Expected `plugin` attribute".to_owned(),
+                    }]);
+                }
+            } else {
+                unreachable!();
+            }
         } else {
             context.location = location;
             match make_value_type(type_, span, None, context, lu_dog) {
@@ -4030,6 +4133,9 @@ fn inter_struct_fields(
                 }
             }
         };
+
+        //     Type::UserType(tok, generics) => {
+        // let name = tok.0.de_sanitize();
 
         let _field = Field::new(name.to_owned(), &woog_struct, &ty, lu_dog);
     }
@@ -4065,7 +4171,7 @@ pub(crate) fn make_value_type(
 ) -> Result<RefType<ValueType>> {
     let sarzak = context.sarzak;
 
-    debug!("get_value_type {type_}");
+    debug!("make_value_type {type_}");
 
     match type_ {
         Type::Boolean => {
@@ -4115,15 +4221,10 @@ pub(crate) fn make_value_type(
             let list = List::new(&inner_type, lu_dog);
             Ok(ValueType::new_list(&list, lu_dog))
         }
-        Type::Reference(ref type_) => {
-            let inner_type = make_value_type(&type_.0, &type_.1, enclosing_type, context, lu_dog)?;
-            // We don't know the address yet -- we'll fix it in the interpreter.
-            let reference = Reference::new(Uuid::new_v4(), false, &inner_type, lu_dog);
-            Ok(ValueType::new_reference(&reference, lu_dog))
-        }
         Type::Self_ => match enclosing_type {
             Some(ty) => Ok(ty.clone()),
             None => Err(vec![DwarfError::BadSelf {
+                file: context.file_name.to_owned(),
                 span: span.clone(),
                 location: context.location,
             }]),
@@ -4158,6 +4259,7 @@ pub(crate) fn make_value_type(
                 // It might be sort of cool to make `Import` a `ValueType`, and then
                 // just return this. `Function` and `Struct`, two out of the other
                 // three `Item`s are already `ValueType`s, so it's not a stretch.
+                unreachable!();
                 Ok(ValueType::new_import(&import, lu_dog))
             } else if name == "Future" {
                 let inner_type =
@@ -4165,10 +4267,17 @@ pub(crate) fn make_value_type(
                 let future = XFuture::new(&inner_type, lu_dog);
 
                 Ok(ValueType::new_x_future(&future, lu_dog))
+            // } else if name == "Plugin" {
+            //     let inner_type =
+            //         make_value_type(&generics[0].0, span, enclosing_type, context, lu_dog)?;
+            //     let future = XFuture::new(&inner_type, lu_dog);
+
+            //     Ok(ValueType::new_x_future(&future, lu_dog))
             } else if name == "Self" {
                 match enclosing_type {
                     Some(ty) => Ok(ty.clone()),
                     None => Err(vec![DwarfError::BadSelf {
+                        file: context.file_name.to_owned(),
                         span: tok.1.clone(),
                         location: context.location,
                     }]),
@@ -4213,11 +4322,6 @@ pub(crate) fn make_value_type(
                     Ok(ty)
                 } else if let Some(ref id) = lu_dog.exhume_enumeration_id_by_name(name) {
                     // Here too, but for enums.
-                    // 🚧 WTAF is this name != name BS?
-                    // if name != name {
-                    //     let (_new_enum, new_ty) = create_generic_enum(name, lu_dog);
-                    //     Ok(new_ty)
-                    // } else {
                     let woog_enum = lu_dog.exhume_enumeration(id).unwrap();
                     Ok(ValueType::new_enumeration(&woog_enum, lu_dog))
                     // }
@@ -4237,6 +4341,7 @@ pub(crate) fn make_value_type(
                 } else {
                     Err(vec![DwarfError::UnknownType {
                         ty: name.to_owned(),
+                        file: context.file_name.to_owned(),
                         span: span.to_owned(),
                         location: context.location,
                     }])
@@ -4408,6 +4513,7 @@ pub(super) fn typecheck(
                         Err(vec![DwarfError::TypeMismatch {
                             expected: a.to_string(),
                             found: b.to_string(),
+                            file: context.file_name.to_owned(),
                             expected_span: lhs_span.to_owned(),
                             found_span: rhs_span.to_owned(),
                             location,
@@ -4433,6 +4539,7 @@ pub(super) fn typecheck(
                     Err(vec![DwarfError::TypeMismatch {
                         expected: lhs.to_string(),
                         found: rhs.to_string(),
+                        file: context.file_name.to_owned(),
                         expected_span: lhs_span.to_owned(),
                         found_span: rhs_span.to_owned(),
                         location,
@@ -4452,6 +4559,7 @@ pub(super) fn typecheck(
                 Err(vec![DwarfError::TypeMismatch {
                     expected: lhs.to_string(),
                     found: rhs.to_string(),
+                    file: context.file_name.to_owned(),
                     expected_span: lhs_span.to_owned(),
                     found_span: rhs_span.to_owned(),
                     location,

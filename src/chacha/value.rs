@@ -226,51 +226,6 @@ impl Clone for ChaChaTask {
     }
 }
 
-#[derive(Clone, Debug)]
-pub enum FutureResult {
-    Running,
-    Waiting(std::task::Waker),
-    Complete(RefType<Value>),
-}
-
-impl Future for FutureResult {
-    type Output = RefType<Value>;
-
-    fn poll(
-        self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Self::Output> {
-        let this = std::pin::Pin::into_inner(self);
-        match this {
-            Self::Running => {
-                *this = Self::Waiting(cx.waker().clone());
-                std::task::Poll::Pending
-            }
-            Self::Waiting(_) => {
-                unreachable!()
-            }
-            // Self::JoinHandle(join) => {
-            //     if let Some(join) = join.take() {
-            //         let waker = cx.waker().clone();
-            //         dbg!("polling");
-            //         let value = async {
-            //             waker.wake();
-            //             join.await
-            //         };
-            //         let value = future::block_on(value);
-            //         dbg!("done");
-            //         *this = Self::Result(value.clone());
-            //         std::task::Poll::Ready(value)
-            //     } else {
-            //         dbg!("pending");
-            //         std::task::Poll::Pending
-            //     }
-            // }
-            Self::Complete(value) => std::task::Poll::Ready(value.clone()),
-        }
-    }
-}
-
 #[derive(Default)]
 pub enum Value {
     /// Boolean
@@ -303,6 +258,7 @@ pub enum Value {
     Integer(DwarfInteger),
     Lambda(RefType<Lambda>),
     ParsedDwarf(Context),
+    Plugin(RefType<PluginType>),
     ProxyType {
         module: String,
         obj_ty: Uuid,
@@ -350,6 +306,7 @@ impl std::fmt::Debug for Value {
             Self::Integer(num) => write!(f, "{num:?}"),
             Self::Lambda(ƛ) => write!(f, "{:?}", s_read!(ƛ)),
             Self::ParsedDwarf(ctx) => write!(f, "{ctx:?}"),
+            Self::Plugin(plugin) => write!(f, "Plugin: {}", s_read!(plugin).name()),
             Self::ProxyType {
                 module,
                 obj_ty,
@@ -399,6 +356,7 @@ impl Clone for Value {
             Self::Integer(num) => Self::Integer(*num),
             Self::Lambda(ƛ) => Self::Lambda(ƛ.clone()),
             Self::ParsedDwarf(ctx) => Self::ParsedDwarf(ctx.clone()),
+            Self::Plugin(plugin) => Self::Plugin(plugin.clone()),
             Self::ProxyType {
                 module,
                 obj_ty,
@@ -643,6 +601,7 @@ impl fmt::Display for Value {
             Self::Integer(num) => write!(f, "{num}"),
             Self::Lambda(_) => write!(f, "<lambda>"),
             Self::ParsedDwarf(ctx) => write!(f, "{ctx:#?}"),
+            Self::Plugin(plugin) => write!(f, "Plugin: {}", s_read!(plugin).name()),
             Self::ProxyType {
                 module: _,
                 obj_ty: _,

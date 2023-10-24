@@ -109,7 +109,7 @@ pub(crate) fn parse_dwarf(
     let ast = crate::dwarf::parse_dwarf(name, &source_code).map_err(|e| {
         eprintln!(
             "{}",
-            crate::dwarf::error::DwarfErrorReporter(&e, false, &source_code, name)
+            crate::dwarf::error::DwarfErrorReporter(&e, false, &source_code)
         );
 
         ChaChaError::Parse {
@@ -119,6 +119,7 @@ pub(crate) fn parse_dwarf(
     })?;
 
     let ctx = new_lu_dog(
+        name.to_owned(),
         Some((source_code.clone(), &ast)),
         context.get_home(),
         &s_read!(context.sarzak_heel()),
@@ -127,7 +128,7 @@ pub(crate) fn parse_dwarf(
         for err in errors {
             eprintln!(
                 "{}",
-                crate::dwarf::error::DwarfErrorReporter(&err, false, &source_code, name)
+                crate::dwarf::error::DwarfErrorReporter(&err, false, &source_code)
             );
         }
 

@@ -35,6 +35,7 @@ mod keywords {
     pub(crate) const ASSERT_EQ: &str = "assert_eq";
     pub(crate) const CHACHA: &str = "chacha";
     pub(crate) const COMPLEX_EX: &str = "ComplexEx";
+    pub(crate) const DWARF: &str = "dwarf";
     pub(crate) const EPS: &str = "eps";
     pub(crate) const EVAL: &str = "eval";
     pub(crate) const FN_NEW: &str = "new";
@@ -42,9 +43,11 @@ mod keywords {
     pub(crate) const JOIN: &str = "join";
     pub(crate) const LEN: &str = "len";
     pub(crate) const FORMAT: &str = "format";
+    pub(crate) const NEW: &str = "new";
     pub(crate) const NORM_SQUARED: &str = "norm_squared";
     pub(crate) const ONE_SHOT: &str = "one_shot";
     pub(crate) const PARSE: &str = "parse";
+    pub(crate) const PLUGIN: &str = "Plugin";
     pub(crate) const SLEEP: &str = "sleep";
     pub(crate) const SPAWN: &str = "spawn";
     pub(crate) const SPAWN_NAMED: &str = "spawn_named";
@@ -280,6 +283,8 @@ pub enum Dirty {
 
 #[derive(Clone, Debug)]
 pub struct Context {
+    /// The path to the source.
+    pub source: String,
     /// This is the compiled source code.
     pub lu_dog: RefType<LuDogStore>,
     /// These are the plugins that represent imported domains.
@@ -303,6 +308,7 @@ impl Context {
 impl Default for Context {
     fn default() -> Self {
         Self {
+            source: "unknown".into(),
             lu_dog: new_ref!(LuDogStore, LuDogStore::new()),
             models: HashMap::default(),
             dirty: Vec::default(),

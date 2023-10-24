@@ -16,10 +16,8 @@ use snafu::{location, Location};
 use uuid::Uuid;
 
 use crate::{
-    lu_dog::{
-        store::ObjectStore as LuDogStore, types::ValueType, Generic, Lambda, List, Reference,
-    },
-    ModelStore, RefType,
+    lu_dog::{store::ObjectStore as LuDogStore, types::ValueType, Generic, Lambda, List},
+    s_read, ModelStore, RefType,
 };
 
 pub mod error;
@@ -144,7 +142,6 @@ pub enum Type {
     Integer,
     List(Box<Spanned<Self>>),
     Path(Vec<Spanned<Self>>),
-    Reference(Box<Spanned<Self>>),
     Self_,
     String,
     Unknown,
@@ -186,7 +183,6 @@ impl fmt::Display for Type {
                 }
                 Ok(())
             }
-            Self::Reference(type_) => write!(f, "&{}", type_.0),
             Self::Self_ => write!(f, "Self"),
             Self::String => write!(f, "string"),
             Self::Unknown => write!(f, "<unknown>"),
@@ -212,17 +208,19 @@ impl fmt::Display for Type {
 impl Type {
     pub fn check_type(
         &self,
+        file_name: &str,
         span: &Span,
         store: &mut LuDogStore,
         models: &ModelStore,
         sarzak: &SarzakStore,
     ) -> Result<bool> {
-        self.into_value_type(span, store, models, sarzak)
+        self.into_value_type(file_name, span, store, models, sarzak)
             .map(|_| true)
     }
 
     pub fn into_value_type(
         &self,
+        file_name: &str,
         span: &Span,
         store: &mut LuDogStore,
         _models: &ModelStore,
@@ -241,7 +239,7 @@ impl Type {
             Type::Fn(_params, return_) => {
                 let return_ = return_
                     .0
-                    .into_value_type(&return_.1, store, _models, sarzak)?;
+                    .into_value_type(file_name, &return_.1, store, _models, sarzak)?;
                 let ƛ = Lambda::new(None, &return_, store);
                 Ok(ValueType::new_lambda(&ƛ, store))
             }
@@ -254,16 +252,13 @@ impl Type {
                 Ok(ValueType::new_ty(&ty, store))
             }
             Type::List(type_) => {
-                let ty = type_.0.into_value_type(&type_.1, store, _models, sarzak)?;
+                let ty = type_
+                    .0
+                    .into_value_type(file_name, &type_.1, store, _models, sarzak)?;
                 let list = List::new(&ty, store);
                 Ok(ValueType::new_list(&list, store))
             }
             Type::Path(_) => unimplemented!(),
-            Type::Reference(type_) => {
-                let ty = type_.0.into_value_type(&type_.1, store, _models, sarzak)?;
-                let reference = Reference::new(Uuid::new_v4(), false, &ty, store);
-                Ok(ValueType::new_reference(&reference, store))
-            }
             Type::Self_ => panic!("Self is deprecated."),
             Type::String => {
                 let ty = Ty::new_s_string(sarzak);
@@ -296,6 +291,7 @@ impl Type {
                 } else {
                     Err(vec![DwarfError::UnknownType {
                         ty: name.to_owned(),
+                        file: file_name.to_owned(),
                         span: span.to_owned(),
                         location: location!(),
                     }])
@@ -353,7 +349,7 @@ impl Type {
 //     }
 // }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Statement {
     Empty,
     Expression(Spanned<Expression>),
@@ -448,6 +444,17 @@ impl From<Pattern> for Expression {
 }
 
 #[derive(Clone, Debug)]
+pub struct WrappedValueType(pub RefType<ValueType>);
+
+impl PartialEq for WrappedValueType {
+    fn eq(&self, other: &Self) -> bool {
+        *s_read!(self.0) == *s_read!(other.0)
+    }
+}
+
+impl Eq for WrappedValueType {}
+
+#[derive(Clone, Debug, PartialEq)]
 pub enum Expression {
     Addition(Box<Spanned<Self>>, Box<Spanned<Self>>),
     And(Box<Spanned<Self>>, Box<Spanned<Self>>),
@@ -468,7 +475,7 @@ pub enum Expression {
         /// A list of variable names to insert into the top of the block
         Vec<String>,
         /// The types of the above variables
-        Vec<RefType<ValueType>>,
+        Vec<WrappedValueType>,
     ),
     BooleanLiteral(bool),
     Debug,
@@ -530,7 +537,7 @@ pub enum Expression {
     Subtraction(Box<Spanned<Self>>, Box<Spanned<Self>>),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Item {
     item: Spanned<InnerItem>,
     attributes: AttributeMap,
@@ -542,7 +549,7 @@ pub enum BlockType {
     Sync,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum InnerItem {
     Enum(
         Spanned<String>,
@@ -567,7 +574,7 @@ pub enum InnerItem {
     /// name, Vec<(Field Name, Field Type)>
     Struct(
         Spanned<String>,
-        Vec<(Spanned<String>, Spanned<Type>)>,
+        Vec<(Spanned<String>, Spanned<Type>, AttributeMap)>,
         Generics,
     ),
 }
@@ -582,8 +589,8 @@ pub enum EnumField {
     Tuple(Spanned<Type>),
     /// Enum Struct Field
     ///
-    /// This is a list of (Field Name, Field Type) pairs.
-    Struct(Vec<(Spanned<String>, Spanned<Type>)>),
+    /// This is a list of (Field Name, Field Type, AttributeMap) pairs.
+    Struct(Vec<(Spanned<String>, Spanned<Type>, AttributeMap)>),
 }
 
 pub type AttributeMap = HashMap<String, Vec<(Span, InnerAttribute)>>;
@@ -594,7 +601,7 @@ pub struct Attribute {
     pub value: InnerAttribute,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum InnerAttribute {
     Attribute(AttributeMap),
     Expression(Spanned<Expression>),

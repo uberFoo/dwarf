@@ -123,16 +123,14 @@ pub fn start_repl(mut context: &mut Context, is_uber: bool) -> Result<(), Error>
                                     dwarf_home: &dwarf_home,
                                     cwd: env::current_dir().unwrap(),
                                     dirty: &mut dirty,
+                                    file_name: "REPL",
                                 },
                                 &mut lu_dog,
                             ) {
                                 Ok(stmt) => stmt.0,
                                 Err(errors) => {
                                     for e in errors {
-                                        println!(
-                                            "{}",
-                                            DwarfErrorReporter(&e, is_uber, &line, "REPL")
-                                        );
+                                        println!("{}", DwarfErrorReporter(&e, is_uber, &line));
                                     }
                                     continue;
                                 }

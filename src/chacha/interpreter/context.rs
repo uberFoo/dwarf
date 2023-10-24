@@ -69,6 +69,7 @@ pub struct Context<'a> {
     dirty: Vec<Dirty>,
     #[cfg(feature = "async")]
     executor: ChaChaExecutor<'a>,
+    source_file: String,
 }
 
 /// Save the lu_dog model when the context is dropped
@@ -120,6 +121,7 @@ impl<'a> Context<'a> {
         args: Option<RefType<Value>>,
         dwarf_home: PathBuf,
         dirty: Vec<Dirty>,
+        source_file: String,
     ) -> Self {
         Self {
             prompt,
@@ -138,7 +140,12 @@ impl<'a> Context<'a> {
             dirty,
             #[cfg(feature = "async")]
             executor: ChaChaExecutor::new(),
+            source_file,
         }
+    }
+
+    pub fn get_source_file(&self) -> &str {
+        self.source_file.as_str()
     }
 
     #[cfg(feature = "async")]

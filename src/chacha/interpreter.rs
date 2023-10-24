@@ -13,14 +13,10 @@ use snafu::{prelude::*, Location};
 use tracy_client::{span, Client};
 use uuid::Uuid;
 
-#[cfg(feature = "print-std-out")]
-use crate::chacha::r#async::ChaChaExecutor;
-
 use crate::{
     chacha::{
         error::{Error, Result, UnimplementedSnafu},
         memory::{Memory, MemoryUpdateMessage},
-        value::FutureResult,
         value::UserStruct,
         vm::{CallFrame, Instruction, Thonk, VM},
     },
@@ -31,7 +27,8 @@ use crate::{
     },
     new_ref, s_read, s_write,
     sarzak::store::ObjectStore as SarzakStore,
-    ChaChaError, Context as InterContext, Dirty, DwarfInteger, ModelStore, NewRef, RefType, Value,
+    ChaChaError, Context as ExtruderContext, Dirty, DwarfInteger, ModelStore, NewRef, RefType,
+    Value,
 };
 
 mod banner;
@@ -131,14 +128,12 @@ lazy_static! {
 
 /// Initialize the interpreter
 ///
-/// The interpreter requires two domains to operate. The first is the metamodel:
-/// sarzak. The second is the compiled dwarf file.
 pub fn initialize_interpreter<'a>(
     dwarf_home: PathBuf,
-    i_context: InterContext,
+    e_context: ExtruderContext,
     sarzak: SarzakStore,
 ) -> Result<Context<'a>, Error> {
-    let mut lu_dog = s_write!(i_context.lu_dog);
+    let mut lu_dog = s_write!(e_context.lu_dog);
 
     // Initialize the stack with stuff from the compiled source.
     let block = Block::new(false, Uuid::new_v4(), None, None, &mut lu_dog);
@@ -388,9 +383,9 @@ pub fn initialize_interpreter<'a>(
         format!("{} ", Colour::Blue.normal().paint("道:>")),
         block,
         stack,
-        i_context.lu_dog.clone(),
+        e_context.lu_dog.clone(),
         new_ref!(SarzakStore, sarzak),
-        new_ref!(ModelStore, i_context.models),
+        new_ref!(ModelStore, e_context.models),
         receiver,
         std_out_send,
         std_out_recv,
@@ -401,6 +396,7 @@ pub fn initialize_interpreter<'a>(
         None,
         dwarf_home,
         dirty,
+        e_context.source.to_owned(),
     ))
 }
 

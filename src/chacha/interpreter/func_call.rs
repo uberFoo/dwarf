@@ -8,13 +8,10 @@ use ansi_term::Colour;
 use snafu::{location, prelude::*, Location};
 use tracy_client::span;
 
-#[cfg(feature = "async")]
-use crate::chacha::value::ChaChaTask;
-
 use crate::{
     chacha::{
         error::{Result, WrongNumberOfArgumentsSnafu},
-        value::{FfiValue, FutureResult},
+        value::FfiValue,
         vm::VM,
     },
     interpreter::{
@@ -131,156 +128,6 @@ fn inner_eval_function_call<'a>(
         BodyEnum::ExternalImplementation(ref id) => {
             eval_external_static_method(id, args, first_arg, arg_check, span, context, vm)
         }
-    }
-}
-
-pub(crate) fn eval_external_method(
-    func: RefType<Function>,
-    args: &[RefType<Argument>],
-    first_arg: Option<SarzakStorePtr>,
-    _arg_check: bool,
-    span: &RefType<Span>,
-    context: &mut Context,
-    vm: &mut VM,
-) -> Result<RefType<Value>> {
-    let lu_dog = context.lu_dog_heel().clone();
-
-    let body = s_read!(func).r19_body(&s_read!(lu_dog))[0].clone();
-    let body = s_read!(body);
-
-    let block_id = if let BodyEnum::ExternalImplementation(ref id) = &body.subtype {
-        id
-    } else {
-        unreachable!();
-    };
-    let external = s_read!(lu_dog)
-        .exhume_external_implementation(block_id)
-        .unwrap();
-
-    // We know that args has at least self.
-    let mut next = s_read!(lu_dog)
-        .exhume_argument(&first_arg.unwrap())
-        .unwrap();
-    let mut arg_values = Vec::with_capacity(args.len());
-
-    let expr = s_read!(next).r37_expression(&s_read!(lu_dog))[0].clone();
-    let plug_in = eval_expression(expr.clone(), context, vm)?;
-    let plug_in = s_read!(plug_in).clone();
-
-    let plug_in = if let Value::Store(_, plug_in) = &plug_in {
-        plug_in
-    } else {
-        panic!("not a proxy");
-    };
-    let next_id = s_read!(next).next;
-    if let Some(ref id) = next_id {
-        next = s_read!(lu_dog).exhume_argument(id).unwrap();
-
-        loop {
-            let expr = s_read!(next).r37_expression(&s_read!(lu_dog))[0].clone();
-            let value = eval_expression(expr.clone(), context, vm)?;
-            arg_values.push((expr, value));
-
-            let next_id = { s_read!(next).next };
-            if let Some(ref id) = next_id {
-                next = s_read!(lu_dog).exhume_argument(id).unwrap();
-            } else {
-                break;
-            }
-        }
-    }
-
-    let model_name = s_read!(external).x_model.clone();
-    let model_name = if model_name == MERLIN {
-        SARZAK.to_owned()
-    } else {
-        model_name
-    };
-    let mut models = s_write!(context.models().models());
-    let model = models.get_mut(&model_name).unwrap();
-    let func_name = s_read!(external).function.clone();
-
-    let object_name = &s_read!(external).object;
-    let object_name = object_name.clone();
-
-    if object_name == OBJECT_STORE {
-        match s_write!(plug_in).invoke_func(
-            model_name.as_str().into(),
-            object_name.as_str().into(),
-            func_name.as_str().into(),
-            arg_values
-                .into_iter()
-                .map(|(_, value)| {
-                    let value = s_read!(value).clone();
-                    <Value as Into<FfiValue>>::into(value)
-                })
-                .collect::<Vec<_>>()
-                .into(),
-        ) {
-            ROk(result) => Ok(new_ref!(Value, result.into())),
-            RErr(error) => Err(ChaChaError::BadnessHappened {
-                message: format!("{error:?}"),
-                location: location!(),
-            }),
-        }
-    }
-    // 🚧 Should these be wrapped in a mutex-like?
-    else if let Some(obj_id) = model.0.exhume_object_id_by_name(&object_name) {
-        if let Some(plugin) = &model.1 {
-            if let ROk(proxy_obj) = s_write!(plugin).invoke_func(
-                model_name.as_str().into(),
-                object_name.as_str().into(),
-                func_name.as_str().into(),
-                arg_values
-                    .into_iter()
-                    .map(|(_, value)| {
-                        let value = s_read!(value).clone();
-                        <Value as Into<FfiValue>>::into(value)
-                    })
-                    .collect::<Vec<_>>()
-                    .into(),
-            ) {
-                match proxy_obj {
-                    FfiValue::ProxyType(proxy_obj) => {
-                        let value = new_ref!(
-                            Value,
-                            Value::ProxyType {
-                                module: model_name,
-                                obj_ty: obj_id,
-                                id: proxy_obj.id.into(),
-                                plugin: new_ref!(PluginType, proxy_obj.plugin)
-                            }
-                        );
-
-                        Ok(value)
-                    }
-                    FfiValue::Vector(vec) => {
-                        let vec = vec
-                            .into_iter()
-                            .map(Value::from)
-                            .map(|v| new_ref!(Value, v))
-                            .collect::<Vec<_>>();
-                        let value = new_ref!(Value, Value::Vector(vec));
-
-                        Ok(value)
-                    }
-                    all_manner_of_things => {
-                        panic!("{all_manner_of_things:?} is not a proxy for model {model_name}.");
-                    }
-                }
-            } else {
-                Err(ChaChaError::NoSuchMethod {
-                    method: func_name,
-                    span: s_read!(span).start as usize..s_read!(span).end as usize,
-                    location: location!(),
-                })
-            }
-        } else {
-            panic!("no plugin");
-        }
-    } else {
-        error!("object not found");
-        panic!("object not found");
     }
 }
 

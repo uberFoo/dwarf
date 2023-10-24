@@ -79,19 +79,16 @@ impl<'a> PrintableValueType<'a> {
                         .paint(format!("[{}]", PrintableValueType(true, ty, context)))
                 )
             }
-            ValueTypeEnum::Range(_) => write!(f, "{}", TY_CLR.italic().paint("range")),
-            ValueTypeEnum::Reference(ref reference) => {
-                let reference = s_read!(lu_dog).exhume_reference(reference).unwrap();
-                let reference = s_read!(reference);
-                let ty = reference.r35_value_type(&s_read!(lu_dog))[0].clone();
+            ValueTypeEnum::Plugin(ref plugin) => {
+                let plugin = s_read!(lu_dog).exhume_plugin(plugin).unwrap();
+                let plugin = s_read!(plugin);
                 write!(
                     f,
                     "{}",
-                    TY_CLR
-                        .italic()
-                        .paint(format!("&{}", PrintableValueType(true, ty, context)))
+                    TY_CLR.italic().paint(format!("plugin: {}", plugin.name))
                 )
             }
+            ValueTypeEnum::Range(_) => write!(f, "{}", TY_CLR.italic().paint("range")),
             ValueTypeEnum::Task(_) => write!(f, "{}", TY_CLR.italic().paint("task")),
             ValueTypeEnum::Ty(ref ty) => {
                 // So, sometimes these show up in the model domain. It'll get really
@@ -207,13 +204,12 @@ impl<'a> PrintableValueType<'a> {
                 let ty = list.r36_value_type(&s_read!(lu_dog))[0].clone();
                 write!(f, "{}", PrintableValueType(false, ty, context))
             }
-            ValueTypeEnum::Range(_) => write!(f, "range"),
-            ValueTypeEnum::Reference(ref reference) => {
-                let reference = s_read!(lu_dog).exhume_reference(reference).unwrap();
-                let reference = s_read!(reference);
-                let ty = reference.r35_value_type(&s_read!(lu_dog))[0].clone();
-                write!(f, "{}", PrintableValueType(false, ty, context))
+            ValueTypeEnum::Plugin(ref plugin) => {
+                let plugin = s_read!(lu_dog).exhume_plugin(plugin).unwrap();
+                let plugin = s_read!(plugin);
+                write!(f, "plugin: {}", plugin.name)
             }
+            ValueTypeEnum::Range(_) => write!(f, "range"),
             ValueTypeEnum::Task(_) => write!(f, "task"),
             ValueTypeEnum::Ty(ref ty) => {
                 // So, sometimes these show up in the model domain. It'll get really

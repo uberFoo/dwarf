@@ -1,5 +1,9 @@
-use std::{collections::VecDeque, thread, time::Duration, time::Instant};
+use std::{collections::VecDeque, path::Path, thread, time::Duration, time::Instant};
 
+use abi_stable::{
+    library::{lib_header_from_path, LibrarySuffix, RawLibrary},
+    std_types::{RErr, ROk},
+};
 use ansi_term::Colour;
 
 #[cfg(feature = "async")]
@@ -24,11 +28,14 @@ use crate::{
     },
     keywords::{
         ADD, ARGS, ASSERT, ASSERT_EQ, CHACHA, COMPLEX_EX, EPS, EVAL, FN_NEW, FORMAT, INTERVAL,
-        JOIN, LEN, NORM_SQUARED, ONE_SHOT, PARSE, SLEEP, SPAWN, SPAWN_NAMED, SQUARE, TIME, TIMER,
-        TYPEOF, UUID_TYPE,
+        JOIN, LEN, NEW, NORM_SQUARED, ONE_SHOT, PARSE, PLUGIN, SLEEP, SPAWN, SPAWN_NAMED, SQUARE,
+        TIME, TIMER, TYPEOF, UUID_TYPE,
     },
     lu_dog::{CallEnum, Expression, ValueTypeEnum},
-    new_ref, s_read, s_write,
+    new_ref,
+    plug_in::PluginModRef,
+    plug_in::PluginType,
+    s_read, s_write,
     sarzak::Ty,
     NewRef, RefType, SarzakStorePtr, Value,
 };
@@ -800,7 +807,56 @@ pub fn eval(
                         })
                     }
                 }
-                // }
+            } else if Some(PLUGIN) == ty.split("::").next() {
+                let plugin = ty.split("::").nth(1).unwrap();
+                match func.as_str() {
+                    NEW => {
+                        let library_path = RawLibrary::path_in_directory(
+                            Path::new(&format!(
+                                "{}/extensions/{plugin}/lib",
+                                context.get_home().display()
+                            )),
+                            plugin,
+                            LibrarySuffix::NoSuffix,
+                        );
+                        let root_module = (|| {
+                            let header = lib_header_from_path(&library_path)?;
+                            header.init_root_module::<PluginModRef>()
+                        })()
+                        .map_err(|e| {
+                            eprintln!("{e}");
+                            ChaChaError::BadnessHappened {
+                                message: "Plug-in error".to_owned(),
+                                location: location!(),
+                            }
+                        })?;
+
+                        let ctor = root_module.new();
+                        // let (_, path) = arg_values.pop().unwrap();
+                        // let path = s_read!(path).clone();
+                        // let plugin = new_ref!(PluginType, ctor(vec![path.into()].into()).unwrap());
+                        let plugin = new_ref!(PluginType, ctor(vec![].into()).unwrap());
+                        // model.1.replace(plugin.clone());
+
+                        // let value = new_ref!(Value, Value::Store(store, plugin));
+                        let value = new_ref!(Value, Value::Plugin(plugin));
+
+                        Ok(value)
+                    }
+                    missing_method => {
+                        let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
+                        let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
+                        let read = s_read!(span);
+                        let span = read.start as usize..read.end as usize;
+
+                        Err(ChaChaError::NoSuchStaticMethod {
+                            ty: ty.to_owned(),
+                            method: missing_method.to_owned(),
+                            span,
+                            location: location!(),
+                        })
+                    }
+                }
             } else if let Some(value) = context.memory().get_meta(ty, func) {
                 debug!("StaticMethodCall meta value {value:?}");
                 match &*s_read!(value) {
@@ -873,6 +929,7 @@ pub fn eval(
                     }
                 }
             } else {
+                dbg!(&ty, &func);
                 ensure!(false, {
                     let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
                     let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
@@ -969,7 +1026,7 @@ fn spawn(
     let future = async move {
         dbg!("spawn begin", &bar);
         // 🚧 This is hinky. I sort of like the idea of storing the context in the
-        // ChaChaTask
+        // ChaChaTask and then running this in Poll.
         nested_context_clone.executor().shutdown();
         let foo = nested_context_clone.executor().run().await;
         dbg!("spawn end", &foo, bar);

@@ -147,18 +147,18 @@ fn main() -> Result<()> {
         })
         .into();
 
-    let ctx = match new_lu_dog(Some((source_code.clone(), &ast)), &dwarf_home, &sarzak) {
+    let ctx = match new_lu_dog(
+        args.source.to_str().unwrap().to_owned(),
+        Some((source_code.clone(), &ast)),
+        &dwarf_home,
+        &sarzak,
+    ) {
         Ok(lu_dog) => lu_dog,
         Err(errors) => {
             for err in errors {
                 eprintln!(
                     "{}",
-                    dwarf::dwarf::error::DwarfErrorReporter(
-                        &err,
-                        is_uber,
-                        &source_code,
-                        args.source.to_str().unwrap()
-                    )
+                    dwarf::dwarf::error::DwarfErrorReporter(&err, is_uber, &source_code,)
                 );
             }
             return Ok(());

@@ -72,13 +72,12 @@ impl<'d, 'a, 'b> fmt::Display for PrintableValueType<'d, 'a, 'b> {
                 let ty = list.r36_value_type(lu_dog)[0].clone();
                 write!(f, "[{}]", PrintableValueType(&ty, context, lu_dog))
             }
-            ValueTypeEnum::Range(_) => write!(f, "<range>"),
-            ValueTypeEnum::Reference(ref reference) => {
-                let reference = lu_dog.exhume_reference(reference).unwrap();
-                let reference = s_read!(reference);
-                let ty = reference.r35_value_type(lu_dog)[0].clone();
-                write!(f, "&{}", PrintableValueType(&ty, context, lu_dog))
+            ValueTypeEnum::Plugin(ref plugin) => {
+                let plugin = lu_dog.exhume_plugin(plugin).unwrap();
+                let plugin = s_read!(plugin);
+                write!(f, "plugin: {}", plugin.name)
             }
+            ValueTypeEnum::Range(_) => write!(f, "<range>"),
             ValueTypeEnum::Task(_) => write!(f, "{}", TY_CLR.italic().paint("<task>")),
             ValueTypeEnum::Ty(ref ty) => {
                 // So, sometimes these show up in the model domain. It'll get really

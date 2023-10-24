@@ -167,7 +167,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 Some((source_code, dwarf_args, url.to_string()))
             }
         }
-        // Maybe reading from stdin?
     } else if args.stdin.is_some() && args.stdin.unwrap() {
         let mut source_code = String::new();
         io::Read::read_to_string(&mut io::stdin(), &mut source_code)?;
@@ -192,8 +191,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         fs::create_dir_all(&dwarf_home)?;
     }
 
-    if let Some((source_code, dwarf_args, name)) = input {
-        let ast = match parse_dwarf(&name, &source_code) {
+    if let Some((source_code, dwarf_args, file_name)) = input {
+        let ast = match parse_dwarf(&file_name, &source_code) {
             Ok(ast) => ast,
             Err(_) => {
                 return Ok(());
@@ -204,13 +203,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("{:#?}", ast);
         }
 
-        let ctx = match new_lu_dog(Some((source_code.clone(), &ast)), &dwarf_home, &sarzak) {
+        let ctx = match new_lu_dog(
+            file_name.to_owned(),
+            Some((source_code.clone(), &ast)),
+            &dwarf_home,
+            &sarzak,
+        ) {
             Ok(lu_dog) => lu_dog,
             Err(errors) => {
                 for err in errors {
                     eprintln!(
                         "{}",
-                        dwarf::dwarf::error::DwarfErrorReporter(&err, is_uber, &source_code, &name)
+                        dwarf::dwarf::error::DwarfErrorReporter(&err, is_uber, &source_code)
                     );
                 }
                 return Ok(());
@@ -220,12 +224,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let mut ctx = initialize_interpreter(dwarf_home, ctx, sarzak)?;
         ctx.add_args(dwarf_args);
         #[cfg(feature = "async")]
-        {
+        let tjh = {
             let mut e = ctx.executor().clone();
             thread::spawn(move || {
                 let _ = future::block_on(async { e.run().await });
-            });
-        }
+            })
+        };
 
         if args.banner.is_some() && args.banner.unwrap() {
             println!("{}", banner2());
@@ -289,11 +293,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 Err(e) => {
                     eprintln!("Interpreter exited with:");
-                    eprintln!("{}", ChaChaErrorReporter(&e, is_uber, &source_code, &name));
+                    eprintln!(
+                        "{}",
+                        ChaChaErrorReporter(&e, is_uber, &source_code, &file_name)
+                    );
                     Ok(())
                 }
             }
             .unwrap();
+        }
+        #[cfg(feature = "async")]
+        {
+            // 🚧
+            // tjh.join().unwrap();
         }
     } else if args.dap.is_some() && args.dap.unwrap() {
         let listener = TcpListener::bind("127.0.0.1:4711").unwrap();
