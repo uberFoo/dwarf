@@ -1,14 +1,11 @@
 #![cfg(feature = "async")]
-//! An executor with task priorities.
 
-use std::future::Future;
-use std::sync::Arc;
-use std::thread;
-use std::{collections::VecDeque, marker::PhantomData};
+use std::{future::Future, marker::PhantomData, sync::Arc, thread};
 
 use async_executor::{Executor, Task};
+use backtrace::Backtrace;
 use crossbeam::channel::{Receiver, Sender};
-use futures_lite::{future, prelude::*};
+use futures_lite::future;
 
 use crate::{chacha::error::ChaChaError, new_ref, NewRef, RefType, Value};
 
@@ -62,23 +59,28 @@ impl<'a> ChaChaExecutor<'a> {
     pub async fn run(&mut self) -> Result<RefType<Value>, ChaChaError> {
         log::debug!(target: "async", "run: {:?}", self.ex);
 
+        let backtrace = Backtrace::new();
+        dbg!("initializing", thread::current().id());
+        // dbg!(backtrace);
         while !self.ex.initialized() {}
 
         while self.ex.running() {
-            dbg!("fucking", thread::current().id());
+            dbg!("executing", thread::current().id());
             self.ex.tick().await;
             // self.ex.try_tick();
-            future::yield_now().await;
+            // future::yield_now().await;
         }
         while !self.ex.is_empty() {
             dbg!("emptying", thread::current().id());
             self.ex.tick().await;
             //     self.ex.try_tick();
-            future::yield_now().await;
+            // future::yield_now().await;
             //     if !self.ex.running() {
             //         break;
             //     }
         }
+
+        dbg!("outta here");
 
         log::debug!(target: "async", "run done: {:?}", self.ex);
         // self.ex.shutdown();

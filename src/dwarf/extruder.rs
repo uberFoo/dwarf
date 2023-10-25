@@ -1275,8 +1275,9 @@ pub(super) fn inter_expression(
             // If it's an async block then wrap it in a future.
             let ty = match a_sink {
                 BlockType::Async => {
+                    let span = ty.1;
                     let future = XFuture::new(&ty.0, lu_dog);
-                    (ValueType::new_x_future(&future, lu_dog), ty.1)
+                    (ValueType::new_x_future(&future, lu_dog), span)
                 }
                 BlockType::Sync => ty,
             };
@@ -4171,7 +4172,7 @@ pub(crate) fn make_value_type(
 ) -> Result<RefType<ValueType>> {
     let sarzak = context.sarzak;
 
-    debug!("make_value_type {type_}");
+    debug!("make_value_type {type_:?}");
 
     match type_ {
         Type::Boolean => {

@@ -44,6 +44,7 @@ impl<'d, 'a, 'b> fmt::Display for PrintableValueType<'d, 'a, 'b> {
                 let future = lu_dog.exhume_x_future(id).unwrap();
                 let inner = s_read!(future).r2_value_type(lu_dog)[0].clone();
                 let inner = PrintableValueType(&inner, context, lu_dog);
+
                 write!(
                     f,
                     "{}<{}>",
@@ -54,7 +55,7 @@ impl<'d, 'a, 'b> fmt::Display for PrintableValueType<'d, 'a, 'b> {
             ValueTypeEnum::Generic(ref g) => {
                 let g = lu_dog.exhume_generic(g).unwrap();
                 let g = s_read!(g);
-                write!(f, "<{}>", TY_CLR.italic().paint(g.name.as_str()))
+                write!(f, "{}", TY_CLR.italic().paint(g.name.as_str()))
             }
             ValueTypeEnum::Import(ref import) => {
                 let import = lu_dog.exhume_import(import).unwrap();

@@ -96,7 +96,12 @@ fn run_program(test: &str, program: &str) -> Result<(RefType<Value>, String), St
         }
         _ => unreachable!(),
     };
-    let ctx = match new_lu_dog(Some((program.to_owned(), &ast)), &dwarf_home, &sarzak) {
+    let ctx = match new_lu_dog(
+        test.to_owned(),
+        Some((program.to_owned(), &ast)),
+        &dwarf_home,
+        &sarzak,
+    ) {
         Ok(lu_dog) => lu_dog,
         Err(e) => {
             eprintln!(
@@ -105,7 +110,7 @@ fn run_program(test: &str, program: &str) -> Result<(RefType<Value>, String), St
                     .map(|e| {
                         format!(
                             "{}",
-                            dwarf::dwarf::error::DwarfErrorReporter(e, true, program, test)
+                            dwarf::dwarf::error::DwarfErrorReporter(e, true, program)
                         )
                     })
                     .collect::<Vec<_>>()
@@ -118,7 +123,7 @@ fn run_program(test: &str, program: &str) -> Result<(RefType<Value>, String), St
                 .map(|e| {
                     format!(
                         "{}",
-                        dwarf::dwarf::error::DwarfErrorReporter(e, false, program, test)
+                        dwarf::dwarf::error::DwarfErrorReporter(e, false, program)
                     )
                 })
                 .collect::<Vec<_>>()
@@ -133,6 +138,8 @@ fn run_program(test: &str, program: &str) -> Result<(RefType<Value>, String), St
     let mut ctx = initialize_interpreter(dwarf_home, ctx, sarzak).unwrap();
     match start_func("main", false, &mut ctx) {
         Ok(value) => {
+            ctx.executor().shutdown();
+            let _ = future::block_on(async { ctx.executor().run().await });
             #[cfg(feature = "async")]
             unsafe {
                 let v = std::sync::Arc::into_raw(value.clone());

@@ -4196,6 +4196,7 @@ impl DwarfParser {
                 }
                 Ok(Some(a)) => {
                     generics.push(a);
+                    // generics.push((Type::Generic((format!("{}", a.0), a.1.clone())), a.1));
                     let _ = self.match_tokens(&[Token::Punct(',')]);
                 }
                 Ok(None) => {

@@ -16,7 +16,7 @@ use crate::{
     },
     keywords::{
         ARGS, ASSERT, ASSERT_EQ, CHACHA, COMPLEX_EX, EPS, FN_NEW, INTERVAL, NEW, NORM_SQUARED,
-        ONE_SHOT, PLUGIN, SLEEP, SPAWN, SPAWN_NAMED, TIME, TIMER, UUID_TYPE,
+        ONE_SHOT, PLUGIN, SLEEP, SPAWN, SPAWN_NAMED, TIME, TIMER, TYPEOF, UUID_TYPE,
     },
     lu_dog::{
         store::ObjectStore as LuDogStore, Argument, Block, Call, DataStructure, EnumFieldEnum,
@@ -56,13 +56,14 @@ pub fn inter(
             if let Type::UserType((obj, span), generics) = p {
                 let mut inner = Vec::new();
                 inner.push((obj.de_sanitize().to_owned(), span));
-                inner.extend(generics.iter().map(|(generic, span)| {
-                    if let Type::Generic((name, _)) = generic {
-                        (name.de_sanitize().to_owned(), span)
-                    } else {
-                        panic!("I don't think that we should ever see anything other than a generic type here: {generic:?}");
-                    }
-                }));
+                // inner.extend(generics.iter().map(|(generic, span)| {
+                //     if let Type::Generic((name, _)) = generic {
+                //         (name.de_sanitize().to_owned(), span)
+                //     } else {
+                //         dbg!(path, generic);
+                //         panic!("I don't think that we should ever see anything other than a generic type here: {generic:?}");
+                //     }
+                // }));
                 inner
             } else {
                 panic!(
@@ -177,13 +178,13 @@ pub fn inter(
                 SLEEP => ValueType::new_empty(lu_dog),
                 #[cfg(feature = "async")]
                 SPAWN => {
-                    let inner = ValueType::new_empty(lu_dog);
+                    let inner = ValueType::new_unknown(lu_dog);
                     let future = XFuture::new(&inner, lu_dog);
                     ValueType::new_x_future(&future, lu_dog)
                 }
                 #[cfg(feature = "async")]
                 SPAWN_NAMED => {
-                    let inner = ValueType::new_empty(lu_dog);
+                    let inner = ValueType::new_unknown(lu_dog);
                     let future = XFuture::new(&inner, lu_dog);
                     ValueType::new_x_future(&future, lu_dog)
                 }
@@ -191,6 +192,11 @@ pub fn inter(
                     let ty = Ty::new_float(sarzak);
                     // 🚧 Ideally we'd cache this when we startup.
                     ValueType::new_ty(&Ty::new_float(sarzak), lu_dog)
+                }
+                TYPEOF => {
+                    let ty = Ty::new_s_string(sarzak);
+                    // Seems like this should be a big fat enum we return.
+                    ValueType::new_ty(&Ty::new_s_string(sarzak), lu_dog)
                 }
                 _ => {
                     let span = s_read!(span).start as usize..s_read!(span).end as usize;
