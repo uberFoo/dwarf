@@ -389,13 +389,13 @@ impl fmt::Display for DwarfErrorReporter<'_, '_> {
                 location,
             } => {
                 let report = Report::build(ReportKind::Error, file, span.start)
-                    .with_message("no such method")
+                    .with_message(format!(
+                        "No such method: {}",
+                        C_WARN.paint(method.to_string())
+                    ))
                     .with_label(
                         Label::new((file, span.to_owned()))
-                            .with_message(format!(
-                                "in this invocation: {}",
-                                C_WARN.paint(method.to_string())
-                            ))
+                            .with_message("at or near this location")
                             .with_color(Color::Red),
                     );
 
@@ -423,13 +423,13 @@ impl fmt::Display for DwarfErrorReporter<'_, '_> {
                 location,
             } => {
                 let report = Report::build(ReportKind::Error, file, span.start)
-                    .with_message("Object not found")
+                    .with_message(format!(
+                        "Type not found: {}",
+                        C_WARN.paint(name.to_string())
+                    ))
                     .with_label(
                         Label::new((file, span.to_owned()))
-                            .with_message(format!(
-                                "in this location: {}",
-                                C_WARN.paint(name.to_string())
-                            ))
+                            .with_message("in this location")
                             .with_color(Color::Red),
                     );
 

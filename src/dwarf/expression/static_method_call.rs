@@ -15,8 +15,8 @@ use crate::{
         DwarfInteger, Expression as ParserExpression, Type,
     },
     keywords::{
-        ARGS, ASSERT, ASSERT_EQ, CHACHA, COMPLEX_EX, EPS, FN_NEW, INTERVAL, NEW, NORM_SQUARED,
-        ONE_SHOT, PLUGIN, SLEEP, SPAWN, SPAWN_NAMED, TIME, TIMER, TYPEOF, UUID_TYPE,
+        ARGS, ASSERT, ASSERT_EQ, CHACHA, COMPLEX_EX, EPS, FN_NEW, HTTP_GET, INTERVAL, NEW,
+        NORM_SQUARED, ONE_SHOT, PLUGIN, SLEEP, SPAWN, SPAWN_NAMED, TIME, TIMER, TYPEOF, UUID_TYPE,
     },
     lu_dog::{
         store::ObjectStore as LuDogStore, Argument, Block, Call, DataStructure, EnumFieldEnum,
@@ -160,20 +160,13 @@ pub fn inter(
                     let list = List::new(&ty, lu_dog);
                     ValueType::new_list(&list, lu_dog)
                 }
-                ASSERT => {
-                    let ty = Ty::new_boolean(sarzak);
-                    // 🚧 Ideally we'd cache this when we startup.
-                    ValueType::new_ty(&Ty::new_boolean(sarzak), lu_dog)
-                }
-                ASSERT_EQ => {
-                    let ty = Ty::new_boolean(sarzak);
-                    // 🚧 Ideally we'd cache this when we startup.
-                    ValueType::new_ty(&Ty::new_boolean(sarzak), lu_dog)
-                }
-                EPS => {
-                    let ty = Ty::new_float(sarzak);
-                    // 🚧 Ideally we'd cache this when we startup.
-                    ValueType::new_ty(&Ty::new_float(sarzak), lu_dog)
+                ASSERT => ValueType::new_ty(&Ty::new_boolean(sarzak), lu_dog),
+                ASSERT_EQ => ValueType::new_ty(&Ty::new_boolean(sarzak), lu_dog),
+                EPS => ValueType::new_ty(&Ty::new_float(sarzak), lu_dog),
+                HTTP_GET => {
+                    let inner = ValueType::new_ty(&Ty::new_s_string(sarzak), lu_dog);
+                    let future = XFuture::new(&inner, lu_dog);
+                    ValueType::new_x_future(&future, lu_dog)
                 }
                 SLEEP => ValueType::new_empty(lu_dog),
                 #[cfg(feature = "async")]
@@ -188,20 +181,12 @@ pub fn inter(
                     let future = XFuture::new(&inner, lu_dog);
                     ValueType::new_x_future(&future, lu_dog)
                 }
-                TIME => {
-                    let ty = Ty::new_float(sarzak);
-                    // 🚧 Ideally we'd cache this when we startup.
-                    ValueType::new_ty(&Ty::new_float(sarzak), lu_dog)
-                }
-                TYPEOF => {
-                    let ty = Ty::new_s_string(sarzak);
-                    // Seems like this should be a big fat enum we return.
-                    ValueType::new_ty(&Ty::new_s_string(sarzak), lu_dog)
-                }
-                _ => {
+                TIME => ValueType::new_ty(&Ty::new_float(sarzak), lu_dog),
+                TYPEOF => ValueType::new_ty(&Ty::new_s_string(sarzak), lu_dog),
+                method => {
                     let span = s_read!(span).start as usize..s_read!(span).end as usize;
-                    return Err(vec![DwarfError::ObjectNameNotFound {
-                        name: type_name.to_owned(),
+                    return Err(vec![DwarfError::NoSuchMethod {
+                        method: method.to_owned(),
                         file: context.file_name.to_owned(),
                         span,
                         location: location!(),

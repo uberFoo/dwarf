@@ -1,10 +1,10 @@
 use std::path::PathBuf;
 
+#[cfg(feature = "async")]
+use std::thread;
+
 use circular_queue::CircularQueue;
 use crossbeam::channel::{Receiver, Sender};
-
-#[cfg(feature = "async")]
-use crate::chacha::r#async::ChaChaExecutor;
 
 use crate::{
     interpreter::{DebuggerStatus, Memory, MemoryUpdateMessage},
@@ -47,8 +47,8 @@ impl ModelContext {
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct Context<'a> {
+#[derive(Debug)]
+pub struct Context {
     models: ModelContext,
     /// The prompt to display in the REPL
     prompt: String,
@@ -68,8 +68,34 @@ pub struct Context<'a> {
     dwarf_home: PathBuf,
     dirty: Vec<Dirty>,
     #[cfg(feature = "async")]
-    executor: ChaChaExecutor<'a>,
+    executor_threads: Option<Vec<thread::JoinHandle<()>>>,
+    // executor: ChaChaExecutor<'a>,
     source_file: String,
+}
+
+impl Clone for Context {
+    fn clone(&self) -> Self {
+        Self {
+            models: self.models.clone(),
+            prompt: self.prompt.clone(),
+            block: self.block.clone(),
+            memory: self.memory.clone(),
+            mem_update_recv: self.mem_update_recv.clone(),
+            std_out_send: self.std_out_send.clone(),
+            std_out_recv: self.std_out_recv.clone(),
+            debug_status_writer: self.debug_status_writer.clone(),
+            // obj_file_path: self.obj_file_path.clone(),
+            timings: self.timings.clone(),
+            expr_count: self.expr_count,
+            func_calls: self.func_calls,
+            args: self.args.clone(),
+            dwarf_home: self.dwarf_home.clone(),
+            dirty: self.dirty.clone(),
+            #[cfg(feature = "async")]
+            executor_threads: None,
+            source_file: self.source_file.clone(),
+        }
+    }
 }
 
 /// Save the lu_dog model when the context is dropped
@@ -103,7 +129,7 @@ pub struct Context<'a> {
 // }
 
 #[allow(clippy::too_many_arguments)]
-impl<'a> Context<'a> {
+impl Context {
     pub fn new(
         prompt: String,
         block: RefType<Block>,
@@ -122,6 +148,7 @@ impl<'a> Context<'a> {
         dwarf_home: PathBuf,
         dirty: Vec<Dirty>,
         source_file: String,
+        executor_threads: Option<Vec<thread::JoinHandle<()>>>,
     ) -> Self {
         Self {
             prompt,
@@ -138,9 +165,9 @@ impl<'a> Context<'a> {
             args,
             dwarf_home,
             dirty,
-            #[cfg(feature = "async")]
-            executor: ChaChaExecutor::new(),
             source_file,
+            #[cfg(feature = "async")]
+            executor_threads,
         }
     }
 
@@ -149,16 +176,21 @@ impl<'a> Context<'a> {
     }
 
     #[cfg(feature = "async")]
-    pub fn executor(&mut self) -> &mut ChaChaExecutor<'a> {
-        &mut self.executor
+    pub fn take_executor_threads(&mut self) -> Option<Vec<thread::JoinHandle<()>>> {
+        self.executor_threads.take()
     }
 
-    #[cfg(feature = "async")]
-    pub fn hyper(&self) -> Self {
-        let mut hyper = self.clone();
-        hyper.executor = ChaChaExecutor::new();
-        hyper
-    }
+    // #[cfg(feature = "async")]
+    // pub fn executor_mut(&mut self) -> &mut ChaChaExecutor<'a> {
+    //     &mut self.executor
+    // }
+
+    // #[cfg(feature = "async")]
+    // pub fn hyper(&self) -> Self {
+    //     let mut hyper = self.clone();
+    //     hyper.executor = ChaChaExecutor::new();
+    //     hyper
+    // }
 
     pub fn dirty(&self) -> Vec<Dirty> {
         self.dirty.clone()

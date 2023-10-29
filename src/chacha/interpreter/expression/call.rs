@@ -17,6 +17,12 @@ use uuid::Uuid;
 #[cfg(feature = "async")]
 use crate::chacha::value::ChaChaTask;
 
+#[cfg(feature = "async")]
+use crate::chacha::r#async::ChaChaTask as ExecutorTask;
+
+#[cfg(feature = "async")]
+use super::Executor;
+
 use crate::{
     chacha::{
         error::{NoSuchStaticMethodSnafu, Result, TypeMismatchSnafu},
@@ -27,9 +33,9 @@ use crate::{
         ChaChaError, Context, PrintableValueType,
     },
     keywords::{
-        ADD, ARGS, ASSERT, ASSERT_EQ, CHACHA, COMPLEX_EX, EPS, EVAL, FN_NEW, FORMAT, INTERVAL,
-        JOIN, LEN, NEW, NORM_SQUARED, ONE_SHOT, PARSE, PLUGIN, SLEEP, SPAWN, SPAWN_NAMED, SQUARE,
-        TIME, TIMER, TYPEOF, UUID_TYPE,
+        ADD, ARGS, ASSERT, ASSERT_EQ, CHACHA, COMPLEX_EX, EPS, EVAL, FN_NEW, FORMAT, HTTP_GET,
+        INTERVAL, JOIN, LEN, NEW, NORM_SQUARED, ONE_SHOT, PARSE, PLUGIN, SLEEP, SPAWN, SPAWN_NAMED,
+        SQUARE, TIME, TIMER, TYPEOF, UUID_TYPE,
     },
     lu_dog::{CallEnum, Expression, ValueTypeEnum},
     new_ref,
@@ -445,8 +451,9 @@ pub fn eval(
                             dbg!("end join", &foo);
                             Ok(foo)
                         };
-                        let task = context.executor().spawn(future);
-                        future::block_on(context.executor().resolve_task(task))
+                        // let task = context.executor().spawn(future);
+                        let task = ExecutorTask::new(Executor::global(), future);
+                        future::block_on(async { task.await })
                         // let value = future::block_on(t);
                         // let v = s_read!(value);
                         // match &*v {
@@ -623,6 +630,7 @@ pub fn eval(
                         Ok(new_ref!(Value, Value::String(result)))
                     }
                     EVAL => chacha::eval_dwarf(arg_values, expression, context),
+                    HTTP_GET => chacha::http_get(arg_values, expression, context),
                     PARSE => chacha::parse_dwarf(arg_values, expression, context),
                     SLEEP => {
                         let (duration, _) = arg_values.pop_front().unwrap();
@@ -633,14 +641,14 @@ pub fn eval(
                         std::thread::sleep(duration);
                         Ok(new_ref!(Value, Value::Empty))
                     }
-                    #[cfg(feature = "async")]
-                    SPAWN => spawn("task".to_owned(), &mut arg_values, expression, context),
-                    #[cfg(feature = "async")]
-                    SPAWN_NAMED => {
-                        let (name, _) = arg_values.pop_front().unwrap();
-                        let name: String = (&*s_read!(name)).try_into()?;
-                        spawn(name, &mut arg_values, expression, context)
-                    }
+                    // #[cfg(feature = "async")]
+                    // SPAWN => spawn("task".to_owned(), &mut arg_values, expression, context),
+                    // #[cfg(feature = "async")]
+                    // SPAWN_NAMED => {
+                    //     let (name, _) = arg_values.pop_front().unwrap();
+                    //     let name: String = (&*s_read!(name)).try_into()?;
+                    //     spawn(name, &mut arg_values, expression, context)
+                    // }
                     TIME => {
                         debug!("evaluating chacha::time");
                         // 🚧 I should be checking that there is an argument before
@@ -749,6 +757,7 @@ pub fn eval(
                         let func = s_read!(func).clone();
 
                         let mut fubar = context.clone();
+                        // let mut baz = fubar.executor().clone();
                         let future = async move {
                             let mem = fubar.memory().clone();
                             let mut vm = VM::new(&mem);
@@ -785,11 +794,14 @@ pub fn eval(
                             }
                         };
 
-                        let task = context.executor().spawn(future);
+                        // let executor = context.executor();
+                        let task = ExecutorTask::new(Executor::global(), future);
+
+                        // let task = baz.spawn(future);
 
                         let value = new_ref!(Value, Value::Future("sleep".to_owned(), Some(task)));
                         // Stash the future away so that it doesn't get dropped when it's done running.
-                        context.executor().park_value(value.clone());
+                        // context.executor().park_value(value.clone());
 
                         Ok(value)
                     }
@@ -951,91 +963,91 @@ pub fn eval(
     call_result
 }
 
-fn spawn(
-    name: String,
-    arg_values: &mut VecDeque<(RefType<Value>, std::ops::Range<usize>)>,
-    expression: &RefType<Expression>,
-    context: &mut Context,
-) -> Result<RefType<Value>> {
-    let sarzak = context.sarzak_heel().clone();
-    let lu_dog = context.lu_dog_heel().clone();
+// fn spawn(
+//     name: String,
+//     arg_values: &mut VecDeque<(RefType<Value>, std::ops::Range<usize>)>,
+//     expression: &RefType<Expression>,
+//     context: &mut Context,
+// ) -> Result<RefType<Value>> {
+//     let sarzak = context.sarzak_heel().clone();
+//     let lu_dog = context.lu_dog_heel().clone();
 
-    debug!("evaluating chacha::spawn");
-    // 🚧 I should be checking that there is an argument before
-    // I go unwrapping it.
-    let (func, span) = arg_values.pop_front().unwrap();
-    let func = s_read!(func);
-    ensure!(
-        matches!(&*func, Value::Lambda(_)) || matches!(&*func, Value::Function(_)),
-        {
-            // 🚧 I'm not really sure what to do about this here. It's
-            // all really a hack for now anyway.
-            let ty = func.get_type(&s_read!(sarzak), &s_read!(lu_dog));
-            let ty = PrintableValueType(true, ty, context.models());
-            let ty = ty.to_string();
-            TypeMismatchSnafu {
-                expected: "<function>".to_string(),
-                found: ty,
-                span,
-            }
-        }
-    );
+//     debug!("evaluating chacha::spawn");
+//     // 🚧 I should be checking that there is an argument before
+//     // I go unwrapping it.
+//     let (func, span) = arg_values.pop_front().unwrap();
+//     let func = s_read!(func);
+//     ensure!(
+//         matches!(&*func, Value::Lambda(_)) || matches!(&*func, Value::Function(_)),
+//         {
+//             // 🚧 I'm not really sure what to do about this here. It's
+//             // all really a hack for now anyway.
+//             let ty = func.get_type(&s_read!(sarzak), &s_read!(lu_dog));
+//             let ty = PrintableValueType(true, ty, context.models());
+//             let ty = ty.to_string();
+//             TypeMismatchSnafu {
+//                 expected: "<function>".to_string(),
+//                 found: ty,
+//                 span,
+//             }
+//         }
+//     );
 
-    let func = func.to_owned();
-    let expression = expression.clone();
-    let mut nested_context = context.hyper();
-    let mut nested_context_clone = nested_context.clone();
-    let future = async move {
-        let mem = nested_context.memory().clone();
-        let mut vm = VM::new(&mem);
-        let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
-        let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
-        if let Value::Function(func) = &func {
-            eval_function_call(
-                func.clone(),
-                &[],
-                None,
-                true,
-                span,
-                &mut nested_context,
-                &mut vm,
-            )
-        } else if let Value::Lambda(ƛ) = &func {
-            eval_lambda_expression(ƛ.clone(), &[], true, span, &mut nested_context, &mut vm)
-        } else {
-            unreachable!()
-        }
-    };
+//     let func = func.to_owned();
+//     let expression = expression.clone();
+//     let mut nested_context = context.clone();
+//     let future = async move {
+//         let mem = nested_context.memory().clone();
+//         let mut vm = VM::new(&mem);
+//         let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
+//         let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
+//         if let Value::Function(func) = &func {
+//             eval_function_call(
+//                 func.clone(),
+//                 &[],
+//                 None,
+//                 true,
+//                 span,
+//                 &mut nested_context,
+//                 &mut vm,
+//             )
+//         } else if let Value::Lambda(ƛ) = &func {
+//             eval_lambda_expression(ƛ.clone(), &[], true, span, &mut nested_context, &mut vm)
+//         } else {
+//             unreachable!()
+//         }
+//     };
 
-    // let task = fubar.executor().spawn(future);
-    // context_copy.executor().park_value(new_ref!(Value, Value::Task(name, Some(task))));
+//     // let task = fubar.executor().spawn(future);
+//     // context_copy.executor().park_value(new_ref!(Value, Value::Task(name, Some(task))));
 
-    // let future =
-    // async move { future::block_on(async { fubar.executor().resolve_task(task).await }) };
-    // future::block_on(async { ctx.executor().run().await });
+//     // let future =
+//     // async move { future::block_on(async { fubar.executor().resolve_task(task).await }) };
+//     // future::block_on(async { ctx.executor().run().await });
 
-    let task = nested_context_clone.executor().spawn(future);
+//     // let task = nested_context_clone.executor().spawn(future);
+//     let task = ExecutorTask::new(&Executor::global(), future);
 
-    // let future = new_ref!(Value, Value::Future(name, Some(task)));
-    let value = new_ref!(Value, Value::Task(ChaChaTask::new(name.clone(), task)));
+//     let value = new_ref!(Value, Value::Future(name.clone(), Some(task)));
+//     // let value = new_ref!(Value, Value::Task(ChaChaTask::new(name.clone(), task)));
 
-    // Stash the future away so that it doesn't get dropped when it's done running.
-    nested_context_clone.executor().park_value(value.clone());
+//     // Stash the future away so that it doesn't get dropped when it's done running.
+//     // nested_context_clone.executor().park_value(value.clone());
 
-    let bar = name.clone();
-    let future = async move {
-        dbg!("spawn begin", &bar);
-        // 🚧 This is hinky. I sort of like the idea of storing the context in the
-        // ChaChaTask and then running this in Poll.
-        nested_context_clone.executor().shutdown();
-        let foo = nested_context_clone.executor().run().await;
-        dbg!("spawn end", &foo, bar);
-        foo
-    };
+//     let bar = name.clone();
+//     let future = async move {
+//         dbg!("spawn begin", &bar);
+//         // 🚧 This is hinky. I sort of like the idea of storing the context in the
+//         // ChaChaTask and then running this in Poll.
+//         // nested_context_clone.executor().shutdown();
+//         let foo = nested_context_clone.executor().run().await;
+//         dbg!("spawn end", &foo, bar);
+//         foo
+//     };
 
-    let task = context.executor().spawn(future);
-    let v = new_ref!(Value, Value::Task(ChaChaTask::new(name, task)));
-    context.executor().park_value(v.clone());
+//     let task = context.executor().spawn(future);
+//     let v = new_ref!(Value, Value::Task(ChaChaTask::new(name, task)));
+//     // context.executor().park_value(v.clone());
 
-    Ok(value)
-}
+//     Ok(value)
+// }

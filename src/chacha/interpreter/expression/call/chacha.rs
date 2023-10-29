@@ -1,7 +1,19 @@
 use std::collections::VecDeque;
 
+#[cfg(feature = "async")]
+use async_compat::Compat;
+
 use ansi_term::Colour;
 use snafu::prelude::*;
+
+#[cfg(feature = "async")]
+use super::Executor;
+
+#[cfg(feature = "async")]
+use crate::chacha::r#async::ChaChaExecutor;
+
+#[cfg(feature = "async")]
+use crate::chacha::r#async::ChaChaTask;
 
 use crate::{
     chacha::error::{Result, WrongNumberOfArgumentsSnafu},
@@ -47,8 +59,9 @@ pub(crate) fn eval_dwarf(
     }
 
     let sarzak = (*s_read!(context.sarzak_heel())).clone();
-    let mut ctx =
-        initialize_interpreter(context.get_home().clone(), ctx.clone(), sarzak).map_err(|e| {
+
+    let mut ctx = initialize_interpreter(2, context.get_home().clone(), ctx.clone(), sarzak)
+        .map_err(|e| {
             chacha_print(
                 crate::chacha::error::ChaChaErrorReporter(&e, false, &ctx.source(), name)
                     .to_string(),
@@ -76,6 +89,49 @@ pub(crate) fn eval_dwarf(
     })?;
 
     Ok(result)
+}
+
+/// This is a hack to get an async http get working in dwarf. It really
+/// belongs in a plug-in.
+#[cfg(feature = "async")]
+pub(crate) fn http_get(
+    mut arg_values: VecDeque<Spanned<RefType<Value>>>,
+    expression: &RefType<Expression>,
+    context: &mut Context,
+) -> Result<RefType<Value>> {
+    debug!("evaluating http_get");
+
+    ensure!(arg_values.len() == 1, {
+        let value = &s_read!(expression).r11_x_value(&s_read!(context.lu_dog_heel()))[0];
+        let span = &s_read!(value).r63_span(&s_read!(context.lu_dog_heel()))[0];
+        let read = s_read!(span);
+        let span = read.start as usize..read.end as usize;
+
+        WrongNumberOfArgumentsSnafu {
+            expected: 1usize,
+            got: arg_values.len(),
+            defn_span: 0..0,
+            invocation_span: span,
+        }
+    });
+
+    let url = arg_values.pop_front().unwrap().0;
+    let task_name = format!("http_get({})", TryInto::<String>::try_into(&*s_read!(url))?);
+    let future = Compat::new(async move {
+        let url = TryInto::<String>::try_into(&*s_read!(url))?;
+        let body = reqwest::get(url).await.unwrap().text().await.unwrap();
+
+        Ok(new_ref!(Value, Value::String(body)))
+    });
+    let task = ChaChaTask::new(&Executor::global(), future);
+    // let task = context.executor().spawn(future);
+
+    let future = new_ref!(Value, Value::Future(task_name, Some(task)));
+
+    // Stash the future away so that it doesn't get dropped when it's done running.
+    // context.executor().park_value(future.clone());
+
+    Ok(future)
 }
 
 /// Parse a string into a LuDogStore

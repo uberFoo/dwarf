@@ -1,6 +1,16 @@
 #![cfg(feature = "async")]
 
-use std::{future::Future, marker::PhantomData, sync::Arc, thread};
+use std::{
+    future::Future,
+    marker::PhantomData,
+    pin::Pin,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+    task::{Context, Poll},
+    thread,
+};
 
 use async_executor::{Executor, Task};
 use backtrace::Backtrace;
@@ -9,12 +19,53 @@ use futures_lite::future;
 
 use crate::{chacha::error::ChaChaError, new_ref, NewRef, RefType, Value};
 
-/// An executor with task priorities.
-///
-/// Tasks with lower priorities only get polled when there are no tasks with higher priorities.
+#[derive(Debug)]
+pub struct ChaChaTask<'a> {
+    inner: Option<Task<Result<RefType<Value>, ChaChaError>>>,
+    executor: &'a ChaChaExecutor<'a>,
+    // executor: Arc<Executor<'a>>,
+    started: AtomicBool,
+}
+
+impl<'a> ChaChaTask<'a> {
+    pub fn new(
+        executor: &'a ChaChaExecutor<'a>,
+        // executor: Arc<Executor<'a>>,
+        future: impl Future<Output = Result<RefType<Value>, ChaChaError>> + Send + 'a,
+    ) -> ChaChaTask<'a> {
+        // let executor = executor.clone();
+        // spawn a task that spawns a task
+        let inner = executor.clone();
+        let future = async move {
+            let task = inner.spawn(future);
+            task.await
+        };
+        Self {
+            inner: Some(executor.spawn(future)),
+            executor: executor,
+            started: AtomicBool::new(false),
+        }
+    }
+}
+
+impl<'a> Future for ChaChaTask<'a> {
+    type Output = Result<RefType<Value>, ChaChaError>;
+
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        if !self.started.load(Ordering::SeqCst) {
+            self.started.store(true, Ordering::SeqCst);
+            let this = std::pin::Pin::into_inner(self);
+            let task = this.inner.take().unwrap();
+            Poll::Ready(future::block_on(this.executor.ex.run(task)))
+        } else {
+            Poll::Pending
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct ChaChaExecutor<'a> {
-    ex: Arc<Executor<'a>>,
+    pub ex: Arc<Executor<'a>>,
     send: Sender<RefType<Value>>,
     _recv: Receiver<RefType<Value>>,
 }
@@ -38,8 +89,18 @@ impl<'a> ChaChaExecutor<'a> {
         self.send.send(value).unwrap();
     }
 
+    // pub fn spawn_task(
+    //     &mut self,
+    //     future: impl Future<Output = Result<RefType<Value>, ChaChaError>> + Send + 'a,
+    // ) -> ChaChaTask<'a> {
+    //     // let task = self.ex.spawn(future);
+    //     ChaChaTask::new(self, future)
+    //     // log::debug!(target: "async", "spawn executor: {:?}\n\tspawn task: {:?}", self.ex, task);
+    //     // task
+    // }
+
     pub fn spawn(
-        &mut self,
+        &self,
         future: impl Future<Output = Result<RefType<Value>, ChaChaError>> + Send + 'a,
     ) -> Task<Result<RefType<Value>, ChaChaError>> {
         let task = self.ex.spawn(future);
@@ -56,7 +117,7 @@ impl<'a> ChaChaExecutor<'a> {
         self.ex.is_empty()
     }
 
-    pub async fn run(&mut self) -> Result<RefType<Value>, ChaChaError> {
+    pub async fn run(&self) -> Result<RefType<Value>, ChaChaError> {
         log::debug!(target: "async", "run: {:?}", self.ex);
 
         let backtrace = Backtrace::new();
@@ -72,15 +133,18 @@ impl<'a> ChaChaExecutor<'a> {
         }
         while !self.ex.is_empty() {
             dbg!("emptying", thread::current().id());
-            self.ex.tick().await;
-            //     self.ex.try_tick();
+            // self.ex.tick().await;
+            // dbg!("awaited", thread::current().id(), self.ex.is_empty());
+            if !self.ex.try_tick() {
+                break;
+            }
             // future::yield_now().await;
             //     if !self.ex.running() {
             //         break;
             //     }
         }
 
-        dbg!("outta here");
+        dbg!("outta here", thread::current().id());
 
         log::debug!(target: "async", "run done: {:?}", self.ex);
         // self.ex.shutdown();

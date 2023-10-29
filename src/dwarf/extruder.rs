@@ -2214,6 +2214,7 @@ pub(super) fn inter_expression(
         // List
         //
         ParserExpression::List(ref elements) => {
+            debug!("list {:?}", elements);
             if elements.is_empty() {
                 let list = List::new(&ValueType::new_empty(lu_dog), lu_dog);
                 let expr =
@@ -2241,7 +2242,17 @@ pub(super) fn inter_expression(
                 let element = ListElement::new(0, &first, None, lu_dog);
                 let expr = Expression::new_list_element(&element, lu_dog);
                 let value = XValue::new_expression(block, &first_ty, &expr, lu_dog);
-                s_write!(first_span).x_value = Some(s_read!(value).id);
+                // We need to clone the span because it's already been used
+                // by the underlying value.
+                LuDogSpan::new(
+                    s_read!(first_span).end,
+                    s_read!(first_span).start,
+                    &context.source,
+                    None,
+                    Some(&value),
+                    lu_dog,
+                );
+
                 let list_expr = ListExpression::new(Some(&element), lu_dog);
 
                 let mut last_element_uuid: Option<usize> = Some(s_read!(element).id);
@@ -2269,15 +2280,24 @@ pub(super) fn inter_expression(
                     last_element_uuid = link_list_element!(last_element_uuid, element, lu_dog);
                     let expr = Expression::new_list_element(&element, lu_dog);
                     let value = XValue::new_expression(block, &elt_ty, &expr, lu_dog);
-                    s_write!(elt_span).x_value = Some(s_read!(value).id);
+                    // We need to clone the span because it's already been used
+                    // by the underlying value.
+                    LuDogSpan::new(
+                        s_read!(elt_span).end,
+                        s_read!(elt_span).start,
+                        &context.source,
+                        None,
+                        Some(&value),
+                        lu_dog,
+                    );
                 }
 
                 let expr = Expression::new_list_expression(&list_expr, lu_dog);
                 let ty = ValueType::new_list(&list, lu_dog);
                 let value = XValue::new_expression(block, &ty, &expr, lu_dog);
-                s_write!(first_span).x_value = Some(s_read!(value).id);
+                update_span_value(&span, &value, location!());
 
-                Ok(((expr, first_span), ty))
+                Ok(((expr, span), ty))
             }
         }
         //
@@ -2599,7 +2619,8 @@ pub(super) fn inter_expression(
                                     file: context.file_name.to_owned(),
                                     span: meth_span.to_owned(),
                                     location: location!(),
-                                }])
+                                    // commentary: "Type `string` has no such method.".to_owned(),
+                                }]);
                             }
                         }
                     } else {
@@ -4676,13 +4697,9 @@ pub(crate) fn update_span_value(
     location: Location,
 ) {
     debug!(
-        "{}:{}:{} -- {value:?}",
+        "update span {}:{}:{} -- {value:?}",
         location.file, location.line, location.column
     );
     s_write!(span).x_value = Some(s_read!(value).id);
-    debug!("span: {:?}", s_read!(span));
+    debug!("update span: {:?}", s_read!(span));
 }
-
-// fn update_span_type(span: &mut RefType<LuDogSpan>, value_type: &RefType<ValueType>) {
-// s_write!(span).value_type = Some(s_read!(value_type).id);
-// }

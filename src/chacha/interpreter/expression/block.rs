@@ -5,6 +5,12 @@ use crate::{
     new_ref, s_read, NewRef, RefType, SarzakStorePtr, Value,
 };
 
+#[cfg(feature = "async")]
+use super::Executor;
+
+#[cfg(feature = "async")]
+use crate::chacha::r#async::ChaChaTask;
+
 pub fn eval<'a>(
     block_id: &SarzakStorePtr,
     context: &mut Context,
@@ -24,12 +30,14 @@ pub fn eval<'a>(
                 eval_inner(block, &mut cloned_context, &mut vm)
             };
 
-            let task = context.executor().spawn(future);
+            let task = ChaChaTask::new(Executor::global(), future);
+
+            // let task = context.executor().spawn(future);
 
             let future = new_ref!(Value, Value::Future("block".to_owned(), Some(task)));
 
             // Stash the future away so that it doesn't get dropped when it's done running.
-            context.executor().park_value(future.clone());
+            // context.executor().park_value(future.clone());
 
             Ok(future)
         } else {

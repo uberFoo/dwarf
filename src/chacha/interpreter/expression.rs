@@ -1,3 +1,6 @@
+#[cfg(feature = "async")]
+use super::Executor;
+
 pub mod block;
 pub mod call;
 pub mod debugger;

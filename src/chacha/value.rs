@@ -192,23 +192,21 @@ impl Future for ChaChaTask {
             Self::Complete((_, value)) => std::task::Poll::Ready(value.clone()),
             Self::DummyClone(_) => std::task::Poll::Ready(new_ref!(Value, Value::Empty)),
             Self::Running((name, task)) => {
-                let waker = cx.waker().clone();
-                let value = async {
-                    waker.wake();
-                    task.await
-                };
-                let value = future::block_on(value);
+                // let waker = cx.waker().clone();
+                // let value = async {
+                // waker.wake();
+                // task.await
+                // };
+                let value = future::block_on(task);
                 match value {
                     Ok(value) => {
                         *this = Self::Complete((name.to_owned(), value.clone()));
                         std::task::Poll::Ready(value)
                     }
                     Err(e) => {
-                        *this = Self::Complete((
-                            name.to_owned(),
-                            new_ref!(Value, Value::Error(e.to_string())),
-                        ));
-                        std::task::Poll::Ready(new_ref!(Value, Value::Error(e.to_string())))
+                        let e = new_ref!(Value, Value::Error(Box::new(e)));
+                        *this = Self::Complete((name.to_owned(), e.clone()));
+                        std::task::Poll::Ready(e)
                     }
                 }
             }
@@ -242,7 +240,7 @@ pub enum Value {
     /// ()
     Empty,
     Enumeration(EnumVariant),
-    Error(String),
+    Error(Box<ChaChaError>),
     Float(DwarfFloat),
     /// Function
     ///
@@ -251,10 +249,7 @@ pub enum Value {
     /// excessive, and yet I know I've looked into it before.
     Function(RefType<Function>),
     #[cfg(feature = "async")]
-    Future(
-        String,
-        Option<smol::Task<Result<RefType<Value>, ChaChaError>>>,
-    ),
+    Future(String, Option<crate::chacha::r#async::ChaChaTask<'static>>),
     Integer(DwarfInteger),
     Lambda(RefType<Lambda>),
     ParsedDwarf(Context),
@@ -277,6 +272,39 @@ pub enum Value {
     Unknown,
     Uuid(uuid::Uuid),
     Vector(Vec<RefType<Self>>),
+}
+
+impl Future for Value {
+    type Output = RefType<Value>;
+
+    fn poll(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Self::Output> {
+        let this = std::pin::Pin::into_inner(self);
+
+        match this {
+            Self::Future(_, task) => {
+                if let Some(task) = task.take() {
+                    // let waker = cx.waker().clone();
+                    // let value = async {
+                    // waker.wake();
+                    // task.await
+                    // };
+                    match future::block_on(task) {
+                        Ok(value) => std::task::Poll::Ready(value),
+                        Err(e) => {
+                            std::task::Poll::Ready(new_ref!(Value, Value::Error(Box::new(e))))
+                        }
+                    }
+                } else {
+                    std::task::Poll::Ready(new_ref!(Value, Value::Empty))
+                }
+            }
+            Self::Task(task) => std::task::Poll::Ready(future::block_on(task)),
+            _ => std::task::Poll::Ready(new_ref!(Value, Value::Empty)),
+        }
+    }
 }
 
 // impl Drop for Value {
@@ -348,7 +376,7 @@ impl Clone for Value {
             Self::Char(char_) => Self::Char(*char_),
             Self::Empty => Self::Empty,
             Self::Enumeration(var) => Self::Enumeration(var.clone()),
-            Self::Error(e) => Self::Error(e.clone()),
+            Self::Error(e) => unimplemented!(),
             Self::Float(num) => Self::Float(*num),
             Self::Function(func) => Self::Function(func.clone()),
             #[cfg(feature = "async")]
@@ -389,7 +417,7 @@ impl From<Value> for FfiValue {
         match &value {
             Value::Boolean(bool_) => Self::Boolean(bool_.to_owned()),
             Value::Empty => Self::Empty,
-            Value::Error(e) => Self::Error(e.to_owned().into()),
+            // Value::Error(e) => Self::Error(e.to_owned().into()),
             Value::Float(num) => Self::Float(num.to_owned()),
             Value::Integer(num) => Self::Integer(num.to_owned()),
             Value::ProxyType {
@@ -422,7 +450,7 @@ impl From<FfiValue> for Value {
         match value {
             FfiValue::Boolean(bool_) => Self::Boolean(bool_),
             FfiValue::Empty => Self::Empty,
-            FfiValue::Error(e) => Self::Error(e.into()),
+            // FfiValue::Error(e) => Self::Error(e.into()),
             FfiValue::Float(num) => Self::Float(num),
             FfiValue::Integer(num) => Self::Integer(num),
             FfiValue::ProxyType(plugin) => Self::ProxyType {
@@ -1016,7 +1044,10 @@ impl std::ops::Add for Value {
             (Value::Boolean(a), Value::Boolean(b)) => Value::Boolean(*a || *b),
             // (Value::Boolean(a), Value::String(b)) => Value::String(a.to_string() + &b),
             // (Value::String(a), Value::Boolean(b)) => Value::String(a + &b.to_string()),
-            (a, b) => Value::Error(format!("Cannot add {} and {}", a, b)),
+            (a, b) => Value::Error(Box::new(ChaChaError::Addition {
+                left: a.clone(),
+                right: b.clone(),
+            })),
         }
     }
 }
@@ -1049,7 +1080,10 @@ impl std::ops::Sub for Value {
             (Value::Integer(a), Value::Integer(b)) => Value::Integer(a - b),
             (Value::Empty, Value::Empty) => Value::Empty,
             (Value::Boolean(a), Value::Boolean(b)) => Value::Boolean(a && b),
-            (a, b) => Value::Error(format!("Cannot subtract {} and {}", a, b)),
+            (a, b) => Value::Error(Box::new(ChaChaError::Subtraction {
+                left: a.clone(),
+                right: b.clone(),
+            })),
         }
     }
 }
@@ -1065,7 +1099,10 @@ impl std::ops::Mul for Value {
             (Value::Float(a), Value::Float(b)) => Value::Float(a * b),
             (Value::Integer(a), Value::Integer(b)) => Value::Integer(a * b),
             (Value::Empty, Value::Empty) => Value::Empty,
-            (a, b) => Value::Error(format!("Cannot multiply {} and {}", a, b)),
+            (a, b) => Value::Error(Box::new(ChaChaError::Multiplication {
+                left: a.clone(),
+                right: b.clone(),
+            })),
         }
     }
 }
@@ -1081,7 +1118,7 @@ impl std::ops::Neg for Value {
             Value::Float(a) => Value::Float(-a),
             Value::Integer(a) => Value::Integer(-a),
             Value::Empty => Value::Empty,
-            a => Value::Error(format!("Cannot negate {}", a)),
+            a => Value::Error(Box::new(ChaChaError::Negation { value: a })),
         }
     }
 }
@@ -1096,7 +1133,7 @@ impl std::ops::Not for Value {
         match self {
             Value::Boolean(a) => Value::Boolean(!a),
             Value::Empty => Value::Empty,
-            a => Value::Error(format!("Cannot bang {}", a)),
+            a => Value::Error(Box::new(ChaChaError::Bang { value: a })),
         }
     }
 }
@@ -1112,7 +1149,10 @@ impl std::ops::Div for Value {
             (Value::Float(a), Value::Float(b)) => Value::Float(a / b),
             (Value::Integer(a), Value::Integer(b)) => Value::Integer(a / b),
             (Value::Empty, Value::Empty) => Value::Empty,
-            (a, b) => Value::Error(format!("Cannot divide {} and {}", a, b)),
+            (a, b) => Value::Error(Box::new(ChaChaError::Division {
+                left: a.clone(),
+                right: b.clone(),
+            })),
         }
     }
 }

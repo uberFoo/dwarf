@@ -1,6 +1,9 @@
 use std::{ops::Range, path::PathBuf};
 
 #[cfg(feature = "async")]
+use std::thread;
+
+#[cfg(feature = "async")]
 use smol::future;
 
 use ansi_term::Colour;
@@ -8,10 +11,14 @@ use circular_queue::CircularQueue;
 use crossbeam::channel::unbounded;
 use lazy_static::lazy_static;
 use log::{self, log_enabled, Level::Debug};
+use once_cell::sync::OnceCell;
 use parking_lot::{Condvar, Mutex};
 use snafu::{prelude::*, Location};
 use tracy_client::{span, Client};
 use uuid::Uuid;
+
+#[cfg(feature = "async")]
+use crate::chacha::r#async::ChaChaExecutor;
 
 use crate::{
     chacha::{
@@ -126,13 +133,62 @@ lazy_static! {
     pub(crate) static ref STEPPING: Mutex<bool> = Mutex::new(false);
 }
 
+#[cfg(feature = "async")]
+#[derive(Debug)]
+pub(super) struct Executor(ChaChaExecutor<'static>);
+
+#[cfg(feature = "async")]
+impl Executor {
+    pub(super) fn global() -> &'static ChaChaExecutor<'static> {
+        &EXECUTOR.get().unwrap().0
+    }
+
+    pub(super) fn new(threads: usize) -> Vec<thread::JoinHandle<()>> {
+        let executor = ChaChaExecutor::new();
+        dbg!(EXECUTOR.get(), &executor, thread::current().id());
+        let mut handles = Vec::new();
+        for _ in 0..threads {
+            let executor = executor.clone();
+            let handle = thread::spawn(move || {
+                let _ = future::block_on(async { executor.run().await });
+            });
+            handles.push(handle);
+        }
+        dbg!(EXECUTOR.get());
+        EXECUTOR.set(Executor(executor)).unwrap();
+
+        handles
+    }
+
+    pub(super) fn shutdown(handles: Vec<thread::JoinHandle<()>>) {
+        EXECUTOR.get().unwrap().0.shutdown();
+        for handle in handles {
+            handle.join().unwrap();
+        }
+    }
+}
+
+#[cfg(feature = "async")]
+static EXECUTOR: OnceCell<Executor> = OnceCell::new();
+
+pub fn shutdown_interpreter(mut context: Context) {
+    let mut running = RUNNING.lock();
+    *running = false;
+    CVAR.notify_all();
+
+    if let Some(handles) = context.take_executor_threads() {
+        Executor::shutdown(handles);
+    }
+}
+
 /// Initialize the interpreter
 ///
-pub fn initialize_interpreter<'a>(
+pub fn initialize_interpreter(
+    thread_count: usize,
     dwarf_home: PathBuf,
     e_context: ExtruderContext,
     sarzak: SarzakStore,
-) -> Result<Context<'a>, Error> {
+) -> Result<Context, Error> {
     let mut lu_dog = s_write!(e_context.lu_dog);
 
     // Initialize the stack with stuff from the compiled source.
@@ -379,6 +435,9 @@ pub fn initialize_interpreter<'a>(
 
     Client::start();
 
+    #[cfg(feature = "async")]
+    let handles = Executor::new(thread_count);
+
     Ok(Context::new(
         format!("{} ", Colour::Blue.normal().paint("道:>")),
         block,
@@ -397,6 +456,7 @@ pub fn initialize_interpreter<'a>(
         dwarf_home,
         dirty,
         e_context.source.to_owned(),
+        Some(handles),
     ))
 }
 
@@ -491,7 +551,7 @@ fn eval_expression(
                 }
             };
 
-            future::block_on(async { context.executor().resolve_task(child_task).await })
+            future::block_on(async { child_task.await })
         }
         ExpressionEnum::Block(ref block) => block::eval(block, context, vm),
         ExpressionEnum::Call(ref call) => call::eval(call, &expression, context, vm),
@@ -640,10 +700,10 @@ pub enum DebuggerControl {
 }
 
 /// This runs the main function, assuming it exists.
-pub fn start_func<'a>(
+pub fn start_func(
     name: &str,
     stopped: bool,
-    mut context: &mut Context<'a>,
+    mut context: &mut Context,
 ) -> Result<RefType<Value>, Error> {
     {
         let mut running = RUNNING.lock();

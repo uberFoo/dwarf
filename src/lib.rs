@@ -39,6 +39,7 @@ mod keywords {
     pub(crate) const EPS: &str = "eps";
     pub(crate) const EVAL: &str = "eval";
     pub(crate) const FN_NEW: &str = "new";
+    pub(crate) const HTTP_GET: &str = "http_get";
     pub(crate) const INTERVAL: &str = "interval";
     pub(crate) const JOIN: &str = "join";
     pub(crate) const LEN: &str = "len";

@@ -8,6 +8,12 @@ use ansi_term::Colour;
 use snafu::{location, prelude::*, Location};
 use tracy_client::span;
 
+#[cfg(feature = "async")]
+use super::Executor;
+
+#[cfg(feature = "async")]
+use crate::chacha::r#async::ChaChaTask;
+
 use crate::{
     chacha::{
         error::{Result, WrongNumberOfArgumentsSnafu},
@@ -85,12 +91,14 @@ pub fn eval_function_call<'a>(
                 )
             };
 
-            let task = context.executor().spawn(future);
+            let task = ChaChaTask::new(Executor::global(), future);
+
+            // let task = context.executor().spawn(future);
 
             let future = new_ref!(Value, Value::Future(task_name, Some(task)));
 
             // Stash the future away so that it doesn't get dropped when it's done running.
-            context.executor().park_value(future.clone());
+            // context.executor().park_value(future.clone());
 
             Ok(future)
         }

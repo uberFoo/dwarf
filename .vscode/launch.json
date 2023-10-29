@@ -90,7 +90,8 @@
             },
             "args": [
                 // "tests/harness/chacha/sleep.tao"
-                "tests/harness/chacha/async/one_shot.tao"
+                // "tests/harness/chacha/async/one_shot.tao"
+                "./async.ore"
             ],
             "cwd": "${workspaceFolder}",
             "env": {

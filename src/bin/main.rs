@@ -8,8 +8,14 @@ use std::{
 #[cfg(feature = "async")]
 use std::thread;
 
+#[cfg(feature = "async")]
+use dwarf::chacha::r#async::ChaChaExecutor;
+
 use clap::{ArgAction, Args, Parser};
 use dap::{prelude::BasicClient, server::Server};
+#[cfg(feature = "async")]
+use once_cell::sync::OnceCell;
+
 #[cfg(feature = "async")]
 use smol::future;
 
@@ -17,9 +23,12 @@ use dwarf::{
     chacha::{
         dap::DapAdapter,
         error::{ChaChaError, ChaChaErrorReporter},
-        interpreter::{banner2, initialize_interpreter, start_func, start_repl},
+        interpreter::{
+            banner2, initialize_interpreter, shutdown_interpreter, start_func, start_repl,
+        },
     },
     dwarf::{new_lu_dog, parse_dwarf},
+    s_read, s_write,
     sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL},
     Context, Value,
 };
@@ -221,15 +230,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         };
 
-        let mut ctx = initialize_interpreter(dwarf_home, ctx, sarzak)?;
+        let mut ctx = initialize_interpreter(2, dwarf_home, ctx, sarzak)?;
         ctx.add_args(dwarf_args);
-        #[cfg(feature = "async")]
-        let tjh = {
-            let mut e = ctx.executor().clone();
-            thread::spawn(move || {
-                let _ = future::block_on(async { e.run().await });
-            })
-        };
+
+        // #[cfg(feature = "async")]
+        // let tjh = {
+        //     let mut e = ctx.executor().clone();
+        //     thread::spawn(move || {
+        //         // let _ = future::block_on(async { e.run().await });
+        //         let _ = future::block_on(async { Executor::global().run().await });
+        //     });
+        //     let mut e = ctx.executor().clone();
+        //     thread::spawn(move || {
+        //         let _ = future::block_on(async { Executor::global().run().await });
+        //         // let _ = future::block_on(async { e.run().await });
+        //     })
+        // };
 
         if args.banner.is_some() && args.banner.unwrap() {
             println!("{}", banner2());
@@ -248,45 +264,75 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 Ok(value) => {
                     #[cfg(feature = "async")]
                     {
-                        // thread::yield_now();
-                        ctx.executor().shutdown();
-                        let _ = future::block_on(async { ctx.executor().run().await });
-                        // while !ctx.executor().finished() {}
+                        // // thread::yield_now();
+
+                        // // ctx.executor().shutdown();
+                        // Executor::global().shutdown();
+
                         unsafe {
                             let value = std::sync::Arc::into_raw(value);
                             let value = std::ptr::read(value);
                             let value = value.into_inner().unwrap();
+                            let value = future::block_on(value);
 
+                            let value = std::sync::Arc::into_raw(value);
+                            let value = std::ptr::read(value);
+                            let value = value.into_inner().unwrap();
                             match value {
-                                Value::Future(name, Some(task)) => {
-                                    dbg!(&name, &task);
-                                    // Ok::<(), ChaChaError>(())
-
-                                    // let task = task.take().unwrap();
-                                    match ctx.executor().block_on(task) {
-                                        // Ok(_) => Ok::<(), ChaChaError>(()),
-                                        Ok(result) => {
-                                            dbg!(result);
-                                        }
-                                        Err(e) => {
-                                            eprintln!("Interpreter exited with:");
-                                            eprintln!(
-                                                "{}",
-                                                ChaChaErrorReporter(
-                                                    &e.into(),
-                                                    is_uber,
-                                                    &source_code,
-                                                    &name
-                                                )
-                                            );
-                                        }
-                                    }
+                                Value::Error(msg) => {
+                                    let msg = *msg;
+                                    eprintln!("Interpreter exited with:");
+                                    eprintln!(
+                                        "{}",
+                                        ChaChaErrorReporter(
+                                            &msg.into(),
+                                            is_uber,
+                                            &source_code,
+                                            &file_name
+                                        )
+                                    );
                                 }
-                                _ => {
-                                    dbg!(value);
-                                }
+                                _ => println!("{}", value),
                             }
-                        };
+                        }
+                        // // let _ = future::block_on(async { ctx.executor().run().await });
+                        // // while !ctx.executor().finished() {}
+                        // unsafe {
+                        //     let value = std::sync::Arc::into_raw(value);
+                        //     let value = std::ptr::read(value);
+                        //     let value = value.into_inner().unwrap();
+
+                        //     match value {
+                        //         Value::Future(name, Some(task)) => {
+                        //             dbg!(&name, &task);
+                        //             // Ok::<(), ChaChaError>(())
+
+                        //             // let task = task.take().unwrap();
+                        //             // match ctx.executor().block_on(task) {
+                        //             match Executor::global().block_on(task) {
+                        //                 // Ok(_) => Ok::<(), ChaChaError>(()),
+                        //                 Ok(result) => {
+                        //                     dbg!(result);
+                        //                 }
+                        //                 Err(e) => {
+                        //                     eprintln!("Interpreter exited with:");
+                        //                     eprintln!(
+                        //                         "{}",
+                        //                         ChaChaErrorReporter(
+                        //                             &e.into(),
+                        //                             is_uber,
+                        //                             &source_code,
+                        //                             &name
+                        //                         )
+                        //                     );
+                        //                 }
+                        //             }
+                        //         }
+                        //         _ => {
+                        //             dbg!(value);
+                        //         }
+                        //     }
+                        // };
                     }
 
                     Ok::<(), ChaChaError>(())
@@ -304,7 +350,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         #[cfg(feature = "async")]
         {
-            // 🚧
+            shutdown_interpreter(ctx);
             // tjh.join().unwrap();
         }
     } else if args.dap.is_some() && args.dap.unwrap() {
@@ -349,7 +395,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     } else {
         let ctx = Context::default();
-        let mut ctx = initialize_interpreter(dwarf_home, ctx, sarzak)?;
+        let mut ctx = initialize_interpreter(2, dwarf_home, ctx, sarzak)?;
 
         start_repl(&mut ctx, is_uber).map_err(|e| {
             println!("Interpreter exited with: {}", e);
