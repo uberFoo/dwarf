@@ -42,7 +42,7 @@ pub fn eval_list_expression(
         let value = eval_expression(expr, context, vm)?;
 
         let ty = s_read!(value);
-        let ty = ty.get_type(&s_read!(sarzak), &s_read!(lu_dog));
+        let ty = ty.get_type(&s_read!(sarzak), &mut s_write!(lu_dog));
 
         let mut values = vec![value.clone()];
 

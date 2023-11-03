@@ -13,7 +13,7 @@ use crate::{
         debug, eval_expression, eval_statement, function, trace, typecheck, ChaChaError, Context,
     },
     lu_dog::{Argument, BodyEnum, Lambda, Span},
-    new_ref, s_read, NewRef, RefType, Value,
+    new_ref, s_read, s_write, NewRef, RefType, Value,
 };
 
 pub fn eval_lambda_expression(
@@ -122,7 +122,6 @@ pub fn eval_lambda_expression(
 
             loop {
                 let expr = s_read!(next).r37_expression(&s_read!(lu_dog))[0].clone();
-                dbg!("shit", &expr);
                 let value = eval_expression(expr.clone(), context, vm)?;
                 arg_values.push((expr, value));
 
@@ -149,7 +148,7 @@ pub fn eval_lambda_expression(
                 let x_value = &s_read!(expr).r11_x_value(&s_read!(lu_dog))[0];
                 let span = &s_read!(x_value).r63_span(&s_read!(lu_dog))[0];
 
-                let arg_ty = s_read!(value).get_type(&s_read!(sarzak), &s_read!(lu_dog));
+                let arg_ty = s_read!(value).get_type(&s_read!(sarzak), &mut s_write!(lu_dog));
                 typecheck(&param_ty, &arg_ty, span, location!(), context)?;
             }
 

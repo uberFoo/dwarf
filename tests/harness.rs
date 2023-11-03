@@ -77,7 +77,7 @@ fn diff_with_file(path: &str, test: &str, found: &str) -> Result<(), ()> {
     }
 }
 
-fn run_program(test: &str, program: &str) -> Result<(RefType<Value>, String), String> {
+fn run_program(test: &str, program: &str) -> Result<(Value, String), String> {
     let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
     let dwarf_home = env::var("DWARF_HOME")
         .unwrap_or_else(|_| {
@@ -135,11 +135,42 @@ fn run_program(test: &str, program: &str) -> Result<(RefType<Value>, String), St
         }
     };
 
-    let mut ctx = initialize_interpreter(2, dwarf_home, ctx, sarzak).unwrap();
+    let mut ctx = initialize_interpreter(1, dwarf_home, ctx, sarzak).unwrap();
     let result = match start_func("main", false, &mut ctx) {
         Ok(value) => {
-            let stdout = ctx.drain_std_out().join("").trim().to_owned();
-            Ok((value, stdout))
+            unsafe {
+                let value = std::sync::Arc::into_raw(value);
+                let value = std::ptr::read(value);
+                let value = value.into_inner().unwrap();
+                let value = future::block_on(value);
+
+                let value = std::sync::Arc::into_raw(value);
+                let value = std::ptr::read(value);
+                let value = value.into_inner().unwrap();
+                match value {
+                    Value::Error(msg) => {
+                        let msg = *msg;
+                        let error = format!(
+                            "Interpreter exited with:\n{}",
+                            ChaChaErrorReporter(&msg.into(), false, program, test)
+                        )
+                        .trim()
+                        .to_owned();
+
+                        eprintln!("{error}");
+
+                        Err(error)
+                    }
+                    _ => {
+                        let stdout = ctx.drain_std_out().join("").trim().to_owned();
+                        Ok((value, stdout))
+                    }
+                }
+            }
+
+            // let stdout = ctx.drain_std_out().join("").trim().to_owned();
+            // Ok((value, stdout))
+
             // ctx.executor().shutdown();
             // let _ = future::block_on(async { ctx.executor().run().await });
             // #[cfg(feature = "async")]
@@ -185,14 +216,14 @@ fn run_program(test: &str, program: &str) -> Result<(RefType<Value>, String), St
             // }
         }
         Err(e) => {
-            eprintln!("{}", ChaChaErrorReporter(&e, true, program, test));
-
             let error = format!(
                 "Interpreter exited with:\n{}",
                 ChaChaErrorReporter(&e, false, program, test)
             )
             .trim()
             .to_owned();
+
+            eprintln!("{error}");
 
             Err(error)
         }

@@ -15,8 +15,9 @@ use crate::{
         DwarfInteger, Expression as ParserExpression, Type,
     },
     keywords::{
-        ARGS, ASSERT, ASSERT_EQ, CHACHA, COMPLEX_EX, EPS, FN_NEW, HTTP_GET, INTERVAL, NEW,
-        NORM_SQUARED, ONE_SHOT, PLUGIN, SLEEP, SPAWN, SPAWN_NAMED, TIME, TIMER, TYPEOF, UUID_TYPE,
+        ARGS, ASLEEP, ASSERT, ASSERT_EQ, CHACHA, COMPLEX_EX, EPS, FN_NEW, HTTP_GET, INTERVAL, MAP,
+        NEW, NORM_SQUARED, ONE_SHOT, PLUGIN, SLEEP, SPAWN, SPAWN_NAMED, TIME, TIMER, TYPEOF,
+        UUID_TYPE,
     },
     lu_dog::{
         store::ObjectStore as LuDogStore, Argument, Block, Call, DataStructure, EnumFieldEnum,
@@ -148,97 +149,118 @@ pub fn inter(
 
         let sarzak = context.sarzak;
 
-        let ty = if type_name == CHACHA {
-            match method {
-                ARGS => {
-                    let ty = Ty::new_s_string(sarzak);
-                    // 🚧 Ideally we'd cache this when we startup.
-                    let ty = lu_dog
-                        .iter_value_type()
-                        .find(|t| s_read!(t).subtype == ValueTypeEnum::Ty(ty.read().unwrap().id()))
-                        .unwrap();
-                    let list = List::new(&ty, lu_dog);
-                    ValueType::new_list(&list, lu_dog)
-                }
-                ASSERT => ValueType::new_ty(&Ty::new_boolean(sarzak), lu_dog),
-                ASSERT_EQ => ValueType::new_ty(&Ty::new_boolean(sarzak), lu_dog),
-                EPS => ValueType::new_ty(&Ty::new_float(sarzak), lu_dog),
-                HTTP_GET => {
-                    let inner = ValueType::new_ty(&Ty::new_s_string(sarzak), lu_dog);
-                    let future = XFuture::new(&inner, lu_dog);
-                    ValueType::new_x_future(&future, lu_dog)
-                }
-                SLEEP => ValueType::new_empty(lu_dog),
-                #[cfg(feature = "async")]
-                SPAWN => {
-                    let inner = ValueType::new_unknown(lu_dog);
-                    let future = XFuture::new(&inner, lu_dog);
-                    ValueType::new_x_future(&future, lu_dog)
-                }
-                #[cfg(feature = "async")]
-                SPAWN_NAMED => {
-                    let inner = ValueType::new_unknown(lu_dog);
-                    let future = XFuture::new(&inner, lu_dog);
-                    ValueType::new_x_future(&future, lu_dog)
-                }
-                TIME => ValueType::new_ty(&Ty::new_float(sarzak), lu_dog),
-                TYPEOF => ValueType::new_ty(&Ty::new_s_string(sarzak), lu_dog),
-                method => {
-                    let span = s_read!(span).start as usize..s_read!(span).end as usize;
-                    return Err(vec![DwarfError::NoSuchMethod {
-                        method: method.to_owned(),
-                        file: context.file_name.to_owned(),
-                        span,
-                        location: location!(),
-                    }]);
-                    // e_warn!("ParserExpression type not found");
-                    // ValueType::new_unknown(lu_dog)
+        let ty = match type_name.as_str() {
+            CHACHA => {
+                match method {
+                    ARGS => {
+                        let ty = Ty::new_s_string(sarzak);
+                        // 🚧 Ideally we'd cache this when we startup.
+                        let ty = lu_dog
+                            .iter_value_type()
+                            .find(|t| {
+                                s_read!(t).subtype == ValueTypeEnum::Ty(ty.read().unwrap().id())
+                            })
+                            .unwrap();
+                        let list = List::new(&ty, lu_dog);
+                        ValueType::new_list(&list, lu_dog)
+                    }
+                    #[cfg(feature = "async")]
+                    ASLEEP => {
+                        let inner = ValueType::new_empty(lu_dog);
+                        let future = XFuture::new(&inner, lu_dog);
+                        ValueType::new_x_future(&future, lu_dog)
+                    }
+                    ASSERT => ValueType::new_ty(&Ty::new_boolean(sarzak), lu_dog),
+                    ASSERT_EQ => ValueType::new_ty(&Ty::new_boolean(sarzak), lu_dog),
+                    EPS => ValueType::new_ty(&Ty::new_float(sarzak), lu_dog),
+                    HTTP_GET => {
+                        let inner = ValueType::new_ty(&Ty::new_s_string(sarzak), lu_dog);
+                        let future = XFuture::new(&inner, lu_dog);
+                        ValueType::new_x_future(&future, lu_dog)
+                    }
+                    SLEEP => ValueType::new_empty(lu_dog),
+                    #[cfg(feature = "async")]
+                    SPAWN => {
+                        let inner = ValueType::new_unknown(lu_dog);
+                        let future = XFuture::new(&inner, lu_dog);
+                        ValueType::new_x_future(&future, lu_dog)
+                    }
+                    #[cfg(feature = "async")]
+                    SPAWN_NAMED => {
+                        let inner = ValueType::new_unknown(lu_dog);
+                        let future = XFuture::new(&inner, lu_dog);
+                        ValueType::new_x_future(&future, lu_dog)
+                    }
+                    TIME => ValueType::new_ty(&Ty::new_float(sarzak), lu_dog),
+                    TYPEOF => ValueType::new_ty(&Ty::new_s_string(sarzak), lu_dog),
+                    method => {
+                        let span = s_read!(span).start as usize..s_read!(span).end as usize;
+                        return Err(vec![DwarfError::NoSuchMethod {
+                            method: method.to_owned(),
+                            file: context.file_name.to_owned(),
+                            span,
+                            location: location!(),
+                        }]);
+                        // e_warn!("ParserExpression type not found");
+                        // ValueType::new_unknown(lu_dog)
+                    }
                 }
             }
-        } else if type_name == COMPLEX_EX {
-            match method {
+            COMPLEX_EX => match method {
                 NORM_SQUARED => ValueType::new_ty(&Ty::new_float(sarzak), lu_dog),
-                _ => {
-                    e_warn!("ComplexEx method not found");
+                method => {
+                    e_warn!("ComplexEx method `{method}` not found");
                     ValueType::new_unknown(lu_dog)
                 }
-            }
-        } else if type_name == PLUGIN {
-            match method {
+            },
+            PLUGIN => match method {
                 NEW => {
                     let plugin = Plugin::new(plugin_type, lu_dog);
                     ValueType::new_plugin(&plugin, lu_dog)
                 }
-                _ => {
-                    e_warn!("Plugin method not found");
+                method => {
+                    e_warn!("Plugin method `{method}` not found");
                     ValueType::new_unknown(lu_dog)
                 }
-            }
-        } else if type_name == TIMER {
-            match method {
-                #[cfg(feature = "async")]
-                INTERVAL | ONE_SHOT => {
-                    let inner = ValueType::new_empty(lu_dog);
-                    let future = XFuture::new(&inner, lu_dog);
-                    ValueType::new_x_future(&future, lu_dog)
+            },
+            // 🚧 This is tricky. We are matching strings, and that won't work here.
+            // RANGE => match method {
+            //     MAP => {
+            //         let inner = ValueType::new_ty(&Ty::new_integer(sarzak), lu_dog);
+            //         let list = List::new(&inner, lu_dog);
+            //         ValueType::new_list(&list, lu_dog)
+            //     }
+            //     method => {
+            //         e_warn!("Range method `{method}` not found");
+            //         ValueType::new_unknown(lu_dog)
+            //     }
+            // },
+            TIMER => {
+                match method {
+                    #[cfg(feature = "async")]
+                    INTERVAL | ONE_SHOT => {
+                        let inner = ValueType::new_empty(lu_dog);
+                        let future = XFuture::new(&inner, lu_dog);
+                        ValueType::new_x_future(&future, lu_dog)
+                    }
+                    _ => {
+                        let span = s_read!(span).start as usize..s_read!(span).end as usize;
+                        return Err(vec![DwarfError::ObjectNameNotFound {
+                            name: type_name.to_owned(),
+                            file: context.file_name.to_owned(),
+                            span,
+                            location: location!(),
+                        }]);
+                        // e_warn!("ParserExpression type not found");
+                        // ValueType::new_unknown(lu_dog)
+                    }
                 }
-                _ => {
-                    let span = s_read!(span).start as usize..s_read!(span).end as usize;
-                    return Err(vec![DwarfError::ObjectNameNotFound {
-                        name: type_name.to_owned(),
-                        file: context.file_name.to_owned(),
-                        span,
-                        location: location!(),
-                    }]);
-                    // e_warn!("ParserExpression type not found");
-                    // ValueType::new_unknown(lu_dog)
-                }
             }
-        } else if type_name == UUID_TYPE && method == FN_NEW {
-            ValueType::new_ty(&Ty::new_s_uuid(sarzak), lu_dog)
-        } else {
-            debug!("ParserExpression::StaticMethodCall: looking up type {type_name}");
-            lookup_woog_struct_method_return_type(&type_name, method, context.sarzak, lu_dog)
+            UUID_TYPE if method == FN_NEW => ValueType::new_ty(&Ty::new_s_uuid(sarzak), lu_dog),
+            _ => {
+                debug!("ParserExpression::StaticMethodCall: looking up type {type_name}");
+                lookup_woog_struct_method_return_type(&type_name, method, context.sarzak, lu_dog)
+            }
         };
 
         let mut last_arg_uuid: Option<usize> = None;

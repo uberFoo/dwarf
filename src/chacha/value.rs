@@ -14,10 +14,10 @@ use uuid::Uuid;
 
 use crate::{
     chacha::error::Result,
-    lu_dog::{Function, Lambda, ObjectStore as LuDogStore, ValueType, ZObjectStore},
+    lu_dog::{Function, Lambda, List, ObjectStore as LuDogStore, ValueType, ZObjectStore},
     new_ref,
     plug_in::PluginType,
-    s_read,
+    s_read, s_write,
     sarzak::{ObjectStore as SarzakStore, Ty},
     ChaChaError, Context, DwarfFloat, DwarfInteger, NewRef, RefType,
 };
@@ -266,7 +266,10 @@ pub enum Value {
     Struct(RefType<UserStruct>),
     Table(HashMap<String, RefType<Self>>),
     #[cfg(feature = "async")]
-    Task(ChaChaTask),
+    Task {
+        parent: Option<crate::chacha::r#async::ChaChaTask<'static>>,
+        child: Option<crate::chacha::r#async::ChaChaTask<'static>>,
+    },
     Thonk(&'static str, usize),
     TupleEnum(RefType<TupleEnum>),
     Unknown,
@@ -286,11 +289,6 @@ impl Future for Value {
         match this {
             Self::Future(_, task) => {
                 if let Some(task) = task.take() {
-                    // let waker = cx.waker().clone();
-                    // let value = async {
-                    // waker.wake();
-                    // task.await
-                    // };
                     match future::block_on(task) {
                         Ok(value) => std::task::Poll::Ready(value),
                         Err(e) => {
@@ -301,7 +299,22 @@ impl Future for Value {
                     std::task::Poll::Ready(new_ref!(Value, Value::Empty))
                 }
             }
-            Self::Task(task) => std::task::Poll::Ready(future::block_on(task)),
+            Self::Task { parent, child } => {
+                if let Some(task) = child.take() {
+                    let _ = future::block_on(task);
+                }
+
+                if let Some(task) = parent.take() {
+                    match future::block_on(task) {
+                        Ok(value) => std::task::Poll::Ready(value),
+                        Err(e) => {
+                            std::task::Poll::Ready(new_ref!(Value, Value::Error(Box::new(e))))
+                        }
+                    }
+                } else {
+                    std::task::Poll::Ready(new_ref!(Value, Value::Empty))
+                }
+            }
             _ => std::task::Poll::Ready(new_ref!(Value, Value::Empty)),
         }
     }
@@ -359,7 +372,7 @@ impl std::fmt::Debug for Value {
             Self::Struct(ty) => write!(f, "{:?}", s_read!(ty)),
             Self::Table(table) => write!(f, "{table:?}"),
             #[cfg(feature = "async")]
-            Self::Task(task) => write!(f, "{task:?}"),
+            Self::Task { parent, child } => write!(f, "Parent: {parent:?}\nChild: {child:?}"),
             Self::Thonk(name, number) => write!(f, "{name:?} [{number:?}]"),
             Self::TupleEnum(te) => write!(f, "{:?}", s_read!(te)),
             Self::Unknown => write!(f, "<unknown>"),
@@ -380,7 +393,8 @@ impl Clone for Value {
             Self::Float(num) => Self::Float(*num),
             Self::Function(func) => Self::Function(func.clone()),
             #[cfg(feature = "async")]
-            Self::Future(name, task) => Self::Future(name.to_owned(), None),
+            // Note that cloned values do not inherit the task
+            Self::Future(name, _) => Self::Future(name.to_owned(), None),
             Self::Integer(num) => Self::Integer(*num),
             Self::Lambda(ƛ) => Self::Lambda(ƛ.clone()),
             Self::ParsedDwarf(ctx) => Self::ParsedDwarf(ctx.clone()),
@@ -402,7 +416,14 @@ impl Clone for Value {
             Self::Struct(ty) => Self::Struct(ty.clone()),
             Self::Table(table) => Self::Table(table.clone()),
             #[cfg(feature = "async")]
-            Self::Task(task) => Self::Task(task.clone()),
+            // Note that cloned values do not inherit the task
+            Self::Task {
+                parent: _,
+                child: _,
+            } => Self::Task {
+                parent: None,
+                child: None,
+            },
             Self::Thonk(name, number) => Self::Thonk(*name, *number),
             Self::TupleEnum(te) => Self::TupleEnum(te.clone()),
             Self::Unknown => Self::Unknown,
@@ -472,7 +493,11 @@ impl From<FfiValue> for Value {
 }
 
 impl Value {
-    pub fn get_type(&self, sarzak: &SarzakStore, lu_dog: &LuDogStore) -> RefType<ValueType> {
+    pub fn get_type(
+        &self,
+        sarzak: &SarzakStore,
+        mut lu_dog: &mut LuDogStore,
+    ) -> RefType<ValueType> {
         match &self {
             Value::Boolean(_) => {
                 let ty = Ty::new_boolean(sarzak);
@@ -560,6 +585,14 @@ impl Value {
                 }
                 unreachable!()
             }
+            Value::Range(_) => {
+                for vt in lu_dog.iter_value_type() {
+                    if let ValueTypeEnum::Range(_) = s_read!(vt).subtype {
+                        return vt.clone();
+                    }
+                }
+                unreachable!()
+            }
             Value::Store(store, _plugin) => s_read!(store).r1_value_type(lu_dog)[0].clone(),
             Value::String(_) => {
                 let ty = Ty::new_s_string(sarzak);
@@ -573,7 +606,10 @@ impl Value {
                 unreachable!()
             }
             Value::Struct(ref ut) => s_read!(ut).get_type().clone(),
-            Value::Task(_) => {
+            Value::Task {
+                parent: _,
+                child: _,
+            } => {
                 for vt in lu_dog.iter_value_type() {
                     if let ValueTypeEnum::Task(_) = s_read!(vt).subtype {
                         return vt.clone();
@@ -592,13 +628,15 @@ impl Value {
                 }
                 unreachable!()
             }
-            Value::Vector(_) => {
+            Value::Vector(ref v) => {
+                let elt = s_read!(v[0]).get_type(sarzak, lu_dog).clone();
+                let list = List::new(&elt, &mut lu_dog);
                 for vt in lu_dog.iter_value_type() {
                     if let ValueTypeEnum::List(_) = s_read!(vt).subtype {
                         return vt.clone();
                     }
                 }
-                unreachable!()
+                return ValueType::new_list(&list, &mut lu_dog);
             }
             value => {
                 log::error!("Value::get_type() not implemented for {:?}", value);
@@ -644,7 +682,7 @@ impl fmt::Display for Value {
             // Self::String(str_) => write!(f, "\"{}\"", str_),
             Self::Table(table) => write!(f, "{table:?}"),
             #[cfg(feature = "async")]
-            Self::Task(task) => write!(f, "{task:?}"),
+            Self::Task { parent, child } => write!(f, "Parent: {parent:?}\nChild: {child:?}"),
             Self::Thonk(name, number) => write!(f, "{name} [{number}]"),
             Self::TupleEnum(te) => write!(f, "{}", s_read!(te)),
             Self::Unknown => write!(f, "<unknown>"),

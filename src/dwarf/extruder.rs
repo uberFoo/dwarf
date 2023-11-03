@@ -2055,7 +2055,7 @@ pub(super) fn inter_expression(
 
             let mut errors = Vec::new();
             let mut last_param_uuid: Option<usize> = None;
-            for (position, ((param_name, name_span), (param_ty, param_span))) in
+            for (position, ((param_name, name_span), (param_ty, ty_span))) in
                 params.iter().enumerate()
             {
                 debug!("param name {}", param_name);
@@ -2072,7 +2072,7 @@ pub(super) fn inter_expression(
                 // error out when parsing the statements.
                 //
                 context.location = location!();
-                let param_ty = match make_value_type(param_ty, param_span, None, context, lu_dog) {
+                let param_ty = match make_value_type(param_ty, ty_span, None, context, lu_dog) {
                     Ok(ty) => ty,
                     Err(mut e) => {
                         errors.append(&mut e);

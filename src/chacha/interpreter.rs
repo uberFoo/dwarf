@@ -13,6 +13,7 @@ use lazy_static::lazy_static;
 use log::{self, log_enabled, Level::Debug};
 use once_cell::sync::OnceCell;
 use parking_lot::{Condvar, Mutex};
+use slab::Slab;
 use snafu::{prelude::*, Location};
 use tracy_client::{span, Client};
 use uuid::Uuid;
@@ -135,50 +136,98 @@ lazy_static! {
 
 #[cfg(feature = "async")]
 #[derive(Debug)]
-pub(super) struct Executor(ChaChaExecutor<'static>);
+pub(super) struct Executor {
+    root: usize,
+    workers: Slab<ChaChaExecutor<'static>>,
+    threads: Vec<thread::JoinHandle<()>>,
+}
 
 #[cfg(feature = "async")]
 impl Executor {
-    pub(super) fn global() -> &'static ChaChaExecutor<'static> {
-        &EXECUTOR.get().unwrap().0
+    pub(super) fn at_index(index: usize) -> &'static ChaChaExecutor<'static> {
+        log::debug!(target: "async", "Executor::at_index: {index}");
+        unsafe {
+            let exec = EXECUTOR.get_mut().unwrap();
+            log::trace!(target: "async", "Executor::at_index: {exec:?}");
+            let executor = exec.workers.get(index).unwrap();
+            log::trace!(target: "async", "Executor::at_index: {executor:?}");
+            executor
+        }
     }
 
-    pub(super) fn new(threads: usize) -> Vec<thread::JoinHandle<()>> {
+    pub(super) fn global() -> &'static ChaChaExecutor<'static> {
+        unsafe {
+            let exec = EXECUTOR.get_mut().unwrap();
+            exec.workers.get(exec.root).unwrap()
+        }
+    }
+
+    pub(super) fn new_worker() -> usize {
+        unsafe {
+            let exec = EXECUTOR.get_mut().unwrap();
+            exec.workers.insert(ChaChaExecutor::new())
+        }
+    }
+
+    pub(super) fn new(thread_count: usize) {
+        let mut workers = Slab::with_capacity(thread_count);
         let executor = ChaChaExecutor::new();
-        dbg!(EXECUTOR.get(), &executor, thread::current().id());
-        let mut handles = Vec::new();
-        for _ in 0..threads {
+        let root = workers.insert(executor.clone());
+
+        let mut threads = Vec::new();
+        for _ in 0..thread_count {
             let executor = executor.clone();
             let handle = thread::spawn(move || {
                 let _ = future::block_on(async { executor.run().await });
             });
-            handles.push(handle);
+            threads.push(handle);
         }
-        dbg!(EXECUTOR.get());
-        EXECUTOR.set(Executor(executor)).unwrap();
+        dbg!("new", thread::current().id());
 
-        handles
+        unsafe {
+            EXECUTOR
+                .set(Executor {
+                    root,
+                    workers,
+                    threads,
+                })
+                .unwrap();
+        }
     }
 
-    pub(super) fn shutdown(handles: Vec<thread::JoinHandle<()>>) {
-        EXECUTOR.get().unwrap().0.shutdown();
-        for handle in handles {
-            handle.join().unwrap();
+    pub(super) fn remove_worker(index: usize) -> ChaChaExecutor<'static> {
+        log::debug!(target: "async", "Executor::remove_worker: {index}");
+        unsafe {
+            let exec = EXECUTOR.get_mut().unwrap();
+            exec.workers[index].shutdown();
+            exec.workers.remove(index)
+        }
+    }
+
+    pub(super) fn shutdown() {
+        unsafe {
+            if let Some(executor) = EXECUTOR.take() {
+                for (_, worker) in executor.workers {
+                    worker.shutdown();
+                }
+                for handle in executor.threads {
+                    handle.join().unwrap();
+                }
+            }
         }
     }
 }
 
 #[cfg(feature = "async")]
-static EXECUTOR: OnceCell<Executor> = OnceCell::new();
+static mut EXECUTOR: OnceCell<Executor> = OnceCell::new();
 
-pub fn shutdown_interpreter(mut context: Context) {
+pub fn shutdown_interpreter() {
+    dbg!("shutdown", thread::current().id());
     let mut running = RUNNING.lock();
     *running = false;
     CVAR.notify_all();
 
-    if let Some(handles) = context.take_executor_threads() {
-        Executor::shutdown(handles);
-    }
+    Executor::shutdown();
 }
 
 /// Initialize the interpreter
@@ -189,6 +238,7 @@ pub fn initialize_interpreter(
     e_context: ExtruderContext,
     sarzak: SarzakStore,
 ) -> Result<Context, Error> {
+    dbg!("initialize_interpreter", thread::current().id());
     let mut lu_dog = s_write!(e_context.lu_dog);
 
     // Initialize the stack with stuff from the compiled source.
@@ -436,7 +486,7 @@ pub fn initialize_interpreter(
     Client::start();
 
     #[cfg(feature = "async")]
-    let handles = Executor::new(thread_count);
+    Executor::new(thread_count);
 
     Ok(Context::new(
         format!("{} ", Colour::Blue.normal().paint("道:>")),
@@ -456,7 +506,6 @@ pub fn initialize_interpreter(
         dwarf_home,
         dirty,
         e_context.source.to_owned(),
-        Some(handles),
     ))
 }
 
@@ -485,6 +534,8 @@ fn eval_expression(
     vm: &mut VM,
 ) -> Result<RefType<Value>> {
     let lu_dog = context.lu_dog_heel().clone();
+
+    debug!("eval_expression expression {:?}", thread::current().id());
 
     // context.tracy.span(span_location!("eval_expression"), 0);
     // context
@@ -536,22 +587,30 @@ fn eval_expression(
     match s_read!(expression).subtype {
         #[cfg(feature = "async")]
         ExpressionEnum::AWait(ref expression) => {
+            debug!("evaluating await");
             let expr = s_read!(lu_dog).exhume_a_wait(expression).unwrap();
             let expr = s_read!(expr).r98_expression(&s_read!(lu_dog))[0].clone();
 
             let mut child = context.clone();
             let value = eval_expression(expr, &mut child, vm)?;
 
-            let mut value = s_write!(value);
-            let (child_task, _name) = match &mut *value {
-                Value::Future(name, task) => (task.take().unwrap(), name),
+            let mut write_value = s_write!(value);
+            match &mut *write_value {
+                Value::Future(_name, task) => {
+                    let task = task.take().unwrap();
+                    task.start();
+                    future::block_on(async { task.await })
+                }
+                Value::Task {
+                    parent: _,
+                    child: _,
+                } => Ok(value.clone()),
                 wtf => {
                     dbg!(wtf);
                     unreachable!()
                 }
-            };
-
-            future::block_on(async { child_task.await })
+            }
+            // Ok(new_ref!(Value, Value::Empty))
         }
         ExpressionEnum::Block(ref block) => block::eval(block, context, vm),
         ExpressionEnum::Call(ref call) => call::eval(call, &expression, context, vm),

@@ -30,7 +30,8 @@ pub fn eval<'a>(
                 eval_inner(block, &mut cloned_context, &mut vm)
             };
 
-            let task = ChaChaTask::new(Executor::global(), future);
+            // let task = ChaChaTask::new(Executor::global(), future);
+            let task = ChaChaTask::new(Executor::at_index(context.executor_index()), future);
 
             // let task = context.executor().spawn(future);
 

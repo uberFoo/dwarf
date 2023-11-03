@@ -33,11 +33,13 @@ use crate::{
         ChaChaError, Context, PrintableValueType,
     },
     keywords::{
-        ADD, ARGS, ASSERT, ASSERT_EQ, CHACHA, COMPLEX_EX, EPS, EVAL, FN_NEW, FORMAT, HTTP_GET,
-        INTERVAL, JOIN, LEN, NEW, NORM_SQUARED, ONE_SHOT, PARSE, PLUGIN, SLEEP, SPAWN, SPAWN_NAMED,
-        SQUARE, TIME, TIMER, TYPEOF, UUID_TYPE,
+        ADD, ARGS, ASLEEP, ASSERT, ASSERT_EQ, CHACHA, COMPLEX_EX, EPS, EVAL, FN_NEW, FORMAT,
+        HTTP_GET, INTERVAL, JOIN, LEN, MAP, NEW, NORM_SQUARED, ONE_SHOT, PARSE, PLUGIN, SLEEP,
+        SPAWN, SPAWN_NAMED, SQUARE, SUM, TIME, TIMER, TYPEOF, UUID_TYPE,
     },
-    lu_dog::{CallEnum, Expression, ValueTypeEnum},
+    lu_dog::{
+        Argument, Call, CallEnum, Expression, IntegerLiteral, Literal, MethodCall, ValueTypeEnum,
+    },
     new_ref,
     plug_in::PluginModRef,
     plug_in::PluginType,
@@ -60,7 +62,7 @@ pub fn eval(
     let call = s_read!(lu_dog).exhume_call(call_id).unwrap();
     let first_arg = s_read!(call).argument;
     debug!("call {call:?}");
-    let args = s_read!(call).r28_argument(&s_read!(lu_dog));
+    let mut args = s_read!(call).r28_argument(&s_read!(lu_dog));
     debug!("args {args:?}");
 
     let arg_check = s_read!(call).arg_check;
@@ -106,10 +108,14 @@ pub fn eval(
                     id: _,
                     plugin: _,
                 } => Ok(value.clone()),
+                Value::Range(_) => Ok(value.clone()),
                 Value::Struct(_) => Ok(value.clone()),
                 Value::Store(_store, _plugin) => Ok(value.clone()),
-                // Value::Task(t) => Ok(future::block_on(t)),
-                Value::Task(_) => Ok(value.clone()),
+                Value::Task {
+                    parent: _,
+                    child: _,
+                } => Ok(value.clone()),
+                Value::Vector(_) => Ok(value.clone()),
                 misc_value => {
                     let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
                     debug!("value {value:?}");
@@ -130,7 +136,7 @@ pub fn eval(
             }
         };
 
-        let ty = s_read!(value).get_type(&s_read!(sarzak), &s_read!(lu_dog));
+        let ty = s_read!(value).get_type(&s_read!(sarzak), &mut s_write!(lu_dog));
 
         // First we need to check the type of the LHS to see if there are
         // any instance methods on the type. This seems weird. I'm not sure
@@ -242,6 +248,63 @@ pub fn eval(
                     };
                     x
                 }
+                Value::Range(range) => match meth_name.as_str() {
+                    MAP => {
+                        debug!("evaluating Range::map");
+                        let func = args.pop().unwrap();
+                        let func = s_read!(func).r37_expression(&s_read!(lu_dog))[0].clone();
+                        let ƛ = eval_expression(func.clone(), context, vm).unwrap();
+                        let ƛ = s_read!(ƛ);
+                        let ƛ = if let Value::Lambda(ƛ) = &*ƛ {
+                            ƛ
+                        } else {
+                            unreachable!()
+                        };
+
+                        let call = &MethodCall::new("map".to_owned(), &mut s_write!(lu_dog));
+                        let call =
+                            Call::new_method_call(false, None, None, &call, &mut s_write!(lu_dog));
+
+                        let result = (range.start..range.end)
+                            .map(|i| {
+                                let literal = IntegerLiteral::new(i, &mut s_write!(lu_dog));
+                                let literal =
+                                    Literal::new_integer_literal(&literal, &mut s_write!(lu_dog));
+                                let expression =
+                                    Expression::new_literal(&literal, &mut s_write!(lu_dog));
+                                let argument = Argument::new(
+                                    0,
+                                    &expression,
+                                    &call,
+                                    None,
+                                    &mut s_write!(lu_dog),
+                                );
+                                eval_lambda_expression(
+                                    ƛ.clone(),
+                                    &[argument],
+                                    false,
+                                    &span,
+                                    context,
+                                    vm,
+                                )
+                            })
+                            .collect::<Result<Vec<RefType<Value>>>>()?;
+
+                        Ok(new_ref!(Value, Value::Vector(result)))
+                    }
+                    _ => {
+                        let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
+                        let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
+                        let read = s_read!(span);
+                        let span = read.start as usize..read.end as usize;
+
+                        return Err(ChaChaError::NoSuchMethod {
+                            method: meth_name.to_owned(),
+                            span,
+                            location: location!(),
+                        });
+                    }
+                },
                 Value::String(string) => match meth_name.as_str() {
                     LEN => {
                         debug!("evaluating String::len");
@@ -433,37 +496,91 @@ pub fn eval(
                     };
                     x
                 }
-                Value::Task(t) => match meth_name.as_str() {
-                    JOIN => {
-                        let t = unsafe {
-                            let value = std::sync::Arc::into_raw(value.clone());
-                            let value = std::ptr::read(value);
-                            let value = value.into_inner().unwrap();
+                // Value::Task(t) => match meth_name.as_str() {
+                //     JOIN => {
+                //         let t = unsafe {
+                //             let value = std::sync::Arc::into_raw(value.clone());
+                //             let value = std::ptr::read(value);
+                //             let value = value.into_inner().unwrap();
 
-                            match value {
-                                Value::Task(t) => t,
-                                _ => unreachable!(),
+                //             match value {
+                //                 Value::Task(t) => t,
+                //                 _ => unreachable!(),
+                //             }
+                //         };
+                //         let future = async move {
+                //             dbg!("start join");
+                //             let foo = t.await;
+                //             dbg!("end join", &foo);
+                //             Ok(foo)
+                //         };
+                //         // let task = context.executor().spawn(future);
+                //         let task = ExecutorTask::new(Executor::global(), future);
+
+                //         // Ok(new_ref!(
+                //         //     Value,
+                //         //     Value::Future("quux".to_owned(), Some(task))
+                //         // ))
+
+                //         // let task =
+                //         // ExecutorTask::new(Executor::at_index(context.executor_index()), future);
+
+                //         future::block_on(async { task.await })
+
+                //         // let value = future::block_on(t);
+                //         // let v = s_read!(value);
+                //         // match &*v {
+                //         //     // Value::Task(t) => Ok(t.deref()),
+                //         //     m => {
+                //         //         dbg!("fubar", m);
+                //         //         // unreachable!()
+                //         //         Ok(value.clone())
+                //         //     }
+                //         // }
+                //     }
+                //     _ => {
+                //         let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
+                //         let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
+                //         let read = s_read!(span);
+                //         let span = read.start as usize..read.end as usize;
+
+                //         return Err(ChaChaError::NoSuchMethod {
+                //             method: meth_name.to_owned(),
+                //             span,
+                //             location: location!(),
+                //         });
+                //     }
+                // },
+                Value::Vector(v) => match meth_name.as_str() {
+                    SUM => {
+                        let mut sum = 0;
+                        for value in v {
+                            let mut value = s_write!(value);
+                            match &mut *value {
+                                Value::Integer(i) => sum += *i,
+                                Value::Task { parent, child } => {
+                                    if let Some(task) = child.take() {
+                                        let _ = future::block_on(task);
+                                    }
+                                    let t = parent.take().unwrap();
+                                    // 🚧 async fix unwrap
+                                    let value = future::block_on(t).unwrap();
+                                    let v = s_read!(value);
+                                    match &*v {
+                                        Value::Integer(i) => sum += i,
+                                        v => {
+                                            dbg!(v);
+                                            unreachable!()
+                                        }
+                                    }
+                                }
+                                v => {
+                                    dbg!(v);
+                                    unreachable!()
+                                }
                             }
-                        };
-                        let future = async move {
-                            dbg!("start join");
-                            let foo = t.await;
-                            dbg!("end join", &foo);
-                            Ok(foo)
-                        };
-                        // let task = context.executor().spawn(future);
-                        let task = ExecutorTask::new(Executor::global(), future);
-                        future::block_on(async { task.await })
-                        // let value = future::block_on(t);
-                        // let v = s_read!(value);
-                        // match &*v {
-                        //     // Value::Task(t) => Ok(t.deref()),
-                        //     m => {
-                        //         dbg!("fubar", m);
-                        //         // unreachable!()
-                        //         Ok(value.clone())
-                        //     }
-                        // }
+                        }
+                        Ok(new_ref!(Value, Value::Integer(sum)))
                     }
                     _ => {
                         let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
@@ -607,6 +724,27 @@ pub fn eval(
                             Ok(new_ref!(Value, Value::Vector(Vec::new())))
                         }
                     }
+                    ASLEEP => {
+                        let (duration, _) = arg_values.pop_front().unwrap();
+                        let millis = &*s_read!(duration);
+                        let millis: u64 = millis.try_into()?;
+                        let duration = Duration::from_millis(millis);
+                        let future = async move {
+                            debug!("sleeping for {duration:?}");
+                            // dbg!(&duration, &fubar.executor());
+                            let _instant = Timer::after(duration).await;
+                            // dbg!(&duration, _instant, &fubar.executor());
+                            debug!("done sleeping");
+                            Ok(new_ref!(Value, Value::Empty))
+                        };
+                        let task =
+                            ExecutorTask::new(Executor::at_index(context.executor_index()), future);
+
+                        Ok(new_ref!(
+                            Value,
+                            Value::Future("sleep".to_owned(), Some(task))
+                        ))
+                    }
                     ASSERT => chacha::assert(arg_values, expression, lu_dog),
                     ASSERT_EQ => chacha::assert_eq(arg_values, expression, lu_dog),
                     EPS => {
@@ -641,14 +779,14 @@ pub fn eval(
                         std::thread::sleep(duration);
                         Ok(new_ref!(Value, Value::Empty))
                     }
-                    // #[cfg(feature = "async")]
-                    // SPAWN => spawn("task".to_owned(), &mut arg_values, expression, context),
-                    // #[cfg(feature = "async")]
-                    // SPAWN_NAMED => {
-                    //     let (name, _) = arg_values.pop_front().unwrap();
-                    //     let name: String = (&*s_read!(name)).try_into()?;
-                    //     spawn(name, &mut arg_values, expression, context)
-                    // }
+                    #[cfg(feature = "async")]
+                    SPAWN => spawn("task".to_owned(), &mut arg_values, expression, context),
+                    #[cfg(feature = "async")]
+                    SPAWN_NAMED => {
+                        let (name, _) = arg_values.pop_front().unwrap();
+                        let name: String = (&*s_read!(name)).try_into()?;
+                        spawn(name, &mut arg_values, expression, context)
+                    }
                     TIME => {
                         debug!("evaluating chacha::time");
                         // 🚧 I should be checking that there is an argument before
@@ -661,7 +799,7 @@ pub fn eval(
                             {
                                 // 🚧 I'm not really sure what to do about this here. It's
                                 // all really a hack for now anyway.
-                                let ty = func.get_type(&s_read!(sarzak), &s_read!(lu_dog));
+                                let ty = func.get_type(&s_read!(sarzak), &mut s_write!(lu_dog));
                                 let ty = PrintableValueType(true, ty, context.models());
                                 let ty = ty.to_string();
                                 TypeMismatchSnafu {
@@ -702,7 +840,7 @@ pub fn eval(
                     TYPEOF => {
                         debug!("evaluating chacha::typeof");
                         let arg = arg_values.pop_front().unwrap().0;
-                        let ty = s_read!(arg).get_type(&s_read!(sarzak), &s_read!(lu_dog));
+                        let ty = s_read!(arg).get_type(&s_read!(sarzak), &mut s_write!(lu_dog));
                         let pvt_ty = PrintableValueType(false, ty, context.models());
 
                         Ok(new_ref!(Value, pvt_ty.to_string().into()))
@@ -741,7 +879,8 @@ pub fn eval(
                             {
                                 // 🚧 I'm not really sure what to do about this here. It's
                                 // all really a hack for now anyway.
-                                let ty = s_read!(func).get_type(&s_read!(sarzak), &s_read!(lu_dog));
+                                let ty =
+                                    s_read!(func).get_type(&s_read!(sarzak), &mut s_write!(lu_dog));
                                 let ty = PrintableValueType(true, ty, context.models());
                                 let ty = ty.to_string();
                                 TypeMismatchSnafu {
@@ -795,7 +934,9 @@ pub fn eval(
                         };
 
                         // let executor = context.executor();
-                        let task = ExecutorTask::new(Executor::global(), future);
+                        let task =
+                            ExecutorTask::new(Executor::at_index(context.executor_index()), future);
+                        // let task = ExecutorTask::new(Executor::global(), future);
 
                         // let task = baz.spawn(future);
 
@@ -963,91 +1104,114 @@ pub fn eval(
     call_result
 }
 
-// fn spawn(
-//     name: String,
-//     arg_values: &mut VecDeque<(RefType<Value>, std::ops::Range<usize>)>,
-//     expression: &RefType<Expression>,
-//     context: &mut Context,
-// ) -> Result<RefType<Value>> {
-//     let sarzak = context.sarzak_heel().clone();
-//     let lu_dog = context.lu_dog_heel().clone();
+fn spawn(
+    name: String,
+    arg_values: &mut VecDeque<(RefType<Value>, std::ops::Range<usize>)>,
+    expression: &RefType<Expression>,
+    context: &mut Context,
+) -> Result<RefType<Value>> {
+    let sarzak = context.sarzak_heel().clone();
+    let lu_dog = context.lu_dog_heel().clone();
 
-//     debug!("evaluating chacha::spawn");
-//     // 🚧 I should be checking that there is an argument before
-//     // I go unwrapping it.
-//     let (func, span) = arg_values.pop_front().unwrap();
-//     let func = s_read!(func);
-//     ensure!(
-//         matches!(&*func, Value::Lambda(_)) || matches!(&*func, Value::Function(_)),
-//         {
-//             // 🚧 I'm not really sure what to do about this here. It's
-//             // all really a hack for now anyway.
-//             let ty = func.get_type(&s_read!(sarzak), &s_read!(lu_dog));
-//             let ty = PrintableValueType(true, ty, context.models());
-//             let ty = ty.to_string();
-//             TypeMismatchSnafu {
-//                 expected: "<function>".to_string(),
-//                 found: ty,
-//                 span,
-//             }
-//         }
-//     );
+    debug!("evaluating chacha::spawn");
+    // 🚧 I should be checking that there is an argument before
+    // I go unwrapping it.
+    let (func, span) = arg_values.pop_front().unwrap();
+    let func = s_read!(func);
+    ensure!(
+        matches!(&*func, Value::Lambda(_)) || matches!(&*func, Value::Function(_)),
+        {
+            // 🚧 I'm not really sure what to do about this here. It's
+            // all really a hack for now anyway.
+            let ty = func.get_type(&s_read!(sarzak), &mut s_write!(lu_dog));
+            let ty = PrintableValueType(true, ty, context.models());
+            let ty = ty.to_string();
+            TypeMismatchSnafu {
+                expected: "<function>".to_string(),
+                found: ty,
+                span,
+            }
+        }
+    );
 
-//     let func = func.to_owned();
-//     let expression = expression.clone();
-//     let mut nested_context = context.clone();
-//     let future = async move {
-//         let mem = nested_context.memory().clone();
-//         let mut vm = VM::new(&mem);
-//         let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
-//         let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
-//         if let Value::Function(func) = &func {
-//             eval_function_call(
-//                 func.clone(),
-//                 &[],
-//                 None,
-//                 true,
-//                 span,
-//                 &mut nested_context,
-//                 &mut vm,
-//             )
-//         } else if let Value::Lambda(ƛ) = &func {
-//             eval_lambda_expression(ƛ.clone(), &[], true, span, &mut nested_context, &mut vm)
-//         } else {
-//             unreachable!()
-//         }
-//     };
+    let func = func.to_owned();
+    let expression = expression.clone();
+    let mut nested_context = context.clone();
+    nested_context.set_executor_index(Executor::new_worker());
+    let driver = nested_context.clone();
 
-//     // let task = fubar.executor().spawn(future);
-//     // context_copy.executor().park_value(new_ref!(Value, Value::Task(name, Some(task))));
+    let future = async move {
+        let mem = nested_context.memory().clone();
+        let mut vm = VM::new(&mem);
+        let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
+        let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
+        if let Value::Function(func) = &func {
+            eval_function_call(
+                func.clone(),
+                &[],
+                None,
+                true,
+                span,
+                &mut nested_context,
+                &mut vm,
+            )
+        } else if let Value::Lambda(ƛ) = &func {
+            eval_lambda_expression(ƛ.clone(), &[], true, span, &mut nested_context, &mut vm)
+        } else {
+            unreachable!()
+        }
+    };
 
-//     // let future =
-//     // async move { future::block_on(async { fubar.executor().resolve_task(task).await }) };
-//     // future::block_on(async { ctx.executor().run().await });
+    // let task = fubar.executor().spawn(future);
+    // context_copy.executor().park_value(new_ref!(Value, Value::Task(name, Some(task))));
 
-//     // let task = nested_context_clone.executor().spawn(future);
-//     let task = ExecutorTask::new(&Executor::global(), future);
+    // let future =
+    // async move { future::block_on(async { fubar.executor().resolve_task(task).await }) };
+    // future::block_on(async { ctx.executor().run().await });
 
-//     let value = new_ref!(Value, Value::Future(name.clone(), Some(task)));
-//     // let value = new_ref!(Value, Value::Task(ChaChaTask::new(name.clone(), task)));
+    // let task = nested_context_clone.executor().spawn(future);
 
-//     // Stash the future away so that it doesn't get dropped when it's done running.
-//     // nested_context_clone.executor().park_value(value.clone());
+    // dbg!(driver.executor_index());
 
-//     let bar = name.clone();
-//     let future = async move {
-//         dbg!("spawn begin", &bar);
-//         // 🚧 This is hinky. I sort of like the idea of storing the context in the
-//         // ChaChaTask and then running this in Poll.
-//         // nested_context_clone.executor().shutdown();
-//         let foo = nested_context_clone.executor().run().await;
-//         dbg!("spawn end", &foo, bar);
-//         foo
-//     };
+    let mut child_task = ExecutorTask::new(&Executor::at_index(driver.executor_index()), future);
 
-//     let task = context.executor().spawn(future);
-//     let v = new_ref!(Value, Value::Task(ChaChaTask::new(name, task)));
-//     // context.executor().park_value(v.clone());
+    // This is *key*.
+    // task.detach();
+    child_task.start();
 
-//     Ok(value)
-// }
+    // let child = new_ref!(Value, Value::Future(name.clone(), Some(task)));
+    // let value = new_ref!(Value, Value::Task(ChaChaTask::new(name.clone(), task)));
+
+    // Stash the future away so that it doesn't get dropped when it's done running.
+    // nested_context_clone.executor().park_value(value.clone());
+
+    let bar = name.clone();
+    let future = async move {
+        let idx = driver.executor_index();
+        dbg!("spawn begin", &bar, idx);
+        // let foo = Executor::remove_worker(idx).run().await;
+        let executor = Executor::at_index(idx);
+        executor.shutdown();
+        let foo = executor.run().await;
+        // let foo = executor.ex.run(child_task).await;
+        dbg!("spawn end", &foo, bar);
+        // Executor::remove_worker(idx);
+        foo
+    };
+
+    // 🚧 This puts all spawned tasks on the main executor. I need to ponder whether
+    // or not I want them to be nested.
+    // let task = Executor::global().spawn(future);
+    let task = ExecutorTask::new(&Executor::global(), future);
+    let value = new_ref!(
+        Value,
+        Value::Task {
+            parent: Some(task),
+            child: None
+        }
+    );
+
+    // context.executor().park_value(v.clone());
+
+    Ok(value)
+}

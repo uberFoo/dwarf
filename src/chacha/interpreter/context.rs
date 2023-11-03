@@ -68,8 +68,7 @@ pub struct Context {
     dwarf_home: PathBuf,
     dirty: Vec<Dirty>,
     #[cfg(feature = "async")]
-    executor_threads: Option<Vec<thread::JoinHandle<()>>>,
-    // executor: ChaChaExecutor<'a>,
+    executor_index: usize,
     source_file: String,
 }
 
@@ -92,7 +91,7 @@ impl Clone for Context {
             dwarf_home: self.dwarf_home.clone(),
             dirty: self.dirty.clone(),
             #[cfg(feature = "async")]
-            executor_threads: None,
+            executor_index: self.executor_index,
             source_file: self.source_file.clone(),
         }
     }
@@ -148,7 +147,6 @@ impl Context {
         dwarf_home: PathBuf,
         dirty: Vec<Dirty>,
         source_file: String,
-        executor_threads: Option<Vec<thread::JoinHandle<()>>>,
     ) -> Self {
         Self {
             prompt,
@@ -167,7 +165,7 @@ impl Context {
             dirty,
             source_file,
             #[cfg(feature = "async")]
-            executor_threads,
+            executor_index: 0,
         }
     }
 
@@ -176,21 +174,14 @@ impl Context {
     }
 
     #[cfg(feature = "async")]
-    pub fn take_executor_threads(&mut self) -> Option<Vec<thread::JoinHandle<()>>> {
-        self.executor_threads.take()
+    pub fn executor_index(&self) -> usize {
+        self.executor_index
     }
 
-    // #[cfg(feature = "async")]
-    // pub fn executor_mut(&mut self) -> &mut ChaChaExecutor<'a> {
-    //     &mut self.executor
-    // }
-
-    // #[cfg(feature = "async")]
-    // pub fn hyper(&self) -> Self {
-    //     let mut hyper = self.clone();
-    //     hyper.executor = ChaChaExecutor::new();
-    //     hyper
-    // }
+    #[cfg(feature = "async")]
+    pub fn set_executor_index(&mut self, index: usize) {
+        self.executor_index = index;
+    }
 
     pub fn dirty(&self) -> Vec<Dirty> {
         self.dirty.clone()

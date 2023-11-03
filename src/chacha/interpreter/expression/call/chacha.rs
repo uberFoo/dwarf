@@ -123,7 +123,9 @@ pub(crate) fn http_get(
 
         Ok(new_ref!(Value, Value::String(body)))
     });
-    let task = ChaChaTask::new(&Executor::global(), future);
+    let task = ChaChaTask::new(Executor::at_index(context.executor_index()), future);
+
+    // let task = ChaChaTask::new(&Executor::global(), future);
     // let task = context.executor().spawn(future);
 
     let future = new_ref!(Value, Value::Future(task_name, Some(task)));

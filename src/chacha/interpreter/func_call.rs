@@ -91,7 +91,7 @@ pub fn eval_function_call<'a>(
                 )
             };
 
-            let task = ChaChaTask::new(Executor::global(), future);
+            let task = ChaChaTask::new(Executor::at_index(context.executor_index()), future);
 
             // let task = context.executor().spawn(future);
 
@@ -403,7 +403,7 @@ fn eval_built_in_function_call(
                 let x_value = &s_read!(expr).r11_x_value(&s_read!(lu_dog))[0];
                 let span = &s_read!(x_value).r63_span(&s_read!(lu_dog))[0];
 
-                let arg_ty = s_read!(value).get_type(&s_read!(sarzak), &s_read!(lu_dog));
+                let arg_ty = s_read!(value).get_type(&s_read!(sarzak), &mut s_write!(lu_dog));
                 typecheck(&param_ty, &arg_ty, span, location!(), context)?;
             }
 

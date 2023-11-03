@@ -31,6 +31,7 @@ pub type DwarfFloat = f64;
 mod keywords {
     pub(crate) const ADD: &str = "add";
     pub(crate) const ARGS: &str = "args";
+    pub(crate) const ASLEEP: &str = "asleep";
     pub(crate) const ASSERT: &str = "assert";
     pub(crate) const ASSERT_EQ: &str = "assert_eq";
     pub(crate) const CHACHA: &str = "chacha";
@@ -44,6 +45,7 @@ mod keywords {
     pub(crate) const JOIN: &str = "join";
     pub(crate) const LEN: &str = "len";
     pub(crate) const FORMAT: &str = "format";
+    pub(crate) const MAP: &str = "map";
     pub(crate) const NEW: &str = "new";
     pub(crate) const NORM_SQUARED: &str = "norm_squared";
     pub(crate) const ONE_SHOT: &str = "one_shot";
@@ -52,10 +54,12 @@ mod keywords {
     pub(crate) const SLEEP: &str = "sleep";
     pub(crate) const SPAWN: &str = "spawn";
     pub(crate) const SPAWN_NAMED: &str = "spawn_named";
+    pub(crate) const SUM: &str = "sum";
     pub(crate) const SQUARE: &str = "square";
     pub(crate) const TIME: &str = "time";
     pub(crate) const TIMER: &str = "timer";
     pub(crate) const TYPEOF: &str = "typeof";
+    // 🚧 We have a token already...
     pub(crate) const UUID_TYPE: &str = "Uuid";
 }
 

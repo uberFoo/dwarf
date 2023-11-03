@@ -1904,11 +1904,11 @@ impl DwarfParser {
                 } else if let Some(expression) = self.parse_struct_expression(&lhs, power)? {
                     debug!("struct expression", expression);
                     Some(expression)
-                } else if let Some(expression) = self.parse_function_call(&lhs, power)? {
-                    debug!("function call", expression);
-                    Some(expression)
                 } else if let Some(expression) = self.parse_range(&lhs, power)? {
                     debug!("range", expression);
+                    Some(expression)
+                } else if let Some(expression) = self.parse_function_call(&lhs, power)? {
+                    debug!("function call", expression);
                     Some(expression)
                 } else if let Some(expression) = self.parse_method_call(&lhs, power)? {
                     debug!("method call", expression);

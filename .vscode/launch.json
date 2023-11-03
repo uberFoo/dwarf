@@ -7,18 +7,20 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug unit tests in library 'chacha'",
+            "name": "Debug unit tests",
             "cargo": {
                 "args": [
                     "test",
-                    "--no-run",
-                    "--lib",
-                    "--package=chacha"
-                ],
-                "filter": {
-                    "name": "chacha",
-                    "kind": "lib"
-                }
+                    "--features=\"multi-vec, repl, async\"",
+                    "--no-default-features",
+                    // "--no-run",
+                    // "--lib",
+                    // "--package=dwarf"
+                ]
+                //     "filter": {
+                //         "name": "chacha",
+                //         "kind": "lib"
+                //     }
             },
             "args": [],
             "cwd": "${workspaceFolder}"
@@ -95,7 +97,7 @@
             ],
             "cwd": "${workspaceFolder}",
             "env": {
-                "RUST_LOG": "async=debug,chacha=debug,exec=debug"
+                "RUST_LOG": "async=debug"
             },
             "preRunCommands": [
                 "script lldb.debugger.HandleCommand('settings set target.source-map /rustc/{} \"{}/lib/rustlib/src/rust\"'.format(os.popen('rustc --version --verbose').read().split('commit-hash: ')[1].split('\\n')[0].strip(), os.popen('rustc --print sysroot').readline().strip()))"

@@ -273,7 +273,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             let value = std::sync::Arc::into_raw(value);
                             let value = std::ptr::read(value);
                             let value = value.into_inner().unwrap();
+                            dbg!(&value);
                             let value = future::block_on(value);
+                            dbg!("done", &value);
 
                             let value = std::sync::Arc::into_raw(value);
                             let value = std::ptr::read(value);
@@ -350,8 +352,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         #[cfg(feature = "async")]
         {
-            shutdown_interpreter(ctx);
-            // tjh.join().unwrap();
+            shutdown_interpreter();
         }
     } else if args.dap.is_some() && args.dap.unwrap() {
         let listener = TcpListener::bind("127.0.0.1:4711").unwrap();
