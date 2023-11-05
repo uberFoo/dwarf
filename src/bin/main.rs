@@ -234,7 +234,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         };
 
-        let mut ctx = initialize_interpreter(0, dwarf_home, ctx, sarzak)?;
+        let mut ctx = initialize_interpreter(threads, dwarf_home, ctx, sarzak)?;
         ctx.add_args(dwarf_args);
 
         // #[cfg(feature = "async")]
