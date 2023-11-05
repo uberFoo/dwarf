@@ -203,6 +203,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "async-compat"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f68a707c1feb095d8c07f8a65b9f506b117d30af431cab89374357de7c11461b"
+dependencies = [
+ "futures-core",
+ "futures-io",
+ "once_cell",
+ "pin-project-lite",
+ "tokio",
+]
+
+[[package]]
 name = "async-executor"
 version = "1.5.3"
 dependencies = [
@@ -210,7 +223,7 @@ dependencies = [
  "async-task",
  "concurrent-queue",
  "fastrand 2.0.1",
- "futures-lite",
+ "futures-lite 1.13.0",
  "slab",
 ]
 
@@ -224,7 +237,7 @@ dependencies = [
  "async-task",
  "concurrent-queue",
  "fastrand 2.0.1",
- "futures-lite",
+ "futures-lite 1.13.0",
  "slab",
 ]
 
@@ -237,7 +250,7 @@ dependencies = [
  "async-lock",
  "autocfg",
  "blocking",
- "futures-lite",
+ "futures-lite 1.13.0",
 ]
 
 [[package]]
@@ -248,10 +261,10 @@ checksum = "f1b6f5d7df27bd294849f8eec66ecfc63d11814df7a4f5d74168a2394467b776"
 dependencies = [
  "async-channel",
  "async-executor 1.6.0",
- "async-io",
+ "async-io 1.13.0",
  "async-lock",
  "blocking",
- "futures-lite",
+ "futures-lite 1.13.0",
  "once_cell",
 ]
 
@@ -265,14 +278,34 @@ dependencies = [
  "autocfg",
  "cfg-if",
  "concurrent-queue",
- "futures-lite",
+ "futures-lite 1.13.0",
  "log",
  "parking",
- "polling",
+ "polling 2.8.0",
  "rustix 0.37.26",
  "slab",
  "socket2 0.4.10",
  "waker-fn",
+]
+
+[[package]]
+name = "async-io"
+version = "2.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "10da8f3146014722c89e7859e1d7bb97873125d7346d10ca642ffab794355828"
+dependencies = [
+ "async-lock",
+ "cfg-if",
+ "concurrent-queue",
+ "futures-io",
+ "futures-lite 1.13.0",
+ "parking",
+ "polling 3.3.0",
+ "rustix 0.38.20",
+ "slab",
+ "tracing",
+ "waker-fn",
+ "windows-sys",
 ]
 
 [[package]]
@@ -290,9 +323,9 @@ version = "1.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0434b1ed18ce1cf5769b8ac540e33f01fa9471058b5e89da9e06f3c882a8c12f"
 dependencies = [
- "async-io",
+ "async-io 1.13.0",
  "blocking",
- "futures-lite",
+ "futures-lite 1.13.0",
 ]
 
 [[package]]
@@ -301,13 +334,13 @@ version = "1.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ea6438ba0a08d81529c69b36700fa2f95837bfe3e776ab39cde9c14d9149da88"
 dependencies = [
- "async-io",
+ "async-io 1.13.0",
  "async-lock",
  "async-signal",
  "blocking",
  "cfg-if",
  "event-listener 3.0.0",
- "futures-lite",
+ "futures-lite 1.13.0",
  "rustix 0.38.20",
  "windows-sys",
 ]
@@ -318,7 +351,7 @@ version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d2a5415b7abcdc9cd7d63d6badba5288b2ca017e3fbd4173b8f405449f1a2399"
 dependencies = [
- "async-io",
+ "async-io 1.13.0",
  "async-lock",
  "atomic-waker",
  "cfg-if",
@@ -338,13 +371,13 @@ checksum = "62565bb4402e926b29953c785397c6dc0391b7b446e45008b0049eb43cec6f5d"
 dependencies = [
  "async-channel",
  "async-global-executor",
- "async-io",
+ "async-io 1.13.0",
  "async-lock",
  "crossbeam-utils",
  "futures-channel",
  "futures-core",
  "futures-io",
- "futures-lite",
+ "futures-lite 1.13.0",
  "gloo-timers",
  "kv-log-macro",
  "log",
@@ -438,7 +471,7 @@ dependencies = [
  "async-task",
  "fastrand 2.0.1",
  "futures-io",
- "futures-lite",
+ "futures-lite 1.13.0",
  "piper",
  "tracing",
 ]
@@ -797,9 +830,9 @@ dependencies = [
  "ansi-to-tui",
  "ansi_term",
  "ariadne",
+ "async-compat",
  "async-executor 1.5.3",
- "async-io",
- "async-task",
+ "async-io 2.1.0",
  "backtrace",
  "bincode",
  "cfg-if",
@@ -812,12 +845,14 @@ dependencies = [
  "crossterm",
  "dap",
  "env_logger 0.10.0",
- "futures-lite",
+ "futures-lite 2.0.0",
  "heck",
  "lazy_static",
  "log",
  "num-format",
+ "once_cell",
  "parking_lot",
+ "pin-project-lite",
  "pretty_env_logger 0.5.0",
  "rayon",
  "reqwest",
@@ -826,6 +861,7 @@ dependencies = [
  "sarzak",
  "serde",
  "serde_json",
+ "slab",
  "smol",
  "snafu",
  "syntect",
@@ -1052,6 +1088,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "49a9d51ce47660b1e808d3c990b4709f2f415d928835a17dfd16991515c46bce"
 dependencies = [
  "fastrand 1.9.0",
+ "futures-core",
+ "futures-io",
+ "memchr",
+ "parking",
+ "pin-project-lite",
+ "waker-fn",
+]
+
+[[package]]
+name = "futures-lite"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9c1155db57329dca6d018b61e76b1488ce9a2e5e44028cac420a5898f4fcef63"
+dependencies = [
+ "fastrand 2.0.1",
  "futures-core",
  "futures-io",
  "memchr",
@@ -1902,6 +1953,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "polling"
+version = "3.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e53b6af1f60f36f8c2ac2aad5459d75a5a9b4be1e8cdd40264f315d78193e531"
+dependencies = [
+ "cfg-if",
+ "concurrent-queue",
+ "pin-project-lite",
+ "rustix 0.38.20",
+ "tracing",
+ "windows-sys",
+]
+
+[[package]]
 name = "powerfmt"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2592,12 +2657,12 @@ dependencies = [
  "async-channel",
  "async-executor 1.6.0",
  "async-fs",
- "async-io",
+ "async-io 1.13.0",
  "async-lock",
  "async-net",
  "async-process",
  "blocking",
- "futures-lite",
+ "futures-lite 1.13.0",
 ]
 
 [[package]]

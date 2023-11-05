@@ -9,12 +9,10 @@ use std::{
 use std::thread;
 
 #[cfg(feature = "async")]
-use dwarf::chacha::r#async::ChaChaExecutor;
+use dwarf::chacha::interpreter::Executor;
 
 use clap::{ArgAction, Args, Parser};
 use dap::{prelude::BasicClient, server::Server};
-#[cfg(feature = "async")]
-use once_cell::sync::OnceCell;
 
 #[cfg(feature = "async")]
 use smol::future;
@@ -122,6 +120,11 @@ struct Arguments {
     ///
     #[arg(long, action=ArgAction::SetTrue)]
     ast: Option<bool>,
+    /// Executor Thread Count
+    ///
+    /// The number of threads to use for the executor. Defaults to the number of cpus.
+    #[arg(long)]
+    threads: Option<usize>,
 }
 
 #[derive(Clone, Debug, Args)]
@@ -145,6 +148,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let bless = args.bless.is_some() && args.bless.unwrap();
     let is_uber = args.uber.is_some() && args.uber.unwrap();
     let print_ast = args.ast.is_some() && args.ast.unwrap();
+    let threads = args.threads.unwrap_or_else(num_cpus::get);
 
     // Figure out what we're dealing with, input-wise.
     let input = if let Some(ref source) = args.source {
@@ -230,7 +234,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         };
 
-        let mut ctx = initialize_interpreter(2, dwarf_home, ctx, sarzak)?;
+        let mut ctx = initialize_interpreter(0, dwarf_home, ctx, sarzak)?;
         ctx.add_args(dwarf_args);
 
         // #[cfg(feature = "async")]
@@ -273,9 +277,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             let value = std::sync::Arc::into_raw(value);
                             let value = std::ptr::read(value);
                             let value = value.into_inner().unwrap();
-                            dbg!(&value);
-                            let value = future::block_on(value);
+
+                            let future = async {
+                                let executor = Executor::global();
+                                executor.shutdown();
+                                let value = value.await;
+                                value
+                            };
+
+                            let value = future::block_on(future);
                             dbg!("done", &value);
+
+                            // dbg!(&value);
+                            // let value = future::block_on(value);
+                            // dbg!("done", &value);
 
                             let value = std::sync::Arc::into_raw(value);
                             let value = std::ptr::read(value);

@@ -47,8 +47,8 @@ impl<'a> ChaChaTask<'a> {
         log::trace!(target: "async", "Thread: {:?}", thread::current().id());
 
         // spawn a task that spawns a task
-        // let inner = executor.clone();
-        let inner = executor.ex.clone();
+        let inner = executor.clone();
+        // let inner = executor.ex.clone();
         let future = async move {
             log::debug!(target: "async", "ChaChaTask::new: spawn inner task: {id}");
             log::trace!(target: "async", "Executor: {:?}", inner);
@@ -93,6 +93,7 @@ impl<'a> Future for ChaChaTask<'a> {
     type Output = Result<RefType<Value>, ChaChaError>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        log::debug!(target: "async", "ChaCha::poll {}\n{:?}", self.id, thread::current().id());
         // let mut this = self.project();
         let this = std::pin::Pin::into_inner(self);
 
@@ -125,6 +126,7 @@ impl<'a> Future for ChaChaTask<'a> {
 pub struct ChaChaExecutor<'a> {
     id: usize,
     pub ex: Arc<Executor<'a>>,
+    shutdown: bool,
 }
 
 impl<'a> Drop for ChaChaExecutor<'a> {
@@ -140,6 +142,7 @@ impl<'a> ChaChaExecutor<'a> {
         ChaChaExecutor {
             id,
             ex: Arc::new(Executor::new()),
+            shutdown: false,
         }
     }
 
@@ -170,7 +173,8 @@ impl<'a> ChaChaExecutor<'a> {
         task
     }
 
-    pub fn shutdown(&self) {
+    pub fn shutdown(&mut self) {
+        self.shutdown = true;
         self.ex.shutdown();
         log::debug!(target: "async", "shutdown: {:?}", self);
     }
@@ -185,8 +189,9 @@ impl<'a> ChaChaExecutor<'a> {
         // dbg!("initializing", thread::current().id());
         while !self.ex.initialized() && self.ex.running() {}
 
-        while self.ex.running() {
-            // log::debug!(target: "async", "ChaChaExecutor::run loop: {:?}, thread: {:?}", self, thread::current().id());
+        // while self.ex.running() {
+        while !self.shutdown {
+            log::debug!(target: "async", "ChaChaExecutor::run loop: {:?}, thread: {:?}", self, thread::current().id());
             // dbg!("executing", thread::current().id());
             self.ex.tick().await;
             // log::debug!(target: "async", "ChaChaExecutor::run loop: {:?}, thread: {:?}", self, thread::current().id());

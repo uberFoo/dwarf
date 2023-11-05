@@ -111,10 +111,7 @@ pub fn eval(
                 Value::Range(_) => Ok(value.clone()),
                 Value::Struct(_) => Ok(value.clone()),
                 Value::Store(_store, _plugin) => Ok(value.clone()),
-                Value::Task {
-                    parent: _,
-                    child: _,
-                } => Ok(value.clone()),
+                Value::Task { parent: _ } => Ok(value.clone()),
                 Value::Vector(_) => Ok(value.clone()),
                 misc_value => {
                     let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
@@ -558,10 +555,7 @@ pub fn eval(
                             let mut value = s_write!(value);
                             match &mut *value {
                                 Value::Integer(i) => sum += *i,
-                                Value::Task { parent, child } => {
-                                    if let Some(task) = child.take() {
-                                        let _ = future::block_on(task);
-                                    }
+                                Value::Task { parent } => {
                                     let t = parent.take().unwrap();
                                     // 🚧 async fix unwrap
                                     let value = future::block_on(t).unwrap();
@@ -1173,7 +1167,7 @@ fn spawn(
 
     // dbg!(driver.executor_index());
 
-    let mut child_task = ExecutorTask::new(&Executor::at_index(driver.executor_index()), future);
+    let child_task = ExecutorTask::new(Executor::at_index(driver.executor_index()), future);
 
     // This is *key*.
     // task.detach();
@@ -1192,8 +1186,8 @@ fn spawn(
         // let foo = Executor::remove_worker(idx).run().await;
         let executor = Executor::at_index(idx);
         executor.shutdown();
-        let foo = executor.run().await;
-        // let foo = executor.ex.run(child_task).await;
+        // let foo = executor.run().await;
+        let foo = executor.ex.run(child_task).await;
         dbg!("spawn end", &foo, bar);
         // Executor::remove_worker(idx);
         foo
@@ -1202,12 +1196,12 @@ fn spawn(
     // 🚧 This puts all spawned tasks on the main executor. I need to ponder whether
     // or not I want them to be nested.
     // let task = Executor::global().spawn(future);
-    let task = ExecutorTask::new(&Executor::global(), future);
+    let task = ExecutorTask::new(Executor::global(), future);
     let value = new_ref!(
         Value,
         Value::Task {
             parent: Some(task),
-            child: None
+            // child: None
         }
     );
 

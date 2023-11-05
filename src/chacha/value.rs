@@ -268,7 +268,6 @@ pub enum Value {
     #[cfg(feature = "async")]
     Task {
         parent: Option<crate::chacha::r#async::ChaChaTask<'static>>,
-        child: Option<crate::chacha::r#async::ChaChaTask<'static>>,
     },
     Thonk(&'static str, usize),
     TupleEnum(RefType<TupleEnum>),
@@ -299,11 +298,7 @@ impl Future for Value {
                     std::task::Poll::Ready(new_ref!(Value, Value::Empty))
                 }
             }
-            Self::Task { parent, child } => {
-                if let Some(task) = child.take() {
-                    let _ = future::block_on(task);
-                }
-
+            Self::Task { parent } => {
                 if let Some(task) = parent.take() {
                     match future::block_on(task) {
                         Ok(value) => std::task::Poll::Ready(value),
@@ -372,7 +367,7 @@ impl std::fmt::Debug for Value {
             Self::Struct(ty) => write!(f, "{:?}", s_read!(ty)),
             Self::Table(table) => write!(f, "{table:?}"),
             #[cfg(feature = "async")]
-            Self::Task { parent, child } => write!(f, "Parent: {parent:?}\nChild: {child:?}"),
+            Self::Task { parent } => write!(f, "Task: {parent:?}"),
             Self::Thonk(name, number) => write!(f, "{name:?} [{number:?}]"),
             Self::TupleEnum(te) => write!(f, "{:?}", s_read!(te)),
             Self::Unknown => write!(f, "<unknown>"),
@@ -417,13 +412,7 @@ impl Clone for Value {
             Self::Table(table) => Self::Table(table.clone()),
             #[cfg(feature = "async")]
             // Note that cloned values do not inherit the task
-            Self::Task {
-                parent: _,
-                child: _,
-            } => Self::Task {
-                parent: None,
-                child: None,
-            },
+            Self::Task { parent: _ } => Self::Task { parent: None },
             Self::Thonk(name, number) => Self::Thonk(*name, *number),
             Self::TupleEnum(te) => Self::TupleEnum(te.clone()),
             Self::Unknown => Self::Unknown,
@@ -606,10 +595,7 @@ impl Value {
                 unreachable!()
             }
             Value::Struct(ref ut) => s_read!(ut).get_type().clone(),
-            Value::Task {
-                parent: _,
-                child: _,
-            } => {
+            Value::Task { parent: _ } => {
                 for vt in lu_dog.iter_value_type() {
                     if let ValueTypeEnum::Task(_) = s_read!(vt).subtype {
                         return vt.clone();
@@ -682,7 +668,7 @@ impl fmt::Display for Value {
             // Self::String(str_) => write!(f, "\"{}\"", str_),
             Self::Table(table) => write!(f, "{table:?}"),
             #[cfg(feature = "async")]
-            Self::Task { parent, child } => write!(f, "Parent: {parent:?}\nChild: {child:?}"),
+            Self::Task { parent } => write!(f, "Task: {parent:?}"),
             Self::Thonk(name, number) => write!(f, "{name} [{number}]"),
             Self::TupleEnum(te) => write!(f, "{}", s_read!(te)),
             Self::Unknown => write!(f, "<unknown>"),

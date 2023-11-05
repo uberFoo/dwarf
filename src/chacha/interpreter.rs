@@ -136,7 +136,7 @@ lazy_static! {
 
 #[cfg(feature = "async")]
 #[derive(Debug)]
-pub(super) struct Executor {
+pub struct Executor {
     root: usize,
     workers: Slab<ChaChaExecutor<'static>>,
     threads: Vec<thread::JoinHandle<()>>,
@@ -144,32 +144,32 @@ pub(super) struct Executor {
 
 #[cfg(feature = "async")]
 impl Executor {
-    pub(super) fn at_index(index: usize) -> &'static ChaChaExecutor<'static> {
+    pub fn at_index(index: usize) -> &'static mut ChaChaExecutor<'static> {
         log::debug!(target: "async", "Executor::at_index: {index}");
         unsafe {
             let exec = EXECUTOR.get_mut().unwrap();
             log::trace!(target: "async", "Executor::at_index: {exec:?}");
-            let executor = exec.workers.get(index).unwrap();
+            let executor = exec.workers.get_mut(index).unwrap();
             log::trace!(target: "async", "Executor::at_index: {executor:?}");
             executor
         }
     }
 
-    pub(super) fn global() -> &'static ChaChaExecutor<'static> {
+    pub fn global() -> &'static mut ChaChaExecutor<'static> {
         unsafe {
             let exec = EXECUTOR.get_mut().unwrap();
-            exec.workers.get(exec.root).unwrap()
+            exec.workers.get_mut(exec.root).unwrap()
         }
     }
 
-    pub(super) fn new_worker() -> usize {
+    pub fn new_worker() -> usize {
         unsafe {
             let exec = EXECUTOR.get_mut().unwrap();
             exec.workers.insert(ChaChaExecutor::new())
         }
     }
 
-    pub(super) fn new(thread_count: usize) {
+    pub fn new(thread_count: usize) {
         let mut workers = Slab::with_capacity(thread_count);
         let executor = ChaChaExecutor::new();
         let root = workers.insert(executor.clone());
@@ -195,7 +195,7 @@ impl Executor {
         }
     }
 
-    pub(super) fn remove_worker(index: usize) -> ChaChaExecutor<'static> {
+    pub fn remove_worker(index: usize) -> ChaChaExecutor<'static> {
         log::debug!(target: "async", "Executor::remove_worker: {index}");
         unsafe {
             let exec = EXECUTOR.get_mut().unwrap();
@@ -204,10 +204,10 @@ impl Executor {
         }
     }
 
-    pub(super) fn shutdown() {
+    pub fn shutdown() {
         unsafe {
             if let Some(executor) = EXECUTOR.take() {
-                for (_, worker) in executor.workers {
+                for (_, mut worker) in executor.workers {
                     worker.shutdown();
                 }
                 for handle in executor.threads {
@@ -601,10 +601,7 @@ fn eval_expression(
                     task.start();
                     future::block_on(async { task.await })
                 }
-                Value::Task {
-                    parent: _,
-                    child: _,
-                } => Ok(value.clone()),
+                Value::Task { parent: _ } => Ok(value.clone()),
                 wtf => {
                     dbg!(wtf);
                     unreachable!()
