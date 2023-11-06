@@ -111,7 +111,10 @@ pub fn eval(
                 Value::Range(_) => Ok(value.clone()),
                 Value::Struct(_) => Ok(value.clone()),
                 Value::Store(_store, _plugin) => Ok(value.clone()),
-                Value::Task { parent: _ } => Ok(value.clone()),
+                Value::Task {
+                    executor_id: _,
+                    parent: _,
+                } => Ok(value.clone()),
                 Value::Vector(_) => Ok(value.clone()),
                 misc_value => {
                     let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
@@ -555,10 +558,19 @@ pub fn eval(
                             let mut value = s_write!(value);
                             match &mut *value {
                                 Value::Integer(i) => sum += *i,
-                                Value::Task { parent } => {
+                                Value::Task {
+                                    executor_id,
+                                    parent,
+                                } => {
+                                    // 🚧 Clean this mess up
+                                    let e = executor_id.take().unwrap();
+                                    let executor = Executor::at_index(e);
                                     let t = parent.take().unwrap();
                                     // 🚧 async fix unwrap
-                                    let value = future::block_on(t).unwrap();
+                                    // let value = future::block_on(t).unwrap();
+                                    let value = future::block_on(executor.ex.run(t))?;
+                                    Executor::remove_worker(e);
+
                                     let v = s_read!(value);
                                     match &*v {
                                         Value::Integer(i) => sum += i,
@@ -1131,8 +1143,9 @@ fn spawn(
     let func = func.to_owned();
     let expression = expression.clone();
     let mut nested_context = context.clone();
-    nested_context.set_executor_index(Executor::new_worker());
-    let driver = nested_context.clone();
+
+    let executor_id = Executor::new_worker();
+    nested_context.set_executor_index(executor_id);
 
     let future = async move {
         let mem = nested_context.memory().clone();
@@ -1167,7 +1180,7 @@ fn spawn(
 
     // dbg!(driver.executor_index());
 
-    let child_task = ExecutorTask::new(Executor::at_index(driver.executor_index()), future);
+    let child_task = ExecutorTask::new(Executor::at_index(executor_id), future);
 
     // This is *key*.
     // task.detach();
@@ -1181,14 +1194,14 @@ fn spawn(
 
     let bar = name.clone();
     let future = async move {
-        let idx = driver.executor_index();
-        dbg!("spawn begin", &bar, idx);
+        let idx = executor_id;
+        // dbg!("spawn begin", &bar, idx);
         // let foo = Executor::remove_worker(idx).run().await;
         let executor = Executor::at_index(idx);
-        executor.shutdown();
+        // executor.shutdown();
         // let foo = executor.run().await;
         let foo = executor.ex.run(child_task).await;
-        dbg!("spawn end", &foo, bar);
+        // dbg!("spawn end", &foo, idx);
         // Executor::remove_worker(idx);
         foo
     };
@@ -1200,6 +1213,7 @@ fn spawn(
     let value = new_ref!(
         Value,
         Value::Task {
+            executor_id: Some(executor_id),
             parent: Some(task),
             // child: None
         }

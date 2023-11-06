@@ -178,11 +178,12 @@ impl Executor {
         for _ in 0..thread_count {
             let executor = executor.clone();
             let handle = thread::spawn(move || {
+                log::debug!(target: "async", "Executor::new: thread spawned: {:?}", thread::current().id());
                 let _ = future::block_on(async { executor.run().await });
+                log::debug!(target: "async", "Executor::new thread exiting: {:?}", thread::current().id());
             });
             threads.push(handle);
         }
-        dbg!("new", thread::current().id());
 
         unsafe {
             EXECUTOR
@@ -200,15 +201,23 @@ impl Executor {
         unsafe {
             let exec = EXECUTOR.get_mut().unwrap();
             exec.workers[index].shutdown();
-            exec.workers.remove(index)
+            let e = exec.workers.remove(index);
+            e
         }
     }
 
     pub fn shutdown() {
+        log::debug!(target: "async", "Executor::shutdown");
         unsafe {
             if let Some(executor) = EXECUTOR.take() {
                 for (_, mut worker) in executor.workers {
                     worker.shutdown();
+
+                    // for _ in 0..executor.threads.len() / 4 {
+                    //     let future = async { Ok(new_ref!(Value, Value::Empty)) };
+                    //     let task = worker.spawn(future);
+                    //     task.detach();
+                    // }
                 }
                 for handle in executor.threads {
                     handle.join().unwrap();
@@ -222,7 +231,6 @@ impl Executor {
 static mut EXECUTOR: OnceCell<Executor> = OnceCell::new();
 
 pub fn shutdown_interpreter() {
-    dbg!("shutdown", thread::current().id());
     let mut running = RUNNING.lock();
     *running = false;
     CVAR.notify_all();
@@ -601,7 +609,15 @@ fn eval_expression(
                     task.start();
                     future::block_on(async { task.await })
                 }
-                Value::Task { parent: _ } => Ok(value.clone()),
+                Value::Task {
+                    executor_id: _,
+                    parent,
+                } => {
+                    if let Some(parent) = parent {
+                        parent.start();
+                    }
+                    Ok(value.clone())
+                }
                 wtf => {
                     dbg!(wtf);
                     unreachable!()

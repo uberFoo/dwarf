@@ -67,8 +67,8 @@ no_deadlocks = { git = "https://github.com/uberFoo/no-deadlocks", optional = tru
 num-format = "0.4.4"
 once_cell = { version = "1.18.0", optional = true }
 parking_lot = { version = "0.12.1", features = [
+    "send_guard",
     "serde",
-    "deadlock_detection",
     "hardware-lock-elision",
 ] }
 pretty_env_logger = "0.5.0"
@@ -102,6 +102,7 @@ uuid = { version = "1.3.1", features = ["v4", "serde"] }
 slab = "0.4.9"
 pin-project-lite = "0.2.13"
 num_cpus = "1.16.0"
+async-condvar-fair = { version = "1.0.0", features = ["parking_lot_0_12"] }
 
 [patch."https://github.com/uberFoo/sarzak"]
 sarzak = { path = "../sarzak" }

@@ -249,7 +249,10 @@ pub enum Value {
     /// excessive, and yet I know I've looked into it before.
     Function(RefType<Function>),
     #[cfg(feature = "async")]
-    Future(String, Option<crate::chacha::r#async::ChaChaTask<'static>>),
+    Future(
+        String,
+        Option<crate::chacha::r#async::ChaChaTask<'static, Result<RefType<Value>, ChaChaError>>>,
+    ),
     Integer(DwarfInteger),
     Lambda(RefType<Lambda>),
     ParsedDwarf(Context),
@@ -267,7 +270,10 @@ pub enum Value {
     Table(HashMap<String, RefType<Self>>),
     #[cfg(feature = "async")]
     Task {
-        parent: Option<crate::chacha::r#async::ChaChaTask<'static>>,
+        executor_id: Option<usize>,
+        parent: Option<
+            crate::chacha::r#async::ChaChaTask<'static, Result<RefType<Value>, ChaChaError>>,
+        >,
     },
     Thonk(&'static str, usize),
     TupleEnum(RefType<TupleEnum>),
@@ -288,6 +294,7 @@ impl Future for Value {
         match this {
             Self::Future(_, task) => {
                 if let Some(task) = task.take() {
+                    task.start();
                     match future::block_on(task) {
                         Ok(value) => std::task::Poll::Ready(value),
                         Err(e) => {
@@ -298,7 +305,10 @@ impl Future for Value {
                     std::task::Poll::Ready(new_ref!(Value, Value::Empty))
                 }
             }
-            Self::Task { parent } => {
+            Self::Task {
+                executor_id: _,
+                parent,
+            } => {
                 if let Some(task) = parent.take() {
                     match future::block_on(task) {
                         Ok(value) => std::task::Poll::Ready(value),
@@ -367,7 +377,10 @@ impl std::fmt::Debug for Value {
             Self::Struct(ty) => write!(f, "{:?}", s_read!(ty)),
             Self::Table(table) => write!(f, "{table:?}"),
             #[cfg(feature = "async")]
-            Self::Task { parent } => write!(f, "Task: {parent:?}"),
+            Self::Task {
+                executor_id,
+                parent,
+            } => write!(f, "Task: {parent:?} running on {executor_id:?}"),
             Self::Thonk(name, number) => write!(f, "{name:?} [{number:?}]"),
             Self::TupleEnum(te) => write!(f, "{:?}", s_read!(te)),
             Self::Unknown => write!(f, "<unknown>"),
@@ -412,7 +425,13 @@ impl Clone for Value {
             Self::Table(table) => Self::Table(table.clone()),
             #[cfg(feature = "async")]
             // Note that cloned values do not inherit the task
-            Self::Task { parent: _ } => Self::Task { parent: None },
+            Self::Task {
+                executor_id,
+                parent: _,
+            } => Self::Task {
+                executor_id: executor_id.clone(),
+                parent: None,
+            },
             Self::Thonk(name, number) => Self::Thonk(*name, *number),
             Self::TupleEnum(te) => Self::TupleEnum(te.clone()),
             Self::Unknown => Self::Unknown,
@@ -595,7 +614,10 @@ impl Value {
                 unreachable!()
             }
             Value::Struct(ref ut) => s_read!(ut).get_type().clone(),
-            Value::Task { parent: _ } => {
+            Value::Task {
+                executor_id: _,
+                parent: _,
+            } => {
                 for vt in lu_dog.iter_value_type() {
                     if let ValueTypeEnum::Task(_) = s_read!(vt).subtype {
                         return vt.clone();
@@ -668,7 +690,10 @@ impl fmt::Display for Value {
             // Self::String(str_) => write!(f, "\"{}\"", str_),
             Self::Table(table) => write!(f, "{table:?}"),
             #[cfg(feature = "async")]
-            Self::Task { parent } => write!(f, "Task: {parent:?}"),
+            Self::Task {
+                executor_id,
+                parent,
+            } => write!(f, "Task: {parent:?} running on {executor_id:?}"),
             Self::Thonk(name, number) => write!(f, "{name} [{number}]"),
             Self::TupleEnum(te) => write!(f, "{}", s_read!(te)),
             Self::Unknown => write!(f, "<unknown>"),

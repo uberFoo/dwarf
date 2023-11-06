@@ -12,11 +12,15 @@ use std::{
     thread,
 };
 
+use async_condvar_fair::Condvar;
 use async_executor::{Executor, Task};
+// use async_lock::Mutex;
 use backtrace::Backtrace;
 use crossbeam::channel::{Receiver, Sender};
-use futures_lite::future;
+use futures_lite::{future, prelude::*};
+use parking_lot::Mutex;
 use pin_project_lite::pin_project;
+// use smol::lock::Mutex;
 
 use crate::{chacha::error::ChaChaError, new_ref, NewRef, RefType, Value};
 
@@ -25,9 +29,9 @@ static mut EXECUTOR_COUNT: AtomicUsize = AtomicUsize::new(0);
 
 // pin_project! {
 #[derive(Debug)]
-pub struct ChaChaTask<'a> {
+pub struct ChaChaTask<'a, T> {
     // #[pin]
-    inner: Option<Task<Result<RefType<Value>, ChaChaError>>>,
+    inner: Option<Task<T>>,
     // #[pin]
     executor: &'a ChaChaExecutor<'a>,
     started: AtomicBool,
@@ -36,11 +40,14 @@ pub struct ChaChaTask<'a> {
 }
 // }
 
-impl<'a> ChaChaTask<'a> {
+impl<'a, T> ChaChaTask<'a, T> {
     pub fn new(
         executor: &'a ChaChaExecutor<'a>,
-        future: impl Future<Output = Result<RefType<Value>, ChaChaError>> + Send + 'a,
-    ) -> ChaChaTask<'a> {
+        future: impl Future<Output = T> + Send + 'a,
+    ) -> ChaChaTask<'a, T>
+    where
+        T: Send + 'a,
+    {
         let id = unsafe { TASK_COUNT.fetch_add(1, Ordering::SeqCst) };
         log::debug!(target: "async", "ChaChaTask::new: {id}");
         log::trace!(target: "async", "Executor: {:?}", executor);
@@ -75,9 +82,7 @@ impl<'a> ChaChaTask<'a> {
             task.detach();
         }
     }
-}
 
-impl<'a> ChaChaTask<'a> {
     pub fn start(&self) {
         if !self.started.load(Ordering::SeqCst) {
             log::debug!(target: "async", "ChaChaTask::start: {}", self.id);
@@ -89,8 +94,11 @@ impl<'a> ChaChaTask<'a> {
     }
 }
 
-impl<'a> Future for ChaChaTask<'a> {
-    type Output = Result<RefType<Value>, ChaChaError>;
+impl<'a, T> Future for ChaChaTask<'a, T>
+where
+    T: std::fmt::Debug,
+{
+    type Output = T;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         log::debug!(target: "async", "ChaCha::poll {}\n{:?}", self.id, thread::current().id());
@@ -126,7 +134,8 @@ impl<'a> Future for ChaChaTask<'a> {
 pub struct ChaChaExecutor<'a> {
     id: usize,
     pub ex: Arc<Executor<'a>>,
-    shutdown: bool,
+    shutdown: Arc<Mutex<bool>>,
+    waiter: Arc<Condvar>,
 }
 
 impl<'a> Drop for ChaChaExecutor<'a> {
@@ -142,7 +151,8 @@ impl<'a> ChaChaExecutor<'a> {
         ChaChaExecutor {
             id,
             ex: Arc::new(Executor::new()),
-            shutdown: false,
+            shutdown: Arc::new(Mutex::new(false)),
+            waiter: Arc::new(Condvar::new()),
         }
     }
 
@@ -164,19 +174,21 @@ impl<'a> ChaChaExecutor<'a> {
     //     // task
     // }
 
-    pub(super) fn spawn(
-        &self,
-        future: impl Future<Output = Result<RefType<Value>, ChaChaError>> + Send + 'a,
-    ) -> Task<Result<RefType<Value>, ChaChaError>> {
+    pub(super) fn spawn<T>(&self, future: impl Future<Output = T> + Send + 'a) -> Task<T>
+    where
+        T: Send + 'a,
+    {
         let task = self.ex.spawn(future);
         log::debug!(target: "async", "spawn executor: {:?}\n\tspawn task: {:?}", self, task);
         task
     }
 
     pub fn shutdown(&mut self) {
-        self.shutdown = true;
+        let mut shutdown = self.shutdown.lock();
+        *shutdown = true;
+        self.waiter.notify_all();
         self.ex.shutdown();
-        log::debug!(target: "async", "shutdown: {:?}", self);
+        log::debug!(target: "async", "ChaChaExecutor: shutdown: {:?}", self);
     }
 
     pub fn finished(&self) -> bool {
@@ -190,12 +202,28 @@ impl<'a> ChaChaExecutor<'a> {
         while !self.ex.initialized() && self.ex.running() {}
 
         // while self.ex.running() {
-        while !self.shutdown {
-            log::debug!(target: "async", "ChaChaExecutor::run loop: {:?}, thread: {:?}", self, thread::current().id());
-            // dbg!("executing", thread::current().id());
-            self.ex.tick().await;
-            // log::debug!(target: "async", "ChaChaExecutor::run loop: {:?}, thread: {:?}", self, thread::current().id());
+        // while !self.shutdown && self.ex.running() {
+        //     log::debug!(target: "async", "ChaChaExecutor::run loop pre: {:?}, thread: {:?}", self, thread::current().id());
+        //     // dbg!("executing", thread::current().id());
+        //     self.ex.tick().await;
+        //     log::debug!(target: "async", "ChaChaExecutor::run loop post: {:?}, thread: {:?}", self, thread::current().id());
+        // }
+        let mut running = true;
+        while running {
+            let mut shutdown = self.shutdown.lock();
+            self.ex
+                .tick()
+                .or(async move {
+                    let shutdown = self.waiter.wait(shutdown).await;
+                    if *shutdown {
+                        running = false;
+                    }
+                })
+                .await;
         }
+
+        log::debug!(target: "async", "Escaped!");
+
         while !self.ex.is_empty() {
             // log::debug!(target: "async", "ChaChaExecutor::exiting: {:?}, thread: {:?}", self, thread::current().id());
             // dbg!("emptying", thread::current().id());
@@ -211,20 +239,19 @@ impl<'a> ChaChaExecutor<'a> {
         Ok(new_ref!(Value, Value::Empty))
     }
 
-    pub fn block_on(
-        &self,
-        task: Task<Result<RefType<Value>, ChaChaError>>,
-    ) -> Result<RefType<Value>, ChaChaError> {
+    pub fn block_on<T>(&self, task: Task<T>) -> T {
         log::debug!(target: "async", "block_on: {:?}", self);
         future::block_on(async { task.await })
     }
 
-    pub async fn resolve_task(
-        &self,
-        task: Task<Result<RefType<Value>, ChaChaError>>,
-    ) -> Result<RefType<Value>, ChaChaError> {
-        log::debug!(target: "async", "resolve_task: {:?}", self);
-        self.ex.run(task).await
+    pub async fn resolve_task<T>(&self, task: Task<T>) -> T
+    where
+        T: std::fmt::Debug,
+    {
+        log::debug!(target: "async", "ChaChaExecutor: resolve_task: {self:?}");
+        let result = self.ex.run(task).await;
+        log::debug!(target: "async", "ChaChaExecutor: resolve_task: {self:?}, RESOLVED: {result:?}");
+        result
     }
 
     pub fn tick(&self) {
