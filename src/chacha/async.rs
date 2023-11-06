@@ -14,17 +14,103 @@ use std::{
 };
 
 use async_condvar_fair::Condvar;
-use async_executor::{Executor, Task};
-// use async_lock::Mutex;
-use backtrace::Backtrace;
-use crossbeam::channel::{Receiver, Sender};
+use async_executor::{Executor as SmolExecutor, Task as SmolTask};
 use futures_lite::{future, prelude::*};
+use once_cell::sync::OnceCell;
 use parking_lot::Mutex;
 use pin_project_lite::pin_project;
+use slab::Slab;
 // use smol::lock::Mutex;
 
 use crate::{chacha::error::ChaChaError, new_ref, NewRef, RefType, Value};
 
+#[derive(Debug)]
+pub struct Executor {
+    root: usize,
+    workers: Slab<ChaChaExecutor<'static>>,
+    threads: Vec<thread::JoinHandle<()>>,
+}
+
+impl Executor {
+    pub fn at_index(index: usize) -> &'static mut ChaChaExecutor<'static> {
+        log::debug!(target: "async", "Executor::at_index: {index}");
+        unsafe {
+            let exec = EXECUTOR.get_mut().unwrap();
+            log::trace!(target: "async", "Executor::at_index: {exec:?}");
+            let executor = exec.workers.get_mut(index).unwrap();
+            log::trace!(target: "async", "Executor::at_index: {executor:?}");
+            executor
+        }
+    }
+
+    pub fn global() -> &'static mut ChaChaExecutor<'static> {
+        unsafe {
+            let exec = EXECUTOR.get_mut().unwrap();
+            exec.workers.get_mut(exec.root).unwrap()
+        }
+    }
+
+    pub fn new_worker() -> usize {
+        unsafe {
+            let exec = EXECUTOR.get_mut().unwrap();
+            exec.workers.insert(ChaChaExecutor::new())
+        }
+    }
+
+    pub fn new(thread_count: usize) {
+        let mut workers = Slab::with_capacity(thread_count);
+        let executor = ChaChaExecutor::new();
+        let root = workers.insert(executor.clone());
+
+        let mut threads = Vec::new();
+        for _ in 0..thread_count {
+            let executor = executor.clone();
+            let handle = thread::spawn(move || {
+                log::debug!(target: "async", "Executor::new: thread spawned: {:?}", thread::current().id());
+                let _ = future::block_on(async { executor.run().await });
+                log::debug!(target: "async", "Executor::new thread exiting: {:?}", thread::current().id());
+            });
+            threads.push(handle);
+        }
+
+        unsafe {
+            EXECUTOR
+                .set(Executor {
+                    root,
+                    workers,
+                    threads,
+                })
+                .unwrap();
+        }
+    }
+
+    pub fn remove_worker(index: usize) -> ChaChaExecutor<'static> {
+        log::debug!(target: "async", "Executor::remove_worker: {index}");
+        unsafe {
+            let exec = EXECUTOR.get_mut().unwrap();
+            exec.workers[index].shutdown();
+            let e = exec.workers.remove(index);
+            e
+        }
+    }
+
+    pub fn shutdown() {
+        log::debug!(target: "async", "Executor::shutdown");
+        unsafe {
+            if let Some(executor) = EXECUTOR.take() {
+                for (_, mut worker) in executor.workers {
+                    // worker.shutdown();
+                }
+
+                for handle in executor.threads {
+                    handle.join().unwrap();
+                }
+            }
+        }
+    }
+}
+
+static mut EXECUTOR: OnceCell<Executor> = OnceCell::new();
 static mut TASK_COUNT: AtomicUsize = AtomicUsize::new(0);
 static mut EXECUTOR_COUNT: AtomicUsize = AtomicUsize::new(0);
 
@@ -32,7 +118,7 @@ static mut EXECUTOR_COUNT: AtomicUsize = AtomicUsize::new(0);
 #[derive(Debug)]
 pub struct ChaChaTask<'a, T> {
     // #[pin]
-    inner: Option<Task<T>>,
+    inner: Option<SmolTask<T>>,
     // #[pin]
     executor: &'a ChaChaExecutor<'a>,
     started: AtomicBool,
@@ -63,7 +149,7 @@ impl<'a, T> ChaChaTask<'a, T> {
             log::trace!(target: "async", "Thread: {:?}", thread::current().id());
             let task = inner.spawn(future);
             let result = task.await;
-            mem::forget(inner);
+            // mem::forget(inner);
             result
         };
 
@@ -78,12 +164,6 @@ impl<'a, T> ChaChaTask<'a, T> {
 
     pub fn id(&self) -> usize {
         self.id
-    }
-
-    pub fn detach(&mut self) {
-        if let Some(task) = self.inner.take() {
-            task.detach();
-        }
     }
 
     pub fn start(&self) {
@@ -136,7 +216,7 @@ where
 #[derive(Clone, Debug)]
 pub struct ChaChaExecutor<'a> {
     id: usize,
-    pub ex: Arc<Executor<'a>>,
+    pub ex: Arc<SmolExecutor<'a>>,
     shutdown: Arc<Mutex<bool>>,
     waiter: Arc<Condvar>,
 }
@@ -153,7 +233,7 @@ impl<'a> ChaChaExecutor<'a> {
         let id = unsafe { EXECUTOR_COUNT.fetch_add(1, Ordering::SeqCst) };
         ChaChaExecutor {
             id,
-            ex: Arc::new(Executor::new()),
+            ex: Arc::new(SmolExecutor::new()),
             shutdown: Arc::new(Mutex::new(false)),
             waiter: Arc::new(Condvar::new()),
         }
@@ -177,7 +257,7 @@ impl<'a> ChaChaExecutor<'a> {
     //     // task
     // }
 
-    pub(super) fn spawn<T>(&self, future: impl Future<Output = T> + Send + 'a) -> Task<T>
+    pub(super) fn spawn<T>(&self, future: impl Future<Output = T> + Send + 'a) -> SmolTask<T>
     where
         T: Send + 'a,
     {
@@ -242,12 +322,12 @@ impl<'a> ChaChaExecutor<'a> {
         Ok(new_ref!(Value, Value::Empty))
     }
 
-    pub fn block_on<T>(&self, task: Task<T>) -> T {
+    pub fn block_on<T>(&self, task: SmolTask<T>) -> T {
         log::debug!(target: "async", "block_on: {:?}", self);
         future::block_on(async { task.await })
     }
 
-    pub async fn resolve_task<T>(&self, task: Task<T>) -> T
+    pub async fn resolve_task<T>(&self, task: SmolTask<T>) -> T
     where
         T: std::fmt::Debug,
     {

@@ -9,7 +9,7 @@ use std::{
 use std::thread;
 
 #[cfg(feature = "async")]
-use dwarf::chacha::interpreter::Executor;
+use dwarf::chacha::r#async::Executor;
 
 use clap::{ArgAction, Args, Parser};
 use dap::{prelude::BasicClient, server::Server};
@@ -26,7 +26,6 @@ use dwarf::{
         },
     },
     dwarf::{new_lu_dog, parse_dwarf},
-    s_read, s_write,
     sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL},
     Context, Value,
 };
@@ -150,6 +149,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let print_ast = args.ast.is_some() && args.ast.unwrap();
     let threads = args.threads.unwrap_or_else(num_cpus::get);
 
+    if threads == 0 {
+        return Err(Box::new(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "Thread count must be a positive integer greater than zero.",
+        )));
+    }
+
     // Figure out what we're dealing with, input-wise.
     let input = if let Some(ref source) = args.source {
         match source {
@@ -234,7 +240,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         };
 
-        let mut ctx = initialize_interpreter(threads, dwarf_home, ctx, sarzak)?;
+        let mut ctx = initialize_interpreter(1, dwarf_home, ctx, sarzak)?;
         ctx.add_args(dwarf_args);
 
         // #[cfg(feature = "async")]

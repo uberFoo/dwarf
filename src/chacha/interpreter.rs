@@ -11,15 +11,13 @@ use circular_queue::CircularQueue;
 use crossbeam::channel::unbounded;
 use lazy_static::lazy_static;
 use log::{self, log_enabled, Level::Debug};
-use once_cell::sync::OnceCell;
 use parking_lot::{Condvar, Mutex};
-use slab::Slab;
 use snafu::{prelude::*, Location};
 use tracy_client::{span, Client};
 use uuid::Uuid;
 
 #[cfg(feature = "async")]
-use crate::chacha::r#async::ChaChaExecutor;
+use crate::chacha::r#async::Executor;
 
 use crate::{
     chacha::{
@@ -134,107 +132,12 @@ lazy_static! {
     pub(crate) static ref STEPPING: Mutex<bool> = Mutex::new(false);
 }
 
-#[cfg(feature = "async")]
-#[derive(Debug)]
-pub struct Executor {
-    root: usize,
-    workers: Slab<ChaChaExecutor<'static>>,
-    threads: Vec<thread::JoinHandle<()>>,
-}
-
-#[cfg(feature = "async")]
-impl Executor {
-    pub fn at_index(index: usize) -> &'static mut ChaChaExecutor<'static> {
-        log::debug!(target: "async", "Executor::at_index: {index}");
-        unsafe {
-            let exec = EXECUTOR.get_mut().unwrap();
-            log::trace!(target: "async", "Executor::at_index: {exec:?}");
-            let executor = exec.workers.get_mut(index).unwrap();
-            log::trace!(target: "async", "Executor::at_index: {executor:?}");
-            executor
-        }
-    }
-
-    pub fn global() -> &'static mut ChaChaExecutor<'static> {
-        unsafe {
-            let exec = EXECUTOR.get_mut().unwrap();
-            exec.workers.get_mut(exec.root).unwrap()
-        }
-    }
-
-    pub fn new_worker() -> usize {
-        unsafe {
-            let exec = EXECUTOR.get_mut().unwrap();
-            exec.workers.insert(ChaChaExecutor::new())
-        }
-    }
-
-    pub fn new(thread_count: usize) {
-        let mut workers = Slab::with_capacity(thread_count);
-        let executor = ChaChaExecutor::new();
-        let root = workers.insert(executor.clone());
-
-        let mut threads = Vec::new();
-        for _ in 0..thread_count {
-            let executor = executor.clone();
-            let handle = thread::spawn(move || {
-                log::debug!(target: "async", "Executor::new: thread spawned: {:?}", thread::current().id());
-                let _ = future::block_on(async { executor.run().await });
-                log::debug!(target: "async", "Executor::new thread exiting: {:?}", thread::current().id());
-            });
-            threads.push(handle);
-        }
-
-        unsafe {
-            EXECUTOR
-                .set(Executor {
-                    root,
-                    workers,
-                    threads,
-                })
-                .unwrap();
-        }
-    }
-
-    pub fn remove_worker(index: usize) -> ChaChaExecutor<'static> {
-        log::debug!(target: "async", "Executor::remove_worker: {index}");
-        unsafe {
-            let exec = EXECUTOR.get_mut().unwrap();
-            exec.workers[index].shutdown();
-            let e = exec.workers.remove(index);
-            e
-        }
-    }
-
-    pub fn shutdown() {
-        log::debug!(target: "async", "Executor::shutdown");
-        unsafe {
-            if let Some(executor) = EXECUTOR.take() {
-                for (_, mut worker) in executor.workers {
-                    worker.shutdown();
-
-                    // for _ in 0..executor.threads.len() / 4 {
-                    //     let future = async { Ok(new_ref!(Value, Value::Empty)) };
-                    //     let task = worker.spawn(future);
-                    //     task.detach();
-                    // }
-                }
-                for handle in executor.threads {
-                    handle.join().unwrap();
-                }
-            }
-        }
-    }
-}
-
-#[cfg(feature = "async")]
-static mut EXECUTOR: OnceCell<Executor> = OnceCell::new();
-
 pub fn shutdown_interpreter() {
     let mut running = RUNNING.lock();
     *running = false;
     CVAR.notify_all();
 
+    #[cfg(feature = "async")]
     Executor::shutdown();
 }
 
