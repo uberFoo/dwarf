@@ -3,6 +3,7 @@
 use std::{
     future::Future,
     marker::PhantomData,
+    mem,
     pin::Pin,
     sync::{
         atomic::{AtomicBool, AtomicUsize, Ordering},
@@ -61,7 +62,9 @@ impl<'a, T> ChaChaTask<'a, T> {
             log::trace!(target: "async", "Executor: {:?}", inner);
             log::trace!(target: "async", "Thread: {:?}", thread::current().id());
             let task = inner.spawn(future);
-            task.await
+            let result = task.await;
+            mem::forget(inner);
+            result
         };
 
         Self {
@@ -138,11 +141,11 @@ pub struct ChaChaExecutor<'a> {
     waiter: Arc<Condvar>,
 }
 
-impl<'a> Drop for ChaChaExecutor<'a> {
-    fn drop(&mut self) {
-        log::debug!(target: "async", "ChaChaExecutor::drop: {:?}", self);
-    }
-}
+// impl<'a> Drop for ChaChaExecutor<'a> {
+//     fn drop(&mut self) {
+//         log::debug!(target: "async", "ChaChaExecutor::drop: {:?}", self);
+//     }
+// }
 
 impl<'a> ChaChaExecutor<'a> {
     /// Creates a new executor.
@@ -210,10 +213,10 @@ impl<'a> ChaChaExecutor<'a> {
         // }
         let mut running = true;
         while running {
-            let mut shutdown = self.shutdown.lock();
+            let shutdown = self.shutdown.lock();
             self.ex
                 .tick()
-                .or(async move {
+                .or(async {
                     let shutdown = self.waiter.wait(shutdown).await;
                     if *shutdown {
                         running = false;
