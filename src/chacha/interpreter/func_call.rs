@@ -52,17 +52,7 @@ pub fn eval_function_call(
 
     span!("eval_function_call");
 
-    if s_read!(func).a_sink {
-        // let future =
-        // async { inner_eval_function_call(func, args, arg_check, span, context, vm).unwrap() };
-        // let future = new_ref!(Box<dyn FutureValue>, Box::new(future));
-        // let foo =         <RefType<dyn FutureValue> as NewRef<dyn FutureValue>>::new_ref(future);
-        // let future = std::rc::Rc::new(std::cell::RefCell::new(future));
-        // Ok(new_ref!(Value, Value::Future(future)))
-        Ok(new_ref!(Value, Value::Empty))
-    } else {
-        inner_eval_function_call(func, args, first_arg, arg_check, span, context, vm)
-    }
+    inner_eval_function_call(func, args, first_arg, arg_check, span, context, vm)
 }
 
 fn inner_eval_function_call(

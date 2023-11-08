@@ -5,7 +5,7 @@ use heck::ToUpperCamelCase;
 
 use crate::{
     interpreter::{debug, error, function, Context},
-    lu_dog::{ValueType, ValueTypeEnum, WoogOptionEnum},
+    lu_dog::{ValueType, ValueTypeEnum},
     s_read,
     sarzak::Ty,
     RefType,
@@ -129,26 +129,6 @@ impl<'a> fmt::Display for PrintableValueType<'a> {
                 }
             }
             ValueTypeEnum::Unknown(_) => write!(f, "{}", TY_WARN_CLR.italic().paint("<unknown>")),
-            ValueTypeEnum::WoogOption(ref option) => {
-                let option = s_read!(lu_dog).exhume_woog_option(option).unwrap();
-                let option = s_read!(option);
-                match option.subtype {
-                    WoogOptionEnum::ZNone(_) => write!(f, "{}", TY_CLR.italic().paint("None")),
-                    WoogOptionEnum::ZSome(ref some) => {
-                        let some = s_read!(lu_dog).exhume_z_some(some).unwrap();
-                        let some = s_read!(some);
-                        let value = s_read!(some.r23_x_value(&s_read!(lu_dog))[0]).clone();
-                        let ty = value.r24_value_type(&s_read!(lu_dog))[0].clone();
-                        write!(
-                            f,
-                            "{}",
-                            TY_CLR
-                                .italic()
-                                .paint(format!("Some({})", PrintableValueType(&ty, context)))
-                        )
-                    }
-                }
-            }
             ValueTypeEnum::WoogStruct(ref woog_struct) => {
                 let woog_struct = s_read!(lu_dog).exhume_woog_struct(woog_struct).unwrap();
                 debug!("woog_struct {woog_struct:?}");
@@ -160,6 +140,7 @@ impl<'a> fmt::Display for PrintableValueType<'a> {
                     TY_CLR.italic().paint(&woog_struct.name)
                 )
             }
+            ValueTypeEnum::XFuture(_) => write!(f, "{}", TY_CLR.italic().paint("future")),
             ValueTypeEnum::ZObjectStore(ref id) => {
                 let zobject_store = s_read!(lu_dog).exhume_z_object_store(id).unwrap();
                 let zobject_store = s_read!(zobject_store);

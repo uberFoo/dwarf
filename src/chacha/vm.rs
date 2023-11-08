@@ -921,7 +921,7 @@ mod tests {
             let mut lu_dog = s_write!(ctx.lu_dog);
 
             // We need to create a WoogStruct and add some fields to it
-            let foo = WoogStruct::new("Foo".to_owned(), None, &mut lu_dog);
+            let foo = WoogStruct::new("Foo".to_owned(), None, None, &mut lu_dog);
             // let _ = WoogItem::new_woog_struct(source, &mt, lu_dog);
             let struct_ty = ValueType::new_woog_struct(&foo, &mut lu_dog);
             let ty = Ty::new_integer(&sarzak);

@@ -96,6 +96,7 @@ fn declaration() {
     let _ = env_logger::builder().is_test(true).try_init();
     let _ = Client::start();
     color_backtrace::install();
-    let program = include_str!("proxy/declare.tao");
-    run_program("proxy/declare.tao", program).unwrap();
+    // 🚧 Put this back once we are synched with the plugin.
+    // let program = include_str!("proxy/declare.tao");
+    // run_program("proxy/declare.tao", program).unwrap();
 }

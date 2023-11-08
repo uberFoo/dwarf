@@ -16,11 +16,7 @@ use snafu::{location, Location};
 use uuid::Uuid;
 
 use crate::{
-    lu_dog::{
-        store::ObjectStore as LuDogStore,
-        types::{ValueType, WoogOption},
-        Lambda, List, Reference,
-    },
+    lu_dog::{store::ObjectStore as LuDogStore, types::ValueType, Lambda, List, Reference},
     ModelStore, RefType,
 };
 
@@ -142,7 +138,6 @@ pub enum Type {
     Fn(Vec<Spanned<Self>>, Box<Spanned<Self>>),
     Integer,
     List(Box<Spanned<Self>>),
-    Option(Box<Spanned<Self>>),
     Reference(Box<Spanned<Self>>),
     Self_,
     String,
@@ -169,7 +164,6 @@ impl fmt::Display for Type {
             }
             Self::Integer => write!(f, "int"),
             Self::List(type_) => write!(f, "[{}]", type_.0),
-            Self::Option(type_) => write!(f, "Option<{}>", type_.0),
             Self::Reference(type_) => write!(f, "&{}", type_.0),
             Self::Self_ => write!(f, "Self"),
             Self::String => write!(f, "string"),
@@ -224,11 +218,6 @@ impl Type {
                 let ty = type_.0.into_value_type(&type_.1, store, _models, sarzak)?;
                 let list = List::new(&ty, store);
                 Ok(ValueType::new_list(&list, store))
-            }
-            Type::Option(type_) => {
-                let ty = type_.0.into_value_type(&type_.1, store, _models, sarzak)?;
-                let option = WoogOption::new_z_none(&ty, store);
-                Ok(ValueType::new_woog_option(&option, store))
             }
             Type::Reference(type_) => {
                 let ty = type_.0.into_value_type(&type_.1, store, _models, sarzak)?;

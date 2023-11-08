@@ -7,7 +7,7 @@ use log::error;
 
 use crate::{
     dwarf::extruder::Context,
-    lu_dog::{store::ObjectStore as LuDogStore, ValueType, ValueTypeEnum, WoogOptionEnum},
+    lu_dog::{store::ObjectStore as LuDogStore, ValueType, ValueTypeEnum},
     s_read,
     sarzak::Ty,
     RefType,
@@ -110,26 +110,13 @@ impl<'d, 'a, 'b> fmt::Display for PrintableValueType<'d, 'a, 'b> {
                 }
             }
             ValueTypeEnum::Unknown(_) => write!(f, "<unknown>"),
-            ValueTypeEnum::WoogOption(ref option) => {
-                let option = lu_dog.exhume_woog_option(option).unwrap();
-                let option = s_read!(option);
-                match option.subtype {
-                    WoogOptionEnum::ZNone(_) => write!(f, "None"),
-                    WoogOptionEnum::ZSome(ref some) => {
-                        let some = lu_dog.exhume_z_some(some).unwrap();
-                        let some = s_read!(some);
-                        let value = s_read!(some.r23_x_value(lu_dog)[0]).clone();
-                        let ty = value.r24_value_type(lu_dog)[0].clone();
-                        write!(f, "Some({})", PrintableValueType(&ty, context, lu_dog))
-                    }
-                }
-            }
             ValueTypeEnum::WoogStruct(ref woog_struct) => {
                 debug!("woog_struct {:?}", woog_struct);
                 let woog_struct = lu_dog.exhume_woog_struct(woog_struct).unwrap();
                 let woog_struct = s_read!(woog_struct);
                 write!(f, "{}", woog_struct.name)
             }
+            ValueTypeEnum::XFuture(_) => write!(f, "{}", TY_CLR.italic().paint("future")),
             ValueTypeEnum::ZObjectStore(ref id) => {
                 let zobject_store = lu_dog.exhume_z_object_store(id).unwrap();
                 let zobject_store = s_read!(zobject_store);

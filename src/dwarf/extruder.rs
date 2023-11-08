@@ -27,8 +27,8 @@ use crate::{
             Lambda, LambdaParameter, LetStatement, Literal, LocalVariable, NamedFieldExpression,
             Parameter, PathElement, Pattern as AssocPat, RangeExpression, Span as LuDogSpan,
             Statement, StringLiteral, StructExpression, StructField, TupleField, Unit, ValueType,
-            ValueTypeEnum, Variable, VariableExpression, WoogOption, WoogStruct, XIf, XMatch,
-            XPath, XPrint, XValue, XValueEnum, ZObjectStore, ZSome,
+            ValueTypeEnum, Variable, VariableExpression, WoogStruct, XIf, XMatch, XPath, XPrint,
+            XValue, XValueEnum, ZObjectStore,
         },
         Argument, Binary, BooleanLiteral, Comparison, DwarfSourceFile, FieldAccess,
         FieldAccessTarget, FloatLiteral, List, ListElement, ListExpression, MethodCall, Operator,
@@ -587,7 +587,9 @@ fn inter_func(
                                     let external = ExternalImplementation::new(
                                         func_name, store_name, obj_name, lu_dog,
                                     );
-                                    Some(Body::new_external_implementation(&external, lu_dog))
+                                    Some(Body::new_external_implementation(
+                                        false, &external, lu_dog,
+                                    ))
                                 } else {
                                     unreachable!();
                                 }
@@ -622,11 +624,6 @@ fn inter_func(
     context.location = location!();
     let ret_ty = get_value_type(&return_type.0, &return_type.1, impl_ty, context, lu_dog)?;
 
-    let a_sink = match func_ty {
-        FunctionType::Async => true,
-        FunctionType::Sync => false,
-    };
-
     let name = name.de_sanitize();
     let (func, block) = if let Some((ParserExpression::Block(stmts, vars, tys), span)) = &stmts {
         let block = Block::new(Uuid::new_v4(), None, None, lu_dog);
@@ -638,31 +635,15 @@ fn inter_func(
             // we can link this XValue to it.
         }
 
-        let body = Body::new_block(&block, lu_dog);
-        let func = Function::new(
-            a_sink,
-            name.to_owned(),
-            &body,
-            None,
-            impl_block,
-            &ret_ty,
-            lu_dog,
-        );
+        let body = Body::new_block(false, &block, lu_dog);
+        let func = Function::new(name.to_owned(), &body, None, impl_block, &ret_ty, lu_dog);
         context.dirty.push(Dirty::Func(func.clone()));
         let _ = ValueType::new_function(&func, lu_dog);
 
         (func, Some((block, stmts, span)))
     } else if let Some(body) = external {
         (
-            Function::new(
-                a_sink,
-                name.to_owned(),
-                &body,
-                None,
-                impl_block,
-                &ret_ty,
-                lu_dog,
-            ),
+            Function::new(name.to_owned(), &body, None, impl_block, &ret_ty, lu_dog),
             None,
         )
     } else {
@@ -2667,20 +2648,6 @@ pub(super) fn inter_expression(
             Ok(((expr, span), lhs_ty))
         }
         //
-        // None
-        //
-        ParserExpression::None => {
-            let ty = ValueType::new_unknown(lu_dog);
-            let expr = Expression::new_z_none(lu_dog);
-            let option = WoogOption::new_z_none(&ty, lu_dog);
-            let ty = ValueType::new_woog_option(&option, lu_dog);
-            let value = XValue::new_expression(block, &ty, &expr, lu_dog);
-
-            update_span_value(&span, &value, location!());
-
-            Ok(((expr, span), ty))
-        }
-        //
         // Or
         //
         ParserExpression::Or(ref lhs_p, ref rhs_p) => {
@@ -2974,31 +2941,6 @@ pub(super) fn inter_expression(
 
             let ret = XReturn::new(&expr.0, lu_dog);
             let expr = Expression::new_x_return(&ret, lu_dog);
-            let value = XValue::new_expression(block, &ty, &expr, lu_dog);
-            update_span_value(&span, &value, location!());
-
-            Ok(((expr, span), ty))
-        }
-        //
-        // Some
-        //
-        ParserExpression::Some(expr) => {
-            let (expr, ty) = inter_expression(
-                &new_ref!(ParserExpression, expr.0.to_owned()),
-                &expr.1,
-                block,
-                context,
-                lu_dog,
-            )?;
-
-            let value = XValue::new_expression(block, &ty, &expr.0, lu_dog);
-            update_span_value(&span, &value, location!());
-
-            let some = ZSome::new(&value, lu_dog);
-            let expr = Expression::new_z_some(&some, lu_dog);
-            let option = WoogOption::new_z_some(&ty, &some, lu_dog);
-            let ty = ValueType::new_woog_option(&option, lu_dog);
-
             let value = XValue::new_expression(block, &ty, &expr, lu_dog);
             update_span_value(&span, &value, location!());
 
@@ -3562,7 +3504,7 @@ fn inter_enum(
                 // separator. This is cheap. I really need to think about how paths and imports
                 // and the like are going to work. The model will need some updating methinks.
                 let woog_struct =
-                    WoogStruct::new(format!("{}::{}", name, field_name), None, lu_dog);
+                    WoogStruct::new(format!("{}::{}", name, field_name), None, None, lu_dog);
                 context.dirty.push(Dirty::Struct(woog_struct.clone()));
                 let ty = ValueType::new_woog_struct(&woog_struct, lu_dog);
                 LuDogSpan::new(
@@ -3585,7 +3527,7 @@ fn inter_enum(
             Some(EnumField::Tuple((type_, span))) => {
                 let ty = if let Type::UserType((ty, span)) = type_ {
                     if let Some(g) = generics.get(ty) {
-                        let g = Generic::new(g.to_owned(), lu_dog);
+                        let g = Generic::new(g.to_owned(), None, None, lu_dog);
                         let ty = ValueType::new_generic(&g, lu_dog);
                         LuDogSpan::new(
                             span.end as i64,
@@ -3733,6 +3675,7 @@ fn inter_struct(
                                     let obj = model.0.exhume_object(obj_id).unwrap();
                                     let woog_struct = WoogStruct::new(
                                         proxy.to_owned(),
+                                        None,
                                         Some(&*obj.read().unwrap()),
                                         lu_dog,
                                     );
@@ -3854,7 +3797,7 @@ fn inter_struct(
         }
     } else {
         // This is just a plain vanilla user defined type.
-        let woog_struct = WoogStruct::new(name.to_owned(), None, lu_dog);
+        let woog_struct = WoogStruct::new(name.to_owned(), None, None, lu_dog);
         context.dirty.push(Dirty::Struct(woog_struct.clone()));
         let _ = ValueType::new_woog_struct(&woog_struct, lu_dog);
         context.struct_fields.push(StructFields {
@@ -3883,7 +3826,7 @@ fn inter_struct_fields(
         debug!("field {name}");
 
         let ty = if let Some(g) = generics.get(&type_.to_string()) {
-            let g = Generic::new(g.to_owned(), lu_dog);
+            let g = Generic::new(g.to_owned(), None, None, lu_dog);
             let ty = ValueType::new_generic(&g, lu_dog);
             LuDogSpan::new(
                 span.end as i64,
@@ -3983,11 +3926,6 @@ pub(crate) fn get_value_type(
             let inner_type = get_value_type(&type_.0, &type_.1, enclosing_type, context, lu_dog)?;
             let list = List::new(&inner_type, lu_dog);
             Ok(ValueType::new_list(&list, lu_dog))
-        }
-        Type::Option(ref type_) => {
-            let inner_type = get_value_type(&type_.0, &type_.1, enclosing_type, context, lu_dog)?;
-            let option = WoogOption::new_z_none(&inner_type, lu_dog);
-            Ok(ValueType::new_woog_option(&option, lu_dog))
         }
         Type::Reference(ref type_) => {
             let inner_type = get_value_type(&type_.0, &type_.1, enclosing_type, context, lu_dog)?;
@@ -4348,7 +4286,7 @@ pub(crate) fn create_generic_struct(
         None
     };
 
-    let new_struct = WoogStruct::new(name.to_owned(), obj.as_ref(), lu_dog);
+    let new_struct = WoogStruct::new(name.to_owned(), None, obj.as_ref(), lu_dog);
     context.dirty.push(Dirty::Struct(new_struct.clone()));
     let _ = ValueType::new_woog_struct(&new_struct, lu_dog);
     for field in s_read!(woog_struct).r7_field(lu_dog) {
