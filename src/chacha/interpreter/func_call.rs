@@ -12,7 +12,7 @@ use tracy_client::span;
 use super::Executor;
 
 #[cfg(feature = "async")]
-use crate::chacha::r#async::ChaChaTask;
+use crate::chacha::r#async::Task;
 
 use crate::{
     chacha::{
@@ -33,7 +33,7 @@ use crate::{
     plug_in::PluginType,
     s_read, s_write,
     sarzak::ObjectStore,
-    NewRef, RefType, SarzakStorePtr, Value,
+    NewRef, RefType, SarzakStorePtr, Value, ValueResult,
 };
 
 const OBJECT_STORE: &str = "ObjectStore";
@@ -91,7 +91,7 @@ pub fn eval_function_call<'a>(
                 )
             };
 
-            let task = ChaChaTask::new(Executor::at_index(context.executor_index()), future);
+            let task = Task::new(Executor::at_index(context.executor_index()), future);
 
             // let task = context.executor().spawn(future);
 

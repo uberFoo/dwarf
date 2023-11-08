@@ -34,7 +34,7 @@ use crate::{
     new_ref, s_read, s_write,
     sarzak::store::ObjectStore as SarzakStore,
     ChaChaError, Context as ExtruderContext, Dirty, DwarfInteger, ModelStore, NewRef, RefType,
-    Value,
+    Value, ValueResult,
 };
 
 mod banner;
@@ -510,14 +510,14 @@ fn eval_expression(
                 Value::Future(_name, task) => {
                     let task = task.take().unwrap();
                     task.start();
-                    future::block_on(async { task.await })
+                    future::block_on(task)
                 }
                 Value::Task {
                     executor_id: _,
                     parent,
                 } => {
                     if let Some(parent) = parent {
-                        parent.start();
+                        Executor::spawn(&parent);
                     }
                     Ok(value.clone())
                 }

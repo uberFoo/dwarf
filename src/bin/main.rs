@@ -27,7 +27,7 @@ use dwarf::{
     },
     dwarf::{new_lu_dog, parse_dwarf},
     sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL},
-    Context, Value,
+    Context, Value, ValueResult,
 };
 use reqwest::Url;
 use tracy_client::Client;
@@ -149,12 +149,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let print_ast = args.ast.is_some() && args.ast.unwrap();
     let threads = args.threads.unwrap_or_else(num_cpus::get);
 
-    if threads == 0 {
-        return Err(Box::new(std::io::Error::new(
-            std::io::ErrorKind::InvalidInput,
-            "Thread count must be a positive integer greater than zero.",
-        )));
-    }
+    // if threads == 0 {
+    //     return Err(Box::new(std::io::Error::new(
+    //         std::io::ErrorKind::InvalidInput,
+    //         "Thread count must be a positive integer greater than zero.",
+    //     )));
+    // }
 
     // Figure out what we're dealing with, input-wise.
     let input = if let Some(ref source) = args.source {
@@ -240,7 +240,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         };
 
-        let mut ctx = initialize_interpreter(1, dwarf_home, ctx, sarzak)?;
+        let mut ctx = initialize_interpreter(threads, dwarf_home, ctx, sarzak)?;
         ctx.add_args(dwarf_args);
 
         // #[cfg(feature = "async")]

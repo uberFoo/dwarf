@@ -18,7 +18,7 @@ use uuid::Uuid;
 use crate::chacha::value::ChaChaTask;
 
 #[cfg(feature = "async")]
-use crate::chacha::r#async::ChaChaTask as ExecutorTask;
+use crate::chacha::r#async::Task as ExecutorTask;
 
 #[cfg(feature = "async")]
 use super::Executor;
@@ -45,7 +45,7 @@ use crate::{
     plug_in::PluginType,
     s_read, s_write,
     sarzak::Ty,
-    NewRef, RefType, SarzakStorePtr, Value,
+    NewRef, RefType, SarzakStorePtr, Value, ValueResult,
 };
 
 mod chacha;
@@ -55,7 +55,7 @@ pub fn eval(
     expression: &RefType<Expression>,
     context: &mut Context,
     vm: &mut VM,
-) -> Result<RefType<Value>> {
+) -> ValueResult {
     let lu_dog = context.lu_dog_heel().clone();
     let sarzak = context.sarzak_heel().clone();
 
@@ -562,13 +562,10 @@ pub fn eval(
                                     executor_id,
                                     parent,
                                 } => {
-                                    // 🚧 Clean this mess up
                                     let e = executor_id.take().unwrap();
-                                    let executor = Executor::at_index(e);
                                     let t = parent.take().unwrap();
-                                    // 🚧 async fix unwrap
-                                    // let value = future::block_on(t).unwrap();
-                                    let value = future::block_on(executor.ex.run(t))?;
+                                    Executor::spawn(&t);
+                                    let value = future::block_on(t)?;
                                     Executor::remove_worker(e);
 
                                     let v = s_read!(value);
@@ -736,10 +733,9 @@ pub fn eval(
                         let millis: u64 = millis.try_into()?;
                         let duration = Duration::from_millis(millis);
                         let future = async move {
+                            dbg!("sleep", thread::current().id());
                             debug!("sleeping for {duration:?}");
-                            // dbg!(&duration, &fubar.executor());
                             let _instant = Timer::after(duration).await;
-                            // dbg!(&duration, _instant, &fubar.executor());
                             debug!("done sleeping");
                             Ok(new_ref!(Value, Value::Empty))
                         };
@@ -1184,7 +1180,8 @@ fn spawn(
 
     // This is *key*.
     // task.detach();
-    child_task.start();
+    // child_task.start();
+    Executor::spawn(&child_task);
 
     // let child = new_ref!(Value, Value::Future(name.clone(), Some(task)));
     // let value = new_ref!(Value, Value::Task(ChaChaTask::new(name.clone(), task)));
@@ -1192,24 +1189,14 @@ fn spawn(
     // Stash the future away so that it doesn't get dropped when it's done running.
     // nested_context_clone.executor().park_value(value.clone());
 
-    let bar = name.clone();
-    let future = async move {
-        let idx = executor_id;
-        // dbg!("spawn begin", &bar, idx);
-        // let foo = Executor::remove_worker(idx).run().await;
-        let executor = Executor::at_index(idx);
-        // executor.shutdown();
-        // let foo = executor.run().await;
-        let foo = executor.ex.run(child_task).await;
-        // dbg!("spawn end", &foo, idx);
-        // Executor::remove_worker(idx);
-        foo
-    };
+    let future = async move { child_task.await };
 
     // 🚧 This puts all spawned tasks on the main executor. I need to ponder whether
     // or not I want them to be nested.
     // let task = Executor::global().spawn(future);
     let task = ExecutorTask::new(Executor::global(), future);
+    // Executor::spawn(&task);
+
     let value = new_ref!(
         Value,
         Value::Task {

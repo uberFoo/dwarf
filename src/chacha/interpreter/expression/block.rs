@@ -1,5 +1,8 @@
 use crate::{
-    chacha::{error::Result, vm::VM},
+    chacha::{
+        error::{ChaChaError, Result},
+        vm::VM,
+    },
     interpreter::{eval_statement, Context},
     lu_dog::Block,
     new_ref, s_read, NewRef, RefType, SarzakStorePtr, Value,
@@ -9,7 +12,7 @@ use crate::{
 use super::Executor;
 
 #[cfg(feature = "async")]
-use crate::chacha::r#async::ChaChaTask;
+use crate::chacha::r#async::Task;
 
 pub fn eval<'a>(
     block_id: &SarzakStorePtr,
@@ -31,7 +34,7 @@ pub fn eval<'a>(
             };
 
             // let task = ChaChaTask::new(Executor::global(), future);
-            let task = ChaChaTask::new(Executor::at_index(context.executor_index()), future);
+            let task = Task::new(Executor::at_index(context.executor_index()), future);
 
             // let task = context.executor().spawn(future);
 

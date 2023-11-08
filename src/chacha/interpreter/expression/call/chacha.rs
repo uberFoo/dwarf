@@ -10,10 +10,10 @@ use snafu::prelude::*;
 use super::Executor;
 
 #[cfg(feature = "async")]
-use crate::chacha::r#async::ChaChaExecutor;
+use crate::chacha::r#async::Worker;
 
 #[cfg(feature = "async")]
-use crate::chacha::r#async::ChaChaTask;
+use crate::chacha::r#async::Task;
 
 use crate::{
     chacha::error::{Result, WrongNumberOfArgumentsSnafu},
@@ -123,7 +123,7 @@ pub(crate) fn http_get(
 
         Ok(new_ref!(Value, Value::String(body)))
     });
-    let task = ChaChaTask::new(Executor::at_index(context.executor_index()), future);
+    let task = Task::new(Executor::at_index(context.executor_index()), future);
 
     // let task = ChaChaTask::new(&Executor::global(), future);
     // let task = context.executor().spawn(future);

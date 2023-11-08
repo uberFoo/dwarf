@@ -245,6 +245,7 @@ dependencies = [
  "dlv-list",
  "parking_lot",
  "pin-project-lite",
+ "smol",
 ]
 
 [[package]]
@@ -967,6 +968,7 @@ dependencies = [
  "circular-queue",
  "clap 4.4.6",
  "color-backtrace",
+ "concurrent-queue",
  "core_extensions",
  "criterion",
  "crossbeam",

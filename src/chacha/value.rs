@@ -19,7 +19,7 @@ use crate::{
     plug_in::PluginType,
     s_read, s_write,
     sarzak::{ObjectStore as SarzakStore, Ty},
-    ChaChaError, Context, DwarfFloat, DwarfInteger, NewRef, RefType,
+    ChaChaError, Context, DwarfFloat, DwarfInteger, NewRef, RefType, ValueResult,
 };
 
 #[repr(C)]
@@ -251,7 +251,7 @@ pub enum Value {
     #[cfg(feature = "async")]
     Future(
         String,
-        Option<crate::chacha::r#async::ChaChaTask<'static, Result<RefType<Value>, ChaChaError>>>,
+        Option<crate::chacha::r#async::Task<'static, ValueResult>>,
     ),
     Integer(DwarfInteger),
     Lambda(RefType<Lambda>),
@@ -271,9 +271,7 @@ pub enum Value {
     #[cfg(feature = "async")]
     Task {
         executor_id: Option<usize>,
-        parent: Option<
-            crate::chacha::r#async::ChaChaTask<'static, Result<RefType<Value>, ChaChaError>>,
-        >,
+        parent: Option<crate::chacha::r#async::Task<'static, ValueResult>>,
     },
     Thonk(&'static str, usize),
     TupleEnum(RefType<TupleEnum>),

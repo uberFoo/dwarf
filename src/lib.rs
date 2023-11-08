@@ -320,3 +320,5 @@ impl Default for Context {
         }
     }
 }
+
+pub type ValueResult = Result<RefType<Value>, ChaChaError>;
