@@ -3,6 +3,9 @@ use std::collections::VecDeque;
 #[cfg(feature = "async")]
 use async_compat::Compat;
 
+#[cfg(feature = "async")]
+use tracing::{debug_span, Instrument};
+
 use ansi_term::Colour;
 use snafu::prelude::*;
 
@@ -10,10 +13,10 @@ use snafu::prelude::*;
 use super::Executor;
 
 #[cfg(feature = "async")]
-use crate::chacha::r#async::Worker;
+use crate::chacha::asink::Worker;
 
 #[cfg(feature = "async")]
-use crate::chacha::r#async::Task;
+use crate::chacha::asink::AsyncTask;
 
 use crate::{
     chacha::error::{Result, WrongNumberOfArgumentsSnafu},
@@ -117,13 +120,19 @@ pub(crate) fn http_get(
 
     let url = arg_values.pop_front().unwrap().0;
     let task_name = format!("http_get({})", TryInto::<String>::try_into(&*s_read!(url))?);
+    let span = debug_span!("http_get", url = %task_name, target = "async");
     let future = Compat::new(async move {
         let url = TryInto::<String>::try_into(&*s_read!(url))?;
         let body = reqwest::get(url).await.unwrap().text().await.unwrap();
 
         Ok(new_ref!(Value, Value::String(body)))
-    });
-    let task = Task::new(Executor::at_index(context.executor_index()), future);
+    })
+    .instrument(span);
+    let task = AsyncTask::new(
+        "http_get".to_owned(),
+        Executor::at_index(context.executor_index()),
+        future,
+    );
 
     // let task = ChaChaTask::new(&Executor::global(), future);
     // let task = context.executor().spawn(future);

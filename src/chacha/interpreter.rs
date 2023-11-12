@@ -11,13 +11,14 @@ use circular_queue::CircularQueue;
 use crossbeam::channel::unbounded;
 use lazy_static::lazy_static;
 use log::{self, log_enabled, Level::Debug};
+use once_cell::sync::OnceCell;
 use parking_lot::{Condvar, Mutex};
 use snafu::{prelude::*, Location};
 use tracy_client::{span, Client};
 use uuid::Uuid;
 
 #[cfg(feature = "async")]
-use crate::chacha::r#async::Executor;
+use crate::chacha::asink::{AsyncTask, Executor as _Executor, Worker};
 
 use crate::{
     chacha::{
@@ -26,10 +27,9 @@ use crate::{
         value::UserStruct,
         vm::{CallFrame, Instruction, Thonk, VM},
     },
-    lu_dog::ExpressionEnum,
     lu_dog::{
-        Block, Expression, LocalVariable, ObjectStore as LuDogStore, Span, Statement,
-        StatementEnum, ValueType, ValueTypeEnum, Variable, XValue,
+        Block, Expression, ExpressionEnum, LocalVariable, ObjectStore as LuDogStore, Span,
+        Statement, StatementEnum, ValueType, ValueTypeEnum, Variable, XValue,
     },
     new_ref, s_read, s_write,
     sarzak::store::ObjectStore as SarzakStore,
@@ -132,6 +132,75 @@ lazy_static! {
     pub(crate) static ref STEPPING: Mutex<bool> = Mutex::new(false);
 }
 
+#[cfg(feature = "async")]
+#[derive(Debug)]
+pub(super) struct Executor(Option<_Executor<'static>>);
+
+impl Executor {
+    pub(super) fn new(thread_count: usize) {
+        let executor = _Executor::new(thread_count);
+        executor.start(thread_count);
+        unsafe {
+            EXECUTOR.set(Executor(Some(executor))).unwrap();
+        }
+    }
+
+    pub(super) fn shutdown() {
+        let executor = unsafe { EXECUTOR.get_mut().unwrap() };
+        if let Some(executor) = executor.0.take() {
+            executor.shutdown();
+        }
+    }
+
+    pub(super) fn at_index(index: usize) -> Worker<'static> {
+        let executor = unsafe { &mut EXECUTOR.get_mut().unwrap().0 };
+        if let Some(executor) = executor {
+            executor.worker_at_index(index)
+        } else {
+            panic!("executor not initialized");
+        }
+    }
+
+    pub(super) fn start_task(task: &AsyncTask<ValueResult>) {
+        let executor = unsafe { &EXECUTOR.get().unwrap().0 };
+        if let Some(executor) = executor {
+            executor.start_task(task);
+        } else {
+            panic!("executor not initialized");
+        }
+    }
+
+    pub(super) fn remove_worker(index: usize) {
+        let executor = unsafe { &mut EXECUTOR.get_mut().unwrap().0 };
+        if let Some(executor) = executor {
+            executor.remove_worker(index);
+        } else {
+            panic!("executor not initialized");
+        }
+    }
+
+    pub(super) fn new_worker() -> usize {
+        let executor = unsafe { &mut EXECUTOR.get_mut().unwrap().0 };
+        if let Some(executor) = executor {
+            executor.new_worker()
+        } else {
+            panic!("executor not initialized");
+        }
+    }
+
+    pub(super) fn root_worker() -> Worker<'static> {
+        let executor = unsafe { &EXECUTOR.get().unwrap().0 };
+        if let Some(executor) = executor {
+            executor.root_worker()
+        } else {
+            panic!("executor not initialized");
+        }
+    }
+}
+
+#[cfg(feature = "async")]
+static mut EXECUTOR: OnceCell<Executor> = OnceCell::new();
+
 pub fn shutdown_interpreter() {
     let mut running = RUNNING.lock();
     *running = false;
@@ -149,7 +218,6 @@ pub fn initialize_interpreter(
     e_context: ExtruderContext,
     sarzak: SarzakStore,
 ) -> Result<Context, Error> {
-    dbg!("initialize_interpreter", thread::current().id());
     let mut lu_dog = s_write!(e_context.lu_dog);
 
     // Initialize the stack with stuff from the compiled source.
@@ -509,15 +577,16 @@ fn eval_expression(
             match &mut *write_value {
                 Value::Future(_name, task) => {
                     let task = task.take().unwrap();
-                    task.start();
-                    future::block_on(task)
+                    Executor::start_task(&task);
+                    let result = future::block_on(task);
+                    result
                 }
                 Value::Task {
                     executor_id: _,
                     parent,
                 } => {
                     if let Some(parent) = parent {
-                        Executor::spawn(&parent);
+                        Executor::start_task(&parent);
                     }
                     Ok(value.clone())
                 }

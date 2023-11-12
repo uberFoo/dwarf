@@ -229,7 +229,7 @@ fn run_program(test: &str, program: &str) -> Result<(Value, String), String> {
         }
     };
 
-    shutdown_interpreter(ctx);
+    shutdown_interpreter();
 
     result
 }

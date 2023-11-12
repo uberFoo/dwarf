@@ -12,12 +12,15 @@ use rustc_hash::FxHashMap as HashMap;
 use sarzak::lu_dog::ValueTypeEnum;
 use uuid::Uuid;
 
+#[cfg(feature = "async")]
+use crate::chacha::interpreter::Executor;
+
 use crate::{
     chacha::error::Result,
     lu_dog::{Function, Lambda, List, ObjectStore as LuDogStore, ValueType, ZObjectStore},
     new_ref,
     plug_in::PluginType,
-    s_read, s_write,
+    s_read,
     sarzak::{ObjectStore as SarzakStore, Ty},
     ChaChaError, Context, DwarfFloat, DwarfInteger, NewRef, RefType, ValueResult,
 };
@@ -147,83 +150,6 @@ impl fmt::Display for EnumVariant {
     }
 }
 
-#[derive(Debug)]
-pub enum ChaChaTask {
-    Complete((String, RefType<Value>)),
-    DummyClone(String),
-    Running((String, smol::Task<Result<RefType<Value>>>)),
-}
-
-impl ChaChaTask {
-    pub fn new(name: String, task: smol::Task<Result<RefType<Value>>>) -> Self {
-        Self::Running((name, task))
-    }
-
-    pub fn deref(&self) -> RefType<Value> {
-        match self {
-            Self::Complete((_, value)) => value.clone(),
-            Self::DummyClone(_) => new_ref!(Value, Value::Empty),
-            Self::Running((_, _)) => new_ref!(Value, Value::Empty),
-        }
-    }
-}
-
-// impl std::ops::Deref for Task {
-//     type Target = RefType<Value>;
-
-//     fn deref(&self) -> &Self::Target {
-//         match self {
-//             Self::Complete((_, ref value)) => value,
-//             Self::DummyClone(_) => &new_ref!(Value, Value::Empty),
-//             Self::Running((_, _)) => &new_ref!(Value, Value::Empty),
-//         }
-//     }
-// }
-
-impl Future for ChaChaTask {
-    type Output = RefType<Value>;
-
-    fn poll(
-        self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Self::Output> {
-        let this = std::pin::Pin::into_inner(self);
-        match this {
-            Self::Complete((_, value)) => std::task::Poll::Ready(value.clone()),
-            Self::DummyClone(_) => std::task::Poll::Ready(new_ref!(Value, Value::Empty)),
-            Self::Running((name, task)) => {
-                // let waker = cx.waker().clone();
-                // let value = async {
-                // waker.wake();
-                // task.await
-                // };
-                let value = future::block_on(task);
-                match value {
-                    Ok(value) => {
-                        *this = Self::Complete((name.to_owned(), value.clone()));
-                        std::task::Poll::Ready(value)
-                    }
-                    Err(e) => {
-                        let e = new_ref!(Value, Value::Error(Box::new(e)));
-                        *this = Self::Complete((name.to_owned(), e.clone()));
-                        std::task::Poll::Ready(e)
-                    }
-                }
-            }
-        }
-    }
-}
-
-impl Clone for ChaChaTask {
-    fn clone(&self) -> Self {
-        match self {
-            Self::Complete((name, value)) => Self::Complete((name.to_owned(), value.clone())),
-            Self::DummyClone(name) => Self::DummyClone(name.to_owned()),
-            Self::Running((name, _)) => Self::DummyClone(name.to_owned()),
-        }
-    }
-}
-
 #[derive(Default)]
 pub enum Value {
     /// Boolean
@@ -251,7 +177,7 @@ pub enum Value {
     #[cfg(feature = "async")]
     Future(
         String,
-        Option<crate::chacha::r#async::Task<'static, ValueResult>>,
+        Option<crate::chacha::asink::AsyncTask<'static, ValueResult>>,
     ),
     Integer(DwarfInteger),
     Lambda(RefType<Lambda>),
@@ -271,7 +197,7 @@ pub enum Value {
     #[cfg(feature = "async")]
     Task {
         executor_id: Option<usize>,
-        parent: Option<crate::chacha::r#async::Task<'static, ValueResult>>,
+        parent: Option<crate::chacha::asink::AsyncTask<'static, ValueResult>>,
     },
     Thonk(&'static str, usize),
     TupleEnum(RefType<TupleEnum>),
@@ -292,7 +218,7 @@ impl Future for Value {
         match this {
             Self::Future(_, task) => {
                 if let Some(task) = task.take() {
-                    task.start();
+                    Executor::start_task(&task);
                     match future::block_on(task) {
                         Ok(value) => std::task::Poll::Ready(value),
                         Err(e) => {

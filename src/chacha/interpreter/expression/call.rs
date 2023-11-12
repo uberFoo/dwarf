@@ -10,15 +10,14 @@ use ansi_term::Colour;
 use async_io::Timer;
 #[cfg(feature = "async")]
 use smol::future;
+#[cfg(feature = "async")]
+use tracing::{debug_span, Instrument};
 
 use snafu::{location, prelude::*, Location};
 use uuid::Uuid;
 
 #[cfg(feature = "async")]
-use crate::chacha::value::ChaChaTask;
-
-#[cfg(feature = "async")]
-use crate::chacha::r#async::Task as ExecutorTask;
+use crate::chacha::asink::AsyncTask as ExecutorTask;
 
 #[cfg(feature = "async")]
 use super::Executor;
@@ -28,6 +27,7 @@ use crate::{
         error::{NoSuchStaticMethodSnafu, Result, TypeMismatchSnafu},
         vm::{CallFrame, VM},
     },
+    dwarf::extruder::update_span_value,
     interpreter::{
         debug, error, eval_expression, eval_function_call, eval_lambda_expression, function,
         ChaChaError, Context, PrintableValueType,
@@ -38,7 +38,8 @@ use crate::{
         SPAWN, SPAWN_NAMED, SQUARE, SUM, TIME, TIMER, TYPEOF, UUID_TYPE,
     },
     lu_dog::{
-        Argument, Call, CallEnum, Expression, IntegerLiteral, Literal, MethodCall, ValueTypeEnum,
+        Argument, Block, Call, CallEnum, Expression, IntegerLiteral, Literal, MethodCall,
+        ValueType, ValueTypeEnum, XValue,
     },
     new_ref,
     plug_in::PluginModRef,
@@ -267,11 +268,29 @@ pub fn eval(
 
                         let result = (range.start..range.end)
                             .map(|i| {
+                                let block = Block::new(
+                                    false,
+                                    Uuid::new_v4(),
+                                    None,
+                                    None,
+                                    &mut s_write!(lu_dog),
+                                );
                                 let literal = IntegerLiteral::new(i, &mut s_write!(lu_dog));
                                 let literal =
                                     Literal::new_integer_literal(&literal, &mut s_write!(lu_dog));
                                 let expression =
                                     Expression::new_literal(&literal, &mut s_write!(lu_dog));
+                                let ty = ValueType::new_ty(
+                                    &Ty::new_integer(&s_read!(sarzak)),
+                                    &mut s_write!(lu_dog),
+                                );
+                                let value = XValue::new_expression(
+                                    &block,
+                                    &ty,
+                                    &expression,
+                                    &mut s_write!(lu_dog),
+                                );
+                                update_span_value(&span, &value, location!());
                                 let argument = Argument::new(
                                     0,
                                     &expression,
@@ -496,61 +515,6 @@ pub fn eval(
                     };
                     x
                 }
-                // Value::Task(t) => match meth_name.as_str() {
-                //     JOIN => {
-                //         let t = unsafe {
-                //             let value = std::sync::Arc::into_raw(value.clone());
-                //             let value = std::ptr::read(value);
-                //             let value = value.into_inner().unwrap();
-
-                //             match value {
-                //                 Value::Task(t) => t,
-                //                 _ => unreachable!(),
-                //             }
-                //         };
-                //         let future = async move {
-                //             dbg!("start join");
-                //             let foo = t.await;
-                //             dbg!("end join", &foo);
-                //             Ok(foo)
-                //         };
-                //         // let task = context.executor().spawn(future);
-                //         let task = ExecutorTask::new(Executor::global(), future);
-
-                //         // Ok(new_ref!(
-                //         //     Value,
-                //         //     Value::Future("quux".to_owned(), Some(task))
-                //         // ))
-
-                //         // let task =
-                //         // ExecutorTask::new(Executor::at_index(context.executor_index()), future);
-
-                //         future::block_on(async { task.await })
-
-                //         // let value = future::block_on(t);
-                //         // let v = s_read!(value);
-                //         // match &*v {
-                //         //     // Value::Task(t) => Ok(t.deref()),
-                //         //     m => {
-                //         //         dbg!("fubar", m);
-                //         //         // unreachable!()
-                //         //         Ok(value.clone())
-                //         //     }
-                //         // }
-                //     }
-                //     _ => {
-                //         let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
-                //         let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
-                //         let read = s_read!(span);
-                //         let span = read.start as usize..read.end as usize;
-
-                //         return Err(ChaChaError::NoSuchMethod {
-                //             method: meth_name.to_owned(),
-                //             span,
-                //             location: location!(),
-                //         });
-                //     }
-                // },
                 Value::Vector(v) => match meth_name.as_str() {
                     SUM => {
                         let mut sum = 0;
@@ -564,9 +528,8 @@ pub fn eval(
                                 } => {
                                     let e = executor_id.take().unwrap();
                                     let t = parent.take().unwrap();
-                                    Executor::spawn(&t);
+
                                     let value = future::block_on(t)?;
-                                    Executor::remove_worker(e);
 
                                     let v = s_read!(value);
                                     match &*v {
@@ -732,15 +695,27 @@ pub fn eval(
                         let millis = &*s_read!(duration);
                         let millis: u64 = millis.try_into()?;
                         let duration = Duration::from_millis(millis);
+
+                        let exec = context.executor_index();
+
+                        let span = debug_span!("asleep", duration = ?duration, target = "async");
                         let future = async move {
-                            dbg!("sleep", thread::current().id());
-                            debug!("sleeping for {duration:?}");
+                            tracing::debug!("sleeping for {duration:?}");
                             let _instant = Timer::after(duration).await;
-                            debug!("done sleeping");
+                            tracing::debug!("done sleeping");
                             Ok(new_ref!(Value, Value::Empty))
-                        };
-                        let task =
-                            ExecutorTask::new(Executor::at_index(context.executor_index()), future);
+                        }
+                        .instrument(span);
+
+                        let task = ExecutorTask::new(
+                            format!("sleep {millis}ms"),
+                            Executor::root_worker(),
+                            future,
+                        );
+                        Executor::start_task(&task);
+
+                        // let task =
+                        // ExecutorTask::new(Executor::at_index(context.executor_index()), future);
 
                         Ok(new_ref!(
                             Value,
@@ -936,8 +911,11 @@ pub fn eval(
                         };
 
                         // let executor = context.executor();
-                        let task =
-                            ExecutorTask::new(Executor::at_index(context.executor_index()), future);
+                        let task = ExecutorTask::new(
+                            "one_shot".to_owned(),
+                            Executor::at_index(context.executor_index()),
+                            future,
+                        );
                         // let task = ExecutorTask::new(Executor::global(), future);
 
                         // let task = baz.spawn(future);
@@ -1143,6 +1121,7 @@ fn spawn(
     let executor_id = Executor::new_worker();
     nested_context.set_executor_index(executor_id);
 
+    let t_span = debug_span!("spawn_span", target = "async", name = ?name);
     let future = async move {
         let mem = nested_context.memory().clone();
         let mut vm = VM::new(&mem);
@@ -1163,7 +1142,8 @@ fn spawn(
         } else {
             unreachable!()
         }
-    };
+    }
+    .instrument(t_span);
 
     // let task = fubar.executor().spawn(future);
     // context_copy.executor().park_value(new_ref!(Value, Value::Task(name, Some(task))));
@@ -1176,12 +1156,12 @@ fn spawn(
 
     // dbg!(driver.executor_index());
 
-    let child_task = ExecutorTask::new(Executor::at_index(executor_id), future);
+    let child_task = ExecutorTask::new("spawn".to_owned(), Executor::at_index(executor_id), future);
 
     // This is *key*.
     // task.detach();
     // child_task.start();
-    Executor::spawn(&child_task);
+    Executor::start_task(&child_task);
 
     // let child = new_ref!(Value, Value::Future(name.clone(), Some(task)));
     // let value = new_ref!(Value, Value::Task(ChaChaTask::new(name.clone(), task)));
@@ -1189,12 +1169,16 @@ fn spawn(
     // Stash the future away so that it doesn't get dropped when it's done running.
     // nested_context_clone.executor().park_value(value.clone());
 
-    let future = async move { child_task.await };
+    let future = async move {
+        let result = child_task.await;
+        Executor::remove_worker(executor_id);
+        result
+    };
 
     // 🚧 This puts all spawned tasks on the main executor. I need to ponder whether
     // or not I want them to be nested.
     // let task = Executor::global().spawn(future);
-    let task = ExecutorTask::new(Executor::global(), future);
+    let task = ExecutorTask::new("spawn driver".to_owned(), Executor::root_worker(), future);
     // Executor::spawn(&task);
 
     let value = new_ref!(

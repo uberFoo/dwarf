@@ -8,14 +8,16 @@ use std::{
 #[cfg(feature = "async")]
 use std::thread;
 
-#[cfg(feature = "async")]
-use dwarf::chacha::r#async::Executor;
+// #[cfg(feature = "async")]
+// use dwarf::chacha::interpreter::Executor;
 
 use clap::{ArgAction, Args, Parser};
 use dap::{prelude::BasicClient, server::Server};
 
 #[cfg(feature = "async")]
 use smol::future;
+#[cfg(feature = "async")]
+use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
 use dwarf::{
     chacha::{
@@ -27,7 +29,7 @@ use dwarf::{
     },
     dwarf::{new_lu_dog, parse_dwarf},
     sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL},
-    Context, Value, ValueResult,
+    Context, Value,
 };
 use reqwest::Url;
 use tracy_client::Client;
@@ -137,6 +139,18 @@ struct DwarfArgs {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    #[cfg(feature = "async")]
+    {
+        let format_layer = fmt::layer().with_thread_ids(true).without_time().pretty();
+        let filter_layer =
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+
+        tracing_subscriber::registry()
+            .with(filter_layer)
+            .with(format_layer)
+            .init();
+    }
+    #[cfg(not(feature = "async"))]
     pretty_env_logger::init();
     color_backtrace::install();
     Client::start();
@@ -284,19 +298,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             let value = std::ptr::read(value);
                             let value = value.into_inner().unwrap();
 
-                            let future = async {
-                                let executor = Executor::global();
-                                executor.shutdown();
-                                let value = value.await;
-                                value
-                            };
-
-                            let value = future::block_on(future);
-                            dbg!("done", &value);
-
-                            // dbg!(&value);
-                            // let value = future::block_on(value);
-                            // dbg!("done", &value);
+                            let value = future::block_on(value);
 
                             let value = std::sync::Arc::into_raw(value);
                             let value = std::ptr::read(value);

@@ -1,3 +1,6 @@
+#[cfg(feature = "async")]
+use tracing::{debug_span, Instrument};
+
 use crate::{
     chacha::{
         error::{ChaChaError, Result},
@@ -12,7 +15,7 @@ use crate::{
 use super::Executor;
 
 #[cfg(feature = "async")]
-use crate::chacha::r#async::Task;
+use crate::chacha::asink::AsyncTask;
 
 pub fn eval<'a>(
     block_id: &SarzakStorePtr,
@@ -27,14 +30,20 @@ pub fn eval<'a>(
     {
         if s_read!(block).a_sink {
             let mut cloned_context = context.clone();
+            let span = debug_span!("async block", target = "async");
             let future = async move {
                 let mem = cloned_context.memory().clone();
                 let mut vm = VM::new(&mem);
                 eval_inner(block, &mut cloned_context, &mut vm)
-            };
+            }
+            .instrument(span);
 
             // let task = ChaChaTask::new(Executor::global(), future);
-            let task = Task::new(Executor::at_index(context.executor_index()), future);
+            let task = AsyncTask::new(
+                "block".to_owned(),
+                Executor::at_index(context.executor_index()),
+                future,
+            );
 
             // let task = context.executor().spawn(future);
 

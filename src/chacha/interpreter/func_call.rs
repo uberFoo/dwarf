@@ -9,10 +9,13 @@ use snafu::{location, prelude::*, Location};
 use tracy_client::span;
 
 #[cfg(feature = "async")]
+use tracing::{debug_span, Instrument};
+
+#[cfg(feature = "async")]
 use super::Executor;
 
 #[cfg(feature = "async")]
-use crate::chacha::r#async::Task;
+use crate::chacha::asink::AsyncTask;
 
 use crate::{
     chacha::{
@@ -74,7 +77,8 @@ pub fn eval_function_call<'a>(
             let args = args.to_owned();
             let span = span.to_owned();
             let mut cloned_context = context.clone();
-            // let mut vm = vm.to_owned();
+
+            let t_span = debug_span!("async func_call", target = "async");
 
             let future = async move {
                 let mem = cloned_context.memory().clone();
@@ -89,9 +93,14 @@ pub fn eval_function_call<'a>(
                     &mut cloned_context,
                     &mut vm,
                 )
-            };
+            }
+            .instrument(t_span);
 
-            let task = Task::new(Executor::at_index(context.executor_index()), future);
+            let task = AsyncTask::new(
+                "func_call".to_owned(),
+                Executor::at_index(context.executor_index()),
+                future,
+            );
 
             // let task = context.executor().spawn(future);
 
