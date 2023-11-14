@@ -130,6 +130,7 @@ lazy_static! {
     pub(super) static ref RUNNING: Mutex<bool> = Mutex::new(true);
     pub(super) static ref CVAR: Condvar = Condvar::new();
     pub(crate) static ref STEPPING: Mutex<bool> = Mutex::new(false);
+    pub(super) static ref EXEC_MUTEX: Mutex<bool> = Mutex::new(false);
 }
 
 #[cfg(feature = "async")]
@@ -138,17 +139,30 @@ pub(super) struct Executor(Option<_Executor<'static>>);
 
 impl Executor {
     pub(super) fn new(thread_count: usize) {
-        let executor = _Executor::new(thread_count);
-        executor.start(thread_count);
-        unsafe {
-            EXECUTOR.set(Executor(Some(executor))).unwrap();
+        // loop {
+        //     let mut guard = EXEC_MUTEX.lock();
+        //     if !*guard {
+        //         *guard = true;
+        //         break;
+        //     }
+        // }
+
+        if unsafe { EXECUTOR.get().is_none() } {
+            let executor = _Executor::new(thread_count);
+            executor.start(thread_count);
+            unsafe {
+                EXECUTOR.set(Executor(Some(executor))).unwrap();
+            }
         }
     }
 
     pub(super) fn shutdown() {
-        let executor = unsafe { EXECUTOR.get_mut().unwrap() };
-        if let Some(executor) = executor.0.take() {
-            executor.shutdown();
+        // let mut guard = EXEC_MUTEX.lock();
+        // *guard = false;
+        if let Some(mut executor) = unsafe { EXECUTOR.take() } {
+            if let Some(executor) = executor.0.take() {
+                // executor.shutdown();
+            }
         }
     }
 

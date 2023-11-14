@@ -211,7 +211,7 @@ impl Future for Value {
 
     fn poll(
         self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
+        cx_: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Self::Output> {
         let this = std::pin::Pin::into_inner(self);
 

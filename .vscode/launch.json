@@ -7,12 +7,59 @@
         {
             "type": "lldb",
             "request": "launch",
+            "name": "Debug integration tests",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--features=multi-vec, repl, async",
+                    "--no-default-features",
+                    "-j=1",
+                    "--no-run",
+                    "--test",
+                    "harness"
+                ],
+                "filter": {
+                    "name": "harness",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "RUST_BACKTRACE": "1"
+            }
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests deux",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    // "--package=dwarf"
+                ],
+                // "filter": {
+                //     "name": "dwarf",
+                //     "kind": "lib"
+                // }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "RUST_BACKTRACE": "1"
+            }
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
             "name": "Debug unit tests",
             "cargo": {
                 "args": [
                     "test",
-                    "--features=\"multi-vec, repl, async\"",
-                    "--no-default-features",
+                    // "--features=\"multi-vec, repl, async\"",
+                    // "--no-default-features",
                     // "--no-run",
                     // "--lib",
                     // "--package=dwarf"
@@ -23,7 +70,10 @@
                 //     }
             },
             "args": [],
-            "cwd": "${workspaceFolder}"
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "RUST_BACKTRACE": "1"
+            }
         },
         {
             "type": "lldb",
@@ -82,7 +132,7 @@
                     "build",
                     "--bin=dwarf",
                     "--package=dwarf",
-                    // "--features=\"parking-lot-mutex, print-std-out, repl\"",
+                    // "--features=parking-lot-mutex, print-std-out, repl",
                     // "--no-default-features"
                 ],
                 "filter": {
@@ -94,8 +144,6 @@
                 // "tests/harness/chacha/sleep.tao"
                 // "tests/harness/chacha/async/one_shot.tao"
                 "./async.ore",
-                "--threads",
-                "1"
             ],
             "cwd": "${workspaceFolder}",
             "env": {

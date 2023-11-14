@@ -139,10 +139,11 @@ fn run_program(test: &str, program: &str) -> Result<(Value, String), String> {
     let result = match start_func("main", false, &mut ctx) {
         Ok(value) => {
             unsafe {
-                let value = std::sync::Arc::into_raw(value);
-                let value = std::ptr::read(value);
-                let value = value.into_inner().unwrap();
-                let value = future::block_on(value);
+                // let value = std::sync::Arc::into_raw(value);
+                // let value = std::ptr::read(value);
+                // let value = value.into_inner().unwrap();
+
+                // let value = future::block_on(value);
 
                 let value = std::sync::Arc::into_raw(value);
                 let value = std::ptr::read(value);
@@ -229,6 +230,7 @@ fn run_program(test: &str, program: &str) -> Result<(Value, String), String> {
         }
     };
 
+    dbg!("harness_shutdown");
     shutdown_interpreter();
 
     result

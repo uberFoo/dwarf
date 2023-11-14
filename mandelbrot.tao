@@ -63,11 +63,11 @@ fn pixel_to_point(
     }
 }
 
-fn escape_time(c: Complex, limit: int) -> Option<int> {
+// fn escape_time(c: Complex, limit: int) -> Option<int> {
+fn escape_time(c: Complex, limit: int) -> int {
     // debugger;
     let z = Complex::zero();
     for i in 0..limit {
-        // Also the chained method calls don't affect the correct z, or something.
         // z.square().add(c);
         ComplexEx::square(z);
         ComplexEx::add(z, c);
@@ -82,13 +82,14 @@ fn escape_time(c: Complex, limit: int) -> Option<int> {
             // if ComplexEx::norm_squared(z) > 4.0 {
             // if z.norm_squared() > 4.0 {
             // debugger;
-            // return Some(i);
-            return Option::<int>::Some(i);
+            return i;
+            // return Option::<int>::Some(i);
         }
     }
-    Option::<int>::None
+    // Option::<int>::None
     // None
     // limit
+    0
 }
 
 fn main() {
@@ -160,16 +161,19 @@ fn do_column(
 ) {
     for column in 0..width {
         let point = pixel_to_point(width, height, column, row, upper_left, lower_right);
-        let time: Option<int> = escape_time(point, time);
-        match time {
-            Option::<int>::None => print("*"),
-            Option::<int>::Some(time) => print(" "),
-        };
-        // if time > 0 {
-        //     print(" ");
-        // } else {
-        //     print("*");
-        // }
+        // let time: Option<int> = escape_time(point, time);
+        let time = escape_time(point, time);
+
+        // match time {
+        //     Option::<int>::None => print("*"),
+        //     Option::<int>::Some(time) => print(" "),
+        // };
+
+        if time > 0 {
+            print(" ");
+        } else {
+            print("*");
+        }
     }
     print("\n");
 }
