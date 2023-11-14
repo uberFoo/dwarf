@@ -25,7 +25,8 @@ File a bug report, and let me know.
 
 The easiest thing to do is to download a [release](https://github.com/uberFoo/dwarf/releases).
 
-### MacOs
+### MacOS
+
 MacOs Gatekeeper will complain about the binary being from an unidentified developer, or that it can't check for malware.
 Give this a go on the command line, replacing the path with the path to the downloaded binary:
 
@@ -34,6 +35,7 @@ xattr -d com.apple.quarantine ~/Downloads/dwarf-aarch64-apple-darwin
 ```
 
 ### Linux
+
 > ⚠️ **Linux Build Problem:** I'm having some issues compiling a dependency on linux.
 
 ### Building from Source
