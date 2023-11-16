@@ -15,7 +15,7 @@ use crate::{
 use super::Executor;
 
 #[cfg(feature = "async")]
-use crate::chacha::asink::AsyncTask;
+use uberfoo_async::AsyncTask;
 
 pub fn eval<'a>(
     block_id: &SarzakStorePtr,

@@ -15,7 +15,7 @@ use tracing::{debug_span, Instrument};
 use super::Executor;
 
 #[cfg(feature = "async")]
-use crate::chacha::asink::AsyncTask;
+use uberfoo_async::AsyncTask;
 
 use crate::{
     chacha::{
@@ -409,10 +409,14 @@ fn eval_built_in_function_call(
             debug!("type check value {value:?}");
 
             if arg_check {
+                let arg_ty = {
+                    let mut lu_write = s_write!(lu_dog);
+                    s_read!(value).get_type(&s_read!(sarzak), &mut lu_write)
+                };
+
                 let x_value = &s_read!(expr).r11_x_value(&s_read!(lu_dog))[0];
                 let span = &s_read!(x_value).r63_span(&s_read!(lu_dog))[0];
 
-                let arg_ty = s_read!(value).get_type(&s_read!(sarzak), &mut s_write!(lu_dog));
                 typecheck(&param_ty, &arg_ty, span, location!(), context)?;
             }
 

@@ -15,16 +15,23 @@ pub fn eval(
 ) -> Result<RefType<Value>> {
     let lu_dog = context.lu_dog_heel().clone();
 
-    let expr = s_read!(lu_dog).exhume_variable_expression(expr).unwrap();
-    debug!("ExpressionEnum::VariableExpression expr: {:?}", expr);
-    let value = context.memory().get(&s_read!(expr).name);
+    // let expr = s_read!(lu_dog).exhume_variable_expression(expr).unwrap();
+    // let name = s_read!(expr).name.clone();
+    // debug!("ExpressionEnum::VariableExpression expr: {:?}", expr);
+
+    let name = {
+        let expr = s_read!(lu_dog).exhume_variable_expression(expr).unwrap();
+        let name = s_read!(expr).name.clone();
+        name
+    };
+    let value = context.memory().get(&name);
 
     ensure!(value.is_some(), {
         let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
         let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
         let read = s_read!(span);
         let span = read.start as usize..read.end as usize;
-        let var = s_read!(expr).name.clone();
+        let var = name;
         VariableNotFoundSnafu { var, span }
     });
 

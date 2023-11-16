@@ -106,6 +106,7 @@ async-condvar-fair = { version = "1.0.0", features = ["smol"] }
 # concurrent-queue = "2.3.0"
 threadpool = "1.8.1"
 tracing-subscriber = { version = "0.3.17", features = ["env-filter"] }
+uberfoo-async = { path = "../uberfoo-async" }
 
 [patch."https://github.com/uberFoo/sarzak"]
 sarzak = { path = "../sarzak" }

@@ -17,7 +17,7 @@ use snafu::{location, prelude::*, Location};
 use uuid::Uuid;
 
 #[cfg(feature = "async")]
-use crate::chacha::asink::AsyncTask as ExecutorTask;
+use uberfoo_async::AsyncTask as ExecutorTask;
 
 #[cfg(feature = "async")]
 use super::Executor;
@@ -182,9 +182,7 @@ pub fn eval(
             let meth_name = &s_read!(meth).name;
             debug!("MethodCall method {meth:?}");
             debug!("MethodCall value {value:?}");
-            // let mut value = s_write!(value);
 
-            // let x = match &mut *value {
             let read_value = s_read!(value);
             match &*read_value {
                 Value::ProxyType {

@@ -13,7 +13,7 @@ use sarzak::lu_dog::ValueTypeEnum;
 use uuid::Uuid;
 
 #[cfg(feature = "async")]
-use crate::chacha::interpreter::Executor;
+use uberfoo_async::Executor;
 
 use crate::{
     chacha::error::Result,
@@ -177,7 +177,7 @@ pub enum Value {
     #[cfg(feature = "async")]
     Future(
         String,
-        Option<crate::chacha::asink::AsyncTask<'static, ValueResult>>,
+        Option<uberfoo_async::AsyncTask<'static, ValueResult>>,
     ),
     Integer(DwarfInteger),
     Lambda(RefType<Lambda>),
@@ -197,7 +197,7 @@ pub enum Value {
     #[cfg(feature = "async")]
     Task {
         executor_id: Option<usize>,
-        parent: Option<crate::chacha::asink::AsyncTask<'static, ValueResult>>,
+        parent: Option<uberfoo_async::AsyncTask<'static, ValueResult>>,
     },
     Thonk(&'static str, usize),
     TupleEnum(RefType<TupleEnum>),

@@ -1,5 +1,5 @@
 #[cfg(feature = "async")]
-use super::Executor;
+use uberfoo_async::Executor;
 
 pub mod block;
 pub mod call;

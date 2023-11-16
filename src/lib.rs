@@ -75,7 +75,7 @@ cfg_if::cfg_if! {
             }
         }
 
-        type RefType<T> = std::rc::Rc<std::cell::RefCell<T>>;
+        pub type RefType<T> = std::rc::Rc<std::cell::RefCell<T>>;
 
         impl<T> NewRef<T> for RefType<T> {
             fn new_ref(value: T) -> RefType<T> {
@@ -137,7 +137,7 @@ cfg_if::cfg_if! {
             }
         }
 
-        type RefType<T> = std::sync::Arc<no_deadlocks::RwLock<T>>;
+        pub type RefType<T> = std::sync::Arc<no_deadlocks::RwLock<T>>;
         impl<T> NewRef<T> for RefType<T> {
             fn new_ref(value: T) -> RefType<T> {
                 std::sync::Arc::new(no_deadlocks::RwLock::new(value))

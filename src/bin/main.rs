@@ -141,9 +141,9 @@ struct DwarfArgs {
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     #[cfg(feature = "async")]
     {
-        let format_layer = fmt::layer().with_thread_ids(true).without_time().pretty();
+        let format_layer = fmt::layer().with_thread_ids(true).pretty();
         let filter_layer =
-            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("error"));
 
         tracing_subscriber::registry()
             .with(filter_layer)
@@ -288,11 +288,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 Ok(value) => {
                     #[cfg(feature = "async")]
                     {
-                        // // thread::yield_now();
-
-                        // // ctx.executor().shutdown();
-                        // Executor::global().shutdown();
-
                         unsafe {
                             let value = std::sync::Arc::into_raw(value);
                             let value = std::ptr::read(value);
@@ -320,44 +315,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 _ => println!("{}", value),
                             }
                         }
-                        // // let _ = future::block_on(async { ctx.executor().run().await });
-                        // // while !ctx.executor().finished() {}
-                        // unsafe {
-                        //     let value = std::sync::Arc::into_raw(value);
-                        //     let value = std::ptr::read(value);
-                        //     let value = value.into_inner().unwrap();
-
-                        //     match value {
-                        //         Value::Future(name, Some(task)) => {
-                        //             dbg!(&name, &task);
-                        //             // Ok::<(), ChaChaError>(())
-
-                        //             // let task = task.take().unwrap();
-                        //             // match ctx.executor().block_on(task) {
-                        //             match Executor::global().block_on(task) {
-                        //                 // Ok(_) => Ok::<(), ChaChaError>(()),
-                        //                 Ok(result) => {
-                        //                     dbg!(result);
-                        //                 }
-                        //                 Err(e) => {
-                        //                     eprintln!("Interpreter exited with:");
-                        //                     eprintln!(
-                        //                         "{}",
-                        //                         ChaChaErrorReporter(
-                        //                             &e.into(),
-                        //                             is_uber,
-                        //                             &source_code,
-                        //                             &name
-                        //                         )
-                        //                     );
-                        //                 }
-                        //             }
-                        //         }
-                        //         _ => {
-                        //             dbg!(value);
-                        //         }
-                        //     }
-                        // };
                     }
 
                     Ok::<(), ChaChaError>(())

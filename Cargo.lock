@@ -331,7 +331,7 @@ dependencies = [
  "cfg-if",
  "concurrent-queue",
  "futures-io",
- "futures-lite 2.0.0",
+ "futures-lite 2.0.1",
  "parking",
  "polling 3.3.0",
  "rustix 0.38.15",
@@ -982,7 +982,7 @@ dependencies = [
  "dap",
  "diff",
  "env_logger 0.10.0",
- "futures-lite 2.0.0",
+ "futures-lite 2.0.1",
  "heck",
  "hyper",
  "lazy_static",
@@ -1014,6 +1014,7 @@ dependencies = [
  "tui-logger",
  "tui-textarea",
  "tui-tree-widget",
+ "uberfoo-async",
  "unicode-segmentation",
  "uuid",
  "walkdir",
@@ -1255,9 +1256,9 @@ dependencies = [
 
 [[package]]
 name = "futures-lite"
-version = "2.0.0"
+version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9c1155db57329dca6d018b61e76b1488ce9a2e5e44028cac420a5898f4fcef63"
+checksum = "d3831c2651acb5177cbd83943f3d9c8912c5ad03c76afcc0e9511ba568ec5ebb"
 dependencies = [
  "fastrand 2.0.1",
  "futures-core",
@@ -1265,7 +1266,6 @@ dependencies = [
  "memchr",
  "parking",
  "pin-project-lite",
- "waker-fn",
 ]
 
 [[package]]
@@ -2033,9 +2033,9 @@ checksum = "b15813163c1d831bf4a13c3610c05c0d03b39feb07f7e09fa234dac9b15aaf39"
 
 [[package]]
 name = "parking"
-version = "2.1.1"
+version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e52c774a4c39359c1d1c52e43f73dd91a75a614652c825408eec30c95a9b2067"
+checksum = "bb813b8af86854136c6922af0598d719255ecb2179515e6e7730d468f05c9cae"
 
 [[package]]
 name = "parking_lot"
@@ -3338,6 +3338,21 @@ name = "typed-arena"
 version = "2.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6af6ae20167a9ece4bcb41af5b80f8a1f1df981f6391189ce00fd257af04126a"
+
+[[package]]
+name = "uberfoo-async"
+version = "0.1.0"
+dependencies = [
+ "async-executor 1.6.0",
+ "async-io 2.2.0",
+ "crossbeam",
+ "futures-lite 2.0.1",
+ "once_cell",
+ "parking_lot",
+ "slab",
+ "threadpool",
+ "tracing",
+]
 
 [[package]]
 name = "unicode-bidi"

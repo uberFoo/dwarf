@@ -1,6 +1,8 @@
 use std::{env, path::PathBuf};
 
 use ansi_term::Colour;
+use lazy_static::lazy_static;
+use parking_lot::Mutex;
 use tracy_client::Client;
 
 use dwarf::{
@@ -11,7 +13,6 @@ use dwarf::{
     },
     dwarf::{new_lu_dog, parse_dwarf},
     sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL},
-    RefType,
 };
 
 cfg_if::cfg_if! {
@@ -22,6 +23,10 @@ cfg_if::cfg_if! {
         use smol::Task;
         use smol::future;
     }
+}
+
+lazy_static! {
+    static ref EXEC_MUTEX: Mutex<()> = Mutex::new(());
 }
 
 #[cfg(feature = "print-std-out")]
@@ -78,6 +83,7 @@ fn diff_with_file(path: &str, test: &str, found: &str) -> Result<(), ()> {
 }
 
 fn run_program(test: &str, program: &str) -> Result<(Value, String), String> {
+    let _guard = EXEC_MUTEX.lock();
     let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
     let dwarf_home = env::var("DWARF_HOME")
         .unwrap_or_else(|_| {
@@ -137,85 +143,30 @@ fn run_program(test: &str, program: &str) -> Result<(Value, String), String> {
 
     let mut ctx = initialize_interpreter(1, dwarf_home, ctx, sarzak).unwrap();
     let result = match start_func("main", false, &mut ctx) {
-        Ok(value) => {
-            unsafe {
-                // let value = std::sync::Arc::into_raw(value);
-                // let value = std::ptr::read(value);
-                // let value = value.into_inner().unwrap();
+        Ok(value) => unsafe {
+            let value = std::sync::Arc::into_raw(value);
+            let value = std::ptr::read(value);
+            let value = value.into_inner().unwrap();
+            match value {
+                Value::Error(msg) => {
+                    let msg = *msg;
+                    let error = format!(
+                        "Interpreter exited with:\n{}",
+                        ChaChaErrorReporter(&msg.into(), false, program, test)
+                    )
+                    .trim()
+                    .to_owned();
 
-                // let value = future::block_on(value);
+                    eprintln!("{error}");
 
-                let value = std::sync::Arc::into_raw(value);
-                let value = std::ptr::read(value);
-                let value = value.into_inner().unwrap();
-                match value {
-                    Value::Error(msg) => {
-                        let msg = *msg;
-                        let error = format!(
-                            "Interpreter exited with:\n{}",
-                            ChaChaErrorReporter(&msg.into(), false, program, test)
-                        )
-                        .trim()
-                        .to_owned();
-
-                        eprintln!("{error}");
-
-                        Err(error)
-                    }
-                    _ => {
-                        let stdout = ctx.drain_std_out().join("").trim().to_owned();
-                        Ok((value, stdout))
-                    }
+                    Err(error)
+                }
+                _ => {
+                    let stdout = ctx.drain_std_out().join("").trim().to_owned();
+                    Ok((value, stdout))
                 }
             }
-
-            // let stdout = ctx.drain_std_out().join("").trim().to_owned();
-            // Ok((value, stdout))
-
-            // ctx.executor().shutdown();
-            // let _ = future::block_on(async { ctx.executor().run().await });
-            // #[cfg(feature = "async")]
-            // unsafe {
-            //     let v = std::sync::Arc::into_raw(value.clone());
-            //     let v = std::ptr::read(v);
-            //     let v = v.into_inner().unwrap();
-            //     match v {
-            //         Value::Future(name, mut task) => {
-            //             dbg!(&name);
-            //             let task = task.take().unwrap();
-            //             match ctx.executor().block_on(task) {
-            //                 Ok(value) => {
-            //                     let stdout = ctx.drain_std_out().join("").trim().to_owned();
-
-            //                     println!("{stdout}");
-
-            //                     Ok((value, stdout))
-            //                 }
-            //                 Err(e) => {
-            //                     let e = e.into();
-            //                     eprintln!("{}", ChaChaErrorReporter(&e, true, program, test));
-
-            //                     let error = format!(
-            //                         "Interpreter exited with:\n{}",
-            //                         ChaChaErrorReporter(&e, false, program, test)
-            //                     )
-            //                     .trim()
-            //                     .to_owned();
-
-            //                     Err(error)
-            //                 }
-            //             }
-            //         }
-            //         _ => {
-            //             let stdout = ctx.drain_std_out().join("").trim().to_owned();
-
-            //             println!("{stdout}");
-
-            //             Ok((value, stdout))
-            //         }
-            //     }
-            // }
-        }
+        },
         Err(e) => {
             let error = format!(
                 "Interpreter exited with:\n{}",
@@ -230,7 +181,6 @@ fn run_program(test: &str, program: &str) -> Result<(Value, String), String> {
         }
     };
 
-    dbg!("harness_shutdown");
     shutdown_interpreter();
 
     result

@@ -13,10 +13,7 @@ use snafu::prelude::*;
 use super::Executor;
 
 #[cfg(feature = "async")]
-use crate::chacha::asink::Worker;
-
-#[cfg(feature = "async")]
-use crate::chacha::asink::AsyncTask;
+use uberfoo_async::{AsyncTask, Worker};
 
 use crate::{
     chacha::error::{Result, WrongNumberOfArgumentsSnafu},
