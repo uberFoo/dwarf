@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 #[cfg(feature = "async")]
-use std::thread;
+use puteketeke::{Executor, Worker};
 
 use circular_queue::CircularQueue;
 use crossbeam::channel::{Receiver, Sender};
@@ -9,7 +9,7 @@ use crossbeam::channel::{Receiver, Sender};
 use crate::{
     interpreter::{DebuggerStatus, Memory, MemoryUpdateMessage},
     lu_dog::{Block, ObjectStore as LuDogStore},
-    new_ref, s_read, s_write,
+    new_ref, s_read,
     sarzak::ObjectStore as SarzakStore,
     Dirty, ModelStore, NewRef, RefType, Value,
 };
@@ -47,7 +47,7 @@ impl ModelContext {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Context {
     models: ModelContext,
     /// The prompt to display in the REPL
@@ -68,34 +68,38 @@ pub struct Context {
     dwarf_home: PathBuf,
     dirty: Vec<Dirty>,
     #[cfg(feature = "async")]
-    executor_index: usize,
+    worker: Option<Worker>,
+    #[cfg(feature = "async")]
+    executor: Executor,
     source_file: String,
 }
 
-impl Clone for Context {
-    fn clone(&self) -> Self {
-        Self {
-            models: self.models.clone(),
-            prompt: self.prompt.clone(),
-            block: self.block.clone(),
-            memory: self.memory.clone(),
-            mem_update_recv: self.mem_update_recv.clone(),
-            std_out_send: self.std_out_send.clone(),
-            std_out_recv: self.std_out_recv.clone(),
-            debug_status_writer: self.debug_status_writer.clone(),
-            // obj_file_path: self.obj_file_path.clone(),
-            timings: self.timings.clone(),
-            expr_count: self.expr_count,
-            func_calls: self.func_calls,
-            args: self.args.clone(),
-            dwarf_home: self.dwarf_home.clone(),
-            dirty: self.dirty.clone(),
-            #[cfg(feature = "async")]
-            executor_index: self.executor_index,
-            source_file: self.source_file.clone(),
-        }
-    }
-}
+// impl Clone for Context {
+//     fn clone(&self) -> Self {
+//         Self {
+//             models: self.models.clone(),
+//             prompt: self.prompt.clone(),
+//             block: self.block.clone(),
+//             memory: self.memory.clone(),
+//             mem_update_recv: self.mem_update_recv.clone(),
+//             std_out_send: self.std_out_send.clone(),
+//             std_out_recv: self.std_out_recv.clone(),
+//             debug_status_writer: self.debug_status_writer.clone(),
+//             // obj_file_path: self.obj_file_path.clone(),
+//             timings: self.timings.clone(),
+//             expr_count: self.expr_count,
+//             func_calls: self.func_calls,
+//             args: self.args.clone(),
+//             dwarf_home: self.dwarf_home.clone(),
+//             dirty: self.dirty.clone(),
+//             #[cfg(feature = "async")]
+//             worker: self.executor.new_worker(),
+//             #[cfg(feature = "async")]
+//             executor: self.executor.clone(),
+//             source_file: self.source_file.clone(),
+//         }
+//     }
+// }
 
 /// Save the lu_dog model when the context is dropped
 ///
@@ -127,6 +131,14 @@ impl Clone for Context {
 //     }
 // }
 
+impl Drop for Context {
+    fn drop(&mut self) {
+        if let Some(worker) = self.worker.take() {
+            // worker.destroy();
+        }
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 impl Context {
     pub fn new(
@@ -147,6 +159,7 @@ impl Context {
         dwarf_home: PathBuf,
         dirty: Vec<Dirty>,
         source_file: String,
+        executor: Executor,
     ) -> Self {
         Self {
             prompt,
@@ -165,7 +178,9 @@ impl Context {
             dirty,
             source_file,
             #[cfg(feature = "async")]
-            executor_index: 0,
+            worker: Some(executor.root_worker()),
+            #[cfg(feature = "async")]
+            executor,
         }
     }
 
@@ -174,14 +189,26 @@ impl Context {
     }
 
     #[cfg(feature = "async")]
-    pub fn executor_index(&self) -> usize {
-        self.executor_index
+    pub fn worker(&self) -> Option<&Worker> {
+        self.worker.as_ref()
     }
 
     #[cfg(feature = "async")]
-    pub fn set_executor_index(&mut self, index: usize) {
-        self.executor_index = index;
+    pub fn executor(&self) -> &Executor {
+        &self.executor
     }
+
+    #[cfg(feature = "async")]
+    pub fn new_worker(&self) -> Self {
+        let mut result = self.clone();
+        result.worker = Some(self.executor.new_worker());
+        result
+    }
+
+    // #[cfg(feature = "async")]
+    // pub fn set_executor_index(&mut self, index: usize) {
+    //     self.executor_index = index;
+    // }
 
     pub fn dirty(&self) -> Vec<Dirty> {
         self.dirty.clone()

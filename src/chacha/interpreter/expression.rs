@@ -1,6 +1,3 @@
-#[cfg(feature = "async")]
-use uberfoo_async::Executor;
-
 pub mod block;
 pub mod call;
 pub mod debugger;

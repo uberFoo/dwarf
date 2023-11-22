@@ -10,10 +10,7 @@ use ansi_term::Colour;
 use snafu::prelude::*;
 
 #[cfg(feature = "async")]
-use super::Executor;
-
-#[cfg(feature = "async")]
-use uberfoo_async::{AsyncTask, Worker};
+use puteketeke::AsyncTask;
 
 use crate::{
     chacha::error::{Result, WrongNumberOfArgumentsSnafu},
@@ -125,21 +122,18 @@ pub(crate) fn http_get(
         Ok(new_ref!(Value, Value::String(body)))
     })
     .instrument(span);
-    let task = AsyncTask::new(
-        "http_get".to_owned(),
-        Executor::at_index(context.executor_index()),
-        future,
+    let task = context.worker().unwrap().create_task(future).unwrap();
+
+    let value = new_ref!(
+        Value,
+        Value::Future {
+            name: task_name,
+            task: Some(task),
+            executor: context.executor().clone()
+        }
     );
 
-    // let task = ChaChaTask::new(&Executor::global(), future);
-    // let task = context.executor().spawn(future);
-
-    let future = new_ref!(Value, Value::Future(task_name, Some(task)));
-
-    // Stash the future away so that it doesn't get dropped when it's done running.
-    // context.executor().park_value(future.clone());
-
-    Ok(future)
+    Ok(value)
 }
 
 /// Parse a string into a LuDogStore

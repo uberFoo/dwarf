@@ -16,12 +16,6 @@ use tracing::{debug_span, Instrument};
 use snafu::{location, prelude::*, Location};
 use uuid::Uuid;
 
-#[cfg(feature = "async")]
-use uberfoo_async::AsyncTask as ExecutorTask;
-
-#[cfg(feature = "async")]
-use super::Executor;
-
 use crate::{
     chacha::{
         error::{NoSuchStaticMethodSnafu, Result, TypeMismatchSnafu},
@@ -113,7 +107,7 @@ pub fn eval(
                 Value::Struct(_) => Ok(value.clone()),
                 Value::Store(_store, _plugin) => Ok(value.clone()),
                 Value::Task {
-                    executor_id: _,
+                    worker: _,
                     parent: _,
                 } => Ok(value.clone()),
                 Value::Vector(_) => Ok(value.clone()),
@@ -137,7 +131,7 @@ pub fn eval(
             }
         };
 
-        let ty = s_read!(value).get_type(&s_read!(sarzak), &mut s_write!(lu_dog));
+        let ty = s_read!(value).get_type(&s_read!(sarzak), &s_read!(lu_dog));
 
         // First we need to check the type of the LHS to see if there are
         // any instance methods on the type. This seems weird. I'm not sure
@@ -520,11 +514,7 @@ pub fn eval(
                             let mut value = s_write!(value);
                             match &mut *value {
                                 Value::Integer(i) => sum += *i,
-                                Value::Task {
-                                    executor_id,
-                                    parent,
-                                } => {
-                                    let e = executor_id.take().unwrap();
+                                Value::Task { worker: _, parent } => {
                                     let t = parent.take().unwrap();
 
                                     let value = future::block_on(t)?;
@@ -694,30 +684,26 @@ pub fn eval(
                         let millis: u64 = millis.try_into()?;
                         let duration = Duration::from_millis(millis);
 
-                        let exec = context.executor_index();
-
                         let span = debug_span!("asleep", duration = ?duration, target = "async");
+                        let executor = context.executor().clone();
                         let future = async move {
                             tracing::debug!("sleeping for {duration:?}");
-                            let _instant = Timer::after(duration).await;
+                            let _instant = executor.timer(duration).await;
                             tracing::debug!("done sleeping");
                             Ok(new_ref!(Value, Value::Empty))
                         }
                         .instrument(span);
+                        let task = context.worker().unwrap().create_task(future).unwrap();
 
-                        let task = ExecutorTask::new(
-                            format!("sleep {millis}ms"),
-                            Executor::root_worker(),
-                            future,
-                        );
-                        Executor::start_task(&task);
-
-                        // let task =
-                        // ExecutorTask::new(Executor::at_index(context.executor_index()), future);
+                        context.executor().start_task(&task);
 
                         Ok(new_ref!(
                             Value,
-                            Value::Future("sleep".to_owned(), Some(task))
+                            Value::Future {
+                                name: "sleep".to_owned(),
+                                task: Some(task),
+                                executor: context.executor().clone()
+                            }
                         ))
                     }
                     ASSERT => chacha::assert(arg_values, expression, lu_dog),
@@ -774,7 +760,8 @@ pub fn eval(
                             {
                                 // 🚧 I'm not really sure what to do about this here. It's
                                 // all really a hack for now anyway.
-                                let ty = func.get_type(&s_read!(sarzak), &mut s_write!(lu_dog));
+                                // 🚧 Sadly I don't know what I'm talking about any longer.
+                                let ty = func.get_type(&s_read!(sarzak), &s_read!(lu_dog));
                                 let ty = PrintableValueType(true, ty, context.models());
                                 let ty = ty.to_string();
                                 TypeMismatchSnafu {
@@ -815,7 +802,7 @@ pub fn eval(
                     TYPEOF => {
                         debug!("evaluating chacha::typeof");
                         let arg = arg_values.pop_front().unwrap().0;
-                        let ty = s_read!(arg).get_type(&s_read!(sarzak), &mut s_write!(lu_dog));
+                        let ty = s_read!(arg).get_type(&s_read!(sarzak), &s_read!(lu_dog));
                         let pvt_ty = PrintableValueType(false, ty, context.models());
 
                         Ok(new_ref!(Value, pvt_ty.to_string().into()))
@@ -854,8 +841,8 @@ pub fn eval(
                             {
                                 // 🚧 I'm not really sure what to do about this here. It's
                                 // all really a hack for now anyway.
-                                let ty =
-                                    s_read!(func).get_type(&s_read!(sarzak), &mut s_write!(lu_dog));
+                                // 🚧 WTF? I clearly copy/pasted this from elsewhere.
+                                let ty = s_read!(func).get_type(&s_read!(sarzak), &s_read!(lu_dog));
                                 let ty = PrintableValueType(true, ty, context.models());
                                 let ty = ty.to_string();
                                 TypeMismatchSnafu {
@@ -908,19 +895,16 @@ pub fn eval(
                             }
                         };
 
-                        // let executor = context.executor();
-                        let task = ExecutorTask::new(
-                            "one_shot".to_owned(),
-                            Executor::at_index(context.executor_index()),
-                            future,
+                        let task = context.worker().unwrap().create_task(future).unwrap();
+
+                        let value = new_ref!(
+                            Value,
+                            Value::Future {
+                                name: "sleep".to_owned(),
+                                task: Some(task),
+                                executor: context.executor().clone()
+                            }
                         );
-                        // let task = ExecutorTask::new(Executor::global(), future);
-
-                        // let task = baz.spawn(future);
-
-                        let value = new_ref!(Value, Value::Future("sleep".to_owned(), Some(task)));
-                        // Stash the future away so that it doesn't get dropped when it's done running.
-                        // context.executor().park_value(value.clone());
 
                         Ok(value)
                     }
@@ -1101,7 +1085,8 @@ fn spawn(
         {
             // 🚧 I'm not really sure what to do about this here. It's
             // all really a hack for now anyway.
-            let ty = func.get_type(&s_read!(sarzak), &mut s_write!(lu_dog));
+            // 🚧 OMFG -- FML
+            let ty = func.get_type(&s_read!(sarzak), &s_read!(lu_dog));
             let ty = PrintableValueType(true, ty, context.models());
             let ty = ty.to_string();
             TypeMismatchSnafu {
@@ -1116,12 +1101,18 @@ fn spawn(
     let expression = expression.clone();
     let mut nested_context = context.clone();
 
-    let executor_id = Executor::new_worker();
-    nested_context.set_executor_index(executor_id);
+    // let executor_id = Executor::new_worker();
+    // nested_context.set_executor_index(executor_id);
 
+    let mut child_context = context.new_worker();
+    let child_worker = child_context.worker().unwrap().clone();
+
+    // let child_task = child_context
+    // .worker()
+    // .create_task(async move {
     let t_span = debug_span!("spawn_span", target = "async", name = ?name);
     let future = async move {
-        let mem = nested_context.memory().clone();
+        let mem = child_context.memory().clone();
         let mut vm = VM::new(&mem);
         let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
         let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
@@ -1143,6 +1134,8 @@ fn spawn(
     }
     .instrument(t_span);
 
+    let child_task = child_worker.spawn_task(future).unwrap();
+
     // let task = fubar.executor().spawn(future);
     // context_copy.executor().park_value(new_ref!(Value, Value::Task(name, Some(task))));
 
@@ -1154,12 +1147,13 @@ fn spawn(
 
     // dbg!(driver.executor_index());
 
-    let child_task = ExecutorTask::new("spawn".to_owned(), Executor::at_index(executor_id), future);
+    // let child_task = ExecutorTask::new("spawn".to_owned(), Executor::at_index(executor_id), future);
 
     // This is *key*.
     // task.detach();
     // child_task.start();
-    Executor::start_task(&child_task);
+    // Executor::start_task(&child_task);
+    // context.executor().start_task(&child_task);
 
     // let child = new_ref!(Value, Value::Future(name.clone(), Some(task)));
     // let value = new_ref!(Value, Value::Task(ChaChaTask::new(name.clone(), task)));
@@ -1167,22 +1161,22 @@ fn spawn(
     // Stash the future away so that it doesn't get dropped when it's done running.
     // nested_context_clone.executor().park_value(value.clone());
 
-    let future = async move {
-        let result = child_task.await;
-        Executor::remove_worker(executor_id);
-        result
-    };
-
-    // 🚧 This puts all spawned tasks on the main executor. I need to ponder whether
-    // or not I want them to be nested.
-    // let task = Executor::global().spawn(future);
-    let task = ExecutorTask::new("spawn driver".to_owned(), Executor::root_worker(), future);
-    // Executor::spawn(&task);
+    let worker = child_worker.clone();
+    let task = context
+        .worker()
+        .unwrap()
+        .create_task(async move {
+            let result = child_task.await;
+            worker.destroy();
+            result
+        })
+        .unwrap();
 
     let value = new_ref!(
         Value,
         Value::Task {
-            executor_id: Some(executor_id),
+            // executor_id: Some(executor_id),
+            worker: Some(child_worker),
             parent: Some(task),
             // child: None
         }

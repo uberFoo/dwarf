@@ -11,12 +11,12 @@
             "cargo": {
                 "args": [
                     "test",
-                    "--features=multi-vec, repl, async",
+                    "harness_items_in_func",
+                    "--features=multi-nd-vec, repl, async",
                     "--no-default-features",
-                    "-j=1",
                     "--no-run",
-                    "--test",
-                    "harness"
+                    // "--test",
+                    // "harness"
                 ],
                 "filter": {
                     "name": "harness",

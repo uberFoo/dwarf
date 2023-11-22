@@ -17,7 +17,7 @@ use tracy_client::{span, Client};
 use uuid::Uuid;
 
 #[cfg(feature = "async")]
-use uberfoo_async::{AsyncTask, Executor, Worker};
+use puteketeke::Executor;
 
 use crate::{
     chacha::{
@@ -132,13 +132,10 @@ lazy_static! {
     pub(super) static ref EXEC_MUTEX: Mutex<()> = Mutex::new(());
 }
 
-pub fn shutdown_interpreter() {
+pub fn shutdown_interpreter(context: &Context) {
     let mut running = RUNNING.lock();
     *running = false;
     CVAR.notify_all();
-
-    #[cfg(feature = "async")]
-    Executor::shutdown();
 }
 
 /// Initialize the interpreter
@@ -396,7 +393,7 @@ pub fn initialize_interpreter(
     Client::start();
 
     #[cfg(feature = "async")]
-    Executor::new(thread_count);
+    let executor = Executor::new(thread_count);
 
     Ok(Context::new(
         format!("{} ", Colour::Blue.normal().paint("道:>")),
@@ -416,6 +413,7 @@ pub fn initialize_interpreter(
         dwarf_home,
         dirty,
         e_context.source.to_owned(),
+        executor,
     ))
 }
 
@@ -504,20 +502,23 @@ fn eval_expression(
             let mut child = context.clone();
             let value = eval_expression(expr, &mut child, vm)?;
 
+            let executor = context.executor();
+
             let mut write_value = s_write!(value);
             match &mut *write_value {
-                Value::Future(_name, task) => {
+                Value::Future {
+                    name: _,
+                    task,
+                    executor,
+                } => {
                     let task = task.take().unwrap();
-                    Executor::start_task(&task);
+                    executor.start_task(&task);
                     let result = future::block_on(task);
                     result
                 }
-                Value::Task {
-                    executor_id: _,
-                    parent,
-                } => {
+                Value::Task { worker: _, parent } => {
                     if let Some(parent) = parent {
-                        Executor::start_task(&parent);
+                        executor.start_task(&parent);
                     }
                     Ok(value.clone())
                 }

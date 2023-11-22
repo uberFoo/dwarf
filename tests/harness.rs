@@ -144,6 +144,7 @@ fn run_program(test: &str, program: &str) -> Result<(Value, String), String> {
     let mut ctx = initialize_interpreter(1, dwarf_home, ctx, sarzak).unwrap();
     let result = match start_func("main", false, &mut ctx) {
         Ok(value) => unsafe {
+            // Ok((Value::Empty, String::new()))
             let value = std::sync::Arc::into_raw(value);
             let value = std::ptr::read(value);
             let value = value.into_inner().unwrap();
@@ -180,8 +181,6 @@ fn run_program(test: &str, program: &str) -> Result<(Value, String), String> {
             Err(error)
         }
     };
-
-    shutdown_interpreter();
 
     result
 }

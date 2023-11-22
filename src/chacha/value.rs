@@ -13,7 +13,7 @@ use sarzak::lu_dog::ValueTypeEnum;
 use uuid::Uuid;
 
 #[cfg(feature = "async")]
-use uberfoo_async::Executor;
+use puteketeke::Executor;
 
 use crate::{
     chacha::error::Result,
@@ -175,10 +175,11 @@ pub enum Value {
     /// excessive, and yet I know I've looked into it before.
     Function(RefType<Function>),
     #[cfg(feature = "async")]
-    Future(
-        String,
-        Option<uberfoo_async::AsyncTask<'static, ValueResult>>,
-    ),
+    Future {
+        name: String,
+        executor: Executor,
+        task: Option<puteketeke::AsyncTask<'static, ValueResult>>,
+    },
     Integer(DwarfInteger),
     Lambda(RefType<Lambda>),
     ParsedDwarf(Context),
@@ -196,8 +197,8 @@ pub enum Value {
     Table(HashMap<String, RefType<Self>>),
     #[cfg(feature = "async")]
     Task {
-        executor_id: Option<usize>,
-        parent: Option<uberfoo_async::AsyncTask<'static, ValueResult>>,
+        worker: Option<puteketeke::Worker>,
+        parent: Option<puteketeke::AsyncTask<'static, ValueResult>>,
     },
     Thonk(&'static str, usize),
     TupleEnum(RefType<TupleEnum>),
@@ -216,9 +217,13 @@ impl Future for Value {
         let this = std::pin::Pin::into_inner(self);
 
         match this {
-            Self::Future(_, task) => {
+            Self::Future {
+                name: _,
+                executor,
+                task,
+            } => {
                 if let Some(task) = task.take() {
-                    Executor::start_task(&task);
+                    executor.start_task(&task);
                     match future::block_on(task) {
                         Ok(value) => std::task::Poll::Ready(value),
                         Err(e) => {
@@ -229,10 +234,7 @@ impl Future for Value {
                     std::task::Poll::Ready(new_ref!(Value, Value::Empty))
                 }
             }
-            Self::Task {
-                executor_id: _,
-                parent,
-            } => {
+            Self::Task { worker: _, parent } => {
                 if let Some(task) = parent.take() {
                     match future::block_on(task) {
                         Ok(value) => std::task::Poll::Ready(value),
@@ -272,7 +274,11 @@ impl std::fmt::Debug for Value {
             Self::Float(num) => write!(f, "{num:?}"),
             Self::Function(func) => write!(f, "{:?}", s_read!(func)),
             #[cfg(feature = "async")]
-            Self::Future(name, task) => write!(f, "Task `{name}`: {task:?}"),
+            Self::Future {
+                name,
+                executor,
+                task,
+            } => write!(f, "Task `{name}`: {task:?}, executor: {executor:?}"),
             Self::Integer(num) => write!(f, "{num:?}"),
             Self::Lambda(ƛ) => write!(f, "{:?}", s_read!(ƛ)),
             Self::ParsedDwarf(ctx) => write!(f, "{ctx:?}"),
@@ -301,10 +307,7 @@ impl std::fmt::Debug for Value {
             Self::Struct(ty) => write!(f, "{:?}", s_read!(ty)),
             Self::Table(table) => write!(f, "{table:?}"),
             #[cfg(feature = "async")]
-            Self::Task {
-                executor_id,
-                parent,
-            } => write!(f, "Task: {parent:?} running on {executor_id:?}"),
+            Self::Task { worker, parent } => write!(f, "Task: {parent:?} running on {worker:?}"),
             Self::Thonk(name, number) => write!(f, "{name:?} [{number:?}]"),
             Self::TupleEnum(te) => write!(f, "{:?}", s_read!(te)),
             Self::Unknown => write!(f, "<unknown>"),
@@ -326,7 +329,15 @@ impl Clone for Value {
             Self::Function(func) => Self::Function(func.clone()),
             #[cfg(feature = "async")]
             // Note that cloned values do not inherit the task
-            Self::Future(name, _) => Self::Future(name.to_owned(), None),
+            Self::Future {
+                name,
+                executor,
+                task: _,
+            } => Self::Future {
+                name: name.to_owned(),
+                executor: executor.clone(),
+                task: None,
+            },
             Self::Integer(num) => Self::Integer(*num),
             Self::Lambda(ƛ) => Self::Lambda(ƛ.clone()),
             Self::ParsedDwarf(ctx) => Self::ParsedDwarf(ctx.clone()),
@@ -349,11 +360,8 @@ impl Clone for Value {
             Self::Table(table) => Self::Table(table.clone()),
             #[cfg(feature = "async")]
             // Note that cloned values do not inherit the task
-            Self::Task {
-                executor_id,
-                parent: _,
-            } => Self::Task {
-                executor_id: executor_id.clone(),
+            Self::Task { worker, parent: _ } => Self::Task {
+                worker: worker.clone(),
                 parent: None,
             },
             Self::Thonk(name, number) => Self::Thonk(*name, *number),
@@ -425,11 +433,7 @@ impl From<FfiValue> for Value {
 }
 
 impl Value {
-    pub fn get_type(
-        &self,
-        sarzak: &SarzakStore,
-        mut lu_dog: &mut LuDogStore,
-    ) -> RefType<ValueType> {
+    pub fn get_type(&self, sarzak: &SarzakStore, lu_dog: &LuDogStore) -> RefType<ValueType> {
         match &self {
             Value::Boolean(_) => {
                 let ty = Ty::new_boolean(sarzak);
@@ -539,7 +543,7 @@ impl Value {
             }
             Value::Struct(ref ut) => s_read!(ut).get_type().clone(),
             Value::Task {
-                executor_id: _,
+                worker: _,
                 parent: _,
             } => {
                 for vt in lu_dog.iter_value_type() {
@@ -561,14 +565,12 @@ impl Value {
                 unreachable!()
             }
             Value::Vector(ref v) => {
-                let elt = s_read!(v[0]).get_type(sarzak, lu_dog).clone();
-                let list = List::new(&elt, &mut lu_dog);
                 for vt in lu_dog.iter_value_type() {
                     if let ValueTypeEnum::List(_) = s_read!(vt).subtype {
                         return vt.clone();
                     }
                 }
-                return ValueType::new_list(&list, &mut lu_dog);
+                unreachable!()
             }
             value => {
                 log::error!("Value::get_type() not implemented for {:?}", value);
@@ -595,7 +597,11 @@ impl fmt::Display for Value {
             Self::Float(num) => write!(f, "{num}"),
             Self::Function(_) => write!(f, "<function>"),
             #[cfg(feature = "async")]
-            Self::Future(name, task) => write!(f, "Task `{name}`: {task:?}"),
+            Self::Future {
+                name,
+                executor,
+                task,
+            } => write!(f, "Task `{name}`: {task:?}, executor: {executor:?}"),
             Self::Integer(num) => write!(f, "{num}"),
             Self::Lambda(_) => write!(f, "<lambda>"),
             Self::ParsedDwarf(ctx) => write!(f, "{ctx:#?}"),
@@ -614,10 +620,7 @@ impl fmt::Display for Value {
             // Self::String(str_) => write!(f, "\"{}\"", str_),
             Self::Table(table) => write!(f, "{table:?}"),
             #[cfg(feature = "async")]
-            Self::Task {
-                executor_id,
-                parent,
-            } => write!(f, "Task: {parent:?} running on {executor_id:?}"),
+            Self::Task { worker, parent } => write!(f, "Task: {parent:?} running on {worker:?}"),
             Self::Thonk(name, number) => write!(f, "{name} [{number}]"),
             Self::TupleEnum(te) => write!(f, "{}", s_read!(te)),
             Self::Unknown => write!(f, "<unknown>"),

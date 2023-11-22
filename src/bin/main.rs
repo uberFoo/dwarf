@@ -6,6 +6,9 @@ use std::{
 };
 
 #[cfg(feature = "async")]
+use futures_lite::future;
+
+#[cfg(feature = "async")]
 use std::thread;
 
 // #[cfg(feature = "async")]
@@ -14,8 +17,8 @@ use std::thread;
 use clap::{ArgAction, Args, Parser};
 use dap::{prelude::BasicClient, server::Server};
 
-#[cfg(feature = "async")]
-use smol::future;
+// #[cfg(feature = "async")]
+// use smol::future;
 #[cfg(feature = "async")]
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
@@ -332,7 +335,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         #[cfg(feature = "async")]
         {
-            shutdown_interpreter();
+            // shutdown_interpreter();
         }
     } else if args.dap.is_some() && args.dap.unwrap() {
         let listener = TcpListener::bind("127.0.0.1:4711").unwrap();

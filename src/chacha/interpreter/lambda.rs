@@ -148,7 +148,7 @@ pub fn eval_lambda_expression(
                 let x_value = &s_read!(expr).r11_x_value(&s_read!(lu_dog))[0];
                 let span = &s_read!(x_value).r63_span(&s_read!(lu_dog))[0];
 
-                let arg_ty = s_read!(value).get_type(&s_read!(sarzak), &mut s_write!(lu_dog));
+                let arg_ty = s_read!(value).get_type(&s_read!(sarzak), &s_read!(lu_dog));
                 typecheck(&param_ty, &arg_ty, span, location!(), context)?;
             }
 

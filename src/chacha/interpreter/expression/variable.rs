@@ -20,10 +20,15 @@ pub fn eval(
     // debug!("ExpressionEnum::VariableExpression expr: {:?}", expr);
 
     let name = {
-        let expr = s_read!(lu_dog).exhume_variable_expression(expr).unwrap();
+        let fucker = s_read!(lu_dog);
+        // dbg!(&fucker);
+        let expr = fucker.exhume_variable_expression(expr).unwrap();
         let name = s_read!(expr).name.clone();
+        drop(fucker);
+        // dbg!(fucker);
         name
     };
+    // dbg!(&name);
     let value = context.memory().get(&name);
 
     ensure!(value.is_some(), {
@@ -36,6 +41,7 @@ pub fn eval(
     });
 
     let value = value.unwrap();
+    // dbg!(&value.read());
     debug!(
         "ExpressionEnum::VariableExpression value: {}",
         s_read!(value)

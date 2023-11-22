@@ -33,7 +33,7 @@ Of course you'll need to have [rust installed ](https://rustup.rs).
 ```bash
 git clone https://github.com/uberFoo/dwarf.git
 cd dwarf
-cargo install --path . --bin dwarf`
+cargo install --path . --bin dwarf
 ```
 
 

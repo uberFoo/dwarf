@@ -11,12 +11,6 @@ use crate::{
     new_ref, s_read, NewRef, RefType, SarzakStorePtr, Value,
 };
 
-#[cfg(feature = "async")]
-use super::Executor;
-
-#[cfg(feature = "async")]
-use uberfoo_async::AsyncTask;
-
 pub fn eval<'a>(
     block_id: &SarzakStorePtr,
     context: &mut Context,
@@ -37,22 +31,18 @@ pub fn eval<'a>(
                 eval_inner(block, &mut cloned_context, &mut vm)
             }
             .instrument(span);
+            let task = context.worker().unwrap().create_task(future).unwrap();
 
-            // let task = ChaChaTask::new(Executor::global(), future);
-            let task = AsyncTask::new(
-                "block".to_owned(),
-                Executor::at_index(context.executor_index()),
-                future,
+            let value = new_ref!(
+                Value,
+                Value::Future {
+                    name: "block".to_owned(),
+                    task: Some(task),
+                    executor: context.executor().clone()
+                }
             );
 
-            // let task = context.executor().spawn(future);
-
-            let future = new_ref!(Value, Value::Future("block".to_owned(), Some(task)));
-
-            // Stash the future away so that it doesn't get dropped when it's done running.
-            // context.executor().park_value(future.clone());
-
-            Ok(future)
+            Ok(value)
         } else {
             eval_inner(block, context, vm)
         }

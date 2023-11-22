@@ -15,7 +15,7 @@ use tracing::{debug_span, Instrument};
 use super::Executor;
 
 #[cfg(feature = "async")]
-use uberfoo_async::AsyncTask;
+use puteketeke::AsyncTask;
 
 use crate::{
     chacha::{
@@ -96,20 +96,18 @@ pub fn eval_function_call<'a>(
             }
             .instrument(t_span);
 
-            let task = AsyncTask::new(
-                "func_call".to_owned(),
-                Executor::at_index(context.executor_index()),
-                future,
+            let task = context.worker().unwrap().create_task(future).unwrap();
+
+            let value = new_ref!(
+                Value,
+                Value::Future {
+                    name: task_name,
+                    executor: context.executor().clone(),
+                    task: Some(task)
+                }
             );
 
-            // let task = context.executor().spawn(future);
-
-            let future = new_ref!(Value, Value::Future(task_name, Some(task)));
-
-            // Stash the future away so that it doesn't get dropped when it's done running.
-            // context.executor().park_value(future.clone());
-
-            Ok(future)
+            Ok(value)
         }
     } else {
         inner_eval_function_call(func, args, first_arg, arg_check, span, context, vm)
@@ -409,11 +407,7 @@ fn eval_built_in_function_call(
             debug!("type check value {value:?}");
 
             if arg_check {
-                let arg_ty = {
-                    let mut lu_write = s_write!(lu_dog);
-                    s_read!(value).get_type(&s_read!(sarzak), &mut lu_write)
-                };
-
+                let arg_ty = s_read!(value).get_type(&s_read!(sarzak), &s_read!(lu_dog));
                 let x_value = &s_read!(expr).r11_x_value(&s_read!(lu_dog))[0];
                 let span = &s_read!(x_value).r63_span(&s_read!(lu_dog))[0];
 
