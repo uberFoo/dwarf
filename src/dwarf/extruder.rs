@@ -16,7 +16,7 @@ use crate::{
         Expression as ParserExpression, Generics, InnerAttribute, InnerItem, Item,
         PrintableValueType, Spanned, Statement as ParserStatement, Type, WrappedValueType,
     },
-    keywords::{CHACHA, FN_NEW, FORMAT, JOIN, LEN, UUID_TYPE},
+    keywords::{CHACHA, FN_NEW, FORMAT, JOIN, LEN, MAP, UUID_TYPE},
     lu_dog::{
         store::ObjectStore as LuDogStore,
         types::{
@@ -2600,6 +2600,21 @@ pub(super) fn inter_expression(
                     #[allow(clippy::let_and_return)]
                     x
                 }
+                ValueTypeEnum::Range(_) => match method.as_str() {
+                    MAP => {
+                        let inner = ValueType::new_ty(&Ty::new_integer(context.sarzak), lu_dog);
+                        let list = List::new(&inner, lu_dog);
+                        ValueType::new_list(&list, lu_dog)
+                    }
+                    _ => {
+                        return Err(vec![DwarfError::NoSuchMethod {
+                            method: method.to_owned(),
+                            file: context.file_name.to_owned(),
+                            span: meth_span.to_owned(),
+                            location: location!(),
+                        }])
+                    }
+                },
                 ValueTypeEnum::Ty(id) => {
                     let ty = context.sarzak.exhume_ty(&id).unwrap();
                     let ty = ty.read().unwrap();

@@ -15,9 +15,8 @@ use crate::{
         DwarfInteger, Expression as ParserExpression, Type,
     },
     keywords::{
-        ARGS, ASLEEP, ASSERT, ASSERT_EQ, CHACHA, COMPLEX_EX, EPS, FN_NEW, HTTP_GET, INTERVAL, MAP,
-        NEW, NORM_SQUARED, ONE_SHOT, PLUGIN, SLEEP, SPAWN, SPAWN_NAMED, TIME, TIMER, TYPEOF,
-        UUID_TYPE,
+        ARGS, ASLEEP, ASSERT, ASSERT_EQ, CHACHA, COMPLEX_EX, EPS, FN_NEW, HTTP_GET, INTERVAL, NEW,
+        NORM_SQUARED, ONE_SHOT, PLUGIN, SLEEP, SPAWN, SPAWN_NAMED, TIME, TIMER, TYPEOF, UUID_TYPE,
     },
     lu_dog::{
         store::ObjectStore as LuDogStore, Argument, Block, Call, DataStructure, EnumFieldEnum,
@@ -91,7 +90,8 @@ pub fn inter(
     let type_name = type_vec[0].0.clone();
     let plugin_type = type_vec.last().unwrap().0.clone();
 
-    debug!("type_name {:?}", type_name);
+    debug!("type_name {type_name}");
+    debug!("method {method}");
 
     let x_path = XPath::new(Uuid::new_v4(), None, lu_dog);
     let mut elts = type_vec
@@ -122,6 +122,7 @@ pub fn inter(
             }
         });
 
+    // 🚧 This smells bad.
     // We need to check if the type name is a struct or an enum.
     if lu_dog.exhume_woog_struct_id_by_name(&type_name).is_some()
         || lu_dog
@@ -143,9 +144,6 @@ pub fn inter(
         let meth = StaticMethodCall::new(method.to_owned(), foo.clone(), Uuid::new_v4(), lu_dog);
         let call = Call::new_static_method_call(true, None, None, &meth, lu_dog);
         let call_expr = Expression::new_call(&call, lu_dog);
-
-        debug!("name {type_name}");
-        debug!("method {method}");
 
         let sarzak = context.sarzak;
 
@@ -223,18 +221,6 @@ pub fn inter(
                     ValueType::new_unknown(lu_dog)
                 }
             },
-            // 🚧 This is tricky. We are matching strings, and that won't work here.
-            // RANGE => match method {
-            //     MAP => {
-            //         let inner = ValueType::new_ty(&Ty::new_integer(sarzak), lu_dog);
-            //         let list = List::new(&inner, lu_dog);
-            //         ValueType::new_list(&list, lu_dog)
-            //     }
-            //     method => {
-            //         e_warn!("Range method `{method}` not found");
-            //         ValueType::new_unknown(lu_dog)
-            //     }
-            // },
             TIMER => {
                 match method {
                     #[cfg(feature = "async")]

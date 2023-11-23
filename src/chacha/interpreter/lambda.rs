@@ -159,6 +159,8 @@ pub fn eval_lambda_expression(
         if let Some(ref id) = s_read!(block).statement {
             let mut next = s_read!(lu_dog).exhume_statement(id).unwrap();
 
+            // 🚧 this needs to be sucked out and dealt with by a single block
+            // execution function.
             loop {
                 let result = eval_statement(next.clone(), context, vm).map_err(|e| {
                     // This is cool, if it does what I think it does. We basically
