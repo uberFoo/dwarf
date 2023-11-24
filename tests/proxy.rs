@@ -9,6 +9,7 @@ use dwarf::{
     sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL},
     RefType,
 };
+#[cfg(feature = "tracy")]
 use tracy_client::Client;
 
 fn run_program(test: &str, program: &str) -> Result<(RefType<Value>, String), String> {
@@ -100,6 +101,7 @@ fn run_program(test: &str, program: &str) -> Result<(RefType<Value>, String), St
 #[test]
 fn declaration() {
     let _ = env_logger::builder().is_test(true).try_init();
+    #[cfg(feature = "tracy")]
     let _ = Client::start();
     color_backtrace::install();
     let program = include_str!("proxy/declare.tao");

@@ -6,6 +6,7 @@ use abi_stable::{
 };
 use ansi_term::Colour;
 use snafu::{location, prelude::*, Location};
+#[cfg(feature = "tracy")]
 use tracy_client::span;
 
 #[cfg(feature = "async")]

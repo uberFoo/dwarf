@@ -570,6 +570,7 @@ impl<'b> VM<'b> {
 #[cfg(test)]
 mod tests {
     use std::env;
+    #[cfg(feature = "tracy")]
     use tracy_client::Client;
 
     use crate::{
@@ -885,6 +886,7 @@ mod tests {
         };
         use sarzak::sarzak::{ObjectStore as SarzakStore, Ty, MODEL as SARZAK_MODEL};
 
+        #[cfg(feature = "tracy")]
         Client::start();
 
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();

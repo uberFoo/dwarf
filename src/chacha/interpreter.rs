@@ -13,6 +13,7 @@ use lazy_static::lazy_static;
 use log::{self, log_enabled, Level::Debug};
 use parking_lot::{Condvar, Mutex};
 use snafu::{prelude::*, Location};
+#[cfg(feature = "tracy")]
 use tracy_client::{span, Client};
 use uuid::Uuid;
 

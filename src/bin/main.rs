@@ -34,6 +34,7 @@ use dwarf::{
     Context, Value,
 };
 use reqwest::Url;
+#[cfg(feature = "tracy")]
 use tracy_client::Client;
 
 #[cfg(not(feature = "repl"))]
@@ -155,6 +156,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     #[cfg(not(feature = "async"))]
     pretty_env_logger::init();
     color_backtrace::install();
+    #[cfg(feature = "tracy")]
     Client::start();
 
     let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();

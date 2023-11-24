@@ -2,6 +2,7 @@ use std::time::Instant;
 
 use ansi_term::Colour;
 use snafu::{location, prelude::*, Location};
+#[cfg(feature = "tracy")]
 use tracy_client::span;
 
 use crate::{

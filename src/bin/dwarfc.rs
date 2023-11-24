@@ -2,6 +2,7 @@ use std::{env, ffi::OsString, fs, os::unix::ffi::OsStringExt, path::PathBuf, pro
 
 use clap::{ArgAction, Parser};
 use snafu::prelude::*;
+#[cfg(feature = "tracy")]
 use tracy_client::Client;
 
 use sarzak::sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL};
@@ -97,6 +98,7 @@ fn find_package_dir(start_dir: &Option<PathBuf>) -> Result<PathBuf> {
 fn main() -> Result<()> {
     pretty_env_logger::init();
     color_backtrace::install();
+    #[cfg(feature = "tracy")]
     Client::start();
 
     let args = Args::parse();
