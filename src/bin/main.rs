@@ -3,13 +3,11 @@ use std::{
     io::{self, BufReader, BufWriter},
     net::TcpListener,
     path::PathBuf,
+    thread,
 };
 
 #[cfg(feature = "async")]
 use futures_lite::future;
-
-#[cfg(feature = "async")]
-use std::thread;
 
 // #[cfg(feature = "async")]
 // use dwarf::chacha::interpreter::Executor;

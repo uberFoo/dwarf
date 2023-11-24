@@ -13,7 +13,6 @@ use rustc_hash::FxHashMap as HashMap;
 use sarzak::sarzak::{store::ObjectStore as SarzakStore, types::Ty};
 use serde::{Deserialize, Serialize};
 use snafu::{location, Location};
-use uuid::Uuid;
 
 use crate::{
     lu_dog::{store::ObjectStore as LuDogStore, types::ValueType, Generic, Lambda, List},
@@ -265,7 +264,7 @@ impl Type {
                 Ok(ValueType::new_ty(&ty, store))
             }
             Type::Unknown => Ok(ValueType::new_unknown(store)),
-            Type::UserType(type_, generics) => {
+            Type::UserType(type_, _generics) => {
                 let name = &type_.0;
 
                 // This is a special case for Uuid, which is a built-in type.
@@ -623,6 +622,7 @@ impl TryFrom<&InnerAttribute> for String {
     }
 }
 
+#[allow(unused)]
 pub(crate) fn generic_to_string(generic: &Generics) -> Spanned<String> {
     let mut result = String::new();
     let mut first_time = true;

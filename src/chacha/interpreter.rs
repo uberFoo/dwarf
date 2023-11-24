@@ -1,9 +1,6 @@
 use std::{ops::Range, path::PathBuf};
 
 #[cfg(feature = "async")]
-use std::thread;
-
-#[cfg(feature = "async")]
 use smol::future;
 
 use ansi_term::Colour;
@@ -133,7 +130,7 @@ lazy_static! {
     pub(super) static ref EXEC_MUTEX: Mutex<()> = Mutex::new(());
 }
 
-pub fn shutdown_interpreter(context: &Context) {
+pub fn shutdown_interpreter() {
     let mut running = RUNNING.lock();
     *running = false;
     CVAR.notify_all();

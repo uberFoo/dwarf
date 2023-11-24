@@ -258,7 +258,9 @@ impl<'b> VM<'b> {
                                 Ok(callee) => callee,
                                 Err(e) => {
                                     return Err::<RefType<Value>, ChaChaError>(
-                                        ChaChaError::VmPanic { cause: Box::new(e) },
+                                        ChaChaError::VmPanic {
+                                            cause: e.to_string(),
+                                        },
                                     );
                                 }
                             };
@@ -276,7 +278,7 @@ impl<'b> VM<'b> {
                             Ok(result) => result,
                             Err(e) => {
                                 return Err::<RefType<Value>, ChaChaError>(ChaChaError::VmPanic {
-                                    cause: Box::new(e),
+                                    cause: e.to_string(),
                                 });
                             }
                         };
@@ -346,10 +348,11 @@ impl<'b> VM<'b> {
                                     None => {
                                         return Err::<RefType<Value>, ChaChaError>(
                                             ChaChaError::VmPanic {
-                                                cause: Box::new(ChaChaError::NoSuchField {
+                                                cause: ChaChaError::NoSuchField {
                                                     field: s_read!(field).to_string(),
                                                     ty: s_read!(ty_).to_string(),
-                                                }),
+                                                }
+                                                .to_string(),
                                             },
                                         );
                                     }
@@ -357,10 +360,11 @@ impl<'b> VM<'b> {
                             }
                             value => {
                                 return Err::<RefType<Value>, ChaChaError>(ChaChaError::VmPanic {
-                                    cause: Box::new(ChaChaError::BadnessHappened {
+                                    cause: ChaChaError::BadnessHappened {
                                         message: format!("Unexpected value type: {value}."),
                                         location: location!(),
-                                    }),
+                                    }
+                                    .to_string(),
                                 })
                             }
                         }
@@ -421,10 +425,11 @@ impl<'b> VM<'b> {
                                     None => {
                                         return Err::<RefType<Value>, ChaChaError>(
                                             ChaChaError::VmPanic {
-                                                cause: Box::new(ChaChaError::NoSuchField {
+                                                cause: ChaChaError::NoSuchField {
                                                     field: s_read!(field).to_string(),
                                                     ty: s_read!(ty_).to_string(),
-                                                }),
+                                                }
+                                                .to_string(),
                                             },
                                         )
                                     }
@@ -432,10 +437,11 @@ impl<'b> VM<'b> {
                             }
                             value => {
                                 return Err::<RefType<Value>, ChaChaError>(ChaChaError::VmPanic {
-                                    cause: Box::new(ChaChaError::BadnessHappened {
+                                    cause: ChaChaError::BadnessHappened {
                                         message: format!("Unexpected value type: {value}."),
                                         location: location!(),
-                                    }),
+                                    }
+                                    .to_string(),
                                 })
                             }
                         }
@@ -446,7 +452,9 @@ impl<'b> VM<'b> {
                         let condition = self.stack.pop().unwrap();
                         let condition: bool = (&*s_read!(condition))
                             .try_into()
-                            .map_err(|e| ChaChaError::VmPanic { cause: Box::new(e) })
+                            .map_err(|e: ChaChaError| ChaChaError::VmPanic {
+                                cause: e.to_string(),
+                            })
                             .unwrap();
 
                         if !condition {
@@ -555,10 +563,11 @@ impl<'b> VM<'b> {
                 }
             } else {
                 return Err(ChaChaError::VmPanic {
-                    cause: Box::new(ChaChaError::BadnessHappened {
+                    cause: ChaChaError::BadnessHappened {
                         message: "ip out of bounds".to_string(),
                         location: location!(),
-                    }),
+                    }
+                    .to_string(),
                 });
             };
 

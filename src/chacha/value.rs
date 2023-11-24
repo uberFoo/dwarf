@@ -127,8 +127,7 @@ pub enum EnumVariant {
 impl PartialEq for EnumVariant {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
-            (Self::Unit(a, b, e), Self::Unit(c, d, f)) => b == d && e == f,
-            // (Self::Unit(a, b, e), Self::Unit(c, d, f)) => a == c && b == d && e == f,
+            (Self::Unit(_a, b, e), Self::Unit(_c, d, f)) => b == d && e == f,
             (Self::Struct(a), Self::Struct(b)) => *s_read!(a) == *s_read!(b),
             (Self::Tuple(a, c), Self::Tuple(b, d)) => {
                 *s_read!(a.0) == *s_read!(b.0) && *s_read!(c) == *s_read!(d)
@@ -325,7 +324,7 @@ impl Clone for Value {
             Self::Char(char_) => Self::Char(*char_),
             Self::Empty => Self::Empty,
             Self::Enumeration(var) => Self::Enumeration(var.clone()),
-            Self::Error(e) => unimplemented!(),
+            Self::Error(_e) => unimplemented!(),
             Self::Float(num) => Self::Float(*num),
             Self::Function(func) => Self::Function(func.clone()),
             #[cfg(feature = "async")]
@@ -566,7 +565,7 @@ impl Value {
                 }
                 unreachable!()
             }
-            Value::Vector(ref v) => {
+            Value::Vector(_) => {
                 for vt in lu_dog.iter_value_type() {
                     if let ValueTypeEnum::List(_) = s_read!(vt).subtype {
                         return vt.clone();

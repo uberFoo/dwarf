@@ -3171,7 +3171,6 @@ pub(super) fn inter_expression(
         // Struct
         //
         ParserExpression::Struct(name, fields) => {
-            let save_name = &name.0;
             let name_span = &name.1;
             let (root, name) = if let ParserExpression::LocalVariable(obj) = &name.0 {
                 (obj.to_owned(), obj.to_owned())
@@ -3766,7 +3765,7 @@ fn inter_enum(
                     lu_dog,
                 );
 
-                for ((name, _), (ty, ty_span), attrs) in fields {
+                for ((name, _), (ty, ty_span), _attrs) in fields {
                     context.location = location!();
                     let ty = make_value_type(ty, ty_span, None, context, lu_dog)?;
                     let _ = Field::new(name.to_owned(), &woog_struct, &ty, lu_dog);
@@ -3776,12 +3775,12 @@ fn inter_enum(
             }
             Some(EnumField::Tuple(type_)) => {
                 let ty = match type_ {
-                    (Type::UserType((_, span), generics), _outer_span) if !generics.is_empty() => {
+                    (Type::UserType(_, generics), _outer_span) if !generics.is_empty() => {
                         let mut first = true;
                         let mut first_generic = ValueType::new_empty(lu_dog);
                         let mut last_generic_uuid: Option<usize> = None;
                         for generic in generics {
-                            let (generic, span) =
+                            let (generic, _span) =
                                 if let Type::UserType((name, span), _) = &generic.0 {
                                     (name, span)
                                 } else {
@@ -3789,14 +3788,15 @@ fn inter_enum(
                                 };
                             let generic = Generic::new(generic.to_owned(), None, None, lu_dog);
                             let ty = ValueType::new_generic(&generic, lu_dog);
-                            let span = LuDogSpan::new(
-                                span.end as i64,
-                                span.start as i64,
-                                &context.source,
-                                Some(&ty),
-                                None,
-                                lu_dog,
-                            );
+                            // let span = LuDogSpan::new(
+                            //     span.end as i64,
+                            //     span.start as i64,
+                            //     &context.source,
+                            //     Some(&ty),
+                            //     None,
+                            //     lu_dog,
+                            // );
+                            // update_span_value(&span, &ty, location!());
 
                             if first {
                                 first = false;
@@ -4124,7 +4124,7 @@ fn inter_struct_fields(
                     if let Some((_, ref value)) = plugin_vec.get(0) {
                         let plugin_name: String = value.try_into().map_err(|e| vec![e])?;
                         debug!("proxy.plugin: {plugin_name}");
-                        if let Type::UserType(tok, generics) = type_ {
+                        if let Type::UserType(tok, _generics) = type_ {
                             let ty_name = tok.0.de_sanitize();
                             if ty_name == "Plugin" {
                                 let plugin = Plugin::new(plugin_name, lu_dog);
@@ -4279,7 +4279,7 @@ pub(crate) fn make_value_type(
                 import.name == name || (import.has_alias && import.alias == name)
             });
 
-            if let Some(import) = import {
+            if let Some(_import) = import {
                 // 🚧 Holy cow, it's been a while since I've plumbed these depths.
                 // I seem to be having an interesting conversation with myself below.
                 // I wonder what will come of it? TBH, I'm not sure how I'm getting
@@ -4655,7 +4655,7 @@ pub(crate) fn create_generic_struct(
 // Note that the name is expected to contain the generic component.
 pub(crate) fn create_generic_enum(
     enum_name: &str,
-    enum_path: &ParserExpression,
+    _enum_path: &ParserExpression,
     lu_dog: &mut LuDogStore,
 ) -> (RefType<Enumeration>, RefType<ValueType>) {
     debug!("interring generic enum {enum_name}");

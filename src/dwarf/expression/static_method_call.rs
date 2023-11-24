@@ -53,17 +53,9 @@ pub fn inter(
     let type_vec = path
         .iter()
         .map(|p| {
-            if let Type::UserType((obj, span), generics) = p {
+            if let Type::UserType((obj, span), _generics) = p {
                 let mut inner = Vec::new();
                 inner.push((obj.de_sanitize().to_owned(), span));
-                // inner.extend(generics.iter().map(|(generic, span)| {
-                //     if let Type::Generic((name, _)) = generic {
-                //         (name.de_sanitize().to_owned(), span)
-                //     } else {
-                //         dbg!(path, generic);
-                //         panic!("I don't think that we should ever see anything other than a generic type here: {generic:?}");
-                //     }
-                // }));
                 inner
             } else {
                 panic!(
