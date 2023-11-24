@@ -12,7 +12,6 @@ const MANDEL_SOURCE_FILE: &str = "./benches/mandelbrot.tao";
 const FIB_SOURCE_FILE: &str = "./benches/fib.tao";
 
 fn mandelbrot(c: &mut Criterion) {
-    let _client = Client::start();
     let source = fs::read_to_string(MANDEL_SOURCE_FILE).unwrap();
     let ast = parse_dwarf("mandelbrot", &source).unwrap();
     let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
@@ -25,17 +24,22 @@ fn mandelbrot(c: &mut Criterion) {
         })
         .into();
 
-    let ctx = new_lu_dog(Some((source, &ast)), &dwarf_home, &sarzak).unwrap();
+    let ctx = new_lu_dog(
+        "bench".to_owned(),
+        Some((source, &ast)),
+        &dwarf_home,
+        &sarzak,
+    )
+    .unwrap();
 
-    let ctx = initialize_interpreter(dwarf_home, ctx, sarzak).unwrap();
+    let ctx = initialize_interpreter(num_cpus::get(), dwarf_home, ctx, sarzak).unwrap();
 
     c.bench_function("mandelbrot-14x4", |b| {
-        b.iter(|| start_func("main", false, ctx.clone()).unwrap())
+        b.iter(|| start_func("main", false, &mut ctx.clone()).unwrap())
     });
 }
 
 fn fib(c: &mut Criterion) {
-    let _client = Client::start();
     let source = fs::read_to_string(FIB_SOURCE_FILE).unwrap();
     let ast = parse_dwarf("fib", &source).unwrap();
     let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
@@ -48,33 +52,35 @@ fn fib(c: &mut Criterion) {
         })
         .into();
 
-    let ctx = new_lu_dog(Some((source, &ast)), &dwarf_home, &sarzak).unwrap();
+    let ctx = new_lu_dog(
+        "bench".to_owned(),
+        Some((source, &ast)),
+        &dwarf_home,
+        &sarzak,
+    )
+    .unwrap();
 
-    let mut ctx = initialize_interpreter(dwarf_home, ctx, sarzak).unwrap();
+    let mut ctx = initialize_interpreter(num_cpus::get(), dwarf_home, ctx, sarzak).unwrap();
     ctx.add_args(vec!["fib".to_owned(), "17".to_owned()]);
 
     c.bench_function("fib-17", |b| {
-        b.iter(|| start_func("main", false, ctx.clone()).unwrap())
+        b.iter(|| start_func("main", false, &mut ctx.clone()).unwrap())
     });
 }
 
 fn vm_28(c: &mut Criterion) {
-    let _client = Client::start();
     c.bench_function("vm-fib-28", |b| b.iter(|| start_vm(28.into()).unwrap()));
 }
 
 fn vm_25(c: &mut Criterion) {
-    let _client = Client::start();
     c.bench_function("vm-fib-25", |b| b.iter(|| start_vm(25.into()).unwrap()));
 }
 
 fn vm_17(c: &mut Criterion) {
-    let _client = Client::start();
     c.bench_function("vm-fib-17", |b| b.iter(|| start_vm(17.into()).unwrap()));
 }
 
 fn vm_5(c: &mut Criterion) {
-    let _client = Client::start();
     c.bench_function("vm-fib-5", |b| b.iter(|| start_vm(5.into()).unwrap()));
 }
 

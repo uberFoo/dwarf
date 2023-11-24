@@ -98,6 +98,13 @@ cfg_if::cfg_if! {
             };
         }
 
+        #[macro_export]
+        macro_rules! ref_to_inner {
+            ($arg:expr) => {
+                $arg.into_inner().unwrap()
+            };
+        }
+
    } else if #[cfg(feature = "multi-vec")] {
         type SarzakStorePtr = usize;
         type RcType<T> = std::sync::Arc<T>;
@@ -128,7 +135,15 @@ cfg_if::cfg_if! {
                 $arg.write().unwrap()
             };
         }
-   } else if #[cfg(feature = "multi-nd-vec")] {
+
+        #[macro_export]
+        macro_rules! ref_to_inner {
+            ($arg:expr) => {
+                $arg.into_inner().unwrap()
+            };
+        }
+
+    } else if #[cfg(feature = "multi-nd-vec")] {
         type SarzakStorePtr = usize;
         type RcType<T> = std::sync::Arc<T>;
         impl<T> NewRcType<T> for RcType<T> {
@@ -158,7 +173,14 @@ cfg_if::cfg_if! {
                 $arg.write().unwrap()
             };
         }
-   }
+
+        #[macro_export]
+        macro_rules! ref_to_inner {
+            ($arg:expr) => {
+                $arg.into_inner()
+            };
+        }
+    }
 }
 
 pub use ref_read as s_read;

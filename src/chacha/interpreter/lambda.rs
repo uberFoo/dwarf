@@ -32,6 +32,7 @@ pub fn eval_lambda_expression(
     debug!("ƛ {ƛ:?}");
     trace!("stack {:?}", context.memory());
 
+    #[cfg(feature = "tracy")]
     span!("eval_lambda_expression");
 
     let ƛ = s_read!(ƛ);

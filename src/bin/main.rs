@@ -26,11 +26,10 @@ use dwarf::{
     chacha::{
         dap::DapAdapter,
         error::{ChaChaError, ChaChaErrorReporter},
-        interpreter::{
-            banner2, initialize_interpreter, shutdown_interpreter, start_func, start_repl,
-        },
+        interpreter::{banner2, initialize_interpreter, start_func, start_repl},
     },
     dwarf::{new_lu_dog, parse_dwarf},
+    ref_to_inner,
     sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL},
     Context, Value,
 };
@@ -294,13 +293,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         unsafe {
                             let value = std::sync::Arc::into_raw(value);
                             let value = std::ptr::read(value);
-                            let value = value.into_inner().unwrap();
+                            let value = ref_to_inner!(value);
 
                             let value = future::block_on(value);
 
                             let value = std::sync::Arc::into_raw(value);
                             let value = std::ptr::read(value);
-                            let value = value.into_inner().unwrap();
+                            let value = ref_to_inner!(value);
+
                             match value {
                                 Value::Error(msg) => {
                                     let msg = *msg;

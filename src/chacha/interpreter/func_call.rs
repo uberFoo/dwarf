@@ -61,6 +61,7 @@ pub fn eval_function_call<'a>(
     debug!("eval_function_call func {func:?}");
     trace!("eval_function_call stack {:?}", context.memory());
 
+    #[cfg(feature = "tracy")]
     span!("eval_function_call");
 
     let body = s_read!(func).r19_body(&s_read!(lu_dog))[0].clone();
@@ -128,6 +129,7 @@ fn inner_eval_function_call<'a>(
     debug!("inner_eval_function_call func {func:?}");
     trace!("inner_eval_function_call stack {:?}", context.memory());
 
+    #[cfg(feature = "tracy")]
     span!("inner_eval_function_call");
 
     let body = s_read!(func).r19_body(&s_read!(lu_dog))[0].clone();

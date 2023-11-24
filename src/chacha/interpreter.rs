@@ -390,6 +390,7 @@ pub fn initialize_interpreter(
 
     let (std_out_send, std_out_recv) = unbounded();
 
+    #[cfg(feature = "tracy")]
     Client::start();
 
     #[cfg(feature = "async")]
@@ -449,6 +450,7 @@ fn eval_expression(
     // context
     //     .tracy
     //     .non_continuous_frame(frame_name!("eval_expression"));
+    #[cfg(feature = "tracy")]
     span!("eval_expression");
 
     {
@@ -587,6 +589,7 @@ pub fn eval_statement(
     debug!("eval_statement statement {statement:?}");
     trace!("eval_statement stack {:?}", context.memory());
 
+    #[cfg(feature = "tracy")]
     span!("eval_statement");
 
     // This is the entrypoint from the REPL, which is where the dirty thing comes

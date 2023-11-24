@@ -25,7 +25,6 @@ fn main() {
             tests += &format!("fn {parent}_{name}() {{\n");
             tests += "    let _ = env_logger::builder().is_test(true).try_init();\n";
             tests += "    color_backtrace::install();\n";
-            tests += "    let _ = Client::start();\n";
             tests += &format!("    let result = run_program(\"{name}\", r#\"{contents}\"#);\n");
 
             let stderr = root.join(format!("{}.stderr", name));

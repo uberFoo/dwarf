@@ -3,7 +3,6 @@ use std::{env, path::PathBuf};
 use ansi_term::Colour;
 use lazy_static::lazy_static;
 use parking_lot::Mutex;
-use tracy_client::Client;
 
 use dwarf::{
     chacha::{
@@ -12,6 +11,7 @@ use dwarf::{
         value::Value,
     },
     dwarf::{new_lu_dog, parse_dwarf},
+    ref_to_inner,
     sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL},
 };
 
@@ -147,7 +147,7 @@ fn run_program(test: &str, program: &str) -> Result<(Value, String), String> {
             // Ok((Value::Empty, String::new()))
             let value = std::sync::Arc::into_raw(value);
             let value = std::ptr::read(value);
-            let value = value.into_inner().unwrap();
+            let value = ref_to_inner!(value);
             match value {
                 Value::Error(msg) => {
                     let msg = *msg;
