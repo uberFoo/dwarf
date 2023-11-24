@@ -4297,7 +4297,6 @@ pub(crate) fn make_value_type(
                 // just return this. `Function` and `Struct`, two out of the other
                 // three `Item`s are already `ValueType`s, so it's not a stretch.
                 unreachable!();
-                Ok(ValueType::new_import(&import, lu_dog))
             } else if name == "Future" {
                 let inner_type =
                     make_value_type(&generics[0].0, span, enclosing_type, context, lu_dog)?;

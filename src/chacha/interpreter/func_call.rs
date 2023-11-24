@@ -2,7 +2,7 @@ use std::{path::Path, time::Instant};
 
 use abi_stable::{
     library::{lib_header_from_path, LibrarySuffix, RawLibrary},
-    std_types::{RErr, ROk},
+    std_types::ROk,
 };
 use ansi_term::Colour;
 use snafu::{location, prelude::*, Location};
@@ -11,12 +11,6 @@ use tracy_client::span;
 
 #[cfg(feature = "async")]
 use tracing::{debug_span, Instrument};
-
-#[cfg(feature = "async")]
-use super::Executor;
-
-#[cfg(feature = "async")]
-use puteketeke::AsyncTask;
 
 use crate::{
     chacha::{
@@ -30,14 +24,14 @@ use crate::{
     },
     lu_dog::{
         Argument, BodyEnum, Expression, ExternalImplementation, Function,
-        ObjectStore as LuDogStore, Span, ValueType, XFuture,
+        ObjectStore as LuDogStore, Span,
     },
     new_ref,
     plug_in::PluginModRef,
     plug_in::PluginType,
     s_read, s_write,
     sarzak::ObjectStore,
-    NewRef, RefType, SarzakStorePtr, Value, ValueResult,
+    NewRef, RefType, SarzakStorePtr, Value,
 };
 
 const OBJECT_STORE: &str = "ObjectStore";

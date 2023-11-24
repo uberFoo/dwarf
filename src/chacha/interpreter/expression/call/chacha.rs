@@ -9,9 +9,6 @@ use tracing::{debug_span, Instrument};
 use ansi_term::Colour;
 use snafu::prelude::*;
 
-#[cfg(feature = "async")]
-use puteketeke::AsyncTask;
-
 use crate::{
     chacha::error::{Result, WrongNumberOfArgumentsSnafu},
     dwarf::{new_lu_dog, Spanned},

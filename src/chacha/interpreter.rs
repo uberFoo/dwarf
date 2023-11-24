@@ -395,8 +395,31 @@ pub fn initialize_interpreter(
     Client::start();
 
     #[cfg(feature = "async")]
-    let executor = Executor::new(thread_count);
+    {
+        let executor = Executor::new(thread_count);
 
+        Ok(Context::new(
+            format!("{} ", Colour::Blue.normal().paint("道:>")),
+            block,
+            stack,
+            e_context.lu_dog.clone(),
+            new_ref!(SarzakStore, sarzak),
+            new_ref!(ModelStore, e_context.models),
+            receiver,
+            std_out_send,
+            std_out_recv,
+            None,
+            CircularQueue::with_capacity(TIMING_COUNT),
+            0,
+            0,
+            None,
+            dwarf_home,
+            dirty,
+            e_context.source.to_owned(),
+            executor,
+        ))
+    }
+    #[cfg(not(feature = "async"))]
     Ok(Context::new(
         format!("{} ", Colour::Blue.normal().paint("道:>")),
         block,
@@ -415,7 +438,6 @@ pub fn initialize_interpreter(
         dwarf_home,
         dirty,
         e_context.source.to_owned(),
-        executor,
     ))
 }
 
@@ -444,8 +466,6 @@ fn eval_expression(
     vm: &mut VM,
 ) -> Result<RefType<Value>> {
     let lu_dog = context.lu_dog_heel().clone();
-
-    debug!("eval_expression expression {:?}", thread::current().id());
 
     // context.tracy.span(span_location!("eval_expression"), 0);
     // context

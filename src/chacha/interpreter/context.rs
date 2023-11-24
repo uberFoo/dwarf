@@ -74,33 +74,6 @@ pub struct Context {
     source_file: String,
 }
 
-// impl Clone for Context {
-//     fn clone(&self) -> Self {
-//         Self {
-//             models: self.models.clone(),
-//             prompt: self.prompt.clone(),
-//             block: self.block.clone(),
-//             memory: self.memory.clone(),
-//             mem_update_recv: self.mem_update_recv.clone(),
-//             std_out_send: self.std_out_send.clone(),
-//             std_out_recv: self.std_out_recv.clone(),
-//             debug_status_writer: self.debug_status_writer.clone(),
-//             // obj_file_path: self.obj_file_path.clone(),
-//             timings: self.timings.clone(),
-//             expr_count: self.expr_count,
-//             func_calls: self.func_calls,
-//             args: self.args.clone(),
-//             dwarf_home: self.dwarf_home.clone(),
-//             dirty: self.dirty.clone(),
-//             #[cfg(feature = "async")]
-//             worker: self.executor.new_worker(),
-//             #[cfg(feature = "async")]
-//             executor: self.executor.clone(),
-//             source_file: self.source_file.clone(),
-//         }
-//     }
-// }
-
 /// Save the lu_dog model when the context is dropped
 ///
 /// NB: This doesn't work. The thread that started us apparently goes away
@@ -119,28 +92,9 @@ pub struct Context {
 //     }
 // }
 
-// impl<'a> Drop for Context<'a> {
-//     fn drop(&mut self) {
-//         dbg!(self.executors.len());
-//         // let executor = self.executors.pop().unwrap();
-//         // while !executor.is_empty() {
-//         //     dbg!("context");
-//         //     executor.tick();
-//         // }
-//         // log::debug!("dropping context");
-//     }
-// }
-
-impl Drop for Context {
-    fn drop(&mut self) {
-        if let Some(worker) = self.worker.take() {
-            // worker.destroy();
-        }
-    }
-}
-
-#[allow(clippy::too_many_arguments)]
 impl Context {
+    #[cfg(feature = "async")]
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         prompt: String,
         block: RefType<Block>,
@@ -177,10 +131,48 @@ impl Context {
             dwarf_home,
             dirty,
             source_file,
-            #[cfg(feature = "async")]
             worker: Some(executor.root_worker()),
-            #[cfg(feature = "async")]
             executor,
+        }
+    }
+
+    #[cfg(not(feature = "async"))]
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        prompt: String,
+        block: RefType<Block>,
+        memory: Memory,
+        lu_dog: RefType<LuDogStore>,
+        sarzak: RefType<SarzakStore>,
+        models: RefType<ModelStore>,
+        mem_update_recv: Receiver<MemoryUpdateMessage>,
+        std_out_send: Sender<String>,
+        std_out_recv: Receiver<String>,
+        debug_status_writer: Option<Sender<DebuggerStatus>>,
+        timings: CircularQueue<f64>,
+        expr_count: usize,
+        func_calls: usize,
+        args: Option<RefType<Value>>,
+        dwarf_home: PathBuf,
+        dirty: Vec<Dirty>,
+        source_file: String,
+    ) -> Self {
+        Self {
+            prompt,
+            block,
+            memory,
+            models: ModelContext::new(lu_dog, sarzak, models),
+            mem_update_recv,
+            std_out_send,
+            std_out_recv,
+            debug_status_writer,
+            timings,
+            expr_count,
+            func_calls,
+            args,
+            dwarf_home,
+            dirty,
+            source_file,
         }
     }
 

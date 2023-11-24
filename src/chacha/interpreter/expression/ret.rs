@@ -6,7 +6,7 @@ use crate::{
         vm::VM,
     },
     interpreter::{debug, eval_expression, function, Context},
-    s_read, s_write, RefType, SarzakStorePtr, Value,
+    s_read, RefType, SarzakStorePtr, Value,
 };
 
 pub fn eval(expr: &SarzakStorePtr, context: &mut Context, vm: &mut VM) -> Result<RefType<Value>> {

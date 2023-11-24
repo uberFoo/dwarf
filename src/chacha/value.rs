@@ -17,7 +17,7 @@ use puteketeke::Executor;
 
 use crate::{
     chacha::error::Result,
-    lu_dog::{Function, Lambda, List, ObjectStore as LuDogStore, ValueType, ZObjectStore},
+    lu_dog::{Function, Lambda, ObjectStore as LuDogStore, ValueType, ZObjectStore},
     new_ref,
     plug_in::PluginType,
     s_read,
@@ -207,12 +207,13 @@ pub enum Value {
     Vector(Vec<RefType<Self>>),
 }
 
+#[cfg(feature = "async")]
 impl Future for Value {
     type Output = RefType<Value>;
 
     fn poll(
         self: std::pin::Pin<&mut Self>,
-        cx_: &mut std::task::Context<'_>,
+        _cx_: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Self::Output> {
         let this = std::pin::Pin::into_inner(self);
 
@@ -542,6 +543,7 @@ impl Value {
                 unreachable!()
             }
             Value::Struct(ref ut) => s_read!(ut).get_type().clone(),
+            #[cfg(feature = "async")]
             Value::Task {
                 worker: _,
                 parent: _,

@@ -115,6 +115,14 @@ async fn main() -> Future<int> {
         assert_off(light);
     });
 
+    // let a = chacha::spawn(|| {
+    //     // let light = Light::new();
+    //     print("a: {0}\n".format(light));
+    //     let event = Event::PowerEvent(PowerEvent::On);
+    //     light.send_event(event).await;
+    //     assert_on(light);
+    // });
+
     // let c = async {
     //     chacha::asleep(4000).await;
     //     print("done\n");
@@ -125,7 +133,7 @@ async fn main() -> Future<int> {
 
     // c.await
 
-    // a.await;
+    a.await;
     b.await;
 
     // a.and(b).await;

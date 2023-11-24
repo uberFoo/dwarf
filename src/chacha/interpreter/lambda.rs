@@ -14,7 +14,7 @@ use crate::{
         debug, eval_expression, eval_statement, function, trace, typecheck, ChaChaError, Context,
     },
     lu_dog::{Argument, BodyEnum, Lambda, Span},
-    new_ref, s_read, s_write, NewRef, RefType, Value,
+    new_ref, s_read, NewRef, RefType, Value,
 };
 
 pub fn eval_lambda_expression(

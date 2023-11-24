@@ -1,19 +1,15 @@
-use std::{collections::VecDeque, path::Path, thread, time::Duration, time::Instant};
+use std::{collections::VecDeque, path::Path, time::Duration, time::Instant};
 
-use abi_stable::{
-    library::{lib_header_from_path, LibrarySuffix, RawLibrary},
-    std_types::{RErr, ROk},
-};
+use abi_stable::library::{lib_header_from_path, LibrarySuffix, RawLibrary};
 use ansi_term::Colour;
 
 #[cfg(feature = "async")]
 use async_io::Timer;
 #[cfg(feature = "async")]
 use smol::future;
-#[cfg(feature = "async")]
-use tracing::{debug_span, Instrument};
 
 use snafu::{location, prelude::*, Location};
+use tracing::{debug_span, Instrument};
 use uuid::Uuid;
 
 use crate::{
@@ -28,8 +24,8 @@ use crate::{
     },
     keywords::{
         ADD, ARGS, ASLEEP, ASSERT, ASSERT_EQ, CHACHA, COMPLEX_EX, EPS, EVAL, FN_NEW, FORMAT,
-        HTTP_GET, INTERVAL, JOIN, LEN, MAP, NEW, NORM_SQUARED, ONE_SHOT, PARSE, PLUGIN, SLEEP,
-        SPAWN, SPAWN_NAMED, SQUARE, SUM, TIME, TIMER, TYPEOF, UUID_TYPE,
+        HTTP_GET, LEN, MAP, NEW, NORM_SQUARED, ONE_SHOT, PARSE, PLUGIN, SLEEP, SPAWN, SPAWN_NAMED,
+        SQUARE, SUM, TIME, TIMER, TYPEOF, UUID_TYPE,
     },
     lu_dog::{
         Argument, Block, Call, CallEnum, Expression, IntegerLiteral, Literal, MethodCall,
@@ -106,6 +102,7 @@ pub fn eval(
                 Value::Range(_) => Ok(value.clone()),
                 Value::Struct(_) => Ok(value.clone()),
                 Value::Store(_store, _plugin) => Ok(value.clone()),
+                #[cfg(feature = "async")]
                 Value::Task {
                     worker: _,
                     parent: _,
@@ -514,6 +511,7 @@ pub fn eval(
                             let mut value = s_write!(value);
                             match &mut *value {
                                 Value::Integer(i) => sum += *i,
+                                #[cfg(feature = "async")]
                                 Value::Task { worker: _, parent } => {
                                     let t = parent.take().unwrap();
 
@@ -604,13 +602,13 @@ pub fn eval(
             debug!("StaticMethodCall ty {ty:?}");
             debug!("StaticMethodCall func {func:?}");
 
-            // This is dirty. Down and dirty...
-            if ty == UUID_TYPE && func == FN_NEW {
-                let value = Value::Uuid(Uuid::new_v4());
+            match ty.as_str() {
+                UUID_TYPE if func == FN_NEW => {
+                    let value = Value::Uuid(Uuid::new_v4());
 
-                Ok(new_ref!(Value, value))
-            } else if ty == COMPLEX_EX {
-                match func.as_str() {
+                    Ok(new_ref!(Value, value))
+                }
+                COMPLEX_EX => match func.as_str() {
                     NORM_SQUARED => {
                         let value = arg_values.pop_front().unwrap().0;
                         let thonk = context.memory().get_thonk(0).unwrap();
@@ -666,399 +664,415 @@ pub fn eval(
                             location: location!(),
                         })
                     }
-                }
-            } else if ty == CHACHA {
-                match func.as_str() {
-                    ARGS => {
-                        debug!("evaluating chacha::args");
+                },
+                CHACHA => {
+                    match func.as_str() {
+                        ARGS => {
+                            debug!("evaluating chacha::args");
 
-                        if let Some(args) = &context.get_args() {
-                            Ok(args.clone())
-                        } else {
-                            Ok(new_ref!(Value, Value::Vector(Vec::new())))
-                        }
-                    }
-                    ASLEEP => {
-                        let (duration, _) = arg_values.pop_front().unwrap();
-                        let millis = &*s_read!(duration);
-                        let millis: u64 = millis.try_into()?;
-                        let duration = Duration::from_millis(millis);
-
-                        let span = debug_span!("asleep", duration = ?duration, target = "async");
-                        let executor = context.executor().clone();
-                        let future = async move {
-                            tracing::debug!("sleeping for {duration:?}");
-                            let _instant = executor.timer(duration).await;
-                            tracing::debug!("done sleeping");
-                            Ok(new_ref!(Value, Value::Empty))
-                        }
-                        .instrument(span);
-                        let task = context.worker().unwrap().create_task(future).unwrap();
-
-                        context.executor().start_task(&task);
-
-                        Ok(new_ref!(
-                            Value,
-                            Value::Future {
-                                name: "sleep".to_owned(),
-                                task: Some(task),
-                                executor: context.executor().clone()
+                            if let Some(args) = &context.get_args() {
+                                Ok(args.clone())
+                            } else {
+                                Ok(new_ref!(Value, Value::Vector(Vec::new())))
                             }
-                        ))
-                    }
-                    ASSERT => chacha::assert(arg_values, expression, lu_dog),
-                    ASSERT_EQ => chacha::assert_eq(arg_values, expression, lu_dog),
-                    EPS => {
-                        debug!("evaluating chacha::eps");
-                        let mut timings = context.get_timings().to_vec();
-                        timings.sort_by(|a, b| a.partial_cmp(b).unwrap());
+                        }
+                        #[cfg(feature = "async")]
+                        ASLEEP => {
+                            let (duration, _) = arg_values.pop_front().unwrap();
+                            let millis = &*s_read!(duration);
+                            let millis: u64 = millis.try_into()?;
+                            let duration = Duration::from_millis(millis);
 
-                        let mean = timings.iter().sum::<f64>() / timings.len() as f64;
-                        let std_dev = timings.iter().map(|x| (x - mean).powi(2)).sum::<f64>()
-                            / timings.len() as f64;
-                        let median = timings[timings.len() / 2];
+                            let span =
+                                debug_span!("asleep", duration = ?duration, target = "async");
+                            let executor = context.executor().clone();
+                            let future = async move {
+                                tracing::debug!("sleeping for {duration:?}");
+                                let _instant = executor.timer(duration).await;
+                                tracing::debug!("done sleeping");
+                                Ok(new_ref!(Value, Value::Empty))
+                            }
+                            .instrument(span);
+                            let task = context.worker().unwrap().create_task(future).unwrap();
 
-                        let result = format!(
+                            context.executor().start_task(&task);
+
+                            Ok(new_ref!(
+                                Value,
+                                Value::Future {
+                                    name: "sleep".to_owned(),
+                                    task: Some(task),
+                                    executor: context.executor().clone()
+                                }
+                            ))
+                        }
+                        ASSERT => chacha::assert(arg_values, expression, lu_dog),
+                        ASSERT_EQ => chacha::assert_eq(arg_values, expression, lu_dog),
+                        EPS => {
+                            debug!("evaluating chacha::eps");
+                            let mut timings = context.get_timings().to_vec();
+                            timings.sort_by(|a, b| a.partial_cmp(b).unwrap());
+
+                            let mean = timings.iter().sum::<f64>() / timings.len() as f64;
+                            let std_dev = timings.iter().map(|x| (x - mean).powi(2)).sum::<f64>()
+                                / timings.len() as f64;
+                            let median = timings[timings.len() / 2];
+
+                            let result = format!(
                                     "expressions (mean/std_dev/median) ((10k)/sec): {:.1} / {:.1} / {:.1}\n",
                                     mean,
                                     std_dev,
                                     median
                                 );
-                        // chacha_print(result, context)?;
+                            // chacha_print(result, context)?;
 
-                        Ok(new_ref!(Value, Value::String(result)))
-                    }
-                    EVAL => chacha::eval_dwarf(arg_values, expression, context),
-                    HTTP_GET => chacha::http_get(arg_values, expression, context),
-                    PARSE => chacha::parse_dwarf(arg_values, expression, context),
-                    SLEEP => {
-                        let (duration, _) = arg_values.pop_front().unwrap();
-                        let millis = &*s_read!(duration);
-                        let millis: u64 = millis.try_into()?;
-                        let duration = Duration::from_millis(millis);
+                            Ok(new_ref!(Value, Value::String(result)))
+                        }
+                        EVAL => chacha::eval_dwarf(arg_values, expression, context),
+                        #[cfg(feature = "async")]
+                        HTTP_GET => chacha::http_get(arg_values, expression, context),
+                        PARSE => chacha::parse_dwarf(arg_values, expression, context),
+                        SLEEP => {
+                            let (duration, _) = arg_values.pop_front().unwrap();
+                            let millis = &*s_read!(duration);
+                            let millis: u64 = millis.try_into()?;
+                            let duration = Duration::from_millis(millis);
 
-                        std::thread::sleep(duration);
-                        Ok(new_ref!(Value, Value::Empty))
-                    }
-                    #[cfg(feature = "async")]
-                    SPAWN => spawn("task".to_owned(), &mut arg_values, expression, context),
-                    #[cfg(feature = "async")]
-                    SPAWN_NAMED => {
-                        let (name, _) = arg_values.pop_front().unwrap();
-                        let name: String = (&*s_read!(name)).try_into()?;
-                        spawn(name, &mut arg_values, expression, context)
-                    }
-                    TIME => {
-                        debug!("evaluating chacha::time");
-                        // 🚧 I should be checking that there is an argument before
-                        // I go unwrapping it.
-                        let (func, span) = arg_values.pop_front().unwrap();
-                        let func = s_read!(func);
-                        ensure!(
-                            matches!(&*func, Value::Lambda(_))
-                                || matches!(&*func, Value::Function(_)),
-                            {
-                                // 🚧 I'm not really sure what to do about this here. It's
-                                // all really a hack for now anyway.
-                                // 🚧 Sadly I don't know what I'm talking about any longer.
-                                let ty = func.get_type(&s_read!(sarzak), &s_read!(lu_dog));
-                                let ty = PrintableValueType(true, ty, context.models());
-                                let ty = ty.to_string();
-                                TypeMismatchSnafu {
-                                    expected: "<function>".to_string(),
-                                    found: ty,
-                                    span,
+                            std::thread::sleep(duration);
+                            Ok(new_ref!(Value, Value::Empty))
+                        }
+                        #[cfg(feature = "async")]
+                        SPAWN => spawn("task".to_owned(), &mut arg_values, expression, context),
+                        #[cfg(feature = "async")]
+                        SPAWN_NAMED => {
+                            let (name, _) = arg_values.pop_front().unwrap();
+                            let name: String = (&*s_read!(name)).try_into()?;
+                            spawn(name, &mut arg_values, expression, context)
+                        }
+                        TIME => {
+                            debug!("evaluating chacha::time");
+                            // 🚧 I should be checking that there is an argument before
+                            // I go unwrapping it.
+                            let (func, span) = arg_values.pop_front().unwrap();
+                            let func = s_read!(func);
+                            ensure!(
+                                matches!(&*func, Value::Lambda(_))
+                                    || matches!(&*func, Value::Function(_)),
+                                {
+                                    // 🚧 I'm not really sure what to do about this here. It's
+                                    // all really a hack for now anyway.
+                                    // 🚧 Sadly I don't know what I'm talking about any longer.
+                                    let ty = func.get_type(&s_read!(sarzak), &s_read!(lu_dog));
+                                    let ty = PrintableValueType(true, ty, context.models());
+                                    let ty = ty.to_string();
+                                    TypeMismatchSnafu {
+                                        expected: "<function>".to_string(),
+                                        found: ty,
+                                        span,
+                                    }
                                 }
-                            }
-                        );
+                            );
 
-                        let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
-                        let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
+                            let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
+                            let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
 
-                        let now = Instant::now();
-                        if let Value::Function(func) = &*func {
-                            let _result = eval_function_call(
-                                func.clone(),
-                                &[],
-                                None,
-                                true,
-                                span,
-                                context,
-                                vm,
-                            )?;
-                        } else if let Value::Lambda(ƛ) = &*func {
-                            let _result =
-                                eval_lambda_expression(ƛ.clone(), &[], true, span, context, vm)?;
-                        } else {
-                            panic!("missing implementation for timing this type: {func:?}");
-                        };
-                        let elapsed = now.elapsed();
-
-                        Ok(new_ref!(Value, Value::Float(elapsed.as_secs_f64())))
-                    }
-                    // This returns a string because that's the easy button given what
-                    // I have to work with. Once I get enums into the language, I'll
-                    // be able to return a proper enum.
-                    TYPEOF => {
-                        debug!("evaluating chacha::typeof");
-                        let arg = arg_values.pop_front().unwrap().0;
-                        let ty = s_read!(arg).get_type(&s_read!(sarzak), &s_read!(lu_dog));
-                        let pvt_ty = PrintableValueType(false, ty, context.models());
-
-                        Ok(new_ref!(Value, pvt_ty.to_string().into()))
-                    }
-                    method => {
-                        let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
-                        let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
-                        let read = s_read!(span);
-                        let span = read.start as usize..read.end as usize;
-
-                        Err(ChaChaError::NoSuchStaticMethod {
-                            ty: ty.to_owned(),
-                            method: method.to_owned(),
-                            span,
-                            location: location!(),
-                        })
-                    }
-                }
-            // #[cfg(feature = "async")]
-            } else if ty == TIMER {
-                match func.as_str() {
-                    ONE_SHOT => {
-                        // dbg!("huh");
-                        // 🚧 I should be checking that there is an argument before
-                        // I go unwrapping it.
-                        let (duration, _) = arg_values.pop_front().unwrap();
-                        let millis = &*s_read!(duration);
-                        let millis: u64 = millis.try_into()?;
-                        let duration = Duration::from_millis(millis);
-
-                        let (func, span) = arg_values.pop_front().unwrap();
-                        // let read_func = s_read!(func);
-                        ensure!(
-                            matches!(&*s_read!(func), Value::Lambda(_))
-                                || matches!(&*s_read!(func), Value::Function(_)),
-                            {
-                                // 🚧 I'm not really sure what to do about this here. It's
-                                // all really a hack for now anyway.
-                                // 🚧 WTF? I clearly copy/pasted this from elsewhere.
-                                let ty = s_read!(func).get_type(&s_read!(sarzak), &s_read!(lu_dog));
-                                let ty = PrintableValueType(true, ty, context.models());
-                                let ty = ty.to_string();
-                                TypeMismatchSnafu {
-                                    expected: "<function>".to_string(),
-                                    found: ty,
-                                    span,
-                                }
-                            }
-                        );
-
-                        let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
-                        let span = s_read!(value).r63_span(&s_read!(lu_dog))[0].clone();
-                        let func = s_read!(func).clone();
-
-                        let mut fubar = context.clone();
-                        // let mut baz = fubar.executor().clone();
-                        let future = async move {
-                            let mem = fubar.memory().clone();
-                            let mut vm = VM::new(&mem);
-
-                            // let func = func.clone();
-
-                            debug!("sleeping for {duration:?}");
-                            // dbg!(&duration, &fubar.executor());
-                            let _instant = Timer::after(duration).await;
-                            // dbg!(&duration, _instant, &fubar.executor());
-                            debug!("done sleeping");
-
-                            if let Value::Function(func) = &func {
-                                eval_function_call(
+                            let now = Instant::now();
+                            if let Value::Function(func) = &*func {
+                                let _result = eval_function_call(
                                     func.clone(),
                                     &[],
                                     None,
                                     true,
-                                    &span,
-                                    &mut fubar,
-                                    &mut vm,
-                                )
-                            } else if let Value::Lambda(ƛ) = &func {
-                                eval_lambda_expression(
+                                    span,
+                                    context,
+                                    vm,
+                                )?;
+                            } else if let Value::Lambda(ƛ) = &*func {
+                                let _result = eval_lambda_expression(
                                     ƛ.clone(),
                                     &[],
                                     true,
-                                    &span,
-                                    &mut fubar,
-                                    &mut vm,
-                                )
+                                    span,
+                                    context,
+                                    vm,
+                                )?;
                             } else {
                                 panic!("missing implementation for timing this type: {func:?}");
-                            }
-                        };
+                            };
+                            let elapsed = now.elapsed();
 
-                        let task = context.worker().unwrap().create_task(future).unwrap();
+                            Ok(new_ref!(Value, Value::Float(elapsed.as_secs_f64())))
+                        }
+                        // This returns a string because that's the easy button given what
+                        // I have to work with. Once I get enums into the language, I'll
+                        // be able to return a proper enum.
+                        TYPEOF => {
+                            debug!("evaluating chacha::typeof");
+                            let arg = arg_values.pop_front().unwrap().0;
+                            let ty = s_read!(arg).get_type(&s_read!(sarzak), &s_read!(lu_dog));
+                            let pvt_ty = PrintableValueType(false, ty, context.models());
 
-                        let value = new_ref!(
-                            Value,
-                            Value::Future {
-                                name: "sleep".to_owned(),
-                                task: Some(task),
-                                executor: context.executor().clone()
-                            }
-                        );
+                            Ok(new_ref!(Value, pvt_ty.to_string().into()))
+                        }
+                        method => {
+                            let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
+                            let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
+                            let read = s_read!(span);
+                            let span = read.start as usize..read.end as usize;
 
-                        Ok(value)
-                    }
-                    missing_method => {
-                        let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
-                        let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
-                        let read = s_read!(span);
-                        let span = read.start as usize..read.end as usize;
-
-                        Err(ChaChaError::NoSuchStaticMethod {
-                            ty: ty.to_owned(),
-                            method: missing_method.to_owned(),
-                            span,
-                            location: location!(),
-                        })
-                    }
-                }
-            } else if Some(PLUGIN) == ty.split("::").next() {
-                let plugin = ty.split("::").nth(1).unwrap();
-                match func.as_str() {
-                    NEW => {
-                        let library_path = RawLibrary::path_in_directory(
-                            Path::new(&format!(
-                                "{}/extensions/{plugin}/lib",
-                                context.get_home().display()
-                            )),
-                            plugin,
-                            LibrarySuffix::NoSuffix,
-                        );
-                        let root_module = (|| {
-                            let header = lib_header_from_path(&library_path)?;
-                            header.init_root_module::<PluginModRef>()
-                        })()
-                        .map_err(|e| {
-                            eprintln!("{e}");
-                            ChaChaError::BadnessHappened {
-                                message: "Plug-in error".to_owned(),
+                            Err(ChaChaError::NoSuchStaticMethod {
+                                ty: ty.to_owned(),
+                                method: method.to_owned(),
+                                span,
                                 location: location!(),
+                            })
+                        }
+                    }
+                }
+                #[cfg(feature = "async")]
+                TIMER => {
+                    match func.as_str() {
+                        ONE_SHOT => {
+                            // dbg!("huh");
+                            // 🚧 I should be checking that there is an argument before
+                            // I go unwrapping it.
+                            let (duration, _) = arg_values.pop_front().unwrap();
+                            let millis = &*s_read!(duration);
+                            let millis: u64 = millis.try_into()?;
+                            let duration = Duration::from_millis(millis);
+
+                            let (func, span) = arg_values.pop_front().unwrap();
+                            // let read_func = s_read!(func);
+                            ensure!(
+                                matches!(&*s_read!(func), Value::Lambda(_))
+                                    || matches!(&*s_read!(func), Value::Function(_)),
+                                {
+                                    // 🚧 I'm not really sure what to do about this here. It's
+                                    // all really a hack for now anyway.
+                                    // 🚧 WTF? I clearly copy/pasted this from elsewhere.
+                                    let ty =
+                                        s_read!(func).get_type(&s_read!(sarzak), &s_read!(lu_dog));
+                                    let ty = PrintableValueType(true, ty, context.models());
+                                    let ty = ty.to_string();
+                                    TypeMismatchSnafu {
+                                        expected: "<function>".to_string(),
+                                        found: ty,
+                                        span,
+                                    }
+                                }
+                            );
+
+                            let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
+                            let span = s_read!(value).r63_span(&s_read!(lu_dog))[0].clone();
+                            let func = s_read!(func).clone();
+
+                            let mut fubar = context.clone();
+                            // let mut baz = fubar.executor().clone();
+                            let future = async move {
+                                let mem = fubar.memory().clone();
+                                let mut vm = VM::new(&mem);
+
+                                // let func = func.clone();
+
+                                debug!("sleeping for {duration:?}");
+                                // dbg!(&duration, &fubar.executor());
+                                let _instant = Timer::after(duration).await;
+                                // dbg!(&duration, _instant, &fubar.executor());
+                                debug!("done sleeping");
+
+                                if let Value::Function(func) = &func {
+                                    eval_function_call(
+                                        func.clone(),
+                                        &[],
+                                        None,
+                                        true,
+                                        &span,
+                                        &mut fubar,
+                                        &mut vm,
+                                    )
+                                } else if let Value::Lambda(ƛ) = &func {
+                                    eval_lambda_expression(
+                                        ƛ.clone(),
+                                        &[],
+                                        true,
+                                        &span,
+                                        &mut fubar,
+                                        &mut vm,
+                                    )
+                                } else {
+                                    panic!("missing implementation for timing this type: {func:?}");
+                                }
+                            };
+
+                            let task = context.worker().unwrap().create_task(future).unwrap();
+
+                            let value = new_ref!(
+                                Value,
+                                Value::Future {
+                                    name: "sleep".to_owned(),
+                                    task: Some(task),
+                                    executor: context.executor().clone()
+                                }
+                            );
+
+                            Ok(value)
+                        }
+                        missing_method => {
+                            let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
+                            let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
+                            let read = s_read!(span);
+                            let span = read.start as usize..read.end as usize;
+
+                            Err(ChaChaError::NoSuchStaticMethod {
+                                ty: ty.to_owned(),
+                                method: missing_method.to_owned(),
+                                span,
+                                location: location!(),
+                            })
+                        }
+                    }
+                }
+                ty => {
+                    if Some(PLUGIN) == ty.split("::").next() {
+                        let plugin = ty.split("::").nth(1).unwrap();
+                        match func.as_str() {
+                            NEW => {
+                                let library_path = RawLibrary::path_in_directory(
+                                    Path::new(&format!(
+                                        "{}/extensions/{plugin}/lib",
+                                        context.get_home().display()
+                                    )),
+                                    plugin,
+                                    LibrarySuffix::NoSuffix,
+                                );
+                                let root_module = (|| {
+                                    let header = lib_header_from_path(&library_path)?;
+                                    header.init_root_module::<PluginModRef>()
+                                })()
+                                .map_err(|e| {
+                                    eprintln!("{e}");
+                                    ChaChaError::BadnessHappened {
+                                        message: "Plug-in error".to_owned(),
+                                        location: location!(),
+                                    }
+                                })?;
+
+                                let ctor = root_module.new();
+                                // let (_, path) = arg_values.pop().unwrap();
+                                // let path = s_read!(path).clone();
+                                // let plugin = new_ref!(PluginType, ctor(vec![path.into()].into()).unwrap());
+                                let plugin = new_ref!(PluginType, ctor(vec![].into()).unwrap());
+                                // model.1.replace(plugin.clone());
+
+                                // let value = new_ref!(Value, Value::Store(store, plugin));
+                                let value = new_ref!(Value, Value::Plugin(plugin));
+
+                                Ok(value)
                             }
-                        })?;
+                            missing_method => {
+                                let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
+                                let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
+                                let read = s_read!(span);
+                                let span = read.start as usize..read.end as usize;
 
-                        let ctor = root_module.new();
-                        // let (_, path) = arg_values.pop().unwrap();
-                        // let path = s_read!(path).clone();
-                        // let plugin = new_ref!(PluginType, ctor(vec![path.into()].into()).unwrap());
-                        let plugin = new_ref!(PluginType, ctor(vec![].into()).unwrap());
-                        // model.1.replace(plugin.clone());
-
-                        // let value = new_ref!(Value, Value::Store(store, plugin));
-                        let value = new_ref!(Value, Value::Plugin(plugin));
-
-                        Ok(value)
-                    }
-                    missing_method => {
-                        let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
-                        let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
-                        let read = s_read!(span);
-                        let span = read.start as usize..read.end as usize;
-
-                        Err(ChaChaError::NoSuchStaticMethod {
-                            ty: ty.to_owned(),
-                            method: missing_method.to_owned(),
-                            span,
-                            location: location!(),
-                        })
-                    }
-                }
-            } else if let Some(value) = context.memory().get_meta(ty, func) {
-                debug!("StaticMethodCall meta value {value:?}");
-                match &*s_read!(value) {
-                    Value::Function(func) => {
-                        debug!("StaticMethodCall meta func {func:?}");
-                        let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
-                        debug!("StaticMethodCall::Function {value:?}");
-                        let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
-                        let value = eval_function_call(
-                            func.clone(),
-                            &args,
-                            first_arg,
-                            arg_check,
-                            span,
-                            context,
-                            vm,
-                        )?;
+                                Err(ChaChaError::NoSuchStaticMethod {
+                                    ty: ty.to_owned(),
+                                    method: missing_method.to_owned(),
+                                    span,
+                                    location: location!(),
+                                })
+                            }
+                        }
+                    } else if let Some(value) = context.memory().get_meta(ty, func) {
                         debug!("StaticMethodCall meta value {value:?}");
-                        Ok(value)
-                    }
-                    value => {
-                        error!("deal with call expression {value:?}");
-                        Ok(new_ref!(Value, Value::Empty))
-                    }
-                }
-            } else if let Some(value) = context.memory().get(ty) {
-                debug!("StaticMethodCall frame value {value:?}");
-                match &mut *s_write!(value) {
-                    Value::Function(ref func) => {
-                        let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
-                        let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
-                        let func = s_read!(lu_dog).exhume_function(&s_read!(func).id).unwrap();
-                        debug!("StaticMethodCall frame func {func:?}");
-                        let value = eval_function_call(
-                            func, &args, first_arg, arg_check, span, context, vm,
-                        )?;
+                        match &*s_read!(value) {
+                            Value::Function(func) => {
+                                debug!("StaticMethodCall meta func {func:?}");
+                                let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
+                                debug!("StaticMethodCall::Function {value:?}");
+                                let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
+                                let value = eval_function_call(
+                                    func.clone(),
+                                    &args,
+                                    first_arg,
+                                    arg_check,
+                                    span,
+                                    context,
+                                    vm,
+                                )?;
+                                debug!("StaticMethodCall meta value {value:?}");
+                                Ok(value)
+                            }
+                            value => {
+                                error!("deal with call expression {value:?}");
+                                Ok(new_ref!(Value, Value::Empty))
+                            }
+                        }
+                    } else if let Some(value) = context.memory().get(ty) {
                         debug!("StaticMethodCall frame value {value:?}");
-                        Ok(value)
-                    }
-                    Value::ProxyType {
-                        module: _,
-                        obj_ty: _,
-                        id: _,
-                        plugin: _,
-                    } => {
-                        unimplemented!();
-                        // debug!("StaticMethodCall proxy {ut:?}");
-                        // s_write!(ut).call(
-                        //     func,
-                        //     &mut arg_values.iter().map(|v| v.0 .0.clone()).collect(),
-                        // )
-                    }
-                    // Value::StoreType(ref mut store_type) => {
-                    //     // We should actually know what's behind the curtain, since
-                    //     // we requested it with `stack.get(ty)`, above.
-                    //     match store_type {
-                    //         StoreType::Inflection(ref mut inf) => {
-                    //             let args: Vec<Value> = Vec::new();
-                    //             inf.call(func, &args)
-                    //         }
-                    //         _ => Ok((
-                    //             Value::Error("make point work".to_owned()),
-                    //             ValueType::new_empty(),
-                    //         )),
-                    //     }
-                    // }
-                    value => {
-                        error!("deal with call expression {value}");
-                        panic!("fix this");
+                        match &mut *s_write!(value) {
+                            Value::Function(ref func) => {
+                                let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
+                                let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
+                                let func =
+                                    s_read!(lu_dog).exhume_function(&s_read!(func).id).unwrap();
+                                debug!("StaticMethodCall frame func {func:?}");
+                                let value = eval_function_call(
+                                    func, &args, first_arg, arg_check, span, context, vm,
+                                )?;
+                                debug!("StaticMethodCall frame value {value:?}");
+                                Ok(value)
+                            }
+                            Value::ProxyType {
+                                module: _,
+                                obj_ty: _,
+                                id: _,
+                                plugin: _,
+                            } => {
+                                unimplemented!();
+                                // debug!("StaticMethodCall proxy {ut:?}");
+                                // s_write!(ut).call(
+                                //     func,
+                                //     &mut arg_values.iter().map(|v| v.0 .0.clone()).collect(),
+                                // )
+                            }
+                            // Value::StoreType(ref mut store_type) => {
+                            //     // We should actually know what's behind the curtain, since
+                            //     // we requested it with `stack.get(ty)`, above.
+                            //     match store_type {
+                            //         StoreType::Inflection(ref mut inf) => {
+                            //             let args: Vec<Value> = Vec::new();
+                            //             inf.call(func, &args)
+                            //         }
+                            //         _ => Ok((
+                            //             Value::Error("make point work".to_owned()),
+                            //             ValueType::new_empty(),
+                            //         )),
+                            //     }
+                            // }
+                            value => {
+                                error!("deal with call expression {value}");
+                                panic!("fix this");
+                            }
+                        }
+                    } else {
+                        dbg!(&ty, &func);
+                        ensure!(false, {
+                            let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
+                            let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
+                            let read = s_read!(span);
+                            let span = read.start as usize..read.end as usize;
+
+                            NoSuchStaticMethodSnafu {
+                                ty: ty.to_owned(),
+                                method: func.to_owned(),
+                                span,
+                            }
+                        });
+
+                        unreachable!();
                     }
                 }
-            } else {
-                dbg!(&ty, &func);
-                ensure!(false, {
-                    let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
-                    let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
-                    let read = s_read!(span);
-                    let span = read.start as usize..read.end as usize;
-
-                    NoSuchStaticMethodSnafu {
-                        ty: ty.to_owned(),
-                        method: func.to_owned(),
-                        span,
-                    }
-                });
-
-                unreachable!();
             }
         }
     };
@@ -1066,6 +1080,7 @@ pub fn eval(
     call_result
 }
 
+#[cfg(feature = "async")]
 fn spawn(
     name: String,
     arg_values: &mut VecDeque<(RefType<Value>, std::ops::Range<usize>)>,

@@ -6,7 +6,6 @@ use dwarf::{
     dwarf::{new_lu_dog, parse_dwarf},
 };
 use sarzak::sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL};
-use tracy_client::Client;
 
 const MANDEL_SOURCE_FILE: &str = "./benches/mandelbrot.tao";
 const FIB_SOURCE_FILE: &str = "./benches/fib.tao";
