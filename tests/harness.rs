@@ -7,23 +7,13 @@ use parking_lot::Mutex;
 use dwarf::{
     chacha::{
         error::ChaChaErrorReporter,
-        interpreter::{initialize_interpreter, shutdown_interpreter, start_func},
+        interpreter::{initialize_interpreter, start_func},
         value::Value,
     },
     dwarf::{new_lu_dog, parse_dwarf},
     ref_to_inner,
     sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL},
 };
-
-cfg_if::cfg_if! {
-    if #[cfg(feature = "async")] {
-        use std::future::Future;
-        use std::sync::Arc;
-        use std::thread;
-        use smol::Task;
-        use smol::future;
-    }
-}
 
 lazy_static! {
     static ref EXEC_MUTEX: Mutex<()> = Mutex::new(());
@@ -95,13 +85,19 @@ fn run_program(test: &str, program: &str) -> Result<(Value, String), String> {
 
     let ast = match parse_dwarf(test, program) {
         Ok(ast) => ast,
-        Err(dwarf::dwarf::error::DwarfError::Parse { error, ast: _ }) => {
-            let error = error.trim();
-            eprintln!("{error}");
-            return Err(error.to_owned());
-        }
-        _ => unreachable!(),
+        Err(e) => match *e {
+            dwarf::dwarf::error::DwarfError::Parse { error, ast: _ } => {
+                let error = error.trim();
+                eprintln!("{error}");
+                return Err(error.to_owned());
+            }
+            e => {
+                eprintln!("{e:?}");
+                return Err(e.to_string());
+            }
+        },
     };
+
     let ctx = match new_lu_dog(
         test.to_owned(),
         Some((program.to_owned(), &ast)),

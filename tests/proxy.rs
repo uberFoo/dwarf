@@ -25,12 +25,17 @@ fn run_program(test: &str, program: &str) -> Result<(RefType<Value>, String), St
 
     let ast = match parse_dwarf(test, program) {
         Ok(ast) => ast,
-        Err(dwarf::dwarf::error::DwarfError::Parse { error, ast: _ }) => {
-            let error = error.trim();
-            eprintln!("{error}");
-            return Err(error.to_owned());
-        }
-        _ => unreachable!(),
+        Err(e) => match *e {
+            dwarf::dwarf::error::DwarfError::Parse { error, ast: _ } => {
+                let error = error.trim();
+                eprintln!("{error}");
+                return Err(error.to_owned());
+            }
+            e => {
+                eprintln!("{e:?}");
+                return Err(e.to_string());
+            }
+        },
     };
 
     let ctx = match new_lu_dog(

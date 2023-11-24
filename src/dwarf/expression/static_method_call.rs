@@ -52,11 +52,9 @@ pub fn inter(
     // span and the string at once.
     let type_vec = path
         .iter()
-        .map(|p| {
+        .flat_map(|p| {
             if let Type::UserType((obj, span), _generics) = p {
-                let mut inner = Vec::new();
-                inner.push((obj.de_sanitize().to_owned(), span));
-                inner
+                vec![(obj.de_sanitize().to_owned(), span)]
             } else {
                 panic!(
                     "I don't think that we should ever see anything other than a user type here: {:?}",
@@ -64,7 +62,6 @@ pub fn inter(
                 );
             }
         })
-        .flatten()
         .collect::<Vec<_>>();
 
     // This is the span over the entire path.
@@ -345,9 +342,9 @@ pub fn inter(
                                         g.0.to_string()
                                     }).collect::<Vec<_>>().join(", ");
                                     if !generics.is_empty() {
-                                        name.push_str("<");
+                                        name.push('<');
                                         name.push_str(&generics);
-                                        name.push_str(">");
+                                        name.push('>');
                                     }
                                     name
                                 } else {

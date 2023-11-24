@@ -243,11 +243,7 @@ impl<'a> PrintableValueType<'a> {
                         if let Some(ty) = model.0.exhume_ty(ty) {
                             if let Ty::Object(ref object) = &*ty.read().unwrap() {
                                 if let Some(object) = model.0.exhume_object(object) {
-                                    return write!(
-                                        f,
-                                        "{}",
-                                        format!("{}Proxy", object.read().unwrap().name)
-                                    );
+                                    return write!(f, "{}Proxy", object.read().unwrap().name);
                                 }
                             }
                         }
@@ -267,11 +263,7 @@ impl<'a> PrintableValueType<'a> {
                 let zobject_store = s_read!(zobject_store);
                 let domain_name = &zobject_store.domain;
 
-                write!(
-                    f,
-                    "{}",
-                    format!("{}Store", domain_name.to_upper_camel_case())
-                )
+                write!(f, "{}Store", domain_name.to_upper_camel_case())
             }
         }
     }

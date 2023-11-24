@@ -351,7 +351,7 @@ pub struct Context<'a> {
 /// `sarzak`. This one really needs a close looking at. It's just an empty metamodel.
 /// It's used in two or three places, and it's baggage on every function call. I think
 /// that it may only be used to look up the id of the UUID type.
-pub fn new_lu_dog<'a>(
+pub fn new_lu_dog(
     file_name: String,
     source: Option<(String, &[Item])>,
     dwarf_home: &PathBuf,
@@ -386,7 +386,7 @@ pub fn new_lu_dog<'a>(
     }
 
     Ok(InterContext {
-        source: file_name.into(),
+        source: file_name,
         lu_dog: new_ref!(LuDogStore, lu_dog),
         models,
         dirty,
@@ -2952,9 +2952,9 @@ pub(super) fn inter_expression(
                         g.0.to_string()
                     }).collect::<Vec<_>>().join(", ");
                     if !generics.is_empty() {
-                        name.push_str("<");
+                        name.push('<');
                         name.push_str(&generics);
-                        name.push_str(">");
+                        name.push('>');
                     }
                     name
                 } else {
@@ -3015,6 +3015,7 @@ pub(super) fn inter_expression(
                         let (new_enum, _) =
                             create_generic_enum(&full_enum_name, &enum_path.0, lu_dog);
                         let x = s_read!(new_enum).id;
+                        #[allow(clippy::let_and_return)]
                         x
                     }
                 } else {
@@ -3122,7 +3123,7 @@ pub(super) fn inter_expression(
                     lu_dog,
                 );
                 let ty = ValueType::new_empty(lu_dog);
-                let value = XValue::new_expression(&block, &ty, &expr, lu_dog);
+                let value = XValue::new_expression(block, &ty, &expr, lu_dog);
                 // See # Span Bug
                 lu_dog.inter_span(|id| {
                     let mut span = s_read!(span).clone();
@@ -3188,7 +3189,7 @@ pub(super) fn inter_expression(
                             root = name.clone();
                         }
                         if !generics.is_empty() {
-                            name.push_str("<");
+                            name.push('<');
                             for (i, (generic, _)) in generics.iter().enumerate() {
                                 // if let Type::Generic((generic_name, _)) = generic {
                                 name.extend([generic.to_string()]);
@@ -3198,7 +3199,7 @@ pub(super) fn inter_expression(
                                 }
                                 // }
                             }
-                            name.push_str(">");
+                            name.push('>');
                         }
                     } else {
                         return Err(vec![DwarfError::Internal {
@@ -3811,7 +3812,7 @@ fn inter_enum(
                         // Pass the user type to the lookup business if this isn't a generic parameter.
                         if let Some(generic) = enum_generics.get(ty) {
                             context.location = location!();
-                            let ty = make_value_type(&generic, span, None, context, lu_dog)?;
+                            let ty = make_value_type(generic, span, None, context, lu_dog)?;
                             LuDogSpan::new(
                                 span.end as i64,
                                 span.start as i64,
@@ -4067,7 +4068,7 @@ fn inter_struct(
         let mut first = true;
         let mut first_generic = None;
         let mut last_generic_uuid: Option<usize> = None;
-        for (generic, _) in generics {
+        for generic in generics.keys() {
             let generic = StructGeneric::new(generic.to_owned(), None, &woog_struct, lu_dog);
             if first {
                 first = false;
@@ -4333,7 +4334,7 @@ pub(crate) fn make_value_type(
                             // object called `Point`. We want to be able to also handle
                             // proxy objects for `Point`. Those are suffixed with "Proxy".
                             let obj = obj.read().unwrap().name.to_upper_camel_case();
-                            obj == *name || name == format!("{}Proxy", obj) || obj == *name
+                            obj == *name || name == format!("{}Proxy", obj)
                         }
                         _ => false,
                     }) {
@@ -4511,7 +4512,7 @@ pub(super) fn typecheck(
     let rhs = rhs.0;
 
     cfg_if::cfg_if! {
-        if #[cfg(any(feature = "single", feature = "single-vec"))] {
+        if #[cfg(any(feature = "single", feature = "single-vec", feature = "single-vec-tracy"))] {
             if std::rc::Rc::as_ptr(lhs) == std::rc::Rc::as_ptr(rhs) {
                 return Ok(());
             }
@@ -4613,7 +4614,7 @@ pub(crate) fn create_generic_struct(
     lu_dog: &mut LuDogStore,
 ) -> RefType<WoogStruct> {
     let mut name = s_read!(woog_struct).name.to_owned();
-    name.push_str("<");
+    name.push('<');
     let first = s_read!(woog_struct).r102_struct_generic(lu_dog)[0].clone();
     name.push_str(&s_read!(first).name);
     let mut id = s_read!(first).next;
@@ -4625,7 +4626,7 @@ pub(crate) fn create_generic_struct(
         // dbg!(&next.name, &substitutions);
 
         let ty = substitutions.get(&next.name).unwrap();
-        let ty = PrintableValueType(&ty, context, lu_dog).to_string();
+        let ty = PrintableValueType(ty, context, lu_dog).to_string();
 
         name.extend([", ", &ty]);
     }

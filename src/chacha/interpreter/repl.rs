@@ -12,7 +12,7 @@ use crate::{
     new_ref, s_read, s_write, ChaChaError, NewRef, RefType,
 };
 
-pub fn start_repl(mut context: &mut Context, is_uber: bool) -> Result<(), Error> {
+pub fn start_repl(context: &mut Context, is_uber: bool) -> Result<(), Error> {
     use std::io;
 
     use rustyline::error::ReadlineError;
@@ -140,7 +140,7 @@ pub fn start_repl(mut context: &mut Context, is_uber: bool) -> Result<(), Error>
 
                         context.set_dirty(dirty);
 
-                        match eval_statement(stmt.0, &mut context, &mut vm) {
+                        match eval_statement(stmt.0, context, &mut vm) {
                             Ok(value) => {
                                 let ty =
                                     s_read!(value).get_type(&s_read!(sarzak), &s_read!(lu_dog));

@@ -312,7 +312,7 @@ impl Context {
     }
 
     pub fn lu_dog_heel(&self) -> &RefType<LuDogStore> {
-        &self.models.lu_dog()
+        self.models.lu_dog()
     }
 
     pub fn block(&self) -> &RefType<Block> {
@@ -320,7 +320,7 @@ impl Context {
     }
 
     pub fn sarzak_heel(&self) -> &RefType<SarzakStore> {
-        &self.models.sarzak()
+        self.models.sarzak()
     }
 
     pub fn models(&self) -> &ModelContext {

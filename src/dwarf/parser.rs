@@ -4823,7 +4823,7 @@ pub fn parse_line(src: &str) -> Result<Option<Spanned<Statement>>, String> {
 
 // This will return as much of the parsed ast as possible, even when hitting an
 // error, which explains the return type.
-pub fn parse_dwarf(name: &str, src: &str) -> Result<Vec<Item>, DwarfError> {
+pub fn parse_dwarf(name: &str, src: &str) -> Result<Vec<Item>, Box<DwarfError>> {
     let (tokens, errs) = lexer().parse_recovery_verbose(src);
 
     let mut parser = DwarfParser::new(tokens.unwrap());
@@ -4834,7 +4834,7 @@ pub fn parse_dwarf(name: &str, src: &str) -> Result<Vec<Item>, DwarfError> {
     if !errs.is_empty() || !parse_errs.is_empty() {
         let error = report_errors(errs, parse_errs, name, src);
         eprintln!("{}", error);
-        Err(DwarfError::Parse { error, ast })
+        Err(Box::new(DwarfError::Parse { error, ast }))
     } else {
         Ok(ast)
     }

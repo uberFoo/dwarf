@@ -145,6 +145,7 @@ tracy = [
 
 single = ["single-vec"]
 single-vec = ["sarzak/lu-dog-vec"]
+single-vec-tracy = ["sarzak/lu-dog-vec-tracy"]
 multi-vec = ["sarzak/lu-dog-rwlock-vec"]
 multi-nd-vec = ["sarzak/lu-dog-ndrwlock-vec", "dep:no_deadlocks"]
 print-std-out = []

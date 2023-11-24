@@ -533,14 +533,15 @@ fn eval_expression(
                 } => {
                     let task = task.take().unwrap();
                     executor.start_task(&task);
-                    let result = future::block_on(task);
-                    result
+                    future::block_on(task)
                 }
                 Value::Task { worker: _, parent } => {
                     if let Some(parent) = parent {
-                        executor.start_task(&parent);
+                        executor.start_task(parent);
+                        future::block_on(parent)
+                    } else {
+                        Ok(value.clone())
                     }
-                    Ok(value.clone())
                 }
                 wtf => {
                     dbg!(wtf);
@@ -700,7 +701,7 @@ pub enum DebuggerControl {
 pub fn start_func(
     name: &str,
     stopped: bool,
-    mut context: &mut Context,
+    context: &mut Context,
 ) -> Result<RefType<Value>, Error> {
     {
         let mut running = RUNNING.lock();
@@ -725,7 +726,7 @@ pub fn start_func(
             let value_ty = &s_read!(main).r1_value_type(&s_read!(context.lu_dog_heel()))[0];
             let span = &s_read!(value_ty).r62_span(&s_read!(context.lu_dog_heel()))[0];
 
-            let result = eval_function_call(main, &[], None, true, span, &mut context, &mut vm)?;
+            let result = eval_function_call(main, &[], None, true, span, context, &mut vm)?;
 
             // let result_wrapped = result.clone();
             // let result_unwrapped = &mut *s_write!(result);
@@ -831,7 +832,7 @@ fn typecheck(
     context: &Context,
 ) -> Result<()> {
     cfg_if::cfg_if! {
-        if #[cfg(any(feature = "single", feature = "single-vec"))] {
+        if #[cfg(any(feature = "single", feature = "single-vec", feature = "single-vec-tracy"))] {
             if std::rc::Rc::as_ptr(lhs) == std::rc::Rc::as_ptr(rhs) {
                 return Ok(());
             }

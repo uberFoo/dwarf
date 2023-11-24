@@ -8,10 +8,10 @@ use crate::{
     new_ref, s_read, NewRef, RefType, SarzakStorePtr, Value,
 };
 
-pub fn eval<'a>(
+pub fn eval(
     block_id: &SarzakStorePtr,
     context: &mut Context,
-    vm: &mut VM<'a>,
+    vm: &mut VM,
 ) -> Result<RefType<Value>> {
     let lu_dog = context.lu_dog_heel().clone();
 

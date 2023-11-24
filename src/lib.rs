@@ -36,7 +36,6 @@ mod keywords {
     pub(crate) const ASSERT_EQ: &str = "assert_eq";
     pub(crate) const CHACHA: &str = "chacha";
     pub(crate) const COMPLEX_EX: &str = "ComplexEx";
-    pub(crate) const DWARF: &str = "dwarf";
     pub(crate) const EPS: &str = "eps";
     pub(crate) const EVAL: &str = "eval";
     pub(crate) const FN_NEW: &str = "new";
@@ -67,6 +66,44 @@ use lu_dog::{ObjectStore as LuDogStore, ValueType};
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "single-vec")] {
+        type SarzakStorePtr = usize;
+        type RcType<T> = std::rc::Rc<T>;
+        impl<T> NewRcType<T> for RcType<T> {
+            fn new_rc_type(value: T) -> RcType<T> {
+                std::rc::Rc::new(value)
+            }
+        }
+
+        pub type RefType<T> = std::rc::Rc<std::cell::RefCell<T>>;
+
+        impl<T> NewRef<T> for RefType<T> {
+            fn new_ref(value: T) -> RefType<T> {
+                std::rc::Rc::new(std::cell::RefCell::new(value))
+            }
+        }
+
+        // Macros to abstract the underlying read/write operations.
+        #[macro_export]
+        macro_rules! ref_read {
+            ($arg:expr) => {
+                $arg.borrow()
+            };
+        }
+
+        #[macro_export]
+        macro_rules! ref_write {
+            ($arg:expr) => {
+                $arg.borrow_mut()
+            };
+        }
+
+        #[macro_export]
+        macro_rules! ref_to_inner {
+            ($arg:expr) => {
+                $arg.into_inner().unwrap()
+            };
+        }
+    } else if #[cfg(feature = "single-vec-tracy")] {
         type SarzakStorePtr = usize;
         type RcType<T> = std::rc::Rc<T>;
         impl<T> NewRcType<T> for RcType<T> {

@@ -45,12 +45,7 @@ impl<'d, 'a, 'b> fmt::Display for PrintableValueType<'d, 'a, 'b> {
                 let inner = s_read!(future).r2_value_type(lu_dog)[0].clone();
                 let inner = PrintableValueType(&inner, context, lu_dog);
 
-                write!(
-                    f,
-                    "{}<{}>",
-                    TY_WARN_CLR.italic().paint("Future"),
-                    inner.to_string()
-                )
+                write!(f, "{}<{inner}>", TY_WARN_CLR.italic().paint("Future"))
             }
             ValueTypeEnum::Generic(ref g) => {
                 let g = lu_dog.exhume_generic(g).unwrap();

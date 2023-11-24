@@ -364,7 +364,7 @@ impl Clone for Value {
                 worker: worker.clone(),
                 parent: None,
             },
-            Self::Thonk(name, number) => Self::Thonk(*name, *number),
+            Self::Thonk(name, number) => Self::Thonk(name, *number),
             Self::TupleEnum(te) => Self::TupleEnum(te.clone()),
             Self::Unknown => Self::Unknown,
             Self::Uuid(uuid) => Self::Uuid(*uuid),
@@ -399,7 +399,7 @@ impl From<Value> for FfiValue {
             Value::String(str_) => Self::String(str_.to_owned().into()),
             Value::Uuid(uuid) => Self::Uuid(uuid.to_owned().into()),
             Value::Vector(vec) => {
-                Self::Vector(vec.into_iter().map(|v| s_read!(v).clone().into()).collect())
+                Self::Vector(vec.iter().map(|v| s_read!(v).clone().into()).collect())
             }
             _ => Self::Unknown,
         }

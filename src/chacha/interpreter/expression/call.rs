@@ -253,7 +253,7 @@ pub fn eval(
 
                         let call = &MethodCall::new("map".to_owned(), &mut s_write!(lu_dog));
                         let call =
-                            Call::new_method_call(false, None, None, &call, &mut s_write!(lu_dog));
+                            Call::new_method_call(false, None, None, call, &mut s_write!(lu_dog));
 
                         let result = (range.start..range.end)
                             .map(|i| {

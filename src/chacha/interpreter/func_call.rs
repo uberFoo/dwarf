@@ -40,14 +40,14 @@ const FUNCTION_LOAD: &str = "load";
 const MERLIN: &str = "merlin";
 const SARZAK: &str = "sarzak";
 
-pub fn eval_function_call<'a>(
+pub fn eval_function_call(
     func: RefType<Function>,
     args: &[RefType<Argument>],
     first_arg: Option<SarzakStorePtr>,
     arg_check: bool,
     span: &RefType<Span>,
     context: &mut Context,
-    vm: &mut VM<'a>,
+    vm: &mut VM,
 ) -> Result<RefType<Value>> {
     let lu_dog = context.lu_dog_heel().clone();
 
@@ -110,14 +110,14 @@ pub fn eval_function_call<'a>(
     }
 }
 
-fn inner_eval_function_call<'a>(
+fn inner_eval_function_call(
     func: RefType<Function>,
     args: &[RefType<Argument>],
     first_arg: Option<SarzakStorePtr>,
     arg_check: bool,
     span: &RefType<Span>,
     context: &mut Context,
-    vm: &mut VM<'a>,
+    vm: &mut VM,
 ) -> Result<RefType<Value>> {
     let lu_dog = context.lu_dog_heel().clone();
 
@@ -293,6 +293,7 @@ fn eval_external_static_method(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn eval_built_in_function_call(
     func: RefType<Function>,
     block_id: &SarzakStorePtr,
