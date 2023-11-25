@@ -166,6 +166,21 @@ macro_rules! debug {
 }
 pub(crate) use debug;
 
+macro_rules! trace {
+    ($($arg:tt)*) => {
+        log::trace!(
+            target: "extruder",
+            "{}: {}\n  --> {}:{}:{}",
+            Colour::Blue.dimmed().italic().paint(function!()),
+            format_args!($($arg)*),
+            file!(),
+            line!(),
+            column!()
+        )
+    };
+}
+pub(crate) use trace;
+
 macro_rules! e_warn {
     ($($arg:tt)*) => {
         log::warn!(
@@ -1607,6 +1622,7 @@ pub(super) fn inter_expression(
                     // For example, what if you wanted a..f? I need to think about this, and
                     // check what rust does. I'm actually too tired right now to think about
                     // it. Related to range_type_bug.
+                    // 🚧 Of course rust does not work on chars. Doesn't mean I don't want to.
                     ValueType::new_ty(&Ty::new_integer(context.sarzak), lu_dog)
                 }
                 ValueTypeEnum::Ty(ref id) => {
@@ -2447,7 +2463,7 @@ pub(super) fn inter_expression(
                 debug!("LocalVariable result ({expr:#?}, {ty:#?})");
                 Ok(((expr, span), ty))
             } else {
-                debug!("variable not found");
+                debug!("variable not found: `{name}`");
                 let expr = VariableExpression::new(name.to_owned(), lu_dog);
                 let expr = Expression::new_variable_expression(&expr, lu_dog);
                 let ty = ValueType::new_unknown(lu_dog);
@@ -4523,6 +4539,10 @@ pub(super) fn typecheck(
         }
     }
 
+    // 🚧 The way that I'm doing this is unwieldy. I'm checking left and right, and
+    // position matters, so I need it to be symmetric, without all the extra code.
+    // Symmetry, right? Maybe a macro? We are also diving into sarzak in three
+    // different places? Four?
     match (&s_read!(lhs).subtype, &s_read!(rhs).subtype) {
         // Promote unknown to the other type.
         (ValueTypeEnum::Unknown(_), _) => Ok(()),
@@ -4560,8 +4580,51 @@ pub(super) fn typecheck(
             }
         }
         // (ValueTypeEnum::Unknown(_), _) => Ok(()),
-        // 🚧 This is a terrible hack. It's very temporary. Related to range_type_bug.
-        (_, ValueTypeEnum::Range(_)) => Ok(()),
+        // 🚧 Related to range_type_bug.
+        (ValueTypeEnum::Ty(id), ValueTypeEnum::Range(_)) => {
+            let ty = context.sarzak.exhume_ty(id).unwrap();
+            let ty = ty.read().unwrap();
+            match &*ty {
+                Ty::Integer(_) => Ok(()),
+                _ => {
+                    // dbg!(PrintableValueType(lhs, context, lu_dog).to_string());
+                    // dbg!(PrintableValueType(rhs, context, lu_dog).to_string());
+                    let lhs = PrintableValueType(lhs, context, lu_dog);
+                    let rhs = PrintableValueType(rhs, context, lu_dog);
+
+                    Err(vec![DwarfError::TypeMismatch {
+                        expected: lhs.to_string(),
+                        found: rhs.to_string(),
+                        file: context.file_name.to_owned(),
+                        expected_span: lhs_span.to_owned(),
+                        found_span: rhs_span.to_owned(),
+                        location,
+                    }])
+                }
+            }
+        }
+        (ValueTypeEnum::Range(_), ValueTypeEnum::Ty(id)) => {
+            let ty = context.sarzak.exhume_ty(id).unwrap();
+            let ty = ty.read().unwrap();
+            match &*ty {
+                Ty::Integer(_) => Ok(()),
+                _ => {
+                    // dbg!(PrintableValueType(lhs, context, lu_dog).to_string());
+                    // dbg!(PrintableValueType(rhs, context, lu_dog).to_string());
+                    let lhs = PrintableValueType(lhs, context, lu_dog);
+                    let rhs = PrintableValueType(rhs, context, lu_dog);
+
+                    Err(vec![DwarfError::TypeMismatch {
+                        expected: lhs.to_string(),
+                        found: rhs.to_string(),
+                        file: context.file_name.to_owned(),
+                        expected_span: lhs_span.to_owned(),
+                        found_span: rhs_span.to_owned(),
+                        location,
+                    }])
+                }
+            }
+        }
         (ValueTypeEnum::Char(_), ValueTypeEnum::Ty(id)) => {
             let ty = context.sarzak.exhume_ty(id).unwrap();
             let ty = ty.read().unwrap();
@@ -4711,10 +4774,12 @@ pub(crate) fn update_span_value(
     value: &RefType<XValue>,
     location: Location,
 ) {
-    debug!(
+    trace!(
         "update span {}:{}:{} -- {value:?}",
-        location.file, location.line, location.column
+        location.file,
+        location.line,
+        location.column
     );
     s_write!(span).x_value = Some(s_read!(value).id);
-    debug!("update span: {:?}", s_read!(span));
+    trace!("update span: {:?}", s_read!(span));
 }

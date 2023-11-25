@@ -24,7 +24,7 @@ impl<'d, 'a, 'b> fmt::Display for PrintableValueType<'d, 'a, 'b> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         const TY_CLR: Colour = Colour::Purple;
         const TY_WARN_CLR: Colour = Colour::Yellow;
-        const _TY_ERR_CLR: Colour = Colour::Red;
+        const TY_ERR_CLR: Colour = Colour::Red;
 
         let value = s_read!(self.0);
         let context = self.1;
@@ -45,11 +45,12 @@ impl<'d, 'a, 'b> fmt::Display for PrintableValueType<'d, 'a, 'b> {
                 let inner = s_read!(future).r2_value_type(lu_dog)[0].clone();
                 let inner = PrintableValueType(&inner, context, lu_dog);
 
-                write!(f, "{}<{inner}>", TY_WARN_CLR.italic().paint("Future"))
+                write!(f, "{}<{inner}>", TY_WARN_CLR.paint("Future"))
             }
             ValueTypeEnum::Generic(ref g) => {
                 let g = lu_dog.exhume_generic(g).unwrap();
                 let g = s_read!(g);
+
                 write!(f, "{}", TY_CLR.italic().paint(g.name.as_str()))
             }
             ValueTypeEnum::Import(ref import) => {
@@ -115,7 +116,7 @@ impl<'d, 'a, 'b> fmt::Display for PrintableValueType<'d, 'a, 'b> {
                     write!(f, "<unknown object>")
                 }
             }
-            ValueTypeEnum::Unknown(_) => write!(f, "<unknown>"),
+            ValueTypeEnum::Unknown(_) => write!(f, "{}", TY_ERR_CLR.italic().paint("unknown")),
             ValueTypeEnum::WoogStruct(ref woog_struct) => {
                 debug!("woog_struct {:?}", woog_struct);
                 let woog_struct = lu_dog.exhume_woog_struct(woog_struct).unwrap();

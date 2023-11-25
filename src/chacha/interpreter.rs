@@ -539,6 +539,7 @@ fn eval_expression(
                     if let Some(parent) = parent {
                         executor.start_task(parent);
                         future::block_on(parent)
+                        // Ok(value.clone())
                     } else {
                         Ok(value.clone())
                     }

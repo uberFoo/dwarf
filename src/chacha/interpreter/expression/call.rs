@@ -683,16 +683,18 @@ pub fn eval(
                             let millis: u64 = millis.try_into()?;
                             let duration = Duration::from_millis(millis);
 
-                            let span =
-                                debug_span!("asleep", duration = ?duration, target = "async");
+                            // let span =
                             let executor = context.executor().clone();
                             let future = async move {
-                                tracing::debug!("sleeping for {duration:?}");
+                                // debug_span!("asleep", duration = ?duration, target = "async");
+                                log::debug!(target: "async", "sleeping for {duration:?}");
+                                // dbg!("start", duration);
                                 let _instant = executor.timer(duration).await;
-                                tracing::debug!("done sleeping");
+                                // dbg!("end", duration);
+                                log::debug!(target: "async", "done sleeping");
                                 Ok(new_ref!(Value, Value::Empty))
-                            }
-                            .instrument(span);
+                            };
+                            // .instrument(span);
                             let task = context.worker().unwrap().create_task(future).unwrap();
 
                             context.executor().start_task(&task);
