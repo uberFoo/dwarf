@@ -136,6 +136,29 @@ pub fn inter(
 
         let sarzak = context.sarzak;
 
+        // Process the args.
+        let mut arg_types = Vec::new();
+        let mut last_arg_uuid: Option<usize> = None;
+        for (position, param) in params.iter().enumerate() {
+            let (arg_expr, ty) = inter_expression(
+                &new_ref!(ParserExpression, param.0.to_owned()),
+                &param.1,
+                block,
+                context,
+                lu_dog,
+            )?;
+            arg_types.push(ty);
+
+            let arg = Argument::new(position as DwarfInteger, &arg_expr.0, &call, None, lu_dog);
+            if position == 0 {
+                // Here I'm setting the pointer to the first argument.
+                s_write!(call).argument = Some(s_read!(arg).id);
+            }
+
+            last_arg_uuid = link_argument!(last_arg_uuid, arg, lu_dog);
+        }
+
+        // Get the type from the method.
         let ty = match type_name.as_str() {
             CHACHA => {
                 match method {
@@ -168,13 +191,13 @@ pub fn inter(
                     SLEEP => ValueType::new_empty(lu_dog),
                     #[cfg(feature = "async")]
                     SPAWN => {
-                        let inner = ValueType::new_unknown(lu_dog);
+                        let inner = arg_types[0].clone();
                         let future = XFuture::new(&inner, lu_dog);
                         ValueType::new_x_future(&future, lu_dog)
                     }
                     #[cfg(feature = "async")]
                     SPAWN_NAMED => {
-                        let inner = ValueType::new_unknown(lu_dog);
+                        let inner = arg_types[0].clone();
                         let future = XFuture::new(&inner, lu_dog);
                         ValueType::new_x_future(&future, lu_dog)
                     }
@@ -237,24 +260,6 @@ pub fn inter(
                 lookup_woog_struct_method_return_type(&type_name, method, context.sarzak, lu_dog)
             }
         };
-
-        let mut last_arg_uuid: Option<usize> = None;
-        for (position, param) in params.iter().enumerate() {
-            let (arg_expr, _ty) = inter_expression(
-                &new_ref!(ParserExpression, param.0.to_owned()),
-                &param.1,
-                block,
-                context,
-                lu_dog,
-            )?;
-            let arg = Argument::new(position as DwarfInteger, &arg_expr.0, &call, None, lu_dog);
-            if position == 0 {
-                // Here I'm setting the pointer to the first argument.
-                s_write!(call).argument = Some(s_read!(arg).id);
-            }
-
-            last_arg_uuid = link_argument!(last_arg_uuid, arg, lu_dog);
-        }
 
         let value = XValue::new_expression(block, &ty, &call_expr, lu_dog);
         update_span_value(&span, &value, location!());
