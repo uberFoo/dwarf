@@ -1,0 +1,46 @@
+name: CI
+
+on:
+    workflow_dispatch:
+    push:
+        branches:
+            - develop
+            - master
+    pull_request:
+        types: [opened, synchronize, reopened, ready_for_review]
+        branches:
+            - develop
+
+jobs:
+    build:
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v2
+              with:
+                  ref: develop
+
+            - name: Set up Rust
+              uses: actions-rs/toolchain@v1
+              with:
+                  toolchain: stable
+
+            - name: Install cargo-llvm-cov
+              uses: taiki-e/install-action@cargo-llvm-cov
+
+            - name: Build and run tests with coverage
+              run: |
+                  cargo llvm-cov --lcov --output-path coverage.lcov --no-default-features --features "multi-vec, repl, async"
+
+            - name: Upload coverage reports to Codecov
+              uses: codecov/codecov-action@v3
+              env:
+                  CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+              with:
+                  directory: ./
+                  fail_ci_if_error: true
+                  # files: ./coverage.xml
+                  files: coverage.lcov
+                  flags: unittests
+                  name: codecov-umbrella
+                  verbose: true
