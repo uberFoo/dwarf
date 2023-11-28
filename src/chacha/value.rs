@@ -17,7 +17,10 @@ use puteketeke::Executor;
 
 use crate::{
     chacha::error::Result,
-    lu_dog::{Function, Lambda, ObjectStore as LuDogStore, ValueType, ZObjectStore},
+    lu_dog::{
+        BooleanLiteralEnum, Expression, ExpressionEnum, Function, Lambda, LiteralEnum,
+        ObjectStore as LuDogStore, ValueType, ZObjectStore, FALSE_LITERAL, TRUE_LITERAL,
+    },
     new_ref,
     plug_in::PluginType,
     s_read,
@@ -203,7 +206,10 @@ pub enum Value {
     TupleEnum(RefType<TupleEnum>),
     Unknown,
     Uuid(uuid::Uuid),
-    Vector(Vec<RefType<Self>>),
+    Vector {
+        ty: RefType<ValueType>,
+        inner: Vec<RefType<Self>>,
+    },
 }
 
 #[cfg(feature = "async")]
@@ -312,7 +318,7 @@ impl std::fmt::Debug for Value {
             Self::TupleEnum(te) => write!(f, "{:?}", s_read!(te)),
             Self::Unknown => write!(f, "<unknown>"),
             Self::Uuid(uuid) => write!(f, "{uuid:?}"),
-            Self::Vector(vec) => write!(f, "{vec:?}"),
+            Self::Vector { ty, inner } => write!(f, "{ty:?}: {inner:?}"),
         }
     }
 }
@@ -368,7 +374,10 @@ impl Clone for Value {
             Self::TupleEnum(te) => Self::TupleEnum(te.clone()),
             Self::Unknown => Self::Unknown,
             Self::Uuid(uuid) => Self::Uuid(*uuid),
-            Self::Vector(vec) => Self::Vector(vec.clone()),
+            Self::Vector { ty, inner } => Self::Vector {
+                ty: ty.clone(),
+                inner: inner.clone(),
+            },
         }
     }
 }
@@ -398,9 +407,9 @@ impl From<Value> for FfiValue {
             }),
             Value::String(str_) => Self::String(str_.to_owned().into()),
             Value::Uuid(uuid) => Self::Uuid(uuid.to_owned().into()),
-            Value::Vector(vec) => {
-                Self::Vector(vec.iter().map(|v| s_read!(v).clone().into()).collect())
-            }
+            // Value::Vector(vec) => {
+            //     Self::Vector(vec.iter().map(|v| s_read!(v).clone().into()).collect())
+            // }
             _ => Self::Unknown,
         }
     }
@@ -424,16 +433,16 @@ impl From<FfiValue> for Value {
             FfiValue::String(str_) => Self::String(str_.into()),
             // FfiValue::UserType(uuid) => Self::UserType(new_ref!(UserType, uuid.into())),
             FfiValue::Uuid(uuid) => Self::Uuid(uuid.into()),
-            FfiValue::Vector(vec) => {
-                Self::Vector(vec.into_iter().map(|v| new_ref!(Value, v.into())).collect())
-            }
+            // FfiValue::Vector(vec) => {
+            //     Self::Vector(vec.into_iter().map(|v| new_ref!(Value, v.into())).collect())
+            // }
             _ => Self::Unknown,
         }
     }
 }
 
 impl Value {
-    pub fn get_type(&self, sarzak: &SarzakStore, lu_dog: &LuDogStore) -> RefType<ValueType> {
+    pub fn get_value_type(&self, sarzak: &SarzakStore, lu_dog: &LuDogStore) -> RefType<ValueType> {
         match &self {
             Value::Boolean(_) => {
                 let ty = Ty::new_boolean(sarzak);
@@ -565,10 +574,22 @@ impl Value {
                 }
                 unreachable!()
             }
-            Value::Vector(_) => {
+            Value::Vector { ty, inner } => {
+                let ty = match &s_read!(ty).subtype {
+                    ValueTypeEnum::XFuture(id) => {
+                        let ty = lu_dog.exhume_x_future(id).unwrap();
+                        let ty = s_read!(ty);
+                        ty.r2_value_type(lu_dog)[0].clone()
+                    }
+                    _ => ty.clone(),
+                };
                 for vt in lu_dog.iter_value_type() {
-                    if let ValueTypeEnum::List(_) = s_read!(vt).subtype {
-                        return vt.clone();
+                    if let ValueTypeEnum::List(id) = s_read!(vt).subtype {
+                        let list = lu_dog.exhume_list(&id).unwrap();
+                        let list_ty = s_read!(list).r36_value_type(lu_dog)[0].clone();
+                        if &*s_read!(ty) == &*s_read!(list_ty) {
+                            return vt.clone();
+                        }
                     }
                 }
                 unreachable!()
@@ -626,7 +647,7 @@ impl fmt::Display for Value {
             Self::TupleEnum(te) => write!(f, "{}", s_read!(te)),
             Self::Unknown => write!(f, "<unknown>"),
             Self::Uuid(uuid) => write!(f, "{uuid}"),
-            Self::Vector(vec) => write!(f, "{vec:?}"),
+            Self::Vector { ty, inner } => write!(f, "{ty:?}: {inner:?}"),
         }
     }
 }
@@ -688,19 +709,6 @@ impl From<String> for Value {
 impl From<Uuid> for Value {
     fn from(value: Uuid) -> Self {
         Self::Uuid(value)
-    }
-}
-
-impl<T> From<Vec<T>> for Value
-where
-    T: Into<Value>,
-{
-    fn from(value: Vec<T>) -> Self {
-        let value = value
-            .into_iter()
-            .map(|v| new_ref!(Value, v.into()))
-            .collect();
-        Self::Vector(value)
     }
 }
 
@@ -1243,7 +1251,11 @@ impl std::cmp::PartialEq for Value {
             (Value::String(a), Value::String(b)) => a == b,
             (Value::Struct(a), Value::Struct(b)) => *s_read!(a) == *s_read!(b),
             (Value::Uuid(a), Value::Uuid(b)) => a == b,
-            (Value::Vector(a), Value::Vector(b)) => {
+            (Value::Vector { ty: ty_a, inner: a }, Value::Vector { ty: ty_b, inner: b }) => {
+                if &*s_read!(ty_a) != &*s_read!(ty_b) {
+                    return false;
+                }
+
                 if a.len() != b.len() {
                     return false;
                 }

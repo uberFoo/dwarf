@@ -58,7 +58,8 @@ pub fn eval(
 
     let arg_check = s_read!(call).arg_check;
     if arg_check {
-        // 🚧 Shouldn't I be checking args here?
+        // Here we are just clearing the flag -- the actual check happens at
+        // the call site.
         s_write!(call).arg_check = false;
     }
 
@@ -89,6 +90,16 @@ pub fn eval(
                 Value::Lambda(ref ƛ) => {
                     let ƛ = s_read!(lu_dog).exhume_lambda(&s_read!(ƛ).id).unwrap();
                     debug!("ExpressionEnum::Call ƛ: {ƛ:?}");
+                    let args: Vec<RefType<Value>> = args
+                        .iter()
+                        .map(|arg| {
+                            let expression = s_read!(arg).expression;
+                            let expression =
+                                s_read!(lu_dog).exhume_expression(&expression).unwrap();
+                            eval_expression(expression, context, vm).unwrap()
+                        })
+                        .collect();
+
                     let value = eval_lambda_expression(ƛ, &args, arg_check, &span, context, vm)?;
                     debug!("value {value:?}");
                     Ok(value)
@@ -107,7 +118,7 @@ pub fn eval(
                     worker: _,
                     parent: _,
                 } => Ok(value.clone()),
-                Value::Vector(_) => Ok(value.clone()),
+                Value::Vector { ty: _, inner: _ } => Ok(value.clone()),
                 misc_value => {
                     let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
                     debug!("value {value:?}");
@@ -128,7 +139,7 @@ pub fn eval(
             }
         };
 
-        let ty = s_read!(value).get_type(&s_read!(sarzak), &s_read!(lu_dog));
+        let ty = s_read!(value).get_value_type(&s_read!(sarzak), &s_read!(lu_dog));
 
         // First we need to check the type of the LHS to see if there are
         // any instance methods on the type. This seems weird. I'm not sure
@@ -250,6 +261,8 @@ pub fn eval(
                         } else {
                             unreachable!()
                         };
+                        let ret_ty = s_read!(ƛ).return_type;
+                        let ret_ty = s_read!(lu_dog).exhume_value_type(&ret_ty).unwrap();
 
                         let call = &MethodCall::new("map".to_owned(), &mut s_write!(lu_dog));
                         let call =
@@ -289,7 +302,7 @@ pub fn eval(
                                 );
                                 eval_lambda_expression(
                                     ƛ.clone(),
-                                    &[argument],
+                                    &[new_ref!(Value, Value::Integer(i))],
                                     false,
                                     &span,
                                     context,
@@ -298,7 +311,13 @@ pub fn eval(
                             })
                             .collect::<Result<Vec<RefType<Value>>>>()?;
 
-                        Ok(new_ref!(Value, Value::Vector(result)))
+                        Ok(new_ref!(
+                            Value,
+                            Value::Vector {
+                                ty: ret_ty,
+                                inner: result
+                            }
+                        ))
                     }
                     _ => {
                         let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
@@ -344,7 +363,7 @@ pub fn eval(
                                 .unwrap()
                                 .clone();
 
-                            // 🚧 ugly hack until I track down why the first argument is the string.
+                            // This is because of the self parameter that is built on in the extruder.
                             let next_id = s_read!(next).next.unwrap();
                             next = s_read!(lu_dog).exhume_argument(&next_id).unwrap();
 
@@ -504,31 +523,63 @@ pub fn eval(
                     };
                     x
                 }
-                Value::Vector(v) => match meth_name.as_str() {
+                Value::Vector { ty, inner } => match meth_name.as_str() {
+                    MAP => {
+                        debug!("evaluating Vector::map");
+                        let func = args.pop().unwrap();
+                        let func = s_read!(func).r37_expression(&s_read!(lu_dog))[0].clone();
+                        let ƛ = eval_expression(func.clone(), context, vm).unwrap();
+                        let ƛ = s_read!(ƛ);
+                        let ƛ = if let Value::Lambda(ƛ) = &*ƛ {
+                            ƛ
+                        } else {
+                            panic!("Should be a lambda");
+                        };
+
+                        let call = &MethodCall::new("map".to_owned(), &mut s_write!(lu_dog));
+                        let call =
+                            Call::new_method_call(false, None, None, call, &mut s_write!(lu_dog));
+
+                        let result = inner
+                            .iter()
+                            .map(|value| {
+                                let block = Block::new(
+                                    false,
+                                    Uuid::new_v4(),
+                                    None,
+                                    None,
+                                    &mut s_write!(lu_dog),
+                                );
+                                let ty = s_read!(ƛ).return_type;
+                                let ty = s_read!(lu_dog).exhume_value_type(&ty).unwrap();
+
+                                eval_lambda_expression(
+                                    ƛ.clone(),
+                                    &[value.clone()],
+                                    false,
+                                    &span,
+                                    context,
+                                    vm,
+                                )
+                            })
+                            .collect::<Result<Vec<RefType<Value>>>>()?;
+
+                        Ok(new_ref!(
+                            Value,
+                            Value::Vector {
+                                ty: ty.clone(),
+                                inner: result
+                            }
+                        ))
+                    }
                     SUM => {
                         let mut sum = 0;
-                        for value in v {
+                        for value in inner {
                             let mut value = s_write!(value);
                             match &mut *value {
                                 Value::Integer(i) => sum += *i,
-                                #[cfg(feature = "async")]
-                                Value::Task { worker: _, parent } => {
-                                    let t = parent.take().unwrap();
-
-                                    let value = future::block_on(t)?;
-
-                                    let v = s_read!(value);
-                                    match &*v {
-                                        Value::Integer(i) => sum += i,
-                                        v => {
-                                            dbg!(v);
-                                            unreachable!()
-                                        }
-                                    }
-                                }
                                 v => {
-                                    dbg!(v);
-                                    unreachable!()
+                                    panic!("Should sum handle this type? {v:#?}")
                                 }
                             }
                         }
@@ -673,7 +724,16 @@ pub fn eval(
                             if let Some(args) = &context.get_args() {
                                 Ok(args.clone())
                             } else {
-                                Ok(new_ref!(Value, Value::Vector(Vec::new())))
+                                let ty = Ty::new_s_string(&s_read!(sarzak));
+                                let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
+
+                                Ok(new_ref!(
+                                    Value,
+                                    Value::Vector {
+                                        ty,
+                                        inner: Vec::new()
+                                    }
+                                ))
                             }
                         }
                         #[cfg(feature = "async")]
@@ -764,7 +824,8 @@ pub fn eval(
                                     // 🚧 I'm not really sure what to do about this here. It's
                                     // all really a hack for now anyway.
                                     // 🚧 Sadly I don't know what I'm talking about any longer.
-                                    let ty = func.get_type(&s_read!(sarzak), &s_read!(lu_dog));
+                                    let ty =
+                                        func.get_value_type(&s_read!(sarzak), &s_read!(lu_dog));
                                     let ty = PrintableValueType(true, ty, context.models());
                                     let ty = ty.to_string();
                                     TypeMismatchSnafu {
@@ -811,7 +872,8 @@ pub fn eval(
                         TYPEOF => {
                             debug!("evaluating chacha::typeof");
                             let arg = arg_values.pop_front().unwrap().0;
-                            let ty = s_read!(arg).get_type(&s_read!(sarzak), &s_read!(lu_dog));
+                            let ty =
+                                s_read!(arg).get_value_type(&s_read!(sarzak), &s_read!(lu_dog));
                             let pvt_ty = PrintableValueType(false, ty, context.models());
 
                             Ok(new_ref!(Value, pvt_ty.to_string().into()))
@@ -852,8 +914,8 @@ pub fn eval(
                                     // 🚧 I'm not really sure what to do about this here. It's
                                     // all really a hack for now anyway.
                                     // 🚧 WTF? I clearly copy/pasted this from elsewhere.
-                                    let ty =
-                                        s_read!(func).get_type(&s_read!(sarzak), &s_read!(lu_dog));
+                                    let ty = s_read!(func)
+                                        .get_value_type(&s_read!(sarzak), &s_read!(lu_dog));
                                     let ty = PrintableValueType(true, ty, context.models());
                                     let ty = ty.to_string();
                                     TypeMismatchSnafu {
@@ -1103,7 +1165,7 @@ fn spawn(
             // 🚧 I'm not really sure what to do about this here. It's
             // all really a hack for now anyway.
             // 🚧 OMFG -- FML
-            let ty = func.get_type(&s_read!(sarzak), &s_read!(lu_dog));
+            let ty = func.get_value_type(&s_read!(sarzak), &s_read!(lu_dog));
             let ty = PrintableValueType(true, ty, context.models());
             let ty = ty.to_string();
             TypeMismatchSnafu {

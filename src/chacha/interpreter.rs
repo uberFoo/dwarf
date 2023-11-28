@@ -531,15 +531,22 @@ fn eval_expression(
                     task,
                     executor,
                 } => {
-                    let task = task.take().unwrap();
-                    executor.start_task(&task);
-                    future::block_on(task)
+                    if let Some(task) = task.take() {
+                        executor.start_task(&task);
+                        future::block_on(task)
+                    } else {
+                        panic!("Who took my task!?");
+                    }
                 }
-                Value::Task { worker: _, parent } => {
+                Value::Task { worker, parent } => {
                     if let Some(parent) = parent {
-                        executor.start_task(parent);
-                        future::block_on(parent)
-                        // Ok(value.clone())
+                        if let Some(worker) = worker {
+                            worker.start_task(parent);
+                            future::block_on(parent)
+                        } else {
+                            executor.start_task(parent);
+                            future::block_on(parent)
+                        }
                     } else {
                         Ok(value.clone())
                     }

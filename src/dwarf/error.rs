@@ -19,7 +19,11 @@ pub type Result<T, E = Vec<DwarfError>> = std::result::Result<T, E>;
 pub enum DwarfError {
     /// Await non-future
     ///
-    AwaitNotFuture { file: String, span: Span },
+    AwaitNotFuture {
+        file: String,
+        found: String,
+        span: Span,
+    },
     /// Self Error
     ///
     /// The Self keyword is being used outside of an impl block.
@@ -204,6 +208,14 @@ pub enum DwarfError {
         span: Span,
         location: Location,
     },
+    #[snafu(display("\n{}: wrong number of arguments. Expected `{}`, found `{}`.", C_ERR.bold().paint("error"), C_OK.paint(expected.to_string()), C_ERR.bold().paint(found.to_string())))]
+    WrongNumberOfArguments {
+        expected: usize,
+        found: usize,
+        file: String,
+        span: Span,
+        location: Location,
+    },
 }
 
 pub struct DwarfErrorReporter<'a, 'b>(pub &'a DwarfError, pub bool, pub &'b str);
@@ -215,13 +227,16 @@ impl fmt::Display for DwarfErrorReporter<'_, '_> {
         let mut std_err = Vec::new();
 
         match &self.0 {
-            DwarfError::AwaitNotFuture { file, span } => {
+            DwarfError::AwaitNotFuture { file, found, span } => {
                 let span = span.clone();
                 Report::build(ReportKind::Error, file, span.start)
                     .with_message("await may only be used on a future")
                     .with_label(
                         Label::new((file, span))
-                            .with_message("this is not a future".to_string())
+                            .with_message(format!(
+                                "expected a future and found {}",
+                                C_OTHER.paint(found)
+                            ))
                             .with_color(Color::Red),
                     )
                     .finish()
@@ -560,6 +575,40 @@ impl fmt::Display for DwarfErrorReporter<'_, '_> {
                     } else {
                         report
                     }
+                } else {
+                    report
+                };
+
+                report
+                    .finish()
+                    .write((file, Source::from(&program)), &mut std_err)
+                    .map_err(|_| fmt::Error)?;
+                write!(f, "{}", String::from_utf8_lossy(&std_err))
+            }
+            DwarfError::WrongNumberOfArguments {
+                expected,
+                found,
+                file,
+                span,
+                location,
+            } => {
+                let msg = format!("expected `{expected}`, found `{found}`.");
+
+                let report = Report::build(ReportKind::Error, file, span.start)
+                    .with_message("wrong number of arguments")
+                    .with_label(
+                        Label::new((file, span.clone()))
+                            .with_message(msg)
+                            .with_color(Color::Red),
+                    );
+
+                let report = if is_uber {
+                    report.with_note(format!(
+                        "{}:{}:{}",
+                        C_OTHER.paint(location.file.to_string()),
+                        C_WARN.paint(format!("{}", location.line)),
+                        C_OK.paint(format!("{}", location.column)),
+                    ))
                 } else {
                     report
                 };

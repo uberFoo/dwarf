@@ -239,7 +239,7 @@ impl Type {
                 let return_ = return_
                     .0
                     .into_value_type(file_name, &return_.1, store, _models, sarzak)?;
-                let ƛ = Lambda::new(None, &return_, store);
+                let ƛ = Lambda::new(None, None, &return_, store);
                 Ok(ValueType::new_lambda(&ƛ, store))
             }
             Type::Generic(name) => {

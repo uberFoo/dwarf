@@ -16,7 +16,7 @@ use crate::{
         Expression as ParserExpression, Generics, InnerAttribute, InnerItem, Item,
         PrintableValueType, Spanned, Statement as ParserStatement, Type, WrappedValueType,
     },
-    keywords::{CHACHA, FN_NEW, FORMAT, JOIN, LEN, MAP, UUID_TYPE},
+    keywords::{CHACHA, FN_NEW, FORMAT, LEN, MAP, SUM, UUID_TYPE},
     lu_dog::{
         store::ObjectStore as LuDogStore,
         types::{
@@ -1213,9 +1213,10 @@ pub(super) fn inter_expression(
             )?;
 
             if !matches!(s_read!(ty).subtype, ValueTypeEnum::XFuture(_)) {
-                dbg!(ty);
+                let ty = PrintableValueType(&ty, context, lu_dog);
                 Err(vec![DwarfError::AwaitNotFuture {
                     file: context.file_name.to_owned(),
+                    found: ty.to_string(),
                     span: expr_p.1.clone(),
                 }])
             } else {
@@ -2066,7 +2067,7 @@ pub(super) fn inter_expression(
             context.location = location!();
             let ret_ty = make_value_type(&return_type.0, &return_type.1, None, context, lu_dog)?;
 
-            let lambda = Lambda::new(Some(&_body), &ret_ty, lu_dog);
+            let lambda = Lambda::new(Some(&_body), None, &ret_ty, lu_dog);
             let _ = ValueType::new_lambda(&lambda, lu_dog);
 
             let mut errors = Vec::new();
@@ -2081,6 +2082,12 @@ pub(super) fn inter_expression(
                     LambdaParameter::new(position as DwarfInteger, &lambda, None, None, lu_dog);
 
                 debug!("param {:?}", param);
+
+                if position == 0 {
+                    // 🚧 This should be marked as unsafe, as there is no type
+                    // check happening.
+                    s_write!(lambda).first_param = Some(s_read!(param).id);
+                }
 
                 let var = Variable::new_lambda_parameter(param_name.to_owned(), &param, lu_dog);
                 debug!("var {:?}", var);
@@ -2603,6 +2610,49 @@ pub(super) fn inter_expression(
 
             debug!("MethodCall instance: {instance:?}, type: {instance_ty:?}");
 
+            let meth = MethodCall::new(method.to_owned(), lu_dog);
+            let call = Call::new_method_call(true, None, Some(&instance.0), &meth, lu_dog);
+            let expr = Expression::new_call(&call, lu_dog);
+
+            let value = XValue::new_expression(block, &instance_ty, &expr, lu_dog);
+            update_span_value(&span, &value, location!());
+
+            let mut last_arg_uuid: Option<usize> = None;
+            let mut arg_ty = Vec::new();
+
+            // Self
+            // This is the self parameter
+            // Self -- I can never seem to find this.
+            let this = Argument::new(0, &instance.0, &call, None, lu_dog);
+            last_arg_uuid = link_argument!(last_arg_uuid, this, lu_dog);
+            s_write!(call).argument = Some(s_read!(this).id);
+
+            // Note the position.
+            let mut position = 1;
+            for arg in args {
+                let (arg_expr, ty) = inter_expression(
+                    &new_ref!(ParserExpression, arg.0.to_owned()),
+                    &arg.1,
+                    block,
+                    context,
+                    lu_dog,
+                )?;
+                let value = XValue::new_expression(block, &ty, &arg_expr.0, lu_dog);
+                let _span = LuDogSpan::new(
+                    arg.1.end as i64,
+                    arg.1.start as i64,
+                    &context.source,
+                    None,
+                    Some(&value),
+                    lu_dog,
+                );
+                let arg = Argument::new(position, &arg_expr.0, &call, None, lu_dog);
+                position += 1;
+
+                last_arg_uuid = link_argument!(last_arg_uuid, arg, lu_dog);
+                arg_ty.push(ty);
+            }
+
             let ret_ty = match s_read!(instance_ty).subtype {
                 ValueTypeEnum::WoogStruct(id) => {
                     let woog_struct = lu_dog.exhume_woog_struct(&id).unwrap();
@@ -2616,6 +2666,31 @@ pub(super) fn inter_expression(
                     #[allow(clippy::let_and_return)]
                     x
                 }
+                ValueTypeEnum::List(_) => match method.as_str() {
+                    MAP => {
+                        if arg_ty.len() != 1 {
+                            return Err(vec![DwarfError::WrongNumberOfArguments {
+                                expected: 1,
+                                found: arg_ty.len(),
+                                file: context.file_name.to_owned(),
+                                span: meth_span.to_owned(),
+                                location: location!(),
+                            }]);
+                        }
+                        let inner = arg_ty.pop().unwrap();
+                        let list = List::new(&inner, lu_dog);
+                        ValueType::new_list(&list, lu_dog)
+                    }
+                    SUM => instance_ty.clone(),
+                    _ => {
+                        return Err(vec![DwarfError::NoSuchMethod {
+                            method: method.to_owned(),
+                            file: context.file_name.to_owned(),
+                            span: meth_span.to_owned(),
+                            location: location!(),
+                        }])
+                    }
+                },
                 ValueTypeEnum::Range(_) => match method.as_str() {
                     MAP => {
                         let inner = ValueType::new_ty(&Ty::new_integer(context.sarzak), lu_dog);
@@ -2655,63 +2730,12 @@ pub(super) fn inter_expression(
                             }
                         }
                     } else {
+                        e_warn!("Unknown type for method call {method}");
                         ValueType::new_unknown(lu_dog)
                     }
                 }
-                ValueTypeEnum::XFuture(_) => match method.as_str() {
-                    JOIN => ValueType::new_unknown(lu_dog),
-                    _ => {
-                        return Err(vec![DwarfError::NoSuchMethod {
-                            method: method.to_owned(),
-                            file: context.file_name.to_owned(),
-                            span: meth_span.to_owned(),
-                            location: location!(),
-                        }])
-                    }
-                },
                 _ => ValueType::new_unknown(lu_dog),
             };
-
-            let meth = MethodCall::new(method.to_owned(), lu_dog);
-            let call = Call::new_method_call(true, None, Some(&instance.0), &meth, lu_dog);
-            let expr = Expression::new_call(&call, lu_dog);
-
-            let value = XValue::new_expression(block, &instance_ty, &expr, lu_dog);
-            update_span_value(&span, &value, location!());
-
-            let mut last_arg_uuid: Option<usize> = None;
-
-            // Self
-            // This is the self parameter
-            // Self -- I can never seem to find this.
-            let this = Argument::new(0, &instance.0, &call, None, lu_dog);
-            last_arg_uuid = link_argument!(last_arg_uuid, this, lu_dog);
-            s_write!(call).argument = Some(s_read!(this).id);
-
-            // Note the position.
-            let mut position = 1;
-            for arg in args {
-                let (arg_expr, ty) = inter_expression(
-                    &new_ref!(ParserExpression, arg.0.to_owned()),
-                    &arg.1,
-                    block,
-                    context,
-                    lu_dog,
-                )?;
-                let value = XValue::new_expression(block, &ty, &arg_expr.0, lu_dog);
-                let _span = LuDogSpan::new(
-                    arg.1.end as i64,
-                    arg.1.start as i64,
-                    &context.source,
-                    None,
-                    Some(&value),
-                    lu_dog,
-                );
-                let arg = Argument::new(position, &arg_expr.0, &call, None, lu_dog);
-                position += 1;
-
-                last_arg_uuid = link_argument!(last_arg_uuid, arg, lu_dog);
-            }
 
             debug!(
                 "{} return type {}",
@@ -4240,7 +4264,7 @@ pub(crate) fn make_value_type(
         Type::Fn(ref params, ref return_type) => {
             let return_type =
                 make_value_type(&return_type.0, span, enclosing_type, context, lu_dog)?;
-            let lambda = Lambda::new(None, &return_type, lu_dog);
+            let lambda = Lambda::new(None, None, &return_type, lu_dog);
 
             let mut last_param_uuid: Option<usize> = None;
             for (position, (param_ty, param_span)) in params.iter().enumerate() {
@@ -4255,6 +4279,12 @@ pub(crate) fn make_value_type(
                     lu_dog,
                 );
                 debug!("param {:?}", param);
+
+                if position == 0 {
+                    // 🚧 This should be marked as unsafe, as there is no type
+                    // check happening.
+                    s_write!(lambda).first_param = Some(s_read!(param).id);
+                }
 
                 last_param_uuid = link_ƛ_parameter!(last_param_uuid, param, lu_dog);
             }

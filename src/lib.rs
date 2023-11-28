@@ -41,7 +41,6 @@ mod keywords {
     pub(crate) const FN_NEW: &str = "new";
     pub(crate) const HTTP_GET: &str = "http_get";
     pub(crate) const INTERVAL: &str = "interval";
-    pub(crate) const JOIN: &str = "join";
     pub(crate) const LEN: &str = "len";
     pub(crate) const FORMAT: &str = "format";
     pub(crate) const MAP: &str = "map";
@@ -381,3 +380,47 @@ impl Default for Context {
 }
 
 pub type ValueResult = Result<RefType<Value>, ChaChaError>;
+
+#[cfg(feature = "async")]
+#[derive(Debug, Clone, Copy)]
+pub struct Duration(DwarfInteger);
+
+#[cfg(feature = "async")]
+impl Duration {
+    pub fn new(dur: DwarfInteger) -> Self {
+        Self(dur)
+    }
+}
+
+#[cfg(feature = "async")]
+impl std::cmp::Ord for Duration {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.0.cmp(&other.0).reverse()
+    }
+}
+
+#[cfg(feature = "async")]
+impl std::cmp::PartialOrd for Duration {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.0.cmp(&other.0).reverse())
+    }
+}
+
+#[cfg(feature = "async")]
+impl std::cmp::PartialEq for Duration {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
+
+#[cfg(feature = "async")]
+impl std::cmp::Eq for Duration {}
+
+#[cfg(feature = "async")]
+impl std::fmt::Display for Duration {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let secs = self.0 / 1_000_000_000;
+        let nanos = self.0 % 1_000_000_000;
+        write!(f, "{}.{:09}", secs, nanos)
+    }
+}

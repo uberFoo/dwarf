@@ -19,7 +19,7 @@ use crate::{
 
 pub fn eval_lambda_expression(
     ƛ: RefType<Lambda>,
-    args: &[RefType<Argument>],
+    args: &[RefType<Value>],
     arg_check: bool,
     span: &RefType<Span>,
     context: &mut Context,
@@ -38,6 +38,7 @@ pub fn eval_lambda_expression(
 
     let ƛ = s_read!(ƛ);
     // We know that we have a block.
+    // 🚧 Do we though? I saw some constructors without a body.
     let body = &ƛ.r73_body(&s_read!(lu_dog))[0];
     // A lambda can't have an external block
     let block = match s_read!(body).subtype {
@@ -99,7 +100,7 @@ pub fn eval_lambda_expression(
                 let var = s_read!(s_read!(next).r12_variable(&s_read!(lu_dog))[0]).clone();
                 let value = s_read!(var.r11_x_value(&s_read!(lu_dog))[0]).clone();
                 let ty = value.r24_value_type(&s_read!(lu_dog))[0].clone();
-                params.push((var.name.clone(), ty.clone()));
+                params.push((var.name.clone(), ty.clone(), value));
 
                 let next_id = { s_read!(next).next };
                 if let Some(ref id) = next_id {
@@ -114,47 +115,20 @@ pub fn eval_lambda_expression(
             Vec::new()
         };
 
-        let arg_values = if !args.is_empty() {
-            let mut arg_values = Vec::with_capacity(args.len());
-            let mut next = args
-                .iter()
-                .find(|a| s_read!(a).r27c_argument(&s_read!(lu_dog)).is_empty())
-                .unwrap()
-                .clone();
-
-            loop {
-                let expr = s_read!(next).r37_expression(&s_read!(lu_dog))[0].clone();
-                let value = eval_expression(expr.clone(), context, vm)?;
-                arg_values.push((expr, value));
-
-                let next_id = { s_read!(next).next };
-                if let Some(ref id) = next_id {
-                    next = s_read!(lu_dog).exhume_argument(id).unwrap();
-                } else {
-                    break;
-                }
-            }
-
-            arg_values
-        } else {
-            Vec::new()
-        };
-
-        let zipped = params.into_iter().zip(arg_values);
-        for ((name, param_ty), (expr, value)) in zipped {
+        let zipped = params.into_iter().zip(args);
+        for ((name, param_ty, x_value), value) in zipped {
             debug!("type check name {name:?}");
             debug!("type check param_ty {param_ty:?}");
             debug!("type check value {value:?}");
 
             if arg_check {
-                let x_value = &s_read!(expr).r11_x_value(&s_read!(lu_dog))[0];
-                let span = &s_read!(x_value).r63_span(&s_read!(lu_dog))[0];
+                let span = &x_value.r63_span(&s_read!(lu_dog))[0];
 
-                let arg_ty = s_read!(value).get_type(&s_read!(sarzak), &s_read!(lu_dog));
+                let arg_ty = s_read!(value).get_value_type(&s_read!(sarzak), &s_read!(lu_dog));
                 typecheck(&param_ty, &arg_ty, span, location!(), context)?;
             }
 
-            context.memory().insert(name.clone(), value);
+            context.memory().insert(name.clone(), value.clone());
         }
 
         let mut value = new_ref!(Value, Value::Empty);

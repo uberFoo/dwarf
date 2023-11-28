@@ -104,8 +104,6 @@ async fn main() -> Future<int> {
         assert_on(light);
     });
 
-    print("wtf\n");
-
     let b = chacha::spawn(|| -> () {
         chacha::asleep(1000).await;
         print("b: {0}\n".format(light));
@@ -135,6 +133,8 @@ async fn main() -> Future<int> {
 
     a.await;
     b.await;
+
+    // 🚧 Assert the time taken is correct
 
     // a.and(b).await;
 

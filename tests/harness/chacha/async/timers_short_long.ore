@@ -1,0 +1,18 @@
+async fn main() -> Future<int> {
+    test().await;
+
+    42
+}
+
+async fn test() -> Future<()> {
+    let a = chacha::spawn(|| {
+        chacha::asleep(500).await;
+    });
+
+    let b = chacha::spawn(|| -> () {
+        chacha::asleep(1000).await;
+    });
+
+    b.await;
+    a.await;
+}

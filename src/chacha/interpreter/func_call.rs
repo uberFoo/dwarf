@@ -24,7 +24,7 @@ use crate::{
     },
     lu_dog::{
         Argument, BodyEnum, Expression, ExternalImplementation, Function,
-        ObjectStore as LuDogStore, Span,
+        ObjectStore as LuDogStore, Span, ValueType,
     },
     new_ref,
     plug_in::PluginModRef,
@@ -247,7 +247,13 @@ fn eval_external_static_method(
                             .map(Value::from)
                             .map(|v| new_ref!(Value, v))
                             .collect::<Vec<_>>();
-                        let value = new_ref!(Value, Value::Vector(vec));
+                        let ty = if vec.is_empty() {
+                            ValueType::new_empty(&mut s_write!(lu_dog))
+                        } else {
+                            s_read!(vec[0])
+                                .get_value_type(&s_read!(context.sarzak_heel()), &s_read!(lu_dog))
+                        };
+                        let value = new_ref!(Value, Value::Vector { ty, inner: vec });
 
                         // let woog_struct = s_read!(lu_dog)
                         //     .iter_woog_struct()
@@ -405,7 +411,7 @@ fn eval_built_in_function_call(
             debug!("type check value {value:?}");
 
             if arg_check {
-                let arg_ty = s_read!(value).get_type(&s_read!(sarzak), &s_read!(lu_dog));
+                let arg_ty = s_read!(value).get_value_type(&s_read!(sarzak), &s_read!(lu_dog));
                 let x_value = &s_read!(expr).r11_x_value(&s_read!(lu_dog))[0];
                 let span = &s_read!(x_value).r63_span(&s_read!(lu_dog))[0];
 

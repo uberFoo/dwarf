@@ -8,9 +8,9 @@ use crossbeam::channel::{Receiver, Sender};
 
 use crate::{
     interpreter::{DebuggerStatus, Memory, MemoryUpdateMessage},
-    lu_dog::{Block, ObjectStore as LuDogStore},
-    new_ref, s_read,
-    sarzak::ObjectStore as SarzakStore,
+    lu_dog::{Block, ObjectStore as LuDogStore, ValueType},
+    new_ref, s_read, s_write,
+    sarzak::{ObjectStore as SarzakStore, Ty},
     Dirty, ModelStore, NewRef, RefType, Value,
 };
 
@@ -227,7 +227,13 @@ impl Context {
     }
 
     pub fn add_args(&mut self, args: Vec<String>) {
-        self.args = Some(new_ref!(Value, args.into()));
+        let ty = Ty::new_s_string(&s_read!(self.sarzak_heel()));
+        let ty = ValueType::new_ty(&ty, &mut s_write!(self.lu_dog_heel()));
+        let inner: Vec<RefType<Value>> = args
+            .into_iter()
+            .map(|a| new_ref!(Value, a.into()))
+            .collect();
+        self.args = Some(new_ref!(Value, Value::Vector { ty, inner }));
     }
 
     // pub fn register_model<P>(&self, model_name: String, model_path: P) -> Result<()>

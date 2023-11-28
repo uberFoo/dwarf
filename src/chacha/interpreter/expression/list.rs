@@ -3,7 +3,7 @@ use ansi_term::Colour;
 use crate::{
     chacha::{error::Result, vm::VM},
     interpreter::{debug, eval_expression, function, Context},
-    lu_dog::List,
+    lu_dog::{List, ValueType},
     new_ref, s_read, s_write, NewRef, RefType, SarzakStorePtr, Value,
 };
 
@@ -42,7 +42,7 @@ pub fn eval_list_expression(
         let value = eval_expression(expr, context, vm)?;
 
         let ty = s_read!(value);
-        let ty = ty.get_type(&s_read!(sarzak), &s_read!(lu_dog));
+        let ty = ty.get_value_type(&s_read!(sarzak), &s_read!(lu_dog));
 
         let mut values = vec![value.clone()];
 
@@ -58,16 +58,16 @@ pub fn eval_list_expression(
 
         let _list = List::new(&ty, &mut s_write!(lu_dog));
 
-        Ok(new_ref!(Value, Value::Vector(values)))
+        Ok(new_ref!(Value, Value::Vector { ty, inner: values }))
     } else {
-        // let list = List::new(
-        //     &Value::Empty.get_type(&s_read!(sarzak), &s_read!(lu_dog)),
-        //     &mut s_write!(lu_dog),
-        // );
+        let ty = ValueType::new_empty(&mut s_write!(lu_dog));
 
         Ok(new_ref!(
             Value,
-            Value::Vector(vec![new_ref!(Value, Value::Empty),])
+            Value::Vector {
+                ty,
+                inner: vec![new_ref!(Value, Value::Empty),]
+            }
         ))
     }
 }
