@@ -104,10 +104,10 @@ num_cpus = "1.16.0"
 async-condvar-fair = { version = "1.0.0", features = ["smol"] }
 threadpool = "1.8.1"
 tracing-subscriber = { version = "0.3.17", features = ["env-filter"] }
-# puteketeke = "0.0.2"
+puteketeke = "0.0.3"
 
 # [patch.crates-io]
-puteketeke = { path = "../puteketeke" }
+# puteketeke = { path = "../puteketeke" }
 
 # [patch."https://github.com/uberFoo/sarzak"]
 # sarzak = { path = "../sarzak" }
