@@ -2,6 +2,9 @@ use std::{env, fs, path::Path};
 
 use walkdir::WalkDir;
 
+const EXT1: &str = "tao";
+const EXT2: &str = "ore";
+
 fn main() {
     let mut tests = String::new();
     let mut in_dir = std::env::current_dir().unwrap();
@@ -15,7 +18,7 @@ fn main() {
         }
         if path.is_file() {
             let ext = path.extension().unwrap();
-            if ext != "tao" {
+            if ext != EXT1 && ext != EXT2 {
                 continue;
             }
             let parent = root.file_name().unwrap().to_str().unwrap();

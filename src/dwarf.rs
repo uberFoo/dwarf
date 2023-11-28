@@ -22,6 +22,7 @@ use crate::{
 pub mod error;
 mod expression;
 pub mod extruder;
+mod items;
 pub mod parser;
 mod pvt;
 
@@ -472,8 +473,12 @@ pub enum Expression {
         BlockType,
         Vec<Spanned<Statement>>,
         /// A list of variable names to insert into the top of the block
+        ///
+        // This is for `for` loops.
         Vec<String>,
         /// The types of the above variables
+        ///
+        // This is for `for` loops.
         Vec<WrappedValueType>,
     ),
     BooleanLiteral(bool),

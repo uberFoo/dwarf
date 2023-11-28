@@ -2,6 +2,7 @@
 use std::{env, thread};
 
 use ansi_term::Colour;
+use rustc_hash::FxHashMap as HashMap;
 use snafu::{location, Location};
 
 use crate::{
@@ -124,6 +125,7 @@ pub fn start_repl(context: &mut Context, is_uber: bool) -> Result<(), Error> {
                                     cwd: env::current_dir().unwrap(),
                                     dirty: &mut dirty,
                                     file_name: "REPL",
+                                    func_defs: HashMap::default(),
                                 },
                                 &mut lu_dog,
                             ) {

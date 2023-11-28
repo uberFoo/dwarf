@@ -2140,7 +2140,7 @@ impl DwarfParser {
     /// Parse await expression
     ///
     /// await -> <expression>.await
-    fn parse_await(&mut self, name: &Expression, power: u8) -> Result<Option<Expression>> {
+    fn parse_await(&mut self, expr: &Expression, power: u8) -> Result<Option<Expression>> {
         debug!("enter", power);
 
         if power > FIELD.0 {
@@ -2148,7 +2148,7 @@ impl DwarfParser {
             return Ok(None);
         }
 
-        let start = name.0 .1.start;
+        let start = expr.0 .1.start;
 
         if !self.check(&Token::Punct('.'))
         //     || self.check(&Token::Punct('.')) && self.check2(&Token::Punct('.'))
@@ -2181,7 +2181,7 @@ impl DwarfParser {
         debug!("exit ok");
 
         Ok(Some((
-            (DwarfExpression::Await(Box::new(name.0.clone())), start..end),
+            (DwarfExpression::Await(Box::new(expr.0.clone())), start..end),
             FIELD,
         )))
     }
@@ -3843,6 +3843,8 @@ impl DwarfParser {
 
         let body = if let Some(body) = self.parse_block_expression()? {
             body
+        } else if let Some(body) = self.parse_expression(ENTER)? {
+            body
         } else {
             let prev = self.previous().unwrap();
             let start = prev.1.start;
@@ -3852,6 +3854,7 @@ impl DwarfParser {
             return Err(Box::new(err));
         };
 
+        // I don't understand why this is here.
         let body = if let Some(expression) = self.parse_await(&body, BLOCK.0)? {
             expression
         } else {

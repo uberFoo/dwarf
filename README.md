@@ -40,7 +40,7 @@ cargo install --path . --bin dwarf
 Once you have a binary, give it a whirl:
 
 ```bash
-dwarf https://raw.githubusercontent.com/uberFoo/dwarf/develop/mandelbrot.tao -- 50
+dwarf https://raw.githubusercontent.com/uberFoo/dwarf/develop/mandelbrot.ore -- 50
 ```
 
 ## Beautiful Error Messages!
