@@ -67,7 +67,7 @@ fn pixel_to_point(
 fn escape_time(c: Complex, limit: int) -> int {
     // debugger;
     let z = Complex::zero();
-    for i in 0..limit {
+    for i in 1..limit {
         // z.square().add(c);
         ComplexEx::square(z);
         ComplexEx::add(z, c);
