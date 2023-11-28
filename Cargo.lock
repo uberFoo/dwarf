@@ -5,7 +5,9 @@ version = 3
 [[package]]
 name = "abi_stable"
 version = "0.11.3"
+version = "0.11.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "69d6512d3eb05ffe5004c59c206de7f99c34951504056ce23fc953842f12c445"
 checksum = "69d6512d3eb05ffe5004c59c206de7f99c34951504056ce23fc953842f12c445"
 dependencies = [
  "abi_stable_derive",
