@@ -189,6 +189,7 @@ checksum = "a4668cab20f66d8d020e1fbc0ebe47217433c1b6c8f2040faf858554e394ace6"
 [[package]]
 name = "ariadne"
 version = "0.3.0"
+source = "git+https://github.com/uberFoo/ariadne#7f145e849a2a3c80efe4306d90d89de3198dab4f"
 dependencies = [
  "unicode-width",
  "yansi",
