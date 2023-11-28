@@ -7,7 +7,8 @@ use crate::{
     dwarf::{
         error::Result,
         extruder::{
-            debug, function, get_value_type, inter_expression, update_span_value, Context, ExprSpan,
+            debug, function, inter_expression, make_value_type, update_span_value, Context,
+            ExprSpan,
         },
         Expression as ParserExpression, Type,
     },
@@ -38,7 +39,7 @@ pub fn inter(
     debug!("As lhs: {expr:?}: {expr_ty:?}");
 
     context.location = location!();
-    let as_type = get_value_type(&ty.0, &ty.1, None, context, lu_dog)?;
+    let as_type = make_value_type(&ty.0, &ty.1, None, context, lu_dog)?;
     let as_op = TypeCast::new(&expr.0, &as_type, lu_dog);
     let expr = Expression::new_type_cast(&as_op, lu_dog);
     let value = XValue::new_expression(block, &as_type, &expr, lu_dog);

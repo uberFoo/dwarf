@@ -19,6 +19,6 @@ pub fn eval(expr: &SarzakStorePtr, context: &mut Context, vm: &mut VM) -> Result
     let expr = s_read!(lu_dog).exhume_expression(expr).unwrap();
 
     let value = eval_expression(expr, context, vm)?;
-    let ty = s_read!(value).get_type(&s_read!(context.sarzak_heel()), &s_read!(lu_dog));
+    let ty = s_read!(value).get_value_type(&s_read!(context.sarzak_heel()), &s_read!(lu_dog));
     Err(ChaChaError::Return { value, ty })
 }

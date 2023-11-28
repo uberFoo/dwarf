@@ -30,7 +30,7 @@ pub fn eval_index(
             let index = *index as usize;
             let list = eval_expression(target.clone(), context, vm)?;
             let list = s_read!(list);
-            if let Value::Vector(vec) = list.clone() {
+            if let Value::Vector { ty: _, inner: vec } = &list.clone() {
                 if index < vec.len() {
                     Ok(vec[index].to_owned())
                 } else {
@@ -84,9 +84,15 @@ pub fn eval_index(
             let range: Range<usize> = index.try_into()?;
             let list = eval_expression(target.clone(), context, vm)?;
             let list = s_read!(list);
-            if let Value::Vector(vec) = list.clone() {
+            if let Value::Vector { ty, inner: vec } = &list.clone() {
                 if range.end < vec.len() {
-                    Ok(new_ref!(Value, Value::Vector(vec[range].to_owned())))
+                    Ok(new_ref!(
+                        Value,
+                        Value::Vector {
+                            ty: ty.clone(),
+                            inner: vec[range].to_owned()
+                        }
+                    ))
                 } else {
                     let value = &s_read!(index_expr).r11_x_value(&s_read!(lu_dog))[0];
                     let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];

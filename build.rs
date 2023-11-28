@@ -2,6 +2,9 @@ use std::{env, fs, path::Path};
 
 use walkdir::WalkDir;
 
+const EXT1: &str = "tao";
+const EXT2: &str = "ore";
+
 fn main() {
     let mut tests = String::new();
     let mut in_dir = std::env::current_dir().unwrap();
@@ -15,7 +18,7 @@ fn main() {
         }
         if path.is_file() {
             let ext = path.extension().unwrap();
-            if ext != "tao" {
+            if ext != EXT1 && ext != EXT2 {
                 continue;
             }
             let parent = root.file_name().unwrap().to_str().unwrap();
@@ -25,7 +28,6 @@ fn main() {
             tests += &format!("fn {parent}_{name}() {{\n");
             tests += "    let _ = env_logger::builder().is_test(true).try_init();\n";
             tests += "    color_backtrace::install();\n";
-            tests += "    let _ = Client::start();\n";
             tests += &format!("    let result = run_program(\"{name}\", r#\"{contents}\"#);\n");
 
             let stderr = root.join(format!("{}.stderr", name));

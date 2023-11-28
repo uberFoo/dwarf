@@ -1,4 +1,4 @@
-# The dwarf Programming Language
+# The Book of dwarf
 
 [Introduction](./introduction.md)
 [Language Walkthrough](./overview.md)
@@ -39,10 +39,13 @@
         - [Parser](./hacker/arch/parser.md)
         - [Compiler]()
         - [Chacha]()
+            - [Async Implementation](./hacker/arch/chacha/async.md)
             - [Interpreter]()
             - [VM]()
         - [The ObjectStore]()
     - [Code Generation]()
+    - [Dwarf Language]()
+        - [Generic Types](./hacker/dwarf/generics.md)
 
 [Index](./directory.md)
 

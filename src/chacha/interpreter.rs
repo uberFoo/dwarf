@@ -1,5 +1,8 @@
 use std::{ops::Range, path::PathBuf};
 
+#[cfg(feature = "async")]
+use smol::future;
+
 use ansi_term::Colour;
 use circular_queue::CircularQueue;
 use crossbeam::channel::unbounded;
@@ -7,8 +10,12 @@ use lazy_static::lazy_static;
 use log::{self, log_enabled, Level::Debug};
 use parking_lot::{Condvar, Mutex};
 use snafu::{prelude::*, Location};
+#[cfg(feature = "tracy")]
 use tracy_client::{span, Client};
 use uuid::Uuid;
+
+#[cfg(feature = "async")]
+use puteketeke::Executor;
 
 use crate::{
     chacha::{
@@ -17,14 +24,14 @@ use crate::{
         value::UserStruct,
         vm::{CallFrame, Instruction, Thonk, VM},
     },
-    lu_dog::ExpressionEnum,
     lu_dog::{
-        Block, Expression, LocalVariable, ObjectStore as LuDogStore, Span, Statement,
-        StatementEnum, ValueType, ValueTypeEnum, Variable, XValue,
+        Block, Expression, ExpressionEnum, LocalVariable, ObjectStore as LuDogStore, Span,
+        Statement, StatementEnum, ValueType, ValueTypeEnum, Variable, XValue,
     },
     new_ref, s_read, s_write,
     sarzak::store::ObjectStore as SarzakStore,
-    ChaChaError, Context as InterContext, Dirty, DwarfInteger, ModelStore, NewRef, RefType, Value,
+    ChaChaError, Context as ExtruderContext, Dirty, DwarfInteger, ModelStore, NewRef, RefType,
+    Value,
 };
 
 mod banner;
@@ -43,7 +50,10 @@ pub(crate) use pvt::PrintableValueType;
 #[cfg(feature = "repl")]
 pub use repl::start_repl;
 
-#[cfg(not(any(feature = "single", feature = "single-vec", feature = "multi-nd-vec")))]
+#[cfg(all(
+    feature = "tui",
+    not(any(feature = "single", feature = "single-vec", feature = "multi-nd-vec"))
+))]
 pub use tui::start_tui_repl;
 
 use context::Context;
@@ -111,45 +121,33 @@ macro_rules! error {
 }
 pub(crate) use error;
 
-// what is this even for?
-macro_rules! no_debug {
-    ($arg:expr) => {
-        log::debug!("{}\n  --> {}:{}:{}", $arg, file!(), line!(), column!());
-    };
-    ($msg:literal, $arg:expr) => {
-        log::debug!(
-            target: "chacha",
-            "{} --> {}\n  --> {}:{}:{}",
-            Colour::Yellow.paint($msg),
-            $arg,
-            file!(),
-            line!(),
-            column!()
-        );
-    };
-}
-
 const TIMING_COUNT: usize = 1_000;
 
 lazy_static! {
     pub(super) static ref RUNNING: Mutex<bool> = Mutex::new(true);
     pub(super) static ref CVAR: Condvar = Condvar::new();
     pub(crate) static ref STEPPING: Mutex<bool> = Mutex::new(false);
+    pub(super) static ref EXEC_MUTEX: Mutex<()> = Mutex::new(());
+}
+
+pub fn shutdown_interpreter() {
+    let mut running = RUNNING.lock();
+    *running = false;
+    CVAR.notify_all();
 }
 
 /// Initialize the interpreter
 ///
-/// The interpreter requires two domains to operate. The first is the metamodel:
-/// sarzak. The second is the compiled dwarf file.
 pub fn initialize_interpreter(
+    thread_count: usize,
     dwarf_home: PathBuf,
-    i_context: InterContext,
+    e_context: ExtruderContext,
     sarzak: SarzakStore,
 ) -> Result<Context, Error> {
-    let mut lu_dog = s_write!(i_context.lu_dog);
+    let mut lu_dog = s_write!(e_context.lu_dog);
 
     // Initialize the stack with stuff from the compiled source.
-    let block = Block::new(Uuid::new_v4(), None, None, &mut lu_dog);
+    let block = Block::new(false, Uuid::new_v4(), None, None, &mut lu_dog);
     let (mut stack, receiver) = Memory::new();
 
     // We don't really care about the dirty flag because we are just stuffing
@@ -390,15 +388,42 @@ pub fn initialize_interpreter(
 
     let (std_out_send, std_out_recv) = unbounded();
 
+    #[cfg(feature = "tracy")]
     Client::start();
 
+    #[cfg(feature = "async")]
+    {
+        let executor = Executor::new(thread_count);
+
+        Ok(Context::new(
+            format!("{} ", Colour::Blue.normal().paint("道:>")),
+            block,
+            stack,
+            e_context.lu_dog.clone(),
+            new_ref!(SarzakStore, sarzak),
+            new_ref!(ModelStore, e_context.models),
+            receiver,
+            std_out_send,
+            std_out_recv,
+            None,
+            CircularQueue::with_capacity(TIMING_COUNT),
+            0,
+            0,
+            None,
+            dwarf_home,
+            dirty,
+            e_context.source.to_owned(),
+            executor,
+        ))
+    }
+    #[cfg(not(feature = "async"))]
     Ok(Context::new(
         format!("{} ", Colour::Blue.normal().paint("道:>")),
         block,
         stack,
-        i_context.lu_dog.clone(),
+        e_context.lu_dog.clone(),
         new_ref!(SarzakStore, sarzak),
-        new_ref!(ModelStore, i_context.models),
+        new_ref!(ModelStore, e_context.models),
         receiver,
         std_out_send,
         std_out_recv,
@@ -409,6 +434,7 @@ pub fn initialize_interpreter(
         None,
         dwarf_home,
         dirty,
+        e_context.source.to_owned(),
     ))
 }
 
@@ -438,13 +464,11 @@ fn eval_expression(
 ) -> Result<RefType<Value>> {
     let lu_dog = context.lu_dog_heel().clone();
 
-    // Timing goodness
-    context.increment_expression_count(1);
-
     // context.tracy.span(span_location!("eval_expression"), 0);
     // context
     //     .tracy
     //     .non_continuous_frame(frame_name!("eval_expression"));
+    #[cfg(feature = "tracy")]
     span!("eval_expression");
 
     {
@@ -474,21 +498,71 @@ fn eval_expression(
         trace!("stack: {:#?}", context.memory());
     }
 
-    if log_enabled!(Debug) {
+    // Timing goodness
+    context.increment_expression_count(1);
+
+    // This is nifty. With the `exec` target you get to see the expression
+    // being evaluated.
+    if log_enabled!(target: "exec", Debug) {
         let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
         let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
         let span = s_read!(span);
         let span = span.start as usize..span.end as usize;
         let source = context.source();
-        debug!("executing {}", source[span].to_owned());
+        log::debug!(target: "exec", "`{}`", source[span].to_owned());
     }
 
     match s_read!(expression).subtype {
+        #[cfg(feature = "async")]
+        ExpressionEnum::AWait(ref expression) => {
+            debug!("evaluating await");
+            let expr = s_read!(lu_dog).exhume_a_wait(expression).unwrap();
+            let expr = s_read!(expr).r98_expression(&s_read!(lu_dog))[0].clone();
+
+            let mut child = context.clone();
+            let value = eval_expression(expr, &mut child, vm)?;
+
+            let executor = context.executor();
+
+            let mut write_value = s_write!(value);
+            match &mut *write_value {
+                Value::Future {
+                    name: _,
+                    task,
+                    executor,
+                } => {
+                    if let Some(task) = task.take() {
+                        executor.start_task(&task);
+                        future::block_on(task)
+                    } else {
+                        panic!("Who took my task!?");
+                    }
+                }
+                Value::Task { worker, parent } => {
+                    if let Some(parent) = parent {
+                        if let Some(worker) = worker {
+                            worker.start_task(parent);
+                            future::block_on(parent)
+                        } else {
+                            executor.start_task(parent);
+                            future::block_on(parent)
+                        }
+                    } else {
+                        Ok(value.clone())
+                    }
+                }
+                wtf => {
+                    dbg!(wtf);
+                    unreachable!()
+                }
+            }
+            // Ok(new_ref!(Value, Value::Empty))
+        }
         ExpressionEnum::Block(ref block) => block::eval(block, context, vm),
         ExpressionEnum::Call(ref call) => call::eval(call, &expression, context, vm),
         ExpressionEnum::Debugger(_) => debugger::eval(context),
+        ExpressionEnum::EmptyExpression(_) => Ok(new_ref!(Value, Value::Empty)),
         // ExpressionEnum::EnumField(ref enum_field) => enumeration::eval(enum_field, context, vm),
-        ExpressionEnum::ErrorExpression(ref error) => expression::error::eval(error, context),
         ExpressionEnum::FieldAccess(ref field) => field::field_access::eval(field, context, vm),
         ExpressionEnum::FieldExpression(ref field_expr) => {
             field::field_expression::eval(field_expr, context, vm)
@@ -542,6 +616,7 @@ pub fn eval_statement(
     debug!("eval_statement statement {statement:?}");
     trace!("eval_statement stack {:?}", context.memory());
 
+    #[cfg(feature = "tracy")]
     span!("eval_statement");
 
     // This is the entrypoint from the REPL, which is where the dirty thing comes
@@ -572,8 +647,7 @@ pub fn eval_statement(
             let stmt = s_read!(lu_dog).exhume_expression_statement(stmt).unwrap();
             let stmt = s_read!(stmt);
             let expr = stmt.r31_expression(&s_read!(lu_dog))[0].clone();
-            let value = eval_expression(expr, context, vm)?;
-            no_debug!("StatementEnum::ExpressionStatement: value", s_read!(value));
+            let _value = eval_expression(expr, context, vm)?;
 
             Ok(new_ref!(Value, Value::Empty))
         }
@@ -590,14 +664,10 @@ pub fn eval_statement(
 
             let var = s_read!(stmt.r21_local_variable(&s_read!(lu_dog))[0]).clone();
             let var = s_read!(var.r12_variable(&s_read!(lu_dog))[0]).clone();
-            debug!("var {var:?}");
 
             debug!("allocating space for  `{} = {}`", var.name, s_read!(value));
             context.memory().insert(var.name, value);
 
-            // 🚧 I'm changing this from returning ty. If something get's wonky,
-            // maybe start looking here. But TBH, why would we return the type of
-            // the storage?
             Ok(new_ref!(Value, Value::Empty))
         }
         StatementEnum::ResultStatement(ref stmt) => {
@@ -639,14 +709,15 @@ pub enum DebuggerControl {
 pub fn start_func(
     name: &str,
     stopped: bool,
-    mut context: Context,
-) -> Result<(Value, Context), Error> {
+    context: &mut Context,
+) -> Result<RefType<Value>, Error> {
     {
         let mut running = RUNNING.lock();
         *running = !stopped;
     }
 
     let stack = &mut context.memory();
+    // 🚧 WTF is this? They don't share memory?
     let vm_stack = stack.clone();
     let mut vm = VM::new(&vm_stack);
 
@@ -663,13 +734,29 @@ pub fn start_func(
             let value_ty = &s_read!(main).r1_value_type(&s_read!(context.lu_dog_heel()))[0];
             let span = &s_read!(value_ty).r62_span(&s_read!(context.lu_dog_heel()))[0];
 
-            let result = eval_function_call(main, &[], None, true, span, &mut context, &mut vm)?;
+            let result = eval_function_call(main, &[], None, true, span, context, &mut vm)?;
+
+            // let result_wrapped = result.clone();
+            // let result_unwrapped = &mut *s_write!(result);
+            // let result = match result_unwrapped {
+            //     Value::Future(_, ref mut task) => match task {
+            //         FutureResult::JoinHandle(ref mut maybe_handle) => {
+            //             if let Some(task) = maybe_handle.take() {
+            //                 future::block_on(task)
+            //             } else {
+            //                 unreachable!()
+            //             }
+            //         }
+            //         FutureResult::Result(result) => result.clone(),
+            //     },
+            //     _ => result_wrapped,
+            // };
 
             #[allow(clippy::redundant_clone)]
             //              ^^^^^^^^^^^^^^^ : It's not redundant.
             // The macro is just hiding the fact that it isn't.
             // This is, btw: not redundant.
-            Ok((s_read!(result.clone()).clone(), context))
+            Ok(result)
         } else {
             Err(Error(ChaChaError::MainIsNotAFunction))
         }
@@ -753,7 +840,7 @@ fn typecheck(
     context: &Context,
 ) -> Result<()> {
     cfg_if::cfg_if! {
-        if #[cfg(any(feature = "single", feature = "single-vec"))] {
+        if #[cfg(any(feature = "single", feature = "single-vec", feature = "single-vec-tracy"))] {
             if std::rc::Rc::as_ptr(lhs) == std::rc::Rc::as_ptr(rhs) {
                 return Ok(());
             }
@@ -803,8 +890,8 @@ fn typecheck(
     if lhs_t == rhs_t {
         Ok(())
     } else {
-        let lhs = PrintableValueType(lhs, context);
-        let rhs = PrintableValueType(rhs, context);
+        let lhs = PrintableValueType(true, lhs.to_owned(), context.models());
+        let rhs = PrintableValueType(true, rhs.to_owned(), context.models());
         Err(ChaChaError::TypeMismatch {
             expected: lhs.to_string(),
             found: rhs.to_string(),

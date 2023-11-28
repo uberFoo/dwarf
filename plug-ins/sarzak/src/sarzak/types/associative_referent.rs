@@ -1,7 +1,7 @@
 // {"magic":"","directive":{"Start":{"directive":"allow-editing","tag":"associative_referent-struct-definition-file"}}}
 // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"associative_referent-use-statements"}}}
-use std::cell::RefCell;
-use std::rc::Rc;
+use std::sync::Arc;
+use std::sync::RwLock;
 use tracy_client::span;
 use uuid::Uuid;
 
@@ -40,18 +40,18 @@ impl AssociativeReferent {
     /// Inter a new 'Associative Referent' in the store, and return it's `id`.
     pub fn new(
         description: String,
-        cardinality: &Rc<RefCell<Cardinality>>,
-        conditionality: &Rc<RefCell<Conditionality>>,
-        obj_id: &Rc<RefCell<Object>>,
+        cardinality: &Arc<RwLock<Cardinality>>,
+        conditionality: &Arc<RwLock<Conditionality>>,
+        obj_id: &Arc<RwLock<Object>>,
         store: &mut SarzakStore,
-    ) -> Rc<RefCell<AssociativeReferent>> {
+    ) -> Arc<RwLock<AssociativeReferent>> {
         let id = Uuid::new_v4();
-        let new = Rc::new(RefCell::new(AssociativeReferent {
+        let new = Arc::new(RwLock::new(AssociativeReferent {
             description,
             id,
-            cardinality: cardinality.borrow().id(),
-            conditionality: conditionality.borrow().id(),
-            obj_id: obj_id.borrow().id,
+            cardinality: cardinality.read().unwrap().id(),
+            conditionality: conditionality.read().unwrap().id(),
+            obj_id: obj_id.read().unwrap().id,
         }));
         store.inter_associative_referent(new.clone());
         new
@@ -59,7 +59,7 @@ impl AssociativeReferent {
     // {"magic":"","directive":{"End":{"directive":"ignore-orig"}}}
     // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"associative_referent-struct-impl-nav-forward-to-cardinality"}}}
     /// Navigate to [`Cardinality`] across R88(1-*)
-    pub fn r88_cardinality<'a>(&'a self, store: &'a SarzakStore) -> Vec<Rc<RefCell<Cardinality>>> {
+    pub fn r88_cardinality<'a>(&'a self, store: &'a SarzakStore) -> Vec<Arc<RwLock<Cardinality>>> {
         span!("r88_cardinality");
         vec![store.exhume_cardinality(&self.cardinality).unwrap()]
     }
@@ -69,14 +69,14 @@ impl AssociativeReferent {
     pub fn r77_conditionality<'a>(
         &'a self,
         store: &'a SarzakStore,
-    ) -> Vec<Rc<RefCell<Conditionality>>> {
+    ) -> Vec<Arc<RwLock<Conditionality>>> {
         span!("r77_conditionality");
         vec![store.exhume_conditionality(&self.conditionality).unwrap()]
     }
     // {"magic":"","directive":{"End":{"directive":"ignore-orig"}}}
     // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"associative_referent-struct-impl-nav-forward-to-obj_id"}}}
     /// Navigate to [`Object`] across R25(1-*)
-    pub fn r25_object<'a>(&'a self, store: &'a SarzakStore) -> Vec<Rc<RefCell<Object>>> {
+    pub fn r25_object<'a>(&'a self, store: &'a SarzakStore) -> Vec<Arc<RwLock<Object>>> {
         span!("r25_object");
         vec![store.exhume_object(&self.obj_id).unwrap()]
     }
@@ -86,11 +86,13 @@ impl AssociativeReferent {
     pub fn r22_an_associative_referent<'a>(
         &'a self,
         store: &'a SarzakStore,
-    ) -> Vec<Rc<RefCell<AnAssociativeReferent>>> {
+    ) -> Vec<Arc<RwLock<AnAssociativeReferent>>> {
         span!("r22_an_associative_referent");
         vec![store
             .iter_an_associative_referent()
-            .find(|an_associative_referent| an_associative_referent.borrow().referent == self.id)
+            .find(|an_associative_referent| {
+                an_associative_referent.read().unwrap().referent == self.id
+            })
             .unwrap()]
     }
     // {"magic":"","directive":{"End":{"directive":"ignore-orig"}}}

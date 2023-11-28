@@ -2,6 +2,7 @@
 use std::{env, thread};
 
 use ansi_term::Colour;
+use rustc_hash::FxHashMap as HashMap;
 use snafu::{location, Location};
 
 use crate::{
@@ -12,7 +13,7 @@ use crate::{
     new_ref, s_read, s_write, ChaChaError, NewRef, RefType,
 };
 
-pub fn start_repl(mut context: Context, is_uber: bool) -> Result<(), Error> {
+pub fn start_repl(context: &mut Context, is_uber: bool) -> Result<(), Error> {
     use std::io;
 
     use rustyline::error::ReadlineError;
@@ -22,7 +23,7 @@ pub fn start_repl(mut context: Context, is_uber: bool) -> Result<(), Error> {
 
     const HISTORY_FILE: &str = ".dwarf_history";
 
-    let models = context.models().clone();
+    let models = context.models().models().clone();
     let lu_dog = context.lu_dog_heel().clone();
     let sarzak = context.sarzak_heel().clone();
 
@@ -123,16 +124,15 @@ pub fn start_repl(mut context: Context, is_uber: bool) -> Result<(), Error> {
                                     dwarf_home: &dwarf_home,
                                     cwd: env::current_dir().unwrap(),
                                     dirty: &mut dirty,
+                                    file_name: "REPL",
+                                    func_defs: HashMap::default(),
                                 },
                                 &mut lu_dog,
                             ) {
                                 Ok(stmt) => stmt.0,
                                 Err(errors) => {
                                     for e in errors {
-                                        println!(
-                                            "{}",
-                                            DwarfErrorReporter(&e, is_uber, &line, "REPL")
-                                        );
+                                        println!("{}", DwarfErrorReporter(&e, is_uber, &line));
                                     }
                                     continue;
                                 }
@@ -142,14 +142,14 @@ pub fn start_repl(mut context: Context, is_uber: bool) -> Result<(), Error> {
 
                         context.set_dirty(dirty);
 
-                        match eval_statement(stmt.0, &mut context, &mut vm) {
+                        match eval_statement(stmt.0, context, &mut vm) {
                             Ok(value) => {
-                                let ty =
-                                    s_read!(value).get_type(&s_read!(sarzak), &s_read!(lu_dog));
+                                let ty = s_read!(value)
+                                    .get_value_type(&s_read!(sarzak), &s_read!(lu_dog));
                                 let value = format!("{}", s_read!(value));
                                 print!("\n'{}'", result_style.paint(value));
 
-                                let ty = PrintableValueType(&ty, &context);
+                                let ty = PrintableValueType(true, ty, context.models());
                                 let ty = format!("{}", ty);
                                 println!("\t  ──➤  {}", type_style.paint(ty));
                             }
@@ -194,7 +194,6 @@ pub fn start_repl(mut context: Context, is_uber: bool) -> Result<(), Error> {
     rl.save_history(HISTORY_FILE)
         .map_err(|e| ChaChaError::RustyLine { source: e })?;
 
-    drop(context);
     handle.join().unwrap();
 
     Ok(())

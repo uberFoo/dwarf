@@ -1,14 +1,15 @@
-use std::{io::Write, path::PathBuf};
+use std::{env, io::Write, path::PathBuf};
 
 use dwarf::{
+    chacha::interpreter::{initialize_interpreter, start_func},
     dwarf::{new_lu_dog, parse_dwarf},
-    interpreter::{initialize_interpreter, start_main},
     sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL},
 };
 use lambda_http::{
     run, run_with_streaming_response, service_fn, Body, Error, Request, RequestExt, Response,
 };
 use tracing::{event, Level};
+use tracy_client::Client;
 
 /// This is the main body for the function.
 /// Write your code inside it.
@@ -17,12 +18,22 @@ use tracing::{event, Level};
 async fn function_handler(event: Request) -> Result<Response<Body>, Error> {
     let (mut tx, rx) = hyper::Body::channel();
 
+    Client::start();
+
     // tokio::spawn(async move {
     //     for message in messages.iter() {
     //         tx.send_data((*message).into()).await.unwrap();
     //         thread::sleep(Duration::from_millis(500));
     //     }
     // });
+
+    let dwarf_home = env::var("DWARF_HOME")
+        .unwrap_or_else(|_| {
+            let mut home = env::var("HOME").unwrap();
+            home.push_str("/.dwarf");
+            home
+        })
+        .into();
 
     let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
 
@@ -39,8 +50,8 @@ async fn function_handler(event: Request) -> Result<Response<Body>, Error> {
 
         match ast {
             Ok(ast) => {
-                let lu_dog =
-                    new_lu_dog(None, Some((program.to_owned(), &ast)), &sarzak).map_err(|errors| {
+                let lu_dog = new_lu_dog(Some((program.to_owned(), &ast)), &dwarf_home, &sarzak)
+                    .map_err(|errors| {
                         for e in &errors {
                             std_err
                                 .write(
@@ -59,8 +70,8 @@ async fn function_handler(event: Request) -> Result<Response<Body>, Error> {
 
                 match lu_dog {
                     Ok(lu_dog) => {
-                        let ctx = initialize_interpreter::<PathBuf>(sarzak, lu_dog, None).unwrap();
-                        match start_main(false, ctx) {
+                        let ctx = initialize_interpreter(dwarf_home, lu_dog, sarzak).unwrap();
+                        match start_func("main", false, ctx) {
                             Ok((result, ctx)) => {
                                 let result = result.to_string();
                                 let result = ansi_to_html::convert_escaped(&result).unwrap();

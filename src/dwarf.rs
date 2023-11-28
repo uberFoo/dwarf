@@ -13,16 +13,16 @@ use rustc_hash::FxHashMap as HashMap;
 use sarzak::sarzak::{store::ObjectStore as SarzakStore, types::Ty};
 use serde::{Deserialize, Serialize};
 use snafu::{location, Location};
-use uuid::Uuid;
 
 use crate::{
-    lu_dog::{store::ObjectStore as LuDogStore, types::ValueType, Lambda, List, Reference},
-    ModelStore, RefType,
+    lu_dog::{store::ObjectStore as LuDogStore, types::ValueType, Generic, Lambda, List},
+    s_read, ModelStore, RefType,
 };
 
 pub mod error;
 mod expression;
 pub mod extruder;
+mod items;
 pub mod parser;
 mod pvt;
 
@@ -62,6 +62,7 @@ pub enum Token {
     As,
     Asm,
     Async,
+    Await,
     Bool(bool),
     Debugger,
     Else,
@@ -98,6 +99,7 @@ impl fmt::Display for Token {
             Self::As => write!(f, "as"),
             Self::Asm => write!(f, "asm!"),
             Self::Async => write!(f, "async"),
+            Self::Await => write!(f, "await"),
             Self::Bool(bool_) => write!(f, "{}", bool_),
             Self::Debugger => write!(f, "debugger"),
             Self::Else => write!(f, "else"),
@@ -136,13 +138,20 @@ pub enum Type {
     Empty,
     Float,
     Fn(Vec<Spanned<Self>>, Box<Spanned<Self>>),
+    Generic(Spanned<String>),
     Integer,
     List(Box<Spanned<Self>>),
-    Reference(Box<Spanned<Self>>),
+    Path(Vec<Spanned<Self>>),
     Self_,
     String,
     Unknown,
-    UserType(Spanned<String>),
+    /// User Type
+    ///
+    /// Almost everything with a name falls into this category.
+    ///
+    /// The first element is the name of the type, and the second is a list of
+    /// generic types.
+    UserType(Spanned<String>, Vec<Spanned<Self>>),
     Uuid,
 }
 
@@ -162,13 +171,35 @@ impl fmt::Display for Type {
                 }
                 write!(f, ") -> {}", return_.0)
             }
+            Self::Generic(name) => write!(f, "{}", name.0),
             Self::Integer => write!(f, "int"),
             Self::List(type_) => write!(f, "[{}]", type_.0),
-            Self::Reference(type_) => write!(f, "&{}", type_.0),
+            Self::Path(path) => {
+                for (i, ty) in path.iter().enumerate() {
+                    if i != 0 {
+                        write!(f, "::")?;
+                    }
+                    write!(f, "{}", ty.0)?;
+                }
+                Ok(())
+            }
             Self::Self_ => write!(f, "Self"),
             Self::String => write!(f, "string"),
             Self::Unknown => write!(f, "<unknown>"),
-            Self::UserType(type_) => write!(f, "{}", type_.0),
+            Self::UserType(type_, inner) => {
+                if !inner.is_empty() {
+                    write!(f, "{}<", type_.0)?;
+                    for (i, ty) in inner.iter().enumerate() {
+                        if i != 0 {
+                            write!(f, ", ")?;
+                        }
+                        write!(f, "{}", ty.0)?;
+                    }
+                    write!(f, ">")
+                } else {
+                    write!(f, "{}", type_.0)
+                }
+            }
             Self::Uuid => write!(f, "Uuid"),
         }
     }
@@ -177,17 +208,19 @@ impl fmt::Display for Type {
 impl Type {
     pub fn check_type(
         &self,
+        file_name: &str,
         span: &Span,
         store: &mut LuDogStore,
         models: &ModelStore,
         sarzak: &SarzakStore,
     ) -> Result<bool> {
-        self.into_value_type(span, store, models, sarzak)
+        self.into_value_type(file_name, span, store, models, sarzak)
             .map(|_| true)
     }
 
     pub fn into_value_type(
         &self,
+        file_name: &str,
         span: &Span,
         store: &mut LuDogStore,
         _models: &ModelStore,
@@ -206,31 +239,33 @@ impl Type {
             Type::Fn(_params, return_) => {
                 let return_ = return_
                     .0
-                    .into_value_type(&return_.1, store, _models, sarzak)?;
-                let ƛ = Lambda::new(None, &return_, store);
+                    .into_value_type(file_name, &return_.1, store, _models, sarzak)?;
+                let ƛ = Lambda::new(None, None, &return_, store);
                 Ok(ValueType::new_lambda(&ƛ, store))
+            }
+            Type::Generic(name) => {
+                let generic = Generic::new(name.0.to_owned(), None, None, store);
+                Ok(ValueType::new_generic(&generic, store))
             }
             Type::Integer => {
                 let ty = Ty::new_integer(sarzak);
                 Ok(ValueType::new_ty(&ty, store))
             }
             Type::List(type_) => {
-                let ty = type_.0.into_value_type(&type_.1, store, _models, sarzak)?;
+                let ty = type_
+                    .0
+                    .into_value_type(file_name, &type_.1, store, _models, sarzak)?;
                 let list = List::new(&ty, store);
                 Ok(ValueType::new_list(&list, store))
             }
-            Type::Reference(type_) => {
-                let ty = type_.0.into_value_type(&type_.1, store, _models, sarzak)?;
-                let reference = Reference::new(Uuid::new_v4(), false, &ty, store);
-                Ok(ValueType::new_reference(&reference, store))
-            }
+            Type::Path(_) => unimplemented!(),
             Type::Self_ => panic!("Self is deprecated."),
             Type::String => {
                 let ty = Ty::new_s_string(sarzak);
                 Ok(ValueType::new_ty(&ty, store))
             }
             Type::Unknown => Ok(ValueType::new_unknown(store)),
-            Type::UserType(type_) => {
+            Type::UserType(type_, _generics) => {
                 let name = &type_.0;
 
                 // This is a special case for Uuid, which is a built-in type.
@@ -254,9 +289,9 @@ impl Type {
                     log::debug!(target: "dwarf", "into_value_type, UserType, ty: {ty:?}");
                     Ok(ValueType::new_ty(&ty, store))
                 } else {
-                    log::error!(target: "dwarf", "Unknown type");
                     Err(vec![DwarfError::UnknownType {
                         ty: name.to_owned(),
+                        file: file_name.to_owned(),
                         span: span.to_owned(),
                         location: location!(),
                     }])
@@ -354,14 +389,20 @@ pub enum Pattern {
 impl From<Pattern> for Expression {
     fn from(pattern: Pattern) -> Self {
         match pattern {
+            // transmogrify an identifier into a local variable
             Pattern::Identifier((name, _span)) => Expression::LocalVariable(name),
+            // 🚧 Need to do something about this.
             Pattern::Literal((_value, _span)) => {
                 unreachable!()
             }
+            // Here we turn a path into a unit enum, which is really just a static
+            // method call with storage.
             Pattern::PathPattern((path, span)) => {
                 let mut path = path.to_owned();
                 let field = path.pop().unwrap();
-                let field = if let Type::UserType(field) = field {
+                // 🚧 I'm not sure how this would play with generics. I don't
+                // think that it's allowed.
+                let field = if let Type::UserType(field, _generics) = field {
                     field
                 } else {
                     unreachable!();
@@ -381,7 +422,7 @@ impl From<Pattern> for Expression {
 
                 let (mut path, _span) = path;
                 let name = path.pop().unwrap();
-                let name = if let Type::UserType(name) = name {
+                let name = if let Type::UserType(name, _generics) = name {
                     name
                 } else {
                     unreachable!();
@@ -402,6 +443,17 @@ impl From<Pattern> for Expression {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct WrappedValueType(pub RefType<ValueType>);
+
+impl PartialEq for WrappedValueType {
+    fn eq(&self, other: &Self) -> bool {
+        *s_read!(self.0) == *s_read!(other.0)
+    }
+}
+
+impl Eq for WrappedValueType {}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum Expression {
     Addition(Box<Spanned<Self>>, Box<Spanned<Self>>),
@@ -415,13 +467,19 @@ pub enum Expression {
     /// The first element is the left-hand side expression representing the storage
     /// and the second is the right-hand side, representing the value to be stored.
     Assignment(Box<Spanned<Self>>, Box<Spanned<Self>>),
+    Await(Box<Spanned<Self>>),
     Bang(Box<Spanned<Self>>),
     Block(
+        BlockType,
         Vec<Spanned<Statement>>,
         /// A list of variable names to insert into the top of the block
+        ///
+        // This is for `for` loops.
         Vec<String>,
         /// The types of the above variables
-        Vec<RefType<ValueType>>,
+        ///
+        // This is for `for` loops.
+        Vec<WrappedValueType>,
     ),
     BooleanLiteral(bool),
     Debug,
@@ -446,6 +504,7 @@ pub enum Expression {
     Index(Box<Spanned<Self>>, Box<Spanned<Self>>),
     IntegerLiteral(i64),
     Lambda(
+        BlockType,
         Vec<(Spanned<String>, Spanned<Type>)>,
         Spanned<Type>,
         Box<Spanned<Self>>,
@@ -489,7 +548,7 @@ pub struct Item {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub enum FunctionType {
+pub enum BlockType {
     Async,
     Sync,
 }
@@ -499,13 +558,13 @@ pub enum InnerItem {
     Enum(
         Spanned<String>,
         Vec<(Spanned<String>, Option<EnumField>)>,
-        Option<Generics>,
+        Generics,
     ),
     /// A Function Definition
     ///
     /// async, name, Vec<(Parameter Name, Parameter Type)>, Return Type, Vec<Statement>
     Function(
-        FunctionType,
+        BlockType,
         Spanned<String>,
         Vec<(Spanned<String>, Spanned<Type>)>,
         Spanned<Type>,
@@ -519,8 +578,8 @@ pub enum InnerItem {
     /// name, Vec<(Field Name, Field Type)>
     Struct(
         Spanned<String>,
-        Vec<(Spanned<String>, Spanned<Type>)>,
-        Option<Generics>,
+        Vec<(Spanned<String>, Spanned<Type>, AttributeMap)>,
+        Generics,
     ),
 }
 
@@ -534,13 +593,13 @@ pub enum EnumField {
     Tuple(Spanned<Type>),
     /// Enum Struct Field
     ///
-    /// This is a list of (Field Name, Field Type) pairs.
-    Struct(Vec<(Spanned<String>, Spanned<Type>)>),
+    /// This is a list of (Field Name, Field Type, AttributeMap) pairs.
+    Struct(Vec<(Spanned<String>, Spanned<Type>, AttributeMap)>),
 }
 
 pub type AttributeMap = HashMap<String, Vec<(Span, InnerAttribute)>>;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct Attribute {
     pub name: Spanned<String>,
     pub value: InnerAttribute,
@@ -568,6 +627,7 @@ impl TryFrom<&InnerAttribute> for String {
     }
 }
 
+#[allow(unused)]
 pub(crate) fn generic_to_string(generic: &Generics) -> Spanned<String> {
     let mut result = String::new();
     let mut first_time = true;

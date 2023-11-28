@@ -1,7 +1,8 @@
 use std::{env, path::PathBuf};
 
 use ansi_term::Colour;
-use tracy_client::Client;
+use lazy_static::lazy_static;
+use parking_lot::Mutex;
 
 use dwarf::{
     chacha::{
@@ -10,8 +11,13 @@ use dwarf::{
         value::Value,
     },
     dwarf::{new_lu_dog, parse_dwarf},
+    ref_to_inner,
     sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL},
 };
+
+lazy_static! {
+    static ref EXEC_MUTEX: Mutex<()> = Mutex::new(());
+}
 
 #[cfg(feature = "print-std-out")]
 compile_error!("The tests don't function with the print-std-out feature enabled.");
@@ -67,6 +73,7 @@ fn diff_with_file(path: &str, test: &str, found: &str) -> Result<(), ()> {
 }
 
 fn run_program(test: &str, program: &str) -> Result<(Value, String), String> {
+    let _guard = EXEC_MUTEX.lock();
     let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
     let dwarf_home = env::var("DWARF_HOME")
         .unwrap_or_else(|_| {
@@ -78,14 +85,25 @@ fn run_program(test: &str, program: &str) -> Result<(Value, String), String> {
 
     let ast = match parse_dwarf(test, program) {
         Ok(ast) => ast,
-        Err(dwarf::dwarf::error::DwarfError::Parse { error, ast: _ }) => {
-            let error = error.trim();
-            eprintln!("{error}");
-            return Err(error.to_owned());
-        }
-        _ => unreachable!(),
+        Err(e) => match *e {
+            dwarf::dwarf::error::DwarfError::Parse { error, ast: _ } => {
+                let error = error.trim();
+                eprintln!("{error}");
+                return Err(error.to_owned());
+            }
+            e => {
+                eprintln!("{e:?}");
+                return Err(e.to_string());
+            }
+        },
     };
-    let ctx = match new_lu_dog(Some((program.to_owned(), &ast)), &dwarf_home, &sarzak) {
+
+    let ctx = match new_lu_dog(
+        test.to_owned(),
+        Some((program.to_owned(), &ast)),
+        &dwarf_home,
+        &sarzak,
+    ) {
         Ok(lu_dog) => lu_dog,
         Err(e) => {
             eprintln!(
@@ -94,7 +112,7 @@ fn run_program(test: &str, program: &str) -> Result<(Value, String), String> {
                     .map(|e| {
                         format!(
                             "{}",
-                            dwarf::dwarf::error::DwarfErrorReporter(e, true, program, test)
+                            dwarf::dwarf::error::DwarfErrorReporter(e, true, program)
                         )
                     })
                     .collect::<Vec<_>>()
@@ -107,7 +125,7 @@ fn run_program(test: &str, program: &str) -> Result<(Value, String), String> {
                 .map(|e| {
                     format!(
                         "{}",
-                        dwarf::dwarf::error::DwarfErrorReporter(e, false, program, test)
+                        dwarf::dwarf::error::DwarfErrorReporter(e, false, program)
                     )
                 })
                 .collect::<Vec<_>>()
@@ -119,18 +137,34 @@ fn run_program(test: &str, program: &str) -> Result<(Value, String), String> {
         }
     };
 
-    let ctx = initialize_interpreter(dwarf_home, ctx, sarzak).unwrap();
-    match start_func("main", false, ctx) {
-        Ok(v) => {
-            let stdout = v.1.drain_std_out().join("").trim().to_owned();
+    let mut ctx = initialize_interpreter(1, dwarf_home, ctx, sarzak).unwrap();
+    let result = match start_func("main", false, &mut ctx) {
+        Ok(value) => unsafe {
+            // Ok((Value::Empty, String::new()))
+            let value = std::sync::Arc::into_raw(value);
+            let value = std::ptr::read(value);
+            let value = ref_to_inner!(value);
+            match value {
+                Value::Error(msg) => {
+                    let msg = *msg;
+                    let error = format!(
+                        "Interpreter exited with:\n{}",
+                        ChaChaErrorReporter(&msg.into(), false, program, test)
+                    )
+                    .trim()
+                    .to_owned();
 
-            println!("{stdout}");
+                    eprintln!("{error}");
 
-            Ok((v.0, stdout))
-        }
+                    Err(error)
+                }
+                _ => {
+                    let stdout = ctx.drain_std_out().join("").trim().to_owned();
+                    Ok((value, stdout))
+                }
+            }
+        },
         Err(e) => {
-            eprintln!("{}", ChaChaErrorReporter(&e, true, program, test));
-
             let error = format!(
                 "Interpreter exited with:\n{}",
                 ChaChaErrorReporter(&e, false, program, test)
@@ -138,9 +172,13 @@ fn run_program(test: &str, program: &str) -> Result<(Value, String), String> {
             .trim()
             .to_owned();
 
+            eprintln!("{error}");
+
             Err(error)
         }
-    }
+    };
+
+    result
 }
 
 include!(concat!(env!("OUT_DIR"), "/tests.rs"));

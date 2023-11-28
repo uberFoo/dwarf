@@ -24,8 +24,8 @@ pub fn eval(
         .unwrap();
 
     let list = eval_expression(list, context, vm)?;
-    let list = if let Value::Vector(vec) = s_read!(list).clone() {
-        vec
+    let list = if let Value::Vector { ty: _, inner: vec } = &s_read!(list).clone() {
+        vec.to_owned()
     } else if let Value::String(str) = &*s_read!(list) {
         str.chars()
             .map(|c| new_ref!(Value, Value::Char(c)))

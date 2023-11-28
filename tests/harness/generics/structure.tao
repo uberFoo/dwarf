@@ -26,22 +26,22 @@ struct One<T> {
 // }
 
 fn main() {
-    let a = Node {
-        value: 42,
-        next: Option::<Node<int>>::None,
-    };
-    let b = Node {
-        value: 69,
-        next: Option::<Node<int>>::Some(a),
-    };
-    let c = Node {
-        value: 3.14,
-        next: Option::Some(b),
-    };
+    // let a = Node {
+    //     value: 42,
+    //     next: Option::<Node<int>>::None,
+    // };
+    // let b = Node {
+    //     value: 69,
+    //     next: Option::<Node<int>>::Some(a),
+    // };
+    // let c = Node {
+    //     value: 420.0,
+    //     next: Option::Some(b),
+    // };
 
-    print("a = {0}\n".format(a));
-    print("b = {0}\n".format(b));
-    print("c = {0}\n".format(c));
+    // print("a = {0}\n".format(a));
+    // print("b = {0}\n".format(b));
+    // print("c = {0}\n".format(c));
 
     let d = Foo {
         a: 42,
@@ -50,11 +50,18 @@ fn main() {
     };
 
     print("d = {0}\n".format(d));
+    chacha::assert_eq(chacha::typeof(d.a), "int");
+    chacha::assert_eq(chacha::typeof(d.b), "string");
+    chacha::assert_eq(chacha::typeof(d.c), "float");
 
     let a = One { uno: 42 };
     print("a = {0}\n".format(a));
     // a.show();
+
+    chacha::assert_eq(chacha::typeof(a.uno), "int");
+
     let b = One { uno: "hello" };
     // b.show();
     print("b = {0}\n".format(b));
+    chacha::assert_eq(chacha::typeof(b.uno), "string");
 }

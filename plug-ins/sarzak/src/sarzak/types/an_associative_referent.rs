@@ -1,7 +1,7 @@
 // {"magic":"","directive":{"Start":{"directive":"allow-editing","tag":"an_associative_referent-struct-definition-file"}}}
 // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"an_associative_referent-use-statements"}}}
-use std::cell::RefCell;
-use std::rc::Rc;
+use std::sync::Arc;
+use std::sync::RwLock;
 use tracy_client::span;
 use uuid::Uuid;
 
@@ -29,16 +29,16 @@ impl AnAssociativeReferent {
     /// Inter a new 'An Associative Referent' in the store, and return it's `id`.
     pub fn new(
         referential_attribute: String,
-        associative: &Rc<RefCell<Associative>>,
-        referent: &Rc<RefCell<AssociativeReferent>>,
+        associative: &Arc<RwLock<Associative>>,
+        referent: &Arc<RwLock<AssociativeReferent>>,
         store: &mut SarzakStore,
-    ) -> Rc<RefCell<AnAssociativeReferent>> {
+    ) -> Arc<RwLock<AnAssociativeReferent>> {
         let id = Uuid::new_v4();
-        let new = Rc::new(RefCell::new(AnAssociativeReferent {
+        let new = Arc::new(RwLock::new(AnAssociativeReferent {
             id,
             referential_attribute,
-            associative: associative.borrow().id,
-            referent: referent.borrow().id,
+            associative: associative.read().unwrap().id,
+            referent: referent.read().unwrap().id,
         }));
         store.inter_an_associative_referent(new.clone());
         new
@@ -46,7 +46,7 @@ impl AnAssociativeReferent {
     // {"magic":"","directive":{"End":{"directive":"ignore-orig"}}}
     // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"an_associative_referent-struct-impl-nav-forward-assoc-to-associative"}}}
     /// Navigate to [`Associative`] across R22(1-*)
-    pub fn r22_associative<'a>(&'a self, store: &'a SarzakStore) -> Vec<Rc<RefCell<Associative>>> {
+    pub fn r22_associative<'a>(&'a self, store: &'a SarzakStore) -> Vec<Arc<RwLock<Associative>>> {
         span!("r22_associative");
         vec![store.exhume_associative(&self.associative).unwrap()]
     }
@@ -56,7 +56,7 @@ impl AnAssociativeReferent {
     pub fn r22_associative_referent<'a>(
         &'a self,
         store: &'a SarzakStore,
-    ) -> Vec<Rc<RefCell<AssociativeReferent>>> {
+    ) -> Vec<Arc<RwLock<AssociativeReferent>>> {
         span!("r22_associative_referent");
         vec![store.exhume_associative_referent(&self.referent).unwrap()]
     }

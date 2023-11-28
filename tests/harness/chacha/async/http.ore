@@ -1,0 +1,57 @@
+enum Result<T, E> {
+    Ok(T),
+    Err(E),
+}
+
+enum Option<T> {
+    Some(T),
+    None,
+}
+
+// async fn async_get(urls: [String]) -> Future<[Result<String, HttpError>]> {
+//     let client = chacha::http_client();
+
+//     let tasks = [];
+//     for url in urls {
+//         let task = chacha::spawn(async || -> Future<HttpResponse> {
+//             let get = client.get(url).send().await;
+//             get.text().await
+//         });
+//         tasks.push(task);
+//     }
+
+//     let results = [];
+//     for task in tasks {
+//         let result = task.await;
+//         results.push(result);
+//     }
+
+//     results
+// }
+
+async fn main() -> Future<()> {
+    let requests = [
+        "https://www.rust-lang.org/",
+        "https://en.wikipedia.org/wiki/Main_Page",
+    ];
+    let rust = chacha::http_get(requests[0]);
+    let future = chacha::http_get(requests[1]);
+    print(rust);
+    print(future);
+    print(future.await);
+    print(rust.await);
+    // future.await;
+    // rust.await;
+    // let results = async_get(requests).await;
+    // for result in results {
+    // print(result);
+    //     match result {
+    //         Result::<String, HttpError>::Ok(response) => {
+    //             print(response);
+    //         }
+    //         Result::<String, HttpError>::Err(e) => {
+    //             print(e);
+    //         }
+    //     }
+    // }
+}

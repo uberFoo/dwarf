@@ -12,25 +12,25 @@ use crate::{
             lookup_woog_struct_method_return_type, typecheck, update_span_value, Context,
             DeSanitize, ExprSpan,
         },
-        DwarfInteger, Expression as ParserExpression, PrintableValueType, Type,
+        DwarfInteger, Expression as ParserExpression, Type,
+    },
+    keywords::{
+        ARGS, ASLEEP, ASSERT, ASSERT_EQ, CHACHA, COMPLEX_EX, EPS, FN_NEW, HTTP_GET, INTERVAL, NEW,
+        NORM_SQUARED, ONE_SHOT, PLUGIN, SLEEP, SPAWN, SPAWN_NAMED, TIME, TIMER, TYPEOF, UUID_TYPE,
     },
     lu_dog::{
         store::ObjectStore as LuDogStore, Argument, Block, Call, DataStructure, EnumFieldEnum,
-        Expression, FieldExpression, List, LocalVariable, PathElement, Span, StaticMethodCall,
-        StructExpression, UnnamedFieldExpression, ValueType, ValueTypeEnum, Variable, XPath,
-        XValue,
+        Expression, FieldExpression, List, LocalVariable, PathElement, Plugin, Span,
+        StaticMethodCall, StructExpression, UnnamedFieldExpression, ValueType, ValueTypeEnum,
+        Variable, XFuture, XPath, XValue,
     },
     new_ref, s_read, s_write,
     sarzak::Ty,
-    NewRef, RefType, ARGS, ASSERT, ASSERT_EQ, CHACHA, COMPLEX_EX, EPS, FN_NEW, NORM_SQUARED, SLEEP,
-    TIME, UUID_TYPE,
+    NewRef, RefType,
 };
 
-// Let's just say that I don't get this lint. The docs say you have to box it
-// first, but what about when it's already boxed? I don't get it.
-#[allow(clippy::borrowed_box)]
 pub fn inter(
-    path: &Box<ParserExpression>,
+    path: &ParserExpression,
     method: &str,
     span: RefType<Span>,
     params: &[(ParserExpression, Range<usize>)],
@@ -38,7 +38,8 @@ pub fn inter(
     context: &mut Context,
     lu_dog: &mut LuDogStore,
 ) -> Result<(ExprSpan, RefType<ValueType>)> {
-    let path = if let ParserExpression::PathInExpression(path) = path.as_ref() {
+    let save_path = &path;
+    let path = if let ParserExpression::PathInExpression(path) = path {
         path
     } else {
         panic!(
@@ -51,27 +52,35 @@ pub fn inter(
     // span and the string at once.
     let type_vec = path
         .iter()
-        .map(|p| {
-            if let Type::UserType((obj, span)) = p {
-                (obj.de_sanitize().to_owned(), span)
+        .flat_map(|p| {
+            if let Type::UserType((obj, span), _generics) = p {
+                vec![(obj.de_sanitize().to_owned(), span)]
             } else {
                 panic!(
-                "I don't think that we should ever see anything other than a user type here: {:?}",
-                path
-            );
+                    "I don't think that we should ever see anything other than a user type here: {:?}",
+                    path
+                );
             }
         })
         .collect::<Vec<_>>();
+
     // This is the span over the entire path.
     let type_span = type_vec.first().unwrap().1.start..type_vec.last().unwrap().1.end;
 
-    let type_name = type_vec
-        .iter()
-        .map(|p| p.0.clone())
-        .collect::<Vec<_>>()
-        .join("");
+    // let type_name = type_vec
+    //     .iter()
+    //     .map(|p| p.0.clone())
+    //     .collect::<Vec<_>>()
+    //     .join("::");
+    // 🚧 I think I was imagining the type name would be made unique here? And
+    // what's up with all the xpath business?
+    //
+    // This thing below is a complete and total hack to get an http client plugin working.
+    let type_name = type_vec[0].0.clone();
+    let plugin_type = type_vec.last().unwrap().0.clone();
 
-    debug!("type_name {:?}", type_name);
+    debug!("type_name {type_name}");
+    debug!("method {method}");
 
     let x_path = XPath::new(Uuid::new_v4(), None, lu_dog);
     let mut elts = type_vec
@@ -81,28 +90,28 @@ pub fn inter(
         })
         .map(|(name, _)| PathElement::new(name.to_owned(), None, &x_path, lu_dog))
         .collect::<Vec<RefType<PathElement>>>();
-    elts.reverse();
     elts.push(PathElement::new(method.to_owned(), None, &x_path, lu_dog));
 
     debug!("path elements: {elts:?}");
 
-    let first = elts
-        .into_iter()
+    if let Some(first) = elts.first() {
+        debug!("first {first:?}");
+        let first = s_read!(first).id;
+        s_write!(x_path).first = Some(first);
+    }
+
+    // Stitch together the pointers.
+    elts.into_iter()
         .fold(Option::<RefType<PathElement>>::None, |prev, elt| {
             if let Some(prev) = prev {
-                let elt = s_read!(elt);
-                s_write!(prev).next = Some(elt.id);
-                Some(prev)
+                s_write!(prev).next = Some(s_read!(elt).id);
+                Some(elt)
             } else {
                 Some(elt)
             }
         });
 
-    if let Some(first) = first {
-        let first = s_read!(first).id;
-        s_write!(x_path).first = Some(first);
-    }
-
+    // 🚧 This smells bad.
     // We need to check if the type name is a struct or an enum.
     if lu_dog.exhume_woog_struct_id_by_name(&type_name).is_some()
         || lu_dog
@@ -110,110 +119,36 @@ pub fn inter(
             .is_some()
         || type_name == CHACHA
         || type_name == COMPLEX_EX
+        || type_name == PLUGIN
+        || type_name == TIMER
         || type_name == UUID_TYPE
     {
+        // 🚧  This is so ugly. This is for the http plugin.
+        let foo = if type_name == PLUGIN {
+            format!("{type_name}::{plugin_type}")
+        } else {
+            type_name.clone()
+        };
         // Here we are interring a static method call.
-        let meth = StaticMethodCall::new(
-            method.to_owned(),
-            type_name.to_owned(),
-            Uuid::new_v4(),
-            lu_dog,
-        );
+        let meth = StaticMethodCall::new(method.to_owned(), foo.clone(), Uuid::new_v4(), lu_dog);
         let call = Call::new_static_method_call(true, None, None, &meth, lu_dog);
         let call_expr = Expression::new_call(&call, lu_dog);
 
-        debug!("name {}", type_name);
-        debug!("method {}", method);
-
         let sarzak = context.sarzak;
 
-        let ty = if type_name == CHACHA {
-            match method {
-                ARGS => {
-                    let ty = Ty::new_s_string(sarzak);
-                    // 🚧 Ideally we'd cache this when we startup.
-                    let ty = lu_dog
-                        .iter_value_type()
-                        .find(|t| s_read!(t).subtype == ValueTypeEnum::Ty(ty.read().unwrap().id()))
-                        .unwrap();
-                    let list = List::new(&ty, lu_dog);
-                    ValueType::new_list(&list, lu_dog)
-                }
-                ASSERT => {
-                    let ty = Ty::new_boolean(sarzak);
-                    // 🚧 Ideally we'd cache this when we startup.
-                    let ty = lu_dog
-                        .iter_value_type()
-                        .find(|t| s_read!(t).subtype == ValueTypeEnum::Ty(ty.read().unwrap().id()))
-                        .unwrap();
-                    ValueType::new_ty(&Ty::new_boolean(sarzak), lu_dog)
-                }
-                ASSERT_EQ => {
-                    let ty = Ty::new_boolean(sarzak);
-                    // 🚧 Ideally we'd cache this when we startup.
-                    let ty = lu_dog
-                        .iter_value_type()
-                        .find(|t| s_read!(t).subtype == ValueTypeEnum::Ty(ty.read().unwrap().id()))
-                        .unwrap();
-                    ValueType::new_ty(&Ty::new_boolean(sarzak), lu_dog)
-                }
-                COMPLEX_EX => {
-                    let ty = Ty::new_float(sarzak);
-                    // 🚧 Ideally we'd cache this when we startup.
-                    let ty = lu_dog
-                        .iter_value_type()
-                        .find(|t| s_read!(t).subtype == ValueTypeEnum::Ty(ty.read().unwrap().id()))
-                        .unwrap();
-                    ValueType::new_ty(&Ty::new_float(sarzak), lu_dog)
-                }
-                EPS => {
-                    let ty = Ty::new_float(sarzak);
-                    // 🚧 Ideally we'd cache this when we startup.
-                    let ty = lu_dog
-                        .iter_value_type()
-                        .find(|t| s_read!(t).subtype == ValueTypeEnum::Ty(ty.read().unwrap().id()))
-                        .unwrap();
-                    ValueType::new_ty(&Ty::new_float(sarzak), lu_dog)
-                }
-                SLEEP => ValueType::new_empty(lu_dog),
-                TIME => {
-                    let ty = Ty::new_float(sarzak);
-                    // 🚧 Ideally we'd cache this when we startup.
-                    let ty = lu_dog
-                        .iter_value_type()
-                        .find(|t| s_read!(t).subtype == ValueTypeEnum::Ty(ty.read().unwrap().id()))
-                        .unwrap();
-                    ValueType::new_ty(&Ty::new_float(sarzak), lu_dog)
-                }
-                _ => {
-                    e_warn!("ParserExpression type not found");
-                    ValueType::new_unknown(lu_dog)
-                }
-            }
-        } else if type_name == UUID_TYPE && method == FN_NEW {
-            ValueType::new_ty(&Ty::new_s_uuid(sarzak), lu_dog)
-        } else if type_name == COMPLEX_EX {
-            match method {
-                NORM_SQUARED => ValueType::new_ty(&Ty::new_float(sarzak), lu_dog),
-                _ => {
-                    e_warn!("ParserExpression type not found");
-                    ValueType::new_unknown(lu_dog)
-                }
-            }
-        } else {
-            debug!("ParserExpression::StaticMethodCall: looking up type {type_name}");
-            lookup_woog_struct_method_return_type(&type_name, method, context.sarzak, lu_dog)
-        };
-
+        // Process the args.
+        let mut arg_types = Vec::new();
         let mut last_arg_uuid: Option<usize> = None;
         for (position, param) in params.iter().enumerate() {
-            let (arg_expr, _ty) = inter_expression(
+            let (arg_expr, ty) = inter_expression(
                 &new_ref!(ParserExpression, param.0.to_owned()),
                 &param.1,
                 block,
                 context,
                 lu_dog,
             )?;
+            arg_types.push(ty);
+
             let arg = Argument::new(position as DwarfInteger, &arg_expr.0, &call, None, lu_dog);
             if position == 0 {
                 // Here I'm setting the pointer to the first argument.
@@ -222,6 +157,109 @@ pub fn inter(
 
             last_arg_uuid = link_argument!(last_arg_uuid, arg, lu_dog);
         }
+
+        // Get the type from the method.
+        let ty = match type_name.as_str() {
+            CHACHA => {
+                match method {
+                    ARGS => {
+                        let ty = Ty::new_s_string(sarzak);
+                        // 🚧 Ideally we'd cache this when we startup.
+                        let ty = lu_dog
+                            .iter_value_type()
+                            .find(|t| {
+                                s_read!(t).subtype == ValueTypeEnum::Ty(ty.read().unwrap().id())
+                            })
+                            .unwrap();
+                        let list = List::new(&ty, lu_dog);
+                        ValueType::new_list(&list, lu_dog)
+                    }
+                    #[cfg(feature = "async")]
+                    ASLEEP => {
+                        let inner = ValueType::new_empty(lu_dog);
+                        let future = XFuture::new(&inner, lu_dog);
+                        ValueType::new_x_future(&future, lu_dog)
+                    }
+                    ASSERT => ValueType::new_ty(&Ty::new_boolean(sarzak), lu_dog),
+                    ASSERT_EQ => ValueType::new_ty(&Ty::new_boolean(sarzak), lu_dog),
+                    EPS => ValueType::new_ty(&Ty::new_float(sarzak), lu_dog),
+                    HTTP_GET => {
+                        let inner = ValueType::new_ty(&Ty::new_s_string(sarzak), lu_dog);
+                        let future = XFuture::new(&inner, lu_dog);
+                        ValueType::new_x_future(&future, lu_dog)
+                    }
+                    SLEEP => ValueType::new_empty(lu_dog),
+                    #[cfg(feature = "async")]
+                    SPAWN => {
+                        let inner = arg_types[0].clone();
+                        let future = XFuture::new(&inner, lu_dog);
+                        ValueType::new_x_future(&future, lu_dog)
+                    }
+                    #[cfg(feature = "async")]
+                    SPAWN_NAMED => {
+                        let inner = arg_types[0].clone();
+                        let future = XFuture::new(&inner, lu_dog);
+                        ValueType::new_x_future(&future, lu_dog)
+                    }
+                    TIME => ValueType::new_ty(&Ty::new_float(sarzak), lu_dog),
+                    TYPEOF => ValueType::new_ty(&Ty::new_s_string(sarzak), lu_dog),
+                    method => {
+                        let span = s_read!(span).start as usize..s_read!(span).end as usize;
+                        return Err(vec![DwarfError::NoSuchMethod {
+                            method: method.to_owned(),
+                            file: context.file_name.to_owned(),
+                            span,
+                            location: location!(),
+                        }]);
+                        // e_warn!("ParserExpression type not found");
+                        // ValueType::new_unknown(lu_dog)
+                    }
+                }
+            }
+            COMPLEX_EX => match method {
+                NORM_SQUARED => ValueType::new_ty(&Ty::new_float(sarzak), lu_dog),
+                method => {
+                    e_warn!("ComplexEx method `{method}` not found");
+                    ValueType::new_unknown(lu_dog)
+                }
+            },
+            PLUGIN => match method {
+                NEW => {
+                    let plugin = Plugin::new(plugin_type, lu_dog);
+                    ValueType::new_plugin(&plugin, lu_dog)
+                }
+                method => {
+                    e_warn!("Plugin method `{method}` not found");
+                    ValueType::new_unknown(lu_dog)
+                }
+            },
+            TIMER => {
+                match method {
+                    #[cfg(feature = "async")]
+                    INTERVAL | ONE_SHOT => {
+                        let inner = ValueType::new_empty(lu_dog);
+                        let future = XFuture::new(&inner, lu_dog);
+                        ValueType::new_x_future(&future, lu_dog)
+                    }
+                    _ => {
+                        let span = s_read!(span).start as usize..s_read!(span).end as usize;
+                        return Err(vec![DwarfError::ObjectNameNotFound {
+                            name: type_name.to_owned(),
+                            file: context.file_name.to_owned(),
+                            span,
+                            location: location!(),
+                        }]);
+                        // e_warn!("ParserExpression type not found");
+                        // ValueType::new_unknown(lu_dog)
+                    }
+                }
+            }
+            UUID_TYPE if method == FN_NEW => ValueType::new_ty(&Ty::new_s_uuid(sarzak), lu_dog),
+            _ => {
+                debug!("ParserExpression::StaticMethodCall: looking up type {type_name}");
+                lookup_woog_struct_method_return_type(&type_name, method, context.sarzak, lu_dog)
+            }
+        };
 
         let value = XValue::new_expression(block, &ty, &call_expr, lu_dog);
         update_span_value(&span, &value, location!());
@@ -241,6 +279,10 @@ pub fn inter(
         // it's not necessary, even without type solvers. For instance, `Option::Some(42)` is
         // clearly of type `Option<int>`, but we require `Option::<int>::Some(42)`.
         // I'm not sure how to fix this exactly.
+        //
+        // Seems like I can just look at the type of the inner expression, and
+        // use that to build a concrete type.
+        //
         // Here we are interring an enum constructor.
         let type_name_no_generics = type_name.split('<').collect::<Vec<_>>()[0];
         if let Some(woog_enum) = lu_dog.exhume_enumeration_id_by_name(type_name_no_generics) {
@@ -298,13 +340,24 @@ pub fn inter(
                         // field and continue.
                         let foo = s_read!(ty);
                         if let ValueTypeEnum::Generic(_) = foo.subtype {
-                            let type_name = if !type_name.contains('<') {
-                                let pvt = PrintableValueType(&expr_ty, context, lu_dog);
-                                format!("{type_name}<{pvt}>")
-                            } else {
-                                type_name.to_owned()
-                            };
-                            let (new_enum, _) = create_generic_enum(&type_name, lu_dog);
+                            let type_name = path.iter().map(|p| {
+                                if let Type::UserType((obj, _), generics) = p {
+                                    let mut name = obj.de_sanitize().to_owned();
+                                    let generics = generics.iter().map(|g| {
+                                        g.0.to_string()
+                                    }).collect::<Vec<_>>().join(", ");
+                                    if !generics.is_empty() {
+                                        name.push('<');
+                                        name.push_str(&generics);
+                                        name.push('>');
+                                    }
+                                    name
+                                } else {
+                                    panic!("I don't think that we should ever see anything other than a user type here: {:?}", p);
+                                }
+                            }).collect::<Vec<_>>().join("");
+
+                            let (new_enum, _) = create_generic_enum(&type_name, save_path, lu_dog);
                             (new_enum, expr)
                         } else {
                             typecheck(
@@ -350,7 +403,15 @@ pub fn inter(
                 );
 
                 let expr = Expression::new_field_expression(&strawberry, lu_dog);
-                let _value = XValue::new_expression(block, &ty, &expr, lu_dog);
+                let value = XValue::new_expression(block, &ty, &expr, lu_dog);
+                Span::new(
+                    s_read!(span).end,
+                    s_read!(span).start,
+                    &context.source,
+                    None,
+                    Some(&value),
+                    lu_dog,
+                );
                 // update_span_value(&span, &value, location!());
 
                 let expr = Expression::new_struct_expression(&struct_expr, lu_dog);
@@ -364,6 +425,7 @@ pub fn inter(
                     name: type_name.to_owned(),
                     name_span: type_span.to_owned(),
                     field: method.to_owned(),
+                    file: context.file_name.to_owned(),
                     span,
                 }])
             }
@@ -371,6 +433,7 @@ pub fn inter(
             let span = s_read!(span).start as usize..s_read!(span).end as usize;
             Err(vec![DwarfError::ObjectNameNotFound {
                 name: type_name.to_owned(),
+                file: context.file_name.to_owned(),
                 span,
                 location: location!(),
             }])

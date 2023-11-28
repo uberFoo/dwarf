@@ -21,6 +21,10 @@ pub(super) type Result<T, E = ChaChaError> = std::result::Result<T, E>;
 #[derive(Debug, Snafu)]
 #[snafu(visibility(pub))]
 pub enum ChaChaError {
+    Addition {
+        left: Value,
+        right: Value,
+    },
     #[snafu(display("\n{}: assertion failed at {}.\n  --> Found `{}`, expected `{}`.\n", ERR_CLR.bold().paint("error"), POP_CLR.underline().paint(code), s_read!(found), s_read!(expected)))]
     AssertEqual {
         found: RefType<Value>,
@@ -37,10 +41,17 @@ pub enum ChaChaError {
         message: String,
         location: Location,
     },
+    Bang {
+        value: Value,
+    },
     #[snafu(display("\n{}: could not convent `{}` to `{}`", ERR_CLR.bold().paint("error"), src, dst))]
     Conversion {
         src: String,
         dst: String,
+    },
+    Division {
+        left: Value,
+        right: Value,
     },
     #[snafu(display("\n{}: evaluation error", ERR_CLR.bold().paint("error")))]
     Eval {
@@ -74,6 +85,13 @@ pub enum ChaChaError {
         name: String,
         span: Span,
     },
+    Multiplication {
+        left: Value,
+        right: Value,
+    },
+    Negation {
+        value: Value,
+    },
     #[snafu(display("\n{}: `{}` is not a function.", ERR_CLR.bold().paint("error"), POP_CLR.paint(value.to_string())))]
     NotAFunction {
         value: Value,
@@ -89,6 +107,10 @@ pub enum ChaChaError {
     },
     #[snafu(display("\n{}: `main` function not found.", ERR_CLR.bold().paint("error")))]
     NoMainFunction,
+    NoSuchField {
+        field: String,
+        ty: String,
+    },
     #[snafu(display("\n{}: no such method `{}`.", ERR_CLR.bold().paint("error"), OTH_CLR.paint(method)))]
     NoSuchMethod {
         method: String,
@@ -126,6 +148,10 @@ pub enum ChaChaError {
     Store {
         source: io::Error,
     },
+    Subtraction {
+        left: Value,
+        right: Value,
+    },
     #[snafu(display("\n{}: type mismatch -- expected `{}`, found `{}`", ERR_CLR.bold().paint("error"), OK_CLR.paint(expected.to_string()), ERR_CLR.bold().paint(found.to_string())))]
     TypeMismatch {
         expected: String,
@@ -146,9 +172,10 @@ pub enum ChaChaError {
         location: Location,
         backtrace: Backtrace,
     },
-    #[snafu(display("\n{}: vm panic: {}", ERR_CLR.bold().paint("error"), OTH_CLR.paint(message)))]
+    #[snafu(display("\n{}: vm panic: {}", ERR_CLR.bold().paint("error"), OTH_CLR.paint(cause)))]
     VmPanic {
-        message: String,
+        // cause: Box<dyn std::error::Error + Send + Sync>,
+        cause: String,
     },
     #[snafu(display("\n{}: wrong number of arguments. Expected `{}`, found `{}`.", ERR_CLR.bold().paint("error"), OK_CLR.paint(expected.to_string()), ERR_CLR.bold().paint(got.to_string())))]
     WrongNumberOfArguments {
@@ -279,7 +306,7 @@ impl fmt::Display for ChaChaErrorReporter<'_, '_, '_> {
                 location,
             } => {
                 let report = Report::build(ReportKind::Error, file_name, span.start)
-                    .with_message("not a function")
+                    .with_message(format!("{value} is not a function"))
                     .with_label(
                         Label::new((file_name, span.to_owned()))
                             .with_message("in this invocation")

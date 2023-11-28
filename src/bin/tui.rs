@@ -1,5 +1,5 @@
 cfg_if::cfg_if! {
-    if #[cfg(all(not(feature = "print-std-out"), not(any(feature = "single", feature = "single-vec", feature = "multi-nd-vec"))))] {
+    if #[cfg(all(feature = "tui", not(feature = "print-std-out"), not(any(feature = "single", feature = "single-vec", feature = "multi-nd-vec"))))] {
         fn main() -> Result<(), Box<dyn std::error::Error>> {
             dwarf::tui::start_tui()
         }

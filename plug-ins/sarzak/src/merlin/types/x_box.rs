@@ -1,7 +1,7 @@
 // {"magic":"","directive":{"Start":{"directive":"allow-editing","tag":"x_box-struct-definition-file"}}}
 // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"x_box-use-statements"}}}
-use std::cell::RefCell;
-use std::rc::Rc;
+use std::sync::Arc;
+use std::sync::RwLock;
 use tracy_client::span;
 use uuid::Uuid;
 
@@ -45,9 +45,9 @@ impl XBox {
         y: i64,
         object: &Object,
         store: &mut MerlinStore,
-    ) -> Rc<RefCell<XBox>> {
+    ) -> Arc<RwLock<XBox>> {
         let id = Uuid::new_v4();
-        let new = Rc::new(RefCell::new(XBox {
+        let new = Arc::new(RwLock::new(XBox {
             height,
             id,
             width,
@@ -64,18 +64,18 @@ impl XBox {
     pub fn r1_object<'a>(
         &'a self,
         store: &'a SarzakStore,
-    ) -> Vec<std::rc::Rc<std::cell::RefCell<Object>>> {
+    ) -> Vec<std::sync::Arc<std::sync::RwLock<Object>>> {
         span!("r1_object");
         vec![store.exhume_object(&self.object).unwrap()]
     }
     // {"magic":"","directive":{"End":{"directive":"ignore-orig"}}}
     // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"x_box-struct-impl-nav-backward-assoc-many-to-anchor"}}}
     /// Navigate to [`Anchor`] across R3(1-M)
-    pub fn r3_anchor<'a>(&'a self, store: &'a MerlinStore) -> Vec<Rc<RefCell<Anchor>>> {
+    pub fn r3_anchor<'a>(&'a self, store: &'a MerlinStore) -> Vec<Arc<RwLock<Anchor>>> {
         span!("r3_anchor");
         store
             .iter_anchor()
-            .filter(|anchor| anchor.borrow().x_box == self.id)
+            .filter(|anchor| anchor.read().unwrap().x_box == self.id)
             .collect()
     }
     // {"magic":"","directive":{"End":{"directive":"ignore-orig"}}}

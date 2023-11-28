@@ -6,19 +6,33 @@ use std::{
     thread,
 };
 
+#[cfg(feature = "async")]
+use futures_lite::future;
+
+// #[cfg(feature = "async")]
+// use dwarf::chacha::interpreter::Executor;
+
 use clap::{ArgAction, Args, Parser};
 use dap::{prelude::BasicClient, server::Server};
+
+// #[cfg(feature = "async")]
+// use smol::future;
+#[cfg(feature = "async")]
+use tracing_subscriber::{fmt, prelude::*, EnvFilter};
+
 use dwarf::{
     chacha::{
         dap::DapAdapter,
-        error::ChaChaErrorReporter,
+        error::{ChaChaError, ChaChaErrorReporter},
         interpreter::{banner2, initialize_interpreter, start_func, start_repl},
     },
     dwarf::{new_lu_dog, parse_dwarf},
+    ref_to_inner,
     sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL},
-    Context,
+    Context, Value,
 };
 use reqwest::Url;
+#[cfg(feature = "tracy")]
 use tracy_client::Client;
 
 #[cfg(not(feature = "repl"))]
@@ -108,6 +122,11 @@ struct Arguments {
     ///
     #[arg(long, action=ArgAction::SetTrue)]
     ast: Option<bool>,
+    /// Executor Thread Count
+    ///
+    /// The number of threads to use for the executor. Defaults to the number of cpus.
+    #[arg(long)]
+    threads: Option<usize>,
 }
 
 #[derive(Clone, Debug, Args)]
@@ -121,8 +140,21 @@ struct DwarfArgs {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    #[cfg(feature = "async")]
+    {
+        let format_layer = fmt::layer().with_thread_ids(true).pretty();
+        let filter_layer =
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("error"));
+
+        tracing_subscriber::registry()
+            .with(filter_layer)
+            .with(format_layer)
+            .init();
+    }
+    #[cfg(not(feature = "async"))]
     pretty_env_logger::init();
     color_backtrace::install();
+    #[cfg(feature = "tracy")]
     Client::start();
 
     let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
@@ -131,6 +163,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let bless = args.bless.is_some() && args.bless.unwrap();
     let is_uber = args.uber.is_some() && args.uber.unwrap();
     let print_ast = args.ast.is_some() && args.ast.unwrap();
+    let threads = args.threads.unwrap_or_else(num_cpus::get);
+
+    // if threads == 0 {
+    //     return Err(Box::new(std::io::Error::new(
+    //         std::io::ErrorKind::InvalidInput,
+    //         "Thread count must be a positive integer greater than zero.",
+    //     )));
+    // }
 
     // Figure out what we're dealing with, input-wise.
     let input = if let Some(ref source) = args.source {
@@ -162,7 +202,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 Some((source_code, dwarf_args, url.to_string()))
             }
         }
-        // Maybe reading from stdin?
     } else if args.stdin.is_some() && args.stdin.unwrap() {
         let mut source_code = String::new();
         io::Read::read_to_string(&mut io::stdin(), &mut source_code)?;
@@ -187,8 +226,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         fs::create_dir_all(&dwarf_home)?;
     }
 
-    if let Some((source_code, dwarf_args, name)) = input {
-        let ast = match parse_dwarf(&name, &source_code) {
+    if let Some((source_code, dwarf_args, file_name)) = input {
+        let ast = match parse_dwarf(&file_name, &source_code) {
             Ok(ast) => ast,
             Err(_) => {
                 return Ok(());
@@ -199,40 +238,104 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("{:#?}", ast);
         }
 
-        let ctx = match new_lu_dog(Some((source_code.clone(), &ast)), &dwarf_home, &sarzak) {
+        let ctx = match new_lu_dog(
+            file_name.to_owned(),
+            Some((source_code.clone(), &ast)),
+            &dwarf_home,
+            &sarzak,
+        ) {
             Ok(lu_dog) => lu_dog,
             Err(errors) => {
                 for err in errors {
                     eprintln!(
                         "{}",
-                        dwarf::dwarf::error::DwarfErrorReporter(&err, is_uber, &source_code, &name)
+                        dwarf::dwarf::error::DwarfErrorReporter(&err, is_uber, &source_code)
                     );
                 }
                 return Ok(());
             }
         };
 
-        let mut ctx = initialize_interpreter(dwarf_home, ctx, sarzak)?;
+        let mut ctx = initialize_interpreter(threads, dwarf_home, ctx, sarzak)?;
         ctx.add_args(dwarf_args);
+
+        // #[cfg(feature = "async")]
+        // let tjh = {
+        //     let mut e = ctx.executor().clone();
+        //     thread::spawn(move || {
+        //         // let _ = future::block_on(async { e.run().await });
+        //         let _ = future::block_on(async { Executor::global().run().await });
+        //     });
+        //     let mut e = ctx.executor().clone();
+        //     thread::spawn(move || {
+        //         let _ = future::block_on(async { Executor::global().run().await });
+        //         // let _ = future::block_on(async { e.run().await });
+        //     })
+        // };
 
         if args.banner.is_some() && args.banner.unwrap() {
             println!("{}", banner2());
         }
 
         if args.repl.is_some() && args.repl.unwrap() {
-            start_repl(ctx, is_uber).map_err(|e| {
-                println!("Interpreter exited with: {}", e);
-                e
-            })?;
+            start_repl(&mut ctx, is_uber)
+                .map_err(|e| {
+                    println!("Interpreter exited with: {}", e);
+                    e
+                })
+                .unwrap();
         } else {
-            match start_func("main", false, ctx) {
-                Ok((_, ctx)) => ctx,
+            match start_func("main", false, &mut ctx) {
+                // 🚧 What's a sensible thing to do with this?
+                Ok(value) => {
+                    #[cfg(feature = "async")]
+                    {
+                        unsafe {
+                            let value = std::sync::Arc::into_raw(value);
+                            let value = std::ptr::read(value);
+                            let value = ref_to_inner!(value);
+
+                            let value = future::block_on(value);
+
+                            let value = std::sync::Arc::into_raw(value);
+                            let value = std::ptr::read(value);
+                            let value = ref_to_inner!(value);
+
+                            match value {
+                                Value::Error(msg) => {
+                                    let msg = *msg;
+                                    eprintln!("Interpreter exited with:");
+                                    eprintln!(
+                                        "{}",
+                                        ChaChaErrorReporter(
+                                            &msg.into(),
+                                            is_uber,
+                                            &source_code,
+                                            &file_name
+                                        )
+                                    );
+                                }
+                                _ => println!("{}", value),
+                            }
+                        }
+                    }
+
+                    Ok::<(), ChaChaError>(())
+                }
                 Err(e) => {
                     eprintln!("Interpreter exited with:");
-                    eprintln!("{}", ChaChaErrorReporter(&e, is_uber, &source_code, &name));
-                    return Ok(());
+                    eprintln!(
+                        "{}",
+                        ChaChaErrorReporter(&e, is_uber, &source_code, &file_name)
+                    );
+                    Ok(())
                 }
-            };
+            }
+            .unwrap();
+        }
+        #[cfg(feature = "async")]
+        {
+            // shutdown_interpreter();
         }
     } else if args.dap.is_some() && args.dap.unwrap() {
         let listener = TcpListener::bind("127.0.0.1:4711").unwrap();
@@ -276,9 +379,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     } else {
         let ctx = Context::default();
-        let ctx = initialize_interpreter(dwarf_home, ctx, sarzak)?;
+        let mut ctx = initialize_interpreter(2, dwarf_home, ctx, sarzak)?;
 
-        start_repl(ctx, is_uber).map_err(|e| {
+        start_repl(&mut ctx, is_uber).map_err(|e| {
             println!("Interpreter exited with: {}", e);
             e
         })?;

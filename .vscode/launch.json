@@ -7,21 +7,73 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug unit tests in library 'chacha'",
+            "name": "Debug integration tests",
+            "cargo": {
+                "args": [
+                    "test",
+                    "harness_items_in_func",
+                    "--features=multi-nd-vec, repl, async",
+                    "--no-default-features",
+                    "--no-run",
+                    // "--test",
+                    // "harness"
+                ],
+                "filter": {
+                    "name": "harness",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "RUST_BACKTRACE": "1"
+            }
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests deux",
             "cargo": {
                 "args": [
                     "test",
                     "--no-run",
                     "--lib",
-                    "--package=chacha"
+                    // "--package=dwarf"
                 ],
-                "filter": {
-                    "name": "chacha",
-                    "kind": "lib"
-                }
+                // "filter": {
+                //     "name": "dwarf",
+                //     "kind": "lib"
+                // }
             },
             "args": [],
-            "cwd": "${workspaceFolder}"
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "RUST_BACKTRACE": "1"
+            }
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests",
+            "cargo": {
+                "args": [
+                    "test",
+                    // "--features=\"multi-vec, repl, async\"",
+                    // "--no-default-features",
+                    // "--no-run",
+                    // "--lib",
+                    // "--package=dwarf"
+                ]
+                //     "filter": {
+                //         "name": "chacha",
+                //         "kind": "lib"
+                //     }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "RUST_BACKTRACE": "1"
+            }
         },
         {
             "type": "lldb",
@@ -80,7 +132,7 @@
                     "build",
                     "--bin=dwarf",
                     "--package=dwarf",
-                    // "--features=\"parking-lot-mutex, print-std-out, repl\"",
+                    // "--features=parking-lot-mutex, print-std-out, repl",
                     // "--no-default-features"
                 ],
                 "filter": {
@@ -89,11 +141,14 @@
                 }
             },
             "args": [
-                "tests/harness/generics/structure.tao"
+                // "tests/harness/chacha/sleep.tao"
+                // "tests/harness/chacha/async/one_shot.tao"
+                "tests/harness/chacha/async/handler.tao"
+                // "./async.ore",
             ],
             "cwd": "${workspaceFolder}",
             "env": {
-                "RUST_LOG": "extruder=debug,chacha=debug"
+                "RUST_LOG": "async=debug"
             },
             "preRunCommands": [
                 "script lldb.debugger.HandleCommand('settings set target.source-map /rustc/{} \"{}/lib/rustlib/src/rust\"'.format(os.popen('rustc --version --verbose').read().split('commit-hash: ')[1].split('\\n')[0].strip(), os.popen('rustc --print sysroot').readline().strip()))"

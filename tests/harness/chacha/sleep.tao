@@ -1,10 +1,13 @@
 fn main() {
     let duration = chacha::time(|| {
-        chacha::sleep(1000);
+        print("sleeping\n");
+        chacha::sleep(420);
+        print("awake\n");
     });
-    let delta = duration - 1.0;
+
+    let delta = duration - 0.420;
 
     print("delta: {0}\n".format(delta));
 
-    chacha::assert(delta < 0.01);
+    chacha::assert((delta < 0.007) && (delta > 0.0));
 }

@@ -1,6 +1,7 @@
 use std::fmt;
 
 use ansi_term::Colour;
+use snafu::{location, Location};
 
 use crate::{
     chacha::{error::Result, memory::Memory, value::UserStruct},
@@ -109,7 +110,6 @@ impl fmt::Display for Instruction {
                 opcode_style.paint("pop_local"),
                 operand_style.paint(index.to_string())
             ),
-            // Instruction::Push => write!(f, "{}", opcode_style.paint("push")),
             Instruction::Push(value) => write!(
                 f,
                 "{} {}",
@@ -149,39 +149,11 @@ impl Thonk {
 impl fmt::Display for Thonk {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         for (i, instr) in self.instructions.iter().enumerate() {
-            writeln!(f, "{:08x}:\t {}", i, instr)?;
+            writeln!(f, "{i:08x}:\t {instr}")?;
         }
         Ok(())
     }
 }
-
-// #[derive(Debug)]
-// pub(crate) struct CallFrame {
-//     ip: usize,
-//     fp: usize,
-//     thonk: Thonk,
-// }
-
-// impl CallFrame {
-//     pub(crate) fn new(ip: usize, fp: usize, thonk: Thonk) -> Self {
-//         CallFrame { ip, fp, thonk }
-//     }
-
-//     fn load_instruction(&mut self) -> Option<&Instruction> {
-//         let instr = self.thonk.get_instruction(self.ip);
-//         if instr.is_some() {
-//             self.ip += 1;
-//         }
-
-//         instr
-//     }
-// }
-
-// impl fmt::Display for CallFrame {
-//     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-//         write!(f, "ip: {}, fp: {}", self.ip, self.fp)
-//     }
-// }
 
 #[derive(Debug)]
 pub(crate) struct CallFrame<'a> {
@@ -211,14 +183,12 @@ impl<'a> fmt::Display for CallFrame<'a> {
     }
 }
 
-#[derive(Debug)]
-// pub struct VM<'b> {
+#[derive(Clone, Debug)]
 pub struct VM<'b> {
     stack: Vec<RefType<Value>>,
     memory: &'b Memory,
 }
 
-// impl<'b> VM<'b> {
 impl<'b> VM<'b> {
     pub(crate) fn new(memory: &'b Memory) -> Self {
         VM {
@@ -270,9 +240,9 @@ impl<'b> VM<'b> {
                             );
                         }
                         let c = s_read!(a).clone() + s_read!(b).clone();
-                        if let Value::Error(e) = c {
-                            return Err(ChaChaError::VmPanic { message: e });
-                        }
+                        // if let Value::Error(e) = &c {
+                        //     return Err(ChaChaError::VmPanic { cause: Box::new(e) });
+                        // }
                         self.stack.push(new_ref!(Value, c));
 
                         0
@@ -289,7 +259,7 @@ impl<'b> VM<'b> {
                                 Err(e) => {
                                     return Err::<RefType<Value>, ChaChaError>(
                                         ChaChaError::VmPanic {
-                                            message: format!("{}: {e}", s_read!(callee)),
+                                            cause: e.to_string(),
                                         },
                                     );
                                 }
@@ -308,7 +278,7 @@ impl<'b> VM<'b> {
                             Ok(result) => result,
                             Err(e) => {
                                 return Err::<RefType<Value>, ChaChaError>(ChaChaError::VmPanic {
-                                    message: format!("{callee}: {e}"),
+                                    cause: e.to_string(),
                                 });
                             }
                         };
@@ -378,11 +348,11 @@ impl<'b> VM<'b> {
                                     None => {
                                         return Err::<RefType<Value>, ChaChaError>(
                                             ChaChaError::VmPanic {
-                                                message: format!(
-                                                    "Unknown field {} for {}.",
-                                                    s_read!(field),
-                                                    s_read!(ty_)
-                                                ),
+                                                cause: ChaChaError::NoSuchField {
+                                                    field: s_read!(field).to_string(),
+                                                    ty: s_read!(ty_).to_string(),
+                                                }
+                                                .to_string(),
                                             },
                                         );
                                     }
@@ -390,7 +360,11 @@ impl<'b> VM<'b> {
                             }
                             value => {
                                 return Err::<RefType<Value>, ChaChaError>(ChaChaError::VmPanic {
-                                    message: format!("Unexpected value type: {value}."),
+                                    cause: ChaChaError::BadnessHappened {
+                                        message: format!("Unexpected value type: {value}."),
+                                        location: location!(),
+                                    }
+                                    .to_string(),
                                 })
                             }
                         }
@@ -451,11 +425,11 @@ impl<'b> VM<'b> {
                                     None => {
                                         return Err::<RefType<Value>, ChaChaError>(
                                             ChaChaError::VmPanic {
-                                                message: format!(
-                                                    "Unknown field {} for {}.",
-                                                    s_read!(field),
-                                                    s_read!(ty_)
-                                                ),
+                                                cause: ChaChaError::NoSuchField {
+                                                    field: s_read!(field).to_string(),
+                                                    ty: s_read!(ty_).to_string(),
+                                                }
+                                                .to_string(),
                                             },
                                         )
                                     }
@@ -463,7 +437,11 @@ impl<'b> VM<'b> {
                             }
                             value => {
                                 return Err::<RefType<Value>, ChaChaError>(ChaChaError::VmPanic {
-                                    message: format!("Unexpected value type: {value}."),
+                                    cause: ChaChaError::BadnessHappened {
+                                        message: format!("Unexpected value type: {value}."),
+                                        location: location!(),
+                                    }
+                                    .to_string(),
                                 })
                             }
                         }
@@ -474,8 +452,8 @@ impl<'b> VM<'b> {
                         let condition = self.stack.pop().unwrap();
                         let condition: bool = (&*s_read!(condition))
                             .try_into()
-                            .map_err(|e| ChaChaError::VmPanic {
-                                message: format!("{}", e),
+                            .map_err(|e: ChaChaError| ChaChaError::VmPanic {
+                                cause: e.to_string(),
                             })
                             .unwrap();
 
@@ -512,9 +490,9 @@ impl<'b> VM<'b> {
                             );
                         }
                         let c = s_read!(a).clone() * s_read!(b).clone();
-                        if let Value::Error(e) = c {
-                            return Err(ChaChaError::VmPanic { message: e });
-                        }
+                        // if let Value::Error(e) = &c {
+                        //     return Err(ChaChaError::VmPanic { cause: Box::new(e) });
+                        // }
                         self.stack.push(new_ref!(Value, c));
 
                         0
@@ -569,9 +547,9 @@ impl<'b> VM<'b> {
                         let b = self.stack.pop().unwrap();
                         let a = self.stack.pop().unwrap();
                         let c = s_read!(a).clone() - s_read!(b).clone();
-                        if let Value::Error(e) = c {
-                            return Err(ChaChaError::VmPanic { message: e });
-                        }
+                        // if let Value::Error(e) = &c {
+                        //     return Err(ChaChaError::VmPanic { cause: Box::new(e) });
+                        // }
 
                         self.stack.push(new_ref!(Value, c));
 
@@ -585,7 +563,11 @@ impl<'b> VM<'b> {
                 }
             } else {
                 return Err(ChaChaError::VmPanic {
-                    message: "ip out of bounds".to_string(),
+                    cause: ChaChaError::BadnessHappened {
+                        message: "ip out of bounds".to_string(),
+                        location: location!(),
+                    }
+                    .to_string(),
                 });
             };
 
@@ -597,6 +579,7 @@ impl<'b> VM<'b> {
 #[cfg(test)]
 mod tests {
     use std::env;
+    #[cfg(feature = "tracy")]
     use tracy_client::Client;
 
     use crate::{
@@ -912,6 +895,7 @@ mod tests {
         };
         use sarzak::sarzak::{ObjectStore as SarzakStore, Ty, MODEL as SARZAK_MODEL};
 
+        #[cfg(feature = "tracy")]
         Client::start();
 
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
@@ -942,8 +926,8 @@ mod tests {
             })
             .into();
 
-        let ctx = initialize_interpreter(dwarf_home, ctx, sarzak).unwrap();
-        let ty_name = PrintableValueType(&struct_ty, &ctx);
+        let ctx = initialize_interpreter(2, dwarf_home, ctx, sarzak).unwrap();
+        let ty_name = PrintableValueType(false, struct_ty.clone(), ctx.models());
         let mut foo_inst = UserStruct::new(ty_name.to_string(), &struct_ty);
         foo_inst.define_field("bar", new_ref!(Value, 42.into()));
         foo_inst.define_field("baz", new_ref!(Value, std::f64::consts::PI.into()));

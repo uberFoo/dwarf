@@ -46,14 +46,14 @@ Of course you'll need to have [rust installed ](https://rustup.rs).
 ```bash
 git clone https://github.com/uberFoo/dwarf.git
 cd dwarf
-cargo install --path . --bin dwarf`
+cargo install --path . --bin dwarf
 ```
 
 
 Once you have a binary, give it a whirl:
 
 ```bash
-dwarf https://raw.githubusercontent.com/uberFoo/dwarf/develop/mandelbrot.tao -- 50
+dwarf https://raw.githubusercontent.com/uberFoo/dwarf/develop/mandelbrot.ore -- 50
 ```
 
 ## Beautiful Error Messages!

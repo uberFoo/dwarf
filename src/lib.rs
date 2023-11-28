@@ -12,6 +12,7 @@ pub mod dwarf;
 pub mod plug_in;
 
 #[cfg(all(
+    feature = "tui",
     not(feature = "print-std-out"),
     not(any(feature = "single", feature = "single-vec", feature = "multi-nd-vec"))
 ))]
@@ -20,30 +21,45 @@ pub mod tui;
 // pub mod lu_dog_proxy;
 
 pub use ::sarzak::{lu_dog, sarzak};
-pub(crate) use chacha::{error::ChaChaError, interpreter, value::Value};
+pub use chacha::value::Value;
+pub(crate) use chacha::{error::ChaChaError, interpreter};
 
 // These should eventually come from the domain.
 pub type DwarfInteger = i64;
 pub type DwarfFloat = f64;
 
-const ADD: &str = "add";
-const ARGS: &str = "args";
-const ASSERT: &str = "assert";
-const ASSERT_EQ: &str = "assert_eq";
-const CHACHA: &str = "chacha";
-const COMPLEX_EX: &str = "ComplexEx";
-const EPS: &str = "eps";
-const EVAL: &str = "eval";
-const FN_NEW: &str = "new";
-const LEN: &str = "len";
-const FORMAT: &str = "format";
-const NORM_SQUARED: &str = "norm_squared";
-const PARSE: &str = "parse";
-const SLEEP: &str = "sleep";
-const SQUARE: &str = "square";
-const TIME: &str = "time";
-const TYPEOF: &str = "typeof";
-const UUID_TYPE: &str = "Uuid";
+mod keywords {
+    pub(crate) const ADD: &str = "add";
+    pub(crate) const ARGS: &str = "args";
+    pub(crate) const ASLEEP: &str = "asleep";
+    pub(crate) const ASSERT: &str = "assert";
+    pub(crate) const ASSERT_EQ: &str = "assert_eq";
+    pub(crate) const CHACHA: &str = "chacha";
+    pub(crate) const COMPLEX_EX: &str = "ComplexEx";
+    pub(crate) const EPS: &str = "eps";
+    pub(crate) const EVAL: &str = "eval";
+    pub(crate) const FN_NEW: &str = "new";
+    pub(crate) const HTTP_GET: &str = "http_get";
+    pub(crate) const INTERVAL: &str = "interval";
+    pub(crate) const LEN: &str = "len";
+    pub(crate) const FORMAT: &str = "format";
+    pub(crate) const MAP: &str = "map";
+    pub(crate) const NEW: &str = "new";
+    pub(crate) const NORM_SQUARED: &str = "norm_squared";
+    pub(crate) const ONE_SHOT: &str = "one_shot";
+    pub(crate) const PARSE: &str = "parse";
+    pub(crate) const PLUGIN: &str = "Plugin";
+    pub(crate) const SLEEP: &str = "sleep";
+    pub(crate) const SPAWN: &str = "spawn";
+    pub(crate) const SPAWN_NAMED: &str = "spawn_named";
+    pub(crate) const SUM: &str = "sum";
+    pub(crate) const SQUARE: &str = "square";
+    pub(crate) const TIME: &str = "time";
+    pub(crate) const TIMER: &str = "timer";
+    pub(crate) const TYPEOF: &str = "typeof";
+    // 🚧 We have a token already...
+    pub(crate) const UUID_TYPE: &str = "Uuid";
+}
 
 use lu_dog::{ObjectStore as LuDogStore, ValueType};
 
@@ -57,7 +73,7 @@ cfg_if::cfg_if! {
             }
         }
 
-        type RefType<T> = std::rc::Rc<std::cell::RefCell<T>>;
+        pub type RefType<T> = std::rc::Rc<std::cell::RefCell<T>>;
 
         impl<T> NewRef<T> for RefType<T> {
             fn new_ref(value: T) -> RefType<T> {
@@ -80,6 +96,51 @@ cfg_if::cfg_if! {
             };
         }
 
+        #[macro_export]
+        macro_rules! ref_to_inner {
+            ($arg:expr) => {
+                $arg.into_inner().unwrap()
+            };
+        }
+    } else if #[cfg(feature = "single-vec-tracy")] {
+        type SarzakStorePtr = usize;
+        type RcType<T> = std::rc::Rc<T>;
+        impl<T> NewRcType<T> for RcType<T> {
+            fn new_rc_type(value: T) -> RcType<T> {
+                std::rc::Rc::new(value)
+            }
+        }
+
+        pub type RefType<T> = std::rc::Rc<std::cell::RefCell<T>>;
+
+        impl<T> NewRef<T> for RefType<T> {
+            fn new_ref(value: T) -> RefType<T> {
+                std::rc::Rc::new(std::cell::RefCell::new(value))
+            }
+        }
+
+        // Macros to abstract the underlying read/write operations.
+        #[macro_export]
+        macro_rules! ref_read {
+            ($arg:expr) => {
+                $arg.borrow()
+            };
+        }
+
+        #[macro_export]
+        macro_rules! ref_write {
+            ($arg:expr) => {
+                $arg.borrow_mut()
+            };
+        }
+
+        #[macro_export]
+        macro_rules! ref_to_inner {
+            ($arg:expr) => {
+                $arg.into_inner().unwrap()
+            };
+        }
+
    } else if #[cfg(feature = "multi-vec")] {
         type SarzakStorePtr = usize;
         type RcType<T> = std::sync::Arc<T>;
@@ -89,7 +150,7 @@ cfg_if::cfg_if! {
             }
         }
 
-        type RefType<T> = std::sync::Arc<std::sync::RwLock<T>>;
+        pub type RefType<T> = std::sync::Arc<std::sync::RwLock<T>>;
         impl<T> NewRef<T> for RefType<T> {
             fn new_ref(value: T) -> RefType<T> {
                 std::sync::Arc::new(std::sync::RwLock::new(value))
@@ -110,7 +171,15 @@ cfg_if::cfg_if! {
                 $arg.write().unwrap()
             };
         }
-   } else if #[cfg(feature = "multi-nd-vec")] {
+
+        #[macro_export]
+        macro_rules! ref_to_inner {
+            ($arg:expr) => {
+                $arg.into_inner().unwrap()
+            };
+        }
+
+    } else if #[cfg(feature = "multi-nd-vec")] {
         type SarzakStorePtr = usize;
         type RcType<T> = std::sync::Arc<T>;
         impl<T> NewRcType<T> for RcType<T> {
@@ -119,7 +188,7 @@ cfg_if::cfg_if! {
             }
         }
 
-        type RefType<T> = std::sync::Arc<no_deadlocks::RwLock<T>>;
+        pub type RefType<T> = std::sync::Arc<no_deadlocks::RwLock<T>>;
         impl<T> NewRef<T> for RefType<T> {
             fn new_ref(value: T) -> RefType<T> {
                 std::sync::Arc::new(no_deadlocks::RwLock::new(value))
@@ -140,18 +209,24 @@ cfg_if::cfg_if! {
                 $arg.write().unwrap()
             };
         }
-   }
+
+        #[macro_export]
+        macro_rules! ref_to_inner {
+            ($arg:expr) => {
+                $arg.into_inner()
+            };
+        }
+    }
 }
 
-// This is ugly, but it's the only way I could find to get the macro to work.
 pub use ref_read as s_read;
-pub(crate) use ref_write as s_write;
+pub use ref_write as s_write;
 
 trait NewRcType<T> {
     fn new_rc_type(value: T) -> RcType<T>;
 }
 
-trait NewRef<T> {
+pub trait NewRef<T> {
     fn new_ref(value: T) -> RefType<T>;
 }
 
@@ -164,13 +239,13 @@ macro_rules! new_rc {
 #[allow(unused_imports)]
 pub(crate) use new_rc;
 
+#[macro_export]
 macro_rules! new_ref {
     ($type:ty, $value:expr) => {
         // std::rc::Rc::new(std::cell::RefCell::new($value))
         <RefType<$type> as NewRef<$type>>::new_ref($value)
     };
 }
-pub(crate) use new_ref;
 
 macro_rules! function {
     () => {{
@@ -271,6 +346,8 @@ pub enum Dirty {
 
 #[derive(Clone, Debug)]
 pub struct Context {
+    /// The path to the source.
+    pub source: String,
     /// This is the compiled source code.
     pub lu_dog: RefType<LuDogStore>,
     /// These are the plugins that represent imported domains.
@@ -294,9 +371,56 @@ impl Context {
 impl Default for Context {
     fn default() -> Self {
         Self {
+            source: "unknown".into(),
             lu_dog: new_ref!(LuDogStore, LuDogStore::new()),
             models: HashMap::default(),
             dirty: Vec::default(),
         }
+    }
+}
+
+pub type ValueResult = Result<RefType<Value>, ChaChaError>;
+
+#[cfg(feature = "async")]
+#[derive(Debug, Clone, Copy)]
+pub struct Duration(DwarfInteger);
+
+#[cfg(feature = "async")]
+impl Duration {
+    pub fn new(dur: DwarfInteger) -> Self {
+        Self(dur)
+    }
+}
+
+#[cfg(feature = "async")]
+impl std::cmp::Ord for Duration {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.0.cmp(&other.0).reverse()
+    }
+}
+
+#[cfg(feature = "async")]
+impl std::cmp::PartialOrd for Duration {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.0.cmp(&other.0).reverse())
+    }
+}
+
+#[cfg(feature = "async")]
+impl std::cmp::PartialEq for Duration {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
+
+#[cfg(feature = "async")]
+impl std::cmp::Eq for Duration {}
+
+#[cfg(feature = "async")]
+impl std::fmt::Display for Duration {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let secs = self.0 / 1_000_000_000;
+        let nanos = self.0 % 1_000_000_000;
+        write!(f, "{}.{:09}", secs, nanos)
     }
 }

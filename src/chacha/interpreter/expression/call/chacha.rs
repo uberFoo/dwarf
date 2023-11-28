@@ -1,5 +1,11 @@
 use std::collections::VecDeque;
 
+#[cfg(feature = "async")]
+use async_compat::Compat;
+
+#[cfg(feature = "async")]
+use tracing::{debug_span, Instrument};
+
 use ansi_term::Colour;
 use snafu::prelude::*;
 
@@ -47,8 +53,9 @@ pub(crate) fn eval_dwarf(
     }
 
     let sarzak = (*s_read!(context.sarzak_heel())).clone();
-    let mut ctx =
-        initialize_interpreter(context.get_home().clone(), ctx.clone(), sarzak).map_err(|e| {
+
+    let mut ctx = initialize_interpreter(2, context.get_home().clone(), ctx.clone(), sarzak)
+        .map_err(|e| {
             chacha_print(
                 crate::chacha::error::ChaChaErrorReporter(&e, false, &ctx.source(), name)
                     .to_string(),
@@ -63,7 +70,7 @@ pub(crate) fn eval_dwarf(
 
     ctx.add_args(args);
 
-    let (result, _) = start_func(&func, false, ctx.clone()).map_err(|e| {
+    let result = start_func(&func, false, &mut ctx.clone()).map_err(|e| {
         chacha_print(
             crate::chacha::error::ChaChaErrorReporter(&e, false, &ctx.source(), name).to_string(),
             context,
@@ -75,7 +82,55 @@ pub(crate) fn eval_dwarf(
         }
     })?;
 
-    Ok(new_ref!(Value, result))
+    Ok(result)
+}
+
+/// This is a hack to get an async http get working in dwarf. It really
+/// belongs in a plug-in.
+#[cfg(feature = "async")]
+pub(crate) fn http_get(
+    mut arg_values: VecDeque<Spanned<RefType<Value>>>,
+    expression: &RefType<Expression>,
+    context: &mut Context,
+) -> Result<RefType<Value>> {
+    debug!("evaluating http_get");
+
+    ensure!(arg_values.len() == 1, {
+        let value = &s_read!(expression).r11_x_value(&s_read!(context.lu_dog_heel()))[0];
+        let span = &s_read!(value).r63_span(&s_read!(context.lu_dog_heel()))[0];
+        let read = s_read!(span);
+        let span = read.start as usize..read.end as usize;
+
+        WrongNumberOfArgumentsSnafu {
+            expected: 1usize,
+            got: arg_values.len(),
+            defn_span: 0..0,
+            invocation_span: span,
+        }
+    });
+
+    let url = arg_values.pop_front().unwrap().0;
+    let task_name = format!("http_get({})", TryInto::<String>::try_into(&*s_read!(url))?);
+    let span = debug_span!("http_get", url = %task_name, target = "async");
+    let future = Compat::new(async move {
+        let url = TryInto::<String>::try_into(&*s_read!(url))?;
+        let body = reqwest::get(url).await.unwrap().text().await.unwrap();
+
+        Ok(new_ref!(Value, Value::String(body)))
+    })
+    .instrument(span);
+    let task = context.worker().unwrap().create_task(future).unwrap();
+
+    let value = new_ref!(
+        Value,
+        Value::Future {
+            name: task_name,
+            task: Some(task),
+            executor: context.executor().clone()
+        }
+    );
+
+    Ok(value)
 }
 
 /// Parse a string into a LuDogStore
@@ -109,7 +164,7 @@ pub(crate) fn parse_dwarf(
     let ast = crate::dwarf::parse_dwarf(name, &source_code).map_err(|e| {
         eprintln!(
             "{}",
-            crate::dwarf::error::DwarfErrorReporter(&e, false, &source_code, name)
+            crate::dwarf::error::DwarfErrorReporter(&e, false, &source_code)
         );
 
         ChaChaError::Parse {
@@ -119,6 +174,7 @@ pub(crate) fn parse_dwarf(
     })?;
 
     let ctx = new_lu_dog(
+        name.to_owned(),
         Some((source_code.clone(), &ast)),
         context.get_home(),
         &s_read!(context.sarzak_heel()),
@@ -127,7 +183,7 @@ pub(crate) fn parse_dwarf(
         for err in errors {
             eprintln!(
                 "{}",
-                crate::dwarf::error::DwarfErrorReporter(&err, false, &source_code, name)
+                crate::dwarf::error::DwarfErrorReporter(&err, false, &source_code)
             );
         }
 

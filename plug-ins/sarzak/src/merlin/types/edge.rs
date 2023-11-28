@@ -7,8 +7,8 @@ use crate::merlin::types::left::LEFT;
 use crate::merlin::types::right::RIGHT;
 use crate::merlin::types::top::TOP;
 use serde::{Deserialize, Serialize};
-use std::cell::RefCell;
-use std::rc::Rc;
+use std::sync::Arc;
+use std::sync::RwLock;
 use tracy_client::span;
 use uuid::Uuid;
 // {"magic":"","directive":{"End":{"directive":"ignore-orig"}}}
@@ -26,25 +26,25 @@ pub enum Edge {
 impl Edge {
     // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"edge-new-impl"}}}
     /// Create a new instance of Edge::Bottom
-    pub fn new_bottom(store: &MerlinStore) -> Rc<RefCell<Self>> {
+    pub fn new_bottom(store: &MerlinStore) -> Arc<RwLock<Self>> {
         // This is already in the store.
         store.exhume_edge(&BOTTOM).unwrap()
     }
 
     /// Create a new instance of Edge::Left
-    pub fn new_left(store: &MerlinStore) -> Rc<RefCell<Self>> {
+    pub fn new_left(store: &MerlinStore) -> Arc<RwLock<Self>> {
         // This is already in the store.
         store.exhume_edge(&LEFT).unwrap()
     }
 
     /// Create a new instance of Edge::Right
-    pub fn new_right(store: &MerlinStore) -> Rc<RefCell<Self>> {
+    pub fn new_right(store: &MerlinStore) -> Arc<RwLock<Self>> {
         // This is already in the store.
         store.exhume_edge(&RIGHT).unwrap()
     }
 
     /// Create a new instance of Edge::Top
-    pub fn new_top(store: &MerlinStore) -> Rc<RefCell<Self>> {
+    pub fn new_top(store: &MerlinStore) -> Arc<RwLock<Self>> {
         // This is already in the store.
         store.exhume_edge(&TOP).unwrap()
     }
@@ -62,11 +62,11 @@ impl Edge {
     // {"magic":"","directive":{"End":{"directive":"ignore-orig"}}}
     // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"edge-struct-impl-nav-backward-1_M-to-anchor"}}}
     /// Navigate to [`Anchor`] across R9(1-M)
-    pub fn r9_anchor<'a>(&'a self, store: &'a MerlinStore) -> Vec<Rc<RefCell<Anchor>>> {
+    pub fn r9_anchor<'a>(&'a self, store: &'a MerlinStore) -> Vec<Arc<RwLock<Anchor>>> {
         span!("r9_anchor");
         store
             .iter_anchor()
-            .filter(|anchor| anchor.borrow().edge == self.id())
+            .filter(|anchor| anchor.read().unwrap().edge == self.id())
             .collect()
     }
     // {"magic":"","directive":{"End":{"directive":"ignore-orig"}}}

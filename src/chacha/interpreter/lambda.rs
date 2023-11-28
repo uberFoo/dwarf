@@ -2,6 +2,7 @@ use std::time::Instant;
 
 use ansi_term::Colour;
 use snafu::{location, prelude::*, Location};
+#[cfg(feature = "tracy")]
 use tracy_client::span;
 
 use crate::{
@@ -12,13 +13,13 @@ use crate::{
     interpreter::{
         debug, eval_expression, eval_statement, function, trace, typecheck, ChaChaError, Context,
     },
-    lu_dog::{Argument, Lambda, Span},
+    lu_dog::{Argument, BodyEnum, Lambda, Span},
     new_ref, s_read, NewRef, RefType, Value,
 };
 
 pub fn eval_lambda_expression(
     ƛ: RefType<Lambda>,
-    args: &[RefType<Argument>],
+    args: &[RefType<Value>],
     arg_check: bool,
     span: &RefType<Span>,
     context: &mut Context,
@@ -32,12 +33,19 @@ pub fn eval_lambda_expression(
     debug!("ƛ {ƛ:?}");
     trace!("stack {:?}", context.memory());
 
+    #[cfg(feature = "tracy")]
     span!("eval_lambda_expression");
 
     let ƛ = s_read!(ƛ);
     // We know that we have a block.
-    let block = &ƛ.r73_block(&s_read!(lu_dog))[0];
-    // let stmts = s_read!(block).r18_statement(&s_read!(lu_dog));
+    // 🚧 Do we though? I saw some constructors without a body.
+    let body = &ƛ.r73_body(&s_read!(lu_dog))[0];
+    // A lambda can't have an external block
+    let block = match s_read!(body).subtype {
+        BodyEnum::Block(ref block) => s_read!(lu_dog).exhume_block(block).unwrap(),
+        _ => unreachable!(),
+    };
+
     let has_stmts = !s_read!(block).r18_statement(&s_read!(lu_dog)).is_empty();
 
     if has_stmts {
@@ -51,6 +59,8 @@ pub fn eval_lambda_expression(
         // also need to typecheck the arguments against the function parameters.
         // We need to look the params up anyway to set the local variables.
         let params = ƛ.r76_lambda_parameter(&s_read!(lu_dog));
+
+        // dbg!(params.len(), args.len());
 
         // 🚧 I'd really like to see the source code printed out, with the function
         // call highlighted.
@@ -90,7 +100,7 @@ pub fn eval_lambda_expression(
                 let var = s_read!(s_read!(next).r12_variable(&s_read!(lu_dog))[0]).clone();
                 let value = s_read!(var.r11_x_value(&s_read!(lu_dog))[0]).clone();
                 let ty = value.r24_value_type(&s_read!(lu_dog))[0].clone();
-                params.push((var.name.clone(), ty.clone()));
+                params.push((var.name.clone(), ty.clone(), value));
 
                 let next_id = { s_read!(next).next };
                 if let Some(ref id) = next_id {
@@ -105,53 +115,28 @@ pub fn eval_lambda_expression(
             Vec::new()
         };
 
-        let arg_values = if !args.is_empty() {
-            let mut arg_values = Vec::with_capacity(args.len());
-            let mut next = args
-                .iter()
-                .find(|a| s_read!(a).r27c_argument(&s_read!(lu_dog)).is_empty())
-                .unwrap()
-                .clone();
-
-            loop {
-                let expr = s_read!(next).r37_expression(&s_read!(lu_dog))[0].clone();
-                let value = eval_expression(expr.clone(), context, vm)?;
-                arg_values.push((expr, value));
-
-                let next_id = { s_read!(next).next };
-                if let Some(ref id) = next_id {
-                    next = s_read!(lu_dog).exhume_argument(id).unwrap();
-                } else {
-                    break;
-                }
-            }
-
-            arg_values
-        } else {
-            Vec::new()
-        };
-
-        let zipped = params.into_iter().zip(arg_values);
-        for ((name, param_ty), (expr, value)) in zipped {
+        let zipped = params.into_iter().zip(args);
+        for ((name, param_ty, x_value), value) in zipped {
             debug!("type check name {name:?}");
             debug!("type check param_ty {param_ty:?}");
             debug!("type check value {value:?}");
 
             if arg_check {
-                let x_value = &s_read!(expr).r11_x_value(&s_read!(lu_dog))[0];
-                let span = &s_read!(x_value).r63_span(&s_read!(lu_dog))[0];
+                let span = &x_value.r63_span(&s_read!(lu_dog))[0];
 
-                let arg_ty = s_read!(value).get_type(&s_read!(sarzak), &s_read!(lu_dog));
+                let arg_ty = s_read!(value).get_value_type(&s_read!(sarzak), &s_read!(lu_dog));
                 typecheck(&param_ty, &arg_ty, span, location!(), context)?;
             }
 
-            context.memory().insert(name.clone(), value);
+            context.memory().insert(name.clone(), value.clone());
         }
 
         let mut value = new_ref!(Value, Value::Empty);
         if let Some(ref id) = s_read!(block).statement {
             let mut next = s_read!(lu_dog).exhume_statement(id).unwrap();
 
+            // 🚧 this needs to be sucked out and dealt with by a single block
+            // execution function.
             loop {
                 let result = eval_statement(next.clone(), context, vm).map_err(|e| {
                     // This is cool, if it does what I think it does. We basically

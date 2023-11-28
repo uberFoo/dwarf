@@ -1,0 +1,45 @@
+async fn main() -> Future<int> {
+    let time = chacha::time(|| {
+        // This is here to keep vscode from removing the braces.
+        test().await
+    });
+
+    print("total time: {0}\n".format(time));
+
+    chacha::assert(time > 1.0);
+    let delta = time - 1.0;
+    chacha::assert(delta < 0.01);
+
+    not_async()
+}
+
+fn not_async() -> int {
+    42
+}
+
+async fn test() -> Future<()> {
+    let a = chacha::spawn(|| {
+        let time = chacha::time(|| {
+            chacha::asleep(500).await;
+        });
+
+        print("a time: {0}\n".format(time));
+
+        let delta = time - 0.5;
+        chacha::assert(delta < 0.002);
+    });
+
+    let b = chacha::spawn(|| -> () {
+        let time = chacha::time(|| {
+            chacha::asleep(1000).await;
+        });
+
+        print("b time: {0}\n".format(time));
+
+        let delta = time - 1.0;
+        chacha::assert(delta < 0.002);
+    });
+
+    a.await;
+    b.await;
+}

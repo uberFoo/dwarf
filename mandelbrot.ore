@@ -63,18 +63,32 @@ fn pixel_to_point(
     }
 }
 
+// fn escape_time(c: Complex, limit: int) -> Option<int> {
 fn escape_time(c: Complex, limit: int) -> int {
+    // debugger;
     let z = Complex::zero();
-    for i in 0..limit {
+    for i in 1..limit {
+        // z.square().add(c);
         ComplexEx::square(z);
         ComplexEx::add(z, c);
+        // z = z.square();
+        // z = z.add(c);
+        // z.square_2();
+        // z.add_2(c);
         // Having the RHS of this statement on the lhs of the expression below
         // does not work.
         let foo = ComplexEx::norm_squared(z);
         if foo > 4.0 {
+            // if ComplexEx::norm_squared(z) > 4.0 {
+            // if z.norm_squared() > 4.0 {
+            // debugger;
             return i;
+            // return Option::<int>::Some(i);
         }
     }
+    // Option::<int>::None
+    // None
+    // limit
     0
 }
 
@@ -147,7 +161,14 @@ fn do_column(
 ) {
     for column in 0..width {
         let point = pixel_to_point(width, height, column, row, upper_left, lower_right);
+        // let time: Option<int> = escape_time(point, time);
         let time = escape_time(point, time);
+
+        // match time {
+        //     Option::<int>::None => print("*"),
+        //     Option::<int>::Some(time) => print(" "),
+        // };
+
         if time > 0 {
             print(" ");
         } else {

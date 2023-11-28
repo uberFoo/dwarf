@@ -1,7 +1,7 @@
 // {"magic":"","directive":{"Start":{"directive":"allow-editing","tag":"subtype-struct-definition-file"}}}
 // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"subtype-use-statements"}}}
-use std::cell::RefCell;
-use std::rc::Rc;
+use std::sync::Arc;
+use std::sync::RwLock;
 use tracy_client::span;
 use uuid::Uuid;
 
@@ -31,15 +31,15 @@ impl Subtype {
     // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"subtype-struct-impl-new"}}}
     /// Inter a new 'Subtype' in the store, and return it's `id`.
     pub fn new(
-        isa: &Rc<RefCell<Isa>>,
-        obj_id: &Rc<RefCell<Object>>,
+        isa: &Arc<RwLock<Isa>>,
+        obj_id: &Arc<RwLock<Object>>,
         store: &mut SarzakStore,
-    ) -> Rc<RefCell<Subtype>> {
+    ) -> Arc<RwLock<Subtype>> {
         let id = Uuid::new_v4();
-        let new = Rc::new(RefCell::new(Subtype {
+        let new = Arc::new(RwLock::new(Subtype {
             id,
-            isa: isa.borrow().id,
-            obj_id: obj_id.borrow().id,
+            isa: isa.read().unwrap().id,
+            obj_id: obj_id.read().unwrap().id,
         }));
         store.inter_subtype(new.clone());
         new
@@ -47,14 +47,14 @@ impl Subtype {
     // {"magic":"","directive":{"End":{"directive":"ignore-orig"}}}
     // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"subtype-struct-impl-nav-forward-to-isa"}}}
     /// Navigate to [`Isa`] across R27(1-*)
-    pub fn r27_isa<'a>(&'a self, store: &'a SarzakStore) -> Vec<Rc<RefCell<Isa>>> {
+    pub fn r27_isa<'a>(&'a self, store: &'a SarzakStore) -> Vec<Arc<RwLock<Isa>>> {
         span!("r27_isa");
         vec![store.exhume_isa(&self.isa).unwrap()]
     }
     // {"magic":"","directive":{"End":{"directive":"ignore-orig"}}}
     // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"subtype-struct-impl-nav-forward-to-obj_id"}}}
     /// Navigate to [`Object`] across R15(1-*)
-    pub fn r15_object<'a>(&'a self, store: &'a SarzakStore) -> Vec<Rc<RefCell<Object>>> {
+    pub fn r15_object<'a>(&'a self, store: &'a SarzakStore) -> Vec<Arc<RwLock<Object>>> {
         span!("r15_object");
         vec![store.exhume_object(&self.obj_id).unwrap()]
     }

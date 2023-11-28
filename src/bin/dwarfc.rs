@@ -2,6 +2,7 @@ use std::{env, ffi::OsString, fs, os::unix::ffi::OsStringExt, path::PathBuf, pro
 
 use clap::{ArgAction, Parser};
 use snafu::prelude::*;
+#[cfg(feature = "tracy")]
 use tracy_client::Client;
 
 use sarzak::sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL};
@@ -97,6 +98,7 @@ fn find_package_dir(start_dir: &Option<PathBuf>) -> Result<PathBuf> {
 fn main() -> Result<()> {
     pretty_env_logger::init();
     color_backtrace::install();
+    #[cfg(feature = "tracy")]
     Client::start();
 
     let args = Args::parse();
@@ -137,7 +139,7 @@ fn main() -> Result<()> {
         })
         .map_err(|e| vec![e])?;
 
-    let ast = parse_dwarf(args.source.to_str().unwrap(), &source_code).map_err(|e| vec![e])?;
+    let ast = parse_dwarf(args.source.to_str().unwrap(), &source_code).map_err(|e| vec![*e])?;
 
     let dwarf_home = env::var("DWARF_HOME")
         .unwrap_or_else(|_| {
@@ -147,18 +149,18 @@ fn main() -> Result<()> {
         })
         .into();
 
-    let ctx = match new_lu_dog(Some((source_code.clone(), &ast)), &dwarf_home, &sarzak) {
+    let ctx = match new_lu_dog(
+        args.source.to_str().unwrap().to_owned(),
+        Some((source_code.clone(), &ast)),
+        &dwarf_home,
+        &sarzak,
+    ) {
         Ok(lu_dog) => lu_dog,
         Err(errors) => {
             for err in errors {
                 eprintln!(
                     "{}",
-                    dwarf::dwarf::error::DwarfErrorReporter(
-                        &err,
-                        is_uber,
-                        &source_code,
-                        args.source.to_str().unwrap()
-                    )
+                    dwarf::dwarf::error::DwarfErrorReporter(&err, is_uber, &source_code,)
                 );
             }
             return Ok(());
