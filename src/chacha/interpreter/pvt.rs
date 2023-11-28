@@ -148,6 +148,7 @@ impl<'a> PrintableValueType<'a> {
                     TY_CLR.italic().paint(&woog_struct.name)
                 )
             }
+            ValueTypeEnum::XFuture(_) => write!(f, "{}", TY_CLR.italic().paint("future")),
             ValueTypeEnum::ZObjectStore(ref id) => {
                 let zobject_store = s_read!(lu_dog).exhume_z_object_store(id).unwrap();
                 let zobject_store = s_read!(zobject_store);

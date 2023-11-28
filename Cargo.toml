@@ -109,8 +109,8 @@ tracing-subscriber = { version = "0.3.17", features = ["env-filter"] }
 # [patch.crates-io]
 puteketeke = { path = "../puteketeke" }
 
-[patch."https://github.com/uberFoo/sarzak"]
-sarzak = { path = "../sarzak" }
+# [patch."https://github.com/uberFoo/sarzak"]
+# sarzak = { path = "../sarzak" }
 
 [dev-dependencies]
 backtrace = "0.3.67"
