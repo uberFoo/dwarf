@@ -5,9 +5,7 @@ version = 3
 [[package]]
 name = "abi_stable"
 version = "0.11.3"
-version = "0.11.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "69d6512d3eb05ffe5004c59c206de7f99c34951504056ce23fc953842f12c445"
 checksum = "69d6512d3eb05ffe5004c59c206de7f99c34951504056ce23fc953842f12c445"
 dependencies = [
  "abi_stable_derive",
@@ -191,6 +189,7 @@ checksum = "a4668cab20f66d8d020e1fbc0ebe47217433c1b6c8f2040faf858554e394ace6"
 [[package]]
 name = "ariadne"
 version = "0.3.0"
+source = "git+https://github.com/uberFoo/ariadne#7f145e849a2a3c80efe4306d90d89de3198dab4f"
 dependencies = [
  "unicode-width",
  "yansi",
@@ -581,7 +580,9 @@ dependencies = [
 
 [[package]]
 name = "chumsky"
-version = "0.9.0"
+version = "0.9.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8eebd66744a15ded14960ab4ccdbfb51ad3b81f51f3f04a80adac98c985396c9"
 dependencies = [
  "hashbrown 0.14.3",
  "stacker",
@@ -1014,7 +1015,6 @@ dependencies = [
  "num_cpus",
  "once_cell",
  "parking_lot",
- "pin-project-lite",
  "pretty_env_logger",
  "puteketeke",
  "ratatui",
