@@ -80,8 +80,16 @@ fn build_plugin(entry: &DirEntry, sh: &Shell, dwarf_home: &String) -> anyhow::Re
     fs::create_dir_all(&src_dir)?;
     fs::create_dir_all(&model_dir)?;
 
-    println!("Copying lib{}.dylib", name);
-    sh.copy_file(format!("target/debug/lib{}.dylib", name), lib_dir)?;
+    if env::consts::OS == "darwin" {
+        println!("Copying lib{}.dylib", name);
+        sh.copy_file(format!("target/debug/lib{}.dylib", name), lib_dir)?;
+    } else if env::consts::OS == "linux" {
+        println!("Copying lib{}.so", name);
+        sh.copy_file(format!("target/debug/lib{}.so", name), lib_dir)?;
+    } else if env::consts::OS == "windows" {
+        println!("Copying {}.dll", name);
+        sh.copy_file(format!("target/debug/{}.dll", name), lib_dir)?;
+    }
 
     // Copy dwarf files
     current_dir.push(entry.path());
