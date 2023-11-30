@@ -15,6 +15,11 @@ jobs:
     build:
         runs-on: ubuntu-latest
         steps:
+            - name: Set up Rust
+              uses: actions-rs/toolchain@v1
+              with:
+                  toolchain: stable
+
             - name: Checkout sarzak-cli
               uses: actions/checkout@v2
               with:
@@ -25,7 +30,7 @@ jobs:
             - name: Build sarzak-cli
               run: |
                   cd sarzak-cli
-                  cargo build --release
+                  cargo install --path .
                   cd ..
 
             - name: Checkout code
@@ -33,11 +38,6 @@ jobs:
               with:
                   ref: develop
                   path: dwarf
-
-            - name: Set up Rust
-              uses: actions-rs/toolchain@v1
-              with:
-                  toolchain: stable
 
             - name: Install cargo-llvm-cov
               uses: taiki-e/install-action@cargo-llvm-cov
