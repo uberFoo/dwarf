@@ -36,7 +36,7 @@ jobs:
             - name: Checkout code
               uses: actions/checkout@v2
               with:
-                  ref: develop
+                  ref: ${{ github.ref }}
                   path: dwarf
 
             - name: Install cargo-llvm-cov
