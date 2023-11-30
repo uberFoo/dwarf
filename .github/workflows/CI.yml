@@ -15,24 +15,41 @@ jobs:
     build:
         runs-on: ubuntu-latest
         steps:
-            - name: Checkout code
-              uses: actions/checkout@v2
-              with:
-                  ref: develop
-
             - name: Set up Rust
               uses: actions-rs/toolchain@v1
               with:
                   toolchain: stable
 
+            - name: Checkout sarzak-cli
+              uses: actions/checkout@v2
+              with:
+                  ref: develop
+                  path: sarzak-cli
+                  repository: 'uberfoo/sarzak-cli'
+
+            - name: Build sarzak-cli
+              run: |
+                  cd sarzak-cli
+                  cargo install --path .
+                  cd ..
+
+            - name: Checkout code
+              uses: actions/checkout@v2
+              with:
+                  ref: ${{ github.ref }}
+                  path: dwarf
+
             - name: Install cargo-llvm-cov
               uses: taiki-e/install-action@cargo-llvm-cov
 
             - name: Install dwarf
-              run: cargo xtask plugins
+              run: |
+                  cd dwarf
+                  cargo xtask plugins
 
             - name: Build and run tests with coverage
               run: |
+                  cd dwarf
                   cargo llvm-cov --lcov --output-path coverage.lcov --no-default-features --features "multi-vec, repl, async"
 
             - name: Upload coverage reports to Codecov
