@@ -1017,7 +1017,7 @@ pub(super) fn inter_expression(
                 BlockType::Async => false,
                 BlockType::Sync => true,
             };
-            let block = Block::new(!sync, Some(block), None, lu_dog);
+            let block = Block::new(!sync, Uuid::new_v4(), Some(block), None, lu_dog);
 
             for (var, ty) in vars.into_iter().zip(tys.into_iter()) {
                 let local = LocalVariable::new(Uuid::new_v4(), lu_dog);
@@ -1827,7 +1827,7 @@ pub(super) fn inter_expression(
             } else {
                 unreachable!();
             };
-            let block = Block::new(a_sink, Some(block), None, lu_dog);
+            let block = Block::new(a_sink, Uuid::new_v4(), Some(block), None, lu_dog);
             let _body = Body::new_block(a_sink, &block, lu_dog);
 
             context.location = location!();
@@ -2924,7 +2924,10 @@ pub(super) fn inter_expression(
                 )?
             } else {
                 // 🚧 Once we have tuples, I'd prefer to return the empty tuple.
-                let expr = Expression::new_block(&Block::new(false, None, None, lu_dog), lu_dog);
+                let expr = Expression::new_block(
+                    &Block::new(false, Uuid::new_v4(), None, None, lu_dog),
+                    lu_dog,
+                );
                 let ty = ValueType::new_empty(lu_dog);
                 let value = XValue::new_expression(block, &ty, &expr, lu_dog);
                 // See # Span Bug

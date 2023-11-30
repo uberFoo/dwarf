@@ -147,7 +147,7 @@ pub fn initialize_interpreter(
     let mut lu_dog = s_write!(e_context.lu_dog);
 
     // Initialize the stack with stuff from the compiled source.
-    let block = Block::new(false, None, None, &mut lu_dog);
+    let block = Block::new(false, Uuid::new_v4(), None, None, &mut lu_dog);
     let (mut stack, receiver) = Memory::new();
 
     // We don't really care about the dirty flag because we are just stuffing
