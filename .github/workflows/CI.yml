@@ -45,6 +45,7 @@ jobs:
             - name: Install dwarf
               run: |
                   cd dwarf
+                  mkdir $HOME/.dwarf
                   cargo xtask plugins
 
             - name: Build and run tests with coverage
