@@ -595,15 +595,19 @@ impl Binary {
 // A block expression is an expression that consists of an ordered set of statements, living
 //  between an opening `{`, and a closing `}`.
 // 
-//  Given that it's an expression it has a Type. The type is the value of the last expression
+// Given that it's an expression it has a Type. The type is the value of the last expression
 //  in the block, if it's not closed by a `;`. If the last statement is terminated thusly, then
 //  the value is `[Empty]`, or `()`.
+// 
+// The `bug` attribute is just there to keep this thing unique. An issue that needs addressing
+// .
 // 
 // This tells the interpreter that this struct is a proxy for an object called
 // "Block" in the store named "lu_dog"; declared above.
 #[proxy(store = "lu_dog", object = "Block")]
 struct Block {
     a_sink: bool,
+    bug: Uuid,
     id: Uuid,
     parent: Option<Block>,
     statement: Option<Statement>,
@@ -612,7 +616,7 @@ struct Block {
 
 impl Block {
     #[proxy(store = "lu_dog", object = "Block", func = "new")]
-    fn new(a_sink: bool, parent: Option<Block>, statement: Option<Statement>) -> Self;
+    fn new(a_sink: bool, bug: Uuid, parent: Option<Block>, statement: Option<Statement>) -> Self;
 
     #[proxy(store = "lu_dog", object = "Block", func = "instances")]
     fn instances() -> [Self];
@@ -623,15 +627,19 @@ impl Block {
         print("A block expression is an expression that consists of an ordered set of statements, living\n");
         print(" between an opening `{`, and a closing `}`.\n");
         print("\n");
-        print(" Given that it's an expression it has a Type. The type is the value of the last expression\n");
+        print("Given that it's an expression it has a Type. The type is the value of the last expression\n");
         print(" in the block, if it's not closed by a `;`. If the last statement is terminated thusly, then\n");
         print(" the value is `[Empty]`, or `()`.\n");
+        print("\n");
+        print("The `bug` attribute is just there to keep this thing unique. An issue that needs addressing\n");
+        print(".\n");
         print("\n");
     }
 
     fn info() -> () {
         print("struct Block {\n");
         print("    a_sink: bool,\n");
+        print("    bug: Uuid,\n");
         print("    id: Uuid,\n");
         print("    parent: Option<Block>,\n");
         print("    statement: Option<Statement>,\n");

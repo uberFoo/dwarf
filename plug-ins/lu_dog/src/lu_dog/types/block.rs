@@ -22,15 +22,19 @@ use crate::lu_dog::store::ObjectStore as LuDogStore;
 /// A block expression is an expression that consists of an ordered set of statements, living
 ///  between an opening `{`, and a closing `}`.
 ///
-///  Given that it's an expression it has a Type. The type is the value of the last expression
+/// Given that it's an expression it has a Type. The type is the value of the last expression
 ///  in the block, if it's not closed by a `;`. If the last statement is terminated thusly, then
 ///  the value is `[Empty]`, or `()`.
+///
+/// The `bug` attribute is just there to keep this thing unique. An issue that needs addressing
+/// .
 ///
 // {"magic":"","directive":{"End":{"directive":"ignore-orig"}}}
 // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"block-struct-definition"}}}
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct Block {
     pub a_sink: bool,
+    pub bug: Uuid,
     pub id: Uuid,
     /// R93: [`Block`] '' [`Block`]
     pub parent: Option<Uuid>,
@@ -44,6 +48,7 @@ impl Block {
     /// Inter a new 'Block' in the store, and return it's `id`.
     pub fn new(
         a_sink: bool,
+        bug: Uuid,
         parent: Option<&Arc<RwLock<Block>>>,
         statement: Option<&Arc<RwLock<Statement>>>,
         store: &mut LuDogStore,
@@ -51,6 +56,7 @@ impl Block {
         let id = Uuid::new_v4();
         let new = Arc::new(RwLock::new(Block {
             a_sink,
+            bug,
             id,
             parent: parent.map(|block| block.read().unwrap().id),
             statement: statement.map(|statement| statement.read().unwrap().id),

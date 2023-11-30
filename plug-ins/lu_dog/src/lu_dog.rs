@@ -4032,8 +4032,8 @@ impl Plugin for LuDogStore {
 
                 "Block" => match func {
                     "new" => {
-                        if args.len() != 3 {
-                            return Err(Error::Uber("Expected 3 arguments".into()));
+                        if args.len() != 4 {
+                            return Err(Error::Uber("Expected 4 arguments".into()));
                         }
                         let mut value_args: Vec<Value> = Vec::new();
                         args.reverse();
@@ -4045,6 +4045,9 @@ impl Plugin for LuDogStore {
                             let block = Block {
                                 id,
                                 a_sink: value_args.pop().unwrap().try_into().map_err(|e| {
+                                    Error::Uber(format!("Error converting value: {e}").into())
+                                })?,
+                                bug: value_args.pop().unwrap().try_into().map_err(|e| {
                                     Error::Uber(format!("Error converting value: {e}").into())
                                 })?,
                                 parent: value_args.pop().unwrap().try_into().map_err(|e| {
@@ -12657,6 +12660,7 @@ impl Plugin for BlockProxy {
                                 "a_sink" => {
                                     Ok(FfiValue::Boolean(self.inner.read().unwrap().a_sink.into()))
                                 }
+                                "bug" => Ok(FfiValue::Uuid(self.inner.read().unwrap().bug.into())),
                                 "id" => Ok(FfiValue::Uuid(self.inner.read().unwrap().id.into())),
                                 "parent" => match self.inner.read().unwrap().parent {
                                     Some(parent) => Ok(FfiValue::Option(ROption::RSome(
@@ -12691,6 +12695,14 @@ impl Plugin for BlockProxy {
                             match field.as_str() {
                                 "a_sink" => {
                                     self.inner.write().unwrap().a_sink =
+                                        value.try_into().map_err(|e| {
+                                            Error::Uber(
+                                                format!("Error converting value: {e}").into(),
+                                            )
+                                        })?
+                                }
+                                "bug" => {
+                                    self.inner.write().unwrap().bug =
                                         value.try_into().map_err(|e| {
                                             Error::Uber(
                                                 format!("Error converting value: {e}").into(),
@@ -12744,6 +12756,7 @@ impl Display for BlockProxy {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "Block({{")?;
         writeln!(f, "	a_sink: {:?},", self.inner.read().unwrap().a_sink)?;
+        writeln!(f, "	bug: {:?},", self.inner.read().unwrap().bug)?;
         writeln!(f, "	id: {:?},", self.inner.read().unwrap().id)?;
         writeln!(f, "	parent: {:?},", self.inner.read().unwrap().parent)?;
         writeln!(f, "	statement: {:?},", self.inner.read().unwrap().statement)?;

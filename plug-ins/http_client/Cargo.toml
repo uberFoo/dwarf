@@ -24,8 +24,8 @@ sarzak = { git = "https://github.com/uberFoo/sarzak", branch = "develop", defaul
     "sarzak-rwlock",
 ] }
 
-[patch."https://github.com/uberFoo/sarzak"]
-sarzak = { path = "../../../sarzak" }
+# [patch."https://github.com/uberFoo/sarzak"]
+# sarzak = { path = "../../../sarzak" }
 
 [lib]
 name = "http_client"
