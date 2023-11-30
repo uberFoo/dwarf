@@ -18,6 +18,12 @@ serde_json = "1.0.104"
 tracy-client = "0.15.2"
 uuid = { version = "1.4.1", features = ["v4"] }
 
+# Sarzak should not be necessary. It's doing something to support the dwarf build,
+# which is weird.
+sarzak = { git = "https://github.com/uberFoo/sarzak", branch = "develop", default-features = false, features = [
+    "sarzak-rwlock",
+] }
+
 [patch."https://github.com/uberFoo/sarzak"]
 sarzak = { path = "../../../sarzak" }
 

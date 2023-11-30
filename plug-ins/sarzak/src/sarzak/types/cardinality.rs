@@ -10,7 +10,6 @@ use crate::sarzak::types::referrer::Referrer;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::sync::RwLock;
-use tracy_client::span;
 use uuid::Uuid;
 // {"magic":"","directive":{"End":{"directive":"ignore-orig"}}}
 
@@ -51,7 +50,6 @@ impl Cardinality {
         &'a self,
         store: &'a SarzakStore,
     ) -> Vec<Arc<RwLock<AssociativeReferent>>> {
-        span!("r88_associative_referent");
         store
             .iter_associative_referent()
             .filter(|associative_referent| {
@@ -66,7 +64,6 @@ impl Cardinality {
         &'a self,
         store: &'a SarzakStore,
     ) -> Vec<Arc<RwLock<AssociativeReferrer>>> {
-        span!("r89_associative_referrer");
         store
             .iter_associative_referrer()
             .filter(|associative_referrer| {
@@ -78,7 +75,6 @@ impl Cardinality {
     // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"cardinality-struct-impl-nav-backward-1_M-to-referent"}}}
     /// Navigate to [`Referent`] across R8(1-M)
     pub fn r8_referent<'a>(&'a self, store: &'a SarzakStore) -> Vec<Arc<RwLock<Referent>>> {
-        span!("r8_referent");
         store
             .iter_referent()
             .filter(|referent| referent.read().unwrap().cardinality == self.id())
@@ -88,7 +84,6 @@ impl Cardinality {
     // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"cardinality-struct-impl-nav-backward-1_M-to-referrer"}}}
     /// Navigate to [`Referrer`] across R9(1-M)
     pub fn r9_referrer<'a>(&'a self, store: &'a SarzakStore) -> Vec<Arc<RwLock<Referrer>>> {
-        span!("r9_referrer");
         store
             .iter_referrer()
             .filter(|referrer| referrer.read().unwrap().cardinality == self.id())

@@ -2678,8 +2678,7 @@ dependencies = [
 
 [[package]]
 name = "sarzak"
-version = "2.7.0"
-source = "git+https://github.com/uberFoo/sarzak?branch=develop#eeb696c39f53a3c5a7c3c0a823f9f5a5cd2622d7"
+version = "2.11.1"
 dependencies = [
  "ansi_term",
  "async-std",

@@ -2,7 +2,6 @@
 // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"bisection-use-statements"}}}
 use std::sync::Arc;
 use std::sync::RwLock;
-use tracy_client::span;
 use uuid::Uuid;
 
 use crate::merlin::types::line_segment::LineSegment;
@@ -56,7 +55,6 @@ impl Bisection {
     // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"bisection-struct-impl-nav-forward-to-segment"}}}
     /// Navigate to [`LineSegment`] across R14(1-*)
     pub fn r14_line_segment<'a>(&'a self, store: &'a MerlinStore) -> Vec<Arc<RwLock<LineSegment>>> {
-        span!("r14_line_segment");
         vec![store.exhume_line_segment(&self.segment).unwrap()]
     }
     // {"magic":"","directive":{"End":{"directive":"ignore-orig"}}}
@@ -66,7 +64,6 @@ impl Bisection {
         &'a self,
         store: &'a MerlinStore,
     ) -> Vec<Arc<RwLock<RelationshipName>>> {
-        span!("r15_relationship_name");
         let relationship_name = store
             .iter_relationship_name()
             .find(|relationship_name| relationship_name.read().unwrap().origin == self.id);
@@ -79,7 +76,6 @@ impl Bisection {
     // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"bisection-impl-nav-subtype-to-supertype-point"}}}
     // Navigate to [`Point`] across R6(isa)
     pub fn r6_point<'a>(&'a self, store: &'a MerlinStore) -> Vec<Arc<RwLock<Point>>> {
-        span!("r6_point");
         vec![store
             .iter_point()
             .find(|point| {

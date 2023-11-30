@@ -50,7 +50,13 @@ impl<'a> PrintableValueType<'a> {
             }
             ValueTypeEnum::Empty(_) => write!(f, "{}", TY_CLR.italic().paint("()")),
             ValueTypeEnum::Function(_) => write!(f, "{}", TY_CLR.italic().paint("function")),
-            ValueTypeEnum::XFuture(_) => write!(f, "{}", TY_CLR.italic().paint("future")),
+            ValueTypeEnum::XFuture(ref id) => {
+                let future = s_read!(lu_dog).exhume_x_future(id).unwrap();
+                let inner = s_read!(future).r2_value_type(&s_read!(lu_dog))[0].clone();
+                let inner = PrintableValueType(true, inner, context);
+
+                write!(f, "{}<{inner}>", TY_CLR.paint("Future"))
+            }
             ValueTypeEnum::Generic(g) => {
                 let g = s_read!(lu_dog).exhume_generic(g).unwrap();
                 let g = s_read!(g);
@@ -78,8 +84,8 @@ impl<'a> PrintableValueType<'a> {
                         .paint(format!("[{}]", PrintableValueType(true, ty, context)))
                 )
             }
-            ValueTypeEnum::Plugin(ref plugin) => {
-                let plugin = s_read!(lu_dog).exhume_plugin(plugin).unwrap();
+            ValueTypeEnum::XPlugin(ref plugin) => {
+                let plugin = s_read!(lu_dog).exhume_x_plugin(plugin).unwrap();
                 let plugin = s_read!(plugin);
                 write!(
                     f,
@@ -148,7 +154,6 @@ impl<'a> PrintableValueType<'a> {
                     TY_CLR.italic().paint(&woog_struct.name)
                 )
             }
-            ValueTypeEnum::XFuture(_) => write!(f, "{}", TY_CLR.italic().paint("future")),
             ValueTypeEnum::ZObjectStore(ref id) => {
                 let zobject_store = s_read!(lu_dog).exhume_z_object_store(id).unwrap();
                 let zobject_store = s_read!(zobject_store);
@@ -204,8 +209,8 @@ impl<'a> PrintableValueType<'a> {
                 let ty = list.r36_value_type(&s_read!(lu_dog))[0].clone();
                 write!(f, "{}", PrintableValueType(false, ty, context))
             }
-            ValueTypeEnum::Plugin(ref plugin) => {
-                let plugin = s_read!(lu_dog).exhume_plugin(plugin).unwrap();
+            ValueTypeEnum::XPlugin(ref plugin) => {
+                let plugin = s_read!(lu_dog).exhume_x_plugin(plugin).unwrap();
                 let plugin = s_read!(plugin);
                 write!(f, "plugin: {}", plugin.name)
             }

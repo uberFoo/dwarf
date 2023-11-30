@@ -20,9 +20,9 @@ use crate::{
     },
     lu_dog::{
         store::ObjectStore as LuDogStore, Argument, Block, Call, DataStructure, EnumFieldEnum,
-        Expression, FieldExpression, List, LocalVariable, PathElement, Plugin, Span,
-        StaticMethodCall, StructExpression, UnnamedFieldExpression, ValueType, ValueTypeEnum,
-        Variable, XFuture, XPath, XValue,
+        Expression, FieldExpression, List, LocalVariable, PathElement, Span, StaticMethodCall,
+        StructExpression, UnnamedFieldExpression, ValueType, ValueTypeEnum, Variable, XFuture,
+        XPath, XPlugin, XValue,
     },
     new_ref, s_read, s_write,
     sarzak::Ty,
@@ -225,8 +225,8 @@ pub fn inter(
             },
             PLUGIN => match method {
                 NEW => {
-                    let plugin = Plugin::new(plugin_type, lu_dog);
-                    ValueType::new_plugin(&plugin, lu_dog)
+                    let plugin = XPlugin::new(plugin_type, lu_dog);
+                    ValueType::new_x_plugin(&plugin, lu_dog)
                 }
                 method => {
                     e_warn!("Plugin method `{method}` not found");

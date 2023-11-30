@@ -9,7 +9,6 @@ use crate::merlin::types::top::TOP;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::sync::RwLock;
-use tracy_client::span;
 use uuid::Uuid;
 // {"magic":"","directive":{"End":{"directive":"ignore-orig"}}}
 
@@ -63,7 +62,6 @@ impl Edge {
     // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"edge-struct-impl-nav-backward-1_M-to-anchor"}}}
     /// Navigate to [`Anchor`] across R9(1-M)
     pub fn r9_anchor<'a>(&'a self, store: &'a MerlinStore) -> Vec<Arc<RwLock<Anchor>>> {
-        span!("r9_anchor");
         store
             .iter_anchor()
             .filter(|anchor| anchor.read().unwrap().edge == self.id())

@@ -14,7 +14,7 @@ const LIB_DIR: &str = "lib";
 const PLUGIN_DIR: &str = "plug-ins";
 const MODEL_DIR: &str = "models";
 const SRC_DIR: &str = "src";
-const TAO_DIR: &str = "tao";
+const TAO_DIR: &str = "ore";
 
 impl flags::Plugins {
     pub(crate) fn run(self, sh: &Shell) -> anyhow::Result<()> {
@@ -44,7 +44,7 @@ impl flags::Plugins {
                 let entry = entry.unwrap();
                 if entry.file_type().unwrap().is_dir() {
                     sh.change_dir(entry.path());
-                    build_plugin(&entry, &sh, &dwarf_home, &mut current_dir).unwrap()
+                    build_plugin(&entry, &sh, &dwarf_home).unwrap()
                 }
             });
 
@@ -52,20 +52,21 @@ impl flags::Plugins {
     }
 }
 
-fn build_plugin(
-    entry: &DirEntry,
-    sh: &Shell,
-    dwarf_home: &String,
-    current_dir: &mut PathBuf,
-) -> anyhow::Result<()> {
+fn build_plugin(entry: &DirEntry, sh: &Shell, dwarf_home: &String) -> anyhow::Result<()> {
     println!("Building {}", entry.path().display());
+    sh.change_dir(entry.path());
+
+    let mut current_dir = entry.path();
 
     let mut sarzak_toml = current_dir.clone();
     sarzak_toml.push("sarzak.toml");
-    let have_models = sarzak_toml.exists();
 
+    let have_models = sarzak_toml.exists();
     if have_models {
+        println!("Generating models");
         cmd!(sh, "sarzak gen").run()?;
+    } else {
+        println!("No models found");
     }
 
     cmd!(sh, "cargo build").run()?;

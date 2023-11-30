@@ -69,8 +69,8 @@ impl<'d, 'a, 'b> fmt::Display for PrintableValueType<'d, 'a, 'b> {
                 let ty = list.r36_value_type(lu_dog)[0].clone();
                 write!(f, "[{}]", PrintableValueType(&ty, context, lu_dog))
             }
-            ValueTypeEnum::Plugin(ref plugin) => {
-                let plugin = lu_dog.exhume_plugin(plugin).unwrap();
+            ValueTypeEnum::XPlugin(ref plugin) => {
+                let plugin = lu_dog.exhume_x_plugin(plugin).unwrap();
                 let plugin = s_read!(plugin);
                 write!(f, "plugin: {}", plugin.name)
             }
@@ -123,7 +123,6 @@ impl<'d, 'a, 'b> fmt::Display for PrintableValueType<'d, 'a, 'b> {
                 let woog_struct = s_read!(woog_struct);
                 write!(f, "{}", TY_WARN_CLR.paint(&woog_struct.name))
             }
-            ValueTypeEnum::XFuture(_) => write!(f, "{}", TY_CLR.italic().paint("future")),
             ValueTypeEnum::ZObjectStore(ref id) => {
                 let zobject_store = lu_dog.exhume_z_object_store(id).unwrap();
                 let zobject_store = s_read!(zobject_store);

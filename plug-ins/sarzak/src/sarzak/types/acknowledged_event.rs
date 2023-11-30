@@ -2,7 +2,6 @@
 // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"acknowledged_event-use-statements"}}}
 use std::sync::Arc;
 use std::sync::RwLock;
-use tracy_client::span;
 use uuid::Uuid;
 
 use crate::sarzak::types::event::Event;
@@ -50,14 +49,12 @@ impl AcknowledgedEvent {
     // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"acknowledged_event-struct-impl-nav-forward-assoc-to-event_id"}}}
     /// Navigate to [`Event`] across R20(1-*)
     pub fn r20_event<'a>(&'a self, store: &'a SarzakStore) -> Vec<Arc<RwLock<Event>>> {
-        span!("r20_event");
         vec![store.exhume_event(&self.event_id).unwrap()]
     }
     // {"magic":"","directive":{"End":{"directive":"ignore-orig"}}}
     // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"acknowledged_event-struct-impl-nav-forward-assoc-to-state_id"}}}
     /// Navigate to [`State`] across R20(1-*)
     pub fn r20_state<'a>(&'a self, store: &'a SarzakStore) -> Vec<Arc<RwLock<State>>> {
-        span!("r20_state");
         vec![store.exhume_state(&self.state_id).unwrap()]
     }
     // {"magic":"","directive":{"End":{"directive":"ignore-orig"}}}

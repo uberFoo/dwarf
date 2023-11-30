@@ -77,7 +77,9 @@ rustyline = { version = "12.0.0", optional = true, features = [
     "derive",
     "with-file-history",
 ] }
-sarzak = { git = "https://github.com/uberFoo/sarzak", default-features = false, branch = "develop" }
+sarzak = { git = "https://github.com/uberFoo/sarzak", branch = "develop", default-features = false, features = [
+    "sarzak-rwlock",
+] }
 serde = { version = "1.0.160", features = ["derive", "rc"] }
 serde_json = "1.0.96"
 slab = "0.4.9"
@@ -103,8 +105,8 @@ uuid = { version = "1.6.1", features = ["v4", "serde"] }
 # [patch.crates-io]
 # puteketeke = { path = "../puteketeke" }
 
-# [patch."https://github.com/uberFoo/sarzak"]
-# sarzak = { path = "../sarzak" }
+[patch."https://github.com/uberFoo/sarzak"]
+sarzak = { path = "../sarzak" }
 
 [dev-dependencies]
 backtrace = "0.3.67"

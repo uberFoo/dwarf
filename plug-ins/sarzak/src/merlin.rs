@@ -13,7 +13,7 @@ use abi_stable::{
     prefix_type::PrefixTypeTrait,
     sabi_extern_fn,
     sabi_trait::prelude::{TD_CanDowncast, TD_Opaque},
-    std_types::{RErr, ROk, RResult, RStr, RString, RVec},
+    std_types::{RBox, RErr, ROk, ROption, RResult, RStr, RString, RVec},
 };
 use dwarf::{
     chacha::value::{FfiProxy, FfiValue, Value},

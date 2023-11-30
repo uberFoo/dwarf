@@ -57,6 +57,7 @@ dwarf https://raw.githubusercontent.com/uberFoo/dwarf/develop/mandelbrot.ore -- 
 ```
 
 ## Beautiful Error Messages!
+
 ![error](doc/art/error.png)
 
 Check out [ariadne](https://docs.rs/ariadne/latest/ariadne/) and you too can have cool error messages!
@@ -77,19 +78,20 @@ Check out [ariadne](https://docs.rs/ariadne/latest/ariadne/) and you too can hav
 These are the thins that spring to mind when I think of what I'd most like to do next with dwarf.
 In no particular order:
 
-- [ ] VSCode integration
-- [ ] Multiple files (use items)
-- [x] enums
-- [x] lambdas
-- [ ] Compiler for VM
-- [ ] Visibility modifiers
-- [x] Generics
-- [ ] Macros (Yes, and I don't know why other interpreted languages don't have them. Am I crazy?)
-- [x] Extensions via plugins
-- [ ] Char type
-- [x] if let expressions
-- [ ] Doc Comments, with Doc Tests
-- [x] match expression
+* [x] async
+* [ ] VSCode integration
+* [x] Multiple files (use items)
+* [x] enums
+* [x] lambdas
+* [ ] Compiler for VM
+* [ ] Visibility modifiers
+* [x] Generics
+* [ ] Macros (Yes, and I don't know why other interpreted languages don't have them. Am I crazy?)
+* [x] Extensions via plugins
+* [ ] Char type
+* [x] if let expressions
+* [ ] Doc Comments, with Doc Tests
+* [x] match expression
 
 ### Supertype / subtype hierarchies
 
@@ -111,8 +113,6 @@ The bits that are missing include iterators, enumerations, paths, visibility mod
 
 dwarf has a REPL.
 Pass the `-r` flag to start it.
-
-## Debugger
 
 ## Architecture
 
@@ -142,8 +142,6 @@ It reads the model/AST and executes it.
 I think that the default is to execute a `main` function.
 
 If you start in the REPL, you get the execution in a loop.
-
-### Debugger
 
 ## License
 

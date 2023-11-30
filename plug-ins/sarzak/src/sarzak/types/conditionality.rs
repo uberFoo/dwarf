@@ -9,7 +9,6 @@ use crate::sarzak::types::unconditional::UNCONDITIONAL;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::sync::RwLock;
-use tracy_client::span;
 use uuid::Uuid;
 // {"magic":"","directive":{"End":{"directive":"ignore-orig"}}}
 
@@ -50,7 +49,6 @@ impl Conditionality {
         &'a self,
         store: &'a SarzakStore,
     ) -> Vec<Arc<RwLock<AssociativeReferent>>> {
-        span!("r77_associative_referent");
         store
             .iter_associative_referent()
             .filter(|associative_referent| {
@@ -62,7 +60,6 @@ impl Conditionality {
     // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"conditionality-struct-impl-nav-backward-1_M-to-referent"}}}
     /// Navigate to [`Referent`] across R12(1-M)
     pub fn r12_referent<'a>(&'a self, store: &'a SarzakStore) -> Vec<Arc<RwLock<Referent>>> {
-        span!("r12_referent");
         store
             .iter_referent()
             .filter(|referent| referent.read().unwrap().conditionality == self.id())
@@ -72,7 +69,6 @@ impl Conditionality {
     // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"conditionality-struct-impl-nav-backward-1_M-to-referrer"}}}
     /// Navigate to [`Referrer`] across R11(1-M)
     pub fn r11_referrer<'a>(&'a self, store: &'a SarzakStore) -> Vec<Arc<RwLock<Referrer>>> {
-        span!("r11_referrer");
         store
             .iter_referrer()
             .filter(|referrer| referrer.read().unwrap().conditionality == self.id())

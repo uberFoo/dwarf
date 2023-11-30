@@ -12,7 +12,6 @@ use crate::sarzak::types::s_uuid::S_UUID;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::sync::RwLock;
-use tracy_client::span;
 use uuid::Uuid;
 // {"magic":"","directive":{"End":{"directive":"ignore-orig"}}}
 
@@ -112,7 +111,6 @@ impl Ty {
     // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"ty-struct-impl-nav-backward-one-to-attribute"}}}
     /// Navigate to [`Attribute`] across R2(1-1)
     pub fn r2_attribute<'a>(&'a self, store: &'a SarzakStore) -> Vec<Arc<RwLock<Attribute>>> {
-        span!("r2_attribute");
         vec![store
             .iter_attribute()
             .find(|attribute| attribute.read().unwrap().ty == self.id())

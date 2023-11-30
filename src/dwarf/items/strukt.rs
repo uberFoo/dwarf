@@ -13,8 +13,8 @@ use crate::{
         AttributeMap, InnerAttribute, Spanned, Type,
     },
     lu_dog::{
-        store::ObjectStore as LuDogStore, Field, Generic, Item as WoogItem, Plugin,
-        Span as LuDogSpan, StructGeneric, ValueType, WoogStruct, ZObjectStore,
+        store::ObjectStore as LuDogStore, Field, Generic, Item as WoogItem, Span as LuDogSpan,
+        StructGeneric, ValueType, WoogStruct, XPlugin, ZObjectStore,
     },
     s_read, s_write, Dirty, RefType,
 };
@@ -258,8 +258,8 @@ pub fn inter_struct_fields(
                         if let Type::UserType(tok, _generics) = type_ {
                             let ty_name = tok.0.de_sanitize();
                             if ty_name == "Plugin" {
-                                let plugin = Plugin::new(plugin_name, lu_dog);
-                                let ty = ValueType::new_plugin(&plugin, lu_dog);
+                                let plugin = XPlugin::new(plugin_name, lu_dog);
+                                let ty = ValueType::new_x_plugin(&plugin, lu_dog);
                                 LuDogSpan::new(
                                     span.end as i64,
                                     span.start as i64,

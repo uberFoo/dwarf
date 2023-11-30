@@ -2,7 +2,6 @@
 // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"anchor-use-statements"}}}
 use std::sync::Arc;
 use std::sync::RwLock;
-use tracy_client::span;
 use uuid::Uuid;
 
 use crate::merlin::types::edge::Edge;
@@ -78,14 +77,12 @@ impl Anchor {
     // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"anchor-struct-impl-nav-forward-to-edge"}}}
     /// Navigate to [`Edge`] across R9(1-*)
     pub fn r9_edge<'a>(&'a self, store: &'a MerlinStore) -> Vec<Arc<RwLock<Edge>>> {
-        span!("r9_edge");
         vec![store.exhume_edge(&self.edge).unwrap()]
     }
     // {"magic":"","directive":{"End":{"directive":"ignore-orig"}}}
     // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"anchor-struct-impl-nav-forward-to-glyph"}}}
     /// Navigate to [`Glyph`] across R10(1-*)
     pub fn r10_glyph<'a>(&'a self, store: &'a MerlinStore) -> Vec<Arc<RwLock<Glyph>>> {
-        span!("r10_glyph");
         vec![store.exhume_glyph(&self.glyph).unwrap()]
     }
     // {"magic":"","directive":{"End":{"directive":"ignore-orig"}}}
@@ -95,7 +92,6 @@ impl Anchor {
         &'a self,
         store: &'a MerlinStore,
     ) -> Vec<Arc<RwLock<RelationshipPhrase>>> {
-        span!("r13_relationship_phrase");
         let relationship_phrase = store
             .iter_relationship_phrase()
             .find(|relationship_phrase| relationship_phrase.read().unwrap().origin == self.id);
@@ -108,21 +104,18 @@ impl Anchor {
     // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"anchor-struct-impl-nav-forward-assoc-to-x_box"}}}
     /// Navigate to [`XBox`] across R3(1-*)
     pub fn r3_x_box<'a>(&'a self, store: &'a MerlinStore) -> Vec<Arc<RwLock<XBox>>> {
-        span!("r3_x_box");
         vec![store.exhume_x_box(&self.x_box).unwrap()]
     }
     // {"magic":"","directive":{"End":{"directive":"ignore-orig"}}}
     // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"anchor-struct-impl-nav-forward-assoc-to-line"}}}
     /// Navigate to [`Line`] across R3(1-*)
     pub fn r3_line<'a>(&'a self, store: &'a MerlinStore) -> Vec<Arc<RwLock<Line>>> {
-        span!("r3_line");
         vec![store.exhume_line(&self.line).unwrap()]
     }
     // {"magic":"","directive":{"End":{"directive":"ignore-orig"}}}
     // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"anchor-impl-nav-subtype-to-supertype-point"}}}
     // Navigate to [`Point`] across R6(isa)
     pub fn r6_point<'a>(&'a self, store: &'a MerlinStore) -> Vec<Arc<RwLock<Point>>> {
-        span!("r6_point");
         vec![store
             .iter_point()
             .find(|point| {

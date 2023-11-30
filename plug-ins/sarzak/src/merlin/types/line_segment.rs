@@ -2,7 +2,6 @@
 // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"line_segment-use-statements"}}}
 use std::sync::Arc;
 use std::sync::RwLock;
-use tracy_client::span;
 use uuid::Uuid;
 
 use crate::merlin::types::bisection::Bisection;
@@ -45,14 +44,12 @@ impl LineSegment {
     // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"line_segment-struct-impl-nav-forward-to-line"}}}
     /// Navigate to [`Line`] across R4(1-*)
     pub fn r4_line<'a>(&'a self, store: &'a MerlinStore) -> Vec<Arc<RwLock<Line>>> {
-        span!("r4_line");
         vec![store.exhume_line(&self.line).unwrap()]
     }
     // {"magic":"","directive":{"End":{"directive":"ignore-orig"}}}
     // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"line_segment-struct-impl-nav-backward-cond-to-bisection"}}}
     /// Navigate to [`Bisection`] across R14(1-1c)
     pub fn r14c_bisection<'a>(&'a self, store: &'a MerlinStore) -> Vec<Arc<RwLock<Bisection>>> {
-        span!("r14_bisection");
         let bisection = store
             .iter_bisection()
             .find(|bisection| bisection.read().unwrap().segment == self.id);
@@ -68,7 +65,6 @@ impl LineSegment {
         &'a self,
         store: &'a MerlinStore,
     ) -> Vec<Arc<RwLock<LineSegmentPoint>>> {
-        span!("r5_line_segment_point");
         store
             .iter_line_segment_point()
             .filter(|line_segment_point| line_segment_point.read().unwrap().segment == self.id)

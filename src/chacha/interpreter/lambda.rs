@@ -10,10 +10,8 @@ use crate::{
         error::{Result, WrongNumberOfArgumentsSnafu},
         vm::VM,
     },
-    interpreter::{
-        debug, eval_expression, eval_statement, function, trace, typecheck, ChaChaError, Context,
-    },
-    lu_dog::{Argument, BodyEnum, Lambda, Span},
+    interpreter::{debug, eval_statement, function, trace, typecheck, ChaChaError, Context},
+    lu_dog::{BodyEnum, Lambda, Span},
     new_ref, s_read, NewRef, RefType, Value,
 };
 

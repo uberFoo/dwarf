@@ -109,7 +109,7 @@ fn declaration() {
     #[cfg(feature = "tracy")]
     let _ = Client::start();
     color_backtrace::install();
-    // 🚧 Put this back once we are synched with the plugin.
-    // let program = include_str!("proxy/declare.tao");
-    // run_program("proxy/declare.tao", program).unwrap();
+
+    let program = include_str!("proxy/declare.tao");
+    run_program("proxy/declare.tao", program).unwrap();
 }

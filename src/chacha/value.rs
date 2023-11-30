@@ -17,10 +17,7 @@ use puteketeke::Executor;
 
 use crate::{
     chacha::error::Result,
-    lu_dog::{
-        BooleanLiteralEnum, Expression, ExpressionEnum, Function, Lambda, LiteralEnum,
-        ObjectStore as LuDogStore, ValueType, ZObjectStore, FALSE_LITERAL, TRUE_LITERAL,
-    },
+    lu_dog::{Function, Lambda, ObjectStore as LuDogStore, ValueType, ZObjectStore},
     new_ref,
     plug_in::PluginType,
     s_read,
@@ -52,6 +49,46 @@ impl From<Uuid> for FfiUuid {
 impl From<FfiUuid> for Uuid {
     fn from(uuid: FfiUuid) -> Self {
         Uuid::parse_str(&uuid.inner).unwrap()
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Debug, StableAbi)]
+pub enum FfiOption<T> {
+    None,
+    Some(T),
+}
+
+impl<T> From<Option<T>> for FfiOption<T>
+where
+    T: Clone,
+{
+    fn from(option: Option<T>) -> Self {
+        match option {
+            None => Self::None,
+            Some(t) => Self::Some(t),
+        }
+    }
+}
+
+impl<T> From<ROption<T>> for FfiOption<T> {
+    fn from(option: ROption<T>) -> Self {
+        match option {
+            ROption::RNone => Self::None,
+            ROption::RSome(t) => Self::Some(t),
+        }
+    }
+}
+
+impl<T> From<ROption<RBox<T>>> for FfiOption<T>
+where
+    T: Clone,
+{
+    fn from(option: ROption<RBox<T>>) -> Self {
+        match option {
+            ROption::RNone => Self::None,
+            ROption::RSome(t) => Self::Some((*t).clone()),
+        }
     }
 }
 
@@ -574,7 +611,7 @@ impl Value {
                 }
                 unreachable!()
             }
-            Value::Vector { ty, inner } => {
+            Value::Vector { ty, inner: _ } => {
                 let ty = match &s_read!(ty).subtype {
                     ValueTypeEnum::XFuture(id) => {
                         let ty = lu_dog.exhume_x_future(id).unwrap();
@@ -587,7 +624,7 @@ impl Value {
                     if let ValueTypeEnum::List(id) = s_read!(vt).subtype {
                         let list = lu_dog.exhume_list(&id).unwrap();
                         let list_ty = s_read!(list).r36_value_type(lu_dog)[0].clone();
-                        if &*s_read!(ty) == &*s_read!(list_ty) {
+                        if *s_read!(ty) == *s_read!(list_ty) {
                             return vt.clone();
                         }
                     }
@@ -1252,7 +1289,7 @@ impl std::cmp::PartialEq for Value {
             (Value::Struct(a), Value::Struct(b)) => *s_read!(a) == *s_read!(b),
             (Value::Uuid(a), Value::Uuid(b)) => a == b,
             (Value::Vector { ty: ty_a, inner: a }, Value::Vector { ty: ty_b, inner: b }) => {
-                if &*s_read!(ty_a) != &*s_read!(ty_b) {
+                if *s_read!(ty_a) != *s_read!(ty_b) {
                     return false;
                 }
 

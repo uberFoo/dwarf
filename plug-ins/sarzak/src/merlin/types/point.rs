@@ -2,7 +2,6 @@
 // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"point-use-statements"}}}
 use std::sync::Arc;
 use std::sync::RwLock;
-use tracy_client::span;
 use uuid::Uuid;
 
 use crate::merlin::types::anchor::Anchor;
@@ -97,7 +96,6 @@ impl Point {
         &'a self,
         store: &'a MerlinStore,
     ) -> Vec<Arc<RwLock<LineSegmentPoint>>> {
-        span!("r5_line_segment_point");
         vec![store
             .iter_line_segment_point()
             .find(|line_segment_point| line_segment_point.read().unwrap().point == self.id)

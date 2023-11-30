@@ -122,7 +122,7 @@ pub fn inter_func(
                     BlockType::Sync => false,
                 };
 
-            let block = Block::new(a_sink, Uuid::new_v4(), None, None, lu_dog);
+            let block = Block::new(a_sink, None, None, lu_dog);
             // Insert variables into the top of the block -- this is a for loop
             // thing.
             for (var, ty) in vars.iter().zip(tys.iter()) {

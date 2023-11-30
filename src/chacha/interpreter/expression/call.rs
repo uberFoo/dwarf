@@ -5,8 +5,6 @@ use ansi_term::Colour;
 
 #[cfg(feature = "async")]
 use async_io::Timer;
-#[cfg(feature = "async")]
-use smol::future;
 
 use snafu::{location, prelude::*, Location};
 use tracing::{debug_span, Instrument};
@@ -17,7 +15,6 @@ use crate::{
         error::{NoSuchStaticMethodSnafu, Result, TypeMismatchSnafu},
         vm::{CallFrame, VM},
     },
-    dwarf::extruder::update_span_value,
     interpreter::{
         debug, error, eval_expression, eval_function_call, eval_lambda_expression, function,
         ChaChaError, Context, PrintableValueType,
@@ -27,10 +24,7 @@ use crate::{
         HTTP_GET, LEN, MAP, NEW, NORM_SQUARED, ONE_SHOT, PARSE, PLUGIN, SLEEP, SPAWN, SPAWN_NAMED,
         SQUARE, SUM, TIME, TIMER, TYPEOF, UUID_TYPE,
     },
-    lu_dog::{
-        Argument, Block, Call, CallEnum, Expression, IntegerLiteral, Literal, MethodCall,
-        ValueType, ValueTypeEnum, XValue,
-    },
+    lu_dog::{CallEnum, Expression, ValueType, ValueTypeEnum},
     new_ref,
     plug_in::PluginModRef,
     plug_in::PluginType,
@@ -264,42 +258,8 @@ pub fn eval(
                         let ret_ty = s_read!(ƛ).return_type;
                         let ret_ty = s_read!(lu_dog).exhume_value_type(&ret_ty).unwrap();
 
-                        let call = &MethodCall::new("map".to_owned(), &mut s_write!(lu_dog));
-                        let call =
-                            Call::new_method_call(false, None, None, call, &mut s_write!(lu_dog));
-
                         let result = (range.start..range.end)
                             .map(|i| {
-                                let block = Block::new(
-                                    false,
-                                    Uuid::new_v4(),
-                                    None,
-                                    None,
-                                    &mut s_write!(lu_dog),
-                                );
-                                let literal = IntegerLiteral::new(i, &mut s_write!(lu_dog));
-                                let literal =
-                                    Literal::new_integer_literal(&literal, &mut s_write!(lu_dog));
-                                let expression =
-                                    Expression::new_literal(&literal, &mut s_write!(lu_dog));
-                                let ty = ValueType::new_ty(
-                                    &Ty::new_integer(&s_read!(sarzak)),
-                                    &mut s_write!(lu_dog),
-                                );
-                                let value = XValue::new_expression(
-                                    &block,
-                                    &ty,
-                                    &expression,
-                                    &mut s_write!(lu_dog),
-                                );
-                                update_span_value(&span, &value, location!());
-                                let argument = Argument::new(
-                                    0,
-                                    &expression,
-                                    &call,
-                                    None,
-                                    &mut s_write!(lu_dog),
-                                );
                                 eval_lambda_expression(
                                     ƛ.clone(),
                                     &[new_ref!(Value, Value::Integer(i))],
@@ -536,23 +496,9 @@ pub fn eval(
                             panic!("Should be a lambda");
                         };
 
-                        let call = &MethodCall::new("map".to_owned(), &mut s_write!(lu_dog));
-                        let _call =
-                            Call::new_method_call(false, None, None, call, &mut s_write!(lu_dog));
-
                         let result = inner
                             .iter()
                             .map(|value| {
-                                let block = Block::new(
-                                    false,
-                                    Uuid::new_v4(),
-                                    None,
-                                    None,
-                                    &mut s_write!(lu_dog),
-                                );
-                                let ty = s_read!(ƛ).return_type;
-                                let ty = s_read!(lu_dog).exhume_value_type(&ty).unwrap();
-
                                 eval_lambda_expression(
                                     ƛ.clone(),
                                     &[value.clone()],

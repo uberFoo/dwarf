@@ -2,7 +2,6 @@
 // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"line_segment_point-use-statements"}}}
 use std::sync::Arc;
 use std::sync::RwLock;
-use tracy_client::span;
 use uuid::Uuid;
 
 use crate::merlin::types::line_segment::LineSegment;
@@ -44,14 +43,12 @@ impl LineSegmentPoint {
     // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"line_segment_point-struct-impl-nav-forward-assoc-to-segment"}}}
     /// Navigate to [`LineSegment`] across R5(1-*)
     pub fn r5_line_segment<'a>(&'a self, store: &'a MerlinStore) -> Vec<Arc<RwLock<LineSegment>>> {
-        span!("r5_line_segment");
         vec![store.exhume_line_segment(&self.segment).unwrap()]
     }
     // {"magic":"","directive":{"End":{"directive":"ignore-orig"}}}
     // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"line_segment_point-struct-impl-nav-forward-assoc-to-point"}}}
     /// Navigate to [`Point`] across R5(1-*)
     pub fn r5_point<'a>(&'a self, store: &'a MerlinStore) -> Vec<Arc<RwLock<Point>>> {
-        span!("r5_point");
         vec![store.exhume_point(&self.point).unwrap()]
     }
     // {"magic":"","directive":{"End":{"directive":"ignore-orig"}}}
