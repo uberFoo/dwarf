@@ -15,10 +15,24 @@ jobs:
     build:
         runs-on: ubuntu-latest
         steps:
+            - name: Checkout sarzak-cli
+              uses: actions/checkout@v2
+              with:
+                  ref: develop
+                  path: sarzak-cli
+                  repository: 'uberfoo/sarzak-cli'
+
+            - name: Build sarzak-cli
+              run: |
+                  cd sarzak-cli
+                  cargo build --release
+                  cd ..
+
             - name: Checkout code
               uses: actions/checkout@v2
               with:
                   ref: develop
+                  path: dwarf
 
             - name: Set up Rust
               uses: actions-rs/toolchain@v1
@@ -29,7 +43,9 @@ jobs:
               uses: taiki-e/install-action@cargo-llvm-cov
 
             - name: Install dwarf
-              run: cargo xtask plugins
+              run: |
+                  cd dwarf
+                  cargo xtask plugins
 
             - name: Build and run tests with coverage
               run: |
