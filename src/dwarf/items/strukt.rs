@@ -1,4 +1,5 @@
 use ansi_term::Colour;
+use heck::ToUpperCamelCase;
 use rustc_hash::FxHashMap as HashMap;
 use sarzak::domain::DomainBuilder;
 use snafu::{location, Location};
@@ -7,8 +8,8 @@ use crate::{
     dwarf::{
         error::{DwarfError, Result},
         extruder::{
-            debug, function, make_value_type, Context, DeSanitize, Span, StructFields, JSON_EXT,
-            MODEL, MODEL_DIR, OBJECT, PLUGIN, PROXY, STORE, TYPE,
+            debug, function, make_value_type, Context, Span, StructFields, JSON_EXT, MODEL,
+            MODEL_DIR, OBJECT, PLUGIN, PROXY, STORE, TYPE,
         },
         AttributeMap, InnerAttribute, Spanned, Type,
     },
@@ -55,14 +56,17 @@ pub fn inter_struct(
 
                     if let Some(name_vec) = attributes.get(OBJECT) {
                         if let Some((_, ref value)) = name_vec.get(0) {
-                            let proxy: String = value.try_into().map_err(|e| vec![e])?;
-                            let proxy = proxy.de_sanitize();
-                            debug!("proxy.object: {proxy}");
+                            let proxy_obj: String = value.try_into().map_err(|e| vec![e])?;
+                            // let proxy_obj = proxy_obj.de_sanitize();
+                            let proxy_obj = proxy_obj.to_upper_camel_case();
+                            debug!("proxy.object: {proxy_obj}");
                             if let Some(model) = context.models.get(&store_name) {
-                                if let Some(ref obj_id) = model.0.exhume_object_id_by_name(proxy) {
+                                if let Some(ref obj_id) =
+                                    model.0.exhume_object_id_by_name(&proxy_obj)
+                                {
                                     let obj = model.0.exhume_object(obj_id).unwrap();
                                     let woog_struct = WoogStruct::new(
-                                        proxy.to_owned(),
+                                        name.to_owned(),
                                         None,
                                         Some(&*obj.read().unwrap()),
                                         lu_dog,
@@ -100,7 +104,7 @@ pub fn inter_struct(
                                     Err(vec![DwarfError::Generic {
                                         description: format!(
                                             "Object `{}` not found in store",
-                                            proxy
+                                            proxy_obj
                                         ),
                                     }])
                                 }
@@ -230,7 +234,7 @@ pub fn inter_struct_fields(
 ) -> Result<()> {
     let mut errors = Vec::new();
     for ((name, _), (type_, span), attrs) in fields {
-        let name = name.de_sanitize();
+        // let name = name.de_sanitize();
 
         debug!("field {name}");
 
@@ -256,7 +260,8 @@ pub fn inter_struct_fields(
                         let plugin_name: String = value.try_into().map_err(|e| vec![e])?;
                         debug!("proxy.plugin: {plugin_name}");
                         if let Type::UserType(tok, _generics) = type_ {
-                            let ty_name = tok.0.de_sanitize();
+                            // let ty_name = tok.0.de_sanitize();
+                            let ty_name = tok.0.to_owned();
                             if ty_name == "Plugin" {
                                 let plugin = XPlugin::new(plugin_name, lu_dog);
                                 let ty = ValueType::new_x_plugin(&plugin, lu_dog);

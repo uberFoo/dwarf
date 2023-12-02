@@ -1130,7 +1130,7 @@ impl Plugin for MerlinStore {
                             Err(e) => Err(e),
                         }
                     }
-                    "new_x_super" => {
+                    "new_z_super" => {
                         if args.len() != 1 {
                             return Err(Error::Uber("Expected 1 arguments".into()));
                         }
@@ -1141,9 +1141,9 @@ impl Plugin for MerlinStore {
                         }
                         match (|| -> Result<Glyph, Error> {
                             let id = Uuid::new_v4();
-                            let x_super = Glyph {
+                            let z_super = Glyph {
                                 id,
-                                subtype: GlyphEnum::XSuper(
+                                subtype: GlyphEnum::ZSuper(
                                     value_args.pop().unwrap().try_into().map_err(|e| {
                                         Error::Uber(format!("Error converting value: {e}").into())
                                     })?,
@@ -1153,20 +1153,20 @@ impl Plugin for MerlinStore {
                                 })?,
                             };
 
-                            Ok(x_super)
+                            Ok(z_super)
                         })() {
-                            Ok(x_super) => {
-                                let x_super = Arc::new(RwLock::new(x_super));
-                                self.store.write().unwrap().inter_glyph(x_super.clone());
+                            Ok(z_super) => {
+                                let z_super = Arc::new(RwLock::new(z_super));
+                                self.store.write().unwrap().inter_glyph(z_super.clone());
                                 let this = GlyphProxy {
-                                    inner: x_super.clone(),
+                                    inner: z_super.clone(),
                                     store: self.store.clone(),
                                 };
                                 let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
                                 let proxy = FfiProxy {
                                     module: module.into(),
                                     uuid: GLYPH_ID.into(),
-                                    id: x_super.read().unwrap().id.into(), // d
+                                    id: z_super.read().unwrap().id.into(), // d
                                     plugin: plugin.clone(),
                                 };
 
@@ -3807,15 +3807,15 @@ impl Display for SubProxy {
     }
 }
 
-const X_SUPER_ID: Uuid = uuid!("0cbeeb50-21ce-5e83-9f2e-65d1410d553f");
+const Z_SUPER_ID: Uuid = uuid!("0cbeeb50-21ce-5e83-9f2e-65d1410d553f");
 
 #[derive(Clone, Debug)]
-pub struct XSuperProxy {
-    inner: Arc<RwLock<XSuper>>,
+pub struct ZSuperProxy {
+    inner: Arc<RwLock<ZSuper>>,
     store: Arc<RwLock<ObjectStore>>,
 }
 
-impl Plugin for XSuperProxy {
+impl Plugin for ZSuperProxy {
     fn invoke_func(
         &mut self,
         module: RStr<'_>,
@@ -3875,15 +3875,15 @@ impl Plugin for XSuperProxy {
     }
 
     fn name(&self) -> RStr<'_> {
-        "XSuper".into()
+        "ZSuper".into()
     }
 
     fn close(self) {}
 }
 
-impl Display for XSuperProxy {
+impl Display for ZSuperProxy {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "XSuper({{")?;
+        writeln!(f, "ZSuper({{")?;
         writeln!(f, "	id: {:?},", self.inner.read().unwrap().id())?;
         writeln!(f, "}})")
     }

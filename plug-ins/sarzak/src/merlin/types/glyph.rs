@@ -9,7 +9,7 @@ use crate::merlin::types::line::Line;
 use crate::merlin::types::many::MANY;
 use crate::merlin::types::one::ONE;
 use crate::merlin::types::sub::SUB;
-use crate::merlin::types::x_super::X_SUPER;
+use crate::merlin::types::z_super::Z_SUPER;
 use serde::{Deserialize, Serialize};
 
 use crate::merlin::store::ObjectStore as MerlinStore;
@@ -30,7 +30,7 @@ pub enum GlyphEnum {
     Many(Uuid),
     One(Uuid),
     Sub(Uuid),
-    XSuper(Uuid),
+    ZSuper(Uuid),
 }
 // {"magic":"","directive":{"End":{"directive":"ignore-orig"}}}
 // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"glyph-implementation"}}}
@@ -75,12 +75,13 @@ impl Glyph {
     }
     // {"magic":"","directive":{"End":{"directive":"ignore-orig"}}}
     // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"glyph-struct-impl-new_x_super"}}}
+    // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"glyph-struct-impl-new_z_super"}}}
     /// Inter a new Glyph in the store, and return it's `id`.
-    pub fn new_x_super(line: &Arc<RwLock<Line>>, store: &mut MerlinStore) -> Arc<RwLock<Glyph>> {
+    pub fn new_z_super(line: &Arc<RwLock<Line>>, store: &mut MerlinStore) -> Arc<RwLock<Glyph>> {
         let id = Uuid::new_v4();
         let new = Arc::new(RwLock::new(Glyph {
             line: line.read().unwrap().id,
-            subtype: GlyphEnum::XSuper(X_SUPER),
+            subtype: GlyphEnum::ZSuper(Z_SUPER),
             id,
         }));
         store.inter_glyph(new.clone());

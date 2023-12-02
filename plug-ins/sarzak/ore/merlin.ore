@@ -1,6 +1,9 @@
 // This is the second iteration of the drawing domain. The first sucked.
 // 
 // This domain represents the visual aspect of a model.
+
+use std::prelude::*;
+
 // This annotation tells the interpreter that the struct will be a proxy for
 // an `ObjectStore` called merlin. It will find the plugin based on the name.
 #[store(model = "merlin")]
@@ -30,9 +33,9 @@ impl MerlinStore {
     fn exhume_bisection(self, bisection: Uuid) -> Bisection;
 
     #[proxy(store = "merlin", object = "ObjectStore", func = "inter_x_box")]
-    fn inter_x_box(self, x_box: XBox);
+    fn inter_x_box(self, x_box: Box);
     #[proxy(store = "merlin", object = "ObjectStore", func = "exhume_x_box")]
-    fn exhume_x_box(self, x_box: Uuid) -> XBox;
+    fn exhume_x_box(self, x_box: Uuid) -> Box;
 
     #[proxy(store = "merlin", object = "ObjectStore", func = "inter_edge")]
     fn inter_edge(self, edge: Edge);
@@ -95,14 +98,14 @@ struct Anchor {
     y_offset: int,
     edge: Edge,
     glyph: Glyph,
-    x_box: XBox,
+    x_box: Box,
     line: Line,
     // Non-formalizing relationships
 }
 
 impl Anchor {
     #[proxy(store = "merlin", object = "Anchor", func = "new")]
-    fn new(offset: float, x_offset: int, y_offset: int, edge: Edge, glyph: Glyph, x_box: XBox, line: Line) -> Self;
+    fn new(offset: float, x_offset: int, y_offset: int, edge: Edge, glyph: Glyph, x_box: Box, line: Line) -> Self;
 
     #[proxy(store = "merlin", object = "Anchor", func = "instances")]
     fn instances() -> [Self];
@@ -128,7 +131,7 @@ impl Anchor {
         print("    y_offset: int,\n");
         print("    edge: Edge,\n");
         print("    glyph: Glyph,\n");
-        print("    x_box: XBox,\n");
+        print("    x_box: Box,\n");
         print("    line: Line,\n");
         print("}\n");
     }
@@ -214,9 +217,9 @@ impl Bottom {
 // It's a rectangle with parameters.
 // 
 // This tells the interpreter that this struct is a proxy for an object called
-// "XBox" in the store named "merlin"; declared above.
-#[proxy(store = "merlin", object = "XBox")]
-struct XBox {
+// "Box" in the store named "merlin"; declared above.
+#[proxy(store = "merlin", object = "Box")]
+struct Box {
     height: int,
     id: Uuid,
     width: int,
@@ -226,11 +229,11 @@ struct XBox {
     // Non-formalizing relationships
 }
 
-impl XBox {
-    #[proxy(store = "merlin", object = "XBox", func = "new")]
+impl Box {
+    #[proxy(store = "merlin", object = "Box", func = "new")]
     fn new(height: int, width: int, x: int, y: int, object: Object) -> Self;
 
-    #[proxy(store = "merlin", object = "XBox", func = "instances")]
+    #[proxy(store = "merlin", object = "Box", func = "instances")]
     fn instances() -> [Self];
 
     fn help() -> () {
@@ -244,7 +247,7 @@ impl XBox {
     }
 
     fn info() -> () {
-        print("struct XBox {\n");
+        print("struct Box {\n");
         print("    height: int,\n");
         print("    id: Uuid,\n");
         print("    width: int,\n");
@@ -311,8 +314,8 @@ impl Glyph {
     fn new_sub(line: Line, sub: Sub
 ) -> Self;
 
-    #[proxy(store = "merlin", object = "Glyph", func = "new_x_super")]
-    fn new_x_super(line: Line, x_super: XSuper
+    #[proxy(store = "merlin", object = "Glyph", func = "new_z_super")]
+    fn new_z_super(line: Line, z_super: Super
 ) -> Self;
 
     #[proxy(store = "merlin", object = "Glyph", func = "instances")]
@@ -433,7 +436,7 @@ impl Line {
 // 
 // This tells the interpreter that this struct is a proxy for an object called
 // "LineSegment" in the store named "merlin"; declared above.
-#[proxy(store = "merlin", object = "LineSegment")]
+#[proxy(store = "merlin", object = "Line Segment")]
 struct LineSegment {
     id: Uuid,
     line: Line,
@@ -441,10 +444,10 @@ struct LineSegment {
 }
 
 impl LineSegment {
-    #[proxy(store = "merlin", object = "LineSegment", func = "new")]
+    #[proxy(store = "merlin", object = "Line Segment", func = "new")]
     fn new(line: Line) -> Self;
 
-    #[proxy(store = "merlin", object = "LineSegment", func = "instances")]
+    #[proxy(store = "merlin", object = "Line Segment", func = "instances")]
     fn instances() -> [Self];
 
     fn help() -> () {
@@ -465,7 +468,7 @@ impl LineSegment {
 
 // This tells the interpreter that this struct is a proxy for an object called
 // "LineSegmentPoint" in the store named "merlin"; declared above.
-#[proxy(store = "merlin", object = "LineSegmentPoint")]
+#[proxy(store = "merlin", object = "Line Segment Point")]
 struct LineSegmentPoint {
     id: Uuid,
     segment: LineSegment,
@@ -474,10 +477,10 @@ struct LineSegmentPoint {
 }
 
 impl LineSegmentPoint {
-    #[proxy(store = "merlin", object = "LineSegmentPoint", func = "new")]
+    #[proxy(store = "merlin", object = "Line Segment Point", func = "new")]
     fn new(segment: LineSegment, point: Point) -> Self;
 
-    #[proxy(store = "merlin", object = "LineSegmentPoint", func = "instances")]
+    #[proxy(store = "merlin", object = "Line Segment Point", func = "instances")]
     fn instances() -> [Self];
 
     fn help() -> () {
@@ -590,7 +593,7 @@ impl Point {
 
 // This tells the interpreter that this struct is a proxy for an object called
 // "RelationshipName" in the store named "merlin"; declared above.
-#[proxy(store = "merlin", object = "RelationshipName")]
+#[proxy(store = "merlin", object = "Relationship Name")]
 struct RelationshipName {
     id: Uuid,
     text: string,
@@ -602,10 +605,10 @@ struct RelationshipName {
 }
 
 impl RelationshipName {
-    #[proxy(store = "merlin", object = "RelationshipName", func = "new")]
+    #[proxy(store = "merlin", object = "Relationship Name", func = "new")]
     fn new(text: string, x: int, y: int, line: Line, origin: Bisection) -> Self;
 
-    #[proxy(store = "merlin", object = "RelationshipName", func = "instances")]
+    #[proxy(store = "merlin", object = "Relationship Name", func = "instances")]
     fn instances() -> [Self];
 
     fn help() -> () {
@@ -625,7 +628,7 @@ impl RelationshipName {
 
 // This tells the interpreter that this struct is a proxy for an object called
 // "RelationshipPhrase" in the store named "merlin"; declared above.
-#[proxy(store = "merlin", object = "RelationshipPhrase")]
+#[proxy(store = "merlin", object = "Relationship Phrase")]
 struct RelationshipPhrase {
     id: Uuid,
     text: string,
@@ -637,10 +640,10 @@ struct RelationshipPhrase {
 }
 
 impl RelationshipPhrase {
-    #[proxy(store = "merlin", object = "RelationshipPhrase", func = "new")]
+    #[proxy(store = "merlin", object = "Relationship Phrase", func = "new")]
     fn new(text: string, x: int, y: int, line: Line, origin: Anchor) -> Self;
 
-    #[proxy(store = "merlin", object = "RelationshipPhrase", func = "instances")]
+    #[proxy(store = "merlin", object = "Relationship Phrase", func = "instances")]
     fn instances() -> [Self];
 
     fn help() -> () {
@@ -709,25 +712,25 @@ impl Sub {
 }
 
 // This tells the interpreter that this struct is a proxy for an object called
-// "XSuper" in the store named "merlin"; declared above.
-#[proxy(store = "merlin", object = "XSuper")]
-struct XSuper {
+// "Super" in the store named "merlin"; declared above.
+#[proxy(store = "merlin", object = "Super")]
+struct Super {
     id: Uuid,
     // Non-formalizing relationships
 }
 
-impl XSuper {
-    #[proxy(store = "merlin", object = "XSuper", func = "new")]
+impl Super {
+    #[proxy(store = "merlin", object = "Super", func = "new")]
     fn new() -> Self;
 
-    #[proxy(store = "merlin", object = "XSuper", func = "instances")]
+    #[proxy(store = "merlin", object = "Super", func = "instances")]
     fn instances() -> [Self];
 
     fn help() -> () {
     }
 
     fn info() -> () {
-        print("struct XSuper {\n");
+        print("struct Super {\n");
         print("    id: Uuid,\n");
         print("}\n");
     }

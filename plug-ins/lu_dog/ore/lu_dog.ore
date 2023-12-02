@@ -1,4 +1,7 @@
 // A blank domain
+
+use std::prelude::*;
+
 // This annotation tells the interpreter that the struct will be a proxy for
 // an `ObjectStore` called lu_dog. It will find the plugin based on the name.
 #[store(model = "lu_dog")]
@@ -23,9 +26,9 @@ impl LuDogStore {
     fn exhume_argument(self, argument: Uuid) -> Argument;
 
     #[proxy(store = "lu_dog", object = "ObjectStore", func = "inter_a_wait")]
-    fn inter_a_wait(self, a_wait: AWait);
+    fn inter_a_wait(self, a_wait: Await);
     #[proxy(store = "lu_dog", object = "ObjectStore", func = "exhume_a_wait")]
-    fn exhume_a_wait(self, a_wait: Uuid) -> AWait;
+    fn exhume_a_wait(self, a_wait: Uuid) -> Await;
 
     #[proxy(store = "lu_dog", object = "ObjectStore", func = "inter_binary")]
     fn inter_binary(self, binary: Binary);
@@ -148,9 +151,9 @@ impl LuDogStore {
     fn exhume_grouped(self, grouped: Uuid) -> Grouped;
 
     #[proxy(store = "lu_dog", object = "ObjectStore", func = "inter_x_if")]
-    fn inter_x_if(self, x_if: XIf);
+    fn inter_x_if(self, x_if: If);
     #[proxy(store = "lu_dog", object = "ObjectStore", func = "exhume_x_if")]
-    fn exhume_x_if(self, x_if: Uuid) -> XIf;
+    fn exhume_x_if(self, x_if: Uuid) -> If;
 
     #[proxy(store = "lu_dog", object = "ObjectStore", func = "inter_implementation_block")]
     fn inter_implementation_block(self, implementation_block: ImplementationBlock);
@@ -218,14 +221,14 @@ impl LuDogStore {
     fn exhume_local_variable(self, local_variable: Uuid) -> LocalVariable;
 
     #[proxy(store = "lu_dog", object = "ObjectStore", func = "inter_x_macro")]
-    fn inter_x_macro(self, x_macro: XMacro);
+    fn inter_x_macro(self, x_macro: Macro);
     #[proxy(store = "lu_dog", object = "ObjectStore", func = "exhume_x_macro")]
-    fn exhume_x_macro(self, x_macro: Uuid) -> XMacro;
+    fn exhume_x_macro(self, x_macro: Uuid) -> Macro;
 
     #[proxy(store = "lu_dog", object = "ObjectStore", func = "inter_x_match")]
-    fn inter_x_match(self, x_match: XMatch);
+    fn inter_x_match(self, x_match: Match);
     #[proxy(store = "lu_dog", object = "ObjectStore", func = "exhume_x_match")]
-    fn exhume_x_match(self, x_match: Uuid) -> XMatch;
+    fn exhume_x_match(self, x_match: Uuid) -> Match;
 
     #[proxy(store = "lu_dog", object = "ObjectStore", func = "inter_method_call")]
     fn inter_method_call(self, method_call: MethodCall);
@@ -238,9 +241,9 @@ impl LuDogStore {
     fn exhume_named_field_expression(self, named_field_expression: Uuid) -> NamedFieldExpression;
 
     #[proxy(store = "lu_dog", object = "ObjectStore", func = "inter_z_object_store")]
-    fn inter_z_object_store(self, z_object_store: ZObjectStore);
+    fn inter_z_object_store(self, z_object_store: ObjectStore);
     #[proxy(store = "lu_dog", object = "ObjectStore", func = "exhume_z_object_store")]
-    fn exhume_z_object_store(self, z_object_store: Uuid) -> ZObjectStore;
+    fn exhume_z_object_store(self, z_object_store: Uuid) -> ObjectStore;
 
     #[proxy(store = "lu_dog", object = "ObjectStore", func = "inter_object_wrapper")]
     fn inter_object_wrapper(self, object_wrapper: ObjectWrapper);
@@ -258,9 +261,9 @@ impl LuDogStore {
     fn exhume_parameter(self, parameter: Uuid) -> Parameter;
 
     #[proxy(store = "lu_dog", object = "ObjectStore", func = "inter_x_path")]
-    fn inter_x_path(self, x_path: XPath);
+    fn inter_x_path(self, x_path: Path);
     #[proxy(store = "lu_dog", object = "ObjectStore", func = "exhume_x_path")]
-    fn exhume_x_path(self, x_path: Uuid) -> XPath;
+    fn exhume_x_path(self, x_path: Uuid) -> Path;
 
     #[proxy(store = "lu_dog", object = "ObjectStore", func = "inter_path_element")]
     fn inter_path_element(self, path_element: PathElement);
@@ -273,14 +276,14 @@ impl LuDogStore {
     fn exhume_pattern(self, pattern: Uuid) -> Pattern;
 
     #[proxy(store = "lu_dog", object = "ObjectStore", func = "inter_x_plugin")]
-    fn inter_x_plugin(self, x_plugin: XPlugin);
+    fn inter_x_plugin(self, x_plugin: Plugin);
     #[proxy(store = "lu_dog", object = "ObjectStore", func = "exhume_x_plugin")]
-    fn exhume_x_plugin(self, x_plugin: Uuid) -> XPlugin;
+    fn exhume_x_plugin(self, x_plugin: Uuid) -> Plugin;
 
     #[proxy(store = "lu_dog", object = "ObjectStore", func = "inter_x_print")]
-    fn inter_x_print(self, x_print: XPrint);
+    fn inter_x_print(self, x_print: Print);
     #[proxy(store = "lu_dog", object = "ObjectStore", func = "exhume_x_print")]
-    fn exhume_x_print(self, x_print: Uuid) -> XPrint;
+    fn exhume_x_print(self, x_print: Uuid) -> Print;
 
     #[proxy(store = "lu_dog", object = "ObjectStore", func = "inter_range_expression")]
     fn inter_range_expression(self, range_expression: RangeExpression);
@@ -293,9 +296,9 @@ impl LuDogStore {
     fn exhume_result_statement(self, result_statement: Uuid) -> ResultStatement;
 
     #[proxy(store = "lu_dog", object = "ObjectStore", func = "inter_x_return")]
-    fn inter_x_return(self, x_return: XReturn);
+    fn inter_x_return(self, x_return: Return);
     #[proxy(store = "lu_dog", object = "ObjectStore", func = "exhume_x_return")]
-    fn exhume_x_return(self, x_return: Uuid) -> XReturn;
+    fn exhume_x_return(self, x_return: Uuid) -> Return;
 
     #[proxy(store = "lu_dog", object = "ObjectStore", func = "inter_span")]
     fn inter_span(self, span: Span);
@@ -318,9 +321,9 @@ impl LuDogStore {
     fn exhume_string_literal(self, string_literal: Uuid) -> StringLiteral;
 
     #[proxy(store = "lu_dog", object = "ObjectStore", func = "inter_woog_struct")]
-    fn inter_woog_struct(self, woog_struct: WoogStruct);
+    fn inter_woog_struct(self, woog_struct: Struct);
     #[proxy(store = "lu_dog", object = "ObjectStore", func = "exhume_woog_struct")]
-    fn exhume_woog_struct(self, woog_struct: Uuid) -> WoogStruct;
+    fn exhume_woog_struct(self, woog_struct: Uuid) -> Struct;
 
     #[proxy(store = "lu_dog", object = "ObjectStore", func = "inter_struct_expression")]
     fn inter_struct_expression(self, struct_expression: StructExpression);
@@ -363,9 +366,9 @@ impl LuDogStore {
     fn exhume_unnamed_field_expression(self, unnamed_field_expression: Uuid) -> UnnamedFieldExpression;
 
     #[proxy(store = "lu_dog", object = "ObjectStore", func = "inter_x_value")]
-    fn inter_x_value(self, x_value: XValue);
+    fn inter_x_value(self, x_value: Value);
     #[proxy(store = "lu_dog", object = "ObjectStore", func = "exhume_x_value")]
-    fn exhume_x_value(self, x_value: Uuid) -> XValue;
+    fn exhume_x_value(self, x_value: Uuid) -> Value;
 
     #[proxy(store = "lu_dog", object = "ObjectStore", func = "inter_value_type")]
     fn inter_value_type(self, value_type: ValueType);
@@ -516,26 +519,26 @@ impl Assignment {
 }
 
 // This tells the interpreter that this struct is a proxy for an object called
-// "AWait" in the store named "lu_dog"; declared above.
-#[proxy(store = "lu_dog", object = "AWait")]
-struct AWait {
+// "Await" in the store named "lu_dog"; declared above.
+#[proxy(store = "lu_dog", object = "Await")]
+struct Await {
     id: Uuid,
     x_future: Expression,
     // Non-formalizing relationships
 }
 
-impl AWait {
-    #[proxy(store = "lu_dog", object = "AWait", func = "new")]
+impl Await {
+    #[proxy(store = "lu_dog", object = "Await", func = "new")]
     fn new(x_future: Expression) -> Self;
 
-    #[proxy(store = "lu_dog", object = "AWait", func = "instances")]
+    #[proxy(store = "lu_dog", object = "Await", func = "instances")]
     fn instances() -> [Self];
 
     fn help() -> () {
     }
 
     fn info() -> () {
-        print("struct AWait {\n");
+        print("struct Await {\n");
         print("    id: Uuid,\n");
         print("    x_future: Expression,\n");
         print("}\n");
@@ -691,20 +694,20 @@ impl Body {
 // 
 // This tells the interpreter that this struct is a proxy for an object called
 // "BooleanLiteral" in the store named "lu_dog"; declared above.
-#[proxy(store = "lu_dog", object = "BooleanLiteral")]
+#[proxy(store = "lu_dog", object = "Boolean Literal")]
 struct BooleanLiteral {
     id: Uuid,
     // Non-formalizing relationships
 }
 
 impl BooleanLiteral {
-    #[proxy(store = "lu_dog", object = "BooleanLiteral", func = "new_false_literal")]
+    #[proxy(store = "lu_dog", object = "Boolean Literal", func = "new_false_literal")]
     fn new_false_literal() -> Self;
 
-    #[proxy(store = "lu_dog", object = "BooleanLiteral", func = "new_true_literal")]
+    #[proxy(store = "lu_dog", object = "Boolean Literal", func = "new_true_literal")]
     fn new_true_literal() -> Self;
 
-    #[proxy(store = "lu_dog", object = "BooleanLiteral", func = "instances")]
+    #[proxy(store = "lu_dog", object = "Boolean Literal", func = "instances")]
     fn instances() -> [Self];
 
     fn help() -> () {
@@ -727,20 +730,20 @@ impl BooleanLiteral {
 // 
 // This tells the interpreter that this struct is a proxy for an object called
 // "BooleanOperator" in the store named "lu_dog"; declared above.
-#[proxy(store = "lu_dog", object = "BooleanOperator")]
+#[proxy(store = "lu_dog", object = "Boolean Operator")]
 struct BooleanOperator {
     id: Uuid,
     // Non-formalizing relationships
 }
 
 impl BooleanOperator {
-    #[proxy(store = "lu_dog", object = "BooleanOperator", func = "new_and")]
+    #[proxy(store = "lu_dog", object = "Boolean Operator", func = "new_and")]
     fn new_and() -> Self;
 
-    #[proxy(store = "lu_dog", object = "BooleanOperator", func = "new_or")]
+    #[proxy(store = "lu_dog", object = "Boolean Operator", func = "new_or")]
     fn new_or() -> Self;
 
-    #[proxy(store = "lu_dog", object = "BooleanOperator", func = "instances")]
+    #[proxy(store = "lu_dog", object = "Boolean Operator", func = "instances")]
     fn instances() -> [Self];
 
     fn help() -> () {
@@ -890,20 +893,20 @@ impl Comparison {
 
 // This tells the interpreter that this struct is a proxy for an object called
 // "DataStructure" in the store named "lu_dog"; declared above.
-#[proxy(store = "lu_dog", object = "DataStructure")]
+#[proxy(store = "lu_dog", object = "Data Structure")]
 struct DataStructure {
     id: Uuid,
     // Non-formalizing relationships
 }
 
 impl DataStructure {
-    #[proxy(store = "lu_dog", object = "DataStructure", func = "new_enumeration")]
+    #[proxy(store = "lu_dog", object = "Data Structure", func = "new_enumeration")]
     fn new_enumeration() -> Self;
 
-    #[proxy(store = "lu_dog", object = "DataStructure", func = "new_woog_struct")]
+    #[proxy(store = "lu_dog", object = "Data Structure", func = "new_woog_struct")]
     fn new_woog_struct() -> Self;
 
-    #[proxy(store = "lu_dog", object = "DataStructure", func = "instances")]
+    #[proxy(store = "lu_dog", object = "Data Structure", func = "instances")]
     fn instances() -> [Self];
 
     fn help() -> () {
@@ -978,7 +981,7 @@ impl Division {
 // 
 // This tells the interpreter that this struct is a proxy for an object called
 // "DwarfSourceFile" in the store named "lu_dog"; declared above.
-#[proxy(store = "lu_dog", object = "DwarfSourceFile")]
+#[proxy(store = "lu_dog", object = "Dwarf Source File")]
 struct DwarfSourceFile {
     id: Uuid,
     source: string,
@@ -986,10 +989,10 @@ struct DwarfSourceFile {
 }
 
 impl DwarfSourceFile {
-    #[proxy(store = "lu_dog", object = "DwarfSourceFile", func = "new")]
+    #[proxy(store = "lu_dog", object = "Dwarf Source File", func = "new")]
     fn new(source: string) -> Self;
 
-    #[proxy(store = "lu_dog", object = "DwarfSourceFile", func = "instances")]
+    #[proxy(store = "lu_dog", object = "Dwarf Source File", func = "instances")]
     fn instances() -> [Self];
 
     fn help() -> () {
@@ -1046,17 +1049,17 @@ impl Empty {
 
 // This tells the interpreter that this struct is a proxy for an object called
 // "EmptyExpression" in the store named "lu_dog"; declared above.
-#[proxy(store = "lu_dog", object = "EmptyExpression")]
+#[proxy(store = "lu_dog", object = "Empty Expression")]
 struct EmptyExpression {
     id: Uuid,
     // Non-formalizing relationships
 }
 
 impl EmptyExpression {
-    #[proxy(store = "lu_dog", object = "EmptyExpression", func = "new")]
+    #[proxy(store = "lu_dog", object = "Empty Expression", func = "new")]
     fn new() -> Self;
 
-    #[proxy(store = "lu_dog", object = "EmptyExpression", func = "instances")]
+    #[proxy(store = "lu_dog", object = "Empty Expression", func = "instances")]
     fn instances() -> [Self];
 
     fn help() -> () {
@@ -1075,7 +1078,7 @@ impl EmptyExpression {
 // 
 // This tells the interpreter that this struct is a proxy for an object called
 // "EnumField" in the store named "lu_dog"; declared above.
-#[proxy(store = "lu_dog", object = "EnumField")]
+#[proxy(store = "lu_dog", object = "Enum Field")]
 struct EnumField {
     id: Uuid,
     name: string,
@@ -1084,19 +1087,19 @@ struct EnumField {
 }
 
 impl EnumField {
-    #[proxy(store = "lu_dog", object = "EnumField", func = "new_struct_field")]
+    #[proxy(store = "lu_dog", object = "Enum Field", func = "new_struct_field")]
     fn new_struct_field(name: string, woog_enum: Enumeration, struct_field: StructField
 ) -> Self;
 
-    #[proxy(store = "lu_dog", object = "EnumField", func = "new_tuple_field")]
+    #[proxy(store = "lu_dog", object = "Enum Field", func = "new_tuple_field")]
     fn new_tuple_field(name: string, woog_enum: Enumeration, tuple_field: TupleField
 ) -> Self;
 
-    #[proxy(store = "lu_dog", object = "EnumField", func = "new_unit")]
+    #[proxy(store = "lu_dog", object = "Enum Field", func = "new_unit")]
     fn new_unit(name: string, woog_enum: Enumeration, unit: Unit
 ) -> Self;
 
-    #[proxy(store = "lu_dog", object = "EnumField", func = "instances")]
+    #[proxy(store = "lu_dog", object = "Enum Field", func = "instances")]
     fn instances() -> [Self];
 
     fn help() -> () {
@@ -1285,7 +1288,7 @@ impl Expression {
 // 
 // This tells the interpreter that this struct is a proxy for an object called
 // "ExpressionStatement" in the store named "lu_dog"; declared above.
-#[proxy(store = "lu_dog", object = "ExpressionStatement")]
+#[proxy(store = "lu_dog", object = "Expression Statement")]
 struct ExpressionStatement {
     id: Uuid,
     expression: Expression,
@@ -1293,10 +1296,10 @@ struct ExpressionStatement {
 }
 
 impl ExpressionStatement {
-    #[proxy(store = "lu_dog", object = "ExpressionStatement", func = "new")]
+    #[proxy(store = "lu_dog", object = "Expression Statement", func = "new")]
     fn new(expression: Expression) -> Self;
 
-    #[proxy(store = "lu_dog", object = "ExpressionStatement", func = "instances")]
+    #[proxy(store = "lu_dog", object = "Expression Statement", func = "instances")]
     fn instances() -> [Self];
 
     fn help() -> () {
@@ -1316,7 +1319,7 @@ impl ExpressionStatement {
 // 
 // This tells the interpreter that this struct is a proxy for an object called
 // "ExternalImplementation" in the store named "lu_dog"; declared above.
-#[proxy(store = "lu_dog", object = "ExternalImplementation")]
+#[proxy(store = "lu_dog", object = "External Implementation")]
 struct ExternalImplementation {
     function: string,
     id: Uuid,
@@ -1326,10 +1329,10 @@ struct ExternalImplementation {
 }
 
 impl ExternalImplementation {
-    #[proxy(store = "lu_dog", object = "ExternalImplementation", func = "new")]
+    #[proxy(store = "lu_dog", object = "External Implementation", func = "new")]
     fn new(function: string, x_model: string, object: string) -> Self;
 
-    #[proxy(store = "lu_dog", object = "ExternalImplementation", func = "instances")]
+    #[proxy(store = "lu_dog", object = "External Implementation", func = "instances")]
     fn instances() -> [Self];
 
     fn help() -> () {
@@ -1352,18 +1355,18 @@ impl ExternalImplementation {
 // The literal `false`.
 // 
 // This tells the interpreter that this struct is a proxy for an object called
-// "FalseLiteral" in the store named "lu_dog"; declared above.
-#[proxy(store = "lu_dog", object = "FalseLiteral")]
-struct FalseLiteral {
+// "False" in the store named "lu_dog"; declared above.
+#[proxy(store = "lu_dog", object = "False")]
+struct False {
     id: Uuid,
     // Non-formalizing relationships
 }
 
-impl FalseLiteral {
-    #[proxy(store = "lu_dog", object = "FalseLiteral", func = "new")]
+impl False {
+    #[proxy(store = "lu_dog", object = "False", func = "new")]
     fn new() -> Self;
 
-    #[proxy(store = "lu_dog", object = "FalseLiteral", func = "instances")]
+    #[proxy(store = "lu_dog", object = "False", func = "instances")]
     fn instances() -> [Self];
 
     fn help() -> () {
@@ -1374,7 +1377,7 @@ impl FalseLiteral {
     }
 
     fn info() -> () {
-        print("struct FalseLiteral {\n");
+        print("struct False {\n");
         print("    id: Uuid,\n");
         print("}\n");
     }
@@ -1390,14 +1393,14 @@ impl FalseLiteral {
 struct Field {
     id: Uuid,
     name: string,
-    x_model: WoogStruct,
+    x_model: Struct,
     ty: ValueType,
     // Non-formalizing relationships
 }
 
 impl Field {
     #[proxy(store = "lu_dog", object = "Field", func = "new")]
-    fn new(name: string, x_model: WoogStruct, ty: ValueType) -> Self;
+    fn new(name: string, x_model: Struct, ty: ValueType) -> Self;
 
     #[proxy(store = "lu_dog", object = "Field", func = "instances")]
     fn instances() -> [Self];
@@ -1413,7 +1416,7 @@ impl Field {
         print("struct Field {\n");
         print("    id: Uuid,\n");
         print("    name: string,\n");
-        print("    x_model: WoogStruct,\n");
+        print("    x_model: Struct,\n");
         print("    ty: ValueType,\n");
         print("}\n");
     }
@@ -1425,20 +1428,20 @@ impl Field {
 // 
 // This tells the interpreter that this struct is a proxy for an object called
 // "FieldAccess" in the store named "lu_dog"; declared above.
-#[proxy(store = "lu_dog", object = "FieldAccess")]
+#[proxy(store = "lu_dog", object = "Field Access")]
 struct FieldAccess {
     id: Uuid,
     expression: Expression,
     field: FieldAccessTarget,
-    woog_struct: WoogStruct,
+    woog_struct: Struct,
     // Non-formalizing relationships
 }
 
 impl FieldAccess {
-    #[proxy(store = "lu_dog", object = "FieldAccess", func = "new")]
-    fn new(expression: Expression, field: FieldAccessTarget, woog_struct: WoogStruct) -> Self;
+    #[proxy(store = "lu_dog", object = "Field Access", func = "new")]
+    fn new(expression: Expression, field: FieldAccessTarget, woog_struct: Struct) -> Self;
 
-    #[proxy(store = "lu_dog", object = "FieldAccess", func = "instances")]
+    #[proxy(store = "lu_dog", object = "Field Access", func = "instances")]
     fn instances() -> [Self];
 
     fn help() -> () {
@@ -1453,7 +1456,7 @@ impl FieldAccess {
         print("    id: Uuid,\n");
         print("    expression: Expression,\n");
         print("    field: FieldAccessTarget,\n");
-        print("    woog_struct: WoogStruct,\n");
+        print("    woog_struct: Struct,\n");
         print("}\n");
     }
 }
@@ -1464,23 +1467,23 @@ impl FieldAccess {
 // 
 // This tells the interpreter that this struct is a proxy for an object called
 // "FieldAccessTarget" in the store named "lu_dog"; declared above.
-#[proxy(store = "lu_dog", object = "FieldAccessTarget")]
+#[proxy(store = "lu_dog", object = "Field Access Target")]
 struct FieldAccessTarget {
     id: Uuid,
     // Non-formalizing relationships
 }
 
 impl FieldAccessTarget {
-    #[proxy(store = "lu_dog", object = "FieldAccessTarget", func = "new_enum_field")]
+    #[proxy(store = "lu_dog", object = "Field Access Target", func = "new_enum_field")]
     fn new_enum_field() -> Self;
 
-    #[proxy(store = "lu_dog", object = "FieldAccessTarget", func = "new_field")]
+    #[proxy(store = "lu_dog", object = "Field Access Target", func = "new_field")]
     fn new_field() -> Self;
 
-    #[proxy(store = "lu_dog", object = "FieldAccessTarget", func = "new_function")]
+    #[proxy(store = "lu_dog", object = "Field Access Target", func = "new_function")]
     fn new_function() -> Self;
 
-    #[proxy(store = "lu_dog", object = "FieldAccessTarget", func = "instances")]
+    #[proxy(store = "lu_dog", object = "Field Access Target", func = "instances")]
     fn instances() -> [Self];
 
     fn help() -> () {
@@ -1503,7 +1506,7 @@ impl FieldAccessTarget {
 // 
 // This tells the interpreter that this struct is a proxy for an object called
 // "FieldExpression" in the store named "lu_dog"; declared above.
-#[proxy(store = "lu_dog", object = "FieldExpression")]
+#[proxy(store = "lu_dog", object = "Field Expression")]
 struct FieldExpression {
     id: Uuid,
     expression: Expression,
@@ -1512,15 +1515,15 @@ struct FieldExpression {
 }
 
 impl FieldExpression {
-    #[proxy(store = "lu_dog", object = "FieldExpression", func = "new_named_field_expression")]
+    #[proxy(store = "lu_dog", object = "Field Expression", func = "new_named_field_expression")]
     fn new_named_field_expression(expression: Expression, woog_struct: StructExpression, named_field_expression: NamedFieldExpression
 ) -> Self;
 
-    #[proxy(store = "lu_dog", object = "FieldExpression", func = "new_unnamed_field_expression")]
+    #[proxy(store = "lu_dog", object = "Field Expression", func = "new_unnamed_field_expression")]
     fn new_unnamed_field_expression(expression: Expression, woog_struct: StructExpression, unnamed_field_expression: UnnamedFieldExpression
 ) -> Self;
 
-    #[proxy(store = "lu_dog", object = "FieldExpression", func = "instances")]
+    #[proxy(store = "lu_dog", object = "Field Expression", func = "instances")]
     fn instances() -> [Self];
 
     fn help() -> () {
@@ -1545,7 +1548,7 @@ impl FieldExpression {
 // 
 // This tells the interpreter that this struct is a proxy for an object called
 // "FloatLiteral" in the store named "lu_dog"; declared above.
-#[proxy(store = "lu_dog", object = "FloatLiteral")]
+#[proxy(store = "lu_dog", object = "Float Literal")]
 struct FloatLiteral {
     id: Uuid,
     x_value: float,
@@ -1553,10 +1556,10 @@ struct FloatLiteral {
 }
 
 impl FloatLiteral {
-    #[proxy(store = "lu_dog", object = "FloatLiteral", func = "new")]
+    #[proxy(store = "lu_dog", object = "Float Literal", func = "new")]
     fn new(x_value: float) -> Self;
 
-    #[proxy(store = "lu_dog", object = "FloatLiteral", func = "instances")]
+    #[proxy(store = "lu_dog", object = "Float Literal", func = "instances")]
     fn instances() -> [Self];
 
     fn help() -> () {
@@ -1580,7 +1583,7 @@ impl FloatLiteral {
 // 
 // This tells the interpreter that this struct is a proxy for an object called
 // "ForLoop" in the store named "lu_dog"; declared above.
-#[proxy(store = "lu_dog", object = "ForLoop")]
+#[proxy(store = "lu_dog", object = "For Loop")]
 struct ForLoop {
     id: Uuid,
     ident: string,
@@ -1590,10 +1593,10 @@ struct ForLoop {
 }
 
 impl ForLoop {
-    #[proxy(store = "lu_dog", object = "ForLoop", func = "new")]
+    #[proxy(store = "lu_dog", object = "For Loop", func = "new")]
     fn new(ident: string, block: Block, expression: Expression) -> Self;
 
-    #[proxy(store = "lu_dog", object = "ForLoop", func = "instances")]
+    #[proxy(store = "lu_dog", object = "For Loop", func = "instances")]
     fn instances() -> [Self];
 
     fn help() -> () {
@@ -1708,17 +1711,17 @@ impl Function {
 
 // This tells the interpreter that this struct is a proxy for an object called
 // "FunctionCall" in the store named "lu_dog"; declared above.
-#[proxy(store = "lu_dog", object = "FunctionCall")]
+#[proxy(store = "lu_dog", object = "Function Call")]
 struct FunctionCall {
     id: Uuid,
     // Non-formalizing relationships
 }
 
 impl FunctionCall {
-    #[proxy(store = "lu_dog", object = "FunctionCall", func = "new")]
+    #[proxy(store = "lu_dog", object = "Function Call", func = "new")]
     fn new() -> Self;
 
-    #[proxy(store = "lu_dog", object = "FunctionCall", func = "instances")]
+    #[proxy(store = "lu_dog", object = "Function Call", func = "instances")]
     fn instances() -> [Self];
 
     fn help() -> () {
@@ -1733,7 +1736,7 @@ impl FunctionCall {
 
 // This tells the interpreter that this struct is a proxy for an object called
 // "XFuture" in the store named "lu_dog"; declared above.
-#[proxy(store = "lu_dog", object = "XFuture")]
+#[proxy(store = "lu_dog", object = "Future")]
 struct XFuture {
     id: Uuid,
     x_value: ValueType,
@@ -1741,10 +1744,10 @@ struct XFuture {
 }
 
 impl XFuture {
-    #[proxy(store = "lu_dog", object = "XFuture", func = "new")]
+    #[proxy(store = "lu_dog", object = "Future", func = "new")]
     fn new(x_value: ValueType) -> Self;
 
-    #[proxy(store = "lu_dog", object = "XFuture", func = "instances")]
+    #[proxy(store = "lu_dog", object = "Future", func = "instances")]
     fn instances() -> [Self];
 
     fn help() -> () {
@@ -1801,17 +1804,17 @@ impl Generic {
 
 // This tells the interpreter that this struct is a proxy for an object called
 // "GreaterThan" in the store named "lu_dog"; declared above.
-#[proxy(store = "lu_dog", object = "GreaterThan")]
+#[proxy(store = "lu_dog", object = "Greater Than")]
 struct GreaterThan {
     id: Uuid,
     // Non-formalizing relationships
 }
 
 impl GreaterThan {
-    #[proxy(store = "lu_dog", object = "GreaterThan", func = "new")]
+    #[proxy(store = "lu_dog", object = "Greater Than", func = "new")]
     fn new() -> Self;
 
-    #[proxy(store = "lu_dog", object = "GreaterThan", func = "instances")]
+    #[proxy(store = "lu_dog", object = "Greater Than", func = "instances")]
     fn instances() -> [Self];
 
     fn help() -> () {
@@ -1826,17 +1829,17 @@ impl GreaterThan {
 
 // This tells the interpreter that this struct is a proxy for an object called
 // "GreaterThanOrEqual" in the store named "lu_dog"; declared above.
-#[proxy(store = "lu_dog", object = "GreaterThanOrEqual")]
+#[proxy(store = "lu_dog", object = "Greater Than or Equal")]
 struct GreaterThanOrEqual {
     id: Uuid,
     // Non-formalizing relationships
 }
 
 impl GreaterThanOrEqual {
-    #[proxy(store = "lu_dog", object = "GreaterThanOrEqual", func = "new")]
+    #[proxy(store = "lu_dog", object = "Greater Than or Equal", func = "new")]
     fn new() -> Self;
 
-    #[proxy(store = "lu_dog", object = "GreaterThanOrEqual", func = "instances")]
+    #[proxy(store = "lu_dog", object = "Greater Than or Equal", func = "instances")]
     fn instances() -> [Self];
 
     fn help() -> () {
@@ -1885,9 +1888,9 @@ impl Grouped {
 // It does include an else, at no extra charge!
 // 
 // This tells the interpreter that this struct is a proxy for an object called
-// "XIf" in the store named "lu_dog"; declared above.
-#[proxy(store = "lu_dog", object = "XIf")]
-struct XIf {
+// "If" in the store named "lu_dog"; declared above.
+#[proxy(store = "lu_dog", object = "If")]
+struct If {
     id: Uuid,
     false_block: Option<Block>,
     test: Expression,
@@ -1895,11 +1898,11 @@ struct XIf {
     // Non-formalizing relationships
 }
 
-impl XIf {
-    #[proxy(store = "lu_dog", object = "XIf", func = "new")]
+impl If {
+    #[proxy(store = "lu_dog", object = "If", func = "new")]
     fn new(false_block: Option<Block>, test: Expression, true_block: Block) -> Self;
 
-    #[proxy(store = "lu_dog", object = "XIf", func = "instances")]
+    #[proxy(store = "lu_dog", object = "If", func = "instances")]
     fn instances() -> [Self];
 
     fn help() -> () {
@@ -1910,7 +1913,7 @@ impl XIf {
     }
 
     fn info() -> () {
-        print("struct XIf {\n");
+        print("struct If {\n");
         print("    id: Uuid,\n");
         print("    false_block: Option<Block>,\n");
         print("    test: Expression,\n");
@@ -1925,19 +1928,19 @@ impl XIf {
 // 
 // This tells the interpreter that this struct is a proxy for an object called
 // "ImplementationBlock" in the store named "lu_dog"; declared above.
-#[proxy(store = "lu_dog", object = "ImplementationBlock")]
+#[proxy(store = "lu_dog", object = "Implementation Block")]
 struct ImplementationBlock {
     id: Uuid,
-    model_type: Option<WoogStruct>,
-    object_store: Option<ZObjectStore>,
+    model_type: Option<Struct>,
+    object_store: Option<ObjectStore>,
     // Non-formalizing relationships
 }
 
 impl ImplementationBlock {
-    #[proxy(store = "lu_dog", object = "ImplementationBlock", func = "new")]
-    fn new(model_type: Option<WoogStruct>, object_store: Option<ZObjectStore>) -> Self;
+    #[proxy(store = "lu_dog", object = "Implementation Block", func = "new")]
+    fn new(model_type: Option<Struct>, object_store: Option<ObjectStore>) -> Self;
 
-    #[proxy(store = "lu_dog", object = "ImplementationBlock", func = "instances")]
+    #[proxy(store = "lu_dog", object = "Implementation Block", func = "instances")]
     fn instances() -> [Self];
 
     fn help() -> () {
@@ -1950,8 +1953,8 @@ impl ImplementationBlock {
     fn info() -> () {
         print("struct ImplementationBlock {\n");
         print("    id: Uuid,\n");
-        print("    model_type: Option<WoogStruct>,\n");
-        print("    object_store: Option<ZObjectStore>,\n");
+        print("    model_type: Option<Struct>,\n");
+        print("    object_store: Option<ObjectStore>,\n");
         print("}\n");
     }
 }
@@ -2081,7 +2084,7 @@ impl Index {
 // 
 // This tells the interpreter that this struct is a proxy for an object called
 // "IntegerLiteral" in the store named "lu_dog"; declared above.
-#[proxy(store = "lu_dog", object = "IntegerLiteral")]
+#[proxy(store = "lu_dog", object = "Integer Literal")]
 struct IntegerLiteral {
     id: Uuid,
     x_value: int,
@@ -2089,10 +2092,10 @@ struct IntegerLiteral {
 }
 
 impl IntegerLiteral {
-    #[proxy(store = "lu_dog", object = "IntegerLiteral", func = "new")]
+    #[proxy(store = "lu_dog", object = "Integer Literal", func = "new")]
     fn new(x_value: int) -> Self;
 
-    #[proxy(store = "lu_dog", object = "IntegerLiteral", func = "instances")]
+    #[proxy(store = "lu_dog", object = "Integer Literal", func = "instances")]
     fn instances() -> [Self];
 
     fn help() -> () {
@@ -2137,11 +2140,11 @@ impl Item {
 ) -> Self;
 
     #[proxy(store = "lu_dog", object = "Item", func = "new_x_macro")]
-    fn new_x_macro(source: DwarfSourceFile, x_macro: XMacro
+    fn new_x_macro(source: DwarfSourceFile, x_macro: Macro
 ) -> Self;
 
     #[proxy(store = "lu_dog", object = "Item", func = "new_woog_struct")]
-    fn new_woog_struct(source: DwarfSourceFile, woog_struct: WoogStruct
+    fn new_woog_struct(source: DwarfSourceFile, woog_struct: Struct
 ) -> Self;
 
     #[proxy(store = "lu_dog", object = "Item", func = "instances")]
@@ -2162,17 +2165,17 @@ impl Item {
 // 
 // This tells the interpreter that this struct is a proxy for an object called
 // "ItemStatement" in the store named "lu_dog"; declared above.
-#[proxy(store = "lu_dog", object = "ItemStatement")]
+#[proxy(store = "lu_dog", object = "Item Statement")]
 struct ItemStatement {
     id: Uuid,
     // Non-formalizing relationships
 }
 
 impl ItemStatement {
-    #[proxy(store = "lu_dog", object = "ItemStatement", func = "new")]
+    #[proxy(store = "lu_dog", object = "Item Statement", func = "new")]
     fn new() -> Self;
 
-    #[proxy(store = "lu_dog", object = "ItemStatement", func = "instances")]
+    #[proxy(store = "lu_dog", object = "Item Statement", func = "instances")]
     fn instances() -> [Self];
 
     fn help() -> () {
@@ -2236,7 +2239,7 @@ impl Lambda {
 // 
 // This tells the interpreter that this struct is a proxy for an object called
 // "LambdaParameter" in the store named "lu_dog"; declared above.
-#[proxy(store = "lu_dog", object = "LambdaParameter")]
+#[proxy(store = "lu_dog", object = "Lambda Parameter")]
 struct LambdaParameter {
     id: Uuid,
     position: int,
@@ -2247,10 +2250,10 @@ struct LambdaParameter {
 }
 
 impl LambdaParameter {
-    #[proxy(store = "lu_dog", object = "LambdaParameter", func = "new")]
+    #[proxy(store = "lu_dog", object = "Lambda Parameter", func = "new")]
     fn new(position: int, lambda: Lambda, next: Option<LambdaParameter>, ty: Option<ValueType>) -> Self;
 
-    #[proxy(store = "lu_dog", object = "LambdaParameter", func = "instances")]
+    #[proxy(store = "lu_dog", object = "Lambda Parameter", func = "instances")]
     fn instances() -> [Self];
 
     fn help() -> () {
@@ -2274,17 +2277,17 @@ impl LambdaParameter {
 // 
 // This tells the interpreter that this struct is a proxy for an object called
 // "LessThan" in the store named "lu_dog"; declared above.
-#[proxy(store = "lu_dog", object = "LessThan")]
+#[proxy(store = "lu_dog", object = "Less Than")]
 struct LessThan {
     id: Uuid,
     // Non-formalizing relationships
 }
 
 impl LessThan {
-    #[proxy(store = "lu_dog", object = "LessThan", func = "new")]
+    #[proxy(store = "lu_dog", object = "Less Than", func = "new")]
     fn new() -> Self;
 
-    #[proxy(store = "lu_dog", object = "LessThan", func = "instances")]
+    #[proxy(store = "lu_dog", object = "Less Than", func = "instances")]
     fn instances() -> [Self];
 
     fn help() -> () {
@@ -2304,17 +2307,17 @@ impl LessThan {
 // 
 // This tells the interpreter that this struct is a proxy for an object called
 // "LessThanOrEqual" in the store named "lu_dog"; declared above.
-#[proxy(store = "lu_dog", object = "LessThanOrEqual")]
+#[proxy(store = "lu_dog", object = "Less Than or Equal")]
 struct LessThanOrEqual {
     id: Uuid,
     // Non-formalizing relationships
 }
 
 impl LessThanOrEqual {
-    #[proxy(store = "lu_dog", object = "LessThanOrEqual", func = "new")]
+    #[proxy(store = "lu_dog", object = "Less Than or Equal", func = "new")]
     fn new() -> Self;
 
-    #[proxy(store = "lu_dog", object = "LessThanOrEqual", func = "instances")]
+    #[proxy(store = "lu_dog", object = "Less Than or Equal", func = "instances")]
     fn instances() -> [Self];
 
     fn help() -> () {
@@ -2335,7 +2338,7 @@ impl LessThanOrEqual {
 // 
 // This tells the interpreter that this struct is a proxy for an object called
 // "LetStatement" in the store named "lu_dog"; declared above.
-#[proxy(store = "lu_dog", object = "LetStatement")]
+#[proxy(store = "lu_dog", object = "Let Statement")]
 struct LetStatement {
     id: Uuid,
     expression: Expression,
@@ -2344,10 +2347,10 @@ struct LetStatement {
 }
 
 impl LetStatement {
-    #[proxy(store = "lu_dog", object = "LetStatement", func = "new")]
+    #[proxy(store = "lu_dog", object = "Let Statement", func = "new")]
     fn new(expression: Expression, variable: LocalVariable) -> Self;
 
-    #[proxy(store = "lu_dog", object = "LetStatement", func = "instances")]
+    #[proxy(store = "lu_dog", object = "Let Statement", func = "instances")]
     fn instances() -> [Self];
 
     fn help() -> () {
@@ -2403,7 +2406,7 @@ impl List {
 
 // This tells the interpreter that this struct is a proxy for an object called
 // "ListElement" in the store named "lu_dog"; declared above.
-#[proxy(store = "lu_dog", object = "ListElement")]
+#[proxy(store = "lu_dog", object = "List Element")]
 struct ListElement {
     id: Uuid,
     position: int,
@@ -2413,10 +2416,10 @@ struct ListElement {
 }
 
 impl ListElement {
-    #[proxy(store = "lu_dog", object = "ListElement", func = "new")]
+    #[proxy(store = "lu_dog", object = "List Element", func = "new")]
     fn new(position: int, expression: Expression, next: Option<ListElement>) -> Self;
 
-    #[proxy(store = "lu_dog", object = "ListElement", func = "instances")]
+    #[proxy(store = "lu_dog", object = "List Element", func = "instances")]
     fn instances() -> [Self];
 
     fn help() -> () {
@@ -2438,7 +2441,7 @@ impl ListElement {
 // 
 // This tells the interpreter that this struct is a proxy for an object called
 // "ListExpression" in the store named "lu_dog"; declared above.
-#[proxy(store = "lu_dog", object = "ListExpression")]
+#[proxy(store = "lu_dog", object = "List Expression")]
 struct ListExpression {
     id: Uuid,
     elements: Option<ListElement>,
@@ -2446,10 +2449,10 @@ struct ListExpression {
 }
 
 impl ListExpression {
-    #[proxy(store = "lu_dog", object = "ListExpression", func = "new")]
+    #[proxy(store = "lu_dog", object = "List Expression", func = "new")]
     fn new(elements: Option<ListElement>) -> Self;
 
-    #[proxy(store = "lu_dog", object = "ListExpression", func = "instances")]
+    #[proxy(store = "lu_dog", object = "List Expression", func = "instances")]
     fn instances() -> [Self];
 
     fn help() -> () {
@@ -2515,7 +2518,7 @@ impl Literal {
 // 
 // This tells the interpreter that this struct is a proxy for an object called
 // "LocalVariable" in the store named "lu_dog"; declared above.
-#[proxy(store = "lu_dog", object = "LocalVariable")]
+#[proxy(store = "lu_dog", object = "Local Variable")]
 struct LocalVariable {
     bug: Uuid,
     id: Uuid,
@@ -2523,10 +2526,10 @@ struct LocalVariable {
 }
 
 impl LocalVariable {
-    #[proxy(store = "lu_dog", object = "LocalVariable", func = "new")]
+    #[proxy(store = "lu_dog", object = "Local Variable", func = "new")]
     fn new(bug: Uuid) -> Self;
 
-    #[proxy(store = "lu_dog", object = "LocalVariable", func = "instances")]
+    #[proxy(store = "lu_dog", object = "Local Variable", func = "instances")]
     fn instances() -> [Self];
 
     fn help() -> () {
@@ -2560,19 +2563,19 @@ impl LocalVariable {
 // ```
 // 
 // This tells the interpreter that this struct is a proxy for an object called
-// "XMacro" in the store named "lu_dog"; declared above.
-#[proxy(store = "lu_dog", object = "XMacro")]
-struct XMacro {
+// "Macro" in the store named "lu_dog"; declared above.
+#[proxy(store = "lu_dog", object = "Macro")]
+struct Macro {
     id: Uuid,
     name: string,
     // Non-formalizing relationships
 }
 
-impl XMacro {
-    #[proxy(store = "lu_dog", object = "XMacro", func = "new")]
+impl Macro {
+    #[proxy(store = "lu_dog", object = "Macro", func = "new")]
     fn new(name: string) -> Self;
 
-    #[proxy(store = "lu_dog", object = "XMacro", func = "instances")]
+    #[proxy(store = "lu_dog", object = "Macro", func = "instances")]
     fn instances() -> [Self];
 
     fn help() -> () {
@@ -2594,7 +2597,7 @@ impl XMacro {
     }
 
     fn info() -> () {
-        print("struct XMacro {\n");
+        print("struct Macro {\n");
         print("    id: Uuid,\n");
         print("    name: string,\n");
         print("}\n");
@@ -2608,17 +2611,17 @@ impl XMacro {
 // 
 // This tells the interpreter that this struct is a proxy for an object called
 // "MacroCall" in the store named "lu_dog"; declared above.
-#[proxy(store = "lu_dog", object = "MacroCall")]
+#[proxy(store = "lu_dog", object = "Macro Call")]
 struct MacroCall {
     id: Uuid,
     // Non-formalizing relationships
 }
 
 impl MacroCall {
-    #[proxy(store = "lu_dog", object = "MacroCall", func = "new")]
+    #[proxy(store = "lu_dog", object = "Macro Call", func = "new")]
     fn new() -> Self;
 
-    #[proxy(store = "lu_dog", object = "MacroCall", func = "instances")]
+    #[proxy(store = "lu_dog", object = "Macro Call", func = "instances")]
     fn instances() -> [Self];
 
     fn help() -> () {
@@ -2639,20 +2642,20 @@ impl MacroCall {
 // Match a pattern to a scrutinee and evaluate a branch based on the results.
 // 
 // This tells the interpreter that this struct is a proxy for an object called
-// "XMatch" in the store named "lu_dog"; declared above.
-#[proxy(store = "lu_dog", object = "XMatch")]
-struct XMatch {
+// "Match" in the store named "lu_dog"; declared above.
+#[proxy(store = "lu_dog", object = "Match")]
+struct Match {
     id: Uuid,
     uniqueness_generator: Uuid,
     scrutinee: Expression,
     // Non-formalizing relationships
 }
 
-impl XMatch {
-    #[proxy(store = "lu_dog", object = "XMatch", func = "new")]
+impl Match {
+    #[proxy(store = "lu_dog", object = "Match", func = "new")]
     fn new(uniqueness_generator: Uuid, scrutinee: Expression) -> Self;
 
-    #[proxy(store = "lu_dog", object = "XMatch", func = "instances")]
+    #[proxy(store = "lu_dog", object = "Match", func = "instances")]
     fn instances() -> [Self];
 
     fn help() -> () {
@@ -2661,7 +2664,7 @@ impl XMatch {
     }
 
     fn info() -> () {
-        print("struct XMatch {\n");
+        print("struct Match {\n");
         print("    id: Uuid,\n");
         print("    uniqueness_generator: Uuid,\n");
         print("    scrutinee: Expression,\n");
@@ -2676,7 +2679,7 @@ impl XMatch {
 // 
 // This tells the interpreter that this struct is a proxy for an object called
 // "MethodCall" in the store named "lu_dog"; declared above.
-#[proxy(store = "lu_dog", object = "MethodCall")]
+#[proxy(store = "lu_dog", object = "Method Call")]
 struct MethodCall {
     id: Uuid,
     name: string,
@@ -2684,10 +2687,10 @@ struct MethodCall {
 }
 
 impl MethodCall {
-    #[proxy(store = "lu_dog", object = "MethodCall", func = "new")]
+    #[proxy(store = "lu_dog", object = "Method Call", func = "new")]
     fn new(name: string) -> Self;
 
-    #[proxy(store = "lu_dog", object = "MethodCall", func = "instances")]
+    #[proxy(store = "lu_dog", object = "Method Call", func = "instances")]
     fn instances() -> [Self];
 
     fn help() -> () {
@@ -2733,7 +2736,7 @@ impl Multiplication {
 
 // This tells the interpreter that this struct is a proxy for an object called
 // "NamedFieldExpression" in the store named "lu_dog"; declared above.
-#[proxy(store = "lu_dog", object = "NamedFieldExpression")]
+#[proxy(store = "lu_dog", object = "Named Field Expression")]
 struct NamedFieldExpression {
     id: Uuid,
     name: string,
@@ -2741,10 +2744,10 @@ struct NamedFieldExpression {
 }
 
 impl NamedFieldExpression {
-    #[proxy(store = "lu_dog", object = "NamedFieldExpression", func = "new")]
+    #[proxy(store = "lu_dog", object = "Named Field Expression", func = "new")]
     fn new(name: string) -> Self;
 
-    #[proxy(store = "lu_dog", object = "NamedFieldExpression", func = "instances")]
+    #[proxy(store = "lu_dog", object = "Named Field Expression", func = "instances")]
     fn instances() -> [Self];
 
     fn help() -> () {
@@ -2818,17 +2821,17 @@ impl Not {
 // 
 // This tells the interpreter that this struct is a proxy for an object called
 // "NotEqual" in the store named "lu_dog"; declared above.
-#[proxy(store = "lu_dog", object = "NotEqual")]
+#[proxy(store = "lu_dog", object = "Not Equal")]
 struct NotEqual {
     id: Uuid,
     // Non-formalizing relationships
 }
 
 impl NotEqual {
-    #[proxy(store = "lu_dog", object = "NotEqual", func = "new")]
+    #[proxy(store = "lu_dog", object = "Not Equal", func = "new")]
     fn new() -> Self;
 
-    #[proxy(store = "lu_dog", object = "NotEqual", func = "instances")]
+    #[proxy(store = "lu_dog", object = "Not Equal", func = "instances")]
     fn instances() -> [Self];
 
     fn help() -> () {
@@ -2850,20 +2853,20 @@ impl NotEqual {
 // This is the backing store for the structs.
 // 
 // This tells the interpreter that this struct is a proxy for an object called
-// "ZObjectStore" in the store named "lu_dog"; declared above.
-#[proxy(store = "lu_dog", object = "ZObjectStore")]
-struct ZObjectStore {
+// "ObjectStore" in the store named "lu_dog"; declared above.
+#[proxy(store = "lu_dog", object = "Object Store")]
+struct ObjectStore {
     domain: string,
     id: Uuid,
     name: string,
     // Non-formalizing relationships
 }
 
-impl ZObjectStore {
-    #[proxy(store = "lu_dog", object = "ZObjectStore", func = "new")]
+impl ObjectStore {
+    #[proxy(store = "lu_dog", object = "Object Store", func = "new")]
     fn new(domain: string, name: string) -> Self;
 
-    #[proxy(store = "lu_dog", object = "ZObjectStore", func = "instances")]
+    #[proxy(store = "lu_dog", object = "Object Store", func = "instances")]
     fn instances() -> [Self];
 
     fn help() -> () {
@@ -2874,7 +2877,7 @@ impl ZObjectStore {
     }
 
     fn info() -> () {
-        print("struct ZObjectStore {\n");
+        print("struct ObjectStore {\n");
         print("    domain: string,\n");
         print("    id: Uuid,\n");
         print("    name: string,\n");
@@ -2887,19 +2890,19 @@ impl ZObjectStore {
 // 
 // This tells the interpreter that this struct is a proxy for an object called
 // "ObjectWrapper" in the store named "lu_dog"; declared above.
-#[proxy(store = "lu_dog", object = "ObjectWrapper")]
+#[proxy(store = "lu_dog", object = "Object Wrapper")]
 struct ObjectWrapper {
     id: Uuid,
     object: Object,
-    z_store: ZObjectStore,
+    z_store: ObjectStore,
     // Non-formalizing relationships
 }
 
 impl ObjectWrapper {
-    #[proxy(store = "lu_dog", object = "ObjectWrapper", func = "new")]
-    fn new(object: Object, z_store: ZObjectStore) -> Self;
+    #[proxy(store = "lu_dog", object = "Object Wrapper", func = "new")]
+    fn new(object: Object, z_store: ObjectStore) -> Self;
 
-    #[proxy(store = "lu_dog", object = "ObjectWrapper", func = "instances")]
+    #[proxy(store = "lu_dog", object = "Object Wrapper", func = "instances")]
     fn instances() -> [Self];
 
     fn help() -> () {
@@ -2912,7 +2915,7 @@ impl ObjectWrapper {
         print("struct ObjectWrapper {\n");
         print("    id: Uuid,\n");
         print("    object: Object,\n");
-        print("    z_store: ZObjectStore,\n");
+        print("    z_store: ObjectStore,\n");
         print("}\n");
     }
 }
@@ -3041,20 +3044,20 @@ impl Parameter {
 // ::`.
 // 
 // This tells the interpreter that this struct is a proxy for an object called
-// "XPath" in the store named "lu_dog"; declared above.
-#[proxy(store = "lu_dog", object = "XPath")]
-struct XPath {
+// "Path" in the store named "lu_dog"; declared above.
+#[proxy(store = "lu_dog", object = "Path")]
+struct Path {
     id: Uuid,
     unique: Uuid,
     first: Option<PathElement>,
     // Non-formalizing relationships
 }
 
-impl XPath {
-    #[proxy(store = "lu_dog", object = "XPath", func = "new")]
+impl Path {
+    #[proxy(store = "lu_dog", object = "Path", func = "new")]
     fn new(unique: Uuid, first: Option<PathElement>) -> Self;
 
-    #[proxy(store = "lu_dog", object = "XPath", func = "instances")]
+    #[proxy(store = "lu_dog", object = "Path", func = "instances")]
     fn instances() -> [Self];
 
     fn help() -> () {
@@ -3064,7 +3067,7 @@ impl XPath {
     }
 
     fn info() -> () {
-        print("struct XPath {\n");
+        print("struct Path {\n");
         print("    id: Uuid,\n");
         print("    unique: Uuid,\n");
         print("    first: Option<PathElement>,\n");
@@ -3076,20 +3079,20 @@ impl XPath {
 // 
 // This tells the interpreter that this struct is a proxy for an object called
 // "PathElement" in the store named "lu_dog"; declared above.
-#[proxy(store = "lu_dog", object = "PathElement")]
+#[proxy(store = "lu_dog", object = "Path Element")]
 struct PathElement {
     id: Uuid,
     name: string,
     next: Option<PathElement>,
-    x_path: XPath,
+    x_path: Path,
     // Non-formalizing relationships
 }
 
 impl PathElement {
-    #[proxy(store = "lu_dog", object = "PathElement", func = "new")]
-    fn new(name: string, next: Option<PathElement>, x_path: XPath) -> Self;
+    #[proxy(store = "lu_dog", object = "Path Element", func = "new")]
+    fn new(name: string, next: Option<PathElement>, x_path: Path) -> Self;
 
-    #[proxy(store = "lu_dog", object = "PathElement", func = "instances")]
+    #[proxy(store = "lu_dog", object = "Path Element", func = "instances")]
     fn instances() -> [Self];
 
     fn help() -> () {
@@ -3102,7 +3105,7 @@ impl PathElement {
         print("    id: Uuid,\n");
         print("    name: string,\n");
         print("    next: Option<PathElement>,\n");
-        print("    x_path: XPath,\n");
+        print("    x_path: Path,\n");
         print("}\n");
     }
 }
@@ -3130,13 +3133,13 @@ struct Pattern {
     id: Uuid,
     expression: Expression,
     match_expr: Expression,
-    x_match: XMatch,
+    x_match: Match,
     // Non-formalizing relationships
 }
 
 impl Pattern {
     #[proxy(store = "lu_dog", object = "Pattern", func = "new")]
-    fn new(expression: Expression, match_expr: Expression, x_match: XMatch) -> Self;
+    fn new(expression: Expression, match_expr: Expression, x_match: Match) -> Self;
 
     #[proxy(store = "lu_dog", object = "Pattern", func = "instances")]
     fn instances() -> [Self];
@@ -3165,7 +3168,7 @@ impl Pattern {
         print("    id: Uuid,\n");
         print("    expression: Expression,\n");
         print("    match_expr: Expression,\n");
-        print("    x_match: XMatch,\n");
+        print("    x_match: Match,\n");
         print("}\n");
     }
 }
@@ -3173,19 +3176,19 @@ impl Pattern {
 // An external compilation unit that may be loaded at run time.
 // 
 // This tells the interpreter that this struct is a proxy for an object called
-// "XPlugin" in the store named "lu_dog"; declared above.
-#[proxy(store = "lu_dog", object = "XPlugin")]
-struct XPlugin {
+// "Plugin" in the store named "lu_dog"; declared above.
+#[proxy(store = "lu_dog", object = "Plugin")]
+struct Plugin {
     id: Uuid,
     name: string,
     // Non-formalizing relationships
 }
 
-impl XPlugin {
-    #[proxy(store = "lu_dog", object = "XPlugin", func = "new")]
+impl Plugin {
+    #[proxy(store = "lu_dog", object = "Plugin", func = "new")]
     fn new(name: string) -> Self;
 
-    #[proxy(store = "lu_dog", object = "XPlugin", func = "instances")]
+    #[proxy(store = "lu_dog", object = "Plugin", func = "instances")]
     fn instances() -> [Self];
 
     fn help() -> () {
@@ -3194,7 +3197,7 @@ impl XPlugin {
     }
 
     fn info() -> () {
-        print("struct XPlugin {\n");
+        print("struct Plugin {\n");
         print("    id: Uuid,\n");
         print("    name: string,\n");
         print("}\n");
@@ -3206,19 +3209,19 @@ impl XPlugin {
 // Shold this be a statement?
 // 
 // This tells the interpreter that this struct is a proxy for an object called
-// "XPrint" in the store named "lu_dog"; declared above.
-#[proxy(store = "lu_dog", object = "XPrint")]
-struct XPrint {
+// "Print" in the store named "lu_dog"; declared above.
+#[proxy(store = "lu_dog", object = "Print")]
+struct Print {
     id: Uuid,
     expression: Expression,
     // Non-formalizing relationships
 }
 
-impl XPrint {
-    #[proxy(store = "lu_dog", object = "XPrint", func = "new")]
+impl Print {
+    #[proxy(store = "lu_dog", object = "Print", func = "new")]
     fn new(expression: Expression) -> Self;
 
-    #[proxy(store = "lu_dog", object = "XPrint", func = "instances")]
+    #[proxy(store = "lu_dog", object = "Print", func = "instances")]
     fn instances() -> [Self];
 
     fn help() -> () {
@@ -3229,7 +3232,7 @@ impl XPrint {
     }
 
     fn info() -> () {
-        print("struct XPrint {\n");
+        print("struct Print {\n");
         print("    id: Uuid,\n");
         print("    expression: Expression,\n");
         print("}\n");
@@ -3263,7 +3266,7 @@ impl Range {
 
 // This tells the interpreter that this struct is a proxy for an object called
 // "RangeExpression" in the store named "lu_dog"; declared above.
-#[proxy(store = "lu_dog", object = "RangeExpression")]
+#[proxy(store = "lu_dog", object = "Range Expression")]
 struct RangeExpression {
     id: Uuid,
     lhs: Option<Expression>,
@@ -3272,27 +3275,27 @@ struct RangeExpression {
 }
 
 impl RangeExpression {
-    #[proxy(store = "lu_dog", object = "RangeExpression", func = "new_from")]
+    #[proxy(store = "lu_dog", object = "Range Expression", func = "new_from")]
     fn new_from(lhs: Option<Expression>, rhs: Option<Expression>, from: From
 ) -> Self;
 
-    #[proxy(store = "lu_dog", object = "RangeExpression", func = "new_full")]
+    #[proxy(store = "lu_dog", object = "Range Expression", func = "new_full")]
     fn new_full(lhs: Option<Expression>, rhs: Option<Expression>, full: Full
 ) -> Self;
 
-    #[proxy(store = "lu_dog", object = "RangeExpression", func = "new_inclusive")]
+    #[proxy(store = "lu_dog", object = "Range Expression", func = "new_inclusive")]
     fn new_inclusive(lhs: Option<Expression>, rhs: Option<Expression>, inclusive: Inclusive
 ) -> Self;
 
-    #[proxy(store = "lu_dog", object = "RangeExpression", func = "new_to")]
+    #[proxy(store = "lu_dog", object = "Range Expression", func = "new_to")]
     fn new_to(lhs: Option<Expression>, rhs: Option<Expression>, to: To
 ) -> Self;
 
-    #[proxy(store = "lu_dog", object = "RangeExpression", func = "new_to_inclusive")]
+    #[proxy(store = "lu_dog", object = "Range Expression", func = "new_to_inclusive")]
     fn new_to_inclusive(lhs: Option<Expression>, rhs: Option<Expression>, to_inclusive: ToInclusive
 ) -> Self;
 
-    #[proxy(store = "lu_dog", object = "RangeExpression", func = "instances")]
+    #[proxy(store = "lu_dog", object = "Range Expression", func = "instances")]
     fn instances() -> [Self];
 
     fn help() -> () {
@@ -3312,7 +3315,7 @@ impl RangeExpression {
 // 
 // This tells the interpreter that this struct is a proxy for an object called
 // "ResultStatement" in the store named "lu_dog"; declared above.
-#[proxy(store = "lu_dog", object = "ResultStatement")]
+#[proxy(store = "lu_dog", object = "Result Statement")]
 struct ResultStatement {
     id: Uuid,
     expression: Expression,
@@ -3320,10 +3323,10 @@ struct ResultStatement {
 }
 
 impl ResultStatement {
-    #[proxy(store = "lu_dog", object = "ResultStatement", func = "new")]
+    #[proxy(store = "lu_dog", object = "Result Statement", func = "new")]
     fn new(expression: Expression) -> Self;
 
-    #[proxy(store = "lu_dog", object = "ResultStatement", func = "instances")]
+    #[proxy(store = "lu_dog", object = "Result Statement", func = "instances")]
     fn instances() -> [Self];
 
     fn help() -> () {
@@ -3345,19 +3348,19 @@ impl ResultStatement {
 // It’s an expression, and not a statement. Isn’t that interesting?
 // 
 // This tells the interpreter that this struct is a proxy for an object called
-// "XReturn" in the store named "lu_dog"; declared above.
-#[proxy(store = "lu_dog", object = "XReturn")]
-struct XReturn {
+// "Return" in the store named "lu_dog"; declared above.
+#[proxy(store = "lu_dog", object = "Return")]
+struct Return {
     id: Uuid,
     expression: Expression,
     // Non-formalizing relationships
 }
 
-impl XReturn {
-    #[proxy(store = "lu_dog", object = "XReturn", func = "new")]
+impl Return {
+    #[proxy(store = "lu_dog", object = "Return", func = "new")]
     fn new(expression: Expression) -> Self;
 
-    #[proxy(store = "lu_dog", object = "XReturn", func = "instances")]
+    #[proxy(store = "lu_dog", object = "Return", func = "instances")]
     fn instances() -> [Self];
 
     fn help() -> () {
@@ -3368,7 +3371,7 @@ impl XReturn {
     }
 
     fn info() -> () {
-        print("struct XReturn {\n");
+        print("struct Return {\n");
         print("    id: Uuid,\n");
         print("    expression: Expression,\n");
         print("}\n");
@@ -3390,13 +3393,13 @@ struct Span {
     start: int,
     source: DwarfSourceFile,
     ty: Option<ValueType>,
-    x_value: Option<XValue>,
+    x_value: Option<Value>,
     // Non-formalizing relationships
 }
 
 impl Span {
     #[proxy(store = "lu_dog", object = "Span", func = "new")]
-    fn new(end: int, start: int, source: DwarfSourceFile, ty: Option<ValueType>, x_value: Option<XValue>) -> Self;
+    fn new(end: int, start: int, source: DwarfSourceFile, ty: Option<ValueType>, x_value: Option<Value>) -> Self;
 
     #[proxy(store = "lu_dog", object = "Span", func = "instances")]
     fn instances() -> [Self];
@@ -3417,7 +3420,7 @@ impl Span {
         print("    start: int,\n");
         print("    source: DwarfSourceFile,\n");
         print("    ty: Option<ValueType>,\n");
-        print("    x_value: Option<XValue>,\n");
+        print("    x_value: Option<Value>,\n");
         print("}\n");
     }
 }
@@ -3483,7 +3486,7 @@ impl Statement {
 // 
 // This tells the interpreter that this struct is a proxy for an object called
 // "StaticMethodCall" in the store named "lu_dog"; declared above.
-#[proxy(store = "lu_dog", object = "StaticMethodCall")]
+#[proxy(store = "lu_dog", object = "Static Method Call")]
 struct StaticMethodCall {
     func: string,
     id: Uuid,
@@ -3493,10 +3496,10 @@ struct StaticMethodCall {
 }
 
 impl StaticMethodCall {
-    #[proxy(store = "lu_dog", object = "StaticMethodCall", func = "new")]
+    #[proxy(store = "lu_dog", object = "Static Method Call", func = "new")]
     fn new(func: string, ty: string, unique: Uuid) -> Self;
 
-    #[proxy(store = "lu_dog", object = "StaticMethodCall", func = "instances")]
+    #[proxy(store = "lu_dog", object = "Static Method Call", func = "instances")]
     fn instances() -> [Self];
 
     fn help() -> () {
@@ -3526,7 +3529,7 @@ impl StaticMethodCall {
 // 
 // This tells the interpreter that this struct is a proxy for an object called
 // "StringLiteral" in the store named "lu_dog"; declared above.
-#[proxy(store = "lu_dog", object = "StringLiteral")]
+#[proxy(store = "lu_dog", object = "String Literal")]
 struct StringLiteral {
     id: Uuid,
     x_value: string,
@@ -3534,10 +3537,10 @@ struct StringLiteral {
 }
 
 impl StringLiteral {
-    #[proxy(store = "lu_dog", object = "StringLiteral", func = "new")]
+    #[proxy(store = "lu_dog", object = "String Literal", func = "new")]
     fn new(x_value: string) -> Self;
 
-    #[proxy(store = "lu_dog", object = "StringLiteral", func = "instances")]
+    #[proxy(store = "lu_dog", object = "String Literal", func = "instances")]
     fn instances() -> [Self];
 
     fn help() -> () {
@@ -3561,9 +3564,9 @@ impl StringLiteral {
 // This is really just an alias for `[Object]`.
 // 
 // This tells the interpreter that this struct is a proxy for an object called
-// "WoogStruct" in the store named "lu_dog"; declared above.
-#[proxy(store = "lu_dog", object = "WoogStruct")]
-struct WoogStruct {
+// "Struct" in the store named "lu_dog"; declared above.
+#[proxy(store = "lu_dog", object = "Struct")]
+struct Struct {
     id: Uuid,
     name: string,
     first_generic: Option<StructGeneric>,
@@ -3571,11 +3574,11 @@ struct WoogStruct {
     // Non-formalizing relationships
 }
 
-impl WoogStruct {
-    #[proxy(store = "lu_dog", object = "WoogStruct", func = "new")]
+impl Struct {
+    #[proxy(store = "lu_dog", object = "Struct", func = "new")]
     fn new(name: string, first_generic: Option<StructGeneric>, object: Option<Object>) -> Self;
 
-    #[proxy(store = "lu_dog", object = "WoogStruct", func = "instances")]
+    #[proxy(store = "lu_dog", object = "Struct", func = "instances")]
     fn instances() -> [Self];
 
     fn help() -> () {
@@ -3586,7 +3589,7 @@ impl WoogStruct {
     }
 
     fn info() -> () {
-        print("struct WoogStruct {\n");
+        print("struct Struct {\n");
         print("    id: Uuid,\n");
         print("    name: string,\n");
         print("    first_generic: Option<StructGeneric>,\n");
@@ -3601,20 +3604,20 @@ impl WoogStruct {
 // 
 // This tells the interpreter that this struct is a proxy for an object called
 // "StructExpression" in the store named "lu_dog"; declared above.
-#[proxy(store = "lu_dog", object = "StructExpression")]
+#[proxy(store = "lu_dog", object = "Struct Expression")]
 struct StructExpression {
     bug: Uuid,
     id: Uuid,
     data: DataStructure,
-    x_path: XPath,
+    x_path: Path,
     // Non-formalizing relationships
 }
 
 impl StructExpression {
-    #[proxy(store = "lu_dog", object = "StructExpression", func = "new")]
-    fn new(bug: Uuid, data: DataStructure, x_path: XPath) -> Self;
+    #[proxy(store = "lu_dog", object = "Struct Expression", func = "new")]
+    fn new(bug: Uuid, data: DataStructure, x_path: Path) -> Self;
 
-    #[proxy(store = "lu_dog", object = "StructExpression", func = "instances")]
+    #[proxy(store = "lu_dog", object = "Struct Expression", func = "instances")]
     fn instances() -> [Self];
 
     fn help() -> () {
@@ -3629,7 +3632,7 @@ impl StructExpression {
         print("    bug: Uuid,\n");
         print("    id: Uuid,\n");
         print("    data: DataStructure,\n");
-        print("    x_path: XPath,\n");
+        print("    x_path: Path,\n");
         print("}\n");
     }
 }
@@ -3638,7 +3641,7 @@ impl StructExpression {
 // 
 // This tells the interpreter that this struct is a proxy for an object called
 // "StructField" in the store named "lu_dog"; declared above.
-#[proxy(store = "lu_dog", object = "StructField")]
+#[proxy(store = "lu_dog", object = "Struct Field")]
 struct StructField {
     id: Uuid,
     name: string,
@@ -3646,10 +3649,10 @@ struct StructField {
 }
 
 impl StructField {
-    #[proxy(store = "lu_dog", object = "StructField", func = "new")]
+    #[proxy(store = "lu_dog", object = "Struct Field", func = "new")]
     fn new(name: string) -> Self;
 
-    #[proxy(store = "lu_dog", object = "StructField", func = "instances")]
+    #[proxy(store = "lu_dog", object = "Struct Field", func = "instances")]
     fn instances() -> [Self];
 
     fn help() -> () {
@@ -3669,20 +3672,20 @@ impl StructField {
 // 
 // This tells the interpreter that this struct is a proxy for an object called
 // "StructGeneric" in the store named "lu_dog"; declared above.
-#[proxy(store = "lu_dog", object = "StructGeneric")]
+#[proxy(store = "lu_dog", object = "Struct Generic")]
 struct StructGeneric {
     id: Uuid,
     name: string,
     next: Option<StructGeneric>,
-    woog_struct: WoogStruct,
+    woog_struct: Struct,
     // Non-formalizing relationships
 }
 
 impl StructGeneric {
-    #[proxy(store = "lu_dog", object = "StructGeneric", func = "new")]
-    fn new(name: string, next: Option<StructGeneric>, woog_struct: WoogStruct) -> Self;
+    #[proxy(store = "lu_dog", object = "Struct Generic", func = "new")]
+    fn new(name: string, next: Option<StructGeneric>, woog_struct: Struct) -> Self;
 
-    #[proxy(store = "lu_dog", object = "StructGeneric", func = "instances")]
+    #[proxy(store = "lu_dog", object = "Struct Generic", func = "instances")]
     fn instances() -> [Self];
 
     fn help() -> () {
@@ -3695,7 +3698,7 @@ impl StructGeneric {
         print("    id: Uuid,\n");
         print("    name: string,\n");
         print("    next: Option<StructGeneric>,\n");
-        print("    woog_struct: WoogStruct,\n");
+        print("    woog_struct: Struct,\n");
         print("}\n");
     }
 }
@@ -3785,17 +3788,17 @@ impl To {
 
 // This tells the interpreter that this struct is a proxy for an object called
 // "ToInclusive" in the store named "lu_dog"; declared above.
-#[proxy(store = "lu_dog", object = "ToInclusive")]
+#[proxy(store = "lu_dog", object = "To Inclusive")]
 struct ToInclusive {
     id: Uuid,
     // Non-formalizing relationships
 }
 
 impl ToInclusive {
-    #[proxy(store = "lu_dog", object = "ToInclusive", func = "new")]
+    #[proxy(store = "lu_dog", object = "To Inclusive", func = "new")]
     fn new() -> Self;
 
-    #[proxy(store = "lu_dog", object = "ToInclusive", func = "instances")]
+    #[proxy(store = "lu_dog", object = "To Inclusive", func = "instances")]
     fn instances() -> [Self];
 
     fn help() -> () {
@@ -3813,18 +3816,18 @@ impl ToInclusive {
 // The literal `true`.
 // 
 // This tells the interpreter that this struct is a proxy for an object called
-// "TrueLiteral" in the store named "lu_dog"; declared above.
-#[proxy(store = "lu_dog", object = "TrueLiteral")]
-struct TrueLiteral {
+// "True" in the store named "lu_dog"; declared above.
+#[proxy(store = "lu_dog", object = "True")]
+struct True {
     id: Uuid,
     // Non-formalizing relationships
 }
 
-impl TrueLiteral {
-    #[proxy(store = "lu_dog", object = "TrueLiteral", func = "new")]
+impl True {
+    #[proxy(store = "lu_dog", object = "True", func = "new")]
     fn new() -> Self;
 
-    #[proxy(store = "lu_dog", object = "TrueLiteral", func = "instances")]
+    #[proxy(store = "lu_dog", object = "True", func = "instances")]
     fn instances() -> [Self];
 
     fn help() -> () {
@@ -3835,7 +3838,7 @@ impl TrueLiteral {
     }
 
     fn info() -> () {
-        print("struct TrueLiteral {\n");
+        print("struct True {\n");
         print("    id: Uuid,\n");
         print("}\n");
     }
@@ -3858,7 +3861,7 @@ impl TrueLiteral {
 // 
 // This tells the interpreter that this struct is a proxy for an object called
 // "TupleField" in the store named "lu_dog"; declared above.
-#[proxy(store = "lu_dog", object = "TupleField")]
+#[proxy(store = "lu_dog", object = "Tuple Field")]
 struct TupleField {
     id: Uuid,
     xyzzy: Uuid,
@@ -3867,10 +3870,10 @@ struct TupleField {
 }
 
 impl TupleField {
-    #[proxy(store = "lu_dog", object = "TupleField", func = "new")]
+    #[proxy(store = "lu_dog", object = "Tuple Field", func = "new")]
     fn new(xyzzy: Uuid, ty: ValueType) -> Self;
 
-    #[proxy(store = "lu_dog", object = "TupleField", func = "instances")]
+    #[proxy(store = "lu_dog", object = "Tuple Field", func = "instances")]
     fn instances() -> [Self];
 
     fn help() -> () {
@@ -3906,7 +3909,7 @@ impl TupleField {
 // 
 // This tells the interpreter that this struct is a proxy for an object called
 // "TypeCast" in the store named "lu_dog"; declared above.
-#[proxy(store = "lu_dog", object = "TypeCast")]
+#[proxy(store = "lu_dog", object = "Type Cast")]
 struct TypeCast {
     id: Uuid,
     lhs: Expression,
@@ -3915,10 +3918,10 @@ struct TypeCast {
 }
 
 impl TypeCast {
-    #[proxy(store = "lu_dog", object = "TypeCast", func = "new")]
+    #[proxy(store = "lu_dog", object = "Type Cast", func = "new")]
     fn new(lhs: Expression, ty: ValueType) -> Self;
 
-    #[proxy(store = "lu_dog", object = "TypeCast", func = "instances")]
+    #[proxy(store = "lu_dog", object = "Type Cast", func = "instances")]
     fn instances() -> [Self];
 
     fn help() -> () {
@@ -4035,7 +4038,7 @@ impl Unknown {
 
 // This tells the interpreter that this struct is a proxy for an object called
 // "UnnamedFieldExpression" in the store named "lu_dog"; declared above.
-#[proxy(store = "lu_dog", object = "UnnamedFieldExpression")]
+#[proxy(store = "lu_dog", object = "Unnamed Field Expression")]
 struct UnnamedFieldExpression {
     id: Uuid,
     position: int,
@@ -4043,10 +4046,10 @@ struct UnnamedFieldExpression {
 }
 
 impl UnnamedFieldExpression {
-    #[proxy(store = "lu_dog", object = "UnnamedFieldExpression", func = "new")]
+    #[proxy(store = "lu_dog", object = "Unnamed Field Expression", func = "new")]
     fn new(position: int) -> Self;
 
-    #[proxy(store = "lu_dog", object = "UnnamedFieldExpression", func = "instances")]
+    #[proxy(store = "lu_dog", object = "Unnamed Field Expression", func = "instances")]
     fn instances() -> [Self];
 
     fn help() -> () {
@@ -4065,25 +4068,25 @@ impl UnnamedFieldExpression {
 // A value has a Type.
 // 
 // This tells the interpreter that this struct is a proxy for an object called
-// "XValue" in the store named "lu_dog"; declared above.
-#[proxy(store = "lu_dog", object = "XValue")]
-struct XValue {
+// "Value" in the store named "lu_dog"; declared above.
+#[proxy(store = "lu_dog", object = "Value")]
+struct Value {
     id: Uuid,
     block: Block,
     ty: ValueType,
     // Non-formalizing relationships
 }
 
-impl XValue {
-    #[proxy(store = "lu_dog", object = "XValue", func = "new_expression")]
+impl Value {
+    #[proxy(store = "lu_dog", object = "Value", func = "new_expression")]
     fn new_expression(block: Block, ty: ValueType, expression: Expression
 ) -> Self;
 
-    #[proxy(store = "lu_dog", object = "XValue", func = "new_variable")]
+    #[proxy(store = "lu_dog", object = "Value", func = "new_variable")]
     fn new_variable(block: Block, ty: ValueType, variable: Variable
 ) -> Self;
 
-    #[proxy(store = "lu_dog", object = "XValue", func = "instances")]
+    #[proxy(store = "lu_dog", object = "Value", func = "instances")]
     fn instances() -> [Self];
 
     fn help() -> () {
@@ -4094,7 +4097,7 @@ impl XValue {
     }
 
     fn info() -> () {
-        print("struct XValue {\n");
+        print("struct Value {\n");
         print("    id: Uuid,\n");
         print("    block: Block,\n");
         print("    ty: ValueType,\n");
@@ -4122,62 +4125,62 @@ impl XValue {
 // 
 // This tells the interpreter that this struct is a proxy for an object called
 // "ValueType" in the store named "lu_dog"; declared above.
-#[proxy(store = "lu_dog", object = "ValueType")]
+#[proxy(store = "lu_dog", object = "Value Type")]
 struct ValueType {
     id: Uuid,
     // Non-formalizing relationships
 }
 
 impl ValueType {
-    #[proxy(store = "lu_dog", object = "ValueType", func = "new_char")]
+    #[proxy(store = "lu_dog", object = "Value Type", func = "new_char")]
     fn new_char() -> Self;
 
-    #[proxy(store = "lu_dog", object = "ValueType", func = "new_empty")]
+    #[proxy(store = "lu_dog", object = "Value Type", func = "new_empty")]
     fn new_empty() -> Self;
 
-    #[proxy(store = "lu_dog", object = "ValueType", func = "new_enumeration")]
+    #[proxy(store = "lu_dog", object = "Value Type", func = "new_enumeration")]
     fn new_enumeration() -> Self;
 
-    #[proxy(store = "lu_dog", object = "ValueType", func = "new_function")]
+    #[proxy(store = "lu_dog", object = "Value Type", func = "new_function")]
     fn new_function() -> Self;
 
-    #[proxy(store = "lu_dog", object = "ValueType", func = "new_x_future")]
+    #[proxy(store = "lu_dog", object = "Value Type", func = "new_x_future")]
     fn new_x_future() -> Self;
 
-    #[proxy(store = "lu_dog", object = "ValueType", func = "new_generic")]
+    #[proxy(store = "lu_dog", object = "Value Type", func = "new_generic")]
     fn new_generic() -> Self;
 
-    #[proxy(store = "lu_dog", object = "ValueType", func = "new_import")]
+    #[proxy(store = "lu_dog", object = "Value Type", func = "new_import")]
     fn new_import() -> Self;
 
-    #[proxy(store = "lu_dog", object = "ValueType", func = "new_lambda")]
+    #[proxy(store = "lu_dog", object = "Value Type", func = "new_lambda")]
     fn new_lambda() -> Self;
 
-    #[proxy(store = "lu_dog", object = "ValueType", func = "new_list")]
+    #[proxy(store = "lu_dog", object = "Value Type", func = "new_list")]
     fn new_list() -> Self;
 
-    #[proxy(store = "lu_dog", object = "ValueType", func = "new_z_object_store")]
+    #[proxy(store = "lu_dog", object = "Value Type", func = "new_z_object_store")]
     fn new_z_object_store() -> Self;
 
-    #[proxy(store = "lu_dog", object = "ValueType", func = "new_x_plugin")]
+    #[proxy(store = "lu_dog", object = "Value Type", func = "new_x_plugin")]
     fn new_x_plugin() -> Self;
 
-    #[proxy(store = "lu_dog", object = "ValueType", func = "new_range")]
+    #[proxy(store = "lu_dog", object = "Value Type", func = "new_range")]
     fn new_range() -> Self;
 
-    #[proxy(store = "lu_dog", object = "ValueType", func = "new_woog_struct")]
+    #[proxy(store = "lu_dog", object = "Value Type", func = "new_woog_struct")]
     fn new_woog_struct() -> Self;
 
-    #[proxy(store = "lu_dog", object = "ValueType", func = "new_task")]
+    #[proxy(store = "lu_dog", object = "Value Type", func = "new_task")]
     fn new_task() -> Self;
 
-    #[proxy(store = "lu_dog", object = "ValueType", func = "new_ty")]
+    #[proxy(store = "lu_dog", object = "Value Type", func = "new_ty")]
     fn new_ty() -> Self;
 
-    #[proxy(store = "lu_dog", object = "ValueType", func = "new_unknown")]
+    #[proxy(store = "lu_dog", object = "Value Type", func = "new_unknown")]
     fn new_unknown() -> Self;
 
-    #[proxy(store = "lu_dog", object = "ValueType", func = "instances")]
+    #[proxy(store = "lu_dog", object = "Value Type", func = "instances")]
     fn instances() -> [Self];
 
     fn help() -> () {
@@ -4262,7 +4265,7 @@ impl Variable {
 // 
 // This tells the interpreter that this struct is a proxy for an object called
 // "VariableExpression" in the store named "lu_dog"; declared above.
-#[proxy(store = "lu_dog", object = "VariableExpression")]
+#[proxy(store = "lu_dog", object = "Variable Expression")]
 struct VariableExpression {
     id: Uuid,
     name: string,
@@ -4270,10 +4273,10 @@ struct VariableExpression {
 }
 
 impl VariableExpression {
-    #[proxy(store = "lu_dog", object = "VariableExpression", func = "new")]
+    #[proxy(store = "lu_dog", object = "Variable Expression", func = "new")]
     fn new(name: string) -> Self;
 
-    #[proxy(store = "lu_dog", object = "VariableExpression", func = "instances")]
+    #[proxy(store = "lu_dog", object = "Variable Expression", func = "instances")]
     fn instances() -> [Self];
 
     fn help() -> () {

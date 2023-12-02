@@ -2698,7 +2698,7 @@ impl Plugin for SarzakStore {
                             Err(e) => Err(e),
                         }
                     }
-                    "new_s_string" => {
+                    "new_z_string" => {
                         if args.len() != 1 {
                             return Err(Error::Uber("Expected 1 arguments".into()));
                         }
@@ -2708,20 +2708,20 @@ impl Plugin for SarzakStore {
                             value_args.push(arg.into());
                         }
                         match (|| -> Result<Arc<RwLock<Ty>>, Error> {
-                            let s_string = self.store.read().unwrap().exhume_ty(&S_STRING).unwrap();
+                            let z_string = self.store.read().unwrap().exhume_ty(&Z_STRING).unwrap();
 
-                            Ok(s_string)
+                            Ok(z_string)
                         })() {
-                            Ok(s_string) => {
+                            Ok(z_string) => {
                                 let this = TyProxy {
-                                    inner: s_string.clone(),
+                                    inner: z_string.clone(),
                                     store: self.store.clone(),
                                 };
                                 let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
                                 let proxy = FfiProxy {
                                     module: module.into(),
-                                    uuid: S_STRING.into(),
-                                    id: s_string.read().unwrap().id().into(),
+                                    uuid: Z_STRING.into(),
+                                    id: z_string.read().unwrap().id().into(),
                                     plugin: plugin.clone(),
                                 };
                                 Ok(FfiValue::ProxyType(proxy))
@@ -2729,7 +2729,7 @@ impl Plugin for SarzakStore {
                             Err(e) => Err(e),
                         }
                     }
-                    "new_s_uuid" => {
+                    "new_z_uuid" => {
                         if args.len() != 1 {
                             return Err(Error::Uber("Expected 1 arguments".into()));
                         }
@@ -2739,20 +2739,20 @@ impl Plugin for SarzakStore {
                             value_args.push(arg.into());
                         }
                         match (|| -> Result<Arc<RwLock<Ty>>, Error> {
-                            let s_uuid = self.store.read().unwrap().exhume_ty(&S_UUID).unwrap();
+                            let z_uuid = self.store.read().unwrap().exhume_ty(&Z_UUID).unwrap();
 
-                            Ok(s_uuid)
+                            Ok(z_uuid)
                         })() {
-                            Ok(s_uuid) => {
+                            Ok(z_uuid) => {
                                 let this = TyProxy {
-                                    inner: s_uuid.clone(),
+                                    inner: z_uuid.clone(),
                                     store: self.store.clone(),
                                 };
                                 let plugin = Plugin_TO::from_value(this, TD_CanDowncast);
                                 let proxy = FfiProxy {
                                     module: module.into(),
-                                    uuid: S_UUID.into(),
-                                    id: s_uuid.read().unwrap().id().into(),
+                                    uuid: Z_UUID.into(),
+                                    id: z_uuid.read().unwrap().id().into(),
                                     plugin: plugin.clone(),
                                 };
                                 Ok(FfiValue::ProxyType(proxy))
@@ -5655,15 +5655,15 @@ impl Display for StateProxy {
     }
 }
 
-const S_STRING_ID: Uuid = uuid!("9803e73c-4984-5179-8460-529fe4ef7921");
+const Z_STRING_ID: Uuid = uuid!("9803e73c-4984-5179-8460-529fe4ef7921");
 
 #[derive(Clone, Debug)]
-pub struct SStringProxy {
-    inner: Arc<RwLock<SString>>,
+pub struct ZStringProxy {
+    inner: Arc<RwLock<ZString>>,
     store: Arc<RwLock<ObjectStore>>,
 }
 
-impl Plugin for SStringProxy {
+impl Plugin for ZStringProxy {
     fn invoke_func(
         &mut self,
         module: RStr<'_>,
@@ -5723,15 +5723,15 @@ impl Plugin for SStringProxy {
     }
 
     fn name(&self) -> RStr<'_> {
-        "SString".into()
+        "ZString".into()
     }
 
     fn close(self) {}
 }
 
-impl Display for SStringProxy {
+impl Display for ZStringProxy {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "SString({{")?;
+        writeln!(f, "ZString({{")?;
         writeln!(f, "	id: {:?},", self.inner.read().unwrap().id())?;
         writeln!(f, "}})")
     }
@@ -6073,15 +6073,15 @@ impl Display for TyProxy {
     }
 }
 
-const S_UUID_ID: Uuid = uuid!("9fcf72a7-a28e-5544-be44-af4de72db6e4");
+const Z_UUID_ID: Uuid = uuid!("9fcf72a7-a28e-5544-be44-af4de72db6e4");
 
 #[derive(Clone, Debug)]
-pub struct SUuidProxy {
-    inner: Arc<RwLock<SUuid>>,
+pub struct ZUuidProxy {
+    inner: Arc<RwLock<ZUuid>>,
     store: Arc<RwLock<ObjectStore>>,
 }
 
-impl Plugin for SUuidProxy {
+impl Plugin for ZUuidProxy {
     fn invoke_func(
         &mut self,
         module: RStr<'_>,
@@ -6141,15 +6141,15 @@ impl Plugin for SUuidProxy {
     }
 
     fn name(&self) -> RStr<'_> {
-        "SUuid".into()
+        "ZUuid".into()
     }
 
     fn close(self) {}
 }
 
-impl Display for SUuidProxy {
+impl Display for ZUuidProxy {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "SUuid({{")?;
+        writeln!(f, "ZUuid({{")?;
         writeln!(f, "	id: {:?},", self.inner.read().unwrap().id())?;
         writeln!(f, "}})")
     }

@@ -9,8 +9,7 @@ use crate::{
         error::{DwarfError, Result},
         extruder::{
             create_generic_enum, debug, e_warn, function, inter_expression, link_argument,
-            lookup_woog_struct_method_return_type, typecheck, update_span_value, Context,
-            DeSanitize, ExprSpan,
+            lookup_woog_struct_method_return_type, typecheck, update_span_value, Context, ExprSpan,
         },
         DwarfInteger, Expression as ParserExpression, Type,
     },
@@ -54,7 +53,7 @@ pub fn inter(
         .iter()
         .flat_map(|p| {
             if let Type::UserType((obj, span), _generics) = p {
-                vec![(obj.de_sanitize().to_owned(), span)]
+                vec![(obj.to_owned(), span)]
             } else {
                 panic!(
                     "I don't think that we should ever see anything other than a user type here: {:?}",
@@ -342,7 +341,7 @@ pub fn inter(
                         if let ValueTypeEnum::Generic(_) = foo.subtype {
                             let type_name = path.iter().map(|p| {
                                 if let Type::UserType((obj, _), generics) = p {
-                                    let mut name = obj.de_sanitize().to_owned();
+                                    let mut name = obj.to_owned();
                                     let generics = generics.iter().map(|g| {
                                         g.0.to_string()
                                     }).collect::<Vec<_>>().join(", ");

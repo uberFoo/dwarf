@@ -717,15 +717,26 @@ impl DwarfParser {
     fn parse_path(&mut self) -> Option<Spanned<Vec<Spanned<String>>>> {
         debug!("enter");
 
+        let mut double = false;
         let mut path = Vec::new();
         while let Some(ident) = self.parse_ident() {
             path.push(ident);
             if self.match_tokens(&[Token::Punct(':')]).is_some()
                 && self.match_tokens(&[Token::Punct(':')]).is_none()
             {
+                double = false;
                 debug!("exit snarf", path);
                 break;
+            } else {
+                double = true;
             }
+        }
+
+        if double && self.match_tokens(&[Token::Punct('*')]).is_some() {
+            path.push((
+                "*".to_owned(),
+                self.previous().unwrap().1.start..self.previous().unwrap().1.end,
+            ));
         }
 
         if path.is_empty() {

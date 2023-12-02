@@ -31,6 +31,8 @@ pub mod subtype;
 pub mod supertype;
 pub mod ty;
 pub mod unconditional;
+pub mod z_string;
+pub mod z_uuid;
 
 pub use crate::sarzak::acknowledged_event::AcknowledgedEvent;
 pub use crate::sarzak::an_associative_referent::AnAssociativeReferent;
@@ -70,4 +72,8 @@ pub use crate::sarzak::supertype::Supertype;
 pub use crate::sarzak::ty::Ty;
 pub use crate::sarzak::unconditional::Unconditional;
 pub use crate::sarzak::unconditional::UNCONDITIONAL;
+pub use crate::sarzak::z_string::ZString;
+pub use crate::sarzak::z_string::Z_STRING;
+pub use crate::sarzak::z_uuid::ZUuid;
+pub use crate::sarzak::z_uuid::Z_UUID;
 // {"magic":"","directive":{"End":{"directive":"allow-editing"}}}

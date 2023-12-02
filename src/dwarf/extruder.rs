@@ -38,12 +38,13 @@ use crate::{
     Context as InterContext, Dirty, ModelStore, NewRef, RefType,
 };
 
-pub(super) const LIB_TAO: &str = "lib.ore";
-pub(super) const SRC_DIR: &str = "src";
-pub(super) const MODEL_DIR: &str = "models";
-pub(super) const TAO_EXT: &str = "ore";
 pub(super) const EXTENSION_DIR: &str = "extensions";
 pub(super) const JSON_EXT: &str = "json";
+pub(super) const LIB_DIR: &str = "lib";
+pub(super) const LIB_TAO: &str = "lib.ore";
+pub(super) const MODEL_DIR: &str = "models";
+pub(super) const SRC_DIR: &str = "src";
+pub(super) const TAO_EXT: &str = "ore";
 
 macro_rules! link_ƛ_parameter {
     ($last:expr, $next:expr, $store:expr) => {{
@@ -2753,7 +2754,7 @@ pub(super) fn inter_expression(
             // I think that if you look, it's actually coming in as Option<int>, which can be a UserType.
             let full_enum_name = path.iter().map(|p| {
                 if let Type::UserType((obj, _), generics) = p {
-                    let mut name = obj.de_sanitize().to_owned();
+                    let mut name = obj.to_owned();
                     let generics = generics.iter().map(|g| {
                         g.0.to_string()
                     }).collect::<Vec<_>>().join(", ");
@@ -3273,11 +3274,13 @@ fn inter_import(
     context: &mut Context,
     lu_dog: &mut LuDogStore,
 ) -> Result<()> {
+    debug!("inter_import: {path:?}");
     let mut errors = Vec::new();
 
     let path_root = path.iter().map(|p| p.0.to_owned()).collect::<Vec<_>>();
     let module = path_root.get(0).unwrap(); // This will have _something_.
 
+    // 🚧 Why?
     if module == "dwarf" {
         return Ok(());
     }
@@ -3290,6 +3293,7 @@ fn inter_import(
     //     (false, "".to_owned())
     // };
 
+    // All of this has to do with reading an extension.
     let mut path = context.dwarf_home.clone();
     path.push(EXTENSION_DIR);
     path.push(module);
@@ -3297,6 +3301,18 @@ fn inter_import(
     let dir = path.clone();
 
     path.push(LIB_TAO);
+
+    let (dir, path) = if path.exists() {
+        (dir, path)
+    } else {
+        let mut path = context.dwarf_home.clone();
+        path.push(LIB_DIR);
+        path.push(module);
+        let dir = path.clone();
+
+        path.push(LIB_TAO);
+        (dir, path)
+    };
 
     match fs::read_to_string(&path) {
         Ok(source_code) => {
@@ -3306,10 +3322,13 @@ fn inter_import(
                     let old_cwd = context.cwd.clone();
                     context.cwd = dir;
                     // Extrusion time
+                    trace!("processing dwarf import");
                     walk_tree(&ast, context, lu_dog)?;
+                    trace!("done processing dwarf import");
                     context.cwd = old_cwd;
                 }
                 Err(_) => {
+                    e_warn!("Failed to parse import: {path:?}");
                     return Ok(());
                 }
             }
@@ -3349,7 +3368,6 @@ fn inter_implementation(
     context: &mut Context,
     lu_dog: &mut LuDogStore,
 ) -> Result<()> {
-    let name = name.de_sanitize();
     debug!("inter_implementation: {name}");
 
     let (impl_ty, implementation) = if let Some(store_vec) = attributes.get(STORE) {
@@ -3666,12 +3684,12 @@ pub(crate) fn make_value_type(
             Ok(ValueType::new_ty(&ty, lu_dog))
         }
         Type::UserType(tok, generics) => {
-            let name = tok.0.de_sanitize();
+            let name = &tok.0;
 
             // Deal with imports
             let import = lu_dog.iter_import().find(|import| {
                 let import = s_read!(import);
-                import.name == name || (import.has_alias && import.alias == name)
+                &import.name == name || (import.has_alias && &import.alias == name)
             });
 
             if let Some(_import) = import {
@@ -3728,7 +3746,7 @@ pub(crate) fn make_value_type(
                             // object called `Point`. We want to be able to also handle
                             // proxy objects for `Point`. Those are suffixed with "Proxy".
                             let obj = obj.read().unwrap().name.to_upper_camel_case();
-                            obj == *name || name == format!("{}Proxy", obj)
+                            obj == *name || name == format!("{}Proxy", obj).as_str()
                         }
                         _ => false,
                     }) {
@@ -3764,7 +3782,7 @@ pub(crate) fn make_value_type(
                     Ty::Object(ref obj) => {
                         let obj = sarzak.exhume_object(obj).unwrap();
                         let obj = obj.read().unwrap().name.to_upper_camel_case();
-                        obj == *name || name == format!("{}Proxy", obj)
+                        obj == *name || name == format!("{}Proxy", obj).as_str()
                     }
                     _ => false,
                 }) {
@@ -3838,58 +3856,6 @@ pub(crate) fn lookup_woog_struct_method_return_type(
     } else {
         e_warn!("ParserExpression type not found");
         ValueType::new_unknown(lu_dog)
-    }
-}
-
-pub(crate) trait DeSanitize {
-    fn de_sanitize(&self) -> &str;
-}
-
-impl DeSanitize for String {
-    fn de_sanitize(&self) -> &str {
-        if let Some(str) = de_sanitize(self) {
-            str
-        } else {
-            self
-        }
-    }
-}
-
-impl DeSanitize for &str {
-    fn de_sanitize(&self) -> &str {
-        if let Some(str) = de_sanitize(self) {
-            str
-        } else {
-            self
-        }
-    }
-}
-
-pub(crate) fn de_sanitize(string: &str) -> Option<&str> {
-    match string {
-        "False Literal" => Some("False"),
-        "FalseLiteral" => Some("False"),
-        "SString" => Some("String"),
-        "SUuid" => Some("Uuid"),
-        "True Literal" => Some("True"),
-        "TrueLiteral" => Some("True"),
-        "Ty" => Some("Type"),
-        "WoogOption" => Some("Option"),
-        "WoogStruct" => Some("Struct"),
-        "XSuper" => Some("Super"),
-        "XSuperProxy" => Some("SuperProxy"),
-        "XBox" => Some("Box"),
-        "XBoxProxy" => Some("BoxProxy"),
-        "XIf" => Some("If"),
-        "XMacro" => Some("Macro"),
-        "XMatch" => Some("Match"),
-        "XPrint" => Some("Print"),
-        "XReturn" => Some("Return"),
-        "XValue" => Some("Value"),
-        "ZObjectStore" => Some("ObjectStore"),
-        "ZSome" => Some("Some"),
-        "ZNone" => Some("None"),
-        _ => None,
     }
 }
 

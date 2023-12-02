@@ -7,8 +7,8 @@ use crate::sarzak::types::external::External;
 use crate::sarzak::types::float::FLOAT;
 use crate::sarzak::types::integer::INTEGER;
 use crate::sarzak::types::object::Object;
-use crate::sarzak::types::s_string::S_STRING;
-use crate::sarzak::types::s_uuid::S_UUID;
+use crate::sarzak::types::z_string::Z_STRING;
+use crate::sarzak::types::z_uuid::Z_UUID;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::sync::RwLock;
@@ -30,8 +30,8 @@ pub enum Ty {
     Float(Uuid),
     Integer(Uuid),
     Object(Uuid),
-    SString(Uuid),
-    SUuid(Uuid),
+    ZString(Uuid),
+    ZUuid(Uuid),
 }
 // {"magic":"","directive":{"End":{"directive":"ignore-orig"}}}
 // {"magic":"","directive":{"Start":{"directive":"ignore-orig","tag":"ty-implementation"}}}
@@ -82,16 +82,16 @@ impl Ty {
         }
     } // wtf?
 
-    /// Create a new instance of Ty::SString
-    pub fn new_s_string(store: &SarzakStore) -> Arc<RwLock<Self>> {
+    /// Create a new instance of Ty::ZString
+    pub fn new_z_string(store: &SarzakStore) -> Arc<RwLock<Self>> {
         // This is already in the store.
-        store.exhume_ty(&S_STRING).unwrap()
+        store.exhume_ty(&Z_STRING).unwrap()
     }
 
-    /// Create a new instance of Ty::SUuid
-    pub fn new_s_uuid(store: &SarzakStore) -> Arc<RwLock<Self>> {
+    /// Create a new instance of Ty::ZUuid
+    pub fn new_z_uuid(store: &SarzakStore) -> Arc<RwLock<Self>> {
         // This is already in the store.
-        store.exhume_ty(&S_UUID).unwrap()
+        store.exhume_ty(&Z_UUID).unwrap()
     }
 
     // {"magic":"","directive":{"End":{"directive":"ignore-orig"}}}
@@ -103,8 +103,8 @@ impl Ty {
             Self::Float(id) => *id,
             Self::Integer(id) => *id,
             Self::Object(id) => *id,
-            Self::SString(id) => *id,
-            Self::SUuid(id) => *id,
+            Self::ZString(id) => *id,
+            Self::ZUuid(id) => *id,
         }
     }
     // {"magic":"","directive":{"End":{"directive":"ignore-orig"}}}

@@ -6,7 +6,7 @@ use crate::{
     dwarf::{
         error::{DwarfError, Result},
         extruder::{
-            debug, function, inter_statements, make_value_type, typecheck, Context, DeSanitize,
+            debug, function, inter_statements, make_value_type, typecheck, Context,
             FunctionDefinition, Span, FUNC, OBJECT, PROXY, STORE,
         },
         AttributeMap, BlockType, Expression as ParserExpression, InnerAttribute, Spanned,
@@ -113,7 +113,6 @@ pub fn inter_func(
     context.location = location!();
     let ret_ty = make_value_type(&return_type.0, &return_type.1, impl_ty, context, lu_dog)?;
 
-    let name = name.de_sanitize();
     let (func, block) =
         if let Some((ParserExpression::Block(block_a_sink, stmts, vars, tys), span)) = &stmts {
             let a_sink = a_sink
@@ -269,7 +268,6 @@ pub fn parse_func_signature(
 
     context.location = location!();
     let ret_ty = make_value_type(&return_type.0, &return_type.1, impl_ty, context, lu_dog)?;
-    let name = name.de_sanitize();
 
     let mut param_tuples = Vec::new();
     for ((param_name, _), (param_ty, ty_span)) in params {
