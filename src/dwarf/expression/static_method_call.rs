@@ -14,8 +14,9 @@ use crate::{
         DwarfInteger, Expression as ParserExpression, Type,
     },
     keywords::{
-        ARGS, ASLEEP, ASSERT, ASSERT_EQ, CHACHA, COMPLEX_EX, EPS, FN_NEW, HTTP_GET, INTERVAL, NEW,
-        NORM_SQUARED, ONE_SHOT, PLUGIN, SLEEP, SPAWN, SPAWN_NAMED, TIME, TIMER, TYPEOF, UUID_TYPE,
+        ARGS, ASLEEP, ASSERT, ASSERT_EQ, CHACHA, COMPLEX_EX, EPS, EVAL, FN_NEW, HTTP_GET, INTERVAL,
+        NEW, NORM_SQUARED, ONE_SHOT, PARSE, PLUGIN, SLEEP, SPAWN, SPAWN_NAMED, TIME, TIMER, TYPEOF,
+        UUID_TYPE,
     },
     lu_dog::{
         store::ObjectStore as LuDogStore, Argument, Block, Call, DataStructure, EnumFieldEnum,
@@ -182,11 +183,14 @@ pub fn inter(
                     ASSERT => ValueType::new_ty(&Ty::new_boolean(sarzak), lu_dog),
                     ASSERT_EQ => ValueType::new_ty(&Ty::new_boolean(sarzak), lu_dog),
                     EPS => ValueType::new_ty(&Ty::new_float(sarzak), lu_dog),
+                    EVAL => ValueType::new_unknown(lu_dog),
+                    #[cfg(feature = "async")]
                     HTTP_GET => {
                         let inner = ValueType::new_ty(&Ty::new_s_string(sarzak), lu_dog);
                         let future = XFuture::new(&inner, lu_dog);
                         ValueType::new_x_future(&future, lu_dog)
                     }
+                    PARSE => ValueType::new_unknown(lu_dog),
                     SLEEP => ValueType::new_empty(lu_dog),
                     #[cfg(feature = "async")]
                     SPAWN => {

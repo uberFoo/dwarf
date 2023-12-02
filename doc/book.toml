@@ -20,9 +20,12 @@ editable = true
 line-numbers = true
 
 [preprocessor.indexing]
+use_chapter_names = true
+
 [preprocessor.indexing.see_instead]
 "equals" = "`==`"
 "Let Statement" = "`let`"
+"future" = "futures"
 
 [preprocessor.indexing.nest_under]
 "`if`" = "expression"
@@ -46,4 +49,4 @@ command = "mdbook-mermaid"
 
 [preprocessor.admonish]
 command = "mdbook-admonish"
-assets_version = "2.0.2" # do not edit: managed by `mdbook-admonish install`
+assets_version = "2.0.2"    # do not edit: managed by `mdbook-admonish install`
