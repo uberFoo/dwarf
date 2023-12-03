@@ -3618,7 +3618,7 @@ impl DwarfParser {
             return Err(Box::new(err));
         };
 
-        let _ = self.parse_generics();
+        let generics = self.parse_generics()?;
 
         if self.match_tokens(&[Token::Punct('(')]).is_none() {
             let token = self.peek().unwrap();
@@ -3742,7 +3742,14 @@ impl DwarfParser {
         };
 
         Ok(Some((
-            InnerItem::Function(func_ty, name, params, return_type, body),
+            InnerItem::Function {
+                a_sink: func_ty,
+                name,
+                params,
+                return_type,
+                generics,
+                statements: body,
+            },
             start..end,
         )))
     }
@@ -4266,11 +4273,7 @@ impl DwarfParser {
             return Err(Box::new(err));
         };
 
-        let generics = if let Some(generics) = self.parse_generics()? {
-            generics
-        } else {
-            (vec![], 0..0)
-        };
+        let generics = self.parse_generics()?;
 
         let fields = if self.match_tokens(&[Token::Punct('{')]).is_some() {
             let mut fields = Vec::new();
@@ -4516,11 +4519,7 @@ impl DwarfParser {
             return Err(Box::new(err));
         };
 
-        let generics = if let Some(generics) = self.parse_generics()? {
-            generics
-        } else {
-            (vec![], 0..0)
-        };
+        let generics = self.parse_generics()?;
 
         if self.match_tokens(&[Token::Punct('{')]).is_none() {
             let tok = self.previous().unwrap();
@@ -4628,7 +4627,14 @@ impl DwarfParser {
             self.previous().unwrap().1.end
         };
 
-        Ok(Some((InnerItem::Enum(name, fields, generics), start..end)))
+        Ok(Some((
+            InnerItem::Enum {
+                name,
+                fields,
+                generics,
+            },
+            start..end,
+        )))
     }
 
     /// Parse an identifier

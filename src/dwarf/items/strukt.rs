@@ -38,7 +38,7 @@ pub fn inter_struct(
     _span: &Span,
     attributes: &AttributeMap,
     fields: &[(Spanned<String>, Spanned<Type>, AttributeMap)],
-    generics: &HashMap<String, Type>,
+    generics: Option<&HashMap<String, Type>>,
     context: &mut Context,
     lu_dog: &mut LuDogStore,
 ) -> Result<()> {
@@ -93,7 +93,7 @@ pub fn inter_struct(
                                     context.struct_fields.push(StructFields {
                                         woog_struct,
                                         fields: fields.to_owned(),
-                                        generics: generics.clone(),
+                                        generics: generics.map(|generics| generics.clone()),
                                         location: location!(),
                                     });
 
@@ -202,21 +202,23 @@ pub fn inter_struct(
         let mut first = true;
         let mut first_generic = None;
         let mut last_generic_uuid: Option<usize> = None;
-        for generic in generics.keys() {
-            let generic = StructGeneric::new(generic.to_owned(), None, &woog_struct, lu_dog);
-            if first {
-                first = false;
-                first_generic = Some(s_read!(generic).id);
+        if let Some(generics) = generics {
+            for generic in generics.keys() {
+                let generic = StructGeneric::new(generic.to_owned(), None, &woog_struct, lu_dog);
+                if first {
+                    first = false;
+                    first_generic = Some(s_read!(generic).id);
+                }
+                last_generic_uuid = link_struct_generic!(last_generic_uuid, generic, lu_dog);
             }
-            last_generic_uuid = link_struct_generic!(last_generic_uuid, generic, lu_dog);
-        }
 
-        s_write!(woog_struct).first_generic = first_generic;
+            s_write!(woog_struct).first_generic = first_generic;
+        }
 
         context.struct_fields.push(StructFields {
             woog_struct,
             fields: fields.to_owned(),
-            generics: generics.clone(),
+            generics: generics.map(|generics| generics.clone()),
             location: location!(),
         });
 
@@ -227,7 +229,7 @@ pub fn inter_struct(
 pub fn inter_struct_fields(
     woog_struct: RefType<WoogStruct>,
     fields: &[(Spanned<String>, Spanned<Type>, AttributeMap)],
-    generics: &HashMap<String, Type>,
+    generics: Option<&HashMap<String, Type>>,
     location: Location,
     context: &mut Context,
     lu_dog: &mut LuDogStore,
@@ -238,64 +240,85 @@ pub fn inter_struct_fields(
 
         debug!("field {name}");
 
-        let type_str = type_.to_string();
-        let ty = if let Some(_definition_type) = generics.get(&type_str) {
-            let g = Generic::new(type_str, None, None, lu_dog);
-            let ty = ValueType::new_generic(&g, lu_dog);
-            LuDogSpan::new(
-                span.end as i64,
-                span.start as i64,
-                &context.source,
-                Some(&ty),
-                None,
-                lu_dog,
-            );
+        use std::ops::Range;
+        let mut proxy_thang =
+            |proxy_vec: &[(Range<usize>, InnerAttribute)]| -> Result<RefType<ValueType>> {
+                if let Some((_, InnerAttribute::Attribute(ref attributes))) = proxy_vec.get(0) {
+                    // Get the plugin value
+                    if let Some(plugin_vec) = attributes.get(PLUGIN) {
+                        if let Some((_, ref value)) = plugin_vec.get(0) {
+                            let plugin_name: String = value.try_into().map_err(|e| vec![e])?;
+                            debug!("proxy.plugin: {plugin_name}");
+                            if let Type::UserType(tok, _generics) = type_ {
+                                // let ty_name = tok.0.de_sanitize();
+                                let ty_name = tok.0.to_owned();
+                                if ty_name == "Plugin" {
+                                    let plugin = XPlugin::new(plugin_name, lu_dog);
+                                    let ty = ValueType::new_x_plugin(&plugin, lu_dog);
+                                    LuDogSpan::new(
+                                        span.end as i64,
+                                        span.start as i64,
+                                        &context.source,
+                                        Some(&ty),
+                                        None,
+                                        lu_dog,
+                                    );
 
-            ty
-        } else if let Some(proxy_vec) = attrs.get(PROXY) {
-            if let Some((_, InnerAttribute::Attribute(ref attributes))) = proxy_vec.get(0) {
-                // Get the plugin value
-                if let Some(plugin_vec) = attributes.get(PLUGIN) {
-                    if let Some((_, ref value)) = plugin_vec.get(0) {
-                        let plugin_name: String = value.try_into().map_err(|e| vec![e])?;
-                        debug!("proxy.plugin: {plugin_name}");
-                        if let Type::UserType(tok, _generics) = type_ {
-                            // let ty_name = tok.0.de_sanitize();
-                            let ty_name = tok.0.to_owned();
-                            if ty_name == "Plugin" {
-                                let plugin = XPlugin::new(plugin_name, lu_dog);
-                                let ty = ValueType::new_x_plugin(&plugin, lu_dog);
-                                LuDogSpan::new(
-                                    span.end as i64,
-                                    span.start as i64,
-                                    &context.source,
-                                    Some(&ty),
-                                    None,
-                                    lu_dog,
-                                );
-
-                                ty
+                                    Ok(ty)
+                                } else {
+                                    return Err(vec![DwarfError::Generic {
+                                        description: format!(
+                                            "Expected `Plugin`, found `{ty_name}`.",
+                                        ),
+                                    }]);
+                                }
                             } else {
                                 return Err(vec![DwarfError::Generic {
-                                    description: format!("Expected `Plugin`, found `{ty_name}`.",),
+                                    description: format!("Expected `Plugin`, found `{type_}`.",),
                                 }]);
                             }
                         } else {
-                            return Err(vec![DwarfError::Generic {
-                                description: format!("Expected `Plugin`, found `{type_}`.",),
-                            }]);
+                            unreachable!();
                         }
                     } else {
-                        unreachable!();
+                        return Err(vec![DwarfError::Generic {
+                            description: "Expected `plugin` attribute".to_owned(),
+                        }]);
                     }
                 } else {
-                    return Err(vec![DwarfError::Generic {
-                        description: "Expected `plugin` attribute".to_owned(),
-                    }]);
+                    unreachable!();
                 }
+            };
+
+        let type_str = type_.to_string();
+        let ty = if let Some(generics) = generics {
+            if let Some(_definition_type) = generics.get(&type_str) {
+                let g = Generic::new(type_str, None, None, lu_dog);
+                let ty = ValueType::new_generic(&g, lu_dog);
+                LuDogSpan::new(
+                    span.end as i64,
+                    span.start as i64,
+                    &context.source,
+                    Some(&ty),
+                    None,
+                    lu_dog,
+                );
+
+                ty
+            } else if let Some(proxy_vec) = attrs.get(PROXY) {
+                proxy_thang(proxy_vec)?
             } else {
-                unreachable!();
+                context.location = location;
+                match make_value_type(type_, span, None, context, lu_dog) {
+                    Ok(ty) => ty,
+                    Err(mut err) => {
+                        errors.append(&mut err);
+                        continue;
+                    }
+                }
             }
+        } else if let Some(proxy_vec) = attrs.get(PROXY) {
+            proxy_thang(proxy_vec)?
         } else {
             context.location = location;
             match make_value_type(type_, span, None, context, lu_dog) {
@@ -306,9 +329,6 @@ pub fn inter_struct_fields(
                 }
             }
         };
-
-        //     Type::UserType(tok, generics) => {
-        // let name = tok.0.de_sanitize();
 
         let _field = Field::new(name.to_owned(), &woog_struct, &ty, lu_dog);
     }

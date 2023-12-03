@@ -185,6 +185,7 @@ struct ConveyFunc<'a> {
     span: &'a Span,
     params: &'a [(Spanned<String>, Spanned<Type>)],
     return_type: &'a Spanned<Type>,
+    generics: Option<HashMap<String, Type>>,
     statements: Option<&'a Spanned<ParserExpression>>,
 }
 
@@ -196,6 +197,7 @@ impl<'a> ConveyFunc<'a> {
         span: &'a Span,
         params: &'a [(Spanned<String>, Spanned<Type>)],
         return_type: &'a Spanned<Type>,
+        generics: Option<HashMap<String, Type>>,
         statements: Option<&'a Spanned<ParserExpression>>,
     ) -> Self {
         Self {
@@ -205,6 +207,7 @@ impl<'a> ConveyFunc<'a> {
             span,
             params,
             return_type,
+            generics,
             statements,
         }
     }
@@ -215,7 +218,7 @@ struct ConveyStruct<'a> {
     span: &'a Span,
     attributes: &'a AttributeMap,
     fields: &'a [(Spanned<String>, Spanned<Type>, AttributeMap)],
-    generics: HashMap<String, Type>,
+    generics: Option<HashMap<String, Type>>,
 }
 
 impl<'a> ConveyStruct<'a> {
@@ -224,7 +227,7 @@ impl<'a> ConveyStruct<'a> {
         span: &'a Span,
         attributes: &'a AttributeMap,
         fields: &'a [(Spanned<String>, Spanned<Type>, AttributeMap)],
-        generics: HashMap<String, Type>,
+        generics: Option<HashMap<String, Type>>,
     ) -> Self {
         Self {
             name,
@@ -240,7 +243,7 @@ struct ConveyEnum<'a> {
     name: &'a str,
     attributes: &'a AttributeMap,
     fields: &'a [(Spanned<String>, Option<EnumField>)],
-    generics: HashMap<String, Type>,
+    generics: Option<HashMap<String, Type>>,
 }
 
 impl<'a> ConveyEnum<'a> {
@@ -248,7 +251,7 @@ impl<'a> ConveyEnum<'a> {
         name: &'a str,
         attributes: &'a AttributeMap,
         fields: &'a [(Spanned<String>, Option<EnumField>)],
-        generics: HashMap<String, Type>,
+        generics: Option<HashMap<String, Type>>,
     ) -> Self {
         Self {
             name,
@@ -281,7 +284,8 @@ impl<'a> ConveyImpl<'a> {
 pub struct StructFields {
     pub woog_struct: RefType<WoogStruct>,
     pub fields: Vec<(Spanned<String>, Spanned<Type>, AttributeMap)>,
-    pub generics: HashMap<String, Type>,
+    // I'd really like to keep this as a reference, rather than cloning it.
+    pub generics: Option<HashMap<String, Type>>,
     pub location: Location,
 }
 
@@ -390,35 +394,78 @@ fn walk_tree(ast: &[Item], context: &mut Context, lu_dog: &mut LuDogStore) -> Re
     for item in ast {
         match item {
             Item {
-                item: (InnerItem::Enum((name, _), fields, generics), _),
+                item:
+                    (
+                        InnerItem::Enum {
+                            name,
+                            fields,
+                            generics,
+                        },
+                        _,
+                    ),
                 attributes,
-            } => enums.push(ConveyEnum::new(
-                name,
-                attributes,
-                fields,
-                generics
-                    .0
-                    .clone()
-                    .into_iter()
-                    .map(|(t, _)| match t {
-                        Type::Generic((t, s)) => (t.to_owned(), Type::Generic((t, s))),
-                        _ => unreachable!(),
-                    })
-                    .collect(),
-            )),
+            } => {
+                let generics = if let Some((generics, _)) = generics {
+                    Some(
+                        generics
+                            .into_iter()
+                            .map(|(t, _)| match t {
+                                Type::Generic((t, s)) => {
+                                    (t.to_owned(), Type::Generic((t.to_owned(), s.to_owned())))
+                                }
+                                _ => unreachable!(),
+                            })
+                            .collect(),
+                    )
+                } else {
+                    None
+                };
+                enums.push(ConveyEnum::new(&name.0, attributes, fields, generics))
+            }
             Item {
                 item:
-                    (InnerItem::Function(a_sink, (name, _name_span), params, return_type, stmts), span),
+                    (
+                        InnerItem::Function {
+                            a_sink,
+                            name,
+                            params,
+                            return_type,
+                            generics,
+                            statements,
+                        },
+                        span,
+                    ),
                 attributes,
-            } => funcs.push(ConveyFunc::new(
-                a_sink,
-                name,
-                attributes,
-                span,
-                params,
-                return_type,
-                stmts.as_ref(),
-            )),
+            } => {
+                let generics = if let Some((generics, _)) = generics {
+                    Some(
+                        generics
+                            .into_iter()
+                            .cloned()
+                            .map(|(t, _)| match t {
+                                Type::Generic((t, s)) => (t.to_owned(), Type::Generic((t, s))),
+                                fubared => {
+                                    dbg!(fubared);
+                                    unreachable!();
+                                }
+                            })
+                            .collect(),
+                    )
+                } else {
+                    None
+                };
+
+                funcs.push(ConveyFunc::new(
+                    a_sink,
+                    &name.0,
+                    attributes,
+                    span,
+                    params,
+                    return_type,
+                    generics,
+                    statements.as_ref(),
+                ))
+            }
             Item {
                 item: (InnerItem::Implementation((name, _name_span), funcs), span),
                 attributes,
@@ -435,24 +482,33 @@ fn walk_tree(ast: &[Item], context: &mut Context, lu_dog: &mut LuDogStore) -> Re
             Item {
                 item: (InnerItem::Struct((name, _), fields, generics), span),
                 attributes,
-            } => structs.push(ConveyStruct::new(
-                name.to_owned(),
-                span,
-                attributes,
-                fields,
-                generics
-                    .0
-                    .clone()
-                    .into_iter()
-                    .map(|(t, _)| match t {
-                        Type::Generic((t, s)) => (t.to_owned(), Type::Generic((t, s))),
-                        fubared => {
-                            dbg!(fubared);
-                            unreachable!();
-                        }
-                    })
-                    .collect(),
-            )),
+            } => {
+                let generics = if let Some((generics, _)) = generics {
+                    Some(
+                        generics
+                            .into_iter()
+                            .cloned()
+                            .map(|(t, _)| match t {
+                                Type::Generic((t, s)) => (t.to_owned(), Type::Generic((t, s))),
+                                fubared => {
+                                    dbg!(fubared);
+                                    unreachable!();
+                                }
+                            })
+                            .collect(),
+                    )
+                } else {
+                    None
+                };
+
+                structs.push(ConveyStruct::new(
+                    name.to_owned(),
+                    span,
+                    attributes,
+                    fields,
+                    generics,
+                ))
+            }
         }
     }
 
@@ -470,10 +526,18 @@ fn walk_tree(ast: &[Item], context: &mut Context, lu_dog: &mut LuDogStore) -> Re
     } in &structs
     {
         debug!("Interring struct `{}` fields", name);
-        let _ = strukt::inter_struct(name, span, attributes, fields, generics, context, lu_dog)
-            .map_err(|mut e| {
-                errors.append(&mut e);
-            });
+        let _ = strukt::inter_struct(
+            name,
+            span,
+            attributes,
+            fields,
+            generics.as_ref(),
+            context,
+            lu_dog,
+        )
+        .map_err(|mut e| {
+            errors.append(&mut e);
+        });
     }
 
     for ConveyEnum {
@@ -484,11 +548,10 @@ fn walk_tree(ast: &[Item], context: &mut Context, lu_dog: &mut LuDogStore) -> Re
     } in &enums
     {
         debug!("Interring enum `{}` fields", name);
-        let _ = enuum::inter_enum(name, attributes, fields, generics, context, lu_dog).map_err(
-            |mut e| {
+        let _ = enuum::inter_enum(name, attributes, fields, generics.as_ref(), context, lu_dog)
+            .map_err(|mut e| {
                 errors.append(&mut e);
-            },
-        );
+            });
     }
 
     // This needs to be after the enums are interred.
@@ -504,7 +567,7 @@ fn walk_tree(ast: &[Item], context: &mut Context, lu_dog: &mut LuDogStore) -> Re
             let _ = strukt::inter_struct_fields(
                 woog_struct,
                 &fields,
-                &generics,
+                generics.as_ref(),
                 location,
                 context,
                 lu_dog,
@@ -523,13 +586,22 @@ fn walk_tree(ast: &[Item], context: &mut Context, lu_dog: &mut LuDogStore) -> Re
         span: _,
         params,
         return_type,
+        generics,
         statements: _,
     } in &funcs
     {
-        let _ = func::parse_func_signature(name, params, return_type, None, context, lu_dog)
-            .map_err(|mut e| {
-                errors.append(&mut e);
-            });
+        let _ = func::parse_func_signature(
+            name,
+            params,
+            generics.as_ref(),
+            return_type,
+            None,
+            context,
+            lu_dog,
+        )
+        .map_err(|mut e| {
+            errors.append(&mut e);
+        });
     }
 
     // Using the type information, and the input, inter the implementation blocks.
@@ -556,6 +628,7 @@ fn walk_tree(ast: &[Item], context: &mut Context, lu_dog: &mut LuDogStore) -> Re
         span,
         params,
         return_type,
+        generics,
         statements,
     } in funcs
     {
@@ -566,6 +639,7 @@ fn walk_tree(ast: &[Item], context: &mut Context, lu_dog: &mut LuDogStore) -> Re
             attributes,
             params,
             return_type,
+            generics.as_ref(),
             statements,
             None,
             None,
@@ -649,24 +723,44 @@ pub fn inter_statement(
                 Item {
                     item:
                         (
-                            InnerItem::Function(
-                                ref a_sink,
-                                ref name,
-                                ref params,
-                                ref return_type,
-                                ref stmts,
-                            ),
+                            InnerItem::Function {
+                                a_sink,
+                                name,
+                                params,
+                                return_type,
+                                statements,
+                                generics,
+                            },
                             span,
                         ),
                     attributes,
                 } => {
+                    let generics = if let Some((generics, _)) = generics {
+                        Some(
+                            generics
+                                .into_iter()
+                                .cloned()
+                                .map(|(t, _)| match t {
+                                    Type::Generic((t, s)) => (t.to_owned(), Type::Generic((t, s))),
+                                    fubared => {
+                                        dbg!(fubared);
+                                        unreachable!();
+                                    }
+                                })
+                                .collect(),
+                        )
+                    } else {
+                        None
+                    };
+
                     func::inter_func(
                         a_sink,
                         &name.0,
                         attributes,
                         params,
                         return_type,
-                        stmts.as_ref(),
+                        generics.as_ref(),
+                        statements.as_ref(),
                         None,
                         None,
                         span,
@@ -693,20 +787,28 @@ pub fn inter_statement(
                     item: (InnerItem::Struct((name, _span), fields, generics), outer_span),
                     attributes,
                 } => {
+                    let generics = if let Some((generics, _)) = generics {
+                        Some(
+                            generics
+                                .into_iter()
+                                .map(|(t, _)| match t {
+                                    Type::Generic((t, s)) => {
+                                        (t.to_owned(), Type::Generic((t.to_owned(), s.to_owned())))
+                                    }
+                                    _ => unreachable!(),
+                                })
+                                .collect(),
+                        )
+                    } else {
+                        None
+                    };
+
                     strukt::inter_struct(
                         name,
                         outer_span,
                         attributes,
                         fields,
-                        &generics
-                            .0
-                            .clone()
-                            .into_iter()
-                            .map(|(t, _)| match t {
-                                Type::Generic((t, s)) => (t.to_owned(), Type::Generic((t, s))),
-                                _ => unreachable!(),
-                            })
-                            .collect(),
+                        generics.as_ref(),
                         context,
                         lu_dog,
                     )
@@ -721,7 +823,7 @@ pub fn inter_statement(
                         strukt::inter_struct_fields(
                             woog_struct,
                             &fields,
-                            &generics,
+                            generics.as_ref(),
                             location,
                             context,
                             lu_dog,
@@ -3463,24 +3565,44 @@ fn inter_implementation(
             Item {
                 item:
                     (
-                        InnerItem::Function(
-                            ref func_ty,
-                            ref name,
-                            ref params,
-                            ref return_type,
-                            ref stmts,
-                        ),
+                        InnerItem::Function {
+                            a_sink,
+                            name,
+                            params,
+                            return_type,
+                            generics,
+                            statements,
+                        },
                         span,
                     ),
                 attributes,
             } => {
+                let generics = if let Some((generics, _)) = generics {
+                    Some(
+                        generics
+                            .into_iter()
+                            .cloned()
+                            .map(|(t, _)| match t {
+                                Type::Generic((t, s)) => (t.to_owned(), Type::Generic((t, s))),
+                                fubared => {
+                                    dbg!(fubared);
+                                    unreachable!();
+                                }
+                            })
+                            .collect(),
+                    )
+                } else {
+                    None
+                };
+
                 match func::inter_func(
-                    func_ty,
+                    a_sink,
                     &name.0,
                     attributes,
                     params,
                     return_type,
-                    stmts.as_ref(),
+                    generics.as_ref(),
+                    statements.as_ref(),
                     implementation.as_ref(),
                     impl_ty.as_ref(),
                     span,

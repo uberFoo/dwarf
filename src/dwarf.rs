@@ -553,23 +553,33 @@ pub enum BlockType {
     Sync,
 }
 
+/// The inner bits of the Item implementation
+///
+///
 #[derive(Clone, Debug, PartialEq)]
 pub enum InnerItem {
-    Enum(
-        Spanned<String>,
-        Vec<(Spanned<String>, Option<EnumField>)>,
-        Generics,
-    ),
+    /// Enumeration
+    ///
+    /// The first field is the enum name.
+    /// The second field is a Vec of the enum fields.
+    /// The first item is the name of the field, and the second is an optional field description, i.e., a tuple or struct.
+    /// The final field are the generics attached to the enum.
+    Enum {
+        name: Spanned<String>,
+        fields: Vec<(Spanned<String>, Option<EnumField>)>,
+        generics: Option<Generics>,
+    },
     /// A Function Definition
     ///
     /// async, name, Vec<(Parameter Name, Parameter Type)>, Return Type, Vec<Statement>
-    Function(
-        BlockType,
-        Spanned<String>,
-        Vec<(Spanned<String>, Spanned<Type>)>,
-        Spanned<Type>,
-        Option<Spanned<Expression>>,
-    ),
+    Function {
+        a_sink: BlockType,
+        name: Spanned<String>,
+        params: Vec<(Spanned<String>, Spanned<Type>)>,
+        return_type: Spanned<Type>,
+        generics: Option<Generics>,
+        statements: Option<Spanned<Expression>>,
+    },
     /// name, Vec<(Function Name, Function)>
     Implementation(Spanned<String>, Vec<Item>),
     /// path, Option<Alias>
@@ -579,7 +589,7 @@ pub enum InnerItem {
     Struct(
         Spanned<String>,
         Vec<(Spanned<String>, Spanned<Type>, AttributeMap)>,
-        Generics,
+        Option<Generics>,
     ),
 }
 

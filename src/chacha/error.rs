@@ -183,6 +183,7 @@ pub enum ChaChaError {
         got: usize,
         defn_span: Span,
         invocation_span: Span,
+        location: Location,
     },
 }
 
@@ -442,10 +443,13 @@ impl fmt::Display for ChaChaErrorReporter<'_, '_, '_> {
                 got,
                 defn_span,
                 invocation_span,
+                location,
             } => {
                 let msg = format!("expected `{expected}`, found `{got}`.");
 
-                Report::build(ReportKind::Error, file_name, invocation_span.start)
+                dbg!(&defn_span);
+
+                let report = Report::build(ReportKind::Error, file_name, invocation_span.start)
                     .with_message("wrong number of arguments")
                     .with_label(
                         Label::new((file_name, defn_span.clone()))
@@ -456,7 +460,20 @@ impl fmt::Display for ChaChaErrorReporter<'_, '_, '_> {
                         Label::new((file_name, invocation_span.clone()))
                             .with_message(msg)
                             .with_color(Color::Red),
-                    )
+                    );
+
+                let report = if is_uber {
+                    report.with_note(format!(
+                        "{}:{}:{}\n",
+                        OTH_CLR.paint(location.file.to_string()),
+                        POP_CLR.paint(format!("{}", location.line)),
+                        OK_CLR.paint(format!("{}", location.column)),
+                    ))
+                } else {
+                    report
+                };
+
+                report
                     .finish()
                     .write((file_name, Source::from(&program)), &mut std_err)
                     .map_err(|_| fmt::Error)?;

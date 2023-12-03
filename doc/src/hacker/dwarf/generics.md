@@ -10,9 +10,9 @@ Here's a simple example:
 ```dwarf
 // This is a generic function.
 // It takes a type T and returns a value of type T.
-//fn id<T>(x: T) -> T {
-//    return x;
-//}
+fn id<T>(x: T) -> T {
+    x
+}
 
 // This is a generic type.
 // It takes a type T and stores a value of type T.
@@ -28,14 +28,10 @@ impl Box<T> {
 
 fn main() {
     // Here we call the generic function with an int.
-    // The compiler will generate a version of the function
-    // that works with ints.
-//    let x = id(42);
-//    print("{0\n".format(x));
+    let x = id(42);
+    print("{0\n".format(x));
 
     // Here we create a Box that stores an int.
-    // The compiler will generate a version of the Box
-    // that stores ints.
     let y = Box{value: 42};
     print("{0\n".format(y));
     y.display();
