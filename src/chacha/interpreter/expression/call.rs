@@ -21,8 +21,8 @@ use crate::{
     },
     keywords::{
         ADD, ARGS, ASLEEP, ASSERT, ASSERT_EQ, CHACHA, COMPLEX_EX, EPS, EVAL, FN_NEW, FORMAT,
-        HTTP_GET, LEN, MAP, NEW, NORM_SQUARED, ONE_SHOT, PARSE, PLUGIN, SLEEP, SPAWN, SPAWN_NAMED,
-        SQUARE, SUM, TIME, TIMER, TYPEOF, UUID_TYPE,
+        HTTP_GET, IS_DIGIT, LEN, LINES, MAP, NEW, NORM_SQUARED, ONE_SHOT, PARSE, PLUGIN, SLEEP,
+        SPAWN, SPAWN_NAMED, SQUARE, SUM, TIME, TIMER, TO_DIGIT, TYPEOF, UUID_TYPE,
     },
     lu_dog::{CallEnum, Expression, ValueType, ValueTypeEnum},
     new_ref,
@@ -30,7 +30,7 @@ use crate::{
     plug_in::PluginType,
     s_read, s_write,
     sarzak::Ty,
-    NewRef, RefType, SarzakStorePtr, Value, ValueResult,
+    DwarfInteger, NewRef, RefType, SarzakStorePtr, Value, ValueResult,
 };
 
 mod chacha;
@@ -144,11 +144,12 @@ pub fn eval(
         // `[1, 2, 3].iter().map(|x| x + 1)`
         // `["hello", "I", "am", "dwarf!"].sort();
         let x = match &s_read!(ty).subtype {
+            ValueTypeEnum::Char(_) => value,
             ValueTypeEnum::Ty(ref id) => {
-                let _ty = s_read!(sarzak).exhume_ty(id).unwrap();
+                let ty = s_read!(sarzak).exhume_ty(id).unwrap();
                 // SString is here because we have methods on that type
                 // 🚧 We need to add Vector or whatever as well.
-                let x = match &*_ty.read().unwrap() {
+                let x = match &*ty.read().unwrap() {
                     Ty::SString(_) => value,
                     _ => eval_lhs()?,
                 };
@@ -181,6 +182,30 @@ pub fn eval(
 
             let read_value = s_read!(value);
             match &*read_value {
+                Value::Char(c) => match meth_name.as_str() {
+                    IS_DIGIT => {
+                        let value = c.is_digit(10);
+
+                        Ok(new_ref!(Value, Value::Boolean(value)))
+                    }
+                    TO_DIGIT => {
+                        let value = c.to_digit(10).unwrap();
+
+                        Ok(new_ref!(Value, Value::Integer(value as DwarfInteger)))
+                    }
+                    _ => {
+                        let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
+                        let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
+                        let read = s_read!(span);
+                        let span = read.start as usize..read.end as usize;
+
+                        return Err(ChaChaError::NoSuchMethod {
+                            method: meth_name.to_owned(),
+                            span,
+                            location: location!(),
+                        });
+                    }
+                },
                 Value::ProxyType {
                     module: _,
                     obj_ty: ref id,
@@ -302,6 +327,21 @@ pub fn eval(
                         .collect::<Vec<&str>>()
                         .len();
                         Ok(new_ref!(Value, Value::Integer(len as i64)))
+                    }
+                    LINES => {
+                        let ty = Ty::new_s_string(&s_read!(sarzak));
+                        let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
+
+                        Ok(new_ref!(
+                            Value,
+                            Value::Vector {
+                                ty,
+                                inner: string
+                                    .lines()
+                                    .map(|line| new_ref!(Value, Value::String(line.to_owned())))
+                                    .collect()
+                            }
+                        ))
                     }
                     FORMAT => {
                         debug!("evaluating String::format");

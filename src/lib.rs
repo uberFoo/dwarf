@@ -41,7 +41,9 @@ mod keywords {
     pub(crate) const FN_NEW: &str = "new";
     pub(crate) const HTTP_GET: &str = "http_get";
     pub(crate) const INTERVAL: &str = "interval";
+    pub(crate) const IS_DIGIT: &str = "is_digit";
     pub(crate) const LEN: &str = "len";
+    pub(crate) const LINES: &str = "lines";
     pub(crate) const FORMAT: &str = "format";
     pub(crate) const MAP: &str = "map";
     pub(crate) const NEW: &str = "new";
@@ -56,6 +58,7 @@ mod keywords {
     pub(crate) const SQUARE: &str = "square";
     pub(crate) const TIME: &str = "time";
     pub(crate) const TIMER: &str = "timer";
+    pub(crate) const TO_DIGIT: &str = "to_digit";
     pub(crate) const TYPEOF: &str = "typeof";
     // 🚧 We have a token already...
     pub(crate) const UUID_TYPE: &str = "Uuid";

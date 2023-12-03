@@ -44,7 +44,7 @@ pub enum ChaChaError {
     Bang {
         value: Value,
     },
-    #[snafu(display("\n{}: could not convent `{}` to `{}`", ERR_CLR.bold().paint("error"), src, dst))]
+    #[snafu(display("\n{}: could not convert `{}` to `{}`", ERR_CLR.bold().paint("error"), src, dst))]
     Conversion {
         src: String,
         dst: String,

@@ -16,7 +16,7 @@ use crate::{
         Expression as ParserExpression, Generics, InnerAttribute, InnerItem, Item,
         PrintableValueType, Spanned, Statement as ParserStatement, Type, WrappedValueType,
     },
-    keywords::{CHACHA, FN_NEW, FORMAT, LEN, MAP, SUM, UUID_TYPE},
+    keywords::{CHACHA, FN_NEW, FORMAT, IS_DIGIT, LEN, LINES, MAP, SUM, TO_DIGIT, UUID_TYPE},
     lu_dog::{
         store::ObjectStore as LuDogStore,
         types::{
@@ -2523,18 +2523,24 @@ pub(super) fn inter_expression(
             }
 
             let ret_ty = match s_read!(instance_ty).subtype {
-                ValueTypeEnum::WoogStruct(id) => {
-                    let woog_struct = lu_dog.exhume_woog_struct(&id).unwrap();
-                    let x = lookup_woog_struct_method_return_type(
-                        &s_read!(woog_struct).name,
-                        method,
-                        context.sarzak,
-                        lu_dog,
-                    );
-
-                    #[allow(clippy::let_and_return)]
-                    x
-                }
+                ValueTypeEnum::Char(_) => match method.as_str() {
+                    IS_DIGIT => {
+                        let ty = Ty::new_boolean(context.sarzak);
+                        ValueType::new_ty(&ty, lu_dog)
+                    }
+                    TO_DIGIT => {
+                        let ty = Ty::new_integer(context.sarzak);
+                        ValueType::new_ty(&ty, lu_dog)
+                    }
+                    _ => {
+                        return Err(vec![DwarfError::NoSuchMethod {
+                            method: method.to_owned(),
+                            file: context.file_name.to_owned(),
+                            span: meth_span.to_owned(),
+                            location: location!(),
+                        }])
+                    }
+                },
                 ValueTypeEnum::List(_) => match method.as_str() {
                     MAP => {
                         if arg_ty.len() != 1 {
@@ -2584,6 +2590,12 @@ pub(super) fn inter_expression(
                                 let ty = Ty::new_integer(context.sarzak);
                                 ValueType::new_ty(&ty, lu_dog)
                             }
+                            LINES => {
+                                let string = Ty::new_s_string(context.sarzak);
+                                let string = ValueType::new_ty(&string, lu_dog);
+                                let list = List::new(&string, lu_dog);
+                                ValueType::new_list(&list, lu_dog)
+                            }
                             FORMAT => {
                                 let ty = Ty::new_s_string(context.sarzak);
                                 ValueType::new_ty(&ty, lu_dog)
@@ -2603,7 +2615,23 @@ pub(super) fn inter_expression(
                         ValueType::new_unknown(lu_dog)
                     }
                 }
-                _ => ValueType::new_unknown(lu_dog),
+                ValueTypeEnum::WoogStruct(id) => {
+                    let woog_struct = lu_dog.exhume_woog_struct(&id).unwrap();
+                    let x = lookup_woog_struct_method_return_type(
+                        &s_read!(woog_struct).name,
+                        method,
+                        context.sarzak,
+                        lu_dog,
+                    );
+
+                    #[allow(clippy::let_and_return)]
+                    x
+                }
+                ref ty => {
+                    e_warn!("Unknown type for method call {method}, {ty:?}", ty = ty);
+
+                    ValueType::new_unknown(lu_dog)
+                }
             };
 
             debug!(
