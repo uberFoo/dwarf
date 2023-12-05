@@ -1,4 +1,7 @@
-use std::{fmt, future::Future, ops::Range};
+#[cfg(feature = "async")]
+use std::future::Future;
+
+use std::{fmt, ops::Range};
 
 #[cfg(feature = "async")]
 use smol::future;
@@ -15,6 +18,9 @@ use uuid::Uuid;
 #[cfg(feature = "async")]
 use puteketeke::Executor;
 
+#[cfg(feature = "async")]
+use crate::ValueResult;
+
 use crate::{
     chacha::error::Result,
     lu_dog::{Function, Lambda, ObjectStore as LuDogStore, ValueType, ZObjectStore},
@@ -22,7 +28,7 @@ use crate::{
     plug_in::PluginType,
     s_read,
     sarzak::{ObjectStore as SarzakStore, Ty},
-    ChaChaError, Context, DwarfFloat, DwarfInteger, NewRef, RefType, ValueResult,
+    ChaChaError, Context, DwarfFloat, DwarfInteger, NewRef, RefType,
 };
 
 #[repr(C)]

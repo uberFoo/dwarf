@@ -16,7 +16,10 @@ use crate::{
         Expression as ParserExpression, Generics, InnerAttribute, InnerItem, Item,
         PrintableValueType, Spanned, Statement as ParserStatement, Type, WrappedValueType,
     },
-    keywords::{CHACHA, FN_NEW, FORMAT, IS_DIGIT, LEN, LINES, MAP, SUM, TO_DIGIT, UUID_TYPE},
+    keywords::{
+        CHACHA, FN_NEW, FORMAT, IS_DIGIT, LEN, LINES, MAP, MAX, SPLIT, SUM, TO_DIGIT, TRIM,
+        UUID_TYPE,
+    },
     lu_dog::{
         store::ObjectStore as LuDogStore,
         types::{
@@ -2584,20 +2587,10 @@ pub(super) fn inter_expression(
                 ValueTypeEnum::Ty(id) => {
                     let ty = context.sarzak.exhume_ty(&id).unwrap();
                     let ty = ty.read().unwrap();
-                    if let Ty::SString(_) = &*ty {
-                        match method.as_str() {
-                            LEN => {
+                    match &*ty {
+                        Ty::Integer(_) => match method.as_str() {
+                            MAX => {
                                 let ty = Ty::new_integer(context.sarzak);
-                                ValueType::new_ty(&ty, lu_dog)
-                            }
-                            LINES => {
-                                let string = Ty::new_s_string(context.sarzak);
-                                let string = ValueType::new_ty(&string, lu_dog);
-                                let list = List::new(&string, lu_dog);
-                                ValueType::new_list(&list, lu_dog)
-                            }
-                            FORMAT => {
-                                let ty = Ty::new_s_string(context.sarzak);
                                 ValueType::new_ty(&ty, lu_dog)
                             }
                             _ => {
@@ -2606,13 +2599,50 @@ pub(super) fn inter_expression(
                                     file: context.file_name.to_owned(),
                                     span: meth_span.to_owned(),
                                     location: location!(),
-                                    // commentary: "Type `string` has no such method.".to_owned(),
-                                }]);
+                                }])
+                            }
+                        },
+                        Ty::SString(_) => {
+                            match method.as_str() {
+                                LEN => {
+                                    let ty = Ty::new_integer(context.sarzak);
+                                    ValueType::new_ty(&ty, lu_dog)
+                                }
+                                LINES => {
+                                    let string = Ty::new_s_string(context.sarzak);
+                                    let string = ValueType::new_ty(&string, lu_dog);
+                                    let list = List::new(&string, lu_dog);
+                                    ValueType::new_list(&list, lu_dog)
+                                }
+                                FORMAT => {
+                                    let ty = Ty::new_s_string(context.sarzak);
+                                    ValueType::new_ty(&ty, lu_dog)
+                                }
+                                SPLIT => {
+                                    let string = Ty::new_s_string(context.sarzak);
+                                    let string = ValueType::new_ty(&string, lu_dog);
+                                    let list = List::new(&string, lu_dog);
+                                    ValueType::new_list(&list, lu_dog)
+                                }
+                                TRIM => {
+                                    let ty = Ty::new_s_string(context.sarzak);
+                                    ValueType::new_ty(&ty, lu_dog)
+                                }
+                                _ => {
+                                    return Err(vec![DwarfError::NoSuchMethod {
+                                        method: method.to_owned(),
+                                        file: context.file_name.to_owned(),
+                                        span: meth_span.to_owned(),
+                                        location: location!(),
+                                        // commentary: "Type `string` has no such method.".to_owned(),
+                                    }]);
+                                }
                             }
                         }
-                    } else {
-                        e_warn!("Unknown type for method call {method}");
-                        ValueType::new_unknown(lu_dog)
+                        _ => {
+                            e_warn!("Unknown type for method call {method}");
+                            ValueType::new_unknown(lu_dog)
+                        }
                     }
                 }
                 ValueTypeEnum::WoogStruct(id) => {

@@ -61,6 +61,8 @@ pub fn eval_function_call(
     span!("eval_function_call");
 
     let body = s_read!(func).r19_body(&s_read!(lu_dog))[0].clone();
+
+    #[cfg(feature = "async")]
     let task_name: String = s_read!(func).name.to_owned();
 
     if s_read!(body).a_sink {

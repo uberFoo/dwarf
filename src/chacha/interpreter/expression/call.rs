@@ -6,8 +6,13 @@ use ansi_term::Colour;
 #[cfg(feature = "async")]
 use async_io::Timer;
 
-use snafu::{location, prelude::*, Location};
+#[cfg(feature = "async")]
 use tracing::{debug_span, Instrument};
+
+#[cfg(feature = "async")]
+use crate::keywords::{ASLEEP, HTTP_GET, ONE_SHOT, SPAWN, SPAWN_NAMED};
+
+use snafu::{location, prelude::*, Location};
 use uuid::Uuid;
 
 use crate::{
@@ -20,9 +25,9 @@ use crate::{
         ChaChaError, Context, PrintableValueType,
     },
     keywords::{
-        ADD, ARGS, ASLEEP, ASSERT, ASSERT_EQ, CHACHA, COMPLEX_EX, EPS, EVAL, FN_NEW, FORMAT,
-        HTTP_GET, IS_DIGIT, LEN, LINES, MAP, NEW, NORM_SQUARED, ONE_SHOT, PARSE, PLUGIN, SLEEP,
-        SPAWN, SPAWN_NAMED, SQUARE, SUM, TIME, TIMER, TO_DIGIT, TYPEOF, UUID_TYPE,
+        ADD, ARGS, ASSERT, ASSERT_EQ, CHACHA, COMPLEX_EX, EPS, EVAL, FN_NEW, FORMAT, IS_DIGIT, LEN,
+        LINES, MAP, NEW, NORM_SQUARED, PARSE, PLUGIN, SLEEP, SPLIT, SQUARE, SUM, TIME, TIMER,
+        TO_DIGIT, TRIM, TYPEOF, UUID_TYPE,
     },
     lu_dog::{CallEnum, Expression, ValueType, ValueTypeEnum},
     new_ref,
@@ -81,6 +86,7 @@ pub fn eval(
                     debug!("value {value:?}");
                     Ok(value)
                 }
+                Value::Integer(_) => Ok(value.clone()),
                 Value::Lambda(ref ƛ) => {
                     let ƛ = s_read!(lu_dog).exhume_lambda(&s_read!(ƛ).id).unwrap();
                     debug!("ExpressionEnum::Call ƛ: {ƛ:?}");
@@ -204,6 +210,28 @@ pub fn eval(
                             span,
                             location: location!(),
                         });
+                    }
+                },
+                Value::Integer(i) => match meth_name.as_str() {
+                    MAX => {
+                        let other = args.pop().unwrap();
+                        let other = s_read!(other).r37_expression(&s_read!(lu_dog))[0].clone();
+                        let other = eval_expression(other.clone(), context, vm).unwrap();
+                        let other = &*s_read!(other);
+                        let other = if let Value::Integer(other) = other {
+                            other
+                        } else {
+                            return Err(ChaChaError::TypeMismatch {
+                                expected: "Integer".to_owned(),
+                                found: other.to_string(),
+                                span: 0..0,
+                                location: location!(),
+                            });
+                        };
+
+                        let value = *i.max(other);
+
+                        Ok(new_ref!(Value, Value::Integer(value)))
                     }
                 },
                 Value::ProxyType {
@@ -459,6 +487,42 @@ pub fn eval(
                         }
 
                         Ok(new_ref!(Value, Value::String(result)))
+                    }
+                    SPLIT => {
+                        let separator = args.pop().unwrap();
+                        let separator =
+                            s_read!(separator).r37_expression(&s_read!(lu_dog))[0].clone();
+                        let separator = eval_expression(separator.clone(), context, vm).unwrap();
+                        let separator = &*s_read!(separator);
+                        let separator = if let Value::String(separator) = separator {
+                            separator
+                        } else {
+                            return Err(ChaChaError::TypeMismatch {
+                                expected: "String".to_owned(),
+                                found: separator.to_string(),
+                                span: 0..0,
+                                location: location!(),
+                            });
+                        };
+
+                        let ty = Ty::new_s_string(&s_read!(sarzak));
+                        let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
+
+                        Ok(new_ref!(
+                            Value,
+                            Value::Vector {
+                                ty,
+                                inner: string
+                                    .split(separator)
+                                    .map(|line| new_ref!(Value, Value::String(line.to_owned())))
+                                    .collect()
+                            }
+                        ))
+                    }
+                    TRIM => {
+                        let value = string.trim().to_owned();
+
+                        Ok(new_ref!(Value, Value::String(value)))
                     }
                     value_ => {
                         let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
@@ -729,18 +793,18 @@ pub fn eval(
                             let millis: u64 = millis.try_into()?;
                             let duration = Duration::from_millis(millis);
 
-                            // let span =
+                            let span =
+                                debug_span!("asleep", duration = ?duration, target = "async");
                             let executor = context.executor().clone();
                             let future = async move {
-                                // debug_span!("asleep", duration = ?duration, target = "async");
-                                log::debug!(target: "async", "sleeping for {duration:?}");
+                                debug!("sleeping for {duration:?}");
                                 // dbg!("start", duration);
                                 let _instant = executor.timer(duration).await;
                                 // dbg!("end", duration);
-                                log::debug!(target: "async", "done sleeping");
+                                debug!("done sleeping");
                                 Ok(new_ref!(Value, Value::Empty))
-                            };
-                            // .instrument(span);
+                            }
+                            .instrument(span);
                             let task = context.worker().unwrap().create_task(future).unwrap();
 
                             context.executor().start_task(&task);

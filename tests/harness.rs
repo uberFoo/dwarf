@@ -149,7 +149,7 @@ fn run_program(test: &str, program: &str) -> Result<(Value, String), String> {
                     let msg = *msg;
                     let error = format!(
                         "Interpreter exited with:\n{}",
-                        ChaChaErrorReporter(&msg.into(), false, program, test)
+                        ChaChaErrorReporter(&msg.into(), true, program, test)
                     )
                     .trim()
                     .to_owned();
@@ -167,12 +167,19 @@ fn run_program(test: &str, program: &str) -> Result<(Value, String), String> {
         Err(e) => {
             let error = format!(
                 "Interpreter exited with:\n{}",
-                ChaChaErrorReporter(&e, false, program, test)
+                ChaChaErrorReporter(&e, true, program, test)
             )
             .trim()
             .to_owned();
 
             eprintln!("{error}");
+
+            let error = format!(
+                "Interpreter exited with:\n{}",
+                ChaChaErrorReporter(&e, false, program, test)
+            )
+            .trim()
+            .to_owned();
 
             Err(error)
         }

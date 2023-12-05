@@ -31,6 +31,7 @@ pub type DwarfFloat = f64;
 mod keywords {
     pub(crate) const ADD: &str = "add";
     pub(crate) const ARGS: &str = "args";
+    #[cfg(feature = "async")]
     pub(crate) const ASLEEP: &str = "asleep";
     pub(crate) const ASSERT: &str = "assert";
     pub(crate) const ASSERT_EQ: &str = "assert_eq";
@@ -39,26 +40,37 @@ mod keywords {
     pub(crate) const EPS: &str = "eps";
     pub(crate) const EVAL: &str = "eval";
     pub(crate) const FN_NEW: &str = "new";
+    #[cfg(feature = "async")]
     pub(crate) const HTTP_GET: &str = "http_get";
+    #[cfg(feature = "async")]
     pub(crate) const INTERVAL: &str = "interval";
     pub(crate) const IS_DIGIT: &str = "is_digit";
     pub(crate) const LEN: &str = "len";
     pub(crate) const LINES: &str = "lines";
     pub(crate) const FORMAT: &str = "format";
     pub(crate) const MAP: &str = "map";
+    pub(crate) const MAX: &str = "max";
     pub(crate) const NEW: &str = "new";
     pub(crate) const NORM_SQUARED: &str = "norm_squared";
+    #[cfg(feature = "async")]
     pub(crate) const ONE_SHOT: &str = "one_shot";
     pub(crate) const PARSE: &str = "parse";
     pub(crate) const PLUGIN: &str = "Plugin";
     pub(crate) const SLEEP: &str = "sleep";
+    #[cfg(feature = "async")]
     pub(crate) const SPAWN: &str = "spawn";
+    #[cfg(feature = "async")]
     pub(crate) const SPAWN_NAMED: &str = "spawn_named";
+    pub(crate) const SPLIT: &str = "split";
     pub(crate) const SUM: &str = "sum";
     pub(crate) const SQUARE: &str = "square";
     pub(crate) const TIME: &str = "time";
+    // 🚧 Really this should be async only, but there's a nastiness in static_method_call.rs
+    // that would make changing this a pain. That's on the todo list.
+    // #[cfg(feature = "async")]
     pub(crate) const TIMER: &str = "timer";
     pub(crate) const TO_DIGIT: &str = "to_digit";
+    pub(crate) const TRIM: &str = "trim";
     pub(crate) const TYPEOF: &str = "typeof";
     // 🚧 We have a token already...
     pub(crate) const UUID_TYPE: &str = "Uuid";

@@ -15,8 +15,8 @@ command = [
     "always",
     "--no-default-features",
     "--features",
-    # "single-vec, repl",
-    "multi-vec, repl, async",
+    "single-vec, repl",
+    # "multi-vec, repl, async",
 ]
 need_stdout = false
 
@@ -30,8 +30,8 @@ command = [
     "clippy",
     "--no-default-features",
     "--features",
-    # "single-vec, repl",
-    "multi-vec, repl, async",
+    "single-vec, repl",
+    # "multi-vec, repl, async",
     "--all-targets",
     "--color",
     "always",

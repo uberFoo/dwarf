@@ -4,6 +4,12 @@ use ansi_term::Colour;
 use snafu::{location, Location};
 use uuid::Uuid;
 
+#[cfg(feature = "async")]
+use crate::{
+    keywords::{ASLEEP, HTTP_GET, INTERVAL, ONE_SHOT, SPAWN, SPAWN_NAMED},
+    lu_dog::XFuture,
+};
+
 use crate::{
     dwarf::{
         error::{DwarfError, Result},
@@ -14,15 +20,14 @@ use crate::{
         DwarfInteger, Expression as ParserExpression, Type,
     },
     keywords::{
-        ARGS, ASLEEP, ASSERT, ASSERT_EQ, CHACHA, COMPLEX_EX, EPS, EVAL, FN_NEW, HTTP_GET, INTERVAL,
-        NEW, NORM_SQUARED, ONE_SHOT, PARSE, PLUGIN, SLEEP, SPAWN, SPAWN_NAMED, TIME, TIMER, TYPEOF,
-        UUID_TYPE,
+        ARGS, ASSERT, ASSERT_EQ, CHACHA, COMPLEX_EX, EPS, EVAL, FN_NEW, NEW, NORM_SQUARED, PARSE,
+        PLUGIN, SLEEP, TIME, TIMER, TYPEOF, UUID_TYPE,
     },
     lu_dog::{
         store::ObjectStore as LuDogStore, Argument, Block, Call, DataStructure, EnumFieldEnum,
         Expression, FieldExpression, List, LocalVariable, PathElement, Span, StaticMethodCall,
-        StructExpression, UnnamedFieldExpression, ValueType, ValueTypeEnum, Variable, XFuture,
-        XPath, XPlugin, XValue,
+        StructExpression, UnnamedFieldExpression, ValueType, ValueTypeEnum, Variable, XPath,
+        XPlugin, XValue,
     },
     new_ref, s_read, s_write,
     sarzak::Ty,

@@ -117,7 +117,7 @@ pub fn eval(
                     (false, _) => {}
                 }
             }
-            _ => unreachable!(),
+            oops => panic!("{oops:?}"),
         }
     }
 
