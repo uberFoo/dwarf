@@ -1024,4 +1024,6 @@ sevendxbninefour2fourclmln
     }
 
     print(total);
+
+    chacha::assert(total == 56108);
 }

@@ -155,5 +155,7 @@ Game 100: 4 blue, 3 green; 5 blue, 12 green; 16 green, 1 red, 1 blue; 2 blue, 1 
     }
 
     print("Possible: {0}\n".format(total));
+    chacha::assert(total == 2256);
     print("Power: {0}\n".format(power));
+    chacha::assert(power == 74229);
 }

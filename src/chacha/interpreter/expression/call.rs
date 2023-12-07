@@ -26,7 +26,7 @@ use crate::{
     },
     keywords::{
         ADD, ARGS, ASSERT, ASSERT_EQ, CHACHA, COMPLEX_EX, EPS, EVAL, FN_NEW, FORMAT, IS_DIGIT, LEN,
-        LINES, MAP, NEW, NORM_SQUARED, PARSE, PLUGIN, SLEEP, SPLIT, SQUARE, SUM, TIME, TIMER,
+        LINES, MAP, MAX, NEW, NORM_SQUARED, PARSE, PLUGIN, SLEEP, SPLIT, SQUARE, SUM, TIME, TIMER,
         TO_DIGIT, TRIM, TYPEOF, UUID_TYPE,
     },
     lu_dog::{CallEnum, Expression, ValueType, ValueTypeEnum},
@@ -232,6 +232,18 @@ pub fn eval(
                         let value = *i.max(other);
 
                         Ok(new_ref!(Value, Value::Integer(value)))
+                    }
+                    _ => {
+                        let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
+                        let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
+                        let read = s_read!(span);
+                        let span = read.start as usize..read.end as usize;
+
+                        return Err(ChaChaError::NoSuchMethod {
+                            method: meth_name.to_owned(),
+                            span,
+                            location: location!(),
+                        });
                     }
                 },
                 Value::ProxyType {
