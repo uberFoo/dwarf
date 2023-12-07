@@ -1,0 +1,11 @@
+fn id<T>(x: T) -> T {
+    x
+}
+
+fn main() {
+    // Here we call the generic function with an int.
+    // let x = id::<int>(42);
+    let x = id(42);
+    print("hello {0}\n".format(x));
+    chacha::assert(x == 42);
+}

@@ -4071,6 +4071,8 @@ pub(super) fn typecheck(
         // Promote unknown to the other type.
         (ValueTypeEnum::Unknown(_), _) => Ok(()),
         (_, ValueTypeEnum::Unknown(_)) => Ok(()),
+        (ValueTypeEnum::Generic(_), _) => Ok(()),
+        (_, ValueTypeEnum::Generic(_)) => Ok(()),
         (ValueTypeEnum::Ty(a), ValueTypeEnum::Ty(b)) => {
             let a = context.sarzak.exhume_ty(a).unwrap();
             let b = context.sarzak.exhume_ty(b).unwrap();

@@ -1,0 +1,5 @@
+fn main() {
+    let program = "fn main() { let x = 1; print(x); }";
+    let ast = chacha::parse(program);
+    print(ast);
+}

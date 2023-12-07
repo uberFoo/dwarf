@@ -889,6 +889,10 @@ fn typecheck(
         }
     }
 
+    if let ValueTypeEnum::Generic(_) = lhs_t {
+        return Ok(());
+    }
+
     if lhs_t == rhs_t {
         Ok(())
     } else {
