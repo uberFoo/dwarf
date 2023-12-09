@@ -1,9 +1,10 @@
 # Generic Types
 
-For anyone not in the know, generics are a type of polymorphism.
-They allow you to write code that works with multiple types.
-They do this by inserting your type into the code at compile time.
-You specify a placeholder for the type that is supplied by the user.
+For those not in the know, generics are a type of polymorphism.
+They allow one to write code that works with many distinct types.
+This is facilitated by supplying a generic type in your generic code, e.g., a function or a struct.
+A concreted type is supplied at the usage site.
+During compilation, the generic type is replaced with the concrete type.
 
 Here's a simple example:
 
@@ -31,12 +32,25 @@ fn main() {
     let x = id(42);
     print("{0}\n".format(x));
 
-    // Here we create a Box that stores an int.
-    let y = Box{value: 42};
+    // And here with a float.
+    let y = id(9.6);
     print("{0}\n".format(y));
-    y.display();
+
+    // Here we create a Box that stores an int.
+    let z = Box{value: "Hello, World!"};
+    print("{0}\n".format(z));
+    z.display();
+
+    // Let's box a list.
+    let α = Box(value: [1, 2, 3]);
+    print("{0}\n".format(α));
+    α.display();
 }
 ```
+
+
+## {{i: Grace}} {{i: AST}} Model
+
 
 Below is an approximation of (a part of) the model that is used to generate (a part of) the dwarf abstract syntax tree ([AST](https://en.wikipedia.org/wiki/Abstract_syntax_tree)).
 The points worth reflecting upon are that `Type` is a generalization over all of the dwarf types.
