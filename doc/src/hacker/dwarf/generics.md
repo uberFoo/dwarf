@@ -29,11 +29,11 @@ impl Box<T> {
 fn main() {
     // Here we call the generic function with an int.
     let x = id(42);
-    print("{0\n".format(x));
+    print("{0}\n".format(x));
 
     // Here we create a Box that stores an int.
     let y = Box{value: 42};
-    print("{0\n".format(y));
+    print("{0}\n".format(y));
     y.display();
 }
 ```
