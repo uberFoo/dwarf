@@ -1,6 +1,6 @@
 use ansi_term::Colour;
 use ariadne::{Color, Fmt, Label, Report, ReportKind, Source};
-use chumsky::prelude::*;
+use chumsky::{prelude::*, text::Character};
 use log;
 use rustc_hash::FxHashMap as HashMap;
 
@@ -143,7 +143,18 @@ fn lexer() -> impl Parser<char, Vec<Spanned<Token>>, Error = Simple<char>> {
         .map(Token::String);
 
     // A parser for identifiers and keywords
-    let ident = text::ident().map(|ident: String| match ident.as_str() {
+    fn ident(
+    ) -> impl Parser<char, <char as Character>::Collection, Error = Simple<char>> + Copy + Clone
+    {
+        filter(|c: &char| c.to_char().is_alphabetic() || c.to_char() == '_')
+            .map(Some)
+            .chain::<char, Vec<_>, _>(
+                filter(|c: &char| c.to_char().is_alphanumeric() || c.to_char() == '_').repeated(),
+            )
+            .collect()
+    }
+
+    let ident = ident().map(|ident: String| match ident.as_str() {
         "as" => Token::As,
         "asm" => Token::Asm,
         "async" => Token::Async,
