@@ -93,7 +93,7 @@ pub fn inter_struct(
                                     context.struct_fields.push(StructFields {
                                         woog_struct,
                                         fields: fields.to_owned(),
-                                        generics: generics.map(|generics| generics.clone()),
+                                        generics: generics.cloned(),
                                         location: location!(),
                                     });
 
@@ -218,7 +218,7 @@ pub fn inter_struct(
         context.struct_fields.push(StructFields {
             woog_struct,
             fields: fields.to_owned(),
-            generics: generics.map(|generics| generics.clone()),
+            generics: generics.cloned(),
             location: location!(),
         });
 
@@ -266,24 +266,24 @@ pub fn inter_struct_fields(
 
                                     Ok(ty)
                                 } else {
-                                    return Err(vec![DwarfError::Generic {
+                                    Err(vec![DwarfError::Generic {
                                         description: format!(
                                             "Expected `Plugin`, found `{ty_name}`.",
                                         ),
-                                    }]);
+                                    }])
                                 }
                             } else {
-                                return Err(vec![DwarfError::Generic {
+                                Err(vec![DwarfError::Generic {
                                     description: format!("Expected `Plugin`, found `{type_}`.",),
-                                }]);
+                                }])
                             }
                         } else {
                             unreachable!();
                         }
                     } else {
-                        return Err(vec![DwarfError::Generic {
+                        Err(vec![DwarfError::Generic {
                             description: "Expected `plugin` attribute".to_owned(),
-                        }]);
+                        }])
                     }
                 } else {
                     unreachable!();

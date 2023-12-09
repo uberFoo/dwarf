@@ -221,32 +221,26 @@ pub fn inter_func(
                 );
 
                 let g = Generic::new(type_str, None, Some(&inner_ty), lu_dog);
-                let ty = ValueType::new_generic(&g, lu_dog);
-
-                ty
+                ValueType::new_generic(&g, lu_dog)
             } else {
                 context.location = location!();
-                let param_ty = match make_value_type(param_ty, ty_span, impl_ty, context, lu_dog) {
+                match make_value_type(param_ty, ty_span, impl_ty, context, lu_dog) {
                     Ok(ty) => ty,
                     Err(mut e) => {
                         errors.append(&mut e);
                         continue;
                     }
-                };
-
-                param_ty
+                }
             }
         } else {
             context.location = location!();
-            let param_ty = match make_value_type(param_ty, ty_span, impl_ty, context, lu_dog) {
+            match make_value_type(param_ty, ty_span, impl_ty, context, lu_dog) {
                 Ok(ty) => ty,
                 Err(mut e) => {
                     errors.append(&mut e);
                     continue;
                 }
-            };
-
-            param_ty
+            }
         };
 
         LuDogSpan::new(
@@ -382,16 +376,14 @@ pub fn parse_func_signature(
                 );
 
                 let g = Generic::new(type_str, None, Some(&inner_ty), lu_dog);
-                let ty = ValueType::new_generic(&g, lu_dog);
-
-                ty
+                ValueType::new_generic(&g, lu_dog)
             } else {
                 context.location = location!();
-                make_value_type(&param_ty, span, impl_ty, context, lu_dog)?
+                make_value_type(param_ty, span, impl_ty, context, lu_dog)?
             }
         } else {
             context.location = location!();
-            make_value_type(&param_ty, span, impl_ty, context, lu_dog)?
+            make_value_type(param_ty, span, impl_ty, context, lu_dog)?
         };
 
         LuDogSpan::new(

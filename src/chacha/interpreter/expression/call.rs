@@ -190,7 +190,7 @@ pub fn eval(
             match &*read_value {
                 Value::Char(c) => match meth_name.as_str() {
                     IS_DIGIT => {
-                        let value = c.is_digit(10);
+                        let value = c.is_ascii_digit();
 
                         Ok(new_ref!(Value, Value::Boolean(value)))
                     }

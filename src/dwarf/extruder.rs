@@ -193,6 +193,7 @@ struct ConveyFunc<'a> {
 }
 
 impl<'a> ConveyFunc<'a> {
+    #[allow(clippy::too_many_arguments)]
     fn new(
         a_sink: &'a BlockType,
         name: &'a str,
@@ -411,7 +412,7 @@ fn walk_tree(ast: &[Item], context: &mut Context, lu_dog: &mut LuDogStore) -> Re
                 let generics = if let Some((generics, _)) = generics {
                     Some(
                         generics
-                            .into_iter()
+                            .iter()
                             .map(|(t, _)| match t {
                                 Type::Generic((t, s)) => {
                                     (t.to_owned(), Type::Generic((t.to_owned(), s.to_owned())))
@@ -443,7 +444,7 @@ fn walk_tree(ast: &[Item], context: &mut Context, lu_dog: &mut LuDogStore) -> Re
                 let generics = if let Some((generics, _)) = generics {
                     Some(
                         generics
-                            .into_iter()
+                            .iter()
                             .cloned()
                             .map(|(t, _)| match t {
                                 Type::Generic((t, s)) => (t.to_owned(), Type::Generic((t, s))),
@@ -489,7 +490,7 @@ fn walk_tree(ast: &[Item], context: &mut Context, lu_dog: &mut LuDogStore) -> Re
                 let generics = if let Some((generics, _)) = generics {
                     Some(
                         generics
-                            .into_iter()
+                            .iter()
                             .cloned()
                             .map(|(t, _)| match t {
                                 Type::Generic((t, s)) => (t.to_owned(), Type::Generic((t, s))),
@@ -741,7 +742,7 @@ pub fn inter_statement(
                     let generics = if let Some((generics, _)) = generics {
                         Some(
                             generics
-                                .into_iter()
+                                .iter()
                                 .cloned()
                                 .map(|(t, _)| match t {
                                     Type::Generic((t, s)) => (t.to_owned(), Type::Generic((t, s))),
@@ -793,7 +794,7 @@ pub fn inter_statement(
                     let generics = if let Some((generics, _)) = generics {
                         Some(
                             generics
-                                .into_iter()
+                                .iter()
                                 .map(|(t, _)| match t {
                                     Type::Generic((t, s)) => {
                                         (t.to_owned(), Type::Generic((t.to_owned(), s.to_owned())))
@@ -3638,7 +3639,7 @@ fn inter_implementation(
                 let generics = if let Some((generics, _)) = generics {
                     Some(
                         generics
-                            .into_iter()
+                            .iter()
                             .cloned()
                             .map(|(t, _)| match t {
                                 Type::Generic((t, s)) => (t.to_owned(), Type::Generic((t, s))),
