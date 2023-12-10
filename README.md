@@ -9,6 +9,11 @@
 dwarf is a programming language based heavily upon, and implemented in, [Rust](https://www.rust-lang.org).
 The language is interpreted (and slow) with a VM (fast-ish) on the way.
 
+dwarf was initially meant to be a simple DSL for another project I'm working on.
+As I used it, I needed to keep adding features.
+Soon it was pretty general purpose, and interesting, and fun to play with.
+I'd simply like to share it with the world to see if anyone else may find it useful.
+
 There is a [book 📒](https://uberfoo.github.io/assets/docs/dwarf/introduction.html) in progress.
 Check it out!
 
@@ -20,6 +25,10 @@ I appreciate feedback.
 Let me know if you love it, or hate it.
 There are likely as not bugs, and corner cases.
 File a bug report, and let me know.
+
+> **Free Stuff**
+>
+> I'm giving away dwarf stickers to anyone who files a bug report.
 
 ## Installation
 

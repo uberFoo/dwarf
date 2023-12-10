@@ -13,7 +13,7 @@ pub fn eval(print: &SarzakStorePtr, context: &mut Context, vm: &mut VM) -> Resul
     debug!("ExpressionEnum::Print print {print:?}");
     let expr = s_read!(print).r32_expression(&s_read!(lu_dog))[0].clone();
     let value = eval_expression(expr, context, vm)?;
-    let result = format!("{}", s_read!(value));
+    let result = s_read!(value).to_inner_string();
     let result = result.replace("\\n", "\n");
 
     chacha_print(result, context)?;

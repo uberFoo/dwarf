@@ -1,6 +1,6 @@
 use ansi_term::Colour;
 use ariadne::{Color, Fmt, Label, Report, ReportKind, Source};
-use chumsky::prelude::*;
+use chumsky::{prelude::*, text::Character};
 use log;
 use rustc_hash::FxHashMap as HashMap;
 
@@ -143,7 +143,18 @@ fn lexer() -> impl Parser<char, Vec<Spanned<Token>>, Error = Simple<char>> {
         .map(Token::String);
 
     // A parser for identifiers and keywords
-    let ident = text::ident().map(|ident: String| match ident.as_str() {
+    fn ident(
+    ) -> impl Parser<char, <char as Character>::Collection, Error = Simple<char>> + Copy + Clone
+    {
+        filter(|c: &char| c.to_char().is_alphabetic() || c.to_char() == '_')
+            .map(Some)
+            .chain::<char, Vec<_>, _>(
+                filter(|c: &char| c.to_char().is_alphanumeric() || c.to_char() == '_').repeated(),
+            )
+            .collect()
+    }
+
+    let ident = ident().map(|ident: String| match ident.as_str() {
         "as" => Token::As,
         "asm" => Token::Asm,
         "async" => Token::Async,
@@ -717,15 +728,26 @@ impl DwarfParser {
     fn parse_path(&mut self) -> Option<Spanned<Vec<Spanned<String>>>> {
         debug!("enter");
 
+        let mut double = false;
         let mut path = Vec::new();
         while let Some(ident) = self.parse_ident() {
             path.push(ident);
             if self.match_tokens(&[Token::Punct(':')]).is_some()
                 && self.match_tokens(&[Token::Punct(':')]).is_none()
             {
+                double = false;
                 debug!("exit snarf", path);
                 break;
+            } else {
+                double = true;
             }
+        }
+
+        if double && self.match_tokens(&[Token::Punct('*')]).is_some() {
+            path.push((
+                "*".to_owned(),
+                self.previous().unwrap().1.start..self.previous().unwrap().1.end,
+            ));
         }
 
         if path.is_empty() {
@@ -3607,7 +3629,7 @@ impl DwarfParser {
             return Err(Box::new(err));
         };
 
-        let _ = self.parse_generics();
+        let generics = self.parse_generics()?;
 
         if self.match_tokens(&[Token::Punct('(')]).is_none() {
             let token = self.peek().unwrap();
@@ -3731,7 +3753,14 @@ impl DwarfParser {
         };
 
         Ok(Some((
-            InnerItem::Function(func_ty, name, params, return_type, body),
+            InnerItem::Function {
+                a_sink: func_ty,
+                name,
+                params,
+                return_type,
+                generics,
+                statements: body,
+            },
             start..end,
         )))
     }
@@ -4255,11 +4284,7 @@ impl DwarfParser {
             return Err(Box::new(err));
         };
 
-        let generics = if let Some(generics) = self.parse_generics()? {
-            generics
-        } else {
-            (vec![], 0..0)
-        };
+        let generics = self.parse_generics()?;
 
         let fields = if self.match_tokens(&[Token::Punct('{')]).is_some() {
             let mut fields = Vec::new();
@@ -4505,11 +4530,7 @@ impl DwarfParser {
             return Err(Box::new(err));
         };
 
-        let generics = if let Some(generics) = self.parse_generics()? {
-            generics
-        } else {
-            (vec![], 0..0)
-        };
+        let generics = self.parse_generics()?;
 
         if self.match_tokens(&[Token::Punct('{')]).is_none() {
             let tok = self.previous().unwrap();
@@ -4617,7 +4638,14 @@ impl DwarfParser {
             self.previous().unwrap().1.end
         };
 
-        Ok(Some((InnerItem::Enum(name, fields, generics), start..end)))
+        Ok(Some((
+            InnerItem::Enum {
+                name,
+                fields,
+                generics,
+            },
+            start..end,
+        )))
     }
 
     /// Parse an identifier

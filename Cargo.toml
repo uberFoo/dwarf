@@ -117,8 +117,9 @@ diff = "0.1.13"
 walkdir = "2.3.3"
 
 [features]
-# default = ["single-vec", "repl", "print-std-out"]
-default = ["multi-vec", "repl", "print-std-out", "async"]
+default = ["single-vec", "repl", "print-std-out"]
+# default = ["multi-vec", "repl", "print-std-out", "async"]
+async_executor = ["multi-vec", "repl", "print-std-out", "async"]
 
 tui = [
     "dep:tui-input",

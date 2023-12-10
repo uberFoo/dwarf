@@ -15,13 +15,22 @@ command = [
     "always",
     "--no-default-features",
     "--features",
-    # "single-vec, repl",
-    "multi-vec, repl, async",
+    "single-vec, repl",
+    # "multi-vec, repl, async",
 ]
 need_stdout = false
 
 [jobs.check-all]
-command = ["cargo", "check", "--all-targets", "--color", "always"]
+command = [
+    "cargo",
+    "check",
+    "--all-targets",
+    "--no-default-features",
+    "--features",
+    "multi-vec, repl, async",
+    "--color",
+    "always",
+]
 need_stdout = false
 
 [jobs.clippy]
@@ -44,14 +53,12 @@ command = [
     "test",
     "--no-default-features",
     "--features",
-    # "single-vec, repl",
     "multi-vec, repl, async",
-    # "multi-nd-vec, repl",
     "--color",
     "always",
     "--",
     "--color",
-    "always",  # see https://github.com/Canop/bacon/issues/124
+    "always",                 # see https://github.com/Canop/bacon/issues/124
 ]
 need_stdout = true
 

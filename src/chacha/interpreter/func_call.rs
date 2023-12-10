@@ -5,6 +5,7 @@ use abi_stable::{
     std_types::ROk,
 };
 use ansi_term::Colour;
+use heck::ToUpperCamelCase;
 use snafu::{location, prelude::*, Location};
 #[cfg(feature = "tracy")]
 use tracy_client::span;
@@ -60,6 +61,8 @@ pub fn eval_function_call(
     span!("eval_function_call");
 
     let body = s_read!(func).r19_body(&s_read!(lu_dog))[0].clone();
+
+    #[cfg(feature = "async")]
     let task_name: String = s_read!(func).name.to_owned();
 
     if s_read!(body).a_sink {
@@ -198,7 +201,7 @@ fn eval_external_static_method(
     let func_name = s_read!(external).function.clone();
 
     let object_name = &s_read!(external).object;
-    let object_name = object_name.clone();
+    let object_name = object_name.to_upper_camel_case();
 
     if object_name == OBJECT_STORE {
         objectstore_static_methods(

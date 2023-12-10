@@ -141,10 +141,8 @@
                 }
             },
             "args": [
-                // "tests/harness/chacha/sleep.tao"
-                // "tests/harness/chacha/async/one_shot.tao"
-                "tests/harness/func_call_type.tao"
-                // "./async.ore",
+                "use.ore"
+                // "tests/harness/types/generics/func.ore"
             ],
             "cwd": "${workspaceFolder}",
             "env": {

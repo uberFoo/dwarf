@@ -46,7 +46,7 @@ use crate::sarzak::types::{
     AcknowledgedEvent, AnAssociativeReferent, Associative, AssociativeReferent,
     AssociativeReferrer, Attribute, Binary, Cardinality, Conditionality, Event, External, Isa,
     Object, Referent, Referrer, Relationship, State, Subtype, Supertype, Ty, BOOLEAN, CONDITIONAL,
-    FLOAT, INTEGER, MANY, ONE, S_STRING, S_UUID, UNCONDITIONAL,
+    FLOAT, INTEGER, MANY, ONE, UNCONDITIONAL, Z_STRING, Z_UUID,
 };
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -118,8 +118,8 @@ impl ObjectStore {
         store.inter_ty(Arc::new(RwLock::new(Ty::Boolean(BOOLEAN))));
         store.inter_ty(Arc::new(RwLock::new(Ty::Float(FLOAT))));
         store.inter_ty(Arc::new(RwLock::new(Ty::Integer(INTEGER))));
-        store.inter_ty(Arc::new(RwLock::new(Ty::SString(S_STRING))));
-        store.inter_ty(Arc::new(RwLock::new(Ty::SUuid(S_UUID))));
+        store.inter_ty(Arc::new(RwLock::new(Ty::ZString(Z_STRING))));
+        store.inter_ty(Arc::new(RwLock::new(Ty::ZUuid(Z_UUID))));
 
         store
     }

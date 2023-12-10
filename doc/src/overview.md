@@ -91,6 +91,7 @@ print(foo(42) + "\n");
 > There is a third type of statement, called an {{i: item}} statement.
 > It's useful for defining {{i: struct}}s and {{i: function}}s inside of a {{i: block expression}}.
 > Below is an example of both:
+>
 > ```dwarf
 > fn main() {
 >     struct Point {

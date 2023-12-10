@@ -4,25 +4,30 @@ use ansi_term::Colour;
 use snafu::{location, Location};
 use uuid::Uuid;
 
+#[cfg(feature = "async")]
+use crate::{
+    keywords::{ASLEEP, HTTP_GET, INTERVAL, ONE_SHOT, SPAWN, SPAWN_NAMED},
+    lu_dog::XFuture,
+};
+
 use crate::{
     dwarf::{
         error::{DwarfError, Result},
         extruder::{
             create_generic_enum, debug, e_warn, function, inter_expression, link_argument,
-            lookup_woog_struct_method_return_type, typecheck, update_span_value, Context,
-            DeSanitize, ExprSpan,
+            lookup_woog_struct_method_return_type, typecheck, update_span_value, Context, ExprSpan,
         },
         DwarfInteger, Expression as ParserExpression, Type,
     },
     keywords::{
-        ARGS, ASLEEP, ASSERT, ASSERT_EQ, CHACHA, COMPLEX_EX, EPS, FN_NEW, HTTP_GET, INTERVAL, NEW,
-        NORM_SQUARED, ONE_SHOT, PLUGIN, SLEEP, SPAWN, SPAWN_NAMED, TIME, TIMER, TYPEOF, UUID_TYPE,
+        ARGS, ASSERT, ASSERT_EQ, CHACHA, COMPLEX_EX, EPS, EVAL, FN_NEW, NEW, NORM_SQUARED, PARSE,
+        PLUGIN, SLEEP, TIME, TIMER, TYPEOF, UUID_TYPE,
     },
     lu_dog::{
         store::ObjectStore as LuDogStore, Argument, Block, Call, DataStructure, EnumFieldEnum,
         Expression, FieldExpression, List, LocalVariable, PathElement, Span, StaticMethodCall,
-        StructExpression, UnnamedFieldExpression, ValueType, ValueTypeEnum, Variable, XFuture,
-        XPath, XPlugin, XValue,
+        StructExpression, UnnamedFieldExpression, ValueType, ValueTypeEnum, Variable, XPath,
+        XPlugin, XValue,
     },
     new_ref, s_read, s_write,
     sarzak::Ty,
@@ -54,7 +59,7 @@ pub fn inter(
         .iter()
         .flat_map(|p| {
             if let Type::UserType((obj, span), _generics) = p {
-                vec![(obj.de_sanitize().to_owned(), span)]
+                vec![(obj.to_owned(), span)]
             } else {
                 panic!(
                     "I don't think that we should ever see anything other than a user type here: {:?}",
@@ -183,11 +188,14 @@ pub fn inter(
                     ASSERT => ValueType::new_ty(&Ty::new_boolean(sarzak), lu_dog),
                     ASSERT_EQ => ValueType::new_ty(&Ty::new_boolean(sarzak), lu_dog),
                     EPS => ValueType::new_ty(&Ty::new_float(sarzak), lu_dog),
+                    EVAL => ValueType::new_unknown(lu_dog),
+                    #[cfg(feature = "async")]
                     HTTP_GET => {
                         let inner = ValueType::new_ty(&Ty::new_s_string(sarzak), lu_dog);
                         let future = XFuture::new(&inner, lu_dog);
                         ValueType::new_x_future(&future, lu_dog)
                     }
+                    PARSE => ValueType::new_unknown(lu_dog),
                     SLEEP => ValueType::new_empty(lu_dog),
                     #[cfg(feature = "async")]
                     SPAWN => {
@@ -342,7 +350,7 @@ pub fn inter(
                         if let ValueTypeEnum::Generic(_) = foo.subtype {
                             let type_name = path.iter().map(|p| {
                                 if let Type::UserType((obj, _), generics) = p {
-                                    let mut name = obj.de_sanitize().to_owned();
+                                    let mut name = obj.to_owned();
                                     let generics = generics.iter().map(|g| {
                                         g.0.to_string()
                                     }).collect::<Vec<_>>().join(", ");

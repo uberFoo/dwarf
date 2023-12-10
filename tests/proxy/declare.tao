@@ -37,7 +37,7 @@ fn main() {
     for instance in Object::instances() {
         print(instance);
         print("\n");
-        // This is what I'd prefer to se, we just need to generate the code!
+        // This is what I'd prefer to see, we just need to generate the code!
         // for attribute in instance.attributes() {
         for attribute in Attribute::instances() {
             if attribute.obj_id == instance {

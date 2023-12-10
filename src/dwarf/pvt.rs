@@ -67,7 +67,7 @@ impl<'d, 'a, 'b> fmt::Display for PrintableValueType<'d, 'a, 'b> {
                 let list = lu_dog.exhume_list(list).unwrap();
                 let list = s_read!(list);
                 let ty = list.r36_value_type(lu_dog)[0].clone();
-                write!(f, "[{}]", PrintableValueType(&ty, context, lu_dog))
+                write!(f, "[{}@]", PrintableValueType(&ty, context, lu_dog))
             }
             ValueTypeEnum::XPlugin(ref plugin) => {
                 let plugin = lu_dog.exhume_x_plugin(plugin).unwrap();

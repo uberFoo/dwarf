@@ -1,4 +1,5 @@
 use ansi_term::Colour;
+use rustc_hash::FxHashMap as HashMap;
 use snafu::{location, Location};
 use uuid::Uuid;
 
@@ -6,14 +7,14 @@ use crate::{
     dwarf::{
         error::{DwarfError, Result},
         extruder::{
-            debug, function, inter_statements, make_value_type, typecheck, Context, DeSanitize,
+            debug, function, inter_statements, make_value_type, typecheck, Context,
             FunctionDefinition, Span, FUNC, OBJECT, PROXY, STORE,
         },
         AttributeMap, BlockType, Expression as ParserExpression, InnerAttribute, Spanned,
         Statement as ParserStatement, Type,
     },
     lu_dog::{
-        store::ObjectStore as LuDogStore, Block, Body, ExternalImplementation, Function,
+        store::ObjectStore as LuDogStore, Block, Body, ExternalImplementation, Function, Generic,
         ImplementationBlock, Item as WoogItem, LocalVariable, Parameter, Span as LuDogSpan,
         ValueType, Variable, XFuture, XValue,
     },
@@ -40,6 +41,7 @@ pub fn inter_func(
     attributes: &AttributeMap,
     params: &[(Spanned<String>, Spanned<Type>)],
     return_type: &Spanned<Type>,
+    generics: Option<&HashMap<String, Type>>,
     stmts: Option<&Spanned<ParserExpression>>,
     impl_block: Option<&RefType<ImplementationBlock>>,
     impl_ty: Option<&RefType<ValueType>>,
@@ -110,10 +112,34 @@ pub fn inter_func(
         None
     };
 
-    context.location = location!();
-    let ret_ty = make_value_type(&return_type.0, &return_type.1, impl_ty, context, lu_dog)?;
+    let type_str = return_type.0.to_string();
+    let ret_span = &return_type.1;
+    let ret_ty = if let Some(generics) = generics {
+        if let Some(defn_ty) = generics.get(&type_str) {
+            context.location = location!();
+            let inner_ty = make_value_type(defn_ty, ret_span, None, context, lu_dog)?;
 
-    let name = name.de_sanitize();
+            let g = Generic::new(type_str, None, Some(&inner_ty), lu_dog);
+            let ty = ValueType::new_generic(&g, lu_dog);
+            LuDogSpan::new(
+                ret_span.end as i64,
+                ret_span.start as i64,
+                &context.source,
+                Some(&ty),
+                None,
+                lu_dog,
+            );
+
+            ty
+        } else {
+            context.location = location!();
+            make_value_type(&return_type.0, ret_span, impl_ty, context, lu_dog)?
+        }
+    } else {
+        context.location = location!();
+        make_value_type(&return_type.0, ret_span, impl_ty, context, lu_dog)?
+    };
+
     let (func, block) =
         if let Some((ParserExpression::Block(block_a_sink, stmts, vars, tys), span)) = &stmts {
             let a_sink = a_sink
@@ -174,14 +200,49 @@ pub fn inter_func(
         // We need to introduce the values into the block, so that we don't
         // error out when parsing the statements.
         //
-        context.location = location!();
-        let param_ty = match make_value_type(param_ty, ty_span, impl_ty, context, lu_dog) {
-            Ok(ty) => ty,
-            Err(mut e) => {
-                errors.append(&mut e);
-                continue;
+        let type_str = param_ty.to_string();
+        let param_ty = if let Some(generics) = generics {
+            if let Some(defn_ty) = generics.get(&type_str) {
+                context.location = location!();
+                let inner_ty = match make_value_type(defn_ty, ty_span, impl_ty, context, lu_dog) {
+                    Ok(ty) => ty,
+                    Err(mut e) => {
+                        errors.append(&mut e);
+                        continue;
+                    }
+                };
+                LuDogSpan::new(
+                    ty_span.end as i64,
+                    ty_span.start as i64,
+                    &context.source,
+                    Some(&inner_ty),
+                    None,
+                    lu_dog,
+                );
+
+                let g = Generic::new(type_str, None, Some(&inner_ty), lu_dog);
+                ValueType::new_generic(&g, lu_dog)
+            } else {
+                context.location = location!();
+                match make_value_type(param_ty, ty_span, impl_ty, context, lu_dog) {
+                    Ok(ty) => ty,
+                    Err(mut e) => {
+                        errors.append(&mut e);
+                        continue;
+                    }
+                }
+            }
+        } else {
+            context.location = location!();
+            match make_value_type(param_ty, ty_span, impl_ty, context, lu_dog) {
+                Ok(ty) => ty,
+                Err(mut e) => {
+                    errors.append(&mut e);
+                    continue;
+                }
             }
         };
+
         LuDogSpan::new(
             ty_span.end as i64,
             ty_span.start as i64,
@@ -239,7 +300,7 @@ pub fn inter_func(
         };
 
         typecheck(
-            (&ret_ty, span),
+            (&ret_ty, ret_span),
             (&block_ty, &block_span),
             location!(),
             context,
@@ -260,6 +321,7 @@ pub fn inter_func(
 pub fn parse_func_signature(
     name: &str,
     params: &[(Spanned<String>, Spanned<Type>)],
+    generics: Option<&HashMap<String, Type>>,
     return_type: &Spanned<Type>,
     impl_ty: Option<&RefType<ValueType>>,
     context: &mut Context,
@@ -267,14 +329,72 @@ pub fn parse_func_signature(
 ) -> Result<()> {
     debug!("parse_func_signature {}", name);
 
-    context.location = location!();
-    let ret_ty = make_value_type(&return_type.0, &return_type.1, impl_ty, context, lu_dog)?;
-    let name = name.de_sanitize();
+    let type_str = return_type.0.to_string();
+    let span = &return_type.1;
+    let ret_ty = if let Some(generics) = generics {
+        if let Some(defn_ty) = generics.get(&type_str) {
+            context.location = location!();
+            let inner_ty = make_value_type(defn_ty, span, None, context, lu_dog)?;
+
+            let g = Generic::new(type_str, None, Some(&inner_ty), lu_dog);
+            let ty = ValueType::new_generic(&g, lu_dog);
+            LuDogSpan::new(
+                span.end as i64,
+                span.start as i64,
+                &context.source,
+                Some(&ty),
+                None,
+                lu_dog,
+            );
+
+            ty
+        } else {
+            context.location = location!();
+            make_value_type(&return_type.0, span, impl_ty, context, lu_dog)?
+        }
+    } else {
+        context.location = location!();
+        make_value_type(&return_type.0, span, impl_ty, context, lu_dog)?
+    };
 
     let mut param_tuples = Vec::new();
     for ((param_name, _), (param_ty, ty_span)) in params {
-        context.location = location!();
-        let param_ty = make_value_type(param_ty, ty_span, impl_ty, context, lu_dog)?;
+        let type_str = param_ty.to_string();
+        let span = ty_span;
+        let param_ty = if let Some(generics) = generics {
+            if let Some(defn_ty) = generics.get(&type_str) {
+                context.location = location!();
+                let inner_ty = make_value_type(defn_ty, span, None, context, lu_dog)?;
+
+                LuDogSpan::new(
+                    span.end as i64,
+                    span.start as i64,
+                    &context.source,
+                    Some(&inner_ty),
+                    None,
+                    lu_dog,
+                );
+
+                let g = Generic::new(type_str, None, Some(&inner_ty), lu_dog);
+                ValueType::new_generic(&g, lu_dog)
+            } else {
+                context.location = location!();
+                make_value_type(param_ty, span, impl_ty, context, lu_dog)?
+            }
+        } else {
+            context.location = location!();
+            make_value_type(param_ty, span, impl_ty, context, lu_dog)?
+        };
+
+        LuDogSpan::new(
+            span.end as i64,
+            span.start as i64,
+            &context.source,
+            Some(&param_ty),
+            None,
+            lu_dog,
+        );
+
         param_tuples.push((param_name.to_owned(), param_ty));
     }
 

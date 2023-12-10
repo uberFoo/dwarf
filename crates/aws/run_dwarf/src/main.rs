@@ -1,24 +1,19 @@
-use std::{env, io::Write, path::PathBuf};
+use std::{env, io::Write};
 
 use dwarf::{
     chacha::interpreter::{initialize_interpreter, start_func},
     dwarf::{new_lu_dog, parse_dwarf},
     sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL},
 };
-use lambda_http::{
-    run, run_with_streaming_response, service_fn, Body, Error, Request, RequestExt, Response,
-};
+use lambda_http::{run, service_fn, Body, Error, Request, Response};
 use tracing::{event, Level};
-use tracy_client::Client;
 
 /// This is the main body for the function.
 /// Write your code inside it.
 /// There are some code example in the following URLs:
 /// - https://github.com/awslabs/aws-lambda-rust-runtime/tree/main/examples
 async fn function_handler(event: Request) -> Result<Response<Body>, Error> {
-    let (mut tx, rx) = hyper::Body::channel();
-
-    Client::start();
+    // let (tx, rx) = hyper::Body::channel();
 
     // tokio::spawn(async move {
     //     for message in messages.iter() {
@@ -50,30 +45,35 @@ async fn function_handler(event: Request) -> Result<Response<Body>, Error> {
 
         match ast {
             Ok(ast) => {
-                let lu_dog = new_lu_dog(Some((program.to_owned(), &ast)), &dwarf_home, &sarzak)
-                    .map_err(|errors| {
-                        for e in &errors {
-                            std_err
-                                .write(
-                                    format!(
-                                        "{}",
-                                        dwarf::dwarf::error::DwarfErrorReporter(
-                                            &e, false, &program, "lambda"
-                                        )
-                                    )
-                                    .as_bytes(),
+                let lu_dog = new_lu_dog(
+                    "ƛ".to_owned(),
+                    Some((program.to_owned(), &ast)),
+                    &dwarf_home,
+                    &sarzak,
+                )
+                .map_err(|errors| {
+                    for e in &errors {
+                        std_err
+                            .write(
+                                format!(
+                                    "{}",
+                                    dwarf::dwarf::error::DwarfErrorReporter(&e, false, &program)
                                 )
-                                .unwrap();
-                        }
-                        errors
-                    });
+                                .as_bytes(),
+                            )
+                            .unwrap();
+                    }
+                    errors
+                });
 
                 match lu_dog {
                     Ok(lu_dog) => {
-                        let ctx = initialize_interpreter(dwarf_home, lu_dog, sarzak).unwrap();
-                        match start_func("main", false, ctx) {
-                            Ok((result, ctx)) => {
-                                let result = result.to_string();
+                        let mut ctx =
+                            initialize_interpreter(num_cpus::get(), dwarf_home, lu_dog, sarzak)
+                                .unwrap();
+                        match start_func("main", false, &mut ctx) {
+                            Ok(result) => {
+                                let result = result.borrow().to_string();
                                 let result = ansi_to_html::convert_escaped(&result).unwrap();
                                 let std_out = ctx.drain_std_out();
                                 let std_out = std_out

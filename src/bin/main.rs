@@ -20,6 +20,9 @@ use dap::{prelude::BasicClient, server::Server};
 #[cfg(feature = "async")]
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
+#[cfg(feature = "async")]
+use dwarf::{ref_to_inner, Value};
+
 use dwarf::{
     chacha::{
         dap::DapAdapter,
@@ -27,9 +30,8 @@ use dwarf::{
         interpreter::{banner2, initialize_interpreter, start_func, start_repl},
     },
     dwarf::{new_lu_dog, parse_dwarf},
-    ref_to_inner,
     sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL},
-    Context, Value,
+    Context,
 };
 use reqwest::Url;
 #[cfg(feature = "tracy")]
@@ -287,6 +289,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         } else {
             match start_func("main", false, &mut ctx) {
                 // 🚧 What's a sensible thing to do with this?
+                #[allow(unused_variables)]
                 Ok(value) => {
                     #[cfg(feature = "async")]
                     {

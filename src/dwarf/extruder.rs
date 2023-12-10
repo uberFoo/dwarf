@@ -16,7 +16,10 @@ use crate::{
         Expression as ParserExpression, Generics, InnerAttribute, InnerItem, Item,
         PrintableValueType, Spanned, Statement as ParserStatement, Type, WrappedValueType,
     },
-    keywords::{CHACHA, FN_NEW, FORMAT, LEN, MAP, SUM, UUID_TYPE},
+    keywords::{
+        CHACHA, FN_NEW, FORMAT, IS_DIGIT, LEN, LINES, MAP, MAX, SPLIT, SUM, TO_DIGIT, TRIM,
+        UUID_TYPE,
+    },
     lu_dog::{
         store::ObjectStore as LuDogStore,
         types::{
@@ -38,12 +41,13 @@ use crate::{
     Context as InterContext, Dirty, ModelStore, NewRef, RefType,
 };
 
-pub(super) const LIB_TAO: &str = "lib.ore";
-pub(super) const SRC_DIR: &str = "src";
-pub(super) const MODEL_DIR: &str = "models";
-pub(super) const TAO_EXT: &str = "ore";
 pub(super) const EXTENSION_DIR: &str = "extensions";
 pub(super) const JSON_EXT: &str = "json";
+pub(super) const LIB_DIR: &str = "lib";
+pub(super) const LIB_TAO: &str = "lib.ore";
+pub(super) const MODEL_DIR: &str = "models";
+pub(super) const SRC_DIR: &str = "src";
+pub(super) const TAO_EXT: &str = "ore";
 
 macro_rules! link_ƛ_parameter {
     ($last:expr, $next:expr, $store:expr) => {{
@@ -184,10 +188,12 @@ struct ConveyFunc<'a> {
     span: &'a Span,
     params: &'a [(Spanned<String>, Spanned<Type>)],
     return_type: &'a Spanned<Type>,
+    generics: Option<HashMap<String, Type>>,
     statements: Option<&'a Spanned<ParserExpression>>,
 }
 
 impl<'a> ConveyFunc<'a> {
+    #[allow(clippy::too_many_arguments)]
     fn new(
         a_sink: &'a BlockType,
         name: &'a str,
@@ -195,6 +201,7 @@ impl<'a> ConveyFunc<'a> {
         span: &'a Span,
         params: &'a [(Spanned<String>, Spanned<Type>)],
         return_type: &'a Spanned<Type>,
+        generics: Option<HashMap<String, Type>>,
         statements: Option<&'a Spanned<ParserExpression>>,
     ) -> Self {
         Self {
@@ -204,6 +211,7 @@ impl<'a> ConveyFunc<'a> {
             span,
             params,
             return_type,
+            generics,
             statements,
         }
     }
@@ -214,7 +222,7 @@ struct ConveyStruct<'a> {
     span: &'a Span,
     attributes: &'a AttributeMap,
     fields: &'a [(Spanned<String>, Spanned<Type>, AttributeMap)],
-    generics: HashMap<String, Type>,
+    generics: Option<HashMap<String, Type>>,
 }
 
 impl<'a> ConveyStruct<'a> {
@@ -223,7 +231,7 @@ impl<'a> ConveyStruct<'a> {
         span: &'a Span,
         attributes: &'a AttributeMap,
         fields: &'a [(Spanned<String>, Spanned<Type>, AttributeMap)],
-        generics: HashMap<String, Type>,
+        generics: Option<HashMap<String, Type>>,
     ) -> Self {
         Self {
             name,
@@ -239,7 +247,7 @@ struct ConveyEnum<'a> {
     name: &'a str,
     attributes: &'a AttributeMap,
     fields: &'a [(Spanned<String>, Option<EnumField>)],
-    generics: HashMap<String, Type>,
+    generics: Option<HashMap<String, Type>>,
 }
 
 impl<'a> ConveyEnum<'a> {
@@ -247,7 +255,7 @@ impl<'a> ConveyEnum<'a> {
         name: &'a str,
         attributes: &'a AttributeMap,
         fields: &'a [(Spanned<String>, Option<EnumField>)],
-        generics: HashMap<String, Type>,
+        generics: Option<HashMap<String, Type>>,
     ) -> Self {
         Self {
             name,
@@ -280,7 +288,8 @@ impl<'a> ConveyImpl<'a> {
 pub struct StructFields {
     pub woog_struct: RefType<WoogStruct>,
     pub fields: Vec<(Spanned<String>, Spanned<Type>, AttributeMap)>,
-    pub generics: HashMap<String, Type>,
+    // I'd really like to keep this as a reference, rather than cloning it.
+    pub generics: Option<HashMap<String, Type>>,
     pub location: Location,
 }
 
@@ -389,35 +398,78 @@ fn walk_tree(ast: &[Item], context: &mut Context, lu_dog: &mut LuDogStore) -> Re
     for item in ast {
         match item {
             Item {
-                item: (InnerItem::Enum((name, _), fields, generics), _),
+                item:
+                    (
+                        InnerItem::Enum {
+                            name,
+                            fields,
+                            generics,
+                        },
+                        _,
+                    ),
                 attributes,
-            } => enums.push(ConveyEnum::new(
-                name,
-                attributes,
-                fields,
-                generics
-                    .0
-                    .clone()
-                    .into_iter()
-                    .map(|(t, _)| match t {
-                        Type::Generic((t, s)) => (t.to_owned(), Type::Generic((t, s))),
-                        _ => unreachable!(),
-                    })
-                    .collect(),
-            )),
+            } => {
+                let generics = if let Some((generics, _)) = generics {
+                    Some(
+                        generics
+                            .iter()
+                            .map(|(t, _)| match t {
+                                Type::Generic((t, s)) => {
+                                    (t.to_owned(), Type::Generic((t.to_owned(), s.to_owned())))
+                                }
+                                _ => unreachable!(),
+                            })
+                            .collect(),
+                    )
+                } else {
+                    None
+                };
+                enums.push(ConveyEnum::new(&name.0, attributes, fields, generics))
+            }
             Item {
                 item:
-                    (InnerItem::Function(a_sink, (name, _name_span), params, return_type, stmts), span),
+                    (
+                        InnerItem::Function {
+                            a_sink,
+                            name,
+                            params,
+                            return_type,
+                            generics,
+                            statements,
+                        },
+                        span,
+                    ),
                 attributes,
-            } => funcs.push(ConveyFunc::new(
-                a_sink,
-                name,
-                attributes,
-                span,
-                params,
-                return_type,
-                stmts.as_ref(),
-            )),
+            } => {
+                let generics = if let Some((generics, _)) = generics {
+                    Some(
+                        generics
+                            .iter()
+                            .cloned()
+                            .map(|(t, _)| match t {
+                                Type::Generic((t, s)) => (t.to_owned(), Type::Generic((t, s))),
+                                fubared => {
+                                    dbg!(fubared);
+                                    unreachable!();
+                                }
+                            })
+                            .collect(),
+                    )
+                } else {
+                    None
+                };
+
+                funcs.push(ConveyFunc::new(
+                    a_sink,
+                    &name.0,
+                    attributes,
+                    span,
+                    params,
+                    return_type,
+                    generics,
+                    statements.as_ref(),
+                ))
+            }
             Item {
                 item: (InnerItem::Implementation((name, _name_span), funcs), span),
                 attributes,
@@ -434,24 +486,33 @@ fn walk_tree(ast: &[Item], context: &mut Context, lu_dog: &mut LuDogStore) -> Re
             Item {
                 item: (InnerItem::Struct((name, _), fields, generics), span),
                 attributes,
-            } => structs.push(ConveyStruct::new(
-                name.to_owned(),
-                span,
-                attributes,
-                fields,
-                generics
-                    .0
-                    .clone()
-                    .into_iter()
-                    .map(|(t, _)| match t {
-                        Type::Generic((t, s)) => (t.to_owned(), Type::Generic((t, s))),
-                        fubared => {
-                            dbg!(fubared);
-                            unreachable!();
-                        }
-                    })
-                    .collect(),
-            )),
+            } => {
+                let generics = if let Some((generics, _)) = generics {
+                    Some(
+                        generics
+                            .iter()
+                            .cloned()
+                            .map(|(t, _)| match t {
+                                Type::Generic((t, s)) => (t.to_owned(), Type::Generic((t, s))),
+                                fubared => {
+                                    dbg!(fubared);
+                                    unreachable!();
+                                }
+                            })
+                            .collect(),
+                    )
+                } else {
+                    None
+                };
+
+                structs.push(ConveyStruct::new(
+                    name.to_owned(),
+                    span,
+                    attributes,
+                    fields,
+                    generics,
+                ))
+            }
         }
     }
 
@@ -469,10 +530,18 @@ fn walk_tree(ast: &[Item], context: &mut Context, lu_dog: &mut LuDogStore) -> Re
     } in &structs
     {
         debug!("Interring struct `{}` fields", name);
-        let _ = strukt::inter_struct(name, span, attributes, fields, generics, context, lu_dog)
-            .map_err(|mut e| {
-                errors.append(&mut e);
-            });
+        let _ = strukt::inter_struct(
+            name,
+            span,
+            attributes,
+            fields,
+            generics.as_ref(),
+            context,
+            lu_dog,
+        )
+        .map_err(|mut e| {
+            errors.append(&mut e);
+        });
     }
 
     for ConveyEnum {
@@ -483,11 +552,10 @@ fn walk_tree(ast: &[Item], context: &mut Context, lu_dog: &mut LuDogStore) -> Re
     } in &enums
     {
         debug!("Interring enum `{}` fields", name);
-        let _ = enuum::inter_enum(name, attributes, fields, generics, context, lu_dog).map_err(
-            |mut e| {
+        let _ = enuum::inter_enum(name, attributes, fields, generics.as_ref(), context, lu_dog)
+            .map_err(|mut e| {
                 errors.append(&mut e);
-            },
-        );
+            });
     }
 
     // This needs to be after the enums are interred.
@@ -503,7 +571,7 @@ fn walk_tree(ast: &[Item], context: &mut Context, lu_dog: &mut LuDogStore) -> Re
             let _ = strukt::inter_struct_fields(
                 woog_struct,
                 &fields,
-                &generics,
+                generics.as_ref(),
                 location,
                 context,
                 lu_dog,
@@ -522,13 +590,22 @@ fn walk_tree(ast: &[Item], context: &mut Context, lu_dog: &mut LuDogStore) -> Re
         span: _,
         params,
         return_type,
+        generics,
         statements: _,
     } in &funcs
     {
-        let _ = func::parse_func_signature(name, params, return_type, None, context, lu_dog)
-            .map_err(|mut e| {
-                errors.append(&mut e);
-            });
+        let _ = func::parse_func_signature(
+            name,
+            params,
+            generics.as_ref(),
+            return_type,
+            None,
+            context,
+            lu_dog,
+        )
+        .map_err(|mut e| {
+            errors.append(&mut e);
+        });
     }
 
     // Using the type information, and the input, inter the implementation blocks.
@@ -555,6 +632,7 @@ fn walk_tree(ast: &[Item], context: &mut Context, lu_dog: &mut LuDogStore) -> Re
         span,
         params,
         return_type,
+        generics,
         statements,
     } in funcs
     {
@@ -565,6 +643,7 @@ fn walk_tree(ast: &[Item], context: &mut Context, lu_dog: &mut LuDogStore) -> Re
             attributes,
             params,
             return_type,
+            generics.as_ref(),
             statements,
             None,
             None,
@@ -648,24 +727,44 @@ pub fn inter_statement(
                 Item {
                     item:
                         (
-                            InnerItem::Function(
-                                ref a_sink,
-                                ref name,
-                                ref params,
-                                ref return_type,
-                                ref stmts,
-                            ),
+                            InnerItem::Function {
+                                a_sink,
+                                name,
+                                params,
+                                return_type,
+                                statements,
+                                generics,
+                            },
                             span,
                         ),
                     attributes,
                 } => {
+                    let generics = if let Some((generics, _)) = generics {
+                        Some(
+                            generics
+                                .iter()
+                                .cloned()
+                                .map(|(t, _)| match t {
+                                    Type::Generic((t, s)) => (t.to_owned(), Type::Generic((t, s))),
+                                    fubared => {
+                                        dbg!(fubared);
+                                        unreachable!();
+                                    }
+                                })
+                                .collect(),
+                        )
+                    } else {
+                        None
+                    };
+
                     func::inter_func(
                         a_sink,
                         &name.0,
                         attributes,
                         params,
                         return_type,
-                        stmts.as_ref(),
+                        generics.as_ref(),
+                        statements.as_ref(),
                         None,
                         None,
                         span,
@@ -692,20 +791,28 @@ pub fn inter_statement(
                     item: (InnerItem::Struct((name, _span), fields, generics), outer_span),
                     attributes,
                 } => {
+                    let generics = if let Some((generics, _)) = generics {
+                        Some(
+                            generics
+                                .iter()
+                                .map(|(t, _)| match t {
+                                    Type::Generic((t, s)) => {
+                                        (t.to_owned(), Type::Generic((t.to_owned(), s.to_owned())))
+                                    }
+                                    _ => unreachable!(),
+                                })
+                                .collect(),
+                        )
+                    } else {
+                        None
+                    };
+
                     strukt::inter_struct(
                         name,
                         outer_span,
                         attributes,
                         fields,
-                        &generics
-                            .0
-                            .clone()
-                            .into_iter()
-                            .map(|(t, _)| match t {
-                                Type::Generic((t, s)) => (t.to_owned(), Type::Generic((t, s))),
-                                _ => unreachable!(),
-                            })
-                            .collect(),
+                        generics.as_ref(),
                         context,
                         lu_dog,
                     )
@@ -720,7 +827,7 @@ pub fn inter_statement(
                         strukt::inter_struct_fields(
                             woog_struct,
                             &fields,
-                            &generics,
+                            generics.as_ref(),
                             location,
                             context,
                             lu_dog,
@@ -2420,18 +2527,24 @@ pub(super) fn inter_expression(
             }
 
             let ret_ty = match s_read!(instance_ty).subtype {
-                ValueTypeEnum::WoogStruct(id) => {
-                    let woog_struct = lu_dog.exhume_woog_struct(&id).unwrap();
-                    let x = lookup_woog_struct_method_return_type(
-                        &s_read!(woog_struct).name,
-                        method,
-                        context.sarzak,
-                        lu_dog,
-                    );
-
-                    #[allow(clippy::let_and_return)]
-                    x
-                }
+                ValueTypeEnum::Char(_) => match method.as_str() {
+                    IS_DIGIT => {
+                        let ty = Ty::new_boolean(context.sarzak);
+                        ValueType::new_ty(&ty, lu_dog)
+                    }
+                    TO_DIGIT => {
+                        let ty = Ty::new_integer(context.sarzak);
+                        ValueType::new_ty(&ty, lu_dog)
+                    }
+                    _ => {
+                        return Err(vec![DwarfError::NoSuchMethod {
+                            method: method.to_owned(),
+                            file: context.file_name.to_owned(),
+                            span: meth_span.to_owned(),
+                            location: location!(),
+                        }])
+                    }
+                },
                 ValueTypeEnum::List(_) => match method.as_str() {
                     MAP => {
                         if arg_ty.len() != 1 {
@@ -2475,14 +2588,10 @@ pub(super) fn inter_expression(
                 ValueTypeEnum::Ty(id) => {
                     let ty = context.sarzak.exhume_ty(&id).unwrap();
                     let ty = ty.read().unwrap();
-                    if let Ty::SString(_) = &*ty {
-                        match method.as_str() {
-                            LEN => {
+                    match &*ty {
+                        Ty::Integer(_) => match method.as_str() {
+                            MAX => {
                                 let ty = Ty::new_integer(context.sarzak);
-                                ValueType::new_ty(&ty, lu_dog)
-                            }
-                            FORMAT => {
-                                let ty = Ty::new_s_string(context.sarzak);
                                 ValueType::new_ty(&ty, lu_dog)
                             }
                             _ => {
@@ -2491,16 +2600,69 @@ pub(super) fn inter_expression(
                                     file: context.file_name.to_owned(),
                                     span: meth_span.to_owned(),
                                     location: location!(),
-                                    // commentary: "Type `string` has no such method.".to_owned(),
-                                }]);
+                                }])
+                            }
+                        },
+                        Ty::SString(_) => {
+                            match method.as_str() {
+                                LEN => {
+                                    let ty = Ty::new_integer(context.sarzak);
+                                    ValueType::new_ty(&ty, lu_dog)
+                                }
+                                LINES => {
+                                    let string = Ty::new_s_string(context.sarzak);
+                                    let string = ValueType::new_ty(&string, lu_dog);
+                                    let list = List::new(&string, lu_dog);
+                                    ValueType::new_list(&list, lu_dog)
+                                }
+                                FORMAT => {
+                                    let ty = Ty::new_s_string(context.sarzak);
+                                    ValueType::new_ty(&ty, lu_dog)
+                                }
+                                SPLIT => {
+                                    let string = Ty::new_s_string(context.sarzak);
+                                    let string = ValueType::new_ty(&string, lu_dog);
+                                    let list = List::new(&string, lu_dog);
+                                    ValueType::new_list(&list, lu_dog)
+                                }
+                                TRIM => {
+                                    let ty = Ty::new_s_string(context.sarzak);
+                                    ValueType::new_ty(&ty, lu_dog)
+                                }
+                                _ => {
+                                    return Err(vec![DwarfError::NoSuchMethod {
+                                        method: method.to_owned(),
+                                        file: context.file_name.to_owned(),
+                                        span: meth_span.to_owned(),
+                                        location: location!(),
+                                        // commentary: "Type `string` has no such method.".to_owned(),
+                                    }]);
+                                }
                             }
                         }
-                    } else {
-                        e_warn!("Unknown type for method call {method}");
-                        ValueType::new_unknown(lu_dog)
+                        _ => {
+                            e_warn!("Unknown type for method call {method}");
+                            ValueType::new_unknown(lu_dog)
+                        }
                     }
                 }
-                _ => ValueType::new_unknown(lu_dog),
+                ValueTypeEnum::WoogStruct(id) => {
+                    let woog_struct = lu_dog.exhume_woog_struct(&id).unwrap();
+                    let x = lookup_woog_struct_method_return_type(
+                        &s_read!(woog_struct).name,
+                        method,
+                        context.sarzak,
+                        lu_dog,
+                    );
+
+                    #[allow(clippy::let_and_return)]
+                    x
+                }
+                ref ty => {
+                    e_warn!("Unknown type for method call {method}, {ty:?}", ty = ty);
+
+                    ValueType::new_unknown(lu_dog)
+                }
             };
 
             debug!(
@@ -2753,7 +2915,7 @@ pub(super) fn inter_expression(
             // I think that if you look, it's actually coming in as Option<int>, which can be a UserType.
             let full_enum_name = path.iter().map(|p| {
                 if let Type::UserType((obj, _), generics) = p {
-                    let mut name = obj.de_sanitize().to_owned();
+                    let mut name = obj.to_owned();
                     let generics = generics.iter().map(|g| {
                         g.0.to_string()
                     }).collect::<Vec<_>>().join(", ");
@@ -3273,11 +3435,13 @@ fn inter_import(
     context: &mut Context,
     lu_dog: &mut LuDogStore,
 ) -> Result<()> {
+    debug!("inter_import: {path:?}");
     let mut errors = Vec::new();
 
     let path_root = path.iter().map(|p| p.0.to_owned()).collect::<Vec<_>>();
     let module = path_root.get(0).unwrap(); // This will have _something_.
 
+    // 🚧 Why?
     if module == "dwarf" {
         return Ok(());
     }
@@ -3290,6 +3454,7 @@ fn inter_import(
     //     (false, "".to_owned())
     // };
 
+    // All of this has to do with reading an extension.
     let mut path = context.dwarf_home.clone();
     path.push(EXTENSION_DIR);
     path.push(module);
@@ -3297,6 +3462,18 @@ fn inter_import(
     let dir = path.clone();
 
     path.push(LIB_TAO);
+
+    let (dir, path) = if path.exists() {
+        (dir, path)
+    } else {
+        let mut path = context.dwarf_home.clone();
+        path.push(LIB_DIR);
+        path.push(module);
+        let dir = path.clone();
+
+        path.push(LIB_TAO);
+        (dir, path)
+    };
 
     match fs::read_to_string(&path) {
         Ok(source_code) => {
@@ -3306,10 +3483,13 @@ fn inter_import(
                     let old_cwd = context.cwd.clone();
                     context.cwd = dir;
                     // Extrusion time
+                    trace!("processing dwarf import");
                     walk_tree(&ast, context, lu_dog)?;
+                    trace!("done processing dwarf import");
                     context.cwd = old_cwd;
                 }
                 Err(_) => {
+                    e_warn!("Failed to parse import: {path:?}");
                     return Ok(());
                 }
             }
@@ -3349,7 +3529,6 @@ fn inter_implementation(
     context: &mut Context,
     lu_dog: &mut LuDogStore,
 ) -> Result<()> {
-    let name = name.de_sanitize();
     debug!("inter_implementation: {name}");
 
     let (impl_ty, implementation) = if let Some(store_vec) = attributes.get(STORE) {
@@ -3445,24 +3624,44 @@ fn inter_implementation(
             Item {
                 item:
                     (
-                        InnerItem::Function(
-                            ref func_ty,
-                            ref name,
-                            ref params,
-                            ref return_type,
-                            ref stmts,
-                        ),
+                        InnerItem::Function {
+                            a_sink,
+                            name,
+                            params,
+                            return_type,
+                            generics,
+                            statements,
+                        },
                         span,
                     ),
                 attributes,
             } => {
+                let generics = if let Some((generics, _)) = generics {
+                    Some(
+                        generics
+                            .iter()
+                            .cloned()
+                            .map(|(t, _)| match t {
+                                Type::Generic((t, s)) => (t.to_owned(), Type::Generic((t, s))),
+                                fubared => {
+                                    dbg!(fubared);
+                                    unreachable!();
+                                }
+                            })
+                            .collect(),
+                    )
+                } else {
+                    None
+                };
+
                 match func::inter_func(
-                    func_ty,
+                    a_sink,
                     &name.0,
                     attributes,
                     params,
                     return_type,
-                    stmts.as_ref(),
+                    generics.as_ref(),
+                    statements.as_ref(),
                     implementation.as_ref(),
                     impl_ty.as_ref(),
                     span,
@@ -3666,12 +3865,12 @@ pub(crate) fn make_value_type(
             Ok(ValueType::new_ty(&ty, lu_dog))
         }
         Type::UserType(tok, generics) => {
-            let name = tok.0.de_sanitize();
+            let name = &tok.0;
 
             // Deal with imports
             let import = lu_dog.iter_import().find(|import| {
                 let import = s_read!(import);
-                import.name == name || (import.has_alias && import.alias == name)
+                &import.name == name || (import.has_alias && &import.alias == name)
             });
 
             if let Some(_import) = import {
@@ -3728,7 +3927,7 @@ pub(crate) fn make_value_type(
                             // object called `Point`. We want to be able to also handle
                             // proxy objects for `Point`. Those are suffixed with "Proxy".
                             let obj = obj.read().unwrap().name.to_upper_camel_case();
-                            obj == *name || name == format!("{}Proxy", obj)
+                            obj == *name || name == format!("{}Proxy", obj).as_str()
                         }
                         _ => false,
                     }) {
@@ -3764,7 +3963,7 @@ pub(crate) fn make_value_type(
                     Ty::Object(ref obj) => {
                         let obj = sarzak.exhume_object(obj).unwrap();
                         let obj = obj.read().unwrap().name.to_upper_camel_case();
-                        obj == *name || name == format!("{}Proxy", obj)
+                        obj == *name || name == format!("{}Proxy", obj).as_str()
                     }
                     _ => false,
                 }) {
@@ -3841,58 +4040,6 @@ pub(crate) fn lookup_woog_struct_method_return_type(
     }
 }
 
-pub(crate) trait DeSanitize {
-    fn de_sanitize(&self) -> &str;
-}
-
-impl DeSanitize for String {
-    fn de_sanitize(&self) -> &str {
-        if let Some(str) = de_sanitize(self) {
-            str
-        } else {
-            self
-        }
-    }
-}
-
-impl DeSanitize for &str {
-    fn de_sanitize(&self) -> &str {
-        if let Some(str) = de_sanitize(self) {
-            str
-        } else {
-            self
-        }
-    }
-}
-
-pub(crate) fn de_sanitize(string: &str) -> Option<&str> {
-    match string {
-        "False Literal" => Some("False"),
-        "FalseLiteral" => Some("False"),
-        "SString" => Some("String"),
-        "SUuid" => Some("Uuid"),
-        "True Literal" => Some("True"),
-        "TrueLiteral" => Some("True"),
-        "Ty" => Some("Type"),
-        "WoogOption" => Some("Option"),
-        "WoogStruct" => Some("Struct"),
-        "XSuper" => Some("Super"),
-        "XSuperProxy" => Some("SuperProxy"),
-        "XBox" => Some("Box"),
-        "XBoxProxy" => Some("BoxProxy"),
-        "XIf" => Some("If"),
-        "XMacro" => Some("Macro"),
-        "XMatch" => Some("Match"),
-        "XPrint" => Some("Print"),
-        "XReturn" => Some("Return"),
-        "XValue" => Some("Value"),
-        "ZObjectStore" => Some("ObjectStore"),
-        "ZSome" => Some("Some"),
-        "ZNone" => Some("None"),
-        _ => None,
-    }
-}
-
 pub(super) fn typecheck(
     lhs: (&RefType<ValueType>, &Span),
     rhs: (&RefType<ValueType>, &Span),
@@ -3925,6 +4072,8 @@ pub(super) fn typecheck(
         // Promote unknown to the other type.
         (ValueTypeEnum::Unknown(_), _) => Ok(()),
         (_, ValueTypeEnum::Unknown(_)) => Ok(()),
+        (ValueTypeEnum::Generic(_), _) => Ok(()),
+        (_, ValueTypeEnum::Generic(_)) => Ok(()),
         (ValueTypeEnum::Ty(a), ValueTypeEnum::Ty(b)) => {
             let a = context.sarzak.exhume_ty(a).unwrap();
             let b = context.sarzak.exhume_ty(b).unwrap();

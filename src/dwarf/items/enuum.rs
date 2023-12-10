@@ -33,7 +33,7 @@ pub fn inter_enum(
     name: &str,
     _attributes: &AttributeMap,
     variants: &[(Spanned<String>, Option<EnumField>)],
-    enum_generics: &HashMap<String, Type>,
+    enum_generics: Option<&HashMap<String, Type>>,
     context: &mut Context,
     lu_dog: &mut LuDogStore,
 ) -> Result<()> {
@@ -108,19 +108,34 @@ pub fn inter_enum(
                     }
                     (Type::UserType((ty, span), generics), _) if generics.is_empty() => {
                         // Pass the user type to the lookup business if this isn't a generic parameter.
-                        if let Some(generic) = enum_generics.get(ty) {
-                            context.location = location!();
-                            let ty = make_value_type(generic, span, None, context, lu_dog)?;
-                            LuDogSpan::new(
-                                span.end as i64,
-                                span.start as i64,
-                                &context.source,
-                                Some(&ty),
-                                None,
-                                lu_dog,
-                            );
+                        if let Some(generics) = enum_generics {
+                            if let Some(generic) = generics.get(ty) {
+                                context.location = location!();
+                                let ty = make_value_type(generic, span, None, context, lu_dog)?;
+                                LuDogSpan::new(
+                                    span.end as i64,
+                                    span.start as i64,
+                                    &context.source,
+                                    Some(&ty),
+                                    None,
+                                    lu_dog,
+                                );
 
-                            ty
+                                ty
+                            } else {
+                                context.location = location!();
+                                let ty = make_value_type(&type_.0, span, None, context, lu_dog)?;
+                                LuDogSpan::new(
+                                    span.end as i64,
+                                    span.start as i64,
+                                    &context.source,
+                                    Some(&ty),
+                                    None,
+                                    lu_dog,
+                                );
+
+                                ty
+                            }
                         } else {
                             context.location = location!();
                             let ty = make_value_type(&type_.0, span, None, context, lu_dog)?;

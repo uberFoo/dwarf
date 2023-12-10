@@ -1,4 +1,7 @@
-use std::{fmt, future::Future, ops::Range};
+#[cfg(feature = "async")]
+use std::future::Future;
+
+use std::{fmt, io::Write, ops::Range};
 
 #[cfg(feature = "async")]
 use smol::future;
@@ -15,6 +18,9 @@ use uuid::Uuid;
 #[cfg(feature = "async")]
 use puteketeke::Executor;
 
+#[cfg(feature = "async")]
+use crate::ValueResult;
+
 use crate::{
     chacha::error::Result,
     lu_dog::{Function, Lambda, ObjectStore as LuDogStore, ValueType, ZObjectStore},
@@ -22,7 +28,7 @@ use crate::{
     plug_in::PluginType,
     s_read,
     sarzak::{ObjectStore as SarzakStore, Ty},
-    ChaChaError, Context, DwarfFloat, DwarfInteger, NewRef, RefType, ValueResult,
+    ChaChaError, Context, DwarfFloat, DwarfInteger, NewRef, RefType,
 };
 
 #[repr(C)]
@@ -247,6 +253,236 @@ pub enum Value {
         ty: RefType<ValueType>,
         inner: Vec<RefType<Self>>,
     },
+}
+
+impl Value {
+    #[inline]
+    pub fn to_inner_string(&self) -> String {
+        let mut buf = Vec::new();
+        self.inner_string(&mut buf)
+            .expect("inner_string returned an error unexpectedly");
+        String::from_utf8(buf).expect("inner_string returned invalid UTF-8")
+    }
+
+    fn inner_string(&self, f: &mut Vec<u8>) -> std::io::Result<()> {
+        match self {
+            Self::Boolean(bool_) => write!(f, "{bool_}"),
+            Self::Char(char_) => write!(f, "{char_}"),
+            Self::Empty => write!(f, "()"),
+            // Self::Enum(ty) => write!(f, "{}", s_read!(ty)),
+            Self::Enumeration(var) => write!(f, "{var}"),
+            Self::Error(e) => write!(f, "{}: {e}", Colour::Red.bold().paint("error")),
+            Self::Float(num) => write!(f, "{num}"),
+            Self::Function(_) => write!(f, "<function>"),
+            #[cfg(feature = "async")]
+            Self::Future {
+                name,
+                executor,
+                task,
+            } => write!(f, "Task `{name}`: {task:?}, executor: {executor:?}"),
+            Self::Integer(num) => write!(f, "{num}"),
+            Self::Lambda(_) => write!(f, "<lambda>"),
+            Self::ParsedDwarf(ctx) => write!(f, "{ctx:#?}"),
+            Self::Plugin(plugin) => write!(f, "Plugin: {}", s_read!(plugin).name()),
+            Self::ProxyType {
+                module: _,
+                obj_ty: _,
+                id: _,
+                plugin,
+            } => write!(f, "{}", s_read!(plugin)),
+            Self::Range(range) => write!(f, "{range:?}"),
+            // Self::StoreType(store) => write!(f, "{:?}", store),
+            Self::Store(_store, plugin) => write!(f, "Plug-in ({})", s_read!(plugin).name()),
+            Self::String(str_) => write!(f, "{str_}"),
+            Self::Struct(ty) => write!(f, "{}", s_read!(ty)),
+            // Self::String(str_) => write!(f, "\"{}\"", str_),
+            Self::Table(table) => write!(f, "{table:?}"),
+            #[cfg(feature = "async")]
+            Self::Task { worker, parent } => write!(f, "Task: {parent:?} running on {worker:?}"),
+            Self::Thonk(name, number) => write!(f, "{name} [{number}]"),
+            Self::TupleEnum(te) => write!(f, "{}", s_read!(te)),
+            Self::Unknown => write!(f, "<unknown>"),
+            Self::Uuid(uuid) => write!(f, "{uuid}"),
+            Self::Vector { ty: _, inner } => {
+                let mut first_time = true;
+                write!(f, "[")?;
+                for i in inner {
+                    if first_time {
+                        first_time = false;
+                    } else {
+                        write!(f, ", ")?;
+                    }
+
+                    write!(f, "{}", s_read!(i))?;
+                }
+                write!(f, "]")
+            }
+        }
+    }
+
+    pub fn get_value_type(&self, sarzak: &SarzakStore, lu_dog: &LuDogStore) -> RefType<ValueType> {
+        match &self {
+            Value::Boolean(_) => {
+                let ty = Ty::new_boolean(sarzak);
+                for vt in lu_dog.iter_value_type() {
+                    if let ValueTypeEnum::Ty(_ty) = s_read!(vt).subtype {
+                        if ty.read().unwrap().id() == _ty {
+                            return vt.clone();
+                        }
+                    }
+                }
+                unreachable!()
+            }
+            Value::Char(_) => {
+                for vt in lu_dog.iter_value_type() {
+                    if let ValueTypeEnum::Char(_) = s_read!(vt).subtype {
+                        return vt.clone();
+                    }
+                }
+                unreachable!()
+            }
+            Value::Empty => {
+                for vt in lu_dog.iter_value_type() {
+                    if let ValueTypeEnum::Empty(_) = s_read!(vt).subtype {
+                        return vt.clone();
+                    }
+                }
+                unreachable!()
+            }
+            // Value::Enum(ref ut) => s_read!(ut).get_type().clone(),
+            Value::Enumeration(var) => match var {
+                EnumVariant::Unit(t, _, _) => t.clone(),
+                EnumVariant::Struct(ut) => s_read!(ut).get_type().clone(),
+                EnumVariant::Tuple((ty, _), _) => ty.clone(),
+            },
+            Value::Float(_) => {
+                let ty = Ty::new_float(sarzak);
+                for vt in lu_dog.iter_value_type() {
+                    if let ValueTypeEnum::Ty(_ty) = s_read!(vt).subtype {
+                        if ty.read().unwrap().id() == _ty {
+                            return vt.clone();
+                        }
+                    }
+                }
+                unreachable!()
+            }
+            Value::Function(ref func) => {
+                let func = lu_dog.exhume_function(&s_read!(func).id).unwrap();
+                let z = s_read!(func).r1_value_type(lu_dog)[0].clone();
+                #[allow(clippy::let_and_return)]
+                z
+            }
+            Value::Integer(_) => {
+                let ty = Ty::new_integer(sarzak);
+                for vt in lu_dog.iter_value_type() {
+                    if let ValueTypeEnum::Ty(_ty) = s_read!(vt).subtype {
+                        if ty.read().unwrap().id() == _ty {
+                            return vt.clone();
+                        }
+                    }
+                }
+                unreachable!()
+            }
+            Value::Lambda(ref ƛ) => {
+                let ƛ = lu_dog.exhume_lambda(&s_read!(ƛ).id).unwrap();
+                let ƛ_type = s_read!(ƛ).r1_value_type(lu_dog)[0].clone();
+                #[allow(clippy::let_and_return)]
+                ƛ_type
+            }
+            Value::ProxyType {
+                module: _,
+                obj_ty: uuid,
+                id: _,
+                plugin: _,
+            } => {
+                for vt in lu_dog.iter_value_type() {
+                    if let ValueTypeEnum::WoogStruct(woog) = s_read!(vt).subtype {
+                        let woog = lu_dog.exhume_woog_struct(&woog).unwrap();
+                        let object = s_read!(woog).object;
+                        if let Some(ref obj_id) = object {
+                            if uuid == obj_id {
+                                return vt.clone();
+                            }
+                        }
+                    }
+                }
+                unreachable!()
+            }
+            Value::Range(_) => {
+                for vt in lu_dog.iter_value_type() {
+                    if let ValueTypeEnum::Range(_) = s_read!(vt).subtype {
+                        return vt.clone();
+                    }
+                }
+                unreachable!()
+            }
+            Value::Store(store, _plugin) => s_read!(store).r1_value_type(lu_dog)[0].clone(),
+            Value::String(_) => {
+                let ty = Ty::new_s_string(sarzak);
+                for vt in lu_dog.iter_value_type() {
+                    if let ValueTypeEnum::Ty(_ty) = s_read!(vt).subtype {
+                        if ty.read().unwrap().id() == _ty {
+                            return vt.clone();
+                        }
+                    }
+                }
+                unreachable!()
+            }
+            Value::Struct(ref ut) => s_read!(ut).get_type().clone(),
+            #[cfg(feature = "async")]
+            Value::Task {
+                worker: _,
+                parent: _,
+            } => {
+                for vt in lu_dog.iter_value_type() {
+                    if let ValueTypeEnum::Task(_) = s_read!(vt).subtype {
+                        return vt.clone();
+                    }
+                }
+                unreachable!()
+            }
+            Value::Uuid(_) => {
+                let ty = Ty::new_s_uuid(sarzak);
+                for vt in lu_dog.iter_value_type() {
+                    if let ValueTypeEnum::Ty(_ty) = s_read!(vt).subtype {
+                        if ty.read().unwrap().id() == _ty {
+                            return vt.clone();
+                        }
+                    }
+                }
+                unreachable!()
+            }
+            Value::Vector { ty, inner: _ } => {
+                let ty = match &s_read!(ty).subtype {
+                    ValueTypeEnum::XFuture(id) => {
+                        let ty = lu_dog.exhume_x_future(id).unwrap();
+                        let ty = s_read!(ty);
+                        ty.r2_value_type(lu_dog)[0].clone()
+                    }
+                    _ => ty.clone(),
+                };
+                for vt in lu_dog.iter_value_type() {
+                    if let ValueTypeEnum::List(id) = s_read!(vt).subtype {
+                        let list = lu_dog.exhume_list(&id).unwrap();
+                        let list_ty = s_read!(list).r36_value_type(lu_dog)[0].clone();
+                        if *s_read!(ty) == *s_read!(list_ty) {
+                            return vt.clone();
+                        }
+                    }
+                }
+                unreachable!()
+            }
+            value => {
+                log::error!("Value::get_type() not implemented for {:?}", value);
+                for vt in lu_dog.iter_value_type() {
+                    if let ValueTypeEnum::Unknown(_) = s_read!(vt).subtype {
+                        return vt.clone();
+                    }
+                }
+                unreachable!()
+            }
+        }
+    }
 }
 
 #[cfg(feature = "async")]
@@ -478,172 +714,7 @@ impl From<FfiValue> for Value {
     }
 }
 
-impl Value {
-    pub fn get_value_type(&self, sarzak: &SarzakStore, lu_dog: &LuDogStore) -> RefType<ValueType> {
-        match &self {
-            Value::Boolean(_) => {
-                let ty = Ty::new_boolean(sarzak);
-                for vt in lu_dog.iter_value_type() {
-                    if let ValueTypeEnum::Ty(_ty) = s_read!(vt).subtype {
-                        if ty.read().unwrap().id() == _ty {
-                            return vt.clone();
-                        }
-                    }
-                }
-                unreachable!()
-            }
-            Value::Char(_) => {
-                for vt in lu_dog.iter_value_type() {
-                    if let ValueTypeEnum::Char(_) = s_read!(vt).subtype {
-                        return vt.clone();
-                    }
-                }
-                unreachable!()
-            }
-            Value::Empty => {
-                for vt in lu_dog.iter_value_type() {
-                    if let ValueTypeEnum::Empty(_) = s_read!(vt).subtype {
-                        return vt.clone();
-                    }
-                }
-                unreachable!()
-            }
-            // Value::Enum(ref ut) => s_read!(ut).get_type().clone(),
-            Value::Enumeration(var) => match var {
-                EnumVariant::Unit(t, _, _) => t.clone(),
-                EnumVariant::Struct(ut) => s_read!(ut).get_type().clone(),
-                EnumVariant::Tuple((ty, _), _) => ty.clone(),
-            },
-            Value::Float(_) => {
-                let ty = Ty::new_float(sarzak);
-                for vt in lu_dog.iter_value_type() {
-                    if let ValueTypeEnum::Ty(_ty) = s_read!(vt).subtype {
-                        if ty.read().unwrap().id() == _ty {
-                            return vt.clone();
-                        }
-                    }
-                }
-                unreachable!()
-            }
-            Value::Function(ref func) => {
-                let func = lu_dog.exhume_function(&s_read!(func).id).unwrap();
-                let z = s_read!(func).r1_value_type(lu_dog)[0].clone();
-                #[allow(clippy::let_and_return)]
-                z
-            }
-            Value::Integer(_) => {
-                let ty = Ty::new_integer(sarzak);
-                for vt in lu_dog.iter_value_type() {
-                    if let ValueTypeEnum::Ty(_ty) = s_read!(vt).subtype {
-                        if ty.read().unwrap().id() == _ty {
-                            return vt.clone();
-                        }
-                    }
-                }
-                unreachable!()
-            }
-            Value::Lambda(ref ƛ) => {
-                let ƛ = lu_dog.exhume_lambda(&s_read!(ƛ).id).unwrap();
-                let ƛ_type = s_read!(ƛ).r1_value_type(lu_dog)[0].clone();
-                #[allow(clippy::let_and_return)]
-                ƛ_type
-            }
-            Value::ProxyType {
-                module: _,
-                obj_ty: uuid,
-                id: _,
-                plugin: _,
-            } => {
-                for vt in lu_dog.iter_value_type() {
-                    if let ValueTypeEnum::WoogStruct(woog) = s_read!(vt).subtype {
-                        let woog = lu_dog.exhume_woog_struct(&woog).unwrap();
-                        let object = s_read!(woog).object;
-                        if let Some(ref obj_id) = object {
-                            if uuid == obj_id {
-                                return vt.clone();
-                            }
-                        }
-                    }
-                }
-                unreachable!()
-            }
-            Value::Range(_) => {
-                for vt in lu_dog.iter_value_type() {
-                    if let ValueTypeEnum::Range(_) = s_read!(vt).subtype {
-                        return vt.clone();
-                    }
-                }
-                unreachable!()
-            }
-            Value::Store(store, _plugin) => s_read!(store).r1_value_type(lu_dog)[0].clone(),
-            Value::String(_) => {
-                let ty = Ty::new_s_string(sarzak);
-                for vt in lu_dog.iter_value_type() {
-                    if let ValueTypeEnum::Ty(_ty) = s_read!(vt).subtype {
-                        if ty.read().unwrap().id() == _ty {
-                            return vt.clone();
-                        }
-                    }
-                }
-                unreachable!()
-            }
-            Value::Struct(ref ut) => s_read!(ut).get_type().clone(),
-            #[cfg(feature = "async")]
-            Value::Task {
-                worker: _,
-                parent: _,
-            } => {
-                for vt in lu_dog.iter_value_type() {
-                    if let ValueTypeEnum::Task(_) = s_read!(vt).subtype {
-                        return vt.clone();
-                    }
-                }
-                unreachable!()
-            }
-            Value::Uuid(_) => {
-                let ty = Ty::new_s_uuid(sarzak);
-                for vt in lu_dog.iter_value_type() {
-                    if let ValueTypeEnum::Ty(_ty) = s_read!(vt).subtype {
-                        if ty.read().unwrap().id() == _ty {
-                            return vt.clone();
-                        }
-                    }
-                }
-                unreachable!()
-            }
-            Value::Vector { ty, inner: _ } => {
-                let ty = match &s_read!(ty).subtype {
-                    ValueTypeEnum::XFuture(id) => {
-                        let ty = lu_dog.exhume_x_future(id).unwrap();
-                        let ty = s_read!(ty);
-                        ty.r2_value_type(lu_dog)[0].clone()
-                    }
-                    _ => ty.clone(),
-                };
-                for vt in lu_dog.iter_value_type() {
-                    if let ValueTypeEnum::List(id) = s_read!(vt).subtype {
-                        let list = lu_dog.exhume_list(&id).unwrap();
-                        let list_ty = s_read!(list).r36_value_type(lu_dog)[0].clone();
-                        if *s_read!(ty) == *s_read!(list_ty) {
-                            return vt.clone();
-                        }
-                    }
-                }
-                unreachable!()
-            }
-            value => {
-                log::error!("Value::get_type() not implemented for {:?}", value);
-                for vt in lu_dog.iter_value_type() {
-                    if let ValueTypeEnum::Unknown(_) = s_read!(vt).subtype {
-                        return vt.clone();
-                    }
-                }
-                unreachable!()
-            }
-        }
-    }
-}
-
+/// NB: This is what get's spit out of dwarf print statements.
 impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
@@ -674,7 +745,8 @@ impl fmt::Display for Value {
             Self::Range(range) => write!(f, "{range:?}"),
             // Self::StoreType(store) => write!(f, "{:?}", store),
             Self::Store(_store, plugin) => write!(f, "Plug-in ({})", s_read!(plugin).name()),
-            Self::String(str_) => write!(f, "{str_}"),
+            // Self::String(str_) => write!(f, "{str_}"),
+            Self::String(str_) => write!(f, "\"{str_}\""),
             Self::Struct(ty) => write!(f, "{}", s_read!(ty)),
             // Self::String(str_) => write!(f, "\"{}\"", str_),
             Self::Table(table) => write!(f, "{table:?}"),
@@ -684,7 +756,20 @@ impl fmt::Display for Value {
             Self::TupleEnum(te) => write!(f, "{}", s_read!(te)),
             Self::Unknown => write!(f, "<unknown>"),
             Self::Uuid(uuid) => write!(f, "{uuid}"),
-            Self::Vector { ty, inner } => write!(f, "{ty:?}: {inner:?}"),
+            Self::Vector { ty: _, inner } => {
+                let mut first_time = true;
+                write!(f, "[")?;
+                for i in inner {
+                    if first_time {
+                        first_time = false;
+                    } else {
+                        write!(f, ", ")?;
+                    }
+
+                    write!(f, "{}", s_read!(i))?;
+                }
+                write!(f, "]")
+            }
         }
     }
 }
@@ -994,7 +1079,7 @@ impl TryFrom<Value> for String {
     type Error = ChaChaError;
 
     fn try_from(value: Value) -> Result<Self, <String as TryFrom<Value>>::Error> {
-        Ok(value.to_string())
+        Ok(value.to_inner_string())
     }
 }
 

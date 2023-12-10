@@ -1,6 +1,9 @@
 // The _Metamodel_
 // 
 // This is the model of the model. From here all is generated...
+
+use std::prelude::*;
+
 // This annotation tells the interpreter that the struct will be a proxy for
 // an `ObjectStore` called sarzak. It will find the plugin based on the name.
 #[store(model = "sarzak")]
@@ -115,9 +118,9 @@ impl SarzakStore {
     fn exhume_supertype(self, supertype: Uuid) -> Supertype;
 
     #[proxy(store = "sarzak", object = "ObjectStore", func = "inter_ty")]
-    fn inter_ty(self, ty: Ty);
+    fn inter_ty(self, ty: Type);
     #[proxy(store = "sarzak", object = "ObjectStore", func = "exhume_ty")]
-    fn exhume_ty(self, ty: Uuid) -> Ty;
+    fn exhume_ty(self, ty: Uuid) -> Type;
 }
 
 // An Event that Does Something
@@ -126,7 +129,7 @@ impl SarzakStore {
 // 
 // This tells the interpreter that this struct is a proxy for an object called
 // "AcknowledgedEvent" in the store named "sarzak"; declared above.
-#[proxy(store = "sarzak", object = "AcknowledgedEvent")]
+#[proxy(store = "sarzak", object = "Acknowledged Event")]
 struct AcknowledgedEvent {
     id: Uuid,
     event_id: Event,
@@ -135,10 +138,10 @@ struct AcknowledgedEvent {
 }
 
 impl AcknowledgedEvent {
-    #[proxy(store = "sarzak", object = "AcknowledgedEvent", func = "new")]
+    #[proxy(store = "sarzak", object = "Acknowledged Event", func = "new")]
     fn new(event_id: Event, state_id: State) -> Self;
 
-    #[proxy(store = "sarzak", object = "AcknowledgedEvent", func = "instances")]
+    #[proxy(store = "sarzak", object = "Acknowledged Event", func = "instances")]
     fn instances() -> [Self];
 
     fn help() -> () {
@@ -159,7 +162,7 @@ impl AcknowledgedEvent {
 
 // This tells the interpreter that this struct is a proxy for an object called
 // "AnAssociativeReferent" in the store named "sarzak"; declared above.
-#[proxy(store = "sarzak", object = "AnAssociativeReferent")]
+#[proxy(store = "sarzak", object = "An Associative Referent")]
 struct AnAssociativeReferent {
     id: Uuid,
     referential_attribute: string,
@@ -169,10 +172,10 @@ struct AnAssociativeReferent {
 }
 
 impl AnAssociativeReferent {
-    #[proxy(store = "sarzak", object = "AnAssociativeReferent", func = "new")]
+    #[proxy(store = "sarzak", object = "An Associative Referent", func = "new")]
     fn new(referential_attribute: string, associative: Associative, referent: AssociativeReferent) -> Self;
 
-    #[proxy(store = "sarzak", object = "AnAssociativeReferent", func = "instances")]
+    #[proxy(store = "sarzak", object = "An Associative Referent", func = "instances")]
     fn instances() -> [Self];
 
     fn help() -> () {
@@ -224,7 +227,7 @@ impl Associative {
 // 
 // This tells the interpreter that this struct is a proxy for an object called
 // "AssociativeReferent" in the store named "sarzak"; declared above.
-#[proxy(store = "sarzak", object = "AssociativeReferent")]
+#[proxy(store = "sarzak", object = "Associative Referent")]
 struct AssociativeReferent {
     description: string,
     id: Uuid,
@@ -235,10 +238,10 @@ struct AssociativeReferent {
 }
 
 impl AssociativeReferent {
-    #[proxy(store = "sarzak", object = "AssociativeReferent", func = "new")]
+    #[proxy(store = "sarzak", object = "Associative Referent", func = "new")]
     fn new(description: string, cardinality: Cardinality, conditionality: Conditionality, obj_id: Object) -> Self;
 
-    #[proxy(store = "sarzak", object = "AssociativeReferent", func = "instances")]
+    #[proxy(store = "sarzak", object = "Associative Referent", func = "instances")]
     fn instances() -> [Self];
 
     fn help() -> () {
@@ -267,7 +270,7 @@ impl AssociativeReferent {
 // 
 // This tells the interpreter that this struct is a proxy for an object called
 // "AssociativeReferrer" in the store named "sarzak"; declared above.
-#[proxy(store = "sarzak", object = "AssociativeReferrer")]
+#[proxy(store = "sarzak", object = "Associative Referrer")]
 struct AssociativeReferrer {
     id: Uuid,
     cardinality: Cardinality,
@@ -276,10 +279,10 @@ struct AssociativeReferrer {
 }
 
 impl AssociativeReferrer {
-    #[proxy(store = "sarzak", object = "AssociativeReferrer", func = "new")]
+    #[proxy(store = "sarzak", object = "Associative Referrer", func = "new")]
     fn new(cardinality: Cardinality, obj_id: Object) -> Self;
 
-    #[proxy(store = "sarzak", object = "AssociativeReferrer", func = "instances")]
+    #[proxy(store = "sarzak", object = "Associative Referrer", func = "instances")]
     fn instances() -> [Self];
 
     fn help() -> () {
@@ -310,13 +313,13 @@ struct Attribute {
     id: Uuid,
     name: string,
     obj_id: Object,
-    ty: Ty,
+    ty: Type,
     // Non-formalizing relationships
 }
 
 impl Attribute {
     #[proxy(store = "sarzak", object = "Attribute", func = "new")]
-    fn new(name: string, obj_id: Object, ty: Ty) -> Self;
+    fn new(name: string, obj_id: Object, ty: Type) -> Self;
 
     #[proxy(store = "sarzak", object = "Attribute", func = "instances")]
     fn instances() -> [Self];
@@ -333,7 +336,7 @@ impl Attribute {
         print("    id: Uuid,\n");
         print("    name: string,\n");
         print("    obj_id: Object,\n");
-        print("    ty: Ty,\n");
+        print("    ty: Type,\n");
         print("}\n");
     }
 }
@@ -1013,18 +1016,18 @@ impl State {
 // ❗️{"singleton_object": true}
 // 
 // This tells the interpreter that this struct is a proxy for an object called
-// "SString" in the store named "sarzak"; declared above.
-#[proxy(store = "sarzak", object = "SString")]
-struct SString {
+// "String" in the store named "sarzak"; declared above.
+#[proxy(store = "sarzak", object = "String")]
+struct String {
     id: Uuid,
     // Non-formalizing relationships
 }
 
-impl SString {
-    #[proxy(store = "sarzak", object = "SString", func = "new")]
+impl String {
+    #[proxy(store = "sarzak", object = "String", func = "new")]
     fn new() -> Self;
 
-    #[proxy(store = "sarzak", object = "SString", func = "instances")]
+    #[proxy(store = "sarzak", object = "String", func = "instances")]
     fn instances() -> [Self];
 
     fn help() -> () {
@@ -1038,7 +1041,7 @@ impl SString {
     }
 
     fn info() -> () {
-        print("struct SString {\n");
+        print("struct String {\n");
         print("    id: Uuid,\n");
         print("}\n");
     }
@@ -1116,36 +1119,36 @@ impl Supertype {
 // .
 // 
 // This tells the interpreter that this struct is a proxy for an object called
-// "Ty" in the store named "sarzak"; declared above.
-#[proxy(store = "sarzak", object = "Ty")]
-struct Ty {
+// "Type" in the store named "sarzak"; declared above.
+#[proxy(store = "sarzak", object = "Type")]
+struct Type {
     id: Uuid,
     // Non-formalizing relationships
 }
 
-impl Ty {
-    #[proxy(store = "sarzak", object = "Ty", func = "new_boolean")]
+impl Type {
+    #[proxy(store = "sarzak", object = "Type", func = "new_boolean")]
     fn new_boolean() -> Self;
 
-    #[proxy(store = "sarzak", object = "Ty", func = "new_external")]
+    #[proxy(store = "sarzak", object = "Type", func = "new_external")]
     fn new_external() -> Self;
 
-    #[proxy(store = "sarzak", object = "Ty", func = "new_float")]
+    #[proxy(store = "sarzak", object = "Type", func = "new_float")]
     fn new_float() -> Self;
 
-    #[proxy(store = "sarzak", object = "Ty", func = "new_integer")]
+    #[proxy(store = "sarzak", object = "Type", func = "new_integer")]
     fn new_integer() -> Self;
 
-    #[proxy(store = "sarzak", object = "Ty", func = "new_object")]
+    #[proxy(store = "sarzak", object = "Type", func = "new_object")]
     fn new_object() -> Self;
 
-    #[proxy(store = "sarzak", object = "Ty", func = "new_s_string")]
-    fn new_s_string() -> Self;
+    #[proxy(store = "sarzak", object = "Type", func = "new_z_string")]
+    fn new_z_string() -> Self;
 
-    #[proxy(store = "sarzak", object = "Ty", func = "new_s_uuid")]
-    fn new_s_uuid() -> Self;
+    #[proxy(store = "sarzak", object = "Type", func = "new_z_uuid")]
+    fn new_z_uuid() -> Self;
 
-    #[proxy(store = "sarzak", object = "Ty", func = "instances")]
+    #[proxy(store = "sarzak", object = "Type", func = "instances")]
     fn instances() -> [Self];
 
     fn help() -> () {
@@ -1157,7 +1160,7 @@ impl Ty {
     }
 
     fn info() -> () {
-        print("struct Ty {\n");
+        print("struct Type {\n");
         print("    id: Uuid,\n");
         print("}\n");
     }
@@ -1177,18 +1180,18 @@ impl Ty {
 // ❗️{"singleton_object": true, "translation_name": "SarzakUuid"}
 // 
 // This tells the interpreter that this struct is a proxy for an object called
-// "SUuid" in the store named "sarzak"; declared above.
-#[proxy(store = "sarzak", object = "SUuid")]
-struct SUuid {
+// "Uuid" in the store named "sarzak"; declared above.
+#[proxy(store = "sarzak", object = "UUID")]
+struct Uuid {
     id: Uuid,
     // Non-formalizing relationships
 }
 
-impl SUuid {
-    #[proxy(store = "sarzak", object = "SUuid", func = "new")]
+impl Uuid {
+    #[proxy(store = "sarzak", object = "UUID", func = "new")]
     fn new() -> Self;
 
-    #[proxy(store = "sarzak", object = "SUuid", func = "instances")]
+    #[proxy(store = "sarzak", object = "UUID", func = "instances")]
     fn instances() -> [Self];
 
     fn help() -> () {
@@ -1208,7 +1211,7 @@ impl SUuid {
     }
 
     fn info() -> () {
-        print("struct SUuid {\n");
+        print("struct Uuid {\n");
         print("    id: Uuid,\n");
         print("}\n");
     }

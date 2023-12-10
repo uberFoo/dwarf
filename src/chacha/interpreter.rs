@@ -144,6 +144,8 @@ pub fn initialize_interpreter(
     e_context: ExtruderContext,
     sarzak: SarzakStore,
 ) -> Result<Context, Error> {
+    debug!("initialize_interpreter with {thread_count} threads");
+
     let mut lu_dog = s_write!(e_context.lu_dog);
 
     // Initialize the stack with stuff from the compiled source.
@@ -885,6 +887,10 @@ fn typecheck(
                 return Ok(());
             }
         }
+    }
+
+    if let ValueTypeEnum::Generic(_) = lhs_t {
+        return Ok(());
     }
 
     if lhs_t == rhs_t {
