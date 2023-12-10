@@ -1,13 +1,11 @@
-use std::{env, io::Write, path::PathBuf};
+use std::{env, io::Write};
 
 use dwarf::{
     chacha::interpreter::{initialize_interpreter, start_func},
     dwarf::{new_lu_dog, parse_dwarf},
     sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL},
 };
-use lambda_http::{
-    run, run_with_streaming_response, service_fn, Body, Error, Request, RequestExt, Response,
-};
+use lambda_http::{run, service_fn, Body, Error, Request, Response};
 use tracing::{event, Level};
 
 /// This is the main body for the function.
@@ -15,7 +13,7 @@ use tracing::{event, Level};
 /// There are some code example in the following URLs:
 /// - https://github.com/awslabs/aws-lambda-rust-runtime/tree/main/examples
 async fn function_handler(event: Request) -> Result<Response<Body>, Error> {
-    let (mut tx, rx) = hyper::Body::channel();
+    // let (tx, rx) = hyper::Body::channel();
 
     // tokio::spawn(async move {
     //     for message in messages.iter() {

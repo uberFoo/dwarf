@@ -40,7 +40,6 @@ impl flags::Plugins {
                 }
             })
             .for_each(|entry| {
-                dbg!(&entry);
                 // for entry in fs::read_dir(&current_dir)? {
                 let entry = entry.unwrap();
                 if entry.file_type().unwrap().is_dir() {

@@ -17,15 +17,15 @@ fn id<T>(x: T) -> T {
 
 // This is a generic type.
 // It takes a type T and stores a value of type T.
-struct Box<T> {
-    value: T,
-}
+ struct Box<T> {
+     value: T,
+ }
 
-impl Box<T> {
-    fn display(self) {
-        print("Box<{0}>\n".format(self.value));
-    }
-}
+ impl Box<T> {
+     fn display(self) {
+         print("Box<{0}>\n".format(self.value));
+     }
+ }
 
 fn main() {
     // Here we call the generic function with an int.
@@ -42,15 +42,24 @@ fn main() {
     z.display();
 
     // Let's box a list.
-    let α = Box(value: [1, 2, 3]);
+    let α = Box{value: [1, 2, 3]};
     print("{0}\n".format(α));
     α.display();
 }
 ```
 
+## Requirements
+
+So what does it take to make this happen in dwarf?
+Well, like everything else, there's a parser piece, an extruder piece, and an interpreter piece.
+
+### Parser
+
+### Extruder
+
+### Interpreter
 
 ## {{i: Grace}} {{i: AST}} Model
-
 
 Below is an approximation of (a part of) the model that is used to generate (a part of) the dwarf abstract syntax tree ([AST](https://en.wikipedia.org/wiki/Abstract_syntax_tree)).
 The points worth reflecting upon are that `Type` is a generalization over all of the dwarf types.

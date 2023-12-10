@@ -650,6 +650,7 @@ impl Value {
     }
 }
 
+/// NB: This is what get's spit out of dwarf print statements.
 impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
@@ -690,7 +691,20 @@ impl fmt::Display for Value {
             Self::TupleEnum(te) => write!(f, "{}", s_read!(te)),
             Self::Unknown => write!(f, "<unknown>"),
             Self::Uuid(uuid) => write!(f, "{uuid}"),
-            Self::Vector { ty, inner } => write!(f, "{ty:?}: {inner:?}"),
+            Self::Vector { ty: _, inner } => {
+                let mut first_time = true;
+                write!(f, "[")?;
+                for i in inner {
+                    if first_time {
+                        first_time = false;
+                    } else {
+                        write!(f, ", ")?;
+                    }
+
+                    write!(f, "{}", s_read!(i))?;
+                }
+                write!(f, "]")
+            }
         }
     }
 }

@@ -81,7 +81,7 @@ impl<'a> PrintableValueType<'a> {
                     "{}",
                     TY_CLR
                         .italic()
-                        .paint(format!("[{}]", PrintableValueType(true, ty, context)))
+                        .paint(format!("[@{}]", PrintableValueType(true, ty, context)))
                 )
             }
             ValueTypeEnum::XPlugin(ref plugin) => {

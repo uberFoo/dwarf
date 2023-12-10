@@ -141,8 +141,8 @@
                 }
             },
             "args": [
-                // "use.ore"
-                "tests/harness/types/generics/func.ore"
+                "use.ore"
+                // "tests/harness/types/generics/func.ore"
             ],
             "cwd": "${workspaceFolder}",
             "env": {
