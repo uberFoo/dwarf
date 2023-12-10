@@ -10,7 +10,7 @@ use async_io::Timer;
 use tracing::{debug_span, Instrument};
 
 #[cfg(feature = "async")]
-use crate::keywords::{ASLEEP, HTTP_GET, ONE_SHOT, SPAWN, SPAWN_NAMED};
+use crate::keywords::{ASLEEP, HTTP_GET, ONE_SHOT, SPAWN, SPAWN_NAMED, TIMER};
 
 use snafu::{location, prelude::*, Location};
 use uuid::Uuid;
@@ -26,7 +26,7 @@ use crate::{
     },
     keywords::{
         ADD, ARGS, ASSERT, ASSERT_EQ, CHACHA, COMPLEX_EX, EPS, EVAL, FN_NEW, FORMAT, IS_DIGIT, LEN,
-        LINES, MAP, MAX, NEW, NORM_SQUARED, PARSE, PLUGIN, SLEEP, SPLIT, SQUARE, SUM, TIME, TIMER,
+        LINES, MAP, MAX, NEW, NORM_SQUARED, PARSE, PLUGIN, SLEEP, SPLIT, SQUARE, SUM, TIME,
         TO_DIGIT, TRIM, TYPEOF, UUID_TYPE,
     },
     lu_dog::{CallEnum, Expression, ValueType, ValueTypeEnum},
@@ -433,7 +433,7 @@ pub fn eval(
 
                                 // This is where the magic happens and we turn the value
                                 // into a string.
-                                arg_values.push_back(s_read!(value).to_string());
+                                arg_values.push_back(s_read!(value).to_inner_string());
 
                                 // debug!(
                                 // "insert into arg_map `{}`: `{}`",

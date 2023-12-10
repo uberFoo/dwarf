@@ -23,7 +23,9 @@ fn main() -> () {
     chacha::assert_eq(s[len - 9], " ");
 
     // index into a string with a range.
-    print("{0}{1}\n".format(s[0..5], s[len - 3])); // Hello!
+    let jumble = "{0}{1}\n".format(s[0..5], s[len - 3]); // Hello!
+    chacha::assert_eq(jumble, "Hello!\n");
+    print(jumble);
 
     // Strings also support substitution via the `format` method.
     // The string contains {?}, where ? is a number that corresponds to a positional

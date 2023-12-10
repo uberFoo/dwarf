@@ -849,7 +849,7 @@ mod tests {
         assert!(result.is_ok());
 
         let result: String = (&*s_read!(result.unwrap())).try_into().unwrap();
-        assert_eq!(result, "you rock!");
+        assert_eq!(result, "\"you rock!\"");
 
         // let mut frame = vm.frames.pop().unwrap();
         // assert_eq!(frame.ip, 8);
