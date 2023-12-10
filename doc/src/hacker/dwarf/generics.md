@@ -1,18 +1,18 @@
 # Generic Types
 
-For those not in the know, generics are a type of polymorphism.
-They allow one to write code that works with many distinct types.
-This is facilitated by supplying a generic type in your generic code, e.g., a function or a struct.
-A concreted type is supplied at the usage site.
-During compilation, the generic type is replaced with the concrete type.
+Today we're going to talk about how generics are implemented in dwarf.
+Generics are a type of polymorphism, which is a way to have one chunk of code work with multiple types.
+In the generic code, the abstract type is specified by a single capital letter.
+When the code is compiled the abstract type is replaced with a concrete type.
+The concrete type is inferred from the call site.
 
-Here's a simple example:
+Below are examples of a generic function and a generic type, as well as a usage of each.
 
 ```dwarf
 // This is a generic function.
 // It takes a type T and returns a value of type T.
 fn id<T>(x: T) -> T {
-    x
+    x + 42
 }
 
 // This is a generic type.
@@ -30,6 +30,7 @@ fn id<T>(x: T) -> T {
 fn main() {
     // Here we call the generic function with an int.
     let x = id(42);
+    chacha::assert(x == 84);
     print("{0}\n".format(x));
 
     // And here with a float.
