@@ -305,50 +305,6 @@ impl Type {
     }
 }
 
-// impl From<(&Type, &mut LuDogStore, &SarzakStore)> for ValueType {
-//     fn from((type_, store, model): (&Type, &mut LuDogStore, &SarzakStore)) -> Self {
-//         match type_ {
-//             Type::Boolean => {
-//                 let ty = Ty::new_boolean();
-//                 ValueType::new_ty(&ty, store)
-//             }
-//             Type::Empty => ValueType::new_empty(),
-//             Type::Float => {
-//                 let ty = Ty::new_float();
-//                 ValueType::new_ty(&ty, store)
-//             }
-//             Type::Integer => {
-//                 let ty = Ty::new_integer();
-//                 ValueType::new_ty(&ty, store)
-//             }
-//             Type::Option(type_) => {
-//                 let ty = (&**type_, &store, &model).into();
-//                 let option = WoogOption::new_none(&ty, store);
-//                 ValueType::new_woog_option(&option, store)
-//             }
-//             Type::Self_(type_) => panic!("Self is deprecated."),
-//             Type::String => {
-//                 let ty = Ty::new_s_string();
-//                 ValueType::new_ty(&ty, store)
-//             }
-//             Type::UserType(type_) => {
-//                 let name = if let Token::Object(name) = &**type_ {
-//                     name
-//                 } else {
-//                     panic!("Expected UserType to be Token::Object.")
-//                 };
-//                 let obj_id = model.exhume_object_id_by_name(&name).unwrap();
-//                 let ty = model.exhume_ty(obj_id).unwrap();
-//                 ValueType::new_ty(&ty, store)
-//             }
-//             Type::Uuid => {
-//                 let ty = Ty::new_s_uuid();
-//                 ValueType::new_ty(&ty, store)
-//             }
-//         }
-//     }
-// }
-
 #[derive(Clone, Debug, PartialEq)]
 pub enum Statement {
     Empty,
