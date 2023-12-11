@@ -71,7 +71,15 @@ The {{i: interpreter}} then takes the AST and evaluates it.
 
 ### Parser
 
-Rather than go into how the parser works, which is covered in the [parser](../arch/parser.md) section of the hacker book,
+We won't discuss how the parser works, which is covered in the [parser](../arch/parser.md) section.
+Instead we'll look at the parser output.
+But first!
+
+#### Where are generics allowed?
+
+
+
+
 
 ### Extruder
 
