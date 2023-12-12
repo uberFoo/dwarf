@@ -138,7 +138,7 @@ pub enum FfiValue {
 ///
 /// ```ignore
 /// enum Foo {
-///     Foo,
+///     One,
 ///     Bar(int),
 ///     Baz { qux: string },
 /// }
@@ -149,7 +149,7 @@ pub enum EnumVariant {
     /// Unit Enumeration Field
     ///
     /// This sort of enumeration is the simplest. In `Foo`, this refers to the
-    /// field `Foo`: `Foo::Foo`. The final field in the path is stored as a
+    /// field `One`: `Foo::One`. The final field in the path is stored as a
     /// string.
     ///
     /// The tuple is: (Type, TypeName, FieldValue)
@@ -168,6 +168,16 @@ pub enum EnumVariant {
     /// The type is stored as the first element of the tuple, and the variant
     /// as the second.
     Tuple((RefType<ValueType>, String), RefType<TupleEnum>),
+}
+
+impl EnumVariant {
+    pub fn get_type(&self) -> RefType<ValueType> {
+        match self {
+            Self::Unit(ty, _, _) => ty.clone(),
+            Self::Struct(ut) => s_read!(ut).get_type().clone(),
+            Self::Tuple((ty, _), _) => ty.clone(),
+        }
+    }
 }
 
 impl PartialEq for EnumVariant {

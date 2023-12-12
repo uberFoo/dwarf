@@ -3596,8 +3596,16 @@ fn inter_implementation(
             lu_dog,
         )?;
 
-        let id = if let Some(id) = lu_dog.exhume_woog_struct_id_by_name(name) {
-            id
+        let implementation = if let Some(id) = lu_dog.exhume_woog_struct_id_by_name(name) {
+            let woog_struct = lu_dog.exhume_woog_struct(&id).unwrap();
+            ImplementationBlock::new(Some(&woog_struct), None, lu_dog)
+        } else if let Some(id) = lu_dog.exhume_enumeration_id_by_name(name) {
+            // OMG this is ugly.
+            // 🚧 Fix the model.
+            let woog_enum = lu_dog.exhume_enumeration(&id).unwrap();
+            let implementation = ImplementationBlock::new(None, None, lu_dog);
+            s_write!(woog_enum).implementation = Some(s_read!(implementation).id);
+            implementation
         } else {
             return Err(vec![DwarfError::ObjectNameNotFound {
                 name: name.to_owned(),
@@ -3607,9 +3615,6 @@ fn inter_implementation(
             }]);
         };
 
-        let woog_struct = lu_dog.exhume_woog_struct(&id).unwrap();
-
-        let implementation = ImplementationBlock::new(Some(&woog_struct), None, lu_dog);
         let _ = WoogItem::new_implementation_block(&context.source, &implementation, lu_dog);
 
         (Some(impl_ty), Some(implementation))
@@ -4249,6 +4254,14 @@ pub(crate) fn create_generic_enum(
     _enum_path: &ParserExpression,
     lu_dog: &mut LuDogStore,
 ) -> (RefType<Enumeration>, RefType<ValueType>) {
+    // Check to see if this already exists
+    if let Some(id) = lu_dog.exhume_enumeration_id_by_name(enum_name) {
+        let found_enum = lu_dog.exhume_enumeration(&id).unwrap();
+        let ty = ValueType::new_enumeration(&found_enum, lu_dog);
+
+        return (found_enum, ty);
+    }
+
     debug!("interring generic enum {enum_name}");
     let new_enum = Enumeration::new(enum_name.to_owned(), None, lu_dog);
     let ty = ValueType::new_enumeration(&new_enum, lu_dog);

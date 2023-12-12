@@ -117,7 +117,7 @@ diff = "0.1.13"
 walkdir = "2.3.3"
 
 [features]
-default = ["single-vec", "repl", "print-std-out"]
+default = ["single", "repl", "print-std-out"]
 # default = ["multi-vec", "repl", "print-std-out", "async"]
 async_executor = ["multi-vec", "repl", "print-std-out", "async"]
 
@@ -138,13 +138,17 @@ tracy = [
     "tracy-client/sampling",
     "tracy-client/code-transfer",
     "tracy-client/broadcast",
+    "dep:tracy-client",
 ]
+
 
 single = ["single-vec"]
 single-vec = ["sarzak/lu-dog-vec"]
-single-vec-tracy = ["sarzak/lu-dog-vec-tracy"]
+single-vec-tracy = ["sarzak/lu-dog-vec-tracy", "dep:tracy-client"]
 multi-vec = ["sarzak/lu-dog-rwlock-vec"]
 multi-nd-vec = ["sarzak/lu-dog-ndrwlock-vec", "dep:no_deadlocks"]
+debug = ["sarzak/lu-dog-rc"]
+
 print-std-out = []
 
 async = [
