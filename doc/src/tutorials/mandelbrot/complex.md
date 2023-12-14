@@ -5,7 +5,7 @@ One element is the real part of the number, and the other is the imaginary part.
 The real part is plotted along the x-axis, and the imaginary part is plotted along the y-axis.
 
 Addition and subtraction are defined as you would expect: perform the operation on the real and imaginary parts independently, e.g.: \\((a, m) + (b, n) = (a + b, m + n)\\).
-To multiply two complex numbers, one must refer back to multiplying two binomials: \\((a + bi)(c + di) = ac + adi + bci + bdi^2\\).
+To multiply two complex numbers, one must refer back to multiplying two binomials: \\((a + bi)(c + di) = bdi^2 + bci + adi + ac = bci + adi + ac - bd\\).
 But don't get caught up in the math — it's not on the test.
 
 ## Defining the Type
@@ -54,6 +54,8 @@ The last two lines are functions provided by the runtime {{i: ChaCha}}.
 Having a type is a good start.
 We can now create Complex numbers
 
+### Addition
+
 Addition is fairly straightforward:
 
 ```dwarf
@@ -73,6 +75,7 @@ impl Complex {
 This is an *impl* block.
 Functions that belong to the *struct* go into the *impl* block.
 
+### Squared
 
 Similarly, the square function is not too bad:
 
@@ -90,6 +93,7 @@ impl Complex {
 }
 ```
 
+### A Shortcut
 Earlier I said that you know if you are in the set if you don't go to infinity and beyond.
 We don't have that much time, and there's a shortcut.
 While we are iterating, we can just check the absolute value of the complex number.
@@ -116,6 +120,8 @@ impl Complex {
 There is something worth noting in the last function.
 We are returning a *float*, but there is no *return* statement.
 Just like in Rust, the last expression in a *block* is the the value of the block.
+
+### Zero
 
 We'll need to be able to create the Complex number "0".
 We can do that with a *{{i: static method}}*.

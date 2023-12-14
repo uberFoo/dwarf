@@ -207,7 +207,7 @@ impl<'a> PrintableValueType<'a> {
                 let list = s_read!(lu_dog).exhume_list(list).unwrap();
                 let list = s_read!(list);
                 let ty = list.r36_value_type(&s_read!(lu_dog))[0].clone();
-                write!(f, "{}", PrintableValueType(false, ty, context))
+                write!(f, "[{}]", PrintableValueType(false, ty, context))
             }
             ValueTypeEnum::XPlugin(ref plugin) => {
                 let plugin = s_read!(lu_dog).exhume_x_plugin(plugin).unwrap();

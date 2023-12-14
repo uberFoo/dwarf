@@ -18,8 +18,6 @@ There is a [book 📒](https://uberfoo.github.io/assets/docs/dwarf/introduction.
 Check it out!
 
 *Nota Bene*: This is a work in progress.
-The parser is pretty good, but not perfect, at recognizing the language.
-However, the errors that it reports aren't always useful.
 
 I appreciate feedback.
 Let me know if you love it, or hate it.
