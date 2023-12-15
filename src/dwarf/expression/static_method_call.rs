@@ -14,9 +14,10 @@ use crate::{
     dwarf::{
         error::{DwarfError, Result},
         extruder::{
-            create_generic_enum, debug, e_warn, function, inter_expression, link_argument,
+            debug, e_warn, function, inter_expression, link_argument,
             lookup_woog_struct_method_return_type, typecheck, update_span_value, Context, ExprSpan,
         },
+        items::enuum::create_generic_enum,
         DwarfInteger, Expression as ParserExpression, Type,
     },
     keywords::{
@@ -58,7 +59,7 @@ pub fn inter(
     let type_vec = path
         .iter()
         .flat_map(|p| {
-            if let Type::UserType((obj, span), _generics) = p {
+            if let (Type::UserType((obj, span), _), _) = p {
                 vec![(obj.to_owned(), span)]
             } else {
                 panic!(
@@ -342,7 +343,7 @@ pub fn inter(
                         let foo = s_read!(ty);
                         if let ValueTypeEnum::Generic(_) = foo.subtype {
                             let type_name = path.iter().map(|p| {
-                                if let Type::UserType((obj, _), generics) = p {
+                                if let Type::UserType((obj, _), generics) = &p.0 {
                                     let mut name = obj.to_owned();
                                     let generics = generics.iter().map(|g| {
                                         g.0.to_string()

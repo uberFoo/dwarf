@@ -7,13 +7,14 @@ use crate::{
     dwarf::{
         error::Result,
         extruder::{debug, function, make_value_type, Context},
-        AttributeMap, EnumField, Spanned, Type,
+        AttributeMap, EnumField, Expression as ParserExpression, Spanned, Type,
     },
     lu_dog::{
-        store::ObjectStore as LuDogStore, EnumField as LuDogEnumField, Enumeration, Field, Generic,
-        Span as LuDogSpan, StructField, TupleField, Unit, ValueType, WoogStruct,
+        store::ObjectStore as LuDogStore, EnumField as LuDogEnumField, EnumFieldEnum, EnumGeneric,
+        Enumeration, Field, Generic, Span as LuDogSpan, StructField, TupleField, Unit, ValueType,
+        WoogStruct,
     },
-    s_read, s_write, Dirty, DwarfInteger,
+    s_read, s_write, Dirty, DwarfInteger, RefType,
 };
 
 macro_rules! link_generic {
@@ -21,6 +22,19 @@ macro_rules! link_generic {
         let next = s_read!($next);
         if let Some(last) = $last {
             let last = $store.exhume_generic(&last).unwrap().clone();
+            let mut last = s_write!(last);
+            last.next = Some(next.id);
+        }
+
+        Some(next.id)
+    }};
+}
+
+macro_rules! link_enum_generic {
+    ($last:expr, $next:expr, $store:expr) => {{
+        let next = s_read!($next);
+        if let Some(last) = $last {
+            let last = $store.exhume_enum_generic(&last).unwrap().clone();
             let mut last = s_write!(last);
             last.next = Some(next.id);
         }
@@ -39,9 +53,25 @@ pub fn inter_enum(
 ) -> Result<()> {
     debug!("inter_enum {name}");
 
-    let woog_enum = Enumeration::new(name.to_owned(), None, lu_dog);
+    let woog_enum = Enumeration::new(name.to_owned(), None, None, lu_dog);
     context.dirty.push(Dirty::Enum(woog_enum.clone()));
     let _ = ValueType::new_enumeration(&woog_enum, lu_dog);
+
+    let mut first = true;
+    let mut first_generic = None;
+    let mut last_generic_uuid: Option<usize> = None;
+    if let Some(generics) = enum_generics {
+        for generic in generics.keys() {
+            let generic = EnumGeneric::new(generic.to_owned(), &woog_enum, None, lu_dog);
+            if first {
+                first = false;
+                first_generic = Some(s_read!(generic).id);
+            }
+            last_generic_uuid = link_enum_generic!(last_generic_uuid, generic, lu_dog);
+        }
+
+        s_write!(woog_enum).first_generic = first_generic;
+    }
 
     for (number, ((field_name, span), field)) in variants.iter().enumerate() {
         match field {
@@ -178,4 +208,83 @@ pub fn inter_enum(
     }
 
     Ok(())
+}
+
+// Note that the name is expected to contain the generic component.
+pub(crate) fn create_generic_enum(
+    enum_name: &str,
+    enum_path: &ParserExpression,
+    lu_dog: &mut LuDogStore,
+) -> (RefType<Enumeration>, RefType<ValueType>) {
+    // Check to see if this already exists
+    if let Some(id) = lu_dog.exhume_enumeration_id_by_name(enum_name) {
+        let found_enum = lu_dog.exhume_enumeration(&id).unwrap();
+        let ty = ValueType::new_enumeration(&found_enum, lu_dog);
+
+        return (found_enum, ty);
+    }
+
+    let base_enum_impl = if let ParserExpression::PathInExpression(path) = enum_path {
+        if let Type::UserType(enum_name, _) = &path[0].0 {
+            let id = lu_dog.exhume_enumeration_id_by_name(&enum_name.0).unwrap();
+            let base_enum = lu_dog.exhume_enumeration(&id).unwrap();
+            let impl_block_vec = s_read!(base_enum).r84_implementation_block(lu_dog);
+            if !impl_block_vec.is_empty() {
+                Some(impl_block_vec[0].clone())
+            } else {
+                None
+            }
+        } else {
+            unreachable!();
+        }
+    } else {
+        unreachable!();
+    };
+
+    debug!("interring generic enum {enum_name}");
+    dbg!(&enum_path);
+    let new_enum = Enumeration::new(enum_name.to_owned(), None, base_enum_impl.as_ref(), lu_dog);
+    let ty = ValueType::new_enumeration(&new_enum, lu_dog);
+
+    let name_without_generics = enum_name.split('<').collect::<Vec<_>>()[0];
+
+    debug!("name_without_generics {:?}", name_without_generics);
+    let id = lu_dog
+        .exhume_enumeration_id_by_name(name_without_generics)
+        .unwrap();
+    let woog_enum = lu_dog.exhume_enumeration(&id).unwrap();
+    for field in s_read!(woog_enum).r88_enum_field(lu_dog) {
+        let field = s_read!(field);
+        match field.subtype {
+            EnumFieldEnum::Unit(ref id) => {
+                let orig = lu_dog.exhume_unit(id).unwrap();
+                let new = Unit::new(s_read!(orig).x_value, lu_dog);
+                let _ = LuDogEnumField::new_unit(field.name.to_owned(), &new_enum, &new, lu_dog);
+            }
+            EnumFieldEnum::StructField(ref id) => {
+                let orig = lu_dog.exhume_struct_field(id).unwrap();
+                let new = StructField::new(s_read!(orig).name.to_owned(), lu_dog);
+                let _ = LuDogEnumField::new_struct_field(
+                    field.name.to_owned(),
+                    &new_enum,
+                    &new,
+                    lu_dog,
+                );
+            }
+            EnumFieldEnum::TupleField(ref id) => {
+                // Note that we are borrowing whatever expression may exist on
+                // the original, non-generic tuple field.
+                let orig = lu_dog.exhume_tuple_field(id).unwrap();
+                let new = TupleField::new(
+                    Uuid::new_v4(),
+                    &s_read!(orig).r86_value_type(lu_dog)[0],
+                    lu_dog,
+                );
+                let _ =
+                    LuDogEnumField::new_tuple_field(field.name.to_owned(), &new_enum, &new, lu_dog);
+            }
+        }
+    }
+
+    (new_enum, ty)
 }

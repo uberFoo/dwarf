@@ -222,12 +222,13 @@ pub fn eval(
                         } else {
                             unreachable!();
                         };
+                        #[allow(clippy::let_and_return)]
                         x
                     };
 
                     let woog_enum = s_read!(lu_dog).exhume_enumeration(&woog_enum).unwrap();
                     let woog_enum = s_read!(woog_enum);
-                    dbg!(&woog_enum);
+
                     let impl_ = &woog_enum.r84_implementation_block(&s_read!(lu_dog))[0];
                     let x = if let Some(func) = s_read!(impl_)
                         .r9_function(&s_read!(lu_dog))

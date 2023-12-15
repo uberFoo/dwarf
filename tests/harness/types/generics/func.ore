@@ -1,11 +1,15 @@
-fn id<T>(x: T) -> T {
+fn idempotent<T>(x: T) -> T {
     x
 }
 
 fn main() {
-    // Here we call the generic function with an int.
-    // let x = id::<int>(42);
-    let x = id(42);
-    print("hello {0}\n".format(x));
-    chacha::assert(x == 42);
+    // Here we call the generic function with a string.
+    let i = idempotent::<string>("world");
+    let j = "hello {0}".format(i);
+    print(j);
+    chacha::assert(j == "hello world");
+
+    let i = idempotent::<int>(42);
+    print(i);
+    chacha::assert(i == 42);
 }

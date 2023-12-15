@@ -10,8 +10,8 @@ Below are examples of a generic function and a generic type, as well as a usage 
 
 ```dwarf
 // This is a generic function.
-// It takes a type T and returns a value of type T.
-fn id<T>(x: T) -> T {
+// It takes a type T and returns a value of type T + 42.
+fn plus_42<T>(x: T) -> T {
     x + 42
 }
 
@@ -29,30 +29,25 @@ fn id<T>(x: T) -> T {
 
 fn main() {
     // Here we call the generic function with an int.
-    let x = id(54);
+    let x = plus_42(0);
     print("{0}\n".format(x));
-    chacha::assert(x == 96);
 
     // And here with a float.
-    let y = id("Hello World, the answer is ");
+    let y = plus_42("Hello World, the answer is ");
     print("{0}\n".format(y));
-    chacha::assert(y == "Hello World, the answer is 42");
 
     // Here we create a Box that stores a float.
     let z = Box{ value: 0.42 };
     z.display();
-    chacha::assert(chacha::typeof(z.value) == "float");
 
     // Let's box a list now.
     let α = Box{ value: [1, 2, 3] };
     α.display();
-    chacha::assert(chacha::typeof(α.value) == "[int]");
 
     // Let's try something interesting...
-    let β = Box{ value: id("") };
+    let β = Box{ value: plus_42("") };
     β.display();
-    chacha::assert(chacha::typeof(β.value) == "string");
-    chacha::assert(β.value == "42");
+    print(β);
 }
 ```
 

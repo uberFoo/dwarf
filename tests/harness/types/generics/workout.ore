@@ -1,5 +1,5 @@
 // This is a generic function.
-// It takes a type T and returns a value of type T.
+// It takes a type T and returns a value of type T + 42.
 fn id<T>(x: T) -> T {
     x + 42
 }
@@ -18,12 +18,12 @@ fn id<T>(x: T) -> T {
 
 fn main() {
     // Here we call the generic function with an int.
-    let x = id(54);
+    let x = id::<int>(54);
     print("{0}\n".format(x));
     chacha::assert(x == 96);
 
     // And here with a float.
-    let y = id("Hello World, the answer is ");
+    let y = id::<string>("Hello World, the answer is ");
     print("{0}\n".format(y));
     chacha::assert(y == "Hello World, the answer is 42");
 
@@ -38,7 +38,7 @@ fn main() {
     chacha::assert(chacha::typeof(α.value) == "[int]");
 
     // Let's try something interesting...
-    let β = Box{ value: id("") };
+    let β = Box{ value: id::<string>("") };
     β.display();
     chacha::assert(chacha::typeof(β.value) == "string");
     chacha::assert(β.value == "42");

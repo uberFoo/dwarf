@@ -108,7 +108,6 @@ impl fmt::Display for Token {
             Self::Float(num) => write!(f, "{}", num),
             Self::Fn => write!(f, "fn"),
             Self::For => write!(f, "for"),
-            // Self::Global => write!(f, "global"),
             Self::Ident(ident) => write!(f, "{}", ident),
             Self::If => write!(f, "if"),
             Self::Impl => write!(f, "impl"),
@@ -354,11 +353,15 @@ impl From<Pattern> for Expression {
             // Here we turn a path into a unit enum, which is really just a static
             // method call with storage.
             Pattern::PathPattern((path, span)) => {
-                let mut path = path.to_owned();
+                let mut path = path
+                    .iter()
+                    .cloned()
+                    .map(|ty| (ty, None))
+                    .collect::<Vec<_>>();
                 let field = path.pop().unwrap();
                 // 🚧 I'm not sure how this would play with generics. I don't
                 // think that it's allowed.
-                let field = if let Type::UserType(field, _generics) = field {
+                let field = if let Type::UserType(field, _generics) = field.0 {
                     field
                 } else {
                     unreachable!();
@@ -370,15 +373,21 @@ impl From<Pattern> for Expression {
                 )
             }
             Pattern::TupleStruct(path, (fields, _fields_span)) => {
+                // Who doesn't love a little recursion?
                 let path = if let Pattern::PathPattern(path) = *path.to_owned() {
                     path
                 } else {
                     unreachable!()
                 };
 
-                let (mut path, _span) = path;
+                let mut path = path
+                    .0
+                    .iter()
+                    .cloned()
+                    .map(|ty| (ty, None))
+                    .collect::<Vec<_>>();
                 let name = path.pop().unwrap();
-                let name = if let Type::UserType(name, _generics) = name {
+                let name = if let Type::UserType(name, _generics) = name.0 {
                     name
                 } else {
                     unreachable!();
@@ -478,7 +487,7 @@ pub enum Expression {
     Or(Box<Spanned<Self>>, Box<Spanned<Self>>),
     UnitEnum(Box<Spanned<Self>>, Spanned<String>),
     Print(Box<Spanned<Self>>),
-    PathInExpression(Vec<Type>),
+    PathInExpression(Vec<(Type, Option<Generics>)>),
     Range(Box<Spanned<Self>>, Box<Spanned<Self>>),
     Return(Option<Box<Spanned<Self>>>),
     Some(Box<Spanned<Self>>),
