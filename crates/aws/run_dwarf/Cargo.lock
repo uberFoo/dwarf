@@ -901,7 +901,7 @@ checksum = "fea41bba32d969b513997752735605054bc0dfa92b4c56bf1189f2e174be7a10"
 
 [[package]]
 name = "dwarf"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "abi_stable",
  "ansi-to-tui",
@@ -2554,7 +2554,7 @@ dependencies = [
 
 [[package]]
 name = "sarzak"
-version = "2.11.2"
+version = "2.12.0"
 dependencies = [
  "ansi_term",
  "async-std",
