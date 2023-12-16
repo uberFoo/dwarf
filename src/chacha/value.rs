@@ -138,7 +138,7 @@ pub enum FfiValue {
 ///
 /// ```ignore
 /// enum Foo {
-///     Foo,
+///     One,
 ///     Bar(int),
 ///     Baz { qux: string },
 /// }
@@ -149,7 +149,7 @@ pub enum EnumVariant {
     /// Unit Enumeration Field
     ///
     /// This sort of enumeration is the simplest. In `Foo`, this refers to the
-    /// field `Foo`: `Foo::Foo`. The final field in the path is stored as a
+    /// field `One`: `Foo::One`. The final field in the path is stored as a
     /// string.
     ///
     /// The tuple is: (Type, TypeName, FieldValue)
@@ -168,6 +168,16 @@ pub enum EnumVariant {
     /// The type is stored as the first element of the tuple, and the variant
     /// as the second.
     Tuple((RefType<ValueType>, String), RefType<TupleEnum>),
+}
+
+impl EnumVariant {
+    pub fn get_type(&self) -> RefType<ValueType> {
+        match self {
+            Self::Unit(ty, _, _) => ty.clone(),
+            Self::Struct(ut) => s_read!(ut).get_type().clone(),
+            Self::Tuple((ty, _), _) => ty.clone(),
+        }
+    }
 }
 
 impl PartialEq for EnumVariant {
@@ -453,14 +463,16 @@ impl Value {
                 unreachable!()
             }
             Value::Vector { ty, inner: _ } => {
-                let ty = match &s_read!(ty).subtype {
-                    ValueTypeEnum::XFuture(id) => {
-                        let ty = lu_dog.exhume_x_future(id).unwrap();
-                        let ty = s_read!(ty);
-                        ty.r2_value_type(lu_dog)[0].clone()
-                    }
-                    _ => ty.clone(),
-                };
+                // 🚧 This code was here and I don't know why. I think it must
+                // have been a copy/paste error. I commented it out on 12/11/2023.
+                // let ty = match &s_read!(ty).subtype {
+                //     ValueTypeEnum::XFuture(id) => {
+                //         let ty = lu_dog.exhume_x_future(id).unwrap();
+                //         let ty = s_read!(ty);
+                //         ty.r2_value_type(lu_dog)[0].clone()
+                //     }
+                //     _ => ty.clone(),
+                // };
                 for vt in lu_dog.iter_value_type() {
                     if let ValueTypeEnum::List(id) = s_read!(vt).subtype {
                         let list = lu_dog.exhume_list(&id).unwrap();
@@ -1142,7 +1154,9 @@ impl std::ops::Add for Value {
             (Value::String(a), Value::Float(b)) => Value::String(a.to_owned() + &b.to_string()),
             (Value::Integer(a), Value::Integer(b)) => Value::Integer(a + b),
             // (Value::Integer(a), Value::String(b)) => Value::String(a.to_string() + &b),
-            // (Value::String(a), Value::Integer(b)) => Value::String(a + &b.to_string()),
+            (Value::String(a), Value::Integer(b)) => {
+                Value::String(a.to_owned() + b.to_string().as_str())
+            }
             (Value::String(a), Value::String(b)) => Value::String(a.to_owned() + b),
             (Value::Char(a), Value::Char(b)) => Value::String(a.to_string() + &b.to_string()),
             (Value::Char(a), Value::String(b)) => Value::String(a.to_string() + &b),

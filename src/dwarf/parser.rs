@@ -1966,10 +1966,11 @@ impl DwarfParser {
         };
 
         // This is an ugly hack. I don't even imagine the alternative.
-        // We just can't be returning a PathInExpression an an Expression.
+        // We just can't be returning a PathInExpression as an Expression.
+        // 🚧 Maybe someday remember why and write it down.
         let lhs = if let Some(((DwarfExpression::PathInExpression(mut path), span), _)) = lhs {
             let method_name = path.pop().unwrap();
-            let field_name = if let Type::UserType(name, _generics) = method_name {
+            let field_name = if let Type::UserType(name, _generics) = method_name.0 {
                 name
             } else {
                 unreachable!()
@@ -2481,11 +2482,13 @@ impl DwarfParser {
 
         let start = name.0 .1.start;
 
-        let name = if let name @ (DwarfExpression::LocalVariable(..), _) = &name.0 {
-            name.clone()
-        } else {
-            debug!("exit not a local variable");
-            return Ok(None);
+        let name = match &name.0 {
+            name @ (DwarfExpression::LocalVariable(..), _) => name.clone(),
+            name @ (DwarfExpression::PathInExpression(path), _) if path.len() == 1 => name.clone(),
+            _ => {
+                debug!("exit not a local variable");
+                return Ok(None);
+            }
         };
 
         if self.match_tokens(&[Token::Punct('(')]).is_none() {
@@ -3118,7 +3121,10 @@ impl DwarfParser {
         }
 
         let mut path = if let (DwarfExpression::LocalVariable(name), span) = &path.0 {
-            vec![Type::UserType((name.to_owned(), span.to_owned()), vec![])]
+            vec![(
+                Type::UserType((name.to_owned(), span.to_owned()), vec![]),
+                None,
+            )]
         } else if let (DwarfExpression::PathInExpression(path), _) = &path.0 {
             path.to_owned()
         } else {
@@ -3133,8 +3139,9 @@ impl DwarfParser {
 
         if let Some(ident) = self.parse_ident() {
             if let Some(g) = self.parse_generics()? {
-                let new_type = Type::UserType(ident, g.0);
-                path.push(new_type);
+                // 🚧 kts.generic
+                let new_type = Type::UserType(ident, g.0.clone());
+                path.push((new_type, Some(g)));
 
                 debug!("exit ok");
 
@@ -3146,7 +3153,7 @@ impl DwarfParser {
                     PATH,
                 )))
             } else {
-                path.push(Type::UserType(ident, vec![]));
+                path.push((Type::UserType(ident, vec![]), None));
 
                 debug!("exit ok");
 
@@ -3160,7 +3167,11 @@ impl DwarfParser {
             }
         } else if let Some(g) = self.parse_generics()? {
             let mut last_type = path.pop().unwrap();
-            if let Type::UserType((_, _), ref mut generics) = &mut last_type {
+            if let (Type::UserType((_, _), ref mut generics), ref mut path_generics) =
+                &mut last_type
+            {
+                // 🚧 kts.generic
+                *path_generics = Some(g.clone());
                 *generics = g.0;
             } else {
                 unreachable!()
@@ -3223,7 +3234,7 @@ impl DwarfParser {
         };
 
         let method_name = path.pop().unwrap();
-        let method_name = if let Type::UserType(name, _generics) = method_name {
+        let method_name = if let (Type::UserType(name, _), _) = method_name {
             name
         } else {
             unreachable!()
@@ -3413,7 +3424,7 @@ impl DwarfParser {
         };
 
         let method_name = path.pop().unwrap();
-        let field_name = if let Type::UserType(name, _generics) = method_name {
+        let field_name = if let Type::UserType(name, _generics) = method_name.0 {
             name
         } else {
             unreachable!()

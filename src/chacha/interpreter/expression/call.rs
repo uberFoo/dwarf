@@ -78,6 +78,7 @@ pub fn eval(
             // to determine what to do with the RHS.
             let read_value = s_read!(value);
             match &*read_value {
+                Value::Enumeration(_) => Ok(value.clone()),
                 Value::Function(ref func) => {
                     let func = s_read!(lu_dog).exhume_function(&s_read!(func).id).unwrap();
                     debug!("ExpressionEnum::Call func: {func:?}");
@@ -212,6 +213,54 @@ pub fn eval(
                         });
                     }
                 },
+                Value::Enumeration(variant) => {
+                    // Below is all wrapped up to avoid a double borrow.
+                    let woog_enum = {
+                        let ty = variant.get_type();
+                        let x = if let ValueTypeEnum::Enumeration(woog_enum) = s_read!(ty).subtype {
+                            woog_enum
+                        } else {
+                            unreachable!();
+                        };
+                        #[allow(clippy::let_and_return)]
+                        x
+                    };
+
+                    let woog_enum = s_read!(lu_dog).exhume_enumeration(&woog_enum).unwrap();
+                    let woog_enum = s_read!(woog_enum);
+
+                    let impl_ = &woog_enum.r84_implementation_block(&s_read!(lu_dog))[0];
+                    let x = if let Some(func) = s_read!(impl_)
+                        .r9_function(&s_read!(lu_dog))
+                        .iter()
+                        .find(|f| s_read!(f).name == *meth_name)
+                    {
+                        let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
+                        let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
+
+                        eval_function_call(
+                            (*func).clone(),
+                            &args,
+                            first_arg,
+                            arg_check,
+                            span,
+                            context,
+                            vm,
+                        )
+                    } else {
+                        let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
+                        let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
+                        let read = s_read!(span);
+                        let span = read.start as usize..read.end as usize;
+
+                        return Err(ChaChaError::NoSuchMethod {
+                            method: meth_name.to_owned(),
+                            span,
+                            location: location!(),
+                        });
+                    };
+                    x
+                }
                 Value::Integer(i) => match meth_name.as_str() {
                     MAX => {
                         let other = args.pop().unwrap();

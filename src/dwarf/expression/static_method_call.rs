@@ -14,9 +14,10 @@ use crate::{
     dwarf::{
         error::{DwarfError, Result},
         extruder::{
-            create_generic_enum, debug, e_warn, function, inter_expression, link_argument,
+            debug, e_warn, function, inter_expression, link_argument,
             lookup_woog_struct_method_return_type, typecheck, update_span_value, Context, ExprSpan,
         },
+        items::enuum::create_generic_enum,
         DwarfInteger, Expression as ParserExpression, Type,
     },
     keywords::{
@@ -58,7 +59,7 @@ pub fn inter(
     let type_vec = path
         .iter()
         .flat_map(|p| {
-            if let Type::UserType((obj, span), _generics) = p {
+            if let (Type::UserType((obj, span), _), _) = p {
                 vec![(obj.to_owned(), span)]
             } else {
                 panic!(
@@ -302,10 +303,7 @@ pub fn inter(
             });
 
             if let Some(field) = field {
-                let subtype = {
-                    let x = &s_read!(field).subtype;
-                    x.clone()
-                };
+                let subtype = &s_read!(field).subtype.clone();
                 let (woog_enum, expr) = match subtype {
                     EnumFieldEnum::TupleField(ref id) => {
                         let tuple_field = lu_dog.exhume_tuple_field(id).unwrap();
@@ -313,18 +311,14 @@ pub fn inter(
                         let span = &s_read!(ty).r62_span(lu_dog)[0];
                         let span = s_read!(span).start as usize..s_read!(span).end as usize;
 
-                        // We only allow a single one. Stupid restriction. Wait for tuples.
                         // For each tuple element we will create a local variable
                         // in the block scope.
+                        // We only allow a single one. Stupid restriction. Wait for tuples.
                         let param = &params[0];
                         if let ParserExpression::LocalVariable(name) = &param.0 {
                             let local = LocalVariable::new(Uuid::new_v4(), lu_dog);
                             let var = Variable::new_local_variable(name.to_owned(), &local, lu_dog);
                             let value = XValue::new_variable(block, &ty, &var, lu_dog);
-                            // let name = name.to_owned();
-                            // let expr = VariableExpression::new(name, lu_dog);
-                            // let expr = Expression::new_variable_expression(&expr, lu_dog);
-                            // let value = XValue::new_expression(block, &ty, &expr, lu_dog);
                             Span::new(
                                 param.1.end as i64,
                                 param.1.start as i64,
@@ -349,7 +343,7 @@ pub fn inter(
                         let foo = s_read!(ty);
                         if let ValueTypeEnum::Generic(_) = foo.subtype {
                             let type_name = path.iter().map(|p| {
-                                if let Type::UserType((obj, _), generics) = p {
+                                if let Type::UserType((obj, _), generics) = &p.0 {
                                     let mut name = obj.to_owned();
                                     let generics = generics.iter().map(|g| {
                                         g.0.to_string()

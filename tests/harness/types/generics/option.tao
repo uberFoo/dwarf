@@ -3,6 +3,22 @@ enum Option<T> {
     None,
 }
 
+impl Option<U> {
+    fn is_some(self) -> bool {
+        match self {
+            Option::Some(_) => true,
+            Option::None => false,
+        }
+    }
+
+    fn is_none(self) -> bool {
+        match self {
+            Option::Some(_) => false,
+            Option::None => true,
+        }
+    }
+}
+
 enum Simple {
     Foo,
     Bar,
@@ -11,14 +27,11 @@ enum Simple {
 
 fn main() {
     let a = Option::Some(42);
-    // let a = Option::<int>::Some(42);
-    // let b = Option::<int>::None;
-    // let b: Option<int> = None;
-    // let b: Option<int> = Option::<int>::None;
     let b: Option<int> = Option::None;
     let c = Option::Some("Hello world!");
     let d = Option::Some(69);
-    let e = Option::<string>::None;
+    // let e = Option::<string>::None;
+    let e: Option<string> = Option::None;
 
     let control = Simple::Baz;
 
@@ -27,6 +40,7 @@ fn main() {
     print("c = {0}\n".format(c));
     print("d = {0}\n".format(d));
     print("e = {0}\n".format(e));
+
     print("control = {0}\n".format(control));
 
     chacha::assert_eq(a, Option::Some(42));
@@ -34,7 +48,17 @@ fn main() {
     chacha::assert_eq(c, Option::Some("Hello world!"));
     chacha::assert_eq(d, Option::Some(69));
     chacha::assert_eq(e, Option::<string>::None);
+
     chacha::assert_eq(control, Simple::Baz);
 
-    // chacha::assert_eq(b != e);
+    chacha::assert_eq(a.is_some(), true);
+    chacha::assert_eq(a.is_none(), false);
+    chacha::assert_eq(b.is_some(), false);
+    chacha::assert_eq(b.is_none(), true);
+    chacha::assert_eq(c.is_some(), true);
+    chacha::assert_eq(c.is_none(), false);
+    chacha::assert_eq(d.is_some(), true);
+    chacha::assert_eq(d.is_none(), false);
+    chacha::assert_eq(e.is_some(), false);
+    chacha::assert_eq(e.is_none(), true);
 }

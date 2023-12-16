@@ -1,0 +1,13 @@
+enum Foo<U, V> {
+    Bar(U),
+    Baz(V),
+}
+
+fn main() {
+    let x = Foo::Bar(1);
+    let y = Foo::Baz(2);
+    print(x);
+    print(y);
+    print(chacha::typeof(x));
+    print(chacha::typeof(y))
+}

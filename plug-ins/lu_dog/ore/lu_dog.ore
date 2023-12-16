@@ -80,6 +80,11 @@ impl LuDogStore {
     #[proxy(store = "lu_dog", object = "ObjectStore", func = "exhume_enum_field")]
     fn exhume_enum_field(self, enum_field: Uuid) -> EnumField;
 
+    #[proxy(store = "lu_dog", object = "ObjectStore", func = "inter_enum_generic")]
+    fn inter_enum_generic(self, enum_generic: EnumGeneric);
+    #[proxy(store = "lu_dog", object = "ObjectStore", func = "exhume_enum_generic")]
+    fn exhume_enum_generic(self, enum_generic: Uuid) -> EnumGeneric;
+
     #[proxy(store = "lu_dog", object = "ObjectStore", func = "inter_enumeration")]
     fn inter_enumeration(self, enumeration: Enumeration);
     #[proxy(store = "lu_dog", object = "ObjectStore", func = "exhume_enumeration")]
@@ -1118,6 +1123,37 @@ impl EnumField {
     }
 }
 
+// This tells the interpreter that this struct is a proxy for an object called
+// "EnumGeneric" in the store named "lu_dog"; declared above.
+#[proxy(store = "lu_dog", object = "Enum Generic")]
+struct EnumGeneric {
+    id: Uuid,
+    name: string,
+    woog_enum: Enumeration,
+    next: Option<EnumGeneric>,
+    // Non-formalizing relationships
+}
+
+impl EnumGeneric {
+    #[proxy(store = "lu_dog", object = "Enum Generic", func = "new")]
+    fn new(name: string, woog_enum: Enumeration, next: Option<EnumGeneric>) -> Self;
+
+    #[proxy(store = "lu_dog", object = "Enum Generic", func = "instances")]
+    fn instances() -> [Self];
+
+    fn help() -> () {
+    }
+
+    fn info() -> () {
+        print("struct EnumGeneric {\n");
+        print("    id: Uuid,\n");
+        print("    name: string,\n");
+        print("    woog_enum: Enumeration,\n");
+        print("    next: Option<EnumGeneric>,\n");
+        print("}\n");
+    }
+}
+
 // An Enumeration
 // 
 // An enumeration is an algebraic type that takes on one if it’s fielsd, another type. as
@@ -1129,13 +1165,14 @@ impl EnumField {
 struct Enumeration {
     id: Uuid,
     name: string,
+    first_generic: Option<EnumGeneric>,
     implementation: Option<ImplementationBlock>,
     // Non-formalizing relationships
 }
 
 impl Enumeration {
     #[proxy(store = "lu_dog", object = "Enumeration", func = "new")]
-    fn new(name: string, implementation: Option<ImplementationBlock>) -> Self;
+    fn new(name: string, first_generic: Option<EnumGeneric>, implementation: Option<ImplementationBlock>) -> Self;
 
     #[proxy(store = "lu_dog", object = "Enumeration", func = "instances")]
     fn instances() -> [Self];
@@ -1152,6 +1189,7 @@ impl Enumeration {
         print("struct Enumeration {\n");
         print("    id: Uuid,\n");
         print("    name: string,\n");
+        print("    first_generic: Option<EnumGeneric>,\n");
         print("    implementation: Option<ImplementationBlock>,\n");
         print("}\n");
     }

@@ -115,11 +115,8 @@ pub fn inter_func(
     let type_str = return_type.0.to_string();
     let ret_span = &return_type.1;
     let ret_ty = if let Some(generics) = generics {
-        if let Some(defn_ty) = generics.get(&type_str) {
-            context.location = location!();
-            let inner_ty = make_value_type(defn_ty, ret_span, None, context, lu_dog)?;
-
-            let g = Generic::new(type_str, None, Some(&inner_ty), lu_dog);
+        if generics.get(&type_str).is_some() {
+            let g = Generic::new(type_str, None, None, lu_dog);
             let ty = ValueType::new_generic(&g, lu_dog);
             LuDogSpan::new(
                 ret_span.end as i64,
@@ -202,25 +199,8 @@ pub fn inter_func(
         //
         let type_str = param_ty.to_string();
         let param_ty = if let Some(generics) = generics {
-            if let Some(defn_ty) = generics.get(&type_str) {
-                context.location = location!();
-                let inner_ty = match make_value_type(defn_ty, ty_span, impl_ty, context, lu_dog) {
-                    Ok(ty) => ty,
-                    Err(mut e) => {
-                        errors.append(&mut e);
-                        continue;
-                    }
-                };
-                LuDogSpan::new(
-                    ty_span.end as i64,
-                    ty_span.start as i64,
-                    &context.source,
-                    Some(&inner_ty),
-                    None,
-                    lu_dog,
-                );
-
-                let g = Generic::new(type_str, None, Some(&inner_ty), lu_dog);
+            if generics.get(&type_str).is_some() {
+                let g = Generic::new(type_str, None, None, lu_dog);
                 ValueType::new_generic(&g, lu_dog)
             } else {
                 context.location = location!();
@@ -332,11 +312,8 @@ pub fn parse_func_signature(
     let type_str = return_type.0.to_string();
     let span = &return_type.1;
     let ret_ty = if let Some(generics) = generics {
-        if let Some(defn_ty) = generics.get(&type_str) {
-            context.location = location!();
-            let inner_ty = make_value_type(defn_ty, span, None, context, lu_dog)?;
-
-            let g = Generic::new(type_str, None, Some(&inner_ty), lu_dog);
+        if generics.get(&type_str).is_some() {
+            let g = Generic::new(type_str, None, None, lu_dog);
             let ty = ValueType::new_generic(&g, lu_dog);
             LuDogSpan::new(
                 span.end as i64,
@@ -362,20 +339,8 @@ pub fn parse_func_signature(
         let type_str = param_ty.to_string();
         let span = ty_span;
         let param_ty = if let Some(generics) = generics {
-            if let Some(defn_ty) = generics.get(&type_str) {
-                context.location = location!();
-                let inner_ty = make_value_type(defn_ty, span, None, context, lu_dog)?;
-
-                LuDogSpan::new(
-                    span.end as i64,
-                    span.start as i64,
-                    &context.source,
-                    Some(&inner_ty),
-                    None,
-                    lu_dog,
-                );
-
-                let g = Generic::new(type_str, None, Some(&inner_ty), lu_dog);
+            if generics.get(&type_str).is_some() {
+                let g = Generic::new(type_str, None, None, lu_dog);
                 ValueType::new_generic(&g, lu_dog)
             } else {
                 context.location = location!();
