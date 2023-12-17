@@ -2,7 +2,8 @@
 use tracing::{debug_span, Instrument};
 
 use crate::{
-    chacha::{error::Result, vm::VM},
+    bubba::VM,
+    chacha::error::Result,
     interpreter::{eval_statement, Context},
     lu_dog::Block,
     new_ref, s_read, NewRef, RefType, SarzakStorePtr, Value,

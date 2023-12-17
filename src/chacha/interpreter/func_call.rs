@@ -14,10 +14,10 @@ use tracy_client::span;
 use tracing::{debug_span, Instrument};
 
 use crate::{
+    bubba::VM,
     chacha::{
         error::{Result, WrongNumberOfArgumentsSnafu},
         value::FfiValue,
-        vm::VM,
     },
     interpreter::{
         debug, error, eval_expression, eval_statement, function, trace, typecheck, ChaChaError,
@@ -68,8 +68,10 @@ pub fn eval_function_call(
     if s_read!(body).a_sink {
         #[cfg(not(feature = "async"))]
         {
-            // compile_error!("The async feature flag is required for async functions.");
-            Ok(new_ref!(Value, Value::Empty))
+            Ok(new_ref!(
+                Value,
+                Value::Error(Box::new(ChaChaError::AsyncNotSupported))
+            ))
         }
         #[cfg(feature = "async")]
         {

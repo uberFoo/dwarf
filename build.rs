@@ -1,4 +1,4 @@
-use std::{env, fs, path::Path};
+use std::{env, fs, io::Write, path::Path};
 
 use walkdir::WalkDir;
 
@@ -6,6 +6,15 @@ const EXT1: &str = "tao";
 const EXT2: &str = "ore";
 
 fn main() {
+    // Create a timestamp file
+    let out_dir = env::var("OUT_DIR").unwrap();
+    let dest_path = Path::new(&out_dir).join("timestamp.txt");
+
+    let mut f = fs::File::create(dest_path).unwrap();
+    // write!(f, r#""{}""#, time::OffsetDateTime::now_utc()).unwrap();
+    write!(f, r#""{}""#, chrono::Utc::now().to_rfc3339()).unwrap();
+
+    // Generate the tests
     let mut tests = String::new();
     let mut in_dir = std::env::current_dir().unwrap();
     in_dir.push("tests");

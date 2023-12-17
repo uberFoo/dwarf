@@ -6,7 +6,8 @@ use rustc_hash::FxHashMap as HashMap;
 use snafu::{location, Location};
 
 use crate::{
-    chacha::{error::ChaChaErrorReporter, vm::VM},
+    bubba::VM,
+    chacha::error::ChaChaErrorReporter,
     dwarf::{error::DwarfErrorReporter, inter_statement, parse_line, Context as ExtruderContext},
     interpreter::{banner2, debug, eval_statement, function, Context, Error, PrintableValueType},
     lu_dog::DwarfSourceFile,

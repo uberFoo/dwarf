@@ -6,10 +6,8 @@ use snafu::{location, prelude::*, Location};
 use tracy_client::span;
 
 use crate::{
-    chacha::{
-        error::{Result, WrongNumberOfArgumentsSnafu},
-        vm::VM,
-    },
+    bubba::VM,
+    chacha::error::{Result, WrongNumberOfArgumentsSnafu},
     interpreter::{debug, eval_statement, function, trace, typecheck, ChaChaError, Context},
     lu_dog::{BodyEnum, Lambda, Span},
     new_ref, s_read, NewRef, RefType, Value,

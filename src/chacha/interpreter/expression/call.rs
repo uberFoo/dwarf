@@ -16,10 +16,8 @@ use snafu::{location, prelude::*, Location};
 use uuid::Uuid;
 
 use crate::{
-    chacha::{
-        error::{NoSuchStaticMethodSnafu, Result, TypeMismatchSnafu},
-        vm::{CallFrame, VM},
-    },
+    bubba::{CallFrame, VM},
+    chacha::error::{NoSuchStaticMethodSnafu, Result, TypeMismatchSnafu},
     interpreter::{
         debug, error, eval_expression, eval_function_call, eval_lambda_expression, function,
         ChaChaError, Context, PrintableValueType,

@@ -1,0 +1,5 @@
+async fn foo() {}
+
+async fn main() {
+    foo().await;
+}

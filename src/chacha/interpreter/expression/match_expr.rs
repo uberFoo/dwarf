@@ -1,5 +1,6 @@
 use crate::{
-    chacha::{error::Result, value::EnumVariant, vm::VM},
+    bubba::VM,
+    chacha::{error::Result, value::EnumVariant},
     interpreter::{eval_expression, Context},
     lu_dog::ExpressionEnum,
     new_ref, s_read, NewRef, RefType, SarzakStorePtr, Value,

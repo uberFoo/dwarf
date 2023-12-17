@@ -7,7 +7,7 @@ use crossbeam::channel::SendError;
 use rustyline::error::ReadlineError;
 use snafu::{prelude::*, Backtrace, Location};
 
-use crate::{chacha::vm::Instruction, lu_dog::ValueType, s_read, RefType, Span, Value};
+use crate::{bubba::Instruction, lu_dog::ValueType, s_read, RefType, Span, Value};
 
 const ERR_CLR: Colour = Colour::Red;
 const OK_CLR: Colour = Colour::Green;
@@ -16,7 +16,8 @@ const OTH_CLR: Colour = Colour::Cyan;
 
 #[derive(Debug, Snafu)]
 pub struct Error(pub(super) ChaChaError);
-pub(super) type Result<T, E = ChaChaError> = std::result::Result<T, E>;
+// 🚧  If the VM get's it's own errors, make this pub(super).
+pub type Result<T, E = ChaChaError> = std::result::Result<T, E>;
 
 #[derive(Debug, Snafu)]
 #[snafu(visibility(pub))]
@@ -36,6 +37,8 @@ pub enum ChaChaError {
         found: RefType<Value>,
         code: String,
     },
+    #[snafu(display("\n{}: async not supported.", ERR_CLR.bold().paint("error")))]
+    AsyncNotSupported,
     #[snafu(display("\n{}: internal error: {message}\n  --> {}:{}:{}", ERR_CLR.bold().paint("error"), location.file, location.line, location.column))]
     BadnessHappened {
         message: String,

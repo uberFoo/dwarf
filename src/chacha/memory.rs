@@ -6,7 +6,7 @@ use ansi_term::Colour;
 use crossbeam::channel::{unbounded, Receiver, Sender};
 use rustc_hash::FxHashMap as HashMap;
 
-use crate::{chacha::vm::Thonk, debug, function, interpreter::STEPPING, s_read, RefType, Value};
+use crate::{bubba::Thonk, debug, function, interpreter::STEPPING, s_read, RefType, Value};
 
 #[derive(Clone, Debug)]
 pub struct Memory {
@@ -57,7 +57,7 @@ impl Memory {
         self.thonks
             .iter()
             .enumerate()
-            .find(|(_, thonk)| thonk._name == name.as_ref())
+            .find(|(_, thonk)| thonk.name == name.as_ref())
             .map(|(index, _)| index)
     }
 

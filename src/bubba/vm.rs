@@ -5,155 +5,10 @@ use snafu::{location, Location};
 
 use crate::{
     chacha::{error::Result, memory::Memory, value::UserStruct},
-    new_ref, s_read, s_write, ChaChaError, NewRef, RefType, Value, ValueType,
+    new_ref, s_read, s_write, ChaChaError, NewRef, RefType, Value,
 };
 
-#[derive(Clone, Debug)]
-pub enum Instruction {
-    /// Add the top two values on the stack.
-    Add,
-    /// Call a function with the given arity.
-    Call(usize),
-    /// Duplicate the top of the stack.
-    Dup,
-    /// Fetch a local variable.
-    ///
-    /// The parameter is it's distance from the frame pointer, I think.
-    /// The value of the local variable is pushed onto the stack.
-    PushLocal(usize),
-    /// Read a field value
-    ///
-    /// The top of the stack is the name of the field to read. The second value
-    /// on the stack is the object from which to read.
-    ///
-    /// The value read is left on top of the stack.
-    FieldRead,
-    /// Read several field values
-    ///
-    /// The first `n` entries of the stack are the names of the fields to read.
-    /// The next value on the stack is the object from which to read.
-    ///
-    /// The values read are left on top of the stack, in the same order as their
-    /// field names were on the stack.
-    FieldsRead(usize),
-    /// Write a field value
-    ///
-    /// The top of the stack is the value to write. The second value on the
-    /// stack is the filed name, and the third value on the stack is the object
-    /// to which to write.
-    FieldWrite,
-    /// Jump to the given offset if the top of the stack is false.
-    JumpIfFalse(usize),
-    /// Compare the top two values on the stack.
-    LessThanOrEqual,
-    /// Multiply the top two values on the stack.
-    Mul,
-    /// New UserType
-    ///
-    /// The first element of the tuple is the name of the user type. The second
-    /// is the type ([ValueType]) of the user type. The third is the number of
-    /// fields in the user type.
-    /// There is a `([String], [ValueType], [Value])`tuple on the stack for each
-    /// field.
-    NewUserType(String, RefType<ValueType>, usize),
-    /// Pop the top value off the stack.
-    PopLocal(usize),
-    /// Push a value onto the stack.
-    Push(RefType<Value>),
-    Return,
-    /// Subtract the top two values on the stack.
-    Subtract,
-}
-
-impl fmt::Display for Instruction {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let opcode_style = Colour::Blue.italic();
-        let operand_style = Colour::Yellow.bold();
-
-        match self {
-            Instruction::Add => write!(f, "{}", opcode_style.paint("add")),
-            Instruction::Call(arity) => write!(
-                f,
-                "{} {}",
-                opcode_style.paint("call"),
-                operand_style.paint(arity.to_string())
-            ),
-            Instruction::Dup => write!(f, "{}", opcode_style.paint("dup")),
-            Instruction::PushLocal(index) => write!(
-                f,
-                "{} {}",
-                opcode_style.paint("push_local"),
-                operand_style.paint(index.to_string())
-            ),
-            Instruction::FieldRead => write!(f, "{}", opcode_style.paint("field_read")),
-            Instruction::FieldsRead(count) => write!(
-                f,
-                "{} {}",
-                opcode_style.paint("fields_read"),
-                operand_style.paint(count.to_string())
-            ),
-            Instruction::FieldWrite => write!(f, "{}", opcode_style.paint("field_write")),
-            Instruction::JumpIfFalse(offset) => write!(
-                f,
-                "{} {}",
-                opcode_style.paint("jif"),
-                operand_style.paint(offset.to_string())
-            ),
-            Instruction::LessThanOrEqual => write!(f, "{}", opcode_style.paint("lte")),
-            Instruction::Mul => write!(f, "{}", opcode_style.paint("mul")),
-            Instruction::NewUserType(name, _ty, n) => {
-                write!(f, "{}{name}({n})", opcode_style.paint("new"))
-            }
-            Instruction::PopLocal(index) => write!(
-                f,
-                "{} {}",
-                opcode_style.paint("pop_local"),
-                operand_style.paint(index.to_string())
-            ),
-            Instruction::Push(value) => write!(
-                f,
-                "{} {}",
-                opcode_style.paint("push"),
-                operand_style.paint(s_read!(value).to_string())
-            ),
-            Instruction::Return => write!(f, "{}", opcode_style.paint("ret")),
-            Instruction::Subtract => write!(f, "{}", opcode_style.paint("sub")),
-        }
-    }
-}
-
-#[derive(Clone, Debug)]
-pub(crate) struct Thonk {
-    pub(crate) _name: String,
-    instructions: Vec<Instruction>,
-}
-
-impl Thonk {
-    pub(crate) fn new(name: String) -> Self {
-        Thonk {
-            _name: name,
-            instructions: Vec::new(),
-        }
-    }
-
-    pub(crate) fn add_instruction(&mut self, instr: Instruction) -> usize {
-        self.instructions.push(instr);
-        self.instructions.len() - 1
-    }
-
-    pub(crate) fn get_instruction(&self, index: usize) -> Option<&Instruction> {
-        self.instructions.get(index)
-    }
-}
-
-impl fmt::Display for Thonk {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        for (i, instr) in self.instructions.iter().enumerate() {
-            writeln!(f, "{i:08x}:\t {instr}")?;
-        }
-        Ok(())
-    }
-}
+use super::instr::{Instruction, Thonk};
 
 #[derive(Debug)]
 pub(crate) struct CallFrame<'a> {
@@ -970,7 +825,7 @@ mod tests {
 
         vm.stack.push(new_ref!(
             Value,
-            "this would normally be a function at the top of the call frame".into()
+            "this would normally be a function at the top (bottom?) of the call frame".into()
         ));
         vm.stack
             .push(new_ref!(Value, <i32 as Into<Value>>::into(-1)));

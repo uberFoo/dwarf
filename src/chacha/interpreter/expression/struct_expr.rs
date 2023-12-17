@@ -1,10 +1,10 @@
 use ansi_term::Colour;
 
 use crate::{
+    bubba::VM,
     chacha::{
         error::Result,
         value::{EnumVariant, TupleEnum},
-        vm::VM,
     },
     interpreter::{debug, eval_expression, function, Context, UserStruct},
     lu_dog::types::{DataStructureEnum, FieldExpressionEnum},

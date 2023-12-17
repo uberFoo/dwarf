@@ -18,11 +18,11 @@ use uuid::Uuid;
 use puteketeke::Executor;
 
 use crate::{
+    bubba::{CallFrame, Instruction, Thonk, VM},
     chacha::{
         error::{Error, Result, UnimplementedSnafu},
         memory::{Memory, MemoryUpdateMessage},
         value::UserStruct,
-        vm::{CallFrame, Instruction, Thonk, VM},
     },
     lu_dog::{
         Block, Expression, ExpressionEnum, LocalVariable, ObjectStore as LuDogStore, Span,
@@ -738,26 +738,10 @@ pub fn start_func(
 
             let result = eval_function_call(main, &[], None, true, span, context, &mut vm)?;
 
-            // let result_wrapped = result.clone();
-            // let result_unwrapped = &mut *s_write!(result);
-            // let result = match result_unwrapped {
-            //     Value::Future(_, ref mut task) => match task {
-            //         FutureResult::JoinHandle(ref mut maybe_handle) => {
-            //             if let Some(task) = maybe_handle.take() {
-            //                 future::block_on(task)
-            //             } else {
-            //                 unreachable!()
-            //             }
-            //         }
-            //         FutureResult::Result(result) => result.clone(),
-            //     },
-            //     _ => result_wrapped,
-            // };
-
             #[allow(clippy::redundant_clone)]
             //              ^^^^^^^^^^^^^^^ : It's not redundant.
             // The macro is just hiding the fact that it isn't.
-            // This is, btw: not redundant.
+            // This is redundant: the above is not redundant.
             Ok(result)
         } else {
             Err(Error(ChaChaError::MainIsNotAFunction))

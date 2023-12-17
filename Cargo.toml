@@ -114,6 +114,7 @@ criterion = { version = "0.5.1", features = ["html_reports"] }
 diff = "0.1.13"
 
 [build-dependencies]
+chrono = "0.4.31"
 walkdir = "2.3.3"
 
 [features]

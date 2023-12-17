@@ -1,10 +1,8 @@
 use ansi_term::Colour;
 
 use crate::{
-    chacha::{
-        error::{ChaChaError, Result},
-        vm::VM,
-    },
+    bubba::VM,
+    chacha::error::{ChaChaError, Result},
     interpreter::{debug, eval_expression, function, Context},
     s_read, RefType, SarzakStorePtr, Value,
 };

@@ -261,20 +261,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let mut ctx = initialize_interpreter(threads, dwarf_home, ctx, sarzak)?;
         ctx.add_args(dwarf_args);
 
-        // #[cfg(feature = "async")]
-        // let tjh = {
-        //     let mut e = ctx.executor().clone();
-        //     thread::spawn(move || {
-        //         // let _ = future::block_on(async { e.run().await });
-        //         let _ = future::block_on(async { Executor::global().run().await });
-        //     });
-        //     let mut e = ctx.executor().clone();
-        //     thread::spawn(move || {
-        //         let _ = future::block_on(async { Executor::global().run().await });
-        //         // let _ = future::block_on(async { e.run().await });
-        //     })
-        // };
-
         if args.banner.is_some() && args.banner.unwrap() {
             println!("{}", banner2());
         }
@@ -335,10 +321,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
             .unwrap();
-        }
-        #[cfg(feature = "async")]
-        {
-            // shutdown_interpreter();
         }
     } else if args.dap.is_some() && args.dap.unwrap() {
         let listener = TcpListener::bind("127.0.0.1:4711").unwrap();

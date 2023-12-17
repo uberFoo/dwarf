@@ -2,10 +2,8 @@ use ansi_term::Colour;
 use snafu::prelude::*;
 
 use crate::{
-    chacha::{
-        error::{Result, UnimplementedSnafu},
-        vm::VM,
-    },
+    bubba::VM,
+    chacha::error::{Result, UnimplementedSnafu},
     interpreter::{debug, eval_expression, function, Context},
     lu_dog::ValueTypeEnum,
     new_ref, s_read,
