@@ -142,6 +142,44 @@ fn loop_(c: &mut Criterion) {
     c.bench_function("loop", |b| {
         b.iter(|| start_func("main", false, &mut ctx.clone()).unwrap())
     });
+
+    let mut ctx = initialize_interpreter(num_cpus::get(), dwarf_home, lu_dog_ctx, sarzak).unwrap();
+    ctx.add_args(vec!["fib".to_owned(), "28".to_owned()]);
+
+    c.bench_function("fib-28", |b| {
+        b.iter(|| start_func("main", false, &mut ctx.clone()).unwrap())
+    });
+}
+
+fn loop_(c: &mut Criterion) {
+    #[cfg(feature = "tracy")]
+    Client::start();
+
+    let source = fs::read_to_string(LOOP_SOURCE_FILE).unwrap();
+    let ast = parse_dwarf("loop", &source).unwrap();
+    let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
+
+    let dwarf_home = env::var("DWARF_HOME")
+        .unwrap_or_else(|_| {
+            let mut home = env::var("HOME").unwrap();
+            home.push_str("/.dwarf");
+            home
+        })
+        .into();
+
+    let lu_dog_ctx = new_lu_dog(
+        "bench".to_owned(),
+        Some((source, &ast)),
+        &dwarf_home,
+        &sarzak,
+    )
+    .unwrap();
+
+    let mut ctx = initialize_interpreter(num_cpus::get(), dwarf_home, lu_dog_ctx, sarzak).unwrap();
+
+    c.bench_function("loop", |b| {
+        b.iter(|| start_func("main", false, &mut ctx.clone()).unwrap())
+    });
 }
 
 fn loop_vm(c: &mut Criterion) {

@@ -617,6 +617,15 @@ impl fmt::Display for Program {
     }
 }
 
+impl fmt::Display for Program {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        for (name, thonk) in self.thonks.iter() {
+            writeln!(f, "{name}:\n{thonk}")?;
+        }
+        Ok(())
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct Thonk {
     name: String,
