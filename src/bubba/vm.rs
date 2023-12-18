@@ -325,7 +325,7 @@ impl<'b> VM<'b> {
                             0
                         }
                     }
-                    Instruction::LessThanOrEqual => {
+                    Instruction::TestLessThanOrEqual => {
                         let b = self.stack.pop().unwrap();
                         let a = self.stack.pop().unwrap();
                         self.stack
@@ -375,6 +375,26 @@ impl<'b> VM<'b> {
                         if trace {
                             println!("\t\t\t\t}}");
                         }
+
+                        0
+                    }
+                    Instruction::Out(stream) => {
+                        let value = self.stack.pop().unwrap();
+                        let value = s_read!(value);
+
+                        match stream {
+                            0 => println!("{value}"),
+                            1 => eprintln!("{value}"),
+                            _ => {
+                                return Err::<RefType<Value>, ChaChaError>(ChaChaError::VmPanic {
+                                    cause: ChaChaError::BadnessHappened {
+                                        message: format!("Unknown stream: {stream}."),
+                                        location: location!(),
+                                    }
+                                    .to_string(),
+                                })
+                            }
+                        };
 
                         0
                     }
@@ -594,7 +614,7 @@ mod tests {
 
         thonk.add_instruction(Instruction::Push(new_ref!(Value, 111.into())));
         thonk.add_instruction(Instruction::Push(new_ref!(Value, 69.into())));
-        thonk.add_instruction(Instruction::LessThanOrEqual);
+        thonk.add_instruction(Instruction::TestLessThanOrEqual);
         thonk.add_instruction(Instruction::Return);
         println!("{}", thonk);
 
@@ -621,7 +641,7 @@ mod tests {
 
         thonk.add_instruction(Instruction::Push(new_ref!(Value, 42.into())));
         thonk.add_instruction(Instruction::Push(new_ref!(Value, 69.into())));
-        thonk.add_instruction(Instruction::LessThanOrEqual);
+        thonk.add_instruction(Instruction::TestLessThanOrEqual);
         thonk.add_instruction(Instruction::Return);
         println!("{}", thonk);
 
@@ -648,7 +668,7 @@ mod tests {
 
         thonk.add_instruction(Instruction::Push(new_ref!(Value, 42.into())));
         thonk.add_instruction(Instruction::Push(new_ref!(Value, 42.into())));
-        thonk.add_instruction(Instruction::LessThanOrEqual);
+        thonk.add_instruction(Instruction::TestLessThanOrEqual);
         thonk.add_instruction(Instruction::Return);
         println!("{}", thonk);
 
@@ -678,7 +698,7 @@ mod tests {
 
         thonk.add_instruction(Instruction::Push(new_ref!(Value, 69.into())));
         thonk.add_instruction(Instruction::Push(new_ref!(Value, 42.into())));
-        thonk.add_instruction(Instruction::LessThanOrEqual);
+        thonk.add_instruction(Instruction::TestLessThanOrEqual);
         thonk.add_instruction(Instruction::JumpIfFalse(2));
         thonk.add_instruction(Instruction::Push(new_ref!(
             Value,
@@ -863,7 +883,7 @@ mod tests {
         thonk.add_instruction(Instruction::PushLocal(0));
         thonk.add_instruction(Instruction::Push(new_ref!(Value, 1.into())));
         // Chcek if it's <= 1
-        thonk.add_instruction(Instruction::LessThanOrEqual);
+        thonk.add_instruction(Instruction::TestLessThanOrEqual);
         thonk.add_instruction(Instruction::JumpIfFalse(2));
         // If false return 1
         thonk.add_instruction(Instruction::Push(new_ref!(Value, 1.into())));

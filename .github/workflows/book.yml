@@ -21,7 +21,7 @@ jobs:
                   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
                   export PATH="$HOME/.cargo/bin:$PATH"
                   rustup update stable
-                  cargo install mdbook-indexing
+                  cargo install mdbook-admonish mdbook-indexing mdbook-mermaid
 
             - name: Build mdBook
               run: |

@@ -762,7 +762,7 @@ pub fn start_vm(n: DwarfInteger) -> Result<DwarfInteger, Error> {
     thonk.add_instruction(Instruction::Push(new_ref!(Value, 1.into())));
     // Check if it's <= 1
     // lte
-    thonk.add_instruction(Instruction::LessThanOrEqual);
+    thonk.add_instruction(Instruction::TestLessThanOrEqual);
     // jne
     thonk.add_instruction(Instruction::JumpIfFalse(2));
     // If false return 1

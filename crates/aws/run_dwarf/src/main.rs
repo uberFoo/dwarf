@@ -24,7 +24,7 @@ async fn function_handler(event: Request) -> Result<Response<Body>, Error> {
 
     let dwarf_home = env::var("DWARF_HOME")
         .unwrap_or_else(|_| {
-            let mut home = env::var("HOME").unwrap();
+            let mut home = env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
             home.push_str("/.dwarf");
             home
         })

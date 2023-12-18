@@ -15,7 +15,9 @@ pub enum Instruction {
     Dup,
     /// Fetch a local variable.
     ///
-    /// The parameter is it's distance from the frame pointer, I think.
+    /// The parameter is it's distance from the frame pointer, or the index of
+    /// the local variable.
+    ///
     /// The value of the local variable is pushed onto the stack.
     PushLocal(usize),
     /// Read a field value
@@ -42,7 +44,7 @@ pub enum Instruction {
     /// Jump to the given offset if the top of the stack is false.
     JumpIfFalse(usize),
     /// Compare the top two values on the stack.
-    LessThanOrEqual,
+    TestLessThanOrEqual,
     /// Multiply the top two values on the stack.
     Mul,
     /// New UserType
@@ -52,11 +54,25 @@ pub enum Instruction {
     /// fields in the user type.
     /// There is a `([String], [ValueType], [Value])`tuple on the stack for each
     /// field.
+    /// // 🚧 move these parameters to the stack
     NewUserType(String, RefType<ValueType>, usize),
-    /// Pop the top value off the stack.
+    /// Write a Value
+    ///
+    /// This function writes some value to an output stream. The top of the stack
+    /// contains the stream number to write to. Currently 0 is stdout, and 1 is
+    /// stderr.
+    ///
+    /// The next value on the stack is the value itself to write.
+    Out(usize),
+    /// Pop the top value off the stack and store it in a local variable at the
+    /// given index.
     PopLocal(usize),
     /// Push a value onto the stack.
     Push(RefType<Value>),
+    /// Exit the function
+    ///
+    /// The value expressed by this instruction is the value at the top of the
+    /// stack.
     Return,
     /// Subtract the top two values on the stack.
     Subtract,
@@ -96,11 +112,17 @@ impl fmt::Display for Instruction {
                 opcode_style.paint("jif"),
                 operand_style.paint(offset.to_string())
             ),
-            Instruction::LessThanOrEqual => write!(f, "{}", opcode_style.paint("lte")),
+            Instruction::TestLessThanOrEqual => write!(f, "{}", opcode_style.paint("lte")),
             Instruction::Mul => write!(f, "{}", opcode_style.paint("mul")),
             Instruction::NewUserType(name, _ty, n) => {
                 write!(f, "{}{name}({n})", opcode_style.paint("new"))
             }
+            Instruction::Out(stream) => write!(
+                f,
+                "{} {}",
+                opcode_style.paint("out "),
+                operand_style.paint(stream.to_string())
+            ),
             Instruction::PopLocal(index) => write!(
                 f,
                 "{} {}",
@@ -153,6 +175,15 @@ impl Program {
 
     pub fn compiler_build_ts(&self) -> &str {
         &self.compiler_build_ts
+    }
+}
+
+impl fmt::Display for Program {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        for (name, thonk) in self.thonks.iter() {
+            writeln!(f, "{name}:\n{thonk}")?;
+        }
+        Ok(())
     }
 }
 

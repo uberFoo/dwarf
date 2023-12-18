@@ -175,7 +175,7 @@ pub enum ChaChaError {
         location: Location,
         backtrace: Backtrace,
     },
-    #[snafu(display("\n{}: vm panic: {}", ERR_CLR.bold().paint("error"), OTH_CLR.paint(cause)))]
+    #[snafu(display("\n{}: vm panic: {cause}", ERR_CLR.bold().paint("error")))]
     VmPanic {
         // cause: Box<dyn std::error::Error + Send + Sync>,
         cause: String,
