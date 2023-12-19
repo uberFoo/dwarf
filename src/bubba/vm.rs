@@ -4,7 +4,11 @@ use ansi_term::Colour;
 use snafu::{location, Location};
 
 use crate::{
-    chacha::{error::Result, memory::Memory, value::UserStruct},
+    chacha::{
+        error::Result,
+        memory::Memory,
+        value::{ThonkInner, UserStruct},
+    },
     new_ref, s_read, s_write, ChaChaError, NewRef, RefType, Value,
 };
 
@@ -67,8 +71,6 @@ impl<'b> VM<'b> {
             let ip = frame.ip;
             let instr = frame.load_instruction();
             let ip_offset = if let Some(instr) = instr {
-                // let instr = instr.clone();
-
                 if trace {
                     let len = self.stack.len();
                     for i in 0..len {
@@ -108,18 +110,23 @@ impl<'b> VM<'b> {
                             println!("\t\t{}:\t{}", Colour::Green.paint("func:"), s_read!(callee));
                         }
                         // let callee: usize = match (&*s_read!(callee)).try_into() {
-                        let callee: usize =
-                            match <&Value as TryInto<usize>>::try_into(&*s_read!(callee)) {
-                                Ok(callee) => callee,
-                                Err(e) => {
-                                    return Err::<RefType<Value>, ChaChaError>(
-                                        ChaChaError::VmPanic {
-                                            cause: e.to_string(),
-                                        },
-                                    );
-                                }
-                            };
-                        let thonk = self.memory.get_thonk(callee).unwrap();
+                        let callee = match <&Value as TryInto<String>>::try_into(&*s_read!(callee))
+                        {
+                            Ok(callee) => callee,
+                            Err(e) => {
+                                return Err::<RefType<Value>, ChaChaError>(ChaChaError::VmPanic {
+                                    cause: e.to_string(),
+                                });
+                            }
+                        };
+                        let thonk = self
+                            .memory
+                            .get_thonk(
+                                self.memory
+                                    .thonk_index(callee.clone())
+                                    .expect(format!("Panic! Thonk not found: {callee}.").as_str()),
+                            )
+                            .expect("missing thonk {callee}!");
                         let mut frame = CallFrame::new(0, self.stack.len() - arity - 1, thonk);
 
                         if trace {
@@ -127,7 +134,6 @@ impl<'b> VM<'b> {
                         }
 
                         let fp = frame.fp;
-                        // self.frames.push(frame);
 
                         let result = match self.run(&mut frame, trace) {
                             Ok(result) => result,
@@ -138,6 +144,9 @@ impl<'b> VM<'b> {
                             }
                         };
 
+                        // This is clever, I guess. Or maybe it's just hard to read on first glance.
+                        // Either way, we are just using fp..stack.len() as an iterator so that we
+                        // can just pop our call frame off the stack.
                         (fp..self.stack.len()).for_each(|_| {
                             self.stack.pop();
                         });
@@ -724,7 +733,7 @@ mod tests {
         assert!(result.is_ok());
 
         let result: String = (&*s_read!(result.unwrap())).try_into().unwrap();
-        assert_eq!(result, "\"you rock!\"");
+        assert_eq!(result, "you rock!");
 
         // let mut frame = vm.frames.pop().unwrap();
         // assert_eq!(frame.ip, 8);
@@ -882,15 +891,18 @@ mod tests {
         // Get the parameter off the stack
         thonk.add_instruction(Instruction::PushLocal(0));
         thonk.add_instruction(Instruction::Push(new_ref!(Value, 1.into())));
-        // Chcek if it's <= 1
+        // Check if it's <= 1
         thonk.add_instruction(Instruction::TestLessThanOrEqual);
         thonk.add_instruction(Instruction::JumpIfFalse(2));
         // If false return 1
         thonk.add_instruction(Instruction::Push(new_ref!(Value, 1.into())));
         thonk.add_instruction(Instruction::Return);
-        // return fidbn-1) + fib(n-2)
+        // return fib(n-1) + fib(n-2)
         // Load fib
-        thonk.add_instruction(Instruction::Push(new_ref!(Value, Value::Thonk("fib", 0))));
+        thonk.add_instruction(Instruction::Push(new_ref!(
+            Value,
+            Value::Thonk(ThonkInner::Thonk("fib".to_owned()))
+        )));
         // load n
         thonk.add_instruction(Instruction::PushLocal(0));
         // load 1
@@ -900,14 +912,17 @@ mod tests {
         // Call fib(n-1)
         thonk.add_instruction(Instruction::Call(1));
         // load fib
-        thonk.add_instruction(Instruction::Push(new_ref!(Value, Value::Thonk("fib", 0))));
+        thonk.add_instruction(Instruction::Push(new_ref!(
+            Value,
+            Value::Thonk(ThonkInner::Thonk("fib".to_owned()))
+        )));
         // load n
         thonk.add_instruction(Instruction::PushLocal(0));
         // load 2
         thonk.add_instruction(Instruction::Push(new_ref!(Value, 2.into())));
         // subtract
         thonk.add_instruction(Instruction::Subtract);
-        // Call fib(n-1)
+        // Call fib(n-2)
         thonk.add_instruction(Instruction::Call(1));
         // add
         thonk.add_instruction(Instruction::Add);

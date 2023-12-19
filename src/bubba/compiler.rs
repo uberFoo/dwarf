@@ -5,6 +5,7 @@ use crate::{
         error::{Error, Result},
         instr::{Instruction, Program, Thonk},
     },
+    chacha::value::ThonkInner,
     lu_dog::{
         BodyEnum, BooleanLiteralEnum, Expression, ExpressionEnum, Function, LiteralEnum, Statement,
         StatementEnum,
@@ -139,6 +140,7 @@ fn compile_expression(
                 // Evaluate the LHS to get at the underlying value/instance.
                 compile_expression(&expr, thonk, context, sarzak)?;
             };
+            thonk.add_instruction(Instruction::Call(0));
         }
         ExpressionEnum::Literal(ref literal) => {
             let lu_dog = &context.lu_dog;
@@ -193,7 +195,18 @@ fn compile_expression(
 
             thonk.add_instruction(Instruction::Push(literal?));
         }
-        ExpressionEnum::VariableExpression(ref expr) => {}
+        ExpressionEnum::VariableExpression(ref expr) => {
+            let expr = s_read!(lu_dog).exhume_variable_expression(expr).unwrap();
+            let expr = s_read!(expr);
+            let name = expr.name.clone();
+
+            // ATM we are here because we need to look up a function. Somehow
+            // we'll need to differentiate between a function and a variable.
+            thonk.add_instruction(Instruction::Push(new_ref!(
+                Value,
+                Value::Thonk(ThonkInner::Thonk(name))
+            )));
+        }
         ExpressionEnum::XPrint(ref print) => {
             let print = s_read!(lu_dog).exhume_x_print(print).unwrap();
             let expr = s_read!(print).r32_expression(&s_read!(lu_dog))[0].clone();
@@ -231,8 +244,15 @@ mod test {
             .into()
     }
 
+    // 🚧 This nastiness needs to be fixed. It's not cool that we are doing all
+    // this work here.
     fn run_vm(program: &Program) -> Result<RefType<Value>, ChaChaError> {
-        let memory = Memory::new();
+        let mut memory = Memory::new();
+        for thonk in program.iter() {
+            // 🚧 This memory thing is BS. Fix it.
+            let slot = memory.0.reserve_thonk_slot();
+            memory.0.insert_thonk(thonk.clone(), slot);
+        }
         let mut vm = VM::new(&memory.0);
         let mut frame = CallFrame::new(0, 0, &program.get_thonk("main").unwrap());
         vm.run(&mut frame, true)
@@ -328,7 +348,7 @@ mod test {
         println!("{program}");
 
         assert_eq!(program.get_thonk_card(), 2);
-        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 3);
+        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 4);
         assert_eq!(program.get_thonk("foo").unwrap().get_instruction_card(), 4);
 
         run_vm(&program).unwrap();

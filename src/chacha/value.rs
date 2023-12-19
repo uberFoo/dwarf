@@ -205,6 +205,13 @@ impl fmt::Display for EnumVariant {
     }
 }
 
+// 🚧 This can be deleted and replaced with just a String.
+#[derive(Clone, Debug)]
+pub enum ThonkInner {
+    Thonk(String),
+    Index(usize),
+}
+
 #[derive(Default)]
 pub enum Value {
     /// Boolean
@@ -255,7 +262,7 @@ pub enum Value {
         worker: Option<puteketeke::Worker>,
         parent: Option<puteketeke::AsyncTask<'static, ValueResult>>,
     },
-    Thonk(&'static str, usize),
+    Thonk(ThonkInner),
     TupleEnum(RefType<TupleEnum>),
     Unknown,
     Uuid(uuid::Uuid),
@@ -309,7 +316,10 @@ impl Value {
             Self::Table(table) => write!(f, "{table:?}"),
             #[cfg(feature = "async")]
             Self::Task { worker, parent } => write!(f, "Task: {parent:?} running on {worker:?}"),
-            Self::Thonk(name, number) => write!(f, "{name} [{number}]"),
+            Self::Thonk(inner) => match inner {
+                ThonkInner::Thonk(name) => write!(f, "{name}"),
+                ThonkInner::Index(index) => write!(f, "{index}"),
+            },
             Self::TupleEnum(te) => write!(f, "{}", s_read!(te)),
             Self::Unknown => write!(f, "<unknown>"),
             Self::Uuid(uuid) => write!(f, "{uuid}"),
@@ -599,7 +609,7 @@ impl std::fmt::Debug for Value {
             Self::Table(table) => write!(f, "{table:?}"),
             #[cfg(feature = "async")]
             Self::Task { worker, parent } => write!(f, "Task: {parent:?} running on {worker:?}"),
-            Self::Thonk(name, number) => write!(f, "{name:?} [{number:?}]"),
+            Self::Thonk(inner) => write!(f, "{inner:?}"),
             Self::TupleEnum(te) => write!(f, "{:?}", s_read!(te)),
             Self::Unknown => write!(f, "<unknown>"),
             Self::Uuid(uuid) => write!(f, "{uuid:?}"),
@@ -655,7 +665,7 @@ impl Clone for Value {
                 worker: worker.clone(),
                 parent: None,
             },
-            Self::Thonk(name, number) => Self::Thonk(name, *number),
+            Self::Thonk(inner) => Self::Thonk(inner.clone()),
             Self::TupleEnum(te) => Self::TupleEnum(te.clone()),
             Self::Unknown => Self::Unknown,
             Self::Uuid(uuid) => Self::Uuid(*uuid),
@@ -764,7 +774,10 @@ impl fmt::Display for Value {
             Self::Table(table) => write!(f, "{table:?}"),
             #[cfg(feature = "async")]
             Self::Task { worker, parent } => write!(f, "Task: {parent:?} running on {worker:?}"),
-            Self::Thonk(name, number) => write!(f, "{name} [{number}]"),
+            Self::Thonk(inner) => match inner {
+                ThonkInner::Thonk(name) => write!(f, "Thonk({name})"),
+                ThonkInner::Index(index) => write!(f, "Thonk({index})"),
+            },
             Self::TupleEnum(te) => write!(f, "{}", s_read!(te)),
             Self::Unknown => write!(f, "<unknown>"),
             Self::Uuid(uuid) => write!(f, "{uuid}"),
@@ -944,7 +957,13 @@ impl TryFrom<Value> for usize {
                 src: str_.to_owned(),
                 dst: "usize".to_owned(),
             }),
-            Value::Thonk(_, num) => Ok(num.to_owned()),
+            Value::Thonk(inner) => match inner {
+                ThonkInner::Thonk(name) => Err(ChaChaError::Conversion {
+                    src: (*name).to_owned(),
+                    dst: "usize".to_owned(),
+                }),
+                ThonkInner::Index(index) => Ok(*index),
+            },
             _ => Err(ChaChaError::Conversion {
                 src: value.to_string(),
                 dst: "usize".to_owned(),
@@ -964,7 +983,13 @@ impl TryFrom<&Value> for usize {
                 src: str_.to_owned(),
                 dst: "usize".to_owned(),
             }),
-            Value::Thonk(_, num) => Ok(*num),
+            Value::Thonk(inner) => match inner {
+                ThonkInner::Thonk(name) => Err(ChaChaError::Conversion {
+                    src: (*name).to_owned(),
+                    dst: "usize".to_owned(),
+                }),
+                ThonkInner::Index(index) => Ok(*index),
+            },
             _ => Err(ChaChaError::Conversion {
                 src: value.to_string(),
                 dst: "usize".to_owned(),
@@ -1099,7 +1124,7 @@ impl TryFrom<&Value> for String {
     type Error = ChaChaError;
 
     fn try_from(value: &Value) -> Result<Self, <String as TryFrom<&Value>>::Error> {
-        Ok(value.to_string())
+        Ok(value.to_inner_string())
     }
 }
 

@@ -22,7 +22,7 @@ use crate::{
     chacha::{
         error::{Error, Result, UnimplementedSnafu},
         memory::{Memory, MemoryUpdateMessage},
-        value::UserStruct,
+        value::{ThonkInner, UserStruct},
     },
     lu_dog::{
         Block, Expression, ExpressionEnum, LocalVariable, ObjectStore as LuDogStore, Span,
@@ -770,7 +770,10 @@ pub fn start_vm(n: DwarfInteger) -> Result<DwarfInteger, Error> {
     thonk.add_instruction(Instruction::Return);
     // return fib(n-1) + fib(n-2)
     // Load fib
-    thonk.add_instruction(Instruction::Push(new_ref!(Value, Value::Thonk("fib", 0))));
+    thonk.add_instruction(Instruction::Push(new_ref!(
+        Value,
+        Value::Thonk(ThonkInner::Thonk("fib".to_owned()))
+    )));
     // load n
     thonk.add_instruction(Instruction::PushLocal(0));
     // load 1
@@ -780,7 +783,10 @@ pub fn start_vm(n: DwarfInteger) -> Result<DwarfInteger, Error> {
     // Call fib(n-1)
     thonk.add_instruction(Instruction::Call(1));
     // load fib
-    thonk.add_instruction(Instruction::Push(new_ref!(Value, Value::Thonk("fib", 0))));
+    thonk.add_instruction(Instruction::Push(new_ref!(
+        Value,
+        Value::Thonk(ThonkInner::Thonk("fib".to_owned()))
+    )));
     // load n
     thonk.add_instruction(Instruction::PushLocal(0));
     // load 2

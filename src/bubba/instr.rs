@@ -10,6 +10,15 @@ pub enum Instruction {
     /// Add the top two values on the stack.
     Add,
     /// Call a function with the given arity.
+    ///
+    /// ## Calling Convention
+    ///
+    /// 🚧 Draw a picture of the stack and all that.
+    ///
+    /// ### Here's a functional description of what to do.
+    ///
+    /// Push a Value onto the stack that contains a Thonk.
+    /// Push
     Call(usize),
     /// Duplicate the top of the stack.
     Dup,
@@ -163,6 +172,10 @@ impl Program {
 
     pub(crate) fn get_thonk(&self, name: &str) -> Option<&Thonk> {
         self.thonks.get(name)
+    }
+
+    pub(crate) fn iter(&self) -> impl Iterator<Item = &Thonk> {
+        self.thonks.values()
     }
 
     pub(crate) fn get_thonk_card(&self) -> usize {
