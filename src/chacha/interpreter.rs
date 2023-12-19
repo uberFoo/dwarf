@@ -22,7 +22,7 @@ use crate::{
     chacha::{
         error::{Error, Result, UnimplementedSnafu},
         memory::{Memory, MemoryUpdateMessage},
-        value::UserStruct,
+        value::{ThonkInner, UserStruct},
     },
     lu_dog::{
         Block, Expression, ExpressionEnum, LocalVariable, ObjectStore as LuDogStore, Span,

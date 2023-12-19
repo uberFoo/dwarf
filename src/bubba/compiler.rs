@@ -8,6 +8,7 @@ use crate::{
         instr::{Instruction, Program, Thonk},
         BOOL, EMPTY, INT, RANGE, RESULT, STRING, STRING_ARRAY, UNKNOWN,
     },
+    chacha::value::ThonkInner,
     lu_dog::{
         BodyEnum, Expression, ExpressionEnum, Function, ObjectStore as LuDogStore, Statement,
         StatementEnum, ValueType, ValueTypeEnum,
