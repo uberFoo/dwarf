@@ -52,8 +52,6 @@ pub(crate) fn eval_dwarf(
         args.push((*s_read!(arg.0)).clone().try_into()?);
     }
 
-    let sarzak = (*s_read!(context.sarzak_heel())).clone();
-
     let mut ctx =
         initialize_interpreter(2, context.get_home().clone(), ctx.clone()).map_err(|e| {
             chacha_print(

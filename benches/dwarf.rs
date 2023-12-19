@@ -37,7 +37,7 @@ fn mandelbrot(c: &mut Criterion) {
     )
     .unwrap();
 
-    let ctx = initialize_interpreter(num_cpus::get(), dwarf_home, ctx, sarzak).unwrap();
+    let ctx = initialize_interpreter(num_cpus::get(), dwarf_home, ctx).unwrap();
 
     c.bench_function("mandelbrot-14x4", |b| {
         b.iter(|| start_func("main", false, &mut ctx.clone()).unwrap())
@@ -68,20 +68,15 @@ fn fib(c: &mut Criterion) {
     )
     .unwrap();
 
-    let mut ctx = initialize_interpreter(
-        num_cpus::get(),
-        dwarf_home.clone(),
-        lu_dog_ctx.clone(),
-        sarzak.clone(),
-    )
-    .unwrap();
+    let mut ctx =
+        initialize_interpreter(num_cpus::get(), dwarf_home.clone(), lu_dog_ctx.clone()).unwrap();
     ctx.add_args(vec!["fib".to_owned(), "17".to_owned()]);
 
     c.bench_function("fib-17", |b| {
         b.iter(|| start_func("main", false, &mut ctx.clone()).unwrap())
     });
 
-    let mut ctx = initialize_interpreter(num_cpus::get(), dwarf_home, lu_dog_ctx, sarzak).unwrap();
+    let mut ctx = initialize_interpreter(num_cpus::get(), dwarf_home, lu_dog_ctx).unwrap();
     ctx.add_args(vec!["fib".to_owned(), "28".to_owned()]);
 
     c.bench_function("fib-28", |b| {
@@ -113,7 +108,7 @@ fn loop_(c: &mut Criterion) {
     )
     .unwrap();
 
-    let mut ctx = initialize_interpreter(num_cpus::get(), dwarf_home, lu_dog_ctx, sarzak).unwrap();
+    let mut ctx = initialize_interpreter(num_cpus::get(), dwarf_home, lu_dog_ctx).unwrap();
 
     c.bench_function("loop", |b| {
         b.iter(|| start_func("main", false, &mut ctx.clone()).unwrap())

@@ -802,7 +802,7 @@ pub fn start_vm(n: DwarfInteger) -> Result<DwarfInteger, Error> {
     let slot = memory.reserve_thonk_slot();
     memory.insert_thonk(thonk.clone(), slot);
 
-    let mut frame = CallFrame::new(0, 0, &thonk);
+    let mut frame = CallFrame::new(0, &thonk);
 
     let mut vm = VM::new(&memory);
 

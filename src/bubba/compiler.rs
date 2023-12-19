@@ -96,10 +96,17 @@ fn compile_statement(
 
             let expr = stmt.r20_expression(&s_read!(lu_dog))[0].clone();
 
-            let value = compile_expression(&expr, thonk, context)?;
+            compile_expression(&expr, thonk, context)?;
 
             let var = s_read!(stmt.r21_local_variable(&s_read!(lu_dog))[0]).clone();
             let var = s_read!(var.r12_variable(&s_read!(lu_dog))[0]).clone();
+
+            // 🚧 We'll soon need to store var.name in a symbol table
+
+            // thonk.add_instruction(Instruction::Push(value));
+            thonk.add_instruction(Instruction::PopLocal(0));
+
+            thonk.increment_frame_size();
 
             // context.memory().insert(var.name, value);
         }
@@ -249,7 +256,11 @@ mod test {
             memory.0.insert_thonk(thonk.clone(), slot);
         }
         let mut vm = VM::new(&memory.0);
-        let mut frame = CallFrame::new(0, 0, &program.get_thonk("main").unwrap());
+        let mut frame = CallFrame::new(0, &program.get_thonk("main").unwrap());
+        vm.push_stack(new_ref!(
+            Value,
+            Value::Thonk(ThonkInner::Thonk("main".to_owned()))
+        ));
         vm.run(&mut frame, true)
     }
 

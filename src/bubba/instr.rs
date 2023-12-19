@@ -172,7 +172,7 @@ impl fmt::Display for Instruction {
             Instruction::JumpIfFalse(offset) => write!(
                 f,
                 "{} {}",
-                opcode_style.paint("jif"),
+                opcode_style.paint("jiff"),
                 operand_style.paint(offset.to_string())
             ),
             Instruction::TestLessThanOrEqual => write!(f, "{}", opcode_style.paint("lte")),
@@ -265,6 +265,7 @@ impl fmt::Display for Program {
 pub struct Thonk {
     pub(crate) name: String,
     instructions: Vec<Instruction>,
+    frame_size: usize,
 }
 
 impl Thonk {
@@ -272,6 +273,7 @@ impl Thonk {
         Thonk {
             name,
             instructions: Vec::new(),
+            frame_size: 0,
         }
     }
 
@@ -286,6 +288,14 @@ impl Thonk {
 
     pub(crate) fn get_instruction_card(&self) -> usize {
         self.instructions.len()
+    }
+
+    pub(crate) fn increment_frame_size(&mut self) {
+        self.frame_size += 1;
+    }
+
+    pub(crate) fn get_frame_size(&self) -> usize {
+        self.frame_size
     }
 }
 

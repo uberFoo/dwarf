@@ -772,7 +772,7 @@ pub fn eval(
                     NORM_SQUARED => {
                         let value = arg_values.pop_front().unwrap().0;
                         let thonk = context.memory().get_thonk(0).unwrap();
-                        let mut frame = CallFrame::new(0, 0, thonk);
+                        let mut frame = CallFrame::new(0, thonk);
                         vm.push_stack(new_ref!(Value, "norm_squared".into()));
                         vm.push_stack(value);
                         let result = vm.run(&mut frame, false);
@@ -785,7 +785,7 @@ pub fn eval(
                     SQUARE => {
                         let value = arg_values.pop_front().unwrap().0;
                         let thonk = context.memory().get_thonk(2).unwrap();
-                        let mut frame = CallFrame::new(0, 0, thonk);
+                        let mut frame = CallFrame::new(0, thonk);
                         vm.push_stack(new_ref!(Value, "square".into()));
                         vm.push_stack(value);
                         let result = vm.run(&mut frame, false);
@@ -797,7 +797,7 @@ pub fn eval(
                     }
                     ADD => {
                         let thonk = context.memory().get_thonk(1).unwrap();
-                        let mut frame = CallFrame::new(0, 0, thonk);
+                        let mut frame = CallFrame::new(0, thonk);
                         vm.push_stack(new_ref!(Value, "add".into()));
                         let value = arg_values.pop_front().unwrap().0;
                         vm.push_stack(value);

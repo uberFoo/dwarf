@@ -22,8 +22,11 @@ pub(crate) struct CallFrame<'a> {
 }
 
 impl<'a> CallFrame<'a> {
-    pub(crate) fn new(ip: usize, fp: usize, thonk: &'a Thonk) -> Self {
-        CallFrame { ip, fp, thonk }
+    pub(crate) fn new(stack_offset: usize, thonk: &'a Thonk) -> Self {
+        let fp = thonk.get_frame_size();
+        let fp = if fp == 0 { fp } else { fp - 1 };
+        let fp = fp + stack_offset;
+        CallFrame { ip: 0, fp, thonk }
     }
 
     fn load_instruction(&mut self) -> Option<&Instruction> {
@@ -77,7 +80,7 @@ impl<'b> VM<'b> {
                         if i == fp {
                             print!("\t{} ->\t", Colour::Green.bold().paint("fp"));
                         } else {
-                            print!("\t\t");
+                            print!("\t     \t");
                         }
                         println!("stack {}:\t{}", len - i - 1, s_read!(self.stack[i]));
                     }
@@ -127,7 +130,7 @@ impl<'b> VM<'b> {
                                     .expect(format!("Panic! Thonk not found: {callee}.").as_str()),
                             )
                             .expect("missing thonk {callee}!");
-                        let mut frame = CallFrame::new(0, self.stack.len() - arity - 1, thonk);
+                        let mut frame = CallFrame::new(self.stack.len() - 1, thonk);
 
                         if trace {
                             println!("\t\t{}\t{}", Colour::Green.paint("frame:"), frame);
@@ -147,11 +150,9 @@ impl<'b> VM<'b> {
                         // This is clever, I guess. Or maybe it's just hard to read on first glance.
                         // Either way, we are just using fp..stack.len() as an iterator so that we
                         // can just pop our call frame off the stack.
-                        (fp..self.stack.len()).for_each(|_| {
+                        (fp..self.stack.len() + 1).for_each(|_| {
                             self.stack.pop();
                         });
-
-                        dbg!(&self.stack);
 
                         self.stack.push(result);
 
@@ -416,7 +417,8 @@ impl<'b> VM<'b> {
                     }
                     Instruction::PopLocal(index) => {
                         let value = self.stack.pop().unwrap();
-                        self.stack[fp + index + 1] = value;
+                        dbg!(&self.stack, fp - index);
+                        self.stack[fp - index] = value;
 
                         0
                     }
@@ -425,15 +427,22 @@ impl<'b> VM<'b> {
 
                         0
                     }
+                    // The fp is pointing someplace the end of the vec.
+                    // Nominally at the Thonk name at the bottom of the stack.
+                    // Any locals will cause the fp to be moved up, with the
+                    // locals existing between the Thonk name and the fp.
                     Instruction::PushLocal(index) => {
-                        let value = self.stack[fp + index + 1].clone();
+                        let value = self.stack[fp - index].clone();
                         self.stack.push(value);
 
                         0
                     }
                     Instruction::Return => {
                         let result = self.stack.pop().unwrap();
-                        dbg!(&result, &self.stack);
+                        // dbg!(&self.stack);
+                        // for _ in 0..fp {
+                        //     self.stack.pop();
+                        // }
                         return Ok(result);
                     }
                     Instruction::Subtract => {
@@ -492,7 +501,7 @@ mod tests {
         thonk.add_instruction(Instruction::Push(new_ref!(Value, 42.into())));
         println!("{}", thonk);
 
-        let mut frame = CallFrame::new(0, 0, &thonk);
+        let mut frame = CallFrame::new(0, &thonk);
         // vm.frames.push(frame);
 
         let result = vm.run(&mut frame, true);
@@ -519,7 +528,7 @@ mod tests {
         thonk.add_instruction(Instruction::Return);
         println!("{}", thonk);
 
-        let mut frame = CallFrame::new(0, 0, &thonk);
+        let mut frame = CallFrame::new(0, &thonk);
         // vm.frames.push(frame);
 
         let result = vm.run(&mut frame, true);
@@ -549,7 +558,7 @@ mod tests {
         thonk.add_instruction(Instruction::Return);
         println!("{}", thonk);
 
-        let mut frame = CallFrame::new(0, 0, &thonk);
+        let mut frame = CallFrame::new(0, &thonk);
         // vm.frames.push(frame);
 
         let result = vm.run(&mut frame, true);
@@ -579,7 +588,7 @@ mod tests {
         thonk.add_instruction(Instruction::Return);
         println!("{}", thonk);
 
-        let mut frame = CallFrame::new(0, 0, &thonk);
+        let mut frame = CallFrame::new(0, &thonk);
         // vm.frames.push(frame);
 
         let result = vm.run(&mut frame, true);
@@ -608,7 +617,7 @@ mod tests {
         thonk.add_instruction(Instruction::Return);
         println!("{}", thonk);
 
-        let mut frame = CallFrame::new(0, 0, &thonk);
+        let mut frame = CallFrame::new(0, &thonk);
         // vm.frames.push(frame);
 
         let result = vm.run(&mut frame, true);
@@ -636,7 +645,7 @@ mod tests {
         thonk.add_instruction(Instruction::Return);
         println!("{}", thonk);
 
-        let mut frame = CallFrame::new(0, 0, &thonk);
+        let mut frame = CallFrame::new(0, &thonk);
         // vm.frames.push(frame);
 
         let result = vm.run(&mut frame, true);
@@ -663,7 +672,7 @@ mod tests {
         thonk.add_instruction(Instruction::Return);
         println!("{}", thonk);
 
-        let mut frame = CallFrame::new(0, 0, &thonk);
+        let mut frame = CallFrame::new(0, &thonk);
         // vm.frames.push(frame);
 
         let result = vm.run(&mut frame, true);
@@ -690,7 +699,7 @@ mod tests {
         thonk.add_instruction(Instruction::Return);
         println!("{}", thonk);
 
-        let mut frame = CallFrame::new(0, 0, &thonk);
+        let mut frame = CallFrame::new(0, &thonk);
         // vm.frames.push(frame);
 
         let result = vm.run(&mut frame, true);
@@ -730,7 +739,7 @@ mod tests {
         thonk.add_instruction(Instruction::Return);
         println!("{}", thonk);
 
-        let mut frame = CallFrame::new(0, 0, &thonk);
+        let mut frame = CallFrame::new(0, &thonk);
         // vm.frames.push(frame);
 
         let result = vm.run(&mut frame, true);
@@ -765,7 +774,7 @@ mod tests {
         thonk.add_instruction(Instruction::Return);
         println!("{}", thonk);
 
-        let mut frame = CallFrame::new(0, 0, &thonk);
+        let mut frame = CallFrame::new(1, &thonk);
         // vm.frames.push(frame);
 
         let result = vm.run(&mut frame, true);
@@ -839,7 +848,7 @@ mod tests {
         thonk.add_instruction(Instruction::Return);
         println!("{}", thonk);
 
-        let mut frame = CallFrame::new(0, 0, &thonk);
+        let mut frame = CallFrame::new(0, &thonk);
         // vm.frames.push(frame);
 
         let result = vm.run(&mut frame, true);
@@ -874,7 +883,7 @@ mod tests {
         thonk.add_instruction(Instruction::Return);
         println!("{}", thonk);
 
-        let mut frame = CallFrame::new(0, 0, &thonk);
+        let mut frame = CallFrame::new(3, &thonk);
         // vm.frames.push(frame);
 
         let result = vm.run(&mut frame, true);
@@ -890,6 +899,42 @@ mod tests {
 
         // let mut frame = vm.frames.pop().unwrap();
         // assert_eq!(frame.ip, 2);
+    }
+
+    #[test]
+    fn test_instr_modify_local() {
+        let memory = Memory::new();
+        let mut vm = VM::new(&memory.0);
+        let mut thonk = Thonk::new("test".to_string());
+
+        vm.stack.push(new_ref!(
+            Value,
+            "this would normally be a function at the top (bottom?) of the call frame".into()
+        ));
+        vm.stack
+            .push(new_ref!(Value, <i32 as Into<Value>>::into(-1)));
+        vm.stack.push(new_ref!(Value, Value::Integer(-1)));
+        vm.stack.push(new_ref!(Value, Value::Integer(-1)));
+
+        thonk.add_instruction(Instruction::Push(new_ref!(Value, 42.into())));
+        thonk.add_instruction(Instruction::PopLocal(1));
+        thonk.add_instruction(Instruction::PushLocal(1));
+        thonk.add_instruction(Instruction::Return);
+        println!("{}", thonk);
+
+        let mut frame = CallFrame::new(3, &thonk);
+        // vm.frames.push(frame);
+
+        let result = vm.run(&mut frame, true);
+        println!("{:?}", result);
+        println!("{:?}", vm);
+
+        assert!(vm.stack.len() == 4);
+
+        assert!(result.is_ok());
+
+        let result: DwarfInteger = (&*s_read!(result.unwrap())).try_into().unwrap();
+        assert_eq!(result, 42);
     }
 
     #[test]
@@ -936,13 +981,14 @@ mod tests {
         // add
         thonk.add_instruction(Instruction::Add);
         thonk.add_instruction(Instruction::Return);
+        thonk.increment_frame_size();
         println!("{}", thonk);
 
         // put fib in memory
         let slot = memory.0.reserve_thonk_slot();
         memory.0.insert_thonk(thonk.clone(), slot);
 
-        let mut frame = CallFrame::new(0, 0, &thonk);
+        let mut frame = CallFrame::new(1, &thonk);
 
         let mut vm = VM::new(&memory.0);
 
