@@ -386,6 +386,7 @@ pub fn new_lu_dog(
         lu_dog: new_ref!(LuDogStore, lu_dog),
         models,
         dirty,
+        sarzak: new_ref!(SarzakStore, sarzak.clone()),
     })
 }
 

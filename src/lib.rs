@@ -78,6 +78,7 @@ mod keywords {
 }
 
 use lu_dog::{ObjectStore as LuDogStore, ValueType};
+use sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL};
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "single-vec")] {
@@ -371,6 +372,8 @@ pub struct Context {
     /// This contains things that the extruder added, that the interpreter
     /// needs to know about.
     pub dirty: Vec<Dirty>,
+    /// This is a reference to the sarzak store.
+    pub sarzak: RefType<SarzakStore>,
 }
 
 impl Context {
@@ -391,6 +394,10 @@ impl Default for Context {
             lu_dog: new_ref!(LuDogStore, LuDogStore::new()),
             models: HashMap::default(),
             dirty: Vec::default(),
+            sarzak: new_ref!(
+                SarzakStore,
+                SarzakStore::from_bincode(SARZAK_MODEL).unwrap()
+            ),
         }
     }
 }

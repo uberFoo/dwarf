@@ -18,23 +18,19 @@ use crate::{
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub const BUILD_TIME: &str = include!(concat!(env!("OUT_DIR"), "/timestamp.txt"));
 
-pub fn compile(context: &ExtruderContext, sarzak: &SarzakStore) -> Result<Program> {
+pub fn compile(context: &ExtruderContext) -> Result<Program> {
     let lu_dog = &context.lu_dog;
 
     let mut program = Program::new(VERSION.to_owned(), BUILD_TIME.to_owned());
 
     for func in s_read!(lu_dog).iter_function() {
-        program.add_thonk(compile_function(&func, context, sarzak)?);
+        program.add_thonk(compile_function(&func, context)?);
     }
 
     Ok(program)
 }
 
-fn compile_function(
-    func: &RefType<Function>,
-    context: &ExtruderContext,
-    sarzak: &SarzakStore,
-) -> Result<Thonk> {
+fn compile_function(func: &RefType<Function>, context: &ExtruderContext) -> Result<Thonk> {
     let lu_dog = &context.lu_dog;
 
     let name = s_read!(func).name.clone();
@@ -54,7 +50,7 @@ fn compile_function(
                     let mut next = s_read!(lu_dog).exhume_statement(id).unwrap();
 
                     loop {
-                        compile_statement(&next, &mut thonk, context, sarzak)?;
+                        compile_statement(&next, &mut thonk, context)?;
 
                         if let Some(ref id) = s_read!(next.clone()).next {
                             next = s_read!(lu_dog).exhume_statement(id).unwrap();
@@ -84,7 +80,6 @@ fn compile_statement(
     statement: &RefType<Statement>,
     thonk: &mut Thonk,
     context: &ExtruderContext,
-    sarzak: &SarzakStore,
 ) -> Result<()> {
     let lu_dog = &context.lu_dog;
 
@@ -93,7 +88,7 @@ fn compile_statement(
             let stmt = s_read!(lu_dog).exhume_expression_statement(stmt).unwrap();
             let stmt = s_read!(stmt);
             let expr = stmt.r31_expression(&s_read!(lu_dog))[0].clone();
-            let _value = compile_expression(&expr, thonk, context, sarzak)?;
+            let _value = compile_expression(&expr, thonk, context)?;
         }
         StatementEnum::LetStatement(ref stmt) => {
             let stmt = s_read!(lu_dog).exhume_let_statement(stmt).unwrap();
@@ -101,7 +96,7 @@ fn compile_statement(
 
             let expr = stmt.r20_expression(&s_read!(lu_dog))[0].clone();
 
-            let value = compile_expression(&expr, thonk, context, sarzak)?;
+            let value = compile_expression(&expr, thonk, context)?;
 
             let var = s_read!(stmt.r21_local_variable(&s_read!(lu_dog))[0]).clone();
             let var = s_read!(var.r12_variable(&s_read!(lu_dog))[0]).clone();
@@ -114,7 +109,7 @@ fn compile_statement(
 
             let expr = stmt.r41_expression(&s_read!(lu_dog))[0].clone();
 
-            let value = compile_expression(&expr, thonk, context, sarzak)?;
+            let value = compile_expression(&expr, thonk, context)?;
         }
         StatementEnum::ItemStatement(_) => {}
     }
@@ -125,7 +120,6 @@ fn compile_expression(
     expression: &RefType<Expression>,
     thonk: &mut Thonk,
     context: &ExtruderContext,
-    sarzak: &SarzakStore,
 ) -> Result<()> {
     let lu_dog = &context.lu_dog;
 
@@ -138,7 +132,7 @@ fn compile_expression(
             if let Some(ref expr) = s_read!(call).expression {
                 let expr = s_read!(lu_dog).exhume_expression(expr).unwrap();
                 // Evaluate the LHS to get at the underlying value/instance.
-                compile_expression(&expr, thonk, context, sarzak)?;
+                compile_expression(&expr, thonk, context)?;
             };
             thonk.add_instruction(Instruction::Call(0));
             thonk.add_instruction(Instruction::Pop);
@@ -212,7 +206,7 @@ fn compile_expression(
             let print = s_read!(lu_dog).exhume_x_print(print).unwrap();
             let expr = s_read!(print).r32_expression(&s_read!(lu_dog))[0].clone();
 
-            compile_expression(&expr, thonk, context, sarzak)?;
+            compile_expression(&expr, thonk, context)?;
             thonk.add_instruction(Instruction::Out(0));
         }
         missed => {
@@ -271,7 +265,7 @@ mod test {
             &sarzak,
         )
         .unwrap();
-        let program = compile(&ctx, &sarzak).unwrap();
+        let program = compile(&ctx).unwrap();
 
         assert_eq!(program.get_thonk_card(), 1);
         assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 2);
@@ -293,7 +287,7 @@ mod test {
             &sarzak,
         )
         .unwrap();
-        let program = compile(&ctx, &sarzak).unwrap();
+        let program = compile(&ctx).unwrap();
 
         assert_eq!(program.get_thonk_card(), 3);
         assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 2);
@@ -317,7 +311,7 @@ mod test {
             &sarzak,
         )
         .unwrap();
-        let program = compile(&ctx, &sarzak).unwrap();
+        let program = compile(&ctx).unwrap();
 
         println!("{program}");
 
@@ -344,14 +338,40 @@ mod test {
             &sarzak,
         )
         .unwrap();
-        let program = compile(&ctx, &sarzak).unwrap();
+        let program = compile(&ctx).unwrap();
 
         println!("{program}");
 
         assert_eq!(program.get_thonk_card(), 2);
-        // assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 5);
+        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 5);
         assert_eq!(program.get_thonk("foo").unwrap().get_instruction_card(), 4);
 
         run_vm(&program).unwrap();
+    }
+
+    #[test]
+    fn test_let_statement() {
+        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
+        let ore = "fn main() -> int {
+                       let x = 5;
+                       print(x);
+                       x
+                   }";
+        let ast = parse_dwarf("test_let_statement", ore).unwrap();
+        let ctx = new_lu_dog(
+            "test_let_statement".to_owned(),
+            Some((ore.to_owned(), &ast)),
+            &get_dwarf_home(),
+            &sarzak,
+        )
+        .unwrap();
+        let program = compile(&ctx).unwrap();
+
+        println!("{program}");
+
+        assert_eq!(program.get_thonk_card(), 1);
+        // assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 6);
+
+        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(5));
     }
 }

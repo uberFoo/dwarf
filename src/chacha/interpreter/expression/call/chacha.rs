@@ -54,8 +54,8 @@ pub(crate) fn eval_dwarf(
 
     let sarzak = (*s_read!(context.sarzak_heel())).clone();
 
-    let mut ctx = initialize_interpreter(2, context.get_home().clone(), ctx.clone(), sarzak)
-        .map_err(|e| {
+    let mut ctx =
+        initialize_interpreter(2, context.get_home().clone(), ctx.clone()).map_err(|e| {
             chacha_print(
                 crate::chacha::error::ChaChaErrorReporter(&e, false, &ctx.source(), name)
                     .to_string(),

@@ -819,7 +819,7 @@ mod tests {
             })
             .into();
 
-        let ctx = initialize_interpreter(2, dwarf_home, ctx, sarzak).unwrap();
+        let ctx = initialize_interpreter(2, dwarf_home, ctx).unwrap();
         let ty_name = PrintableValueType(false, struct_ty.clone(), ctx.models());
         let mut foo_inst = UserStruct::new(ty_name.to_string(), &struct_ty);
         foo_inst.define_field("bar", new_ref!(Value, 42.into()));

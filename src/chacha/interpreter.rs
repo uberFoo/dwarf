@@ -142,7 +142,6 @@ pub fn initialize_interpreter(
     thread_count: usize,
     dwarf_home: PathBuf,
     e_context: ExtruderContext,
-    sarzak: SarzakStore,
 ) -> Result<Context, Error> {
     debug!("initialize_interpreter with {thread_count} threads");
 
@@ -402,7 +401,7 @@ pub fn initialize_interpreter(
             block,
             stack,
             e_context.lu_dog.clone(),
-            new_ref!(SarzakStore, sarzak),
+            e_context.sarzak.clone(),
             new_ref!(ModelStore, e_context.models),
             receiver,
             std_out_send,
@@ -424,7 +423,7 @@ pub fn initialize_interpreter(
         block,
         stack,
         e_context.lu_dog.clone(),
-        new_ref!(SarzakStore, sarzak),
+        e_context.sarzak.clone(),
         new_ref!(ModelStore, e_context.models),
         receiver,
         std_out_send,

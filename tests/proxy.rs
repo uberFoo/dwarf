@@ -78,7 +78,7 @@ fn run_program(test: &str, program: &str) -> Result<(RefType<Value>, String), St
         }
     };
 
-    let mut ctx = initialize_interpreter(2, dwarf_home, ctx, sarzak).unwrap();
+    let mut ctx = initialize_interpreter(2, dwarf_home, ctx).unwrap();
     match start_func("main", false, &mut ctx) {
         Ok(v) => {
             let stdout = ctx.drain_std_out().join("").trim().to_owned();

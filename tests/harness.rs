@@ -137,7 +137,7 @@ fn run_program(test: &str, program: &str) -> Result<(Value, String), String> {
         }
     };
 
-    let mut ctx = initialize_interpreter(1, dwarf_home, ctx, sarzak).unwrap();
+    let mut ctx = initialize_interpreter(1, dwarf_home, ctx).unwrap();
     let result = match start_func("main", false, &mut ctx) {
         Ok(value) => unsafe {
             // Ok((Value::Empty, String::new()))

@@ -258,7 +258,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         };
 
-        let mut ctx = initialize_interpreter(threads, dwarf_home, ctx, sarzak)?;
+        let mut ctx = initialize_interpreter(threads, dwarf_home, ctx)?;
         ctx.add_args(dwarf_args);
 
         if args.banner.is_some() && args.banner.unwrap() {
@@ -364,7 +364,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     } else {
         let ctx = Context::default();
-        let mut ctx = initialize_interpreter(2, dwarf_home, ctx, sarzak)?;
+        let mut ctx = initialize_interpreter(2, dwarf_home, ctx)?;
 
         start_repl(&mut ctx, is_uber).map_err(|e| {
             println!("Interpreter exited with: {}", e);
