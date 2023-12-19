@@ -143,7 +143,7 @@ fn loop_(c: &mut Criterion) {
         b.iter(|| start_func("main", false, &mut ctx.clone()).unwrap())
     });
 
-    let mut ctx = initialize_interpreter(num_cpus::get(), dwarf_home, lu_dog_ctx, sarzak).unwrap();
+    let mut ctx = initialize_interpreter(num_cpus::get(), dwarf_home, lu_dog_ctx).unwrap();
     ctx.add_args(vec!["fib".to_owned(), "28".to_owned()]);
 
     c.bench_function("fib-28", |b| {
@@ -175,7 +175,7 @@ fn loop_(c: &mut Criterion) {
     )
     .unwrap();
 
-    let mut ctx = initialize_interpreter(num_cpus::get(), dwarf_home, lu_dog_ctx, sarzak).unwrap();
+    let mut ctx = initialize_interpreter(num_cpus::get(), dwarf_home, lu_dog_ctx).unwrap();
 
     c.bench_function("loop", |b| {
         b.iter(|| start_func("main", false, &mut ctx.clone()).unwrap())
