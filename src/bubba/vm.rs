@@ -151,6 +151,8 @@ impl<'b> VM<'b> {
                             self.stack.pop();
                         });
 
+                        dbg!(&self.stack);
+
                         self.stack.push(result);
 
                         0
@@ -407,6 +409,11 @@ impl<'b> VM<'b> {
 
                         0
                     }
+                    Instruction::Pop => {
+                        self.stack.pop();
+
+                        0
+                    }
                     Instruction::PopLocal(index) => {
                         let value = self.stack.pop().unwrap();
                         self.stack[fp + index + 1] = value;
@@ -425,7 +432,9 @@ impl<'b> VM<'b> {
                         0
                     }
                     Instruction::Return => {
-                        return Ok(self.stack.pop().unwrap());
+                        let result = self.stack.pop().unwrap();
+                        dbg!(&result, &self.stack);
+                        return Ok(result);
                     }
                     Instruction::Subtract => {
                         let b = self.stack.pop().unwrap();

@@ -8,6 +8,11 @@ use crate::{s_read, RefType, Value, ValueType};
 #[derive(Clone, Debug)]
 pub enum Instruction {
     /// Add the top two values on the stack.
+    ///
+    /// ## Stack Effect
+    ///
+    /// The instruction will pop two values from the stack, and push one.
+    /// Therefore the stack will be one element shorter after this instruction.
     Add,
     /// Call a function with the given arity.
     ///
@@ -19,22 +24,25 @@ pub enum Instruction {
     ///
     /// Push a Value onto the stack that contains a Thonk.
     /// Push
+    ///
+    ///  ## Stack Effect
+    ///
     Call(usize),
     /// Duplicate the top of the stack.
+    ///
+    /// ## Stack Effect
+    ///
+    /// The instruction will increase the stack depth by one.
     Dup,
-    /// Fetch a local variable.
-    ///
-    /// The parameter is it's distance from the frame pointer, or the index of
-    /// the local variable.
-    ///
-    /// The value of the local variable is pushed onto the stack.
-    PushLocal(usize),
     /// Read a field value
     ///
     /// The top of the stack is the name of the field to read. The second value
     /// on the stack is the object from which to read.
     ///
     /// The value read is left on top of the stack.
+    ///
+    /// ## Stack Effect
+    ///
     FieldRead,
     /// Read several field values
     ///
@@ -43,18 +51,33 @@ pub enum Instruction {
     ///
     /// The values read are left on top of the stack, in the same order as their
     /// field names were on the stack.
+    ///
+    /// ## Stack Effect
+    ///
     FieldsRead(usize),
     /// Write a field value
     ///
     /// The top of the stack is the value to write. The second value on the
     /// stack is the filed name, and the third value on the stack is the object
     /// to which to write.
+    ///
+    /// ## Stack Effect
+    ///
     FieldWrite,
     /// Jump to the given offset if the top of the stack is false.
+    ///
+    /// ## Stack Effect
+    ///
     JumpIfFalse(usize),
     /// Compare the top two values on the stack.
+    ///
+    /// ## Stack Effect
+    ///
     TestLessThanOrEqual,
     /// Multiply the top two values on the stack.
+    ///
+    /// ## Stack Effect
+    ///
     Mul,
     /// New UserType
     ///
@@ -64,6 +87,9 @@ pub enum Instruction {
     /// There is a `([String], [ValueType], [Value])`tuple on the stack for each
     /// field.
     /// // 🚧 move these parameters to the stack
+    ///
+    /// ## Stack Effect
+    ///
     NewUserType(String, RefType<ValueType>, usize),
     /// Write a Value
     ///
@@ -72,18 +98,52 @@ pub enum Instruction {
     /// stderr.
     ///
     /// The next value on the stack is the value itself to write.
+    ///
+    /// ## Stack Effect
+    ///
     Out(usize),
+    /// Pop the value off the top of the stack.
+    ///
+    /// The value is dropped on the floor and forgotten.
+    ///
+    /// ## Stack Effect
+    ///
+    /// The stack is one element shorter after this instruction.
+    Pop,
+    ///
     /// Pop the top value off the stack and store it in a local variable at the
     /// given index.
+    ///
+    /// ## Stack Effect
+    ///
     PopLocal(usize),
     /// Push a value onto the stack.
+    ///
+    /// ## Stack Effect
+    ///
     Push(RefType<Value>),
+    /// Fetch a local variable.
+    ///
+    /// The parameter is it's distance from the frame pointer, or the index of
+    /// the local variable.
+    ///
+    /// The value of the local variable is pushed onto the stack.
+    ///
+    /// ## Stack Effect
+    ///
+    PushLocal(usize),
     /// Exit the function
     ///
     /// The value expressed by this instruction is the value at the top of the
     /// stack.
+    ///
+    /// ## Stack Effect
+    ///
     Return,
     /// Subtract the top two values on the stack.
+    ///
+    /// ## Stack Effect
+    ///
     Subtract,
 }
 
@@ -101,12 +161,6 @@ impl fmt::Display for Instruction {
                 operand_style.paint(arity.to_string())
             ),
             Instruction::Dup => write!(f, "{}", opcode_style.paint("dup")),
-            Instruction::PushLocal(index) => write!(
-                f,
-                "{} {}",
-                opcode_style.paint("push_local"),
-                operand_style.paint(index.to_string())
-            ),
             Instruction::FieldRead => write!(f, "{}", opcode_style.paint("field_read")),
             Instruction::FieldsRead(count) => write!(
                 f,
@@ -132,6 +186,7 @@ impl fmt::Display for Instruction {
                 opcode_style.paint("out "),
                 operand_style.paint(stream.to_string())
             ),
+            Instruction::Pop => write!(f, "{}", opcode_style.paint("pop")),
             Instruction::PopLocal(index) => write!(
                 f,
                 "{} {}",
@@ -143,6 +198,12 @@ impl fmt::Display for Instruction {
                 "{} {}",
                 opcode_style.paint("push"),
                 operand_style.paint(s_read!(value).to_string())
+            ),
+            Instruction::PushLocal(index) => write!(
+                f,
+                "{} {}",
+                opcode_style.paint("push_local"),
+                operand_style.paint(index.to_string())
             ),
             Instruction::Return => write!(f, "{}", opcode_style.paint("ret")),
             Instruction::Subtract => write!(f, "{}", opcode_style.paint("sub")),

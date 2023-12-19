@@ -1571,19 +1571,6 @@ pub(super) fn inter_expression(
             let func = &func.0;
             debug!("args {:?}", args);
 
-            // I think that we need to see if we have the function definition
-            // in memory. This is actually tricky, because theoretically we will
-            // eventually have either the function definition or a pointer to
-            // some external function. Either way we should be able to look up the
-            // return type. We only need to resort to interring the expression
-            // if we con't find it, which means it's a local variable, and we
-            // can go that route.
-            //
-            // The problem, currently, is that not only do we not really resolve
-            // external references, but we also don't parse all the function
-            // signatures into memory before we parse their bodies.
-            //
-            // 🚧 Deal with the above situation.
             let (func_expr, ret_ty) = inter_expression(
                 &new_ref!(ParserExpression, func.to_owned()),
                 fspan,
@@ -1598,10 +1585,18 @@ pub(super) fn inter_expression(
                         if let Some(defn) = context.func_defs.get(name) {
                             defn.return_type.clone()
                         } else {
-                            ret_ty.clone()
+                            return Err(vec![DwarfError::MissingFunctionDefinition {
+                                span: fspan.to_owned(),
+                                file: context.file_name.to_owned(),
+                            }]);
                         }
                     }
-                    _ => ret_ty.clone(),
+                    _ => {
+                        return Err(vec![DwarfError::MissingFunctionDefinition {
+                            span: fspan.to_owned(),
+                            file: context.file_name.to_owned(),
+                        }]);
+                    }
                 }
             } else {
                 ret_ty.clone()

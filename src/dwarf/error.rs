@@ -96,6 +96,12 @@ pub enum DwarfError {
         location: Location,
     },
 
+    /// Missing Function Definition
+    ///
+    /// A function is being called, but it's not defined.
+    #[snafu(display("\n{}: Missing function definition\n  --> {}..{}", C_ERR.bold().paint("error"), span.start, span.end))]
+    MissingFunctionDefinition { file: String, span: Span },
+
     /// Missing Implementation
     ///
     /// This is just not done yet.
@@ -318,6 +324,19 @@ impl fmt::Display for DwarfErrorReporter<'_, '_> {
                     .with_label(
                         Label::new((file, span))
                             .with_message("used here".to_string())
+                            .with_color(Color::Red),
+                    )
+                    .finish()
+                    .write((file, Source::from(&program)), &mut std_err)
+                    .map_err(|_| fmt::Error)?;
+                write!(f, "{}", String::from_utf8_lossy(&std_err))
+            }
+            DwarfError::MissingFunctionDefinition { file, span } => {
+                Report::build(ReportKind::Error, file, span.start)
+                    .with_message("missing function definition")
+                    .with_label(
+                        Label::new((file, span.to_owned()))
+                            .with_message("function called here is not found")
                             .with_color(Color::Red),
                     )
                     .finish()
