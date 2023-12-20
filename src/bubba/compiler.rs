@@ -9,8 +9,8 @@ use crate::{
     },
     chacha::value::ThonkInner,
     lu_dog::{
-        BodyEnum, BooleanLiteralEnum, Expression, ExpressionEnum, Function, LiteralEnum,
-        ObjectStore as LuDogStore, Statement, StatementEnum,
+        BinaryEnum, BodyEnum, BooleanLiteralEnum, CallEnum, Expression, ExpressionEnum, Function,
+        LiteralEnum, ObjectStore as LuDogStore, OperatorEnum, Statement, StatementEnum,
     },
     new_ref, s_read,
     sarzak::ObjectStore as SarzakStore,
@@ -181,14 +181,89 @@ fn compile_expression(
             let call = s_read!(lu_dog).exhume_call(call).unwrap();
             let first_arg = s_read!(call).argument;
             let mut args = s_read!(call).r28_argument(&s_read!(lu_dog));
+            let call_type = &s_read!(call).subtype;
+
+            let name = if let CallEnum::FunctionCall(ref call) = call_type {
+                let call = s_read!(lu_dog).exhume_function_call(call).unwrap();
+                let call = s_read!(call);
+                let name = call.name.clone();
+                name
+            } else {
+                todo!("handle the other calls");
+            };
+
+            let func = s_read!(lu_dog).exhume_function_id_by_name(&name).unwrap();
+            let func = s_read!(lu_dog).exhume_function(&func).unwrap();
+            let func = s_read!(func);
+            let params = func.r13_parameter(&s_read!(lu_dog));
+
+            let params = if !params.is_empty() {
+                let mut params = Vec::with_capacity(params.len());
+                let mut next = func
+                    .r13_parameter(&s_read!(lu_dog))
+                    .iter()
+                    .find(|p| s_read!(p).r14c_parameter(&s_read!(lu_dog)).is_empty())
+                    .unwrap()
+                    .clone();
+
+                loop {
+                    // Apparently I'm being clever. I don't typecheck against an actual
+                    // type associated with the parameter. No, I am looking up the variable
+                    // associated with the parameter and using it's type. I guess that's cool,
+                    // but it's tricky if you aren't aware.
+                    let var = s_read!(s_read!(next).r12_variable(&s_read!(lu_dog))[0]).clone();
+                    let value = s_read!(var.r11_x_value(&s_read!(lu_dog))[0]).clone();
+                    let ty = value.r24_value_type(&s_read!(lu_dog))[0].clone();
+                    params.push(var.name.clone());
+
+                    let next_id = { s_read!(next).next };
+                    if let Some(ref id) = next_id {
+                        next = s_read!(lu_dog).exhume_parameter(id).unwrap();
+                    } else {
+                        break;
+                    }
+                }
+
+                params
+            } else {
+                Vec::new()
+            };
+
+            let arg_exprs = if let Some(next) = first_arg {
+                let mut exprs = Vec::with_capacity(args.len());
+                let mut next = s_read!(lu_dog).exhume_argument(&next).unwrap();
+
+                loop {
+                    let expr = s_read!(next).r37_expression(&s_read!(lu_dog))[0].clone();
+                    exprs.push(expr);
+
+                    let next_id = { s_read!(next).next };
+                    if let Some(ref id) = next_id {
+                        next = s_read!(lu_dog).exhume_argument(id).unwrap();
+                    } else {
+                        break;
+                    }
+                }
+
+                exprs
+            } else {
+                Vec::new()
+            };
 
             if let Some(ref expr) = s_read!(call).expression {
                 let expr = s_read!(lu_dog).exhume_expression(expr).unwrap();
                 // Evaluate the LHS to get at the underlying value/instance.
                 compile_expression(&expr, thonk, context)?;
             };
-            thonk.add_instruction(Instruction::Call(0));
-            thonk.add_instruction(Instruction::Pop);
+
+            for (name, expr) in params.into_iter().zip(arg_exprs) {
+                compile_expression(&expr, thonk, context)?;
+                context.insert_symbol(name);
+                // thonk.increment_frame_size();
+            }
+
+            thonk.add_instruction(Instruction::Call(args.len()));
+            // thonk.add_instruction(Instruction::Pop);
         }
         ExpressionEnum::Literal(ref literal) => {
             let literal = s_read!(lu_dog).exhume_literal(literal).unwrap();
@@ -240,6 +315,57 @@ fn compile_expression(
             };
 
             thonk.add_instruction(Instruction::Push(literal?));
+        }
+        ExpressionEnum::Operator(ref op_type) => {
+            let operator = s_read!(lu_dog).exhume_operator(op_type).unwrap();
+            let operator = s_read!(operator);
+            let lhs = s_read!(lu_dog).exhume_expression(&operator.lhs).unwrap();
+
+            match operator.subtype {
+                OperatorEnum::Binary(ref op_type) => {
+                    let binary = s_read!(lu_dog).exhume_binary(op_type).unwrap();
+                    let binary = s_read!(binary);
+                    let rhs = s_read!(lu_dog)
+                        .exhume_expression(&operator.rhs.unwrap())
+                        .unwrap();
+
+                    dbg!(&lhs, &rhs);
+                    compile_expression(&lhs, thonk, context)?;
+                    compile_expression(&rhs, thonk, context)?;
+
+                    match binary.subtype {
+                        BinaryEnum::Addition(_) => {
+                            thonk.add_instruction(Instruction::Add);
+                        }
+                        BinaryEnum::Assignment(_) => {
+                            todo!("Assignment")
+                        }
+                        BinaryEnum::BooleanOperator(_) => {
+                            todo!("BooleanOperator")
+                        }
+                        BinaryEnum::Division(_) => {
+                            todo!("Division")
+                        }
+                        BinaryEnum::Subtraction(_) => {
+                            todo!("Subtraction")
+                        }
+                        BinaryEnum::Multiplication(_) => {
+                            todo!("Multiplication")
+                        }
+                    }
+                }
+                OperatorEnum::Comparison(ref op_type) => {
+                    let op_type = s_read!(lu_dog).exhume_comparison(op_type).unwrap();
+                    let op_type = s_read!(op_type);
+
+                    match &op_type.subtype {
+                        _ => todo!(),
+                    }
+                }
+                OperatorEnum::Unary(ref id) => {
+                    todo!("unary");
+                }
+            }
         }
         ExpressionEnum::VariableExpression(ref expr) => {
             let expr = s_read!(lu_dog).exhume_variable_expression(expr).unwrap();
@@ -414,14 +540,14 @@ mod test {
         println!("{program}");
 
         assert_eq!(program.get_thonk_card(), 2);
-        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 5);
+        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 4);
         assert_eq!(program.get_thonk("foo").unwrap().get_instruction_card(), 4);
 
         run_vm(&program).unwrap();
     }
 
     #[test]
-    fn test_let_statement() {
+    fn test_let_statements() {
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "fn main() -> int {
                        let z = 1;
@@ -448,5 +574,33 @@ mod test {
         );
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(5));
+    }
+
+    #[test]
+    fn test_func_args() {
+        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
+        let ore = "fn main() -> int {
+                       foo(1, 2, 3)
+                   }
+                   fn foo(x: int, y: int, z: int) -> int {
+                       x + y + z
+                   }";
+        let ast = parse_dwarf("test_func_args", ore).unwrap();
+        let ctx = new_lu_dog(
+            "test_func_args".to_owned(),
+            Some((ore.to_owned(), &ast)),
+            &get_dwarf_home(),
+            &sarzak,
+        )
+        .unwrap();
+        let program = compile(&ctx).unwrap();
+
+        println!("{program}");
+
+        assert_eq!(program.get_thonk_card(), 2);
+        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 8);
+        assert_eq!(program.get_thonk("foo").unwrap().get_instruction_card(), 8);
+
+        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(6));
     }
 }

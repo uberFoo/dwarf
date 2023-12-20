@@ -28,7 +28,7 @@ pub fn eval(
     debug!("eval_comparison: {lhs:?} {comp:?} {rhs:?}");
 
     let comp = s_read!(comp);
-    match &comp.subtype {
+    match comp.subtype {
         ComparisonEnum::Equal(_) => {
             let value = *s_read!(lhs) == *s_read!(rhs);
             let value = Value::Boolean(value);

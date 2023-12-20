@@ -27,9 +27,9 @@ use crate::{
         store::ObjectStore as LuDogStore,
         types::{
             AWait, Block, Body, BooleanOperator, Call, DataStructure, EnumFieldEnum, Expression,
-            ExpressionEnum, ExpressionStatement, Field, FieldExpression, ForLoop, Generic,
-            ImplementationBlock, Index, IntegerLiteral, Item as WoogItem, ItemStatement, Lambda,
-            LambdaParameter, LetStatement, Literal, LocalVariable, NamedFieldExpression,
+            ExpressionEnum, ExpressionStatement, Field, FieldExpression, ForLoop, FunctionCall,
+            Generic, ImplementationBlock, Index, IntegerLiteral, Item as WoogItem, ItemStatement,
+            Lambda, LambdaParameter, LetStatement, Literal, LocalVariable, NamedFieldExpression,
             PathElement, Pattern as AssocPat, RangeExpression, Span as LuDogSpan, Statement,
             StringLiteral, StructExpression, ValueType, ValueTypeEnum, Variable,
             VariableExpression, WoogStruct, XFuture, XIf, XMatch, XPath, XPrint, XValue,
@@ -1603,7 +1603,14 @@ pub(super) fn inter_expression(
                 ret_ty.clone()
             };
 
-            let func_call = Call::new_function_call(true, None, Some(&func_expr.0), lu_dog);
+            let name = match func {
+                ParserExpression::LocalVariable(name) => name,
+                _ => "not-a-local-variable",
+            };
+
+            let func_call = FunctionCall::new(name.to_owned(), lu_dog);
+            let func_call =
+                Call::new_function_call(true, None, Some(&func_expr.0), &func_call, lu_dog);
             let func = Expression::new_call(&func_call, lu_dog);
             let value = XValue::new_expression(block, &ret_ty, &func, lu_dog);
             update_span_value(&span, &value, location!());

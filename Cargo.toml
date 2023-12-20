@@ -34,8 +34,8 @@ path = "src/bin/tui.rs"
 abi_stable = "0.11.2"
 ansi_term = "0.12.1"
 ansi-to-tui = { git = "https://github.com/uberFoo/ansi-to-tui" }
-async-compat = "0.2.3"
-async-condvar-fair = { version = "1.0.0", features = ["smol"] }
+async-compat = { version = "0.2.3", optional = true }
+async-condvar-fair = { version = "1.0.0", features = ["smol"], optional = true }
 async-executor = { version = "1.6.0", optional = true }
 async-io = { version = "2.2.0", optional = true }
 async-task = { version = "4.5.0", optional = true }
@@ -55,6 +55,7 @@ crossterm = "0.27.0"
 dap = "0.2.0-alpha1"
 env_logger = "0.10.0"
 futures-lite = { version = "2.0.0", optional = true }
+getrandom = { version = "0.2", features = ["js"] }
 heck = "0.4.1"
 hyper = { version = "0.14.26", optional = true }
 lazy_static = "1.4.0"
@@ -69,9 +70,12 @@ parking_lot = { version = "0.12.1", features = [
     "hardware-lock-elision",
 ] }
 pretty_env_logger = "0.5.0"
-puteketeke = "0.0.3"
+puteketeke = { version = "0.0.3", optional = true }
 ratatui = { git = "https://github.com/uberFoo/ratatui", optional = true }
-reqwest = { version = "0.11.18", features = ["blocking", "rustls-tls"] }
+reqwest = { version = "0.11.18", features = [
+    "blocking",
+    "rustls-tls",
+], optional = true }
 rustc-hash = "1.1.0"
 rustyline = { version = "12.0.0", optional = true, features = [
     "derive",
@@ -85,7 +89,7 @@ serde_json = "1.0.96"
 slab = "0.4.9"
 smol = { version = "1.3.0", optional = true }
 snafu = { version = "0.7.4", features = ["backtraces"] }
-syntect = "5.0.0"
+syntect = { version = "5.0.0", optional = true }
 threadpool = "1.8.1"
 tokio = { version = "1.28.2", features = ["macros", "rt"], optional = true }
 tracing = { version = "0.1.40" }
@@ -118,7 +122,7 @@ chrono = "0.4.31"
 walkdir = "2.3.3"
 
 [features]
-default = ["single", "repl", "print-std-out"]
+default = ["single", "repl", "print-std-out", "dep:reqwest"]
 # default = ["multi-vec", "repl", "print-std-out", "async"]
 async_executor = ["multi-vec", "repl", "print-std-out", "async"]
 
@@ -128,6 +132,7 @@ tui = [
     "dep:tui-textarea",
     "dep:tui-tree-widget",
     "dep:ratatui",
+    "dep:syntect",
 ]
 
 repl = ["dep:rustyline"]
@@ -158,6 +163,10 @@ async = [
     "dep:async-executor",
     "dep:async-io",
     "dep:once_cell",
+    "dep:puteketeke",
+    "dep:reqwest",
+    "dep:async-compat",
+    "dep:async-condvar-fair",
 ]
 
 [[bench]]
@@ -166,3 +175,6 @@ harness = false
 
 [profile.release]
 lto = "fat"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
