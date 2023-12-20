@@ -244,6 +244,8 @@ pub fn initialize_interpreter(
         thonk.add_instruction(Instruction::Add);
         thonk.add_instruction(Instruction::Return);
 
+        thonk.increment_frame_size();
+
         let slot = stack.reserve_thonk_slot();
         stack.insert_thonk(thonk, slot);
 
@@ -302,6 +304,9 @@ pub fn initialize_interpreter(
         // let ty = lu_dog.exhume_value_type(&id).unwrap();
         // thonk.add_instruction(Instruction::NewUserType("Complex".to_string(), ty, 2));
         thonk.add_instruction(Instruction::Return);
+
+        thonk.increment_frame_size();
+        thonk.increment_frame_size();
 
         let slot = stack.reserve_thonk_slot();
         stack.insert_thonk(thonk, slot);
@@ -382,6 +387,8 @@ pub fn initialize_interpreter(
         // thonk.add_instruction(Instruction::NewUserType("Complex".to_string(), ty, 2));
 
         thonk.add_instruction(Instruction::Return);
+
+        thonk.increment_frame_size();
 
         let slot = stack.reserve_thonk_slot();
         stack.insert_thonk(thonk, slot);
@@ -798,11 +805,13 @@ pub fn start_vm(n: DwarfInteger) -> Result<DwarfInteger, Error> {
     thonk.add_instruction(Instruction::Add);
     thonk.add_instruction(Instruction::Return);
 
+    thonk.increment_frame_size();
+
     // put fib in memory
     let slot = memory.reserve_thonk_slot();
     memory.insert_thonk(thonk.clone(), slot);
 
-    let mut frame = CallFrame::new(0, &thonk);
+    let mut frame = CallFrame::new(&thonk);
 
     let mut vm = VM::new(&memory);
 

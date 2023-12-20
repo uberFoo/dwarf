@@ -772,10 +772,17 @@ pub fn eval(
                     NORM_SQUARED => {
                         let value = arg_values.pop_front().unwrap().0;
                         let thonk = context.memory().get_thonk(0).unwrap();
-                        let mut frame = CallFrame::new(0, thonk);
+
                         vm.push_stack(new_ref!(Value, "norm_squared".into()));
                         vm.push_stack(value);
+                        vm.push_stack(new_ref!(Value, Value::Empty));
+                        vm.set_fp(thonk.get_frame_size() + 1);
+
+                        let mut frame = CallFrame::new(thonk);
+                        // 🚧 It would be neat to turn the tracing on with a flag.
                         let result = vm.run(&mut frame, false);
+
+                        vm.pop_stack();
                         vm.pop_stack();
                         vm.pop_stack();
                         context.increment_expression_count(2);
@@ -785,10 +792,16 @@ pub fn eval(
                     SQUARE => {
                         let value = arg_values.pop_front().unwrap().0;
                         let thonk = context.memory().get_thonk(2).unwrap();
-                        let mut frame = CallFrame::new(0, thonk);
+
                         vm.push_stack(new_ref!(Value, "square".into()));
                         vm.push_stack(value);
+                        vm.push_stack(new_ref!(Value, Value::Empty));
+                        vm.set_fp(thonk.get_frame_size() + 1);
+
+                        let mut frame = CallFrame::new(thonk);
                         let result = vm.run(&mut frame, false);
+
+                        vm.pop_stack();
                         vm.pop_stack();
                         vm.pop_stack();
                         context.increment_expression_count(5);
@@ -797,13 +810,19 @@ pub fn eval(
                     }
                     ADD => {
                         let thonk = context.memory().get_thonk(1).unwrap();
-                        let mut frame = CallFrame::new(0, thonk);
+
                         vm.push_stack(new_ref!(Value, "add".into()));
                         let value = arg_values.pop_front().unwrap().0;
                         vm.push_stack(value);
                         let value = arg_values.pop_front().unwrap().0;
                         vm.push_stack(value);
+                        vm.push_stack(new_ref!(Value, Value::Empty));
+                        vm.set_fp(thonk.get_frame_size() + 1);
+
+                        let mut frame = CallFrame::new(thonk);
                         let result = vm.run(&mut frame, false);
+
+                        vm.pop_stack();
                         vm.pop_stack();
                         vm.pop_stack();
                         vm.pop_stack();

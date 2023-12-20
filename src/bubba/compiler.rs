@@ -1,5 +1,7 @@
 use std::path::PathBuf;
 
+use rustc_hash::FxHashMap as HashMap;
+
 use crate::{
     bubba::{
         error::{Error, Result},
@@ -7,8 +9,8 @@ use crate::{
     },
     chacha::value::ThonkInner,
     lu_dog::{
-        BodyEnum, BooleanLiteralEnum, Expression, ExpressionEnum, Function, LiteralEnum, Statement,
-        StatementEnum,
+        BodyEnum, BooleanLiteralEnum, Expression, ExpressionEnum, Function, LiteralEnum,
+        ObjectStore as LuDogStore, Statement, StatementEnum,
     },
     new_ref, s_read,
     sarzak::ObjectStore as SarzakStore,
@@ -18,20 +20,63 @@ use crate::{
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub const BUILD_TIME: &str = include!(concat!(env!("OUT_DIR"), "/timestamp.txt"));
 
+struct Context<'a> {
+    extruder_context: &'a ExtruderContext,
+    symbol_tables: Vec<(usize, HashMap<String, usize>)>,
+}
+
+impl<'a> Context<'a> {
+    fn new(extruder_context: &'a ExtruderContext) -> Self {
+        Context {
+            extruder_context,
+            symbol_tables: vec![(0, HashMap::default())],
+        }
+    }
+
+    fn lu_dog_heel(&self) -> RefType<LuDogStore> {
+        self.extruder_context.lu_dog.clone()
+    }
+
+    fn push_symbol_table(&mut self) {
+        self.symbol_tables.push((0, HashMap::default()));
+    }
+
+    fn pop_symbol_table(&mut self) {
+        self.symbol_tables.pop();
+    }
+
+    fn insert_symbol(&mut self, name: String) {
+        let (next, map) = self.symbol_tables.last_mut().unwrap();
+        map.insert(name, *next);
+        *next += 1;
+    }
+
+    fn get_symbol(&self, name: &str) -> Option<usize> {
+        for table in self.symbol_tables.iter().rev() {
+            if let Some(value) = table.1.get(name) {
+                return Some(*value);
+            }
+        }
+        None
+    }
+}
+
 pub fn compile(context: &ExtruderContext) -> Result<Program> {
     let lu_dog = &context.lu_dog;
 
     let mut program = Program::new(VERSION.to_owned(), BUILD_TIME.to_owned());
 
+    let mut context = Context::new(context);
+
     for func in s_read!(lu_dog).iter_function() {
-        program.add_thonk(compile_function(&func, context)?);
+        program.add_thonk(compile_function(&func, &mut context)?);
     }
 
     Ok(program)
 }
 
-fn compile_function(func: &RefType<Function>, context: &ExtruderContext) -> Result<Thonk> {
-    let lu_dog = &context.lu_dog;
+fn compile_function(func: &RefType<Function>, context: &mut Context) -> Result<Thonk> {
+    let lu_dog = context.lu_dog_heel();
 
     let name = s_read!(func).name.clone();
     let mut thonk = Thonk::new(name.clone());
@@ -79,9 +124,9 @@ fn compile_function(func: &RefType<Function>, context: &ExtruderContext) -> Resu
 fn compile_statement(
     statement: &RefType<Statement>,
     thonk: &mut Thonk,
-    context: &ExtruderContext,
+    context: &mut Context,
 ) -> Result<()> {
-    let lu_dog = &context.lu_dog;
+    let lu_dog = context.lu_dog_heel();
 
     match s_read!(statement).subtype {
         StatementEnum::ExpressionStatement(ref stmt) => {
@@ -101,14 +146,13 @@ fn compile_statement(
             let var = s_read!(stmt.r21_local_variable(&s_read!(lu_dog))[0]).clone();
             let var = s_read!(var.r12_variable(&s_read!(lu_dog))[0]).clone();
 
-            // 🚧 We'll soon need to store var.name in a symbol table
+            let name = var.name;
+            context.insert_symbol(name.clone());
 
-            // thonk.add_instruction(Instruction::Push(value));
-            thonk.add_instruction(Instruction::PopLocal(0));
+            let offset = context.get_symbol(&name).unwrap();
 
+            thonk.add_instruction(Instruction::PopLocal(offset));
             thonk.increment_frame_size();
-
-            // context.memory().insert(var.name, value);
         }
         StatementEnum::ResultStatement(ref stmt) => {
             let stmt = s_read!(lu_dog).exhume_result_statement(stmt).unwrap();
@@ -116,7 +160,9 @@ fn compile_statement(
 
             let expr = stmt.r41_expression(&s_read!(lu_dog))[0].clone();
 
-            let value = compile_expression(&expr, thonk, context)?;
+            compile_expression(&expr, thonk, context)?;
+
+            thonk.add_instruction(Instruction::Return);
         }
         StatementEnum::ItemStatement(_) => {}
     }
@@ -126,9 +172,9 @@ fn compile_statement(
 fn compile_expression(
     expression: &RefType<Expression>,
     thonk: &mut Thonk,
-    context: &ExtruderContext,
+    context: &mut Context,
 ) -> Result<()> {
-    let lu_dog = &context.lu_dog;
+    let lu_dog = context.lu_dog_heel();
 
     match &s_read!(expression).subtype {
         ExpressionEnum::Call(ref call) => {
@@ -145,8 +191,6 @@ fn compile_expression(
             thonk.add_instruction(Instruction::Pop);
         }
         ExpressionEnum::Literal(ref literal) => {
-            let lu_dog = &context.lu_dog;
-
             let literal = s_read!(lu_dog).exhume_literal(literal).unwrap();
 
             let literal = match &s_read!(literal).subtype {
@@ -202,12 +246,16 @@ fn compile_expression(
             let expr = s_read!(expr);
             let name = expr.name.clone();
 
-            // ATM we are here because we need to look up a function. Somehow
-            // we'll need to differentiate between a function and a variable.
-            thonk.add_instruction(Instruction::Push(new_ref!(
-                Value,
-                Value::Thonk(ThonkInner::Thonk(name))
-            )));
+            if let Some(index) = context.get_symbol(&name) {
+                thonk.add_instruction(Instruction::PushLocal(index));
+            } else {
+                // ATM we are here because we need to look up a function. Somehow
+                // we'll need to differentiate between a function and a variable.
+                thonk.add_instruction(Instruction::Push(new_ref!(
+                    Value,
+                    Value::Thonk(ThonkInner::Thonk(name))
+                )));
+            }
         }
         ExpressionEnum::XPrint(ref print) => {
             let print = s_read!(lu_dog).exhume_x_print(print).unwrap();
@@ -256,11 +304,20 @@ mod test {
             memory.0.insert_thonk(thonk.clone(), slot);
         }
         let mut vm = VM::new(&memory.0);
-        let mut frame = CallFrame::new(0, &program.get_thonk("main").unwrap());
+        let thonk = program.get_thonk("main").unwrap();
+        dbg!(thonk.get_frame_size());
+        let mut frame = CallFrame::new(&thonk);
+
         vm.push_stack(new_ref!(
             Value,
             Value::Thonk(ThonkInner::Thonk("main".to_owned()))
         ));
+        for _ in 0..thonk.get_frame_size() {
+            vm.push_stack(new_ref!(Value, Value::Empty));
+        }
+        vm.set_fp(thonk.get_frame_size() + 1);
+        vm.push_stack(new_ref!(Value, Value::Empty));
+
         vm.run(&mut frame, true)
     }
 
@@ -364,8 +421,9 @@ mod test {
     fn test_let_statement() {
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "fn main() -> int {
+                       let z = 1;
                        let x = 5;
-                       print(x);
+                       let y = 10;
                        x
                    }";
         let ast = parse_dwarf("test_let_statement", ore).unwrap();
@@ -381,7 +439,10 @@ mod test {
         println!("{program}");
 
         assert_eq!(program.get_thonk_card(), 1);
-        // assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 6);
+        assert_eq!(
+            program.get_thonk("main").unwrap().get_instruction_card(),
+            10
+        );
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(5));
     }
