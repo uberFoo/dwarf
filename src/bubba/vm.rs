@@ -1,11 +1,10 @@
 use std::fmt;
 
 use ansi_term::Colour;
-use snafu::{location, Location};
+use snafu::{location, prelude::*, Location};
 
 use crate::{
     chacha::{
-        error::Result,
         memory::Memory,
         value::{ThonkInner, UserStruct},
     },
@@ -13,6 +12,24 @@ use crate::{
 };
 
 use super::instr::{Instruction, Thonk};
+
+#[derive(Debug, Snafu)]
+pub struct Error(BubbaError);
+
+const ERR_CLR: Colour = Colour::Red;
+const OK_CLR: Colour = Colour::Green;
+const POP_CLR: Colour = Colour::Yellow;
+const OTH_CLR: Colour = Colour::Cyan;
+
+#[derive(Debug, Snafu)]
+pub(crate) enum BubbaError {
+    #[snafu(display("\n{}: invalid instruction: {instr}", ERR_CLR.bold().paint("error")))]
+    InvalidInstruction { instr: Instruction },
+    #[snafu(display("\n{}: vm panic: {source}", ERR_CLR.bold().paint("error")))]
+    VmPanic { source: Box<dyn std::error::Error> },
+}
+
+type Result<T, E = Error> = std::result::Result<T, E>;
 
 #[derive(Debug)]
 pub(crate) struct CallFrame<'a> {
@@ -102,7 +119,7 @@ impl<'b> VM<'b> {
                         }
                         let c = s_read!(a).clone() + s_read!(b).clone();
                         // if let Value::Error(e) = &c {
-                        //     return Err(ChaChaError::VmPanic { cause: Box::new(e) });
+                        //     return Err(BubbaError::VmPanic { cause: Box::new(e) });
                         // }
                         self.stack.push(new_ref!(Value, c));
 
@@ -118,9 +135,12 @@ impl<'b> VM<'b> {
                         {
                             Ok(callee) => callee,
                             Err(e) => {
-                                return Err::<RefType<Value>, ChaChaError>(ChaChaError::VmPanic {
-                                    cause: e.to_string(),
-                                });
+                                return Err::<RefType<Value>, Error>(
+                                    BubbaError::VmPanic {
+                                        source: Box::new(e),
+                                    }
+                                    .into(),
+                                );
                             }
                         };
                         let thonk = self
@@ -144,14 +164,7 @@ impl<'b> VM<'b> {
                             println!("\t\t{}\t{}", Colour::Green.paint("frame:"), frame);
                         }
 
-                        let result = match self.run(&mut frame, trace) {
-                            Ok(result) => result,
-                            Err(e) => {
-                                return Err::<RefType<Value>, ChaChaError>(ChaChaError::VmPanic {
-                                    cause: e.to_string(),
-                                });
-                            }
-                        };
+                        let result = self.run(&mut frame, trace)?;
 
                         // Move the frame pointer
                         self.fp = (&*s_read!(self.stack[self.fp])).try_into().unwrap();
@@ -197,8 +210,8 @@ impl<'b> VM<'b> {
                                 //         self.stack.push(value);
                                 //     }
                                 //     Err(_e) => {
-                                //         return Err::<RefType<Value>, ChaChaError>(
-                                //             ChaChaError::VmPanic {
+                                //         return Err::<RefType<Value>, BubbaError>(
+                                //             BubbaError::VmPanic {
                                 //                 message: format!(
                                 //                     "Unknown field {} for proxy.",
                                 //                     s_read!(field),
@@ -222,26 +235,28 @@ impl<'b> VM<'b> {
                                         self.stack.push(value.clone());
                                     }
                                     None => {
-                                        return Err::<RefType<Value>, ChaChaError>(
-                                            ChaChaError::VmPanic {
-                                                cause: ChaChaError::NoSuchField {
+                                        return Err::<RefType<Value>, Error>(
+                                            BubbaError::VmPanic {
+                                                source: Box::new(ChaChaError::NoSuchField {
                                                     field: s_read!(field).to_string(),
                                                     ty: s_read!(ty_).to_string(),
-                                                }
-                                                .to_string(),
-                                            },
+                                                }),
+                                            }
+                                            .into(),
                                         );
                                     }
                                 }
                             }
                             value => {
-                                return Err::<RefType<Value>, ChaChaError>(ChaChaError::VmPanic {
-                                    cause: ChaChaError::BadnessHappened {
-                                        message: format!("Unexpected value type: {value}."),
-                                        location: location!(),
+                                return Err::<RefType<Value>, Error>(
+                                    BubbaError::VmPanic {
+                                        source: Box::new(ChaChaError::BadnessHappened {
+                                            message: format!("Unexpected value type: {value}."),
+                                            location: location!(),
+                                        }),
                                     }
-                                    .to_string(),
-                                })
+                                    .into(),
+                                )
                             }
                         }
 
@@ -273,8 +288,8 @@ impl<'b> VM<'b> {
                                 //         }
                                 //     }
                                 //     Err(_e) => {
-                                //         return Err::<RefType<Value>, ChaChaError>(
-                                //             ChaChaError::VmPanic {
+                                //         return Err::<RefType<Value>, BubbaError>(
+                                //             BubbaError::VmPanic {
                                 //                 message: format!(
                                 //                     "Unknown field {} for proxy.",
                                 //                     s_read!(field),
@@ -299,26 +314,28 @@ impl<'b> VM<'b> {
                                         }
                                     }
                                     None => {
-                                        return Err::<RefType<Value>, ChaChaError>(
-                                            ChaChaError::VmPanic {
-                                                cause: ChaChaError::NoSuchField {
+                                        return Err::<RefType<Value>, Error>(
+                                            BubbaError::VmPanic {
+                                                source: Box::new(ChaChaError::NoSuchField {
                                                     field: s_read!(field).to_string(),
                                                     ty: s_read!(ty_).to_string(),
-                                                }
-                                                .to_string(),
-                                            },
+                                                }),
+                                            }
+                                            .into(),
                                         )
                                     }
                                 }
                             }
                             value => {
-                                return Err::<RefType<Value>, ChaChaError>(ChaChaError::VmPanic {
-                                    cause: ChaChaError::BadnessHappened {
-                                        message: format!("Unexpected value type: {value}."),
-                                        location: location!(),
+                                return Err::<RefType<Value>, Error>(
+                                    BubbaError::VmPanic {
+                                        source: Box::new(ChaChaError::BadnessHappened {
+                                            message: format!("Unexpected value type: {value}."),
+                                            location: location!(),
+                                        }),
                                     }
-                                    .to_string(),
-                                })
+                                    .into(),
+                                )
                             }
                         }
 
@@ -328,8 +345,8 @@ impl<'b> VM<'b> {
                         let condition = self.stack.pop().unwrap();
                         let condition: bool = (&*s_read!(condition))
                             .try_into()
-                            .map_err(|e: ChaChaError| ChaChaError::VmPanic {
-                                cause: e.to_string(),
+                            .map_err(|e: ChaChaError| BubbaError::VmPanic {
+                                source: Box::new(e),
                             })
                             .unwrap();
 
@@ -367,7 +384,7 @@ impl<'b> VM<'b> {
                         }
                         let c = s_read!(a).clone() * s_read!(b).clone();
                         // if let Value::Error(e) = &c {
-                        //     return Err(ChaChaError::VmPanic { cause: Box::new(e) });
+                        //     return Err(BubbaError::VmPanic { cause: Box::new(e) });
                         // }
                         self.stack.push(new_ref!(Value, c));
 
@@ -407,13 +424,15 @@ impl<'b> VM<'b> {
                             0 => println!("{value}"),
                             1 => eprintln!("{value}"),
                             _ => {
-                                return Err::<RefType<Value>, ChaChaError>(ChaChaError::VmPanic {
-                                    cause: ChaChaError::BadnessHappened {
-                                        message: format!("Unknown stream: {stream}."),
-                                        location: location!(),
+                                return Err::<RefType<Value>, Error>(
+                                    BubbaError::VmPanic {
+                                        source: Box::new(ChaChaError::BadnessHappened {
+                                            message: format!("Unknown stream: {stream}."),
+                                            location: location!(),
+                                        }),
                                     }
-                                    .to_string(),
-                                })
+                                    .into(),
+                                )
                             }
                         };
 
@@ -459,7 +478,7 @@ impl<'b> VM<'b> {
                         let a = self.stack.pop().unwrap();
                         let c = s_read!(a).clone() - s_read!(b).clone();
                         // if let Value::Error(e) = &c {
-                        //     return Err(ChaChaError::VmPanic { cause: Box::new(e) });
+                        //     return Err(BubbaError::VmPanic { cause: Box::new(e) });
                         // }
 
                         self.stack.push(new_ref!(Value, c));
@@ -467,19 +486,20 @@ impl<'b> VM<'b> {
                         0
                     }
                     invalid => {
-                        return Err(ChaChaError::InvalidInstruction {
+                        return Err(BubbaError::InvalidInstruction {
                             instr: invalid.clone(),
-                        })
+                        }
+                        .into())
                     }
                 }
             } else {
-                return Err(ChaChaError::VmPanic {
-                    cause: ChaChaError::BadnessHappened {
+                return Err(BubbaError::VmPanic {
+                    source: Box::new(ChaChaError::BadnessHappened {
                         message: "ip out of bounds".to_string(),
                         location: location!(),
-                    }
-                    .to_string(),
-                });
+                    }),
+                }
+                .into());
             };
 
             frame.ip += ip_offset;

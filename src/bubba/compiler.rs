@@ -277,13 +277,15 @@ mod test {
 
     use super::*;
 
+    #[allow(unused_imports)]
     use crate::{
-        bubba::{CallFrame, VM},
+        bubba::{vm::Error, CallFrame, VM},
         chacha::{error::ChaChaError, memory::Memory},
         dwarf::{new_lu_dog, parse_dwarf},
         sarzak::MODEL as SARZAK_MODEL,
     };
 
+    #[allow(dead_code)]
     fn get_dwarf_home() -> PathBuf {
         env::var("DWARF_HOME")
             .unwrap_or_else(|_| {
@@ -296,7 +298,8 @@ mod test {
 
     // 🚧 This nastiness needs to be fixed. It's not cool that we are doing all
     // this work here.
-    fn run_vm(program: &Program) -> Result<RefType<Value>, ChaChaError> {
+    #[allow(dead_code)]
+    fn run_vm(program: &Program) -> Result<RefType<Value>, Error> {
         let mut memory = Memory::new();
         for thonk in program.iter() {
             // 🚧 This memory thing is BS. Fix it.

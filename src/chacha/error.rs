@@ -175,11 +175,6 @@ pub enum ChaChaError {
         location: Location,
         backtrace: Backtrace,
     },
-    #[snafu(display("\n{}: vm panic: {cause}", ERR_CLR.bold().paint("error")))]
-    VmPanic {
-        // cause: Box<dyn std::error::Error + Send + Sync>,
-        cause: String,
-    },
     #[snafu(display("\n{}: wrong number of arguments. Expected `{}`, found `{}`.", ERR_CLR.bold().paint("error"), OK_CLR.paint(expected.to_string()), ERR_CLR.bold().paint(got.to_string())))]
     WrongNumberOfArguments {
         expected: usize,
