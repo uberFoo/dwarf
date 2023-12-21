@@ -1152,4 +1152,35 @@ async fn main() -> Future<()> {
             &Value::String("MOTD: Hello world!, the magic number is 42.".to_owned())
         );
     }
+
+    #[test]
+    fn test_func_args_and_locals() {
+        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
+        let ore = "fn main() -> int {
+                       foo(1, 2, 3)
+                   }
+                   fn foo(x: int, y: int, z: int) -> int {
+                       let a = 1;
+                       let b = 2;
+                       let c = 3;
+                       x + y + z + a + b + c
+                   }";
+        let ast = parse_dwarf("test_func_args_and_locals", ore).unwrap();
+        let ctx = new_lu_dog(
+            "test_func_args_and_locals".to_owned(),
+            Some((ore.to_owned(), &ast)),
+            &get_dwarf_home(),
+            &sarzak,
+        )
+        .unwrap();
+        let program = compile(&ctx).unwrap();
+
+        println!("{program}");
+
+        assert_eq!(program.get_thonk_card(), 2);
+        // assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 14);
+        // assert_eq!(program.get_thonk("foo").unwrap().get_instruction_card(), 14);
+
+        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(12));
+    }
 }
