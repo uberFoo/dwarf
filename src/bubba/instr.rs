@@ -37,6 +37,16 @@ pub enum Instruction {
     ///
     /// The instruction will increase the stack depth by one.
     Dup,
+    /// Fetch a local variable.
+    ///
+    /// The parameter is it's distance from the frame pointer, or the index of
+    /// the local variable.
+    ///
+    /// The value of the local variable is pushed onto the stack.
+    ///
+    /// ## Stack Effect
+    ///
+    FetchLocal(usize),
     /// Read a field value
     ///
     /// The top of the stack is the name of the field to read. The second value
@@ -113,28 +123,18 @@ pub enum Instruction {
     ///
     /// The stack is one element shorter after this instruction.
     Pop,
+    /// Push a value onto the stack.
+    ///
+    /// ## Stack Effect
+    ///
+    Push(RefType<Value>),
     ///
     /// Pop the top value off the stack and store it in a local variable at the
     /// given index.
     ///
     /// ## Stack Effect
     ///
-    PopLocal(usize),
-    /// Push a value onto the stack.
-    ///
-    /// ## Stack Effect
-    ///
-    Push(RefType<Value>),
-    /// Fetch a local variable.
-    ///
-    /// The parameter is it's distance from the frame pointer, or the index of
-    /// the local variable.
-    ///
-    /// The value of the local variable is pushed onto the stack.
-    ///
-    /// ## Stack Effect
-    ///
-    PushLocal(usize),
+    StoreLocal(usize),
     /// Exit the function
     ///
     /// The value expressed by this instruction is the value at the top of the
@@ -165,6 +165,12 @@ impl fmt::Display for Instruction {
             ),
             Instruction::Divide => write!(f, "{}", opcode_style.paint("div")),
             Instruction::Dup => write!(f, "{}", opcode_style.paint("dup")),
+            Instruction::FetchLocal(index) => write!(
+                f,
+                "{} {}",
+                opcode_style.paint("fetch"),
+                operand_style.paint(index.to_string())
+            ),
             Instruction::FieldRead => write!(f, "{}", opcode_style.paint("field_read")),
             Instruction::FieldsRead(count) => write!(
                 f,
@@ -191,22 +197,16 @@ impl fmt::Display for Instruction {
                 operand_style.paint(stream.to_string())
             ),
             Instruction::Pop => write!(f, "{}", opcode_style.paint("pop")),
-            Instruction::PopLocal(index) => write!(
-                f,
-                "{} {}",
-                opcode_style.paint("pop_local"),
-                operand_style.paint(index.to_string())
-            ),
             Instruction::Push(value) => write!(
                 f,
                 "{} {}",
                 opcode_style.paint("push"),
                 operand_style.paint(s_read!(value).to_string())
             ),
-            Instruction::PushLocal(index) => write!(
+            Instruction::StoreLocal(index) => write!(
                 f,
                 "{} {}",
-                opcode_style.paint("push_local"),
+                opcode_style.paint("store"),
                 operand_style.paint(index.to_string())
             ),
             Instruction::Return => write!(f, "{}", opcode_style.paint("ret")),

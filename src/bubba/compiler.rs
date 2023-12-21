@@ -151,7 +151,7 @@ fn compile_statement(
 
             let offset = context.get_symbol(&name).unwrap();
 
-            thonk.add_instruction(Instruction::PopLocal(offset));
+            thonk.add_instruction(Instruction::StoreLocal(offset));
             thonk.increment_frame_size();
         }
         StatementEnum::ResultStatement(ref stmt) => {
@@ -329,26 +329,45 @@ fn compile_expression(
                         .exhume_expression(&operator.rhs.unwrap())
                         .unwrap();
 
-                    compile_expression(&lhs, thonk, context)?;
-                    compile_expression(&rhs, thonk, context)?;
-
                     match binary.subtype {
                         BinaryEnum::Addition(_) => {
+                            compile_expression(&lhs, thonk, context)?;
+                            compile_expression(&rhs, thonk, context)?;
                             thonk.add_instruction(Instruction::Add);
                         }
                         BinaryEnum::Assignment(_) => {
-                            todo!("Assignment")
+                            let offset = if let ExpressionEnum::VariableExpression(ref expr) =
+                                &s_read!(lhs).subtype
+                            {
+                                let expr =
+                                    s_read!(lu_dog).exhume_variable_expression(expr).unwrap();
+                                let expr = s_read!(expr);
+                                context.get_symbol(&expr.name).expect(
+                                    format!("symbol lookup failed for {}", expr.name).as_ref(),
+                                )
+                            } else {
+                                panic!("In assignment and lhs is not a variable.")
+                            };
+
+                            compile_expression(&rhs, thonk, context)?;
+                            thonk.add_instruction(Instruction::StoreLocal(offset));
                         }
                         BinaryEnum::BooleanOperator(_) => {
                             todo!("BooleanOperator")
                         }
                         BinaryEnum::Division(_) => {
+                            compile_expression(&lhs, thonk, context)?;
+                            compile_expression(&rhs, thonk, context)?;
                             thonk.add_instruction(Instruction::Divide);
                         }
                         BinaryEnum::Subtraction(_) => {
+                            compile_expression(&lhs, thonk, context)?;
+                            compile_expression(&rhs, thonk, context)?;
                             thonk.add_instruction(Instruction::Subtract);
                         }
                         BinaryEnum::Multiplication(_) => {
+                            compile_expression(&lhs, thonk, context)?;
+                            compile_expression(&rhs, thonk, context)?;
                             thonk.add_instruction(Instruction::Multiply);
                         }
                     }
@@ -372,7 +391,7 @@ fn compile_expression(
             let name = expr.name.clone();
 
             if let Some(index) = context.get_symbol(&name) {
-                thonk.add_instruction(Instruction::PushLocal(index));
+                thonk.add_instruction(Instruction::FetchLocal(index));
             } else {
                 // We are here because we need to look up a function.
                 thonk.add_instruction(Instruction::Push(new_ref!(
@@ -732,5 +751,82 @@ mod test {
         assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 6);
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(2));
+    }
+
+    #[test]
+    fn test_boolean_true() {
+        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
+        let ore = "fn main() -> bool {
+                       true
+                   }";
+        let ast = parse_dwarf("test_boolean_true", ore).unwrap();
+        let ctx = new_lu_dog(
+            "test_boolean_true".to_owned(),
+            Some((ore.to_owned(), &ast)),
+            &get_dwarf_home(),
+            &sarzak,
+        )
+        .unwrap();
+
+        let program = compile(&ctx).unwrap();
+
+        println!("{program}");
+
+        assert_eq!(program.get_thonk_card(), 1);
+        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 4);
+
+        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Boolean(true));
+    }
+
+    #[test]
+    fn test_boolean_false() {
+        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
+        let ore = "fn main() -> bool {
+                       false
+                   }";
+        let ast = parse_dwarf("test_boolean_false", ore).unwrap();
+        let ctx = new_lu_dog(
+            "test_boolean_false".to_owned(),
+            Some((ore.to_owned(), &ast)),
+            &get_dwarf_home(),
+            &sarzak,
+        )
+        .unwrap();
+
+        let program = compile(&ctx).unwrap();
+
+        println!("{program}");
+
+        assert_eq!(program.get_thonk_card(), 1);
+        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 4);
+
+        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Boolean(false));
+    }
+
+    #[test]
+    fn test_assignment() {
+        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
+        let ore = "fn main() -> int {
+                       let x = 5;
+                       x = 10;
+                       x
+                   }";
+        let ast = parse_dwarf("test_assignment", ore).unwrap();
+        let ctx = new_lu_dog(
+            "test_assignment".to_owned(),
+            Some((ore.to_owned(), &ast)),
+            &get_dwarf_home(),
+            &sarzak,
+        )
+        .unwrap();
+
+        let program = compile(&ctx).unwrap();
+
+        println!("{program}");
+
+        assert_eq!(program.get_thonk_card(), 1);
+        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 8);
+
+        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(10));
     }
 }

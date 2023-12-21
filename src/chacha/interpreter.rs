@@ -218,7 +218,7 @@ pub fn initialize_interpreter(
 
         // Get the parameter off the stack
         // push {fp + 0}
-        thonk.add_instruction(Instruction::PushLocal(0));
+        thonk.add_instruction(Instruction::FetchLocal(0));
         // push "re"
         thonk.add_instruction(Instruction::Push(new_ref!(Value, "re".into())));
         //
@@ -230,7 +230,7 @@ pub fn initialize_interpreter(
         thonk.add_instruction(Instruction::Multiply);
         // Get the parameter off the stack
         // push {fp + 0}
-        thonk.add_instruction(Instruction::PushLocal(0));
+        thonk.add_instruction(Instruction::FetchLocal(0));
         // push "im"
         thonk.add_instruction(Instruction::Push(new_ref!(Value, "im".into())));
         //
@@ -261,13 +261,13 @@ pub fn initialize_interpreter(
         // }
 
         // Get the first parameter off the stack
-        thonk.add_instruction(Instruction::PushLocal(0));
+        thonk.add_instruction(Instruction::FetchLocal(0));
         // push "re"
         thonk.add_instruction(Instruction::Push(new_ref!(Value, "re".into())));
         // field
         thonk.add_instruction(Instruction::FieldRead);
         // Get the second parameter off the stack
-        thonk.add_instruction(Instruction::PushLocal(1));
+        thonk.add_instruction(Instruction::FetchLocal(1));
         // push "re"
         thonk.add_instruction(Instruction::Push(new_ref!(Value, "re".into())));
         // field
@@ -275,19 +275,19 @@ pub fn initialize_interpreter(
         // add
         thonk.add_instruction(Instruction::Add);
         // Get the first parameter off the stack
-        thonk.add_instruction(Instruction::PushLocal(0));
+        thonk.add_instruction(Instruction::FetchLocal(0));
         // push "re"
         thonk.add_instruction(Instruction::Push(new_ref!(Value, "re".into())));
         // Write field
         thonk.add_instruction(Instruction::FieldWrite);
         // Get the first parameter off the stack
-        thonk.add_instruction(Instruction::PushLocal(0));
+        thonk.add_instruction(Instruction::FetchLocal(0));
         // push "im"
         thonk.add_instruction(Instruction::Push(new_ref!(Value, "im".into())));
         // field
         thonk.add_instruction(Instruction::FieldRead);
         // Get the second parameter off the stack
-        thonk.add_instruction(Instruction::PushLocal(1));
+        thonk.add_instruction(Instruction::FetchLocal(1));
         // push "im"
         thonk.add_instruction(Instruction::Push(new_ref!(Value, "im".into())));
         // field
@@ -295,7 +295,7 @@ pub fn initialize_interpreter(
         // add
         thonk.add_instruction(Instruction::Add);
         // Get the first parameter off the stack
-        thonk.add_instruction(Instruction::PushLocal(0));
+        thonk.add_instruction(Instruction::FetchLocal(0));
         // push "im"
         thonk.add_instruction(Instruction::Push(new_ref!(Value, "im".into())));
         // Write field
@@ -324,7 +324,7 @@ pub fn initialize_interpreter(
 
         // Get the parameter off the stack
         // push {fp + 0}
-        thonk.add_instruction(Instruction::PushLocal(0));
+        thonk.add_instruction(Instruction::FetchLocal(0));
         // push "re"
         thonk.add_instruction(Instruction::Push(new_ref!(Value, "re".into())));
         //
@@ -336,7 +336,7 @@ pub fn initialize_interpreter(
         thonk.add_instruction(Instruction::Multiply);
         // Get the parameter off the stack
         // push {fp + 0}
-        thonk.add_instruction(Instruction::PushLocal(0));
+        thonk.add_instruction(Instruction::FetchLocal(0));
         // push "im"
         thonk.add_instruction(Instruction::Push(new_ref!(Value, "im".into())));
         //
@@ -350,13 +350,13 @@ pub fn initialize_interpreter(
         thonk.add_instruction(Instruction::Subtract);
         // push {fp + 0}
         //  this is the one for write
-        thonk.add_instruction(Instruction::PushLocal(0));
+        thonk.add_instruction(Instruction::FetchLocal(0));
         // push "re"
         thonk.add_instruction(Instruction::Push(new_ref!(Value, "re".into())));
         // 2.0 * self.re * self.im
         // Get the parameter off the stack
         // push {fp + 0}
-        thonk.add_instruction(Instruction::PushLocal(0));
+        thonk.add_instruction(Instruction::FetchLocal(0));
         // push "re"
         thonk.add_instruction(Instruction::Push(new_ref!(Value, "re".into())));
         //
@@ -364,7 +364,7 @@ pub fn initialize_interpreter(
         thonk.add_instruction(Instruction::FieldRead);
         // Get the parameter off the stack
         // push {fp + 0}
-        thonk.add_instruction(Instruction::PushLocal(0));
+        thonk.add_instruction(Instruction::FetchLocal(0));
         // push "im"
         thonk.add_instruction(Instruction::Push(new_ref!(Value, "im".into())));
         //
@@ -377,7 +377,7 @@ pub fn initialize_interpreter(
         // mul
         thonk.add_instruction(Instruction::Multiply);
         // push {fp + 0}
-        thonk.add_instruction(Instruction::PushLocal(0));
+        thonk.add_instruction(Instruction::FetchLocal(0));
         // push "im"
         thonk.add_instruction(Instruction::Push(new_ref!(Value, "im".into())));
         thonk.add_instruction(Instruction::FieldWrite);
@@ -763,7 +763,7 @@ pub fn start_vm(n: DwarfInteger) -> Result<DwarfInteger, Error> {
 
     // Get the parameter off the stack
     // push {fp + 0}
-    thonk.add_instruction(Instruction::PushLocal(0));
+    thonk.add_instruction(Instruction::FetchLocal(0));
     // push 1
     thonk.add_instruction(Instruction::Push(new_ref!(Value, 1.into())));
     // Check if it's <= 1
@@ -781,7 +781,7 @@ pub fn start_vm(n: DwarfInteger) -> Result<DwarfInteger, Error> {
         Value::Thonk(ThonkInner::Thonk("fib".to_owned()))
     )));
     // load n
-    thonk.add_instruction(Instruction::PushLocal(0));
+    thonk.add_instruction(Instruction::FetchLocal(0));
     // load 1
     thonk.add_instruction(Instruction::Push(new_ref!(Value, 1.into())));
     // subtract
@@ -794,7 +794,7 @@ pub fn start_vm(n: DwarfInteger) -> Result<DwarfInteger, Error> {
         Value::Thonk(ThonkInner::Thonk("fib".to_owned()))
     )));
     // load n
-    thonk.add_instruction(Instruction::PushLocal(0));
+    thonk.add_instruction(Instruction::FetchLocal(0));
     // load 2
     thonk.add_instruction(Instruction::Push(new_ref!(Value, 2.into())));
     // subtract

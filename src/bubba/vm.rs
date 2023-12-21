@@ -476,7 +476,7 @@ impl<'b> VM<'b> {
 
                         0
                     }
-                    Instruction::PopLocal(index) => {
+                    Instruction::StoreLocal(index) => {
                         let value = self.stack.pop().unwrap();
                         // We gotta index the stack in reverse order.
                         self.stack[self.fp - arity - frame_size + index] = value;
@@ -492,7 +492,7 @@ impl<'b> VM<'b> {
                     // Nominally at the Thonk name at the bottom of the stack.
                     // Any locals will cause the fp to be moved up, with the
                     // locals existing between the Thonk name and the fp.
-                    Instruction::PushLocal(index) => {
+                    Instruction::FetchLocal(index) => {
                         // We gotta index the stack in reverse order.
                         let value = self.stack[self.fp - arity - frame_size + index].clone();
                         self.stack.push(value);
@@ -841,7 +841,7 @@ mod tests {
         ));
         vm.stack.push(new_ref!(Value, 42.into()));
 
-        thonk.add_instruction(Instruction::PushLocal(0));
+        thonk.add_instruction(Instruction::FetchLocal(0));
         thonk.add_instruction(Instruction::Return);
         println!("{}", thonk);
 
@@ -953,7 +953,7 @@ mod tests {
         vm.stack.push(new_ref!(Value, 42.into()));
         vm.stack.push(new_ref!(Value, Value::Integer(-1)));
 
-        thonk.add_instruction(Instruction::PushLocal(1));
+        thonk.add_instruction(Instruction::FetchLocal(1));
         thonk.add_instruction(Instruction::Return);
         println!("{}", thonk);
 
@@ -994,8 +994,8 @@ mod tests {
         vm.stack.push(new_ref!(Value, Value::Integer(-1)));
 
         thonk.add_instruction(Instruction::Push(new_ref!(Value, 42.into())));
-        thonk.add_instruction(Instruction::PopLocal(1));
-        thonk.add_instruction(Instruction::PushLocal(1));
+        thonk.add_instruction(Instruction::StoreLocal(1));
+        thonk.add_instruction(Instruction::FetchLocal(1));
         thonk.add_instruction(Instruction::Return);
         println!("{}", thonk);
 
@@ -1023,7 +1023,7 @@ mod tests {
         let mut thonk = Thonk::new("fib".to_string());
 
         // Get the parameter off the stack
-        thonk.add_instruction(Instruction::PushLocal(0));
+        thonk.add_instruction(Instruction::FetchLocal(0));
         thonk.add_instruction(Instruction::Push(new_ref!(Value, 1.into())));
         // Check if it's <= 1
         thonk.add_instruction(Instruction::TestLessThanOrEqual);
@@ -1038,7 +1038,7 @@ mod tests {
             Value::Thonk(ThonkInner::Thonk("fib".to_owned()))
         )));
         // load n
-        thonk.add_instruction(Instruction::PushLocal(0));
+        thonk.add_instruction(Instruction::FetchLocal(0));
         // load 1
         thonk.add_instruction(Instruction::Push(new_ref!(Value, 1.into())));
         // subtract
@@ -1051,7 +1051,7 @@ mod tests {
             Value::Thonk(ThonkInner::Thonk("fib".to_owned()))
         )));
         // load n
-        thonk.add_instruction(Instruction::PushLocal(0));
+        thonk.add_instruction(Instruction::FetchLocal(0));
         // load 2
         thonk.add_instruction(Instruction::Push(new_ref!(Value, 2.into())));
         // subtract
