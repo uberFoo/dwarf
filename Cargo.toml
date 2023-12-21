@@ -1,6 +1,6 @@
 [package]
 name = "dwarf"
-version = "0.7.0"
+version = "0.8.0"
 authors = ["Keith T. Star <uberfoo@me.com>"]
 categories = ["compilers", "command-line-interface"]
 description = "A Rust-like, typed, interpreted programming language"
