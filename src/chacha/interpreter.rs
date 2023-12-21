@@ -822,7 +822,7 @@ pub fn start_vm(n: DwarfInteger) -> Result<DwarfInteger, Error> {
 
     // vm.push_frame(frame);
 
-    let result = vm.run(&mut frame, false);
+    let result = vm.run(0, &mut frame, false);
 
     vm.pop_stack();
     vm.pop_stack();

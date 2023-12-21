@@ -780,7 +780,7 @@ pub fn eval(
 
                         let mut frame = CallFrame::new(thonk);
                         // 🚧 It would be neat to turn the tracing on with a flag.
-                        let result = vm.run(&mut frame, false);
+                        let result = vm.run(0, &mut frame, false);
 
                         vm.pop_stack();
                         vm.pop_stack();
@@ -799,7 +799,7 @@ pub fn eval(
                         vm.set_fp(thonk.get_frame_size() + 1);
 
                         let mut frame = CallFrame::new(thonk);
-                        let result = vm.run(&mut frame, false);
+                        let result = vm.run(0, &mut frame, false);
 
                         vm.pop_stack();
                         vm.pop_stack();
@@ -820,7 +820,7 @@ pub fn eval(
                         vm.set_fp(thonk.get_frame_size() + 1);
 
                         let mut frame = CallFrame::new(thonk);
-                        let result = vm.run(&mut frame, false);
+                        let result = vm.run(0, &mut frame, false);
 
                         vm.pop_stack();
                         vm.pop_stack();

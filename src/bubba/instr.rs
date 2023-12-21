@@ -282,6 +282,7 @@ impl Thonk {
         self.instructions.len() - 1
     }
 
+    #[inline]
     pub(crate) fn get_instruction(&self, index: usize) -> Option<&Instruction> {
         self.instructions.get(index)
     }
@@ -294,6 +295,7 @@ impl Thonk {
         self.frame_size += 1;
     }
 
+    #[inline]
     pub(crate) fn get_frame_size(&self) -> usize {
         self.frame_size
     }
