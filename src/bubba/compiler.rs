@@ -343,13 +343,13 @@ fn compile_expression(
                             todo!("BooleanOperator")
                         }
                         BinaryEnum::Division(_) => {
-                            todo!("Division")
+                            thonk.add_instruction(Instruction::Divide);
                         }
                         BinaryEnum::Subtraction(_) => {
                             thonk.add_instruction(Instruction::Subtract);
                         }
                         BinaryEnum::Multiplication(_) => {
-                            todo!("Multiplication")
+                            thonk.add_instruction(Instruction::Multiply);
                         }
                     }
                 }
@@ -682,5 +682,55 @@ mod test {
         assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 6);
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(3));
+    }
+
+    #[test]
+    fn test_multiplication() {
+        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
+        let ore = "fn main() -> int {
+                       5 * 2
+                   }";
+        let ast = parse_dwarf("test_multiplication", ore).unwrap();
+        let ctx = new_lu_dog(
+            "test_multiplication".to_owned(),
+            Some((ore.to_owned(), &ast)),
+            &get_dwarf_home(),
+            &sarzak,
+        )
+        .unwrap();
+
+        let program = compile(&ctx).unwrap();
+
+        println!("{program}");
+
+        assert_eq!(program.get_thonk_card(), 1);
+        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 6);
+
+        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(10));
+    }
+
+    #[test]
+    fn test_division() {
+        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
+        let ore = "fn main() -> int {
+                       5 / 2
+                   }";
+        let ast = parse_dwarf("test_division", ore).unwrap();
+        let ctx = new_lu_dog(
+            "test_division".to_owned(),
+            Some((ore.to_owned(), &ast)),
+            &get_dwarf_home(),
+            &sarzak,
+        )
+        .unwrap();
+
+        let program = compile(&ctx).unwrap();
+
+        println!("{program}");
+
+        assert_eq!(program.get_thonk_card(), 1);
+        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 6);
+
+        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(2));
     }
 }

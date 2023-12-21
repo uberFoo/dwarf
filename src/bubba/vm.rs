@@ -194,6 +194,25 @@ impl<'b> VM<'b> {
 
                         0
                     }
+                    Instruction::Divide => {
+                        let b = self.stack.pop().unwrap();
+                        let a = self.stack.pop().unwrap();
+                        if trace {
+                            println!(
+                                "\t\t{}\t{},\t{}",
+                                Colour::Green.paint("div:"),
+                                s_read!(a),
+                                s_read!(b),
+                            );
+                        }
+                        let c = s_read!(a).clone() / s_read!(b).clone();
+                        // if let Value::Error(e) = &c {
+                        //     return Err(BubbaError::VmPanic { cause: Box::new(e) });
+                        // }
+                        self.stack.push(new_ref!(Value, c));
+
+                        0
+                    }
                     Instruction::Dup => {
                         let value = self.stack.pop().unwrap();
                         self.stack.push(value.clone());
@@ -385,7 +404,7 @@ impl<'b> VM<'b> {
 
                         0
                     }
-                    Instruction::Mul => {
+                    Instruction::Multiply => {
                         let b = self.stack.pop().unwrap();
                         let a = self.stack.pop().unwrap();
                         if trace {
@@ -492,6 +511,14 @@ impl<'b> VM<'b> {
                         let b = self.stack.pop().unwrap();
                         let a = self.stack.pop().unwrap();
                         let c = s_read!(a).clone() - s_read!(b).clone();
+                        if trace {
+                            println!(
+                                "\t\t{}\t{},\t{}",
+                                Colour::Green.paint("sub:"),
+                                s_read!(a),
+                                s_read!(b),
+                            );
+                        }
                         // if let Value::Error(e) = &c {
                         //     return Err(BubbaError::VmPanic { cause: Box::new(e) });
                         // }
@@ -657,7 +684,7 @@ mod tests {
 
         thonk.add_instruction(Instruction::Push(new_ref!(Value, 42.into())));
         thonk.add_instruction(Instruction::Push(new_ref!(Value, 69.into())));
-        thonk.add_instruction(Instruction::Mul);
+        thonk.add_instruction(Instruction::Multiply);
         thonk.add_instruction(Instruction::Return);
         println!("{}", thonk);
 

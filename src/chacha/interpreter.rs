@@ -227,7 +227,7 @@ pub fn initialize_interpreter(
         // dup
         thonk.add_instruction(Instruction::Dup);
         // mul
-        thonk.add_instruction(Instruction::Mul);
+        thonk.add_instruction(Instruction::Multiply);
         // Get the parameter off the stack
         // push {fp + 0}
         thonk.add_instruction(Instruction::PushLocal(0));
@@ -239,7 +239,7 @@ pub fn initialize_interpreter(
         // dup
         thonk.add_instruction(Instruction::Dup);
         // mul
-        thonk.add_instruction(Instruction::Mul);
+        thonk.add_instruction(Instruction::Multiply);
         // add
         thonk.add_instruction(Instruction::Add);
         thonk.add_instruction(Instruction::Return);
@@ -333,7 +333,7 @@ pub fn initialize_interpreter(
         // dup
         thonk.add_instruction(Instruction::Dup);
         // mul
-        thonk.add_instruction(Instruction::Mul);
+        thonk.add_instruction(Instruction::Multiply);
         // Get the parameter off the stack
         // push {fp + 0}
         thonk.add_instruction(Instruction::PushLocal(0));
@@ -345,7 +345,7 @@ pub fn initialize_interpreter(
         // dup
         thonk.add_instruction(Instruction::Dup);
         // mul
-        thonk.add_instruction(Instruction::Mul);
+        thonk.add_instruction(Instruction::Multiply);
         // sub
         thonk.add_instruction(Instruction::Subtract);
         // push {fp + 0}
@@ -373,9 +373,9 @@ pub fn initialize_interpreter(
         // push 2.0
         thonk.add_instruction(Instruction::Push(new_ref!(Value, 2.0.into())));
         // mul
-        thonk.add_instruction(Instruction::Mul);
+        thonk.add_instruction(Instruction::Multiply);
         // mul
-        thonk.add_instruction(Instruction::Mul);
+        thonk.add_instruction(Instruction::Multiply);
         // push {fp + 0}
         thonk.add_instruction(Instruction::PushLocal(0));
         // push "im"

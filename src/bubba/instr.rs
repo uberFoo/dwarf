@@ -28,6 +28,9 @@ pub enum Instruction {
     ///  ## Stack Effect
     ///
     Call(usize),
+    /// Divide the top two values on the stack.
+    ///
+    Divide,
     /// Duplicate the top of the stack.
     ///
     /// ## Stack Effect
@@ -78,7 +81,7 @@ pub enum Instruction {
     ///
     /// ## Stack Effect
     ///
-    Mul,
+    Multiply,
     /// New UserType
     ///
     /// The first element of the tuple is the name of the user type. The second
@@ -160,6 +163,7 @@ impl fmt::Display for Instruction {
                 opcode_style.paint("call"),
                 operand_style.paint(arity.to_string())
             ),
+            Instruction::Divide => write!(f, "{}", opcode_style.paint("div")),
             Instruction::Dup => write!(f, "{}", opcode_style.paint("dup")),
             Instruction::FieldRead => write!(f, "{}", opcode_style.paint("field_read")),
             Instruction::FieldsRead(count) => write!(
@@ -176,7 +180,7 @@ impl fmt::Display for Instruction {
                 operand_style.paint(offset.to_string())
             ),
             Instruction::TestLessThanOrEqual => write!(f, "{}", opcode_style.paint("lte")),
-            Instruction::Mul => write!(f, "{}", opcode_style.paint("mul")),
+            Instruction::Multiply => write!(f, "{}", opcode_style.paint("mul")),
             Instruction::NewUserType(name, _ty, n) => {
                 write!(f, "{}{name}({n})", opcode_style.paint("new"))
             }
