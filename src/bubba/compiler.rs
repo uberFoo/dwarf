@@ -346,7 +346,7 @@ fn compile_expression(
                             todo!("Division")
                         }
                         BinaryEnum::Subtraction(_) => {
-                            todo!("Subtraction")
+                            thonk.add_instruction(Instruction::Subtract);
                         }
                         BinaryEnum::Multiplication(_) => {
                             todo!("Multiplication")
@@ -658,5 +658,29 @@ mod test {
             &*s_read!(run_vm(&program).unwrap()),
             &Value::String("Hello, world!".to_owned())
         );
+    }
+
+    #[test]
+    fn test_subtraction() {
+        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
+        let ore = "fn main() -> int {
+                       5 - 2
+                   }";
+        let ast = parse_dwarf("test_subtraction", ore).unwrap();
+        let ctx = new_lu_dog(
+            "test_subtraction".to_owned(),
+            Some((ore.to_owned(), &ast)),
+            &get_dwarf_home(),
+            &sarzak,
+        )
+        .unwrap();
+        let program = compile(&ctx).unwrap();
+
+        println!("{program}");
+
+        assert_eq!(program.get_thonk_card(), 1);
+        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 6);
+
+        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(3));
     }
 }
