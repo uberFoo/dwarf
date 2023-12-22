@@ -261,6 +261,7 @@ pub(crate) fn assert(
     lu_dog: RefType<LuDogStore>,
 ) -> Result<RefType<Value>> {
     debug!("evaluating chacha::assert");
+    // 🚧 This should be happening in the extruder.
     ensure!(arg_values.len() == 1, {
         let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
         let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];

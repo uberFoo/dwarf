@@ -20,6 +20,46 @@ use crate::{
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub const BUILD_TIME: &str = include!(concat!(env!("OUT_DIR"), "/timestamp.txt"));
 
+struct CThonk {
+    inner: Thonk,
+    returned: bool,
+}
+
+impl CThonk {
+    fn new(name: String) -> Self {
+        CThonk {
+            inner: Thonk::new(name),
+            returned: false,
+        }
+    }
+
+    fn add_instruction(&mut self, instruction: Instruction) {
+        self.inner.add_instruction(instruction);
+    }
+
+    fn get_instruction_card(&self) -> usize {
+        self.inner.get_instruction_card()
+    }
+
+    fn increment_frame_size(&mut self) {
+        self.inner.increment_frame_size();
+    }
+
+    fn get_frame_size(&self) -> usize {
+        self.inner.get_frame_size()
+    }
+
+    fn append(&mut self, other: CThonk) {
+        self.inner.instructions.extend(other.inner.instructions);
+    }
+}
+
+impl From<CThonk> for Thonk {
+    fn from(thonk: CThonk) -> Self {
+        thonk.inner
+    }
+}
+
 struct Context<'a> {
     extruder_context: &'a ExtruderContext,
     symbol_tables: Vec<(usize, HashMap<String, usize>)>,
@@ -38,17 +78,19 @@ impl<'a> Context<'a> {
     }
 
     fn push_symbol_table(&mut self) {
-        self.symbol_tables.push((0, HashMap::default()));
+        let (start, _) = self.symbol_tables.last().unwrap();
+        self.symbol_tables.push((*start, HashMap::default()));
     }
 
     fn pop_symbol_table(&mut self) {
         self.symbol_tables.pop();
     }
 
-    fn insert_symbol(&mut self, name: String) {
+    fn insert_symbol(&mut self, name: String) -> usize {
         let (next, map) = self.symbol_tables.last_mut().unwrap();
         map.insert(name, *next);
         *next += 1;
+        *next - 1
     }
 
     fn get_symbol(&self, name: &str) -> Option<usize> {
@@ -63,52 +105,63 @@ impl<'a> Context<'a> {
 
 pub fn compile(context: &ExtruderContext) -> Result<Program> {
     let lu_dog = &context.lu_dog;
+    let lu_dog = s_read!(lu_dog);
 
     let mut program = Program::new(VERSION.to_owned(), BUILD_TIME.to_owned());
 
     let mut context = Context::new(context);
 
-    for func in s_read!(lu_dog).iter_function() {
-        program.add_thonk(compile_function(&func, &mut context)?);
+    for func in lu_dog.iter_function() {
+        program.add_thonk(compile_function(&func, &mut context)?.into());
     }
 
     Ok(program)
 }
 
-fn compile_function(func: &RefType<Function>, context: &mut Context) -> Result<Thonk> {
+fn compile_function(func: &RefType<Function>, context: &mut Context) -> Result<CThonk> {
     let lu_dog = context.lu_dog_heel();
+    let lu_dog = s_read!(lu_dog);
 
     let name = s_read!(func).name.clone();
-    let mut thonk = Thonk::new(name.clone());
+    let mut thonk = CThonk::new(name.clone());
 
-    let body = s_read!(func).r19_body(&s_read!(lu_dog))[0].clone();
+    let body = s_read!(func).r19_body(&lu_dog)[0].clone();
     let body = s_read!(body);
     match body.subtype {
         //
         // This is a function defined in a dwarf file.
         BodyEnum::Block(ref id) => {
-            let block = s_read!(lu_dog).exhume_block(id).unwrap();
-            let has_stmts = !s_read!(block).r18_statement(&s_read!(lu_dog)).is_empty();
+            let block = lu_dog.exhume_block(id).unwrap();
+            let has_stmts = !s_read!(block).r18_statement(&lu_dog).is_empty();
 
             if has_stmts {
                 if let Some(ref id) = s_read!(block).statement {
-                    let mut next = s_read!(lu_dog).exhume_statement(id).unwrap();
+                    let mut next = lu_dog.exhume_statement(id).unwrap();
 
                     loop {
                         compile_statement(&next, &mut thonk, context)?;
 
                         if let Some(ref id) = s_read!(next.clone()).next {
-                            next = s_read!(lu_dog).exhume_statement(id).unwrap();
+                            next = lu_dog.exhume_statement(id).unwrap();
                         } else {
-                            thonk.add_instruction(Instruction::Push(new_ref!(Value, Value::Empty)));
-                            thonk.add_instruction(Instruction::Return);
-                            break;
+                            if thonk.returned {
+                                break;
+                            } else {
+                                thonk.add_instruction(Instruction::Push(new_ref!(
+                                    Value,
+                                    Value::Empty
+                                )));
+                                thonk.add_instruction(Instruction::Return);
+                                thonk.returned = true;
+                                break;
+                            }
                         }
                     }
                 }
             } else {
                 thonk.add_instruction(Instruction::Push(new_ref!(Value, Value::Empty)));
                 thonk.add_instruction(Instruction::Return);
+                thonk.returned = true;
             }
         }
         //
@@ -123,46 +176,44 @@ fn compile_function(func: &RefType<Function>, context: &mut Context) -> Result<T
 
 fn compile_statement(
     statement: &RefType<Statement>,
-    thonk: &mut Thonk,
+    thonk: &mut CThonk,
     context: &mut Context,
 ) -> Result<()> {
     let lu_dog = context.lu_dog_heel();
+    let lu_dog = s_read!(lu_dog);
 
     match s_read!(statement).subtype {
         StatementEnum::ExpressionStatement(ref stmt) => {
-            let stmt = s_read!(lu_dog).exhume_expression_statement(stmt).unwrap();
+            let stmt = lu_dog.exhume_expression_statement(stmt).unwrap();
             let stmt = s_read!(stmt);
-            let expr = stmt.r31_expression(&s_read!(lu_dog))[0].clone();
-            let _value = compile_expression(&expr, thonk, context)?;
+            let expr = stmt.r31_expression(&lu_dog)[0].clone();
+            compile_expression(&expr, thonk, context)?;
         }
         StatementEnum::LetStatement(ref stmt) => {
-            let stmt = s_read!(lu_dog).exhume_let_statement(stmt).unwrap();
+            let stmt = lu_dog.exhume_let_statement(stmt).unwrap();
             let stmt = s_read!(stmt);
 
-            let expr = stmt.r20_expression(&s_read!(lu_dog))[0].clone();
+            let expr = stmt.r20_expression(&lu_dog)[0].clone();
 
             compile_expression(&expr, thonk, context)?;
 
-            let var = s_read!(stmt.r21_local_variable(&s_read!(lu_dog))[0]).clone();
-            let var = s_read!(var.r12_variable(&s_read!(lu_dog))[0]).clone();
+            let var = s_read!(stmt.r21_local_variable(&lu_dog)[0]).clone();
+            let var = s_read!(var.r12_variable(&lu_dog)[0]).clone();
 
             let name = var.name;
-            context.insert_symbol(name.clone());
-
-            let offset = context.get_symbol(&name).unwrap();
+            let offset = context.insert_symbol(name.clone());
 
             thonk.add_instruction(Instruction::StoreLocal(offset));
             thonk.increment_frame_size();
         }
         StatementEnum::ResultStatement(ref stmt) => {
-            let stmt = s_read!(lu_dog).exhume_result_statement(stmt).unwrap();
+            let stmt = lu_dog.exhume_result_statement(stmt).unwrap();
             let stmt = s_read!(stmt);
-
-            let expr = stmt.r41_expression(&s_read!(lu_dog))[0].clone();
-
+            let expr = stmt.r41_expression(&lu_dog)[0].clone();
             compile_expression(&expr, thonk, context)?;
 
             thonk.add_instruction(Instruction::Return);
+            thonk.returned = true;
         }
         StatementEnum::ItemStatement(_) => {}
     }
@@ -171,20 +222,38 @@ fn compile_statement(
 
 fn compile_expression(
     expression: &RefType<Expression>,
-    thonk: &mut Thonk,
+    thonk: &mut CThonk,
     context: &mut Context,
 ) -> Result<()> {
     let lu_dog = context.lu_dog_heel();
+    let lu_dog = s_read!(lu_dog);
 
     match &s_read!(expression).subtype {
-        ExpressionEnum::Call(ref call) => {
-            let call = s_read!(lu_dog).exhume_call(call).unwrap();
-            let first_arg = s_read!(call).argument;
-            let mut args = s_read!(call).r28_argument(&s_read!(lu_dog));
-            let call_type = &s_read!(call).subtype;
+        ExpressionEnum::Block(ref block) => {
+            let block = lu_dog.exhume_block(block).unwrap();
+            let stmts = s_read!(block).r18_statement(&lu_dog);
+            if !stmts.is_empty() {
+                let mut next = s_read!(block).r71_statement(&lu_dog)[0].clone();
 
-            let name = if let CallEnum::FunctionCall(ref call) = call_type {
-                let call = s_read!(lu_dog).exhume_function_call(call).unwrap();
+                loop {
+                    compile_statement(&next, thonk, context)?;
+
+                    if let Some(ref id) = s_read!(next.clone()).next {
+                        next = lu_dog.exhume_statement(id).unwrap();
+                    } else {
+                        break;
+                    }
+                }
+            }
+        }
+        ExpressionEnum::Call(ref call) => {
+            let call = lu_dog.exhume_call(call).unwrap();
+            let call = s_read!(call);
+            let first_arg = call.argument;
+            let args = call.r28_argument(&lu_dog);
+
+            let name = if let CallEnum::FunctionCall(ref call) = call.subtype {
+                let call = lu_dog.exhume_function_call(call).unwrap();
                 let call = s_read!(call);
                 let name = call.name.clone();
                 name
@@ -192,17 +261,17 @@ fn compile_expression(
                 todo!("handle the other calls");
             };
 
-            let func = s_read!(lu_dog).exhume_function_id_by_name(&name).unwrap();
-            let func = s_read!(lu_dog).exhume_function(&func).unwrap();
+            let func = lu_dog.exhume_function_id_by_name(&name).unwrap();
+            let func = lu_dog.exhume_function(&func).unwrap();
             let func = s_read!(func);
-            let params = func.r13_parameter(&s_read!(lu_dog));
+            let params = func.r13_parameter(&lu_dog);
 
             let params = if !params.is_empty() {
                 let mut params = Vec::with_capacity(params.len());
                 let mut next = func
-                    .r13_parameter(&s_read!(lu_dog))
+                    .r13_parameter(&lu_dog)
                     .iter()
-                    .find(|p| s_read!(p).r14c_parameter(&s_read!(lu_dog)).is_empty())
+                    .find(|p| s_read!(p).r14c_parameter(&lu_dog).is_empty())
                     .unwrap()
                     .clone();
 
@@ -211,14 +280,14 @@ fn compile_expression(
                     // type associated with the parameter. No, I am looking up the variable
                     // associated with the parameter and using it's type. I guess that's cool,
                     // but it's tricky if you aren't aware.
-                    let var = s_read!(s_read!(next).r12_variable(&s_read!(lu_dog))[0]).clone();
-                    let value = s_read!(var.r11_x_value(&s_read!(lu_dog))[0]).clone();
-                    let ty = value.r24_value_type(&s_read!(lu_dog))[0].clone();
+                    let var = s_read!(s_read!(next).r12_variable(&lu_dog)[0]).clone();
+                    let value = s_read!(var.r11_x_value(&lu_dog)[0]).clone();
+                    let ty = value.r24_value_type(&lu_dog)[0].clone();
                     params.push(var.name.clone());
 
                     let next_id = { s_read!(next).next };
                     if let Some(ref id) = next_id {
-                        next = s_read!(lu_dog).exhume_parameter(id).unwrap();
+                        next = lu_dog.exhume_parameter(id).unwrap();
                     } else {
                         break;
                     }
@@ -231,15 +300,15 @@ fn compile_expression(
 
             let arg_exprs = if let Some(next) = first_arg {
                 let mut exprs = Vec::with_capacity(args.len());
-                let mut next = s_read!(lu_dog).exhume_argument(&next).unwrap();
+                let mut next = lu_dog.exhume_argument(&next).unwrap();
 
                 loop {
-                    let expr = s_read!(next).r37_expression(&s_read!(lu_dog))[0].clone();
+                    let expr = s_read!(next).r37_expression(&lu_dog)[0].clone();
                     exprs.push(expr);
 
                     let next_id = { s_read!(next).next };
                     if let Some(ref id) = next_id {
-                        next = s_read!(lu_dog).exhume_argument(id).unwrap();
+                        next = lu_dog.exhume_argument(id).unwrap();
                     } else {
                         break;
                     }
@@ -250,8 +319,8 @@ fn compile_expression(
                 Vec::new()
             };
 
-            if let Some(ref expr) = s_read!(call).expression {
-                let expr = s_read!(lu_dog).exhume_expression(expr).unwrap();
+            if let Some(ref expr) = call.expression {
+                let expr = lu_dog.exhume_expression(expr).unwrap();
                 // Evaluate the LHS to get at the underlying value/instance.
                 compile_expression(&expr, thonk, context)?;
             };
@@ -259,21 +328,66 @@ fn compile_expression(
             for (name, expr) in params.into_iter().zip(arg_exprs) {
                 compile_expression(&expr, thonk, context)?;
                 context.insert_symbol(name);
-                // thonk.increment_frame_size();
             }
 
             thonk.add_instruction(Instruction::Call(args.len()));
-            // thonk.add_instruction(Instruction::Pop);
+        }
+        ExpressionEnum::ForLoop(ref for_loop) => {
+            let for_loop = lu_dog.exhume_for_loop(for_loop).unwrap();
+            let for_loop = s_read!(for_loop);
+            let ident = for_loop.ident.to_owned();
+            let body = lu_dog.exhume_expression(&for_loop.block).unwrap();
+            let list = lu_dog.exhume_expression(&for_loop.expression).unwrap();
+
+            compile_expression(&list, thonk, context)?;
+
+            context.push_symbol_table();
+            let mut inner_thonk = CThonk::new(format!("for_{}", ident));
+
+            inner_thonk.increment_frame_size();
+            let index = context.insert_symbol(ident.clone());
+            compile_expression(&body, &mut inner_thonk, context)?;
+            let fp = inner_thonk.get_frame_size();
+            for _ in 0..fp {
+                thonk.increment_frame_size();
+            }
+
+            // Store the starting value
+            thonk.add_instruction(Instruction::StoreLocal(index));
+
+            let top_of_loop = thonk.get_instruction_card() as isize;
+
+            thonk.append(inner_thonk);
+
+            // Duplicate the range end so that we can compare against it.
+            thonk.add_instruction(Instruction::Dup);
+
+            // Increment the index
+            thonk.add_instruction(Instruction::FetchLocal(index));
+            thonk.add_instruction(Instruction::Push(new_ref!(Value, Value::Integer(1))));
+            thonk.add_instruction(Instruction::Add);
+            thonk.add_instruction(Instruction::Dup);
+            thonk.add_instruction(Instruction::StoreLocal(index));
+
+            // Test the index against the length of the list
+            thonk.add_instruction(Instruction::TestLessThanOrEqual);
+
+            // go do it again if index is < end.
+            thonk.add_instruction(Instruction::JumpIfFalse(
+                top_of_loop - thonk.get_instruction_card() as isize - 1,
+            ));
+
+            context.pop_symbol_table();
         }
         ExpressionEnum::Literal(ref literal) => {
-            let literal = s_read!(lu_dog).exhume_literal(literal).unwrap();
+            let literal = lu_dog.exhume_literal(literal).unwrap();
 
             let literal = match &s_read!(literal).subtype {
                 //
                 // BooleanLiteral
                 //
                 LiteralEnum::BooleanLiteral(ref literal) => {
-                    let literal = s_read!(lu_dog).exhume_boolean_literal(literal).unwrap();
+                    let literal = lu_dog.exhume_boolean_literal(literal).unwrap();
                     let literal = s_read!(literal);
 
                     match literal.subtype {
@@ -289,7 +403,7 @@ fn compile_expression(
                 // FloatLiteral
                 //
                 LiteralEnum::FloatLiteral(ref literal) => {
-                    let literal = s_read!(lu_dog).exhume_float_literal(literal).unwrap();
+                    let literal = lu_dog.exhume_float_literal(literal).unwrap();
                     let value = s_read!(literal).x_value;
                     let value = Value::Float(value);
                     Ok(new_ref!(Value, value))
@@ -298,7 +412,7 @@ fn compile_expression(
                 // IntegerLiteral
                 //
                 LiteralEnum::IntegerLiteral(ref literal) => {
-                    let literal = s_read!(lu_dog).exhume_integer_literal(literal).unwrap();
+                    let literal = lu_dog.exhume_integer_literal(literal).unwrap();
                     let value = s_read!(literal).x_value;
                     let value = Value::Integer(value);
                     Ok(new_ref!(Value, value))
@@ -307,7 +421,7 @@ fn compile_expression(
                 // StringLiteral
                 //
                 LiteralEnum::StringLiteral(ref literal) => {
-                    let literal = s_read!(lu_dog).exhume_string_literal(literal).unwrap();
+                    let literal = lu_dog.exhume_string_literal(literal).unwrap();
                     // 🚧 It'd be great if this were an Rc...
                     let value = Value::String(s_read!(literal).x_value.clone());
                     Ok(new_ref!(Value, value))
@@ -317,17 +431,15 @@ fn compile_expression(
             thonk.add_instruction(Instruction::Push(literal?));
         }
         ExpressionEnum::Operator(ref op_type) => {
-            let operator = s_read!(lu_dog).exhume_operator(op_type).unwrap();
+            let operator = lu_dog.exhume_operator(op_type).unwrap();
             let operator = s_read!(operator);
-            let lhs = s_read!(lu_dog).exhume_expression(&operator.lhs).unwrap();
+            let lhs = lu_dog.exhume_expression(&operator.lhs).unwrap();
 
             match operator.subtype {
                 OperatorEnum::Binary(ref op_type) => {
-                    let binary = s_read!(lu_dog).exhume_binary(op_type).unwrap();
+                    let binary = lu_dog.exhume_binary(op_type).unwrap();
                     let binary = s_read!(binary);
-                    let rhs = s_read!(lu_dog)
-                        .exhume_expression(&operator.rhs.unwrap())
-                        .unwrap();
+                    let rhs = lu_dog.exhume_expression(&operator.rhs.unwrap()).unwrap();
 
                     match binary.subtype {
                         BinaryEnum::Addition(_) => {
@@ -339,8 +451,7 @@ fn compile_expression(
                             let offset = if let ExpressionEnum::VariableExpression(ref expr) =
                                 &s_read!(lhs).subtype
                             {
-                                let expr =
-                                    s_read!(lu_dog).exhume_variable_expression(expr).unwrap();
+                                let expr = lu_dog.exhume_variable_expression(expr).unwrap();
                                 let expr = s_read!(expr);
                                 context.get_symbol(&expr.name).expect(
                                     format!("symbol lookup failed for {}", expr.name).as_ref(),
@@ -373,7 +484,7 @@ fn compile_expression(
                     }
                 }
                 OperatorEnum::Comparison(ref op_type) => {
-                    let op_type = s_read!(lu_dog).exhume_comparison(op_type).unwrap();
+                    let op_type = lu_dog.exhume_comparison(op_type).unwrap();
                     let op_type = s_read!(op_type);
 
                     match &op_type.subtype {
@@ -385,8 +496,19 @@ fn compile_expression(
                 }
             }
         }
+        ExpressionEnum::RangeExpression(ref range) => {
+            let range = lu_dog.exhume_range_expression(range).unwrap();
+            let range = s_read!(range);
+
+            let start = lu_dog.exhume_expression(&range.lhs.unwrap()).unwrap();
+            let end = lu_dog.exhume_expression(&range.rhs.unwrap()).unwrap();
+
+            // We push first the end, then the start onto the stack.
+            compile_expression(&end, thonk, context)?;
+            compile_expression(&start, thonk, context)?;
+        }
         ExpressionEnum::VariableExpression(ref expr) => {
-            let expr = s_read!(lu_dog).exhume_variable_expression(expr).unwrap();
+            let expr = lu_dog.exhume_variable_expression(expr).unwrap();
             let expr = s_read!(expr);
             let name = expr.name.clone();
 
@@ -401,14 +523,14 @@ fn compile_expression(
             }
         }
         ExpressionEnum::XPrint(ref print) => {
-            let print = s_read!(lu_dog).exhume_x_print(print).unwrap();
-            let expr = s_read!(print).r32_expression(&s_read!(lu_dog))[0].clone();
+            let print = lu_dog.exhume_x_print(print).unwrap();
+            let expr = s_read!(print).r32_expression(&lu_dog)[0].clone();
 
             compile_expression(&expr, thonk, context)?;
             thonk.add_instruction(Instruction::Out(0));
         }
         missed => {
-            panic!("Missed: {:?}", missed);
+            panic!("Implement: {:?}", missed);
         }
     }
 
@@ -585,10 +707,7 @@ mod test {
         println!("{program}");
 
         assert_eq!(program.get_thonk_card(), 1);
-        assert_eq!(
-            program.get_thonk("main").unwrap().get_instruction_card(),
-            10
-        );
+        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 8);
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(5));
     }
@@ -615,8 +734,8 @@ mod test {
         println!("{program}");
 
         assert_eq!(program.get_thonk_card(), 2);
-        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 8);
-        assert_eq!(program.get_thonk("foo").unwrap().get_instruction_card(), 8);
+        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 6);
+        assert_eq!(program.get_thonk("foo").unwrap().get_instruction_card(), 6);
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(6));
     }
@@ -646,8 +765,38 @@ mod test {
         println!("{program}");
 
         assert_eq!(program.get_thonk_card(), 2);
-        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 8);
-        assert_eq!(program.get_thonk("foo").unwrap().get_instruction_card(), 20);
+        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 6);
+        assert_eq!(program.get_thonk("foo").unwrap().get_instruction_card(), 18);
+
+        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(12));
+    }
+
+    // #[test]
+    fn test_argument_ordering() {
+        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
+        let ore = "fn main() {
+                       foo(1, 2, 3)
+                   }
+                   fn foo(x: int, y: int, z: int) {
+                       chacha::assert_eq(x, 1);
+                       chacha::assert_eq(y, 2);
+                       chacha::assert_eq(z, 3);
+                   }";
+        let ast = parse_dwarf("test_argument_ordering", ore).unwrap();
+        let ctx = new_lu_dog(
+            "test_argument_ordering".to_owned(),
+            Some((ore.to_owned(), &ast)),
+            &get_dwarf_home(),
+            &sarzak,
+        )
+        .unwrap();
+        let mut program = compile(&ctx).unwrap();
+
+        println!("{program}");
+
+        assert_eq!(program.get_thonk_card(), 2);
+        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 6);
+        assert_eq!(program.get_thonk("foo").unwrap().get_instruction_card(), 18);
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(12));
     }
@@ -671,7 +820,7 @@ mod test {
         println!("{program}");
 
         assert_eq!(program.get_thonk_card(), 1);
-        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 6);
+        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 4);
 
         assert_eq!(
             &*s_read!(run_vm(&program).unwrap()),
@@ -698,7 +847,7 @@ mod test {
         println!("{program}");
 
         assert_eq!(program.get_thonk_card(), 1);
-        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 6);
+        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 4);
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(3));
     }
@@ -723,7 +872,7 @@ mod test {
         println!("{program}");
 
         assert_eq!(program.get_thonk_card(), 1);
-        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 6);
+        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 4);
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(10));
     }
@@ -748,7 +897,7 @@ mod test {
         println!("{program}");
 
         assert_eq!(program.get_thonk_card(), 1);
-        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 6);
+        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 4);
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(2));
     }
@@ -773,7 +922,7 @@ mod test {
         println!("{program}");
 
         assert_eq!(program.get_thonk_card(), 1);
-        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 4);
+        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 2);
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Boolean(true));
     }
@@ -798,7 +947,7 @@ mod test {
         println!("{program}");
 
         assert_eq!(program.get_thonk_card(), 1);
-        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 4);
+        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 2);
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Boolean(false));
     }
@@ -825,8 +974,40 @@ mod test {
         println!("{program}");
 
         assert_eq!(program.get_thonk_card(), 1);
-        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 8);
+        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 6);
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(10));
+    }
+
+    #[test]
+    fn test_for_in_range() {
+        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
+        let ore = "fn main() -> int {
+                       let x = 0;
+                       for i in 0..10 {
+                           x = x + i;
+                       }
+                       x
+                   }";
+        let ast = parse_dwarf("test_for_in_range", ore).unwrap();
+        let ctx = new_lu_dog(
+            "test_for_in_range".to_owned(),
+            Some((ore.to_owned(), &ast)),
+            &get_dwarf_home(),
+            &sarzak,
+        )
+        .unwrap();
+
+        let program = compile(&ctx).unwrap();
+
+        println!("{program}");
+
+        assert_eq!(program.get_thonk_card(), 1);
+        // assert_eq!(
+        // program.get_thonk("main").unwrap().get_instruction_card(),
+        // 16
+        // );
+
+        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(45));
     }
 }

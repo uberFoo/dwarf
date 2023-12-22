@@ -55,7 +55,6 @@ crossterm = "0.27.0"
 dap = "0.2.0-alpha1"
 env_logger = "0.10.0"
 futures-lite = { version = "2.0.0", optional = true }
-getrandom = { version = "0.2", features = ["js"] }
 heck = "0.4.1"
 hyper = { version = "0.14.26", optional = true }
 lazy_static = "1.4.0"
@@ -72,10 +71,7 @@ parking_lot = { version = "0.12.1", features = [
 pretty_env_logger = "0.5.0"
 puteketeke = { version = "0.0.3", optional = true }
 ratatui = { git = "https://github.com/uberFoo/ratatui", optional = true }
-reqwest = { version = "0.11.18", features = [
-    "blocking",
-    "rustls-tls",
-], optional = true }
+reqwest = { version = "0.11.18", features = ["blocking", "rustls-tls"] }
 rustc-hash = "1.1.0"
 rustyline = { version = "12.0.0", optional = true, features = [
     "derive",
@@ -122,7 +118,7 @@ chrono = "0.4.31"
 walkdir = "2.3.3"
 
 [features]
-default = ["single", "repl", "print-std-out", "dep:reqwest"]
+default = ["single", "repl", "print-std-out"]
 # default = ["multi-vec", "repl", "print-std-out", "async"]
 async_executor = ["multi-vec", "repl", "print-std-out", "async"]
 
@@ -164,7 +160,6 @@ async = [
     "dep:async-io",
     "dep:once_cell",
     "dep:puteketeke",
-    "dep:reqwest",
     "dep:async-compat",
     "dep:async-condvar-fair",
 ]

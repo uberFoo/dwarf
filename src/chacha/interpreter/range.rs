@@ -13,12 +13,14 @@ pub fn eval_range(
     vm: &mut VM,
 ) -> Result<(RefType<Value>, RefType<ValueType>)> {
     let lu_dog = context.lu_dog_heel().clone();
+    let lu_dog_read = s_read!(lu_dog);
 
-    let range = s_read!(lu_dog).exhume_range_expression(range).unwrap();
-    let lhs = s_read!(range).lhs.unwrap();
-    let lhs = s_read!(lu_dog).exhume_expression(&lhs).unwrap();
-    let rhs = s_read!(range).rhs.unwrap();
-    let rhs = s_read!(lu_dog).exhume_expression(&rhs).unwrap();
+    let range = lu_dog_read.exhume_range_expression(range).unwrap();
+    let range = s_read!(range);
+    let lhs = range.lhs.unwrap();
+    let lhs = lu_dog_read.exhume_expression(&lhs).unwrap();
+    let rhs = range.rhs.unwrap();
+    let rhs = lu_dog_read.exhume_expression(&rhs).unwrap();
 
     let (lhs, _) = eval_expression(lhs, context, vm)?;
     let (rhs, _) = eval_expression(rhs, context, vm)?;

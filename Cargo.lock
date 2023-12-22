@@ -967,7 +967,6 @@ dependencies = [
  "diff",
  "env_logger",
  "futures-lite 2.1.0",
- "getrandom 0.2.11",
  "heck",
  "hyper",
  "lazy_static",
@@ -1293,10 +1292,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fe9006bed769170c11f845cf00c7c1e9092aeb3f268e007c3e760ac68008070f"
 dependencies = [
  "cfg-if",
- "js-sys",
  "libc",
  "wasi 0.11.0+wasi-snapshot-preview1",
- "wasm-bindgen",
 ]
 
 [[package]]
@@ -2577,7 +2574,7 @@ dependencies = [
 [[package]]
 name = "sarzak"
 version = "2.12.7"
-source = "git+https://github.com/uberFoo/sarzak?branch=develop#e766a2eefbf6c990b99edc31c615c2b0d31b566d"
+source = "git+https://github.com/uberFoo/sarzak?branch=develop#198f588ea0c8069ca177c6e8cfe27283d3de0d85"
 dependencies = [
  "ansi_term",
  "bincode",

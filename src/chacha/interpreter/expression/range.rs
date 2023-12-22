@@ -22,7 +22,6 @@ pub fn eval_range(
 
     debug!("range lhs: {lhs:?}, range: {range:?}");
 
-    // 🚧 Should probably typecheck these.
     let lhs = eval_expression(lhs, context, vm)?;
     let rhs = eval_expression(rhs, context, vm)?;
 

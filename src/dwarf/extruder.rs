@@ -1553,6 +1553,7 @@ pub(super) fn inter_expression(
                 unreachable!()
             };
             let body = lu_dog.exhume_block(body).unwrap();
+            let body = Expression::new_block(&body, lu_dog);
 
             let for_loop = ForLoop::new(iter.0.to_owned(), &body, &collection.0, lu_dog);
             let expr = Expression::new_for_loop(&for_loop, lu_dog);

@@ -21,6 +21,7 @@
         "IIRC",
         "impls",
         "jemalloc",
+        "jift",
         "metamodel",
         "mimalloc",
         "msvc",

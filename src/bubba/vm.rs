@@ -25,6 +25,8 @@ const OTH_CLR: Colour = Colour::Cyan;
 pub(crate) enum BubbaError {
     #[snafu(display("\n{}: invalid instruction: {instr}", ERR_CLR.bold().paint("error")))]
     InvalidInstruction { instr: Instruction },
+    #[snafu(display("\n{}: ip out of bounds at {ip}", ERR_CLR.bold().paint("error")))]
+    IPOutOfBounds { ip: usize },
     #[snafu(display("\n{}: vm panic: {source}", ERR_CLR.bold().paint("error")))]
     VmPanic { source: Box<dyn std::error::Error> },
 }
@@ -33,7 +35,9 @@ type Result<T, E = Error> = std::result::Result<T, E>;
 
 #[derive(Debug)]
 pub(crate) struct CallFrame<'a> {
-    ip: usize,
+    // This needs to be an isize due to the way that we implemented the VM.
+    // Jumps are relative, and not absolute. So we need to have negative offsets.
+    ip: isize,
     thonk: &'a Thonk,
 }
 
@@ -44,7 +48,7 @@ impl<'a> CallFrame<'a> {
 
     #[inline]
     fn load_instruction(&mut self) -> Option<&Instruction> {
-        let instr = self.thonk.get_instruction(self.ip);
+        let instr = self.thonk.get_instruction(self.ip as usize);
         if instr.is_some() {
             self.ip += 1;
         }
@@ -56,6 +60,11 @@ impl<'a> CallFrame<'a> {
     fn size(&self) -> usize {
         self.thonk.get_frame_size()
     }
+
+    #[inline]
+    fn name(&self) -> &str {
+        self.thonk.name.as_str()
+    }
 }
 
 impl<'a> fmt::Display for CallFrame<'a> {
@@ -66,6 +75,8 @@ impl<'a> fmt::Display for CallFrame<'a> {
 
 #[derive(Clone, Debug)]
 pub struct VM<'b> {
+    /// Frame Pointer
+    ///
     fp: usize,
     stack: Vec<RefType<Value>>,
     memory: &'b Memory,
@@ -102,8 +113,9 @@ impl<'b> VM<'b> {
         loop {
             let ip = frame.ip;
             let frame_size = frame.size();
+            let func_name = frame.name().to_owned();
             let instr = frame.load_instruction();
-            let ip_offset = if let Some(instr) = instr {
+            let ip_offset: isize = if let Some(instr) = instr {
                 if trace {
                     let len = self.stack.len();
                     for i in 0..len {
@@ -115,7 +127,7 @@ impl<'b> VM<'b> {
                         println!("stack {i}:\t{}", s_read!(self.stack[i]));
                     }
                     println!();
-                    println!("{:08x}:\t{}", ip, instr);
+                    println!("<{func_name}>::{ip:08x}:\t{instr}");
                 }
                 match instr {
                     Instruction::Add => {
@@ -180,7 +192,7 @@ impl<'b> VM<'b> {
 
                         let result = self.run(*arity, &mut frame, trace)?;
 
-                        // Move the frame pointer
+                        // Move the frame pointer back
                         self.fp = (&*s_read!(self.stack[self.fp])).try_into().unwrap();
 
                         // This is clever, I guess. Or maybe it's just hard to read on first glance.
@@ -216,6 +228,17 @@ impl<'b> VM<'b> {
                     Instruction::Dup => {
                         let value = self.stack.pop().unwrap();
                         self.stack.push(value.clone());
+                        self.stack.push(value);
+
+                        0
+                    }
+                    // The fp is pointing someplace near the end of the vec.
+                    // Nominally at one past the Thonk name at the bottom of the stack.
+                    // Any locals will cause the fp to be moved up, with the
+                    // locals existing between the Thonk name and the fp.
+                    Instruction::FetchLocal(index) => {
+                        // We gotta index the stack in reverse order.
+                        let value = self.stack[self.fp - arity - frame_size + index].clone();
                         self.stack.push(value);
 
                         0
@@ -396,13 +419,27 @@ impl<'b> VM<'b> {
                             0
                         }
                     }
-                    Instruction::TestLessThanOrEqual => {
-                        let b = self.stack.pop().unwrap();
-                        let a = self.stack.pop().unwrap();
-                        self.stack
-                            .push(new_ref!(Value, Value::Boolean(s_read!(a).lte(&s_read!(b)))));
+                    Instruction::JumpIfTrue(offset) => {
+                        let condition = self.stack.pop().unwrap();
+                        let condition: bool = (&*s_read!(condition))
+                            .try_into()
+                            .map_err(|e: ChaChaError| BubbaError::VmPanic {
+                                source: Box::new(e),
+                            })
+                            .unwrap();
 
-                        0
+                        if condition {
+                            if trace {
+                                println!(
+                                    "\t\t{} {}",
+                                    Colour::Red.bold().paint("jmp"),
+                                    Colour::Yellow.bold().paint(format!("{}", ip + offset + 1))
+                                );
+                            }
+                            *offset
+                        } else {
+                            0
+                        }
                     }
                     Instruction::Multiply => {
                         let b = self.stack.pop().unwrap();
@@ -476,26 +513,8 @@ impl<'b> VM<'b> {
 
                         0
                     }
-                    Instruction::StoreLocal(index) => {
-                        let value = self.stack.pop().unwrap();
-                        // We gotta index the stack in reverse order.
-                        self.stack[self.fp - arity - frame_size + index] = value;
-
-                        0
-                    }
                     Instruction::Push(value) => {
                         self.stack.push(value.clone());
-
-                        0
-                    }
-                    // The fp is pointing someplace the end of the vec.
-                    // Nominally at the Thonk name at the bottom of the stack.
-                    // Any locals will cause the fp to be moved up, with the
-                    // locals existing between the Thonk name and the fp.
-                    Instruction::FetchLocal(index) => {
-                        // We gotta index the stack in reverse order.
-                        let value = self.stack[self.fp - arity - frame_size + index].clone();
-                        self.stack.push(value);
 
                         0
                     }
@@ -506,6 +525,17 @@ impl<'b> VM<'b> {
                         //     self.stack.pop();
                         // }
                         return Ok(result);
+                    }
+                    // The fp is pointing someplace near the end of the vec.
+                    // Nominally at one past the Thonk name at the bottom of the stack.
+                    // Any locals will cause the fp to be moved up, with the
+                    // locals existing between the Thonk name and the fp.
+                    Instruction::StoreLocal(index) => {
+                        let value = self.stack.pop().unwrap();
+                        // We gotta index into the stack in reverse order from the index.
+                        self.stack[self.fp - arity - frame_size + index] = value;
+
+                        0
                     }
                     Instruction::Subtract => {
                         let b = self.stack.pop().unwrap();
@@ -524,6 +554,22 @@ impl<'b> VM<'b> {
                         // }
 
                         self.stack.push(new_ref!(Value, c));
+
+                        0
+                    }
+                    Instruction::TestLessThan => {
+                        let b = self.stack.pop().unwrap();
+                        let a = self.stack.pop().unwrap();
+                        self.stack
+                            .push(new_ref!(Value, Value::Boolean(s_read!(a).lt(&s_read!(b)))));
+
+                        0
+                    }
+                    Instruction::TestLessThanOrEqual => {
+                        let b = self.stack.pop().unwrap();
+                        let a = self.stack.pop().unwrap();
+                        self.stack
+                            .push(new_ref!(Value, Value::Boolean(s_read!(a).lte(&s_read!(b)))));
 
                         0
                     }

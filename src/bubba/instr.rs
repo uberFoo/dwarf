@@ -22,8 +22,9 @@ pub enum Instruction {
     ///
     /// ### Here's a functional description of what to do.
     ///
-    /// Push a Value onto the stack that contains a Thonk.
-    /// Push
+    /// - push a Value::Thonk onto the stack
+    /// - push the arguments onto the stack in declaration order
+    /// - push Instruction::Call(arity) onto the stack
     ///
     ///  ## Stack Effect
     ///
@@ -81,10 +82,38 @@ pub enum Instruction {
     ///
     /// ## Stack Effect
     ///
-    JumpIfFalse(usize),
-    /// Compare the top two values on the stack.
+    /// Pops the value off the top of the stack for the condition.
+    ///
+    JumpIfFalse(isize),
+    /// Jump to the given address if the top of the stack is true.
     ///
     /// ## Stack Effect
+    ///
+    /// Pops the value off the top of the stack for the condition.
+    ///
+    JumpIfTrue(isize),
+    /// Compare the top two values on the stack.
+    ///
+    /// a < b
+    ///
+    /// ## Stack Effect
+    ///
+    /// The top two values are consumed and compared, with a boolean value
+    /// pushed as the result.
+    ///
+    /// Net effect -1.
+    ///
+    TestLessThan,
+    /// Compare the top two values on the stack.
+    ///
+    /// a <= b
+    ///
+    /// ## Stack Effect
+    ///
+    /// The top two values are consumed and compared, with a boolean value
+    /// pushed as the result.
+    ///
+    /// Net effect -1.
     ///
     TestLessThanOrEqual,
     /// Multiply the top two values on the stack.
@@ -156,15 +185,15 @@ impl fmt::Display for Instruction {
         let operand_style = Colour::Yellow.bold();
 
         match self {
-            Instruction::Add => write!(f, "{}", opcode_style.paint("add")),
+            Instruction::Add => write!(f, "{}", opcode_style.paint("add ")),
             Instruction::Call(arity) => write!(
                 f,
                 "{} {}",
                 opcode_style.paint("call"),
                 operand_style.paint(arity.to_string())
             ),
-            Instruction::Divide => write!(f, "{}", opcode_style.paint("div")),
-            Instruction::Dup => write!(f, "{}", opcode_style.paint("dup")),
+            Instruction::Divide => write!(f, "{}", opcode_style.paint("div ")),
+            Instruction::Dup => write!(f, "{}", opcode_style.paint("dup ")),
             Instruction::FetchLocal(index) => write!(
                 f,
                 "{} {}",
@@ -185,10 +214,17 @@ impl fmt::Display for Instruction {
                 opcode_style.paint("jiff"),
                 operand_style.paint(offset.to_string())
             ),
-            Instruction::TestLessThanOrEqual => write!(f, "{}", opcode_style.paint("lte")),
-            Instruction::Multiply => write!(f, "{}", opcode_style.paint("mul")),
+            Instruction::JumpIfTrue(address) => write!(
+                f,
+                "{} {}",
+                opcode_style.paint("jift"),
+                operand_style.paint(address.to_string())
+            ),
+            Instruction::TestLessThan => write!(f, "{}", opcode_style.paint("lt  ")),
+            Instruction::TestLessThanOrEqual => write!(f, "{}", opcode_style.paint("lte ")),
+            Instruction::Multiply => write!(f, "{}", opcode_style.paint("mul ")),
             Instruction::NewUserType(name, _ty, n) => {
-                write!(f, "{}{name}({n})", opcode_style.paint("new"))
+                write!(f, "{}{name}({n})", opcode_style.paint("new "))
             }
             Instruction::Out(stream) => write!(
                 f,
@@ -196,21 +232,21 @@ impl fmt::Display for Instruction {
                 opcode_style.paint("out "),
                 operand_style.paint(stream.to_string())
             ),
-            Instruction::Pop => write!(f, "{}", opcode_style.paint("pop")),
+            Instruction::Pop => write!(f, "{}", opcode_style.paint("pop ")),
             Instruction::Push(value) => write!(
                 f,
                 "{} {}",
                 opcode_style.paint("push"),
                 operand_style.paint(s_read!(value).to_string())
             ),
+            Instruction::Return => write!(f, "{}", opcode_style.paint("ret ")),
             Instruction::StoreLocal(index) => write!(
                 f,
                 "{} {}",
                 opcode_style.paint("store"),
                 operand_style.paint(index.to_string())
             ),
-            Instruction::Return => write!(f, "{}", opcode_style.paint("ret")),
-            Instruction::Subtract => write!(f, "{}", opcode_style.paint("sub")),
+            Instruction::Subtract => write!(f, "{}", opcode_style.paint("sub ")),
         }
     }
 }
@@ -259,7 +295,7 @@ impl Program {
 impl fmt::Display for Program {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         for (name, thonk) in self.thonks.iter() {
-            writeln!(f, "{name}:\n{thonk}")?;
+            writeln!(f, "{name} ({}):\n{thonk}", thonk.get_frame_size())?;
         }
         Ok(())
     }
@@ -268,7 +304,7 @@ impl fmt::Display for Program {
 #[derive(Clone, Debug)]
 pub struct Thonk {
     pub(crate) name: String,
-    instructions: Vec<Instruction>,
+    pub(crate) instructions: Vec<Instruction>,
     frame_size: usize,
 }
 

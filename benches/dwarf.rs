@@ -30,7 +30,7 @@ fn mandelbrot(c: &mut Criterion) {
         .into();
 
     let ctx = new_lu_dog(
-        "bench".to_owned(),
+        "mandelbrot".to_owned(),
         Some((source, &ast)),
         &dwarf_home,
         &sarzak,
@@ -60,13 +60,8 @@ fn fib(c: &mut Criterion) {
         })
         .into();
 
-    let lu_dog_ctx = new_lu_dog(
-        "bench".to_owned(),
-        Some((source, &ast)),
-        &dwarf_home,
-        &sarzak,
-    )
-    .unwrap();
+    let lu_dog_ctx =
+        new_lu_dog("fib".to_owned(), Some((source, &ast)), &dwarf_home, &sarzak).unwrap();
 
     let mut ctx =
         initialize_interpreter(num_cpus::get(), dwarf_home.clone(), lu_dog_ctx.clone()).unwrap();
@@ -87,8 +82,9 @@ fn fib(c: &mut Criterion) {
 fn loop_(c: &mut Criterion) {
     #[cfg(feature = "tracy")]
     Client::start();
-
+    let _ = env_logger::builder().is_test(true).try_init();
     let source = fs::read_to_string(LOOP_SOURCE_FILE).unwrap();
+    dbg!(&source);
     let ast = parse_dwarf("loop", &source).unwrap();
     let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
 
@@ -101,14 +97,14 @@ fn loop_(c: &mut Criterion) {
         .into();
 
     let lu_dog_ctx = new_lu_dog(
-        "bench".to_owned(),
+        "loop".to_owned(),
         Some((source, &ast)),
         &dwarf_home,
         &sarzak,
     )
     .unwrap();
 
-    let mut ctx = initialize_interpreter(num_cpus::get(), dwarf_home, lu_dog_ctx).unwrap();
+    let ctx = initialize_interpreter(num_cpus::get(), dwarf_home, lu_dog_ctx).unwrap();
 
     c.bench_function("loop", |b| {
         b.iter(|| start_func("main", false, &mut ctx.clone()).unwrap())

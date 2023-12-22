@@ -38,6 +38,7 @@ use crate::{
 
 mod chacha;
 
+// 🚧 I feel like this could use a good looking at. It smells bad.
 pub fn eval(
     call_id: &SarzakStorePtr,
     expression: &RefType<Expression>,
@@ -70,13 +71,11 @@ pub fn eval(
         let value = eval_expression(expr, context, vm)?;
         debug!("ExpressionEnum::Call LHS value {:?}", s_read!(value));
 
-        // 🚧 I don't remember why this is a closure.
         let mut eval_lhs = || -> Result<RefType<Value>> {
             // Below we are reading the value of the LHS, and then using that
             // to determine what to do with the RHS.
             let read_value = s_read!(value);
             match &*read_value {
-                Value::Enumeration(_) => Ok(value.clone()),
                 Value::Function(ref func) => {
                     let func = s_read!(lu_dog).exhume_function(&s_read!(func).id).unwrap();
                     debug!("ExpressionEnum::Call func: {func:?}");
@@ -85,7 +84,6 @@ pub fn eval(
                     debug!("value {value:?}");
                     Ok(value)
                 }
-                Value::Integer(_) => Ok(value.clone()),
                 Value::Lambda(ref ƛ) => {
                     let ƛ = s_read!(lu_dog).exhume_lambda(&s_read!(ƛ).id).unwrap();
                     debug!("ExpressionEnum::Call ƛ: {ƛ:?}");
@@ -103,38 +101,7 @@ pub fn eval(
                     debug!("value {value:?}");
                     Ok(value)
                 }
-                Value::ProxyType {
-                    module: _,
-                    obj_ty: _,
-                    id: _,
-                    plugin: _,
-                } => Ok(value.clone()),
-                Value::Range(_) => Ok(value.clone()),
-                Value::Struct(_) => Ok(value.clone()),
-                Value::Store(_store, _plugin) => Ok(value.clone()),
-                #[cfg(feature = "async")]
-                Value::Task {
-                    worker: _,
-                    parent: _,
-                } => Ok(value.clone()),
-                Value::Vector { ty: _, inner: _ } => Ok(value.clone()),
-                misc_value => {
-                    let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
-                    debug!("value {value:?}");
-
-                    let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
-
-                    let read = s_read!(span);
-                    let span = read.start as usize..read.end as usize;
-
-                    dbg!(&misc_value);
-
-                    Err(ChaChaError::NotAFunction {
-                        value: misc_value.to_owned(),
-                        span,
-                        location: location!(),
-                    })
-                }
+                _ => Ok(value.clone()),
             }
         };
 
