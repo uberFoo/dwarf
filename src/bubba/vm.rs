@@ -178,6 +178,9 @@ impl<'b> VM<'b> {
                             .expect("missing thonk {callee}!");
 
                         let old_fp = self.fp;
+
+                        // The call stack has been setup, but we need to make room
+                        // for locals.
                         for _ in 0..thonk.get_frame_size() {
                             self.stack.push(new_ref!(Value, Value::Empty));
                         }

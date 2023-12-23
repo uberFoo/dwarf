@@ -76,6 +76,7 @@ impl From<CThonk> for Thonk {
     }
 }
 
+#[derive(Debug)]
 struct Context<'a> {
     extruder_context: &'a ExtruderContext,
     symbol_tables: Vec<(usize, HashMap<String, usize>)>,
@@ -103,10 +104,16 @@ impl<'a> Context<'a> {
     }
 
     fn insert_symbol(&mut self, name: String) -> usize {
-        let (next, map) = self.symbol_tables.last_mut().unwrap();
-        map.insert(name, *next);
-        *next += 1;
-        *next - 1
+        match self.get_symbol(name.as_str()) {
+            Some(value) => value,
+            None => {
+                let (next, map) = self.symbol_tables.last_mut().unwrap();
+                map.insert(name, *next);
+                let value = *next;
+                *next += 1;
+                value
+            }
+        }
     }
 
     fn get_symbol(&self, name: &str) -> Option<usize> {
@@ -878,10 +885,25 @@ mod test {
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(1));
     }
 
-    // #[test]
+    #[test]
     fn fibonacci() {
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
-        let ore = "fn fib(n: int) -> int {
+        // let ore = "
+        //            fn main() -> int {
+        //                fib(10)
+        //            }
+        //            fn fib(n: int) -> int {
+        //                if n <= 1 {
+        //                    1
+        //                } else {
+        //                    fib(n - 1) + fib(n - 2)
+        //                }
+        //            }";
+        let ore = "
+                   fn main() -> int {
+                       fib(10)
+                   }
+                   fn fib(n: int) -> int {
                        if n == 0 {
                            0
                        } else if n == 1 {
@@ -889,9 +911,6 @@ mod test {
                        } else {
                            fib(n - 1) + fib(n - 2)
                        }
-                   }
-                   fn main() -> int {
-                       fib(10)
                    }";
         let ast = parse_dwarf("fibonacci", ore).unwrap();
         let ctx = new_lu_dog(
@@ -910,6 +929,7 @@ mod test {
         assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 4);
 
         assert_eq!(program.get_thonk("fib").unwrap().get_instruction_card(), 31);
+        // assert_eq!(program.get_thonk("fib").unwrap().get_instruction_card(), 22);
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(55));
     }
