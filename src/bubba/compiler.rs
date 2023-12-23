@@ -1003,11 +1003,45 @@ mod test {
         println!("{program}");
 
         assert_eq!(program.get_thonk_card(), 1);
-        // assert_eq!(
-        // program.get_thonk("main").unwrap().get_instruction_card(),
-        // 16
-        // );
+        assert_eq!(
+            program.get_thonk("main").unwrap().get_instruction_card(),
+            19
+        );
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(45));
+    }
+
+    #[test]
+    fn nested_for_loop() {
+        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
+        let ore = "fn main() -> int {
+                       let x = 0;
+                       for i in 0..10 {
+                           for j in 0..10 {
+                               x = x + i + j;
+                           }
+                       }
+                       x
+                   }";
+        let ast = parse_dwarf("nested_for_loop", ore).unwrap();
+        let ctx = new_lu_dog(
+            "nested_for_loop".to_owned(),
+            Some((ore.to_owned(), &ast)),
+            &get_dwarf_home(),
+            &sarzak,
+        )
+        .unwrap();
+
+        let program = compile(&ctx).unwrap();
+
+        println!("{program}");
+
+        assert_eq!(program.get_thonk_card(), 1);
+        assert_eq!(
+            program.get_thonk("main").unwrap().get_instruction_card(),
+            32
+        );
+
+        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(900));
     }
 }
