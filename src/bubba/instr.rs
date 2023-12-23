@@ -78,6 +78,13 @@ pub enum Instruction {
     /// ## Stack Effect
     ///
     FieldWrite,
+    /// Jump to the given offset.
+    ///
+    /// ## Stack Effect
+    ///
+    /// None
+    ///
+    Jump(isize),
     /// Jump to the given offset if the top of the stack is false.
     ///
     /// ## Stack Effect
@@ -94,7 +101,23 @@ pub enum Instruction {
     JumpIfTrue(isize),
     /// Compare the top two values on the stack.
     ///
+    /// a == b
+    ///
+    /// Where b is the top of the stack, and a is the next element.
+    ///
+    /// ## Stack Effect
+    ///
+    /// The top two values are consumed and compared, with a boolean value
+    /// pushed as the result.
+    ///
+    /// Net effect -1.
+    ///
+    TestEq,
+    /// Compare the top two values on the stack.
+    ///
     /// a < b
+    ///
+    /// Where b is the top of the stack, and a is the next element.
     ///
     /// ## Stack Effect
     ///
@@ -107,6 +130,8 @@ pub enum Instruction {
     /// Compare the top two values on the stack.
     ///
     /// a <= b
+    ///
+    /// Where b is the top of the stack, and a is the next element.
     ///
     /// ## Stack Effect
     ///
@@ -208,6 +233,12 @@ impl fmt::Display for Instruction {
                 operand_style.paint(count.to_string())
             ),
             Instruction::FieldWrite => write!(f, "{}", opcode_style.paint("field_write")),
+            Instruction::Jump(offset) => write!(
+                f,
+                "{} {}",
+                opcode_style.paint("jump"),
+                operand_style.paint(offset.to_string())
+            ),
             Instruction::JumpIfFalse(offset) => write!(
                 f,
                 "{} {}",
@@ -220,6 +251,7 @@ impl fmt::Display for Instruction {
                 opcode_style.paint("jift"),
                 operand_style.paint(address.to_string())
             ),
+            Instruction::TestEq => write!(f, "{}", opcode_style.paint("eq  ")),
             Instruction::TestLessThan => write!(f, "{}", opcode_style.paint("lt  ")),
             Instruction::TestLessThanOrEqual => write!(f, "{}", opcode_style.paint("lte ")),
             Instruction::Multiply => write!(f, "{}", opcode_style.paint("mul ")),
@@ -279,6 +311,7 @@ impl Program {
         self.thonks.values()
     }
 
+    #[allow(dead_code)]
     pub(crate) fn get_thonk_card(&self) -> usize {
         self.thonks.len()
     }

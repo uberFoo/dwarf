@@ -19,6 +19,7 @@ pub fn eval(
         let foo = s_read!(lu_dog);
         let expr = foo.exhume_variable_expression(expr).unwrap();
         let name = s_read!(expr).name.clone();
+        #[allow(clippy::let_and_return)]
         name
     };
 

@@ -1,24 +1,40 @@
 use std::path::PathBuf;
 
+use ansi_term::Colour;
 use rustc_hash::FxHashMap as HashMap;
+use snafu::prelude::*;
 
 use crate::{
-    bubba::{
-        error::{Error, Result},
-        instr::{Instruction, Program, Thonk},
-    },
+    bubba::instr::{Instruction, Program, Thonk},
     chacha::value::ThonkInner,
     lu_dog::{
-        BinaryEnum, BodyEnum, BooleanLiteralEnum, CallEnum, Expression, ExpressionEnum, Function,
-        LiteralEnum, ObjectStore as LuDogStore, OperatorEnum, Statement, StatementEnum,
+        BodyEnum, Expression, ExpressionEnum, Function, ObjectStore as LuDogStore, Statement,
+        StatementEnum,
     },
     new_ref, s_read,
     sarzak::ObjectStore as SarzakStore,
     Context as ExtruderContext, NewRef, RefType, Value,
 };
 
+mod expression;
+
+use expression::{block, call, for_loop, if_expr, literal, operator, print, range, variable};
+
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub const BUILD_TIME: &str = include!(concat!(env!("OUT_DIR"), "/timestamp.txt"));
+
+#[derive(Debug, Snafu)]
+pub struct Error(BubbaError);
+
+const _ERR_CLR: Colour = Colour::Red;
+const _OK_CLR: Colour = Colour::Green;
+const _POP_CLR: Colour = Colour::Yellow;
+const _OTH_CLR: Colour = Colour::Cyan;
+
+#[derive(Debug, Snafu)]
+pub(crate) enum BubbaError {}
+
+type Result<T, E = Error> = std::result::Result<T, E>;
 
 struct CThonk {
     inner: Thonk,
@@ -143,18 +159,13 @@ fn compile_function(func: &RefType<Function>, context: &mut Context) -> Result<C
 
                         if let Some(ref id) = s_read!(next.clone()).next {
                             next = lu_dog.exhume_statement(id).unwrap();
+                        } else if thonk.returned {
+                            break;
                         } else {
-                            if thonk.returned {
-                                break;
-                            } else {
-                                thonk.add_instruction(Instruction::Push(new_ref!(
-                                    Value,
-                                    Value::Empty
-                                )));
-                                thonk.add_instruction(Instruction::Return);
-                                thonk.returned = true;
-                                break;
-                            }
+                            thonk.add_instruction(Instruction::Push(new_ref!(Value, Value::Empty)));
+                            thonk.add_instruction(Instruction::Return);
+                            thonk.returned = true;
+                            break;
                         }
                     }
                 }
@@ -166,7 +177,7 @@ fn compile_function(func: &RefType<Function>, context: &mut Context) -> Result<C
         }
         //
         // This is an externally defined function that was declared in a dwarf file.
-        BodyEnum::ExternalImplementation(ref id) => {
+        BodyEnum::ExternalImplementation(ref _id) => {
             panic!("Somehow we found ourselves trying to compile an external implementation. This should not happen. The function name is: {name}");
         }
     };
@@ -225,310 +236,16 @@ fn compile_expression(
     thonk: &mut CThonk,
     context: &mut Context,
 ) -> Result<()> {
-    let lu_dog = context.lu_dog_heel();
-    let lu_dog = s_read!(lu_dog);
-
     match &s_read!(expression).subtype {
-        ExpressionEnum::Block(ref block) => {
-            let block = lu_dog.exhume_block(block).unwrap();
-            let stmts = s_read!(block).r18_statement(&lu_dog);
-            if !stmts.is_empty() {
-                let mut next = s_read!(block).r71_statement(&lu_dog)[0].clone();
-
-                loop {
-                    compile_statement(&next, thonk, context)?;
-
-                    if let Some(ref id) = s_read!(next.clone()).next {
-                        next = lu_dog.exhume_statement(id).unwrap();
-                    } else {
-                        break;
-                    }
-                }
-            }
-        }
-        ExpressionEnum::Call(ref call) => {
-            let call = lu_dog.exhume_call(call).unwrap();
-            let call = s_read!(call);
-            let first_arg = call.argument;
-            let args = call.r28_argument(&lu_dog);
-
-            let name = if let CallEnum::FunctionCall(ref call) = call.subtype {
-                let call = lu_dog.exhume_function_call(call).unwrap();
-                let call = s_read!(call);
-                let name = call.name.clone();
-                name
-            } else {
-                todo!("handle the other calls");
-            };
-
-            let func = lu_dog.exhume_function_id_by_name(&name).unwrap();
-            let func = lu_dog.exhume_function(&func).unwrap();
-            let func = s_read!(func);
-            let params = func.r13_parameter(&lu_dog);
-
-            let params = if !params.is_empty() {
-                let mut params = Vec::with_capacity(params.len());
-                let mut next = func
-                    .r13_parameter(&lu_dog)
-                    .iter()
-                    .find(|p| s_read!(p).r14c_parameter(&lu_dog).is_empty())
-                    .unwrap()
-                    .clone();
-
-                loop {
-                    // Apparently I'm being clever. I don't typecheck against an actual
-                    // type associated with the parameter. No, I am looking up the variable
-                    // associated with the parameter and using it's type. I guess that's cool,
-                    // but it's tricky if you aren't aware.
-                    let var = s_read!(s_read!(next).r12_variable(&lu_dog)[0]).clone();
-                    let value = s_read!(var.r11_x_value(&lu_dog)[0]).clone();
-                    let ty = value.r24_value_type(&lu_dog)[0].clone();
-                    params.push(var.name.clone());
-
-                    let next_id = { s_read!(next).next };
-                    if let Some(ref id) = next_id {
-                        next = lu_dog.exhume_parameter(id).unwrap();
-                    } else {
-                        break;
-                    }
-                }
-
-                params
-            } else {
-                Vec::new()
-            };
-
-            let arg_exprs = if let Some(next) = first_arg {
-                let mut exprs = Vec::with_capacity(args.len());
-                let mut next = lu_dog.exhume_argument(&next).unwrap();
-
-                loop {
-                    let expr = s_read!(next).r37_expression(&lu_dog)[0].clone();
-                    exprs.push(expr);
-
-                    let next_id = { s_read!(next).next };
-                    if let Some(ref id) = next_id {
-                        next = lu_dog.exhume_argument(id).unwrap();
-                    } else {
-                        break;
-                    }
-                }
-
-                exprs
-            } else {
-                Vec::new()
-            };
-
-            if let Some(ref expr) = call.expression {
-                let expr = lu_dog.exhume_expression(expr).unwrap();
-                // Evaluate the LHS to get at the underlying value/instance.
-                compile_expression(&expr, thonk, context)?;
-            };
-
-            for (name, expr) in params.into_iter().zip(arg_exprs) {
-                compile_expression(&expr, thonk, context)?;
-                context.insert_symbol(name);
-            }
-
-            thonk.add_instruction(Instruction::Call(args.len()));
-        }
-        ExpressionEnum::ForLoop(ref for_loop) => {
-            let for_loop = lu_dog.exhume_for_loop(for_loop).unwrap();
-            let for_loop = s_read!(for_loop);
-            let ident = for_loop.ident.to_owned();
-            let body = lu_dog.exhume_expression(&for_loop.block).unwrap();
-            let list = lu_dog.exhume_expression(&for_loop.expression).unwrap();
-
-            compile_expression(&list, thonk, context)?;
-
-            context.push_symbol_table();
-            let mut inner_thonk = CThonk::new(format!("for_{}", ident));
-
-            inner_thonk.increment_frame_size();
-            let index = context.insert_symbol(ident.clone());
-            compile_expression(&body, &mut inner_thonk, context)?;
-            let fp = inner_thonk.get_frame_size();
-            for _ in 0..fp {
-                thonk.increment_frame_size();
-            }
-
-            // Store the starting value
-            thonk.add_instruction(Instruction::StoreLocal(index));
-
-            let top_of_loop = thonk.get_instruction_card() as isize;
-
-            thonk.append(inner_thonk);
-
-            // Duplicate the range end so that we can compare against it.
-            thonk.add_instruction(Instruction::Dup);
-
-            // Increment the index
-            thonk.add_instruction(Instruction::FetchLocal(index));
-            thonk.add_instruction(Instruction::Push(new_ref!(Value, Value::Integer(1))));
-            thonk.add_instruction(Instruction::Add);
-            thonk.add_instruction(Instruction::Dup);
-            thonk.add_instruction(Instruction::StoreLocal(index));
-
-            // Test the index against the length of the list
-            thonk.add_instruction(Instruction::TestLessThanOrEqual);
-
-            // go do it again if index is < end.
-            thonk.add_instruction(Instruction::JumpIfFalse(
-                top_of_loop - thonk.get_instruction_card() as isize - 1,
-            ));
-
-            context.pop_symbol_table();
-        }
-        ExpressionEnum::Literal(ref literal) => {
-            let literal = lu_dog.exhume_literal(literal).unwrap();
-
-            let literal = match &s_read!(literal).subtype {
-                //
-                // BooleanLiteral
-                //
-                LiteralEnum::BooleanLiteral(ref literal) => {
-                    let literal = lu_dog.exhume_boolean_literal(literal).unwrap();
-                    let literal = s_read!(literal);
-
-                    match literal.subtype {
-                        BooleanLiteralEnum::FalseLiteral(_) => {
-                            Ok::<RefType<Value>, Error>(new_ref!(Value, Value::Boolean(false,)))
-                        }
-                        BooleanLiteralEnum::TrueLiteral(_) => {
-                            Ok(new_ref!(Value, Value::Boolean(true,)))
-                        }
-                    }
-                }
-                //
-                // FloatLiteral
-                //
-                LiteralEnum::FloatLiteral(ref literal) => {
-                    let literal = lu_dog.exhume_float_literal(literal).unwrap();
-                    let value = s_read!(literal).x_value;
-                    let value = Value::Float(value);
-                    Ok(new_ref!(Value, value))
-                }
-                //
-                // IntegerLiteral
-                //
-                LiteralEnum::IntegerLiteral(ref literal) => {
-                    let literal = lu_dog.exhume_integer_literal(literal).unwrap();
-                    let value = s_read!(literal).x_value;
-                    let value = Value::Integer(value);
-                    Ok(new_ref!(Value, value))
-                }
-                //
-                // StringLiteral
-                //
-                LiteralEnum::StringLiteral(ref literal) => {
-                    let literal = lu_dog.exhume_string_literal(literal).unwrap();
-                    // 🚧 It'd be great if this were an Rc...
-                    let value = Value::String(s_read!(literal).x_value.clone());
-                    Ok(new_ref!(Value, value))
-                }
-            };
-
-            thonk.add_instruction(Instruction::Push(literal?));
-        }
-        ExpressionEnum::Operator(ref op_type) => {
-            let operator = lu_dog.exhume_operator(op_type).unwrap();
-            let operator = s_read!(operator);
-            let lhs = lu_dog.exhume_expression(&operator.lhs).unwrap();
-
-            match operator.subtype {
-                OperatorEnum::Binary(ref op_type) => {
-                    let binary = lu_dog.exhume_binary(op_type).unwrap();
-                    let binary = s_read!(binary);
-                    let rhs = lu_dog.exhume_expression(&operator.rhs.unwrap()).unwrap();
-
-                    match binary.subtype {
-                        BinaryEnum::Addition(_) => {
-                            compile_expression(&lhs, thonk, context)?;
-                            compile_expression(&rhs, thonk, context)?;
-                            thonk.add_instruction(Instruction::Add);
-                        }
-                        BinaryEnum::Assignment(_) => {
-                            let offset = if let ExpressionEnum::VariableExpression(ref expr) =
-                                &s_read!(lhs).subtype
-                            {
-                                let expr = lu_dog.exhume_variable_expression(expr).unwrap();
-                                let expr = s_read!(expr);
-                                context.get_symbol(&expr.name).expect(
-                                    format!("symbol lookup failed for {}", expr.name).as_ref(),
-                                )
-                            } else {
-                                panic!("In assignment and lhs is not a variable.")
-                            };
-
-                            compile_expression(&rhs, thonk, context)?;
-                            thonk.add_instruction(Instruction::StoreLocal(offset));
-                        }
-                        BinaryEnum::BooleanOperator(_) => {
-                            todo!("BooleanOperator")
-                        }
-                        BinaryEnum::Division(_) => {
-                            compile_expression(&lhs, thonk, context)?;
-                            compile_expression(&rhs, thonk, context)?;
-                            thonk.add_instruction(Instruction::Divide);
-                        }
-                        BinaryEnum::Subtraction(_) => {
-                            compile_expression(&lhs, thonk, context)?;
-                            compile_expression(&rhs, thonk, context)?;
-                            thonk.add_instruction(Instruction::Subtract);
-                        }
-                        BinaryEnum::Multiplication(_) => {
-                            compile_expression(&lhs, thonk, context)?;
-                            compile_expression(&rhs, thonk, context)?;
-                            thonk.add_instruction(Instruction::Multiply);
-                        }
-                    }
-                }
-                OperatorEnum::Comparison(ref op_type) => {
-                    let op_type = lu_dog.exhume_comparison(op_type).unwrap();
-                    let op_type = s_read!(op_type);
-
-                    match &op_type.subtype {
-                        _ => todo!(),
-                    }
-                }
-                OperatorEnum::Unary(ref id) => {
-                    todo!("unary");
-                }
-            }
-        }
-        ExpressionEnum::RangeExpression(ref range) => {
-            let range = lu_dog.exhume_range_expression(range).unwrap();
-            let range = s_read!(range);
-
-            let start = lu_dog.exhume_expression(&range.lhs.unwrap()).unwrap();
-            let end = lu_dog.exhume_expression(&range.rhs.unwrap()).unwrap();
-
-            // We push first the end, then the start onto the stack.
-            compile_expression(&end, thonk, context)?;
-            compile_expression(&start, thonk, context)?;
-        }
-        ExpressionEnum::VariableExpression(ref expr) => {
-            let expr = lu_dog.exhume_variable_expression(expr).unwrap();
-            let expr = s_read!(expr);
-            let name = expr.name.clone();
-
-            if let Some(index) = context.get_symbol(&name) {
-                thonk.add_instruction(Instruction::FetchLocal(index));
-            } else {
-                // We are here because we need to look up a function.
-                thonk.add_instruction(Instruction::Push(new_ref!(
-                    Value,
-                    Value::Thonk(ThonkInner::Thonk(name))
-                )));
-            }
-        }
-        ExpressionEnum::XPrint(ref print) => {
-            let print = lu_dog.exhume_x_print(print).unwrap();
-            let expr = s_read!(print).r32_expression(&lu_dog)[0].clone();
-
-            compile_expression(&expr, thonk, context)?;
-            thonk.add_instruction(Instruction::Out(0));
-        }
+        ExpressionEnum::Block(ref block) => block::compile(block, thonk, context)?,
+        ExpressionEnum::Call(ref call) => call::compile(call, thonk, context)?,
+        ExpressionEnum::ForLoop(ref for_loop) => for_loop::compile(for_loop, thonk, context)?,
+        ExpressionEnum::Literal(ref literal) => literal::compile(literal, thonk, context)?,
+        ExpressionEnum::Operator(ref op_type) => operator::compile(op_type, thonk, context)?,
+        ExpressionEnum::RangeExpression(ref range) => range::compile(range, thonk, context)?,
+        ExpressionEnum::VariableExpression(ref expr) => variable::compile(expr, thonk, context)?,
+        ExpressionEnum::XIf(ref expr) => if_expr::compile(expr, thonk, context)?,
+        ExpressionEnum::XPrint(ref print) => print::compile(print, thonk, context)?,
         missed => {
             panic!("Implement: {:?}", missed);
         }
@@ -574,7 +291,7 @@ mod test {
         let mut vm = VM::new(&memory.0);
         let thonk = program.get_thonk("main").unwrap();
         dbg!(thonk.get_frame_size());
-        let mut frame = CallFrame::new(&thonk);
+        let mut frame = CallFrame::new(thonk);
 
         vm.push_stack(new_ref!(
             Value,
@@ -790,7 +507,7 @@ mod test {
             &sarzak,
         )
         .unwrap();
-        let mut program = compile(&ctx).unwrap();
+        let program = compile(&ctx).unwrap();
 
         println!("{program}");
 
@@ -1043,5 +760,121 @@ mod test {
         );
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(900));
+    }
+
+    #[test]
+    fn if_expression_true_arm() {
+        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
+        let ore = "fn main() -> int {
+                       if true {
+                           1
+                       } else {
+                           2
+                       }
+                   }";
+        let ast = parse_dwarf("if_expression", ore).unwrap();
+        let ctx = new_lu_dog(
+            "if_expression".to_owned(),
+            Some((ore.to_owned(), &ast)),
+            &get_dwarf_home(),
+            &sarzak,
+        )
+        .unwrap();
+
+        let program = compile(&ctx).unwrap();
+
+        println!("{program}");
+
+        assert_eq!(program.get_thonk_card(), 1);
+
+        assert_eq!(
+            program.get_thonk("main").unwrap().get_instruction_card(),
+            10
+        );
+
+        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(1));
+    }
+
+    #[test]
+    fn if_expression_false_arm() {
+        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
+        let ore = "fn main() -> int {
+                       if false {
+                           1
+                       } else {
+                           2
+                       }
+                   }";
+        let ast = parse_dwarf("if_expression_else_arm", ore).unwrap();
+        let ctx = new_lu_dog(
+            "if_expression_else_arm".to_owned(),
+            Some((ore.to_owned(), &ast)),
+            &get_dwarf_home(),
+            &sarzak,
+        )
+        .unwrap();
+
+        let program = compile(&ctx).unwrap();
+
+        println!("{program}");
+
+        assert_eq!(program.get_thonk_card(), 1);
+
+        assert_eq!(
+            program.get_thonk("main").unwrap().get_instruction_card(),
+            10
+        );
+
+        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(2));
+    }
+
+    #[test]
+    fn if_expression_complex() {
+        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
+        let ore = "fn main() -> int {
+                       let x = 0;
+                       if 1 == 1 {
+                           print(\"true\");
+                            if 0 == 1 {
+                                print(\"false\");
+                                x = 3
+                            } else {
+                                print(\"true\");
+                                x = 10;
+                                for i in 0..9 {
+                                    x = x - 1;
+                                }
+                                print(\"past one\");
+                            };
+                       } else {
+                           for i in 0..10 {
+                               x = x + i;
+                           }
+                           print(\"false\");
+                           x = 2;
+                       };
+
+                       x
+                   }";
+        let ast = parse_dwarf("if_expression_complex_condition", ore).unwrap();
+        let ctx = new_lu_dog(
+            "if_expression_complex_condition".to_owned(),
+            Some((ore.to_owned(), &ast)),
+            &get_dwarf_home(),
+            &sarzak,
+        )
+        .unwrap();
+
+        let program = compile(&ctx).unwrap();
+        println!("{program}");
+
+        assert_eq!(program.get_thonk_card(), 1);
+
+        assert_eq!(
+            program.get_thonk("main").unwrap().get_instruction_card(),
+            65
+        );
+
+        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(1));
     }
 }

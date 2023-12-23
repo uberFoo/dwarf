@@ -4,10 +4,7 @@ use ansi_term::Colour;
 use snafu::{location, prelude::*, Location};
 
 use crate::{
-    chacha::{
-        memory::Memory,
-        value::{ThonkInner, UserStruct},
-    },
+    chacha::{memory::Memory, value::UserStruct},
     new_ref, s_read, s_write, ChaChaError, NewRef, RefType, Value,
 };
 
@@ -17,9 +14,9 @@ use super::instr::{Instruction, Thonk};
 pub struct Error(BubbaError);
 
 const ERR_CLR: Colour = Colour::Red;
-const OK_CLR: Colour = Colour::Green;
-const POP_CLR: Colour = Colour::Yellow;
-const OTH_CLR: Colour = Colour::Cyan;
+const _OK_CLR: Colour = Colour::Green;
+const _POP_CLR: Colour = Colour::Yellow;
+const _OTH_CLR: Colour = Colour::Cyan;
 
 #[derive(Debug, Snafu)]
 pub(crate) enum BubbaError {
@@ -170,11 +167,14 @@ impl<'b> VM<'b> {
                         // 🚧 I imagine that this dynamic lookup is slow.
                         let thonk = self
                             .memory
-                            .get_thonk(
-                                self.memory
-                                    .thonk_index(callee.clone())
-                                    .expect(format!("Panic! Thonk not found: {callee}.").as_str()),
-                            )
+                            .get_thonk(self.memory.thonk_index(callee.clone()).unwrap_or_else(
+                                || {
+                                    panic!(
+                                        "Panic! Thonk not found: {callee}.",
+                                        callee = callee.clone()
+                                    )
+                                },
+                            ))
                             .expect("missing thonk {callee}!");
 
                         let old_fp = self.fp;
@@ -397,6 +397,18 @@ impl<'b> VM<'b> {
 
                         0
                     }
+                    Instruction::Jump(offset) => {
+                        if trace {
+                            println!(
+                                "\t\t{} {}",
+                                Colour::Red.bold().paint("jmp"),
+                                Colour::Yellow
+                                    .bold()
+                                    .paint(format!("0x{:08x}", ip + offset + 1))
+                            );
+                        }
+                        *offset
+                    }
                     Instruction::JumpIfFalse(offset) => {
                         let condition = self.stack.pop().unwrap();
                         let condition: bool = (&*s_read!(condition))
@@ -410,8 +422,10 @@ impl<'b> VM<'b> {
                             if trace {
                                 println!(
                                     "\t\t{} {}",
-                                    Colour::Red.bold().paint("jmp"),
-                                    Colour::Yellow.bold().paint(format!("{}", ip + offset + 1))
+                                    Colour::Red.bold().paint("jiff"),
+                                    Colour::Yellow
+                                        .bold()
+                                        .paint(format!("0x{:08x}", ip + offset + 1))
                                 );
                             }
                             *offset
@@ -432,8 +446,10 @@ impl<'b> VM<'b> {
                             if trace {
                                 println!(
                                     "\t\t{} {}",
-                                    Colour::Red.bold().paint("jmp"),
-                                    Colour::Yellow.bold().paint(format!("{}", ip + offset + 1))
+                                    Colour::Red.bold().paint("jift"),
+                                    Colour::Yellow
+                                        .bold()
+                                        .paint(format!("0x{:08x}", ip + offset + 1))
                                 );
                             }
                             *offset
@@ -557,6 +573,14 @@ impl<'b> VM<'b> {
 
                         0
                     }
+                    Instruction::TestEq => {
+                        let b = self.stack.pop().unwrap();
+                        let a = self.stack.pop().unwrap();
+                        self.stack
+                            .push(new_ref!(Value, Value::Boolean(*s_read!(a) == *s_read!(b))));
+
+                        0
+                    }
                     Instruction::TestLessThan => {
                         let b = self.stack.pop().unwrap();
                         let a = self.stack.pop().unwrap();
@@ -602,6 +626,7 @@ mod tests {
     use tracy_client::Client;
 
     use crate::{
+        chacha::value::ThonkInner,
         dwarf::{DwarfFloat, DwarfInteger},
         interpreter::{initialize_interpreter, PrintableValueType},
         Context,
