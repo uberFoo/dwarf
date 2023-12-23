@@ -28,8 +28,7 @@ pub(in crate::bubba::compiler) fn compile(
     let false_thonk = if let Some(ref expr) = expr.false_block {
         context.push_symbol_table();
         let mut false_thonk = CThonk::new("if_false".to_owned());
-        let block = lu_dog.exhume_block(expr).unwrap();
-        let block = s_read!(block).r15_expression(&lu_dog)[0].clone();
+        let block = lu_dog.exhume_expression(expr).unwrap();
 
         compile_expression(&block, &mut false_thonk, context)?;
         let fp = false_thonk.get_frame_size();

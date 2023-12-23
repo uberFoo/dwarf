@@ -469,6 +469,9 @@ impl DwarfParser {
             let false_block = if let Some(expr) = self.parse_block_expression()? {
                 debug!("false block", expr);
                 expr
+            } else if let Some(expr) = self.parse_if_expression()? {
+                debug!("false block", expr);
+                expr
             } else {
                 let token = self.previous().unwrap();
                 let err = Simple::expected_input_found(
@@ -5771,6 +5774,26 @@ mod tests {
         "#;
 
         let ast = parse_dwarf("test_await", src);
+        assert!(ast.is_ok());
+    }
+
+    #[test]
+    fn if_else_if() {
+        let _ = env_logger::builder().is_test(true).try_init();
+
+        let src = r#"
+            fn main() {
+                if a == b {
+                    print("a == b");
+                } else if a < b {
+                    print("a < b");
+                } else {
+                    print("a > b");
+                }
+            }
+        "#;
+
+        let ast = parse_dwarf("test_if_else_if", src);
         assert!(ast.is_ok());
     }
 }

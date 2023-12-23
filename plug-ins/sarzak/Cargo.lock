@@ -620,7 +620,7 @@ dependencies = [
  "reqwest",
  "rustc-hash",
  "rustyline",
- "sarzak 2.12.7",
+ "sarzak 2.12.8",
  "serde",
  "serde_json",
  "slab",
@@ -1784,7 +1784,7 @@ dependencies = [
  "heck",
  "log",
  "rustc-hash",
- "sarzak 2.12.7",
+ "sarzak 2.12.8",
  "serde",
  "serde_json",
  "uuid",
@@ -1792,8 +1792,8 @@ dependencies = [
 
 [[package]]
 name = "sarzak"
-version = "2.12.7"
-source = "git+https://github.com/uberFoo/sarzak?branch=develop#198f588ea0c8069ca177c6e8cfe27283d3de0d85"
+version = "2.12.8"
+source = "git+https://github.com/uberFoo/sarzak?branch=develop#631bfca82361e91f6dea2455227a7298908c0a47"
 dependencies = [
  "ansi_term",
  "bincode",

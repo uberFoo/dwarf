@@ -78,6 +78,11 @@ pub(in crate::bubba::compiler) fn compile(
                     compile_expression(&rhs, thonk, context)?;
                     thonk.add_instruction(Instruction::TestEq);
                 }
+                ComparisonEnum::LessThanOrEqual(_) => {
+                    compile_expression(&lhs, thonk, context)?;
+                    compile_expression(&rhs, thonk, context)?;
+                    thonk.add_instruction(Instruction::TestLessThanOrEqual);
+                }
                 _ => todo!("comparison"),
             }
         }

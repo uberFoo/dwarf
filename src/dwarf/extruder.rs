@@ -1826,14 +1826,7 @@ pub(super) fn inter_expression(
                 let false_block = new_ref!(ParserExpression, false_block.0.to_owned());
                 let (false_block, _false_ty) =
                     inter_expression(&false_block, fspan, block, context, lu_dog)?;
-                let false_block =
-                    if let ExpressionEnum::Block(false_block) = s_read!(false_block.0).subtype {
-                        false_block
-                    } else {
-                        panic!("Expected a block expression");
-                    };
-                let false_block = lu_dog.exhume_block(&false_block).unwrap();
-                Some(false_block)
+                Some(false_block.0)
             } else {
                 None
             };

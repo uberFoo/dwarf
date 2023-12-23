@@ -877,4 +877,40 @@ mod test {
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(1));
     }
+
+    // #[test]
+    fn fibonacci() {
+        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
+        let ore = "fn fib(n: int) -> int {
+                       if n == 0 {
+                           0
+                       } else if n == 1 {
+                           1
+                       } else {
+                           fib(n - 1) + fib(n - 2)
+                       }
+                   }
+                   fn main() -> int {
+                       fib(10)
+                   }";
+        let ast = parse_dwarf("fibonacci", ore).unwrap();
+        let ctx = new_lu_dog(
+            "fibonacci".to_owned(),
+            Some((ore.to_owned(), &ast)),
+            &get_dwarf_home(),
+            &sarzak,
+        )
+        .unwrap();
+
+        let program = compile(&ctx).unwrap();
+        println!("{program}");
+
+        assert_eq!(program.get_thonk_card(), 2);
+
+        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 4);
+
+        assert_eq!(program.get_thonk("fib").unwrap().get_instruction_card(), 31);
+
+        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(55));
+    }
 }
