@@ -2588,8 +2588,9 @@ pub(super) fn inter_expression(
                         }])
                     }
                 },
-                ValueTypeEnum::Ty(id) => {
-                    let ty = context.sarzak.exhume_ty(&id).unwrap();
+                ValueTypeEnum::Ty(ref id) => {
+                    dbg!(id, &instance_ty);
+                    let ty = context.sarzak.exhume_ty(id).unwrap();
                     let ty = ty.read().unwrap();
                     match &*ty {
                         Ty::Integer(_) => match method.as_str() {
@@ -2993,9 +2994,6 @@ pub(super) fn inter_expression(
                 if let Some(_field) = field {
                     let ty = lu_dog
                         .iter_value_type()
-                        .inspect(|ty| {
-                            debug!("ty {:?}", ty);
-                        })
                         .find(|ty| {
                             if let ValueTypeEnum::Enumeration(id) = s_read!(ty).subtype {
                                 id == woog_enum_id

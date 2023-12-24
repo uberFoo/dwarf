@@ -159,8 +159,6 @@ pub(crate) fn parse_dwarf(
     let source_code = arg_values.pop_front().unwrap().0;
     let source_code: String = (*s_read!(source_code)).clone().try_into()?;
 
-    dbg!(&source_code);
-
     let ast = crate::dwarf::parse_dwarf(name, &source_code).map_err(|e| {
         eprintln!(
             "{}",

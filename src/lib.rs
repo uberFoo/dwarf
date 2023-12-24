@@ -4,6 +4,7 @@
 use std::{ops, path::PathBuf};
 
 use clap::Args;
+use heck::ToUpperCamelCase;
 use rustc_hash::FxHashMap as HashMap;
 use serde::{Deserialize, Serialize};
 
@@ -403,3 +404,83 @@ impl Default for Context {
 }
 
 pub type ValueResult = Result<RefType<Value>, ChaChaError>;
+
+pub(crate) trait Desanitize {
+    fn desanitize(&self) -> String;
+}
+
+impl Desanitize for &str {
+    fn desanitize(&self) -> String {
+        let result = match *self {
+            "a_sink" => "async".to_owned(),
+            "a_wait" => "await".to_owned(),
+            "AWait" => "Await".to_owned(),
+            "x_box" => "box".to_owned(),
+            "XBox" => "Box".to_owned(),
+            "x_break" => "break".to_owned(),
+            "krate" => "crate".to_owned(),
+            "Krate" => "Crate".to_owned(),
+            "woog_const" => "const".to_owned(),
+            "WoogConst" => "Const".to_owned(),
+            "woog_enum" => "enum".to_owned(),
+            "WoogEnum" => "Enum".to_owned(),
+            "x_error" => "error".to_owned(),
+            "XError" => "Error".to_owned(),
+            "false_literal" => "false".to_owned(),
+            "FalseLiteral" => "False".to_owned(),
+            "x_future" => "future".to_owned(),
+            "XFuture" => "Future".to_owned(),
+            "x_if" => "if".to_owned(),
+            "XIf" => "If".to_owned(),
+            "x_let" => "let".to_owned(),
+            "XLet" => "Let".to_owned(),
+            "x_macro" => "macro".to_owned(),
+            "XMacro" => "Macro".to_owned(),
+            "x_match" => "match".to_owned(),
+            "XMatch" => "Match".to_owned(),
+            "x_model" => "model".to_owned(),
+            "XModel" => "Model".to_owned(),
+            "ZNone" => "None".to_owned(),
+            "ZObjectStore" => "Object Store".to_owned(),
+            "woog_option" => "option".to_owned(),
+            "WoogOption" => "Option".to_owned(),
+            "x_path" => "path".to_owned(),
+            "XPath" => "Path".to_owned(),
+            "x_plugin" => "plugin".to_owned(),
+            "XPlugin" => "Plugin".to_owned(),
+            "x_print" => "print".to_owned(),
+            "XPrint" => "Print".to_owned(),
+            "x_ref" => "ref".to_owned(),
+            "x_return" => "return".to_owned(),
+            "XReturn" => "Return".to_owned(),
+            "ZSome" => "Some".to_owned(),
+            "z_string" => "string".to_owned(),
+            "ZString" => "String".to_owned(),
+            "woog_struct" => "struct".to_owned(),
+            "WoogStruct" => "Struct".to_owned(),
+            "z_super" => "super".to_owned(),
+            "ZSuper" => "Super".to_owned(),
+            "true_literal" => "true".to_owned(),
+            "TrueLiteral" => "True".to_owned(),
+            "ty" => "type".to_owned(),
+            "Ty" => "Type".to_owned(),
+            "z_uuid" => "uuid".to_owned(),
+            "ZUuid" => "Uuid".to_owned(),
+            // "z_uuid" => "UUID".to_owned(),
+            "x_value" => "value".to_owned(),
+            "XValue" => "Value".to_owned(),
+            _ => self.to_upper_camel_case(),
+        };
+
+        if self != &result {
+            log::debug!("sanitized: {} -> {}", self, result);
+        }
+        result
+    }
+}
+
+impl Desanitize for String {
+    fn desanitize(&self) -> String {
+        self.as_str().desanitize()
+    }
+}

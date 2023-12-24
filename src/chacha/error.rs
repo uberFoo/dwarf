@@ -445,8 +445,6 @@ impl fmt::Display for ChaChaErrorReporter<'_, '_, '_> {
             } => {
                 let msg = format!("expected `{expected}`, found `{got}`.");
 
-                dbg!(&defn_span);
-
                 let report = Report::build(ReportKind::Error, file_name, invocation_span.start)
                     .with_message("wrong number of arguments")
                     .with_label(

@@ -629,12 +629,12 @@ pub fn eval_statement(
     // into play.
     for dirty in context.dirty() {
         match dirty {
-            // Dirty::Func(f) => inter_func(
-            //     f.clone(),
-            //     &context.block().clone(),
-            //     context.memory(),
-            //     &mut s_write!(lu_dog),
-            // ),
+            Dirty::Func(f) => inter_func(
+                f.clone(),
+                &context.block().clone(),
+                context.memory(),
+                &mut s_write!(lu_dog),
+            ),
             Dirty::Store(ref s_id) => {
                 let store = s_read!(lu_dog).exhume_z_object_store(s_id).unwrap();
                 inter_store(store, context.memory(), &s_read!(lu_dog));

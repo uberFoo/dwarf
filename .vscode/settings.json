@@ -12,6 +12,7 @@
         "cspan",
         "CVAR",
         "defn",
+        "desanitize",
         "dwarfc",
         "embeddable",
         "enuum",

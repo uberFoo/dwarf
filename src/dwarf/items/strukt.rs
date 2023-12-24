@@ -17,7 +17,7 @@ use crate::{
         store::ObjectStore as LuDogStore, Field, Generic, Item as WoogItem, Span as LuDogSpan,
         StructGeneric, ValueType, WoogStruct, XPlugin, ZObjectStore,
     },
-    s_read, s_write, Dirty, RefType,
+    s_read, s_write, Desanitize, Dirty, RefType,
 };
 
 macro_rules! link_struct_generic {
@@ -57,8 +57,8 @@ pub fn inter_struct(
                     if let Some(name_vec) = attributes.get(OBJECT) {
                         if let Some((_, ref value)) = name_vec.get(0) {
                             let proxy_obj: String = value.try_into().map_err(|e| vec![e])?;
-                            // let proxy_obj = proxy_obj.de_sanitize();
-                            let proxy_obj = proxy_obj.to_upper_camel_case();
+                            let proxy_obj = proxy_obj.desanitize();
+                            // let proxy_obj = proxy_obj.to_upper_camel_case();
                             debug!("proxy.object: {proxy_obj}");
                             if let Some(model) = context.models.get(&store_name) {
                                 if let Some(ref obj_id) =

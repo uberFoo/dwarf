@@ -2,7 +2,7 @@ use std::{path::Path, time::Instant};
 
 use abi_stable::{
     library::{lib_header_from_path, LibrarySuffix, RawLibrary},
-    std_types::ROk,
+    std_types::{RErr, ROk},
 };
 use ansi_term::Colour;
 use heck::ToUpperCamelCase;
@@ -32,7 +32,7 @@ use crate::{
     plug_in::PluginType,
     s_read, s_write,
     sarzak::ObjectStore,
-    NewRef, RefType, SarzakStorePtr, Value,
+    Desanitize, NewRef, RefType, SarzakStorePtr, Value,
 };
 
 const OBJECT_STORE: &str = "ObjectStore";
@@ -217,9 +217,9 @@ fn eval_external_static_method(
         )
     }
     // 🚧 Should these be wrapped in a mutex-like?
-    else if let Some(obj_id) = model.0.exhume_object_id_by_name(&object_name) {
+    else if let Some(obj_id) = model.0.exhume_object_id_by_name(&object_name.desanitize()) {
         if let Some(plugin) = &model.1 {
-            if let ROk(proxy_obj) = s_write!(plugin).invoke_func(
+            match s_write!(plugin).invoke_func(
                 model_name.as_str().into(),
                 object_name.as_str().into(),
                 func_name.as_str().into(),
@@ -232,74 +232,82 @@ fn eval_external_static_method(
                     .collect::<Vec<_>>()
                     .into(),
             ) {
-                match proxy_obj {
-                    FfiValue::ProxyType(proxy_obj) => {
-                        let value = new_ref!(
-                            Value,
-                            Value::ProxyType {
-                                module: model_name,
-                                obj_ty: obj_id,
-                                id: proxy_obj.id.into(),
-                                plugin: new_ref!(PluginType, proxy_obj.plugin)
-                            }
-                        );
+                ROk(proxy_obj) => {
+                    match proxy_obj {
+                        FfiValue::ProxyType(proxy_obj) => {
+                            let value = new_ref!(
+                                Value,
+                                Value::ProxyType {
+                                    module: model_name,
+                                    obj_ty: obj_id,
+                                    id: proxy_obj.id.into(),
+                                    plugin: new_ref!(PluginType, proxy_obj.plugin)
+                                }
+                            );
 
-                        Ok(value)
-                    }
-                    FfiValue::Vector(vec) => {
-                        let vec = vec
-                            .into_iter()
-                            .map(Value::from)
-                            .map(|v| new_ref!(Value, v))
-                            .collect::<Vec<_>>();
-                        let ty = if vec.is_empty() {
-                            ValueType::new_empty(&mut s_write!(lu_dog))
-                        } else {
-                            s_read!(vec[0])
-                                .get_value_type(&s_read!(context.sarzak_heel()), &s_read!(lu_dog))
-                        };
-                        let value = new_ref!(Value, Value::Vector { ty, inner: vec });
+                            Ok(value)
+                        }
+                        FfiValue::Vector(vec) => {
+                            let vec = vec
+                                .into_iter()
+                                .map(Value::from)
+                                .map(|v| new_ref!(Value, v))
+                                .collect::<Vec<_>>();
+                            let ty = if vec.is_empty() {
+                                ValueType::new_empty(&mut s_write!(lu_dog))
+                            } else {
+                                s_read!(vec[0]).get_value_type(
+                                    &s_read!(context.sarzak_heel()),
+                                    &s_read!(lu_dog),
+                                )
+                            };
+                            let value = new_ref!(Value, Value::Vector { ty, inner: vec });
 
-                        // let woog_struct = s_read!(lu_dog)
-                        //     .iter_woog_struct()
-                        //     .find(|woog| {
-                        //         let woog = s_read!(woog);
-                        //         woog.name == object_name
-                        //     })
-                        //     .unwrap();
+                            // let woog_struct = s_read!(lu_dog)
+                            //     .iter_woog_struct()
+                            //     .find(|woog| {
+                            //         let woog = s_read!(woog);
+                            //         woog.name == object_name
+                            //     })
+                            //     .unwrap();
 
-                        // let ty = s_read!(lu_dog)
-                        //     .iter_value_type()
-                        //     .find(|ty| {
-                        //         let ty = s_read!(ty);
-                        //         if let ValueTypeEnum::WoogStruct(struct_id) = ty.subtype {
-                        //             struct_id == s_read!(woog_struct).id
-                        //         } else {
-                        //             false
-                        //         }
-                        //     })
-                        //     .unwrap();
+                            // let ty = s_read!(lu_dog)
+                            //     .iter_value_type()
+                            //     .find(|ty| {
+                            //         let ty = s_read!(ty);
+                            //         if let ValueTypeEnum::WoogStruct(struct_id) = ty.subtype {
+                            //             struct_id == s_read!(woog_struct).id
+                            //         } else {
+                            //             false
+                            //         }
+                            //     })
+                            //     .unwrap();
 
-                        // let list = List::new(&ty, &mut s_write!(lu_dog));
+                            // let list = List::new(&ty, &mut s_write!(lu_dog));
 
-                        Ok(value)
-                    }
-                    all_manner_of_things => {
-                        panic!("{all_manner_of_things:?} is not a proxy for model {model_name}.");
+                            Ok(value)
+                        }
+                        all_manner_of_things => {
+                            panic!(
+                                "{all_manner_of_things:?} is not a proxy for model {model_name}."
+                            );
+                        }
                     }
                 }
-            } else {
-                Err(ChaChaError::NoSuchMethod {
-                    method: func_name,
-                    span: s_read!(span).start as usize..s_read!(span).end as usize,
-                    location: location!(),
-                })
+                RErr(e) => {
+                    dbg!(e);
+                    Err(ChaChaError::NoSuchMethod {
+                        method: func_name,
+                        span: s_read!(span).start as usize..s_read!(span).end as usize,
+                        location: location!(),
+                    })
+                }
             }
         } else {
             panic!("no plugin");
         }
     } else {
-        error!("object not found");
+        error!("object not found: {object_name}");
         unimplemented!()
     }
 }

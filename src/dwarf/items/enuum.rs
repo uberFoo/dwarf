@@ -242,7 +242,7 @@ pub(crate) fn create_generic_enum(
     };
 
     debug!("interring generic enum {enum_name}");
-    dbg!(&enum_path);
+
     let new_enum = Enumeration::new(enum_name.to_owned(), None, base_enum_impl.as_ref(), lu_dog);
     let ty = ValueType::new_enumeration(&new_enum, lu_dog);
 
