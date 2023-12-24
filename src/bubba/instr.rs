@@ -2,10 +2,11 @@ use std::fmt;
 
 use ansi_term::Colour;
 use rustc_hash::FxHashMap as HashMap;
+use serde::{Deserialize, Serialize};
 
 use crate::{s_read, RefType, Value, ValueType};
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum Instruction {
     /// Add the top two values on the stack.
     ///
@@ -283,7 +284,7 @@ impl fmt::Display for Instruction {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Program {
     compiler_version: String,
     compiler_build_ts: String,
@@ -334,7 +335,7 @@ impl fmt::Display for Program {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Thonk {
     pub(crate) name: String,
     pub(crate) instructions: Vec<Instruction>,

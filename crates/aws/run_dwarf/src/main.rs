@@ -45,7 +45,7 @@ async fn function_handler(event: Request) -> Result<Response<Body>, Error> {
 
         match ast {
             Ok(ast) => {
-                let lu_dog = new_lu_dog(
+                let ctx = new_lu_dog(
                     "ƛ".to_owned(),
                     Some((program.to_owned(), &ast)),
                     &dwarf_home,
@@ -66,11 +66,10 @@ async fn function_handler(event: Request) -> Result<Response<Body>, Error> {
                     errors
                 });
 
-                match lu_dog {
+                match ctx {
                     Ok(lu_dog) => {
                         let mut ctx =
-                            initialize_interpreter(num_cpus::get(), dwarf_home, lu_dog, sarzak)
-                                .unwrap();
+                            initialize_interpreter(num_cpus::get(), dwarf_home, lu_dog).unwrap();
                         match start_func("main", false, &mut ctx) {
                             Ok(result) => {
                                 let result = result.borrow().to_string();

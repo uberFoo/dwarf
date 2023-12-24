@@ -13,6 +13,7 @@ use abi_stable::{
 use ansi_term::Colour;
 use rustc_hash::FxHashMap as HashMap;
 use sarzak::lu_dog::ValueTypeEnum;
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 #[cfg(feature = "async")]
@@ -144,7 +145,7 @@ pub enum FfiValue {
 /// }
 /// ```
 ///
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum EnumVariant {
     /// Unit Enumeration Field
     ///
@@ -206,13 +207,13 @@ impl fmt::Display for EnumVariant {
 }
 
 // 🚧 This can be deleted and replaced with just a String.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum ThonkInner {
     Thonk(String),
     Index(usize),
 }
 
-#[derive(Default)]
+#[derive(Default, Deserialize, Serialize)]
 pub enum Value {
     /// Boolean
     ///
@@ -228,6 +229,7 @@ pub enum Value {
     /// ()
     Empty,
     Enumeration(EnumVariant),
+    #[serde(skip)]
     Error(Box<ChaChaError>),
     Float(DwarfFloat),
     /// Function
@@ -237,6 +239,7 @@ pub enum Value {
     /// excessive, and yet I know I've looked into it before.
     Function(RefType<Function>),
     #[cfg(feature = "async")]
+    #[serde(skip)]
     Future {
         name: String,
         executor: Executor,
@@ -244,8 +247,11 @@ pub enum Value {
     },
     Integer(DwarfInteger),
     Lambda(RefType<Lambda>),
+    #[serde(skip)]
     ParsedDwarf(Context),
+    #[serde(skip)]
     Plugin(RefType<PluginType>),
+    #[serde(skip)]
     ProxyType {
         module: String,
         obj_ty: Uuid,
@@ -253,11 +259,13 @@ pub enum Value {
         plugin: RefType<PluginType>,
     },
     Range(Range<DwarfInteger>),
+    #[serde(skip)]
     Store(RefType<ZObjectStore>, RefType<PluginType>),
     String(String),
     Struct(RefType<UserStruct>),
     Table(HashMap<String, RefType<Self>>),
     #[cfg(feature = "async")]
+    #[serde(skip)]
     Task {
         worker: Option<puteketeke::Worker>,
         parent: Option<puteketeke::AsyncTask<'static, ValueResult>>,
@@ -1434,7 +1442,7 @@ impl std::cmp::PartialEq for Value {
     }
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct UserTypeAttribute(HashMap<String, RefType<Value>>);
 
 impl PartialEq for UserTypeAttribute {
@@ -1459,7 +1467,7 @@ impl PartialEq for UserTypeAttribute {
 
 impl Eq for UserTypeAttribute {}
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct TupleEnum {
     variant: String,
     value: RefType<Value>,
@@ -1496,7 +1504,7 @@ impl fmt::Display for TupleEnum {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct UserStruct {
     type_name: String,
     type_: RefType<ValueType>,
