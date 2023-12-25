@@ -12,12 +12,13 @@ pub fn eval(
     vm: &mut VM,
 ) -> Result<RefType<Value>> {
     let lu_dog = context.lu_dog_heel().clone();
+    let lu_dog = s_read!(lu_dog);
 
-    let match_expr = s_read!(lu_dog).exhume_x_match(match_expr).unwrap();
+    let match_expr = lu_dog.exhume_x_match(match_expr).unwrap();
     let match_expr = s_read!(match_expr);
 
-    let patterns = match_expr.r87_pattern(&s_read!(lu_dog));
-    let scrutinee = match_expr.r91_expression(&s_read!(lu_dog))[0].clone();
+    let patterns = match_expr.r87_pattern(&lu_dog);
+    let scrutinee = match_expr.r91_expression(&lu_dog)[0].clone();
 
     let scrutinee = eval_expression(scrutinee, context, vm)?;
 
@@ -25,15 +26,27 @@ pub fn eval(
     // 🚧 Darn. Match arms need to be ordered the same as they are written, and
     // they are not ordered in the model.
     for pattern in patterns {
-        let match_expr = s_read!(pattern).r87_expression(&s_read!(lu_dog))[0].clone();
-        let expr = s_read!(pattern).r92_expression(&s_read!(lu_dog))[0].clone();
+        let match_expr = s_read!(pattern).r87_expression(&lu_dog)[0].clone();
+        let expr = s_read!(pattern).r92_expression(&lu_dog)[0].clone();
 
-        let match_expr = s_read!(match_expr);
-        match &match_expr.subtype {
+        let match_expr_read = s_read!(match_expr);
+        match &match_expr_read.subtype {
+            ExpressionEnum::EmptyExpression(ref _id) => {
+                let value = eval_expression(expr, context, vm)?;
+                return Ok(value);
+            }
+            ExpressionEnum::Literal(ref _id) => {
+                let value = eval_expression(match_expr.clone(), context, vm)?;
+                let value = s_read!(value);
+                if &*s_read!(scrutinee) == &*value {
+                    let value = eval_expression(expr, context, vm)?;
+                    return Ok(value);
+                }
+            }
             ExpressionEnum::StructExpression(ref id) => {
-                let struct_expr = s_read!(lu_dog).exhume_struct_expression(id).unwrap();
-                let field_exprs = s_read!(struct_expr).r26_field_expression(&s_read!(lu_dog));
-                // let data_struct = &s_read!(struct_expr).r39_data_structure(&s_read!(lu_dog))[0];
+                let struct_expr = lu_dog.exhume_struct_expression(id).unwrap();
+                let field_exprs = s_read!(struct_expr).r26_field_expression(&lu_dog);
+                // let data_struct = &s_read!(struct_expr).r39_data_structure(&lu_dog)[0];
 
                 fn decode_value(value: RefType<Value>) -> (String, Option<RefType<Value>>) {
                     match &*s_read!(value) {
@@ -63,12 +76,10 @@ pub fn eval(
                 }
 
                 // if let Value::Enum(value) = &*s_read!(scrutinee) {
-                let x_path = &s_read!(lu_dog)
-                    .exhume_x_path(&s_read!(struct_expr).x_path)
-                    .unwrap();
+                let x_path = &lu_dog.exhume_x_path(&s_read!(struct_expr).x_path).unwrap();
                 // We know that there is always a pe. It's only in an option so that
                 // we can construct everything.
-                let mut pe = s_read!(x_path).r97_path_element(&s_read!(lu_dog))[0].clone();
+                let mut pe = s_read!(x_path).r97_path_element(&lu_dog)[0].clone();
 
                 let mut matched = false;
                 let (name, mut scrutinee) = decode_value(scrutinee.clone());
@@ -79,7 +90,7 @@ pub fn eval(
                             #[allow(clippy::clone_on_copy)]
                             id.as_ref().unwrap().clone()
                         };
-                        pe = s_read!(lu_dog).exhume_path_element(&id).unwrap();
+                        pe = lu_dog.exhume_path_element(&id).unwrap();
                         let (name, s) = decode_value(scrutinee.unwrap());
                         scrutinee = s;
                         if name == s_read!(pe).name {
@@ -98,11 +109,10 @@ pub fn eval(
                         return Ok(value);
                     }
                     (true, _) => {
-                        let field_expr =
-                            s_read!(field_exprs[0]).r38_expression(&s_read!(lu_dog))[0].clone();
+                        let field_expr = s_read!(field_exprs[0]).r38_expression(&lu_dog)[0].clone();
                         let field_expr = s_read!(field_expr);
                         if let ExpressionEnum::VariableExpression(ref var) = field_expr.subtype {
-                            let var = s_read!(lu_dog).exhume_variable_expression(var).unwrap();
+                            let var = lu_dog.exhume_variable_expression(var).unwrap();
 
                             context.memory().push_frame();
 
@@ -117,6 +127,19 @@ pub fn eval(
                     }
                     (false, _) => {}
                 }
+            }
+            ExpressionEnum::VariableExpression(ref id) => {
+                let var = lu_dog.exhume_variable_expression(id).unwrap();
+
+                context.memory().push_frame();
+
+                context
+                    .memory()
+                    .insert(s_read!(var).name.to_owned(), scrutinee);
+                let value = eval_expression(expr, context, vm)?;
+
+                context.memory().pop_frame();
+                return Ok(value);
             }
             oops => panic!("{oops:?}"),
         }

@@ -1,5 +1,4 @@
 use ansi_term::Colour;
-use heck::ToUpperCamelCase;
 use rustc_hash::FxHashMap as HashMap;
 use sarzak::domain::DomainBuilder;
 use snafu::{location, Location};

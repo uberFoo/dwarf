@@ -112,6 +112,7 @@ fn run_program(test: &str, program: &str) -> Result<(Value, String), String> {
                     .map(|e| {
                         format!(
                             "{}",
+                            // This one is uber.
                             dwarf::dwarf::error::DwarfErrorReporter(e, true, program)
                         )
                     })
@@ -125,6 +126,7 @@ fn run_program(test: &str, program: &str) -> Result<(Value, String), String> {
                 .map(|e| {
                     format!(
                         "{}",
+                        // This one is not uber.
                         dwarf::dwarf::error::DwarfErrorReporter(e, false, program)
                     )
                 })

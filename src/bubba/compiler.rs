@@ -18,7 +18,9 @@ use crate::{
 
 mod expression;
 
-use expression::{block, call, for_loop, if_expr, literal, operator, print, range, variable};
+use expression::{
+    block, call, for_loop, if_expr, literal, operator, print, range, variable, xmatch,
+};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub const BUILD_TIME: &str = include!(concat!(env!("OUT_DIR"), "/timestamp.txt"));
@@ -252,6 +254,7 @@ fn compile_expression(
         ExpressionEnum::RangeExpression(ref range) => range::compile(range, thonk, context)?,
         ExpressionEnum::VariableExpression(ref expr) => variable::compile(expr, thonk, context)?,
         ExpressionEnum::XIf(ref expr) => if_expr::compile(expr, thonk, context)?,
+        ExpressionEnum::XMatch(ref expr) => xmatch::compile(expr, thonk, context)?,
         ExpressionEnum::XPrint(ref print) => print::compile(print, thonk, context)?,
         missed => {
             panic!("Implement: {:?}", missed);
@@ -888,17 +891,6 @@ mod test {
     #[test]
     fn fibonacci() {
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
-        // let ore = "
-        //            fn main() -> int {
-        //                fib(10)
-        //            }
-        //            fn fib(n: int) -> int {
-        //                if n <= 1 {
-        //                    1
-        //                } else {
-        //                    fib(n - 1) + fib(n - 2)
-        //                }
-        //            }";
         let ore = "
                    fn main() -> int {
                        fib(10)
@@ -929,8 +921,41 @@ mod test {
         assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 4);
 
         assert_eq!(program.get_thonk("fib").unwrap().get_instruction_card(), 31);
-        // assert_eq!(program.get_thonk("fib").unwrap().get_instruction_card(), 22);
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(55));
+    }
+
+    // #[test]
+    fn match_expression() {
+        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
+        let ore = "
+                   fn main() -> int {
+                       match 1 {
+                           1 => 1,
+                           2 => 2,
+                           3 => 3,
+                           _ => 4,
+                       }
+                   }";
+        let ast = parse_dwarf("match_expression", ore).unwrap();
+        let ctx = new_lu_dog(
+            "match_expression".to_owned(),
+            Some((ore.to_owned(), &ast)),
+            &get_dwarf_home(),
+            &sarzak,
+        )
+        .unwrap();
+
+        let program = compile(&ctx).unwrap();
+        println!("{program}");
+
+        assert_eq!(program.get_thonk_card(), 1);
+
+        assert_eq!(
+            program.get_thonk("main").unwrap().get_instruction_card(),
+            10
+        );
+
+        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(1));
     }
 }

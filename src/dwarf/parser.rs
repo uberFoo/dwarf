@@ -382,6 +382,10 @@ impl DwarfParser {
         }
 
         if path.is_empty() {
+            if let Some(literal) = self.parse_simple_expression()? {
+                return Ok(Some((Pattern::Literal(literal.0), path_span)));
+            }
+
             Ok(None)
         } else if path.len() == 1 {
             let ty = if let Type::UserType(ty, _) = path[0].clone() {
