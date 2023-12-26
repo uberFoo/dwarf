@@ -79,6 +79,13 @@ pub enum Instruction {
     /// ## Stack Effect
     ///
     FieldWrite,
+    /// Stop processing and panic the VM
+    ///
+    /// ## Stack Effect
+    ///
+    /// conflagration
+    ///
+    HaltAndCatchFire,
     /// Jump to the given offset.
     ///
     /// ## Stack Effect
@@ -234,6 +241,7 @@ impl fmt::Display for Instruction {
                 operand_style.paint(count.to_string())
             ),
             Instruction::FieldWrite => write!(f, "{}", opcode_style.paint("field_write")),
+            Instruction::HaltAndCatchFire => write!(f, "{}", opcode_style.paint("🔥   ")),
             Instruction::Jump(offset) => write!(
                 f,
                 "{} {}",

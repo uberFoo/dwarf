@@ -925,8 +925,8 @@ mod test {
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(55));
     }
 
-    // #[test]
-    fn match_expression() {
+    #[test]
+    fn match_literal_expression() {
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "
                    fn main() -> int {
@@ -953,9 +953,117 @@ mod test {
 
         assert_eq!(
             program.get_thonk("main").unwrap().get_instruction_card(),
-            10
+            29
         );
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(1));
+    }
+
+    #[test]
+    fn match_literal_expression_catchall() {
+        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
+        let ore = "
+                   fn main() -> int {
+                       match 6 {
+                           1 => 1,
+                           2 => 2,
+                           3 => 3,
+                           a => {
+                                print(a);
+                                4
+                           }
+                       }
+                   }";
+        let ast = parse_dwarf("match_expression", ore).unwrap();
+        let ctx = new_lu_dog(
+            "match_expression".to_owned(),
+            Some((ore.to_owned(), &ast)),
+            &get_dwarf_home(),
+            &sarzak,
+        )
+        .unwrap();
+
+        let program = compile(&ctx).unwrap();
+        println!("{program}");
+
+        assert_eq!(program.get_thonk_card(), 1);
+
+        assert_eq!(
+            program.get_thonk("main").unwrap().get_instruction_card(),
+            32
+        );
+
+        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(4));
+    }
+
+    #[test]
+    fn match_literal_expression_middle() {
+        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
+        let ore = "
+                   fn main() -> int {
+                       match 3 {
+                           1 => 1,
+                           2 => 2,
+                           3 => 3,
+                           _ => 4,
+                       }
+                   }";
+        let ast = parse_dwarf("match_expression", ore).unwrap();
+        let ctx = new_lu_dog(
+            "match_expression".to_owned(),
+            Some((ore.to_owned(), &ast)),
+            &get_dwarf_home(),
+            &sarzak,
+        )
+        .unwrap();
+
+        let program = compile(&ctx).unwrap();
+        println!("{program}");
+
+        assert_eq!(program.get_thonk_card(), 1);
+
+        assert_eq!(
+            program.get_thonk("main").unwrap().get_instruction_card(),
+            29
+        );
+
+        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(3));
+    }
+
+    #[test]
+    fn match_string_literal_expression() {
+        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
+        let ore = "
+                   fn main() -> string {
+                       match \"foo\" {
+                           \"foo\" => \"foo\",
+                           \"bar\" => \"bar\",
+                           \"baz\" => \"baz\",
+                           _ => \"qux\",
+                       }
+                   }";
+        let ast = parse_dwarf("match_expression", ore).unwrap();
+        let ctx = new_lu_dog(
+            "match_expression".to_owned(),
+            Some((ore.to_owned(), &ast)),
+            &get_dwarf_home(),
+            &sarzak,
+        )
+        .unwrap();
+
+        let program = compile(&ctx).unwrap();
+        println!("{program}");
+
+        assert_eq!(program.get_thonk_card(), 1);
+
+        assert_eq!(
+            program.get_thonk("main").unwrap().get_instruction_card(),
+            29
+        );
+
+        assert_eq!(
+            &*s_read!(run_vm(&program).unwrap()),
+            &Value::String("foo".to_owned())
+        );
     }
 }

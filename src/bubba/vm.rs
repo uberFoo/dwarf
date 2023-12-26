@@ -20,6 +20,8 @@ const _OTH_CLR: Colour = Colour::Cyan;
 
 #[derive(Debug, Snafu)]
 pub(crate) enum BubbaError {
+    #[snafu(display("\n{}: Halt and catch fire...🔥", ERR_CLR.bold().paint("error")))]
+    HaltAndCatchFire,
     #[snafu(display("\n{}: invalid instruction: {instr}", ERR_CLR.bold().paint("error")))]
     InvalidInstruction { instr: Instruction },
     #[snafu(display("\n{}: ip out of bounds at {ip}", ERR_CLR.bold().paint("error")))]
@@ -399,6 +401,9 @@ impl<'b> VM<'b> {
                         }
 
                         0
+                    }
+                    Instruction::HaltAndCatchFire => {
+                        return Err(BubbaError::HaltAndCatchFire.into());
                     }
                     Instruction::Jump(offset) => {
                         if trace {

@@ -2589,7 +2589,6 @@ pub(super) fn inter_expression(
                     }
                 },
                 ValueTypeEnum::Ty(ref id) => {
-                    dbg!(id, &instance_ty);
                     let ty = context.sarzak.exhume_ty(id).unwrap();
                     let ty = ty.read().unwrap();
                     match &*ty {
