@@ -142,7 +142,7 @@
             },
             "args": [
                 // "use.ore"
-                // "tests/harness/types/generics/option.tao"
+                "tests/harness/types/generics/workout.ore"
             ],
             "cwd": "${workspaceFolder}",
             "env": {
