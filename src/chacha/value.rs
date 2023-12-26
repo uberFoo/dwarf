@@ -274,6 +274,7 @@ pub enum Value {
     TupleEnum(RefType<TupleEnum>),
     Unknown,
     Uuid(uuid::Uuid),
+    ValueType(ValueType),
     Vector {
         ty: RefType<ValueType>,
         inner: Vec<RefType<Self>>,
@@ -331,6 +332,7 @@ impl Value {
             Self::TupleEnum(te) => write!(f, "{}", s_read!(te)),
             Self::Unknown => write!(f, "<unknown>"),
             Self::Uuid(uuid) => write!(f, "{uuid}"),
+            Self::ValueType(ty) => write!(f, "{:?}", ty),
             Self::Vector { ty: _, inner } => {
                 let mut first_time = true;
                 write!(f, "[")?;
@@ -621,6 +623,7 @@ impl std::fmt::Debug for Value {
             Self::TupleEnum(te) => write!(f, "{:?}", s_read!(te)),
             Self::Unknown => write!(f, "<unknown>"),
             Self::Uuid(uuid) => write!(f, "{uuid:?}"),
+            Self::ValueType(ty) => write!(f, "{:?}", ty),
             Self::Vector { ty, inner } => write!(f, "{ty:?}: {inner:?}"),
         }
     }
@@ -677,6 +680,7 @@ impl Clone for Value {
             Self::TupleEnum(te) => Self::TupleEnum(te.clone()),
             Self::Unknown => Self::Unknown,
             Self::Uuid(uuid) => Self::Uuid(*uuid),
+            Self::ValueType(ty) => Self::ValueType(ty.clone()),
             Self::Vector { ty, inner } => Self::Vector {
                 ty: ty.clone(),
                 inner: inner.clone(),
@@ -789,6 +793,7 @@ impl fmt::Display for Value {
             Self::TupleEnum(te) => write!(f, "{}", s_read!(te)),
             Self::Unknown => write!(f, "<unknown>"),
             Self::Uuid(uuid) => write!(f, "{uuid}"),
+            Self::ValueType(ty) => write!(f, "{:?}", ty),
             Self::Vector { ty: _, inner } => {
                 let mut first_time = true;
                 write!(f, "[")?;
@@ -872,6 +877,20 @@ impl From<Value> for Option<Uuid> {
         match option {
             Value::Uuid(uuid) => Some(uuid),
             _ => None,
+        }
+    }
+}
+
+impl TryFrom<&Value> for ValueType {
+    type Error = ChaChaError;
+
+    fn try_from(value: &Value) -> Result<Self, <ValueType as TryFrom<&Value>>::Error> {
+        match &value {
+            Value::ValueType(ty) => Ok(ty.to_owned()),
+            _ => Err(ChaChaError::Conversion {
+                src: value.to_string(),
+                dst: "ValueType".to_owned(),
+            }),
         }
     }
 }

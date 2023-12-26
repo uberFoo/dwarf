@@ -47,8 +47,6 @@ pub fn eval(expr: &SarzakStorePtr, context: &mut Context, vm: &mut VM) -> Result
 
             //
             // This is where we give the enums actual values -- the rubber hits the road.
-            // Feels like wrapping this if expression in an Ok Option variant is
-            // somehow bad. I'm doing it anyway. 😜
             Ok(if field_exprs.is_empty() {
                 new_ref!(
                     Value,
@@ -70,7 +68,6 @@ pub fn eval(expr: &SarzakStorePtr, context: &mut Context, vm: &mut VM) -> Result
                 // 🚧 Punting here -- we are just doing tuple enums for now. And
                 // only single ones at that. I should just lift the restriction.
                 // Tuples are only a notional thing anyway I think.
-                // (field_values[0].clone(), UserEnumType::Tuple)
                 let value = field_values[0].clone();
 
                 let user_enum = TupleEnum::new(variant, value);

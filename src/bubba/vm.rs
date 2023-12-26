@@ -1,10 +1,14 @@
 use std::fmt;
 
 use ansi_term::Colour;
+use sarzak::lu_dog::ValueType;
 use snafu::{location, prelude::*, Location};
 
 use crate::{
-    chacha::{memory::Memory, value::UserStruct},
+    chacha::{
+        memory::Memory,
+        value::{EnumVariant, TupleEnum, UserStruct},
+    },
     new_ref, s_read, s_write, ChaChaError, NewRef, RefType, Value,
 };
 
@@ -484,9 +488,72 @@ impl<'b> VM<'b> {
 
                         0
                     }
+                    Instruction::NewTupleEnum(n) => {
+                        if trace {
+                            println!("\t\t{}\t{n}", Colour::Green.paint("nte:"));
+                        }
+
+                        let variant = self.stack.pop().unwrap();
+                        let variant: String =
+                            (&*s_read!(variant))
+                                .try_into()
+                                .map_err(|e| BubbaError::VmPanic {
+                                    source: Box::new(e),
+                                })?;
+
+                        if trace {
+                            println!("\t\t\t\t{}", variant);
+                        }
+
+                        let path = self.stack.pop().unwrap();
+                        let path: String =
+                            (&*s_read!(path))
+                                .try_into()
+                                .map_err(|e| BubbaError::VmPanic {
+                                    source: Box::new(e),
+                                })?;
+
+                        if trace {
+                            println!("\t\t\t\t{}", path);
+                        }
+
+                        let ty = self.stack.pop().unwrap();
+                        let ty: ValueType =
+                            (&*s_read!(ty))
+                                .try_into()
+                                .map_err(|e| BubbaError::VmPanic {
+                                    source: Box::new(e),
+                                })?;
+
+                        if trace {
+                            println!("\t\t\t\t{:?}", ty);
+                        }
+
+                        let ty = new_ref!(ValueType, ty);
+
+                        let mut values = Vec::with_capacity(*n);
+
+                        for _i in 0..*n {
+                            let value = self.stack.pop().unwrap();
+                            values.push(value.clone());
+                            if trace {
+                                println!("\t\t\t\t{}", s_read!(value));
+                            }
+                        }
+
+                        // 🚧 This is temporary until Tuples are sorted.
+                        let user_enum = TupleEnum::new(variant, values[0].to_owned());
+                        let user_enum = new_ref!(TupleEnum, user_enum);
+                        self.stack.push(new_ref!(
+                            Value,
+                            Value::Enumeration(EnumVariant::Tuple((ty, path), user_enum))
+                        ));
+
+                        0
+                    }
                     Instruction::NewUserType(name, ty, n) => {
                         if trace {
-                            println!("\t\t{}\t{} {{", Colour::Green.paint("new:"), name);
+                            println!("\t\t{}\t{name} {{", Colour::Green.paint("new:"));
                         }
 
                         let mut inst = UserStruct::new(name, ty);

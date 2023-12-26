@@ -19,7 +19,8 @@ use crate::{
 mod expression;
 
 use expression::{
-    block, call, for_loop, if_expr, literal, operator, print, range, struct_expr, variable, xmatch,
+    block, call, field, for_loop, if_expr, literal, operator, print, range, struct_expr, variable,
+    xmatch,
 };
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -248,6 +249,9 @@ fn compile_expression(
     match &s_read!(expression).subtype {
         ExpressionEnum::Block(ref block) => block::compile(block, thonk, context)?,
         ExpressionEnum::Call(ref call) => call::compile(call, thonk, context)?,
+        ExpressionEnum::FieldExpression(ref field) => {
+            field::compile_field_expression(field, thonk, context)?
+        }
         ExpressionEnum::ForLoop(ref for_loop) => for_loop::compile(for_loop, thonk, context)?,
         ExpressionEnum::Literal(ref literal) => literal::compile(literal, thonk, context)?,
         ExpressionEnum::Operator(ref op_type) => operator::compile(op_type, thonk, context)?,
@@ -273,7 +277,11 @@ mod test {
     #[allow(unused_imports)]
     use crate::{
         bubba::{vm::Error, CallFrame, VM},
-        chacha::{error::ChaChaError, memory::Memory, value::EnumVariant},
+        chacha::{
+            error::ChaChaError,
+            memory::Memory,
+            value::{EnumVariant, TupleEnum},
+        },
         dwarf::{new_lu_dog, parse_dwarf},
         lu_dog::ValueType,
         s_write,
@@ -1117,6 +1125,57 @@ mod test {
         assert_eq!(
             &*s_read!(run_vm(&program).unwrap()),
             &Value::Enumeration(EnumVariant::Unit(ty, "Foo".to_owned(), "Bar".to_owned()))
+        );
+    }
+
+    #[test]
+    fn match_tuple_enum() {
+        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
+        let ore = "
+                   enum Foo {
+                       Bar(int),
+                       Baz(int),
+                       Qux(int),
+                   }
+                   fn main() -> Foo {
+                       match Foo::Bar(40 + 2) {
+                           Foo::Bar(42) => Foo::Bar(42),
+                           Foo::Baz(1) => Foo::Baz(1),
+                           Foo::Qux(1) => Foo::Qux(1),
+                       }
+                   }";
+        let ast = parse_dwarf("match_expression", ore).unwrap();
+        let ctx = new_lu_dog(
+            "match_expression".to_owned(),
+            Some((ore.to_owned(), &ast)),
+            &get_dwarf_home(),
+            &sarzak,
+        )
+        .unwrap();
+
+        let lu_dog = ctx.lu_dog.clone();
+
+        let id = s_read!(lu_dog)
+            .exhume_enumeration_id_by_name("Foo")
+            .unwrap();
+        let woog_enum = s_read!(lu_dog).exhume_enumeration(&id).unwrap();
+        let ty = ValueType::new_enumeration(&woog_enum, &mut s_write!(lu_dog));
+        let user_enum = TupleEnum::new("Bar".to_owned(), new_ref!(Value, Value::Integer(42)));
+        let user_enum = new_ref!(TupleEnum, user_enum);
+
+        let program = compile(&ctx).unwrap();
+        println!("{program}");
+
+        assert_eq!(program.get_thonk_card(), 1);
+
+        assert_eq!(
+            program.get_thonk("main").unwrap().get_instruction_card(),
+            51
+        );
+
+        assert_eq!(
+            &*s_read!(run_vm(&program).unwrap()),
+            &Value::Enumeration(EnumVariant::Tuple((ty, "Foo".to_owned()), user_enum))
         );
     }
 }

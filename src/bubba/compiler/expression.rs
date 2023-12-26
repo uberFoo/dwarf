@@ -1,5 +1,6 @@
 pub(super) mod block;
 pub(super) mod call;
+pub(super) mod field;
 pub(super) mod for_loop;
 pub(super) mod if_expr;
 pub(super) mod literal;

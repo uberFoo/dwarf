@@ -154,6 +154,17 @@ pub enum Instruction {
     /// ## Stack Effect
     ///
     Multiply,
+    /// New Tuple Enum
+    ///
+    /// The first operand is the number of tuple fields. It is expected that the
+    /// tuple name be the first element on the stack. The tuple fields are next,
+    /// according to the first operand.
+    ///
+    /// ## Stack Effect
+    ///
+    /// The stack is 1 + n elements shorter after this instruction.
+    ///
+    NewTupleEnum(usize),
     /// New UserType
     ///
     /// The first element of the tuple is the name of the user type. The second
@@ -264,6 +275,12 @@ impl fmt::Display for Instruction {
             Instruction::TestLessThan => write!(f, "{}", opcode_style.paint("lt  ")),
             Instruction::TestLessThanOrEqual => write!(f, "{}", opcode_style.paint("lte ")),
             Instruction::Multiply => write!(f, "{}", opcode_style.paint("mul ")),
+            Instruction::NewTupleEnum(n) => write!(
+                f,
+                "{} {}",
+                opcode_style.paint("nte "),
+                operand_style.paint(n.to_string())
+            ),
             Instruction::NewUserType(name, _ty, n) => {
                 write!(f, "{}{name}({n})", opcode_style.paint("new "))
             }

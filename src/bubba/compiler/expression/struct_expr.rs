@@ -3,8 +3,8 @@ use crate::{
         compiler::{compile_expression, CThonk, Context, Result},
         instr::Instruction,
     },
-    chacha::value::{EnumVariant, TupleEnum, UserStruct},
-    lu_dog::{DataStructureEnum, FieldExpressionEnum},
+    chacha::value::EnumVariant,
+    lu_dog::DataStructureEnum,
     new_ref, s_read, NewRef, RefType, SarzakStorePtr, Value,
 };
 
@@ -45,6 +45,7 @@ pub(in crate::bubba::compiler) fn compile(
 
             let ty = s_read!(woog_enum).r1_value_type(&lu_dog)[0].clone();
             let variant = path.pop().unwrap();
+            let variant = new_ref!(Value, Value::String(variant));
             let path = path.join("::");
 
             //
@@ -56,31 +57,19 @@ pub(in crate::bubba::compiler) fn compile(
                 );
                 thonk.add_instruction(Instruction::Push(value));
             } else {
-                unimplemented!()
-                // // Get value and expression for each field expression.
-                // let field_values = field_exprs
-                //     .iter()
-                //     .map(|f| {
-                //         let expr = s_read!(f).r15_expression(&lu_dog)[0].clone();
-                //         let value = eval_expression(expr.clone(), context, vm)?;
+                let field_count = field_exprs.len();
+                for f in field_exprs {
+                    let expr = s_read!(f).r15_expression(&lu_dog)[0].clone();
+                    compile_expression(&expr, thonk, context)?;
+                }
 
-                //         debug!("StructExpression field value: {}", s_read!(value),);
-                //         Ok(value)
-                //     })
-                //     .collect::<Result<Vec<_>>>()?;
+                let ty = new_ref!(Value, Value::ValueType((&*s_read!(ty)).to_owned()));
+                let path = new_ref!(Value, Value::String(path));
+                thonk.add_instruction(Instruction::Push(ty));
+                thonk.add_instruction(Instruction::Push(path));
+                thonk.add_instruction(Instruction::Push(variant));
 
-                // // 🚧 Punting here -- we are just doing tuple enums for now. And
-                // // only single ones at that. I should just lift the restriction.
-                // // Tuples are only a notional thing anyway I think.
-                // // (field_values[0].clone(), UserEnumType::Tuple)
-                // let value = field_values[0].clone();
-
-                // let user_enum = TupleEnum::new(variant, value);
-                // let user_enum = new_ref!(TupleEnum, user_enum);
-                // new_ref!(
-                //     Value,
-                //     Value::Enumeration(EnumVariant::Tuple((ty, path), user_enum))
-                // )
+                thonk.add_instruction(Instruction::NewTupleEnum(field_count));
             }
         }
         DataStructureEnum::WoogStruct(_) => {
