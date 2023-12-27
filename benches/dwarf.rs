@@ -139,5 +139,6 @@ fn vm_5(c: &mut Criterion) {
     c.bench_function("vm-fib-5", |b| b.iter(|| start_vm(5.into()).unwrap()));
 }
 
-criterion_group!(benches, loop_, mandelbrot, fib, vm_28, vm_25, vm_17, vm_5);
+// criterion_group!(benches, loop_, mandelbrot, fib, vm_28, vm_25, vm_17, vm_5);
+criterion_group!(benches, vm_28, vm_25, vm_17, vm_5);
 criterion_main!(benches);

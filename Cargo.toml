@@ -122,6 +122,8 @@ default = ["single", "repl", "print-std-out"]
 # default = ["multi-vec", "repl", "print-std-out", "async"]
 async_executor = ["multi-vec", "repl", "print-std-out", "async"]
 
+tracy-client = ["dep:tracy-client"]
+
 tui = [
     "dep:tui-input",
     "dep:tui-logger",

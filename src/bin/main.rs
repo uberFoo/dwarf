@@ -24,6 +24,7 @@ use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 use dwarf::{ref_to_inner, Value};
 
 use dwarf::{
+    bubba::{compiler::compile, VM},
     chacha::{
         dap::DapAdapter,
         error::{ChaChaError, ChaChaErrorReporter},
@@ -257,6 +258,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 return Ok(());
             }
         };
+
+        if let Ok(program) = compile(&ctx) {
+            println!("running in the VM");
+            VM::new_and_run(&program, "main")?;
+            return Ok(());
+        }
 
         let mut ctx = initialize_interpreter(threads, dwarf_home, ctx)?;
         ctx.add_args(dwarf_args);

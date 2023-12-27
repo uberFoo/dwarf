@@ -83,7 +83,7 @@ pub fn eval_function_call(
 
             let future = async move {
                 let mem = cloned_context.memory().clone();
-                let mut vm = VM::new(&mem);
+                let mut vm = VM::new_with_mem(&mem);
 
                 inner_eval_function_call(
                     func,

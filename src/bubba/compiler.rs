@@ -6,7 +6,6 @@ use snafu::prelude::*;
 
 use crate::{
     bubba::instr::{Instruction, Program, Thonk},
-    chacha::value::ThonkInner,
     lu_dog::{
         BodyEnum, Expression, ExpressionEnum, Function, ObjectStore as LuDogStore, Statement,
         StatementEnum,
@@ -310,15 +309,12 @@ mod test {
             let slot = memory.0.reserve_thonk_slot();
             memory.0.insert_thonk(thonk.clone(), slot);
         }
-        let mut vm = VM::new(&memory.0);
+        let mut vm = VM::new_with_mem(&memory.0);
         let thonk = program.get_thonk("main").unwrap();
 
         let mut frame = CallFrame::new(thonk);
 
-        vm.push_stack(new_ref!(
-            Value,
-            Value::Thonk(ThonkInner::Thonk("main".to_owned()))
-        ));
+        vm.push_stack(new_ref!(Value, Value::new_thonk("main".to_owned())));
         for _ in 0..thonk.get_frame_size() {
             vm.push_stack(new_ref!(Value, Value::Empty));
         }

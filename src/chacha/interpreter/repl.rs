@@ -31,7 +31,7 @@ pub fn start_repl(context: &mut Context, is_uber: bool) -> Result<(), Error> {
     let block = context.block().clone();
 
     let vm_stack = context.memory().clone();
-    let mut vm = VM::new(&vm_stack);
+    let mut vm = VM::new_with_mem(&vm_stack);
 
     let notice_style = Colour::Red.bold().italic();
     let prompt_style = Colour::Blue.normal();

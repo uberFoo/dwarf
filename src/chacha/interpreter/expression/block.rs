@@ -25,7 +25,7 @@ pub fn eval(
             let span = debug_span!("async block", target = "async");
             let future = async move {
                 let mem = cloned_context.memory().clone();
-                let mut vm = VM::new(&mem);
+                let mut vm = VM::new_with_mem(&mem);
                 eval_inner(block, &mut cloned_context, &mut vm)
             }
             .instrument(span);

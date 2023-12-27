@@ -12,7 +12,7 @@ use crate::{
     new_ref, s_read, s_write, ChaChaError, NewRef, RefType, Value,
 };
 
-use super::instr::{Instruction, Thonk};
+use super::instr::{Instruction, Program, Thonk};
 
 #[derive(Debug, Snafu)]
 pub struct Error(BubbaError);
@@ -37,7 +37,7 @@ pub(crate) enum BubbaError {
 type Result<T, E = Error> = std::result::Result<T, E>;
 
 #[derive(Debug)]
-pub(crate) struct CallFrame<'a> {
+pub struct CallFrame<'a> {
     // This needs to be an isize due to the way that we implemented the VM.
     // Jumps are relative, and not absolute. So we need to have negative offsets.
     ip: isize,
@@ -86,7 +86,26 @@ pub struct VM<'b> {
 }
 
 impl<'b> VM<'b> {
-    pub(crate) fn new(memory: &'b Memory) -> Self {
+    pub fn new_and_run(program: &Program, entry: &str) -> Result<RefType<Value>> {
+        let memory = Memory::new();
+        let mut vm = VM::new_with_mem(&memory.0);
+
+        let thonk = program.get_thonk(entry).unwrap();
+
+        let mut frame = CallFrame::new(&thonk);
+
+        vm.stack
+            .push(new_ref!(Value, Value::new_thonk(entry.to_owned())));
+        for _ in 0..thonk.get_frame_size() {
+            vm.stack.push(new_ref!(Value, Value::Empty));
+        }
+        vm.fp = thonk.get_frame_size() + 1;
+        vm.stack.push(new_ref!(Value, Value::Empty));
+
+        vm.run(0, &mut frame, false)
+    }
+
+    pub(crate) fn new_with_mem(memory: &'b Memory) -> Self {
         VM {
             fp: 0,
             // 🚧 These shouldn't be hard-coded, and they should be configurable.
@@ -551,12 +570,38 @@ impl<'b> VM<'b> {
 
                         0
                     }
-                    Instruction::NewUserType(name, ty, n) => {
+                    Instruction::NewUserType(n) => {
                         if trace {
-                            println!("\t\t{}\t{name} {{", Colour::Green.paint("new:"));
+                            println!("\t\t{}\t{n} {{", Colour::Green.paint("nut:"));
                         }
 
-                        let mut inst = UserStruct::new(name, ty);
+                        let name = self.stack.pop().unwrap();
+                        let name: String =
+                            (&*s_read!(name))
+                                .try_into()
+                                .map_err(|e| BubbaError::VmPanic {
+                                    source: Box::new(e),
+                                })?;
+
+                        if trace {
+                            println!("\t\t\t\t{}", name);
+                        }
+
+                        let ty = self.stack.pop().unwrap();
+                        let ty: ValueType =
+                            (&*s_read!(ty))
+                                .try_into()
+                                .map_err(|e| BubbaError::VmPanic {
+                                    source: Box::new(e),
+                                })?;
+
+                        if trace {
+                            println!("\t\t\t\t{:?}", ty);
+                        }
+
+                        let ty = new_ref!(ValueType, ty);
+
+                        let mut inst = UserStruct::new(name, &ty);
 
                         for _i in 0..*n {
                             let name = self.stack.pop().unwrap();
@@ -701,7 +746,6 @@ mod tests {
     use tracy_client::Client;
 
     use crate::{
-        chacha::value::ThonkInner,
         dwarf::{DwarfFloat, DwarfInteger},
         interpreter::{initialize_interpreter, PrintableValueType},
         Context,
@@ -712,7 +756,7 @@ mod tests {
     #[test]
     fn test_instr_constant() {
         let memory = Memory::new();
-        let mut vm = VM::new(&memory.0);
+        let mut vm = VM::new_with_mem(&memory.0);
         let mut thonk = Thonk::new("test".to_string());
 
         thonk.add_instruction(Instruction::Push(new_ref!(Value, 42.into())));
@@ -738,7 +782,7 @@ mod tests {
     #[test]
     fn test_instr_return() {
         let memory = Memory::new();
-        let mut vm = VM::new(&memory.0);
+        let mut vm = VM::new_with_mem(&memory.0);
         let mut thonk = Thonk::new("test".to_string());
 
         thonk.add_instruction(Instruction::Push(new_ref!(Value, 42.into())));
@@ -766,7 +810,7 @@ mod tests {
     #[test]
     fn test_instr_add() {
         let memory = Memory::new();
-        let mut vm = VM::new(&memory.0);
+        let mut vm = VM::new_with_mem(&memory.0);
         let mut thonk = Thonk::new("test".to_string());
 
         thonk.add_instruction(Instruction::Push(new_ref!(Value, 42.into())));
@@ -796,7 +840,7 @@ mod tests {
     #[test]
     fn test_instr_subtract() {
         let memory = Memory::new();
-        let mut vm = VM::new(&memory.0);
+        let mut vm = VM::new_with_mem(&memory.0);
         let mut thonk = Thonk::new("test".to_string());
 
         thonk.add_instruction(Instruction::Push(new_ref!(Value, 111.into())));
@@ -825,7 +869,7 @@ mod tests {
     #[test]
     fn test_instr_multiply() {
         let memory = Memory::new();
-        let mut vm = VM::new(&memory.0);
+        let mut vm = VM::new_with_mem(&memory.0);
         let mut thonk = Thonk::new("test".to_string());
 
         thonk.add_instruction(Instruction::Push(new_ref!(Value, 42.into())));
@@ -853,7 +897,7 @@ mod tests {
     fn test_instr_less_than_or_equal() {
         // False Case
         let memory = Memory::new();
-        let mut vm = VM::new(&memory.0);
+        let mut vm = VM::new_with_mem(&memory.0);
         let mut thonk = Thonk::new("test".to_string());
 
         thonk.add_instruction(Instruction::Push(new_ref!(Value, 111.into())));
@@ -880,7 +924,7 @@ mod tests {
 
         // True case: less than
         let memory = Memory::new();
-        let mut vm = VM::new(&memory.0);
+        let mut vm = VM::new_with_mem(&memory.0);
         let mut thonk = Thonk::new("test".to_string());
 
         thonk.add_instruction(Instruction::Push(new_ref!(Value, 42.into())));
@@ -907,7 +951,7 @@ mod tests {
 
         // True case: equal
         let memory = Memory::new();
-        let mut vm = VM::new(&memory.0);
+        let mut vm = VM::new_with_mem(&memory.0);
         let mut thonk = Thonk::new("test".to_string());
 
         thonk.add_instruction(Instruction::Push(new_ref!(Value, 42.into())));
@@ -937,7 +981,7 @@ mod tests {
     #[test]
     fn test_instr_jump_if_false() {
         let memory = Memory::new();
-        let mut vm = VM::new(&memory.0);
+        let mut vm = VM::new_with_mem(&memory.0);
         let mut thonk = Thonk::new("test".to_string());
 
         thonk.add_instruction(Instruction::Push(new_ref!(Value, 69.into())));
@@ -978,7 +1022,7 @@ mod tests {
     fn test_instr_fetch_local() {
         // Simple
         let memory = Memory::new();
-        let mut vm = VM::new(&memory.0);
+        let mut vm = VM::new_with_mem(&memory.0);
         let mut thonk = Thonk::new("test".to_string());
 
         vm.stack.push(new_ref!(
@@ -1055,7 +1099,7 @@ mod tests {
         foo_inst.define_field("baz", new_ref!(Value, std::f64::consts::PI.into()));
 
         let memory = Memory::new();
-        let mut vm = VM::new(&memory.0);
+        let mut vm = VM::new_with_mem(&memory.0);
         let mut thonk = Thonk::new("test".to_string());
 
         vm.stack.push(new_ref!(
@@ -1087,7 +1131,7 @@ mod tests {
     fn test_instr_fetch_local_nested() {
         // Nested
         let memory = Memory::new();
-        let mut vm = VM::new(&memory.0);
+        let mut vm = VM::new_with_mem(&memory.0);
         let mut thonk = Thonk::new("test".to_string());
 
         vm.stack.push(new_ref!(
@@ -1127,7 +1171,7 @@ mod tests {
     #[test]
     fn test_instr_modify_local() {
         let memory = Memory::new();
-        let mut vm = VM::new(&memory.0);
+        let mut vm = VM::new_with_mem(&memory.0);
         let mut thonk = Thonk::new("test".to_string());
 
         vm.stack.push(new_ref!(
@@ -1181,7 +1225,7 @@ mod tests {
         // Load fib
         thonk.add_instruction(Instruction::Push(new_ref!(
             Value,
-            Value::Thonk(ThonkInner::Thonk("fib".to_owned()))
+            Value::new_thonk("fib".to_owned())
         )));
         // load n
         thonk.add_instruction(Instruction::FetchLocal(0));
@@ -1194,7 +1238,7 @@ mod tests {
         // load fib
         thonk.add_instruction(Instruction::Push(new_ref!(
             Value,
-            Value::Thonk(ThonkInner::Thonk("fib".to_owned()))
+            Value::new_thonk("fib".to_owned())
         )));
         // load n
         thonk.add_instruction(Instruction::FetchLocal(0));
@@ -1216,7 +1260,7 @@ mod tests {
 
         let mut frame = CallFrame::new(&thonk);
 
-        let mut vm = VM::new(&memory.0);
+        let mut vm = VM::new_with_mem(&memory.0);
 
         // Push the func
         vm.stack.push(new_ref!(Value, "fib".into()));

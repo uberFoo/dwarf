@@ -282,6 +282,10 @@ pub enum Value {
 }
 
 impl Value {
+    pub fn new_thonk(name: String) -> Self {
+        Self::Thonk(ThonkInner::Thonk(name))
+    }
+
     #[inline]
     pub fn to_inner_string(&self) -> String {
         let mut buf = Vec::new();

@@ -4,7 +4,7 @@ use ansi_term::Colour;
 use rustc_hash::FxHashMap as HashMap;
 use serde::{Deserialize, Serialize};
 
-use crate::{s_read, RefType, Value, ValueType};
+use crate::{s_read, RefType, Value};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum Instruction {
@@ -157,26 +157,30 @@ pub enum Instruction {
     /// New Tuple Enum
     ///
     /// The first operand is the number of tuple fields. It is expected that the
-    /// tuple name be the first element on the stack. The tuple fields are next,
-    /// according to the first operand.
+    /// tuple name be the first element on the stack. Next is the enum path. Third
+    /// up is the ValueType. The tuple fields are last, according to the first
+    /// operand.
+    ///
+    /// A Value::Enumeration is pushed onto the stack.
     ///
     /// ## Stack Effect
     ///
-    /// The stack is 1 + n elements shorter after this instruction.
+    /// The stack is n elements shorter after this instruction, where n is the
+    /// first operand.
     ///
     NewTupleEnum(usize),
     /// New UserType
     ///
-    /// The first element of the tuple is the name of the user type. The second
-    /// is the type ([ValueType]) of the user type. The third is the number of
-    /// fields in the user type.
-    /// There is a `([String], [ValueType], [Value])`tuple on the stack for each
-    /// field.
-    /// // 🚧 move these parameters to the stack
+    /// The first operand is the number of fields in the struct. Let's call this
+    /// n. The stack shall then contain, in order, the name of the struct, the
+    /// ValueType of the struct, and there is a `([String], [ValueType], [Value])`
+    /// tuple on the stack for each field.
+    ///
+    /// The new type is pushed onto the stack.
     ///
     /// ## Stack Effect
     ///
-    NewUserType(String, RefType<ValueType>, usize),
+    NewUserType(usize),
     /// Write a Value
     ///
     /// This function writes some value to an output stream. The top of the stack
@@ -281,9 +285,12 @@ impl fmt::Display for Instruction {
                 opcode_style.paint("nte "),
                 operand_style.paint(n.to_string())
             ),
-            Instruction::NewUserType(name, _ty, n) => {
-                write!(f, "{}{name}({n})", opcode_style.paint("new "))
-            }
+            Instruction::NewUserType(n) => write!(
+                f,
+                "{} {}",
+                opcode_style.paint("nut "),
+                operand_style.paint(n.to_string())
+            ),
             Instruction::Out(stream) => write!(
                 f,
                 "{} {}",

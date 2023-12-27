@@ -78,7 +78,7 @@ mod keywords {
     pub(crate) const UUID_TYPE: &str = "Uuid";
 }
 
-use lu_dog::{ObjectStore as LuDogStore, ValueType};
+use lu_dog::ObjectStore as LuDogStore;
 use sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL};
 
 cfg_if::cfg_if! {

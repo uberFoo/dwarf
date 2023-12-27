@@ -22,7 +22,7 @@ use crate::{
     chacha::{
         error::{Error, Result, UnimplementedSnafu},
         memory::{Memory, MemoryUpdateMessage},
-        value::{ThonkInner, UserStruct},
+        value::UserStruct,
     },
     lu_dog::{
         Block, Expression, ExpressionEnum, LocalVariable, ObjectStore as LuDogStore, Span,
@@ -725,7 +725,7 @@ pub fn start_func(
     let stack = &mut context.memory();
     // 🚧 WTF is this? They don't share memory?
     let vm_stack = stack.clone();
-    let mut vm = VM::new(&vm_stack);
+    let mut vm = VM::new_with_mem(&vm_stack);
 
     if let Some(main) = stack.get(name) {
         // This should fail if it's not a function. Actually, I think that it _has_
@@ -776,7 +776,7 @@ pub fn start_vm(n: DwarfInteger) -> Result<DwarfInteger, Error> {
     // Load fib
     thonk.add_instruction(Instruction::Push(new_ref!(
         Value,
-        Value::Thonk(ThonkInner::Thonk("fib".to_owned()))
+        Value::new_thonk("fib".to_owned())
     )));
     // load n
     thonk.add_instruction(Instruction::FetchLocal(0));
@@ -789,7 +789,7 @@ pub fn start_vm(n: DwarfInteger) -> Result<DwarfInteger, Error> {
     // load fib
     thonk.add_instruction(Instruction::Push(new_ref!(
         Value,
-        Value::Thonk(ThonkInner::Thonk("fib".to_owned()))
+        Value::new_thonk("fib".to_owned())
     )));
     // load n
     thonk.add_instruction(Instruction::FetchLocal(0));
@@ -811,12 +811,15 @@ pub fn start_vm(n: DwarfInteger) -> Result<DwarfInteger, Error> {
 
     let mut frame = CallFrame::new(&thonk);
 
-    let mut vm = VM::new(&memory);
+    let mut vm = VM::new_with_mem(&memory);
 
     // Push the func
     vm.push_stack(new_ref!(Value, "fib".into()));
     // Push the argument
     vm.push_stack(new_ref!(Value, Value::Integer(n)));
+
+    vm.set_fp(2);
+    vm.push_stack(new_ref!(Value, Value::Empty));
 
     // vm.push_frame(frame);
 
