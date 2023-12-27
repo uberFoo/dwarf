@@ -332,9 +332,7 @@ mod test {
     fn run_vm(program: &Program) -> Result<RefType<Value>, Error> {
         let mut memory = Memory::new();
         for thonk in program.iter() {
-            // 🚧 This memory thing is BS. Fix it.
-            let slot = memory.0.reserve_thonk_slot();
-            memory.0.insert_thonk(thonk.clone(), slot);
+            memory.0.insert_thonk(thonk.clone());
         }
         let mut vm = VM::new_with_mem(&memory.0);
         let thonk = program.get_thonk("main").unwrap();

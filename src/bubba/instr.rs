@@ -401,7 +401,7 @@ impl fmt::Display for Program {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Thonk {
-    pub(crate) name: String,
+    name: String,
     pub(crate) instructions: Vec<Instruction>,
     spans: Vec<Span>,
     frame_size: usize,
@@ -421,6 +421,10 @@ impl Thonk {
         self.instructions.push(instr);
         self.spans.push(span.unwrap_or_default());
         self.instructions.len() - 1
+    }
+
+    pub(crate) fn get_name(&self) -> &str {
+        &self.name
     }
 
     #[inline]

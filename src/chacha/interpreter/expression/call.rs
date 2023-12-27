@@ -738,7 +738,7 @@ pub fn eval(
                 COMPLEX_EX => match func.as_str() {
                     NORM_SQUARED => {
                         let value = arg_values.pop_front().unwrap().0;
-                        let thonk = context.memory().get_thonk(0).unwrap();
+                        let thonk = context.memory().get_thonk("complex_ex").unwrap();
 
                         vm.push_stack(new_ref!(Value, "norm_squared".into()));
                         vm.push_stack(value);
@@ -758,7 +758,7 @@ pub fn eval(
                     }
                     SQUARE => {
                         let value = arg_values.pop_front().unwrap().0;
-                        let thonk = context.memory().get_thonk(2).unwrap();
+                        let thonk = context.memory().get_thonk("norm_squared").unwrap();
 
                         vm.push_stack(new_ref!(Value, "square".into()));
                         vm.push_stack(value);
@@ -776,7 +776,7 @@ pub fn eval(
                         Ok(result.unwrap())
                     }
                     ADD => {
-                        let thonk = context.memory().get_thonk(1).unwrap();
+                        let thonk = context.memory().get_thonk("add").unwrap();
 
                         vm.push_stack(new_ref!(Value, "add".into()));
                         let value = arg_values.pop_front().unwrap().0;

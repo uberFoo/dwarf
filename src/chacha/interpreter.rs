@@ -244,8 +244,7 @@ pub fn initialize_interpreter(
 
         thonk.increment_frame_size();
 
-        let slot = stack.reserve_thonk_slot();
-        stack.insert_thonk(thonk, slot);
+        stack.insert_thonk(thonk);
 
         // Hack to try to get mandelbrot running faster...
         let mut thonk = Thonk::new("add".to_string());
@@ -306,8 +305,7 @@ pub fn initialize_interpreter(
         thonk.increment_frame_size();
         thonk.increment_frame_size();
 
-        let slot = stack.reserve_thonk_slot();
-        stack.insert_thonk(thonk, slot);
+        stack.insert_thonk(thonk);
 
         // Hack to try to get mandelbrot running faster...
         let mut thonk = Thonk::new("square".to_string());
@@ -388,8 +386,7 @@ pub fn initialize_interpreter(
 
         thonk.increment_frame_size();
 
-        let slot = stack.reserve_thonk_slot();
-        stack.insert_thonk(thonk, slot);
+        stack.insert_thonk(thonk);
     }
 
     let (std_out_send, std_out_recv) = unbounded();
@@ -806,8 +803,7 @@ pub fn start_vm(n: DwarfInteger) -> Result<DwarfInteger, Error> {
     thonk.increment_frame_size();
 
     // put fib in memory
-    let slot = memory.reserve_thonk_slot();
-    memory.insert_thonk(thonk.clone(), slot);
+    memory.insert_thonk(thonk.clone());
 
     let mut frame = CallFrame::new(&thonk);
 

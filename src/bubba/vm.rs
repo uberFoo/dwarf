@@ -66,7 +66,7 @@ impl<'a> CallFrame<'a> {
 
     #[inline]
     fn name(&self) -> &str {
-        self.thonk.name.as_str()
+        self.thonk.get_name()
     }
 
     fn get_span(&self) -> std::ops::Range<usize> {
@@ -184,7 +184,7 @@ impl<'b> VM<'b> {
                         if trace {
                             println!("\t\t{}:\t{}", Colour::Green.paint("func:"), s_read!(callee));
                         }
-                        // let callee: usize = match (&*s_read!(callee)).try_into() {
+
                         let callee = match <&Value as TryInto<String>>::try_into(&*s_read!(callee))
                         {
                             Ok(callee) => callee,
@@ -197,18 +197,10 @@ impl<'b> VM<'b> {
                                 );
                             }
                         };
-                        // 🚧 I imagine that this dynamic lookup is slow.
-                        let thonk = self
-                            .memory
-                            .get_thonk(self.memory.thonk_index(callee.clone()).unwrap_or_else(
-                                || {
-                                    panic!(
-                                        "Panic! Thonk not found: {callee}.",
-                                        callee = callee.clone()
-                                    )
-                                },
-                            ))
-                            .expect("missing thonk {callee}!");
+                        // 🚧 This is too slow. I need to create linear memory and work within that.
+                        let thonk = self.memory.get_thonk(&callee).unwrap_or_else(|| {
+                            panic!("Panic! Thonk not found: {callee}.", callee = callee.clone())
+                        });
 
                         let old_fp = self.fp;
 
@@ -1421,8 +1413,7 @@ mod tests {
         println!("{}", thonk);
 
         // put fib in memory
-        let slot = memory.0.reserve_thonk_slot();
-        memory.0.insert_thonk(thonk.clone(), slot);
+        memory.0.insert_thonk(thonk.clone());
 
         let mut frame = CallFrame::new(&thonk);
 
