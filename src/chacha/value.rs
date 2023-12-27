@@ -487,16 +487,6 @@ impl Value {
                 unreachable!()
             }
             Value::Vector { ty, inner: _ } => {
-                // 🚧 This code was here and I don't know why. I think it must
-                // have been a copy/paste error. I commented it out on 12/11/2023.
-                // let ty = match &s_read!(ty).subtype {
-                //     ValueTypeEnum::XFuture(id) => {
-                //         let ty = lu_dog.exhume_x_future(id).unwrap();
-                //         let ty = s_read!(ty);
-                //         ty.r2_value_type(lu_dog)[0].clone()
-                //     }
-                //     _ => ty.clone(),
-                // };
                 for vt in lu_dog.iter_value_type() {
                     if let ValueTypeEnum::List(id) = s_read!(vt).subtype {
                         let list = lu_dog.exhume_list(&id).unwrap();

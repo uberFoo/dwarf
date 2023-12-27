@@ -4,7 +4,7 @@ use ansi_term::Colour;
 use rustc_hash::FxHashMap as HashMap;
 use serde::{Deserialize, Serialize};
 
-use crate::{s_read, RefType, Value};
+use crate::{s_read, RefType, Span, Value};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum Instruction {
@@ -86,6 +86,16 @@ pub enum Instruction {
     /// conflagration
     ///
     HaltAndCatchFire,
+    /// Index into a list
+    ///
+    /// The top of the stack is the index to read. The second value on the stack
+    /// is the list to read from. The result is pushed onto the stack.
+    ///
+    /// ## Stack Effect
+    ///
+    /// The stack is one element shorter after this instruction.
+    ///
+    Index,
     /// Jump to the given offset.
     ///
     /// ## Stack Effect
@@ -154,6 +164,21 @@ pub enum Instruction {
     /// ## Stack Effect
     ///
     Multiply,
+    /// New List
+    ///
+    /// Create a new list from values on the stack.
+    ///
+    /// The operand is the number of elements in the list. We'll call that `n`.
+    /// The first element in the stack is the type of the list. The next `n`
+    /// entries in the stack are the list elements. The list is pushed onto the
+    /// stack.
+    ///
+    /// ## Stack Effect
+    ///
+    /// `n` + 1 elements are removed from the stack, and a single element is
+    /// pushed.
+    ///
+    NewList(usize),
     /// New Tuple Enum
     ///
     /// The first operand is the number of tuple fields. It is expected that the
@@ -257,6 +282,7 @@ impl fmt::Display for Instruction {
             ),
             Instruction::FieldWrite => write!(f, "{}", opcode_style.paint("field_write")),
             Instruction::HaltAndCatchFire => write!(f, "{}", opcode_style.paint("🔥   ")),
+            Instruction::Index => write!(f, "{}", opcode_style.paint("idx ")),
             Instruction::Jump(offset) => write!(
                 f,
                 "{} {}",
@@ -279,6 +305,12 @@ impl fmt::Display for Instruction {
             Instruction::TestLessThan => write!(f, "{}", opcode_style.paint("lt  ")),
             Instruction::TestLessThanOrEqual => write!(f, "{}", opcode_style.paint("lte ")),
             Instruction::Multiply => write!(f, "{}", opcode_style.paint("mul ")),
+            Instruction::NewList(n) => write!(
+                f,
+                "{} {}",
+                opcode_style.paint("nl  "),
+                operand_style.paint(n.to_string())
+            ),
             Instruction::NewTupleEnum(n) => write!(
                 f,
                 "{} {}",
@@ -371,6 +403,7 @@ impl fmt::Display for Program {
 pub struct Thonk {
     pub(crate) name: String,
     pub(crate) instructions: Vec<Instruction>,
+    spans: Vec<Span>,
     frame_size: usize,
 }
 
@@ -379,12 +412,14 @@ impl Thonk {
         Thonk {
             name,
             instructions: Vec::new(),
+            spans: Vec::new(),
             frame_size: 0,
         }
     }
 
-    pub(crate) fn add_instruction(&mut self, instr: Instruction) -> usize {
+    pub(crate) fn add_instruction(&mut self, instr: Instruction, span: Option<Span>) -> usize {
         self.instructions.push(instr);
+        self.spans.push(span.unwrap_or_default());
         self.instructions.len() - 1
     }
 
@@ -404,6 +439,10 @@ impl Thonk {
     #[inline]
     pub(crate) fn get_frame_size(&self) -> usize {
         self.frame_size
+    }
+
+    pub(crate) fn get_span(&self, index: usize) -> Option<&Span> {
+        self.spans.get(index)
     }
 }
 

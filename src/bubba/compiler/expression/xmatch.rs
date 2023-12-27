@@ -1,6 +1,6 @@
 use crate::{
     bubba::{
-        compiler::{compile_expression, CThonk, Context, Result},
+        compiler::{compile_expression, get_span, CThonk, Context, Result},
         instr::Instruction,
     },
     lu_dog::ExpressionEnum,
@@ -20,8 +20,8 @@ pub(in crate::bubba::compiler) fn compile(
 
     let patterns = match_expr.r87_pattern(&lu_dog);
     let scrutinee = match_expr.r91_expression(&lu_dog)[0].clone();
-
-    compile_expression(&scrutinee, thonk, context)?;
+    let scrutinee_span = get_span(&scrutinee, &lu_dog);
+    compile_expression(&scrutinee, thonk, context, scrutinee_span)?;
 
     for pattern in patterns {
         let pattern = s_read!(pattern);
@@ -40,14 +40,14 @@ pub(in crate::bubba::compiler) fn compile(
             thonk.add_instruction(Instruction::StoreLocal(idx));
         }
 
-        compile_expression(&match_expr, thonk, context)?;
+        compile_expression(&match_expr, thonk, context, get_span(&match_expr, &lu_dog))?;
         thonk.add_instruction(Instruction::TestEq);
 
         // Compile the block if we match.
         context.push_symbol_table();
         let mut match_thonk = CThonk::new("match".to_owned());
 
-        compile_expression(&expr, &mut match_thonk, context)?;
+        compile_expression(&expr, &mut match_thonk, context, get_span(&expr, &lu_dog))?;
         let fp = match_thonk.get_frame_size();
         for _ in 0..fp {
             thonk.increment_frame_size();

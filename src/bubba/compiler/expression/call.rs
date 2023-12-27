@@ -1,6 +1,6 @@
 use crate::{
     bubba::{
-        compiler::{compile_expression, CThonk, Context, Result},
+        compiler::{compile_expression, get_span, CThonk, Context, Result},
         instr::Instruction,
     },
     lu_dog::CallEnum,
@@ -86,12 +86,14 @@ pub(in crate::bubba::compiler) fn compile(
 
     if let Some(ref expr) = call.expression {
         let expr = lu_dog.exhume_expression(expr).unwrap();
+        let span = get_span(&expr, &lu_dog);
         // Evaluate the LHS to get at the underlying value/instance.
-        compile_expression(&expr, thonk, context)?;
+        compile_expression(&expr, thonk, context, span)?;
     };
 
     for (name, expr) in params.into_iter().zip(arg_exprs) {
-        compile_expression(&expr, thonk, context)?;
+        let span = get_span(&expr, &lu_dog);
+        compile_expression(&expr, thonk, context, span)?;
         context.insert_symbol(name);
     }
 

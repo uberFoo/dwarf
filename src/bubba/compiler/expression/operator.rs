@@ -1,34 +1,37 @@
 use crate::{
     bubba::{
-        compiler::{compile_expression, CThonk, Context, Result},
+        compiler::{compile_expression, get_span, CThonk, Context, Result},
         instr::Instruction,
     },
     lu_dog::{BinaryEnum, ComparisonEnum, ExpressionEnum, OperatorEnum},
-    s_read, SarzakStorePtr,
+    s_read, SarzakStorePtr, Span,
 };
 
 pub(in crate::bubba::compiler) fn compile(
     op_type: &SarzakStorePtr,
     thonk: &mut CThonk,
     context: &mut Context,
+    span: Span,
 ) -> Result<()> {
     let lu_dog = context.lu_dog_heel().clone();
     let lu_dog = s_read!(lu_dog);
     let operator = lu_dog.exhume_operator(op_type).unwrap();
     let operator = s_read!(operator);
     let lhs = lu_dog.exhume_expression(&operator.lhs).unwrap();
+    let lhs_span = get_span(&lhs, &lu_dog);
 
     match operator.subtype {
         OperatorEnum::Binary(ref op_type) => {
             let binary = lu_dog.exhume_binary(op_type).unwrap();
             let binary = s_read!(binary);
             let rhs = lu_dog.exhume_expression(&operator.rhs.unwrap()).unwrap();
+            let rhs_span = get_span(&rhs, &lu_dog);
 
             match binary.subtype {
                 BinaryEnum::Addition(_) => {
-                    compile_expression(&lhs, thonk, context)?;
-                    compile_expression(&rhs, thonk, context)?;
-                    thonk.add_instruction(Instruction::Add);
+                    compile_expression(&lhs, thonk, context, lhs_span)?;
+                    compile_expression(&rhs, thonk, context, rhs_span)?;
+                    thonk.add_instruction_with_span(Instruction::Add, span);
                 }
                 BinaryEnum::Assignment(_) => {
                     let offset = if let ExpressionEnum::VariableExpression(ref expr) =
@@ -43,26 +46,26 @@ pub(in crate::bubba::compiler) fn compile(
                         panic!("In assignment and lhs is not a variable.")
                     };
 
-                    compile_expression(&rhs, thonk, context)?;
-                    thonk.add_instruction(Instruction::StoreLocal(offset));
+                    compile_expression(&rhs, thonk, context, rhs_span)?;
+                    thonk.add_instruction_with_span(Instruction::StoreLocal(offset), span);
                 }
                 BinaryEnum::BooleanOperator(_) => {
                     todo!("BooleanOperator")
                 }
                 BinaryEnum::Division(_) => {
-                    compile_expression(&lhs, thonk, context)?;
-                    compile_expression(&rhs, thonk, context)?;
-                    thonk.add_instruction(Instruction::Divide);
+                    compile_expression(&lhs, thonk, context, lhs_span)?;
+                    compile_expression(&rhs, thonk, context, rhs_span)?;
+                    thonk.add_instruction_with_span(Instruction::Divide, span);
                 }
                 BinaryEnum::Subtraction(_) => {
-                    compile_expression(&lhs, thonk, context)?;
-                    compile_expression(&rhs, thonk, context)?;
-                    thonk.add_instruction(Instruction::Subtract);
+                    compile_expression(&lhs, thonk, context, lhs_span)?;
+                    compile_expression(&rhs, thonk, context, rhs_span)?;
+                    thonk.add_instruction_with_span(Instruction::Subtract, span);
                 }
                 BinaryEnum::Multiplication(_) => {
-                    compile_expression(&lhs, thonk, context)?;
-                    compile_expression(&rhs, thonk, context)?;
-                    thonk.add_instruction(Instruction::Multiply);
+                    compile_expression(&lhs, thonk, context, lhs_span)?;
+                    compile_expression(&rhs, thonk, context, rhs_span)?;
+                    thonk.add_instruction_with_span(Instruction::Multiply, span);
                 }
             }
         }
@@ -71,17 +74,18 @@ pub(in crate::bubba::compiler) fn compile(
             let op_type = s_read!(op_type);
 
             let rhs = lu_dog.exhume_expression(&operator.rhs.unwrap()).unwrap();
+            let rhs_span = get_span(&rhs, &lu_dog);
 
             match &op_type.subtype {
                 ComparisonEnum::Equal(_) => {
-                    compile_expression(&lhs, thonk, context)?;
-                    compile_expression(&rhs, thonk, context)?;
-                    thonk.add_instruction(Instruction::TestEq);
+                    compile_expression(&lhs, thonk, context, lhs_span)?;
+                    compile_expression(&rhs, thonk, context, rhs_span)?;
+                    thonk.add_instruction_with_span(Instruction::TestEq, span);
                 }
                 ComparisonEnum::LessThanOrEqual(_) => {
-                    compile_expression(&lhs, thonk, context)?;
-                    compile_expression(&rhs, thonk, context)?;
-                    thonk.add_instruction(Instruction::TestLessThanOrEqual);
+                    compile_expression(&lhs, thonk, context, lhs_span)?;
+                    compile_expression(&rhs, thonk, context, rhs_span)?;
+                    thonk.add_instruction_with_span(Instruction::TestLessThanOrEqual, span);
                 }
                 _ => todo!("comparison"),
             }

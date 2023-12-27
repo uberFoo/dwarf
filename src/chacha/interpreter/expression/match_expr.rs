@@ -38,7 +38,7 @@ pub fn eval(
             ExpressionEnum::Literal(ref _id) => {
                 let value = eval_expression(match_expr.clone(), context, vm)?;
                 let value = s_read!(value);
-                if &*s_read!(scrutinee) == &*value {
+                if *s_read!(scrutinee) == *value {
                     let value = eval_expression(expr, context, vm)?;
                     return Ok(value);
                 }

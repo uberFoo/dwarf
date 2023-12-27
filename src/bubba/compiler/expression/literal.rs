@@ -4,13 +4,14 @@ use crate::{
         instr::Instruction,
     },
     lu_dog::{BooleanLiteralEnum, LiteralEnum},
-    new_ref, s_read, NewRef, RefType, SarzakStorePtr, Value,
+    new_ref, s_read, NewRef, RefType, SarzakStorePtr, Span, Value,
 };
 
 pub(in crate::bubba::compiler) fn compile(
     literal: &SarzakStorePtr,
     thonk: &mut CThonk,
     context: &mut Context,
+    span: Span,
 ) -> Result<()> {
     let lu_dog = context.lu_dog_heel().clone();
     let lu_dog = s_read!(lu_dog);
@@ -61,7 +62,7 @@ pub(in crate::bubba::compiler) fn compile(
         }
     };
 
-    thonk.add_instruction(Instruction::Push(literal?));
+    thonk.add_instruction_with_span(Instruction::Push(literal?), span);
 
     Ok(())
 }

@@ -12,14 +12,14 @@ use crate::{
     },
     new_ref, s_read,
     sarzak::ObjectStore as SarzakStore,
-    Context as ExtruderContext, NewRef, RefType, Value,
+    Context as ExtruderContext, NewRef, RefType, Span, Value,
 };
 
 mod expression;
 
 use expression::{
-    block, call, field, for_loop, if_expr, literal, operator, print, range, struct_expr, variable,
-    xmatch,
+    block, call, field, for_loop, if_expr, index, list, literal, operator, print, range,
+    struct_expr, variable, xmatch,
 };
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -52,7 +52,11 @@ impl CThonk {
     }
 
     fn add_instruction(&mut self, instruction: Instruction) {
-        self.inner.add_instruction(instruction);
+        self.inner.add_instruction(instruction, None);
+    }
+
+    fn add_instruction_with_span(&mut self, instruction: Instruction, span: Span) {
+        self.inner.add_instruction(instruction, Some(span));
     }
 
     fn get_instruction_card(&self) -> usize {
@@ -94,6 +98,10 @@ impl<'a> Context<'a> {
 
     fn lu_dog_heel(&self) -> RefType<LuDogStore> {
         self.extruder_context.lu_dog.clone()
+    }
+
+    fn sarzak_heel(&self) -> RefType<SarzakStore> {
+        self.extruder_context.sarzak.clone()
     }
 
     fn push_symbol_table(&mut self) {
@@ -207,15 +215,16 @@ fn compile_statement(
             let stmt = lu_dog.exhume_expression_statement(stmt).unwrap();
             let stmt = s_read!(stmt);
             let expr = stmt.r31_expression(&lu_dog)[0].clone();
-            compile_expression(&expr, thonk, context)?;
+            let span = get_span(&expr, &lu_dog);
+            compile_expression(&expr, thonk, context, span)?;
         }
         StatementEnum::LetStatement(ref stmt) => {
             let stmt = lu_dog.exhume_let_statement(stmt).unwrap();
             let stmt = s_read!(stmt);
 
             let expr = stmt.r20_expression(&lu_dog)[0].clone();
-
-            compile_expression(&expr, thonk, context)?;
+            let span = get_span(&expr, &lu_dog);
+            compile_expression(&expr, thonk, context, span)?;
 
             let var = s_read!(stmt.r21_local_variable(&lu_dog)[0]).clone();
             let var = s_read!(var.r12_variable(&lu_dog)[0]).clone();
@@ -230,7 +239,8 @@ fn compile_statement(
             let stmt = lu_dog.exhume_result_statement(stmt).unwrap();
             let stmt = s_read!(stmt);
             let expr = stmt.r41_expression(&lu_dog)[0].clone();
-            compile_expression(&expr, thonk, context)?;
+            let span = get_span(&expr, &lu_dog);
+            compile_expression(&expr, thonk, context, span)?;
 
             thonk.add_instruction(Instruction::Return);
             thonk.returned = true;
@@ -244,6 +254,7 @@ fn compile_expression(
     expression: &RefType<Expression>,
     thonk: &mut CThonk,
     context: &mut Context,
+    span: Span,
 ) -> Result<()> {
     match &s_read!(expression).subtype {
         ExpressionEnum::Block(ref block) => block::compile(block, thonk, context)?,
@@ -251,12 +262,21 @@ fn compile_expression(
         ExpressionEnum::FieldExpression(ref field) => {
             field::compile_field_expression(field, thonk, context)?
         }
-        ExpressionEnum::ForLoop(ref for_loop) => for_loop::compile(for_loop, thonk, context)?,
-        ExpressionEnum::Literal(ref literal) => literal::compile(literal, thonk, context)?,
-        ExpressionEnum::Operator(ref op_type) => operator::compile(op_type, thonk, context)?,
+        ExpressionEnum::ForLoop(ref for_loop) => for_loop::compile(for_loop, thonk, context, span)?,
+        ExpressionEnum::Index(ref index) => index::compile(index, thonk, context, span)?,
+        ExpressionEnum::ListElement(ref list) => list::compile_list_element(list, thonk, context)?,
+        ExpressionEnum::ListExpression(ref list) => {
+            list::compile_list_expression(list, thonk, context, span)?
+        }
+        ExpressionEnum::Literal(ref literal) => literal::compile(literal, thonk, context, span)?,
+        ExpressionEnum::Operator(ref op_type) => operator::compile(op_type, thonk, context, span)?,
         ExpressionEnum::RangeExpression(ref range) => range::compile(range, thonk, context)?,
-        ExpressionEnum::StructExpression(ref expr) => struct_expr::compile(expr, thonk, context)?,
-        ExpressionEnum::VariableExpression(ref expr) => variable::compile(expr, thonk, context)?,
+        ExpressionEnum::StructExpression(ref expr) => {
+            struct_expr::compile(expr, thonk, context, span)?
+        }
+        ExpressionEnum::VariableExpression(ref expr) => {
+            variable::compile(expr, thonk, context, span)?
+        }
         ExpressionEnum::XIf(ref expr) => if_expr::compile(expr, thonk, context)?,
         ExpressionEnum::XMatch(ref expr) => xmatch::compile(expr, thonk, context)?,
         ExpressionEnum::XPrint(ref print) => print::compile(print, thonk, context)?,
@@ -266,6 +286,13 @@ fn compile_expression(
     }
 
     Ok(())
+}
+
+fn get_span(expression: &RefType<Expression>, lu_dog: &LuDogStore) -> Span {
+    let value = &s_read!(expression).r11_x_value(lu_dog)[0];
+    let span = &s_read!(value).r63_span(lu_dog)[0];
+    let read = s_read!(span);
+    read.start as usize..read.end as usize
 }
 
 mod test {
@@ -1156,7 +1183,7 @@ mod test {
             .unwrap();
         let woog_enum = s_read!(lu_dog).exhume_enumeration(&id).unwrap();
         let ty = ValueType::new_enumeration(&woog_enum, &mut s_write!(lu_dog));
-        let user_enum = TupleEnum::new("Bar".to_owned(), new_ref!(Value, Value::Integer(42)));
+        let user_enum = TupleEnum::new("Bar", new_ref!(Value, Value::Integer(42)));
         let user_enum = new_ref!(TupleEnum, user_enum);
 
         let program = compile(&ctx).unwrap();
@@ -1173,5 +1200,36 @@ mod test {
             &*s_read!(run_vm(&program).unwrap()),
             &Value::Enumeration(EnumVariant::Tuple((ty, "Foo".to_owned()), user_enum))
         );
+    }
+
+    #[test]
+    fn index_into_list() {
+        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
+        let ore = "
+                   fn main() -> int {
+                       let y = [];
+                       let x = [1, 2, 3];
+                       x[1]
+                   }";
+        let ast = parse_dwarf("index_into_list", ore).unwrap();
+        let ctx = new_lu_dog(
+            "index_into_list".to_owned(),
+            Some((ore.to_owned(), &ast)),
+            &get_dwarf_home(),
+            &sarzak,
+        )
+        .unwrap();
+
+        let program = compile(&ctx).unwrap();
+        println!("{program}");
+
+        assert_eq!(program.get_thonk_card(), 1);
+
+        // assert_eq!(
+        //     program.get_thonk("main").unwrap().get_instruction_card(),
+        //     8
+        // );
+
+        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(2));
     }
 }

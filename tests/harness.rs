@@ -11,7 +11,7 @@ use dwarf::{
         value::Value,
     },
     dwarf::{new_lu_dog, parse_dwarf},
-    ref_to_inner,
+    s_read,
     sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL},
 };
 
@@ -141,11 +141,8 @@ fn run_program(test: &str, program: &str) -> Result<(Value, String), String> {
 
     let mut ctx = initialize_interpreter(1, dwarf_home, ctx).unwrap();
     let result = match start_func("main", false, &mut ctx) {
-        Ok(value) => unsafe {
-            // Ok((Value::Empty, String::new()))
-            let value = std::sync::Arc::into_raw(value);
-            let value = std::ptr::read(value);
-            let value = ref_to_inner!(value);
+        Ok(value) => {
+            let value = (*s_read!(value)).clone();
             match value {
                 Value::Error(msg) => {
                     let msg = *msg;
@@ -165,7 +162,7 @@ fn run_program(test: &str, program: &str) -> Result<(Value, String), String> {
                     Ok((value, stdout))
                 }
             }
-        },
+        }
         Err(e) => {
             let error = format!(
                 "Interpreter exited with:\n{}",

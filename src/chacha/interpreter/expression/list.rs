@@ -33,15 +33,26 @@ pub fn eval_list_expression(
 
     let list = s_read!(lu_dog).exhume_list_expression(list).unwrap();
     let list = s_read!(list);
+
+    // 🚧 I should be able to swap this in for the ty stuff below, but it causes
+    // a test to fail. I don't want to hunt this down now.
+    //
+    // let expr = &list.r15_expression(&s_read!(lu_dog))[0];
+    // let ty = &s_read!(expr).r11_x_value(&s_read!(lu_dog))[0];
+    // let ty = s_read!(ty).r24_value_type(&s_read!(lu_dog))[0].clone();
+
     if let Some(ref element) = list.elements {
+        // 🚧 This seems like the sort of thing that can be sorted out by the
+        // extruder.
         // This is the first element in the list. We need to give this list
         // a type, and I'm going to do the easy thing here and take the type
-        // to be whatever the first element evaluates to be.
+        // to be whatever the first element evaluates as.
         let element = s_read!(lu_dog).exhume_list_element(element).unwrap();
         let element = s_read!(element);
         let expr = element.r15_expression(&s_read!(lu_dog))[0].clone();
         let value = eval_expression(expr, context, vm)?;
 
+        // 🚧 These should be removed
         let ty = s_read!(value);
         let ty = ty.get_value_type(&s_read!(sarzak), &s_read!(lu_dog));
 
@@ -63,12 +74,6 @@ pub fn eval_list_expression(
     } else {
         let ty = ValueType::new_empty(&mut s_write!(lu_dog));
 
-        Ok(new_ref!(
-            Value,
-            Value::Vector {
-                ty,
-                inner: vec![new_ref!(Value, Value::Empty),]
-            }
-        ))
+        Ok(new_ref!(Value, Value::Vector { ty, inner: vec![] }))
     }
 }

@@ -1,15 +1,16 @@
 use crate::{
     bubba::{
-        compiler::{compile_expression, CThonk, Context, Result},
+        compiler::{compile_expression, get_span, CThonk, Context, Result},
         instr::Instruction,
     },
-    new_ref, s_read, NewRef, RefType, SarzakStorePtr, Value,
+    new_ref, s_read, NewRef, RefType, SarzakStorePtr, Span, Value,
 };
 
 pub(in crate::bubba::compiler) fn compile(
     for_loop: &SarzakStorePtr,
     thonk: &mut CThonk,
     context: &mut Context,
+    span: Span,
 ) -> Result<()> {
     let lu_dog = context.lu_dog_heel().clone();
     let lu_dog = s_read!(lu_dog);
@@ -18,23 +19,24 @@ pub(in crate::bubba::compiler) fn compile(
     let for_loop = s_read!(for_loop);
     let ident = for_loop.ident.to_owned();
     let body = lu_dog.exhume_expression(&for_loop.block).unwrap();
+    let body_span = get_span(&body, &lu_dog);
     let list = lu_dog.exhume_expression(&for_loop.expression).unwrap();
-
-    compile_expression(&list, thonk, context)?;
+    let list_span = get_span(&list, &lu_dog);
+    compile_expression(&list, thonk, context, list_span)?;
 
     context.push_symbol_table();
     let mut inner_thonk = CThonk::new(format!("for_{}", ident));
 
     inner_thonk.increment_frame_size();
-    let index = context.insert_symbol(ident.clone());
-    compile_expression(&body, &mut inner_thonk, context)?;
+    let index = context.insert_symbol(ident);
+    compile_expression(&body, &mut inner_thonk, context, body_span)?;
     let fp = inner_thonk.get_frame_size();
     for _ in 0..fp {
         thonk.increment_frame_size();
     }
 
     // Store the starting value
-    thonk.add_instruction(Instruction::StoreLocal(index));
+    thonk.add_instruction_with_span(Instruction::StoreLocal(index), span);
 
     let top_of_loop = thonk.get_instruction_card() as isize;
 

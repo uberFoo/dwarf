@@ -1,17 +1,18 @@
 use crate::{
     bubba::{
-        compiler::{compile_expression, CThonk, Context, Result},
+        compiler::{compile_expression, get_span, CThonk, Context, Result},
         instr::Instruction,
     },
     chacha::value::EnumVariant,
     lu_dog::DataStructureEnum,
-    new_ref, s_read, NewRef, RefType, SarzakStorePtr, Value,
+    new_ref, s_read, NewRef, RefType, SarzakStorePtr, Span, Value,
 };
 
 pub(in crate::bubba::compiler) fn compile(
     expr: &SarzakStorePtr,
     thonk: &mut CThonk,
     context: &mut Context,
+    span: Span,
 ) -> Result<()> {
     let lu_dog = context.lu_dog_heel().clone();
     let lu_dog = s_read!(lu_dog);
@@ -60,16 +61,17 @@ pub(in crate::bubba::compiler) fn compile(
                 let field_count = field_exprs.len();
                 for f in field_exprs {
                     let expr = s_read!(f).r15_expression(&lu_dog)[0].clone();
-                    compile_expression(&expr, thonk, context)?;
+                    let span = get_span(&expr, &lu_dog);
+                    compile_expression(&expr, thonk, context, span)?;
                 }
 
-                let ty = new_ref!(Value, Value::ValueType((&*s_read!(ty)).to_owned()));
+                let ty = new_ref!(Value, Value::ValueType((*s_read!(ty)).to_owned()));
                 let path = new_ref!(Value, Value::String(path));
                 thonk.add_instruction(Instruction::Push(ty));
                 thonk.add_instruction(Instruction::Push(path));
                 thonk.add_instruction(Instruction::Push(variant));
 
-                thonk.add_instruction(Instruction::NewTupleEnum(field_count));
+                thonk.add_instruction_with_span(Instruction::NewTupleEnum(field_count), span);
             }
         }
         DataStructureEnum::WoogStruct(_) => {

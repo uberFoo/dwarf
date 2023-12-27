@@ -68,6 +68,14 @@ impl<'a> CallFrame<'a> {
     fn name(&self) -> &str {
         self.thonk.name.as_str()
     }
+
+    fn get_span(&self) -> std::ops::Range<usize> {
+        let span = self.thonk.get_span((self.ip - 1) as usize);
+        match span {
+            Some(span) => span.to_owned(),
+            None => 0..0,
+        }
+    }
 }
 
 impl<'a> fmt::Display for CallFrame<'a> {
@@ -92,7 +100,7 @@ impl<'b> VM<'b> {
 
         let thonk = program.get_thonk(entry).unwrap();
 
-        let mut frame = CallFrame::new(&thonk);
+        let mut frame = CallFrame::new(thonk);
 
         vm.stack
             .push(new_ref!(Value, Value::new_thonk(entry.to_owned())));
@@ -428,6 +436,128 @@ impl<'b> VM<'b> {
                     Instruction::HaltAndCatchFire => {
                         return Err(BubbaError::HaltAndCatchFire.into());
                     }
+                    Instruction::Index => {
+                        let index = self.stack.pop().unwrap();
+                        let list = self.stack.pop().unwrap();
+                        let list = s_read!(list);
+                        let index = s_read!(index);
+                        match &*index {
+                            Value::Integer(index) => {
+                                let index = *index as usize;
+                                if let Value::Vector { ty: _, inner: vec } = &list.clone() {
+                                    if index < vec.len() {
+                                        self.stack.push(vec[index].clone());
+                                    } else {
+                                        return Err(BubbaError::VmPanic {
+                                            source: Box::new(ChaChaError::IndexOutOfBounds {
+                                                index,
+                                                len: vec.len(),
+                                                span: frame.get_span(),
+                                                location: location!(),
+                                            }),
+                                        }
+                                        .into());
+                                    }
+                                } else if let Value::String(str) = &*list {
+                                    let str = unicode_segmentation::UnicodeSegmentation::graphemes(
+                                        str.as_str(),
+                                        true,
+                                    )
+                                    .collect::<Vec<&str>>();
+
+                                    if index < str.len() {
+                                        self.stack.push(new_ref!(
+                                            Value,
+                                            Value::String(str[index..index + 1].join(""),)
+                                        ))
+                                    } else {
+                                        return Err(BubbaError::VmPanic {
+                                            source: Box::new(ChaChaError::IndexOutOfBounds {
+                                                index,
+                                                len: str.len(),
+                                                span: frame.get_span(),
+                                                location: location!(),
+                                            }),
+                                        }
+                                        .into());
+                                    }
+                                } else {
+                                    return Err(BubbaError::VmPanic {
+                                        source: Box::new(ChaChaError::NotIndexable {
+                                            span: frame.get_span(),
+                                            location: location!(),
+                                        }),
+                                    }
+                                    .into());
+                                }
+                            }
+                            // Value::Range(_) => {
+                            //     let range: Range<usize> = index.try_into()?;
+                            //     let list = eval_expression(list.clone(), context, vm)?;
+                            //     let list = s_read!(list);
+                            //     if let Value::Vector { ty, inner: vec } = &list.clone() {
+                            //         if range.end < vec.len() {
+                            //             Ok(new_ref!(
+                            //                 Value,
+                            //                 Value::Vector {
+                            //                     ty: ty.clone(),
+                            //                     inner: vec[range].to_owned()
+                            //                 }
+                            //             ))
+                            //         } else {
+                            //             let value =
+                            //                 &s_read!(index_expr).r11_x_value(&s_read!(lu_dog))[0];
+                            //             let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
+                            //             let read = s_read!(span);
+                            //             let span = read.start as usize..read.end as usize;
+
+                            //             Err(ChaChaError::IndexOutOfBounds {
+                            //                 index: range.end,
+                            //                 len: vec.len(),
+                            //                 span,
+                            //                 location: location!(),
+                            //             })
+                            //         }
+                            //     } else if let Value::String(str) = &*list {
+                            //         let str = unicode_segmentation::UnicodeSegmentation::graphemes(
+                            //             str.as_str(),
+                            //             true,
+                            //         )
+                            //         .collect::<Vec<&str>>();
+
+                            //         if range.end < str.len() {
+                            //             Ok(new_ref!(Value, Value::String(str[range].join(""),)))
+                            //         } else {
+                            //             let value =
+                            //                 &s_read!(index_expr).r11_x_value(&s_read!(lu_dog))[0];
+                            //             let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
+                            //             let read = s_read!(span);
+                            //             let span = read.start as usize..read.end as usize;
+
+                            //             Err(ChaChaError::IndexOutOfBounds {
+                            //                 index: range.end,
+                            //                 len: str.len(),
+                            //                 span,
+                            //                 location: location!(),
+                            //             })
+                            //         }
+                            // } else {
+                            //     let value = &s_read!(list).r11_x_value(&s_read!(lu_dog))[0];
+                            //     let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
+                            //     let read = s_read!(span);
+                            //     let span = read.start as usize..read.end as usize;
+
+                            //     Err(ChaChaError::NotIndexable {
+                            //         span,
+                            //         location: location!(),
+                            //     })
+                            // }
+                            // }
+                            _ => unreachable!(),
+                        }
+
+                        0
+                    }
                     Instruction::Jump(offset) => {
                         if trace {
                             println!(
@@ -504,6 +634,42 @@ impl<'b> VM<'b> {
                         //     return Err(BubbaError::VmPanic { cause: Box::new(e) });
                         // }
                         self.stack.push(new_ref!(Value, c));
+
+                        0
+                    }
+                    Instruction::NewList(n) => {
+                        if trace {
+                            println!("\t\t{}\t{}", Colour::Green.paint("nl:"), n);
+                        }
+
+                        let ty = self.stack.pop().unwrap();
+                        let ty: ValueType =
+                            (&*s_read!(ty))
+                                .try_into()
+                                .map_err(|e| BubbaError::VmPanic {
+                                    source: Box::new(e),
+                                })?;
+
+                        if trace {
+                            println!("\t\t\t\t{:?}", ty);
+                        }
+
+                        let ty = new_ref!(ValueType, ty);
+
+                        let mut values = Vec::with_capacity(*n);
+
+                        for _i in 0..*n {
+                            let value = self.stack.pop().unwrap();
+                            values.push(value.clone());
+                            if trace {
+                                println!("\t\t\t\t{}", s_read!(value));
+                            }
+                        }
+
+                        values.reverse();
+
+                        self.stack
+                            .push(new_ref!(Value, Value::Vector { ty, inner: values }));
 
                         0
                     }
@@ -759,7 +925,7 @@ mod tests {
         let mut vm = VM::new_with_mem(&memory.0);
         let mut thonk = Thonk::new("test".to_string());
 
-        thonk.add_instruction(Instruction::Push(new_ref!(Value, 42.into())));
+        thonk.add_instruction(Instruction::Push(new_ref!(Value, 42.into())), None);
         println!("{}", thonk);
 
         let mut frame = CallFrame::new(&thonk);
@@ -785,8 +951,8 @@ mod tests {
         let mut vm = VM::new_with_mem(&memory.0);
         let mut thonk = Thonk::new("test".to_string());
 
-        thonk.add_instruction(Instruction::Push(new_ref!(Value, 42.into())));
-        thonk.add_instruction(Instruction::Return);
+        thonk.add_instruction(Instruction::Push(new_ref!(Value, 42.into())), None);
+        thonk.add_instruction(Instruction::Return, None);
         println!("{}", thonk);
 
         let mut frame = CallFrame::new(&thonk);
@@ -813,10 +979,10 @@ mod tests {
         let mut vm = VM::new_with_mem(&memory.0);
         let mut thonk = Thonk::new("test".to_string());
 
-        thonk.add_instruction(Instruction::Push(new_ref!(Value, 42.into())));
-        thonk.add_instruction(Instruction::Push(new_ref!(Value, 69.into())));
-        thonk.add_instruction(Instruction::Add);
-        thonk.add_instruction(Instruction::Return);
+        thonk.add_instruction(Instruction::Push(new_ref!(Value, 42.into())), None);
+        thonk.add_instruction(Instruction::Push(new_ref!(Value, 69.into())), None);
+        thonk.add_instruction(Instruction::Add, None);
+        thonk.add_instruction(Instruction::Return, None);
         println!("{}", thonk);
 
         let mut frame = CallFrame::new(&thonk);
@@ -843,10 +1009,10 @@ mod tests {
         let mut vm = VM::new_with_mem(&memory.0);
         let mut thonk = Thonk::new("test".to_string());
 
-        thonk.add_instruction(Instruction::Push(new_ref!(Value, 111.into())));
-        thonk.add_instruction(Instruction::Push(new_ref!(Value, 69.into())));
-        thonk.add_instruction(Instruction::Subtract);
-        thonk.add_instruction(Instruction::Return);
+        thonk.add_instruction(Instruction::Push(new_ref!(Value, 111.into())), None);
+        thonk.add_instruction(Instruction::Push(new_ref!(Value, 69.into())), None);
+        thonk.add_instruction(Instruction::Subtract, None);
+        thonk.add_instruction(Instruction::Return, None);
         println!("{}", thonk);
 
         let mut frame = CallFrame::new(&thonk);
@@ -872,10 +1038,10 @@ mod tests {
         let mut vm = VM::new_with_mem(&memory.0);
         let mut thonk = Thonk::new("test".to_string());
 
-        thonk.add_instruction(Instruction::Push(new_ref!(Value, 42.into())));
-        thonk.add_instruction(Instruction::Push(new_ref!(Value, 69.into())));
-        thonk.add_instruction(Instruction::Multiply);
-        thonk.add_instruction(Instruction::Return);
+        thonk.add_instruction(Instruction::Push(new_ref!(Value, 42.into())), None);
+        thonk.add_instruction(Instruction::Push(new_ref!(Value, 69.into())), None);
+        thonk.add_instruction(Instruction::Multiply, None);
+        thonk.add_instruction(Instruction::Return, None);
         println!("{}", thonk);
 
         let mut frame = CallFrame::new(&thonk);
@@ -900,10 +1066,10 @@ mod tests {
         let mut vm = VM::new_with_mem(&memory.0);
         let mut thonk = Thonk::new("test".to_string());
 
-        thonk.add_instruction(Instruction::Push(new_ref!(Value, 111.into())));
-        thonk.add_instruction(Instruction::Push(new_ref!(Value, 69.into())));
-        thonk.add_instruction(Instruction::TestLessThanOrEqual);
-        thonk.add_instruction(Instruction::Return);
+        thonk.add_instruction(Instruction::Push(new_ref!(Value, 111.into())), None);
+        thonk.add_instruction(Instruction::Push(new_ref!(Value, 69.into())), None);
+        thonk.add_instruction(Instruction::TestLessThanOrEqual, None);
+        thonk.add_instruction(Instruction::Return, None);
         println!("{}", thonk);
 
         let mut frame = CallFrame::new(&thonk);
@@ -927,10 +1093,10 @@ mod tests {
         let mut vm = VM::new_with_mem(&memory.0);
         let mut thonk = Thonk::new("test".to_string());
 
-        thonk.add_instruction(Instruction::Push(new_ref!(Value, 42.into())));
-        thonk.add_instruction(Instruction::Push(new_ref!(Value, 69.into())));
-        thonk.add_instruction(Instruction::TestLessThanOrEqual);
-        thonk.add_instruction(Instruction::Return);
+        thonk.add_instruction(Instruction::Push(new_ref!(Value, 42.into())), None);
+        thonk.add_instruction(Instruction::Push(new_ref!(Value, 69.into())), None);
+        thonk.add_instruction(Instruction::TestLessThanOrEqual, None);
+        thonk.add_instruction(Instruction::Return, None);
         println!("{}", thonk);
 
         let mut frame = CallFrame::new(&thonk);
@@ -954,10 +1120,10 @@ mod tests {
         let mut vm = VM::new_with_mem(&memory.0);
         let mut thonk = Thonk::new("test".to_string());
 
-        thonk.add_instruction(Instruction::Push(new_ref!(Value, 42.into())));
-        thonk.add_instruction(Instruction::Push(new_ref!(Value, 42.into())));
-        thonk.add_instruction(Instruction::TestLessThanOrEqual);
-        thonk.add_instruction(Instruction::Return);
+        thonk.add_instruction(Instruction::Push(new_ref!(Value, 42.into())), None);
+        thonk.add_instruction(Instruction::Push(new_ref!(Value, 42.into())), None);
+        thonk.add_instruction(Instruction::TestLessThanOrEqual, None);
+        thonk.add_instruction(Instruction::Return, None);
         println!("{}", thonk);
 
         let mut frame = CallFrame::new(&thonk);
@@ -984,20 +1150,20 @@ mod tests {
         let mut vm = VM::new_with_mem(&memory.0);
         let mut thonk = Thonk::new("test".to_string());
 
-        thonk.add_instruction(Instruction::Push(new_ref!(Value, 69.into())));
-        thonk.add_instruction(Instruction::Push(new_ref!(Value, 42.into())));
-        thonk.add_instruction(Instruction::TestLessThanOrEqual);
-        thonk.add_instruction(Instruction::JumpIfFalse(2));
-        thonk.add_instruction(Instruction::Push(new_ref!(
-            Value,
-            Value::String("epic fail!".to_string())
-        )));
-        thonk.add_instruction(Instruction::Return);
-        thonk.add_instruction(Instruction::Push(new_ref!(
-            Value,
-            Value::String("you rock!".to_string())
-        )));
-        thonk.add_instruction(Instruction::Return);
+        thonk.add_instruction(Instruction::Push(new_ref!(Value, 69.into())), None);
+        thonk.add_instruction(Instruction::Push(new_ref!(Value, 42.into())), None);
+        thonk.add_instruction(Instruction::TestLessThanOrEqual, None);
+        thonk.add_instruction(Instruction::JumpIfFalse(2), None);
+        thonk.add_instruction(
+            Instruction::Push(new_ref!(Value, Value::String("epic fail!".to_string()))),
+            None,
+        );
+        thonk.add_instruction(Instruction::Return, None);
+        thonk.add_instruction(
+            Instruction::Push(new_ref!(Value, Value::String("you rock!".to_string()))),
+            None,
+        );
+        thonk.add_instruction(Instruction::Return, None);
         println!("{}", thonk);
 
         let mut frame = CallFrame::new(&thonk);
@@ -1031,8 +1197,8 @@ mod tests {
         ));
         vm.stack.push(new_ref!(Value, 42.into()));
 
-        thonk.add_instruction(Instruction::FetchLocal(0));
-        thonk.add_instruction(Instruction::Return);
+        thonk.add_instruction(Instruction::FetchLocal(0), None);
+        thonk.add_instruction(Instruction::Return, None);
         println!("{}", thonk);
 
         vm.fp = 2;
@@ -1108,8 +1274,8 @@ mod tests {
         ));
         vm.stack.push(new_ref!(Value, "baz".into()));
 
-        thonk.add_instruction(Instruction::FieldRead);
-        thonk.add_instruction(Instruction::Return);
+        thonk.add_instruction(Instruction::FieldRead, None);
+        thonk.add_instruction(Instruction::Return, None);
         println!("{}", thonk);
 
         let mut frame = CallFrame::new(&thonk);
@@ -1143,8 +1309,8 @@ mod tests {
         vm.stack.push(new_ref!(Value, 42.into()));
         vm.stack.push(new_ref!(Value, Value::Integer(-1)));
 
-        thonk.add_instruction(Instruction::FetchLocal(1));
-        thonk.add_instruction(Instruction::Return);
+        thonk.add_instruction(Instruction::FetchLocal(1), None);
+        thonk.add_instruction(Instruction::Return, None);
         println!("{}", thonk);
 
         vm.fp = 4;
@@ -1183,10 +1349,10 @@ mod tests {
         vm.stack.push(new_ref!(Value, Value::Integer(-1)));
         vm.stack.push(new_ref!(Value, Value::Integer(-1)));
 
-        thonk.add_instruction(Instruction::Push(new_ref!(Value, 42.into())));
-        thonk.add_instruction(Instruction::StoreLocal(1));
-        thonk.add_instruction(Instruction::FetchLocal(1));
-        thonk.add_instruction(Instruction::Return);
+        thonk.add_instruction(Instruction::Push(new_ref!(Value, 42.into())), None);
+        thonk.add_instruction(Instruction::StoreLocal(1), None);
+        thonk.add_instruction(Instruction::FetchLocal(1), None);
+        thonk.add_instruction(Instruction::Return, None);
         println!("{}", thonk);
 
         vm.fp = 4;
@@ -1213,44 +1379,44 @@ mod tests {
         let mut thonk = Thonk::new("fib".to_string());
 
         // Get the parameter off the stack
-        thonk.add_instruction(Instruction::FetchLocal(0));
-        thonk.add_instruction(Instruction::Push(new_ref!(Value, 1.into())));
+        thonk.add_instruction(Instruction::FetchLocal(0), None);
+        thonk.add_instruction(Instruction::Push(new_ref!(Value, 1.into())), None);
         // Check if it's <= 1
-        thonk.add_instruction(Instruction::TestLessThanOrEqual);
-        thonk.add_instruction(Instruction::JumpIfFalse(2));
+        thonk.add_instruction(Instruction::TestLessThanOrEqual, None);
+        thonk.add_instruction(Instruction::JumpIfFalse(2), None);
         // If false return 1
-        thonk.add_instruction(Instruction::Push(new_ref!(Value, 1.into())));
-        thonk.add_instruction(Instruction::Return);
+        thonk.add_instruction(Instruction::Push(new_ref!(Value, 1.into())), None);
+        thonk.add_instruction(Instruction::Return, None);
         // return fib(n-1) + fib(n-2)
         // Load fib
-        thonk.add_instruction(Instruction::Push(new_ref!(
-            Value,
-            Value::new_thonk("fib".to_owned())
-        )));
+        thonk.add_instruction(
+            Instruction::Push(new_ref!(Value, Value::new_thonk("fib".to_owned()))),
+            None,
+        );
         // load n
-        thonk.add_instruction(Instruction::FetchLocal(0));
+        thonk.add_instruction(Instruction::FetchLocal(0), None);
         // load 1
-        thonk.add_instruction(Instruction::Push(new_ref!(Value, 1.into())));
+        thonk.add_instruction(Instruction::Push(new_ref!(Value, 1.into())), None);
         // subtract
-        thonk.add_instruction(Instruction::Subtract);
+        thonk.add_instruction(Instruction::Subtract, None);
         // Call fib(n-1)
-        thonk.add_instruction(Instruction::Call(1));
+        thonk.add_instruction(Instruction::Call(1), None);
         // load fib
-        thonk.add_instruction(Instruction::Push(new_ref!(
-            Value,
-            Value::new_thonk("fib".to_owned())
-        )));
+        thonk.add_instruction(
+            Instruction::Push(new_ref!(Value, Value::new_thonk("fib".to_owned()))),
+            None,
+        );
         // load n
-        thonk.add_instruction(Instruction::FetchLocal(0));
+        thonk.add_instruction(Instruction::FetchLocal(0), None);
         // load 2
-        thonk.add_instruction(Instruction::Push(new_ref!(Value, 2.into())));
+        thonk.add_instruction(Instruction::Push(new_ref!(Value, 2.into())), None);
         // subtract
-        thonk.add_instruction(Instruction::Subtract);
+        thonk.add_instruction(Instruction::Subtract, None);
         // Call fib(n-2)
-        thonk.add_instruction(Instruction::Call(1));
+        thonk.add_instruction(Instruction::Call(1), None);
         // add
-        thonk.add_instruction(Instruction::Add);
-        thonk.add_instruction(Instruction::Return);
+        thonk.add_instruction(Instruction::Add, None);
+        thonk.add_instruction(Instruction::Return, None);
         thonk.increment_frame_size();
         println!("{}", thonk);
 

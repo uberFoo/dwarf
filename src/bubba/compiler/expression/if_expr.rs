@@ -1,6 +1,6 @@
 use crate::{
     bubba::{
-        compiler::{compile_expression, CThonk, Context, Result},
+        compiler::{compile_expression, get_span, CThonk, Context, Result},
         instr::Instruction,
     },
     new_ref, s_read, NewRef, RefType, SarzakStorePtr, Value,
@@ -18,8 +18,8 @@ pub(in crate::bubba::compiler) fn compile(
     let expr = s_read!(expr);
 
     let cond_expr = lu_dog.exhume_expression(&expr.test).unwrap();
-
-    compile_expression(&cond_expr, thonk, context)?;
+    let cond_expr_span = get_span(&cond_expr, &lu_dog);
+    compile_expression(&cond_expr, thonk, context, cond_expr_span)?;
 
     thonk.add_instruction(Instruction::Push(new_ref!(Value, Value::Boolean(true))));
     thonk.add_instruction(Instruction::TestEq);
@@ -29,8 +29,8 @@ pub(in crate::bubba::compiler) fn compile(
         context.push_symbol_table();
         let mut false_thonk = CThonk::new("if_false".to_owned());
         let block = lu_dog.exhume_expression(expr).unwrap();
-
-        compile_expression(&block, &mut false_thonk, context)?;
+        let block_span = get_span(&block, &lu_dog);
+        compile_expression(&block, &mut false_thonk, context, block_span)?;
         let fp = false_thonk.get_frame_size();
         for _ in 0..fp {
             thonk.increment_frame_size();
@@ -46,8 +46,8 @@ pub(in crate::bubba::compiler) fn compile(
     let mut true_thonk = CThonk::new("if_true".to_owned());
     let block = lu_dog.exhume_block(&expr.true_block).unwrap();
     let block = s_read!(block).r15_expression(&lu_dog)[0].clone();
-
-    compile_expression(&block, &mut true_thonk, context)?;
+    let block_span = get_span(&block, &lu_dog);
+    compile_expression(&block, &mut true_thonk, context, block_span)?;
 
     let fp = true_thonk.get_frame_size();
     for _ in 0..fp {
