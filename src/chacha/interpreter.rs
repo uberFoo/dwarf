@@ -18,7 +18,7 @@ use uuid::Uuid;
 use puteketeke::Executor;
 
 use crate::{
-    bubba::{CallFrame, Instruction, Thonk, VM},
+    bubba::{Instruction, Program, Thonk, VM},
     chacha::{
         error::{Error, Result, UnimplementedSnafu},
         memory::{Memory, MemoryUpdateMessage},
@@ -120,6 +120,8 @@ macro_rules! error {
 pub(crate) use error;
 
 const TIMING_COUNT: usize = 1_000;
+const VERSION: &str = env!("CARGO_PKG_VERSION");
+pub const BUILD_TIME: &str = include!(concat!(env!("OUT_DIR"), "/timestamp.txt"));
 
 lazy_static! {
     pub(super) static ref RUNNING: Mutex<bool> = Mutex::new(true);
@@ -168,6 +170,8 @@ pub fn initialize_interpreter(
     for store in lu_dog.iter_z_object_store() {
         inter_store(store, &mut stack, &lu_dog);
     }
+
+    let mut program = Program::new(VERSION.to_owned(), BUILD_TIME.to_owned());
 
     if let Some(_id) = lu_dog.exhume_woog_struct_id_by_name("Complex") {
         // Hack to try to get mandelbrot running faster...
@@ -244,7 +248,7 @@ pub fn initialize_interpreter(
 
         thonk.increment_frame_size();
 
-        stack.insert_thonk(thonk);
+        program.add_thonk(thonk);
 
         // Hack to try to get mandelbrot running faster...
         let mut thonk = Thonk::new("add".to_string());
@@ -305,7 +309,7 @@ pub fn initialize_interpreter(
         thonk.increment_frame_size();
         thonk.increment_frame_size();
 
-        stack.insert_thonk(thonk);
+        program.add_thonk(thonk);
 
         // Hack to try to get mandelbrot running faster...
         let mut thonk = Thonk::new("square".to_string());
@@ -384,9 +388,7 @@ pub fn initialize_interpreter(
 
         thonk.add_instruction(Instruction::Return, None);
 
-        thonk.increment_frame_size();
-
-        stack.insert_thonk(thonk);
+        program.add_thonk(thonk);
     }
 
     let (std_out_send, std_out_recv) = unbounded();
@@ -416,6 +418,7 @@ pub fn initialize_interpreter(
             dwarf_home,
             dirty,
             e_context.source.to_owned(),
+            program,
             executor,
         ))
     }
@@ -438,6 +441,7 @@ pub fn initialize_interpreter(
         dwarf_home,
         dirty,
         e_context.source.to_owned(),
+        program,
     ))
 }
 
@@ -719,10 +723,9 @@ pub fn start_func(
         *running = !stopped;
     }
 
-    let stack = &mut context.memory();
-    // 🚧 WTF is this? They don't share memory?
-    let vm_stack = stack.clone();
-    let mut vm = VM::new_with_mem(&vm_stack);
+    let program = context.get_program().clone();
+    let stack = context.memory();
+    let mut vm = VM::new(&program);
 
     if let Some(main) = stack.get(name) {
         // This should fail if it's not a function. Actually, I think that it _has_
@@ -753,8 +756,9 @@ pub fn start_func(
 }
 
 pub fn start_vm(n: DwarfInteger) -> Result<DwarfInteger, Error> {
-    let (mut memory, _) = Memory::new();
     let mut thonk = Thonk::new("fib".to_string());
+
+    let fib = new_ref!(Value, "fib".into());
 
     // Get the parameter off the stack
     // push {fp + 0}
@@ -771,10 +775,8 @@ pub fn start_vm(n: DwarfInteger) -> Result<DwarfInteger, Error> {
     thonk.add_instruction(Instruction::Return, None);
     // return fib(n-1) + fib(n-2)
     // Load fib
-    thonk.add_instruction(
-        Instruction::Push(new_ref!(Value, Value::new_thonk("fib".to_owned()))),
-        None,
-    );
+    thonk.add_instruction(Instruction::CallDestination(fib.clone()), None);
+    thonk.add_instruction(Instruction::LocalCardinality(fib.clone()), None);
     // load n
     thonk.add_instruction(Instruction::FetchLocal(0), None);
     // load 1
@@ -784,10 +786,8 @@ pub fn start_vm(n: DwarfInteger) -> Result<DwarfInteger, Error> {
     // Call fib(n-1)
     thonk.add_instruction(Instruction::Call(1), None);
     // load fib
-    thonk.add_instruction(
-        Instruction::Push(new_ref!(Value, Value::new_thonk("fib".to_owned()))),
-        None,
-    );
+    thonk.add_instruction(Instruction::CallDestination(fib.clone()), None);
+    thonk.add_instruction(Instruction::LocalCardinality(fib.clone()), None);
     // load n
     thonk.add_instruction(Instruction::FetchLocal(0), None);
     // load 2
@@ -802,27 +802,14 @@ pub fn start_vm(n: DwarfInteger) -> Result<DwarfInteger, Error> {
 
     thonk.increment_frame_size();
 
-    // put fib in memory
-    memory.insert_thonk(thonk.clone());
+    let mut program = crate::bubba::Program::new("".to_owned(), "".to_owned());
+    program.add_thonk(thonk);
 
-    let mut frame = CallFrame::new(&thonk);
+    let mut vm = VM::new(&program);
+    let result = vm.invoke("fib", &[new_ref!(Value, n.into())], false);
 
-    let mut vm = VM::new_with_mem(&memory);
-
-    // Push the func
-    vm.push_stack(new_ref!(Value, "fib".into()));
-    // Push the argument
-    vm.push_stack(new_ref!(Value, Value::Integer(n)));
-
-    vm.set_fp(2);
-    vm.push_stack(new_ref!(Value, Value::Empty));
-
-    // vm.push_frame(frame);
-
-    let result = vm.run(0, &mut frame, false);
-
-    vm.pop_stack();
-    vm.pop_stack();
+    // vm.pop_stack();
+    // vm.pop_stack();
 
     let result: DwarfInteger = (&*s_read!(result.unwrap())).try_into().unwrap();
 

@@ -814,7 +814,13 @@ impl From<bool> for Value {
 
 impl From<usize> for Value {
     fn from(value: usize) -> Self {
-        Self::Integer(value as i64)
+        Self::Integer(value as DwarfInteger)
+    }
+}
+
+impl From<isize> for Value {
+    fn from(value: isize) -> Self {
+        Self::Integer(value as DwarfInteger)
     }
 }
 
@@ -826,19 +832,19 @@ impl From<i64> for Value {
 
 impl From<u64> for Value {
     fn from(value: u64) -> Self {
-        Self::Integer(value as i64)
+        Self::Integer(value as DwarfInteger)
     }
 }
 
 impl From<i32> for Value {
     fn from(value: i32) -> Self {
-        Self::Integer(value as i64)
+        Self::Integer(value as DwarfInteger)
     }
 }
 
 impl From<u32> for Value {
     fn from(value: u32) -> Self {
-        Self::Integer(value as i64)
+        Self::Integer(value as DwarfInteger)
     }
 }
 
@@ -1019,12 +1025,64 @@ impl TryFrom<&Value> for usize {
     }
 }
 
+impl TryFrom<Value> for isize {
+    type Error = ChaChaError;
+
+    fn try_from(value: Value) -> Result<Self, <isize as TryFrom<Value>>::Error> {
+        match &value {
+            Value::Float(num) => Ok(num.to_owned() as isize),
+            Value::Integer(num) => Ok(num.to_owned() as isize),
+            Value::String(str_) => str_.parse::<isize>().map_err(|_| ChaChaError::Conversion {
+                src: str_.to_owned(),
+                dst: "isize".to_owned(),
+            }),
+            Value::Thonk(inner) => match inner {
+                ThonkInner::Thonk(name) => Err(ChaChaError::Conversion {
+                    src: (*name).to_owned(),
+                    dst: "isize".to_owned(),
+                }),
+                ThonkInner::Index(index) => Ok(*index as isize),
+            },
+            _ => Err(ChaChaError::Conversion {
+                src: value.to_string(),
+                dst: "isize".to_owned(),
+            }),
+        }
+    }
+}
+
+impl TryFrom<&Value> for isize {
+    type Error = ChaChaError;
+
+    fn try_from(value: &Value) -> Result<Self, <isize as TryFrom<&Value>>::Error> {
+        match value {
+            Value::Float(num) => Ok(*num as isize),
+            Value::Integer(num) => Ok(*num as isize),
+            Value::String(str_) => str_.parse::<isize>().map_err(|_| ChaChaError::Conversion {
+                src: str_.to_owned(),
+                dst: "isize".to_owned(),
+            }),
+            Value::Thonk(inner) => match inner {
+                ThonkInner::Thonk(name) => Err(ChaChaError::Conversion {
+                    src: (*name).to_owned(),
+                    dst: "isize".to_owned(),
+                }),
+                ThonkInner::Index(index) => Ok(*index as isize),
+            },
+            _ => Err(ChaChaError::Conversion {
+                src: value.to_string(),
+                dst: "isize".to_owned(),
+            }),
+        }
+    }
+}
+
 impl TryFrom<Value> for i64 {
     type Error = ChaChaError;
 
     fn try_from(value: Value) -> Result<Self, <i64 as TryFrom<Value>>::Error> {
         match &value {
-            Value::Float(num) => Ok(num.to_owned() as i64),
+            Value::Float(num) => Ok(num.to_owned() as DwarfInteger),
             Value::Integer(num) => Ok(num.to_owned()),
             Value::String(str_) => str_.parse::<i64>().map_err(|_| ChaChaError::Conversion {
                 src: str_.to_owned(),
@@ -1043,7 +1101,7 @@ impl TryFrom<&Value> for i64 {
 
     fn try_from(value: &Value) -> Result<Self, <i64 as TryFrom<&Value>>::Error> {
         match value {
-            Value::Float(num) => Ok(*num as i64),
+            Value::Float(num) => Ok(*num as DwarfInteger),
             Value::Integer(num) => Ok(*num),
             Value::String(str_) => str_.parse::<i64>().map_err(|_| ChaChaError::Conversion {
                 src: str_.to_owned(),

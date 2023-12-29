@@ -22,8 +22,13 @@ pub(in crate::bubba::compiler) fn compile(
     if let Some(index) = context.get_symbol(&name) {
         thonk.add_instruction_with_span(Instruction::FetchLocal(index), span);
     } else {
+        let name = new_ref!(Value, Value::String(name));
         // We are here because we need to look up a function.
-        thonk.add_instruction(Instruction::Push(new_ref!(Value, Value::new_thonk(name))));
+        thonk.add_instruction(Instruction::CallDestination(name.clone()));
+
+        // This instruction will be patched by the VM with the number of locals in the
+        // function.
+        thonk.add_instruction(Instruction::LocalCardinality(name));
     }
 
     Ok(())

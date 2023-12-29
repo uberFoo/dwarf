@@ -82,8 +82,7 @@ pub fn eval_function_call(
             let t_span = debug_span!("async func_call", target = "async");
 
             let future = async move {
-                let mem = cloned_context.memory().clone();
-                let mut vm = VM::new_with_mem(&mem);
+                let mut vm = VM::new(cloned_context.get_program());
 
                 inner_eval_function_call(
                     func,

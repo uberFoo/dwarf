@@ -6,11 +6,10 @@ use ansi_term::Colour;
 use crossbeam::channel::{unbounded, Receiver, Sender};
 use rustc_hash::FxHashMap as HashMap;
 
-use crate::{bubba::Thonk, debug, function, interpreter::STEPPING, s_read, RefType, Value};
+use crate::{debug, function, interpreter::STEPPING, s_read, RefType, Value};
 
 #[derive(Clone, Debug)]
 pub struct Memory {
-    thonks: HashMap<String, Thonk>,
     meta: HashMap<String, HashMap<String, RefType<Value>>>,
     global: HashMap<String, RefType<Value>>,
     frames: Vec<HashMap<String, RefType<Value>>>,
@@ -18,12 +17,11 @@ pub struct Memory {
 }
 
 impl Memory {
-    pub(crate) fn new() -> (Self, Receiver<MemoryUpdateMessage>) {
+    pub fn new() -> (Self, Receiver<MemoryUpdateMessage>) {
         let (sender, receiver) = unbounded();
 
         (
             Memory {
-                thonks: HashMap::default(),
                 meta: HashMap::default(),
                 global: HashMap::default(),
                 frames: vec![HashMap::default()],
@@ -50,14 +48,6 @@ impl Memory {
                     .collect()
             })
             .collect()
-    }
-
-    pub(crate) fn insert_thonk(&mut self, thonk: Thonk) {
-        self.thonks.insert(thonk.get_name().to_owned(), thonk);
-    }
-
-    pub(crate) fn get_thonk(&self, name: &str) -> Option<&Thonk> {
-        self.thonks.get(name)
     }
 
     pub(crate) fn push_frame(&mut self) {

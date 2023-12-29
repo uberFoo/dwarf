@@ -302,7 +302,7 @@ mod test {
 
     #[allow(unused_imports)]
     use crate::{
-        bubba::{vm::Error, CallFrame, VM},
+        bubba::{vm::Error, VM},
         chacha::{
             error::ChaChaError,
             memory::Memory,
@@ -330,23 +330,8 @@ mod test {
     // this work here.
     #[allow(dead_code)]
     fn run_vm(program: &Program) -> Result<RefType<Value>, Error> {
-        let mut memory = Memory::new();
-        for thonk in program.iter() {
-            memory.0.insert_thonk(thonk.clone());
-        }
-        let mut vm = VM::new_with_mem(&memory.0);
-        let thonk = program.get_thonk("main").unwrap();
-
-        let mut frame = CallFrame::new(thonk);
-
-        vm.push_stack(new_ref!(Value, Value::new_thonk("main".to_owned())));
-        for _ in 0..thonk.get_frame_size() {
-            vm.push_stack(new_ref!(Value, Value::Empty));
-        }
-        vm.set_fp(thonk.get_frame_size() + 1);
-        vm.push_stack(new_ref!(Value, Value::Empty));
-
-        vm.run(0, &mut frame, true)
+        let mut vm = VM::new(program);
+        vm.invoke("main", &[], true)
     }
 
     #[test]
@@ -439,7 +424,7 @@ mod test {
         println!("{program}");
 
         assert_eq!(program.get_thonk_card(), 2);
-        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 4);
+        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 5);
         assert_eq!(program.get_thonk("foo").unwrap().get_instruction_card(), 4);
 
         run_vm(&program).unwrap();
@@ -494,7 +479,7 @@ mod test {
         println!("{program}");
 
         assert_eq!(program.get_thonk_card(), 2);
-        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 6);
+        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 7);
         assert_eq!(program.get_thonk("foo").unwrap().get_instruction_card(), 6);
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(6));
@@ -525,7 +510,7 @@ mod test {
         println!("{program}");
 
         assert_eq!(program.get_thonk_card(), 2);
-        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 6);
+        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 7);
         assert_eq!(program.get_thonk("foo").unwrap().get_instruction_card(), 18);
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(12));
@@ -951,9 +936,9 @@ mod test {
 
         assert_eq!(program.get_thonk_card(), 2);
 
-        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 4);
+        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 5);
 
-        assert_eq!(program.get_thonk("fib").unwrap().get_instruction_card(), 31);
+        assert_eq!(program.get_thonk("fib").unwrap().get_instruction_card(), 33);
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(55));
     }
@@ -1223,11 +1208,66 @@ mod test {
 
         assert_eq!(program.get_thonk_card(), 1);
 
+        assert_eq!(
+            program.get_thonk("main").unwrap().get_instruction_card(),
+            13
+        );
+
+        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(2));
+    }
+
+    #[test]
+    fn index_out_of_bounds() {
+        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
+        let ore = "
+                   fn main() -> int {
+                       let x = [1, 2, 3];
+                       x[3]
+                   }";
+        let ast = parse_dwarf("index_out_of_bounds", ore).unwrap();
+        let ctx = new_lu_dog(
+            "index_out_of_bounds".to_owned(),
+            Some((ore.to_owned(), &ast)),
+            &get_dwarf_home(),
+            &sarzak,
+        )
+        .unwrap();
+
+        let program = compile(&ctx).unwrap();
+
+        println!("{}", run_vm(&program).unwrap_err());
+    }
+
+    // #[test]
+    fn index_into_string() {
+        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
+        let ore = "
+                   fn main() -> string {
+                       let x = \"foo\";
+                       x[1]
+                   }";
+        let ast = parse_dwarf("index_into_string", ore).unwrap();
+        let ctx = new_lu_dog(
+            "index_into_string".to_owned(),
+            Some((ore.to_owned(), &ast)),
+            &get_dwarf_home(),
+            &sarzak,
+        )
+        .unwrap();
+
+        let program = compile(&ctx).unwrap();
+        println!("{program}");
+
+        assert_eq!(program.get_thonk_card(), 1);
+
         // assert_eq!(
         //     program.get_thonk("main").unwrap().get_instruction_card(),
         //     8
         // );
 
-        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(2));
+        assert_eq!(
+            &*s_read!(run_vm(&program).unwrap()),
+            &Value::String("o".to_owned())
+        );
     }
 }

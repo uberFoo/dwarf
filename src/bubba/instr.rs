@@ -23,13 +23,20 @@ pub enum Instruction {
     ///
     /// ### Here's a functional description of what to do.
     ///
-    /// - push a Value::Thonk onto the stack
+    /// - push a Value::Thonk onto the stack -- this is the call destination
+    /// - push the number of locals on the stack
     /// - push the arguments onto the stack in declaration order
     /// - push Instruction::Call(arity) onto the stack
     ///
     ///  ## Stack Effect
     ///
     Call(usize),
+    /// Call Destination
+    ///
+    /// This is a pseudo-instruction that stores the name of the function that
+    /// we are calling. It is patched by the VM before execution.
+    ///
+    CallDestination(RefType<Value>),
     /// Divide the top two values on the stack.
     ///
     Divide,
@@ -117,6 +124,12 @@ pub enum Instruction {
     /// Pops the value off the top of the stack for the condition.
     ///
     JumpIfTrue(isize),
+    /// Local Cardinality
+    ///
+    /// This is a pseudo-instruction to store the number of local variables in
+    /// the function. It is patched by the VM before execution.
+    ///
+    LocalCardinality(RefType<Value>),
     /// Compare the top two values on the stack.
     ///
     /// a == b
@@ -265,6 +278,12 @@ impl fmt::Display for Instruction {
                 opcode_style.paint("call"),
                 operand_style.paint(arity.to_string())
             ),
+            Instruction::CallDestination(name) => write!(
+                f,
+                "{} {}",
+                opcode_style.paint("calld"),
+                operand_style.paint(s_read!(name).to_string())
+            ),
             Instruction::Divide => write!(f, "{}", opcode_style.paint("div ")),
             Instruction::Dup => write!(f, "{}", opcode_style.paint("dup ")),
             Instruction::FetchLocal(index) => write!(
@@ -300,6 +319,12 @@ impl fmt::Display for Instruction {
                 "{} {}",
                 opcode_style.paint("jift"),
                 operand_style.paint(address.to_string())
+            ),
+            Instruction::LocalCardinality(name) => write!(
+                f,
+                "{} {}",
+                opcode_style.paint("lc  "),
+                operand_style.paint(s_read!(name).to_string())
             ),
             Instruction::TestEq => write!(f, "{}", opcode_style.paint("eq  ")),
             Instruction::TestLessThan => write!(f, "{}", opcode_style.paint("lt  ")),
@@ -368,6 +393,7 @@ impl Program {
         self.thonks.insert(thonk.name.clone(), thonk);
     }
 
+    #[allow(dead_code)]
     pub(crate) fn get_thonk(&self, name: &str) -> Option<&Thonk> {
         self.thonks.get(name)
     }
@@ -403,7 +429,7 @@ impl fmt::Display for Program {
 pub struct Thonk {
     name: String,
     pub(crate) instructions: Vec<Instruction>,
-    spans: Vec<Span>,
+    pub(crate) spans: Vec<Span>,
     frame_size: usize,
 }
 
@@ -427,11 +453,6 @@ impl Thonk {
         &self.name
     }
 
-    #[inline]
-    pub(crate) fn get_instruction(&self, index: usize) -> Option<&Instruction> {
-        self.instructions.get(index)
-    }
-
     pub(crate) fn get_instruction_card(&self) -> usize {
         self.instructions.len()
     }
@@ -443,10 +464,6 @@ impl Thonk {
     #[inline]
     pub(crate) fn get_frame_size(&self) -> usize {
         self.frame_size
-    }
-
-    pub(crate) fn get_span(&self, index: usize) -> Option<&Span> {
-        self.spans.get(index)
     }
 }
 

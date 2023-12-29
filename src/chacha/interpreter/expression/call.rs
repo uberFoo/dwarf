@@ -16,7 +16,7 @@ use snafu::{location, prelude::*, Location};
 use uuid::Uuid;
 
 use crate::{
-    bubba::{CallFrame, VM},
+    bubba::VM,
     chacha::error::{NoSuchStaticMethodSnafu, Result, TypeMismatchSnafu},
     interpreter::{
         debug, error, eval_expression, eval_function_call, eval_lambda_expression, function,
@@ -738,61 +738,26 @@ pub fn eval(
                 COMPLEX_EX => match func.as_str() {
                     NORM_SQUARED => {
                         let value = arg_values.pop_front().unwrap().0;
-                        let thonk = context.memory().get_thonk("complex_ex").unwrap();
-
-                        vm.push_stack(new_ref!(Value, "norm_squared".into()));
-                        vm.push_stack(value);
-                        vm.push_stack(new_ref!(Value, Value::Empty));
-                        vm.set_fp(thonk.get_frame_size() + 1);
-
-                        let mut frame = CallFrame::new(thonk);
                         // 🚧 It would be neat to turn the tracing on with a flag.
-                        let result = vm.run(0, &mut frame, false);
+                        let result = vm.invoke("norm_squared", &[value], true);
 
-                        vm.pop_stack();
-                        vm.pop_stack();
-                        vm.pop_stack();
                         context.increment_expression_count(2);
 
                         Ok(result.unwrap())
                     }
                     SQUARE => {
                         let value = arg_values.pop_front().unwrap().0;
-                        let thonk = context.memory().get_thonk("norm_squared").unwrap();
+                        let result = vm.invoke("square", &[value], true);
 
-                        vm.push_stack(new_ref!(Value, "square".into()));
-                        vm.push_stack(value);
-                        vm.push_stack(new_ref!(Value, Value::Empty));
-                        vm.set_fp(thonk.get_frame_size() + 1);
-
-                        let mut frame = CallFrame::new(thonk);
-                        let result = vm.run(0, &mut frame, false);
-
-                        vm.pop_stack();
-                        vm.pop_stack();
-                        vm.pop_stack();
                         context.increment_expression_count(5);
 
                         Ok(result.unwrap())
                     }
                     ADD => {
-                        let thonk = context.memory().get_thonk("add").unwrap();
+                        let lhs = arg_values.pop_front().unwrap().0;
+                        let rhs = arg_values.pop_front().unwrap().0;
+                        let result = vm.invoke("add", &[lhs, rhs], true);
 
-                        vm.push_stack(new_ref!(Value, "add".into()));
-                        let value = arg_values.pop_front().unwrap().0;
-                        vm.push_stack(value);
-                        let value = arg_values.pop_front().unwrap().0;
-                        vm.push_stack(value);
-                        vm.push_stack(new_ref!(Value, Value::Empty));
-                        vm.set_fp(thonk.get_frame_size() + 1);
-
-                        let mut frame = CallFrame::new(thonk);
-                        let result = vm.run(0, &mut frame, false);
-
-                        vm.pop_stack();
-                        vm.pop_stack();
-                        vm.pop_stack();
-                        vm.pop_stack();
                         context.increment_expression_count(2);
 
                         Ok(result.unwrap())
@@ -1028,8 +993,7 @@ pub fn eval(
                             let mut fubar = context.clone();
                             // let mut baz = fubar.executor().clone();
                             let future = async move {
-                                let mem = fubar.memory().clone();
-                                let mut vm = VM::new_with_mem(&mem);
+                                let mut vm = VM::new(fubar.get_program());
 
                                 // let func = func.clone();
 
@@ -1278,7 +1242,7 @@ fn spawn(
     // let executor_id = Executor::new_worker();
     // nested_context.set_executor_index(executor_id);
 
-    let mut child_context = context.new_worker();
+    let child_context = context.new_worker();
     let child_worker = child_context.worker().unwrap().clone();
 
     // let child_task = child_context
@@ -1286,8 +1250,7 @@ fn spawn(
     // .create_task(async move {
     let t_span = debug_span!("spawn_span", target = "async", name = ?name);
     let future = async move {
-        let mem = child_context.memory().clone();
-        let mut vm = VM::new_with_mem(&mem);
+        let mut vm = VM::new(child_context.get_program());
         let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
         let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
         if let Value::Function(func) = &func {

@@ -140,5 +140,5 @@ fn vm_5(c: &mut Criterion) {
 }
 
 // criterion_group!(benches, loop_, mandelbrot, fib, vm_28, vm_25, vm_17, vm_5);
-criterion_group!(benches, vm_28, vm_25, vm_17, vm_5);
+criterion_group!(benches, vm_25, vm_17, vm_5);
 criterion_main!(benches);

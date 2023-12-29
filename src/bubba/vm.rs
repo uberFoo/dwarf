@@ -1,18 +1,14 @@
-use std::fmt;
-
 use ansi_term::Colour;
+use rustc_hash::FxHashMap as HashMap;
 use sarzak::lu_dog::ValueType;
 use snafu::{location, prelude::*, Location};
 
 use crate::{
-    chacha::{
-        memory::Memory,
-        value::{EnumVariant, TupleEnum, UserStruct},
-    },
-    new_ref, s_read, s_write, ChaChaError, NewRef, RefType, Value,
+    chacha::value::{EnumVariant, TupleEnum, UserStruct},
+    new_ref, s_read, s_write, ChaChaError, DwarfInteger, NewRef, RefType, Span, Value,
 };
 
-use super::instr::{Instruction, Program, Thonk};
+use super::instr::{Instruction, Program};
 
 #[derive(Debug, Snafu)]
 pub struct Error(BubbaError);
@@ -36,116 +32,125 @@ pub(crate) enum BubbaError {
 
 type Result<T, E = Error> = std::result::Result<T, E>;
 
-#[derive(Debug)]
-pub struct CallFrame<'a> {
-    // This needs to be an isize due to the way that we implemented the VM.
-    // Jumps are relative, and not absolute. So we need to have negative offsets.
-    ip: isize,
-    thonk: &'a Thonk,
-}
-
-impl<'a> CallFrame<'a> {
-    pub(crate) fn new(thonk: &'a Thonk) -> Self {
-        CallFrame { ip: 0, thonk }
-    }
-
-    #[inline]
-    fn load_instruction(&mut self) -> Option<&Instruction> {
-        let instr = self.thonk.get_instruction(self.ip as usize);
-        if instr.is_some() {
-            self.ip += 1;
-        }
-
-        instr
-    }
-
-    #[inline]
-    fn size(&self) -> usize {
-        self.thonk.get_frame_size()
-    }
-
-    #[inline]
-    fn name(&self) -> &str {
-        self.thonk.get_name()
-    }
-
-    fn get_span(&self) -> std::ops::Range<usize> {
-        let span = self.thonk.get_span((self.ip - 1) as usize);
-        match span {
-            Some(span) => span.to_owned(),
-            None => 0..0,
-        }
-    }
-}
-
-impl<'a> fmt::Display for CallFrame<'a> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "ip: {}", self.ip)
-    }
-}
-
 #[derive(Clone, Debug)]
-pub struct VM<'b> {
+pub struct VM {
+    /// Instruction Pointer
+    ///
+    /// This is an isize because we have negative jump offsets.
+    ip: isize,
     /// Frame Pointer
     ///
     fp: usize,
     stack: Vec<RefType<Value>>,
-    memory: &'b Memory,
+    program: Vec<Instruction>,
+    source_map: Vec<Span>,
+    func_map: HashMap<String, (usize, usize)>,
 }
 
-impl<'b> VM<'b> {
-    pub fn new_and_run(program: &Program, entry: &str) -> Result<RefType<Value>> {
-        let memory = Memory::new();
-        let mut vm = VM::new_with_mem(&memory.0);
-
-        let thonk = program.get_thonk(entry).unwrap();
-
-        let mut frame = CallFrame::new(thonk);
-
-        vm.stack
-            .push(new_ref!(Value, Value::new_thonk(entry.to_owned())));
-        for _ in 0..thonk.get_frame_size() {
-            vm.stack.push(new_ref!(Value, Value::Empty));
-        }
-        vm.fp = thonk.get_frame_size() + 1;
-        vm.stack.push(new_ref!(Value, Value::Empty));
-
-        vm.run(0, &mut frame, false)
-    }
-
-    pub(crate) fn new_with_mem(memory: &'b Memory) -> Self {
-        VM {
+impl VM {
+    pub fn new(program: &Program) -> Self {
+        let mut vm = VM {
+            ip: 0,
             fp: 0,
-            // 🚧 These shouldn't be hard-coded, and they should be configurable.
+            // 🚧 This shouldn't be hard-coded, and they should be configurable.
             stack: Vec::with_capacity(10 * 1024 * 1024),
-            memory,
+            program: Vec::new(),
+            source_map: Vec::new(),
+            func_map: HashMap::default(),
+        };
+
+        let mut tmp_mem: Vec<Instruction> = Vec::new();
+        let mut i = 0;
+        for thonk in program.iter() {
+            tmp_mem.append(&mut thonk.instructions.clone());
+            vm.source_map.append(&mut thonk.spans.clone());
+            vm.func_map
+                .insert(thonk.get_name().to_owned(), (i, thonk.get_frame_size()));
+            i += thonk.get_instruction_card();
         }
+
+        for instr in tmp_mem.iter() {
+            match instr {
+                Instruction::CallDestination(name) => {
+                    let name: String = (&*s_read!(name)).try_into().unwrap();
+                    let (ip, _frame_size) = vm.func_map.get(&name).unwrap();
+                    vm.program.push(Instruction::Push(new_ref!(
+                        Value,
+                        Value::Integer(*ip as DwarfInteger)
+                    )));
+                }
+                Instruction::LocalCardinality(name) => {
+                    let name: String = (&*s_read!(name)).try_into().unwrap();
+                    let (_ip, frame_size) = vm.func_map.get(&name).unwrap();
+                    vm.program.push(Instruction::Push(new_ref!(
+                        Value,
+                        Value::Integer(*frame_size as DwarfInteger)
+                    )));
+                }
+                _ => vm.program.push(instr.clone()),
+            }
+        }
+
+        vm
     }
 
-    pub(crate) fn push_stack(&mut self, value: RefType<Value>) {
-        self.stack.push(value);
+    fn get_span(&self) -> Span {
+        self.source_map[(self.ip - 1) as usize].to_owned()
     }
 
-    pub(crate) fn pop_stack(&mut self) -> Option<RefType<Value>> {
-        self.stack.pop()
+    pub fn invoke(
+        &mut self,
+        func_name: &str,
+        args: &[RefType<Value>],
+        trace: bool,
+    ) -> Result<RefType<Value>> {
+        let (ip, frame_size) = self.func_map.get(func_name).unwrap();
+        let frame_size = *frame_size;
+
+        self.stack
+            .push(new_ref!(Value, Value::Integer(*ip as DwarfInteger)));
+        self.stack
+            .push(new_ref!(Value, Value::Integer(frame_size as DwarfInteger)));
+
+        for arg in args.iter() {
+            self.stack.push(arg.clone());
+        }
+
+        for _ in 0..frame_size {
+            self.stack.push(new_ref!(Value, Value::Empty));
+        }
+
+        self.fp = frame_size + args.len() + 2;
+
+        self.ip = *ip as isize;
+
+        let result = self.inner_run(args.len(), frame_size, trace);
+
+        self.stack.pop(); // fp
+        for _ in 0..frame_size {
+            self.stack.pop();
+        }
+        self.stack.pop(); // frame size
+        self.stack.pop(); // ip
+
+        result
     }
 
-    pub(crate) fn set_fp(&mut self, fp: usize) {
-        self.fp = fp;
-    }
-
-    pub(crate) fn run(
+    fn inner_run(
         &mut self,
         arity: usize,
-        frame: &mut CallFrame,
+        local_count: usize,
         trace: bool,
     ) -> Result<RefType<Value>> {
         loop {
-            let ip = frame.ip;
-            let frame_size = frame.size();
-            let func_name = frame.name().to_owned();
-            let instr = frame.load_instruction();
-            let ip_offset: isize = if let Some(instr) = instr {
+            if self.ip as usize >= self.program.len() {
+                return Err(BubbaError::IPOutOfBounds {
+                    ip: self.ip as usize,
+                }
+                .into());
+            }
+            let instr = self.program[self.ip as usize].clone();
+            let ip_offset: isize = {
                 if trace {
                     let len = self.stack.len();
                     for i in 0..len {
@@ -157,7 +162,7 @@ impl<'b> VM<'b> {
                         println!("stack {i}:\t{}", s_read!(self.stack[i]));
                     }
                     println!();
-                    println!("<{func_name}>::{ip:08x}:\t{instr}");
+                    println!("<{:08x}:\t{instr}", self.ip);
                 }
                 match instr {
                     Instruction::Add => {
@@ -177,62 +182,58 @@ impl<'b> VM<'b> {
                         // }
                         self.stack.push(new_ref!(Value, c));
 
-                        0
+                        1
                     }
                     Instruction::Call(arity) => {
-                        let callee = &self.stack[self.stack.len() - arity - 1];
+                        let callee = &self.stack[self.stack.len() - arity - 2];
                         if trace {
                             println!("\t\t{}:\t{}", Colour::Green.paint("func:"), s_read!(callee));
                         }
 
-                        let callee = match <&Value as TryInto<String>>::try_into(&*s_read!(callee))
-                        {
-                            Ok(callee) => callee,
-                            Err(e) => {
-                                return Err::<RefType<Value>, Error>(
-                                    BubbaError::VmPanic {
-                                        source: Box::new(e),
-                                    }
-                                    .into(),
-                                );
-                            }
-                        };
-                        // 🚧 This is too slow. I need to create linear memory and work within that.
-                        let thonk = self.memory.get_thonk(&callee).unwrap_or_else(|| {
-                            panic!("Panic! Thonk not found: {callee}.", callee = callee.clone())
-                        });
+                        let local_count = &self.stack[self.stack.len() - arity - 1];
+                        let local_count: usize =
+                            (&*s_read!(local_count)).try_into().map_err(|e| {
+                                BubbaError::VmPanic {
+                                    source: Box::new(e),
+                                }
+                            })?;
+
+                        let callee: isize =
+                            (&*s_read!(callee))
+                                .try_into()
+                                .map_err(|e| BubbaError::VmPanic {
+                                    source: Box::new(e),
+                                })?;
 
                         let old_fp = self.fp;
+                        let old_ip = self.ip;
 
                         // The call stack has been setup, but we need to make room
                         // for locals.
-                        for _ in 0..thonk.get_frame_size() {
+                        for _ in 0..local_count {
                             self.stack.push(new_ref!(Value, Value::Empty));
                         }
                         self.fp = self.stack.len();
                         self.stack.push(new_ref!(Value, old_fp.into()));
 
-                        let mut frame = CallFrame::new(thonk);
-
-                        if trace {
-                            println!("\t\t{}\t{}", Colour::Green.paint("frame:"), frame);
-                        }
-
-                        let result = self.run(*arity, &mut frame, trace)?;
+                        self.ip = callee;
+                        let result = self.inner_run(arity, local_count, trace)?;
 
                         // Move the frame pointer back
-                        self.fp = (&*s_read!(self.stack[self.fp])).try_into().unwrap();
+                        // self.fp = (&*s_read!(self.stack[self.fp])).try_into().unwrap();
+                        self.fp = old_fp;
+                        self.ip = old_ip;
 
                         // This is clever, I guess. Or maybe it's just hard to read on first glance.
                         // Either way, we are just using fp..stack.len() as an iterator so that we
                         // can just pop our call frame off the stack.
-                        (0..arity + thonk.get_frame_size() + 2).for_each(|_| {
+                        (0..arity + local_count + 3).for_each(|_| {
                             self.stack.pop();
                         });
 
                         self.stack.push(result);
 
-                        0
+                        1
                     }
                     Instruction::Divide => {
                         let b = self.stack.pop().unwrap();
@@ -251,14 +252,14 @@ impl<'b> VM<'b> {
                         // }
                         self.stack.push(new_ref!(Value, c));
 
-                        0
+                        1
                     }
                     Instruction::Dup => {
                         let value = self.stack.pop().unwrap();
                         self.stack.push(value.clone());
                         self.stack.push(value);
 
-                        0
+                        1
                     }
                     // The fp is pointing someplace near the end of the vec.
                     // Nominally at one past the Thonk name at the bottom of the stack.
@@ -266,10 +267,10 @@ impl<'b> VM<'b> {
                     // locals existing between the Thonk name and the fp.
                     Instruction::FetchLocal(index) => {
                         // We gotta index the stack in reverse order.
-                        let value = self.stack[self.fp - arity - frame_size + index].clone();
+                        let value = self.stack[self.fp - arity - local_count + index].clone();
                         self.stack.push(value);
 
-                        0
+                        1
                     }
                     Instruction::FieldRead => {
                         let field = self.stack.pop().unwrap();
@@ -335,7 +336,7 @@ impl<'b> VM<'b> {
                                 return Err::<RefType<Value>, Error>(
                                     BubbaError::VmPanic {
                                         source: Box::new(ChaChaError::BadnessHappened {
-                                            message: format!("Unexpected value type: {value}."),
+                                            message: format!("Unexpected value: {value}."),
                                             location: location!(),
                                         }),
                                     }
@@ -344,7 +345,7 @@ impl<'b> VM<'b> {
                             }
                         }
 
-                        0
+                        1
                     }
                     Instruction::FieldWrite => {
                         let field = self.stack.pop().unwrap();
@@ -423,7 +424,7 @@ impl<'b> VM<'b> {
                             }
                         }
 
-                        0
+                        1
                     }
                     Instruction::HaltAndCatchFire => {
                         return Err(BubbaError::HaltAndCatchFire.into());
@@ -444,7 +445,7 @@ impl<'b> VM<'b> {
                                             source: Box::new(ChaChaError::IndexOutOfBounds {
                                                 index,
                                                 len: vec.len(),
-                                                span: frame.get_span(),
+                                                span: self.get_span(),
                                                 location: location!(),
                                             }),
                                         }
@@ -467,7 +468,7 @@ impl<'b> VM<'b> {
                                             source: Box::new(ChaChaError::IndexOutOfBounds {
                                                 index,
                                                 len: str.len(),
-                                                span: frame.get_span(),
+                                                span: self.get_span(),
                                                 location: location!(),
                                             }),
                                         }
@@ -476,7 +477,7 @@ impl<'b> VM<'b> {
                                 } else {
                                     return Err(BubbaError::VmPanic {
                                         source: Box::new(ChaChaError::NotIndexable {
-                                            span: frame.get_span(),
+                                            span: self.get_span(),
                                             location: location!(),
                                         }),
                                     }
@@ -548,7 +549,7 @@ impl<'b> VM<'b> {
                             _ => unreachable!(),
                         }
 
-                        0
+                        1
                     }
                     Instruction::Jump(offset) => {
                         if trace {
@@ -557,10 +558,10 @@ impl<'b> VM<'b> {
                                 Colour::Red.bold().paint("jmp"),
                                 Colour::Yellow
                                     .bold()
-                                    .paint(format!("0x{:08x}", ip + offset + 1))
+                                    .paint(format!("0x{:08x}", self.ip + offset + 1))
                             );
                         }
-                        *offset
+                        offset + 1
                     }
                     Instruction::JumpIfFalse(offset) => {
                         let condition = self.stack.pop().unwrap();
@@ -578,12 +579,12 @@ impl<'b> VM<'b> {
                                     Colour::Red.bold().paint("jiff"),
                                     Colour::Yellow
                                         .bold()
-                                        .paint(format!("0x{:08x}", ip + offset + 1))
+                                        .paint(format!("0x{:08x}", self.ip + offset + 1))
                                 );
                             }
-                            *offset
+                            offset + 1
                         } else {
-                            0
+                            1
                         }
                     }
                     Instruction::JumpIfTrue(offset) => {
@@ -602,12 +603,12 @@ impl<'b> VM<'b> {
                                     Colour::Red.bold().paint("jift"),
                                     Colour::Yellow
                                         .bold()
-                                        .paint(format!("0x{:08x}", ip + offset + 1))
+                                        .paint(format!("0x{:08x}", self.ip + offset + 1))
                                 );
                             }
-                            *offset
+                            offset + 1
                         } else {
-                            0
+                            1
                         }
                     }
                     Instruction::Multiply => {
@@ -627,7 +628,7 @@ impl<'b> VM<'b> {
                         // }
                         self.stack.push(new_ref!(Value, c));
 
-                        0
+                        1
                     }
                     Instruction::NewList(n) => {
                         if trace {
@@ -648,9 +649,9 @@ impl<'b> VM<'b> {
 
                         let ty = new_ref!(ValueType, ty);
 
-                        let mut values = Vec::with_capacity(*n);
+                        let mut values = Vec::with_capacity(n);
 
-                        for _i in 0..*n {
+                        for _i in 0..n {
                             let value = self.stack.pop().unwrap();
                             values.push(value.clone());
                             if trace {
@@ -663,7 +664,7 @@ impl<'b> VM<'b> {
                         self.stack
                             .push(new_ref!(Value, Value::Vector { ty, inner: values }));
 
-                        0
+                        1
                     }
                     Instruction::NewTupleEnum(n) => {
                         if trace {
@@ -708,9 +709,9 @@ impl<'b> VM<'b> {
 
                         let ty = new_ref!(ValueType, ty);
 
-                        let mut values = Vec::with_capacity(*n);
+                        let mut values = Vec::with_capacity(n);
 
-                        for _i in 0..*n {
+                        for _i in 0..n {
                             let value = self.stack.pop().unwrap();
                             values.push(value.clone());
                             if trace {
@@ -726,7 +727,7 @@ impl<'b> VM<'b> {
                             Value::Enumeration(EnumVariant::Tuple((ty, path), user_enum))
                         ));
 
-                        0
+                        1
                     }
                     Instruction::NewUserType(n) => {
                         if trace {
@@ -761,7 +762,7 @@ impl<'b> VM<'b> {
 
                         let mut inst = UserStruct::new(name, &ty);
 
-                        for _i in 0..*n {
+                        for _i in 0..n {
                             let name = self.stack.pop().unwrap();
                             let value = self.stack.pop().unwrap();
 
@@ -778,7 +779,7 @@ impl<'b> VM<'b> {
                             println!("\t\t\t\t}}");
                         }
 
-                        0
+                        1
                     }
                     Instruction::Out(stream) => {
                         let value = self.stack.pop().unwrap();
@@ -800,24 +801,20 @@ impl<'b> VM<'b> {
                             }
                         };
 
-                        0
+                        1
                     }
                     Instruction::Pop => {
                         self.stack.pop();
 
-                        0
+                        1
                     }
                     Instruction::Push(value) => {
                         self.stack.push(value.clone());
 
-                        0
+                        1
                     }
                     Instruction::Return => {
                         let result = self.stack.pop().unwrap();
-                        // dbg!(&self.stack);
-                        // for _ in 0..fp {
-                        //     self.stack.pop();
-                        // }
                         return Ok(result);
                     }
                     // The fp is pointing someplace near the end of the vec.
@@ -827,9 +824,9 @@ impl<'b> VM<'b> {
                     Instruction::StoreLocal(index) => {
                         let value = self.stack.pop().unwrap();
                         // We gotta index into the stack in reverse order from the index.
-                        self.stack[self.fp - arity - frame_size + index] = value;
+                        self.stack[self.fp - arity - local_count + index] = value;
 
-                        0
+                        1
                     }
                     Instruction::Subtract => {
                         let b = self.stack.pop().unwrap();
@@ -849,7 +846,7 @@ impl<'b> VM<'b> {
 
                         self.stack.push(new_ref!(Value, c));
 
-                        0
+                        1
                     }
                     Instruction::TestEq => {
                         let b = self.stack.pop().unwrap();
@@ -857,7 +854,7 @@ impl<'b> VM<'b> {
                         self.stack
                             .push(new_ref!(Value, Value::Boolean(*s_read!(a) == *s_read!(b))));
 
-                        0
+                        1
                     }
                     Instruction::TestLessThan => {
                         let b = self.stack.pop().unwrap();
@@ -865,7 +862,7 @@ impl<'b> VM<'b> {
                         self.stack
                             .push(new_ref!(Value, Value::Boolean(s_read!(a).lt(&s_read!(b)))));
 
-                        0
+                        1
                     }
                     Instruction::TestLessThanOrEqual => {
                         let b = self.stack.pop().unwrap();
@@ -873,7 +870,7 @@ impl<'b> VM<'b> {
                         self.stack
                             .push(new_ref!(Value, Value::Boolean(s_read!(a).lte(&s_read!(b)))));
 
-                        0
+                        1
                     }
                     invalid => {
                         return Err(BubbaError::InvalidInstruction {
@@ -882,17 +879,9 @@ impl<'b> VM<'b> {
                         .into())
                     }
                 }
-            } else {
-                return Err(BubbaError::VmPanic {
-                    source: Box::new(ChaChaError::BadnessHappened {
-                        message: "ip out of bounds".to_string(),
-                        location: location!(),
-                    }),
-                }
-                .into());
             };
 
-            frame.ip += ip_offset;
+            self.ip += ip_offset;
         }
     }
 }
@@ -904,6 +893,7 @@ mod tests {
     use tracy_client::Client;
 
     use crate::{
+        bubba::instr::Thonk,
         dwarf::{DwarfFloat, DwarfInteger},
         interpreter::{initialize_interpreter, PrintableValueType},
         Context,
@@ -911,46 +901,40 @@ mod tests {
 
     use super::*;
 
+    const VERSION: &str = env!("CARGO_PKG_VERSION");
+    pub const BUILD_TIME: &str = include!(concat!(env!("OUT_DIR"), "/timestamp.txt"));
+
     #[test]
-    fn test_instr_constant() {
-        let memory = Memory::new();
-        let mut vm = VM::new_with_mem(&memory.0);
+    fn instr_constant() {
         let mut thonk = Thonk::new("test".to_string());
 
         thonk.add_instruction(Instruction::Push(new_ref!(Value, 42.into())), None);
         println!("{}", thonk);
 
-        let mut frame = CallFrame::new(&thonk);
-        // vm.frames.push(frame);
+        let mut program = Program::new(VERSION.to_owned(), BUILD_TIME.to_owned());
+        program.add_thonk(thonk);
 
-        let result = vm.run(0, &mut frame, true);
+        let mut vm = VM::new(&program);
+        let result = vm.invoke("test", &[], true);
         println!("{:?}", result);
         println!("{:?}", vm);
 
         assert!(result.is_err());
-
-        let tos = vm.stack.pop().unwrap();
-        let as_int: DwarfInteger = (&*s_read!(tos)).try_into().unwrap();
-        assert_eq!(as_int, 42);
-
-        // let mut frame = vm.frames.pop().unwrap();
-        // assert_eq!(frame.ip, 1);
     }
 
     #[test]
     fn test_instr_return() {
-        let memory = Memory::new();
-        let mut vm = VM::new_with_mem(&memory.0);
         let mut thonk = Thonk::new("test".to_string());
 
         thonk.add_instruction(Instruction::Push(new_ref!(Value, 42.into())), None);
         thonk.add_instruction(Instruction::Return, None);
         println!("{}", thonk);
 
-        let mut frame = CallFrame::new(&thonk);
-        // vm.frames.push(frame);
+        let mut program = Program::new(VERSION.to_owned(), BUILD_TIME.to_owned());
+        program.add_thonk(thonk);
 
-        let result = vm.run(0, &mut frame, true);
+        let mut vm = VM::new(&program);
+        let result = vm.invoke("test", &[], true);
         println!("{:?}", result);
         println!("{:?}", vm);
 
@@ -967,8 +951,6 @@ mod tests {
 
     #[test]
     fn test_instr_add() {
-        let memory = Memory::new();
-        let mut vm = VM::new_with_mem(&memory.0);
         let mut thonk = Thonk::new("test".to_string());
 
         thonk.add_instruction(Instruction::Push(new_ref!(Value, 42.into())), None);
@@ -977,10 +959,11 @@ mod tests {
         thonk.add_instruction(Instruction::Return, None);
         println!("{}", thonk);
 
-        let mut frame = CallFrame::new(&thonk);
-        // vm.frames.push(frame);
+        let mut program = Program::new(VERSION.to_owned(), BUILD_TIME.to_owned());
+        program.add_thonk(thonk);
 
-        let result = vm.run(0, &mut frame, true);
+        let mut vm = VM::new(&program);
+        let result = vm.invoke("test", &[], true);
         println!("{:?}", result);
         println!("{:?}", vm);
 
@@ -997,8 +980,6 @@ mod tests {
 
     #[test]
     fn test_instr_subtract() {
-        let memory = Memory::new();
-        let mut vm = VM::new_with_mem(&memory.0);
         let mut thonk = Thonk::new("test".to_string());
 
         thonk.add_instruction(Instruction::Push(new_ref!(Value, 111.into())), None);
@@ -1007,10 +988,11 @@ mod tests {
         thonk.add_instruction(Instruction::Return, None);
         println!("{}", thonk);
 
-        let mut frame = CallFrame::new(&thonk);
-        // vm.frames.push(frame);
+        let mut program = Program::new(VERSION.to_owned(), BUILD_TIME.to_owned());
+        program.add_thonk(thonk);
 
-        let result = vm.run(0, &mut frame, true);
+        let mut vm = VM::new(&program);
+        let result = vm.invoke("test", &[], true);
         println!("{:?}", result);
         println!("{:?}", vm);
 
@@ -1026,8 +1008,6 @@ mod tests {
 
     #[test]
     fn test_instr_multiply() {
-        let memory = Memory::new();
-        let mut vm = VM::new_with_mem(&memory.0);
         let mut thonk = Thonk::new("test".to_string());
 
         thonk.add_instruction(Instruction::Push(new_ref!(Value, 42.into())), None);
@@ -1036,10 +1016,11 @@ mod tests {
         thonk.add_instruction(Instruction::Return, None);
         println!("{}", thonk);
 
-        let mut frame = CallFrame::new(&thonk);
-        // vm.frames.push(frame);
+        let mut program = Program::new(VERSION.to_owned(), BUILD_TIME.to_owned());
+        program.add_thonk(thonk);
 
-        let result = vm.run(0, &mut frame, true);
+        let mut vm = VM::new(&program);
+        let result = vm.invoke("test", &[], true);
         println!("{:?}", result);
         println!("{:?}", vm);
 
@@ -1054,8 +1035,6 @@ mod tests {
     #[test]
     fn test_instr_less_than_or_equal() {
         // False Case
-        let memory = Memory::new();
-        let mut vm = VM::new_with_mem(&memory.0);
         let mut thonk = Thonk::new("test".to_string());
 
         thonk.add_instruction(Instruction::Push(new_ref!(Value, 111.into())), None);
@@ -1064,10 +1043,11 @@ mod tests {
         thonk.add_instruction(Instruction::Return, None);
         println!("{}", thonk);
 
-        let mut frame = CallFrame::new(&thonk);
-        // vm.frames.push(frame);
+        let mut program = Program::new(VERSION.to_owned(), BUILD_TIME.to_owned());
+        program.add_thonk(thonk);
 
-        let result = vm.run(0, &mut frame, true);
+        let mut vm = VM::new(&program);
+        let result = vm.invoke("test", &[], true);
         println!("{:?}", result);
         println!("{:?}", vm);
 
@@ -1081,8 +1061,6 @@ mod tests {
         // assert_eq!(frame.ip, 4);
 
         // True case: less than
-        let memory = Memory::new();
-        let mut vm = VM::new_with_mem(&memory.0);
         let mut thonk = Thonk::new("test".to_string());
 
         thonk.add_instruction(Instruction::Push(new_ref!(Value, 42.into())), None);
@@ -1091,10 +1069,11 @@ mod tests {
         thonk.add_instruction(Instruction::Return, None);
         println!("{}", thonk);
 
-        let mut frame = CallFrame::new(&thonk);
-        // vm.frames.push(frame);
+        let mut program = Program::new(VERSION.to_owned(), BUILD_TIME.to_owned());
+        program.add_thonk(thonk);
 
-        let result = vm.run(0, &mut frame, true);
+        let mut vm = VM::new(&program);
+        let result = vm.invoke("test", &[], true);
         println!("{:?}", result);
         println!("{:?}", vm);
 
@@ -1108,8 +1087,6 @@ mod tests {
         // assert_eq!(frame.ip, 4);
 
         // True case: equal
-        let memory = Memory::new();
-        let mut vm = VM::new_with_mem(&memory.0);
         let mut thonk = Thonk::new("test".to_string());
 
         thonk.add_instruction(Instruction::Push(new_ref!(Value, 42.into())), None);
@@ -1118,10 +1095,11 @@ mod tests {
         thonk.add_instruction(Instruction::Return, None);
         println!("{}", thonk);
 
-        let mut frame = CallFrame::new(&thonk);
-        // vm.frames.push(frame);
+        let mut program = Program::new(VERSION.to_owned(), BUILD_TIME.to_owned());
+        program.add_thonk(thonk);
 
-        let result = vm.run(0, &mut frame, true);
+        let mut vm = VM::new(&program);
+        let result = vm.invoke("test", &[], true);
         println!("{:?}", result);
         println!("{:?}", vm);
 
@@ -1138,8 +1116,6 @@ mod tests {
 
     #[test]
     fn test_instr_jump_if_false() {
-        let memory = Memory::new();
-        let mut vm = VM::new_with_mem(&memory.0);
         let mut thonk = Thonk::new("test".to_string());
 
         thonk.add_instruction(Instruction::Push(new_ref!(Value, 69.into())), None);
@@ -1158,10 +1134,11 @@ mod tests {
         thonk.add_instruction(Instruction::Return, None);
         println!("{}", thonk);
 
-        let mut frame = CallFrame::new(&thonk);
-        // vm.frames.push(frame);
+        let mut program = Program::new(VERSION.to_owned(), BUILD_TIME.to_owned());
+        program.add_thonk(thonk);
 
-        let result = vm.run(0, &mut frame, true);
+        let mut vm = VM::new(&program);
+        let result = vm.invoke("test", &[], true);
         println!("{:?}", result);
         println!("{:?}", vm);
 
@@ -1177,33 +1154,25 @@ mod tests {
     }
 
     #[test]
-    fn test_instr_fetch_local() {
+    fn test_instr_store_fetch_local() {
         // Simple
-        let memory = Memory::new();
-        let mut vm = VM::new_with_mem(&memory.0);
         let mut thonk = Thonk::new("test".to_string());
-
-        vm.stack.push(new_ref!(
-            Value,
-            "this would normally be a function at the top of the call frame".into()
-        ));
-        vm.stack.push(new_ref!(Value, 42.into()));
-
+        thonk.increment_frame_size();
+        thonk.add_instruction(Instruction::Push(new_ref!(Value, 42.into())), None);
+        thonk.add_instruction(Instruction::StoreLocal(0), None);
         thonk.add_instruction(Instruction::FetchLocal(0), None);
         thonk.add_instruction(Instruction::Return, None);
         println!("{}", thonk);
+        let mut program = Program::new(VERSION.to_owned(), BUILD_TIME.to_owned());
+        program.add_thonk(thonk);
 
-        vm.fp = 2;
-        vm.stack.push(new_ref!(Value, Value::Empty));
+        let mut vm = VM::new(&program);
 
-        let mut frame = CallFrame::new(&thonk);
-        // vm.frames.push(frame);
-
-        let result = vm.run(1, &mut frame, true);
+        let result = vm.invoke("test", &[], true);
         println!("{:?}", result);
         println!("{:?}", vm);
 
-        assert!(vm.stack.len() == 3);
+        assert!(vm.stack.is_empty());
 
         assert!(result.is_ok());
 
@@ -1256,24 +1225,24 @@ mod tests {
         foo_inst.define_field("bar", new_ref!(Value, 42.into()));
         foo_inst.define_field("baz", new_ref!(Value, std::f64::consts::PI.into()));
 
-        let memory = Memory::new();
-        let mut vm = VM::new_with_mem(&memory.0);
         let mut thonk = Thonk::new("test".to_string());
-
-        vm.stack.push(new_ref!(
-            Value,
-            Value::Struct(new_ref!(UserStruct, foo_inst))
-        ));
-        vm.stack.push(new_ref!(Value, "baz".into()));
-
+        thonk.add_instruction(
+            Instruction::Push(new_ref!(
+                Value,
+                Value::Struct(new_ref!(UserStruct, foo_inst))
+            )),
+            None,
+        );
+        thonk.add_instruction(Instruction::Push(new_ref!(Value, "baz".into())), None);
         thonk.add_instruction(Instruction::FieldRead, None);
         thonk.add_instruction(Instruction::Return, None);
         println!("{}", thonk);
+        let mut program = Program::new(VERSION.to_owned(), BUILD_TIME.to_owned());
+        program.add_thonk(thonk);
 
-        let mut frame = CallFrame::new(&thonk);
-        // vm.frames.push(frame);
+        let mut vm = VM::new(&program);
 
-        let result = vm.run(0, &mut frame, true);
+        let result = vm.invoke("test", &[], true);
         println!("{:?}", result);
         println!("{:?}", vm);
 
@@ -1283,163 +1252,5 @@ mod tests {
 
         let result: DwarfFloat = (&*s_read!(result.unwrap())).try_into().unwrap();
         assert_eq!(result, std::f64::consts::PI);
-    }
-
-    #[test]
-    fn test_instr_fetch_local_nested() {
-        // Nested
-        let memory = Memory::new();
-        let mut vm = VM::new_with_mem(&memory.0);
-        let mut thonk = Thonk::new("test".to_string());
-
-        vm.stack.push(new_ref!(
-            Value,
-            "this would normally be a function at the top (bottom?) of the call frame".into()
-        ));
-        vm.stack
-            .push(new_ref!(Value, <i32 as Into<Value>>::into(-1)));
-        vm.stack.push(new_ref!(Value, 42.into()));
-        vm.stack.push(new_ref!(Value, Value::Integer(-1)));
-
-        thonk.add_instruction(Instruction::FetchLocal(1), None);
-        thonk.add_instruction(Instruction::Return, None);
-        println!("{}", thonk);
-
-        vm.fp = 4;
-        vm.stack.push(new_ref!(Value, Value::Empty));
-
-        let mut frame = CallFrame::new(&thonk);
-        // vm.frames.push(frame);
-
-        let result = vm.run(3, &mut frame, true);
-        println!("{:?}", result);
-        println!("{:?}", vm);
-
-        assert!(vm.stack.len() == 5);
-
-        assert!(result.is_ok());
-
-        let result: DwarfInteger = (&*s_read!(result.unwrap())).try_into().unwrap();
-        assert_eq!(result, 42);
-
-        // let mut frame = vm.frames.pop().unwrap();
-        // assert_eq!(frame.ip, 2);
-    }
-
-    #[test]
-    fn test_instr_modify_local() {
-        let memory = Memory::new();
-        let mut vm = VM::new_with_mem(&memory.0);
-        let mut thonk = Thonk::new("test".to_string());
-
-        vm.stack.push(new_ref!(
-            Value,
-            "this would normally be a function at the top (bottom?) of the call frame".into()
-        ));
-        vm.stack
-            .push(new_ref!(Value, <i32 as Into<Value>>::into(-1)));
-        vm.stack.push(new_ref!(Value, Value::Integer(-1)));
-        vm.stack.push(new_ref!(Value, Value::Integer(-1)));
-
-        thonk.add_instruction(Instruction::Push(new_ref!(Value, 42.into())), None);
-        thonk.add_instruction(Instruction::StoreLocal(1), None);
-        thonk.add_instruction(Instruction::FetchLocal(1), None);
-        thonk.add_instruction(Instruction::Return, None);
-        println!("{}", thonk);
-
-        vm.fp = 4;
-        vm.stack.push(new_ref!(Value, Value::Empty));
-
-        let mut frame = CallFrame::new(&thonk);
-        // vm.frames.push(frame);
-
-        let result = vm.run(3, &mut frame, true);
-        println!("{:?}", result);
-        println!("{:?}", vm);
-
-        assert!(vm.stack.len() == 5);
-
-        assert!(result.is_ok());
-
-        let result: DwarfInteger = (&*s_read!(result.unwrap())).try_into().unwrap();
-        assert_eq!(result, 42);
-    }
-
-    #[test]
-    fn test_instr_call() {
-        let mut memory = Memory::new();
-        let mut thonk = Thonk::new("fib".to_string());
-
-        // Get the parameter off the stack
-        thonk.add_instruction(Instruction::FetchLocal(0), None);
-        thonk.add_instruction(Instruction::Push(new_ref!(Value, 1.into())), None);
-        // Check if it's <= 1
-        thonk.add_instruction(Instruction::TestLessThanOrEqual, None);
-        thonk.add_instruction(Instruction::JumpIfFalse(2), None);
-        // If false return 1
-        thonk.add_instruction(Instruction::Push(new_ref!(Value, 1.into())), None);
-        thonk.add_instruction(Instruction::Return, None);
-        // return fib(n-1) + fib(n-2)
-        // Load fib
-        thonk.add_instruction(
-            Instruction::Push(new_ref!(Value, Value::new_thonk("fib".to_owned()))),
-            None,
-        );
-        // load n
-        thonk.add_instruction(Instruction::FetchLocal(0), None);
-        // load 1
-        thonk.add_instruction(Instruction::Push(new_ref!(Value, 1.into())), None);
-        // subtract
-        thonk.add_instruction(Instruction::Subtract, None);
-        // Call fib(n-1)
-        thonk.add_instruction(Instruction::Call(1), None);
-        // load fib
-        thonk.add_instruction(
-            Instruction::Push(new_ref!(Value, Value::new_thonk("fib".to_owned()))),
-            None,
-        );
-        // load n
-        thonk.add_instruction(Instruction::FetchLocal(0), None);
-        // load 2
-        thonk.add_instruction(Instruction::Push(new_ref!(Value, 2.into())), None);
-        // subtract
-        thonk.add_instruction(Instruction::Subtract, None);
-        // Call fib(n-2)
-        thonk.add_instruction(Instruction::Call(1), None);
-        // add
-        thonk.add_instruction(Instruction::Add, None);
-        thonk.add_instruction(Instruction::Return, None);
-        thonk.increment_frame_size();
-        println!("{}", thonk);
-
-        // put fib in memory
-        memory.0.insert_thonk(thonk.clone());
-
-        let mut frame = CallFrame::new(&thonk);
-
-        let mut vm = VM::new_with_mem(&memory.0);
-
-        // Push the func
-        vm.stack.push(new_ref!(Value, "fib".into()));
-        // Push the argument
-        vm.stack.push(new_ref!(Value, 20.into()));
-
-        // vm.frames.push(frame);
-        vm.fp = 2;
-        vm.stack.push(new_ref!(Value, Value::Empty));
-
-        let result = vm.run(0, &mut frame, false);
-        println!("{:?}", result);
-        println!("{:?}", vm);
-
-        assert_eq!(vm.stack.len(), 3);
-
-        assert!(result.is_ok());
-
-        let result: DwarfInteger = (&*s_read!(result.unwrap())).try_into().unwrap();
-        assert_eq!(result, 10946);
-
-        // let mut frame = vm.frames.pop().unwrap();
-        // assert_eq!(frame.ip, 8);
     }
 }

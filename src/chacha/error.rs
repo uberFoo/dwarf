@@ -61,6 +61,9 @@ pub enum ChaChaError {
         src: String,
         span: Span,
     },
+    /// Index out of bounds
+    ///
+    #[snafu(display("\n{}: index `{}` is out of bounds for array of length `{}`.", ERR_CLR.bold().paint("error"), POP_CLR.paint(index.to_string()), POP_CLR.paint(len.to_string())))]
     IndexOutOfBounds {
         index: usize,
         len: usize,

@@ -21,7 +21,7 @@ use dap::{prelude::BasicClient, server::Server};
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
 #[cfg(feature = "async")]
-use dwarf::{ref_to_inner, Value};
+use dwarf::ref_to_inner;
 
 use dwarf::{
     bubba::{compiler::compile, VM},
@@ -31,8 +31,9 @@ use dwarf::{
         interpreter::{banner2, initialize_interpreter, start_func, start_repl},
     },
     dwarf::{new_lu_dog, parse_dwarf},
+    new_ref,
     sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL},
-    Context,
+    Context, NewRef, RefType, Value,
 };
 use reqwest::Url;
 #[cfg(feature = "tracy")]
@@ -261,7 +262,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         if let Ok(program) = compile(&ctx) {
             println!("running in the VM");
-            VM::new_and_run(&program, "main")?;
+
+            let args: Vec<RefType<Value>> = dwarf_args
+                .into_iter()
+                .map(|a| new_ref!(Value, a.into()))
+                .collect();
+
+            let mut vm = VM::new(&program);
+            vm.invoke("main", &args, false)?;
             return Ok(());
         }
 
