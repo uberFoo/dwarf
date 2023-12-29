@@ -33,7 +33,6 @@ pub(in crate::bubba::compiler) fn compile(
             let mut pe = s_read!(x_path).r97_path_element(&lu_dog)[0].clone();
             let mut path = vec![s_read!(pe).name.to_owned()];
 
-            // Get the last path element.
             while s_read!(pe).next.is_some() {
                 let id = {
                     let id = &s_read!(pe).next;
@@ -50,7 +49,7 @@ pub(in crate::bubba::compiler) fn compile(
             let path = path.join("::");
 
             //
-            // This is where we give the enums actual values -- the rubber hits the road.
+            // This is where the rubber hits the road -- we give the enums actual values.
             if field_exprs.is_empty() {
                 let value = new_ref!(
                     Value,
