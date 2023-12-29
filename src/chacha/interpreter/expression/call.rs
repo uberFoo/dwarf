@@ -682,7 +682,6 @@ pub fn eval(
         //
         (CallEnum::StaticMethodCall(ref meth), _) => {
             let meth = s_read!(lu_dog).exhume_static_method_call(meth).unwrap();
-            let call = s_read!(meth).r30_call(&s_read!(lu_dog))[0].clone();
 
             let arg_check = s_read!(call).arg_check;
             if arg_check {
@@ -739,7 +738,7 @@ pub fn eval(
                     NORM_SQUARED => {
                         let value = arg_values.pop_front().unwrap().0;
                         // 🚧 It would be neat to turn the tracing on with a flag.
-                        let result = vm.invoke("norm_squared", &[value], true);
+                        let result = vm.invoke("norm_squared", &[value], false);
 
                         context.increment_expression_count(2);
 
@@ -747,7 +746,7 @@ pub fn eval(
                     }
                     SQUARE => {
                         let value = arg_values.pop_front().unwrap().0;
-                        let result = vm.invoke("square", &[value], true);
+                        let result = vm.invoke("square", &[value], false);
 
                         context.increment_expression_count(5);
 
@@ -756,7 +755,7 @@ pub fn eval(
                     ADD => {
                         let lhs = arg_values.pop_front().unwrap().0;
                         let rhs = arg_values.pop_front().unwrap().0;
-                        let result = vm.invoke("add", &[lhs, rhs], true);
+                        let result = vm.invoke("add", &[lhs, rhs], false);
 
                         context.increment_expression_count(2);
 

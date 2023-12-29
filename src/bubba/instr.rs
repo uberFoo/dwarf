@@ -300,7 +300,7 @@ impl fmt::Display for Instruction {
                 operand_style.paint(count.to_string())
             ),
             Instruction::FieldWrite => write!(f, "{}", opcode_style.paint("field_write")),
-            Instruction::HaltAndCatchFire => write!(f, "{}", opcode_style.paint("🔥   ")),
+            Instruction::HaltAndCatchFire => write!(f, "{}", opcode_style.paint("hcf 🔥")),
             Instruction::Index => write!(f, "{}", opcode_style.paint("idx ")),
             Instruction::Jump(offset) => write!(
                 f,

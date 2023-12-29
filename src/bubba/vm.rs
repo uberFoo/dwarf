@@ -120,6 +120,7 @@ impl VM {
             self.stack.push(new_ref!(Value, Value::Empty));
         }
 
+        self.stack.push(new_ref!(Value, Value::Empty));
         self.fp = frame_size + args.len() + 2;
 
         self.ip = *ip as isize;
@@ -128,6 +129,9 @@ impl VM {
 
         self.stack.pop(); // fp
         for _ in 0..frame_size {
+            self.stack.pop();
+        }
+        for _ in 0..args.len() {
             self.stack.pop();
         }
         self.stack.pop(); // frame size
@@ -232,7 +236,6 @@ impl VM {
                         });
 
                         self.stack.push(result);
-
                         1
                     }
                     Instruction::Divide => {

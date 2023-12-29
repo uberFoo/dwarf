@@ -258,7 +258,7 @@ fn compile_expression(
 ) -> Result<()> {
     match &s_read!(expression).subtype {
         ExpressionEnum::Block(ref block) => block::compile(block, thonk, context)?,
-        ExpressionEnum::Call(ref call) => call::compile(call, thonk, context)?,
+        ExpressionEnum::Call(ref call) => call::compile(call, thonk, context, span)?,
         ExpressionEnum::FieldExpression(ref field) => {
             field::compile_field_expression(field, thonk, context)?
         }
@@ -516,7 +516,7 @@ mod test {
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(12));
     }
 
-    // #[test]
+    #[test]
     fn test_argument_ordering() {
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "fn main() {
@@ -540,10 +540,10 @@ mod test {
         println!("{program}");
 
         assert_eq!(program.get_thonk_card(), 2);
-        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 6);
-        assert_eq!(program.get_thonk("foo").unwrap().get_instruction_card(), 18);
+        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 7);
+        assert_eq!(program.get_thonk("foo").unwrap().get_instruction_card(), 17);
 
-        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(12));
+        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Empty);
     }
 
     #[test]
