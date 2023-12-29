@@ -188,6 +188,28 @@ impl VM {
 
                         1
                     }
+                    Instruction::And => {
+                        let b = self.stack.pop().unwrap();
+                        let a = self.stack.pop().unwrap();
+                        if trace {
+                            println!(
+                                "\t\t{}\t{},\t{}",
+                                Colour::Green.paint("and:"),
+                                s_read!(a),
+                                s_read!(b),
+                            );
+                        }
+                        let c = Value::Boolean(
+                            (&*s_read!(a)).try_into().unwrap()
+                                && (&*s_read!(b)).try_into().unwrap(),
+                        );
+                        // if let Value::Error(e) = &c {
+                        //     return Err(BubbaError::VmPanic { cause: Box::new(e) });
+                        // }
+                        self.stack.push(new_ref!(Value, c));
+
+                        1
+                    }
                     Instruction::Call(arity) => {
                         let callee = &self.stack[self.stack.len() - arity - 2];
                         if trace {
@@ -781,6 +803,28 @@ impl VM {
                         if trace {
                             println!("\t\t\t\t}}");
                         }
+
+                        1
+                    }
+                    Instruction::Or => {
+                        let b = self.stack.pop().unwrap();
+                        let a = self.stack.pop().unwrap();
+                        if trace {
+                            println!(
+                                "\t\t{}\t{},\t{}",
+                                Colour::Green.paint("or:"),
+                                s_read!(a),
+                                s_read!(b),
+                            );
+                        }
+                        let c = Value::Boolean(
+                            (&*s_read!(a)).try_into().unwrap()
+                                || (&*s_read!(b)).try_into().unwrap(),
+                        );
+                        // if let Value::Error(e) = &c {
+                        //     return Err(BubbaError::VmPanic { cause: Box::new(e) });
+                        // }
+                        self.stack.push(new_ref!(Value, c));
 
                         1
                     }

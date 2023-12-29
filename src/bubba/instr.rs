@@ -15,6 +15,15 @@ pub enum Instruction {
     /// The instruction will pop two values from the stack, and push one.
     /// Therefore the stack will be one element shorter after this instruction.
     Add,
+    /// Operator And
+    ///
+    /// Take the first two values off the stack and perform a logical and on them.
+    /// The result is pushed onto the stack.
+    ///
+    /// ## Stack Effect
+    ///
+    /// The stack is one element shorter after this instruction.
+    And,
     /// Call a function with the given arity.
     ///
     /// ## Calling Convention
@@ -219,6 +228,15 @@ pub enum Instruction {
     /// ## Stack Effect
     ///
     NewUserType(usize),
+    /// Operator Or
+    ///
+    /// Take the first two values off the stack and perform a logical or on them.
+    /// The result is pushed onto the stack.
+    ///
+    /// ## Stack Effect
+    ///
+    /// The stack is one element shorter after this instruction.
+    Or,
     /// Write a Value
     ///
     /// This function writes some value to an output stream. The top of the stack
@@ -272,6 +290,7 @@ impl fmt::Display for Instruction {
 
         match self {
             Instruction::Add => write!(f, "{}", opcode_style.paint("add ")),
+            Instruction::And => write!(f, "{}", opcode_style.paint("and ")),
             Instruction::Call(arity) => write!(
                 f,
                 "{} {}",
@@ -348,6 +367,7 @@ impl fmt::Display for Instruction {
                 opcode_style.paint("nut "),
                 operand_style.paint(n.to_string())
             ),
+            Instruction::Or => write!(f, "{}", opcode_style.paint("or  ")),
             Instruction::Out(stream) => write!(
                 f,
                 "{} {}",

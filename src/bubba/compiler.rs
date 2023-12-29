@@ -1270,4 +1270,54 @@ mod test {
             &Value::String("o".to_owned())
         );
     }
+
+    #[test]
+    fn test_and_expression() {
+        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
+        let ore = "
+                   fn main() -> bool {
+                       true && true
+                   }";
+        let ast = parse_dwarf("test_and_expression", ore).unwrap();
+        let ctx = new_lu_dog(
+            "test_and_expression".to_owned(),
+            Some((ore.to_owned(), &ast)),
+            &get_dwarf_home(),
+            &sarzak,
+        )
+        .unwrap();
+        let program = compile(&ctx).unwrap();
+        println!("{program}");
+
+        assert_eq!(program.get_thonk_card(), 1);
+
+        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 4);
+
+        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Boolean(true));
+    }
+
+    #[test]
+    fn test_or_expression() {
+        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
+        let ore = "
+                   fn main() -> bool {
+                       true || false
+                   }";
+        let ast = parse_dwarf("test_or_expression", ore).unwrap();
+        let ctx = new_lu_dog(
+            "test_or_expression".to_owned(),
+            Some((ore.to_owned(), &ast)),
+            &get_dwarf_home(),
+            &sarzak,
+        )
+        .unwrap();
+        let program = compile(&ctx).unwrap();
+        println!("{program}");
+
+        assert_eq!(program.get_thonk_card(), 1);
+
+        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 4);
+
+        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Boolean(true));
+    }
 }

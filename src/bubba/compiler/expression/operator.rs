@@ -3,7 +3,7 @@ use crate::{
         compiler::{compile_expression, get_span, CThonk, Context, Result},
         instr::Instruction,
     },
-    lu_dog::{BinaryEnum, ComparisonEnum, ExpressionEnum, OperatorEnum},
+    lu_dog::{BinaryEnum, BooleanOperatorEnum, ComparisonEnum, ExpressionEnum, OperatorEnum},
     s_read, SarzakStorePtr, Span,
 };
 
@@ -49,8 +49,19 @@ pub(in crate::bubba::compiler) fn compile(
                     compile_expression(&rhs, thonk, context, rhs_span)?;
                     thonk.add_instruction_with_span(Instruction::StoreLocal(offset), span);
                 }
-                BinaryEnum::BooleanOperator(_) => {
-                    todo!("BooleanOperator")
+                BinaryEnum::BooleanOperator(ref op) => {
+                    let boolean_operator = lu_dog.exhume_boolean_operator(op).unwrap();
+                    let boolean_operator = s_read!(boolean_operator);
+                    compile_expression(&lhs, thonk, context, lhs_span)?;
+                    compile_expression(&rhs, thonk, context, rhs_span)?;
+                    match &boolean_operator.subtype {
+                        BooleanOperatorEnum::And(_) => {
+                            thonk.add_instruction_with_span(Instruction::And, span);
+                        }
+                        BooleanOperatorEnum::Or(_) => {
+                            thonk.add_instruction_with_span(Instruction::Or, span);
+                        }
+                    }
                 }
                 BinaryEnum::Division(_) => {
                     compile_expression(&lhs, thonk, context, lhs_span)?;
