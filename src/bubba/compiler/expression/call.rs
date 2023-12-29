@@ -3,9 +3,9 @@ use crate::{
         compiler::{compile_expression, get_span, CThonk, Context, Result},
         instr::Instruction,
     },
-    keywords::{ASSERT_EQ, CHACHA},
+    keywords::{ASSERT, ASSERT_EQ, CHACHA},
     lu_dog::{Call, CallEnum, Expression},
-    s_read, RefType, SarzakStorePtr, Span,
+    new_ref, s_read, NewRef, RefType, SarzakStorePtr, Span, Value,
 };
 
 pub(in crate::bubba::compiler) fn compile(
@@ -78,6 +78,18 @@ fn compile_static_method_call(
 
     match ty.as_str() {
         CHACHA => match func.as_str() {
+            ASSERT => {
+                let expr = &args[0];
+                let expr_span = get_span(expr, &lu_dog);
+                compile_expression(expr, thonk, context, expr_span)?;
+                thonk.add_instruction_with_span(
+                    Instruction::Push(new_ref!(Value, true.into())),
+                    span.clone(),
+                );
+                thonk.add_instruction_with_span(Instruction::TestEq, span.clone());
+                thonk.add_instruction_with_span(Instruction::JumpIfTrue(1), span.clone());
+                thonk.add_instruction_with_span(Instruction::HaltAndCatchFire, span);
+            }
             ASSERT_EQ => {
                 let lhs = &args[0];
                 let rhs = &args[1];
