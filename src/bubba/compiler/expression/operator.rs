@@ -3,7 +3,9 @@ use crate::{
         compiler::{compile_expression, get_span, CThonk, Context, Result},
         instr::Instruction,
     },
-    lu_dog::{BinaryEnum, BooleanOperatorEnum, ComparisonEnum, ExpressionEnum, OperatorEnum},
+    lu_dog::{
+        BinaryEnum, BooleanOperatorEnum, ComparisonEnum, ExpressionEnum, OperatorEnum, UnaryEnum,
+    },
     s_read, SarzakStorePtr, Span,
 };
 
@@ -101,8 +103,16 @@ pub(in crate::bubba::compiler) fn compile(
                 _ => todo!("comparison"),
             }
         }
-        OperatorEnum::Unary(ref _id) => {
-            todo!("unary");
+        OperatorEnum::Unary(ref id) => {
+            let unary = lu_dog.exhume_unary(id).unwrap();
+            let unary = s_read!(unary);
+            compile_expression(&lhs, thonk, context, lhs_span)?;
+            match &unary.subtype {
+                UnaryEnum::Not(_) => {
+                    thonk.add_instruction_with_span(Instruction::Not, span);
+                }
+                _ => todo!("unary"),
+            }
         }
     }
 

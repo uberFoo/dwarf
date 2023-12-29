@@ -228,6 +228,16 @@ pub enum Instruction {
     /// ## Stack Effect
     ///
     NewUserType(usize),
+    /// Operator Not
+    ///
+    /// Take the top value off the stack and perform a logical not on it.
+    /// The result is pushed onto the stack.
+    ///
+    /// ## Stack Effect
+    ///
+    /// The stack is unchanged after this instruction.
+    ///
+    Not,
     /// Operator Or
     ///
     /// Take the first two values off the stack and perform a logical or on them.
@@ -367,6 +377,7 @@ impl fmt::Display for Instruction {
                 opcode_style.paint("nut "),
                 operand_style.paint(n.to_string())
             ),
+            Instruction::Not => write!(f, "{}", opcode_style.paint("not ")),
             Instruction::Or => write!(f, "{}", opcode_style.paint("or  ")),
             Instruction::Out(stream) => write!(
                 f,

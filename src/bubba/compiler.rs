@@ -1011,7 +1011,7 @@ mod test {
             32
         );
 
-        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(4));
+        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &4.into());
     }
 
     #[test]
@@ -1045,7 +1045,7 @@ mod test {
             29
         );
 
-        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(3));
+        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &3.into());
     }
 
     #[test]
@@ -1213,7 +1213,7 @@ mod test {
             13
         );
 
-        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(2));
+        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &2.into());
     }
 
     #[test]
@@ -1293,7 +1293,7 @@ mod test {
 
         assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 4);
 
-        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Boolean(true));
+        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &true.into());
     }
 
     #[test]
@@ -1318,7 +1318,7 @@ mod test {
 
         assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 4);
 
-        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Boolean(true));
+        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &true.into());
     }
 
     #[test]
@@ -1344,5 +1344,30 @@ mod test {
         assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 7);
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Empty);
+    }
+
+    #[test]
+    fn test_binary_not() {
+        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
+        let ore = "
+                   fn main() -> bool {
+                       !false
+                   }";
+        let ast = parse_dwarf("test_binary_not", ore).unwrap();
+        let ctx = new_lu_dog(
+            "test_binary_not".to_owned(),
+            Some((ore.to_owned(), &ast)),
+            &get_dwarf_home(),
+            &sarzak,
+        )
+        .unwrap();
+        let program = compile(&ctx).unwrap();
+        println!("{program}");
+
+        assert_eq!(program.get_thonk_card(), 1);
+
+        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 3);
+
+        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &true.into());
     }
 }

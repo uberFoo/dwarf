@@ -806,6 +806,19 @@ impl VM {
 
                         1
                     }
+                    Instruction::Not => {
+                        let value = self.stack.pop().unwrap();
+                        let value: bool =
+                            (&*s_read!(value))
+                                .try_into()
+                                .map_err(|e| BubbaError::VmPanic {
+                                    source: Box::new(e),
+                                })?;
+
+                        self.stack.push(new_ref!(Value, Value::Boolean(!value)));
+
+                        1
+                    }
                     Instruction::Or => {
                         let b = self.stack.pop().unwrap();
                         let a = self.stack.pop().unwrap();
