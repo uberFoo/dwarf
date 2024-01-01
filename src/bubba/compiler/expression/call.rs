@@ -59,7 +59,7 @@ pub(in crate::bubba::compiler) fn compile(
             let meth = s_read!(meth);
             compile_static_method_call(&meth.ty, &meth.func, &arg_exprs, thonk, context, span)?;
         }
-        _ => todo!("handle the other calls"),
+        ref call => todo!("handle the other calls: {call:?}"),
     };
 
     Ok(())

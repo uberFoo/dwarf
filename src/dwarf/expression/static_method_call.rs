@@ -18,17 +18,17 @@ use crate::{
             lookup_woog_struct_method_return_type, typecheck, update_span_value, Context, ExprSpan,
         },
         items::enuum::create_generic_enum,
-        DwarfInteger, Expression as ParserExpression, Type,
+        DwarfInteger, Expression as ParserExpression, Generics, Type,
     },
     keywords::{
         ARGS, ASSERT, ASSERT_EQ, CHACHA, COMPLEX_EX, EPS, EVAL, FN_NEW, NEW, NORM_SQUARED, PARSE,
         PLUGIN, SLEEP, TIME, TIMER, TYPEOF, UUID_TYPE,
     },
     lu_dog::{
-        store::ObjectStore as LuDogStore, Argument, Block, Call, DataStructure, EnumFieldEnum,
-        Expression, FieldExpression, List, LocalVariable, PathElement, Span, StaticMethodCall,
-        StructExpression, UnnamedFieldExpression, ValueType, ValueTypeEnum, Variable, XPath,
-        XPlugin, XValue,
+        store::ObjectStore as LuDogStore, Argument, Block, Call, DataStructure, EnumField,
+        EnumFieldEnum, Enumeration, Expression, FieldExpression, List, LocalVariable, PathElement,
+        Span, StaticMethodCall, StructExpression, UnnamedFieldExpression, ValueType, ValueTypeEnum,
+        Variable, XPath, XPlugin, XValue,
     },
     new_ref, s_read, s_write,
     sarzak::Ty,
@@ -42,6 +42,7 @@ pub fn inter(
     params: &[(ParserExpression, Range<usize>)],
     block: &RefType<Block>,
     context: &mut Context,
+    context_stack: &mut Vec<(String, RefType<LuDogStore>)>,
     lu_dog: &mut LuDogStore,
 ) -> Result<(ExprSpan, RefType<ValueType>)> {
     let save_path = &path;
@@ -120,6 +121,21 @@ pub fn inter(
     // 🚧 This smells bad.
     // We need to check if the type name is a struct or an enum.
     if lu_dog.exhume_woog_struct_id_by_name(&type_name).is_some()
+        || {
+            let mut iter = context_stack.iter();
+            loop {
+                if let Some((path, lu_dog)) = iter.next() {
+                    if s_read!(lu_dog)
+                        .exhume_woog_struct_id_by_name(&type_name)
+                        .is_some()
+                    {
+                        break true;
+                    }
+                } else {
+                    break false;
+                }
+            }
+        }
         || lu_dog
             .exhume_z_object_store_id_by_name(&type_name)
             .is_some()
@@ -151,6 +167,7 @@ pub fn inter(
                 &param.1,
                 block,
                 context,
+                context_stack,
                 lu_dog,
             )?;
             arg_types.push(ty);
@@ -294,6 +311,7 @@ pub fn inter(
         //
         // Here we are interring an enum constructor.
         let type_name_no_generics = type_name.split('<').collect::<Vec<_>>()[0];
+
         if let Some(woog_enum) = lu_dog.exhume_enumeration_id_by_name(type_name_no_generics) {
             let woog_enum = lu_dog.exhume_enumeration(&woog_enum).unwrap();
             let foo = s_read!(woog_enum).r88_enum_field(lu_dog);
@@ -301,126 +319,20 @@ pub fn inter(
                 let field = s_read!(field);
                 field.name == method
             });
-
             if let Some(field) = field {
-                let subtype = &s_read!(field).subtype.clone();
-                let (woog_enum, expr) = match subtype {
-                    EnumFieldEnum::TupleField(ref id) => {
-                        let tuple_field = lu_dog.exhume_tuple_field(id).unwrap();
-                        let ty = s_read!(tuple_field).r86_value_type(lu_dog)[0].clone();
-                        let span = &s_read!(ty).r62_span(lu_dog)[0];
-                        let span = s_read!(span).start as usize..s_read!(span).end as usize;
-
-                        // For each tuple element we will create a local variable
-                        // in the block scope.
-                        // We only allow a single one. Stupid restriction. Wait for tuples.
-                        let param = &params[0];
-                        if let ParserExpression::LocalVariable(name) = &param.0 {
-                            let local = LocalVariable::new(Uuid::new_v4(), lu_dog);
-                            let var = Variable::new_local_variable(name.to_owned(), &local, lu_dog);
-                            let value = XValue::new_variable(block, &ty, &var, lu_dog);
-                            Span::new(
-                                param.1.end as i64,
-                                param.1.start as i64,
-                                &context.source,
-                                None,
-                                Some(&value),
-                                lu_dog,
-                            );
-                        };
-
-                        let (expr, expr_ty) = inter_expression(
-                            &new_ref!(ParserExpression, param.0.to_owned()),
-                            &param.1,
-                            block,
-                            context,
-                            lu_dog,
-                        )?;
-
-                        // If the type is `Generic` then we need to create a field with the
-                        // type of the expression. We then attach the expression to the new
-                        // field and continue.
-                        let foo = s_read!(ty);
-                        if let ValueTypeEnum::Generic(_) = foo.subtype {
-                            let type_name = path.iter().map(|p| {
-                                if let Type::UserType((obj, _), generics) = &p.0 {
-                                    let mut name = obj.to_owned();
-                                    let generics = generics.iter().map(|g| {
-                                        g.0.to_string()
-                                    }).collect::<Vec<_>>().join(", ");
-                                    if !generics.is_empty() {
-                                        name.push('<');
-                                        name.push_str(&generics);
-                                        name.push('>');
-                                    }
-                                    name
-                                } else {
-                                    panic!("I don't think that we should ever see anything other than a user type here: {:?}", p);
-                                }
-                            }).collect::<Vec<_>>().join("");
-
-                            let (new_enum, _) = create_generic_enum(&type_name, save_path, lu_dog);
-                            (new_enum, expr)
-                        } else {
-                            typecheck(
-                                (&ty, &span),
-                                (&expr_ty, &param.1),
-                                location!(),
-                                context,
-                                lu_dog,
-                            )?;
-
-                            (woog_enum, expr)
-                        }
-                    }
-                    _ => unreachable!(),
-                };
-
-                let woog_enum_id = s_read!(woog_enum).id;
-                let ty = lu_dog
-                    .iter_value_type()
-                    .inspect(|ty| {
-                        debug!("ty {:?}", ty);
-                    })
-                    .find(|ty| {
-                        if let ValueTypeEnum::Enumeration(id) = s_read!(ty).subtype {
-                            id == woog_enum_id
-                        } else {
-                            false
-                        }
-                    })
-                    .unwrap();
-
-                // let expr = Expression::new_enum_field(&field, lu_dog);
-
-                let data_struct = DataStructure::new_enumeration(&woog_enum, lu_dog);
-                let struct_expr =
-                    StructExpression::new(Uuid::new_v4(), &data_struct, &x_path, lu_dog);
-                let nfe = UnnamedFieldExpression::new(0, lu_dog);
-                let strawberry = FieldExpression::new_unnamed_field_expression(
-                    &expr.0,
-                    &struct_expr,
-                    &nfe,
+                inter_field(
+                    field,
+                    params,
+                    block,
+                    path,
+                    save_path,
+                    woog_enum,
+                    &span,
+                    &x_path,
+                    context,
+                    context_stack,
                     lu_dog,
-                );
-
-                let expr = Expression::new_field_expression(&strawberry, lu_dog);
-                let value = XValue::new_expression(block, &ty, &expr, lu_dog);
-                Span::new(
-                    s_read!(span).end,
-                    s_read!(span).start,
-                    &context.source,
-                    None,
-                    Some(&value),
-                    lu_dog,
-                );
-                // update_span_value(&span, &value, location!());
-
-                let expr = Expression::new_struct_expression(&struct_expr, lu_dog);
-                let value = XValue::new_expression(block, &ty, &expr, lu_dog);
-                update_span_value(&span, &value, location!());
-
-                Ok(((expr, span), ty))
+                )
             } else {
                 let span = s_read!(span).start as usize..s_read!(span).end as usize;
                 Err(vec![DwarfError::NoSuchField {
@@ -429,16 +341,192 @@ pub fn inter(
                     field: method.to_owned(),
                     file: context.file_name.to_owned(),
                     span,
+                    location: location!(),
                 }])
             }
         } else {
-            let span = s_read!(span).start as usize..s_read!(span).end as usize;
-            Err(vec![DwarfError::ObjectNameNotFound {
-                name: type_name.to_owned(),
-                file: context.file_name.to_owned(),
-                span,
-                location: location!(),
-            }])
+            let mut iter = context_stack.iter();
+            loop {
+                if let Some((mod_path, lu_dog)) = iter.next() {
+                    let mut lu_dog = s_write!(lu_dog);
+                    dbg!(&mod_path, &type_name_no_generics);
+                    if let Some(woog_enum) =
+                        lu_dog.exhume_enumeration_id_by_name(type_name_no_generics)
+                    {
+                        dbg!("found it");
+                        let woog_enum = lu_dog.exhume_enumeration(&woog_enum).unwrap().clone();
+                        dbg!(&woog_enum);
+                        let foo = s_read!(woog_enum).r88_enum_field(&lu_dog);
+                        let field = foo.iter().find(|field| {
+                            let field = s_read!(field);
+                            field.name == method
+                        });
+                        dbg!(&field);
+
+                        if let Some(field) = field {
+                            break inter_field(
+                                field,
+                                params,
+                                block,
+                                path,
+                                save_path,
+                                woog_enum,
+                                &span,
+                                &x_path,
+                                context,
+                                &mut Vec::new(),
+                                &mut lu_dog,
+                            );
+                        } else {
+                            let span = s_read!(span).start as usize..s_read!(span).end as usize;
+                            break Err(vec![DwarfError::NoSuchField {
+                                name: type_name.to_owned(),
+                                name_span: type_span.to_owned(),
+                                field: method.to_owned(),
+                                file: context.file_name.to_owned(),
+                                span,
+                                location: location!(),
+                            }]);
+                        }
+                    } else {
+                        dbg!("not found");
+                        let span = s_read!(span).start as usize..s_read!(span).end as usize;
+                        break Err(vec![DwarfError::ObjectNameNotFound {
+                            name: type_name.to_owned(),
+                            file: context.file_name.to_owned(),
+                            span,
+                            location: location!(),
+                        }]);
+                    }
+                }
+            }
         }
     }
+}
+
+fn inter_field(
+    field: &RefType<EnumField>,
+    params: &[(ParserExpression, Range<usize>)],
+    block: &RefType<Block>,
+    path: &Vec<(Type, Option<Generics>)>,
+    save_path: &ParserExpression,
+    woog_enum: RefType<Enumeration>,
+    span: &RefType<Span>,
+    x_path: &RefType<XPath>,
+    context: &mut Context,
+    context_stack: &mut Vec<(String, RefType<LuDogStore>)>,
+    lu_dog: &mut LuDogStore,
+) -> Result<(ExprSpan, RefType<ValueType>)> {
+    let subtype = &s_read!(field).subtype.clone();
+    let (woog_enum, expr) = match subtype {
+        EnumFieldEnum::TupleField(ref id) => {
+            let tuple_field = lu_dog.exhume_tuple_field(id).unwrap();
+            let ty = s_read!(tuple_field).r86_value_type(lu_dog)[0].clone();
+            let span = &s_read!(ty).r62_span(lu_dog)[0];
+            let span = s_read!(span).start as usize..s_read!(span).end as usize;
+
+            // For each tuple element we will create a local variable
+            // in the block scope.
+            // We only allow a single one. Stupid restriction. Wait for tuples.
+            let param = &params[0];
+            if let ParserExpression::LocalVariable(name) = &param.0 {
+                let local = LocalVariable::new(Uuid::new_v4(), lu_dog);
+                let var = Variable::new_local_variable(name.to_owned(), &local, lu_dog);
+                let value = XValue::new_variable(block, &ty, &var, lu_dog);
+                Span::new(
+                    param.1.end as i64,
+                    param.1.start as i64,
+                    &context.source,
+                    None,
+                    Some(&value),
+                    lu_dog,
+                );
+            };
+
+            let (expr, expr_ty) = inter_expression(
+                &new_ref!(ParserExpression, param.0.to_owned()),
+                &param.1,
+                block,
+                context,
+                context_stack,
+                lu_dog,
+            )?;
+
+            // If the type is `Generic` then we need to create a field with the
+            // type of the expression. We then attach the expression to the new
+            // field and continue.
+            let foo = s_read!(ty);
+            if let ValueTypeEnum::Generic(_) = foo.subtype {
+                let type_name = path.iter().map(|p| {
+                    if let Type::UserType((obj, _), generics) = &p.0 {
+                        let mut name = obj.to_owned();
+                        let generics = generics.iter().map(|g| {
+                            g.0.to_string()
+                        }).collect::<Vec<_>>().join(", ");
+                        if !generics.is_empty() {
+                            name.push('<');
+                            name.push_str(&generics);
+                            name.push('>');
+                        }
+                        name
+                    } else {
+                        panic!("I don't think that we should ever see anything other than a user type here: {:?}", p);
+                    }
+                }).collect::<Vec<_>>().join("");
+
+                let (new_enum, _) =
+                    create_generic_enum(&type_name, save_path, context, context_stack, lu_dog);
+                (new_enum, expr)
+            } else {
+                typecheck(
+                    (&ty, &span),
+                    (&expr_ty, &param.1),
+                    location!(),
+                    context,
+                    lu_dog,
+                )?;
+
+                (woog_enum, expr)
+            }
+        }
+        _ => unreachable!(),
+    };
+
+    let woog_enum_id = s_read!(woog_enum).id;
+    let ty = lu_dog
+        .iter_value_type()
+        .find(|ty| {
+            if let ValueTypeEnum::Enumeration(id) = s_read!(ty).subtype {
+                id == woog_enum_id
+            } else {
+                false
+            }
+        })
+        .unwrap();
+
+    // let expr = Expression::new_enum_field(&field, lu_dog);
+
+    let data_struct = DataStructure::new_enumeration(&woog_enum, lu_dog);
+    let struct_expr = StructExpression::new(Uuid::new_v4(), &data_struct, &x_path, lu_dog);
+    let nfe = UnnamedFieldExpression::new(0, lu_dog);
+    let strawberry =
+        FieldExpression::new_unnamed_field_expression(&expr.0, &struct_expr, &nfe, lu_dog);
+
+    let expr = Expression::new_field_expression(&strawberry, lu_dog);
+    let value = XValue::new_expression(block, &ty, &expr, lu_dog);
+    Span::new(
+        s_read!(span).end,
+        s_read!(span).start,
+        &context.source,
+        None,
+        Some(&value),
+        lu_dog,
+    );
+    // update_span_value(&span, &value, location!());
+
+    let expr = Expression::new_struct_expression(&struct_expr, lu_dog);
+    let value = XValue::new_expression(block, &ty, &expr, lu_dog);
+    update_span_value(&span, &value, location!());
+
+    Ok(((expr, span.clone()), ty))
 }

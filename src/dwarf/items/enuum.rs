@@ -49,6 +49,7 @@ pub fn inter_enum(
     variants: &[(Spanned<String>, Option<EnumField>)],
     enum_generics: Option<&HashMap<String, Type>>,
     context: &mut Context,
+    context_stack: &mut Vec<(String, RefType<LuDogStore>)>,
     lu_dog: &mut LuDogStore,
 ) -> Result<()> {
     debug!("inter_enum {name}");
@@ -96,7 +97,7 @@ pub fn inter_enum(
 
                 for ((name, _), (ty, ty_span), _attrs) in fields {
                     context.location = location!();
-                    let ty = make_value_type(ty, ty_span, None, context, lu_dog)?;
+                    let ty = make_value_type(ty, ty_span, None, context, context_stack, lu_dog)?;
                     let _ = Field::new(name.to_owned(), &woog_struct, &ty, lu_dog);
                 }
                 let field = StructField::new(field_name.to_owned(), lu_dog);
@@ -141,7 +142,14 @@ pub fn inter_enum(
                         if let Some(generics) = enum_generics {
                             if let Some(generic) = generics.get(ty) {
                                 context.location = location!();
-                                let ty = make_value_type(generic, span, None, context, lu_dog)?;
+                                let ty = make_value_type(
+                                    generic,
+                                    span,
+                                    None,
+                                    context,
+                                    context_stack,
+                                    lu_dog,
+                                )?;
                                 LuDogSpan::new(
                                     span.end as i64,
                                     span.start as i64,
@@ -154,7 +162,14 @@ pub fn inter_enum(
                                 ty
                             } else {
                                 context.location = location!();
-                                let ty = make_value_type(&type_.0, span, None, context, lu_dog)?;
+                                let ty = make_value_type(
+                                    &type_.0,
+                                    span,
+                                    None,
+                                    context,
+                                    context_stack,
+                                    lu_dog,
+                                )?;
                                 LuDogSpan::new(
                                     span.end as i64,
                                     span.start as i64,
@@ -168,7 +183,14 @@ pub fn inter_enum(
                             }
                         } else {
                             context.location = location!();
-                            let ty = make_value_type(&type_.0, span, None, context, lu_dog)?;
+                            let ty = make_value_type(
+                                &type_.0,
+                                span,
+                                None,
+                                context,
+                                context_stack,
+                                lu_dog,
+                            )?;
                             LuDogSpan::new(
                                 span.end as i64,
                                 span.start as i64,
@@ -183,7 +205,8 @@ pub fn inter_enum(
                     }
                     _ => {
                         context.location = location!();
-                        let ty = make_value_type(&type_.0, span, None, context, lu_dog)?;
+                        let ty =
+                            make_value_type(&type_.0, span, None, context, context_stack, lu_dog)?;
                         LuDogSpan::new(
                             span.end as i64,
                             span.start as i64,
@@ -214,6 +237,8 @@ pub fn inter_enum(
 pub(crate) fn create_generic_enum(
     enum_name: &str,
     enum_path: &ParserExpression,
+    context: &Context,
+    context_stack: &mut Vec<(String, RefType<LuDogStore>)>,
     lu_dog: &mut LuDogStore,
 ) -> (RefType<Enumeration>, RefType<ValueType>) {
     // Check to see if this already exists
@@ -226,7 +251,26 @@ pub(crate) fn create_generic_enum(
 
     let base_enum_impl = if let ParserExpression::PathInExpression(path) = enum_path {
         if let Type::UserType(enum_name, _) = &path[0].0 {
-            let id = lu_dog.exhume_enumeration_id_by_name(&enum_name.0).unwrap();
+            let id = if let Some(woog_enum) = lu_dog.exhume_enumeration_id_by_name(&enum_name.0) {
+                woog_enum
+            } else {
+                let mut iter = context_stack.iter();
+                loop {
+                    if let Some((path, lu_dog)) = iter.next() {
+                        dbg!(&path, &enum_name.0);
+                        if let Some(woog_enum) =
+                            s_read!(lu_dog).exhume_enumeration_id_by_name(&enum_name.0)
+                        {
+                            dbg!("found it");
+                            break woog_enum;
+                        }
+                    } else {
+                        dbg!("not found");
+                        unreachable!();
+                    }
+                }
+            };
+
             let base_enum = lu_dog.exhume_enumeration(&id).unwrap();
             let impl_block_vec = s_read!(base_enum).r84_implementation_block(lu_dog);
             if !impl_block_vec.is_empty() {
@@ -249,9 +293,25 @@ pub(crate) fn create_generic_enum(
     let name_without_generics = enum_name.split('<').collect::<Vec<_>>()[0];
 
     debug!("name_without_generics {:?}", name_without_generics);
-    let id = lu_dog
-        .exhume_enumeration_id_by_name(name_without_generics)
-        .unwrap();
+    let id = if let Some(woog_enum) = lu_dog.exhume_enumeration_id_by_name(name_without_generics) {
+        woog_enum
+    } else {
+        let mut iter = context_stack.iter();
+        loop {
+            if let Some((path, lu_dog)) = iter.next() {
+                dbg!(&path, name_without_generics);
+                if let Some(woog_enum) =
+                    s_read!(lu_dog).exhume_enumeration_id_by_name(name_without_generics)
+                {
+                    dbg!("found it");
+                    break woog_enum;
+                }
+            } else {
+                dbg!("not found");
+                unreachable!();
+            }
+        }
+    };
     let woog_enum = lu_dog.exhume_enumeration(&id).unwrap();
     for field in s_read!(woog_enum).r88_enum_field(lu_dog) {
         let field = s_read!(field);

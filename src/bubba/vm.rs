@@ -73,7 +73,10 @@ impl VM {
             match instr {
                 Instruction::CallDestination(name) => {
                     let name: String = (&*s_read!(name)).try_into().unwrap();
-                    let (ip, _frame_size) = vm.func_map.get(&name).unwrap();
+                    let (ip, _frame_size) = vm
+                        .func_map
+                        .get(&name)
+                        .expect(format!("Unknown function: {name}").as_str());
                     vm.program.push(Instruction::Push(new_ref!(
                         Value,
                         Value::Integer(*ip as DwarfInteger)
@@ -956,7 +959,7 @@ mod tests {
         bubba::instr::Thonk,
         dwarf::{DwarfFloat, DwarfInteger},
         interpreter::{initialize_interpreter, PrintableValueType},
-        Context,
+        Context, ROOT_LU_DOG,
     };
 
     use super::*;
@@ -1255,7 +1258,7 @@ mod tests {
 
         let ctx = Context::default();
         let struct_ty = {
-            let mut lu_dog = s_write!(ctx.lu_dog);
+            let mut lu_dog = s_write!(ctx.lu_dog.get(ROOT_LU_DOG).unwrap());
 
             // We need to create a WoogStruct and add some fields to it
             let foo = WoogStruct::new("Foo".to_owned(), None, None, &mut lu_dog);

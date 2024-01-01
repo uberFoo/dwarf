@@ -17,12 +17,13 @@ pub(in crate::bubba::compiler) fn compile(
 
     let expr = lu_dog.exhume_variable_expression(expr).unwrap();
     let expr = s_read!(expr);
-    let name = expr.name.clone();
+    let name = &expr.name;
 
-    if let Some(index) = context.get_symbol(&name) {
+    // dbg!(&name, &context.symbol_tables);
+    if let Some(index) = context.get_symbol(name) {
         thonk.add_instruction_with_span(Instruction::FetchLocal(index), span);
     } else {
-        let name = new_ref!(Value, Value::String(name));
+        let name = new_ref!(Value, Value::String(name.to_owned()));
         // We are here because we need to look up a function.
         thonk.add_instruction(Instruction::CallDestination(name.clone()));
 

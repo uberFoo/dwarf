@@ -28,16 +28,23 @@ pub(in crate::bubba::compiler) fn compile(
         let match_expr = pattern.r87_expression(&lu_dog)[0].clone();
         let expr = pattern.r92_expression(&lu_dog)[0].clone();
 
+        // Duplicate the scrutinee
         thonk.add_instruction(Instruction::Dup);
 
-        // Do we need to create a new symbol table for each match arm?
-        if let ExpressionEnum::VariableExpression(ref id) = s_read!(match_expr).subtype {
-            let var = lu_dog.exhume_variable_expression(id).unwrap();
-            let idx = context.insert_symbol(s_read!(var).name.clone());
-            thonk.increment_frame_size();
+        match &s_read!(match_expr).subtype {
+            ExpressionEnum::Literal(_) => {}
+            ExpressionEnum::StructExpression(ref id) => {
+                let struct_expr = lu_dog.exhume_struct_expression(id).unwrap();
+            }
+            ExpressionEnum::VariableExpression(ref id) => {
+                let var = lu_dog.exhume_variable_expression(id).unwrap();
+                let idx = context.insert_symbol(s_read!(var).name.clone());
+                thonk.increment_frame_size();
 
-            thonk.add_instruction(Instruction::Dup);
-            thonk.add_instruction(Instruction::StoreLocal(idx));
+                thonk.add_instruction(Instruction::Dup);
+                thonk.add_instruction(Instruction::StoreLocal(idx));
+            }
+            todo => todo!("Match expression type: {todo:?}"),
         }
 
         compile_expression(&match_expr, thonk, context, get_span(&match_expr, &lu_dog))?;

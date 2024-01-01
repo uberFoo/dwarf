@@ -140,6 +140,7 @@ pub enum DwarfError {
         field: String,
         file: String,
         span: Span,
+        location: Location,
     },
 
     /// No Such Method
@@ -398,8 +399,9 @@ impl fmt::Display for DwarfErrorReporter<'_, '_> {
                 field,
                 file,
                 span,
+                location,
             } => {
-                Report::build(ReportKind::Error, file, span.start)
+                let report = Report::build(ReportKind::Error, file, span.start)
                     .with_message(format!("no such field {}", C_OTHER.paint(field)))
                     .with_label(
                         Label::new((file, span.to_owned()))
@@ -408,9 +410,22 @@ impl fmt::Display for DwarfErrorReporter<'_, '_> {
                     )
                     .with_label(
                         Label::new((file, name_span.to_owned()))
-                            .with_message("on this struct")
+                            .with_message("on this type")
                             .with_color(Color::Yellow),
-                    )
+                    );
+
+                let report = if is_uber {
+                    report.with_note(format!(
+                        "{}:{}:{}",
+                        C_OTHER.paint(location.file.to_string()),
+                        C_WARN.paint(format!("{}", location.line)),
+                        C_OK.paint(format!("{}", location.column)),
+                    ))
+                } else {
+                    report
+                };
+
+                report
                     .finish()
                     .write((file, Source::from(&program)), &mut std_err)
                     .map_err(|_| fmt::Error)?;

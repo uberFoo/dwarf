@@ -12,7 +12,7 @@ use crate::{
         store::ObjectStore as LuDogStore, Binary, Block, BooleanOperator, Expression, Operator,
         Span, ValueType, ValueTypeEnum, XValue,
     },
-    new_ref, s_read,
+    new_ref, s_read, s_write,
     sarzak::Ty,
     NewRef, RefType,
 };
@@ -26,6 +26,7 @@ pub fn inter(
     span: RefType<Span>,
     block: &RefType<Block>,
     context: &mut Context,
+    context_stack: &mut Vec<(String, RefType<LuDogStore>)>,
     lu_dog: &mut LuDogStore,
 ) -> Result<(ExprSpan, RefType<ValueType>)> {
     let (lhs, lhs_ty) = inter_expression(
@@ -33,6 +34,7 @@ pub fn inter(
         &lhs_p.1,
         block,
         context,
+        context_stack,
         lu_dog,
     )?;
     let (rhs, rhs_ty) = inter_expression(
@@ -40,6 +42,7 @@ pub fn inter(
         &rhs_p.1,
         block,
         context,
+        context_stack,
         lu_dog,
     )?;
 

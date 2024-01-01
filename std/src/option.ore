@@ -2,3 +2,19 @@ enum Option<T> {
     None,
     Some(T),
 }
+
+impl Option<T> {
+    fn is_some(self) -> bool {
+        match self {
+            Option::Some(_) => true,
+            Option::None => false,
+        }
+    }
+
+    fn is_none(self) -> bool {
+        match self {
+            Option::Some(_) => false,
+            Option::None => true,
+        }
+    }
+}

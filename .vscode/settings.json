@@ -23,6 +23,7 @@
         "impls",
         "jemalloc",
         "jift",
+        "krate",
         "metamodel",
         "mimalloc",
         "msvc",

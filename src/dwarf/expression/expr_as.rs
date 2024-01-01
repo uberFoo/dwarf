@@ -15,7 +15,7 @@ use crate::{
     lu_dog::{
         store::ObjectStore as LuDogStore, Block, Expression, Span, TypeCast, ValueType, XValue,
     },
-    new_ref, NewRef, RefType,
+    new_ref, s_write, NewRef, RefType,
 };
 
 // Let's just say that I don't get this lint. The docs say you have to box it
@@ -27,6 +27,7 @@ pub fn inter(
     span: RefType<Span>,
     block: &RefType<Block>,
     context: &mut Context,
+    context_stack: &mut Vec<(String, RefType<LuDogStore>)>,
     lu_dog: &mut LuDogStore,
 ) -> Result<(ExprSpan, RefType<ValueType>)> {
     let (expr, expr_ty) = inter_expression(
@@ -34,12 +35,14 @@ pub fn inter(
         &expr.1,
         block,
         context,
+        context_stack,
         lu_dog,
     )?;
     debug!("As lhs: {expr:?}: {expr_ty:?}");
 
     context.location = location!();
-    let as_type = make_value_type(&ty.0, &ty.1, None, context, lu_dog)?;
+    let as_type = make_value_type(&ty.0, &ty.1, None, context, context_stack, lu_dog)?;
+
     let as_op = TypeCast::new(&expr.0, &as_type, lu_dog);
     let expr = Expression::new_type_cast(&as_op, lu_dog);
     let value = XValue::new_expression(block, &as_type, &expr, lu_dog);

@@ -194,24 +194,39 @@ pub fn eval(
                     let woog_enum = s_read!(lu_dog).exhume_enumeration(&woog_enum).unwrap();
                     let woog_enum = s_read!(woog_enum);
 
-                    let impl_ = &woog_enum.r84_implementation_block(&s_read!(lu_dog))[0];
-                    let x = if let Some(func) = s_read!(impl_)
-                        .r9_function(&s_read!(lu_dog))
-                        .iter()
-                        .find(|f| s_read!(f).name == *meth_name)
+                    if let Some(impl_) =
+                        &woog_enum.r84_implementation_block(&s_read!(lu_dog)).get(0)
                     {
-                        let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
-                        let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
+                        let x = if let Some(func) = s_read!(impl_)
+                            .r9_function(&s_read!(lu_dog))
+                            .iter()
+                            .find(|f| s_read!(f).name == *meth_name)
+                        {
+                            let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
+                            let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
 
-                        eval_function_call(
-                            (*func).clone(),
-                            &args,
-                            first_arg,
-                            arg_check,
-                            span,
-                            context,
-                            vm,
-                        )
+                            eval_function_call(
+                                (*func).clone(),
+                                &args,
+                                first_arg,
+                                arg_check,
+                                span,
+                                context,
+                                vm,
+                            )
+                        } else {
+                            let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
+                            let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
+                            let read = s_read!(span);
+                            let span = read.start as usize..read.end as usize;
+
+                            return Err(ChaChaError::NoSuchMethod {
+                                method: meth_name.to_owned(),
+                                span,
+                                location: location!(),
+                            });
+                        };
+                        x
                     } else {
                         let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
                         let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
@@ -223,8 +238,7 @@ pub fn eval(
                             span,
                             location: location!(),
                         });
-                    };
-                    x
+                    }
                 }
                 Value::Integer(i) => match meth_name.as_str() {
                     MAX => {

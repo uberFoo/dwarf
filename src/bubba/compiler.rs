@@ -12,7 +12,7 @@ use crate::{
     },
     new_ref, s_read,
     sarzak::ObjectStore as SarzakStore,
-    Context as ExtruderContext, NewRef, RefType, Span, Value,
+    Context as ExtruderContext, NewRef, RefType, Span, Value, ROOT_LU_DOG,
 };
 
 mod expression;
@@ -97,7 +97,11 @@ impl<'a> Context<'a> {
     }
 
     fn lu_dog_heel(&self) -> RefType<LuDogStore> {
-        self.extruder_context.lu_dog.clone()
+        self.extruder_context
+            .lu_dog
+            .get(ROOT_LU_DOG)
+            .unwrap()
+            .clone()
     }
 
     fn sarzak_heel(&self) -> RefType<SarzakStore> {
@@ -137,12 +141,12 @@ impl<'a> Context<'a> {
 }
 
 pub fn compile(context: &ExtruderContext) -> Result<Program> {
-    let lu_dog = &context.lu_dog;
-    let lu_dog = s_read!(lu_dog);
-
     let mut program = Program::new(VERSION.to_owned(), BUILD_TIME.to_owned());
 
     let mut context = Context::new(context);
+
+    let lu_dog = context.lu_dog_heel();
+    let lu_dog = s_read!(lu_dog);
 
     for func in lu_dog.iter_function() {
         program.add_thonk(compile_function(&func, &mut context)?.into());
@@ -155,10 +159,31 @@ fn compile_function(func: &RefType<Function>, context: &mut Context) -> Result<C
     let lu_dog = context.lu_dog_heel();
     let lu_dog = s_read!(lu_dog);
 
-    let name = s_read!(func).name.clone();
+    let func = s_read!(func);
+    let ty_name = if let Some(i_block) = func.r9_implementation_block(&lu_dog).get(0) {
+        let i_block = s_read!(i_block);
+        if let Some(woog_struct) = i_block.r8_woog_struct(&lu_dog).get(0) {
+            s_read!(woog_struct).name.clone()
+        } else if let Some(woog_enum) = i_block.r84c_enumeration(&lu_dog).get(0) {
+            s_read!(woog_enum).name.clone()
+        } else {
+            "".to_owned()
+        }
+    } else {
+        "".to_owned()
+    };
+
+    // context.push_symbol_table();
+
+    let name = if ty_name.is_empty() {
+        func.name.clone()
+    } else {
+        context.insert_symbol("self".to_owned());
+        format!("{ty_name}::{}", func.name)
+    };
     let mut thonk = CThonk::new(name.clone());
 
-    let body = s_read!(func).r19_body(&lu_dog)[0].clone();
+    let body = func.r19_body(&lu_dog)[0].clone();
     let body = s_read!(body);
     match body.subtype {
         //
@@ -198,6 +223,8 @@ fn compile_function(func: &RefType<Function>, context: &mut Context) -> Result<C
             panic!("Somehow we found ourselves trying to compile an external implementation. This should not happen. The function name is: {name}");
         }
     };
+
+    // context.pop_symbol_table();
 
     Ok(thonk)
 }
@@ -1110,7 +1137,7 @@ mod test {
         )
         .unwrap();
 
-        let lu_dog = ctx.lu_dog.clone();
+        let lu_dog = ctx.lu_dog.get(ROOT_LU_DOG).unwrap().clone();
 
         let id = s_read!(lu_dog)
             .exhume_enumeration_id_by_name("Foo")
@@ -1159,7 +1186,7 @@ mod test {
         )
         .unwrap();
 
-        let lu_dog = ctx.lu_dog.clone();
+        let lu_dog = ctx.lu_dog.get(ROOT_LU_DOG).unwrap().clone();
 
         let id = s_read!(lu_dog)
             .exhume_enumeration_id_by_name("Foo")
@@ -1369,5 +1396,45 @@ mod test {
         assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 3);
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &true.into());
+    }
+
+    // #[test]
+    fn use_std_option() {
+        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
+        let ore = "
+                   use std::Option;
+                   fn main() -> bool {
+                       let foo = Option::Some(1);
+                          match foo {
+                            Option::Some(x) => true,
+                            Option::None => false,
+                          }
+                   }";
+        let ast = parse_dwarf("use_std_option", ore).unwrap();
+        let ctx = new_lu_dog(
+            "use_std_option".to_owned(),
+            Some((ore.to_owned(), &ast)),
+            &get_dwarf_home(),
+            &sarzak,
+        )
+        .unwrap();
+        let program = compile(&ctx).unwrap();
+        println!("{program}");
+        assert_eq!(program.get_thonk_card(), 3);
+        run_vm(&program);
+        // assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 4);
+        // assert_eq!(
+        //     &*s_read!(run_vm(&program).unwrap()),
+        //     &Value::Enumeration(EnumVariant::Unit(
+        //         ValueType::new_enumeration(
+        //             &s_read!(ctx.lu_dog)
+        //                 .exhume_enumeration_by_name("Option")
+        //                 .unwrap(),
+        //             &mut s_write!(ctx.lu_dog)
+        //         ),
+        //         "Option".to_owned(),
+        //         "Some".to_owned()
+        //     ))
+        // );
     }
 }

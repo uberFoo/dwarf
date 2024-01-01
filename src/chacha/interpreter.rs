@@ -29,7 +29,7 @@ use crate::{
         Statement, StatementEnum, ValueType, ValueTypeEnum, Variable, XValue,
     },
     new_ref, s_read, s_write, ChaChaError, Context as ExtruderContext, Dirty, DwarfInteger,
-    ModelStore, NewRef, RefType, Value,
+    ModelStore, NewRef, RefType, Value, ROOT_LU_DOG,
 };
 
 mod banner;
@@ -145,7 +145,7 @@ pub fn initialize_interpreter(
 ) -> Result<Context, Error> {
     debug!("initialize_interpreter with {thread_count} threads");
 
-    let mut lu_dog = s_write!(e_context.lu_dog);
+    let mut lu_dog = s_write!(e_context.lu_dog.get(ROOT_LU_DOG).unwrap());
 
     // Initialize the stack with stuff from the compiled source.
     let block = Block::new(false, Uuid::new_v4(), None, None, &mut lu_dog);

@@ -13,7 +13,7 @@ use crate::{
         store::ObjectStore as LuDogStore, Binary, Block, Expression, Operator, Span, ValueType,
         XValue,
     },
-    new_ref, NewRef, RefType,
+    new_ref, s_write, NewRef, RefType,
 };
 
 // Let's just say that I don't get this lint. The docs say you have to box it
@@ -25,6 +25,7 @@ pub fn inter(
     span: RefType<Span>,
     block: &RefType<Block>,
     context: &mut Context,
+    context_stack: &mut Vec<(String, RefType<LuDogStore>)>,
     lu_dog: &mut LuDogStore,
 ) -> Result<(ExprSpan, RefType<ValueType>)> {
     debug!("Addition");
@@ -33,6 +34,7 @@ pub fn inter(
         &lhs_p.1,
         block,
         context,
+        context_stack,
         lu_dog,
     )?;
     let (rhs, rhs_ty) = inter_expression(
@@ -40,6 +42,7 @@ pub fn inter(
         &rhs_p.1,
         block,
         context,
+        context_stack,
         lu_dog,
     )?;
 

@@ -231,6 +231,7 @@ pub fn inter_struct_fields(
     generics: Option<&HashMap<String, Type>>,
     location: Location,
     context: &mut Context,
+    context_stack: &mut Vec<(String, RefType<LuDogStore>)>,
     lu_dog: &mut LuDogStore,
 ) -> Result<()> {
     let mut errors = Vec::new();
@@ -308,7 +309,7 @@ pub fn inter_struct_fields(
                 proxy_thang(proxy_vec)?
             } else {
                 context.location = location;
-                match make_value_type(type_, span, None, context, lu_dog) {
+                match make_value_type(type_, span, None, context, context_stack, lu_dog) {
                     Ok(ty) => ty,
                     Err(mut err) => {
                         errors.append(&mut err);
@@ -320,7 +321,7 @@ pub fn inter_struct_fields(
             proxy_thang(proxy_vec)?
         } else {
             context.location = location;
-            match make_value_type(type_, span, None, context, lu_dog) {
+            match make_value_type(type_, span, None, context, context_stack, lu_dog) {
                 Ok(ty) => ty,
                 Err(mut err) => {
                     errors.append(&mut err);

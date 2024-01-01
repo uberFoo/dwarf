@@ -5,6 +5,7 @@ use puteketeke::{Executor, Worker};
 
 use circular_queue::CircularQueue;
 use crossbeam::channel::{Receiver, Sender};
+use rustc_hash::FxHashMap as HashMap;
 
 use crate::{
     bubba::Program,
@@ -12,19 +13,19 @@ use crate::{
     lu_dog::{Block, ObjectStore as LuDogStore, ValueType},
     new_ref, s_read, s_write,
     sarzak::{ObjectStore as SarzakStore, Ty},
-    Dirty, ModelStore, NewRef, RefType, Value,
+    Dirty, ModelStore, NewRef, RefType, Value, ROOT_LU_DOG,
 };
 
 #[derive(Clone, Debug)]
 pub struct ModelContext {
-    lu_dog: RefType<LuDogStore>,
+    lu_dog: HashMap<String, RefType<LuDogStore>>,
     sarzak: RefType<SarzakStore>,
     models: RefType<ModelStore>,
 }
 
 impl ModelContext {
     pub fn new(
-        lu_dog: RefType<LuDogStore>,
+        lu_dog: HashMap<String, RefType<LuDogStore>>,
         sarzak: RefType<SarzakStore>,
         models: RefType<ModelStore>,
     ) -> Self {
@@ -35,8 +36,15 @@ impl ModelContext {
         }
     }
 
+    pub fn lu_dogs(&self) -> Vec<(String, RefType<LuDogStore>)> {
+        self.lu_dog
+            .iter()
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect()
+    }
+
     pub fn lu_dog(&self) -> &RefType<LuDogStore> {
-        &self.lu_dog
+        &self.lu_dog.get(ROOT_LU_DOG).unwrap()
     }
 
     pub fn sarzak(&self) -> &RefType<SarzakStore> {
@@ -101,7 +109,7 @@ impl Context {
         prompt: String,
         block: RefType<Block>,
         memory: Memory,
-        lu_dog: RefType<LuDogStore>,
+        lu_dog: HashMap<String, RefType<LuDogStore>>,
         sarzak: RefType<SarzakStore>,
         models: RefType<ModelStore>,
         mem_update_recv: Receiver<MemoryUpdateMessage>,
@@ -146,7 +154,7 @@ impl Context {
         prompt: String,
         block: RefType<Block>,
         memory: Memory,
-        lu_dog: RefType<LuDogStore>,
+        lu_dog: HashMap<String, RefType<LuDogStore>>,
         sarzak: RefType<SarzakStore>,
         models: RefType<ModelStore>,
         mem_update_recv: Receiver<MemoryUpdateMessage>,
@@ -329,6 +337,10 @@ impl Context {
 
     pub fn lu_dog_heel(&self) -> &RefType<LuDogStore> {
         self.models.lu_dog()
+    }
+
+    pub fn lu_dog_pack(&self) -> Vec<(String, RefType<LuDogStore>)> {
+        self.models.lu_dogs()
     }
 
     pub fn block(&self) -> &RefType<Block> {
