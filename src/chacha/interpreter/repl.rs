@@ -11,7 +11,7 @@ use crate::{
     dwarf::{error::DwarfErrorReporter, inter_statement, parse_line, Context as ExtruderContext},
     interpreter::{banner2, debug, eval_statement, function, Context, Error, PrintableValueType},
     lu_dog::DwarfSourceFile,
-    new_ref, s_read, s_write, ChaChaError, NewRef, RefType,
+    new_ref, s_read, s_write, ChaChaError, NewRef, RefType, PATH_ROOT,
 };
 
 pub fn start_repl(context: &mut Context, is_uber: bool) -> Result<(), Error> {
@@ -126,6 +126,7 @@ pub fn start_repl(context: &mut Context, is_uber: bool) -> Result<(), Error> {
                                     dirty: &mut dirty,
                                     file_name: "REPL",
                                     func_defs: HashMap::default(),
+                                    path: PATH_ROOT.to_owned(),
                                 },
                                 &mut Vec::new(),
                                 &mut lu_dog,

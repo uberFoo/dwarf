@@ -5,7 +5,7 @@ use snafu::{location, prelude::*, Location};
 
 use crate::{
     chacha::value::{EnumVariant, TupleEnum, UserStruct},
-    new_ref, s_read, s_write, ChaChaError, DwarfInteger, NewRef, RefType, Span, Value,
+    new_ref, s_read, s_write, ChaChaError, DwarfInteger, NewRef, RefType, Span, Value, PATH_ROOT,
 };
 
 use super::instr::{Instruction, Program};
@@ -1258,10 +1258,16 @@ mod tests {
 
         let ctx = Context::default();
         let struct_ty = {
-            let mut lu_dog = s_write!(ctx.lu_dog.get(ROOT_LU_DOG).unwrap());
+            let mut lu_dog = s_write!(ctx.lu_dog);
 
             // We need to create a WoogStruct and add some fields to it
-            let foo = WoogStruct::new("Foo".to_owned(), None, None, &mut lu_dog);
+            let foo = WoogStruct::new(
+                "Foo".to_owned(),
+                PATH_ROOT.to_owned(),
+                None,
+                None,
+                &mut lu_dog,
+            );
             // let _ = WoogItem::new_woog_struct(source, &mt, lu_dog);
             let struct_ty = ValueType::new_woog_struct(&foo, &mut lu_dog);
             let ty = Ty::new_integer(&sarzak);

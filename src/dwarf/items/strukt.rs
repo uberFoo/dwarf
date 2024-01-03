@@ -66,6 +66,7 @@ pub fn inter_struct(
                                     let obj = model.0.exhume_object(obj_id).unwrap();
                                     let woog_struct = WoogStruct::new(
                                         name.to_owned(),
+                                        context.path.clone(),
                                         None,
                                         Some(&*obj.read().unwrap()),
                                         lu_dog,
@@ -194,7 +195,8 @@ pub fn inter_struct(
         }
     } else {
         // This is just a plain vanilla user defined type.
-        let woog_struct = WoogStruct::new(name.to_owned(), None, None, lu_dog);
+        let woog_struct =
+            WoogStruct::new(name.to_owned(), context.path.clone(), None, None, lu_dog);
         context.dirty.push(Dirty::Struct(woog_struct.clone()));
         let _ = ValueType::new_woog_struct(&woog_struct, lu_dog);
 

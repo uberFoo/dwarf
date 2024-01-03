@@ -145,7 +145,7 @@ pub fn initialize_interpreter(
 ) -> Result<Context, Error> {
     debug!("initialize_interpreter with {thread_count} threads");
 
-    let mut lu_dog = s_write!(e_context.lu_dog.get(ROOT_LU_DOG).unwrap());
+    let mut lu_dog = s_write!(e_context.lu_dog);
 
     // Initialize the stack with stuff from the compiled source.
     let block = Block::new(false, Uuid::new_v4(), None, None, &mut lu_dog);

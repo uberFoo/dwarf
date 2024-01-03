@@ -10,11 +10,8 @@ use uuid::Uuid;
 use crate::{
     dwarf::{
         error::{DwarfError, Result},
-        expression::{addition, and, expr_as, static_method_call},
-        items::{
-            enuum::{self, create_generic_enum},
-            func, strukt,
-        },
+        expression::{addition, and, expr_as, static_method_call, unit_enum},
+        items::{enuum, func, strukt},
         parse_dwarf, AttributeMap, BlockType, DwarfInteger, EnumField,
         Expression as ParserExpression, Generics, InnerAttribute, InnerItem, Item,
         PrintableValueType, Spanned, Statement as ParserStatement, Type, WrappedValueType,
@@ -41,7 +38,7 @@ use crate::{
     },
     new_ref, s_read, s_write,
     sarzak::{store::ObjectStore as SarzakStore, types::Ty},
-    Context as InterContext, Dirty, ModelStore, NewRef, RefType, ROOT_LU_DOG,
+    Context as InterContext, Dirty, ModelStore, NewRef, RefType, PATH_ROOT, PATH_SEP, ROOT_LU_DOG,
 };
 
 pub(super) const EXTENSION_DIR: &str = "extensions";
@@ -322,6 +319,7 @@ pub struct Context<'a> {
     pub dirty: &'a mut Vec<Dirty>,
     pub file_name: &'a str,
     pub func_defs: HashMap<String, FunctionDefinition>,
+    pub path: String,
 }
 
 impl<'a> Context<'a> {
@@ -335,6 +333,7 @@ impl<'a> Context<'a> {
         dirty: &'a mut Vec<Dirty>,
         location: Location,
         mut lu_dog: &mut LuDogStore,
+        path: String,
     ) -> Self {
         Self {
             location,
@@ -347,6 +346,7 @@ impl<'a> Context<'a> {
             dirty,
             file_name,
             func_defs: HashMap::default(),
+            path,
         }
     }
 }
@@ -404,18 +404,15 @@ pub fn new_lu_dog(
             dirty: &mut dirty,
             file_name: file_name.as_str(),
             func_defs: HashMap::default(),
+            path: PATH_ROOT.to_string(),
         };
 
         walk_tree(ast, &mut context, &mut stack, &mut lu_dog)?;
     };
 
-    let mut map: HashMap<String, RefType<LuDogStore>> = stack.into_iter().collect();
-
-    map.insert(ROOT_LU_DOG.to_string(), new_ref!(LuDogStore, lu_dog));
-
     Ok(InterContext {
         source: file_name,
-        lu_dog: map,
+        lu_dog: new_ref!(LuDogStore, lu_dog),
         models,
         dirty,
         sarzak: new_ref!(SarzakStore, sarzak.clone()),
@@ -2992,175 +2989,16 @@ pub(super) fn inter_expression(
         //
         // Unit enumeration
         //
-        ParserExpression::UnitEnum(enum_path, (field_name, field_span)) => {
-            debug!("UnitEnum {:?}, Field {field_name}", enum_path);
-            let (path, path_span) =
-                if let (ParserExpression::PathInExpression(path), span) = enum_path.as_ref() {
-                    (path, span)
-                } else {
-                    panic!(
-                    "I don't think that we should ever see anything other than a path here: {:?}",
-                    enum_path
-                );
-                };
-
-            debug!("path {path:?}");
-
-            // 🚧 Looks like we are validating each element of the path, but int, in Option::<int> isn't a
-            // UserType, so I'm confused.
-            // I think that if you look, it's actually coming in as Option<int>, which can be a UserType.
-            let full_enum_name = path.iter().map(|p| {
-                if let Type::UserType((obj, _), generics) = &p.0 {
-                    let mut name = obj.to_owned();
-                    let generics = generics.iter().map(|g| {
-                        g.0.to_string()
-                    }).collect::<Vec<_>>().join(", ");
-                    if !generics.is_empty() {
-                        name.push('<');
-                        name.push_str(&generics);
-                        name.push('>');
-                    }
-                    name
-                } else {
-                    panic!("I don't think that we should ever see anything other than a user type here: {:?}", p);
-                }
-            }).collect::<Vec<_>>().join("");
-
-            let enum_root = if let Some(root) = full_enum_name.split('<').next() {
-                root
-            } else {
-                full_enum_name.as_str()
-            };
-
-            debug!("enum_name {:?}", full_enum_name);
-            // dbg!(&enum_root, &full_enum_name, &enum_path);
-            let x_path = XPath::new(Uuid::new_v4(), None, lu_dog);
-            let mut elts = path
-                .iter()
-                .inspect(|ty| {
-                    debug!("ty {:?}", ty);
-                })
-                .map(|ty| {
-                    if let Type::UserType((name, _), _generics) = &ty.0 {
-                        PathElement::new(name.to_owned(), None, &x_path, lu_dog)
-                    } else {
-                        unreachable!()
-                    }
-                })
-                .collect::<Vec<RefType<PathElement>>>();
-            elts.push(PathElement::new(
-                field_name.to_owned(),
-                None,
-                &x_path,
-                lu_dog,
-            ));
-
-            let first = Some(elts[0].clone());
-            let _last = elts
-                .into_iter()
-                .fold(Option::<RefType<PathElement>>::None, |prev, elt| {
-                    if let Some(prev) = prev {
-                        let elt = s_read!(elt);
-                        s_write!(prev).next = Some(elt.id);
-                    }
-                    Some(elt)
-                });
-
-            if let Some(first) = first {
-                let first = s_read!(first).id;
-                s_write!(x_path).first = Some(first);
-            }
-
-            if let Some(woog_enum_id) = {
-                if let Some(woog_enum) = lu_dog.exhume_enumeration_id_by_name(enum_root) {
-                    Some(woog_enum)
-                } else {
-                    let mut iter = context_stack.iter();
-                    loop {
-                        if let Some((path, lu_dog)) = iter.next() {
-                            dbg!(&path, &enum_root);
-                            if let Some(woog_enum) =
-                                s_read!(lu_dog).exhume_enumeration_id_by_name(enum_root)
-                            {
-                                dbg!("found it");
-                                break Some(woog_enum);
-                            }
-                        } else {
-                            dbg!("not found");
-                            break None;
-                        }
-                    }
-                }
-            } {
-                let woog_enum_id = if enum_root != full_enum_name {
-                    if let Some(id) = lu_dog.exhume_enumeration_id_by_name(&full_enum_name) {
-                        id
-                    } else {
-                        let (new_enum, _) = create_generic_enum(
-                            &full_enum_name,
-                            &enum_path.0,
-                            context,
-                            context_stack,
-                            lu_dog,
-                        );
-                        let x = s_read!(new_enum).id;
-                        #[allow(clippy::let_and_return)]
-                        x
-                    }
-                } else {
-                    woog_enum_id
-                };
-
-                let woog_enum = lu_dog.exhume_enumeration(&woog_enum_id).unwrap();
-
-                let data_struct = DataStructure::new_enumeration(&woog_enum, lu_dog);
-
-                let foo = s_read!(woog_enum).r88_enum_field(lu_dog);
-                let field = foo.iter().find(|field| {
-                    let field = s_read!(field);
-                    field.name == field_name
-                });
-
-                if let Some(_field) = field {
-                    let ty = lu_dog
-                        .iter_value_type()
-                        .find(|ty| {
-                            if let ValueTypeEnum::Enumeration(id) = s_read!(ty).subtype {
-                                id == woog_enum_id
-                            } else {
-                                false
-                            }
-                        })
-                        .unwrap();
-
-                    // let expr = Expression::new_enum_field(field, lu_dog);
-                    let struct_expr =
-                        StructExpression::new(Uuid::new_v4(), &data_struct, &x_path, lu_dog);
-                    let expr = Expression::new_struct_expression(&struct_expr, lu_dog);
-                    debug!("expression {expr:?}");
-
-                    let value = XValue::new_expression(block, &ty, &expr, lu_dog);
-                    update_span_value(&span, &value, location!());
-
-                    Ok(((expr, span), ty))
-                } else {
-                    Err(vec![DwarfError::NoSuchField {
-                        name: full_enum_name.to_owned(),
-                        name_span: path_span.to_owned(),
-                        field: field_name.to_owned(),
-                        file: context.file_name.to_owned(),
-                        span: field_span.to_owned(),
-                        location: location!(),
-                    }])
-                }
-            } else {
-                Err(vec![DwarfError::EnumNotFound {
-                    name: full_enum_name.to_owned(),
-                    file: context.file_name.to_owned(),
-                    span: path_span.to_owned(),
-                }])
-            }
-        }
+        ParserExpression::UnitEnum(enum_path, (field_name, field_span)) => unit_enum::inter(
+            &enum_path,
+            field_name,
+            field_span,
+            span,
+            block,
+            context,
+            context_stack,
+            lu_dog,
+        ),
         //
         // Range
         //
@@ -3272,20 +3110,23 @@ pub(super) fn inter_expression(
         //
         ParserExpression::Struct(name, fields) => {
             let name_span = &name.1;
-            let (root, name) = if let ParserExpression::LocalVariable(obj) = &name.0 {
-                (obj.to_owned(), obj.to_owned())
+            let (path, base, name) = if let ParserExpression::LocalVariable(obj) = &name.0 {
+                (PATH_ROOT.to_owned(), obj.to_owned(), obj.to_owned())
             } else if let ParserExpression::PathInExpression(types) = &name.0 {
-                let mut root = String::new();
+                let mut path = String::new();
+                let mut base = String::new();
                 let mut name = String::new();
 
                 for (i, ty) in types.iter().enumerate() {
                     if let Type::UserType((type_name, _), generics) = &ty.0 {
                         name.extend([type_name.as_str()]);
                         if i != types.len() - 1 {
+                            path.extend([type_name.as_str()]);
+                            path.extend(["::"]);
                             name.extend(["::"]);
                         }
                         if i == types.len() - 1 {
-                            root = name.clone();
+                            base = type_name.clone();
                         }
                         if !generics.is_empty() {
                             name.push('<');
@@ -3311,7 +3152,7 @@ pub(super) fn inter_expression(
                     }
                 }
 
-                (root, name)
+                (path, base, name)
             } else {
                 return Err(vec![DwarfError::Internal {
                     description: format!(
@@ -3326,7 +3167,9 @@ pub(super) fn inter_expression(
 
             // Here we don't de_sanitize the name, and we are looking it up in the
             // dwarf model.
-            let id = match lu_dog.exhume_woog_struct_id_by_name(&root) {
+            // 🚧 This method isn't sufficient any longer. The name can be aliased
+            // with a different path.
+            let id = match lu_dog.exhume_woog_struct_id_by_name(&base) {
                 Some(id) => id,
                 None => {
                     return Err(vec![DwarfError::UnknownType {
@@ -3543,7 +3386,11 @@ fn inter_module(
                 Ok(ast) => {
                     let path_name = format!("{}", path.display());
 
-                    let mut models = HashMap::default();
+                    let mut type_path = context.path.clone();
+                    type_path += name;
+                    type_path += PATH_SEP;
+
+                    // let mut models = HashMap::default();
                     let mut dirty = Vec::new();
 
                     let mut new_lu = LuDogStore::new();
@@ -3553,15 +3400,19 @@ fn inter_module(
                         &path_name,
                         context.cwd.clone(),
                         context.dwarf_home,
-                        &mut models,
+                        // &mut models,
+                        &mut context.models,
                         &mut dirty,
                         location!(),
                         lu_dog,
+                        type_path,
                     );
+
+                    // context.models.extend(models.into_iter());
 
                     // Extrusion time
                     trace!("processing dwarf import");
-                    walk_tree(&ast, &mut new_ctx, context_stack, &mut new_lu)?;
+                    walk_tree(&ast, &mut new_ctx, context_stack, lu_dog)?;
                     trace!("done processing dwarf import");
 
                     // Store this for future lookups.
@@ -3604,7 +3455,7 @@ fn inter_import(
         .iter()
         .map(|p| p.0.to_owned())
         .collect::<Vec<_>>();
-    let import_path = path_root.join("::");
+    let import_path = path_root.join(PATH_SEP);
 
     let module = path_root.get(0).unwrap(); // This will have _something_.
 
@@ -3641,7 +3492,7 @@ fn inter_import(
             match parse_dwarf(path.to_str().unwrap(), &source_code) {
                 Ok(ast) => {
                     let path = format!("{}", path.display());
-                    let mut models = HashMap::default();
+                    // let mut models = HashMap::default();
                     let mut dirty = Vec::new();
 
                     let mut new_lu = LuDogStore::new();
@@ -3651,15 +3502,19 @@ fn inter_import(
                         &path,
                         dir,
                         context.dwarf_home,
-                        &mut models,
+                        // &mut models,
+                        &mut context.models,
                         &mut dirty,
                         location!(),
                         lu_dog,
+                        format!("::{module}::"),
                     );
+
+                    // context.models.extend(&mut models.into_iter());
 
                     // Extrusion time
                     trace!("processing dwarf import");
-                    walk_tree(&ast, &mut new_ctx, context_stack, &mut new_lu)?;
+                    walk_tree(&ast, &mut new_ctx, context_stack, lu_dog)?;
                     trace!("done processing dwarf import");
 
                     // Store this for future lookups.
@@ -4468,9 +4323,10 @@ pub(crate) fn create_generic_struct(
     sarzak: &SarzakStore,
     lu_dog: &mut LuDogStore,
 ) -> RefType<WoogStruct> {
-    let mut name = s_read!(woog_struct).name.to_owned();
+    let woog_struct = s_read!(woog_struct);
+    let mut name = woog_struct.name.to_owned();
     name.push('<');
-    let first = s_read!(woog_struct).r102_struct_generic(lu_dog)[0].clone();
+    let first = woog_struct.r102_struct_generic(lu_dog)[0].clone();
     name.push_str(&s_read!(first).name);
     let mut id = s_read!(first).next;
     while let Some(next_id) = id {
@@ -4487,19 +4343,25 @@ pub(crate) fn create_generic_struct(
     }
     name.push('>');
 
-    let mut obj = s_read!(woog_struct).r4_object(sarzak);
+    let mut obj = woog_struct.r4_object(sarzak);
     let obj = if !obj.is_empty() {
         let obj = obj.pop().unwrap();
-        let obj = obj.read().unwrap().clone();
+        let obj = s_read!(obj).clone();
         Some(obj)
     } else {
         None
     };
 
-    let new_struct = WoogStruct::new(name.to_owned(), None, obj.as_ref(), lu_dog);
+    let new_struct = WoogStruct::new(
+        name.to_owned(),
+        context.path.clone(),
+        None,
+        obj.as_ref(),
+        lu_dog,
+    );
     context.dirty.push(Dirty::Struct(new_struct.clone()));
     let _ = ValueType::new_woog_struct(&new_struct, lu_dog);
-    for field in s_read!(woog_struct).r7_field(lu_dog) {
+    for field in woog_struct.r7_field(lu_dog) {
         let field = s_read!(field);
         let ty = &field.r5_value_type(lu_dog)[0];
         let _ = Field::new(field.name.to_owned(), &new_struct, ty, lu_dog);

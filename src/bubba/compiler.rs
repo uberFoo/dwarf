@@ -97,11 +97,7 @@ impl<'a> Context<'a> {
     }
 
     fn lu_dog_heel(&self) -> RefType<LuDogStore> {
-        self.extruder_context
-            .lu_dog
-            .get(ROOT_LU_DOG)
-            .unwrap()
-            .clone()
+        self.extruder_context.lu_dog.clone()
     }
 
     fn sarzak_heel(&self) -> RefType<SarzakStore> {
@@ -1137,13 +1133,13 @@ mod test {
         )
         .unwrap();
 
-        let lu_dog = ctx.lu_dog.get(ROOT_LU_DOG).unwrap().clone();
+        let ty = {
+            let mut lu_dog = s_write!(ctx.lu_dog);
 
-        let id = s_read!(lu_dog)
-            .exhume_enumeration_id_by_name("Foo")
-            .unwrap();
-        let woog_enum = s_read!(lu_dog).exhume_enumeration(&id).unwrap();
-        let ty = ValueType::new_enumeration(&woog_enum, &mut s_write!(lu_dog));
+            let id = lu_dog.exhume_enumeration_id_by_name("Foo").unwrap();
+            let woog_enum = lu_dog.exhume_enumeration(&id).unwrap();
+            ValueType::new_enumeration(&woog_enum, &mut lu_dog)
+        };
 
         let program = compile(&ctx).unwrap();
         println!("{program}");
@@ -1186,7 +1182,7 @@ mod test {
         )
         .unwrap();
 
-        let lu_dog = ctx.lu_dog.get(ROOT_LU_DOG).unwrap().clone();
+        let lu_dog = &ctx.lu_dog;
 
         let id = s_read!(lu_dog)
             .exhume_enumeration_id_by_name("Foo")
@@ -1398,7 +1394,7 @@ mod test {
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &true.into());
     }
 
-    // #[test]
+    #[test]
     fn use_std_option() {
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "

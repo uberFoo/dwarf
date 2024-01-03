@@ -79,6 +79,8 @@ mod keywords {
 }
 
 pub(crate) const ROOT_LU_DOG: &str = "__root__";
+pub(crate) const PATH_SEP: &str = "::";
+pub(crate) const PATH_ROOT: &str = PATH_SEP;
 
 use lu_dog::ObjectStore as LuDogStore;
 use sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL};
@@ -369,7 +371,7 @@ pub struct Context {
     /// The path to the source.
     pub source: String,
     /// This is the compiled source code.
-    pub lu_dog: HashMap<String, RefType<LuDogStore>>,
+    pub lu_dog: RefType<LuDogStore>,
     /// These are the plugins that represent imported domains.
     pub models: ModelStore,
     /// This contains things that the extruder added, that the interpreter
@@ -381,25 +383,20 @@ pub struct Context {
 
 impl Context {
     pub fn source(&self) -> String {
-        let lu_dog = self.lu_dog.get("").unwrap();
-        let source = s_read!(lu_dog).iter_dwarf_source_file().next().unwrap();
+        let source = s_read!(self.lu_dog)
+            .iter_dwarf_source_file()
+            .next()
+            .unwrap();
         let source = s_read!(source);
         source.source.clone()
-    }
-
-    pub fn add_lu_dog(&mut self, name: String, lu_dog: RefType<LuDogStore>) {
-        self.lu_dog.insert(name, lu_dog);
     }
 }
 
 impl Default for Context {
     fn default() -> Self {
-        let mut lu_dog = HashMap::default();
-        lu_dog.insert(ROOT_LU_DOG.into(), new_ref!(LuDogStore, LuDogStore::new()));
-
         Self {
             source: "unknown".into(),
-            lu_dog,
+            lu_dog: new_ref!(LuDogStore, LuDogStore::new()),
             models: HashMap::default(),
             dirty: Vec::default(),
             sarzak: new_ref!(

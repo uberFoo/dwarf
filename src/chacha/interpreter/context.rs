@@ -18,14 +18,14 @@ use crate::{
 
 #[derive(Clone, Debug)]
 pub struct ModelContext {
-    lu_dog: HashMap<String, RefType<LuDogStore>>,
+    lu_dog: RefType<LuDogStore>,
     sarzak: RefType<SarzakStore>,
     models: RefType<ModelStore>,
 }
 
 impl ModelContext {
     pub fn new(
-        lu_dog: HashMap<String, RefType<LuDogStore>>,
+        lu_dog: RefType<LuDogStore>,
         sarzak: RefType<SarzakStore>,
         models: RefType<ModelStore>,
     ) -> Self {
@@ -36,15 +36,8 @@ impl ModelContext {
         }
     }
 
-    pub fn lu_dogs(&self) -> Vec<(String, RefType<LuDogStore>)> {
-        self.lu_dog
-            .iter()
-            .map(|(k, v)| (k.clone(), v.clone()))
-            .collect()
-    }
-
     pub fn lu_dog(&self) -> &RefType<LuDogStore> {
-        &self.lu_dog.get(ROOT_LU_DOG).unwrap()
+        &self.lu_dog
     }
 
     pub fn sarzak(&self) -> &RefType<SarzakStore> {
@@ -109,7 +102,7 @@ impl Context {
         prompt: String,
         block: RefType<Block>,
         memory: Memory,
-        lu_dog: HashMap<String, RefType<LuDogStore>>,
+        lu_dog: RefType<LuDogStore>,
         sarzak: RefType<SarzakStore>,
         models: RefType<ModelStore>,
         mem_update_recv: Receiver<MemoryUpdateMessage>,
@@ -154,7 +147,7 @@ impl Context {
         prompt: String,
         block: RefType<Block>,
         memory: Memory,
-        lu_dog: HashMap<String, RefType<LuDogStore>>,
+        lu_dog: RefType<LuDogStore>,
         sarzak: RefType<SarzakStore>,
         models: RefType<ModelStore>,
         mem_update_recv: Receiver<MemoryUpdateMessage>,
@@ -337,10 +330,6 @@ impl Context {
 
     pub fn lu_dog_heel(&self) -> &RefType<LuDogStore> {
         self.models.lu_dog()
-    }
-
-    pub fn lu_dog_pack(&self) -> Vec<(String, RefType<LuDogStore>)> {
-        self.models.lu_dogs()
     }
 
     pub fn block(&self) -> &RefType<Block> {

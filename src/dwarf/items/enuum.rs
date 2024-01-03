@@ -14,7 +14,7 @@ use crate::{
         Enumeration, Field, Generic, Span as LuDogSpan, StructField, TupleField, Unit, ValueType,
         WoogStruct,
     },
-    s_read, s_write, Dirty, DwarfInteger, RefType,
+    s_read, s_write, Dirty, DwarfInteger, RefType, PATH_SEP,
 };
 
 macro_rules! link_generic {
@@ -54,7 +54,7 @@ pub fn inter_enum(
 ) -> Result<()> {
     debug!("inter_enum {name}");
 
-    let woog_enum = Enumeration::new(name.to_owned(), None, None, lu_dog);
+    let woog_enum = Enumeration::new(name.to_owned(), context.path.clone(), None, None, lu_dog);
     context.dirty.push(Dirty::Enum(woog_enum.clone()));
     let _ = ValueType::new_enumeration(&woog_enum, lu_dog);
 
@@ -77,13 +77,12 @@ pub fn inter_enum(
     for (number, ((field_name, span), field)) in variants.iter().enumerate() {
         match field {
             Some(EnumField::Struct(ref fields)) => {
-                // We create a struct in the store here so that it's available for construction
-                // in the struct expression code.
-                // Note that the name of the struct includes the name of the enum, with a path
-                // separator. This is cheap. I really need to think about how paths and imports
-                // and the like are going to work. The model will need some updating methinks.
+                let mut type_path = context.path.clone();
+                type_path += name;
+                type_path += PATH_SEP;
+
                 let woog_struct =
-                    WoogStruct::new(format!("{}::{}", name, field_name), None, None, lu_dog);
+                    WoogStruct::new(field_name.to_owned(), type_path, None, None, lu_dog);
                 context.dirty.push(Dirty::Struct(woog_struct.clone()));
                 let ty = ValueType::new_woog_struct(&woog_struct, lu_dog);
                 LuDogSpan::new(
@@ -237,7 +236,7 @@ pub fn inter_enum(
 pub(crate) fn create_generic_enum(
     enum_name: &str,
     enum_path: &ParserExpression,
-    context: &Context,
+    context: &mut Context,
     context_stack: &mut Vec<(String, RefType<LuDogStore>)>,
     lu_dog: &mut LuDogStore,
 ) -> (RefType<Enumeration>, RefType<ValueType>) {
@@ -287,7 +286,13 @@ pub(crate) fn create_generic_enum(
 
     debug!("interring generic enum {enum_name}");
 
-    let new_enum = Enumeration::new(enum_name.to_owned(), None, base_enum_impl.as_ref(), lu_dog);
+    let new_enum = Enumeration::new(
+        enum_name.to_owned(),
+        context.path.clone(),
+        None,
+        base_enum_impl.as_ref(),
+        lu_dog,
+    );
     let ty = ValueType::new_enumeration(&new_enum, lu_dog);
 
     let name_without_generics = enum_name.split('<').collect::<Vec<_>>()[0];

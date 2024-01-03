@@ -1,4 +1,4 @@
-use std::Option;
+use std::option::Option;
 
 enum Simple {
     Foo,

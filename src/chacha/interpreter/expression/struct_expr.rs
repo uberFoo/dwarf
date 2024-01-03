@@ -107,9 +107,13 @@ pub fn eval(expr: &SarzakStorePtr, context: &mut Context, vm: &mut VM) -> Result
                 } else {
                     unreachable!()
                 };
-            let ty = s_read!(woog_struct).r1_value_type(&s_read!(lu_dog))[0].clone();
+            let woog_struct = s_read!(woog_struct);
+            let ty = woog_struct.r1_value_type(&s_read!(lu_dog))[0].clone();
 
-            let mut user_type = UserStruct::new(&s_read!(woog_struct).name, &ty);
+            let mut name = format!("{}{}", woog_struct.x_path, woog_struct.name);
+            let name = name.strip_prefix("::").unwrap();
+
+            let mut user_type = UserStruct::new(name, &ty);
             for (name, value) in field_exprs {
                 user_type.define_field(&name, value);
             }
