@@ -1,3 +1,5 @@
+use snafu::{location, Location};
+
 use crate::{
     bubba::{
         compiler::{compile_expression, get_span, CThonk, Context, Result},
@@ -85,10 +87,15 @@ fn compile_static_method_call(
                 thonk.add_instruction_with_span(
                     Instruction::Push(new_ref!(Value, true.into())),
                     span.clone(),
+                    location!(),
                 );
-                thonk.add_instruction_with_span(Instruction::TestEq, span.clone());
-                thonk.add_instruction_with_span(Instruction::JumpIfTrue(1), span.clone());
-                thonk.add_instruction_with_span(Instruction::HaltAndCatchFire, span);
+                thonk.add_instruction_with_span(Instruction::TestEq, span.clone(), location!());
+                thonk.add_instruction_with_span(
+                    Instruction::JumpIfTrue(1),
+                    span.clone(),
+                    location!(),
+                );
+                thonk.add_instruction_with_span(Instruction::HaltAndCatchFire, span, location!());
             }
             ASSERT_EQ => {
                 let lhs = &args[0];
@@ -97,9 +104,13 @@ fn compile_static_method_call(
                 compile_expression(lhs, thonk, context, lhs_span)?;
                 let rhs_span = get_span(rhs, &lu_dog);
                 compile_expression(rhs, thonk, context, rhs_span)?;
-                thonk.add_instruction_with_span(Instruction::TestEq, span.clone());
-                thonk.add_instruction_with_span(Instruction::JumpIfTrue(1), span.clone());
-                thonk.add_instruction_with_span(Instruction::HaltAndCatchFire, span);
+                thonk.add_instruction_with_span(Instruction::TestEq, span.clone(), location!());
+                thonk.add_instruction_with_span(
+                    Instruction::JumpIfTrue(1),
+                    span.clone(),
+                    location!(),
+                );
+                thonk.add_instruction_with_span(Instruction::HaltAndCatchFire, span, location!());
             }
             _ => todo!("handle other chacha methods"),
         },
@@ -167,7 +178,7 @@ fn compile_function_call(
         context.insert_symbol(name);
     }
 
-    thonk.add_instruction(Instruction::Call(args.len()));
+    thonk.add_instruction(Instruction::Call(args.len()), location!());
 
     Ok(())
 }

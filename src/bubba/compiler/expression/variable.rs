@@ -1,3 +1,5 @@
+use snafu::{location, Location};
+
 use crate::{
     bubba::{
         compiler::{CThonk, Context, Result},
@@ -21,15 +23,15 @@ pub(in crate::bubba::compiler) fn compile(
 
     // dbg!(&name, &context.symbol_tables);
     if let Some(index) = context.get_symbol(name) {
-        thonk.add_instruction_with_span(Instruction::FetchLocal(index), span);
+        thonk.add_instruction_with_span(Instruction::FetchLocal(index), span, location!());
     } else {
         let name = new_ref!(Value, Value::String(name.to_owned()));
         // We are here because we need to look up a function.
-        thonk.add_instruction(Instruction::CallDestination(name.clone()));
+        thonk.add_instruction(Instruction::CallDestination(name.clone()), location!());
 
         // This instruction will be patched by the VM with the number of locals in the
         // function.
-        thonk.add_instruction(Instruction::LocalCardinality(name));
+        thonk.add_instruction(Instruction::LocalCardinality(name), location!());
     }
 
     Ok(())

@@ -1,3 +1,5 @@
+use snafu::{location, Location};
+
 use crate::{
     bubba::{
         compiler::{compile_expression, get_span, CThonk, Context, Result},
@@ -33,7 +35,7 @@ pub(in crate::bubba::compiler) fn compile(
                 BinaryEnum::Addition(_) => {
                     compile_expression(&lhs, thonk, context, lhs_span)?;
                     compile_expression(&rhs, thonk, context, rhs_span)?;
-                    thonk.add_instruction_with_span(Instruction::Add, span);
+                    thonk.add_instruction_with_span(Instruction::Add, span, location!());
                 }
                 BinaryEnum::Assignment(_) => {
                     let offset = if let ExpressionEnum::VariableExpression(ref expr) =
@@ -49,7 +51,11 @@ pub(in crate::bubba::compiler) fn compile(
                     };
 
                     compile_expression(&rhs, thonk, context, rhs_span)?;
-                    thonk.add_instruction_with_span(Instruction::StoreLocal(offset), span);
+                    thonk.add_instruction_with_span(
+                        Instruction::StoreLocal(offset),
+                        span,
+                        location!(),
+                    );
                 }
                 BinaryEnum::BooleanOperator(ref op) => {
                     let boolean_operator = lu_dog.exhume_boolean_operator(op).unwrap();
@@ -58,27 +64,27 @@ pub(in crate::bubba::compiler) fn compile(
                     compile_expression(&rhs, thonk, context, rhs_span)?;
                     match &boolean_operator.subtype {
                         BooleanOperatorEnum::And(_) => {
-                            thonk.add_instruction_with_span(Instruction::And, span);
+                            thonk.add_instruction_with_span(Instruction::And, span, location!());
                         }
                         BooleanOperatorEnum::Or(_) => {
-                            thonk.add_instruction_with_span(Instruction::Or, span);
+                            thonk.add_instruction_with_span(Instruction::Or, span, location!());
                         }
                     }
                 }
                 BinaryEnum::Division(_) => {
                     compile_expression(&lhs, thonk, context, lhs_span)?;
                     compile_expression(&rhs, thonk, context, rhs_span)?;
-                    thonk.add_instruction_with_span(Instruction::Divide, span);
+                    thonk.add_instruction_with_span(Instruction::Divide, span, location!());
                 }
                 BinaryEnum::Subtraction(_) => {
                     compile_expression(&lhs, thonk, context, lhs_span)?;
                     compile_expression(&rhs, thonk, context, rhs_span)?;
-                    thonk.add_instruction_with_span(Instruction::Subtract, span);
+                    thonk.add_instruction_with_span(Instruction::Subtract, span, location!());
                 }
                 BinaryEnum::Multiplication(_) => {
                     compile_expression(&lhs, thonk, context, lhs_span)?;
                     compile_expression(&rhs, thonk, context, rhs_span)?;
-                    thonk.add_instruction_with_span(Instruction::Multiply, span);
+                    thonk.add_instruction_with_span(Instruction::Multiply, span, location!());
                 }
             }
         }
@@ -93,12 +99,16 @@ pub(in crate::bubba::compiler) fn compile(
                 ComparisonEnum::Equal(_) => {
                     compile_expression(&lhs, thonk, context, lhs_span)?;
                     compile_expression(&rhs, thonk, context, rhs_span)?;
-                    thonk.add_instruction_with_span(Instruction::TestEq, span);
+                    thonk.add_instruction_with_span(Instruction::TestEq, span, location!());
                 }
                 ComparisonEnum::LessThanOrEqual(_) => {
                     compile_expression(&lhs, thonk, context, lhs_span)?;
                     compile_expression(&rhs, thonk, context, rhs_span)?;
-                    thonk.add_instruction_with_span(Instruction::TestLessThanOrEqual, span);
+                    thonk.add_instruction_with_span(
+                        Instruction::TestLessThanOrEqual,
+                        span,
+                        location!(),
+                    );
                 }
                 _ => todo!("comparison"),
             }
@@ -109,7 +119,7 @@ pub(in crate::bubba::compiler) fn compile(
             compile_expression(&lhs, thonk, context, lhs_span)?;
             match &unary.subtype {
                 UnaryEnum::Not(_) => {
-                    thonk.add_instruction_with_span(Instruction::Not, span);
+                    thonk.add_instruction_with_span(Instruction::Not, span, location!());
                 }
                 _ => todo!("unary"),
             }

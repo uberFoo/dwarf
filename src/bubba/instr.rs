@@ -46,6 +46,12 @@ pub enum Instruction {
     /// we are calling. It is patched by the VM before execution.
     ///
     CallDestination(RefType<Value>),
+    /// Comment Instruction / NOP
+    ///
+    /// I don't like this because it increases the size of the instruction by 50%
+    /// -- from 16 bytes to 24.
+    ///
+    Comment(String),
     /// Divide the top two values on the stack.
     ///
     Divide,
@@ -312,6 +318,12 @@ impl fmt::Display for Instruction {
                 "{} {}",
                 opcode_style.paint("calld"),
                 operand_style.paint(s_read!(name).to_string())
+            ),
+            Instruction::Comment(comment) => write!(
+                f,
+                "{} {}",
+                opcode_style.paint("nop "),
+                operand_style.paint(comment.to_string())
             ),
             Instruction::Divide => write!(f, "{}", opcode_style.paint("div ")),
             Instruction::Dup => write!(f, "{}", opcode_style.paint("dup ")),

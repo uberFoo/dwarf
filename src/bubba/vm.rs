@@ -5,7 +5,7 @@ use snafu::{location, prelude::*, Location};
 
 use crate::{
     chacha::value::{EnumVariant, TupleEnum, UserStruct},
-    new_ref, s_read, s_write, ChaChaError, DwarfInteger, NewRef, RefType, Span, Value, PATH_ROOT,
+    new_ref, s_read, s_write, ChaChaError, DwarfInteger, NewRef, RefType, Span, Value,
 };
 
 use super::instr::{Instruction, Program};
@@ -263,6 +263,7 @@ impl VM {
                         self.stack.push(result);
                         1
                     }
+                    Instruction::Comment(_) => 1,
                     Instruction::Divide => {
                         let b = self.stack.pop().unwrap();
                         let a = self.stack.pop().unwrap();
@@ -959,7 +960,7 @@ mod tests {
         bubba::instr::Thonk,
         dwarf::{DwarfFloat, DwarfInteger},
         interpreter::{initialize_interpreter, PrintableValueType},
-        Context, ROOT_LU_DOG,
+        Context,
     };
 
     use super::*;
@@ -1248,6 +1249,7 @@ mod tests {
         use crate::{
             chacha::value::UserStruct,
             lu_dog::{Field, ValueType, WoogStruct},
+            PATH_ROOT,
         };
         use sarzak::sarzak::{ObjectStore as SarzakStore, Ty, MODEL as SARZAK_MODEL};
 

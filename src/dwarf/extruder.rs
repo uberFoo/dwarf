@@ -27,10 +27,9 @@ use crate::{
             ExpressionEnum, ExpressionStatement, Field, FieldExpression, ForLoop, FunctionCall,
             Generic, ImplementationBlock, Index, IntegerLiteral, Item as WoogItem, ItemStatement,
             Lambda, LambdaParameter, LetStatement, Literal, LocalVariable, NamedFieldExpression,
-            PathElement, Pattern as AssocPat, RangeExpression, Span as LuDogSpan, Statement,
-            StringLiteral, StructExpression, ValueType, ValueTypeEnum, Variable,
-            VariableExpression, WoogStruct, XFuture, XIf, XMatch, XPath, XPrint, XValue,
-            XValueEnum,
+            Pattern as AssocPat, RangeExpression, Span as LuDogSpan, Statement, StringLiteral,
+            StructExpression, ValueType, ValueTypeEnum, Variable, VariableExpression, WoogStruct,
+            XFuture, XIf, XMatch, XPath, XPrint, XValue, XValueEnum,
         },
         Argument, Binary, BooleanLiteral, Comparison, DwarfSourceFile, FieldAccess,
         FieldAccessTarget, FloatLiteral, List, ListElement, ListExpression, MethodCall, Operator,
@@ -38,7 +37,7 @@ use crate::{
     },
     new_ref, s_read, s_write,
     sarzak::{store::ObjectStore as SarzakStore, types::Ty},
-    Context as InterContext, Dirty, ModelStore, NewRef, RefType, PATH_ROOT, PATH_SEP, ROOT_LU_DOG,
+    Context as InterContext, Dirty, ModelStore, NewRef, RefType, PATH_ROOT, PATH_SEP,
 };
 
 pub(super) const EXTENSION_DIR: &str = "extensions";
@@ -3110,7 +3109,7 @@ pub(super) fn inter_expression(
         //
         ParserExpression::Struct(name, fields) => {
             let name_span = &name.1;
-            let (path, base, name) = if let ParserExpression::LocalVariable(obj) = &name.0 {
+            let (_path, base, name) = if let ParserExpression::LocalVariable(obj) = &name.0 {
                 (PATH_ROOT.to_owned(), obj.to_owned(), obj.to_owned())
             } else if let ParserExpression::PathInExpression(types) = &name.0 {
                 let mut path = String::new();
@@ -3393,7 +3392,6 @@ fn inter_module(
                     // let mut models = HashMap::default();
                     let mut dirty = Vec::new();
 
-                    let mut new_lu = LuDogStore::new();
                     let mut new_ctx = Context::new(
                         source_code,
                         context.sarzak,
@@ -3408,16 +3406,10 @@ fn inter_module(
                         type_path,
                     );
 
-                    // context.models.extend(models.into_iter());
-
                     // Extrusion time
                     trace!("processing dwarf import");
                     walk_tree(&ast, &mut new_ctx, context_stack, lu_dog)?;
                     trace!("done processing dwarf import");
-
-                    // Store this for future lookups.
-                    // 🚧 Punting on the path. It really should have the parent's prefix...
-                    context_stack.push((name.to_owned(), new_ref!(LuDogStore, new_lu)));
                 }
                 Err(_) => {
                     return Ok(());
@@ -3455,7 +3447,7 @@ fn inter_import(
         .iter()
         .map(|p| p.0.to_owned())
         .collect::<Vec<_>>();
-    let import_path = path_root.join(PATH_SEP);
+    // let import_path = path_root.join(PATH_SEP);
 
     let module = path_root.get(0).unwrap(); // This will have _something_.
 
@@ -3495,7 +3487,6 @@ fn inter_import(
                     // let mut models = HashMap::default();
                     let mut dirty = Vec::new();
 
-                    let mut new_lu = LuDogStore::new();
                     let mut new_ctx = Context::new(
                         source_code,
                         context.sarzak,
@@ -3510,15 +3501,10 @@ fn inter_import(
                         format!("::{module}::"),
                     );
 
-                    // context.models.extend(&mut models.into_iter());
-
                     // Extrusion time
                     trace!("processing dwarf import");
                     walk_tree(&ast, &mut new_ctx, context_stack, lu_dog)?;
                     trace!("done processing dwarf import");
-
-                    // Store this for future lookups.
-                    context_stack.push((import_path, new_ref!(LuDogStore, new_lu)));
                 }
                 Err(_) => {
                     e_warn!("Failed to parse import: {path:?}");

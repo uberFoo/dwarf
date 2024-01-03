@@ -78,7 +78,6 @@ mod keywords {
     pub(crate) const UUID_TYPE: &str = "Uuid";
 }
 
-pub(crate) const ROOT_LU_DOG: &str = "__root__";
 pub(crate) const PATH_SEP: &str = "::";
 pub(crate) const PATH_ROOT: &str = PATH_SEP;
 

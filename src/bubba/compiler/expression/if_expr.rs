@@ -1,3 +1,5 @@
+use snafu::{location, Location};
+
 use crate::{
     bubba::{
         compiler::{compile_expression, get_span, CThonk, Context, Result},
@@ -21,8 +23,11 @@ pub(in crate::bubba::compiler) fn compile(
     let cond_expr_span = get_span(&cond_expr, &lu_dog);
     compile_expression(&cond_expr, thonk, context, cond_expr_span)?;
 
-    thonk.add_instruction(Instruction::Push(new_ref!(Value, Value::Boolean(true))));
-    thonk.add_instruction(Instruction::TestEq);
+    thonk.add_instruction(
+        Instruction::Push(new_ref!(Value, Value::Boolean(true))),
+        location!(),
+    );
+    thonk.add_instruction(Instruction::TestEq, location!());
 
     // Compile the false block
     let false_thonk = if let Some(ref expr) = expr.false_block {
@@ -56,12 +61,13 @@ pub(in crate::bubba::compiler) fn compile(
     let true_block_len = true_thonk.get_instruction_card() as isize;
     context.pop_symbol_table();
 
-    thonk.add_instruction(Instruction::JumpIfFalse(true_block_len + 1));
+    thonk.add_instruction(Instruction::JumpIfFalse(true_block_len + 1), location!());
     thonk.append(true_thonk);
     if let Some(false_thonk) = &false_thonk {
-        thonk.add_instruction(Instruction::Jump(
-            false_thonk.get_instruction_card() as isize
-        ));
+        thonk.add_instruction(
+            Instruction::Jump(false_thonk.get_instruction_card() as isize),
+            location!(),
+        );
     }
     if let Some(false_thonk) = false_thonk {
         thonk.append(false_thonk);

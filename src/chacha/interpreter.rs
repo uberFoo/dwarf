@@ -29,7 +29,7 @@ use crate::{
         Statement, StatementEnum, ValueType, ValueTypeEnum, Variable, XValue,
     },
     new_ref, s_read, s_write, ChaChaError, Context as ExtruderContext, Dirty, DwarfInteger,
-    ModelStore, NewRef, RefType, Value, ROOT_LU_DOG,
+    ModelStore, NewRef, RefType, Value,
 };
 
 mod banner;

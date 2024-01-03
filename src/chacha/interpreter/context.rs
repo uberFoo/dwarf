@@ -5,7 +5,6 @@ use puteketeke::{Executor, Worker};
 
 use circular_queue::CircularQueue;
 use crossbeam::channel::{Receiver, Sender};
-use rustc_hash::FxHashMap as HashMap;
 
 use crate::{
     bubba::Program,
@@ -13,7 +12,7 @@ use crate::{
     lu_dog::{Block, ObjectStore as LuDogStore, ValueType},
     new_ref, s_read, s_write,
     sarzak::{ObjectStore as SarzakStore, Ty},
-    Dirty, ModelStore, NewRef, RefType, Value, ROOT_LU_DOG,
+    Dirty, ModelStore, NewRef, RefType, Value,
 };
 
 #[derive(Clone, Debug)]

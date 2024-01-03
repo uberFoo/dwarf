@@ -12,7 +12,7 @@ use crate::{
         store::ObjectStore as LuDogStore, Binary, Block, BooleanOperator, Expression, Operator,
         Span, ValueType, ValueTypeEnum, XValue,
     },
-    new_ref, s_read, s_write,
+    new_ref, s_read,
     sarzak::Ty,
     NewRef, RefType,
 };

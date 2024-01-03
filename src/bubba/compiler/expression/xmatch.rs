@@ -1,16 +1,19 @@
+use snafu::{location, Location};
+
 use crate::{
     bubba::{
-        compiler::{compile_expression, get_span, CThonk, Context, Result},
+        compiler::{compile_expression, expression::literal, get_span, CThonk, Context, Result},
         instr::Instruction,
     },
     lu_dog::ExpressionEnum,
-    s_read, SarzakStorePtr,
+    s_read, SarzakStorePtr, Span,
 };
 
 pub(in crate::bubba::compiler) fn compile(
     expr: &SarzakStorePtr,
     thonk: &mut CThonk,
     context: &mut Context,
+    span: Span,
 ) -> Result<()> {
     let lu_dog = context.lu_dog_heel().clone();
     let lu_dog = s_read!(lu_dog);
@@ -29,26 +32,61 @@ pub(in crate::bubba::compiler) fn compile(
         let expr = pattern.r92_expression(&lu_dog)[0].clone();
 
         // Duplicate the scrutinee
-        thonk.add_instruction(Instruction::Dup);
+        thonk.add_instruction(Instruction::Dup, location!());
 
+        // Setup locals for the match expression
         match &s_read!(match_expr).subtype {
-            ExpressionEnum::Literal(_) => {}
+            ExpressionEnum::Literal(ref literal) => {
+                literal::compile(literal, thonk, context, span.clone())?
+            }
             ExpressionEnum::StructExpression(ref id) => {
                 let struct_expr = lu_dog.exhume_struct_expression(id).unwrap();
+                let struct_expr = s_read!(struct_expr);
+                let field_exprs = struct_expr.r26_field_expression(&lu_dog);
+                for f in field_exprs {
+                    let expr = s_read!(f).r15_expression(&lu_dog)[0].clone();
+                    let expr = s_read!(expr);
+                    match &expr.subtype {
+                        ExpressionEnum::FieldExpression(ref id) => {
+                            let expr = lu_dog.exhume_field_expression(id).unwrap();
+                            let expr = s_read!(expr).r38_expression(&lu_dog)[0].clone();
+
+                            let expr = s_read!(expr);
+                            match &expr.subtype {
+                                ExpressionEnum::Literal(_) => {}
+                                ExpressionEnum::VariableExpression(ref id) => {
+                                    let var = lu_dog.exhume_variable_expression(id).unwrap();
+                                    let idx = context.insert_symbol(s_read!(var).name.clone());
+                                    thonk.increment_frame_size();
+
+                                    thonk.add_instruction(Instruction::Dup, location!());
+                                    thonk
+                                        .add_instruction(Instruction::StoreLocal(idx), location!());
+                                }
+                                todo => {
+                                    todo!("Match expression, field expression, type: {todo:?}");
+                                }
+                            }
+                        }
+                        todo => {
+                            todo!("Match expression type: {todo:?}");
+                        }
+                    }
+                }
             }
             ExpressionEnum::VariableExpression(ref id) => {
                 let var = lu_dog.exhume_variable_expression(id).unwrap();
                 let idx = context.insert_symbol(s_read!(var).name.clone());
                 thonk.increment_frame_size();
 
-                thonk.add_instruction(Instruction::Dup);
-                thonk.add_instruction(Instruction::StoreLocal(idx));
+                thonk.add_instruction(Instruction::Dup, location!());
+                thonk.add_instruction(Instruction::StoreLocal(idx), location!());
             }
             todo => todo!("Match expression type: {todo:?}"),
         }
 
-        compile_expression(&match_expr, thonk, context, get_span(&match_expr, &lu_dog))?;
-        thonk.add_instruction(Instruction::TestEq);
+        // compile_expression(&match_expr, thonk, context, get_span(&match_expr, &lu_dog))?;
+        thonk.add_instruction(Instruction::TestEq, location!());
 
         // Compile the block if we match.
         context.push_symbol_table();
@@ -63,16 +101,16 @@ pub(in crate::bubba::compiler) fn compile(
         context.pop_symbol_table();
 
         // Jump over the matching block if we don't match.
-        thonk.add_instruction(Instruction::JumpIfFalse(match_len + 1));
+        thonk.add_instruction(Instruction::JumpIfFalse(match_len + 1), location!());
 
         // Insert the compiled matching block
         thonk.append(match_thonk);
 
         // Return if we matched.
-        thonk.add_instruction(Instruction::Return);
+        thonk.add_instruction(Instruction::Return, location!());
     }
 
-    thonk.add_instruction(Instruction::HaltAndCatchFire);
+    thonk.add_instruction(Instruction::HaltAndCatchFire, location!());
 
     Ok(())
 }

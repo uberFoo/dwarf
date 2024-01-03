@@ -1,3 +1,5 @@
+use snafu::{location, Location};
+
 use crate::{
     bubba::{
         compiler::{compile_expression, get_span, CThonk, Context, Result},
@@ -25,7 +27,7 @@ pub(in crate::bubba::compiler) fn compile(
     let index_expr_span = get_span(&index_expr, &lu_dog);
     compile_expression(&index_expr, thonk, context, index_expr_span)?;
 
-    thonk.add_instruction_with_span(Instruction::Index, span);
+    thonk.add_instruction_with_span(Instruction::Index, span, location!());
 
     Ok(())
 }

@@ -1,3 +1,5 @@
+use snafu::{location, Location};
+
 use crate::{
     bubba::{
         compiler::{compile_expression, get_span, CThonk, Context, Result},
@@ -55,7 +57,7 @@ pub(in crate::bubba::compiler) fn compile(
                     Value,
                     Value::Enumeration(EnumVariant::Unit(ty, path, s_read!(pe).name.to_owned()))
                 );
-                thonk.add_instruction(Instruction::Push(value));
+                thonk.add_instruction(Instruction::Push(value), location!());
             } else {
                 let field_count = field_exprs.len();
                 for f in field_exprs {
@@ -66,11 +68,15 @@ pub(in crate::bubba::compiler) fn compile(
 
                 let ty = new_ref!(Value, Value::ValueType((*s_read!(ty)).to_owned()));
                 let path = new_ref!(Value, Value::String(path));
-                thonk.add_instruction(Instruction::Push(ty));
-                thonk.add_instruction(Instruction::Push(path));
-                thonk.add_instruction(Instruction::Push(variant));
+                thonk.add_instruction(Instruction::Push(ty), location!());
+                thonk.add_instruction(Instruction::Push(path), location!());
+                thonk.add_instruction(Instruction::Push(variant), location!());
 
-                thonk.add_instruction_with_span(Instruction::NewTupleEnum(field_count), span);
+                thonk.add_instruction_with_span(
+                    Instruction::NewTupleEnum(field_count),
+                    span,
+                    location!(),
+                );
             }
         }
         DataStructureEnum::WoogStruct(_) => {

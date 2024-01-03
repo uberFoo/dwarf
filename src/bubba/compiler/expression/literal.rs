@@ -1,3 +1,5 @@
+use snafu::{location, Location};
+
 use crate::{
     bubba::{
         compiler::{CThonk, Context, Error, Result},
@@ -62,7 +64,7 @@ pub(in crate::bubba::compiler) fn compile(
         }
     };
 
-    thonk.add_instruction_with_span(Instruction::Push(literal?), span);
+    thonk.add_instruction_with_span(Instruction::Push(literal?), span, location!());
 
     Ok(())
 }

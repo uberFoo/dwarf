@@ -7,12 +7,9 @@ use tracy_client::Client;
 
 use sarzak::sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL};
 
-use dwarf::{
-    dwarf::{
-        error::{FileSnafu, IOSnafu, Result},
-        new_lu_dog, parse_dwarf,
-    },
-    s_read,
+use dwarf::dwarf::{
+    error::{FileSnafu, IOSnafu, Result},
+    new_lu_dog, parse_dwarf,
 };
 
 const TARGET_DIR: &str = "target";
@@ -149,7 +146,7 @@ fn main() -> Result<()> {
         })
         .into();
 
-    let ctx = match new_lu_dog(
+    let _ctx = match new_lu_dog(
         args.source.to_str().unwrap().to_owned(),
         Some((source_code.clone(), &ast)),
         &dwarf_home,

@@ -1,8 +1,9 @@
 use std::path::PathBuf;
 
 use ansi_term::Colour;
+use log::{self, log_enabled, Level::Trace};
 use rustc_hash::FxHashMap as HashMap;
-use snafu::prelude::*;
+use snafu::{location, prelude::*, Location};
 
 use crate::{
     bubba::instr::{Instruction, Program, Thonk},
@@ -12,7 +13,7 @@ use crate::{
     },
     new_ref, s_read,
     sarzak::ObjectStore as SarzakStore,
-    Context as ExtruderContext, NewRef, RefType, Span, Value, ROOT_LU_DOG,
+    Context as ExtruderContext, NewRef, RefType, Span, Value,
 };
 
 mod expression;
@@ -51,11 +52,34 @@ impl CThonk {
         }
     }
 
-    fn add_instruction(&mut self, instruction: Instruction) {
+    fn add_instruction(&mut self, instruction: Instruction, location: Location) {
+        if log_enabled!(target: "instr", Trace) {
+            self.inner.add_instruction(
+                Instruction::Comment(format!(
+                    "{}:{}:{}",
+                    location.file, location.line, location.column
+                )),
+                None,
+            );
+        }
         self.inner.add_instruction(instruction, None);
     }
 
-    fn add_instruction_with_span(&mut self, instruction: Instruction, span: Span) {
+    fn add_instruction_with_span(
+        &mut self,
+        instruction: Instruction,
+        span: Span,
+        location: Location,
+    ) {
+        if log_enabled!(target: "instr", Trace) {
+            self.inner.add_instruction(
+                Instruction::Comment(format!(
+                    "{}:{}:{}",
+                    location.file, location.line, location.column
+                )),
+                None,
+            );
+        }
         self.inner.add_instruction(instruction, Some(span));
     }
 
@@ -200,16 +224,22 @@ fn compile_function(func: &RefType<Function>, context: &mut Context) -> Result<C
                         } else if thonk.returned {
                             break;
                         } else {
-                            thonk.add_instruction(Instruction::Push(new_ref!(Value, Value::Empty)));
-                            thonk.add_instruction(Instruction::Return);
+                            thonk.add_instruction(
+                                Instruction::Push(new_ref!(Value, Value::Empty)),
+                                location!(),
+                            );
+                            thonk.add_instruction(Instruction::Return, location!());
                             thonk.returned = true;
                             break;
                         }
                     }
                 }
             } else {
-                thonk.add_instruction(Instruction::Push(new_ref!(Value, Value::Empty)));
-                thonk.add_instruction(Instruction::Return);
+                thonk.add_instruction(
+                    Instruction::Push(new_ref!(Value, Value::Empty)),
+                    location!(),
+                );
+                thonk.add_instruction(Instruction::Return, location!());
                 thonk.returned = true;
             }
         }
@@ -255,7 +285,7 @@ fn compile_statement(
             let name = var.name;
             let offset = context.insert_symbol(name.clone());
 
-            thonk.add_instruction(Instruction::StoreLocal(offset));
+            thonk.add_instruction(Instruction::StoreLocal(offset), location!());
             thonk.increment_frame_size();
         }
         StatementEnum::ResultStatement(ref stmt) => {
@@ -265,7 +295,7 @@ fn compile_statement(
             let span = get_span(&expr, &lu_dog);
             compile_expression(&expr, thonk, context, span)?;
 
-            thonk.add_instruction(Instruction::Return);
+            thonk.add_instruction(Instruction::Return, location!());
             thonk.returned = true;
         }
         StatementEnum::ItemStatement(_) => {}
@@ -301,7 +331,7 @@ fn compile_expression(
             variable::compile(expr, thonk, context, span)?
         }
         ExpressionEnum::XIf(ref expr) => if_expr::compile(expr, thonk, context)?,
-        ExpressionEnum::XMatch(ref expr) => xmatch::compile(expr, thonk, context)?,
+        ExpressionEnum::XMatch(ref expr) => xmatch::compile(expr, thonk, context, span)?,
         ExpressionEnum::XPrint(ref print) => print::compile(print, thonk, context)?,
         missed => {
             panic!("Implement: {:?}", missed);
@@ -359,6 +389,9 @@ mod test {
 
     #[test]
     fn empty_func() {
+        let _ = env_logger::builder().is_test(true).try_init();
+        color_backtrace::install();
+
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "fn main() {}";
         let ast = parse_dwarf("empty_func", ore).unwrap();
@@ -379,6 +412,9 @@ mod test {
 
     #[test]
     fn empty_funcs() {
+        let _ = env_logger::builder().is_test(true).try_init();
+        color_backtrace::install();
+
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "fn main() {}
                    fn foo() {}
@@ -403,6 +439,9 @@ mod test {
 
     #[test]
     fn print_hello_world() {
+        let _ = env_logger::builder().is_test(true).try_init();
+        color_backtrace::install();
+
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "fn main() {
                        print(\"Hello, world!\");
@@ -427,6 +466,9 @@ mod test {
 
     #[test]
     fn func_call() {
+        let _ = env_logger::builder().is_test(true).try_init();
+        color_backtrace::install();
+
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "fn main() {
                        foo();
@@ -455,6 +497,9 @@ mod test {
 
     #[test]
     fn test_let_statements() {
+        let _ = env_logger::builder().is_test(true).try_init();
+        color_backtrace::install();
+
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "fn main() -> int {
                        let z = 1;
@@ -482,6 +527,9 @@ mod test {
 
     #[test]
     fn test_func_args() {
+        let _ = env_logger::builder().is_test(true).try_init();
+        color_backtrace::install();
+
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "fn main() -> int {
                        foo(1, 2, 3)
@@ -510,6 +558,9 @@ mod test {
 
     #[test]
     fn test_func_args_and_locals() {
+        let _ = env_logger::builder().is_test(true).try_init();
+        color_backtrace::install();
+
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "fn main() -> int {
                        foo(1, 2, 3)
@@ -541,6 +592,9 @@ mod test {
 
     #[test]
     fn test_argument_ordering() {
+        let _ = env_logger::builder().is_test(true).try_init();
+        color_backtrace::install();
+
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "fn main() {
                        foo(1, 2, 3)
@@ -571,6 +625,9 @@ mod test {
 
     #[test]
     fn test_add_strings() {
+        let _ = env_logger::builder().is_test(true).try_init();
+        color_backtrace::install();
+
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "fn main() -> string {
                        \"Hello, \" + \"world!\"
@@ -598,6 +655,9 @@ mod test {
 
     #[test]
     fn test_subtraction() {
+        let _ = env_logger::builder().is_test(true).try_init();
+        color_backtrace::install();
+
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "fn main() -> int {
                        5 - 2
@@ -622,6 +682,9 @@ mod test {
 
     #[test]
     fn test_multiplication() {
+        let _ = env_logger::builder().is_test(true).try_init();
+        color_backtrace::install();
+
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "fn main() -> int {
                        5 * 2
@@ -647,6 +710,9 @@ mod test {
 
     #[test]
     fn test_division() {
+        let _ = env_logger::builder().is_test(true).try_init();
+        color_backtrace::install();
+
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "fn main() -> int {
                        5 / 2
@@ -672,6 +738,9 @@ mod test {
 
     #[test]
     fn test_boolean_true() {
+        let _ = env_logger::builder().is_test(true).try_init();
+        color_backtrace::install();
+
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "fn main() -> bool {
                        true
@@ -697,6 +766,9 @@ mod test {
 
     #[test]
     fn test_boolean_false() {
+        let _ = env_logger::builder().is_test(true).try_init();
+        color_backtrace::install();
+
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "fn main() -> bool {
                        false
@@ -722,6 +794,9 @@ mod test {
 
     #[test]
     fn test_assignment() {
+        let _ = env_logger::builder().is_test(true).try_init();
+        color_backtrace::install();
+
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "fn main() -> int {
                        let x = 5;
@@ -749,6 +824,9 @@ mod test {
 
     #[test]
     fn test_for_in_range() {
+        let _ = env_logger::builder().is_test(true).try_init();
+        color_backtrace::install();
+
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "fn main() -> int {
                        let x = 0;
@@ -781,6 +859,9 @@ mod test {
 
     #[test]
     fn nested_for_loop() {
+        let _ = env_logger::builder().is_test(true).try_init();
+        color_backtrace::install();
+
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "fn main() -> int {
                        let x = 0;
@@ -815,6 +896,9 @@ mod test {
 
     #[test]
     fn if_expression_true_arm() {
+        let _ = env_logger::builder().is_test(true).try_init();
+        color_backtrace::install();
+
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "fn main() -> int {
                        if true {
@@ -848,6 +932,9 @@ mod test {
 
     #[test]
     fn if_expression_false_arm() {
+        let _ = env_logger::builder().is_test(true).try_init();
+        color_backtrace::install();
+
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "fn main() -> int {
                        if false {
@@ -881,6 +968,9 @@ mod test {
 
     #[test]
     fn if_expression_complex() {
+        let _ = env_logger::builder().is_test(true).try_init();
+        color_backtrace::install();
+
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "fn main() -> int {
                        let x = 0;
@@ -931,6 +1021,9 @@ mod test {
 
     #[test]
     fn fibonacci() {
+        let _ = env_logger::builder().is_test(true).try_init();
+        color_backtrace::install();
+
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "
                    fn main() -> int {
@@ -968,6 +1061,9 @@ mod test {
 
     #[test]
     fn match_literal_expression() {
+        let _ = env_logger::builder().is_test(true).try_init();
+        color_backtrace::install();
+
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "
                    fn main() -> int {
@@ -994,14 +1090,17 @@ mod test {
 
         assert_eq!(
             program.get_thonk("main").unwrap().get_instruction_card(),
-            29
+            28
         );
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(1));
     }
 
     #[test]
-    fn match_literal_expression_catchall() {
+    fn match_literal_catchall() {
+        let _ = env_logger::builder().is_test(true).try_init();
+        color_backtrace::install();
+
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "
                    fn main() -> int {
@@ -1031,14 +1130,17 @@ mod test {
 
         assert_eq!(
             program.get_thonk("main").unwrap().get_instruction_card(),
-            32
+            31
         );
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &4.into());
     }
 
     #[test]
-    fn match_literal_expression_middle() {
+    fn match_literal_exp_middle() {
+        let _ = env_logger::builder().is_test(true).try_init();
+        color_backtrace::install();
+
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "
                    fn main() -> int {
@@ -1065,7 +1167,7 @@ mod test {
 
         assert_eq!(
             program.get_thonk("main").unwrap().get_instruction_card(),
-            29
+            28
         );
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &3.into());
@@ -1073,6 +1175,9 @@ mod test {
 
     #[test]
     fn match_string_literal_expression() {
+        let _ = env_logger::builder().is_test(true).try_init();
+        color_backtrace::install();
+
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "
                    fn main() -> string {
@@ -1099,7 +1204,7 @@ mod test {
 
         assert_eq!(
             program.get_thonk("main").unwrap().get_instruction_card(),
-            29
+            28
         );
 
         assert_eq!(
@@ -1110,6 +1215,9 @@ mod test {
 
     #[test]
     fn match_enum() {
+        let _ = env_logger::builder().is_test(true).try_init();
+        color_backtrace::install();
+
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "
                    enum Foo {
@@ -1148,7 +1256,7 @@ mod test {
 
         assert_eq!(
             program.get_thonk("main").unwrap().get_instruction_card(),
-            21
+            18
         );
 
         assert_eq!(
@@ -1159,6 +1267,9 @@ mod test {
 
     #[test]
     fn match_tuple_enum() {
+        let _ = env_logger::builder().is_test(true).try_init();
+        color_backtrace::install();
+
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "
                    enum Foo {
@@ -1199,7 +1310,7 @@ mod test {
 
         assert_eq!(
             program.get_thonk("main").unwrap().get_instruction_card(),
-            51
+            36
         );
 
         assert_eq!(
@@ -1210,6 +1321,9 @@ mod test {
 
     #[test]
     fn index_into_list() {
+        let _ = env_logger::builder().is_test(true).try_init();
+        color_backtrace::install();
+
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "
                    fn main() -> int {
@@ -1241,6 +1355,9 @@ mod test {
 
     #[test]
     fn index_out_of_bounds() {
+        let _ = env_logger::builder().is_test(true).try_init();
+        color_backtrace::install();
+
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "
                    fn main() -> int {
@@ -1263,6 +1380,9 @@ mod test {
 
     // #[test]
     fn index_into_string() {
+        let _ = env_logger::builder().is_test(true).try_init();
+        color_backtrace::install();
+
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "
                    fn main() -> string {
@@ -1296,6 +1416,9 @@ mod test {
 
     #[test]
     fn test_and_expression() {
+        let _ = env_logger::builder().is_test(true).try_init();
+        color_backtrace::install();
+
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "
                    fn main() -> bool {
@@ -1321,6 +1444,9 @@ mod test {
 
     #[test]
     fn test_or_expression() {
+        let _ = env_logger::builder().is_test(true).try_init();
+        color_backtrace::install();
+
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "
                    fn main() -> bool {
@@ -1346,6 +1472,9 @@ mod test {
 
     #[test]
     fn test_assert() {
+        let _ = env_logger::builder().is_test(true).try_init();
+        color_backtrace::install();
+
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "
                    fn main() {
@@ -1371,6 +1500,9 @@ mod test {
 
     #[test]
     fn test_binary_not() {
+        let _ = env_logger::builder().is_test(true).try_init();
+        color_backtrace::install();
+
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "
                    fn main() -> bool {
@@ -1396,15 +1528,18 @@ mod test {
 
     #[test]
     fn use_std_option() {
+        let _ = env_logger::builder().is_test(true).try_init();
+        color_backtrace::install();
+
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "
                    use std::Option;
                    fn main() -> bool {
                        let foo = Option::Some(1);
-                          match foo {
-                            Option::Some(x) => true,
-                            Option::None => false,
-                          }
+                       match foo {
+                           Option::Some(x) => true,
+                           Option::None => false,
+                    }
                    }";
         let ast = parse_dwarf("use_std_option", ore).unwrap();
         let ctx = new_lu_dog(
@@ -1417,20 +1552,11 @@ mod test {
         let program = compile(&ctx).unwrap();
         println!("{program}");
         assert_eq!(program.get_thonk_card(), 3);
-        run_vm(&program);
-        // assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 4);
-        // assert_eq!(
-        //     &*s_read!(run_vm(&program).unwrap()),
-        //     &Value::Enumeration(EnumVariant::Unit(
-        //         ValueType::new_enumeration(
-        //             &s_read!(ctx.lu_dog)
-        //                 .exhume_enumeration_by_name("Option")
-        //                 .unwrap(),
-        //             &mut s_write!(ctx.lu_dog)
-        //         ),
-        //         "Option".to_owned(),
-        //         "Some".to_owned()
-        //     ))
-        // );
+
+        assert_eq!(
+            program.get_thonk("main").unwrap().get_instruction_card(),
+            21
+        );
+        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Boolean(true));
     }
 }

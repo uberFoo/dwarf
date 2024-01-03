@@ -1,3 +1,5 @@
+use snafu::{location, Location};
+
 use crate::{
     bubba::{
         compiler::{compile_expression, get_span, CThonk, Context, Result},
@@ -36,29 +38,33 @@ pub(in crate::bubba::compiler) fn compile(
     }
 
     // Store the starting value
-    thonk.add_instruction_with_span(Instruction::StoreLocal(index), span);
+    thonk.add_instruction_with_span(Instruction::StoreLocal(index), span, location!());
 
     let top_of_loop = thonk.get_instruction_card() as isize;
 
     thonk.append(inner_thonk);
 
     // Duplicate the range end so that we can compare against it.
-    thonk.add_instruction(Instruction::Dup);
+    thonk.add_instruction(Instruction::Dup, location!());
 
     // Increment the index
-    thonk.add_instruction(Instruction::FetchLocal(index));
-    thonk.add_instruction(Instruction::Push(new_ref!(Value, Value::Integer(1))));
-    thonk.add_instruction(Instruction::Add);
-    thonk.add_instruction(Instruction::Dup);
-    thonk.add_instruction(Instruction::StoreLocal(index));
+    thonk.add_instruction(Instruction::FetchLocal(index), location!());
+    thonk.add_instruction(
+        Instruction::Push(new_ref!(Value, Value::Integer(1))),
+        location!(),
+    );
+    thonk.add_instruction(Instruction::Add, location!());
+    thonk.add_instruction(Instruction::Dup, location!());
+    thonk.add_instruction(Instruction::StoreLocal(index), location!());
 
     // Test the index against the length of the list
-    thonk.add_instruction(Instruction::TestLessThanOrEqual);
+    thonk.add_instruction(Instruction::TestLessThanOrEqual, location!());
 
     // go do it again if index is < end.
-    thonk.add_instruction(Instruction::JumpIfFalse(
-        top_of_loop - thonk.get_instruction_card() as isize - 1,
-    ));
+    thonk.add_instruction(
+        Instruction::JumpIfFalse(top_of_loop - thonk.get_instruction_card() as isize - 1),
+        location!(),
+    );
 
     context.pop_symbol_table();
 
