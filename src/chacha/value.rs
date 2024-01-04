@@ -872,6 +872,12 @@ impl From<Uuid> for Value {
     }
 }
 
+impl From<Range<usize>> for Value {
+    fn from(value: Range<usize>) -> Self {
+        Self::Range(value.start as DwarfInteger..value.end as DwarfInteger)
+    }
+}
+
 impl From<Value> for Option<Uuid> {
     fn from(option: Value) -> Self {
         match option {
@@ -928,6 +934,20 @@ impl TryFrom<Value> for Range<usize> {
 
     fn try_from(value: Value) -> Result<Self, <Range<usize> as TryFrom<Value>>::Error> {
         match &value {
+            Value::Range(range) => Ok(range.start as usize..range.end as usize),
+            _ => Err(ChaChaError::Conversion {
+                src: value.to_string(),
+                dst: "Uuid".to_owned(),
+            }),
+        }
+    }
+}
+
+impl TryFrom<&Value> for Range<usize> {
+    type Error = ChaChaError;
+
+    fn try_from(value: &Value) -> Result<Self, <Range<usize> as TryFrom<&Value>>::Error> {
+        match value {
             Value::Range(range) => Ok(range.start as usize..range.end as usize),
             _ => Err(ChaChaError::Conversion {
                 src: value.to_string(),

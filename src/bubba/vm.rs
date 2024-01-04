@@ -21,7 +21,7 @@ const _OTH_CLR: Colour = Colour::Cyan;
 #[derive(Debug, Snafu)]
 pub(crate) enum BubbaError {
     #[snafu(display("\n{}: Halt and catch fire...🔥", ERR_CLR.bold().paint("error")))]
-    HaltAndCatchFire,
+    HaltAndCatchFire { file: String, span: Span },
     #[snafu(display("\n{}: invalid instruction: {instr}", ERR_CLR.bold().paint("error")))]
     InvalidInstruction { instr: Instruction },
     #[snafu(display("\n{}: ip out of bounds at {ip}", ERR_CLR.bold().paint("error")))]
@@ -456,7 +456,23 @@ impl VM {
                         1
                     }
                     Instruction::HaltAndCatchFire => {
-                        return Err(BubbaError::HaltAndCatchFire.into());
+                        let span = self.stack.pop().unwrap();
+                        let span: std::ops::Range<usize> = (&*s_read!(span))
+                            .try_into()
+                            .map_err(|e: ChaChaError| BubbaError::VmPanic {
+                                source: Box::new(e),
+                            })
+                            .unwrap();
+
+                        let file = self.stack.pop().unwrap();
+                        let file: String = (&*s_read!(file))
+                            .try_into()
+                            .map_err(|e: ChaChaError| BubbaError::VmPanic {
+                                source: Box::new(e),
+                            })
+                            .unwrap();
+
+                        return Err(BubbaError::HaltAndCatchFire { file, span }.into());
                     }
                     Instruction::Index => {
                         let index = self.stack.pop().unwrap();

@@ -20,7 +20,6 @@ use crate::{
 };
 
 pub mod error;
-mod expression;
 pub mod extruder;
 mod items;
 pub mod parser;

@@ -19,8 +19,8 @@ pub(in crate::bubba::compiler) fn compile(
     let lu_dog = context.lu_dog_heel().clone();
     let lu_dog = s_read!(lu_dog);
 
-    let call_rt = lu_dog.exhume_call(call).unwrap();
-    let call = s_read!(call_rt);
+    let wrapped_call = lu_dog.exhume_call(call).unwrap();
+    let call = s_read!(wrapped_call);
     let first_arg = call.argument;
     let args = call.r28_argument(&lu_dog);
 
@@ -50,10 +50,22 @@ pub(in crate::bubba::compiler) fn compile(
             let call = lu_dog.exhume_function_call(call).unwrap();
             compile_function_call(
                 &s_read!(call).name,
-                call_rt.clone(),
+                wrapped_call.clone(),
                 &arg_exprs,
                 thonk,
                 context,
+            )?;
+        }
+        CallEnum::MethodCall(ref meth) => {
+            let meth = lu_dog.exhume_method_call(meth).unwrap();
+            let meth = s_read!(meth);
+            compile_method_call(
+                &meth.name,
+                wrapped_call.clone(),
+                &arg_exprs,
+                thonk,
+                context,
+                span,
             )?;
         }
         CallEnum::StaticMethodCall(ref meth) => {
@@ -62,6 +74,28 @@ pub(in crate::bubba::compiler) fn compile(
             compile_static_method_call(&meth.ty, &meth.func, &arg_exprs, thonk, context, span)?;
         }
         ref call => todo!("handle the other calls: {call:?}"),
+    };
+
+    Ok(())
+}
+
+fn compile_method_call(
+    name: &String,
+    call: RefType<Call>,
+    args: &[RefType<Expression>],
+    thonk: &mut CThonk,
+    context: &mut Context,
+    span: Span,
+) -> Result<()> {
+    let lu_dog = context.lu_dog_heel().clone();
+    let lu_dog = s_read!(lu_dog);
+
+    // First off we need to evaluate the expression associated with this call.
+    if let Some(ref expr) = s_read!(call).expression {
+        let expr = lu_dog.exhume_expression(expr).unwrap();
+        let span = get_span(&expr, &lu_dog);
+        // Evaluate the LHS to get at the underlying value/instance.
+        compile_expression(&expr, thonk, context, span)?;
     };
 
     Ok(())
@@ -91,11 +125,31 @@ fn compile_static_method_call(
                 );
                 thonk.add_instruction_with_span(Instruction::TestEq, span.clone(), location!());
                 thonk.add_instruction_with_span(
-                    Instruction::JumpIfTrue(1),
+                    Instruction::JumpIfTrue(5),
                     span.clone(),
                     location!(),
                 );
-                thonk.add_instruction_with_span(Instruction::HaltAndCatchFire, span, location!());
+                thonk.add_instruction_with_span(
+                    Instruction::Push(new_ref!(
+                        Value,
+                        format!("assertion failed: {span:?}").into()
+                    )),
+                    span.clone(),
+                    location!(),
+                );
+                thonk.add_instruction_with_span(Instruction::Out(1), span.clone(), location!());
+                thonk.add_instruction(
+                    Instruction::Push(new_ref!(
+                        Value,
+                        context.extruder_context.source.clone().into()
+                    )),
+                    location!(),
+                );
+                thonk.add_instruction(
+                    Instruction::Push(new_ref!(Value, span.clone().into())),
+                    location!(),
+                );
+                thonk.add_instruction(Instruction::HaltAndCatchFire, location!());
             }
             ASSERT_EQ => {
                 let lhs = &args[0];
@@ -106,8 +160,28 @@ fn compile_static_method_call(
                 compile_expression(rhs, thonk, context, rhs_span)?;
                 thonk.add_instruction_with_span(Instruction::TestEq, span.clone(), location!());
                 thonk.add_instruction_with_span(
-                    Instruction::JumpIfTrue(1),
+                    Instruction::JumpIfTrue(5),
                     span.clone(),
+                    location!(),
+                );
+                thonk.add_instruction_with_span(
+                    Instruction::Push(new_ref!(
+                        Value,
+                        format!("assertion failed: {span:?}").into()
+                    )),
+                    span.clone(),
+                    location!(),
+                );
+                thonk.add_instruction_with_span(Instruction::Out(1), span.clone(), location!());
+                thonk.add_instruction(
+                    Instruction::Push(new_ref!(
+                        Value,
+                        context.extruder_context.source.clone().into()
+                    )),
+                    location!(),
+                );
+                thonk.add_instruction(
+                    Instruction::Push(new_ref!(Value, span.clone().into())),
                     location!(),
                 );
                 thonk.add_instruction_with_span(Instruction::HaltAndCatchFire, span, location!());

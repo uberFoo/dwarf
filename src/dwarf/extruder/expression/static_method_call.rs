@@ -14,8 +14,9 @@ use crate::{
     dwarf::{
         error::{DwarfError, Result},
         extruder::{
-            debug, e_warn, function, inter_expression, link_argument,
-            lookup_woog_struct_method_return_type, typecheck, update_span_value, Context, ExprSpan,
+            debug, e_warn, expression::method_call::method_call_return_type, function,
+            inter_expression, link_argument, lookup_woog_struct_method_return_type, typecheck,
+            update_span_value, Context, ExprSpan,
         },
         items::enuum::create_generic_enum,
         DwarfInteger, Expression as ParserExpression, Generics, Type,
@@ -26,9 +27,9 @@ use crate::{
     },
     lu_dog::{
         store::ObjectStore as LuDogStore, Argument, Block, Call, DataStructure, EnumField,
-        EnumFieldEnum, Enumeration, Expression, FieldExpression, List, LocalVariable, PathElement,
-        Span, StaticMethodCall, StructExpression, UnnamedFieldExpression, ValueType, ValueTypeEnum,
-        Variable, XPath, XPlugin, XValue,
+        EnumFieldEnum, Enumeration, Expression, FieldExpression, List, LocalVariable, MethodCall,
+        PathElement, Span, StaticMethodCall, StructExpression, UnnamedFieldExpression, ValueType,
+        ValueTypeEnum, Variable, XPath, XPlugin, XValue,
     },
     new_ref, s_read, s_write,
     sarzak::Ty,
@@ -319,15 +320,83 @@ pub fn inter(
                     lu_dog,
                 )
             } else {
-                let span = s_read!(span).start as usize..s_read!(span).end as usize;
-                Err(vec![DwarfError::NoSuchField {
-                    name: type_name.to_owned(),
-                    name_span: type_span.to_owned(),
-                    field: method.to_owned(),
-                    file: context.file_name.to_owned(),
-                    span,
-                    location: location!(),
-                }])
+                // Lookup the functions on the enum and see if the field matches a func.
+                let foo = &s_read!(woog_enum).r84_implementation_block(lu_dog)[0];
+                let foo = s_read!(foo).r9_function(lu_dog);
+                let func = foo.iter().find(|func| {
+                    let func = s_read!(func);
+                    func.name == method
+                });
+
+                if let Some(func) = func {
+                    let func_ty = s_read!(func).r10_value_type(lu_dog)[0].clone();
+                    let meth = MethodCall::new(method.to_owned(), lu_dog);
+                    let call = Call::new_method_call(true, None, None, &meth, lu_dog);
+                    let expr = Expression::new_call(&call, lu_dog);
+
+                    // Call the function with it's args.
+                    // Process the args.
+                    let mut arg_types = Vec::new();
+                    let mut last_arg_uuid: Option<usize> = None;
+                    for (position, param) in params.iter().enumerate() {
+                        let (arg_expr, ty) = inter_expression(
+                            &new_ref!(ParserExpression, param.0.to_owned()),
+                            &param.1,
+                            block,
+                            context,
+                            context_stack,
+                            lu_dog,
+                        )?;
+                        arg_types.push(ty);
+
+                        let arg = Argument::new(
+                            position as DwarfInteger,
+                            &arg_expr.0,
+                            &call,
+                            None,
+                            lu_dog,
+                        );
+                        if position == 0 {
+                            // Here I'm setting the pointer to the first argument.
+                            s_write!(call).argument = Some(s_read!(arg).id);
+                            s_write!(call).expression = Some(s_read!(arg_expr.0).id);
+                        }
+
+                        last_arg_uuid = link_argument!(last_arg_uuid, arg, lu_dog);
+                    }
+
+                    let r_span = s_read!(span).start as usize..s_read!(span).end as usize;
+                    let ret_ty = method_call_return_type(
+                        func_ty,
+                        &method.to_owned(),
+                        r_span,
+                        &mut arg_types,
+                        context,
+                        lu_dog,
+                    )?;
+
+                    let value = XValue::new_expression(block, &ret_ty, &expr, lu_dog);
+                    Span::new(
+                        s_read!(span).end,
+                        s_read!(span).start,
+                        &context.source,
+                        None,
+                        Some(&value),
+                        lu_dog,
+                    );
+
+                    Ok(((expr, span), ret_ty))
+                } else {
+                    let span = s_read!(span).start as usize..s_read!(span).end as usize;
+                    Err(vec![DwarfError::NoSuchField {
+                        name: type_name.to_owned(),
+                        name_span: type_span.to_owned(),
+                        field: method.to_owned(),
+                        file: context.file_name.to_owned(),
+                        span,
+                        location: location!(),
+                    }])
+                }
             }
         } else {
             let span = s_read!(span).start as usize..s_read!(span).end as usize;
