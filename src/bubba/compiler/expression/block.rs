@@ -8,7 +8,7 @@ pub(in crate::bubba::compiler) fn compile(
     thonk: &mut CThonk,
     context: &mut Context,
 ) -> Result<()> {
-    let lu_dog = context.lu_dog_heel().clone();
+    let lu_dog = context.lu_dog_heel();
     let lu_dog = s_read!(lu_dog);
 
     let block = lu_dog.exhume_block(block).unwrap();

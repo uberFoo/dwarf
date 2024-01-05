@@ -46,6 +46,7 @@ pub(in crate::bubba::compiler) fn compile(
                         context
                             .get_symbol(&expr.name)
                             .unwrap_or_else(|| panic!("symbol lookup failed for {}", expr.name))
+                            .number
                     } else {
                         panic!("In assignment and lhs is not a variable.")
                     };

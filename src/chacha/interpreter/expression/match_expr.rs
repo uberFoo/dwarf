@@ -52,6 +52,7 @@ pub fn eval(
                     match &*s_read!(value) {
                         Value::Enumeration(value) => match value {
                             // 🚧 I can't tell if this is gross, or a sweet hack.
+                            // I think I'm referring to using the name as the scrutinee?
                             EnumVariant::Unit(_, ty, value) => (
                                 ty.to_owned(),
                                 Some(new_ref!(Value, Value::String(value.to_owned()))),
@@ -75,7 +76,9 @@ pub fn eval(
                     }
                 }
 
-                // if let Value::Enum(value) = &*s_read!(scrutinee) {
+                // Below we are iterating over each element in the expression path
+                // and testing it against the scrutinee value.
+
                 let x_path = &lu_dog.exhume_x_path(&s_read!(struct_expr).x_path).unwrap();
                 // We know that there is always a pe. It's only in an option so that
                 // we can construct everything.
@@ -93,6 +96,7 @@ pub fn eval(
                         pe = lu_dog.exhume_path_element(&id).unwrap();
                         let (name, s) = decode_value(scrutinee.unwrap());
                         scrutinee = s;
+
                         if name == s_read!(pe).name {
                             matched = true;
                             continue;
@@ -110,19 +114,30 @@ pub fn eval(
                     }
                     (true, _) => {
                         let field_expr = s_read!(field_exprs[0]).r38_expression(&lu_dog)[0].clone();
-                        let field_expr = s_read!(field_expr);
-                        if let ExpressionEnum::VariableExpression(ref var) = field_expr.subtype {
-                            let var = lu_dog.exhume_variable_expression(var).unwrap();
+                        let field_expr_read = s_read!(field_expr);
+                        match field_expr_read.subtype {
+                            ExpressionEnum::Literal(ref _id) => {
+                                let value = eval_expression(field_expr.clone(), context, vm)?;
+                                let value = s_read!(value);
+                                if *s_read!(scrutinee.unwrap()) == *value {
+                                    let value = eval_expression(expr, context, vm)?;
+                                    return Ok(value);
+                                }
+                            }
+                            ExpressionEnum::VariableExpression(ref var) => {
+                                let var = lu_dog.exhume_variable_expression(var).unwrap();
 
-                            context.memory().push_frame();
+                                context.memory().push_frame();
+                                context
+                                    .memory()
+                                    .insert(s_read!(var).name.to_owned(), scrutinee.unwrap());
+                                let value = eval_expression(expr, context, vm)?;
 
-                            context
-                                .memory()
-                                .insert(s_read!(var).name.to_owned(), scrutinee.unwrap());
-                            let value = eval_expression(expr, context, vm)?;
+                                context.memory().pop_frame();
 
-                            context.memory().pop_frame();
-                            return Ok(value);
+                                return Ok(value);
+                            }
+                            _ => unimplemented!(),
                         }
                     }
                     (false, _) => {}

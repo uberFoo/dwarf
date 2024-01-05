@@ -27,14 +27,17 @@ pub(in crate::bubba::compiler) fn compile(
     compile_expression(&scrutinee, thonk, context, scrutinee_span)?;
 
     for pattern in patterns {
+        // We push this up here because of the pattern matching needs it's own context.
+        context.push_symbol_table();
+
         let pattern = s_read!(pattern);
         let match_expr = pattern.r87_expression(&lu_dog)[0].clone();
         let expr = pattern.r92_expression(&lu_dog)[0].clone();
 
-        // Duplicate the scrutinee
+        // Duplicate the scrutinee with which to compare against.
         thonk.add_instruction(Instruction::Dup, location!());
 
-        // Setup locals for the match expression
+        // This is the pattern we are matching against.
         match &s_read!(match_expr).subtype {
             ExpressionEnum::Literal(ref literal) => {
                 literal::compile(literal, thonk, context, span.clone())?
@@ -52,16 +55,23 @@ pub(in crate::bubba::compiler) fn compile(
                             let expr = s_read!(expr).r38_expression(&lu_dog)[0].clone();
 
                             let expr = s_read!(expr);
+                            // 🚧 I'm already in the middle of one of these.
                             match &expr.subtype {
                                 ExpressionEnum::Literal(_) => {}
                                 ExpressionEnum::VariableExpression(ref id) => {
-                                    let var = lu_dog.exhume_variable_expression(id).unwrap();
-                                    let idx = context.insert_symbol(s_read!(var).name.clone());
-                                    thonk.increment_frame_size();
+                                    // let var = lu_dog.exhume_variable_expression(id).unwrap();
+                                    // let var = s_read!(var);
+                                    // let expr = var.r15_expression(&lu_dog)[0].clone();
+                                    // let value = s_read!(expr).r11_x_value(&lu_dog)[0].clone();
+                                    // let ty = s_read!(value).r24_value_type(&lu_dog)[0].clone();
 
-                                    thonk.add_instruction(Instruction::Dup, location!());
-                                    thonk
-                                        .add_instruction(Instruction::StoreLocal(idx), location!());
+                                    // let idx = context
+                                    //     .insert_symbol(var.name.clone(), s_read!(ty).clone());
+                                    // thonk.increment_frame_size();
+
+                                    // thonk.add_instruction(Instruction::Dup, location!());
+                                    // thonk
+                                    //     .add_instruction(Instruction::StoreLocal(idx), location!());
                                 }
                                 todo => {
                                     todo!("Match expression, field expression, type: {todo:?}");
@@ -76,7 +86,12 @@ pub(in crate::bubba::compiler) fn compile(
             }
             ExpressionEnum::VariableExpression(ref id) => {
                 let var = lu_dog.exhume_variable_expression(id).unwrap();
-                let idx = context.insert_symbol(s_read!(var).name.clone());
+                let var = s_read!(var);
+                let expr = var.r15_expression(&lu_dog)[0].clone();
+                let value = s_read!(expr).r11_x_value(&lu_dog)[0].clone();
+                let ty = s_read!(value).r24_value_type(&lu_dog)[0].clone();
+
+                let idx = context.insert_symbol(var.name.clone(), s_read!(ty).clone());
                 thonk.increment_frame_size();
 
                 thonk.add_instruction(Instruction::Dup, location!());
@@ -88,8 +103,7 @@ pub(in crate::bubba::compiler) fn compile(
         // compile_expression(&match_expr, thonk, context, get_span(&match_expr, &lu_dog))?;
         thonk.add_instruction(Instruction::TestEq, location!());
 
-        // Compile the block if we match.
-        context.push_symbol_table();
+        // Compile the match block.
         let mut match_thonk = CThonk::new("match".to_owned());
 
         compile_expression(&expr, &mut match_thonk, context, get_span(&expr, &lu_dog))?;

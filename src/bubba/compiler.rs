@@ -9,9 +9,9 @@ use crate::{
     bubba::instr::{Instruction, Program, Thonk},
     lu_dog::{
         BodyEnum, Expression, ExpressionEnum, Function, ObjectStore as LuDogStore, Statement,
-        StatementEnum,
+        StatementEnum, ValueType,
     },
-    new_ref, s_read,
+    new_ref, s_read, s_write,
     sarzak::ObjectStore as SarzakStore,
     Context as ExtruderContext, NewRef, RefType, Span, Value,
 };
@@ -29,13 +29,16 @@ pub const BUILD_TIME: &str = include!(concat!(env!("OUT_DIR"), "/timestamp.txt")
 #[derive(Debug, Snafu)]
 pub struct Error(BubbaError);
 
-const _ERR_CLR: Colour = Colour::Red;
+const ERR_CLR: Colour = Colour::Red;
 const _OK_CLR: Colour = Colour::Green;
 const _POP_CLR: Colour = Colour::Yellow;
 const _OTH_CLR: Colour = Colour::Cyan;
 
 #[derive(Debug, Snafu)]
-pub(crate) enum BubbaError {}
+pub(crate) enum BubbaError {
+    #[snafu(display("\n{}: `{message}`\n  --> {}::{}::{}", ERR_CLR.bold().paint("error"), location.file, location.line, location.column))]
+    InternalCompilerError { location: Location, message: String },
+}
 
 type Result<T, E = Error> = std::result::Result<T, E>;
 
@@ -107,16 +110,59 @@ impl From<CThonk> for Thonk {
 }
 
 #[derive(Debug)]
+struct Symbol {
+    number: usize,
+    ty: ValueType,
+}
+
+#[derive(Debug)]
+struct SymbolTable {
+    start: usize,
+    map: HashMap<String, Symbol>,
+}
+
+impl SymbolTable {
+    fn new(start: usize) -> Self {
+        SymbolTable {
+            start,
+            map: HashMap::default(),
+        }
+    }
+
+    fn insert(&mut self, name: String, ty: ValueType) -> usize {
+        let number = self.count();
+        self.map.insert(
+            name,
+            Symbol {
+                number,
+                ty: ty.clone(),
+            },
+        );
+        number
+    }
+
+    fn get(&self, name: &str) -> Option<&Symbol> {
+        self.map.get(name)
+    }
+
+    fn count(&self) -> usize {
+        self.map.len() + self.start
+    }
+}
+
+#[derive(Debug)]
 struct Context<'a> {
     extruder_context: &'a ExtruderContext,
-    symbol_tables: Vec<(usize, HashMap<String, usize>)>,
+    symbol_tables: Vec<SymbolTable>,
+    method_name: Option<String>,
 }
 
 impl<'a> Context<'a> {
     fn new(extruder_context: &'a ExtruderContext) -> Self {
         Context {
             extruder_context,
-            symbol_tables: vec![(0, HashMap::default())],
+            symbol_tables: vec![SymbolTable::new(0)],
+            method_name: None,
         }
     }
 
@@ -129,31 +175,28 @@ impl<'a> Context<'a> {
     }
 
     fn push_symbol_table(&mut self) {
-        let (start, _) = self.symbol_tables.last().unwrap();
-        self.symbol_tables.push((*start, HashMap::default()));
+        let start = self.symbol_tables.last().unwrap().count();
+        self.symbol_tables.push(SymbolTable::new(start));
     }
 
     fn pop_symbol_table(&mut self) {
         self.symbol_tables.pop();
     }
 
-    fn insert_symbol(&mut self, name: String) -> usize {
+    fn insert_symbol(&mut self, name: String, ty: ValueType) -> usize {
         match self.get_symbol(name.as_str()) {
-            Some(value) => value,
+            Some(value) => value.number,
             None => {
-                let (next, map) = self.symbol_tables.last_mut().unwrap();
-                map.insert(name, *next);
-                let value = *next;
-                *next += 1;
-                value
+                let table = self.symbol_tables.last_mut().unwrap();
+                table.insert(name, ty)
             }
         }
     }
 
-    fn get_symbol(&self, name: &str) -> Option<usize> {
+    fn get_symbol(&self, name: &str) -> Option<&Symbol> {
         for table in self.symbol_tables.iter().rev() {
-            if let Some(value) = table.1.get(name) {
-                return Some(*value);
+            if let Some(value) = table.get(name) {
+                return Some(value);
             }
         }
         None
@@ -195,13 +238,36 @@ fn compile_function(func: &RefType<Function>, context: &mut Context) -> Result<C
 
     // context.push_symbol_table();
 
-    let name = if ty_name.is_empty() {
-        func.name.clone()
+    let (name, incr_fs) = if ty_name.is_empty() {
+        (func.name.clone(), false)
     } else {
-        context.insert_symbol("self".to_owned());
-        format!("{ty_name}::{}", func.name)
+        let ty = if let Some(ref id) = lu_dog.exhume_woog_struct_id_by_name(&ty_name) {
+            // Here is where we look for actual user defined types, as
+            // in types that are defined in dwarf source.
+            let woog_struct = lu_dog.exhume_woog_struct(id).unwrap();
+            let woog_struct = s_read!(woog_struct);
+            woog_struct.r1_value_type(&lu_dog)[0].clone()
+        } else if let Some(ref id) = lu_dog.exhume_enumeration_id_by_name(&ty_name) {
+            let woog_enum = lu_dog.exhume_enumeration(id).unwrap();
+            let woog_enum = s_read!(woog_enum);
+            woog_enum.r1_value_type(&lu_dog)[0].clone()
+        } else {
+            return Err(BubbaError::InternalCompilerError {
+                location: location!(),
+                message: format!("Could not find type: {ty_name}"),
+            }
+            .into());
+        };
+
+        context.insert_symbol("self".to_owned(), s_read!(ty).clone());
+        (format!("{ty_name}::{}", func.name), true)
     };
+
     let mut thonk = CThonk::new(name.clone());
+
+    if incr_fs {
+        thonk.increment_frame_size();
+    }
 
     let body = func.r19_body(&lu_dog)[0].clone();
     let body = s_read!(body);
@@ -281,12 +347,14 @@ fn compile_statement(
 
             let var = s_read!(stmt.r21_local_variable(&lu_dog)[0]).clone();
             let var = s_read!(var.r12_variable(&lu_dog)[0]).clone();
+            let value = s_read!(var.r11_x_value(&lu_dog)[0]).clone();
+            let ty = s_read!(value.r24_value_type(&lu_dog)[0]).clone();
 
             let name = var.name;
-            let offset = context.insert_symbol(name.clone());
+            let offset = context.insert_symbol(name.clone(), ty);
+            thonk.increment_frame_size();
 
             thonk.add_instruction(Instruction::StoreLocal(offset), location!());
-            thonk.increment_frame_size();
         }
         StatementEnum::ResultStatement(ref stmt) => {
             let stmt = lu_dog.exhume_result_statement(stmt).unwrap();
@@ -1319,6 +1387,48 @@ mod test {
         );
     }
 
+    // #[test]
+    fn match_enum_pattern_match() {
+        let _ = env_logger::builder().is_test(true).try_init();
+        color_backtrace::install();
+
+        let sarzak_store = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
+        let ore = "
+                   enum Foo {
+                       Bar(int),
+                       Baz(int),
+                       Qux(int),
+                   }
+                   fn main() -> int {
+                       let x = Foo::Bar(42);
+                       match x {
+                           Foo::Bar(x) => x,
+                           Foo::Baz(x) => x,
+                           Foo::Qux(x) => x,
+                       }
+                   }";
+        let ast = parse_dwarf("match_expression", ore).unwrap();
+        let ctx = new_lu_dog(
+            "match_expression".to_owned(),
+            Some((ore.to_owned(), &ast)),
+            &get_dwarf_home(),
+            &sarzak_store,
+        )
+        .unwrap();
+
+        let program = compile(&ctx).unwrap();
+        println!("{program}");
+
+        assert_eq!(program.get_thonk_card(), 1);
+
+        assert_eq!(
+            program.get_thonk("main").unwrap().get_instruction_card(),
+            24
+        );
+
+        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(42));
+    }
+
     #[test]
     fn index_into_list() {
         let _ = env_logger::builder().is_test(true).try_init();
@@ -1540,6 +1650,9 @@ mod test {
                    fn main() -> bool {
                        let foo = Option::Some(1);
                        chacha::assert(foo.is_some());
+                       let bar = Option::None;
+                       chacha::assert(bar.is_none());
+
                        match foo {
                            Option::Some(x) => true,
                            Option::None => false,

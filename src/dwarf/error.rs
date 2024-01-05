@@ -196,6 +196,7 @@ pub enum DwarfError {
     /// I think that this doesn't implement Display because it's displayed
     /// someplace other than where error go? I'm not really sure, and it needs
     /// looking into.
+    #[snafu(display("\n{}: Type mismatch: expected `{expected}`, found `{found}`.", C_ERR.bold().paint("error")))]
     TypeMismatch {
         expected: String,
         found: String,

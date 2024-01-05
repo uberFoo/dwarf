@@ -1,0 +1,12 @@
+enum Foo {
+    Bar(int),
+    Baz(bool),
+}
+
+fn main() {
+    match Foo::Bar(42) {
+        Foo::Bar(42) => chacha::assert(true),
+        Foo::Bar(x) => chacha::assert(false),
+        Foo::Baz(true) => chacha::assert(false),
+    };
+}

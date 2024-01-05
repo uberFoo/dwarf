@@ -16,7 +16,7 @@ pub(in crate::bubba::compiler) fn compile(
     context: &mut Context,
     span: Span,
 ) -> Result<()> {
-    let lu_dog = context.lu_dog_heel().clone();
+    let lu_dog = context.lu_dog_heel();
     let lu_dog = s_read!(lu_dog);
 
     let wrapped_call = lu_dog.exhume_call(call).unwrap();
@@ -60,7 +60,7 @@ pub(in crate::bubba::compiler) fn compile(
             let meth = lu_dog.exhume_method_call(meth).unwrap();
             let meth = s_read!(meth);
             compile_method_call(
-                &meth.name,
+                meth.name.to_owned(),
                 wrapped_call.clone(),
                 &arg_exprs,
                 thonk,
@@ -80,14 +80,14 @@ pub(in crate::bubba::compiler) fn compile(
 }
 
 fn compile_method_call(
-    name: &String,
+    name: String,
     call: RefType<Call>,
     args: &[RefType<Expression>],
     thonk: &mut CThonk,
     context: &mut Context,
     span: Span,
 ) -> Result<()> {
-    let lu_dog = context.lu_dog_heel().clone();
+    let lu_dog = context.lu_dog_heel();
     let lu_dog = s_read!(lu_dog);
 
     // First off we need to evaluate the expression associated with this call.
@@ -95,8 +95,61 @@ fn compile_method_call(
         let expr = lu_dog.exhume_expression(expr).unwrap();
         let span = get_span(&expr, &lu_dog);
         // Evaluate the LHS to get at the underlying value/instance.
+        // Note the magic bit.
+        context.method_name = Some(name.clone());
         compile_expression(&expr, thonk, context, span)?;
+        context.method_name = None;
     };
+
+    let func = lu_dog.exhume_function_id_by_name(&name).unwrap();
+    let func = lu_dog.exhume_function(&func).unwrap();
+    let func = s_read!(func);
+    let params = func.r13_parameter(&lu_dog);
+
+    // I need to iterate over the parameters to get the name.
+    let params = if !params.is_empty() {
+        let mut params = Vec::with_capacity(params.len());
+        let mut next = func
+            .r13_parameter(&lu_dog)
+            .iter()
+            .find(|p| s_read!(p).r14c_parameter(&lu_dog).is_empty())
+            .unwrap()
+            .clone();
+
+        loop {
+            // Apparently I'm being clever. I don't typecheck against an actual
+            // type associated with the parameter. No, I am looking up the variable
+            // associated with the parameter and using it's type. I guess that's cool,
+            // but it's tricky if you aren't aware.
+            let txen = next.clone();
+            let txen = s_read!(txen);
+            let var = s_read!(txen.r12_variable(&lu_dog)[0]).clone();
+            let value = s_read!(var.r11_x_value(&lu_dog)[0]).clone();
+            let ty = s_read!(value.r24_value_type(&lu_dog)[0]).clone();
+            params.push((var.name.clone(), ty));
+
+            let next_id = { txen.next };
+            if let Some(ref id) = next_id {
+                next = lu_dog.exhume_parameter(id).unwrap();
+            } else {
+                break;
+            }
+        }
+
+        params
+    } else {
+        Vec::new()
+    };
+
+    for ((name, ty), expr) in params.into_iter().zip(args) {
+        let span = get_span(&expr, &lu_dog);
+        compile_expression(&expr, thonk, context, span)?;
+        // 🚧 Why do I not increment the frame size?
+        context.insert_symbol(name, ty);
+        thonk.increment_frame_size();
+    }
+
+    thonk.add_instruction(Instruction::Call(args.len()), location!());
 
     Ok(())
 }
@@ -109,7 +162,7 @@ fn compile_static_method_call(
     context: &mut Context,
     span: Span,
 ) -> Result<()> {
-    let lu_dog = context.lu_dog_heel().clone();
+    let lu_dog = context.lu_dog_heel();
     let lu_dog = s_read!(lu_dog);
 
     match ty.as_str() {
@@ -201,7 +254,7 @@ fn compile_function_call(
     thonk: &mut CThonk,
     context: &mut Context,
 ) -> Result<()> {
-    let lu_dog = context.lu_dog_heel().clone();
+    let lu_dog = context.lu_dog_heel();
     let lu_dog = s_read!(lu_dog);
 
     let func = lu_dog.exhume_function_id_by_name(&name).unwrap();
@@ -209,6 +262,7 @@ fn compile_function_call(
     let func = s_read!(func);
     let params = func.r13_parameter(&lu_dog);
 
+    // I need to iterate over the parameters to get the name.
     let params = if !params.is_empty() {
         let mut params = Vec::with_capacity(params.len());
         let mut next = func
@@ -223,10 +277,14 @@ fn compile_function_call(
             // type associated with the parameter. No, I am looking up the variable
             // associated with the parameter and using it's type. I guess that's cool,
             // but it's tricky if you aren't aware.
-            let var = s_read!(s_read!(next).r12_variable(&lu_dog)[0]).clone();
-            params.push(var.name.clone());
+            let txen = next.clone();
+            let txen = s_read!(txen);
+            let var = s_read!(txen.r12_variable(&lu_dog)[0]).clone();
+            let value = s_read!(var.r11_x_value(&lu_dog)[0]).clone();
+            let ty = s_read!(value.r24_value_type(&lu_dog)[0]).clone();
+            params.push((var.name.clone(), ty));
 
-            let next_id = { s_read!(next).next };
+            let next_id = { txen.next };
             if let Some(ref id) = next_id {
                 next = lu_dog.exhume_parameter(id).unwrap();
             } else {
@@ -246,10 +304,12 @@ fn compile_function_call(
         compile_expression(&expr, thonk, context, span)?;
     };
 
-    for (name, expr) in params.into_iter().zip(args) {
+    for ((name, ty), expr) in params.into_iter().zip(args) {
         let span = get_span(&expr, &lu_dog);
         compile_expression(&expr, thonk, context, span)?;
-        context.insert_symbol(name);
+        // 🚧 Why do I not increment the frame size?
+        context.insert_symbol(name, ty);
+        thonk.increment_frame_size();
     }
 
     thonk.add_instruction(Instruction::Call(args.len()), location!());
