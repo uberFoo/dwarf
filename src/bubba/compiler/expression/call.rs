@@ -191,6 +191,8 @@ fn compile_static_method_call(
                     location!(),
                 );
                 thonk.add_instruction_with_span(Instruction::Out(1), span.clone(), location!());
+
+                // Bail on false
                 thonk.add_instruction(
                     Instruction::Push(new_ref!(
                         Value,
@@ -226,6 +228,8 @@ fn compile_static_method_call(
                     location!(),
                 );
                 thonk.add_instruction_with_span(Instruction::Out(1), span.clone(), location!());
+
+                // This is the bad path.
                 thonk.add_instruction(
                     Instruction::Push(new_ref!(
                         Value,

@@ -25,6 +25,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - Improved module support
 - Contexts contain sarzak references
+- Improved match expression handling.
 
 ## [0.0.7] - 2023-12-16
 

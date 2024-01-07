@@ -52,6 +52,16 @@ pub enum Instruction {
     /// -- from 16 bytes to 24.
     ///
     Comment(String),
+    /// Deconstruct a struct expression
+    ///
+    /// Given a struct expression, like Foo::Bar(x, y), this instruction will pop the
+    /// top value off the stack, and push the tuple elements onto the stack.
+    ///
+    /// ## Stack Effect
+    ///
+    /// The stack is n - 1 elements longer, where n is the path length.
+    ///
+    DeconstructStructExpression,
     /// Divide the top two values on the stack.
     ///
     Divide,
@@ -325,6 +335,7 @@ impl fmt::Display for Instruction {
                 opcode_style.paint("nop "),
                 operand_style.paint(comment.to_string())
             ),
+            Instruction::DeconstructStructExpression => write!(f, "{}", opcode_style.paint("dse ")),
             Instruction::Divide => write!(f, "{}", opcode_style.paint("div ")),
             Instruction::Dup => write!(f, "{}", opcode_style.paint("dup ")),
             Instruction::FetchLocal(index) => write!(

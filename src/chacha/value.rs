@@ -166,8 +166,8 @@ pub enum EnumVariant {
     /// This type of field is for when it contains a tuple, as `Bar` does above.
     /// That is to say, `Foo::Bar(int)`.
     ///
-    /// The type is stored as the first element of the tuple, and the variant
-    /// as the second.
+    /// The type is stored as the first element of the tuple, and the path/type
+    /// as a string in the second. The third element is the enum itself.
     Tuple((RefType<ValueType>, String), RefType<TupleEnum>),
 }
 
@@ -271,7 +271,6 @@ pub enum Value {
         parent: Option<puteketeke::AsyncTask<'static, ValueResult>>,
     },
     Thonk(ThonkInner),
-    TupleEnum(RefType<TupleEnum>),
     Unknown,
     Uuid(uuid::Uuid),
     ValueType(ValueType),
@@ -333,7 +332,6 @@ impl Value {
                 ThonkInner::Thonk(name) => write!(f, "{name}"),
                 ThonkInner::Index(index) => write!(f, "{index}"),
             },
-            Self::TupleEnum(te) => write!(f, "{}", s_read!(te)),
             Self::Unknown => write!(f, "<unknown>"),
             Self::Uuid(uuid) => write!(f, "{uuid}"),
             Self::ValueType(ty) => write!(f, "{:?}", ty),
@@ -614,7 +612,6 @@ impl std::fmt::Debug for Value {
             #[cfg(feature = "async")]
             Self::Task { worker, parent } => write!(f, "Task: {parent:?} running on {worker:?}"),
             Self::Thonk(inner) => write!(f, "{inner:?}"),
-            Self::TupleEnum(te) => write!(f, "{:?}", s_read!(te)),
             Self::Unknown => write!(f, "<unknown>"),
             Self::Uuid(uuid) => write!(f, "{uuid:?}"),
             Self::ValueType(ty) => write!(f, "{:?}", ty),
@@ -671,7 +668,6 @@ impl Clone for Value {
                 parent: None,
             },
             Self::Thonk(inner) => Self::Thonk(inner.clone()),
-            Self::TupleEnum(te) => Self::TupleEnum(te.clone()),
             Self::Unknown => Self::Unknown,
             Self::Uuid(uuid) => Self::Uuid(*uuid),
             Self::ValueType(ty) => Self::ValueType(ty.clone()),
@@ -784,7 +780,6 @@ impl fmt::Display for Value {
                 ThonkInner::Thonk(name) => write!(f, "Thonk({name})"),
                 ThonkInner::Index(index) => write!(f, "Thonk({index})"),
             },
-            Self::TupleEnum(te) => write!(f, "{}", s_read!(te)),
             Self::Unknown => write!(f, "<unknown>"),
             Self::Uuid(uuid) => write!(f, "{uuid}"),
             Self::ValueType(ty) => write!(f, "{:?}", ty),
@@ -923,7 +918,7 @@ impl TryFrom<Value> for Range<DwarfInteger> {
             Value::Range(range) => Ok(range.start..range.end),
             _ => Err(ChaChaError::Conversion {
                 src: value.to_string(),
-                dst: "Uuid".to_owned(),
+                dst: "range".to_owned(),
             }),
         }
     }
@@ -937,7 +932,7 @@ impl TryFrom<Value> for Range<usize> {
             Value::Range(range) => Ok(range.start as usize..range.end as usize),
             _ => Err(ChaChaError::Conversion {
                 src: value.to_string(),
-                dst: "Uuid".to_owned(),
+                dst: "range".to_owned(),
             }),
         }
     }
@@ -951,7 +946,7 @@ impl TryFrom<&Value> for Range<usize> {
             Value::Range(range) => Ok(range.start as usize..range.end as usize),
             _ => Err(ChaChaError::Conversion {
                 src: value.to_string(),
-                dst: "Uuid".to_owned(),
+                dst: "range".to_owned(),
             }),
         }
     }

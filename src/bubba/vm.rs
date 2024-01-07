@@ -1,3 +1,5 @@
+use std::collections::VecDeque;
+
 use ansi_term::Colour;
 use rustc_hash::FxHashMap as HashMap;
 use sarzak::lu_dog::ValueType;
@@ -5,7 +7,7 @@ use snafu::{location, prelude::*, Location};
 
 use crate::{
     chacha::value::{EnumVariant, TupleEnum, UserStruct},
-    new_ref, s_read, s_write, ChaChaError, DwarfInteger, NewRef, RefType, Span, Value,
+    new_ref, s_read, s_write, ChaChaError, DwarfInteger, NewRef, RefType, Span, Value, PATH_SEP,
 };
 
 use super::instr::{Instruction, Program};
@@ -27,7 +29,9 @@ pub(crate) enum BubbaError {
     #[snafu(display("\n{}: ip out of bounds at {ip}", ERR_CLR.bold().paint("error")))]
     IPOutOfBounds { ip: usize },
     #[snafu(display("\n{}: vm panic: {source}", ERR_CLR.bold().paint("error")))]
-    VmPanic { source: Box<dyn std::error::Error> },
+    ValueError { source: Box<dyn std::error::Error> },
+    #[snafu(display("\n{}: vm panic: {message}", ERR_CLR.bold().paint("error")))]
+    VmPanic { message: String },
 }
 
 type Result<T, E = Error> = std::result::Result<T, E>;
@@ -222,7 +226,7 @@ impl VM {
                         let local_count = &self.stack[self.stack.len() - arity - 1];
                         let local_count: usize =
                             (&*s_read!(local_count)).try_into().map_err(|e| {
-                                BubbaError::VmPanic {
+                                BubbaError::ValueError {
                                     source: Box::new(e),
                                 }
                             })?;
@@ -230,7 +234,7 @@ impl VM {
                         let callee: isize =
                             (&*s_read!(callee))
                                 .try_into()
-                                .map_err(|e| BubbaError::VmPanic {
+                                .map_err(|e| BubbaError::ValueError {
                                     source: Box::new(e),
                                 })?;
 
@@ -264,6 +268,75 @@ impl VM {
                         1
                     }
                     Instruction::Comment(_) => 1,
+                    Instruction::DeconstructStructExpression => {
+                        fn decode_expression(
+                            value: RefType<Value>,
+                        ) -> Result<(RefType<Value>, Option<RefType<Value>>)>
+                        {
+                            let read = s_read!(value);
+                            match &*read {
+                                Value::Enumeration(value) => match value {
+                                    // 🚧 I can't tell if this is gross, or a sweet hack.
+                                    // I think I'm referring to using the name as the scrutinee?
+                                    EnumVariant::Unit(_, ty, value) => Ok((
+                                        new_ref!(Value, Value::String(ty.to_owned())),
+                                        Some(new_ref!(Value, Value::String(value.to_owned()))),
+                                    )),
+                                    // EnumFieldVariant::Struct(value) => (
+                                    //     s_read!(value).type_name().to_owned(),
+                                    //     Some(s_read!(value).get_value()),
+                                    // ),
+                                    EnumVariant::Tuple((ty, path), value) => {
+                                        let path = path.split(PATH_SEP).collect::<Vec<&str>>();
+                                        let mut path = VecDeque::from(path);
+                                        let name = path.pop_front().unwrap().to_owned();
+                                        if name == "" {
+                                            Ok((
+                                                new_ref!(
+                                                    Value,
+                                                    Value::String(
+                                                        s_read!(value).variant().to_owned()
+                                                    )
+                                                ),
+                                                Some(s_read!(value).value().clone()),
+                                            ))
+                                        } else {
+                                            Ok((
+                                                new_ref!(Value, Value::String(name)),
+                                                Some(new_ref!(
+                                                    Value,
+                                                    Value::Enumeration(EnumVariant::Tuple(
+                                                        (
+                                                            ty.clone(),
+                                                            path.into_iter()
+                                                                .collect::<Vec<&str>>()
+                                                                .join(PATH_SEP)
+                                                        ),
+                                                        value.clone(),
+                                                    ))
+                                                )),
+                                            ))
+                                        }
+                                    }
+                                    _ => unimplemented!(),
+                                },
+                                _ => Ok((value.clone(), None)),
+                            }
+                        }
+
+                        let mut variant = self.stack.pop().unwrap();
+                        while let Ok((name, value)) = decode_expression(variant) {
+                            dbg!(&name, &value);
+                            self.stack.push(name);
+                            if let Some(value) = value {
+                                variant = value;
+                            } else {
+                                break;
+                            }
+                        }
+
+                        1
+                    }
                     Instruction::Divide => {
                         let b = self.stack.pop().unwrap();
                         let a = self.stack.pop().unwrap();
@@ -276,9 +349,12 @@ impl VM {
                             );
                         }
                         let c = s_read!(a).clone() / s_read!(b).clone();
-                        // if let Value::Error(e) = &c {
-                        //     return Err(BubbaError::VmPanic { cause: Box::new(e) });
-                        // }
+                        if let Value::Error(e) = c {
+                            return Err(BubbaError::ValueError {
+                                source: Box::new(e),
+                            }
+                            .into());
+                        }
                         self.stack.push(new_ref!(Value, c));
 
                         1
@@ -350,7 +426,7 @@ impl VM {
                                     }
                                     None => {
                                         return Err::<RefType<Value>, Error>(
-                                            BubbaError::VmPanic {
+                                            BubbaError::ValueError {
                                                 source: Box::new(ChaChaError::NoSuchField {
                                                     field: s_read!(field).to_string(),
                                                     ty: s_read!(ty_).to_string(),
@@ -363,7 +439,7 @@ impl VM {
                             }
                             value => {
                                 return Err::<RefType<Value>, Error>(
-                                    BubbaError::VmPanic {
+                                    BubbaError::ValueError {
                                         source: Box::new(ChaChaError::BadnessHappened {
                                             message: format!("Unexpected value: {value}."),
                                             location: location!(),
@@ -429,7 +505,7 @@ impl VM {
                                     }
                                     None => {
                                         return Err::<RefType<Value>, Error>(
-                                            BubbaError::VmPanic {
+                                            BubbaError::ValueError {
                                                 source: Box::new(ChaChaError::NoSuchField {
                                                     field: s_read!(field).to_string(),
                                                     ty: s_read!(ty_).to_string(),
@@ -442,7 +518,7 @@ impl VM {
                             }
                             value => {
                                 return Err::<RefType<Value>, Error>(
-                                    BubbaError::VmPanic {
+                                    BubbaError::ValueError {
                                         source: Box::new(ChaChaError::BadnessHappened {
                                             message: format!("Unexpected value type: {value}."),
                                             location: location!(),
@@ -459,7 +535,7 @@ impl VM {
                         let span = self.stack.pop().unwrap();
                         let span: std::ops::Range<usize> = (&*s_read!(span))
                             .try_into()
-                            .map_err(|e: ChaChaError| BubbaError::VmPanic {
+                            .map_err(|e: ChaChaError| BubbaError::ValueError {
                                 source: Box::new(e),
                             })
                             .unwrap();
@@ -467,7 +543,7 @@ impl VM {
                         let file = self.stack.pop().unwrap();
                         let file: String = (&*s_read!(file))
                             .try_into()
-                            .map_err(|e: ChaChaError| BubbaError::VmPanic {
+                            .map_err(|e: ChaChaError| BubbaError::ValueError {
                                 source: Box::new(e),
                             })
                             .unwrap();
@@ -486,7 +562,7 @@ impl VM {
                                     if index < vec.len() {
                                         self.stack.push(vec[index].clone());
                                     } else {
-                                        return Err(BubbaError::VmPanic {
+                                        return Err(BubbaError::ValueError {
                                             source: Box::new(ChaChaError::IndexOutOfBounds {
                                                 index,
                                                 len: vec.len(),
@@ -509,7 +585,7 @@ impl VM {
                                             Value::String(str[index..index + 1].join(""),)
                                         ))
                                     } else {
-                                        return Err(BubbaError::VmPanic {
+                                        return Err(BubbaError::ValueError {
                                             source: Box::new(ChaChaError::IndexOutOfBounds {
                                                 index,
                                                 len: str.len(),
@@ -520,7 +596,7 @@ impl VM {
                                         .into());
                                     }
                                 } else {
-                                    return Err(BubbaError::VmPanic {
+                                    return Err(BubbaError::ValueError {
                                         source: Box::new(ChaChaError::NotIndexable {
                                             span: self.get_span(),
                                             location: location!(),
@@ -612,7 +688,7 @@ impl VM {
                         let condition = self.stack.pop().unwrap();
                         let condition: bool = (&*s_read!(condition))
                             .try_into()
-                            .map_err(|e: ChaChaError| BubbaError::VmPanic {
+                            .map_err(|e: ChaChaError| BubbaError::ValueError {
                                 source: Box::new(e),
                             })
                             .unwrap();
@@ -636,7 +712,7 @@ impl VM {
                         let condition = self.stack.pop().unwrap();
                         let condition: bool = (&*s_read!(condition))
                             .try_into()
-                            .map_err(|e: ChaChaError| BubbaError::VmPanic {
+                            .map_err(|e: ChaChaError| BubbaError::ValueError {
                                 source: Box::new(e),
                             })
                             .unwrap();
@@ -684,7 +760,7 @@ impl VM {
                         let ty: ValueType =
                             (&*s_read!(ty))
                                 .try_into()
-                                .map_err(|e| BubbaError::VmPanic {
+                                .map_err(|e| BubbaError::ValueError {
                                     source: Box::new(e),
                                 })?;
 
@@ -717,12 +793,11 @@ impl VM {
                         }
 
                         let variant = self.stack.pop().unwrap();
-                        let variant: String =
-                            (&*s_read!(variant))
-                                .try_into()
-                                .map_err(|e| BubbaError::VmPanic {
-                                    source: Box::new(e),
-                                })?;
+                        let variant: String = (&*s_read!(variant)).try_into().map_err(|e| {
+                            BubbaError::ValueError {
+                                source: Box::new(e),
+                            }
+                        })?;
 
                         if trace {
                             println!("\t\t\t\t{}", variant);
@@ -732,7 +807,7 @@ impl VM {
                         let path: String =
                             (&*s_read!(path))
                                 .try_into()
-                                .map_err(|e| BubbaError::VmPanic {
+                                .map_err(|e| BubbaError::ValueError {
                                     source: Box::new(e),
                                 })?;
 
@@ -744,7 +819,7 @@ impl VM {
                         let ty: ValueType =
                             (&*s_read!(ty))
                                 .try_into()
-                                .map_err(|e| BubbaError::VmPanic {
+                                .map_err(|e| BubbaError::ValueError {
                                     source: Box::new(e),
                                 })?;
 
@@ -764,13 +839,19 @@ impl VM {
                             }
                         }
 
-                        // 🚧 This is temporary until Tuples are sorted.
-                        let user_enum = TupleEnum::new(variant, values[0].to_owned());
-                        let user_enum = new_ref!(TupleEnum, user_enum);
-                        self.stack.push(new_ref!(
-                            Value,
-                            Value::Enumeration(EnumVariant::Tuple((ty, path), user_enum))
-                        ));
+                        if n > 0 {
+                            // 🚧 This is temporary until Tuples are sorted.
+                            let user_enum = TupleEnum::new(variant, values[0].to_owned());
+                            let user_enum = new_ref!(TupleEnum, user_enum);
+                            self.stack.push(new_ref!(
+                                Value,
+                                Value::Enumeration(EnumVariant::Tuple((ty, path), user_enum))
+                            ));
+                        } else {
+                            let user_enum = EnumVariant::Unit(ty, path, variant);
+                            self.stack
+                                .push(new_ref!(Value, Value::Enumeration(user_enum)));
+                        }
 
                         1
                     }
@@ -783,7 +864,7 @@ impl VM {
                         let name: String =
                             (&*s_read!(name))
                                 .try_into()
-                                .map_err(|e| BubbaError::VmPanic {
+                                .map_err(|e| BubbaError::ValueError {
                                     source: Box::new(e),
                                 })?;
 
@@ -795,7 +876,7 @@ impl VM {
                         let ty: ValueType =
                             (&*s_read!(ty))
                                 .try_into()
-                                .map_err(|e| BubbaError::VmPanic {
+                                .map_err(|e| BubbaError::ValueError {
                                     source: Box::new(e),
                                 })?;
 
@@ -831,7 +912,7 @@ impl VM {
                         let value: bool =
                             (&*s_read!(value))
                                 .try_into()
-                                .map_err(|e| BubbaError::VmPanic {
+                                .map_err(|e| BubbaError::ValueError {
                                     source: Box::new(e),
                                 })?;
 
@@ -870,7 +951,7 @@ impl VM {
                             1 => eprintln!("{value}"),
                             _ => {
                                 return Err::<RefType<Value>, Error>(
-                                    BubbaError::VmPanic {
+                                    BubbaError::ValueError {
                                         source: Box::new(ChaChaError::BadnessHappened {
                                             message: format!("Unknown stream: {stream}."),
                                             location: location!(),

@@ -1158,7 +1158,7 @@ mod test {
 
         assert_eq!(
             program.get_thonk("main").unwrap().get_instruction_card(),
-            28
+            30
         );
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(1));
@@ -1198,7 +1198,7 @@ mod test {
 
         assert_eq!(
             program.get_thonk("main").unwrap().get_instruction_card(),
-            31
+            33
         );
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &4.into());
@@ -1235,7 +1235,7 @@ mod test {
 
         assert_eq!(
             program.get_thonk("main").unwrap().get_instruction_card(),
-            28
+            30
         );
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &3.into());
@@ -1272,7 +1272,7 @@ mod test {
 
         assert_eq!(
             program.get_thonk("main").unwrap().get_instruction_card(),
-            28
+            30
         );
 
         assert_eq!(
@@ -1324,7 +1324,7 @@ mod test {
 
         assert_eq!(
             program.get_thonk("main").unwrap().get_instruction_card(),
-            18
+            32
         );
 
         assert_eq!(
@@ -1347,8 +1347,8 @@ mod test {
                    }
                    fn main() -> Foo {
                        match Foo::Bar(40 + 2) {
-                           Foo::Bar(42) => Foo::Bar(42),
                            Foo::Baz(1) => Foo::Baz(1),
+                           Foo::Bar(42) => Foo::Bar(42),
                            Foo::Qux(1) => Foo::Qux(1),
                        }
                    }";
@@ -1378,7 +1378,7 @@ mod test {
 
         assert_eq!(
             program.get_thonk("main").unwrap().get_instruction_card(),
-            36
+            53
         );
 
         assert_eq!(
@@ -1388,7 +1388,7 @@ mod test {
     }
 
     // #[test]
-    fn match_enum_pattern_match() {
+    fn enum_pattern_match() {
         let _ = env_logger::builder().is_test(true).try_init();
         color_backtrace::install();
 
@@ -1400,11 +1400,11 @@ mod test {
                        Qux(int),
                    }
                    fn main() -> int {
-                       let x = Foo::Bar(42);
+                       let x = Foo::Baz(42);
                        match x {
-                           Foo::Bar(x) => x,
-                           Foo::Baz(x) => x,
-                           Foo::Qux(x) => x,
+                           Foo::Bar(u) => u,
+                           Foo::Baz(v) => v,
+                           Foo::Qux(w) => w,
                        }
                    }";
         let ast = parse_dwarf("match_expression", ore).unwrap();
@@ -1421,10 +1421,10 @@ mod test {
 
         assert_eq!(program.get_thonk_card(), 1);
 
-        assert_eq!(
-            program.get_thonk("main").unwrap().get_instruction_card(),
-            24
-        );
+        // assert_eq!(
+        // program.get_thonk("main").unwrap().get_instruction_card(),
+        // 30
+        // );
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(42));
     }

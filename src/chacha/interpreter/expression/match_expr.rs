@@ -3,8 +3,9 @@ use crate::{
     chacha::{error::Result, value::EnumVariant},
     interpreter::{eval_expression, Context},
     lu_dog::ExpressionEnum,
-    new_ref, s_read, NewRef, RefType, SarzakStorePtr, Value,
+    new_ref, s_read, NewRef, RefType, SarzakStorePtr, Value, PATH_SEP,
 };
+use std::collections::VecDeque;
 
 pub fn eval(
     match_expr: &SarzakStorePtr,
@@ -27,19 +28,19 @@ pub fn eval(
     // they are not ordered in the model.
     for pattern in patterns {
         let match_expr = s_read!(pattern).r87_expression(&lu_dog)[0].clone();
-        let expr = s_read!(pattern).r92_expression(&lu_dog)[0].clone();
+        let pattern_expr = s_read!(pattern).r92_expression(&lu_dog)[0].clone();
 
         let match_expr_read = s_read!(match_expr);
         match &match_expr_read.subtype {
             ExpressionEnum::EmptyExpression(ref _id) => {
-                let value = eval_expression(expr, context, vm)?;
+                let value = eval_expression(pattern_expr, context, vm)?;
                 return Ok(value);
             }
             ExpressionEnum::Literal(ref _id) => {
                 let value = eval_expression(match_expr.clone(), context, vm)?;
                 let value = s_read!(value);
                 if *s_read!(scrutinee) == *value {
-                    let value = eval_expression(expr, context, vm)?;
+                    let value = eval_expression(pattern_expr, context, vm)?;
                     return Ok(value);
                 }
             }
@@ -48,7 +49,7 @@ pub fn eval(
                 let field_exprs = s_read!(struct_expr).r26_field_expression(&lu_dog);
                 // let data_struct = &s_read!(struct_expr).r39_data_structure(&lu_dog)[0];
 
-                fn decode_value(value: RefType<Value>) -> (String, Option<RefType<Value>>) {
+                fn decode_expression(value: RefType<Value>) -> (String, Option<RefType<Value>>) {
                     match &*s_read!(value) {
                         Value::Enumeration(value) => match value {
                             // 🚧 I can't tell if this is gross, or a sweet hack.
@@ -61,17 +62,36 @@ pub fn eval(
                             //     s_read!(value).type_name().to_owned(),
                             //     Some(s_read!(value).get_value()),
                             // ),
-                            EnumVariant::Tuple((_, ty), value) => (
-                                ty.to_owned(),
-                                Some(new_ref!(Value, Value::TupleEnum(value.clone()))),
-                            ),
+                            EnumVariant::Tuple((ty, path), value) => {
+                                let path = path.split(PATH_SEP).collect::<Vec<&str>>();
+                                let mut path = VecDeque::from(path);
+                                let name = path.pop_front().unwrap().to_owned();
+                                if name == "" {
+                                    (
+                                        s_read!(value).variant().to_owned(),
+                                        Some(s_read!(value).value().clone()),
+                                    )
+                                } else {
+                                    (
+                                        name,
+                                        Some(new_ref!(
+                                            Value,
+                                            Value::Enumeration(EnumVariant::Tuple(
+                                                (
+                                                    ty.clone(),
+                                                    path.into_iter()
+                                                        .collect::<Vec<&str>>()
+                                                        .join(PATH_SEP)
+                                                ),
+                                                value.clone(),
+                                            ))
+                                        )),
+                                    )
+                                }
+                            }
                             _ => unimplemented!(),
                         },
                         Value::String(value) => (value.to_owned(), None),
-                        Value::TupleEnum(te) => (
-                            s_read!(te).variant().to_owned(),
-                            Some(s_read!(te).value().clone()),
-                        ),
                         _ => unreachable!(),
                     }
                 }
@@ -85,7 +105,7 @@ pub fn eval(
                 let mut pe = s_read!(x_path).r97_path_element(&lu_dog)[0].clone();
 
                 let mut matched = false;
-                let (name, mut scrutinee) = decode_value(scrutinee.clone());
+                let (name, mut scrutinee) = decode_expression(scrutinee.clone());
                 if name == s_read!(pe).name {
                     while s_read!(pe).next.is_some() && scrutinee.is_some() {
                         let id = {
@@ -94,7 +114,7 @@ pub fn eval(
                             id.as_ref().unwrap().clone()
                         };
                         pe = lu_dog.exhume_path_element(&id).unwrap();
-                        let (name, s) = decode_value(scrutinee.unwrap());
+                        let (name, s) = decode_expression(scrutinee.unwrap());
                         scrutinee = s;
 
                         if name == s_read!(pe).name {
@@ -107,12 +127,15 @@ pub fn eval(
                     }
                 }
 
+                // Assuming that we matched the path we need to now evaluate the
+                // pattern expression.
                 match (matched, field_exprs.len()) {
                     (true, 0) => {
-                        let value = eval_expression(expr, context, vm)?;
+                        let value = eval_expression(pattern_expr, context, vm)?;
                         return Ok(value);
                     }
                     (true, _) => {
+                        // 🚧 We are only working on the first one?
                         let field_expr = s_read!(field_exprs[0]).r38_expression(&lu_dog)[0].clone();
                         let field_expr_read = s_read!(field_expr);
                         match field_expr_read.subtype {
@@ -120,7 +143,7 @@ pub fn eval(
                                 let value = eval_expression(field_expr.clone(), context, vm)?;
                                 let value = s_read!(value);
                                 if *s_read!(scrutinee.unwrap()) == *value {
-                                    let value = eval_expression(expr, context, vm)?;
+                                    let value = eval_expression(pattern_expr, context, vm)?;
                                     return Ok(value);
                                 }
                             }
@@ -131,7 +154,7 @@ pub fn eval(
                                 context
                                     .memory()
                                     .insert(s_read!(var).name.to_owned(), scrutinee.unwrap());
-                                let value = eval_expression(expr, context, vm)?;
+                                let value = eval_expression(pattern_expr, context, vm)?;
 
                                 context.memory().pop_frame();
 
@@ -151,7 +174,7 @@ pub fn eval(
                 context
                     .memory()
                     .insert(s_read!(var).name.to_owned(), scrutinee);
-                let value = eval_expression(expr, context, vm)?;
+                let value = eval_expression(pattern_expr, context, vm)?;
 
                 context.memory().pop_frame();
                 return Ok(value);

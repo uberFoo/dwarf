@@ -30,7 +30,7 @@ pub fn eval(expr: &SarzakStorePtr, context: &mut Context, vm: &mut VM) -> Result
             let mut pe = s_read!(x_path).r97_path_element(&s_read!(lu_dog))[0].clone();
             let mut path = vec![s_read!(pe).name.to_owned()];
 
-            // Get the last path element.
+            // Build the path from the elements.
             while s_read!(pe).next.is_some() {
                 let id = {
                     let id = &s_read!(pe).next;
