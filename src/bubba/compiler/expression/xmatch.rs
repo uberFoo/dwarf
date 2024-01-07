@@ -65,7 +65,6 @@ pub(in crate::bubba::compiler) fn compile(
                             let expr = s_read!(expr).r38_expression(&lu_dog)[0].clone();
 
                             let expr = s_read!(expr);
-                            dbg!(&expr);
                             // 🚧 I'm already in the middle of one of these.
                             match &expr.subtype {
                                 ExpressionEnum::Literal(ref literal) => {
@@ -81,7 +80,7 @@ pub(in crate::bubba::compiler) fn compile(
                                     let expr = var.r15_expression(&lu_dog)[0].clone();
                                     let value = s_read!(expr).r11_x_value(&lu_dog)[0].clone();
                                     let ty = s_read!(value).r24_value_type(&lu_dog)[0].clone();
-                                    dbg!(&var);
+
                                     let idx = context
                                         .insert_symbol(var.name.clone(), s_read!(ty).clone());
                                     thonk.increment_frame_size();

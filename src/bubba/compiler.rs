@@ -223,11 +223,11 @@ fn compile_function(func: &RefType<Function>, context: &mut Context) -> Result<C
     let lu_dog = s_read!(lu_dog);
 
     let func = s_read!(func);
-    let ty_name = if let Some(i_block) = func.r9_implementation_block(&lu_dog).get(0) {
+    let ty_name = if let Some(i_block) = func.r9_implementation_block(&lu_dog).first() {
         let i_block = s_read!(i_block);
-        if let Some(woog_struct) = i_block.r8_woog_struct(&lu_dog).get(0) {
+        if let Some(woog_struct) = i_block.r8_woog_struct(&lu_dog).first() {
             s_read!(woog_struct).name.clone()
-        } else if let Some(woog_enum) = i_block.r84c_enumeration(&lu_dog).get(0) {
+        } else if let Some(woog_enum) = i_block.r84c_enumeration(&lu_dog).first() {
             s_read!(woog_enum).name.clone()
         } else {
             "".to_owned()

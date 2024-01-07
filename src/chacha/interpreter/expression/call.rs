@@ -195,7 +195,7 @@ pub fn eval(
                     let woog_enum = s_read!(woog_enum);
 
                     if let Some(impl_) =
-                        &woog_enum.r84_implementation_block(&s_read!(lu_dog)).get(0)
+                        &woog_enum.r84_implementation_block(&s_read!(lu_dog)).first()
                     {
                         let x = if let Some(func) = s_read!(impl_)
                             .r9_function(&s_read!(lu_dog))

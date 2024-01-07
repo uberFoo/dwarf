@@ -66,7 +66,7 @@ pub fn eval(
                                 let path = path.split(PATH_SEP).collect::<Vec<&str>>();
                                 let mut path = VecDeque::from(path);
                                 let name = path.pop_front().unwrap().to_owned();
-                                if name == "" {
+                                if name.is_empty() {
                                     (
                                         s_read!(value).variant().to_owned(),
                                         Some(s_read!(value).value().clone()),

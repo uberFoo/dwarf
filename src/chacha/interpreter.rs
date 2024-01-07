@@ -925,7 +925,7 @@ fn inter_struct(
         // For each function in the impl, insert the function. I should probably
         // check and only insert the static functions.
         for func in s_read!(impl_[0]).r9_function(lu_dog) {
-            let insert = if let Some(param) = s_read!(func).r82_parameter(lu_dog).get(0) {
+            let insert = if let Some(param) = s_read!(func).r82_parameter(lu_dog).first() {
                 let var = &s_read!(param).r12_variable(lu_dog)[0];
                 let var = s_read!(var);
                 var.name != "self"
@@ -960,7 +960,7 @@ fn inter_store(
         // check and only insert the static functions.
         // 🚧 Only insert the static functions
         for func in s_read!(impl_[0]).r9_function(lu_dog) {
-            let insert = if let Some(param) = s_read!(func).r82_parameter(lu_dog).get(0) {
+            let insert = if let Some(param) = s_read!(func).r82_parameter(lu_dog).first() {
                 let var = &s_read!(param).r12_variable(lu_dog)[0];
                 let var = s_read!(var);
                 var.name != "self"

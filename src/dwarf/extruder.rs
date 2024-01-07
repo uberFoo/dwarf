@@ -321,6 +321,7 @@ pub struct Context<'a> {
 }
 
 impl<'a> Context<'a> {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         source: String,
         sarzak: &'a SarzakStore,
@@ -330,13 +331,13 @@ impl<'a> Context<'a> {
         models: &'a mut ModelStore,
         dirty: &'a mut Vec<Dirty>,
         location: Location,
-        mut lu_dog: &mut LuDogStore,
+        lu_dog: &mut LuDogStore,
         path: String,
     ) -> Self {
         Self {
             location,
             struct_fields: Vec::new(),
-            source: DwarfSourceFile::new(source, &mut lu_dog),
+            source: DwarfSourceFile::new(source, lu_dog),
             models,
             sarzak,
             dwarf_home,
@@ -3205,8 +3206,7 @@ fn inter_module(
                         &path_name,
                         context.cwd.clone(),
                         context.dwarf_home,
-                        // &mut models,
-                        &mut context.models,
+                        context.models,
                         &mut dirty,
                         location!(),
                         lu_dog,
@@ -3256,7 +3256,7 @@ fn inter_import(
         .collect::<Vec<_>>();
     // let import_path = path_root.join(PATH_SEP);
 
-    let module = path_root.get(0).unwrap(); // This will have _something_.
+    let module = path_root.first().unwrap(); // This will have _something_.
 
     // 🚧 Why?
     if module == "dwarf" {
@@ -3300,8 +3300,7 @@ fn inter_import(
                         &path,
                         dir,
                         context.dwarf_home,
-                        // &mut models,
-                        &mut context.models,
+                        context.models,
                         &mut dirty,
                         location!(),
                         lu_dog,
@@ -3358,9 +3357,9 @@ fn inter_implementation(
     debug!("inter_implementation: {name}");
 
     let (impl_ty, implementation) = if let Some(store_vec) = attributes.get(STORE) {
-        if let Some((_, InnerAttribute::Attribute(ref attributes))) = store_vec.get(0) {
+        if let Some((_, InnerAttribute::Attribute(ref attributes))) = store_vec.first() {
             if let Some(model_vec) = attributes.get(MODEL) {
-                if let Some((_, ref value)) = model_vec.get(0) {
+                if let Some((_, ref value)) = model_vec.first() {
                     let model_name: String = value.try_into().map_err(|e| vec![e])?;
                     debug!("store.model: {model_name}");
                     let store = lu_dog

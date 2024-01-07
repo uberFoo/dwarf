@@ -237,7 +237,7 @@ pub(crate) fn create_generic_enum(
     enum_name: &str,
     enum_path: &ParserExpression,
     context: &mut Context,
-    context_stack: &mut Vec<(String, RefType<LuDogStore>)>,
+    context_stack: &mut [(String, RefType<LuDogStore>)],
     lu_dog: &mut LuDogStore,
 ) -> (RefType<Enumeration>, RefType<ValueType>) {
     // Check to see if this already exists

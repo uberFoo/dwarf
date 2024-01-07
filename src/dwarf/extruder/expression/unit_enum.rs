@@ -21,6 +21,7 @@ use crate::{
 // Let's just say that I don't get this lint. The docs say you have to box it
 // first, but what about when it's already boxed? I don't get it.
 #[allow(clippy::borrowed_box)]
+#[allow(clippy::too_many_arguments)]
 pub fn inter(
     enum_path: &Box<(ParserExpression, Range<usize>)>,
     field_name: String,
@@ -28,7 +29,7 @@ pub fn inter(
     span: RefType<Span>,
     block: &RefType<Block>,
     context: &mut Context,
-    context_stack: &mut Vec<(String, RefType<LuDogStore>)>,
+    context_stack: &mut [(String, RefType<LuDogStore>)],
     lu_dog: &mut LuDogStore,
 ) -> Result<(ExprSpan, RefType<ValueType>)> {
     debug!("UnitEnum {:?}, Field {field_name}", enum_path);

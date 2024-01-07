@@ -58,21 +58,21 @@ pub fn inter_func(
     };
 
     let external = if let Some(proxy_vec) = attributes.get(PROXY) {
-        if let Some((_, InnerAttribute::Attribute(ref attributes))) = proxy_vec.get(0) {
+        if let Some((_, InnerAttribute::Attribute(ref attributes))) = proxy_vec.first() {
             debug!("proxy");
 
             if let Some(store_vec) = attributes.get(STORE) {
-                if let Some((_, ref value)) = store_vec.get(0) {
+                if let Some((_, ref value)) = store_vec.first() {
                     let store_name: String = value.try_into().map_err(|e| vec![e])?;
                     debug!("proxy.store.: {store_name}");
 
                     if let Some(func_vec) = attributes.get(FUNC) {
-                        if let Some((_, ref value)) = func_vec.get(0) {
+                        if let Some((_, ref value)) = func_vec.first() {
                             let func_name: String = value.try_into().map_err(|e| vec![e])?;
                             debug!("proxy.func: {func_name}");
 
                             if let Some(obj_vec) = attributes.get(OBJECT) {
-                                if let Some((_, ref value)) = obj_vec.get(0) {
+                                if let Some((_, ref value)) = obj_vec.first() {
                                     let obj_name: String = value.try_into().map_err(|e| vec![e])?;
                                     debug!("proxy.object: {obj_name}");
 

@@ -22,6 +22,7 @@ use crate::{
     NewRef, RefType,
 };
 
+#[allow(clippy::too_many_arguments)]
 pub(in crate::dwarf::extruder) fn inter(
     instance: Box<(ParserExpression, Range<usize>)>,
     method: &String,

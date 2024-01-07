@@ -77,10 +77,8 @@ impl VM {
             match instr {
                 Instruction::CallDestination(name) => {
                     let name: String = (&*s_read!(name)).try_into().unwrap();
-                    let (ip, _frame_size) = vm
-                        .func_map
-                        .get(&name)
-                        .expect(format!("Unknown function: {name}").as_str());
+                    let (ip, _frame_size) =
+                        vm.func_map.get(&name).expect("Unknown function: {name}");
                     vm.program.push(Instruction::Push(new_ref!(
                         Value,
                         Value::Integer(*ip as DwarfInteger)
@@ -290,7 +288,7 @@ impl VM {
                                         let path = path.split(PATH_SEP).collect::<Vec<&str>>();
                                         let mut path = VecDeque::from(path);
                                         let name = path.pop_front().unwrap().to_owned();
-                                        if name == "" {
+                                        if name.is_empty() {
                                             Ok((
                                                 new_ref!(
                                                     Value,

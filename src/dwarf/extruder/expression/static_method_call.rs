@@ -36,6 +36,7 @@ use crate::{
     NewRef, RefType,
 };
 
+#[allow(clippy::too_many_arguments)]
 pub fn inter(
     path: &ParserExpression,
     method: &str,
@@ -410,11 +411,12 @@ pub fn inter(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn inter_field(
     field: &RefType<EnumField>,
     params: &[(ParserExpression, Range<usize>)],
     block: &RefType<Block>,
-    path: &Vec<(Type, Option<Generics>)>,
+    path: &[(Type, Option<Generics>)],
     save_path: &ParserExpression,
     woog_enum: RefType<Enumeration>,
     span: &RefType<Span>,
@@ -513,7 +515,7 @@ fn inter_field(
     // let expr = Expression::new_enum_field(&field, lu_dog);
 
     let data_struct = DataStructure::new_enumeration(&woog_enum, lu_dog);
-    let struct_expr = StructExpression::new(Uuid::new_v4(), &data_struct, &x_path, lu_dog);
+    let struct_expr = StructExpression::new(Uuid::new_v4(), &data_struct, x_path, lu_dog);
     let nfe = UnnamedFieldExpression::new(0, lu_dog);
     let strawberry =
         FieldExpression::new_unnamed_field_expression(&expr.0, &struct_expr, &nfe, lu_dog);
@@ -532,7 +534,7 @@ fn inter_field(
 
     let expr = Expression::new_struct_expression(&struct_expr, lu_dog);
     let value = XValue::new_expression(block, &ty, &expr, lu_dog);
-    update_span_value(&span, &value, location!());
+    update_span_value(span, &value, location!());
 
     Ok(((expr, span.clone()), ty))
 }

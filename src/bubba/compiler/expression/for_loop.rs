@@ -35,7 +35,7 @@ pub(in crate::bubba::compiler) fn compile(
     let mut inner_thonk = CThonk::new(format!("for_{}", ident));
 
     let get_integer = || -> RefType<ValueType> {
-        let ty = Ty::new_integer(&mut s_read!(context.sarzak_heel()));
+        let ty = Ty::new_integer(&s_read!(context.sarzak_heel()));
         for vt in lu_dog.iter_value_type() {
             if let ValueTypeEnum::Ty(_ty) = s_read!(vt).subtype {
                 if ty.read().unwrap().id() == _ty {

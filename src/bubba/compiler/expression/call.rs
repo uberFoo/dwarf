@@ -142,8 +142,8 @@ fn compile_method_call(
     };
 
     for ((name, ty), expr) in params.into_iter().zip(args) {
-        let span = get_span(&expr, &lu_dog);
-        compile_expression(&expr, thonk, context, span)?;
+        let span = get_span(expr, &lu_dog);
+        compile_expression(expr, thonk, context, span)?;
         // 🚧 Why do I not increment the frame size?
         context.insert_symbol(name, ty);
         thonk.increment_frame_size();
@@ -155,8 +155,8 @@ fn compile_method_call(
 }
 
 fn compile_static_method_call(
-    ty: &String,
-    func: &String,
+    ty: &str,
+    func: &str,
     args: &[RefType<Expression>],
     thonk: &mut CThonk,
     context: &mut Context,
@@ -165,8 +165,8 @@ fn compile_static_method_call(
     let lu_dog = context.lu_dog_heel();
     let lu_dog = s_read!(lu_dog);
 
-    match ty.as_str() {
-        CHACHA => match func.as_str() {
+    match ty {
+        CHACHA => match func {
             ASSERT => {
                 let expr = &args[0];
                 let expr_span = get_span(expr, &lu_dog);
@@ -243,16 +243,16 @@ fn compile_static_method_call(
                 );
                 thonk.add_instruction_with_span(Instruction::HaltAndCatchFire, span, location!());
             }
-            _ => todo!("handle other chacha methods"),
+            meth => todo!("handle chacha method: {meth}"),
         },
-        _ => todo!("handle other static methods"),
+        meth => todo!("handle static method {meth}"),
     }
 
     Ok(())
 }
 
 fn compile_function_call(
-    name: &String,
+    name: &str,
     call: RefType<Call>,
     args: &[RefType<Expression>],
     thonk: &mut CThonk,
@@ -261,7 +261,7 @@ fn compile_function_call(
     let lu_dog = context.lu_dog_heel();
     let lu_dog = s_read!(lu_dog);
 
-    let func = lu_dog.exhume_function_id_by_name(&name).unwrap();
+    let func = lu_dog.exhume_function_id_by_name(name).unwrap();
     let func = lu_dog.exhume_function(&func).unwrap();
     let func = s_read!(func);
     let params = func.r13_parameter(&lu_dog);
@@ -309,8 +309,8 @@ fn compile_function_call(
     };
 
     for ((name, ty), expr) in params.into_iter().zip(args) {
-        let span = get_span(&expr, &lu_dog);
-        compile_expression(&expr, thonk, context, span)?;
+        let span = get_span(expr, &lu_dog);
+        compile_expression(expr, thonk, context, span)?;
         // 🚧 Why do I not increment the frame size?
         context.insert_symbol(name, ty);
         thonk.increment_frame_size();

@@ -46,15 +46,15 @@ pub fn inter_struct(
     // If there is a proxy attribute then we'll use it's info to attach an object
     // from the store to this UDT.
     if let Some(proxy_vec) = attributes.get(PROXY) {
-        if let Some((_, InnerAttribute::Attribute(ref attributes))) = proxy_vec.get(0) {
+        if let Some((_, InnerAttribute::Attribute(ref attributes))) = proxy_vec.first() {
             // Get the store value
             if let Some(store_vec) = attributes.get(STORE) {
-                if let Some((_, ref value)) = store_vec.get(0) {
+                if let Some((_, ref value)) = store_vec.first() {
                     let store_name: String = value.try_into().map_err(|e| vec![e])?;
                     debug!("proxy.store: {store_name}");
 
                     if let Some(name_vec) = attributes.get(OBJECT) {
-                        if let Some((_, ref value)) = name_vec.get(0) {
+                        if let Some((_, ref value)) = name_vec.first() {
                             let proxy_obj: String = value.try_into().map_err(|e| vec![e])?;
                             let proxy_obj = proxy_obj.desanitize();
                             // let proxy_obj = proxy_obj.to_upper_camel_case();
@@ -128,7 +128,7 @@ pub fn inter_struct(
                     unreachable!();
                 }
             } else if let Some(ty_vec) = attributes.get(TYPE) {
-                if let Some((_, ref value)) = ty_vec.get(0) {
+                if let Some((_, ref value)) = ty_vec.first() {
                     let type_name: String = value.try_into().map_err(|e| vec![e])?;
                     debug!("proxy.ty: {type_name}");
                 }
@@ -144,9 +144,9 @@ pub fn inter_struct(
 
         // Below we are interring as an ObjectStore, according to it's annotation.
     } else if let Some(store_vec) = attributes.get(STORE) {
-        if let Some((_, InnerAttribute::Attribute(ref attributes))) = store_vec.get(0) {
+        if let Some((_, InnerAttribute::Attribute(ref attributes))) = store_vec.first() {
             if let Some(model_vec) = attributes.get(MODEL) {
-                if let Some((_, ref value)) = model_vec.get(0) {
+                if let Some((_, ref value)) = model_vec.first() {
                     let model_name: String = value.try_into().map_err(|e| vec![e])?;
                     debug!("store.model: {model_name}");
 
@@ -245,10 +245,10 @@ pub fn inter_struct_fields(
         use std::ops::Range;
         let mut proxy_thang =
             |proxy_vec: &[(Range<usize>, InnerAttribute)]| -> Result<RefType<ValueType>> {
-                if let Some((_, InnerAttribute::Attribute(ref attributes))) = proxy_vec.get(0) {
+                if let Some((_, InnerAttribute::Attribute(ref attributes))) = proxy_vec.first() {
                     // Get the plugin value
                     if let Some(plugin_vec) = attributes.get(PLUGIN) {
-                        if let Some((_, ref value)) = plugin_vec.get(0) {
+                        if let Some((_, ref value)) = plugin_vec.first() {
                             let plugin_name: String = value.try_into().map_err(|e| vec![e])?;
                             debug!("proxy.plugin: {plugin_name}");
                             if let Type::UserType(tok, _generics) = type_ {
