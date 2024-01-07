@@ -6,11 +6,12 @@ use rustc_hash::FxHashMap as HashMap;
 use snafu::{location, Location};
 
 use crate::{
-    chacha::{error::ChaChaErrorReporter, vm::VM},
+    bubba::VM,
+    chacha::error::ChaChaErrorReporter,
     dwarf::{error::DwarfErrorReporter, inter_statement, parse_line, Context as ExtruderContext},
     interpreter::{banner2, debug, eval_statement, function, Context, Error, PrintableValueType},
     lu_dog::DwarfSourceFile,
-    new_ref, s_read, s_write, ChaChaError, NewRef, RefType,
+    new_ref, s_read, s_write, ChaChaError, NewRef, RefType, PATH_ROOT,
 };
 
 pub fn start_repl(context: &mut Context, is_uber: bool) -> Result<(), Error> {
@@ -29,8 +30,7 @@ pub fn start_repl(context: &mut Context, is_uber: bool) -> Result<(), Error> {
 
     let block = context.block().clone();
 
-    let vm_stack = context.memory().clone();
-    let mut vm = VM::new(&vm_stack);
+    let mut vm = VM::new(context.get_program());
 
     let notice_style = Colour::Red.bold().italic();
     let prompt_style = Colour::Blue.normal();
@@ -108,9 +108,9 @@ pub fn start_repl(context: &mut Context, is_uber: bool) -> Result<(), Error> {
                     Ok(Some((stmt, _))) => {
                         debug!("stmt from readline {stmt:?}");
 
+                        let mut lu_dog = s_write!(lu_dog);
                         let mut dirty = Vec::new();
                         let stmt = {
-                            let mut lu_dog = s_write!(lu_dog);
                             match inter_statement(
                                 &new_ref!(crate::dwarf::Statement, stmt),
                                 stmt_index,
@@ -126,7 +126,9 @@ pub fn start_repl(context: &mut Context, is_uber: bool) -> Result<(), Error> {
                                     dirty: &mut dirty,
                                     file_name: "REPL",
                                     func_defs: HashMap::default(),
+                                    path: PATH_ROOT.to_owned(),
                                 },
+                                &mut Vec::new(),
                                 &mut lu_dog,
                             ) {
                                 Ok(stmt) => stmt.0,
@@ -144,8 +146,7 @@ pub fn start_repl(context: &mut Context, is_uber: bool) -> Result<(), Error> {
 
                         match eval_statement(stmt.0, context, &mut vm) {
                             Ok(value) => {
-                                let ty = s_read!(value)
-                                    .get_value_type(&s_read!(sarzak), &s_read!(lu_dog));
+                                let ty = s_read!(value).get_value_type(&s_read!(sarzak), &lu_dog);
                                 let value = format!("{}", s_read!(value));
                                 print!("\n'{}'", result_style.paint(value));
 

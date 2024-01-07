@@ -1,0 +1,10 @@
+fn main() {
+    // let x = 1000000;
+
+    // while x > 0 {
+    // x = x - 1;
+    // }
+    for _ in 0..1000000 {
+        // do nothing
+    }
+}

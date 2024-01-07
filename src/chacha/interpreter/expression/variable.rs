@@ -15,20 +15,14 @@ pub fn eval(
 ) -> Result<RefType<Value>> {
     let lu_dog = context.lu_dog_heel().clone();
 
-    // let expr = s_read!(lu_dog).exhume_variable_expression(expr).unwrap();
-    // let name = s_read!(expr).name.clone();
-    // debug!("ExpressionEnum::VariableExpression expr: {:?}", expr);
-
     let name = {
-        let fucker = s_read!(lu_dog);
-        // dbg!(&fucker);
-        let expr = fucker.exhume_variable_expression(expr).unwrap();
+        let foo = s_read!(lu_dog);
+        let expr = foo.exhume_variable_expression(expr).unwrap();
         let name = s_read!(expr).name.clone();
-        drop(fucker);
-        // dbg!(fucker);
+        #[allow(clippy::let_and_return)]
         name
     };
-    // dbg!(&name);
+
     let value = context.memory().get(&name);
 
     ensure!(value.is_some(), {
@@ -41,7 +35,6 @@ pub fn eval(
     });
 
     let value = value.unwrap();
-    // dbg!(&value.read());
     debug!(
         "ExpressionEnum::VariableExpression value: {}",
         s_read!(value)

@@ -18,20 +18,18 @@ use uuid::Uuid;
 use puteketeke::Executor;
 
 use crate::{
+    bubba::{Instruction, Program, Thonk, VM},
     chacha::{
         error::{Error, Result, UnimplementedSnafu},
         memory::{Memory, MemoryUpdateMessage},
         value::UserStruct,
-        vm::{CallFrame, Instruction, Thonk, VM},
     },
     lu_dog::{
         Block, Expression, ExpressionEnum, LocalVariable, ObjectStore as LuDogStore, Span,
         Statement, StatementEnum, ValueType, ValueTypeEnum, Variable, XValue,
     },
-    new_ref, s_read, s_write,
-    sarzak::store::ObjectStore as SarzakStore,
-    ChaChaError, Context as ExtruderContext, Dirty, DwarfInteger, ModelStore, NewRef, RefType,
-    Value,
+    new_ref, s_read, s_write, ChaChaError, Context as ExtruderContext, Dirty, DwarfInteger,
+    ModelStore, NewRef, RefType, Value,
 };
 
 mod banner;
@@ -122,6 +120,8 @@ macro_rules! error {
 pub(crate) use error;
 
 const TIMING_COUNT: usize = 1_000;
+const VERSION: &str = env!("CARGO_PKG_VERSION");
+pub const BUILD_TIME: &str = include!(concat!(env!("OUT_DIR"), "/timestamp.txt"));
 
 lazy_static! {
     pub(super) static ref RUNNING: Mutex<bool> = Mutex::new(true);
@@ -142,7 +142,6 @@ pub fn initialize_interpreter(
     thread_count: usize,
     dwarf_home: PathBuf,
     e_context: ExtruderContext,
-    sarzak: SarzakStore,
 ) -> Result<Context, Error> {
     debug!("initialize_interpreter with {thread_count} threads");
 
@@ -171,6 +170,8 @@ pub fn initialize_interpreter(
     for store in lu_dog.iter_z_object_store() {
         inter_store(store, &mut stack, &lu_dog);
     }
+
+    let mut program = Program::new(VERSION.to_owned(), BUILD_TIME.to_owned());
 
     if let Some(_id) = lu_dog.exhume_woog_struct_id_by_name("Complex") {
         // Hack to try to get mandelbrot running faster...
@@ -219,34 +220,35 @@ pub fn initialize_interpreter(
 
         // Get the parameter off the stack
         // push {fp + 0}
-        thonk.add_instruction(Instruction::PushLocal(0));
+        thonk.add_instruction(Instruction::FetchLocal(0), None);
         // push "re"
-        thonk.add_instruction(Instruction::Push(new_ref!(Value, "re".into())));
+        thonk.add_instruction(Instruction::Push(new_ref!(Value, "re".into())), None);
         //
         // field
-        thonk.add_instruction(Instruction::FieldRead);
+        thonk.add_instruction(Instruction::FieldRead, None);
         // dup
-        thonk.add_instruction(Instruction::Dup);
+        thonk.add_instruction(Instruction::Dup, None);
         // mul
-        thonk.add_instruction(Instruction::Mul);
+        thonk.add_instruction(Instruction::Multiply, None);
         // Get the parameter off the stack
         // push {fp + 0}
-        thonk.add_instruction(Instruction::PushLocal(0));
+        thonk.add_instruction(Instruction::FetchLocal(0), None);
         // push "im"
-        thonk.add_instruction(Instruction::Push(new_ref!(Value, "im".into())));
+        thonk.add_instruction(Instruction::Push(new_ref!(Value, "im".into())), None);
         //
         // field
-        thonk.add_instruction(Instruction::FieldRead);
+        thonk.add_instruction(Instruction::FieldRead, None);
         // dup
-        thonk.add_instruction(Instruction::Dup);
+        thonk.add_instruction(Instruction::Dup, None);
         // mul
-        thonk.add_instruction(Instruction::Mul);
+        thonk.add_instruction(Instruction::Multiply, None);
         // add
-        thonk.add_instruction(Instruction::Add);
-        thonk.add_instruction(Instruction::Return);
+        thonk.add_instruction(Instruction::Add, None);
+        thonk.add_instruction(Instruction::Return, None);
 
-        let slot = stack.reserve_thonk_slot();
-        stack.insert_thonk(thonk, slot);
+        thonk.increment_frame_size();
+
+        program.add_thonk(thonk);
 
         // Hack to try to get mandelbrot running faster...
         let mut thonk = Thonk::new("add".to_string());
@@ -260,52 +262,54 @@ pub fn initialize_interpreter(
         // }
 
         // Get the first parameter off the stack
-        thonk.add_instruction(Instruction::PushLocal(0));
+        thonk.add_instruction(Instruction::FetchLocal(0), None);
         // push "re"
-        thonk.add_instruction(Instruction::Push(new_ref!(Value, "re".into())));
+        thonk.add_instruction(Instruction::Push(new_ref!(Value, "re".into())), None);
         // field
-        thonk.add_instruction(Instruction::FieldRead);
+        thonk.add_instruction(Instruction::FieldRead, None);
         // Get the second parameter off the stack
-        thonk.add_instruction(Instruction::PushLocal(1));
+        thonk.add_instruction(Instruction::FetchLocal(1), None);
         // push "re"
-        thonk.add_instruction(Instruction::Push(new_ref!(Value, "re".into())));
+        thonk.add_instruction(Instruction::Push(new_ref!(Value, "re".into())), None);
         // field
-        thonk.add_instruction(Instruction::FieldRead);
+        thonk.add_instruction(Instruction::FieldRead, None);
         // add
-        thonk.add_instruction(Instruction::Add);
+        thonk.add_instruction(Instruction::Add, None);
         // Get the first parameter off the stack
-        thonk.add_instruction(Instruction::PushLocal(0));
+        thonk.add_instruction(Instruction::FetchLocal(0), None);
         // push "re"
-        thonk.add_instruction(Instruction::Push(new_ref!(Value, "re".into())));
+        thonk.add_instruction(Instruction::Push(new_ref!(Value, "re".into())), None);
         // Write field
-        thonk.add_instruction(Instruction::FieldWrite);
+        thonk.add_instruction(Instruction::FieldWrite, None);
         // Get the first parameter off the stack
-        thonk.add_instruction(Instruction::PushLocal(0));
+        thonk.add_instruction(Instruction::FetchLocal(0), None);
         // push "im"
-        thonk.add_instruction(Instruction::Push(new_ref!(Value, "im".into())));
+        thonk.add_instruction(Instruction::Push(new_ref!(Value, "im".into())), None);
         // field
-        thonk.add_instruction(Instruction::FieldRead);
+        thonk.add_instruction(Instruction::FieldRead, None);
         // Get the second parameter off the stack
-        thonk.add_instruction(Instruction::PushLocal(1));
+        thonk.add_instruction(Instruction::FetchLocal(1), None);
         // push "im"
-        thonk.add_instruction(Instruction::Push(new_ref!(Value, "im".into())));
+        thonk.add_instruction(Instruction::Push(new_ref!(Value, "im".into())), None);
         // field
-        thonk.add_instruction(Instruction::FieldRead);
+        thonk.add_instruction(Instruction::FieldRead, None);
         // add
-        thonk.add_instruction(Instruction::Add);
+        thonk.add_instruction(Instruction::Add, None);
         // Get the first parameter off the stack
-        thonk.add_instruction(Instruction::PushLocal(0));
+        thonk.add_instruction(Instruction::FetchLocal(0), None);
         // push "im"
-        thonk.add_instruction(Instruction::Push(new_ref!(Value, "im".into())));
+        thonk.add_instruction(Instruction::Push(new_ref!(Value, "im".into())), None);
         // Write field
-        thonk.add_instruction(Instruction::FieldWrite);
+        thonk.add_instruction(Instruction::FieldWrite, None);
         // // new
         // let ty = lu_dog.exhume_value_type(&id).unwrap();
         // thonk.add_instruction(Instruction::NewUserType("Complex".to_string(), ty, 2));
-        thonk.add_instruction(Instruction::Return);
+        thonk.add_instruction(Instruction::Return, None);
 
-        let slot = stack.reserve_thonk_slot();
-        stack.insert_thonk(thonk, slot);
+        thonk.increment_frame_size();
+        thonk.increment_frame_size();
+
+        program.add_thonk(thonk);
 
         // Hack to try to get mandelbrot running faster...
         let mut thonk = Thonk::new("square".to_string());
@@ -320,72 +324,71 @@ pub fn initialize_interpreter(
 
         // Get the parameter off the stack
         // push {fp + 0}
-        thonk.add_instruction(Instruction::PushLocal(0));
+        thonk.add_instruction(Instruction::FetchLocal(0), None);
         // push "re"
-        thonk.add_instruction(Instruction::Push(new_ref!(Value, "re".into())));
+        thonk.add_instruction(Instruction::Push(new_ref!(Value, "re".into())), None);
         //
         // field
-        thonk.add_instruction(Instruction::FieldRead);
+        thonk.add_instruction(Instruction::FieldRead, None);
         // dup
-        thonk.add_instruction(Instruction::Dup);
+        thonk.add_instruction(Instruction::Dup, None);
         // mul
-        thonk.add_instruction(Instruction::Mul);
+        thonk.add_instruction(Instruction::Multiply, None);
         // Get the parameter off the stack
         // push {fp + 0}
-        thonk.add_instruction(Instruction::PushLocal(0));
+        thonk.add_instruction(Instruction::FetchLocal(0), None);
         // push "im"
-        thonk.add_instruction(Instruction::Push(new_ref!(Value, "im".into())));
+        thonk.add_instruction(Instruction::Push(new_ref!(Value, "im".into())), None);
         //
         // field
-        thonk.add_instruction(Instruction::FieldRead);
+        thonk.add_instruction(Instruction::FieldRead, None);
         // dup
-        thonk.add_instruction(Instruction::Dup);
+        thonk.add_instruction(Instruction::Dup, None);
         // mul
-        thonk.add_instruction(Instruction::Mul);
+        thonk.add_instruction(Instruction::Multiply, None);
         // sub
-        thonk.add_instruction(Instruction::Subtract);
+        thonk.add_instruction(Instruction::Subtract, None);
         // push {fp + 0}
         //  this is the one for write
-        thonk.add_instruction(Instruction::PushLocal(0));
+        thonk.add_instruction(Instruction::FetchLocal(0), None);
         // push "re"
-        thonk.add_instruction(Instruction::Push(new_ref!(Value, "re".into())));
+        thonk.add_instruction(Instruction::Push(new_ref!(Value, "re".into())), None);
         // 2.0 * self.re * self.im
         // Get the parameter off the stack
         // push {fp + 0}
-        thonk.add_instruction(Instruction::PushLocal(0));
+        thonk.add_instruction(Instruction::FetchLocal(0), None);
         // push "re"
-        thonk.add_instruction(Instruction::Push(new_ref!(Value, "re".into())));
+        thonk.add_instruction(Instruction::Push(new_ref!(Value, "re".into())), None);
         //
         // field
-        thonk.add_instruction(Instruction::FieldRead);
+        thonk.add_instruction(Instruction::FieldRead, None);
         // Get the parameter off the stack
         // push {fp + 0}
-        thonk.add_instruction(Instruction::PushLocal(0));
+        thonk.add_instruction(Instruction::FetchLocal(0), None);
         // push "im"
-        thonk.add_instruction(Instruction::Push(new_ref!(Value, "im".into())));
+        thonk.add_instruction(Instruction::Push(new_ref!(Value, "im".into())), None);
         //
         // field
-        thonk.add_instruction(Instruction::FieldRead);
+        thonk.add_instruction(Instruction::FieldRead, None);
         // push 2.0
-        thonk.add_instruction(Instruction::Push(new_ref!(Value, 2.0.into())));
+        thonk.add_instruction(Instruction::Push(new_ref!(Value, 2.0.into())), None);
         // mul
-        thonk.add_instruction(Instruction::Mul);
+        thonk.add_instruction(Instruction::Multiply, None);
         // mul
-        thonk.add_instruction(Instruction::Mul);
+        thonk.add_instruction(Instruction::Multiply, None);
         // push {fp + 0}
-        thonk.add_instruction(Instruction::PushLocal(0));
+        thonk.add_instruction(Instruction::FetchLocal(0), None);
         // push "im"
-        thonk.add_instruction(Instruction::Push(new_ref!(Value, "im".into())));
-        thonk.add_instruction(Instruction::FieldWrite);
-        thonk.add_instruction(Instruction::FieldWrite);
+        thonk.add_instruction(Instruction::Push(new_ref!(Value, "im".into())), None);
+        thonk.add_instruction(Instruction::FieldWrite, None);
+        thonk.add_instruction(Instruction::FieldWrite, None);
         // // new
         // let ty = lu_dog.exhume_value_type(&id).unwrap();
         // thonk.add_instruction(Instruction::NewUserType("Complex".to_string(), ty, 2));
 
-        thonk.add_instruction(Instruction::Return);
+        thonk.add_instruction(Instruction::Return, None);
 
-        let slot = stack.reserve_thonk_slot();
-        stack.insert_thonk(thonk, slot);
+        program.add_thonk(thonk);
     }
 
     let (std_out_send, std_out_recv) = unbounded();
@@ -402,7 +405,7 @@ pub fn initialize_interpreter(
             block,
             stack,
             e_context.lu_dog.clone(),
-            new_ref!(SarzakStore, sarzak),
+            e_context.sarzak.clone(),
             new_ref!(ModelStore, e_context.models),
             receiver,
             std_out_send,
@@ -415,6 +418,7 @@ pub fn initialize_interpreter(
             dwarf_home,
             dirty,
             e_context.source.to_owned(),
+            program,
             executor,
         ))
     }
@@ -424,7 +428,7 @@ pub fn initialize_interpreter(
         block,
         stack,
         e_context.lu_dog.clone(),
-        new_ref!(SarzakStore, sarzak),
+        e_context.sarzak.clone(),
         new_ref!(ModelStore, e_context.models),
         receiver,
         std_out_send,
@@ -437,6 +441,7 @@ pub fn initialize_interpreter(
         dwarf_home,
         dirty,
         e_context.source.to_owned(),
+        program,
     ))
 }
 
@@ -625,12 +630,12 @@ pub fn eval_statement(
     // into play.
     for dirty in context.dirty() {
         match dirty {
-            // Dirty::Func(f) => inter_func(
-            //     f.clone(),
-            //     &context.block().clone(),
-            //     context.memory(),
-            //     &mut s_write!(lu_dog),
-            // ),
+            Dirty::Func(f) => inter_func(
+                f.clone(),
+                &context.block().clone(),
+                context.memory(),
+                &mut s_write!(lu_dog),
+            ),
             Dirty::Store(ref s_id) => {
                 let store = s_read!(lu_dog).exhume_z_object_store(s_id).unwrap();
                 inter_store(store, context.memory(), &s_read!(lu_dog));
@@ -718,10 +723,9 @@ pub fn start_func(
         *running = !stopped;
     }
 
-    let stack = &mut context.memory();
-    // 🚧 WTF is this? They don't share memory?
-    let vm_stack = stack.clone();
-    let mut vm = VM::new(&vm_stack);
+    let program = context.get_program().clone();
+    let stack = context.memory();
+    let mut vm = VM::new(&program);
 
     if let Some(main) = stack.get(name) {
         // This should fail if it's not a function. Actually, I think that it _has_
@@ -738,26 +742,10 @@ pub fn start_func(
 
             let result = eval_function_call(main, &[], None, true, span, context, &mut vm)?;
 
-            // let result_wrapped = result.clone();
-            // let result_unwrapped = &mut *s_write!(result);
-            // let result = match result_unwrapped {
-            //     Value::Future(_, ref mut task) => match task {
-            //         FutureResult::JoinHandle(ref mut maybe_handle) => {
-            //             if let Some(task) = maybe_handle.take() {
-            //                 future::block_on(task)
-            //             } else {
-            //                 unreachable!()
-            //             }
-            //         }
-            //         FutureResult::Result(result) => result.clone(),
-            //     },
-            //     _ => result_wrapped,
-            // };
-
             #[allow(clippy::redundant_clone)]
             //              ^^^^^^^^^^^^^^^ : It's not redundant.
             // The macro is just hiding the fact that it isn't.
-            // This is, btw: not redundant.
+            // This is redundant: the above is not redundant.
             Ok(result)
         } else {
             Err(Error(ChaChaError::MainIsNotAFunction))
@@ -768,66 +756,60 @@ pub fn start_func(
 }
 
 pub fn start_vm(n: DwarfInteger) -> Result<DwarfInteger, Error> {
-    let (mut memory, _) = Memory::new();
     let mut thonk = Thonk::new("fib".to_string());
+
+    let fib = new_ref!(Value, "fib".into());
 
     // Get the parameter off the stack
     // push {fp + 0}
-    thonk.add_instruction(Instruction::PushLocal(0));
+    thonk.add_instruction(Instruction::FetchLocal(0), None);
     // push 1
-    thonk.add_instruction(Instruction::Push(new_ref!(Value, 1.into())));
+    thonk.add_instruction(Instruction::Push(new_ref!(Value, 1.into())), None);
     // Check if it's <= 1
     // lte
-    thonk.add_instruction(Instruction::LessThanOrEqual);
+    thonk.add_instruction(Instruction::TestLessThanOrEqual, None);
     // jne
-    thonk.add_instruction(Instruction::JumpIfFalse(2));
+    thonk.add_instruction(Instruction::JumpIfFalse(2), None);
     // If false return 1
-    thonk.add_instruction(Instruction::Push(new_ref!(Value, 1.into())));
-    thonk.add_instruction(Instruction::Return);
+    thonk.add_instruction(Instruction::Push(new_ref!(Value, 1.into())), None);
+    thonk.add_instruction(Instruction::Return, None);
     // return fib(n-1) + fib(n-2)
     // Load fib
-    thonk.add_instruction(Instruction::Push(new_ref!(Value, Value::Thonk("fib", 0))));
+    thonk.add_instruction(Instruction::CallDestination(fib.clone()), None);
+    thonk.add_instruction(Instruction::LocalCardinality(fib.clone()), None);
     // load n
-    thonk.add_instruction(Instruction::PushLocal(0));
+    thonk.add_instruction(Instruction::FetchLocal(0), None);
     // load 1
-    thonk.add_instruction(Instruction::Push(new_ref!(Value, 1.into())));
+    thonk.add_instruction(Instruction::Push(new_ref!(Value, 1.into())), None);
     // subtract
-    thonk.add_instruction(Instruction::Subtract);
+    thonk.add_instruction(Instruction::Subtract, None);
     // Call fib(n-1)
-    thonk.add_instruction(Instruction::Call(1));
+    thonk.add_instruction(Instruction::Call(1), None);
     // load fib
-    thonk.add_instruction(Instruction::Push(new_ref!(Value, Value::Thonk("fib", 0))));
+    thonk.add_instruction(Instruction::CallDestination(fib.clone()), None);
+    thonk.add_instruction(Instruction::LocalCardinality(fib.clone()), None);
     // load n
-    thonk.add_instruction(Instruction::PushLocal(0));
+    thonk.add_instruction(Instruction::FetchLocal(0), None);
     // load 2
-    thonk.add_instruction(Instruction::Push(new_ref!(Value, 2.into())));
+    thonk.add_instruction(Instruction::Push(new_ref!(Value, 2.into())), None);
     // subtract
-    thonk.add_instruction(Instruction::Subtract);
+    thonk.add_instruction(Instruction::Subtract, None);
     // Call fib(n-1)
-    thonk.add_instruction(Instruction::Call(1));
+    thonk.add_instruction(Instruction::Call(1), None);
     // add
-    thonk.add_instruction(Instruction::Add);
-    thonk.add_instruction(Instruction::Return);
+    thonk.add_instruction(Instruction::Add, None);
+    thonk.add_instruction(Instruction::Return, None);
 
-    // put fib in memory
-    let slot = memory.reserve_thonk_slot();
-    memory.insert_thonk(thonk.clone(), slot);
+    thonk.increment_frame_size();
 
-    let mut frame = CallFrame::new(0, 0, &thonk);
+    let mut program = crate::bubba::Program::new("".to_owned(), "".to_owned());
+    program.add_thonk(thonk);
 
-    let mut vm = VM::new(&memory);
+    let mut vm = VM::new(&program);
+    let result = vm.invoke("fib", &[new_ref!(Value, n.into())], false);
 
-    // Push the func
-    vm.push_stack(new_ref!(Value, "fib".into()));
-    // Push the argument
-    vm.push_stack(new_ref!(Value, Value::Integer(n)));
-
-    // vm.push_frame(frame);
-
-    let result = vm.run(&mut frame, false);
-
-    vm.pop_stack();
-    vm.pop_stack();
+    // vm.pop_stack();
+    // vm.pop_stack();
 
     let result: DwarfInteger = (&*s_read!(result.unwrap())).try_into().unwrap();
 
@@ -943,7 +925,7 @@ fn inter_struct(
         // For each function in the impl, insert the function. I should probably
         // check and only insert the static functions.
         for func in s_read!(impl_[0]).r9_function(lu_dog) {
-            let insert = if let Some(param) = s_read!(func).r82_parameter(lu_dog).get(0) {
+            let insert = if let Some(param) = s_read!(func).r82_parameter(lu_dog).first() {
                 let var = &s_read!(param).r12_variable(lu_dog)[0];
                 let var = s_read!(var);
                 var.name != "self"
@@ -978,7 +960,7 @@ fn inter_store(
         // check and only insert the static functions.
         // 🚧 Only insert the static functions
         for func in s_read!(impl_[0]).r9_function(lu_dog) {
-            let insert = if let Some(param) = s_read!(func).r82_parameter(lu_dog).get(0) {
+            let insert = if let Some(param) = s_read!(func).r82_parameter(lu_dog).first() {
                 let var = &s_read!(param).r12_variable(lu_dog)[0];
                 let var = s_read!(var);
                 var.name != "self"

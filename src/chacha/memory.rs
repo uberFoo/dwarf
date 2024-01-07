@@ -6,11 +6,10 @@ use ansi_term::Colour;
 use crossbeam::channel::{unbounded, Receiver, Sender};
 use rustc_hash::FxHashMap as HashMap;
 
-use crate::{chacha::vm::Thonk, debug, function, interpreter::STEPPING, s_read, RefType, Value};
+use crate::{debug, function, interpreter::STEPPING, s_read, RefType, Value};
 
 #[derive(Clone, Debug)]
 pub struct Memory {
-    thonks: Vec<Thonk>,
     meta: HashMap<String, HashMap<String, RefType<Value>>>,
     global: HashMap<String, RefType<Value>>,
     frames: Vec<HashMap<String, RefType<Value>>>,
@@ -18,12 +17,11 @@ pub struct Memory {
 }
 
 impl Memory {
-    pub(crate) fn new() -> (Self, Receiver<MemoryUpdateMessage>) {
+    pub fn new() -> (Self, Receiver<MemoryUpdateMessage>) {
         let (sender, receiver) = unbounded();
 
         (
             Memory {
-                thonks: Vec::new(),
                 meta: HashMap::default(),
                 global: HashMap::default(),
                 frames: vec![HashMap::default()],
@@ -50,29 +48,6 @@ impl Memory {
                     .collect()
             })
             .collect()
-    }
-
-    #[allow(dead_code)]
-    pub(crate) fn thonk_index<S: AsRef<str>>(&self, name: S) -> Option<usize> {
-        self.thonks
-            .iter()
-            .enumerate()
-            .find(|(_, thonk)| thonk._name == name.as_ref())
-            .map(|(index, _)| index)
-    }
-
-    pub(crate) fn reserve_thonk_slot(&mut self) -> ThonkReservation {
-        let slot = self.thonks.len();
-        self.thonks.push(Thonk::new("placeholder".to_string()));
-        ThonkReservation { slot }
-    }
-
-    pub(crate) fn insert_thonk(&mut self, thonk: Thonk, reservation: ThonkReservation) {
-        self.thonks[reservation.slot] = thonk;
-    }
-
-    pub(crate) fn get_thonk(&self, index: usize) -> Option<&Thonk> {
-        self.thonks.get(index)
     }
 
     pub(crate) fn push_frame(&mut self) {
@@ -147,10 +122,6 @@ impl Memory {
         }
         self.global.get(name)
     }
-}
-
-pub(crate) struct ThonkReservation {
-    slot: usize,
 }
 
 type MemoryCell = (String, RefType<Value>);

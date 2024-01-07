@@ -1,7 +1,8 @@
 use ansi_term::Colour;
 
 use crate::{
-    chacha::{error::Result, vm::VM},
+    bubba::VM,
+    chacha::error::Result,
     interpreter::{debug, eval_expression, function, Context},
     new_ref, s_read, DwarfInteger, NewRef, RefType, SarzakStorePtr, Value,
 };
@@ -21,7 +22,6 @@ pub fn eval_range(
 
     debug!("range lhs: {lhs:?}, range: {range:?}");
 
-    // 🚧 Should probably typecheck these.
     let lhs = eval_expression(lhs, context, vm)?;
     let rhs = eval_expression(rhs, context, vm)?;
 

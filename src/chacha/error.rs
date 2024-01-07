@@ -1,22 +1,20 @@
 use std::{fmt, io};
 
-use ansi_term::Colour;
 use ariadne::{Color, Label, Report, ReportKind, Source};
 use crossbeam::channel::SendError;
 #[cfg(feature = "repl")]
 use rustyline::error::ReadlineError;
 use snafu::{prelude::*, Backtrace, Location};
 
-use crate::{chacha::vm::Instruction, lu_dog::ValueType, s_read, RefType, Span, Value};
-
-const ERR_CLR: Colour = Colour::Red;
-const OK_CLR: Colour = Colour::Green;
-const POP_CLR: Colour = Colour::Yellow;
-const OTH_CLR: Colour = Colour::Cyan;
+use crate::{
+    bubba::Instruction, lu_dog::ValueType, s_read, RefType, Span, Value, ERR_CLR, OK_CLR, OTH_CLR,
+    POP_CLR,
+};
 
 #[derive(Debug, Snafu)]
 pub struct Error(pub(super) ChaChaError);
-pub(super) type Result<T, E = ChaChaError> = std::result::Result<T, E>;
+// 🚧  If the VM get's it's own errors, make this pub(super).
+pub type Result<T, E = ChaChaError> = std::result::Result<T, E>;
 
 #[derive(Debug, Snafu)]
 #[snafu(visibility(pub))]
@@ -36,6 +34,8 @@ pub enum ChaChaError {
         found: RefType<Value>,
         code: String,
     },
+    #[snafu(display("\n{}: async not supported.", ERR_CLR.bold().paint("error")))]
+    AsyncNotSupported,
     #[snafu(display("\n{}: internal error: {message}\n  --> {}:{}:{}", ERR_CLR.bold().paint("error"), location.file, location.line, location.column))]
     BadnessHappened {
         message: String,
@@ -58,6 +58,9 @@ pub enum ChaChaError {
         src: String,
         span: Span,
     },
+    /// Index out of bounds
+    ///
+    #[snafu(display("\n{}: index `{}` is out of bounds for array of length `{}`.", ERR_CLR.bold().paint("error"), POP_CLR.paint(index.to_string()), POP_CLR.paint(len.to_string())))]
     IndexOutOfBounds {
         index: usize,
         len: usize,
@@ -171,11 +174,6 @@ pub enum ChaChaError {
         span: Span,
         location: Location,
         backtrace: Backtrace,
-    },
-    #[snafu(display("\n{}: vm panic: {}", ERR_CLR.bold().paint("error"), OTH_CLR.paint(cause)))]
-    VmPanic {
-        // cause: Box<dyn std::error::Error + Send + Sync>,
-        cause: String,
     },
     #[snafu(display("\n{}: wrong number of arguments. Expected `{}`, found `{}`.", ERR_CLR.bold().paint("error"), OK_CLR.paint(expected.to_string()), ERR_CLR.bold().paint(got.to_string())))]
     WrongNumberOfArguments {
@@ -446,8 +444,6 @@ impl fmt::Display for ChaChaErrorReporter<'_, '_, '_> {
                 location,
             } => {
                 let msg = format!("expected `{expected}`, found `{got}`.");
-
-                dbg!(&defn_span);
 
                 let report = Report::build(ReportKind::Error, file_name, invocation_span.start)
                     .with_message("wrong number of arguments")

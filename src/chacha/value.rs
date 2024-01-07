@@ -13,6 +13,7 @@ use abi_stable::{
 use ansi_term::Colour;
 use rustc_hash::FxHashMap as HashMap;
 use sarzak::lu_dog::ValueTypeEnum;
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 #[cfg(feature = "async")]
@@ -144,7 +145,7 @@ pub enum FfiValue {
 /// }
 /// ```
 ///
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum EnumVariant {
     /// Unit Enumeration Field
     ///
@@ -165,8 +166,8 @@ pub enum EnumVariant {
     /// This type of field is for when it contains a tuple, as `Bar` does above.
     /// That is to say, `Foo::Bar(int)`.
     ///
-    /// The type is stored as the first element of the tuple, and the variant
-    /// as the second.
+    /// The type is stored as the first element of the tuple, and the path/type
+    /// as a string in the second. The third element is the enum itself.
     Tuple((RefType<ValueType>, String), RefType<TupleEnum>),
 }
 
@@ -205,7 +206,14 @@ impl fmt::Display for EnumVariant {
     }
 }
 
-#[derive(Default)]
+// 🚧 This can be deleted and replaced with just a String.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub enum ThonkInner {
+    Thonk(String),
+    Index(usize),
+}
+
+#[derive(Default, Deserialize, Serialize)]
 pub enum Value {
     /// Boolean
     ///
@@ -221,6 +229,7 @@ pub enum Value {
     /// ()
     Empty,
     Enumeration(EnumVariant),
+    #[serde(skip)]
     Error(Box<ChaChaError>),
     Float(DwarfFloat),
     /// Function
@@ -230,6 +239,7 @@ pub enum Value {
     /// excessive, and yet I know I've looked into it before.
     Function(RefType<Function>),
     #[cfg(feature = "async")]
+    #[serde(skip)]
     Future {
         name: String,
         executor: Executor,
@@ -237,8 +247,11 @@ pub enum Value {
     },
     Integer(DwarfInteger),
     Lambda(RefType<Lambda>),
+    #[serde(skip)]
     ParsedDwarf(Context),
+    #[serde(skip)]
     Plugin(RefType<PluginType>),
+    #[serde(skip)]
     ProxyType {
         module: String,
         obj_ty: Uuid,
@@ -246,19 +259,21 @@ pub enum Value {
         plugin: RefType<PluginType>,
     },
     Range(Range<DwarfInteger>),
+    #[serde(skip)]
     Store(RefType<ZObjectStore>, RefType<PluginType>),
     String(String),
     Struct(RefType<UserStruct>),
     Table(HashMap<String, RefType<Self>>),
     #[cfg(feature = "async")]
+    #[serde(skip)]
     Task {
         worker: Option<puteketeke::Worker>,
         parent: Option<puteketeke::AsyncTask<'static, ValueResult>>,
     },
-    Thonk(&'static str, usize),
-    TupleEnum(RefType<TupleEnum>),
+    Thonk(ThonkInner),
     Unknown,
     Uuid(uuid::Uuid),
+    ValueType(ValueType),
     Vector {
         ty: RefType<ValueType>,
         inner: Vec<RefType<Self>>,
@@ -266,6 +281,10 @@ pub enum Value {
 }
 
 impl Value {
+    pub fn new_thonk(name: String) -> Self {
+        Self::Thonk(ThonkInner::Thonk(name))
+    }
+
     #[inline]
     pub fn to_inner_string(&self) -> String {
         let mut buf = Vec::new();
@@ -309,10 +328,13 @@ impl Value {
             Self::Table(table) => write!(f, "{table:?}"),
             #[cfg(feature = "async")]
             Self::Task { worker, parent } => write!(f, "Task: {parent:?} running on {worker:?}"),
-            Self::Thonk(name, number) => write!(f, "{name} [{number}]"),
-            Self::TupleEnum(te) => write!(f, "{}", s_read!(te)),
+            Self::Thonk(inner) => match inner {
+                ThonkInner::Thonk(name) => write!(f, "{name}"),
+                ThonkInner::Index(index) => write!(f, "{index}"),
+            },
             Self::Unknown => write!(f, "<unknown>"),
             Self::Uuid(uuid) => write!(f, "{uuid}"),
+            Self::ValueType(ty) => write!(f, "{:?}", ty),
             Self::Vector { ty: _, inner } => {
                 let mut first_time = true;
                 write!(f, "[")?;
@@ -463,16 +485,6 @@ impl Value {
                 unreachable!()
             }
             Value::Vector { ty, inner: _ } => {
-                // 🚧 This code was here and I don't know why. I think it must
-                // have been a copy/paste error. I commented it out on 12/11/2023.
-                // let ty = match &s_read!(ty).subtype {
-                //     ValueTypeEnum::XFuture(id) => {
-                //         let ty = lu_dog.exhume_x_future(id).unwrap();
-                //         let ty = s_read!(ty);
-                //         ty.r2_value_type(lu_dog)[0].clone()
-                //     }
-                //     _ => ty.clone(),
-                // };
                 for vt in lu_dog.iter_value_type() {
                     if let ValueTypeEnum::List(id) = s_read!(vt).subtype {
                         let list = lu_dog.exhume_list(&id).unwrap();
@@ -599,10 +611,10 @@ impl std::fmt::Debug for Value {
             Self::Table(table) => write!(f, "{table:?}"),
             #[cfg(feature = "async")]
             Self::Task { worker, parent } => write!(f, "Task: {parent:?} running on {worker:?}"),
-            Self::Thonk(name, number) => write!(f, "{name:?} [{number:?}]"),
-            Self::TupleEnum(te) => write!(f, "{:?}", s_read!(te)),
+            Self::Thonk(inner) => write!(f, "{inner:?}"),
             Self::Unknown => write!(f, "<unknown>"),
             Self::Uuid(uuid) => write!(f, "{uuid:?}"),
+            Self::ValueType(ty) => write!(f, "{:?}", ty),
             Self::Vector { ty, inner } => write!(f, "{ty:?}: {inner:?}"),
         }
     }
@@ -655,10 +667,10 @@ impl Clone for Value {
                 worker: worker.clone(),
                 parent: None,
             },
-            Self::Thonk(name, number) => Self::Thonk(name, *number),
-            Self::TupleEnum(te) => Self::TupleEnum(te.clone()),
+            Self::Thonk(inner) => Self::Thonk(inner.clone()),
             Self::Unknown => Self::Unknown,
             Self::Uuid(uuid) => Self::Uuid(*uuid),
+            Self::ValueType(ty) => Self::ValueType(ty.clone()),
             Self::Vector { ty, inner } => Self::Vector {
                 ty: ty.clone(),
                 inner: inner.clone(),
@@ -764,10 +776,13 @@ impl fmt::Display for Value {
             Self::Table(table) => write!(f, "{table:?}"),
             #[cfg(feature = "async")]
             Self::Task { worker, parent } => write!(f, "Task: {parent:?} running on {worker:?}"),
-            Self::Thonk(name, number) => write!(f, "{name} [{number}]"),
-            Self::TupleEnum(te) => write!(f, "{}", s_read!(te)),
+            Self::Thonk(inner) => match inner {
+                ThonkInner::Thonk(name) => write!(f, "Thonk({name})"),
+                ThonkInner::Index(index) => write!(f, "Thonk({index})"),
+            },
             Self::Unknown => write!(f, "<unknown>"),
             Self::Uuid(uuid) => write!(f, "{uuid}"),
+            Self::ValueType(ty) => write!(f, "{:?}", ty),
             Self::Vector { ty: _, inner } => {
                 let mut first_time = true;
                 write!(f, "[")?;
@@ -794,7 +809,13 @@ impl From<bool> for Value {
 
 impl From<usize> for Value {
     fn from(value: usize) -> Self {
-        Self::Integer(value as i64)
+        Self::Integer(value as DwarfInteger)
+    }
+}
+
+impl From<isize> for Value {
+    fn from(value: isize) -> Self {
+        Self::Integer(value as DwarfInteger)
     }
 }
 
@@ -806,19 +827,19 @@ impl From<i64> for Value {
 
 impl From<u64> for Value {
     fn from(value: u64) -> Self {
-        Self::Integer(value as i64)
+        Self::Integer(value as DwarfInteger)
     }
 }
 
 impl From<i32> for Value {
     fn from(value: i32) -> Self {
-        Self::Integer(value as i64)
+        Self::Integer(value as DwarfInteger)
     }
 }
 
 impl From<u32> for Value {
     fn from(value: u32) -> Self {
-        Self::Integer(value as i64)
+        Self::Integer(value as DwarfInteger)
     }
 }
 
@@ -846,11 +867,31 @@ impl From<Uuid> for Value {
     }
 }
 
+impl From<Range<usize>> for Value {
+    fn from(value: Range<usize>) -> Self {
+        Self::Range(value.start as DwarfInteger..value.end as DwarfInteger)
+    }
+}
+
 impl From<Value> for Option<Uuid> {
     fn from(option: Value) -> Self {
         match option {
             Value::Uuid(uuid) => Some(uuid),
             _ => None,
+        }
+    }
+}
+
+impl TryFrom<&Value> for ValueType {
+    type Error = ChaChaError;
+
+    fn try_from(value: &Value) -> Result<Self, <ValueType as TryFrom<&Value>>::Error> {
+        match &value {
+            Value::ValueType(ty) => Ok(ty.to_owned()),
+            _ => Err(ChaChaError::Conversion {
+                src: value.to_string(),
+                dst: "ValueType".to_owned(),
+            }),
         }
     }
 }
@@ -877,7 +918,7 @@ impl TryFrom<Value> for Range<DwarfInteger> {
             Value::Range(range) => Ok(range.start..range.end),
             _ => Err(ChaChaError::Conversion {
                 src: value.to_string(),
-                dst: "Uuid".to_owned(),
+                dst: "range".to_owned(),
             }),
         }
     }
@@ -891,7 +932,21 @@ impl TryFrom<Value> for Range<usize> {
             Value::Range(range) => Ok(range.start as usize..range.end as usize),
             _ => Err(ChaChaError::Conversion {
                 src: value.to_string(),
-                dst: "Uuid".to_owned(),
+                dst: "range".to_owned(),
+            }),
+        }
+    }
+}
+
+impl TryFrom<&Value> for Range<usize> {
+    type Error = ChaChaError;
+
+    fn try_from(value: &Value) -> Result<Self, <Range<usize> as TryFrom<&Value>>::Error> {
+        match value {
+            Value::Range(range) => Ok(range.start as usize..range.end as usize),
+            _ => Err(ChaChaError::Conversion {
+                src: value.to_string(),
+                dst: "range".to_owned(),
             }),
         }
     }
@@ -944,7 +999,13 @@ impl TryFrom<Value> for usize {
                 src: str_.to_owned(),
                 dst: "usize".to_owned(),
             }),
-            Value::Thonk(_, num) => Ok(num.to_owned()),
+            Value::Thonk(inner) => match inner {
+                ThonkInner::Thonk(name) => Err(ChaChaError::Conversion {
+                    src: (*name).to_owned(),
+                    dst: "usize".to_owned(),
+                }),
+                ThonkInner::Index(index) => Ok(*index),
+            },
             _ => Err(ChaChaError::Conversion {
                 src: value.to_string(),
                 dst: "usize".to_owned(),
@@ -964,10 +1025,68 @@ impl TryFrom<&Value> for usize {
                 src: str_.to_owned(),
                 dst: "usize".to_owned(),
             }),
-            Value::Thonk(_, num) => Ok(*num),
+            Value::Thonk(inner) => match inner {
+                ThonkInner::Thonk(name) => Err(ChaChaError::Conversion {
+                    src: (*name).to_owned(),
+                    dst: "usize".to_owned(),
+                }),
+                ThonkInner::Index(index) => Ok(*index),
+            },
             _ => Err(ChaChaError::Conversion {
                 src: value.to_string(),
                 dst: "usize".to_owned(),
+            }),
+        }
+    }
+}
+
+impl TryFrom<Value> for isize {
+    type Error = ChaChaError;
+
+    fn try_from(value: Value) -> Result<Self, <isize as TryFrom<Value>>::Error> {
+        match &value {
+            Value::Float(num) => Ok(num.to_owned() as isize),
+            Value::Integer(num) => Ok(num.to_owned() as isize),
+            Value::String(str_) => str_.parse::<isize>().map_err(|_| ChaChaError::Conversion {
+                src: str_.to_owned(),
+                dst: "isize".to_owned(),
+            }),
+            Value::Thonk(inner) => match inner {
+                ThonkInner::Thonk(name) => Err(ChaChaError::Conversion {
+                    src: (*name).to_owned(),
+                    dst: "isize".to_owned(),
+                }),
+                ThonkInner::Index(index) => Ok(*index as isize),
+            },
+            _ => Err(ChaChaError::Conversion {
+                src: value.to_string(),
+                dst: "isize".to_owned(),
+            }),
+        }
+    }
+}
+
+impl TryFrom<&Value> for isize {
+    type Error = ChaChaError;
+
+    fn try_from(value: &Value) -> Result<Self, <isize as TryFrom<&Value>>::Error> {
+        match value {
+            Value::Float(num) => Ok(*num as isize),
+            Value::Integer(num) => Ok(*num as isize),
+            Value::String(str_) => str_.parse::<isize>().map_err(|_| ChaChaError::Conversion {
+                src: str_.to_owned(),
+                dst: "isize".to_owned(),
+            }),
+            Value::Thonk(inner) => match inner {
+                ThonkInner::Thonk(name) => Err(ChaChaError::Conversion {
+                    src: (*name).to_owned(),
+                    dst: "isize".to_owned(),
+                }),
+                ThonkInner::Index(index) => Ok(*index as isize),
+            },
+            _ => Err(ChaChaError::Conversion {
+                src: value.to_string(),
+                dst: "isize".to_owned(),
             }),
         }
     }
@@ -978,7 +1097,7 @@ impl TryFrom<Value> for i64 {
 
     fn try_from(value: Value) -> Result<Self, <i64 as TryFrom<Value>>::Error> {
         match &value {
-            Value::Float(num) => Ok(num.to_owned() as i64),
+            Value::Float(num) => Ok(num.to_owned() as DwarfInteger),
             Value::Integer(num) => Ok(num.to_owned()),
             Value::String(str_) => str_.parse::<i64>().map_err(|_| ChaChaError::Conversion {
                 src: str_.to_owned(),
@@ -997,7 +1116,7 @@ impl TryFrom<&Value> for i64 {
 
     fn try_from(value: &Value) -> Result<Self, <i64 as TryFrom<&Value>>::Error> {
         match value {
-            Value::Float(num) => Ok(*num as i64),
+            Value::Float(num) => Ok(*num as DwarfInteger),
             Value::Integer(num) => Ok(*num),
             Value::String(str_) => str_.parse::<i64>().map_err(|_| ChaChaError::Conversion {
                 src: str_.to_owned(),
@@ -1099,7 +1218,7 @@ impl TryFrom<&Value> for String {
     type Error = ChaChaError;
 
     fn try_from(value: &Value) -> Result<Self, <String as TryFrom<&Value>>::Error> {
-        Ok(value.to_string())
+        Ok(value.to_inner_string())
     }
 }
 
@@ -1409,7 +1528,7 @@ impl std::cmp::PartialEq for Value {
     }
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct UserTypeAttribute(HashMap<String, RefType<Value>>);
 
 impl PartialEq for UserTypeAttribute {
@@ -1434,7 +1553,7 @@ impl PartialEq for UserTypeAttribute {
 
 impl Eq for UserTypeAttribute {}
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct TupleEnum {
     variant: String,
     value: RefType<Value>,
@@ -1471,7 +1590,7 @@ impl fmt::Display for TupleEnum {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct UserStruct {
     type_name: String,
     type_: RefType<ValueType>,

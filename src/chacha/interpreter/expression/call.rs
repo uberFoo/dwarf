@@ -16,10 +16,8 @@ use snafu::{location, prelude::*, Location};
 use uuid::Uuid;
 
 use crate::{
-    chacha::{
-        error::{NoSuchStaticMethodSnafu, Result, TypeMismatchSnafu},
-        vm::{CallFrame, VM},
-    },
+    bubba::VM,
+    chacha::error::{NoSuchStaticMethodSnafu, Result, TypeMismatchSnafu},
     interpreter::{
         debug, error, eval_expression, eval_function_call, eval_lambda_expression, function,
         ChaChaError, Context, PrintableValueType,
@@ -40,6 +38,7 @@ use crate::{
 
 mod chacha;
 
+// 🚧 I feel like this could use a good looking at. It smells bad.
 pub fn eval(
     call_id: &SarzakStorePtr,
     expression: &RefType<Expression>,
@@ -72,13 +71,11 @@ pub fn eval(
         let value = eval_expression(expr, context, vm)?;
         debug!("ExpressionEnum::Call LHS value {:?}", s_read!(value));
 
-        // 🚧 I don't remember why this is a closure.
         let mut eval_lhs = || -> Result<RefType<Value>> {
             // Below we are reading the value of the LHS, and then using that
             // to determine what to do with the RHS.
             let read_value = s_read!(value);
             match &*read_value {
-                Value::Enumeration(_) => Ok(value.clone()),
                 Value::Function(ref func) => {
                     let func = s_read!(lu_dog).exhume_function(&s_read!(func).id).unwrap();
                     debug!("ExpressionEnum::Call func: {func:?}");
@@ -87,7 +84,6 @@ pub fn eval(
                     debug!("value {value:?}");
                     Ok(value)
                 }
-                Value::Integer(_) => Ok(value.clone()),
                 Value::Lambda(ref ƛ) => {
                     let ƛ = s_read!(lu_dog).exhume_lambda(&s_read!(ƛ).id).unwrap();
                     debug!("ExpressionEnum::Call ƛ: {ƛ:?}");
@@ -105,38 +101,7 @@ pub fn eval(
                     debug!("value {value:?}");
                     Ok(value)
                 }
-                Value::ProxyType {
-                    module: _,
-                    obj_ty: _,
-                    id: _,
-                    plugin: _,
-                } => Ok(value.clone()),
-                Value::Range(_) => Ok(value.clone()),
-                Value::Struct(_) => Ok(value.clone()),
-                Value::Store(_store, _plugin) => Ok(value.clone()),
-                #[cfg(feature = "async")]
-                Value::Task {
-                    worker: _,
-                    parent: _,
-                } => Ok(value.clone()),
-                Value::Vector { ty: _, inner: _ } => Ok(value.clone()),
-                misc_value => {
-                    let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
-                    debug!("value {value:?}");
-
-                    let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
-
-                    let read = s_read!(span);
-                    let span = read.start as usize..read.end as usize;
-
-                    dbg!(&misc_value);
-
-                    Err(ChaChaError::NotAFunction {
-                        value: misc_value.to_owned(),
-                        span,
-                        location: location!(),
-                    })
-                }
+                _ => Ok(value.clone()),
             }
         };
 
@@ -229,24 +194,39 @@ pub fn eval(
                     let woog_enum = s_read!(lu_dog).exhume_enumeration(&woog_enum).unwrap();
                     let woog_enum = s_read!(woog_enum);
 
-                    let impl_ = &woog_enum.r84_implementation_block(&s_read!(lu_dog))[0];
-                    let x = if let Some(func) = s_read!(impl_)
-                        .r9_function(&s_read!(lu_dog))
-                        .iter()
-                        .find(|f| s_read!(f).name == *meth_name)
+                    if let Some(impl_) =
+                        &woog_enum.r84_implementation_block(&s_read!(lu_dog)).first()
                     {
-                        let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
-                        let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
+                        let x = if let Some(func) = s_read!(impl_)
+                            .r9_function(&s_read!(lu_dog))
+                            .iter()
+                            .find(|f| s_read!(f).name == *meth_name)
+                        {
+                            let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
+                            let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
 
-                        eval_function_call(
-                            (*func).clone(),
-                            &args,
-                            first_arg,
-                            arg_check,
-                            span,
-                            context,
-                            vm,
-                        )
+                            eval_function_call(
+                                (*func).clone(),
+                                &args,
+                                first_arg,
+                                arg_check,
+                                span,
+                                context,
+                                vm,
+                            )
+                        } else {
+                            let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
+                            let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
+                            let read = s_read!(span);
+                            let span = read.start as usize..read.end as usize;
+
+                            return Err(ChaChaError::NoSuchMethod {
+                                method: meth_name.to_owned(),
+                                span,
+                                location: location!(),
+                            });
+                        };
+                        x
                     } else {
                         let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
                         let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
@@ -258,8 +238,7 @@ pub fn eval(
                             span,
                             location: location!(),
                         });
-                    };
-                    x
+                    }
                 }
                 Value::Integer(i) => match meth_name.as_str() {
                     MAX => {
@@ -717,7 +696,6 @@ pub fn eval(
         //
         (CallEnum::StaticMethodCall(ref meth), _) => {
             let meth = s_read!(lu_dog).exhume_static_method_call(meth).unwrap();
-            let call = s_read!(meth).r30_call(&s_read!(lu_dog))[0].clone();
 
             let arg_check = s_read!(call).arg_check;
             if arg_check {
@@ -773,42 +751,26 @@ pub fn eval(
                 COMPLEX_EX => match func.as_str() {
                     NORM_SQUARED => {
                         let value = arg_values.pop_front().unwrap().0;
-                        let thonk = context.memory().get_thonk(0).unwrap();
-                        let mut frame = CallFrame::new(0, 0, thonk);
-                        vm.push_stack(new_ref!(Value, "norm_squared".into()));
-                        vm.push_stack(value);
-                        let result = vm.run(&mut frame, false);
-                        vm.pop_stack();
-                        vm.pop_stack();
+                        // 🚧 It would be neat to turn the tracing on with a flag.
+                        let result = vm.invoke("norm_squared", &[value], false);
+
                         context.increment_expression_count(2);
 
                         Ok(result.unwrap())
                     }
                     SQUARE => {
                         let value = arg_values.pop_front().unwrap().0;
-                        let thonk = context.memory().get_thonk(2).unwrap();
-                        let mut frame = CallFrame::new(0, 0, thonk);
-                        vm.push_stack(new_ref!(Value, "square".into()));
-                        vm.push_stack(value);
-                        let result = vm.run(&mut frame, false);
-                        vm.pop_stack();
-                        vm.pop_stack();
+                        let result = vm.invoke("square", &[value], false);
+
                         context.increment_expression_count(5);
 
                         Ok(result.unwrap())
                     }
                     ADD => {
-                        let thonk = context.memory().get_thonk(1).unwrap();
-                        let mut frame = CallFrame::new(0, 0, thonk);
-                        vm.push_stack(new_ref!(Value, "add".into()));
-                        let value = arg_values.pop_front().unwrap().0;
-                        vm.push_stack(value);
-                        let value = arg_values.pop_front().unwrap().0;
-                        vm.push_stack(value);
-                        let result = vm.run(&mut frame, false);
-                        vm.pop_stack();
-                        vm.pop_stack();
-                        vm.pop_stack();
+                        let lhs = arg_values.pop_front().unwrap().0;
+                        let rhs = arg_values.pop_front().unwrap().0;
+                        let result = vm.invoke("add", &[lhs, rhs], false);
+
                         context.increment_expression_count(2);
 
                         Ok(result.unwrap())
@@ -1044,8 +1006,7 @@ pub fn eval(
                             let mut fubar = context.clone();
                             // let mut baz = fubar.executor().clone();
                             let future = async move {
-                                let mem = fubar.memory().clone();
-                                let mut vm = VM::new(&mem);
+                                let mut vm = VM::new(fubar.get_program());
 
                                 // let func = func.clone();
 
@@ -1294,7 +1255,7 @@ fn spawn(
     // let executor_id = Executor::new_worker();
     // nested_context.set_executor_index(executor_id);
 
-    let mut child_context = context.new_worker();
+    let child_context = context.new_worker();
     let child_worker = child_context.worker().unwrap().clone();
 
     // let child_task = child_context
@@ -1302,8 +1263,7 @@ fn spawn(
     // .create_task(async move {
     let t_span = debug_span!("spawn_span", target = "async", name = ?name);
     let future = async move {
-        let mem = child_context.memory().clone();
-        let mut vm = VM::new(&mem);
+        let mut vm = VM::new(child_context.get_program());
         let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
         let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
         if let Value::Function(func) = &func {

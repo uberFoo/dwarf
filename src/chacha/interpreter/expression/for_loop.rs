@@ -2,10 +2,10 @@ use ansi_term::Colour;
 use snafu::{location, Location};
 
 use crate::{
-    chacha::{error::Result, vm::VM},
+    bubba::VM,
+    chacha::error::Result,
     interpreter::{debug, eval_expression, function, ChaChaError, Context},
-    lu_dog::Expression,
-    new_ref, s_read, s_write, NewRef, RefType, SarzakStorePtr, Value,
+    new_ref, s_read, NewRef, RefType, SarzakStorePtr, Value,
 };
 
 pub fn eval(
@@ -18,7 +18,8 @@ pub fn eval(
     let for_loop = s_read!(lu_dog).exhume_for_loop(for_loop).unwrap();
     let for_loop = s_read!(for_loop);
     let ident = for_loop.ident.to_owned();
-    let block = s_read!(lu_dog).exhume_block(&for_loop.block).unwrap();
+
+    let block = s_read!(lu_dog).exhume_expression(&for_loop.block).unwrap();
     let list = s_read!(lu_dog)
         .exhume_expression(&for_loop.expression)
         .unwrap();
@@ -45,12 +46,6 @@ pub fn eval(
 
     debug!("for loop {ident} in {list:?}");
 
-    // 🚧 Why am I creating a block here? Why don't I just store it as an expression?
-    // Check out what I'm doing in match_exprs.rs with the tuple field variable
-    // expressions.
-    // Well, it's a block expression, so we are storing a block, just not as an
-    // expression.
-    let block = Expression::new_block(&block, &mut s_write!(lu_dog));
     context.memory().push_frame();
     for item in list {
         context.memory().insert(ident.clone(), item);
@@ -64,8 +59,6 @@ pub fn eval(
         }
     }
     context.memory().pop_frame();
-    // 🚧 Lazy me. I should accept an expression instead of a uuid.
-    s_write!(lu_dog).exorcise_expression(&s_read!(block).id);
 
     let result = Ok(new_ref!(Value, Value::Empty));
 

@@ -46,11 +46,14 @@ command = [
     "always",
 ]
 need_stdout = false
-
+# cargo llvm-cov --lcov --output-path coverage.lcov --no-default-features --features "async, multi-vec, repl"
 [jobs.test]
 command = [
     "cargo",
-    "test",
+    "llvm-cov",
+    "--lcov",
+    "--output-path",
+    "coverage.lcov",
     "--no-default-features",
     "--features",
     "multi-vec, repl, async",
@@ -60,6 +63,18 @@ command = [
     "--color",
     "always",                 # see https://github.com/Canop/bacon/issues/124
 ]
+# command = [
+#     "cargo",
+#     "test",
+#     "--no-default-features",
+#     "--features",
+#     "multi-vec, repl, async",
+#     "--color",
+#     "always",
+#     "--",
+#     "--color",
+#     "always",                 # see https://github.com/Canop/bacon/issues/124
+# ]
 need_stdout = true
 
 [jobs.doc]

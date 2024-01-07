@@ -1,0 +1,8 @@
+use std::option::Option;
+
+fn main() {
+    let some = Option::Some(1);
+    chacha::assert(some.is_some());
+    let none = Option::None;
+    chacha::assert(none.is_none());
+}

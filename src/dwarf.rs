@@ -20,7 +20,6 @@ use crate::{
 };
 
 pub mod error;
-mod expression;
 pub mod extruder;
 mod items;
 pub mod parser;
@@ -325,7 +324,7 @@ pub enum Pattern {
     /// A literal
     ///
     /// E.g., `420`
-    Literal(Spanned<String>),
+    Literal(Spanned<Expression>),
     /// A path pattern
     ///
     /// E.g., `Foo::Bar`
@@ -347,9 +346,14 @@ impl From<Pattern> for Expression {
             // transmogrify an identifier into a local variable
             Pattern::Identifier((name, _span)) => Expression::LocalVariable(name),
             // 🚧 Need to do something about this.
-            Pattern::Literal((_value, _span)) => {
-                unreachable!()
-            }
+            Pattern::Literal((literal, _span)) => match literal {
+                Expression::BooleanLiteral(b) => Expression::BooleanLiteral(b),
+                Expression::Empty => Expression::Empty,
+                Expression::FloatLiteral(f) => Expression::FloatLiteral(f),
+                Expression::IntegerLiteral(i) => Expression::IntegerLiteral(i),
+                Expression::StringLiteral(s) => Expression::StringLiteral(s),
+                _ => unreachable!(),
+            },
             // Here we turn a path into a unit enum, which is really just a static
             // method call with storage.
             Pattern::PathPattern((path, span)) => {

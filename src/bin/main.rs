@@ -21,17 +21,19 @@ use dap::{prelude::BasicClient, server::Server};
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
 #[cfg(feature = "async")]
-use dwarf::{ref_to_inner, Value};
+use dwarf::ref_to_inner;
 
 use dwarf::{
+    bubba::{compiler::compile, VM},
     chacha::{
         dap::DapAdapter,
         error::{ChaChaError, ChaChaErrorReporter},
         interpreter::{banner2, initialize_interpreter, start_func, start_repl},
     },
     dwarf::{new_lu_dog, parse_dwarf},
+    new_ref,
     sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL},
-    Context,
+    Context, NewRef, RefType, Value,
 };
 use reqwest::Url;
 #[cfg(feature = "tracy")]
@@ -258,22 +260,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         };
 
-        let mut ctx = initialize_interpreter(threads, dwarf_home, ctx, sarzak)?;
-        ctx.add_args(dwarf_args);
+        if let Ok(program) = compile(&ctx) {
+            println!("running in the VM");
 
-        // #[cfg(feature = "async")]
-        // let tjh = {
-        //     let mut e = ctx.executor().clone();
-        //     thread::spawn(move || {
-        //         // let _ = future::block_on(async { e.run().await });
-        //         let _ = future::block_on(async { Executor::global().run().await });
-        //     });
-        //     let mut e = ctx.executor().clone();
-        //     thread::spawn(move || {
-        //         let _ = future::block_on(async { Executor::global().run().await });
-        //         // let _ = future::block_on(async { e.run().await });
-        //     })
-        // };
+            let args: Vec<RefType<Value>> = dwarf_args
+                .into_iter()
+                .map(|a| new_ref!(Value, a.into()))
+                .collect();
+
+            let mut vm = VM::new(&program);
+            vm.invoke("main", &args, false)?;
+            return Ok(());
+        }
+
+        let mut ctx = initialize_interpreter(threads, dwarf_home, ctx)?;
+        ctx.add_args(dwarf_args);
 
         if args.banner.is_some() && args.banner.unwrap() {
             println!("{}", banner2());
@@ -336,10 +337,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             .unwrap();
         }
-        #[cfg(feature = "async")]
-        {
-            // shutdown_interpreter();
-        }
     } else if args.dap.is_some() && args.dap.unwrap() {
         let listener = TcpListener::bind("127.0.0.1:4711").unwrap();
         println!("Listening on port {}", listener.local_addr().unwrap());
@@ -382,7 +379,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     } else {
         let ctx = Context::default();
-        let mut ctx = initialize_interpreter(2, dwarf_home, ctx, sarzak)?;
+        let mut ctx = initialize_interpreter(2, dwarf_home, ctx)?;
 
         start_repl(&mut ctx, is_uber).map_err(|e| {
             println!("Interpreter exited with: {}", e);

@@ -52,10 +52,8 @@ pub(crate) fn eval_dwarf(
         args.push((*s_read!(arg.0)).clone().try_into()?);
     }
 
-    let sarzak = (*s_read!(context.sarzak_heel())).clone();
-
-    let mut ctx = initialize_interpreter(2, context.get_home().clone(), ctx.clone(), sarzak)
-        .map_err(|e| {
+    let mut ctx =
+        initialize_interpreter(2, context.get_home().clone(), ctx.clone()).map_err(|e| {
             chacha_print(
                 crate::chacha::error::ChaChaErrorReporter(&e, false, &ctx.source(), name)
                     .to_string(),
@@ -161,8 +159,6 @@ pub(crate) fn parse_dwarf(
     let source_code = arg_values.pop_front().unwrap().0;
     let source_code: String = (*s_read!(source_code)).clone().try_into()?;
 
-    dbg!(&source_code);
-
     let ast = crate::dwarf::parse_dwarf(name, &source_code).map_err(|e| {
         eprintln!(
             "{}",
@@ -263,6 +259,7 @@ pub(crate) fn assert(
     lu_dog: RefType<LuDogStore>,
 ) -> Result<RefType<Value>> {
     debug!("evaluating chacha::assert");
+    // 🚧 This should be happening in the extruder.
     ensure!(arg_values.len() == 1, {
         let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
         let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];

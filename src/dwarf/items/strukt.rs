@@ -1,5 +1,4 @@
 use ansi_term::Colour;
-use heck::ToUpperCamelCase;
 use rustc_hash::FxHashMap as HashMap;
 use sarzak::domain::DomainBuilder;
 use snafu::{location, Location};
@@ -17,7 +16,7 @@ use crate::{
         store::ObjectStore as LuDogStore, Field, Generic, Item as WoogItem, Span as LuDogSpan,
         StructGeneric, ValueType, WoogStruct, XPlugin, ZObjectStore,
     },
-    s_read, s_write, Dirty, RefType,
+    s_read, s_write, Desanitize, Dirty, RefType,
 };
 
 macro_rules! link_struct_generic {
@@ -47,18 +46,18 @@ pub fn inter_struct(
     // If there is a proxy attribute then we'll use it's info to attach an object
     // from the store to this UDT.
     if let Some(proxy_vec) = attributes.get(PROXY) {
-        if let Some((_, InnerAttribute::Attribute(ref attributes))) = proxy_vec.get(0) {
+        if let Some((_, InnerAttribute::Attribute(ref attributes))) = proxy_vec.first() {
             // Get the store value
             if let Some(store_vec) = attributes.get(STORE) {
-                if let Some((_, ref value)) = store_vec.get(0) {
+                if let Some((_, ref value)) = store_vec.first() {
                     let store_name: String = value.try_into().map_err(|e| vec![e])?;
                     debug!("proxy.store: {store_name}");
 
                     if let Some(name_vec) = attributes.get(OBJECT) {
-                        if let Some((_, ref value)) = name_vec.get(0) {
+                        if let Some((_, ref value)) = name_vec.first() {
                             let proxy_obj: String = value.try_into().map_err(|e| vec![e])?;
-                            // let proxy_obj = proxy_obj.de_sanitize();
-                            let proxy_obj = proxy_obj.to_upper_camel_case();
+                            let proxy_obj = proxy_obj.desanitize();
+                            // let proxy_obj = proxy_obj.to_upper_camel_case();
                             debug!("proxy.object: {proxy_obj}");
                             if let Some(model) = context.models.get(&store_name) {
                                 if let Some(ref obj_id) =
@@ -67,6 +66,7 @@ pub fn inter_struct(
                                     let obj = model.0.exhume_object(obj_id).unwrap();
                                     let woog_struct = WoogStruct::new(
                                         name.to_owned(),
+                                        context.path.clone(),
                                         None,
                                         Some(&*obj.read().unwrap()),
                                         lu_dog,
@@ -128,7 +128,7 @@ pub fn inter_struct(
                     unreachable!();
                 }
             } else if let Some(ty_vec) = attributes.get(TYPE) {
-                if let Some((_, ref value)) = ty_vec.get(0) {
+                if let Some((_, ref value)) = ty_vec.first() {
                     let type_name: String = value.try_into().map_err(|e| vec![e])?;
                     debug!("proxy.ty: {type_name}");
                 }
@@ -144,9 +144,9 @@ pub fn inter_struct(
 
         // Below we are interring as an ObjectStore, according to it's annotation.
     } else if let Some(store_vec) = attributes.get(STORE) {
-        if let Some((_, InnerAttribute::Attribute(ref attributes))) = store_vec.get(0) {
+        if let Some((_, InnerAttribute::Attribute(ref attributes))) = store_vec.first() {
             if let Some(model_vec) = attributes.get(MODEL) {
-                if let Some((_, ref value)) = model_vec.get(0) {
+                if let Some((_, ref value)) = model_vec.first() {
                     let model_name: String = value.try_into().map_err(|e| vec![e])?;
                     debug!("store.model: {model_name}");
 
@@ -195,7 +195,8 @@ pub fn inter_struct(
         }
     } else {
         // This is just a plain vanilla user defined type.
-        let woog_struct = WoogStruct::new(name.to_owned(), None, None, lu_dog);
+        let woog_struct =
+            WoogStruct::new(name.to_owned(), context.path.clone(), None, None, lu_dog);
         context.dirty.push(Dirty::Struct(woog_struct.clone()));
         let _ = ValueType::new_woog_struct(&woog_struct, lu_dog);
 
@@ -232,6 +233,7 @@ pub fn inter_struct_fields(
     generics: Option<&HashMap<String, Type>>,
     location: Location,
     context: &mut Context,
+    context_stack: &mut Vec<(String, RefType<LuDogStore>)>,
     lu_dog: &mut LuDogStore,
 ) -> Result<()> {
     let mut errors = Vec::new();
@@ -243,10 +245,10 @@ pub fn inter_struct_fields(
         use std::ops::Range;
         let mut proxy_thang =
             |proxy_vec: &[(Range<usize>, InnerAttribute)]| -> Result<RefType<ValueType>> {
-                if let Some((_, InnerAttribute::Attribute(ref attributes))) = proxy_vec.get(0) {
+                if let Some((_, InnerAttribute::Attribute(ref attributes))) = proxy_vec.first() {
                     // Get the plugin value
                     if let Some(plugin_vec) = attributes.get(PLUGIN) {
-                        if let Some((_, ref value)) = plugin_vec.get(0) {
+                        if let Some((_, ref value)) = plugin_vec.first() {
                             let plugin_name: String = value.try_into().map_err(|e| vec![e])?;
                             debug!("proxy.plugin: {plugin_name}");
                             if let Type::UserType(tok, _generics) = type_ {
@@ -309,7 +311,7 @@ pub fn inter_struct_fields(
                 proxy_thang(proxy_vec)?
             } else {
                 context.location = location;
-                match make_value_type(type_, span, None, context, lu_dog) {
+                match make_value_type(type_, span, None, context, context_stack, lu_dog) {
                     Ok(ty) => ty,
                     Err(mut err) => {
                         errors.append(&mut err);
@@ -321,7 +323,7 @@ pub fn inter_struct_fields(
             proxy_thang(proxy_vec)?
         } else {
             context.location = location;
-            match make_value_type(type_, span, None, context, lu_dog) {
+            match make_value_type(type_, span, None, context, context_stack, lu_dog) {
                 Ok(ty) => ty,
                 Err(mut err) => {
                     errors.append(&mut err);

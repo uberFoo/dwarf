@@ -7,6 +7,7 @@ use circular_queue::CircularQueue;
 use crossbeam::channel::{Receiver, Sender};
 
 use crate::{
+    bubba::Program,
     interpreter::{DebuggerStatus, Memory, MemoryUpdateMessage},
     lu_dog::{Block, ObjectStore as LuDogStore, ValueType},
     new_ref, s_read, s_write,
@@ -72,6 +73,7 @@ pub struct Context {
     #[cfg(feature = "async")]
     executor: Executor,
     source_file: String,
+    program: Program,
 }
 
 /// Save the lu_dog model when the context is dropped
@@ -113,6 +115,7 @@ impl Context {
         dwarf_home: PathBuf,
         dirty: Vec<Dirty>,
         source_file: String,
+        program: Program,
         executor: Executor,
     ) -> Self {
         Self {
@@ -131,6 +134,7 @@ impl Context {
             dwarf_home,
             dirty,
             source_file,
+            program,
             worker: Some(executor.root_worker()),
             executor,
         }
@@ -156,6 +160,7 @@ impl Context {
         dwarf_home: PathBuf,
         dirty: Vec<Dirty>,
         source_file: String,
+        program: Program,
     ) -> Self {
         Self {
             prompt,
@@ -173,7 +178,12 @@ impl Context {
             dwarf_home,
             dirty,
             source_file,
+            program,
         }
+    }
+
+    pub fn get_program(&self) -> &Program {
+        &self.program
     }
 
     pub fn get_source_file(&self) -> &str {

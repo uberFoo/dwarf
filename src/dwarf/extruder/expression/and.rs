@@ -1,19 +1,20 @@
 use std::ops::Range;
 
-use log::debug;
 use snafu::{location, Location};
 
 use crate::{
     dwarf::{
-        error::Result,
+        error::{DwarfError, Result},
         extruder::{inter_expression, typecheck, update_span_value, Context, ExprSpan},
-        Expression as ParserExpression,
+        Expression as ParserExpression, PrintableValueType,
     },
     lu_dog::{
-        store::ObjectStore as LuDogStore, Binary, Block, Expression, Operator, Span, ValueType,
-        XValue,
+        store::ObjectStore as LuDogStore, Binary, Block, BooleanOperator, Expression, Operator,
+        Span, ValueType, ValueTypeEnum, XValue,
     },
-    new_ref, NewRef, RefType,
+    new_ref, s_read,
+    sarzak::Ty,
+    NewRef, RefType,
 };
 
 // Let's just say that I don't get this lint. The docs say you have to box it
@@ -25,14 +26,15 @@ pub fn inter(
     span: RefType<Span>,
     block: &RefType<Block>,
     context: &mut Context,
+    context_stack: &mut Vec<(String, RefType<LuDogStore>)>,
     lu_dog: &mut LuDogStore,
 ) -> Result<(ExprSpan, RefType<ValueType>)> {
-    debug!("Addition");
     let (lhs, lhs_ty) = inter_expression(
         &new_ref!(ParserExpression, lhs_p.0.to_owned()),
         &lhs_p.1,
         block,
         context,
+        context_stack,
         lu_dog,
     )?;
     let (rhs, rhs_ty) = inter_expression(
@@ -40,16 +42,24 @@ pub fn inter(
         &rhs_p.1,
         block,
         context,
+        context_stack,
         lu_dog,
     )?;
 
-    // 🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧
-    // 🚧                        THIS IS SUPER IMPORTANT!
-    // 🚧
-    // 🚧 We need to check the types of the LHS and RHS to make sure that they are the same.
-    // 🚧 We also need to check that the type supports addition.
-    // 🚧
-    // 🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧
+    if let ValueTypeEnum::Ty(ref id) = s_read!(lhs_ty).subtype {
+        let ty = context.sarzak.exhume_ty(id).unwrap();
+        matches!(&*ty.read().unwrap(), Ty::Boolean(_));
+    } else {
+        let lhs = PrintableValueType(&lhs_ty, context, lu_dog);
+        return Err(vec![DwarfError::TypeMismatch {
+            found: lhs.to_string(),
+            expected: "bool".to_string(),
+            file: context.file_name.to_owned(),
+            found_span: lhs_p.1.to_owned(),
+            expected_span: rhs_p.1.to_owned(),
+            location: location!(),
+        }]);
+    }
 
     typecheck(
         (&lhs_ty, &lhs_p.1),
@@ -59,7 +69,8 @@ pub fn inter(
         lu_dog,
     )?;
 
-    let expr = Binary::new_addition(lu_dog);
+    let expr = BooleanOperator::new_and(lu_dog);
+    let expr = Binary::new_boolean_operator(&expr, lu_dog);
     let expr = Operator::new_binary(&lhs.0, Some(&rhs.0), &expr, lu_dog);
     let expr = Expression::new_operator(&expr, lu_dog);
 
