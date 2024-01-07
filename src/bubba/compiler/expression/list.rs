@@ -13,6 +13,8 @@ pub(in crate::bubba::compiler) fn compile_list_element(
     thonk: &mut CThonk,
     context: &mut Context,
 ) -> Result<()> {
+    log::debug!(target: "instr", "{}:{}:{}", file!(), line!(), column!());
+
     let lu_dog = context.lu_dog_heel().clone();
     let lu_dog = s_read!(lu_dog);
 
@@ -36,6 +38,8 @@ pub(in crate::bubba::compiler) fn compile_list_expression(
     context: &mut Context,
     entry_span: Span,
 ) -> Result<()> {
+    log::debug!(target: "instr", "{}:{}:{}", file!(), line!(), column!());
+
     let lu_dog = context.lu_dog_heel().clone();
     let lu_dog = s_read!(lu_dog);
     let sarzak = context.sarzak_heel().clone();

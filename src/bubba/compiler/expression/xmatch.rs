@@ -15,6 +15,8 @@ pub(in crate::bubba::compiler) fn compile(
     context: &mut Context,
     span: Span,
 ) -> Result<()> {
+    log::debug!(target: "instr", "{}:{}:{}", file!(), line!(), column!());
+
     let lu_dog = context.lu_dog_heel().clone();
     let lu_dog = s_read!(lu_dog);
 
@@ -29,6 +31,8 @@ pub(in crate::bubba::compiler) fn compile(
     compile_expression(&scrutinee, thonk, context, scrutinee_span)?;
 
     for pattern in patterns {
+        log::debug!(target: "instr", "{}:{}:{}", file!(), line!(), column!());
+
         // We push this up here because of the pattern matching needs it's own context.
         context.push_symbol_table();
 
@@ -38,11 +42,12 @@ pub(in crate::bubba::compiler) fn compile(
 
         // Duplicate the scrutinee with which to compare against.
         thonk.add_instruction(Instruction::Dup, location!());
-        dbg!(&match_expr);
 
-        // This is the pattern we are matching against.
+        // Compile the match expression.
         match &s_read!(match_expr).subtype {
             ExpressionEnum::Literal(ref literal) => {
+                log::debug!(target: "instr", "{}:{}:{}", file!(), line!(), column!());
+
                 literal::compile(literal, thonk, context, span.clone())?
             }
             ExpressionEnum::StructExpression(ref id) => {
@@ -50,7 +55,7 @@ pub(in crate::bubba::compiler) fn compile(
                 let struct_expr = s_read!(struct_expr);
 
                 let field_exprs = struct_expr.r26_field_expression(&lu_dog);
-                dbg!(&field_exprs);
+
                 for f in &field_exprs {
                     let expr = s_read!(f).r15_expression(&lu_dog)[0].clone();
                     let expr = s_read!(expr);
@@ -64,9 +69,13 @@ pub(in crate::bubba::compiler) fn compile(
                             // 🚧 I'm already in the middle of one of these.
                             match &expr.subtype {
                                 ExpressionEnum::Literal(ref literal) => {
+                                    log::debug!(target: "instr", "{}:{}:{}", file!(), line!(), column!());
+
                                     literal::compile(literal, thonk, context, span.clone())?
                                 }
                                 ExpressionEnum::VariableExpression(ref id) => {
+                                    log::debug!(target: "instr", "{}:{}:{}", file!(), line!(), column!());
+
                                     let var = lu_dog.exhume_variable_expression(id).unwrap();
                                     let var = s_read!(var);
                                     let expr = var.r15_expression(&lu_dog)[0].clone();
@@ -76,20 +85,26 @@ pub(in crate::bubba::compiler) fn compile(
                                     let idx = context
                                         .insert_symbol(var.name.clone(), s_read!(ty).clone());
                                     thonk.increment_frame_size();
+                                    // thonk.add_instruction(
+                                    // Instruction::DeconstructStructExpression,
+                                    // location!(),
+                                    // );
+                                    thonk.add_instruction(Instruction::Dup, location!());
                                     thonk.add_instruction(
-                                        Instruction::DeconstructStructExpression,
+                                        Instruction::ExtractEnumValue,
                                         location!(),
                                     );
+                                    thonk.add_instruction(Instruction::Dup, location!());
                                     thonk
                                         .add_instruction(Instruction::StoreLocal(idx), location!());
-                                    let pattern_span = get_span(&pattern_expr, &lu_dog);
+                                    // let pattern_span = get_span(&pattern_expr, &lu_dog);
 
-                                    compile_expression(
-                                        &pattern_expr,
-                                        thonk,
-                                        context,
-                                        pattern_span,
-                                    )?;
+                                    // compile_expression(
+                                    //     &pattern_expr,
+                                    //     thonk,
+                                    //     context,
+                                    //     pattern_span,
+                                    // )?;
                                 }
 
                                 // thonk.add_instruction(Instruction::Dup, location!());
@@ -149,12 +164,12 @@ pub(in crate::bubba::compiler) fn compile(
             todo => todo!("Match expression type: {todo:?}"),
         }
 
-        // compile_expression(&match_expr, thonk, context, get_span(&match_expr, &lu_dog))?;
         thonk.add_instruction(Instruction::TestEq, location!());
 
         // Compile the match block.
         let mut match_thonk = CThonk::new("match".to_owned());
 
+        log::debug!(target: "instr", "{}:{}:{}", file!(), line!(), column!());
         compile_expression(
             &pattern_expr,
             &mut match_thonk,

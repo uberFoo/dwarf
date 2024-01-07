@@ -17,6 +17,8 @@ pub(in crate::bubba::compiler) fn compile(
     context: &mut Context,
     span: Span,
 ) -> Result<()> {
+    log::debug!(target: "instr", "{}:{}:{}", file!(), line!(), column!());
+
     let lu_dog = context.lu_dog_heel().clone();
     let lu_dog = s_read!(lu_dog);
     let operator = lu_dog.exhume_operator(op_type).unwrap();

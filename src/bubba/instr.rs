@@ -71,6 +71,7 @@ pub enum Instruction {
     ///
     /// The instruction will increase the stack depth by one.
     Dup,
+    ExtractEnumValue,
     /// Fetch a local variable.
     ///
     /// The parameter is it's distance from the frame pointer, or the index of
@@ -338,6 +339,7 @@ impl fmt::Display for Instruction {
             Instruction::DeconstructStructExpression => write!(f, "{}", opcode_style.paint("dse ")),
             Instruction::Divide => write!(f, "{}", opcode_style.paint("div ")),
             Instruction::Dup => write!(f, "{}", opcode_style.paint("dup ")),
+            Instruction::ExtractEnumValue => write!(f, "{}", opcode_style.paint("eev ")),
             Instruction::FetchLocal(index) => write!(
                 f,
                 "{} {}",

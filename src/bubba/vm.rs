@@ -366,6 +366,31 @@ impl VM {
 
                         1
                     }
+                    Instruction::ExtractEnumValue => {
+                        let user_enum = self.stack.pop().unwrap();
+                        let Value::Enumeration(user_enum) = &*s_read!(user_enum) else {
+                            return Err(BubbaError::ValueError {
+                                source: Box::new(ChaChaError::BadnessHappened {
+                                    message: format!("Unexpected value: {user_enum:?}."),
+                                    location: location!(),
+                                }),
+                            }
+                            .into());
+                        };
+
+                        match user_enum {
+                            EnumVariant::Unit(_, _, value) => {
+                                self.stack
+                                    .push(new_ref!(Value, Value::String(value.to_owned())));
+                            }
+                            EnumVariant::Tuple(_, value) => {
+                                self.stack.push(s_read!(value).value().clone());
+                            }
+                            _ => unimplemented!(),
+                        }
+
+                        1
+                    }
                     // The fp is pointing someplace near the end of the vec.
                     // Nominally at one past the Thonk name at the bottom of the stack.
                     // Any locals will cause the fp to be moved up, with the

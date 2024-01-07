@@ -16,6 +16,8 @@ pub(in crate::bubba::compiler) fn compile(
     context: &mut Context,
     span: Span,
 ) -> Result<()> {
+    log::debug!(target: "instr", "{}:{}:{}", file!(), line!(), column!());
+
     let lu_dog = context.lu_dog_heel();
     let lu_dog = s_read!(lu_dog);
 
@@ -65,7 +67,6 @@ pub(in crate::bubba::compiler) fn compile(
                 &arg_exprs,
                 thonk,
                 context,
-                span,
             )?;
         }
         CallEnum::StaticMethodCall(ref meth) => {
@@ -85,7 +86,6 @@ fn compile_method_call(
     args: &[RefType<Expression>],
     thonk: &mut CThonk,
     context: &mut Context,
-    span: Span,
 ) -> Result<()> {
     let lu_dog = context.lu_dog_heel();
     let lu_dog = s_read!(lu_dog);

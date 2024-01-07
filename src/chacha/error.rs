@@ -1,18 +1,15 @@
 use std::{fmt, io};
 
-use ansi_term::Colour;
 use ariadne::{Color, Label, Report, ReportKind, Source};
 use crossbeam::channel::SendError;
 #[cfg(feature = "repl")]
 use rustyline::error::ReadlineError;
 use snafu::{prelude::*, Backtrace, Location};
 
-use crate::{bubba::Instruction, lu_dog::ValueType, s_read, RefType, Span, Value};
-
-const ERR_CLR: Colour = Colour::Red;
-const OK_CLR: Colour = Colour::Green;
-const POP_CLR: Colour = Colour::Yellow;
-const OTH_CLR: Colour = Colour::Cyan;
+use crate::{
+    bubba::Instruction, lu_dog::ValueType, s_read, RefType, Span, Value, ERR_CLR, OK_CLR, OTH_CLR,
+    POP_CLR,
+};
 
 #[derive(Debug, Snafu)]
 pub struct Error(pub(super) ChaChaError);

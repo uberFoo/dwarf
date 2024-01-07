@@ -1,6 +1,5 @@
 use std::path::PathBuf;
 
-use ansi_term::Colour;
 use log::{self, log_enabled, Level::Trace};
 use rustc_hash::FxHashMap as HashMap;
 use snafu::{location, prelude::*, Location};
@@ -11,9 +10,9 @@ use crate::{
         BodyEnum, Expression, ExpressionEnum, Function, ObjectStore as LuDogStore, Statement,
         StatementEnum, ValueType,
     },
-    new_ref, s_read, s_write,
+    new_ref, s_read,
     sarzak::ObjectStore as SarzakStore,
-    Context as ExtruderContext, NewRef, RefType, Span, Value,
+    Context as ExtruderContext, NewRef, RefType, Span, Value, ERR_CLR, POP_CLR,
 };
 
 mod expression;
@@ -28,11 +27,6 @@ pub const BUILD_TIME: &str = include!(concat!(env!("OUT_DIR"), "/timestamp.txt")
 
 #[derive(Debug, Snafu)]
 pub struct Error(BubbaError);
-
-const ERR_CLR: Colour = Colour::Red;
-const _OK_CLR: Colour = Colour::Green;
-const _POP_CLR: Colour = Colour::Yellow;
-const _OTH_CLR: Colour = Colour::Cyan;
 
 #[derive(Debug, Snafu)]
 pub(crate) enum BubbaError {
@@ -56,6 +50,8 @@ impl CThonk {
     }
 
     fn add_instruction(&mut self, instruction: Instruction, location: Location) {
+        log::debug!(target: "instr", "{}: {}:{}:{}\n{instruction}", POP_CLR.paint("add_instruction"), location.file, location.line, location.column);
+
         if log_enabled!(target: "instr", Trace) {
             self.inner.add_instruction(
                 Instruction::Comment(format!(
@@ -74,6 +70,8 @@ impl CThonk {
         span: Span,
         location: Location,
     ) {
+        log::debug!(target: "instr", "{}: {}:{}:{}\n{instruction}", POP_CLR.paint("add_instruction"), location.file, location.line, location.column);
+
         if log_enabled!(target: "instr", Trace) {
             self.inner.add_instruction(
                 Instruction::Comment(format!(
@@ -219,6 +217,8 @@ pub fn compile(context: &ExtruderContext) -> Result<Program> {
 }
 
 fn compile_function(func: &RefType<Function>, context: &mut Context) -> Result<CThonk> {
+    log::debug!(target: "instr", "{}: {}:{}:{}", POP_CLR.paint("compile_function"), file!(), line!(), column!());
+
     let lu_dog = context.lu_dog_heel();
     let lu_dog = s_read!(lu_dog);
 
@@ -326,6 +326,8 @@ fn compile_statement(
     thonk: &mut CThonk,
     context: &mut Context,
 ) -> Result<()> {
+    log::debug!(target: "instr", "{}: {}:{}:{}", POP_CLR.paint("compile_statement"), file!(), line!(), column!());
+
     let lu_dog = context.lu_dog_heel();
     let lu_dog = s_read!(lu_dog);
 
@@ -377,6 +379,8 @@ fn compile_expression(
     context: &mut Context,
     span: Span,
 ) -> Result<()> {
+    log::debug!(target: "instr", "{}: {}:{}:{}", POP_CLR.paint("compile_expression"), file!(), line!(), column!());
+
     match &s_read!(expression).subtype {
         ExpressionEnum::Block(ref block) => block::compile(block, thonk, context)?,
         ExpressionEnum::Call(ref call) => call::compile(call, thonk, context, span)?,
@@ -1387,8 +1391,8 @@ mod test {
         );
     }
 
-    // #[test]
-    fn enum_pattern_match() {
+    #[test]
+    fn match_pattern_variable() {
         let _ = env_logger::builder().is_test(true).try_init();
         color_backtrace::install();
 
@@ -1421,10 +1425,52 @@ mod test {
 
         assert_eq!(program.get_thonk_card(), 1);
 
-        // assert_eq!(
-        // program.get_thonk("main").unwrap().get_instruction_card(),
-        // 30
-        // );
+        assert_eq!(
+            program.get_thonk("main").unwrap().get_instruction_card(),
+            50
+        );
+
+        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(42));
+    }
+
+    #[test]
+    fn something_interesting_in_match() {
+        let _ = env_logger::builder().is_test(true).try_init();
+        color_backtrace::install();
+
+        let sarzak_store = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
+        let ore = "
+                   enum Foo {
+                       Bar(int),
+                       Baz(int),
+                       Qux(int),
+                   }
+                   fn main() -> int {
+                       let x = Foo::Baz(40);
+                       match x {
+                           Foo::Bar(u) => u + 2,
+                           Foo::Baz(v) => v + 2,
+                           Foo::Qux(w) => w + 2,
+                       }
+                   }";
+        let ast = parse_dwarf("match_expression", ore).unwrap();
+        let ctx = new_lu_dog(
+            "match_expression".to_owned(),
+            Some((ore.to_owned(), &ast)),
+            &get_dwarf_home(),
+            &sarzak_store,
+        )
+        .unwrap();
+
+        let program = compile(&ctx).unwrap();
+        println!("{program}");
+
+        assert_eq!(program.get_thonk_card(), 1);
+
+        assert_eq!(
+            program.get_thonk("main").unwrap().get_instruction_card(),
+            56
+        );
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(42));
     }
@@ -1639,7 +1685,7 @@ mod test {
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &true.into());
     }
 
-    // #[test]
+    #[test]
     fn use_std_option() {
         let _ = env_logger::builder().is_test(true).try_init();
         color_backtrace::install();
@@ -1670,10 +1716,10 @@ mod test {
         println!("{program}");
         assert_eq!(program.get_thonk_card(), 3);
 
-        // assert_eq!(
-        // program.get_thonk("main").unwrap().get_instruction_card(),
-        // 21
-        // );
+        assert_eq!(
+            program.get_thonk("main").unwrap().get_instruction_card(),
+            59
+        );
         let run = run_vm(&program);
         assert!(run.is_ok());
         assert_eq!(&*s_read!(run.unwrap()), &Value::Boolean(true));

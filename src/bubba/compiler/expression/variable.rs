@@ -15,6 +15,8 @@ pub(in crate::bubba::compiler) fn compile(
     context: &mut Context,
     span: Span,
 ) -> Result<()> {
+    log::debug!(target: "instr", "{}:{}:{}", file!(), line!(), column!());
+
     let lu_dog = context.lu_dog_heel();
     let lu_dog = s_read!(lu_dog);
 

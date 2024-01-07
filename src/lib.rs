@@ -3,6 +3,7 @@
 #![allow(clippy::disallowed_names)]
 use std::{ops, path::PathBuf};
 
+use ansi_term::Colour;
 use clap::Args;
 use heck::ToUpperCamelCase;
 use rustc_hash::FxHashMap as HashMap;
@@ -80,6 +81,11 @@ mod keywords {
 
 pub(crate) const PATH_SEP: &str = "::";
 pub(crate) const PATH_ROOT: &str = PATH_SEP;
+
+pub(crate) const ERR_CLR: Colour = Colour::Red;
+pub(crate) const OK_CLR: Colour = Colour::Green;
+pub(crate) const POP_CLR: Colour = Colour::Yellow;
+pub(crate) const OTH_CLR: Colour = Colour::Cyan;
 
 use lu_dog::ObjectStore as LuDogStore;
 use sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL};

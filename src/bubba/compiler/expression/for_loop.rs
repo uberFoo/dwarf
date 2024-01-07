@@ -6,7 +6,7 @@ use crate::{
         instr::Instruction,
     },
     lu_dog::{ValueType, ValueTypeEnum},
-    new_ref, s_read, s_write,
+    new_ref, s_read,
     sarzak::Ty,
     NewRef, RefType, SarzakStorePtr, Span, Value,
 };
@@ -17,6 +17,8 @@ pub(in crate::bubba::compiler) fn compile(
     context: &mut Context,
     span: Span,
 ) -> Result<()> {
+    log::debug!(target: "instr", "{}:{}:{}", file!(), line!(), column!());
+
     let lu_dog = context.lu_dog_heel().clone();
     let lu_dog = s_read!(lu_dog);
 
