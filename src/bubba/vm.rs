@@ -436,7 +436,8 @@ impl VM {
                                 // }
                             }
                             Value::Struct(ty_) => {
-                                match s_read!(ty_).get_field_value(s_read!(field).as_ref()) {
+                                match s_read!(ty_).get_field_value(s_read!(field).to_inner_string())
+                                {
                                     Some(value) => {
                                         if trace {
                                             println!(

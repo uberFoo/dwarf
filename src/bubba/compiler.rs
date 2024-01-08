@@ -382,9 +382,13 @@ fn compile_expression(
     match &s_read!(expression).subtype {
         ExpressionEnum::Block(ref block) => block::compile(block, thonk, context)?,
         ExpressionEnum::Call(ref call) => call::compile(call, thonk, context, span)?,
+        ExpressionEnum::FieldAccess(ref field) => {
+            field::compile_field_access(field, thonk, context, span)?
+        }
         ExpressionEnum::FieldExpression(ref field) => {
             field::compile_field_expression(field, thonk, context)?
         }
+
         ExpressionEnum::ForLoop(ref for_loop) => for_loop::compile(for_loop, thonk, context, span)?,
         ExpressionEnum::Index(ref index) => index::compile(index, thonk, context, span)?,
         ExpressionEnum::ListElement(ref list) => list::compile_list_element(list, thonk, context)?,
