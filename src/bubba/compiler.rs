@@ -54,9 +54,9 @@ impl CThonk {
 
         if log_enabled!(target: "instr", Trace) {
             self.inner.add_instruction(
-                Instruction::Comment(format!(
-                    "{}:{}:{}",
-                    location.file, location.line, location.column
+                Instruction::Comment(new_ref!(
+                    String,
+                    format!("{}:{}:{}", location.file, location.line, location.column)
                 )),
                 None,
             );
@@ -74,9 +74,9 @@ impl CThonk {
 
         if log_enabled!(target: "instr", Trace) {
             self.inner.add_instruction(
-                Instruction::Comment(format!(
-                    "{}:{}:{}",
-                    location.file, location.line, location.column
+                Instruction::Comment(new_ref!(
+                    String,
+                    format!("{}:{}:{}", location.file, location.line, location.column)
                 )),
                 None,
             );

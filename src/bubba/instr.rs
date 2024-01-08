@@ -51,7 +51,7 @@ pub enum Instruction {
     /// I don't like this because it increases the size of the instruction by 50%
     /// -- from 16 bytes to 24.
     ///
-    Comment(String),
+    Comment(RefType<String>),
     /// Deconstruct a struct expression
     ///
     /// Given a struct expression, like Foo::Bar(x, y), this instruction will pop the
@@ -334,7 +334,7 @@ impl fmt::Display for Instruction {
                 f,
                 "{} {}",
                 opcode_style.paint("nop "),
-                operand_style.paint(comment.to_string())
+                operand_style.paint(s_read!(comment).to_string())
             ),
             Instruction::DeconstructStructExpression => write!(f, "{}", opcode_style.paint("dse ")),
             Instruction::Divide => write!(f, "{}", opcode_style.paint("div ")),
