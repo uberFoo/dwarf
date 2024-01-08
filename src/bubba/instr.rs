@@ -220,7 +220,7 @@ pub enum Instruction {
     NewList(usize),
     /// New Tuple Enum
     ///
-    /// The first operand is the number of tuple fields. It is expected that the
+    /// The first operand, `n` is the number of tuple fields. It is expected that the
     /// tuple name be the first element on the stack. Next is the enum path. Third
     /// up is the ValueType. The tuple fields are last, according to the first
     /// operand.
@@ -229,20 +229,21 @@ pub enum Instruction {
     ///
     /// ## Stack Effect
     ///
-    /// The stack is n elements shorter after this instruction, where n is the
-    /// first operand.
+    /// The stack is `n` + 2? elements shorter after this instruction.
     ///
     NewTupleEnum(usize),
     /// New UserType
     ///
     /// The first operand is the number of fields in the struct. Let's call this
     /// n. The stack shall then contain, in order, the name of the struct, the
-    /// ValueType of the struct, and there is a `([String], [ValueType], [Value])`
-    /// tuple on the stack for each field.
+    /// ValueType of the struct. For each struct field there shall be a  `[String]`
+    /// as the name of the filed, a `[ValueType]` and finally a `[Value]`.
     ///
     /// The new type is pushed onto the stack.
     ///
     /// ## Stack Effect
+    ///
+    /// The stack is (`n` * 3) + 2? elements shorter after this instruction.
     ///
     NewUserType(usize),
     /// Operator Not

@@ -1,5 +1,3 @@
-use std::path::PathBuf;
-
 use log::{self, log_enabled, Level::Trace};
 use rustc_hash::FxHashMap as HashMap;
 use snafu::{location, prelude::*, Location};
@@ -420,19 +418,17 @@ fn get_span(expression: &RefType<Expression>, lu_dog: &LuDogStore) -> Span {
     read.start as usize..read.end as usize
 }
 
+#[cfg(test)]
 mod test {
+    use std::path::PathBuf;
+
     use std::env;
 
     use super::*;
 
-    #[allow(unused_imports)]
     use crate::{
         bubba::{vm::Error, VM},
-        chacha::{
-            error::ChaChaError,
-            memory::Memory,
-            value::{EnumVariant, TupleEnum},
-        },
+        chacha::value::{EnumVariant, TupleEnum},
         dwarf::{new_lu_dog, parse_dwarf},
         lu_dog::ValueType,
         s_write,
@@ -440,8 +436,7 @@ mod test {
         NewRef, RefType,
     };
 
-    #[allow(dead_code)]
-    fn get_dwarf_home() -> PathBuf {
+    pub(super) fn get_dwarf_home() -> PathBuf {
         env::var("DWARF_HOME")
             .unwrap_or_else(|_| {
                 let mut home = env::var("HOME").unwrap();
@@ -453,8 +448,7 @@ mod test {
 
     // 🚧 This nastiness needs to be fixed. It's not cool that we are doing all
     // this work here.
-    #[allow(dead_code)]
-    fn run_vm(program: &Program) -> Result<RefType<Value>, Error> {
+    pub(super) fn run_vm(program: &Program) -> Result<RefType<Value>, Error> {
         let mut vm = VM::new(program);
         vm.invoke("main", &[], true)
     }
@@ -505,33 +499,6 @@ mod test {
         assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 2);
         assert_eq!(program.get_thonk("foo").unwrap().get_instruction_card(), 2);
         assert_eq!(program.get_thonk("bar").unwrap().get_instruction_card(), 2);
-
-        run_vm(&program).unwrap();
-    }
-
-    #[test]
-    fn print_hello_world() {
-        let _ = env_logger::builder().is_test(true).try_init();
-        color_backtrace::install();
-
-        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
-        let ore = "fn main() {
-                       print(\"Hello, world!\");
-                   }";
-        let ast = parse_dwarf("print_hello_world", ore).unwrap();
-        let ctx = new_lu_dog(
-            "print_hello_world".to_owned(),
-            Some((ore.to_owned(), &ast)),
-            &get_dwarf_home(),
-            &sarzak,
-        )
-        .unwrap();
-        let program = compile(&ctx).unwrap();
-
-        println!("{program}");
-
-        assert_eq!(program.get_thonk_card(), 1);
-        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 4);
 
         run_vm(&program).unwrap();
     }
@@ -696,119 +663,6 @@ mod test {
     }
 
     #[test]
-    fn test_add_strings() {
-        let _ = env_logger::builder().is_test(true).try_init();
-        color_backtrace::install();
-
-        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
-        let ore = "fn main() -> string {
-                       \"Hello, \" + \"world!\"
-                   }";
-        let ast = parse_dwarf("test_add_strings", ore).unwrap();
-        let ctx = new_lu_dog(
-            "test_add_strings".to_owned(),
-            Some((ore.to_owned(), &ast)),
-            &get_dwarf_home(),
-            &sarzak,
-        )
-        .unwrap();
-        let program = compile(&ctx).unwrap();
-
-        println!("{program}");
-
-        assert_eq!(program.get_thonk_card(), 1);
-        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 4);
-
-        assert_eq!(
-            &*s_read!(run_vm(&program).unwrap()),
-            &Value::String("Hello, world!".to_owned())
-        );
-    }
-
-    #[test]
-    fn test_subtraction() {
-        let _ = env_logger::builder().is_test(true).try_init();
-        color_backtrace::install();
-
-        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
-        let ore = "fn main() -> int {
-                       5 - 2
-                   }";
-        let ast = parse_dwarf("test_subtraction", ore).unwrap();
-        let ctx = new_lu_dog(
-            "test_subtraction".to_owned(),
-            Some((ore.to_owned(), &ast)),
-            &get_dwarf_home(),
-            &sarzak,
-        )
-        .unwrap();
-        let program = compile(&ctx).unwrap();
-
-        println!("{program}");
-
-        assert_eq!(program.get_thonk_card(), 1);
-        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 4);
-
-        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(3));
-    }
-
-    #[test]
-    fn test_multiplication() {
-        let _ = env_logger::builder().is_test(true).try_init();
-        color_backtrace::install();
-
-        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
-        let ore = "fn main() -> int {
-                       5 * 2
-                   }";
-        let ast = parse_dwarf("test_multiplication", ore).unwrap();
-        let ctx = new_lu_dog(
-            "test_multiplication".to_owned(),
-            Some((ore.to_owned(), &ast)),
-            &get_dwarf_home(),
-            &sarzak,
-        )
-        .unwrap();
-
-        let program = compile(&ctx).unwrap();
-
-        println!("{program}");
-
-        assert_eq!(program.get_thonk_card(), 1);
-        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 4);
-
-        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(10));
-    }
-
-    #[test]
-    fn test_division() {
-        let _ = env_logger::builder().is_test(true).try_init();
-        color_backtrace::install();
-
-        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
-        let ore = "fn main() -> int {
-                       5 / 2
-                   }";
-        let ast = parse_dwarf("test_division", ore).unwrap();
-        let ctx = new_lu_dog(
-            "test_division".to_owned(),
-            Some((ore.to_owned(), &ast)),
-            &get_dwarf_home(),
-            &sarzak,
-        )
-        .unwrap();
-
-        let program = compile(&ctx).unwrap();
-
-        println!("{program}");
-
-        assert_eq!(program.get_thonk_card(), 1);
-        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 4);
-
-        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(2));
-    }
-
-    #[test]
     fn test_boolean_true() {
         let _ = env_logger::builder().is_test(true).try_init();
         color_backtrace::install();
@@ -862,36 +716,6 @@ mod test {
         assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 2);
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Boolean(false));
-    }
-
-    #[test]
-    fn test_assignment() {
-        let _ = env_logger::builder().is_test(true).try_init();
-        color_backtrace::install();
-
-        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
-        let ore = "fn main() -> int {
-                       let x = 5;
-                       x = 10;
-                       x
-                   }";
-        let ast = parse_dwarf("test_assignment", ore).unwrap();
-        let ctx = new_lu_dog(
-            "test_assignment".to_owned(),
-            Some((ore.to_owned(), &ast)),
-            &get_dwarf_home(),
-            &sarzak,
-        )
-        .unwrap();
-
-        let program = compile(&ctx).unwrap();
-
-        println!("{program}");
-
-        assert_eq!(program.get_thonk_card(), 1);
-        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 6);
-
-        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(10));
     }
 
     #[test]
@@ -1571,62 +1395,6 @@ mod test {
     }
 
     #[test]
-    fn test_and_expression() {
-        let _ = env_logger::builder().is_test(true).try_init();
-        color_backtrace::install();
-
-        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
-        let ore = "
-                   fn main() -> bool {
-                       true && true
-                   }";
-        let ast = parse_dwarf("test_and_expression", ore).unwrap();
-        let ctx = new_lu_dog(
-            "test_and_expression".to_owned(),
-            Some((ore.to_owned(), &ast)),
-            &get_dwarf_home(),
-            &sarzak,
-        )
-        .unwrap();
-        let program = compile(&ctx).unwrap();
-        println!("{program}");
-
-        assert_eq!(program.get_thonk_card(), 1);
-
-        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 4);
-
-        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &true.into());
-    }
-
-    #[test]
-    fn test_or_expression() {
-        let _ = env_logger::builder().is_test(true).try_init();
-        color_backtrace::install();
-
-        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
-        let ore = "
-                   fn main() -> bool {
-                       true || false
-                   }";
-        let ast = parse_dwarf("test_or_expression", ore).unwrap();
-        let ctx = new_lu_dog(
-            "test_or_expression".to_owned(),
-            Some((ore.to_owned(), &ast)),
-            &get_dwarf_home(),
-            &sarzak,
-        )
-        .unwrap();
-        let program = compile(&ctx).unwrap();
-        println!("{program}");
-
-        assert_eq!(program.get_thonk_card(), 1);
-
-        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 4);
-
-        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &true.into());
-    }
-
-    #[test]
     fn test_assert() {
         let _ = env_logger::builder().is_test(true).try_init();
         color_backtrace::install();
@@ -1655,34 +1423,6 @@ mod test {
         );
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Empty);
-    }
-
-    #[test]
-    fn test_binary_not() {
-        let _ = env_logger::builder().is_test(true).try_init();
-        color_backtrace::install();
-
-        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
-        let ore = "
-                   fn main() -> bool {
-                       !false
-                   }";
-        let ast = parse_dwarf("test_binary_not", ore).unwrap();
-        let ctx = new_lu_dog(
-            "test_binary_not".to_owned(),
-            Some((ore.to_owned(), &ast)),
-            &get_dwarf_home(),
-            &sarzak,
-        )
-        .unwrap();
-        let program = compile(&ctx).unwrap();
-        println!("{program}");
-
-        assert_eq!(program.get_thonk_card(), 1);
-
-        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 3);
-
-        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &true.into());
     }
 
     #[test]

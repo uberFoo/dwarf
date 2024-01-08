@@ -6,8 +6,8 @@ use crate::{
         instr::Instruction,
     },
     chacha::value::EnumVariant,
-    lu_dog::DataStructureEnum,
-    new_ref, s_read, NewRef, RefType, SarzakStorePtr, Span, Value,
+    lu_dog::{DataStructureEnum, FieldExpressionEnum},
+    new_ref, s_read, NewRef, RefType, SarzakStorePtr, Span, Value, POP_CLR,
 };
 
 pub(in crate::bubba::compiler) fn compile(
@@ -30,6 +30,8 @@ pub(in crate::bubba::compiler) fn compile(
 
     match &data_struct.subtype {
         DataStructureEnum::Enumeration(ref id) => {
+            log::debug!(target: "instr", "{}: {}:{}:{}", POP_CLR.paint("creating enum"), file!(), line!(), column!());
+
             let woog_enum = lu_dog.exhume_enumeration(id).unwrap();
             let x_path = &lu_dog.exhume_x_path(&expr.x_path).unwrap();
             // We know that there is always a pe. It's only in an option so that
@@ -55,6 +57,11 @@ pub(in crate::bubba::compiler) fn compile(
             //
             // This is where the rubber hits the road -- we give the enums actual values.
             if field_exprs.is_empty() {
+                // 🚧 This is weird. I create the value and push it, and below I push all
+                // the bits and have an instruction to create the thing. Which is it gonna
+                // be? Now that I think of it, I think the implementation of the nte instruction
+                // checks the cardinality of the fields, and if it's zero it generates a
+                // unit enum. So that's two fishy things.
                 let value = new_ref!(
                     Value,
                     Value::Enumeration(EnumVariant::Unit(ty, path, s_read!(pe).name.to_owned()))
@@ -82,47 +89,105 @@ pub(in crate::bubba::compiler) fn compile(
             }
         }
         DataStructureEnum::WoogStruct(_) => {
-            unimplemented!()
-            //     // Get name, value for each field expression.
-            //     let field_exprs = field_exprs
-            //         .iter()
-            //         .map(|f| {
-            //             let expr = s_read!(f).r15_expression(&lu_dog)[0].clone();
-            //             let value = eval_expression(expr.clone(), context, vm)?;
+            log::debug!(target: "instr", "{}: {}:{}:{}", POP_CLR.paint("creating struct"), file!(), line!(), column!());
 
-            //             let name = if let FieldExpressionEnum::NamedFieldExpression(ref id) =
-            //                 s_read!(f).subtype
-            //             {
-            //                 let nfe = lu_dog.exhume_named_field_expression(id).unwrap();
-            //                 let name = s_read!(nfe);
-            //                 name.name.clone()
-            //             } else {
-            //                 unreachable!()
-            //             };
+            let woog_struct = if let DataStructureEnum::WoogStruct(ref id) = data_struct.subtype {
+                lu_dog.exhume_woog_struct(id).unwrap()
+            } else {
+                unreachable!()
+            };
+            let woog_struct = s_read!(woog_struct);
 
-            //             debug!("StructExpression field value: {}", s_read!(value),);
-            //             Ok((name, value))
-            //         })
-            //         .collect::<Result<Vec<_>>>()?;
+            // Get name, value for each field expression.
+            let field_count = field_exprs.len();
+            for f in field_exprs {
+                let f = s_read!(f);
+                let expr = f.r15_expression(&lu_dog)[0].clone();
+                let span = get_span(&expr, &lu_dog);
+                compile_expression(&expr, thonk, context, span)?;
 
-            //     let woog_struct = if let DataStructureEnum::WoogStruct(ref id) = data_struct.subtype {
-            //         lu_dog.exhume_woog_struct(id).unwrap()
-            //     } else {
-            //         unreachable!()
-            //     };
-            //     let ty = s_read!(woog_struct).r1_value_type(&lu_dog)[0].clone();
+                let FieldExpressionEnum::NamedFieldExpression(ref name) = f.subtype else {
+                    unreachable!()
+                };
+                let name = lu_dog.exhume_named_field_expression(name).unwrap();
+                let name = s_read!(name).name.clone();
+                let name = new_ref!(Value, Value::String(name));
+                thonk.add_instruction(Instruction::Push(name), location!());
+            }
 
-            //     let mut user_type = UserStruct::new(&s_read!(woog_struct).name, &ty);
-            //     for (name, value) in field_exprs {
-            //         user_type.define_field(&name, value);
-            //     }
+            let ty = woog_struct.r1_value_type(&lu_dog)[0].clone();
+            let ty = new_ref!(Value, Value::ValueType((*s_read!(ty)).to_owned()));
+            thonk.add_instruction(Instruction::Push(ty), location!());
 
-            //     Ok(new_ref!(
-            //         Value,
-            //         Value::Struct(new_ref!(UserStruct, user_type))
-            //     ))
+            let name = new_ref!(Value, Value::String(woog_struct.name.clone()));
+            thonk.add_instruction(Instruction::Push(name), location!());
+
+            thonk.add_instruction_with_span(
+                Instruction::NewUserType(field_count),
+                span,
+                location!(),
+            );
         }
     };
 
     Ok(())
+}
+
+#[cfg(test)]
+mod test {
+    use crate::{
+        bubba::compiler::{
+            test::{get_dwarf_home, run_vm},
+            *,
+        },
+        chacha::value::UserStruct,
+        dwarf::{new_lu_dog, parse_dwarf},
+        s_write,
+        sarzak::MODEL as SARZAK_MODEL,
+    };
+
+    #[test]
+    fn struct_expression() {
+        let _ = env_logger::builder().is_test(true).try_init();
+        color_backtrace::install();
+
+        let sarzak_store = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
+        let ore = "
+                   struct Foo {
+                       x: int,
+                       y: float,
+                   }
+                   fn main() -> Foo {
+                       Foo {
+                           y: 0.42,
+                           x: 42,
+                       }
+                   }";
+        let ast = parse_dwarf("struct_expression", ore).unwrap();
+        let ctx = new_lu_dog(
+            "struct_expression".to_owned(),
+            Some((ore.to_owned(), &ast)),
+            &get_dwarf_home(),
+            &sarzak_store,
+        )
+        .unwrap();
+        let program = compile(&ctx).unwrap();
+        println!("{program}");
+        assert_eq!(program.get_thonk_card(), 1);
+
+        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 8);
+        let run = run_vm(&program);
+        assert!(run.is_ok());
+
+        let mut lu_dog = s_write!(ctx.lu_dog);
+        let woog_struct = lu_dog.exhume_woog_struct_id_by_name("Foo").unwrap();
+        let woog_struct = lu_dog.exhume_woog_struct(&woog_struct).unwrap();
+        let ty = crate::lu_dog::ValueType::new_woog_struct(&woog_struct, &mut lu_dog);
+        let mut result = UserStruct::new("Foo".to_owned(), &ty);
+        result.define_field("x".to_owned(), new_ref!(Value, Value::Integer(42)));
+        result.define_field("y".to_owned(), new_ref!(Value, Value::Float(0.42)));
+        let result = Value::Struct(new_ref!(UserStruct, result));
+
+        assert_eq!(&*s_read!(run.unwrap()), &result,);
+    }
 }

@@ -915,7 +915,7 @@ impl VM {
                             let name = self.stack.pop().unwrap();
                             let value = self.stack.pop().unwrap();
 
-                            inst.define_field(s_read!(name).to_string(), value.clone());
+                            inst.define_field(s_read!(name).to_inner_string(), value.clone());
                             if trace {
                                 println!("\t\t\t\t{}: {}", s_read!(name), s_read!(value));
                             }

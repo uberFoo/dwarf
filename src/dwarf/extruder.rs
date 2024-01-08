@@ -3838,7 +3838,7 @@ pub(crate) fn make_value_type(
     }
 }
 
-fn lookup_user_defined_type(
+pub(crate) fn lookup_user_defined_type(
     lu_dog: &mut LuDogStore,
     name: &str,
     span: &Span,

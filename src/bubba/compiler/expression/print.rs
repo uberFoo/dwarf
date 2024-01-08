@@ -25,3 +25,43 @@ pub(in crate::bubba::compiler) fn compile(
 
     Ok(())
 }
+
+#[cfg(test)]
+mod test {
+
+    use crate::{
+        bubba::compiler::{
+            test::{get_dwarf_home, run_vm},
+            *,
+        },
+        dwarf::{new_lu_dog, parse_dwarf},
+        sarzak::MODEL as SARZAK_MODEL,
+    };
+
+    #[test]
+    fn print_hello_world() {
+        let _ = env_logger::builder().is_test(true).try_init();
+        color_backtrace::install();
+
+        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
+        let ore = "fn main() {
+                       print(\"Hello, world!\");
+                   }";
+        let ast = parse_dwarf("print_hello_world", ore).unwrap();
+        let ctx = new_lu_dog(
+            "print_hello_world".to_owned(),
+            Some((ore.to_owned(), &ast)),
+            &get_dwarf_home(),
+            &sarzak,
+        )
+        .unwrap();
+        let program = compile(&ctx).unwrap();
+
+        println!("{program}");
+
+        assert_eq!(program.get_thonk_card(), 1);
+        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 4);
+
+        run_vm(&program).unwrap();
+    }
+}
