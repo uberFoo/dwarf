@@ -1006,7 +1006,7 @@ pub fn eval(
                             let mut fubar = context.clone();
                             // let mut baz = fubar.executor().clone();
                             let future = async move {
-                                let mut vm = VM::new(fubar.get_program());
+                                let mut vm = VM::new(fubar.get_program(), &[]);
 
                                 // let func = func.clone();
 
@@ -1263,7 +1263,7 @@ fn spawn(
     // .create_task(async move {
     let t_span = debug_span!("spawn_span", target = "async", name = ?name);
     let future = async move {
-        let mut vm = VM::new(child_context.get_program());
+        let mut vm = VM::new(child_context.get_program(), &[]);
         let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
         let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
         if let Value::Function(func) = &func {

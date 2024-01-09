@@ -293,6 +293,7 @@ impl Value {
         String::from_utf8(buf).expect("inner_string returned invalid UTF-8")
     }
 
+    #[inline]
     fn inner_string(&self, f: &mut Vec<u8>) -> std::io::Result<()> {
         match self {
             Self::Boolean(bool_) => write!(f, "{bool_}"),

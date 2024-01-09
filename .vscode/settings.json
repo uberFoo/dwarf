@@ -27,6 +27,7 @@
         "metamodel",
         "mimalloc",
         "msvc",
+        "parg",
         "powi",
         "readline",
         "Readline",

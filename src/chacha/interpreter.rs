@@ -146,6 +146,7 @@ pub fn initialize_interpreter(
     debug!("initialize_interpreter with {thread_count} threads");
 
     let mut lu_dog = s_write!(e_context.lu_dog);
+    let sarzak = s_read!(e_context.sarzak);
 
     // Initialize the stack with stuff from the compiled source.
     let block = Block::new(false, Uuid::new_v4(), None, None, &mut lu_dog);
@@ -172,6 +173,10 @@ pub fn initialize_interpreter(
     }
 
     let mut program = Program::new(VERSION.to_owned(), BUILD_TIME.to_owned());
+    let ty = crate::sarzak::Ty::new_s_string(&sarzak);
+    let ty = ValueType::new_ty(&ty, &mut lu_dog);
+    let ty = Value::ValueType((*s_read!(ty)).clone());
+    program.add_symbol("STRING".to_owned(), ty);
 
     if let Some(_id) = lu_dog.exhume_woog_struct_id_by_name("Complex") {
         // Hack to try to get mandelbrot running faster...
@@ -723,9 +728,14 @@ pub fn start_func(
         *running = !stopped;
     }
 
-    let program = context.get_program().clone();
+    let mut program = context.get_program().clone();
+    let ty = crate::sarzak::Ty::new_s_string(&s_read!(context.sarzak_heel()));
+    let ty = ValueType::new_ty(&ty, &mut s_write!(context.lu_dog_heel()));
+    let ty = Value::ValueType((*s_read!(ty)).clone());
+    program.add_symbol("STRING".to_owned(), ty);
+
     let stack = context.memory();
-    let mut vm = VM::new(&program);
+    let mut vm = VM::new(&program, &[]);
 
     if let Some(main) = stack.get(name) {
         // This should fail if it's not a function. Actually, I think that it _has_
@@ -805,7 +815,7 @@ pub fn start_vm(n: DwarfInteger) -> Result<DwarfInteger, Error> {
     let mut program = crate::bubba::Program::new("".to_owned(), "".to_owned());
     program.add_thonk(thonk);
 
-    let mut vm = VM::new(&program);
+    let mut vm = VM::new(&program, &[]);
     let result = vm.invoke("fib", &[new_ref!(Value, n.into())], false);
 
     // vm.pop_stack();

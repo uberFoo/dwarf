@@ -247,6 +247,13 @@ pub enum Instruction {
     /// ## Stack Effect
     ///
     Push(RefType<Value>),
+    /// Push the arguments to the program onto the stack
+    ///
+    /// ## Stack Effect
+    ///
+    /// The stack will be n elements longer, where n is the cardinality of the
+    /// arguments.
+    PushArgs,
     ///
     /// Pop the top value off the stack and store it in a local variable at the
     /// given index.
@@ -423,6 +430,7 @@ impl fmt::Display for Instruction {
                 opcode_style.paint("push"),
                 operand_style.paint(s_read!(value).to_string())
             ),
+            Instruction::PushArgs => write!(f, "{}", opcode_style.paint("parg")),
             Instruction::Return => write!(f, "{}", opcode_style.paint("ret ")),
             Instruction::StoreLocal(index) => write!(
                 f,
@@ -449,6 +457,7 @@ impl fmt::Display for Instruction {
 pub struct Program {
     compiler_version: String,
     compiler_build_ts: String,
+    symbols: HashMap<String, Value>,
     thonks: HashMap<String, Thonk>,
 }
 
@@ -457,15 +466,23 @@ impl Program {
         Program {
             compiler_version,
             compiler_build_ts: build_time,
+            symbols: HashMap::default(),
             thonks: HashMap::default(),
         }
+    }
+
+    pub(crate) fn add_symbol(&mut self, name: String, value: Value) {
+        self.symbols.insert(name, value);
+    }
+
+    pub(crate) fn get_symbol(&self, name: &str) -> Option<&Value> {
+        self.symbols.get(name)
     }
 
     pub(crate) fn add_thonk(&mut self, thonk: Thonk) {
         self.thonks.insert(thonk.name.clone(), thonk);
     }
 
-    #[allow(dead_code)]
     pub(crate) fn get_thonk(&self, name: &str) -> Option<&Thonk> {
         self.thonks.get(name)
     }
@@ -474,7 +491,6 @@ impl Program {
         self.thonks.values()
     }
 
-    #[allow(dead_code)]
     pub(crate) fn get_thonk_card(&self) -> usize {
         self.thonks.len()
     }

@@ -268,8 +268,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .map(|a| new_ref!(Value, a.into()))
                 .collect();
 
-            let mut vm = VM::new(&program);
-            vm.invoke("main", &args, false)?;
+            let mut vm = VM::new(&program, &args);
+            vm.invoke("main", &[], false)?;
             return Ok(());
         }
 

@@ -8,8 +8,8 @@ use crate::{
         BodyEnum, Expression, ExpressionEnum, Function, ObjectStore as LuDogStore, Statement,
         StatementEnum, ValueType,
     },
-    new_ref, s_read,
-    sarzak::ObjectStore as SarzakStore,
+    new_ref, s_read, s_write,
+    sarzak::{ObjectStore as SarzakStore, Ty},
     Context as ExtruderContext, NewRef, RefType, Span, Value, ERR_CLR, POP_CLR,
 };
 
@@ -205,6 +205,12 @@ pub fn compile(context: &ExtruderContext) -> Result<Program> {
     let mut context = Context::new(context);
 
     let lu_dog = context.lu_dog_heel();
+
+    let ty = Ty::new_s_string(&s_read!(context.sarzak_heel()));
+    let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
+    let ty = Value::ValueType((*s_read!(ty)).clone());
+    program.add_symbol("STRING".to_owned(), ty);
+
     let lu_dog = s_read!(lu_dog);
 
     for func in lu_dog.iter_function() {
@@ -452,10 +458,16 @@ mod test {
             .into()
     }
 
-    // 🚧 This nastiness needs to be fixed. It's not cool that we are doing all
-    // this work here.
     pub(super) fn run_vm(program: &Program) -> Result<RefType<Value>, Error> {
-        let mut vm = VM::new(program);
+        let mut vm = VM::new(program, &[]);
+        vm.invoke("main", &[], true)
+    }
+
+    pub(super) fn run_vm_with_args(
+        program: &Program,
+        args: &[RefType<Value>],
+    ) -> Result<RefType<Value>, Error> {
+        let mut vm = VM::new(program, args);
         vm.invoke("main", &[], true)
     }
 

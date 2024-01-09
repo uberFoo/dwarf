@@ -23,6 +23,7 @@ pub(in crate::bubba::compiler) fn compile_field_access(
     let field = lu_dog.exhume_field_access(field).unwrap();
     let field = s_read!(field);
 
+    // This is the expression upon which we access the field
     let expr = lu_dog.exhume_expression(&field.expression).unwrap();
     compile_expression(&expr, thonk, context, get_span(&expr, &lu_dog))?;
 

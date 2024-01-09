@@ -5,7 +5,7 @@ use crate::{
         compiler::{compile_expression, get_span, CThonk, Context, Result},
         instr::Instruction,
     },
-    keywords::{ASSERT, ASSERT_EQ, CHACHA},
+    keywords::{ARGS, ASSERT, ASSERT_EQ, CHACHA},
     lu_dog::{Call, CallEnum, Expression},
     new_ref, s_read, NewRef, RefType, SarzakStorePtr, Span, Value,
 };
@@ -236,6 +236,9 @@ fn compile_static_method_call(
 
     match ty {
         CHACHA => match func {
+            ARGS => {
+                thonk.add_instruction_with_span(Instruction::PushArgs, span.clone(), location!());
+            }
             ASSERT => {
                 let expr = &args[0];
                 let expr_span = get_span(expr, &lu_dog);
@@ -382,7 +385,7 @@ fn compile_static_method_call(
 mod test {
     use crate::{
         bubba::compiler::{
-            test::{get_dwarf_home, run_vm},
+            test::{get_dwarf_home, run_vm, run_vm_with_args},
             *,
         },
         dwarf::{new_lu_dog, parse_dwarf},
@@ -459,5 +462,44 @@ mod test {
         assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 9);
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &42.into());
+    }
+
+    #[test]
+    fn test_args() {
+        let _ = env_logger::builder().is_test(true).try_init();
+        color_backtrace::install();
+
+        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
+        let ore = "
+                   fn main() -> () {
+                       let first = chacha::args()[0];
+                       let second = chacha::args()[1];
+                       chacha::assert_eq(first, 42);
+                       chacha::assert_eq(second, \"Hello World\");
+                   }";
+        let ast = parse_dwarf("test_args", ore).unwrap();
+        let ctx = new_lu_dog(
+            "test_args".to_owned(),
+            Some((ore.to_owned(), &ast)),
+            &get_dwarf_home(),
+            &sarzak,
+        )
+        .unwrap();
+        let program = compile(&ctx).unwrap();
+        println!("{program}");
+
+        assert_eq!(program.get_thonk_card(), 1);
+
+        assert_eq!(
+            program.get_thonk("main").unwrap().get_instruction_card(),
+            28
+        );
+
+        let args = vec![
+            new_ref!(Value, 42.into()),
+            new_ref!(Value, "Hello World".into()),
+        ];
+
+        assert!(run_vm_with_args(&program, &args).is_ok());
     }
 }

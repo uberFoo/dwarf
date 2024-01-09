@@ -52,10 +52,15 @@ pub struct VM {
     source_map: Vec<Span>,
     func_map: HashMap<String, (usize, usize)>,
     sarzak: SarzakStore,
+    args: RefType<Value>,
 }
 
 impl VM {
-    pub fn new(program: &Program) -> Self {
+    pub fn new(program: &Program, args: &[RefType<Value>]) -> Self {
+        let Some(Value::ValueType(str_ty)) = program.get_symbol("STRING") else {
+            panic!("No STRING symbol found.")
+        };
+
         let mut vm = VM {
             ip: 0,
             fp: 0,
@@ -65,6 +70,13 @@ impl VM {
             source_map: Vec::new(),
             func_map: HashMap::default(),
             sarzak: SarzakStore::from_bincode(SARZAK_MODEL).unwrap(),
+            args: new_ref!(
+                Value,
+                Value::Vector {
+                    ty: new_ref!(ValueType, str_ty.clone()),
+                    inner: args.to_vec()
+                }
+            ),
         };
 
         let mut tmp_mem: Vec<Instruction> = Vec::new();
@@ -77,6 +89,7 @@ impl VM {
             i += thonk.get_instruction_card();
         }
 
+        // This is where we patch up the function calls.
         for instr in tmp_mem.iter() {
             match instr {
                 Instruction::CallDestination(name) => {
@@ -121,10 +134,6 @@ impl VM {
         self.stack
             .push(new_ref!(Value, Value::Integer(frame_size as DwarfInteger)));
 
-        for arg in args.iter() {
-            self.stack.push(arg.clone());
-        }
-
         for _ in 0..frame_size {
             self.stack.push(new_ref!(Value, Value::Empty));
         }
@@ -149,6 +158,18 @@ impl VM {
         result
     }
 
+    fn print_stack(&self) {
+        let len = self.stack.len();
+        for i in 0..len {
+            if i == self.fp {
+                print!("\t{} ->\t", Colour::Green.bold().paint("fp"));
+            } else {
+                print!("\t     \t");
+            }
+            println!("stack {i}:\t{}", s_read!(self.stack[i]));
+        }
+    }
+
     fn inner_run(
         &mut self,
         arity: usize,
@@ -165,15 +186,7 @@ impl VM {
             let instr = self.program[self.ip as usize].clone();
             let ip_offset: isize = {
                 if trace {
-                    let len = self.stack.len();
-                    for i in 0..len {
-                        if i == self.fp {
-                            print!("\t{} ->\t", Colour::Green.bold().paint("fp"));
-                        } else {
-                            print!("\t     \t");
-                        }
-                        println!("stack {i}:\t{}", s_read!(self.stack[i]));
-                    }
+                    self.print_stack();
                     println!();
                     println!("<{:08x}:\t{instr}", self.ip);
                 }
@@ -466,15 +479,18 @@ impl VM {
                                 }
                             }
                             value => {
+                                self.print_stack();
                                 return Err::<RefType<Value>, Error>(
                                     BubbaError::ValueError {
                                         source: Box::new(ChaChaError::BadnessHappened {
-                                            message: format!("Unexpected value: {value}."),
+                                            message: format!(
+                                                "FieldRead unexpected value: {value}."
+                                            ),
                                             location: location!(),
                                         }),
                                     }
                                     .into(),
-                                )
+                                );
                             }
                         }
 
@@ -1003,6 +1019,12 @@ impl VM {
 
                         1
                     }
+                    Instruction::PushArgs => {
+                        let value = self.args.clone();
+                        self.stack.push(value);
+
+                        1
+                    }
                     Instruction::Return => {
                         let result = self.stack.pop().unwrap();
                         return Ok(result);
@@ -1172,6 +1194,7 @@ mod tests {
         bubba::instr::Thonk,
         dwarf::{DwarfFloat, DwarfInteger},
         interpreter::{initialize_interpreter, PrintableValueType},
+        lu_dog::ObjectStore as LuDogStore,
         Context,
     };
 
@@ -1189,8 +1212,12 @@ mod tests {
 
         let mut program = Program::new(VERSION.to_owned(), BUILD_TIME.to_owned());
         program.add_thonk(thonk);
+        program.add_symbol(
+            "STRING".to_owned(),
+            Value::ValueType((*s_read!(ValueType::new_empty(&mut LuDogStore::new()))).clone()),
+        );
 
-        let mut vm = VM::new(&program);
+        let mut vm = VM::new(&program, &[]);
         let result = vm.invoke("test", &[], true);
         println!("{:?}", result);
         println!("{:?}", vm);
@@ -1208,8 +1235,12 @@ mod tests {
 
         let mut program = Program::new(VERSION.to_owned(), BUILD_TIME.to_owned());
         program.add_thonk(thonk);
+        program.add_symbol(
+            "STRING".to_owned(),
+            Value::ValueType((*s_read!(ValueType::new_empty(&mut LuDogStore::new()))).clone()),
+        );
 
-        let mut vm = VM::new(&program);
+        let mut vm = VM::new(&program, &[]);
         let result = vm.invoke("test", &[], true);
         println!("{:?}", result);
         println!("{:?}", vm);
@@ -1237,8 +1268,12 @@ mod tests {
 
         let mut program = Program::new(VERSION.to_owned(), BUILD_TIME.to_owned());
         program.add_thonk(thonk);
+        program.add_symbol(
+            "STRING".to_owned(),
+            Value::ValueType((*s_read!(ValueType::new_empty(&mut LuDogStore::new()))).clone()),
+        );
 
-        let mut vm = VM::new(&program);
+        let mut vm = VM::new(&program, &[]);
         let result = vm.invoke("test", &[], true);
         println!("{:?}", result);
         println!("{:?}", vm);
@@ -1266,8 +1301,12 @@ mod tests {
 
         let mut program = Program::new(VERSION.to_owned(), BUILD_TIME.to_owned());
         program.add_thonk(thonk);
+        program.add_symbol(
+            "STRING".to_owned(),
+            Value::ValueType((*s_read!(ValueType::new_empty(&mut LuDogStore::new()))).clone()),
+        );
 
-        let mut vm = VM::new(&program);
+        let mut vm = VM::new(&program, &[]);
         let result = vm.invoke("test", &[], true);
         println!("{:?}", result);
         println!("{:?}", vm);
@@ -1294,8 +1333,12 @@ mod tests {
 
         let mut program = Program::new(VERSION.to_owned(), BUILD_TIME.to_owned());
         program.add_thonk(thonk);
+        program.add_symbol(
+            "STRING".to_owned(),
+            Value::ValueType((*s_read!(ValueType::new_empty(&mut LuDogStore::new()))).clone()),
+        );
 
-        let mut vm = VM::new(&program);
+        let mut vm = VM::new(&program, &[]);
         let result = vm.invoke("test", &[], true);
         println!("{:?}", result);
         println!("{:?}", vm);
@@ -1321,8 +1364,12 @@ mod tests {
 
         let mut program = Program::new(VERSION.to_owned(), BUILD_TIME.to_owned());
         program.add_thonk(thonk);
+        program.add_symbol(
+            "STRING".to_owned(),
+            Value::ValueType((*s_read!(ValueType::new_empty(&mut LuDogStore::new()))).clone()),
+        );
 
-        let mut vm = VM::new(&program);
+        let mut vm = VM::new(&program, &[]);
         let result = vm.invoke("test", &[], true);
         println!("{:?}", result);
         println!("{:?}", vm);
@@ -1347,8 +1394,12 @@ mod tests {
 
         let mut program = Program::new(VERSION.to_owned(), BUILD_TIME.to_owned());
         program.add_thonk(thonk);
+        program.add_symbol(
+            "STRING".to_owned(),
+            Value::ValueType((*s_read!(ValueType::new_empty(&mut LuDogStore::new()))).clone()),
+        );
 
-        let mut vm = VM::new(&program);
+        let mut vm = VM::new(&program, &[]);
         let result = vm.invoke("test", &[], true);
         println!("{:?}", result);
         println!("{:?}", vm);
@@ -1373,8 +1424,12 @@ mod tests {
 
         let mut program = Program::new(VERSION.to_owned(), BUILD_TIME.to_owned());
         program.add_thonk(thonk);
+        program.add_symbol(
+            "STRING".to_owned(),
+            Value::ValueType((*s_read!(ValueType::new_empty(&mut LuDogStore::new()))).clone()),
+        );
 
-        let mut vm = VM::new(&program);
+        let mut vm = VM::new(&program, &[]);
         let result = vm.invoke("test", &[], true);
         println!("{:?}", result);
         println!("{:?}", vm);
@@ -1412,8 +1467,12 @@ mod tests {
 
         let mut program = Program::new(VERSION.to_owned(), BUILD_TIME.to_owned());
         program.add_thonk(thonk);
+        program.add_symbol(
+            "STRING".to_owned(),
+            Value::ValueType((*s_read!(ValueType::new_empty(&mut LuDogStore::new()))).clone()),
+        );
 
-        let mut vm = VM::new(&program);
+        let mut vm = VM::new(&program, &[]);
         let result = vm.invoke("test", &[], true);
         println!("{:?}", result);
         println!("{:?}", vm);
@@ -1441,8 +1500,12 @@ mod tests {
         println!("{}", thonk);
         let mut program = Program::new(VERSION.to_owned(), BUILD_TIME.to_owned());
         program.add_thonk(thonk);
+        program.add_symbol(
+            "STRING".to_owned(),
+            Value::ValueType((*s_read!(ValueType::new_empty(&mut LuDogStore::new()))).clone()),
+        );
 
-        let mut vm = VM::new(&program);
+        let mut vm = VM::new(&program, &[]);
 
         let result = vm.invoke("test", &[], true);
         println!("{:?}", result);
@@ -1493,6 +1556,10 @@ mod tests {
             struct_ty
         };
 
+        let ty = Ty::new_s_string(&sarzak);
+        let ty = ValueType::new_ty(&ty, &mut s_write!(ctx.lu_dog));
+        let ty = Value::ValueType((*s_read!(ty)).clone());
+
         // Now we need an instance.
         let dwarf_home = env::var("DWARF_HOME")
             .unwrap_or_else(|_| {
@@ -1523,7 +1590,9 @@ mod tests {
         let mut program = Program::new(VERSION.to_owned(), BUILD_TIME.to_owned());
         program.add_thonk(thonk);
 
-        let mut vm = VM::new(&program);
+        program.add_symbol("STRING".to_owned(), ty);
+
+        let mut vm = VM::new(&program, &[]);
 
         let result = vm.invoke("test", &[], true);
         println!("{:?}", result);
