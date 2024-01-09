@@ -6,9 +6,10 @@ use crate::{
         instr::Instruction,
     },
     lu_dog::{
-        BinaryEnum, BooleanOperatorEnum, ComparisonEnum, ExpressionEnum, OperatorEnum, UnaryEnum,
+        BinaryEnum, BooleanOperatorEnum, ComparisonEnum, ExpressionEnum, FieldAccessTargetEnum,
+        OperatorEnum, UnaryEnum,
     },
-    s_read, SarzakStorePtr, Span,
+    new_ref, s_read, NewRef, RefType, SarzakStorePtr, Span, Value,
 };
 
 pub(in crate::bubba::compiler) fn compile(
@@ -40,25 +41,65 @@ pub(in crate::bubba::compiler) fn compile(
                     thonk.add_instruction_with_span(Instruction::Add, span, location!());
                 }
                 BinaryEnum::Assignment(_) => {
-                    let offset = if let ExpressionEnum::VariableExpression(ref expr) =
-                        &s_read!(lhs).subtype
-                    {
-                        let expr = lu_dog.exhume_variable_expression(expr).unwrap();
-                        let expr = s_read!(expr);
-                        context
-                            .get_symbol(&expr.name)
-                            .unwrap_or_else(|| panic!("symbol lookup failed for {}", expr.name))
-                            .number
-                    } else {
-                        panic!("In assignment and lhs is not a variable.")
-                    };
-
                     compile_expression(&rhs, thonk, context, rhs_span)?;
-                    thonk.add_instruction_with_span(
-                        Instruction::StoreLocal(offset),
-                        span,
-                        location!(),
-                    );
+
+                    match &s_read!(lhs).subtype {
+                        ExpressionEnum::FieldAccess(ref field) => {
+                            let field = lu_dog.exhume_field_access(field).unwrap();
+                            let field = s_read!(field);
+
+                            let expr = lu_dog.exhume_expression(&field.expression).unwrap();
+                            compile_expression(&expr, thonk, context, get_span(&expr, &lu_dog))?;
+
+                            let fat = &field.r65_field_access_target(&lu_dog)[0];
+                            let field_name = match s_read!(fat).subtype {
+                                FieldAccessTargetEnum::EnumField(ref field) => {
+                                    let field = lu_dog.exhume_enum_field(field).unwrap();
+                                    let field = s_read!(field);
+                                    field.name.to_owned()
+                                }
+                                FieldAccessTargetEnum::Field(ref field) => {
+                                    let field = lu_dog.exhume_field(field).unwrap();
+                                    let field = s_read!(field);
+                                    field.name.to_owned()
+                                }
+                                FieldAccessTargetEnum::Function(ref func) => {
+                                    let func = lu_dog.exhume_function(func).unwrap();
+                                    let func = s_read!(func);
+                                    func.name.to_owned()
+                                }
+                            };
+
+                            thonk.add_instruction_with_span(
+                                Instruction::Push(new_ref!(Value, Value::String(field_name))),
+                                span.clone(),
+                                location!(),
+                            );
+
+                            thonk.add_instruction_with_span(
+                                Instruction::FieldWrite,
+                                span,
+                                location!(),
+                            );
+                        }
+                        ExpressionEnum::VariableExpression(ref expr) => {
+                            let expr = lu_dog.exhume_variable_expression(expr).unwrap();
+                            let expr = s_read!(expr);
+                            let offset = context
+                                .get_symbol(&expr.name)
+                                .unwrap_or_else(|| panic!("symbol lookup failed for {}", expr.name))
+                                .number;
+
+                            thonk.add_instruction_with_span(
+                                Instruction::StoreLocal(offset),
+                                span,
+                                location!(),
+                            );
+                        }
+                        _ => {
+                            panic!("In assignment and lhs is not a variable: {lhs:?}")
+                        }
+                    }
                 }
                 BinaryEnum::BooleanOperator(ref op) => {
                     let boolean_operator = lu_dog.exhume_boolean_operator(op).unwrap();
@@ -368,5 +409,41 @@ mod test {
         assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 3);
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &true.into());
+    }
+
+    #[test]
+    fn test_assign_to_struct_field() {
+        let _ = env_logger::builder().is_test(true).try_init();
+        color_backtrace::install();
+
+        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
+
+        let ore = "struct Foo {
+                       bar: int,
+                   }
+                   fn main() -> int {
+                       let foo = Foo { bar: 42 };
+                       foo.bar = 43;
+                       foo.bar
+                   }";
+        let ast = parse_dwarf("test_assign_to_struct_field", ore).unwrap();
+        let ctx = new_lu_dog(
+            "test_assign_to_struct_field".to_owned(),
+            Some((ore.to_owned(), &ast)),
+            &get_dwarf_home(),
+            &sarzak,
+        )
+        .unwrap();
+
+        let program = compile(&ctx).unwrap();
+
+        println!("{program}");
+
+        assert_eq!(program.get_thonk_card(), 1);
+
+        let result = run_vm(&program);
+        assert!(result.is_ok());
+
+        assert_eq!(&*s_read!(result.unwrap()), &43.into());
     }
 }

@@ -515,9 +515,10 @@ impl VM {
                                 // }
                             }
                             Value::Struct(ty_) => {
-                                match s_write!(ty_)
-                                    .set_field_value(s_read!(field).as_ref(), value.clone())
-                                {
+                                match s_write!(ty_).set_field_value(
+                                    s_read!(field).to_inner_string(),
+                                    value.clone(),
+                                ) {
                                     Some(_) => {
                                         if trace {
                                             println!(

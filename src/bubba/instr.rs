@@ -106,7 +106,7 @@ pub enum Instruction {
     /// Write a field value
     ///
     /// The top of the stack is the value to write. The second value on the
-    /// stack is the filed name, and the third value on the stack is the object
+    /// stack is the field name, and the third value on the stack is the object
     /// to which to write.
     ///
     /// ## Stack Effect
