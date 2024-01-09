@@ -145,6 +145,15 @@ pub(in crate::bubba::compiler) fn compile(
                     compile_expression(&rhs, thonk, context, rhs_span)?;
                     thonk.add_instruction_with_span(Instruction::TestEq, span, location!());
                 }
+                ComparisonEnum::GreaterThan(_) => {
+                    compile_expression(&lhs, thonk, context, lhs_span)?;
+                    compile_expression(&rhs, thonk, context, rhs_span)?;
+                    thonk.add_instruction_with_span(
+                        Instruction::TestGreaterThan,
+                        span,
+                        location!(),
+                    );
+                }
                 ComparisonEnum::LessThanOrEqual(_) => {
                     compile_expression(&lhs, thonk, context, lhs_span)?;
                     compile_expression(&rhs, thonk, context, rhs_span)?;
@@ -154,7 +163,7 @@ pub(in crate::bubba::compiler) fn compile(
                         location!(),
                     );
                 }
-                _ => todo!("comparison"),
+                c => todo!("comparison {c:?}"),
             }
         }
         OperatorEnum::Unary(ref id) => {
@@ -445,5 +454,37 @@ mod test {
         assert!(result.is_ok());
 
         assert_eq!(&*s_read!(result.unwrap()), &43.into());
+    }
+
+    #[test]
+    fn test_greater_than() {
+        let _ = env_logger::builder().is_test(true).try_init();
+        color_backtrace::install();
+
+        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
+
+        let ore = "
+                   fn main() -> bool {
+                       5 > 2
+                   }";
+        let ast = parse_dwarf("test_greater_than", ore).unwrap();
+        let ctx = new_lu_dog(
+            "test_greater_than".to_owned(),
+            Some((ore.to_owned(), &ast)),
+            &get_dwarf_home(),
+            &sarzak,
+        )
+        .unwrap();
+
+        let program = compile(&ctx).unwrap();
+
+        println!("{program}");
+
+        assert_eq!(program.get_thonk_card(), 1);
+
+        let result = run_vm(&program);
+        assert!(result.is_ok());
+
+        assert_eq!(&*s_read!(result.unwrap()), &true.into());
     }
 }

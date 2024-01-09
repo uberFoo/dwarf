@@ -268,6 +268,11 @@ pub enum Instruction {
     /// Net effect -1.
     ///
     TestEq,
+    /// Greater Than Operator (>)
+    ///
+    /// ## Stack Effect
+    ///
+    TestGreaterThan,
     /// Compare the top two values on the stack.
     ///
     /// a < b
@@ -384,15 +389,6 @@ impl fmt::Display for Instruction {
                 opcode_style.paint("lc  "),
                 operand_style.paint(s_read!(name).to_string())
             ),
-            Instruction::TestEq => write!(f, "{}", opcode_style.paint("eq  ")),
-            Instruction::TestLessThan => write!(f, "{}", opcode_style.paint("lt  ")),
-            Instruction::TestLessThanOrEqual => write!(f, "{}", opcode_style.paint("lte ")),
-            Instruction::Typecast(name) => write!(
-                f,
-                "{} {}",
-                opcode_style.paint("tc  "),
-                operand_style.paint(s_read!(name).to_string())
-            ),
             Instruction::Multiply => write!(f, "{}", opcode_style.paint("mul ")),
             Instruction::NewList(n) => write!(
                 f,
@@ -435,6 +431,16 @@ impl fmt::Display for Instruction {
                 operand_style.paint(index.to_string())
             ),
             Instruction::Subtract => write!(f, "{}", opcode_style.paint("sub ")),
+            Instruction::TestEq => write!(f, "{}", opcode_style.paint("eq  ")),
+            Instruction::TestGreaterThan => write!(f, "{}", opcode_style.paint("gt  ")),
+            Instruction::TestLessThan => write!(f, "{}", opcode_style.paint("lt  ")),
+            Instruction::TestLessThanOrEqual => write!(f, "{}", opcode_style.paint("lte ")),
+            Instruction::Typecast(name) => write!(
+                f,
+                "{} {}",
+                opcode_style.paint("tc  "),
+                operand_style.paint(s_read!(name).to_string())
+            ),
         }
     }
 }
