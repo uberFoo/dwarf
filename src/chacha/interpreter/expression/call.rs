@@ -413,7 +413,7 @@ pub fn eval(
                     }
                     FORMAT => {
                         debug!("evaluating String::format");
-                        // let mut arg_map = HashMap::default();
+
                         let arg_values = if !args.is_empty() {
                             // The VecDeque is so that I can pop off the args, and then push them
                             // back onto a queue in the same order. What? That doesn't make sense.
@@ -422,63 +422,43 @@ pub fn eval(
 
                             // Gotta do this goofy thing because we don't have a first pointer,
                             // and they aren't in order.
-                            let mut next = args
+                            let next = args
                                 .iter()
-                                .inspect(|a| {
-                                    debug!("arg: {a:?}");
-                                })
                                 .find(|a| s_read!(a).r27c_argument(&s_read!(lu_dog)).is_empty())
                                 .unwrap()
                                 .clone();
 
                             // This is because of the self parameter that is built on in the extruder.
-                            let next_id = s_read!(next).next.unwrap();
-                            next = s_read!(lu_dog).exhume_argument(&next_id).unwrap();
+                            let x = if let Some(next_id) = s_read!(next).next {
+                                let mut next = s_read!(lu_dog).exhume_argument(&next_id).unwrap();
 
-                            // It's not clear what's happening below really. Here's the scoop:
-                            // We iterate over the arguments to the `format` call. For each one
-                            // we evaluate it and store it in a map. And also push it onto vac.
-                            loop {
-                                let expr = s_read!(lu_dog)
-                                    .exhume_expression(&s_read!(next).expression)
-                                    .unwrap();
+                                // We iterate over the arguments to the `format` call. For each one
+                                // we evaluate it and store it in a vac.
+                                loop {
+                                    let expr = s_read!(lu_dog)
+                                        .exhume_expression(&s_read!(next).expression)
+                                        .unwrap();
 
-                                // let source =
-                                //     s_read!(lu_dog).iter_dwarf_source_file().next().unwrap();
-                                // let source = s_read!(source);
-                                // let source = &source.source;
+                                    let value = eval_expression(expr, context, vm)?;
+                                    debug!("value {value:?}");
 
-                                // let value = &s_read!(expr).r11_x_value(&s_read!(lu_dog))[0];
+                                    // This is where the magic happens and we turn the value
+                                    // into a string.
+                                    arg_values.push_back(s_read!(value).to_inner_string());
 
-                                // let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
-                                // let read = s_read!(span);
-                                // let span = read.start as usize..read.end as usize;
-
-                                // let key = source[span].to_owned();
-
-                                let value = eval_expression(expr, context, vm)?;
-                                debug!("value {value:?}");
-
-                                // This is where the magic happens and we turn the value
-                                // into a string.
-                                arg_values.push_back(s_read!(value).to_inner_string());
-
-                                // debug!(
-                                // "insert into arg_map `{}`: `{}`",
-                                // key,
-                                // s_read!(value).to_string()
-                                // );
-                                // arg_map.insert(key, s_read!(value).to_string());
-
-                                let next_id = s_read!(next).next;
-                                if let Some(ref id) = next_id {
-                                    next = s_read!(lu_dog).exhume_argument(id).unwrap();
-                                } else {
-                                    break;
+                                    let next_id = s_read!(next).next;
+                                    if let Some(ref id) = next_id {
+                                        next = s_read!(lu_dog).exhume_argument(id).unwrap();
+                                    } else {
+                                        break;
+                                    }
                                 }
-                            }
 
-                            arg_values
+                                arg_values
+                            } else {
+                                VecDeque::new()
+                            };
+                            x
                         } else {
                             VecDeque::new()
                         };
@@ -507,10 +487,10 @@ pub fn eval(
                                             result.push_str(&value);
                                             current.clear();
                                             state = State::Normal;
-                                        // } else if let Some(value) = arg_map.get(&current) {
-                                        //     result.push_str(&value);
-                                        //     current.clear();
-                                        //     state = State::Normal;
+                                        } else if let Some(value) = context.memory().get(&current) {
+                                            result.push_str(&s_read!(value).to_inner_string());
+                                            current.clear();
+                                            state = State::Normal;
                                         } else {
                                             // 🚧 this is the wrong error
                                             return Err(ChaChaError::NoSuchMethod {
