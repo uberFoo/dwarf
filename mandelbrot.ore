@@ -69,15 +69,16 @@ fn escape_time(c: Complex, limit: int) -> int {
     let z = Complex::zero();
     for i in 1..limit {
         // z.square().add(c);
-        ComplexEx::square(z);
-        ComplexEx::add(z, c);
-        // z = z.square();
-        // z = z.add(c);
-        // z.square_2();
-        // z.add_2(c);
+        // ComplexEx::square(z);
+        // ComplexEx::add(z, c);
+        z = z.square();
+        z = z.add(c);
+        z.square_2();
+        z.add_2(c);
         // Having the RHS of this statement on the lhs of the expression below
         // does not work.
-        let foo = ComplexEx::norm_squared(z);
+        // let foo = ComplexEx::norm_squared(z);
+        let foo = z.norm_squared();
         if foo > 4.0 {
             // if ComplexEx::norm_squared(z) > 4.0 {
             // if z.norm_squared() > 4.0 {

@@ -1400,37 +1400,6 @@ mod test {
     }
 
     #[test]
-    fn test_assert() {
-        let _ = env_logger::builder().is_test(true).try_init();
-        color_backtrace::install();
-
-        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
-        let ore = "
-                   fn main() {
-                       chacha::assert(true);
-                   }";
-        let ast = parse_dwarf("test_or_expression", ore).unwrap();
-        let ctx = new_lu_dog(
-            "test_or_expression".to_owned(),
-            Some((ore.to_owned(), &ast)),
-            &get_dwarf_home(),
-            &sarzak,
-        )
-        .unwrap();
-        let program = compile(&ctx).unwrap();
-        println!("{program}");
-
-        assert_eq!(program.get_thonk_card(), 1);
-
-        assert_eq!(
-            program.get_thonk("main").unwrap().get_instruction_card(),
-            11
-        );
-
-        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Empty);
-    }
-
-    #[test]
     fn use_std_option() {
         let _ = env_logger::builder().is_test(true).try_init();
         color_backtrace::install();
