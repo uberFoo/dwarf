@@ -110,8 +110,7 @@ mod test {
         println!("{program}");
 
         let result = run_vm(&program);
-        dbg!(&result);
         assert!(result.is_ok());
-        assert_eq!(*s_read!(result.unwrap()), Value::Integer(42));
+        assert_eq!(*s_read!(result.unwrap()), 42.into());
     }
 }

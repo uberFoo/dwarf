@@ -156,48 +156,6 @@ pub enum Instruction {
     /// the function. It is patched by the VM before execution.
     ///
     LocalCardinality(RefType<Value>),
-    /// Compare the top two values on the stack.
-    ///
-    /// a == b
-    ///
-    /// Where b is the top of the stack, and a is the next element.
-    ///
-    /// ## Stack Effect
-    ///
-    /// The top two values are consumed and compared, with a boolean value
-    /// pushed as the result.
-    ///
-    /// Net effect -1.
-    ///
-    TestEq,
-    /// Compare the top two values on the stack.
-    ///
-    /// a < b
-    ///
-    /// Where b is the top of the stack, and a is the next element.
-    ///
-    /// ## Stack Effect
-    ///
-    /// The top two values are consumed and compared, with a boolean value
-    /// pushed as the result.
-    ///
-    /// Net effect -1.
-    ///
-    TestLessThan,
-    /// Compare the top two values on the stack.
-    ///
-    /// a <= b
-    ///
-    /// Where b is the top of the stack, and a is the next element.
-    ///
-    /// ## Stack Effect
-    ///
-    /// The top two values are consumed and compared, with a boolean value
-    /// pushed as the result.
-    ///
-    /// Net effect -1.
-    ///
-    TestLessThanOrEqual,
     /// Multiply the top two values on the stack.
     ///
     /// ## Stack Effect
@@ -296,6 +254,51 @@ pub enum Instruction {
     /// ## Stack Effect
     ///
     StoreLocal(usize),
+    /// Compare the top two values on the stack.
+    ///
+    /// a == b
+    ///
+    /// Where b is the top of the stack, and a is the next element.
+    ///
+    /// ## Stack Effect
+    ///
+    /// The top two values are consumed and compared, with a boolean value
+    /// pushed as the result.
+    ///
+    /// Net effect -1.
+    ///
+    TestEq,
+    /// Compare the top two values on the stack.
+    ///
+    /// a < b
+    ///
+    /// Where b is the top of the stack, and a is the next element.
+    ///
+    /// ## Stack Effect
+    ///
+    /// The top two values are consumed and compared, with a boolean value
+    /// pushed as the result.
+    ///
+    /// Net effect -1.
+    ///
+    TestLessThan,
+    /// Compare the top two values on the stack.
+    ///
+    /// a <= b
+    ///
+    /// Where b is the top of the stack, and a is the next element.
+    ///
+    /// ## Stack Effect
+    ///
+    /// The top two values are consumed and compared, with a boolean value
+    /// pushed as the result.
+    ///
+    /// Net effect -1.
+    ///
+    TestLessThanOrEqual,
+    /// Typecast
+    ///
+    Typecast(RefType<Value>),
     /// Exit the function
     ///
     /// The value expressed by this instruction is the value at the top of the
@@ -384,6 +387,12 @@ impl fmt::Display for Instruction {
             Instruction::TestEq => write!(f, "{}", opcode_style.paint("eq  ")),
             Instruction::TestLessThan => write!(f, "{}", opcode_style.paint("lt  ")),
             Instruction::TestLessThanOrEqual => write!(f, "{}", opcode_style.paint("lte ")),
+            Instruction::Typecast(name) => write!(
+                f,
+                "{} {}",
+                opcode_style.paint("tc  "),
+                operand_style.paint(s_read!(name).to_string())
+            ),
             Instruction::Multiply => write!(f, "{}", opcode_style.paint("mul ")),
             Instruction::NewList(n) => write!(
                 f,

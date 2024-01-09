@@ -17,7 +17,7 @@ mod expression;
 
 use expression::{
     block, call, field, for_loop, if_expr, index, list, literal, operator, print, range,
-    struct_expr, variable, xmatch,
+    struct_expr, typecast, variable, xmatch,
 };
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -401,6 +401,7 @@ fn compile_expression(
         ExpressionEnum::StructExpression(ref expr) => {
             struct_expr::compile(expr, thonk, context, span)?
         }
+        ExpressionEnum::TypeCast(ref expr) => typecast::compile(expr, thonk, context, span)?,
         ExpressionEnum::VariableExpression(ref expr) => {
             variable::compile(expr, thonk, context, span)?
         }

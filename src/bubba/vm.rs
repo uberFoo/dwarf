@@ -2,12 +2,14 @@ use std::collections::VecDeque;
 
 use ansi_term::Colour;
 use rustc_hash::FxHashMap as HashMap;
-use sarzak::lu_dog::ValueType;
 use snafu::{location, prelude::*, Location};
 
 use crate::{
     chacha::value::{EnumVariant, TupleEnum, UserStruct},
-    new_ref, s_read, s_write, ChaChaError, DwarfInteger, NewRef, RefType, Span, Value, PATH_SEP,
+    lu_dog::{ValueType, ValueTypeEnum},
+    new_ref, s_read, s_write,
+    sarzak::{ObjectStore as SarzakStore, Ty, MODEL as SARZAK_MODEL},
+    ChaChaError, DwarfInteger, NewRef, RefType, Span, Value, PATH_SEP,
 };
 
 use super::instr::{Instruction, Program};
@@ -49,6 +51,7 @@ pub struct VM {
     program: Vec<Instruction>,
     source_map: Vec<Span>,
     func_map: HashMap<String, (usize, usize)>,
+    sarzak: SarzakStore,
 }
 
 impl VM {
@@ -61,6 +64,7 @@ impl VM {
             program: Vec::new(),
             source_map: Vec::new(),
             func_map: HashMap::default(),
+            sarzak: SarzakStore::from_bincode(SARZAK_MODEL).unwrap(),
         };
 
         let mut tmp_mem: Vec<Instruction> = Vec::new();
@@ -1055,6 +1059,84 @@ impl VM {
                         let a = self.stack.pop().unwrap();
                         self.stack
                             .push(new_ref!(Value, Value::Boolean(s_read!(a).lte(&s_read!(b)))));
+
+                        1
+                    }
+                    Instruction::Typecast(as_ty) => {
+                        let Value::ValueType(as_ty) = &*s_read!(as_ty) else {
+                            return Err(BubbaError::VmPanic {
+                                message: format!(
+                                    "Expected a ValueType, but got: {as_ty:?}.",
+                                    as_ty = s_read!(as_ty)
+                                ),
+                            }
+                            .into());
+                        };
+
+                        let lhs = self.stack.pop().unwrap();
+
+                        let value = match &as_ty.subtype {
+                            ValueTypeEnum::Ty(ref ty) => {
+                                let ty = self.sarzak.exhume_ty(ty).unwrap();
+                                let x = match &*ty.read().unwrap() {
+                                    Ty::Boolean(_) => {
+                                        let value: bool = (&*s_read!(lhs)).try_into().map_err(
+                                            |e: ChaChaError| BubbaError::ValueError {
+                                                source: Box::new(e),
+                                            },
+                                        )?;
+                                        new_ref!(Value, value.into())
+                                    }
+                                    Ty::Float(_) => {
+                                        let value: f64 = (&*s_read!(lhs)).try_into().map_err(
+                                            |e: ChaChaError| BubbaError::ValueError {
+                                                source: Box::new(e),
+                                            },
+                                        )?;
+                                        new_ref!(Value, value.into())
+                                    }
+                                    Ty::Integer(_) => {
+                                        let value: i64 = (&*s_read!(lhs)).try_into().map_err(
+                                            |e: ChaChaError| BubbaError::ValueError {
+                                                source: Box::new(e),
+                                            },
+                                        )?;
+                                        new_ref!(Value, value.into())
+                                    }
+                                    Ty::SString(_) => {
+                                        let value: String = (&*s_read!(lhs)).try_into().map_err(
+                                            |e: ChaChaError| BubbaError::ValueError {
+                                                source: Box::new(e),
+                                            },
+                                        )?;
+                                        new_ref!(Value, value.into())
+                                    }
+                                    Ty::SUuid(_) => {
+                                        let value: uuid::Uuid = (&*s_read!(lhs))
+                                            .try_into()
+                                            .map_err(|e: ChaChaError| BubbaError::ValueError {
+                                                source: Box::new(e),
+                                            })?;
+                                        new_ref!(Value, value.into())
+                                    }
+                                    ref alpha => {
+                                        return Err(BubbaError::VmPanic {
+                                            message: format!("Unexpected type: {alpha:?}.",),
+                                        }
+                                        .into())
+                                    }
+                                };
+                                x
+                            }
+                            ty => {
+                                return Err(BubbaError::VmPanic {
+                                    message: format!("Unexpected type: {ty:?}.",),
+                                }
+                                .into())
+                            }
+                        };
+
+                        self.stack.push(value);
 
                         1
                     }

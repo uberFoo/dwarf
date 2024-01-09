@@ -10,5 +10,6 @@ pub(super) mod operator;
 pub(super) mod print;
 pub(super) mod range;
 pub(super) mod struct_expr;
+pub(super) mod typecast;
 pub(super) mod variable;
 pub(super) mod xmatch;
