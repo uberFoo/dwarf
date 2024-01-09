@@ -16,7 +16,7 @@ use crate::{
 mod expression;
 
 use expression::{
-    block, call, field, for_loop, if_expr, index, list, literal, operator, print, range,
+    block, call, field, for_loop, if_expr, index, list, literal, operator, print, range, ret,
     struct_expr, typecast, variable, xmatch,
 };
 
@@ -408,6 +408,7 @@ fn compile_expression(
         ExpressionEnum::XIf(ref expr) => if_expr::compile(expr, thonk, context)?,
         ExpressionEnum::XMatch(ref expr) => xmatch::compile(expr, thonk, context, span)?,
         ExpressionEnum::XPrint(ref print) => print::compile(print, thonk, context)?,
+        ExpressionEnum::XReturn(ref expr) => ret::compile(expr, thonk, context, span)?,
         missed => {
             panic!("Implement: {:?}", missed);
         }

@@ -18,5 +18,7 @@ pub fn eval(expr: &SarzakStorePtr, context: &mut Context, vm: &mut VM) -> Result
 
     let value = eval_expression(expr, context, vm)?;
     let ty = s_read!(value).get_value_type(&s_read!(context.sarzak_heel()), &s_read!(lu_dog));
+
+    // This is a trick to get return to exit out in the evaluation.
     Err(ChaChaError::Return { value, ty })
 }

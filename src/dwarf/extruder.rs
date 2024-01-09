@@ -1006,6 +1006,7 @@ pub(super) fn inter_statements(
             s_write!(block).statement = Some(s_read!(stmt.0).id);
         }
         last_stmt_uuid = link_statement!(last_stmt_uuid, stmt.0, lu_dog);
+
         value_type = ty;
         span = stmt.1;
     }
@@ -2866,7 +2867,6 @@ pub(super) fn inter_expression(
                     span.id = id;
                     new_ref!(LuDogSpan, span)
                 });
-
                 // update_span_value(&span, &value, location!());
 
                 ((expr, span.clone()), ty)

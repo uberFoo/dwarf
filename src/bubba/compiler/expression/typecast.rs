@@ -2,10 +2,9 @@ use snafu::{location, Location};
 
 use crate::{
     bubba::{
-        compiler::{compile_expression, get_span, BubbaError, CThonk, Context, Result},
+        compiler::{compile_expression, get_span, CThonk, Context, Result},
         instr::Instruction,
     },
-    lu_dog::ValueTypeEnum,
     new_ref, s_read, NewRef, RefType, SarzakStorePtr, Span, Value,
 };
 
