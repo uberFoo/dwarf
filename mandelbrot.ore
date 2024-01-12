@@ -67,22 +67,35 @@ fn pixel_to_point(
 fn escape_time(c: Complex, limit: int) -> int {
     // debugger;
     let z = Complex::zero();
+    // print(z);
+    // print("\n");
     for i in 1..limit {
         // z.square().add(c);
         // ComplexEx::square(z);
         // ComplexEx::add(z, c);
         z = z.square();
+        // print(z);
+        // print("\n");
         z = z.add(c);
+        // print(z);
+        // print("\n");
         z.square_2();
+        // print(z);
+        // print("\n");
         z.add_2(c);
+        // print(z);
+        // print("\n");
         // Having the RHS of this statement on the lhs of the expression below
         // does not work.
         // let foo = ComplexEx::norm_squared(z);
         let foo = z.norm_squared();
+        // print(foo);
+        // print("\n");
         if foo > 4.0 {
             // if ComplexEx::norm_squared(z) > 4.0 {
             // if z.norm_squared() > 4.0 {
             // debugger;
+            // print("returning one\n");
             return i;
             // return Option::<int>::Some(i);
         }
@@ -101,22 +114,22 @@ fn main() {
 
     let iterations = chacha::args()[1];
     // print("iterations {1},  type is {0}\n".format(chacha::typeof(iterations), iterations));
-    print("Total time: {0}s.\n".format(chacha::time(|| {
-        plot(iterations as int);
-    })));
+    // print("Total time: {0}s.\n".format(chacha::time(|| {
+    plot(iterations as int);
+    // })));
 }
 
 fn plot(t: int) {
     let width = 7;
     let height = 2;
-    let width = 21;
-    let height = 5;
-    let width = 42;
-    let height = 10;
-    let width = 84;
-    let height = 20;
-    let width = 168;
-    let height = 40;
+    // let width = 21;
+    // let height = 5;
+    // let width = 42;
+    // let height = 10;
+    // let width = 84;
+    // let height = 20;
+    // let width = 168;
+    // let height = 40;
     let upper_left = Complex { re: -2.5, im: 1.0 };
     let lower_right = Complex { re: 2.0, im: -1.0 };
     // let upper_left = Complex {
@@ -141,6 +154,9 @@ fn plot(t: int) {
     // for t in 0..255 {
     // let t = 1024;
     for row in 0..height {
+        // if row > height {
+        // debugger;
+        // }
         // if row > 1 {
         // debugger;
         // }
@@ -160,11 +176,19 @@ fn do_column(
     upper_left: Complex,
     lower_right: Complex,
 ) {
+    // print("row ");
+    // print(row);
+    // print("\n");
+    // print(width);
     for column in 0..width {
+        // print("col ");
+        // print(column);
+        // print("\n");
         let point = pixel_to_point(width, height, column, row, upper_left, lower_right);
+        // print(point);
         // let time: Option<int> = escape_time(point, time);
         let time = escape_time(point, time);
-
+        // print(time);
         // match time {
         //     Option::<int>::None => print("*"),
         //     Option::<int>::Some(time) => print(" "),
@@ -176,5 +200,5 @@ fn do_column(
             print("*");
         }
     }
-    print("\n");
+    // print("dude\n");
 }

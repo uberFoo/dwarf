@@ -14,10 +14,11 @@ fn main() -> int {
     //     print("Usage: fib <n>\n");
     //     return 0;
     // }
-    let n = chacha::args()[1];
+    let a = chacha::args()[1];
 
-    print("Calculating fibonacci number {0}:\n".format(n));
-    let result = fib2(n as int);
+    // print("Calculating fibonacci number {0}:\n".format(n));
+    print(a);
+    let result = fib2(a as int);
     print(result as string + "\n");
     // chacha::assert_eq(result, 2584);
     result

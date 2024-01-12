@@ -816,7 +816,7 @@ pub fn start_vm(n: DwarfInteger) -> Result<DwarfInteger, Error> {
     program.add_thonk(thonk);
 
     let mut vm = VM::new(&program, &[]);
-    let result = vm.invoke("fib", &[new_ref!(Value, n.into())], false);
+    let result = vm.invoke("fib", &[new_ref!(Value, n.into())]);
 
     // vm.pop_stack();
     // vm.pop_stack();

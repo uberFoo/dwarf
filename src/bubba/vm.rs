@@ -1,6 +1,7 @@
 use std::collections::VecDeque;
 
 use ansi_term::Colour;
+use log::{self, log_enabled, Level::Trace};
 use rustc_hash::FxHashMap as HashMap;
 use snafu::{location, prelude::*, Location};
 
@@ -57,9 +58,14 @@ pub struct VM {
 
 impl VM {
     pub fn new(program: &Program, args: &[RefType<Value>]) -> Self {
+        // println!("{}", program);
         let Some(Value::ValueType(str_ty)) = program.get_symbol("STRING") else {
             panic!("No STRING symbol found.")
         };
+
+        if log_enabled!(target: "vm", Trace) {
+            eprintln!("{program}");
+        }
 
         let mut vm = VM {
             ip: 0,
@@ -94,8 +100,10 @@ impl VM {
             match instr {
                 Instruction::CallDestination(name) => {
                     let name: String = (&*s_read!(name)).try_into().unwrap();
-                    let (ip, _frame_size) =
-                        vm.func_map.get(&name).expect("Unknown function: {name}");
+                    let (ip, _frame_size) = vm
+                        .func_map
+                        .get(&name)
+                        .expect(format!("Unknown function: {name}").as_str());
                     vm.program.push(Instruction::Push(new_ref!(
                         Value,
                         Value::Integer(*ip as DwarfInteger)
@@ -120,12 +128,7 @@ impl VM {
         self.source_map[(self.ip - 1) as usize].to_owned()
     }
 
-    pub fn invoke(
-        &mut self,
-        func_name: &str,
-        args: &[RefType<Value>],
-        trace: bool,
-    ) -> Result<RefType<Value>> {
+    pub fn invoke(&mut self, func_name: &str, args: &[RefType<Value>]) -> Result<RefType<Value>> {
         let (ip, frame_size) = self.func_map.get(func_name).unwrap();
         let frame_size = *frame_size;
 
@@ -142,6 +145,8 @@ impl VM {
         self.fp = frame_size + args.len() + 2;
 
         self.ip = *ip as isize;
+
+        let trace = log_enabled!(target: "vm", Trace);
 
         let result = self.inner_run(args.len(), frame_size, trace);
 
@@ -412,6 +417,12 @@ impl VM {
                     // locals existing between the Thonk name and the fp.
                     Instruction::FetchLocal(index) => {
                         // We gotta index the stack in reverse order.
+                        // dbg!(
+                        // &arity,
+                        // &local_count,
+                        // &index,
+                        // self.fp - arity - local_count + index
+                        // );
                         let value = self.stack[self.fp - arity - local_count + index].clone();
                         self.stack.push(value);
 
@@ -989,11 +1000,18 @@ impl VM {
                     }
                     Instruction::Out(stream) => {
                         let value = self.stack.pop().unwrap();
-                        let value = s_read!(value);
+                        let value = s_read!(value).to_inner_string();
+                        let value = value.replace("\\n", "\n");
 
                         match stream {
-                            0 => println!("{value}"),
-                            1 => eprintln!("{value}"),
+                            0 => {
+                                print!("{}", Colour::Green.paint(format!("{value}")));
+                                std::io::Write::flush(&mut std::io::stdout()).unwrap();
+                            }
+                            1 => {
+                                eprint!("{value}");
+                                std::io::Write::flush(&mut std::io::stdout()).unwrap();
+                            }
                             _ => {
                                 return Err::<RefType<Value>, Error>(
                                     BubbaError::ValueError {
@@ -1218,7 +1236,7 @@ mod tests {
         );
 
         let mut vm = VM::new(&program, &[]);
-        let result = vm.invoke("test", &[], true);
+        let result = vm.invoke("test", &[]);
         println!("{:?}", result);
         println!("{:?}", vm);
 
@@ -1241,7 +1259,7 @@ mod tests {
         );
 
         let mut vm = VM::new(&program, &[]);
-        let result = vm.invoke("test", &[], true);
+        let result = vm.invoke("test", &[]);
         println!("{:?}", result);
         println!("{:?}", vm);
 
@@ -1274,7 +1292,7 @@ mod tests {
         );
 
         let mut vm = VM::new(&program, &[]);
-        let result = vm.invoke("test", &[], true);
+        let result = vm.invoke("test", &[]);
         println!("{:?}", result);
         println!("{:?}", vm);
 
@@ -1307,7 +1325,7 @@ mod tests {
         );
 
         let mut vm = VM::new(&program, &[]);
-        let result = vm.invoke("test", &[], true);
+        let result = vm.invoke("test", &[]);
         println!("{:?}", result);
         println!("{:?}", vm);
 
@@ -1339,7 +1357,7 @@ mod tests {
         );
 
         let mut vm = VM::new(&program, &[]);
-        let result = vm.invoke("test", &[], true);
+        let result = vm.invoke("test", &[]);
         println!("{:?}", result);
         println!("{:?}", vm);
 
@@ -1370,7 +1388,7 @@ mod tests {
         );
 
         let mut vm = VM::new(&program, &[]);
-        let result = vm.invoke("test", &[], true);
+        let result = vm.invoke("test", &[]);
         println!("{:?}", result);
         println!("{:?}", vm);
 
@@ -1400,7 +1418,7 @@ mod tests {
         );
 
         let mut vm = VM::new(&program, &[]);
-        let result = vm.invoke("test", &[], true);
+        let result = vm.invoke("test", &[]);
         println!("{:?}", result);
         println!("{:?}", vm);
 
@@ -1430,7 +1448,7 @@ mod tests {
         );
 
         let mut vm = VM::new(&program, &[]);
-        let result = vm.invoke("test", &[], true);
+        let result = vm.invoke("test", &[]);
         println!("{:?}", result);
         println!("{:?}", vm);
 
@@ -1473,7 +1491,7 @@ mod tests {
         );
 
         let mut vm = VM::new(&program, &[]);
-        let result = vm.invoke("test", &[], true);
+        let result = vm.invoke("test", &[]);
         println!("{:?}", result);
         println!("{:?}", vm);
 
@@ -1507,7 +1525,7 @@ mod tests {
 
         let mut vm = VM::new(&program, &[]);
 
-        let result = vm.invoke("test", &[], true);
+        let result = vm.invoke("test", &[]);
         println!("{:?}", result);
         println!("{:?}", vm);
 
@@ -1594,7 +1612,7 @@ mod tests {
 
         let mut vm = VM::new(&program, &[]);
 
-        let result = vm.invoke("test", &[], true);
+        let result = vm.invoke("test", &[]);
         println!("{:?}", result);
         println!("{:?}", vm);
 

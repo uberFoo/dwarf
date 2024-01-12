@@ -269,7 +269,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .collect();
 
             let mut vm = VM::new(&program, &args);
-            vm.invoke("main", &[], false)?;
+            vm.invoke("main", &[])?;
             return Ok(());
         }
 

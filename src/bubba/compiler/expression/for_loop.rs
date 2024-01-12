@@ -31,7 +31,7 @@ pub(in crate::bubba::compiler) fn compile(
     let list_span = get_span(&list, &lu_dog);
     compile_expression(&list, thonk, context, list_span)?;
 
-    context.push_symbol_table();
+    context.push_child_symbol_table();
     let mut inner_thonk = CThonk::new(format!("for_{}", ident));
 
     let get_integer = || -> RefType<ValueType> {
@@ -46,8 +46,13 @@ pub(in crate::bubba::compiler) fn compile(
         unreachable!();
     };
 
-    inner_thonk.increment_frame_size();
-    let index = context.insert_symbol(ident, s_read!(get_integer()).clone());
+    let index = match context.insert_symbol(ident, s_read!(get_integer()).clone()) {
+        (true, index) => {
+            inner_thonk.increment_frame_size();
+            index
+        }
+        (false, index) => index,
+    };
 
     compile_expression(&body, &mut inner_thonk, context, body_span)?;
     let fp = inner_thonk.get_frame_size();
@@ -87,4 +92,160 @@ pub(in crate::bubba::compiler) fn compile(
     context.pop_symbol_table();
 
     Ok(())
+}
+
+#[cfg(test)]
+mod test {
+
+    use crate::{
+        bubba::compiler::{
+            test::{get_dwarf_home, run_vm},
+            *,
+        },
+        dwarf::{new_lu_dog, parse_dwarf},
+        sarzak::MODEL as SARZAK_MODEL,
+    };
+    #[test]
+    fn test_for_in_range() {
+        let _ = env_logger::builder().is_test(true).try_init();
+        color_backtrace::install();
+
+        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
+        let ore = "fn main() -> int {
+                       let x = 0;
+                       for i in 0..10 {
+                           x = x + i;
+                       }
+                       x
+                   }";
+        let ast = parse_dwarf("test_for_in_range", ore).unwrap();
+        let ctx = new_lu_dog(
+            "test_for_in_range".to_owned(),
+            Some((ore.to_owned(), &ast)),
+            &get_dwarf_home(),
+            &sarzak,
+        )
+        .unwrap();
+
+        let program = compile(&ctx).unwrap();
+
+        println!("{program}");
+
+        assert_eq!(program.get_thonk_card(), 1);
+        assert_eq!(
+            program.get_thonk("main").unwrap().get_instruction_card(),
+            19
+        );
+
+        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(45));
+    }
+
+    #[test]
+    fn nested_for_loop() {
+        let _ = env_logger::builder().is_test(true).try_init();
+        color_backtrace::install();
+
+        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
+        let ore = "fn main() -> int {
+                       let x = 0;
+                       for i in 0..10 {
+                           for j in 0..10 {
+                               x = x + i + j;
+                           }
+                       }
+                       x
+                   }";
+        let ast = parse_dwarf("nested_for_loop", ore).unwrap();
+        let ctx = new_lu_dog(
+            "nested_for_loop".to_owned(),
+            Some((ore.to_owned(), &ast)),
+            &get_dwarf_home(),
+            &sarzak,
+        )
+        .unwrap();
+
+        let program = compile(&ctx).unwrap();
+
+        println!("{program}");
+
+        assert_eq!(program.get_thonk_card(), 1);
+        assert_eq!(
+            program.get_thonk("main").unwrap().get_instruction_card(),
+            32
+        );
+
+        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(900));
+    }
+
+    #[test]
+    fn for_loop_variable() {
+        let _ = env_logger::builder().is_test(true).try_init();
+        color_backtrace::install();
+
+        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
+        let ore = "fn main() -> int {
+                       let max = 10;
+                       let x = 0;
+                       for i in 0..max {
+                           x = x + i;
+                       }
+                       x
+                   }";
+        let ast = parse_dwarf("for_loop_variable", ore).unwrap();
+        let ctx = new_lu_dog(
+            "for_loop_variable".to_owned(),
+            Some((ore.to_owned(), &ast)),
+            &get_dwarf_home(),
+            &sarzak,
+        )
+        .unwrap();
+
+        let program = compile(&ctx).unwrap();
+
+        println!("{program}");
+
+        assert_eq!(program.get_thonk_card(), 1);
+        assert_eq!(
+            program.get_thonk("main").unwrap().get_instruction_card(),
+            21
+        );
+
+        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(45));
+    }
+
+    #[test]
+    fn test_for_loop_iterator_param() {
+        let _ = env_logger::builder().is_test(true).try_init();
+        color_backtrace::install();
+
+        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
+        let ore = "fn add(x: int) -> int {
+                       let accum = 0;
+                       for i in 0..x {
+                            accum = accum + i;
+                       }
+                       accum
+                   }
+                   fn main() -> int {
+                    let x = 10;
+                       add(x)
+                   }";
+        let ast = parse_dwarf("test_for_loop_iterator_param", ore).unwrap();
+        let ctx = new_lu_dog(
+            "test_for_loop_iterator_param".to_owned(),
+            Some((ore.to_owned(), &ast)),
+            &get_dwarf_home(),
+            &sarzak,
+        )
+        .unwrap();
+
+        let program = compile(&ctx).unwrap();
+
+        println!("{program}");
+
+        assert_eq!(program.get_thonk_card(), 2);
+        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 7);
+
+        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(45));
+    }
 }

@@ -1338,6 +1338,8 @@ impl std::ops::Mul for Value {
     fn mul(self, other: Self) -> Self::Output {
         match (self, other) {
             (Value::Float(a), Value::Float(b)) => Value::Float(a * b),
+            (Value::Float(a), Value::Integer(b)) => Value::Float(a * b as DwarfFloat),
+            (Value::Integer(a), Value::Float(b)) => Value::Float(a as DwarfFloat * b),
             (Value::Integer(a), Value::Integer(b)) => Value::Integer(a * b),
             (Value::Empty, Value::Empty) => Value::Empty,
             (a, b) => Value::Error(Box::new(ChaChaError::Multiplication {

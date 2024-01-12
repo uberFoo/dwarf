@@ -506,8 +506,11 @@ impl Program {
 
 impl fmt::Display for Program {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let mut offset = 0;
         for (name, thonk) in self.thonks.iter() {
-            writeln!(f, "{name} ({}):\n{thonk}", thonk.get_frame_size())?;
+            writeln!(f, "{name} ({}):", thonk.get_frame_size())?;
+            thonk.print_in_program(offset, f)?;
+            offset += thonk.get_instruction_card();
         }
         Ok(())
     }
@@ -552,6 +555,13 @@ impl Thonk {
     #[inline]
     pub(crate) fn get_frame_size(&self) -> usize {
         self.frame_size
+    }
+
+    fn print_in_program(&self, start_addr: usize, f: &mut fmt::Formatter) -> fmt::Result {
+        for (i, instr) in self.instructions.iter().enumerate() {
+            writeln!(f, "{:08x}:\t {instr}", start_addr + i)?;
+        }
+        Ok(())
     }
 }
 

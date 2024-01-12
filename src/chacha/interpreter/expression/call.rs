@@ -732,7 +732,7 @@ pub fn eval(
                     NORM_SQUARED => {
                         let value = arg_values.pop_front().unwrap().0;
                         // 🚧 It would be neat to turn the tracing on with a flag.
-                        let result = vm.invoke("norm_squared", &[value], false);
+                        let result = vm.invoke("norm_squared", &[value]);
 
                         context.increment_expression_count(2);
 
@@ -740,7 +740,7 @@ pub fn eval(
                     }
                     SQUARE => {
                         let value = arg_values.pop_front().unwrap().0;
-                        let result = vm.invoke("square", &[value], false);
+                        let result = vm.invoke("square", &[value]);
 
                         context.increment_expression_count(5);
 
@@ -749,7 +749,7 @@ pub fn eval(
                     ADD => {
                         let lhs = arg_values.pop_front().unwrap().0;
                         let rhs = arg_values.pop_front().unwrap().0;
-                        let result = vm.invoke("add", &[lhs, rhs], false);
+                        let result = vm.invoke("add", &[lhs, rhs]);
 
                         context.increment_expression_count(2);
 

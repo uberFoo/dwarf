@@ -5,7 +5,7 @@ use crate::{
         compiler::{compile_expression, get_span, CThonk, Context, Result},
         instr::Instruction,
     },
-    keywords::{ARGS, ASSERT, ASSERT_EQ, CHACHA},
+    keywords::{ARGS, ASSERT, ASSERT_EQ, CHACHA, FORMAT},
     lu_dog::{Call, CallEnum, Expression},
     new_ref, s_read, NewRef, RefType, SarzakStorePtr, Span, Value,
 };
@@ -90,62 +90,24 @@ fn compile_function_call(
     let lu_dog = context.lu_dog_heel();
     let lu_dog = s_read!(lu_dog);
 
-    let func = lu_dog.exhume_function_id_by_name(name).unwrap();
-    let func = lu_dog.exhume_function(&func).unwrap();
-    let func = s_read!(func);
-    let params = func.r13_parameter(&lu_dog);
+    match name {
+        FORMAT => {}
+        _ => {
+            if let Some(ref expr) = s_read!(call).expression {
+                let expr = lu_dog.exhume_expression(expr).unwrap();
+                let span = get_span(&expr, &lu_dog);
+                // Evaluate the LHS to get at the underlying value/instance.
+                compile_expression(&expr, thonk, context, span)?;
+            };
 
-    // I need to iterate over the parameters to get the name.
-    let params = if !params.is_empty() {
-        let mut params = Vec::with_capacity(params.len());
-        let mut next = func
-            .r13_parameter(&lu_dog)
-            .iter()
-            .find(|p| s_read!(p).r14c_parameter(&lu_dog).is_empty())
-            .unwrap()
-            .clone();
-
-        loop {
-            // Apparently I'm being clever. I don't typecheck against an actual
-            // type associated with the parameter. No, I am looking up the variable
-            // associated with the parameter and using it's type. I guess that's cool,
-            // but it's tricky if you aren't aware.
-            let txen = next.clone();
-            let txen = s_read!(txen);
-            let var = s_read!(txen.r12_variable(&lu_dog)[0]).clone();
-            let value = s_read!(var.r11_x_value(&lu_dog)[0]).clone();
-            let ty = s_read!(value.r24_value_type(&lu_dog)[0]).clone();
-            params.push((var.name.clone(), ty));
-
-            let next_id = { txen.next };
-            if let Some(ref id) = next_id {
-                next = lu_dog.exhume_parameter(id).unwrap();
-            } else {
-                break;
+            for expr in args {
+                let span = get_span(expr, &lu_dog);
+                compile_expression(expr, thonk, context, span)?;
             }
+
+            thonk.add_instruction(Instruction::Call(args.len()), location!());
         }
-
-        params
-    } else {
-        Vec::new()
-    };
-
-    if let Some(ref expr) = s_read!(call).expression {
-        let expr = lu_dog.exhume_expression(expr).unwrap();
-        let span = get_span(&expr, &lu_dog);
-        // Evaluate the LHS to get at the underlying value/instance.
-        compile_expression(&expr, thonk, context, span)?;
-    };
-
-    for ((name, ty), expr) in params.into_iter().zip(args) {
-        let span = get_span(expr, &lu_dog);
-        compile_expression(expr, thonk, context, span)?;
-        // 🚧 Why do I not increment the frame size?
-        context.insert_symbol(name, ty);
-        thonk.increment_frame_size();
     }
-
-    thonk.add_instruction(Instruction::Call(args.len()), location!());
 
     Ok(())
 }
@@ -171,51 +133,9 @@ fn compile_method_call(
         context.method_name = None;
     };
 
-    let func = lu_dog.exhume_function_id_by_name(&name).unwrap();
-    let func = lu_dog.exhume_function(&func).unwrap();
-    let func = s_read!(func);
-    let params = func.r13_parameter(&lu_dog);
-
-    // I need to iterate over the parameters to get the name.
-    let params = if !params.is_empty() {
-        let mut params = Vec::with_capacity(params.len());
-        let mut next = func
-            .r13_parameter(&lu_dog)
-            .iter()
-            .find(|p| s_read!(p).r14c_parameter(&lu_dog).is_empty())
-            .unwrap()
-            .clone();
-
-        loop {
-            // Apparently I'm being clever. I don't typecheck against an actual
-            // type associated with the parameter. No, I am looking up the variable
-            // associated with the parameter and using it's type. I guess that's cool,
-            // but it's tricky if you aren't aware.
-            let txen = next.clone();
-            let txen = s_read!(txen);
-            let var = s_read!(txen.r12_variable(&lu_dog)[0]).clone();
-            let value = s_read!(var.r11_x_value(&lu_dog)[0]).clone();
-            let ty = s_read!(value.r24_value_type(&lu_dog)[0]).clone();
-            params.push((var.name.clone(), ty));
-
-            let next_id = { txen.next };
-            if let Some(ref id) = next_id {
-                next = lu_dog.exhume_parameter(id).unwrap();
-            } else {
-                break;
-            }
-        }
-
-        params
-    } else {
-        Vec::new()
-    };
-
-    for ((name, ty), expr) in params.into_iter().zip(args) {
+    for expr in args {
         let span = get_span(expr, &lu_dog);
         compile_expression(expr, thonk, context, span)?;
-        context.insert_symbol(name, ty);
-        thonk.increment_frame_size();
     }
 
     thonk.add_instruction(Instruction::Call(args.len()), location!());
@@ -327,51 +247,9 @@ fn compile_static_method_call(
             // function.
             thonk.add_instruction(Instruction::LocalCardinality(name), location!());
 
-            let func = lu_dog.exhume_function_id_by_name(&func).unwrap();
-            let func = lu_dog.exhume_function(&func).unwrap();
-            let func = s_read!(func);
-            let params = func.r13_parameter(&lu_dog);
-
-            // I need to iterate over the parameters to get the name.
-            let params = if !params.is_empty() {
-                let mut params = Vec::with_capacity(params.len());
-                let mut next = func
-                    .r13_parameter(&lu_dog)
-                    .iter()
-                    .find(|p| s_read!(p).r14c_parameter(&lu_dog).is_empty())
-                    .unwrap()
-                    .clone();
-
-                loop {
-                    // Apparently I'm being clever. I don't typecheck against an actual
-                    // type associated with the parameter. No, I am looking up the variable
-                    // associated with the parameter and using it's type. I guess that's cool,
-                    // but it's tricky if you aren't aware.
-                    let txen = next.clone();
-                    let txen = s_read!(txen);
-                    let var = s_read!(txen.r12_variable(&lu_dog)[0]).clone();
-                    let value = s_read!(var.r11_x_value(&lu_dog)[0]).clone();
-                    let ty = s_read!(value.r24_value_type(&lu_dog)[0]).clone();
-                    params.push((var.name.clone(), ty));
-
-                    let next_id = { txen.next };
-                    if let Some(ref id) = next_id {
-                        next = lu_dog.exhume_parameter(id).unwrap();
-                    } else {
-                        break;
-                    }
-                }
-
-                params
-            } else {
-                Vec::new()
-            };
-
-            for ((name, ty), expr) in params.into_iter().zip(args) {
+            for expr in args {
                 let span = get_span(expr, &lu_dog);
                 compile_expression(expr, thonk, context, span)?;
-                context.insert_symbol(name, ty);
-                thonk.increment_frame_size();
             }
 
             thonk.add_instruction(Instruction::Call(args.len()), location!());
@@ -391,6 +269,76 @@ mod test {
         dwarf::{new_lu_dog, parse_dwarf},
         sarzak::MODEL as SARZAK_MODEL,
     };
+
+    // #[test]
+    fn string_format_locals() {
+        let _ = env_logger::builder().is_test(true).try_init();
+        color_backtrace::install();
+
+        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
+        let ore = "
+                   fn main() -> string {
+                         let a = 1;
+                         let b = 2;
+                         let c = 3;
+                         \"{a} {b} {c}\".format()
+                   }";
+        let ast = parse_dwarf("test_or_expression", ore).unwrap();
+        let ctx = new_lu_dog(
+            "test_or_expression".to_owned(),
+            Some((ore.to_owned(), &ast)),
+            &get_dwarf_home(),
+            &sarzak,
+        )
+        .unwrap();
+        let program = compile(&ctx).unwrap();
+        println!("{program}");
+
+        assert_eq!(program.get_thonk_card(), 1);
+
+        assert_eq!(
+            program.get_thonk("main").unwrap().get_instruction_card(),
+            11
+        );
+
+        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &"test 1 2 3".into());
+    }
+
+    // #[test]
+    fn string_format_indices() {
+        let _ = env_logger::builder().is_test(true).try_init();
+        color_backtrace::install();
+
+        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
+        let ore = "
+                   fn main() -> string {
+                       \"test {0} {1} {2} {3} {4} {5} {6} {7} {8} {9}\".format(
+                           0, 1, 2, 3, 4, 5, 6, 7, 8, 9
+                       )
+                   }";
+        let ast = parse_dwarf("test_or_expression", ore).unwrap();
+        let ctx = new_lu_dog(
+            "test_or_expression".to_owned(),
+            Some((ore.to_owned(), &ast)),
+            &get_dwarf_home(),
+            &sarzak,
+        )
+        .unwrap();
+        let program = compile(&ctx).unwrap();
+        println!("{program}");
+
+        assert_eq!(program.get_thonk_card(), 1);
+
+        assert_eq!(
+            program.get_thonk("main").unwrap().get_instruction_card(),
+            11
+        );
+
+        assert_eq!(
+            &*s_read!(run_vm(&program).unwrap()),
+            &"test 0 1 2 3 4 5 6 7 8 9".into()
+        );
+    }
 
     #[test]
     fn test_assert() {

@@ -34,6 +34,7 @@ pub(crate) enum BubbaError {
 
 type Result<T, E = Error> = std::result::Result<T, E>;
 
+#[derive(Debug)]
 struct CThonk {
     inner: Thonk,
     returned: bool,
@@ -127,6 +128,8 @@ impl SymbolTable {
 
     fn insert(&mut self, name: String, ty: ValueType) -> usize {
         let number = self.count();
+        log::debug!(target: "instr", "{}: {name}: {number}", ERR_CLR.paint("symbol insert"));
+
         self.map.insert(
             name,
             Symbol {
@@ -171,6 +174,10 @@ impl<'a> Context<'a> {
     }
 
     fn push_symbol_table(&mut self) {
+        self.symbol_tables.push(SymbolTable::new(0));
+    }
+
+    fn push_child_symbol_table(&mut self) {
         let start = self.symbol_tables.last().unwrap().count();
         self.symbol_tables.push(SymbolTable::new(start));
     }
@@ -179,12 +186,12 @@ impl<'a> Context<'a> {
         self.symbol_tables.pop();
     }
 
-    fn insert_symbol(&mut self, name: String, ty: ValueType) -> usize {
+    fn insert_symbol(&mut self, name: String, ty: ValueType) -> (bool, usize) {
         match self.get_symbol(name.as_str()) {
-            Some(value) => value.number,
+            Some(value) => (false, value.number),
             None => {
                 let table = self.symbol_tables.last_mut().unwrap();
-                table.insert(name, ty)
+                (true, table.insert(name, ty))
             }
         }
     }
@@ -221,12 +228,48 @@ pub fn compile(context: &ExtruderContext) -> Result<Program> {
 }
 
 fn compile_function(func: &RefType<Function>, context: &mut Context) -> Result<CThonk> {
-    log::debug!(target: "instr", "{}: {}:{}:{}", POP_CLR.paint("compile_function"), file!(), line!(), column!());
-
     let lu_dog = context.lu_dog_heel();
     let lu_dog = s_read!(lu_dog);
 
     let func = s_read!(func);
+
+    log::debug!(target: "instr", "{}: {}\n\t-->{}:{}:{}", POP_CLR.paint("compile_function"), func.name, file!(), line!(), column!());
+
+    context.push_symbol_table();
+
+    let params = func.r13_parameter(&lu_dog);
+
+    // I need to iterate over the parameters to get the name.
+    if !params.is_empty() {
+        let mut next = func
+            .r13_parameter(&lu_dog)
+            .iter()
+            .find(|p| s_read!(p).r14c_parameter(&lu_dog).is_empty())
+            .unwrap()
+            .clone();
+
+        loop {
+            // Apparently I'm being clever. I don't typecheck against an actual
+            // type associated with the parameter. No, I am looking up the variable
+            // associated with the parameter and using it's type. I guess that's cool,
+            // but it's tricky if you aren't aware.
+            let txen = next.clone();
+            let txen = s_read!(txen);
+            let var = s_read!(txen.r12_variable(&lu_dog)[0]).clone();
+            let value = s_read!(var.r11_x_value(&lu_dog)[0]).clone();
+            let ty = s_read!(value.r24_value_type(&lu_dog)[0]).clone();
+
+            context.insert_symbol(var.name.clone(), ty);
+
+            let next_id = { txen.next };
+            if let Some(ref id) = next_id {
+                next = lu_dog.exhume_parameter(id).unwrap();
+            } else {
+                break;
+            }
+        }
+    }
+
     let ty_name = if let Some(i_block) = func.r9_implementation_block(&lu_dog).first() {
         let i_block = s_read!(i_block);
         if let Some(woog_struct) = i_block.r8_woog_struct(&lu_dog).first() {
@@ -239,8 +282,6 @@ fn compile_function(func: &RefType<Function>, context: &mut Context) -> Result<C
     } else {
         "".to_owned()
     };
-
-    // context.push_symbol_table();
 
     let (name, incr_fs) = if ty_name.is_empty() {
         (func.name.clone(), false)
@@ -320,7 +361,7 @@ fn compile_function(func: &RefType<Function>, context: &mut Context) -> Result<C
         }
     };
 
-    // context.pop_symbol_table();
+    context.pop_symbol_table();
 
     Ok(thonk)
 }
@@ -357,8 +398,13 @@ fn compile_statement(
             let ty = s_read!(value.r24_value_type(&lu_dog)[0]).clone();
 
             let name = var.name;
-            let offset = context.insert_symbol(name.clone(), ty);
-            thonk.increment_frame_size();
+            let offset = match context.insert_symbol(name.clone(), ty) {
+                (true, index) => {
+                    thonk.increment_frame_size();
+                    index
+                }
+                (false, index) => index,
+            };
 
             thonk.add_instruction(Instruction::StoreLocal(offset), location!());
         }
@@ -369,6 +415,7 @@ fn compile_statement(
             let span = get_span(&expr, &lu_dog);
             compile_expression(&expr, thonk, context, span)?;
 
+            // 🚧 This is incorrect. We should only return if we are in an outer scope.
             thonk.add_instruction(Instruction::Return, location!());
             thonk.returned = true;
         }
@@ -388,6 +435,7 @@ fn compile_expression(
     match &s_read!(expression).subtype {
         ExpressionEnum::Block(ref block) => block::compile(block, thonk, context)?,
         ExpressionEnum::Call(ref call) => call::compile(call, thonk, context, span)?,
+        ExpressionEnum::Debugger(_) => {}
         ExpressionEnum::FieldAccess(ref field) => {
             field::compile_field_access(field, thonk, context, span)?
         }
@@ -460,7 +508,7 @@ mod test {
 
     pub(super) fn run_vm(program: &Program) -> Result<RefType<Value>, Error> {
         let mut vm = VM::new(program, &[]);
-        vm.invoke("main", &[], true)
+        vm.invoke("main", &[])
     }
 
     pub(super) fn run_vm_with_args(
@@ -468,7 +516,7 @@ mod test {
         args: &[RefType<Value>],
     ) -> Result<RefType<Value>, Error> {
         let mut vm = VM::new(program, args);
-        vm.invoke("main", &[], true)
+        vm.invoke("main", &[])
     }
 
     #[test]
@@ -734,203 +782,6 @@ mod test {
         assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 2);
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Boolean(false));
-    }
-
-    #[test]
-    fn test_for_in_range() {
-        let _ = env_logger::builder().is_test(true).try_init();
-        color_backtrace::install();
-
-        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
-        let ore = "fn main() -> int {
-                       let x = 0;
-                       for i in 0..10 {
-                           x = x + i;
-                       }
-                       x
-                   }";
-        let ast = parse_dwarf("test_for_in_range", ore).unwrap();
-        let ctx = new_lu_dog(
-            "test_for_in_range".to_owned(),
-            Some((ore.to_owned(), &ast)),
-            &get_dwarf_home(),
-            &sarzak,
-        )
-        .unwrap();
-
-        let program = compile(&ctx).unwrap();
-
-        println!("{program}");
-
-        assert_eq!(program.get_thonk_card(), 1);
-        assert_eq!(
-            program.get_thonk("main").unwrap().get_instruction_card(),
-            19
-        );
-
-        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(45));
-    }
-
-    #[test]
-    fn nested_for_loop() {
-        let _ = env_logger::builder().is_test(true).try_init();
-        color_backtrace::install();
-
-        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
-        let ore = "fn main() -> int {
-                       let x = 0;
-                       for i in 0..10 {
-                           for j in 0..10 {
-                               x = x + i + j;
-                           }
-                       }
-                       x
-                   }";
-        let ast = parse_dwarf("nested_for_loop", ore).unwrap();
-        let ctx = new_lu_dog(
-            "nested_for_loop".to_owned(),
-            Some((ore.to_owned(), &ast)),
-            &get_dwarf_home(),
-            &sarzak,
-        )
-        .unwrap();
-
-        let program = compile(&ctx).unwrap();
-
-        println!("{program}");
-
-        assert_eq!(program.get_thonk_card(), 1);
-        assert_eq!(
-            program.get_thonk("main").unwrap().get_instruction_card(),
-            32
-        );
-
-        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(900));
-    }
-
-    #[test]
-    fn if_expression_true_arm() {
-        let _ = env_logger::builder().is_test(true).try_init();
-        color_backtrace::install();
-
-        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
-        let ore = "fn main() -> int {
-                       if true {
-                           1
-                       } else {
-                           2
-                       }
-                   }";
-        let ast = parse_dwarf("if_expression", ore).unwrap();
-        let ctx = new_lu_dog(
-            "if_expression".to_owned(),
-            Some((ore.to_owned(), &ast)),
-            &get_dwarf_home(),
-            &sarzak,
-        )
-        .unwrap();
-
-        let program = compile(&ctx).unwrap();
-
-        println!("{program}");
-
-        assert_eq!(program.get_thonk_card(), 1);
-
-        assert_eq!(
-            program.get_thonk("main").unwrap().get_instruction_card(),
-            10
-        );
-
-        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(1));
-    }
-
-    #[test]
-    fn if_expression_false_arm() {
-        let _ = env_logger::builder().is_test(true).try_init();
-        color_backtrace::install();
-
-        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
-        let ore = "fn main() -> int {
-                       if false {
-                           1
-                       } else {
-                           2
-                       }
-                   }";
-        let ast = parse_dwarf("if_expression_else_arm", ore).unwrap();
-        let ctx = new_lu_dog(
-            "if_expression_else_arm".to_owned(),
-            Some((ore.to_owned(), &ast)),
-            &get_dwarf_home(),
-            &sarzak,
-        )
-        .unwrap();
-
-        let program = compile(&ctx).unwrap();
-
-        println!("{program}");
-
-        assert_eq!(program.get_thonk_card(), 1);
-
-        assert_eq!(
-            program.get_thonk("main").unwrap().get_instruction_card(),
-            10
-        );
-
-        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(2));
-    }
-
-    #[test]
-    fn if_expression_complex() {
-        let _ = env_logger::builder().is_test(true).try_init();
-        color_backtrace::install();
-
-        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
-        let ore = "fn main() -> int {
-                       let x = 0;
-                       if 1 == 1 {
-                           print(\"true\");
-                            if 0 == 1 {
-                                print(\"false\");
-                                x = 3
-                            } else {
-                                print(\"true\");
-                                x = 10;
-                                for i in 0..9 {
-                                    x = x - 1;
-                                }
-                                print(\"past one\");
-                            };
-                       } else {
-                           for i in 0..10 {
-                               x = x + i;
-                           }
-                           print(\"false\");
-                           x = 2;
-                       };
-
-                       x
-                   }";
-        let ast = parse_dwarf("if_expression_complex_condition", ore).unwrap();
-        let ctx = new_lu_dog(
-            "if_expression_complex_condition".to_owned(),
-            Some((ore.to_owned(), &ast)),
-            &get_dwarf_home(),
-            &sarzak,
-        )
-        .unwrap();
-
-        let program = compile(&ctx).unwrap();
-        println!("{program}");
-
-        assert_eq!(program.get_thonk_card(), 1);
-
-        assert_eq!(
-            program.get_thonk("main").unwrap().get_instruction_card(),
-            65
-        );
-
-        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(1));
     }
 
     #[test]
@@ -1450,5 +1301,46 @@ mod test {
         let run = run_vm(&program);
         assert!(run.is_ok());
         assert_eq!(&*s_read!(run.unwrap()), &Value::Boolean(true));
+    }
+
+    #[test]
+    fn test_locals_and_params() {
+        let _ = env_logger::builder().is_test(true).try_init();
+        color_backtrace::install();
+
+        let ore = "
+                   fn main() -> int {
+                       let x = 1;
+                       let y = 2;
+                       let z = 3;
+                       foo(x, y, z)
+                   }
+                   fn foo(a: int, b: int, c: int) -> int {
+                       let z = 42;
+                       let x = a + b;
+                       let y = x + c;
+                       y
+                   }";
+        let ast = parse_dwarf("test_locals_and_params", ore).unwrap();
+        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
+        let ctx = new_lu_dog(
+            "test_locals_and_params".to_owned(),
+            Some((ore.to_owned(), &ast)),
+            &get_dwarf_home(),
+            &sarzak,
+        )
+        .unwrap();
+        let program = compile(&ctx).unwrap();
+        println!("{program}");
+        assert_eq!(program.get_thonk_card(), 2);
+
+        assert_eq!(
+            program.get_thonk("main").unwrap().get_instruction_card(),
+            13
+        );
+        assert_eq!(program.get_thonk("foo").unwrap().get_instruction_card(), 12);
+        let run = run_vm(&program);
+        assert!(run.is_ok());
+        assert_eq!(&*s_read!(run.unwrap()), &Value::Integer(6));
     }
 }

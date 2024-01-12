@@ -34,7 +34,7 @@ pub(in crate::bubba::compiler) fn compile(
         log::debug!(target: "instr", "{}:{}:{}", file!(), line!(), column!());
 
         // We push this up here because of the pattern matching needs it's own context.
-        context.push_symbol_table();
+        context.push_child_symbol_table();
 
         let pattern = s_read!(pattern);
         let match_expr = pattern.r87_expression(&lu_dog)[0].clone();
@@ -81,9 +81,15 @@ pub(in crate::bubba::compiler) fn compile(
                                     let value = s_read!(expr).r11_x_value(&lu_dog)[0].clone();
                                     let ty = s_read!(value).r24_value_type(&lu_dog)[0].clone();
 
-                                    let idx = context
-                                        .insert_symbol(var.name.clone(), s_read!(ty).clone());
-                                    thonk.increment_frame_size();
+                                    let idx = match context
+                                        .insert_symbol(var.name.clone(), s_read!(ty).clone())
+                                    {
+                                        (true, index) => {
+                                            thonk.increment_frame_size();
+                                            index
+                                        }
+                                        (false, index) => index,
+                                    };
                                     // thonk.add_instruction(
                                     // Instruction::DeconstructStructExpression,
                                     // location!(),
@@ -154,8 +160,13 @@ pub(in crate::bubba::compiler) fn compile(
                 let value = s_read!(expr).r11_x_value(&lu_dog)[0].clone();
                 let ty = s_read!(value).r24_value_type(&lu_dog)[0].clone();
 
-                let idx = context.insert_symbol(var.name.clone(), s_read!(ty).clone());
-                thonk.increment_frame_size();
+                let idx = match context.insert_symbol(var.name.clone(), s_read!(ty).clone()) {
+                    (true, idx) => {
+                        thonk.increment_frame_size();
+                        idx
+                    }
+                    (false, idx) => idx,
+                };
 
                 thonk.add_instruction(Instruction::Dup, location!());
                 thonk.add_instruction(Instruction::StoreLocal(idx), location!());
@@ -175,12 +186,12 @@ pub(in crate::bubba::compiler) fn compile(
             context,
             get_span(&pattern_expr, &lu_dog),
         )?;
+
         let fp = match_thonk.get_frame_size();
         for _ in 0..fp {
             thonk.increment_frame_size();
         }
         let match_len = match_thonk.get_instruction_card() as isize;
-        context.pop_symbol_table();
 
         // Jump over the matching block if we don't match.
         thonk.add_instruction(Instruction::JumpIfFalse(match_len + 1), location!());
@@ -190,6 +201,8 @@ pub(in crate::bubba::compiler) fn compile(
 
         // Return if we matched.
         thonk.add_instruction(Instruction::Return, location!());
+
+        context.pop_symbol_table();
     }
 
     // This should not really happen because if this were done right the compiler

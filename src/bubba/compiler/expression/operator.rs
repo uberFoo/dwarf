@@ -171,10 +171,17 @@ pub(in crate::bubba::compiler) fn compile(
             let unary = s_read!(unary);
             compile_expression(&lhs, thonk, context, lhs_span)?;
             match &unary.subtype {
+                UnaryEnum::Negation(_) => {
+                    thonk.add_instruction_with_span(
+                        Instruction::Push(new_ref!(Value, Value::Integer(-1))),
+                        span.clone(),
+                        location!(),
+                    );
+                    thonk.add_instruction_with_span(Instruction::Multiply, span, location!());
+                }
                 UnaryEnum::Not(_) => {
                     thonk.add_instruction_with_span(Instruction::Not, span, location!());
                 }
-                _ => todo!("unary"),
             }
         }
     }
