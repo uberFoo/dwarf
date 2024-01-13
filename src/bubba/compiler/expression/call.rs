@@ -270,6 +270,185 @@ mod test {
         sarzak::MODEL as SARZAK_MODEL,
     };
 
+    #[test]
+    fn empty_func() {
+        let _ = env_logger::builder().is_test(true).try_init();
+        color_backtrace::install();
+
+        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
+        let ore = "fn main() {}";
+        let ast = parse_dwarf("empty_func", ore).unwrap();
+        let ctx = new_lu_dog(
+            "empty_func".to_owned(),
+            Some((ore.to_owned(), &ast)),
+            &get_dwarf_home(),
+            &sarzak,
+        )
+        .unwrap();
+        let program = compile(&ctx).unwrap();
+
+        assert_eq!(program.get_thonk_card(), 1);
+        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 2);
+
+        run_vm(&program).unwrap();
+    }
+
+    #[test]
+    fn empty_funcs() {
+        let _ = env_logger::builder().is_test(true).try_init();
+        color_backtrace::install();
+
+        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
+        let ore = "fn main() {}
+                   fn foo() {}
+                   fn bar() {}";
+        let ast = parse_dwarf("empty_func", ore).unwrap();
+        let ctx = new_lu_dog(
+            "empty_func".to_owned(),
+            Some((ore.to_owned(), &ast)),
+            &get_dwarf_home(),
+            &sarzak,
+        )
+        .unwrap();
+        let program = compile(&ctx).unwrap();
+
+        assert_eq!(program.get_thonk_card(), 3);
+        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 2);
+        assert_eq!(program.get_thonk("foo").unwrap().get_instruction_card(), 2);
+        assert_eq!(program.get_thonk("bar").unwrap().get_instruction_card(), 2);
+
+        run_vm(&program).unwrap();
+    }
+
+    #[test]
+    fn func_call() {
+        let _ = env_logger::builder().is_test(true).try_init();
+        color_backtrace::install();
+
+        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
+        let ore = "fn main() {
+                       foo();
+                   }
+                   fn foo() {
+                       print(\"Hello, world!\");
+                   }";
+        let ast = parse_dwarf("func_call", ore).unwrap();
+        let ctx = new_lu_dog(
+            "func_call".to_owned(),
+            Some((ore.to_owned(), &ast)),
+            &get_dwarf_home(),
+            &sarzak,
+        )
+        .unwrap();
+        let program = compile(&ctx).unwrap();
+
+        println!("{program}");
+
+        assert_eq!(program.get_thonk_card(), 2);
+        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 5);
+        assert_eq!(program.get_thonk("foo").unwrap().get_instruction_card(), 4);
+
+        run_vm(&program).unwrap();
+    }
+
+    #[test]
+    fn test_func_args() {
+        let _ = env_logger::builder().is_test(true).try_init();
+        color_backtrace::install();
+
+        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
+        let ore = "fn main() -> int {
+                       foo(1, 2, 3)
+                   }
+                   fn foo(x: int, y: int, z: int) -> int {
+                       x + y + z
+                   }";
+        let ast = parse_dwarf("test_func_args", ore).unwrap();
+        let ctx = new_lu_dog(
+            "test_func_args".to_owned(),
+            Some((ore.to_owned(), &ast)),
+            &get_dwarf_home(),
+            &sarzak,
+        )
+        .unwrap();
+        let program = compile(&ctx).unwrap();
+
+        println!("{program}");
+
+        assert_eq!(program.get_thonk_card(), 2);
+        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 7);
+        assert_eq!(program.get_thonk("foo").unwrap().get_instruction_card(), 6);
+
+        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(6));
+    }
+
+    #[test]
+    fn test_func_with_args_and_locals() {
+        let _ = env_logger::builder().is_test(true).try_init();
+        color_backtrace::install();
+
+        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
+        let ore = "fn main() -> int {
+                       foo(1, 2, 3)
+                   }
+                   fn foo(x: int, y: int, z: int) -> int {
+                       let a = 1;
+                       let b = 2;
+                       let c = 3;
+                       x + y + z + a + b + c
+                   }";
+        let ast = parse_dwarf("test_func_args_and_locals", ore).unwrap();
+        let ctx = new_lu_dog(
+            "test_func_args_and_locals".to_owned(),
+            Some((ore.to_owned(), &ast)),
+            &get_dwarf_home(),
+            &sarzak,
+        )
+        .unwrap();
+        let program = compile(&ctx).unwrap();
+
+        println!("{program}");
+
+        assert_eq!(program.get_thonk_card(), 2);
+        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 7);
+        assert_eq!(program.get_thonk("foo").unwrap().get_instruction_card(), 18);
+
+        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(12));
+    }
+
+    #[test]
+    fn test_argument_ordering() {
+        let _ = env_logger::builder().is_test(true).try_init();
+        color_backtrace::install();
+
+        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
+        let ore = "fn main() {
+                       foo(1, 2, 3)
+                   }
+                   fn foo(x: int, y: int, z: int) {
+                       chacha::assert_eq(x, 1);
+                       chacha::assert_eq(y, 2);
+                       chacha::assert_eq(z, 3);
+                   }";
+        let ast = parse_dwarf("test_argument_ordering", ore).unwrap();
+        let ctx = new_lu_dog(
+            "test_argument_ordering".to_owned(),
+            Some((ore.to_owned(), &ast)),
+            &get_dwarf_home(),
+            &sarzak,
+        )
+        .unwrap();
+        let program = compile(&ctx).unwrap();
+
+        println!("{program}");
+
+        assert_eq!(program.get_thonk_card(), 2);
+        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 7);
+        assert_eq!(program.get_thonk("foo").unwrap().get_instruction_card(), 29);
+
+        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Empty);
+    }
+
     // #[test]
     fn string_format_locals() {
         let _ = env_logger::builder().is_test(true).try_init();

@@ -105,8 +105,8 @@ uuid = { version = "1.6.1", features = ["v4", "serde"] }
 # [patch.crates-io]
 # puteketeke = { path = "../puteketeke" }
 
-# [patch."https://github.com/uberFoo/sarzak"]
-# sarzak = { path = "../sarzak" }
+[patch."https://github.com/uberFoo/sarzak"]
+sarzak = { path = "../sarzak" }
 
 [dev-dependencies]
 backtrace = "0.3.67"

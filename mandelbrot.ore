@@ -98,7 +98,7 @@ fn escape_time(c: Complex, limit: int) -> int {
             // print("returning one\n");
             return i;
             // return Option::<int>::Some(i);
-        }
+        };
     }
     // Option::<int>::None
     // None
@@ -176,29 +176,29 @@ fn do_column(
     upper_left: Complex,
     lower_right: Complex,
 ) {
-    // print("row ");
-    // print(row);
-    // print("\n");
+    print("row ");
+    print(row);
+    print("\n");
     // print(width);
     for column in 0..width {
-        // print("col ");
-        // print(column);
-        // print("\n");
+        print("col ");
+        print(column);
+        print("\n");
         let point = pixel_to_point(width, height, column, row, upper_left, lower_right);
         // print(point);
         // let time: Option<int> = escape_time(point, time);
-        let time = escape_time(point, time);
+        let et = escape_time(point, time);
         // print(time);
         // match time {
         //     Option::<int>::None => print("*"),
         //     Option::<int>::Some(time) => print(" "),
         // };
 
-        if time > 0 {
+        if et > 0 {
             print(" ");
         } else {
             print("*");
-        }
+        };
     }
-    // print("dude\n");
+    print("dude\n");
 }
