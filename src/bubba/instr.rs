@@ -453,7 +453,7 @@ impl fmt::Display for Instruction {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Deserialize, Serialize)]
 pub struct Program {
     compiler_version: String,
     compiler_build_ts: String,
@@ -501,6 +501,20 @@ impl Program {
 
     pub fn compiler_build_ts(&self) -> &str {
         &self.compiler_build_ts
+    }
+}
+
+impl fmt::Debug for Program {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        writeln!(f, "Symbols:")?;
+        for (name, value) in self.symbols.iter() {
+            writeln!(f, "{}: {}", name, value)?;
+        }
+        writeln!(f, "Thonks:")?;
+        for (name, thonk) in self.thonks.iter() {
+            writeln!(f, "{}: {:?}", name, thonk)?;
+        }
+        Ok(())
     }
 }
 

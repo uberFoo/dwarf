@@ -42,9 +42,79 @@ pub(crate) enum BubbaError {
 
 type Result<T, E = Error> = std::result::Result<T, E>;
 
-const STACK_SIZE: usize = 1024 * 1024;
+const STACK_SIZE: usize = 1024;
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
+struct Stack {
+    stack: [RefType<Value>; STACK_SIZE],
+    sp: usize,
+}
+
+impl std::fmt::Debug for Stack {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let len = self.len();
+        for i in 0..len {
+            if i == self.sp {
+                write!(f, "\t{} ->\t", Colour::Green.bold().paint("sp"))?;
+            } else {
+                write!(f, "\t     \t")?;
+            }
+            writeln!(f, "stack {i}:\t{}", s_read!(self.stack[i]))?;
+        }
+        Ok(())
+    }
+}
+
+impl Stack {
+    fn new() -> Self {
+        let stack: [RefType<Value>; STACK_SIZE] =
+            std::array::from_fn(|_| new_ref!(Value, Value::default()));
+        Stack { stack, sp: 0 }
+    }
+
+    fn push(&mut self, value: RefType<Value>) {
+        // if self.sp == STACK_SIZE {
+        //     panic!("Stack overflow.");
+        // }
+
+        self.stack[self.sp] = value;
+        self.sp += 1;
+    }
+
+    fn pop(&mut self) -> RefType<Value> {
+        // if self.sp == 0 {
+        //     panic!("Stack underflow.");
+        // }
+
+        self.sp -= 1;
+        self.stack[self.sp].clone()
+    }
+
+    fn len(&self) -> usize {
+        self.sp
+    }
+
+    #[allow(dead_code)]
+    fn is_empty(&self) -> bool {
+        self.sp == 0
+    }
+}
+
+impl std::ops::Index<usize> for Stack {
+    type Output = RefType<Value>;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.stack[index]
+    }
+}
+
+impl std::ops::IndexMut<usize> for Stack {
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+        &mut self.stack[index]
+    }
+}
+
+#[derive(Clone)]
 pub struct VM {
     /// Instruction Pointer
     ///
@@ -53,12 +123,25 @@ pub struct VM {
     /// Frame Pointer
     ///
     fp: usize,
-    stack: Vec<RefType<Value>>,
+    stack: Stack,
     program: Vec<Instruction>,
     source_map: Vec<Span>,
     func_map: HashMap<String, (usize, usize)>,
     sarzak: SarzakStore,
     args: RefType<Value>,
+}
+
+impl std::fmt::Debug for VM {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "ip: {}", self.ip)?;
+        writeln!(f, "fp: {}", self.fp)?;
+        writeln!(f, "stack: {:?}", self.stack)?;
+        writeln!(f, "program: {:?}", self.program)?;
+        writeln!(f, "source_map: {:?}", self.source_map)?;
+        writeln!(f, "func_map: {:?}", self.func_map)?;
+        writeln!(f, "args: {:?}", self.args)?;
+        Ok(())
+    }
 }
 
 impl VM {
@@ -76,7 +159,7 @@ impl VM {
             ip: 0,
             fp: 0,
             // 🚧 This shouldn't be hard-coded, and they should be configurable.
-            stack: Vec::with_capacity(10 * 1024 * 1024 * 1024),
+            stack: Stack::new(),
             program: Vec::new(),
             source_map: Vec::new(),
             func_map: HashMap::default(),
@@ -227,8 +310,8 @@ impl VM {
             let ip_offset: isize = {
                 match instr {
                     Instruction::Add => {
-                        let b = self.stack.pop().unwrap();
-                        let a = self.stack.pop().unwrap();
+                        let b = self.stack.pop();
+                        let a = self.stack.pop();
                         if trace {
                             println!(
                                 "\t\t{}\t{},\t{}",
@@ -246,8 +329,8 @@ impl VM {
                         1
                     }
                     Instruction::And => {
-                        let b = self.stack.pop().unwrap();
-                        let a = self.stack.pop().unwrap();
+                        let b = self.stack.pop();
+                        let a = self.stack.pop();
                         if trace {
                             println!(
                                 "\t\t{}\t{},\t{}",
@@ -384,7 +467,7 @@ impl VM {
                             }
                         }
 
-                        let mut variant = self.stack.pop().unwrap();
+                        let mut variant = self.stack.pop();
                         while let Ok((name, value)) = decode_expression(variant) {
                             dbg!(&name, &value);
                             self.stack.push(name);
@@ -398,8 +481,8 @@ impl VM {
                         1
                     }
                     Instruction::Divide => {
-                        let b = self.stack.pop().unwrap();
-                        let a = self.stack.pop().unwrap();
+                        let b = self.stack.pop();
+                        let a = self.stack.pop();
                         if trace {
                             println!(
                                 "\t\t{}\t{},\t{}",
@@ -421,14 +504,14 @@ impl VM {
                         1
                     }
                     Instruction::Dup => {
-                        let value = self.stack.pop().unwrap();
+                        let value = self.stack.pop();
                         self.stack.push(value.clone());
                         self.stack.push(value);
 
                         1
                     }
                     Instruction::ExtractEnumValue => {
-                        let user_enum = self.stack.pop().unwrap();
+                        let user_enum = self.stack.pop();
                         let Value::Enumeration(user_enum) = &*s_read!(user_enum) else {
                             return Err(BubbaError::ValueError {
                                 location: location!(),
@@ -471,8 +554,8 @@ impl VM {
                         1
                     }
                     Instruction::FieldRead => {
-                        let field = self.stack.pop().unwrap();
-                        let ty_ = self.stack.pop().unwrap();
+                        let field = self.stack.pop();
+                        let ty_ = self.stack.pop();
                         match &*s_read!(ty_) {
                             Value::ProxyType {
                                 module: _,
@@ -552,9 +635,9 @@ impl VM {
                         1
                     }
                     Instruction::FieldWrite => {
-                        let field = self.stack.pop().unwrap();
-                        let ty_ = self.stack.pop().unwrap();
-                        let value = self.stack.pop().unwrap();
+                        let field = self.stack.pop();
+                        let ty_ = self.stack.pop();
+                        let value = self.stack.pop();
                         match &*s_read!(ty_) {
                             Value::ProxyType {
                                 module: _,
@@ -634,7 +717,7 @@ impl VM {
                         1
                     }
                     Instruction::HaltAndCatchFire => {
-                        let span = self.stack.pop().unwrap();
+                        let span = self.stack.pop();
                         let span: std::ops::Range<usize> = (&*s_read!(span))
                             .try_into()
                             .map_err(|e: ChaChaError| BubbaError::ValueError {
@@ -643,7 +726,7 @@ impl VM {
                             })
                             .unwrap();
 
-                        let file = self.stack.pop().unwrap();
+                        let file = self.stack.pop();
                         let file: String = (&*s_read!(file))
                             .try_into()
                             .map_err(|e: ChaChaError| BubbaError::ValueError {
@@ -655,8 +738,8 @@ impl VM {
                         return Err(BubbaError::HaltAndCatchFire { file, span }.into());
                     }
                     Instruction::Index => {
-                        let index = self.stack.pop().unwrap();
-                        let list = self.stack.pop().unwrap();
+                        let index = self.stack.pop();
+                        let list = self.stack.pop();
                         let list = s_read!(list);
                         let index = s_read!(index);
                         match &*index {
@@ -792,7 +875,7 @@ impl VM {
                         offset + 1
                     }
                     Instruction::JumpIfFalse(offset) => {
-                        let condition = self.stack.pop().unwrap();
+                        let condition = self.stack.pop();
                         let condition: bool = (&*s_read!(condition))
                             .try_into()
                             .map_err(|e: ChaChaError| BubbaError::ValueError {
@@ -817,7 +900,7 @@ impl VM {
                         }
                     }
                     Instruction::JumpIfTrue(offset) => {
-                        let condition = self.stack.pop().unwrap();
+                        let condition = self.stack.pop();
                         let condition: bool = (&*s_read!(condition))
                             .try_into()
                             .map_err(|e: ChaChaError| BubbaError::ValueError {
@@ -842,8 +925,8 @@ impl VM {
                         }
                     }
                     Instruction::Multiply => {
-                        let b = self.stack.pop().unwrap();
-                        let a = self.stack.pop().unwrap();
+                        let b = self.stack.pop();
+                        let a = self.stack.pop();
                         if trace {
                             println!(
                                 "\t\t{}\t{},\t{}",
@@ -865,7 +948,7 @@ impl VM {
                             println!("\t\t{}\t{}", Colour::Green.paint("nl:"), n);
                         }
 
-                        let ty = self.stack.pop().unwrap();
+                        let ty = self.stack.pop();
                         let ty: ValueType =
                             (&*s_read!(ty))
                                 .try_into()
@@ -883,7 +966,7 @@ impl VM {
                         let mut values = Vec::with_capacity(*n as usize);
 
                         for _i in 0..*n as usize {
-                            let value = self.stack.pop().unwrap();
+                            let value = self.stack.pop();
                             values.push(value.clone());
                             if trace {
                                 println!("\t\t\t\t{}", s_read!(value));
@@ -902,7 +985,7 @@ impl VM {
                             println!("\t\t{}\t{n}", Colour::Green.paint("nte:"));
                         }
 
-                        let variant = self.stack.pop().unwrap();
+                        let variant = self.stack.pop();
                         let variant: String = (&*s_read!(variant)).try_into().map_err(|e| {
                             BubbaError::ValueError {
                                 source: Box::new(e),
@@ -914,7 +997,7 @@ impl VM {
                             println!("\t\t\t\t{}", variant);
                         }
 
-                        let path = self.stack.pop().unwrap();
+                        let path = self.stack.pop();
                         let path: String =
                             (&*s_read!(path))
                                 .try_into()
@@ -927,7 +1010,7 @@ impl VM {
                             println!("\t\t\t\t{}", path);
                         }
 
-                        let ty = self.stack.pop().unwrap();
+                        let ty = self.stack.pop();
                         let ty: ValueType =
                             (&*s_read!(ty))
                                 .try_into()
@@ -945,7 +1028,7 @@ impl VM {
                         let mut values = Vec::with_capacity(*n);
 
                         for _i in 0..*n as i32 {
-                            let value = self.stack.pop().unwrap();
+                            let value = self.stack.pop();
                             values.push(value.clone());
                             if trace {
                                 println!("\t\t\t\t{}", s_read!(value));
@@ -973,7 +1056,7 @@ impl VM {
                             println!("\t\t{}\t{n} {{", Colour::Green.paint("nut:"));
                         }
 
-                        let name = self.stack.pop().unwrap();
+                        let name = self.stack.pop();
                         let name: String =
                             (&*s_read!(name))
                                 .try_into()
@@ -986,7 +1069,7 @@ impl VM {
                             println!("\t\t\t\t{}", name);
                         }
 
-                        let ty = self.stack.pop().unwrap();
+                        let ty = self.stack.pop();
                         let ty: ValueType =
                             (&*s_read!(ty))
                                 .try_into()
@@ -1004,8 +1087,8 @@ impl VM {
                         let mut inst = UserStruct::new(name, &ty);
 
                         for _i in 0..*n as i32 {
-                            let name = self.stack.pop().unwrap();
-                            let value = self.stack.pop().unwrap();
+                            let name = self.stack.pop();
+                            let value = self.stack.pop();
 
                             inst.define_field(s_read!(name).to_inner_string(), value.clone());
                             if trace {
@@ -1023,7 +1106,7 @@ impl VM {
                         1
                     }
                     Instruction::Not => {
-                        let value = self.stack.pop().unwrap();
+                        let value = self.stack.pop();
                         let value: bool =
                             (&*s_read!(value))
                                 .try_into()
@@ -1037,8 +1120,8 @@ impl VM {
                         1
                     }
                     Instruction::Or => {
-                        let b = self.stack.pop().unwrap();
-                        let a = self.stack.pop().unwrap();
+                        let b = self.stack.pop();
+                        let a = self.stack.pop();
                         if trace {
                             println!(
                                 "\t\t{}\t{},\t{}",
@@ -1059,7 +1142,7 @@ impl VM {
                         1
                     }
                     Instruction::Out(stream) => {
-                        let value = self.stack.pop().unwrap();
+                        let value = self.stack.pop();
                         let value = s_read!(value).to_inner_string();
                         let value = value.replace("\\n", "\n");
 
@@ -1105,7 +1188,7 @@ impl VM {
                         1
                     }
                     Instruction::Return => {
-                        let result = self.stack.pop().unwrap();
+                        let result = self.stack.pop();
 
                         // Clear the stack up to the frame pointer.
                         while self.stack.len() > self.fp + 1 {
@@ -1113,7 +1196,7 @@ impl VM {
                         }
 
                         // reset the frame pointer
-                        self.fp = match &*s_read!(self.stack.pop().unwrap()) {
+                        self.fp = match &*s_read!(self.stack.pop()) {
                             Value::Integer(fp) => *fp as usize,
                             Value::Empty => {
                                 return Ok(result);
@@ -1122,34 +1205,34 @@ impl VM {
                                 return Err(BubbaError::VmPanic {
                                     message: format!(
                                         "Expected an integer, but got: {fp:?}.",
-                                        fp = s_read!(self.stack.pop().unwrap())
+                                        fp = s_read!(self.stack.pop())
                                     ),
                                 }
                                 .into());
                             }
                         };
 
-                        let ip: isize =
-                            (&*s_read!(self.stack.pop().unwrap()))
-                                .try_into()
-                                .map_err(|e| BubbaError::ValueError {
-                                    source: Box::new(e),
-                                    location: location!(),
-                                })?;
-
-                        let frame_size: usize = (&*s_read!(self.stack.pop().unwrap()))
-                            .try_into()
-                            .map_err(|e| BubbaError::ValueError {
-                            source: Box::new(e),
-                            location: location!(),
-                        })?;
-
-                        arity = (&*s_read!(self.stack.pop().unwrap()))
-                            .try_into()
-                            .map_err(|e| BubbaError::ValueError {
+                        let ip: isize = (&*s_read!(self.stack.pop())).try_into().map_err(|e| {
+                            BubbaError::ValueError {
                                 source: Box::new(e),
                                 location: location!(),
+                            }
+                        })?;
+
+                        let frame_size: usize =
+                            (&*s_read!(self.stack.pop())).try_into().map_err(|e| {
+                                BubbaError::ValueError {
+                                    source: Box::new(e),
+                                    location: location!(),
+                                }
                             })?;
+
+                        arity = (&*s_read!(self.stack.pop())).try_into().map_err(|e| {
+                            BubbaError::ValueError {
+                                source: Box::new(e),
+                                location: location!(),
+                            }
+                        })?;
 
                         for _ in 0..frame_size {
                             self.stack.pop();
@@ -1182,15 +1265,15 @@ impl VM {
                     // Any locals will cause the fp to be moved up, with the
                     // locals existing between the Thonk name and the fp.
                     Instruction::StoreLocal(index) => {
-                        let value = self.stack.pop().unwrap();
+                        let value = self.stack.pop();
                         // We gotta index into the stack in reverse order from the index.
                         self.stack[self.fp - arity - local_count - 3 + index] = value;
 
                         1
                     }
                     Instruction::Subtract => {
-                        let b = self.stack.pop().unwrap();
-                        let a = self.stack.pop().unwrap();
+                        let b = self.stack.pop();
+                        let a = self.stack.pop();
                         let c = s_read!(a).clone() - s_read!(b).clone();
                         if trace {
                             println!(
@@ -1209,32 +1292,32 @@ impl VM {
                         1
                     }
                     Instruction::TestEq => {
-                        let b = self.stack.pop().unwrap();
-                        let a = self.stack.pop().unwrap();
+                        let b = self.stack.pop();
+                        let a = self.stack.pop();
                         self.stack
                             .push(new_ref!(Value, Value::Boolean(*s_read!(a) == *s_read!(b))));
 
                         1
                     }
                     Instruction::TestGreaterThan => {
-                        let b = self.stack.pop().unwrap();
-                        let a = self.stack.pop().unwrap();
+                        let b = self.stack.pop();
+                        let a = self.stack.pop();
                         self.stack
                             .push(new_ref!(Value, Value::Boolean(s_read!(a).gt(&s_read!(b)))));
 
                         1
                     }
                     Instruction::TestLessThan => {
-                        let b = self.stack.pop().unwrap();
-                        let a = self.stack.pop().unwrap();
+                        let b = self.stack.pop();
+                        let a = self.stack.pop();
                         self.stack
                             .push(new_ref!(Value, Value::Boolean(s_read!(a).lt(&s_read!(b)))));
 
                         1
                     }
                     Instruction::TestLessThanOrEqual => {
-                        let b = self.stack.pop().unwrap();
-                        let a = self.stack.pop().unwrap();
+                        let b = self.stack.pop();
+                        let a = self.stack.pop();
                         self.stack
                             .push(new_ref!(Value, Value::Boolean(s_read!(a).lte(&s_read!(b)))));
 
@@ -1251,7 +1334,7 @@ impl VM {
                             .into());
                         };
 
-                        let lhs = self.stack.pop().unwrap();
+                        let lhs = self.stack.pop();
 
                         let value = match &as_ty.subtype {
                             ValueTypeEnum::Ty(ref ty) => {
@@ -1405,7 +1488,7 @@ mod tests {
         let as_int: DwarfInteger = (&*s_read!(result.unwrap())).try_into().unwrap();
         assert_eq!(as_int, 42);
 
-        // let mut frame = vm.frames.pop().unwrap();
+        // let mut frame = vm.frames.pop();
         // assert_eq!(frame.ip, 2);
     }
 
@@ -1438,7 +1521,7 @@ mod tests {
         let as_int: DwarfInteger = (&*s_read!(result.unwrap())).try_into().unwrap();
         assert_eq!(as_int, 111);
 
-        // let mut frame = vm.frames.pop().unwrap();
+        // let mut frame = vm.frames.pop();
         // assert_eq!(frame.ip, 4);
     }
 
@@ -1594,7 +1677,7 @@ mod tests {
         let as_bool: bool = (&*s_read!(result.unwrap())).try_into().unwrap();
         assert!(as_bool);
 
-        // let mut frame = vm.frames.pop().unwrap();
+        // let mut frame = vm.frames.pop();
         // assert_eq!(frame.ip, 4);
     }
 
@@ -1637,7 +1720,7 @@ mod tests {
         let result: String = (&*s_read!(result.unwrap())).try_into().unwrap();
         assert_eq!(result, "you rock!");
 
-        // let mut frame = vm.frames.pop().unwrap();
+        // let mut frame = vm.frames.pop();
         // assert_eq!(frame.ip, 8);
     }
 
