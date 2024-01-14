@@ -213,6 +213,7 @@ pub fn compile(context: &ExtruderContext) -> Result<Program> {
 
     let lu_dog = context.lu_dog_heel();
 
+    // We need to grab this specific instance's value of of the string type.
     let ty = Ty::new_s_string(&s_read!(context.sarzak_heel()));
     let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
     let ty = Value::ValueType((*s_read!(ty)).clone());

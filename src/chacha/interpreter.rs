@@ -815,6 +815,22 @@ pub fn start_vm(n: DwarfInteger) -> Result<DwarfInteger, Error> {
     let mut program = crate::bubba::Program::new("".to_owned(), "".to_owned());
     program.add_thonk(thonk);
 
+    use crate::sarzak::{ObjectStore as SarzakStore, Ty, MODEL as SARZAK_MODEL};
+    let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
+    let mut lu_dog = LuDogStore::new();
+
+    // We need to stuff all of the sarzak types into the store.
+    ValueType::new_ty(&Ty::new_boolean(&sarzak), &mut lu_dog);
+    ValueType::new_ty(&Ty::new_float(&sarzak), &mut lu_dog);
+    ValueType::new_ty(&Ty::new_integer(&sarzak), &mut lu_dog);
+    ValueType::new_ty(&Ty::new_s_string(&sarzak), &mut lu_dog);
+    ValueType::new_ty(&Ty::new_s_uuid(&sarzak), &mut lu_dog);
+
+    let ty = Ty::new_s_string(&sarzak);
+    let ty = ValueType::new_ty(&ty, &mut lu_dog);
+    let ty = Value::ValueType((*s_read!(ty)).clone());
+    program.add_symbol("STRING".to_owned(), ty);
+
     let mut vm = VM::new(&program, &[]);
     let result = vm.invoke("fib", &[new_ref!(Value, n.into())]);
 

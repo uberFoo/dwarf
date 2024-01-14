@@ -241,14 +241,14 @@ impl VM {
         // Frame size
         self.stack.push(new_ref!(
             Value,
-            Value::Integer((frame_size + args.len() + 2) as DwarfInteger)
+            Value::Integer((frame_size + 2) as DwarfInteger)
         ));
         // This is the IP sentinel value.
         self.stack.push(new_ref!(Value, Value::Empty));
         // Setup the frame pointer and it's sentinel.
         self.stack.push(new_ref!(Value, Value::Empty));
-        self.fp = frame_size + args.len() + 5;
 
+        self.fp = frame_size + 5;
         self.ip = *ip as isize;
 
         let trace = log_enabled!(target: "vm", Trace);
@@ -276,11 +276,11 @@ impl VM {
         let len = self.stack.len();
         for i in 0..len {
             if i == self.fp {
-                print!("\t{} ->\t", Colour::Green.bold().paint("fp"));
+                eprint!("\t{} ->\t", Colour::Green.bold().paint("fp"));
             } else {
-                print!("\t     \t");
+                eprint!("\t     \t");
             }
-            println!("stack {i}:\t{}", s_read!(self.stack[i]));
+            eprintln!("stack {i}:\t{}", s_read!(self.stack[i]));
         }
     }
 
@@ -759,6 +759,8 @@ impl VM {
                                     if index < vec.len() {
                                         self.stack.push(vec[index].clone());
                                     } else {
+                                        self.print_stack();
+                                        eprintln!("{self:?}");
                                         return Err(BubbaError::ValueError {
                                             location: location!(),
                                             source: Box::new(ChaChaError::IndexOutOfBounds {
@@ -1251,6 +1253,7 @@ impl VM {
                         let frame_size = &self.stack[self.fp - 2];
                         let frame_size: usize =
                             (&*s_read!(frame_size)).try_into().map_err(|e| {
+                                self.print_stack();
                                 BubbaError::ValueError {
                                     source: Box::new(e),
                                     location: location!(),
