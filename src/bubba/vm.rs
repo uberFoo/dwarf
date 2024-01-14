@@ -73,18 +73,18 @@ impl Stack {
     }
 
     fn push(&mut self, value: RefType<Value>) {
-        // if self.sp == STACK_SIZE {
-        //     panic!("Stack overflow.");
-        // }
+        if self.sp == STACK_SIZE {
+            panic!("Stack overflow.");
+        }
 
         self.stack[self.sp] = value;
         self.sp += 1;
     }
 
     fn pop(&mut self) -> RefType<Value> {
-        // if self.sp == 0 {
-        //     panic!("Stack underflow.");
-        // }
+        if self.sp == 0 {
+            panic!("Stack underflow.");
+        }
 
         self.sp -= 1;
         self.stack[self.sp].clone()
@@ -96,6 +96,7 @@ impl Stack {
 
     #[allow(dead_code)]
     fn is_empty(&self) -> bool {
+        dbg!(&self.sp);
         self.sp == 0
     }
 }
@@ -220,12 +221,17 @@ impl VM {
         let (ip, frame_size) = self.func_map.get(func_name).unwrap();
         let frame_size = *frame_size;
 
+        // Address of the function to invoke.
         self.stack
             .push(new_ref!(Value, Value::Integer(*ip as DwarfInteger)));
+        // Number of parameters and locals in the function.
         self.stack
             .push(new_ref!(Value, Value::Integer(frame_size as DwarfInteger)));
 
-        for _ in 0..frame_size {
+        for arg in args.iter() {
+            self.stack.push(arg.clone());
+        }
+        for _ in 0..frame_size - args.len() {
             self.stack.push(new_ref!(Value, Value::Empty));
         }
 
@@ -249,16 +255,19 @@ impl VM {
 
         let result = self.inner_run(args.len(), frame_size, trace);
 
-        self.stack.pop(); // fp
+        // The FP is taken by the return handling code.
+        // self.stack.pop(); // fp
+        self.stack.pop(); // ip
+        self.stack.pop(); // frame size
+        self.stack.pop(); // arity
         for _ in 0..frame_size {
             self.stack.pop();
         }
-        for _ in 0..args.len() {
-            self.stack.pop();
-        }
-        self.stack.pop(); // frame size
-        self.stack.pop(); // ip
-        self.stack.pop(); // arity
+        // for _ in 0..args.len() {
+        // self.stack.pop();
+        // }
+        self.stack.pop(); // local count
+        self.stack.pop(); // func addr
 
         result
     }
@@ -357,6 +366,7 @@ impl VM {
                         }
 
                         let stack_local_count = &self.stack[self.stack.len() - func_arity - 1];
+                        // This is in the function's scope.
                         local_count = (&*s_read!(stack_local_count)).try_into().map_err(|e| {
                             BubbaError::ValueError {
                                 source: Box::new(e),
