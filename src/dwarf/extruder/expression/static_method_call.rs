@@ -33,7 +33,7 @@ use crate::{
     },
     new_ref, s_read, s_write,
     sarzak::Ty,
-    NewRef, RefType,
+    NewRef, RefType, SarzakStorePtr,
 };
 
 #[allow(clippy::too_many_arguments)]
@@ -141,13 +141,13 @@ pub fn inter(
         // Here we are interring a static method call.
         let meth = StaticMethodCall::new(method.to_owned(), foo.clone(), Uuid::new_v4(), lu_dog);
         let call = Call::new_static_method_call(true, None, None, &meth, lu_dog);
-        let call_expr = Expression::new_call(&call, lu_dog);
+        let call_expr = Expression::new_call(true, &call, lu_dog);
 
         let sarzak = context.sarzak;
 
         // Process the args.
         let mut arg_types = Vec::new();
-        let mut last_arg_uuid: Option<usize> = None;
+        let mut last_arg_uuid: Option<SarzakStorePtr> = None;
         for (position, param) in params.iter().enumerate() {
             let (arg_expr, ty) = inter_expression(
                 &new_ref!(ParserExpression, param.0.to_owned()),
@@ -182,26 +182,26 @@ pub fn inter(
                             })
                             .unwrap();
                         let list = List::new(&ty, lu_dog);
-                        ValueType::new_list(&list, lu_dog)
+                        ValueType::new_list(true, &list, lu_dog)
                     }
                     #[cfg(feature = "async")]
                     ASLEEP => {
-                        let inner = ValueType::new_empty(lu_dog);
+                        let inner = ValueType::new_empty(true, lu_dog);
                         let future = XFuture::new(&inner, lu_dog);
                         ValueType::new_x_future(&future, lu_dog)
                     }
-                    ASSERT => ValueType::new_ty(&Ty::new_boolean(sarzak), lu_dog),
-                    ASSERT_EQ => ValueType::new_ty(&Ty::new_boolean(sarzak), lu_dog),
-                    EPS => ValueType::new_ty(&Ty::new_float(sarzak), lu_dog),
-                    EVAL => ValueType::new_unknown(lu_dog),
+                    ASSERT => ValueType::new_ty(true, &Ty::new_boolean(sarzak), lu_dog),
+                    ASSERT_EQ => ValueType::new_ty(true, &Ty::new_boolean(sarzak), lu_dog),
+                    EPS => ValueType::new_ty(true, &Ty::new_float(sarzak), lu_dog),
+                    EVAL => ValueType::new_unknown(true, lu_dog),
                     #[cfg(feature = "async")]
                     HTTP_GET => {
-                        let inner = ValueType::new_ty(&Ty::new_s_string(sarzak), lu_dog);
+                        let inner = ValueType::new_ty(true, &Ty::new_s_string(sarzak), lu_dog);
                         let future = XFuture::new(&inner, lu_dog);
                         ValueType::new_x_future(&future, lu_dog)
                     }
-                    PARSE => ValueType::new_unknown(lu_dog),
-                    SLEEP => ValueType::new_empty(lu_dog),
+                    PARSE => ValueType::new_unknown(true, lu_dog),
+                    SLEEP => ValueType::new_empty(true, lu_dog),
                     #[cfg(feature = "async")]
                     SPAWN => {
                         let inner = arg_types[0].clone();
@@ -214,8 +214,8 @@ pub fn inter(
                         let future = XFuture::new(&inner, lu_dog);
                         ValueType::new_x_future(&future, lu_dog)
                     }
-                    TIME => ValueType::new_ty(&Ty::new_float(sarzak), lu_dog),
-                    TYPEOF => ValueType::new_ty(&Ty::new_s_string(sarzak), lu_dog),
+                    TIME => ValueType::new_ty(true, &Ty::new_float(sarzak), lu_dog),
+                    TYPEOF => ValueType::new_ty(true, &Ty::new_s_string(sarzak), lu_dog),
                     method => {
                         let span = s_read!(span).start as usize..s_read!(span).end as usize;
                         return Err(vec![DwarfError::NoSuchMethod {
@@ -230,27 +230,27 @@ pub fn inter(
                 }
             }
             COMPLEX_EX => match method {
-                NORM_SQUARED => ValueType::new_ty(&Ty::new_float(sarzak), lu_dog),
+                NORM_SQUARED => ValueType::new_ty(true, &Ty::new_float(sarzak), lu_dog),
                 method => {
                     e_warn!("ComplexEx method `{method}` not found");
-                    ValueType::new_unknown(lu_dog)
+                    ValueType::new_unknown(true, lu_dog)
                 }
             },
             PLUGIN => match method {
                 NEW => {
                     let plugin = XPlugin::new(plugin_type, lu_dog);
-                    ValueType::new_x_plugin(&plugin, lu_dog)
+                    ValueType::new_x_plugin(true, &plugin, lu_dog)
                 }
                 method => {
                     e_warn!("Plugin method `{method}` not found");
-                    ValueType::new_unknown(lu_dog)
+                    ValueType::new_unknown(true, lu_dog)
                 }
             },
             TIMER => {
                 match method {
                     #[cfg(feature = "async")]
                     INTERVAL | ONE_SHOT => {
-                        let inner = ValueType::new_empty(lu_dog);
+                        let inner = ValueType::new_empty(true, lu_dog);
                         let future = XFuture::new(&inner, lu_dog);
                         ValueType::new_x_future(&future, lu_dog)
                     }
@@ -267,7 +267,9 @@ pub fn inter(
                     }
                 }
             }
-            UUID_TYPE if method == FN_NEW => ValueType::new_ty(&Ty::new_s_uuid(sarzak), lu_dog),
+            UUID_TYPE if method == FN_NEW => {
+                ValueType::new_ty(true, &Ty::new_s_uuid(sarzak), lu_dog)
+            }
             _ => {
                 debug!("ParserExpression::StaticMethodCall: looking up type {type_name}");
                 lookup_woog_struct_method_return_type(&type_name, method, context.sarzak, lu_dog)
@@ -333,12 +335,12 @@ pub fn inter(
                     let func_ty = s_read!(func).r10_value_type(lu_dog)[0].clone();
                     let meth = MethodCall::new(method.to_owned(), lu_dog);
                     let call = Call::new_method_call(true, None, None, &meth, lu_dog);
-                    let expr = Expression::new_call(&call, lu_dog);
+                    let expr = Expression::new_call(true, &call, lu_dog);
 
                     // Call the function with it's args.
                     // Process the args.
                     let mut arg_types = Vec::new();
-                    let mut last_arg_uuid: Option<usize> = None;
+                    let mut last_arg_uuid: Option<SarzakStorePtr> = None;
                     for (position, param) in params.iter().enumerate() {
                         let (arg_expr, ty) = inter_expression(
                             &new_ref!(ParserExpression, param.0.to_owned()),
@@ -514,13 +516,13 @@ fn inter_field(
 
     // let expr = Expression::new_enum_field(&field, lu_dog);
 
-    let data_struct = DataStructure::new_enumeration(&woog_enum, lu_dog);
+    let data_struct = DataStructure::new_enumeration(true, &woog_enum, lu_dog);
     let struct_expr = StructExpression::new(Uuid::new_v4(), &data_struct, x_path, lu_dog);
     let nfe = UnnamedFieldExpression::new(0, lu_dog);
     let strawberry =
         FieldExpression::new_unnamed_field_expression(&expr.0, &struct_expr, &nfe, lu_dog);
 
-    let expr = Expression::new_field_expression(&strawberry, lu_dog);
+    let expr = Expression::new_field_expression(true, &strawberry, lu_dog);
     let value = XValue::new_expression(block, &ty, &expr, lu_dog);
     Span::new(
         s_read!(span).end,
@@ -532,7 +534,7 @@ fn inter_field(
     );
     // update_span_value(&span, &value, location!());
 
-    let expr = Expression::new_struct_expression(&struct_expr, lu_dog);
+    let expr = Expression::new_struct_expression(true, &struct_expr, lu_dog);
     let value = XValue::new_expression(block, &ty, &expr, lu_dog);
     update_span_value(span, &value, location!());
 

@@ -7,9 +7,12 @@ use tracy_client::Client;
 
 use sarzak::sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL};
 
-use dwarf::dwarf::{
-    error::{FileSnafu, IOSnafu, Result},
-    new_lu_dog, parse_dwarf,
+use dwarf::{
+    dwarf::{
+        error::{FileSnafu, IOSnafu, Result},
+        new_lu_dog, parse_dwarf,
+    },
+    s_read,
 };
 
 const TARGET_DIR: &str = "target";
@@ -146,7 +149,7 @@ fn main() -> Result<()> {
         })
         .into();
 
-    let _ctx = match new_lu_dog(
+    let ctx = match new_lu_dog(
         args.source.to_str().unwrap().to_owned(),
         Some((source_code.clone(), &ast)),
         &dwarf_home,
@@ -168,6 +171,7 @@ fn main() -> Result<()> {
      * I am going to come back to this once I have a better idea of what a real
      * binary format needs to look like. I don't think using dwarfc to persist
      * lu-dog stores is a good idea. Maybe, but I need to think about it.
+     */
     #[cfg(not(feature = "multi-nd-vec"))]
     if args.debug.is_some() && args.debug.unwrap() {
         s_read!(ctx.lu_dog)
@@ -186,7 +190,6 @@ fn main() -> Result<()> {
             })
             .map_err(|e| vec![e])?;
     }
-    */
 
     println!("Lu-Dog domain created at {:?}", out_file);
 

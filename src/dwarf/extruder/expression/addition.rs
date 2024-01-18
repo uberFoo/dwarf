@@ -62,9 +62,9 @@ pub fn inter(
         lu_dog,
     )?;
 
-    let expr = Binary::new_addition(lu_dog);
+    let expr = Binary::new_addition(true, lu_dog);
     let expr = Operator::new_binary(&lhs.0, Some(&rhs.0), &expr, lu_dog);
-    let expr = Expression::new_operator(&expr, lu_dog);
+    let expr = Expression::new_operator(true, &expr, lu_dog);
 
     let value = XValue::new_expression(block, &lhs_ty, &expr, lu_dog);
     update_span_value(&span, &value, location!());

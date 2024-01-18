@@ -227,42 +227,42 @@ impl Type {
         match self {
             Type::Boolean => {
                 let ty = Ty::new_boolean(sarzak);
-                Ok(ValueType::new_ty(&ty, store))
+                Ok(ValueType::new_ty(true, &ty, store))
             }
-            Type::Empty => Ok(ValueType::new_empty(store)),
+            Type::Empty => Ok(ValueType::new_empty(true, store)),
             Type::Float => {
                 let ty = Ty::new_float(sarzak);
-                Ok(ValueType::new_ty(&ty, store))
+                Ok(ValueType::new_ty(true, &ty, store))
             }
             Type::Fn(_params, return_) => {
                 let return_ = return_
                     .0
                     .into_value_type(file_name, &return_.1, store, _models, sarzak)?;
                 let ƛ = Lambda::new(None, None, &return_, store);
-                Ok(ValueType::new_lambda(&ƛ, store))
+                Ok(ValueType::new_lambda(true, &ƛ, store))
             }
             Type::Generic(name) => {
                 let generic = Generic::new(name.0.to_owned(), None, None, store);
-                Ok(ValueType::new_generic(&generic, store))
+                Ok(ValueType::new_generic(true, &generic, store))
             }
             Type::Integer => {
                 let ty = Ty::new_integer(sarzak);
-                Ok(ValueType::new_ty(&ty, store))
+                Ok(ValueType::new_ty(true, &ty, store))
             }
             Type::List(type_) => {
                 let ty = type_
                     .0
                     .into_value_type(file_name, &type_.1, store, _models, sarzak)?;
                 let list = List::new(&ty, store);
-                Ok(ValueType::new_list(&list, store))
+                Ok(ValueType::new_list(true, &list, store))
             }
             Type::Path(_) => unimplemented!(),
             Type::Self_ => panic!("Self is deprecated."),
             Type::String => {
                 let ty = Ty::new_s_string(sarzak);
-                Ok(ValueType::new_ty(&ty, store))
+                Ok(ValueType::new_ty(true, &ty, store))
             }
-            Type::Unknown => Ok(ValueType::new_unknown(store)),
+            Type::Unknown => Ok(ValueType::new_unknown(true, store)),
             Type::UserType(type_, _generics) => {
                 let name = &type_.0;
 
@@ -270,22 +270,22 @@ impl Type {
                 // The parser just doesn't know that, and it's actually cleaner
                 // and easier to handle it here.
                 if name == "Uuid" {
-                    return Ok(ValueType::new_ty(&Ty::new_s_uuid(sarzak), store));
+                    return Ok(ValueType::new_ty(true, &Ty::new_s_uuid(sarzak), store));
                 }
 
                 log::debug!(target: "dwarf", "Type::UserType: {name}");
 
                 if let Some(obj_id) = store.exhume_woog_struct_id_by_name(name) {
                     let woog_struct = store.exhume_woog_struct(&obj_id).unwrap();
-                    Ok(ValueType::new_woog_struct(&woog_struct, store))
+                    Ok(ValueType::new_woog_struct(true, &woog_struct, store))
                 } else if let Some(enum_id) = store.exhume_enumeration_id_by_name(name) {
                     let enumeration = store.exhume_enumeration(&enum_id).unwrap();
-                    Ok(ValueType::new_enumeration(&enumeration, store))
+                    Ok(ValueType::new_enumeration(true, &enumeration, store))
                 } else if let Some(obj_id) = sarzak.exhume_object_id_by_name(name) {
                     // If it's not in one of the models, it must be in sarzak.
                     let ty = sarzak.exhume_ty(&obj_id).unwrap();
                     log::debug!(target: "dwarf", "into_value_type, UserType, ty: {ty:?}");
-                    Ok(ValueType::new_ty(&ty, store))
+                    Ok(ValueType::new_ty(true, &ty, store))
                 } else {
                     Err(vec![DwarfError::UnknownType {
                         ty: name.to_owned(),
@@ -297,7 +297,7 @@ impl Type {
             }
             Type::Uuid => {
                 let ty = Ty::new_s_uuid(sarzak);
-                Ok(ValueType::new_ty(&ty, store))
+                Ok(ValueType::new_ty(true, &ty, store))
             }
         }
     }

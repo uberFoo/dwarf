@@ -69,6 +69,7 @@ fn build_plugin(entry: &DirEntry, sh: &Shell, dwarf_home: &String) -> anyhow::Re
         println!("No models found");
     }
 
+    cmd!(sh, "cargo update").run()?;
     cmd!(sh, "cargo build").run()?;
 
     let name = entry.file_name();

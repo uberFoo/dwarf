@@ -1,3 +1,4 @@
+use heck::ToUpperCamelCase;
 use log::{self, log_enabled, Level::Trace};
 use rustc_hash::FxHashMap as HashMap;
 use snafu::{location, prelude::*, Location};
@@ -10,7 +11,7 @@ use crate::{
     },
     new_ref, s_read, s_write,
     sarzak::{ObjectStore as SarzakStore, Ty},
-    Context as ExtruderContext, NewRef, RefType, Span, Value, ERR_CLR, POP_CLR,
+    Context as ExtruderContext, NewRef, RefType, Span, Value, ERR_CLR, MERLIN, POP_CLR, SARZAK,
 };
 
 mod expression;
@@ -215,7 +216,7 @@ pub fn compile(context: &ExtruderContext) -> Result<Program> {
 
     // We need to grab this specific instance's value of of the string type.
     let ty = Ty::new_s_string(&s_read!(context.sarzak_heel()));
-    let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
+    let ty = ValueType::new_ty(true, &ty, &mut s_write!(lu_dog));
     let ty = Value::ValueType((*s_read!(ty)).clone());
     program.add_symbol("STRING".to_owned(), ty);
 
@@ -357,8 +358,21 @@ fn compile_function(func: &RefType<Function>, context: &mut Context) -> Result<C
         }
         //
         // This is an externally defined function that was declared in a dwarf file.
-        BodyEnum::ExternalImplementation(ref _id) => {
-            panic!("Somehow we found ourselves trying to compile an external implementation. This should not happen. The function name is: {name}");
+        BodyEnum::ExternalImplementation(ref block_id) => {
+            let external = lu_dog.exhume_external_implementation(block_id).unwrap();
+            let external = s_read!(external);
+            let model_name = external.x_model.clone();
+            let model_name = if model_name == MERLIN {
+                SARZAK.to_owned()
+            } else {
+                model_name
+            };
+            let models = &context.extruder_context.models;
+            let model = models.get(&model_name).unwrap();
+            let func_name = external.function.clone();
+
+            let object_name = &external.object;
+            let object_name = object_name.to_upper_camel_case();
         }
     };
 
@@ -436,7 +450,7 @@ fn compile_expression(
     match &s_read!(expression).subtype {
         ExpressionEnum::Block(ref block) => block::compile(block, thonk, context)?,
         ExpressionEnum::Call(ref call) => call::compile(call, thonk, context, span)?,
-        ExpressionEnum::Debugger(_) => {}
+        ExpressionEnum::XDebugger(_) => {}
         ExpressionEnum::FieldAccess(ref field) => {
             field::compile_field_access(field, thonk, context, span)?
         }
@@ -1120,6 +1134,38 @@ mod test {
             program.get_thonk("main").unwrap().get_instruction_card(),
             59
         );
+        let run = run_vm(&program);
+        assert!(run.is_ok());
+        assert_eq!(&*s_read!(run.unwrap()), &Value::Boolean(true));
+    }
+
+    #[test]
+    fn use_plugin() {
+        let _ = env_logger::builder().is_test(true).try_init();
+        color_backtrace::install();
+
+        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
+        let ore = "
+                use sarzak;
+                fn main() -> bool {
+                    true
+                }";
+        let ast = parse_dwarf("use_plugin", ore).unwrap();
+        let ctx = new_lu_dog(
+            "use_plugin".to_owned(),
+            Some((ore.to_owned(), &ast)),
+            &get_dwarf_home(),
+            &sarzak,
+        )
+        .unwrap();
+        let program = compile(&ctx).unwrap();
+        println!("{program}");
+        assert_eq!(program.get_thonk_card(), 3);
+
+        // assert_eq!(
+        //     program.get_thonk("main").unwrap().get_instruction_card(),
+        //     59
+        // );
         let run = run_vm(&program);
         assert!(run.is_ok());
         assert_eq!(&*s_read!(run.unwrap()), &Value::Boolean(true));

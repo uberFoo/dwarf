@@ -101,6 +101,7 @@ tui-textarea = { git = "https://github.com/uberFoo/tui-textarea", optional = tru
 tui-tree-widget = { git = "https://github.com/uberFoo/tui-rs-tree-widget", optional = true }
 unicode-segmentation = "1.10.1"
 uuid = { version = "1.6.1", features = ["v4", "serde"] }
+smartstring = { version = "1.0.1", features = ["serde"] }
 
 # [patch.crates-io]
 # puteketeke = { path = "../puteketeke" }
@@ -118,8 +119,8 @@ chrono = "0.4.31"
 walkdir = "2.3.3"
 
 [features]
-default = ["single", "repl", "print-std-out"]
-# default = ["multi-vec", "repl", "print-std-out", "async"]
+default = ["debug", "repl", "print-std-out"]
+# default = ["multi-nd-vec", "repl", "print-std-out", "async"]
 async_executor = ["multi-vec", "repl", "print-std-out", "async"]
 
 tracy-client = ["dep:tracy-client"]

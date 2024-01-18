@@ -46,7 +46,7 @@ pub(in crate::bubba::compiler) fn compile(
             };
 
             let func_name = format!("{ty}::{method}");
-            let name = new_ref!(Value, Value::String(func_name));
+            let name = new_ref!(String, func_name);
             // We are here because we need to look up a function.
             thonk.add_instruction(Instruction::CallDestination(name.clone()), location!());
 
@@ -61,7 +61,7 @@ pub(in crate::bubba::compiler) fn compile(
             );
         }
     } else {
-        let name = new_ref!(Value, Value::String(name.to_owned()));
+        let name = new_ref!(String, name.to_owned());
         // We are here because we need to look up a function.
         thonk.add_instruction(Instruction::CallDestination(name.clone()), location!());
 

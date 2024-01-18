@@ -26,12 +26,12 @@ pub fn instantiate_root_module() -> PluginModRef {
 
 #[sabi_extern_fn]
 pub fn name() -> RStr<'static> {
-    "http_client".into()
+    "http".into()
 }
 
 #[sabi_extern_fn]
 pub fn id() -> RStr<'static> {
-    "http_client".into()
+    "http".into()
 }
 
 /// Instantiates the plugin.

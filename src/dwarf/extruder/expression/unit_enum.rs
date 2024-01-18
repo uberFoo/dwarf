@@ -152,7 +152,7 @@ pub fn inter(
 
         let woog_enum = lu_dog.exhume_enumeration(&woog_enum_id).unwrap();
 
-        let data_struct = DataStructure::new_enumeration(&woog_enum, lu_dog);
+        let data_struct = DataStructure::new_enumeration(true, &woog_enum, lu_dog);
 
         let foo = s_read!(woog_enum).r88_enum_field(lu_dog);
         let field = foo.iter().find(|field| {
@@ -174,7 +174,7 @@ pub fn inter(
 
             // let expr = Expression::new_enum_field(field, lu_dog);
             let struct_expr = StructExpression::new(Uuid::new_v4(), &data_struct, &x_path, lu_dog);
-            let expr = Expression::new_struct_expression(&struct_expr, lu_dog);
+            let expr = Expression::new_struct_expression(true, &struct_expr, lu_dog);
             debug!("expression {expr:?}");
 
             let value = XValue::new_expression(block, &ty, &expr, lu_dog);

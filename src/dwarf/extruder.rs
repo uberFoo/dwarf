@@ -33,7 +33,8 @@ use crate::{
     },
     new_ref, s_read, s_write,
     sarzak::{store::ObjectStore as SarzakStore, types::Ty},
-    Context as InterContext, Dirty, ModelStore, NewRef, RefType, PATH_ROOT, PATH_SEP,
+    Context as InterContext, Dirty, ModelStore, NewRef, RefType, SarzakStorePtr, PATH_ROOT,
+    PATH_SEP,
 };
 
 mod expression;
@@ -381,11 +382,11 @@ pub fn new_lu_dog(
     let mut lu_dog = LuDogStore::new();
 
     // We need to stuff all of the sarzak types into the store.
-    ValueType::new_ty(&Ty::new_boolean(sarzak), &mut lu_dog);
-    ValueType::new_ty(&Ty::new_float(sarzak), &mut lu_dog);
-    ValueType::new_ty(&Ty::new_integer(sarzak), &mut lu_dog);
-    ValueType::new_ty(&Ty::new_s_string(sarzak), &mut lu_dog);
-    ValueType::new_ty(&Ty::new_s_uuid(sarzak), &mut lu_dog);
+    ValueType::new_ty(true, &Ty::new_boolean(sarzak), &mut lu_dog);
+    ValueType::new_ty(true, &Ty::new_float(sarzak), &mut lu_dog);
+    ValueType::new_ty(true, &Ty::new_integer(sarzak), &mut lu_dog);
+    ValueType::new_ty(true, &Ty::new_s_string(sarzak), &mut lu_dog);
+    ValueType::new_ty(true, &Ty::new_s_uuid(sarzak), &mut lu_dog);
 
     let mut models = HashMap::default();
     let mut dirty = Vec::new();
@@ -744,7 +745,7 @@ pub fn inter_statement(
             let stmt = ExpressionStatement::new(&expr.0, lu_dog);
             let stmt = Statement::new_expression_statement(index, block, None, &stmt, lu_dog);
 
-            Ok(((stmt, span.to_owned()), ValueType::new_empty(lu_dog)))
+            Ok(((stmt, span.to_owned()), ValueType::new_empty(true, lu_dog)))
         }
         //
         // Item
@@ -878,7 +879,7 @@ pub fn inter_statement(
             };
             let _stmt = ItemStatement::new();
             let stmt = Statement::new_item_statement(index, block, None, lu_dog);
-            Ok(((stmt, span.to_owned()), ValueType::new_empty(lu_dog)))
+            Ok(((stmt, span.to_owned()), ValueType::new_empty(true, lu_dog)))
         }
         //
         // Let
@@ -951,7 +952,10 @@ pub fn inter_statement(
             let stmt = LetStatement::new(&expr.0, &local, lu_dog);
             let stmt = Statement::new_let_statement(index, block, None, &stmt, lu_dog);
 
-            Ok(((stmt, expr_span.to_owned()), ValueType::new_empty(lu_dog)))
+            Ok((
+                (stmt, expr_span.to_owned()),
+                ValueType::new_empty(true, lu_dog),
+            ))
         }
         //
         // Result
@@ -982,11 +986,11 @@ pub(super) fn inter_statements(
     context_stack: &mut Vec<(String, RefType<LuDogStore>)>,
     lu_dog: &mut LuDogStore,
 ) -> Result<Spanned<RefType<ValueType>>> {
-    let mut value_type = ValueType::new_empty(lu_dog);
+    let mut value_type = ValueType::new_empty(true, lu_dog);
     let mut span = span.to_owned();
     let mut errors = Vec::new();
 
-    let mut last_stmt_uuid: Option<usize> = None;
+    let mut last_stmt_uuid: Option<SarzakStorePtr> = None;
     let mut index = 0;
     for stmt in statements {
         let (stmt, ty) = match inter_statement(stmt, index, block, context, context_stack, lu_dog) {
@@ -1106,9 +1110,9 @@ pub(super) fn inter_expression(
                 lu_dog,
             )?;
 
-            let expr = Binary::new_assignment(lu_dog);
+            let expr = Binary::new_assignment(true, lu_dog);
             let expr = Operator::new_binary(&lhs.0, Some(&rhs.0), &expr, lu_dog);
-            let expr = Expression::new_operator(&expr, lu_dog);
+            let expr = Expression::new_operator(true, &expr, lu_dog);
 
             let value = XValue::new_expression(block, &lhs_ty, &expr, lu_dog);
             update_span_value(&span, &value, location!());
@@ -1142,7 +1146,7 @@ pub(super) fn inter_expression(
                 };
                 let ty = s_read!(future).r2_value_type(lu_dog)[0].clone();
                 let expr = AWait::new(&expr.0, lu_dog);
-                let expr = Expression::new_a_wait(&expr, lu_dog);
+                let expr = Expression::new_a_wait(true, &expr, lu_dog);
                 let value = XValue::new_expression(block, &ty, &expr, lu_dog);
                 update_span_value(&span, &value, location!());
 
@@ -1162,9 +1166,9 @@ pub(super) fn inter_expression(
                 context_stack,
                 lu_dog,
             )?;
-            let not = Unary::new_not(lu_dog);
+            let not = Unary::new_not(true, lu_dog);
             let operator = Operator::new_unary(&expr.0, None, &not, lu_dog);
-            let expr = Expression::new_operator(&operator, lu_dog);
+            let expr = Expression::new_operator(true, &operator, lu_dog);
             let value = XValue::new_expression(block, &ty, &expr, lu_dog);
             update_span_value(&span, &value, location!());
 
@@ -1200,7 +1204,7 @@ pub(super) fn inter_expression(
             //     ..stmts.iter().map(|stmt| stmt.1.end).max().unwrap();
             let stmts_span = s_read!(span).start as usize..s_read!(span).end as usize;
 
-            let expr = Expression::new_block(&block, lu_dog);
+            let expr = Expression::new_block(true, &block, lu_dog);
             let ty = inter_statements(
                 &stmts_vec,
                 &stmts_span,
@@ -1217,7 +1221,7 @@ pub(super) fn inter_expression(
                 BlockType::Async => {
                     let span = ty.1;
                     let future = XFuture::new(&ty.0, lu_dog);
-                    (ValueType::new_x_future(&future, lu_dog), span)
+                    (ValueType::new_x_future(true, &future, lu_dog), span)
                 }
                 BlockType::Sync => ty,
             };
@@ -1230,13 +1234,16 @@ pub(super) fn inter_expression(
         //
         ParserExpression::BooleanLiteral(literal) => {
             let literal = if literal {
-                BooleanLiteral::new_true_literal(lu_dog)
+                BooleanLiteral::new_true_literal(true, lu_dog)
             } else {
-                BooleanLiteral::new_false_literal(lu_dog)
+                BooleanLiteral::new_false_literal(true, lu_dog)
             };
-            let expr =
-                Expression::new_literal(&Literal::new_boolean_literal(&literal, lu_dog), lu_dog);
-            let ty = ValueType::new_ty(&Ty::new_boolean(context.sarzak), lu_dog);
+            let expr = Expression::new_literal(
+                true,
+                &Literal::new_boolean_literal(true, &literal, lu_dog),
+                lu_dog,
+            );
+            let ty = ValueType::new_ty(true, &Ty::new_boolean(context.sarzak), lu_dog);
             let value = XValue::new_expression(block, &ty, &expr, lu_dog);
             update_span_value(&span, &value, location!());
 
@@ -1246,8 +1253,8 @@ pub(super) fn inter_expression(
         // Debug
         //
         ParserExpression::Debug => {
-            let expr = Expression::new_debugger(lu_dog);
-            let ty = ValueType::new_empty(lu_dog);
+            let expr = Expression::new_x_debugger(true, lu_dog);
+            let ty = ValueType::new_empty(true, lu_dog);
             let value = XValue::new_expression(block, &ty, &expr, lu_dog);
             update_span_value(&span, &value, location!());
 
@@ -1289,9 +1296,9 @@ pub(super) fn inter_expression(
                 lu_dog,
             )?;
 
-            let expr = Binary::new_division(lu_dog);
+            let expr = Binary::new_division(true, lu_dog);
             let expr = Operator::new_binary(&lhs.0, Some(&rhs.0), &expr, lu_dog);
-            let expr = Expression::new_operator(&expr, lu_dog);
+            let expr = Expression::new_operator(true, &expr, lu_dog);
 
             let value = XValue::new_expression(block, &lhs_ty, &expr, lu_dog);
             update_span_value(&span, &value, location!());
@@ -1302,8 +1309,8 @@ pub(super) fn inter_expression(
         // Empty
         //
         ParserExpression::Empty => {
-            let expr = Expression::new_empty_expression(lu_dog);
-            let ty = ValueType::new_empty(lu_dog);
+            let expr = Expression::new_empty_expression(true, lu_dog);
+            let ty = ValueType::new_empty(true, lu_dog);
             let value = XValue::new_expression(block, &ty, &expr, lu_dog);
             update_span_value(&span, &value, location!());
 
@@ -1338,12 +1345,12 @@ pub(super) fn inter_expression(
                 lu_dog,
             )?;
 
-            let expr = Comparison::new_equal(lu_dog);
+            let expr = Comparison::new_equal(true, lu_dog);
             let expr = Operator::new_comparison(&lhs.0, Some(&rhs.0), &expr, lu_dog);
-            let expr = Expression::new_operator(&expr, lu_dog);
+            let expr = Expression::new_operator(true, &expr, lu_dog);
 
             let ty = Ty::new_boolean(context.sarzak);
-            let ty = ValueType::new_ty(&ty, lu_dog);
+            let ty = ValueType::new_ty(true, &ty, lu_dog);
 
             let value = XValue::new_expression(block, &ty, &expr, lu_dog);
             update_span_value(&span, &value, location!());
@@ -1397,18 +1404,18 @@ pub(super) fn inter_expression(
                         // We need to grab the type from the field: what we have above is the type
                         // of the struct.
                         if let Some(field) = field {
-                            let fat = FieldAccessTarget::new_field(&field, lu_dog);
+                            let fat = FieldAccessTarget::new_field(true, &field, lu_dog);
                             let expr = FieldAccess::new(&lhs.0, &fat, &woog_struct, lu_dog);
-                            let expr = Expression::new_field_access(&expr, lu_dog);
+                            let expr = Expression::new_field_access(true, &expr, lu_dog);
                             let ty = s_read!(field).r5_value_type(lu_dog)[0].clone();
                             let value = XValue::new_expression(block, &ty, &expr, lu_dog);
                             update_span_value(&span, &value, location!());
 
                             Ok(((expr, span), ty))
                         } else if let Some(func) = func {
-                            let fat = FieldAccessTarget::new_function(&func, lu_dog);
+                            let fat = FieldAccessTarget::new_function(true, &func, lu_dog);
                             let expr = FieldAccess::new(&lhs.0, &fat, &woog_struct, lu_dog);
-                            let expr = Expression::new_field_access(&expr, lu_dog);
+                            let expr = Expression::new_field_access(true, &expr, lu_dog);
                             let ty = s_read!(func).r10_value_type(lu_dog)[0].clone();
                             let value = XValue::new_expression(block, &ty, &expr, lu_dog);
                             update_span_value(&span, &value, location!());
@@ -1466,18 +1473,18 @@ pub(super) fn inter_expression(
                                 // We need to grab the type from the field: what we have above is the type
                                 // of the struct.
                                 if let Some(field) = field {
-                                    let fat = FieldAccessTarget::new_field(&field, lu_dog);
+                                    let fat = FieldAccessTarget::new_field(true, &field, lu_dog);
                                     let expr = FieldAccess::new(&lhs.0, &fat, &woog_struct, lu_dog);
-                                    let expr = Expression::new_field_access(&expr, lu_dog);
+                                    let expr = Expression::new_field_access(true, &expr, lu_dog);
                                     let ty = s_read!(field).r5_value_type(lu_dog)[0].clone();
                                     let value = XValue::new_expression(block, &ty, &expr, lu_dog);
                                     update_span_value(&span, &value, location!());
 
                                     Ok(((expr, span), ty))
                                 } else if let Some(func) = func {
-                                    let fat = FieldAccessTarget::new_function(&func, lu_dog);
+                                    let fat = FieldAccessTarget::new_function(true, &func, lu_dog);
                                     let expr = FieldAccess::new(&lhs.0, &fat, &woog_struct, lu_dog);
-                                    let expr = Expression::new_field_access(&expr, lu_dog);
+                                    let expr = Expression::new_field_access(true, &expr, lu_dog);
                                     let ty = s_read!(func).r10_value_type(lu_dog)[0].clone();
                                     let value = XValue::new_expression(block, &ty, &expr, lu_dog);
                                     update_span_value(&span, &value, location!());
@@ -1520,10 +1527,11 @@ pub(super) fn inter_expression(
         //
         ParserExpression::FloatLiteral(literal) => {
             let expr = Expression::new_literal(
-                &Literal::new_float_literal(&FloatLiteral::new(literal, lu_dog), lu_dog),
+                true,
+                &Literal::new_float_literal(true, &FloatLiteral::new(literal, lu_dog), lu_dog),
                 lu_dog,
             );
-            let ty = ValueType::new_ty(&Ty::new_float(context.sarzak), lu_dog);
+            let ty = ValueType::new_ty(true, &Ty::new_float(context.sarzak), lu_dog);
             let value = XValue::new_expression(block, &ty, &expr, lu_dog);
             update_span_value(&span, &value, location!());
 
@@ -1553,13 +1561,13 @@ pub(super) fn inter_expression(
                     // check what rust does. I'm actually too tired right now to think about
                     // it. Related to range_type_bug.
                     // 🚧 Of course rust does not work on chars. Doesn't mean I don't want to.
-                    ValueType::new_ty(&Ty::new_integer(context.sarzak), lu_dog)
+                    ValueType::new_ty(true, &Ty::new_integer(context.sarzak), lu_dog)
                 }
                 ValueTypeEnum::Ty(ref id) => {
                     let ty = context.sarzak.exhume_ty(id).unwrap();
                     let ty = ty.read().unwrap();
                     match &*ty {
-                        Ty::SString(_) => ValueType::new_char(lu_dog),
+                        Ty::SString(_) => ValueType::new_char(true, lu_dog),
                         _ => {
                             let ty =
                                 PrintableValueType(&collection_ty, context, lu_dog).to_string();
@@ -1613,11 +1621,11 @@ pub(super) fn inter_expression(
                 unreachable!()
             };
             let body = lu_dog.exhume_block(body).unwrap();
-            let body = Expression::new_block(&body, lu_dog);
+            let body = Expression::new_block(true, &body, lu_dog);
 
             let for_loop = ForLoop::new(iter.0.to_owned(), &body, &collection.0, lu_dog);
-            let expr = Expression::new_for_loop(&for_loop, lu_dog);
-            let ty = ValueType::new_empty(lu_dog);
+            let expr = Expression::new_for_loop(true, &for_loop, lu_dog);
+            let ty = ValueType::new_empty(true, lu_dog);
 
             let value = XValue::new_expression(block, &ty, &expr, lu_dog);
             update_span_value(&span, &value, location!());
@@ -1673,11 +1681,11 @@ pub(super) fn inter_expression(
             let func_call = FunctionCall::new(name.to_owned(), lu_dog);
             let func_call =
                 Call::new_function_call(true, None, Some(&func_expr.0), &func_call, lu_dog);
-            let func = Expression::new_call(&func_call, lu_dog);
+            let func = Expression::new_call(true, &func_call, lu_dog);
             let value = XValue::new_expression(block, &ret_ty, &func, lu_dog);
             update_span_value(&span, &value, location!());
 
-            let mut last_arg_uuid: Option<usize> = None;
+            let mut last_arg_uuid: Option<SarzakStorePtr> = None;
             // Note that position makes each arg unique. I don't remember if
             // that is the explicit intention or not.
             for (position, arg) in args.iter().enumerate() {
@@ -1754,12 +1762,12 @@ pub(super) fn inter_expression(
                 lu_dog,
             )?;
 
-            let expr = Comparison::new_greater_than(lu_dog);
+            let expr = Comparison::new_greater_than(true, lu_dog);
             let expr = Operator::new_comparison(&lhs.0, Some(&rhs.0), &expr, lu_dog);
-            let expr = Expression::new_operator(&expr, lu_dog);
+            let expr = Expression::new_operator(true, &expr, lu_dog);
 
             let ty = Ty::new_boolean(context.sarzak);
-            let ty = ValueType::new_ty(&ty, lu_dog);
+            let ty = ValueType::new_ty(true, &ty, lu_dog);
 
             let value = XValue::new_expression(block, &ty, &expr, lu_dog);
             update_span_value(&span, &value, location!());
@@ -1804,12 +1812,12 @@ pub(super) fn inter_expression(
                 lu_dog,
             )?;
 
-            let expr = Comparison::new_greater_than_or_equal(lu_dog);
+            let expr = Comparison::new_greater_than_or_equal(true, lu_dog);
             let expr = Operator::new_comparison(&lhs.0, Some(&rhs.0), &expr, lu_dog);
-            let expr = Expression::new_operator(&expr, lu_dog);
+            let expr = Expression::new_operator(true, &expr, lu_dog);
 
             let ty = Ty::new_boolean(context.sarzak);
-            let ty = ValueType::new_ty(&ty, lu_dog);
+            let ty = ValueType::new_ty(true, &ty, lu_dog);
 
             let value = XValue::new_expression(block, &ty, &expr, lu_dog);
             update_span_value(&span, &value, location!());
@@ -1850,7 +1858,7 @@ pub(super) fn inter_expression(
                 if let Ty::Boolean(_) = &*s_ty {
                     // Good Times.
                 } else {
-                    let bty = ValueType::new_ty(&Ty::new_boolean(context.sarzak), lu_dog);
+                    let bty = ValueType::new_ty(true, &Ty::new_boolean(context.sarzak), lu_dog);
                     let bty = PrintableValueType(&bty, context, lu_dog);
                     let ty = PrintableValueType(&conditional_ty, context, lu_dog);
                     return Err(vec![DwarfError::TypeMismatch {
@@ -1863,7 +1871,7 @@ pub(super) fn inter_expression(
                     }]);
                 }
             } else {
-                let bty = ValueType::new_ty(&Ty::new_boolean(context.sarzak), lu_dog);
+                let bty = ValueType::new_ty(true, &Ty::new_boolean(context.sarzak), lu_dog);
                 let bty = PrintableValueType(&bty, context, lu_dog);
                 let ty = PrintableValueType(&conditional_ty, context, lu_dog);
                 return Err(vec![DwarfError::TypeMismatch {
@@ -1899,7 +1907,7 @@ pub(super) fn inter_expression(
             };
 
             let if_expr = XIf::new(false_block.as_ref(), &conditional.0, &true_block, lu_dog);
-            let expr = Expression::new_x_if(&if_expr, lu_dog);
+            let expr = Expression::new_x_if(true, &if_expr, lu_dog);
 
             let ty = true_ty;
 
@@ -1931,7 +1939,7 @@ pub(super) fn inter_expression(
                 lu_dog,
             )?;
 
-            let int_ty = ValueType::new_ty(&Ty::new_integer(context.sarzak), lu_dog);
+            let int_ty = ValueType::new_ty(true, &Ty::new_integer(context.sarzak), lu_dog);
 
             let index_span = s_read!(index.1).start as usize..s_read!(index.1).end as usize;
             typecheck(
@@ -1951,7 +1959,7 @@ pub(super) fn inter_expression(
                 let ty = context.sarzak.exhume_ty(ty).unwrap();
                 let ty = ty.read().unwrap();
                 if let Ty::SString(_) = &*ty {
-                    ValueType::new_char(lu_dog)
+                    ValueType::new_char(true, lu_dog)
                 } else {
                     let ty = PrintableValueType(&target_ty, context, lu_dog).to_string();
                     return Err(vec![DwarfError::NotAList {
@@ -1973,7 +1981,7 @@ pub(super) fn inter_expression(
 
             let index = Index::new(&index.0, &target.0, lu_dog);
 
-            let expr = Expression::new_index(&index, lu_dog);
+            let expr = Expression::new_index(true, &index, lu_dog);
             let value = XValue::new_expression(block, &target_ty, &expr, lu_dog);
             update_span_value(&span, &value, location!());
 
@@ -1984,10 +1992,11 @@ pub(super) fn inter_expression(
         //
         ParserExpression::IntegerLiteral(literal) => {
             let expr = Expression::new_literal(
-                &Literal::new_integer_literal(&IntegerLiteral::new(literal, lu_dog), lu_dog),
+                true,
+                &Literal::new_integer_literal(true, &IntegerLiteral::new(literal, lu_dog), lu_dog),
                 lu_dog,
             );
-            let ty = ValueType::new_ty(&Ty::new_integer(context.sarzak), lu_dog);
+            let ty = ValueType::new_ty(true, &Ty::new_integer(context.sarzak), lu_dog);
             let value = XValue::new_expression(block, &ty, &expr, lu_dog);
             update_span_value(&span, &value, location!());
 
@@ -2020,10 +2029,10 @@ pub(super) fn inter_expression(
             )?;
 
             let lambda = Lambda::new(Some(&_body), None, &ret_ty, lu_dog);
-            let _ = ValueType::new_lambda(&lambda, lu_dog);
+            let _ = ValueType::new_lambda(true, &lambda, lu_dog);
 
             let mut errors = Vec::new();
-            let mut last_param_uuid: Option<usize> = None;
+            let mut last_param_uuid: Option<SarzakStorePtr> = None;
             for (position, ((param_name, name_span), (param_ty, ty_span))) in
                 params.iter().enumerate()
             {
@@ -2090,7 +2099,7 @@ pub(super) fn inter_expression(
                 lu_dog,
             )?;
 
-            let expr = Expression::new_lambda(&lambda, lu_dog);
+            let expr = Expression::new_lambda(true, &lambda, lu_dog);
             let value = XValue::new_expression(&block, &ret_ty, &expr, lu_dog);
             update_span_value(&span, &value, location!());
 
@@ -2134,12 +2143,12 @@ pub(super) fn inter_expression(
                 lu_dog,
             )?;
 
-            let expr = Comparison::new_less_than(lu_dog);
+            let expr = Comparison::new_less_than(true, lu_dog);
             let expr = Operator::new_comparison(&lhs.0, Some(&rhs.0), &expr, lu_dog);
-            let expr = Expression::new_operator(&expr, lu_dog);
+            let expr = Expression::new_operator(true, &expr, lu_dog);
 
             let ty = Ty::new_boolean(context.sarzak);
-            let ty = ValueType::new_ty(&ty, lu_dog);
+            let ty = ValueType::new_ty(true, &ty, lu_dog);
 
             let value = XValue::new_expression(block, &ty, &expr, lu_dog);
             update_span_value(&span, &value, location!());
@@ -2184,12 +2193,12 @@ pub(super) fn inter_expression(
                 lu_dog,
             )?;
 
-            let expr = Comparison::new_less_than_or_equal(lu_dog);
+            let expr = Comparison::new_less_than_or_equal(true, lu_dog);
             let expr = Operator::new_comparison(&lhs.0, Some(&rhs.0), &expr, lu_dog);
-            let expr = Expression::new_operator(&expr, lu_dog);
+            let expr = Expression::new_operator(true, &expr, lu_dog);
 
             let ty = Ty::new_boolean(context.sarzak);
-            let ty = ValueType::new_ty(&ty, lu_dog);
+            let ty = ValueType::new_ty(true, &ty, lu_dog);
 
             let value = XValue::new_expression(block, &ty, &expr, lu_dog);
             update_span_value(&span, &value, location!());
@@ -2202,10 +2211,13 @@ pub(super) fn inter_expression(
         ParserExpression::List(ref elements) => {
             debug!("list {:?}", elements);
             if elements.is_empty() {
-                let list = List::new(&ValueType::new_empty(lu_dog), lu_dog);
-                let expr =
-                    Expression::new_list_expression(&ListExpression::new(None, lu_dog), lu_dog);
-                let ty = ValueType::new_list(&list, lu_dog);
+                let list = List::new(&ValueType::new_empty(true, lu_dog), lu_dog);
+                let expr = Expression::new_list_expression(
+                    true,
+                    &ListExpression::new(None, lu_dog),
+                    lu_dog,
+                );
+                let ty = ValueType::new_list(true, &list, lu_dog);
                 let value = XValue::new_expression(block, &ty, &expr, lu_dog);
                 update_span_value(&span, &value, location!());
 
@@ -2227,7 +2239,7 @@ pub(super) fn inter_expression(
 
                 let list = List::new(&first_ty, lu_dog);
                 let element = ListElement::new(0, &first, None, lu_dog);
-                let expr = Expression::new_list_element(&element, lu_dog);
+                let expr = Expression::new_list_element(true, &element, lu_dog);
                 let value = XValue::new_expression(block, &first_ty, &expr, lu_dog);
                 // We need to clone the span because it's already been used
                 // by the underlying value.
@@ -2242,7 +2254,7 @@ pub(super) fn inter_expression(
 
                 let list_expr = ListExpression::new(Some(&element), lu_dog);
 
-                let mut last_element_uuid: Option<usize> = Some(s_read!(element).id);
+                let mut last_element_uuid: Option<SarzakStorePtr> = Some(s_read!(element).id);
                 let mut position = 1;
                 for element in elements {
                     let ((elt, elt_span), elt_ty) = inter_expression(
@@ -2266,7 +2278,7 @@ pub(super) fn inter_expression(
                     position += 1;
 
                     last_element_uuid = link_list_element!(last_element_uuid, element, lu_dog);
-                    let expr = Expression::new_list_element(&element, lu_dog);
+                    let expr = Expression::new_list_element(true, &element, lu_dog);
                     let value = XValue::new_expression(block, &elt_ty, &expr, lu_dog);
                     // We need to clone the span because it's already been used
                     // by the underlying value.
@@ -2280,8 +2292,8 @@ pub(super) fn inter_expression(
                     );
                 }
 
-                let expr = Expression::new_list_expression(&list_expr, lu_dog);
-                let ty = ValueType::new_list(&list, lu_dog);
+                let expr = Expression::new_list_expression(true, &list_expr, lu_dog);
+                let ty = ValueType::new_list(true, &list, lu_dog);
                 let value = XValue::new_expression(block, &ty, &expr, lu_dog);
                 update_span_value(&span, &value, location!());
 
@@ -2355,7 +2367,7 @@ pub(super) fn inter_expression(
                                             let expr =
                                                 VariableExpression::new(name.to_owned(), lu_dog);
                                             debug!("created a new variable expression {:?}", expr);
-                                            Expression::new_variable_expression(&expr, lu_dog)
+                                            Expression::new_variable_expression(true, &expr, lu_dog)
                                         };
 
                                         let value =
@@ -2427,7 +2439,7 @@ pub(super) fn inter_expression(
                 let func = lu_dog.exhume_function(id).unwrap();
                 let ty = s_read!(func).r10_value_type(lu_dog)[0].clone();
                 let expr = VariableExpression::new(name.to_owned(), lu_dog);
-                let expr = Expression::new_variable_expression(&expr, lu_dog);
+                let expr = Expression::new_variable_expression(true, &expr, lu_dog);
 
                 let value = XValue::new_expression(block, &ty, &expr, lu_dog);
                 update_span_value(&span, &value, location!());
@@ -2437,8 +2449,8 @@ pub(super) fn inter_expression(
             } else {
                 debug!("variable not found: `{name}`");
                 let expr = VariableExpression::new(name.to_owned(), lu_dog);
-                let expr = Expression::new_variable_expression(&expr, lu_dog);
-                let ty = ValueType::new_unknown(lu_dog);
+                let expr = Expression::new_variable_expression(true, &expr, lu_dog);
+                let ty = ValueType::new_unknown(true, lu_dog);
                 e_warn!("Unknown type for variable {name}");
 
                 let value = XValue::new_expression(block, &ty, &expr, lu_dog);
@@ -2515,7 +2527,7 @@ pub(super) fn inter_expression(
             let xmatch = XMatch::new(Uuid::new_v4(), &scrutinee.0, lu_dog);
 
             let mut first = true;
-            let mut match_ty = ValueType::new_unknown(lu_dog);
+            let mut match_ty = ValueType::new_unknown(true, lu_dog);
             for ((pattern, match_expr), ref span) in patterns {
                 debug!("pattern: {pattern:?}");
                 let pattern_expr: ParserExpression = pattern.to_owned().into();
@@ -2555,7 +2567,7 @@ pub(super) fn inter_expression(
                 let _pat = AssocPat::new(&expr.0, &pattern_expr.0, &xmatch, lu_dog);
             }
 
-            let expr = Expression::new_x_match(&xmatch, lu_dog);
+            let expr = Expression::new_x_match(true, &xmatch, lu_dog);
 
             let value = XValue::new_expression(block, &match_ty, &expr, lu_dog);
             update_span_value(&span, &value, location!());
@@ -2590,9 +2602,9 @@ pub(super) fn inter_expression(
                 context_stack,
                 lu_dog,
             )?;
-            let negation = Unary::new_negation(lu_dog);
+            let negation = Unary::new_negation(true, lu_dog);
             let operator = Operator::new_unary(&expr.0, None, &negation, lu_dog);
-            let expr = Expression::new_operator(&operator, lu_dog);
+            let expr = Expression::new_operator(true, &operator, lu_dog);
             let value = XValue::new_expression(block, &ty, &expr, lu_dog);
             update_span_value(&span, &value, location!());
 
@@ -2627,12 +2639,12 @@ pub(super) fn inter_expression(
                 lu_dog,
             )?;
 
-            let expr = Comparison::new_not_equal(lu_dog);
+            let expr = Comparison::new_not_equal(true, lu_dog);
             let expr = Operator::new_comparison(&lhs.0, Some(&rhs.0), &expr, lu_dog);
-            let expr = Expression::new_operator(&expr, lu_dog);
+            let expr = Expression::new_operator(true, &expr, lu_dog);
 
             let ty = Ty::new_boolean(context.sarzak);
-            let ty = ValueType::new_ty(&ty, lu_dog);
+            let ty = ValueType::new_ty(true, &ty, lu_dog);
 
             let value = XValue::new_expression(block, &ty, &expr, lu_dog);
             update_span_value(&span, &value, location!());
@@ -2651,9 +2663,9 @@ pub(super) fn inter_expression(
                 context_stack,
                 lu_dog,
             )?;
-            let ty = ValueType::new_empty(lu_dog);
+            let ty = ValueType::new_empty(true, lu_dog);
             let print = XPrint::new(&expr.0, lu_dog);
-            let expr = Expression::new_x_print(&print, lu_dog);
+            let expr = Expression::new_x_print(true, &print, lu_dog);
             let value = XValue::new_expression(block, &ty, &expr, lu_dog);
             update_span_value(&span, &value, location!());
 
@@ -2695,9 +2707,9 @@ pub(super) fn inter_expression(
                 lu_dog,
             )?;
 
-            let expr = Binary::new_multiplication(lu_dog);
+            let expr = Binary::new_multiplication(true, lu_dog);
             let expr = Operator::new_binary(&lhs.0, Some(&rhs.0), &expr, lu_dog);
-            let expr = Expression::new_operator(&expr, lu_dog);
+            let expr = Expression::new_operator(true, &expr, lu_dog);
 
             let value = XValue::new_expression(block, &lhs_ty, &expr, lu_dog);
             update_span_value(&span, &value, location!());
@@ -2748,10 +2760,10 @@ pub(super) fn inter_expression(
                 lu_dog,
             )?;
 
-            let expr = BooleanOperator::new_or(lu_dog);
-            let expr = Binary::new_boolean_operator(&expr, lu_dog);
+            let expr = BooleanOperator::new_or(true, lu_dog);
+            let expr = Binary::new_boolean_operator(true, &expr, lu_dog);
             let expr = Operator::new_binary(&lhs.0, Some(&rhs.0), &expr, lu_dog);
-            let expr = Expression::new_operator(&expr, lu_dog);
+            let expr = Expression::new_operator(true, &expr, lu_dog);
 
             let value = XValue::new_expression(block, &lhs_ty, &expr, lu_dog);
             update_span_value(&span, &value, location!());
@@ -2777,7 +2789,7 @@ pub(super) fn inter_expression(
                 } else {
                     let expr = VariableExpression::new(name.to_owned(), lu_dog);
                     debug!("created a new variable expression {:?}", expr);
-                    Expression::new_variable_expression(&expr, lu_dog)
+                    Expression::new_variable_expression(true, &expr, lu_dog)
                 };
 
                 context.location = location!();
@@ -2833,11 +2845,11 @@ pub(super) fn inter_expression(
 
             let range = RangeExpression::new_full(Some(&start.0), Some(&end.0), lu_dog);
 
-            let expr = Expression::new_range_expression(&range, lu_dog);
+            let expr = Expression::new_range_expression(true, &range, lu_dog);
             let value = XValue::new_expression(block, &start_ty, &expr, lu_dog);
             update_span_value(&span, &value, location!());
 
-            Ok(((expr, span), ValueType::new_range(lu_dog)))
+            Ok(((expr, span), ValueType::new_range(true, lu_dog)))
         }
         //
         // Return
@@ -2855,25 +2867,38 @@ pub(super) fn inter_expression(
             } else {
                 // 🚧 Once we have tuples, I'd prefer to return the empty tuple.
                 let expr = Expression::new_block(
+                    true,
                     &Block::new(false, Uuid::new_v4(), None, None, lu_dog),
                     lu_dog,
                 );
-                let ty = ValueType::new_empty(lu_dog);
+                let ty = ValueType::new_empty(true, lu_dog);
                 let value = XValue::new_expression(block, &ty, &expr, lu_dog);
-                // See # Span Bug
-                lu_dog.inter_span(|id| {
-                    let mut span = s_read!(span).clone();
-                    span.x_value = Some(s_read!(value).id);
-                    span.id = id;
-                    new_ref!(LuDogSpan, span)
-                });
-                // update_span_value(&span, &value, location!());
-
+                cfg_if::cfg_if! {
+                if #[cfg(not(feature="debug"))] {
+                    // See # Span Bug
+                        lu_dog.inter_span(|id| {
+                            let mut span = s_read!(span).clone();
+                            span.x_value = Some(s_read!(value).id);
+                            span.id = id;
+                            new_ref!(LuDogSpan, span)
+                        });
+                        // update_span_value(&span, &value, location!());
+                    } else {
+                        let span = LuDogSpan::new(
+                            s_read!(span).end,
+                            s_read!(span).start,
+                            &context.source,
+                            None,
+                            Some(&value),
+                            lu_dog,
+                        );
+                    }
+                }
                 ((expr, span.clone()), ty)
             };
 
             let ret = XReturn::new(&expr.0, lu_dog);
-            let expr = Expression::new_x_return(&ret, lu_dog);
+            let expr = Expression::new_x_return(true, &ret, lu_dog);
             let value = XValue::new_expression(block, &ty, &expr, lu_dog);
             update_span_value(&span, &value, location!());
 
@@ -2900,13 +2925,15 @@ pub(super) fn inter_expression(
         ParserExpression::StringLiteral(literal) => {
             debug!("literal {:?}", literal);
             let expr = Expression::new_literal(
+                true,
                 &Literal::new_string_literal(
+                    true,
                     &StringLiteral::new(literal.to_owned(), lu_dog),
                     lu_dog,
                 ),
                 lu_dog,
             );
-            let ty = ValueType::new_ty(&Ty::new_s_string(context.sarzak), lu_dog);
+            let ty = ValueType::new_ty(true, &Ty::new_s_string(context.sarzak), lu_dog);
             let value = XValue::new_expression(block, &ty, &expr, lu_dog);
             update_span_value(&span, &value, location!());
 
@@ -2991,7 +3018,7 @@ pub(super) fn inter_expression(
             let woog_struct = lu_dog.exhume_woog_struct(&id).unwrap();
             let struct_fields = s_read!(woog_struct).r7_field(lu_dog);
 
-            let data_struct = DataStructure::new_woog_struct(&woog_struct, lu_dog);
+            let data_struct = DataStructure::new_woog_struct(true, &woog_struct, lu_dog);
 
             // 🚧 Fix this.
             let x_path = XPath::new(Uuid::new_v4(), None, lu_dog);
@@ -3069,7 +3096,7 @@ pub(super) fn inter_expression(
                     lu_dog,
                 );
 
-                let expr = Expression::new_field_expression(&field, lu_dog);
+                let expr = Expression::new_field_expression(true, &field, lu_dog);
                 let value = XValue::new_expression(block, &ty, &expr, lu_dog);
                 update_span_value(&span, &value, location!());
 
@@ -3091,12 +3118,25 @@ pub(super) fn inter_expression(
                 if s_read!(field_expr.1).x_value.is_none() {
                     s_write!(field_expr.1).x_value = Some(s_read!(value).id);
                 } else {
-                    lu_dog.inter_span(|id| {
-                        let mut span = s_read!(field_expr.1).clone();
-                        span.x_value = Some(s_read!(value).id);
-                        span.id = id;
-                        new_ref!(LuDogSpan, span)
-                    });
+                    cfg_if::cfg_if! {
+                        if #[cfg(not(feature="debug"))] {
+                            lu_dog.inter_span(|id| {
+                                let mut span = s_read!(field_expr.1).clone();
+                                span.x_value = Some(s_read!(value).id);
+                                span.id = id;
+                                new_ref!(LuDogSpan, span)
+                            });
+                        } else {
+                            let span = LuDogSpan::new(
+                                s_read!(field_expr.1).end,
+                                s_read!(field_expr.1).start,
+                                &context.source,
+                                None,
+                                Some(&value),
+                                lu_dog,
+                            );
+                        }
+                    }
                 }
             }
 
@@ -3111,8 +3151,8 @@ pub(super) fn inter_expression(
             }
 
             // I love that the type of the thing is the same as the thing itself.
-            let expr = Expression::new_struct_expression(&struct_expr, lu_dog);
-            let ty = ValueType::new_woog_struct(&woog_struct, lu_dog);
+            let expr = Expression::new_struct_expression(true, &struct_expr, lu_dog);
+            let ty = ValueType::new_woog_struct(true, &woog_struct, lu_dog);
 
             let value = XValue::new_expression(block, &ty, &expr, lu_dog);
             update_span_value(&span, &value, location!());
@@ -3149,9 +3189,9 @@ pub(super) fn inter_expression(
             // 🚧
             // 🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧
 
-            let expr = Binary::new_subtraction(lu_dog);
+            let expr = Binary::new_subtraction(true, lu_dog);
             let expr = Operator::new_binary(&lhs.0, Some(&rhs.0), &expr, lu_dog);
-            let expr = Expression::new_operator(&expr, lu_dog);
+            let expr = Expression::new_operator(true, &expr, lu_dog);
 
             let value = XValue::new_expression(block, &lhs_ty, &expr, lu_dog);
             update_span_value(&span, &value, location!());
@@ -3635,12 +3675,12 @@ pub(crate) fn make_value_type(
     match type_ {
         Type::Boolean => {
             let ty = Ty::new_boolean(sarzak);
-            Ok(ValueType::new_ty(&ty, lu_dog))
+            Ok(ValueType::new_ty(true, &ty, lu_dog))
         }
-        Type::Empty => Ok(ValueType::new_empty(lu_dog)),
+        Type::Empty => Ok(ValueType::new_empty(true, lu_dog)),
         Type::Float => {
             let ty = Ty::new_float(sarzak);
-            Ok(ValueType::new_ty(&ty, lu_dog))
+            Ok(ValueType::new_ty(true, &ty, lu_dog))
         }
         Type::Fn(ref params, ref return_type) => {
             let return_type = make_value_type(
@@ -3653,7 +3693,7 @@ pub(crate) fn make_value_type(
             )?;
             let lambda = Lambda::new(None, None, &return_type, lu_dog);
 
-            let mut last_param_uuid: Option<usize> = None;
+            let mut last_param_uuid: Option<SarzakStorePtr> = None;
             for (position, (param_ty, param_span)) in params.iter().enumerate() {
                 let param_ty =
                     make_value_type(param_ty, param_span, None, context, context_stack, lu_dog)?;
@@ -3677,16 +3717,16 @@ pub(crate) fn make_value_type(
                 last_param_uuid = link_ƛ_parameter!(last_param_uuid, param, lu_dog);
             }
 
-            let lambda = ValueType::new_lambda(&lambda, lu_dog);
+            let lambda = ValueType::new_lambda(true, &lambda, lu_dog);
             Ok(lambda)
         }
         Type::Generic((t, _)) => {
             let ty = Generic::new(t.to_owned(), None, None, lu_dog);
-            Ok(ValueType::new_generic(&ty, lu_dog))
+            Ok(ValueType::new_generic(true, &ty, lu_dog))
         }
         Type::Integer => {
             let ty = Ty::new_integer(sarzak);
-            Ok(ValueType::new_ty(&ty, lu_dog))
+            Ok(ValueType::new_ty(true, &ty, lu_dog))
         }
         Type::List(ref type_) => {
             let inner_type = make_value_type(
@@ -3698,7 +3738,7 @@ pub(crate) fn make_value_type(
                 lu_dog,
             )?;
             let list = List::new(&inner_type, lu_dog);
-            Ok(ValueType::new_list(&list, lu_dog))
+            Ok(ValueType::new_list(true, &list, lu_dog))
         }
         Type::Self_ => match enclosing_type {
             Some(ty) => Ok(ty.clone()),
@@ -3710,7 +3750,7 @@ pub(crate) fn make_value_type(
         },
         Type::String => {
             let ty = Ty::new_s_string(sarzak);
-            Ok(ValueType::new_ty(&ty, lu_dog))
+            Ok(ValueType::new_ty(true, &ty, lu_dog))
         }
         Type::UserType(tok, generics) => {
             let name = &tok.0;
@@ -3750,7 +3790,7 @@ pub(crate) fn make_value_type(
                 )?;
                 let future = XFuture::new(&inner_type, lu_dog);
 
-                Ok(ValueType::new_x_future(&future, lu_dog))
+                Ok(ValueType::new_x_future(true, &future, lu_dog))
             // } else if name == "Plugin" {
             //     let inner_type =
             //         make_value_type(&generics[0].0, span, enclosing_type, context, lu_dog)?;
@@ -3767,9 +3807,9 @@ pub(crate) fn make_value_type(
                     }]),
                 }
             } else if name == "String" {
-                Ok(ValueType::new_ty(&Ty::new_s_string(sarzak), lu_dog))
+                Ok(ValueType::new_ty(true, &Ty::new_s_string(sarzak), lu_dog))
             } else if name == UUID_TYPE {
-                Ok(ValueType::new_ty(&Ty::new_s_uuid(sarzak), lu_dog))
+                Ok(ValueType::new_ty(true, &Ty::new_s_uuid(sarzak), lu_dog))
             } else {
                 // 🚧 HashMapFix
                 for model in context.models.values() {
@@ -3785,7 +3825,7 @@ pub(crate) fn make_value_type(
                         }
                         _ => false,
                     }) {
-                        return Ok(ValueType::new_ty(&ty, lu_dog));
+                        return Ok(ValueType::new_ty(true, &ty, lu_dog));
                     }
                 }
 
@@ -3809,7 +3849,7 @@ pub(crate) fn make_value_type(
                     Ok(ty)
                 } else if let Some(ref id) = lu_dog.exhume_z_object_store_id_by_name(name) {
                     let store = lu_dog.exhume_z_object_store(id).unwrap();
-                    Ok(ValueType::new_z_object_store(&store, lu_dog))
+                    Ok(ValueType::new_z_object_store(true, &store, lu_dog))
                 } else if let Some(ty) = sarzak.iter_ty().find(|ty| match &*ty.read().unwrap() {
                     // Unlikely to have to reach back this far.
                     Ty::Object(ref obj) => {
@@ -3819,7 +3859,7 @@ pub(crate) fn make_value_type(
                     }
                     _ => false,
                 }) {
-                    Ok(ValueType::new_ty(&ty, lu_dog))
+                    Ok(ValueType::new_ty(true, &ty, lu_dog))
                 } else {
                     Err(vec![DwarfError::UnknownType {
                         ty: name.to_owned(),
@@ -3832,7 +3872,7 @@ pub(crate) fn make_value_type(
         }
         Type::Uuid => {
             let ty = Ty::new_s_uuid(sarzak);
-            Ok(ValueType::new_ty(&ty, lu_dog))
+            Ok(ValueType::new_ty(true, &ty, lu_dog))
         }
         道 => todo!("get_value_type missing implementation for {:?}", 道),
     }
@@ -3848,7 +3888,7 @@ pub(crate) fn lookup_user_defined_type(
         // Here is where we look for actual user defined types, as
         // in types that are defined in dwarf source.
         let woog_struct = lu_dog.exhume_woog_struct(id).unwrap();
-        let ty = ValueType::new_woog_struct(&woog_struct, lu_dog);
+        let ty = ValueType::new_woog_struct(true, &woog_struct, lu_dog);
         LuDogSpan::new(
             span.end as i64,
             span.start as i64,
@@ -3862,7 +3902,7 @@ pub(crate) fn lookup_user_defined_type(
     } else if let Some(ref id) = lu_dog.exhume_enumeration_id_by_name(name) {
         // Here too, but for enums.
         let woog_enum = lu_dog.exhume_enumeration(id).unwrap();
-        Some(ValueType::new_enumeration(&woog_enum, lu_dog))
+        Some(ValueType::new_enumeration(true, &woog_enum, lu_dog))
     } else {
         None
     }
@@ -3888,14 +3928,14 @@ pub(crate) fn lookup_woog_struct_method_return_type(
         } else {
             debug!("ParserExpression type not found");
             e_warn!("Unknown type for variable {method}");
-            Some(ValueType::new_unknown(lu_dog))
+            Some(ValueType::new_unknown(true, lu_dog))
         };
         debug!("ParserExpression found type: {ty:?}");
         if let Some(ty) = ty {
             ty
         } else {
             e_warn!("Unknown type for variable {method}");
-            ValueType::new_unknown(lu_dog)
+            ValueType::new_unknown(true, lu_dog)
         }
     } else if type_name == CHACHA {
         match method {
@@ -3907,18 +3947,18 @@ pub(crate) fn lookup_woog_struct_method_return_type(
                     .find(|t| s_read!(t).subtype == ValueTypeEnum::Ty(ty.read().unwrap().id()))
                     .unwrap();
                 let list = List::new(&ty, lu_dog);
-                ValueType::new_list(&list, lu_dog)
+                ValueType::new_list(true, &list, lu_dog)
             }
             _ => {
                 e_warn!("ParserExpression type not found");
-                ValueType::new_unknown(lu_dog)
+                ValueType::new_unknown(true, lu_dog)
             }
         }
     } else if type_name == UUID_TYPE && method == FN_NEW {
-        ValueType::new_ty(&Ty::new_s_uuid(sarzak), lu_dog)
+        ValueType::new_ty(true, &Ty::new_s_uuid(sarzak), lu_dog)
     } else {
         e_warn!("ParserExpression type not found");
-        ValueType::new_unknown(lu_dog)
+        ValueType::new_unknown(true, lu_dog)
     }
 }
 
@@ -3935,7 +3975,7 @@ pub(super) fn typecheck(
     let rhs = rhs.0;
 
     cfg_if::cfg_if! {
-        if #[cfg(any(feature = "single", feature = "single-vec", feature = "single-vec-tracy"))] {
+        if #[cfg(any(feature = "single", feature = "single-vec", feature = "single-vec-tracy", feature="debug"))] {
             if std::rc::Rc::as_ptr(lhs) == std::rc::Rc::as_ptr(rhs) {
                 return Ok(());
             }
@@ -4153,7 +4193,7 @@ pub(crate) fn create_generic_struct(
         lu_dog,
     );
     context.dirty.push(Dirty::Struct(new_struct.clone()));
-    let _ = ValueType::new_woog_struct(&new_struct, lu_dog);
+    let _ = ValueType::new_woog_struct(true, &new_struct, lu_dog);
     for field in woog_struct.r7_field(lu_dog) {
         let field = s_read!(field);
         let ty = &field.r5_value_type(lu_dog)[0];

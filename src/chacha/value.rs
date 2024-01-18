@@ -103,7 +103,7 @@ where
 #[derive(Clone, Debug, StableAbi)]
 pub struct FfiProxy {
     pub module: RString,
-    pub uuid: FfiUuid,
+    pub ty: FfiUuid,
     pub id: FfiUuid,
     pub plugin: PluginType,
 }
@@ -145,7 +145,7 @@ pub enum FfiValue {
 /// }
 /// ```
 ///
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug)]
 pub enum EnumVariant {
     /// Unit Enumeration Field
     ///
@@ -213,7 +213,7 @@ pub enum ThonkInner {
     Index(usize),
 }
 
-#[derive(Default, Deserialize, Serialize)]
+#[derive(Default)]
 pub enum Value {
     /// Boolean
     ///
@@ -229,7 +229,7 @@ pub enum Value {
     /// ()
     Empty,
     Enumeration(EnumVariant),
-    #[serde(skip)]
+    // #[serde(skip)]
     Error(Box<ChaChaError>),
     Float(DwarfFloat),
     /// Function
@@ -239,7 +239,7 @@ pub enum Value {
     /// excessive, and yet I know I've looked into it before.
     Function(RefType<Function>),
     #[cfg(feature = "async")]
-    #[serde(skip)]
+    // #[serde(skip)]
     Future {
         name: String,
         executor: Executor,
@@ -247,11 +247,11 @@ pub enum Value {
     },
     Integer(DwarfInteger),
     Lambda(RefType<Lambda>),
-    #[serde(skip)]
+    // #[serde(skip)]
     ParsedDwarf(Context),
-    #[serde(skip)]
+    // #[serde(skip)]
     Plugin(RefType<PluginType>),
-    #[serde(skip)]
+    // #[serde(skip)]
     ProxyType {
         module: String,
         obj_ty: Uuid,
@@ -259,13 +259,13 @@ pub enum Value {
         plugin: RefType<PluginType>,
     },
     Range(Range<DwarfInteger>),
-    #[serde(skip)]
+    // #[serde(skip)]
     Store(RefType<ZObjectStore>, RefType<PluginType>),
     String(String),
     Struct(RefType<UserStruct>),
     Table(HashMap<String, RefType<Self>>),
     #[cfg(feature = "async")]
-    #[serde(skip)]
+    // #[serde(skip)]
     Task {
         worker: Option<puteketeke::Worker>,
         parent: Option<puteketeke::AsyncTask<'static, ValueResult>>,
@@ -695,7 +695,7 @@ impl From<Value> for FfiValue {
                 plugin,
             } => Self::ProxyType(FfiProxy {
                 module: module.to_owned().into(),
-                uuid: obj_ty.to_owned().into(),
+                ty: obj_ty.to_owned().into(),
                 id: id.to_owned().into(),
                 plugin: s_read!(plugin).clone(),
             }),
@@ -723,7 +723,7 @@ impl From<FfiValue> for Value {
             FfiValue::Integer(num) => Self::Integer(num),
             FfiValue::ProxyType(plugin) => Self::ProxyType {
                 module: plugin.module.into(),
-                obj_ty: plugin.uuid.into(),
+                obj_ty: plugin.ty.into(),
                 id: plugin.id.into(),
                 plugin: new_ref!(PluginType, plugin.plugin),
             },
@@ -1531,7 +1531,7 @@ impl std::cmp::PartialEq for Value {
     }
 }
 
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default)]
 pub struct UserTypeAttribute(HashMap<String, RefType<Value>>);
 
 impl PartialEq for UserTypeAttribute {
@@ -1556,7 +1556,7 @@ impl PartialEq for UserTypeAttribute {
 
 impl Eq for UserTypeAttribute {}
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug)]
 pub struct TupleEnum {
     variant: String,
     value: RefType<Value>,
@@ -1593,7 +1593,7 @@ impl fmt::Display for TupleEnum {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug)]
 pub struct UserStruct {
     type_name: String,
     type_: RefType<ValueType>,

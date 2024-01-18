@@ -19,7 +19,7 @@ use crate::{
     },
     new_ref, s_read, s_write,
     sarzak::Ty,
-    NewRef, RefType,
+    NewRef, RefType, SarzakStorePtr,
 };
 
 #[allow(clippy::too_many_arguments)]
@@ -49,12 +49,12 @@ pub(in crate::dwarf::extruder) fn inter(
 
     let meth = MethodCall::new(method.to_owned(), lu_dog);
     let call = Call::new_method_call(true, None, Some(&instance.0), &meth, lu_dog);
-    let expr = Expression::new_call(&call, lu_dog);
+    let expr = Expression::new_call(true, &call, lu_dog);
 
     let value = XValue::new_expression(block, &instance_ty, &expr, lu_dog);
     update_span_value(&span, &value, location!());
 
-    let mut last_arg_uuid: Option<usize> = None;
+    let mut last_arg_uuid: Option<SarzakStorePtr> = None;
     let mut arg_ty = Vec::new();
 
     // Self
@@ -115,11 +115,11 @@ pub(in crate::dwarf::extruder) fn method_call_return_type(
         ValueTypeEnum::Char(_) => match method.as_str() {
             IS_DIGIT => {
                 let ty = Ty::new_boolean(context.sarzak);
-                ValueType::new_ty(&ty, lu_dog)
+                ValueType::new_ty(true, &ty, lu_dog)
             }
             TO_DIGIT => {
                 let ty = Ty::new_integer(context.sarzak);
-                ValueType::new_ty(&ty, lu_dog)
+                ValueType::new_ty(true, &ty, lu_dog)
             }
             _ => {
                 return Err(vec![DwarfError::NoSuchMethod {
@@ -143,7 +143,7 @@ pub(in crate::dwarf::extruder) fn method_call_return_type(
                 }
                 let inner = arg_ty.pop().unwrap();
                 let list = List::new(&inner, lu_dog);
-                ValueType::new_list(&list, lu_dog)
+                ValueType::new_list(true, &list, lu_dog)
             }
             SUM => instance_ty.clone(),
             _ => {
@@ -157,9 +157,9 @@ pub(in crate::dwarf::extruder) fn method_call_return_type(
         },
         ValueTypeEnum::Range(_) => match method.as_str() {
             MAP => {
-                let inner = ValueType::new_ty(&Ty::new_integer(context.sarzak), lu_dog);
+                let inner = ValueType::new_ty(true, &Ty::new_integer(context.sarzak), lu_dog);
                 let list = List::new(&inner, lu_dog);
-                ValueType::new_list(&list, lu_dog)
+                ValueType::new_list(true, &list, lu_dog)
             }
             _ => {
                 return Err(vec![DwarfError::NoSuchMethod {
@@ -177,7 +177,7 @@ pub(in crate::dwarf::extruder) fn method_call_return_type(
                 Ty::Integer(_) => match method.as_str() {
                     MAX => {
                         let ty = Ty::new_integer(context.sarzak);
-                        ValueType::new_ty(&ty, lu_dog)
+                        ValueType::new_ty(true, &ty, lu_dog)
                     }
                     _ => {
                         return Err(vec![DwarfError::NoSuchMethod {
@@ -192,27 +192,27 @@ pub(in crate::dwarf::extruder) fn method_call_return_type(
                     match method.as_str() {
                         LEN => {
                             let ty = Ty::new_integer(context.sarzak);
-                            ValueType::new_ty(&ty, lu_dog)
+                            ValueType::new_ty(true, &ty, lu_dog)
                         }
                         LINES => {
                             let string = Ty::new_s_string(context.sarzak);
-                            let string = ValueType::new_ty(&string, lu_dog);
+                            let string = ValueType::new_ty(true, &string, lu_dog);
                             let list = List::new(&string, lu_dog);
-                            ValueType::new_list(&list, lu_dog)
+                            ValueType::new_list(true, &list, lu_dog)
                         }
                         FORMAT => {
                             let ty = Ty::new_s_string(context.sarzak);
-                            ValueType::new_ty(&ty, lu_dog)
+                            ValueType::new_ty(true, &ty, lu_dog)
                         }
                         SPLIT => {
                             let string = Ty::new_s_string(context.sarzak);
-                            let string = ValueType::new_ty(&string, lu_dog);
+                            let string = ValueType::new_ty(true, &string, lu_dog);
                             let list = List::new(&string, lu_dog);
-                            ValueType::new_list(&list, lu_dog)
+                            ValueType::new_list(true, &list, lu_dog)
                         }
                         TRIM => {
                             let ty = Ty::new_s_string(context.sarzak);
-                            ValueType::new_ty(&ty, lu_dog)
+                            ValueType::new_ty(true, &ty, lu_dog)
                         }
                         _ => {
                             return Err(vec![DwarfError::NoSuchMethod {
@@ -227,7 +227,7 @@ pub(in crate::dwarf::extruder) fn method_call_return_type(
                 }
                 _ => {
                     e_warn!("Unknown type for method call {method}");
-                    ValueType::new_unknown(lu_dog)
+                    ValueType::new_unknown(true, lu_dog)
                 }
             }
         }
@@ -246,7 +246,7 @@ pub(in crate::dwarf::extruder) fn method_call_return_type(
         ref ty => {
             e_warn!("Unknown type for method call {method}, {ty:?}", ty = ty);
 
-            ValueType::new_unknown(lu_dog)
+            ValueType::new_unknown(true, lu_dog)
         }
     };
 

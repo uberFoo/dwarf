@@ -18,7 +18,7 @@ use crate::{
         ImplementationBlock, Item as WoogItem, LocalVariable, Parameter, Span as LuDogSpan,
         ValueType, Variable, XFuture, XValue,
     },
-    new_ref, s_read, s_write, Dirty, DwarfInteger, NewRef, RefType,
+    new_ref, s_read, s_write, Dirty, DwarfInteger, NewRef, RefType, SarzakStorePtr,
 };
 
 macro_rules! link_parameter {
@@ -118,7 +118,7 @@ pub fn inter_func(
     let ret_ty = if let Some(generics) = generics {
         if generics.get(&type_str).is_some() {
             let g = Generic::new(type_str, None, None, lu_dog);
-            let ty = ValueType::new_generic(&g, lu_dog);
+            let ty = ValueType::new_generic(true, &g, lu_dog);
             LuDogSpan::new(
                 ret_span.end as i64,
                 ret_span.start as i64,
@@ -174,7 +174,7 @@ pub fn inter_func(
             let body = Body::new_block(a_sink, &block, lu_dog);
             let func = Function::new(name.to_owned(), &body, None, impl_block, &ret_ty, lu_dog);
             context.dirty.push(Dirty::Func(func.clone()));
-            let _ = ValueType::new_function(&func, lu_dog);
+            // let _ = ValueType::new_function(true, &func, lu_dog);
 
             (func, Some((block, stmts, span)))
         } else if let Some(body) = external {
@@ -190,7 +190,7 @@ pub fn inter_func(
 
     let _ = WoogItem::new_function(&context.source, &func, lu_dog);
     // Create a type for our function
-    let ty = ValueType::new_function(&func, lu_dog);
+    let ty = ValueType::new_function(true, &func, lu_dog);
     LuDogSpan::new(
         span.end as i64,
         span.start as i64,
@@ -203,7 +203,7 @@ pub fn inter_func(
     // Check the parameters
     //
     let mut errors = Vec::new();
-    let mut last_param_uuid: Option<usize> = None;
+    let mut last_param_uuid: Option<SarzakStorePtr> = None;
 
     for (position, ((param_name, name_span), (param_ty, ty_span))) in params.iter().enumerate() {
         debug!("param name {}", param_name);
@@ -216,7 +216,7 @@ pub fn inter_func(
         let param_ty = if let Some(generics) = generics {
             if generics.get(&type_str).is_some() {
                 let g = Generic::new(type_str, None, None, lu_dog);
-                ValueType::new_generic(&g, lu_dog)
+                ValueType::new_generic(true, &g, lu_dog)
             } else {
                 context.location = location!();
                 match make_value_type(param_ty, ty_span, impl_ty, context, context_stack, lu_dog) {
@@ -290,7 +290,7 @@ pub fn inter_func(
         let block_ty = match a_sink {
             true => {
                 let future = XFuture::new(&block_ty, lu_dog);
-                ValueType::new_x_future(&future, lu_dog)
+                ValueType::new_x_future(true, &future, lu_dog)
             }
             false => block_ty,
         };
@@ -331,7 +331,7 @@ pub fn parse_func_signature(
     let ret_ty = if let Some(generics) = generics {
         if generics.get(&type_str).is_some() {
             let g = Generic::new(type_str, None, None, lu_dog);
-            let ty = ValueType::new_generic(&g, lu_dog);
+            let ty = ValueType::new_generic(true, &g, lu_dog);
             LuDogSpan::new(
                 span.end as i64,
                 span.start as i64,
@@ -372,7 +372,7 @@ pub fn parse_func_signature(
         let param_ty = if let Some(generics) = generics {
             if generics.get(&type_str).is_some() {
                 let g = Generic::new(type_str, None, None, lu_dog);
-                ValueType::new_generic(&g, lu_dog)
+                ValueType::new_generic(true, &g, lu_dog)
             } else {
                 context.location = location!();
                 make_value_type(param_ty, span, impl_ty, context, context_stack, lu_dog)?

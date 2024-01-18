@@ -1,14 +1,7 @@
+use std::option::Option;
+use std::result::Result;
+
 use dwarf::Plugin;
-
-enum Result<T, E> {
-    Ok(T),
-    Err(E),
-}
-
-enum Option<T> {
-    Some(T),
-    None,
-}
 
 struct HttpClient {
     #[proxy(plugin = "http_client")]
@@ -22,7 +15,7 @@ impl HttpClient {
         }
     }
     // #[proxy(plugin = "http_client", object = "HttpClient", func = "get")]
-    fn get(self, url: String) -> RequestBuillder {
+    fn get(self, url: String) -> RequestBuilder {
         self.inner
             .invoke_func("http_client", "HttpClient", "get", vec![url])
     }

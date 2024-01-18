@@ -8,7 +8,9 @@ use snafu::{location, prelude::*, Location};
 use crate::{
     chacha::value::{EnumVariant, TupleEnum, UserStruct},
     lu_dog::{ValueType, ValueTypeEnum},
-    new_ref, s_read, s_write,
+    new_ref,
+    plug_in::PluginType,
+    s_read, s_write,
     sarzak::{ObjectStore as SarzakStore, Ty, MODEL as SARZAK_MODEL},
     ChaChaError, DwarfInteger, NewRef, RefType, Span, Value, PATH_SEP,
 };
@@ -124,12 +126,14 @@ pub struct VM {
     /// Frame Pointer
     ///
     fp: usize,
-    stack: Stack,
+    // stack: Stack,
+    stack: Vec<RefType<Value>>,
     program: Vec<Instruction>,
     source_map: Vec<Span>,
     func_map: HashMap<String, (usize, usize)>,
     sarzak: SarzakStore,
     args: RefType<Value>,
+    libs: HashMap<String, PluginType>,
 }
 
 impl std::fmt::Debug for VM {
@@ -160,7 +164,8 @@ impl VM {
             ip: 0,
             fp: 0,
             // 🚧 This shouldn't be hard-coded, and they should be configurable.
-            stack: Stack::new(),
+            // stack: Stack::new(),
+            stack: Vec::new(),
             program: Vec::new(),
             source_map: Vec::new(),
             func_map: HashMap::default(),
@@ -172,6 +177,7 @@ impl VM {
                     inner: args.to_vec()
                 }
             ),
+            libs: HashMap::default(),
         };
 
         let mut tmp_mem: Vec<Instruction> = Vec::new();
@@ -188,10 +194,10 @@ impl VM {
         for instr in tmp_mem.iter() {
             match instr {
                 Instruction::CallDestination(name) => {
-                    let name: String = (&*s_read!(name)).try_into().unwrap();
+                    let name = &*s_read!(name);
                     let (ip, _frame_size) = vm
                         .func_map
-                        .get(&name)
+                        .get(name)
                         .expect(format!("Unknown function: {name}").as_str());
                     vm.program.push(Instruction::Push(new_ref!(
                         Value,
@@ -199,8 +205,8 @@ impl VM {
                     )));
                 }
                 Instruction::LocalCardinality(name) => {
-                    let name: String = (&*s_read!(name)).try_into().unwrap();
-                    let (_ip, frame_size) = vm.func_map.get(&name).unwrap();
+                    let name = &*s_read!(name);
+                    let (_ip, frame_size) = vm.func_map.get(name).unwrap();
                     vm.program.push(Instruction::Push(new_ref!(
                         Value,
                         Value::Integer(*frame_size as DwarfInteger)
@@ -319,8 +325,8 @@ impl VM {
             let ip_offset: isize = {
                 match instr {
                     Instruction::Add => {
-                        let b = self.stack.pop();
-                        let a = self.stack.pop();
+                        let b = self.stack.pop().unwrap();
+                        let a = self.stack.pop().unwrap();
                         if trace {
                             println!(
                                 "\t\t{}\t{},\t{}",
@@ -338,8 +344,8 @@ impl VM {
                         1
                     }
                     Instruction::And => {
-                        let b = self.stack.pop();
-                        let a = self.stack.pop();
+                        let b = self.stack.pop().unwrap();
+                        let a = self.stack.pop().unwrap();
                         if trace {
                             println!(
                                 "\t\t{}\t{},\t{}",
@@ -477,7 +483,7 @@ impl VM {
                             }
                         }
 
-                        let mut variant = self.stack.pop();
+                        let mut variant = self.stack.pop().unwrap();
                         while let Ok((name, value)) = decode_expression(variant) {
                             dbg!(&name, &value);
                             self.stack.push(name);
@@ -491,8 +497,8 @@ impl VM {
                         1
                     }
                     Instruction::Divide => {
-                        let b = self.stack.pop();
-                        let a = self.stack.pop();
+                        let b = self.stack.pop().unwrap();
+                        let a = self.stack.pop().unwrap();
                         if trace {
                             println!(
                                 "\t\t{}\t{},\t{}",
@@ -514,14 +520,14 @@ impl VM {
                         1
                     }
                     Instruction::Dup => {
-                        let value = self.stack.pop();
+                        let value = self.stack.pop().unwrap();
                         self.stack.push(value.clone());
                         self.stack.push(value);
 
                         1
                     }
                     Instruction::ExtractEnumValue => {
-                        let user_enum = self.stack.pop();
+                        let user_enum = self.stack.pop().unwrap();
                         let Value::Enumeration(user_enum) = &*s_read!(user_enum) else {
                             return Err(BubbaError::ValueError {
                                 location: location!(),
@@ -564,8 +570,8 @@ impl VM {
                         1
                     }
                     Instruction::FieldRead => {
-                        let field = self.stack.pop();
-                        let ty_ = self.stack.pop();
+                        let field = self.stack.pop().unwrap();
+                        let ty_ = self.stack.pop().unwrap();
                         match &*s_read!(ty_) {
                             Value::ProxyType {
                                 module: _,
@@ -645,9 +651,9 @@ impl VM {
                         1
                     }
                     Instruction::FieldWrite => {
-                        let field = self.stack.pop();
-                        let ty_ = self.stack.pop();
-                        let value = self.stack.pop();
+                        let field = self.stack.pop().unwrap();
+                        let ty_ = self.stack.pop().unwrap();
+                        let value = self.stack.pop().unwrap();
                         match &*s_read!(ty_) {
                             Value::ProxyType {
                                 module: _,
@@ -727,7 +733,7 @@ impl VM {
                         1
                     }
                     Instruction::HaltAndCatchFire => {
-                        let span = self.stack.pop();
+                        let span = self.stack.pop().unwrap();
                         let span: std::ops::Range<usize> = (&*s_read!(span))
                             .try_into()
                             .map_err(|e: ChaChaError| BubbaError::ValueError {
@@ -736,7 +742,7 @@ impl VM {
                             })
                             .unwrap();
 
-                        let file = self.stack.pop();
+                        let file = self.stack.pop().unwrap();
                         let file: String = (&*s_read!(file))
                             .try_into()
                             .map_err(|e: ChaChaError| BubbaError::ValueError {
@@ -748,8 +754,8 @@ impl VM {
                         return Err(BubbaError::HaltAndCatchFire { file, span }.into());
                     }
                     Instruction::Index => {
-                        let index = self.stack.pop();
-                        let list = self.stack.pop();
+                        let index = self.stack.pop().unwrap();
+                        let list = self.stack.pop().unwrap();
                         let list = s_read!(list);
                         let index = s_read!(index);
                         match &*index {
@@ -887,7 +893,7 @@ impl VM {
                         offset + 1
                     }
                     Instruction::JumpIfFalse(offset) => {
-                        let condition = self.stack.pop();
+                        let condition = self.stack.pop().unwrap();
                         let condition: bool = (&*s_read!(condition))
                             .try_into()
                             .map_err(|e: ChaChaError| BubbaError::ValueError {
@@ -912,7 +918,7 @@ impl VM {
                         }
                     }
                     Instruction::JumpIfTrue(offset) => {
-                        let condition = self.stack.pop();
+                        let condition = self.stack.pop().unwrap();
                         let condition: bool = (&*s_read!(condition))
                             .try_into()
                             .map_err(|e: ChaChaError| BubbaError::ValueError {
@@ -937,8 +943,8 @@ impl VM {
                         }
                     }
                     Instruction::Multiply => {
-                        let b = self.stack.pop();
-                        let a = self.stack.pop();
+                        let b = self.stack.pop().unwrap();
+                        let a = self.stack.pop().unwrap();
                         if trace {
                             println!(
                                 "\t\t{}\t{},\t{}",
@@ -960,7 +966,7 @@ impl VM {
                             println!("\t\t{}\t{}", Colour::Green.paint("nl:"), n);
                         }
 
-                        let ty = self.stack.pop();
+                        let ty = self.stack.pop().unwrap();
                         let ty: ValueType =
                             (&*s_read!(ty))
                                 .try_into()
@@ -978,7 +984,7 @@ impl VM {
                         let mut values = Vec::with_capacity(*n as usize);
 
                         for _i in 0..*n as usize {
-                            let value = self.stack.pop();
+                            let value = self.stack.pop().unwrap();
                             values.push(value.clone());
                             if trace {
                                 println!("\t\t\t\t{}", s_read!(value));
@@ -997,7 +1003,7 @@ impl VM {
                             println!("\t\t{}\t{n}", Colour::Green.paint("nte:"));
                         }
 
-                        let variant = self.stack.pop();
+                        let variant = self.stack.pop().unwrap();
                         let variant: String = (&*s_read!(variant)).try_into().map_err(|e| {
                             BubbaError::ValueError {
                                 source: Box::new(e),
@@ -1009,7 +1015,7 @@ impl VM {
                             println!("\t\t\t\t{}", variant);
                         }
 
-                        let path = self.stack.pop();
+                        let path = self.stack.pop().unwrap();
                         let path: String =
                             (&*s_read!(path))
                                 .try_into()
@@ -1022,7 +1028,7 @@ impl VM {
                             println!("\t\t\t\t{}", path);
                         }
 
-                        let ty = self.stack.pop();
+                        let ty = self.stack.pop().unwrap();
                         let ty: ValueType =
                             (&*s_read!(ty))
                                 .try_into()
@@ -1040,7 +1046,7 @@ impl VM {
                         let mut values = Vec::with_capacity(*n);
 
                         for _i in 0..*n as i32 {
-                            let value = self.stack.pop();
+                            let value = self.stack.pop().unwrap();
                             values.push(value.clone());
                             if trace {
                                 println!("\t\t\t\t{}", s_read!(value));
@@ -1068,7 +1074,7 @@ impl VM {
                             println!("\t\t{}\t{n} {{", Colour::Green.paint("nut:"));
                         }
 
-                        let name = self.stack.pop();
+                        let name = self.stack.pop().unwrap();
                         let name: String =
                             (&*s_read!(name))
                                 .try_into()
@@ -1081,7 +1087,7 @@ impl VM {
                             println!("\t\t\t\t{}", name);
                         }
 
-                        let ty = self.stack.pop();
+                        let ty = self.stack.pop().unwrap();
                         let ty: ValueType =
                             (&*s_read!(ty))
                                 .try_into()
@@ -1099,8 +1105,8 @@ impl VM {
                         let mut inst = UserStruct::new(name, &ty);
 
                         for _i in 0..*n as i32 {
-                            let name = self.stack.pop();
-                            let value = self.stack.pop();
+                            let name = self.stack.pop().unwrap();
+                            let value = self.stack.pop().unwrap();
 
                             inst.define_field(s_read!(name).to_inner_string(), value.clone());
                             if trace {
@@ -1118,7 +1124,7 @@ impl VM {
                         1
                     }
                     Instruction::Not => {
-                        let value = self.stack.pop();
+                        let value = self.stack.pop().unwrap();
                         let value: bool =
                             (&*s_read!(value))
                                 .try_into()
@@ -1132,8 +1138,8 @@ impl VM {
                         1
                     }
                     Instruction::Or => {
-                        let b = self.stack.pop();
-                        let a = self.stack.pop();
+                        let b = self.stack.pop().unwrap();
+                        let a = self.stack.pop().unwrap();
                         if trace {
                             println!(
                                 "\t\t{}\t{},\t{}",
@@ -1154,7 +1160,7 @@ impl VM {
                         1
                     }
                     Instruction::Out(stream) => {
-                        let value = self.stack.pop();
+                        let value = self.stack.pop().unwrap();
                         let value = s_read!(value).to_inner_string();
                         let value = value.replace("\\n", "\n");
 
@@ -1200,7 +1206,7 @@ impl VM {
                         1
                     }
                     Instruction::Return => {
-                        let result = self.stack.pop();
+                        let result = self.stack.pop().unwrap();
 
                         // Clear the stack up to the frame pointer.
                         while self.stack.len() > self.fp + 1 {
@@ -1208,7 +1214,7 @@ impl VM {
                         }
 
                         // reset the frame pointer
-                        self.fp = match &*s_read!(self.stack.pop()) {
+                        self.fp = match &*s_read!(self.stack.pop().unwrap()) {
                             Value::Integer(fp) => *fp as usize,
                             Value::Empty => {
                                 return Ok(result);
@@ -1217,34 +1223,34 @@ impl VM {
                                 return Err(BubbaError::VmPanic {
                                     message: format!(
                                         "Expected an integer, but got: {fp:?}.",
-                                        fp = s_read!(self.stack.pop())
+                                        fp = s_read!(self.stack.pop().unwrap())
                                     ),
                                 }
                                 .into());
                             }
                         };
 
-                        let ip: isize = (&*s_read!(self.stack.pop())).try_into().map_err(|e| {
-                            BubbaError::ValueError {
-                                source: Box::new(e),
-                                location: location!(),
-                            }
-                        })?;
-
-                        let frame_size: usize =
-                            (&*s_read!(self.stack.pop())).try_into().map_err(|e| {
-                                BubbaError::ValueError {
+                        let ip: isize =
+                            (&*s_read!(self.stack.pop().unwrap()))
+                                .try_into()
+                                .map_err(|e| BubbaError::ValueError {
                                     source: Box::new(e),
                                     location: location!(),
-                                }
-                            })?;
+                                })?;
 
-                        arity = (&*s_read!(self.stack.pop())).try_into().map_err(|e| {
-                            BubbaError::ValueError {
+                        let frame_size: usize = (&*s_read!(self.stack.pop().unwrap()))
+                            .try_into()
+                            .map_err(|e| BubbaError::ValueError {
+                            source: Box::new(e),
+                            location: location!(),
+                        })?;
+
+                        arity = (&*s_read!(self.stack.pop().unwrap()))
+                            .try_into()
+                            .map_err(|e| BubbaError::ValueError {
                                 source: Box::new(e),
                                 location: location!(),
-                            }
-                        })?;
+                            })?;
 
                         for _ in 0..frame_size {
                             self.stack.pop();
@@ -1278,15 +1284,15 @@ impl VM {
                     // Any locals will cause the fp to be moved up, with the
                     // locals existing between the Thonk name and the fp.
                     Instruction::StoreLocal(index) => {
-                        let value = self.stack.pop();
+                        let value = self.stack.pop().unwrap();
                         // We gotta index into the stack in reverse order from the index.
                         self.stack[self.fp - arity - local_count - 3 + index] = value;
 
                         1
                     }
                     Instruction::Subtract => {
-                        let b = self.stack.pop();
-                        let a = self.stack.pop();
+                        let b = self.stack.pop().unwrap();
+                        let a = self.stack.pop().unwrap();
                         let c = s_read!(a).clone() - s_read!(b).clone();
                         if trace {
                             println!(
@@ -1305,32 +1311,32 @@ impl VM {
                         1
                     }
                     Instruction::TestEq => {
-                        let b = self.stack.pop();
-                        let a = self.stack.pop();
+                        let b = self.stack.pop().unwrap();
+                        let a = self.stack.pop().unwrap();
                         self.stack
                             .push(new_ref!(Value, Value::Boolean(*s_read!(a) == *s_read!(b))));
 
                         1
                     }
                     Instruction::TestGreaterThan => {
-                        let b = self.stack.pop();
-                        let a = self.stack.pop();
+                        let b = self.stack.pop().unwrap();
+                        let a = self.stack.pop().unwrap();
                         self.stack
                             .push(new_ref!(Value, Value::Boolean(s_read!(a).gt(&s_read!(b)))));
 
                         1
                     }
                     Instruction::TestLessThan => {
-                        let b = self.stack.pop();
-                        let a = self.stack.pop();
+                        let b = self.stack.pop().unwrap();
+                        let a = self.stack.pop().unwrap();
                         self.stack
                             .push(new_ref!(Value, Value::Boolean(s_read!(a).lt(&s_read!(b)))));
 
                         1
                     }
                     Instruction::TestLessThanOrEqual => {
-                        let b = self.stack.pop();
-                        let a = self.stack.pop();
+                        let b = self.stack.pop().unwrap();
+                        let a = self.stack.pop().unwrap();
                         self.stack
                             .push(new_ref!(Value, Value::Boolean(s_read!(a).lte(&s_read!(b)))));
 
@@ -1347,7 +1353,7 @@ impl VM {
                             .into());
                         };
 
-                        let lhs = self.stack.pop();
+                        let lhs = self.stack.pop().unwrap();
 
                         let value = match &as_ty.subtype {
                             ValueTypeEnum::Ty(ref ty) => {
@@ -1463,7 +1469,9 @@ mod tests {
         program.add_thonk(thonk);
         program.add_symbol(
             "STRING".to_owned(),
-            Value::ValueType((*s_read!(ValueType::new_empty(&mut LuDogStore::new()))).clone()),
+            Value::ValueType(
+                (*s_read!(ValueType::new_empty(true, &mut LuDogStore::new()))).clone(),
+            ),
         );
 
         let mut vm = VM::new(&program, &[]);
@@ -1486,7 +1494,9 @@ mod tests {
         program.add_thonk(thonk);
         program.add_symbol(
             "STRING".to_owned(),
-            Value::ValueType((*s_read!(ValueType::new_empty(&mut LuDogStore::new()))).clone()),
+            Value::ValueType(
+                (*s_read!(ValueType::new_empty(true, &mut LuDogStore::new()))).clone(),
+            ),
         );
 
         let mut vm = VM::new(&program, &[]);
@@ -1519,7 +1529,9 @@ mod tests {
         program.add_thonk(thonk);
         program.add_symbol(
             "STRING".to_owned(),
-            Value::ValueType((*s_read!(ValueType::new_empty(&mut LuDogStore::new()))).clone()),
+            Value::ValueType(
+                (*s_read!(ValueType::new_empty(true, &mut LuDogStore::new()))).clone(),
+            ),
         );
 
         let mut vm = VM::new(&program, &[]);
@@ -1552,7 +1564,9 @@ mod tests {
         program.add_thonk(thonk);
         program.add_symbol(
             "STRING".to_owned(),
-            Value::ValueType((*s_read!(ValueType::new_empty(&mut LuDogStore::new()))).clone()),
+            Value::ValueType(
+                (*s_read!(ValueType::new_empty(true, &mut LuDogStore::new()))).clone(),
+            ),
         );
 
         let mut vm = VM::new(&program, &[]);
@@ -1584,7 +1598,9 @@ mod tests {
         program.add_thonk(thonk);
         program.add_symbol(
             "STRING".to_owned(),
-            Value::ValueType((*s_read!(ValueType::new_empty(&mut LuDogStore::new()))).clone()),
+            Value::ValueType(
+                (*s_read!(ValueType::new_empty(true, &mut LuDogStore::new()))).clone(),
+            ),
         );
 
         let mut vm = VM::new(&program, &[]);
@@ -1615,7 +1631,9 @@ mod tests {
         program.add_thonk(thonk);
         program.add_symbol(
             "STRING".to_owned(),
-            Value::ValueType((*s_read!(ValueType::new_empty(&mut LuDogStore::new()))).clone()),
+            Value::ValueType(
+                (*s_read!(ValueType::new_empty(true, &mut LuDogStore::new()))).clone(),
+            ),
         );
 
         let mut vm = VM::new(&program, &[]);
@@ -1645,7 +1663,9 @@ mod tests {
         program.add_thonk(thonk);
         program.add_symbol(
             "STRING".to_owned(),
-            Value::ValueType((*s_read!(ValueType::new_empty(&mut LuDogStore::new()))).clone()),
+            Value::ValueType(
+                (*s_read!(ValueType::new_empty(true, &mut LuDogStore::new()))).clone(),
+            ),
         );
 
         let mut vm = VM::new(&program, &[]);
@@ -1675,7 +1695,9 @@ mod tests {
         program.add_thonk(thonk);
         program.add_symbol(
             "STRING".to_owned(),
-            Value::ValueType((*s_read!(ValueType::new_empty(&mut LuDogStore::new()))).clone()),
+            Value::ValueType(
+                (*s_read!(ValueType::new_empty(true, &mut LuDogStore::new()))).clone(),
+            ),
         );
 
         let mut vm = VM::new(&program, &[]);
@@ -1718,7 +1740,9 @@ mod tests {
         program.add_thonk(thonk);
         program.add_symbol(
             "STRING".to_owned(),
-            Value::ValueType((*s_read!(ValueType::new_empty(&mut LuDogStore::new()))).clone()),
+            Value::ValueType(
+                (*s_read!(ValueType::new_empty(true, &mut LuDogStore::new()))).clone(),
+            ),
         );
 
         let mut vm = VM::new(&program, &[]);
@@ -1751,7 +1775,9 @@ mod tests {
         program.add_thonk(thonk);
         program.add_symbol(
             "STRING".to_owned(),
-            Value::ValueType((*s_read!(ValueType::new_empty(&mut LuDogStore::new()))).clone()),
+            Value::ValueType(
+                (*s_read!(ValueType::new_empty(true, &mut LuDogStore::new()))).clone(),
+            ),
         );
 
         let mut vm = VM::new(&program, &[]);
@@ -1797,16 +1823,16 @@ mod tests {
             // let _ = WoogItem::new_woog_struct(source, &mt, lu_dog);
             let struct_ty = ValueType::new_woog_struct(&foo, &mut lu_dog);
             let ty = Ty::new_integer(&sarzak);
-            let ty = ValueType::new_ty(&ty, &mut lu_dog);
+            let ty = ValueType::new_ty(true, &ty, &mut lu_dog);
             let _ = Field::new("bar".to_owned(), &foo, &ty, &mut lu_dog);
             let ty = Ty::new_float(&sarzak);
-            let ty = ValueType::new_ty(&ty, &mut lu_dog);
+            let ty = ValueType::new_ty(true, &ty, &mut lu_dog);
             let _ = Field::new("baz".to_owned(), &foo, &ty, &mut lu_dog);
             struct_ty
         };
 
         let ty = Ty::new_s_string(&sarzak);
-        let ty = ValueType::new_ty(&ty, &mut s_write!(ctx.lu_dog));
+        let ty = ValueType::new_ty(true, &ty, &mut s_write!(ctx.lu_dog));
         let ty = Value::ValueType((*s_read!(ty)).clone());
 
         // Now we need an instance.

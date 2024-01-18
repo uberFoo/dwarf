@@ -14,7 +14,7 @@ use crate::{
         Enumeration, Field, Generic, Span as LuDogSpan, StructField, TupleField, Unit, ValueType,
         WoogStruct,
     },
-    s_read, s_write, Dirty, DwarfInteger, RefType, PATH_SEP,
+    s_read, s_write, Dirty, DwarfInteger, RefType, SarzakStorePtr, PATH_SEP,
 };
 
 macro_rules! link_generic {
@@ -56,11 +56,11 @@ pub fn inter_enum(
 
     let woog_enum = Enumeration::new(name.to_owned(), context.path.clone(), None, None, lu_dog);
     context.dirty.push(Dirty::Enum(woog_enum.clone()));
-    let _ = ValueType::new_enumeration(&woog_enum, lu_dog);
+    let _ = ValueType::new_enumeration(true, &woog_enum, lu_dog);
 
     let mut first = true;
     let mut first_generic = None;
-    let mut last_generic_uuid: Option<usize> = None;
+    let mut last_generic_uuid: Option<SarzakStorePtr> = None;
     if let Some(generics) = enum_generics {
         for generic in generics.keys() {
             let generic = EnumGeneric::new(generic.to_owned(), &woog_enum, None, lu_dog);
@@ -84,7 +84,7 @@ pub fn inter_enum(
                 let woog_struct =
                     WoogStruct::new(field_name.to_owned(), type_path, None, None, lu_dog);
                 context.dirty.push(Dirty::Struct(woog_struct.clone()));
-                let ty = ValueType::new_woog_struct(&woog_struct, lu_dog);
+                let ty = ValueType::new_woog_struct(true, &woog_struct, lu_dog);
                 LuDogSpan::new(
                     span.end as i64,
                     span.start as i64,
@@ -106,8 +106,8 @@ pub fn inter_enum(
                 let ty = match type_ {
                     (Type::UserType(_, generics), _outer_span) if !generics.is_empty() => {
                         let mut first = true;
-                        let mut first_generic = ValueType::new_empty(lu_dog);
-                        let mut last_generic_uuid: Option<usize> = None;
+                        let mut first_generic = ValueType::new_empty(true, lu_dog);
+                        let mut last_generic_uuid: Option<SarzakStorePtr> = None;
                         for generic in generics {
                             let (generic, _span) =
                                 if let Type::UserType((name, span), _) = &generic.0 {
@@ -116,7 +116,7 @@ pub fn inter_enum(
                                     unreachable!();
                                 };
                             let generic = Generic::new(generic.to_owned(), None, None, lu_dog);
-                            let ty = ValueType::new_generic(&generic, lu_dog);
+                            let ty = ValueType::new_generic(true, &generic, lu_dog);
                             // let span = LuDogSpan::new(
                             //     span.end as i64,
                             //     span.start as i64,
@@ -243,7 +243,7 @@ pub(crate) fn create_generic_enum(
     // Check to see if this already exists
     if let Some(id) = lu_dog.exhume_enumeration_id_by_name(enum_name) {
         let found_enum = lu_dog.exhume_enumeration(&id).unwrap();
-        let ty = ValueType::new_enumeration(&found_enum, lu_dog);
+        let ty = ValueType::new_enumeration(true, &found_enum, lu_dog);
 
         return (found_enum, ty);
     }
@@ -293,7 +293,7 @@ pub(crate) fn create_generic_enum(
         base_enum_impl.as_ref(),
         lu_dog,
     );
-    let ty = ValueType::new_enumeration(&new_enum, lu_dog);
+    let ty = ValueType::new_enumeration(true, &new_enum, lu_dog);
 
     let name_without_generics = enum_name.split('<').collect::<Vec<_>>()[0];
 

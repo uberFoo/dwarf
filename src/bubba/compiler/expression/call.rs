@@ -239,7 +239,7 @@ fn compile_static_method_call(
         },
         ty => {
             let func_name = format!("{ty}::{func}");
-            let name = new_ref!(Value, Value::String(func_name));
+            let name = new_ref!(String, func_name);
             // We are here because we need to look up a function.
             thonk.add_instruction(Instruction::CallDestination(name.clone()), location!());
 
@@ -364,14 +364,14 @@ mod test {
                        x + y + z
                    }";
         let ast = parse_dwarf("test_func_args", ore).unwrap();
-        let ctx = new_lu_dog(
+        let mut ctx = new_lu_dog(
             "test_func_args".to_owned(),
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &sarzak,
         )
         .unwrap();
-        let program = compile(&ctx).unwrap();
+        let program = compile(&mut ctx).unwrap();
 
         println!("{program}");
 

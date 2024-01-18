@@ -16,7 +16,7 @@ use crate::{
         store::ObjectStore as LuDogStore, Field, Generic, Item as WoogItem, Span as LuDogSpan,
         StructGeneric, ValueType, WoogStruct, XPlugin, ZObjectStore,
     },
-    s_read, s_write, Desanitize, Dirty, RefType,
+    s_read, s_write, Desanitize, Dirty, RefType, SarzakStorePtr,
 };
 
 macro_rules! link_struct_generic {
@@ -77,7 +77,8 @@ pub fn inter_struct(
                                         &woog_struct,
                                         lu_dog,
                                     );
-                                    let _ty = ValueType::new_woog_struct(&woog_struct, lu_dog);
+                                    let _ty =
+                                        ValueType::new_woog_struct(true, &woog_struct, lu_dog);
                                     // 🚧 We may want to consider putting a span in the attribute map.
                                     // LuDogSpan::new(
                                     //     span.end as i64,
@@ -179,7 +180,7 @@ pub fn inter_struct(
                     // 🚧 Really should check to see if it's already there.
                     let store = ZObjectStore::new(model_name, name.to_owned(), lu_dog);
                     context.dirty.push(Dirty::Store(s_read!(store).id));
-                    let _ = ValueType::new_z_object_store(&store, lu_dog);
+                    let _ = ValueType::new_z_object_store(true, &store, lu_dog);
 
                     Ok(())
                 } else {
@@ -198,11 +199,11 @@ pub fn inter_struct(
         let woog_struct =
             WoogStruct::new(name.to_owned(), context.path.clone(), None, None, lu_dog);
         context.dirty.push(Dirty::Struct(woog_struct.clone()));
-        let _ = ValueType::new_woog_struct(&woog_struct, lu_dog);
+        let _ = ValueType::new_woog_struct(true, &woog_struct, lu_dog);
 
         let mut first = true;
         let mut first_generic = None;
-        let mut last_generic_uuid: Option<usize> = None;
+        let mut last_generic_uuid: Option<SarzakStorePtr> = None;
         if let Some(generics) = generics {
             for generic in generics.keys() {
                 let generic = StructGeneric::new(generic.to_owned(), None, &woog_struct, lu_dog);
@@ -256,7 +257,7 @@ pub fn inter_struct_fields(
                                 let ty_name = tok.0.to_owned();
                                 if ty_name == "Plugin" {
                                     let plugin = XPlugin::new(plugin_name, lu_dog);
-                                    let ty = ValueType::new_x_plugin(&plugin, lu_dog);
+                                    let ty = ValueType::new_x_plugin(true, &plugin, lu_dog);
                                     LuDogSpan::new(
                                         span.end as i64,
                                         span.start as i64,
@@ -296,7 +297,7 @@ pub fn inter_struct_fields(
         let ty = if let Some(generics) = generics {
             if let Some(_definition_type) = generics.get(&type_str) {
                 let g = Generic::new(type_str, None, None, lu_dog);
-                let ty = ValueType::new_generic(&g, lu_dog);
+                let ty = ValueType::new_generic(true, &g, lu_dog);
                 LuDogSpan::new(
                     span.end as i64,
                     span.start as i64,

@@ -72,7 +72,7 @@ pub fn eval_list_expression(
 
         Ok(new_ref!(Value, Value::Vector { ty, inner: values }))
     } else {
-        let ty = ValueType::new_empty(&mut s_write!(lu_dog));
+        let ty = ValueType::new_empty(true, &mut s_write!(lu_dog));
 
         Ok(new_ref!(Value, Value::Vector { ty, inner: vec![] }))
     }

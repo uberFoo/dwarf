@@ -144,6 +144,7 @@ struct DwarfArgs {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    color_backtrace::install();
     #[cfg(feature = "async")]
     {
         let format_layer = fmt::layer().with_thread_ids(true).pretty();
@@ -157,7 +158,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     #[cfg(not(feature = "async"))]
     pretty_env_logger::init();
-    color_backtrace::install();
     #[cfg(feature = "tracy")]
     Client::start();
 
@@ -260,18 +260,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         };
 
-        if let Ok(program) = compile(&ctx) {
-            println!("running in the VM");
+        // if let Ok(program) = compile(&ctx) {
+        //     println!("running in the VM");
 
-            let args: Vec<RefType<Value>> = dwarf_args
-                .into_iter()
-                .map(|a| new_ref!(Value, a.into()))
-                .collect();
+        //     let args: Vec<RefType<Value>> = dwarf_args
+        //         .into_iter()
+        //         .map(|a| new_ref!(Value, a.into()))
+        //         .collect();
 
-            let mut vm = VM::new(&program, &args);
-            vm.invoke("main", &[])?;
-            return Ok(());
-        }
+        //     let mut vm = VM::new(&program, &args);
+        //     vm.invoke("main", &[])?;
+        //     return Ok(());
+        // }
 
         let mut ctx = initialize_interpreter(threads, dwarf_home, ctx)?;
         ctx.add_args(dwarf_args);

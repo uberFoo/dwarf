@@ -398,7 +398,7 @@ pub fn eval(
                     }
                     LINES => {
                         let ty = Ty::new_s_string(&s_read!(sarzak));
-                        let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
+                        let ty = ValueType::new_ty(true, &ty, &mut s_write!(lu_dog));
 
                         Ok(new_ref!(
                             Value,
@@ -526,7 +526,7 @@ pub fn eval(
                         };
 
                         let ty = Ty::new_s_string(&s_read!(sarzak));
-                        let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
+                        let ty = ValueType::new_ty(true, &ty, &mut s_write!(lu_dog));
 
                         Ok(new_ref!(
                             Value,
@@ -778,7 +778,7 @@ pub fn eval(
                                 Ok(args.clone())
                             } else {
                                 let ty = Ty::new_s_string(&s_read!(sarzak));
-                                let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
+                                let ty = ValueType::new_ty(true, &ty, &mut s_write!(lu_dog));
 
                                 Ok(new_ref!(
                                     Value,
@@ -1162,7 +1162,7 @@ pub fn eval(
                             //         }
                             //         _ => Ok((
                             //             Value::Error("make point work".to_owned()),
-                            //             ValueType::new_empty(),
+                            //             ValueType::new_empty(true, ),
                             //         )),
                             //     }
                             // }

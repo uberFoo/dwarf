@@ -1,5 +1,5 @@
 [package]
-name = "http_client"
+name = "http"
 version = "0.1.0"
 edition = "2021"
 
@@ -28,5 +28,5 @@ sarzak = { git = "https://github.com/uberFoo/sarzak", branch = "develop", defaul
 # sarzak = { path = "../../../sarzak" }
 
 [lib]
-name = "http_client"
+name = "http"
 crate-type = ["cdylib"]

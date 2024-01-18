@@ -40,6 +40,8 @@ pub fn id() -> RStr<'static> {
 #[sabi_extern_fn]
 pub fn new(args: RVec<FfiValue>) -> RResult<PluginType, Error> {
     let this = if args.len() == 0 {
+        // Each of these is a "sub-plug-in". We have to instantiate it the same
+        // way that a plug-in is instantiated in the VM or interpreter.
         let sarzak = sarzak::instantiate_root_module();
         let sarzak = sarzak.new();
         let sarzak = sarzak(vec![].into()).unwrap();

@@ -140,6 +140,11 @@ impl LuDogStore {
     #[proxy(store = "lu_dog", object = "ObjectStore", func = "exhume_function")]
     fn exhume_function(self, function: Uuid) -> Function;
 
+    #[proxy(store = "lu_dog", object = "ObjectStore", func = "inter_function_call")]
+    fn inter_function_call(self, function_call: FunctionCall);
+    #[proxy(store = "lu_dog", object = "ObjectStore", func = "exhume_function_call")]
+    fn exhume_function_call(self, function_call: Uuid) -> FunctionCall;
+
     #[proxy(store = "lu_dog", object = "ObjectStore", func = "inter_x_future")]
     fn inter_x_future(self, x_future: XFuture);
     #[proxy(store = "lu_dog", object = "ObjectStore", func = "exhume_x_future")]
@@ -558,28 +563,35 @@ impl Await {
 // "Binary" in the store named "lu_dog"; declared above.
 #[proxy(store = "lu_dog", object = "Binary")]
 struct Binary {
+    bogus: bool,
     id: Uuid,
     // Non-formalizing relationships
 }
 
 impl Binary {
     #[proxy(store = "lu_dog", object = "Binary", func = "new_addition")]
-    fn new_addition() -> Self;
+    fn new_addition(bogus: bool, addition: Addition
+) -> Self;
 
     #[proxy(store = "lu_dog", object = "Binary", func = "new_assignment")]
-    fn new_assignment() -> Self;
+    fn new_assignment(bogus: bool, assignment: Assignment
+) -> Self;
 
     #[proxy(store = "lu_dog", object = "Binary", func = "new_boolean_operator")]
-    fn new_boolean_operator() -> Self;
+    fn new_boolean_operator(bogus: bool, boolean_operator: BooleanOperator
+) -> Self;
 
     #[proxy(store = "lu_dog", object = "Binary", func = "new_division")]
-    fn new_division() -> Self;
+    fn new_division(bogus: bool, division: Division
+) -> Self;
 
     #[proxy(store = "lu_dog", object = "Binary", func = "new_multiplication")]
-    fn new_multiplication() -> Self;
+    fn new_multiplication(bogus: bool, multiplication: Multiplication
+) -> Self;
 
     #[proxy(store = "lu_dog", object = "Binary", func = "new_subtraction")]
-    fn new_subtraction() -> Self;
+    fn new_subtraction(bogus: bool, subtraction: Subtraction
+) -> Self;
 
     #[proxy(store = "lu_dog", object = "Binary", func = "instances")]
     fn instances() -> [Self];
@@ -593,6 +605,7 @@ impl Binary {
 
     fn info() -> () {
         print("struct Binary {\n");
+        print("    bogus: bool,\n");
         print("    id: Uuid,\n");
         print("}\n");
     }
@@ -701,16 +714,19 @@ impl Body {
 // "BooleanLiteral" in the store named "lu_dog"; declared above.
 #[proxy(store = "lu_dog", object = "Boolean Literal")]
 struct BooleanLiteral {
+    bogus: bool,
     id: Uuid,
     // Non-formalizing relationships
 }
 
 impl BooleanLiteral {
     #[proxy(store = "lu_dog", object = "Boolean Literal", func = "new_false_literal")]
-    fn new_false_literal() -> Self;
+    fn new_false_literal(bogus: bool, false_literal: False
+) -> Self;
 
     #[proxy(store = "lu_dog", object = "Boolean Literal", func = "new_true_literal")]
-    fn new_true_literal() -> Self;
+    fn new_true_literal(bogus: bool, true_literal: True
+) -> Self;
 
     #[proxy(store = "lu_dog", object = "Boolean Literal", func = "instances")]
     fn instances() -> [Self];
@@ -724,6 +740,7 @@ impl BooleanLiteral {
 
     fn info() -> () {
         print("struct BooleanLiteral {\n");
+        print("    bogus: bool,\n");
         print("    id: Uuid,\n");
         print("}\n");
     }
@@ -737,16 +754,19 @@ impl BooleanLiteral {
 // "BooleanOperator" in the store named "lu_dog"; declared above.
 #[proxy(store = "lu_dog", object = "Boolean Operator")]
 struct BooleanOperator {
+    bogus: bool,
     id: Uuid,
     // Non-formalizing relationships
 }
 
 impl BooleanOperator {
     #[proxy(store = "lu_dog", object = "Boolean Operator", func = "new_and")]
-    fn new_and() -> Self;
+    fn new_and(bogus: bool, and: And
+) -> Self;
 
     #[proxy(store = "lu_dog", object = "Boolean Operator", func = "new_or")]
-    fn new_or() -> Self;
+    fn new_or(bogus: bool, or: Or
+) -> Self;
 
     #[proxy(store = "lu_dog", object = "Boolean Operator", func = "instances")]
     fn instances() -> [Self];
@@ -760,6 +780,7 @@ impl BooleanOperator {
 
     fn info() -> () {
         print("struct BooleanOperator {\n");
+        print("    bogus: bool,\n");
         print("    id: Uuid,\n");
         print("}\n");
     }
@@ -856,28 +877,35 @@ impl Char {
 // "Comparison" in the store named "lu_dog"; declared above.
 #[proxy(store = "lu_dog", object = "Comparison")]
 struct Comparison {
+    bogus: bool,
     id: Uuid,
     // Non-formalizing relationships
 }
 
 impl Comparison {
     #[proxy(store = "lu_dog", object = "Comparison", func = "new_equal")]
-    fn new_equal() -> Self;
+    fn new_equal(bogus: bool, equal: Equal
+) -> Self;
 
     #[proxy(store = "lu_dog", object = "Comparison", func = "new_greater_than")]
-    fn new_greater_than() -> Self;
+    fn new_greater_than(bogus: bool, greater_than: GreaterThan
+) -> Self;
 
     #[proxy(store = "lu_dog", object = "Comparison", func = "new_greater_than_or_equal")]
-    fn new_greater_than_or_equal() -> Self;
+    fn new_greater_than_or_equal(bogus: bool, greater_than_or_equal: GreaterThanOrEqual
+) -> Self;
 
     #[proxy(store = "lu_dog", object = "Comparison", func = "new_less_than")]
-    fn new_less_than() -> Self;
+    fn new_less_than(bogus: bool, less_than: LessThan
+) -> Self;
 
     #[proxy(store = "lu_dog", object = "Comparison", func = "new_less_than_or_equal")]
-    fn new_less_than_or_equal() -> Self;
+    fn new_less_than_or_equal(bogus: bool, less_than_or_equal: LessThanOrEqual
+) -> Self;
 
     #[proxy(store = "lu_dog", object = "Comparison", func = "new_not_equal")]
-    fn new_not_equal() -> Self;
+    fn new_not_equal(bogus: bool, not_equal: NotEqual
+) -> Self;
 
     #[proxy(store = "lu_dog", object = "Comparison", func = "instances")]
     fn instances() -> [Self];
@@ -891,6 +919,7 @@ impl Comparison {
 
     fn info() -> () {
         print("struct Comparison {\n");
+        print("    bogus: bool,\n");
         print("    id: Uuid,\n");
         print("}\n");
     }
@@ -900,16 +929,19 @@ impl Comparison {
 // "DataStructure" in the store named "lu_dog"; declared above.
 #[proxy(store = "lu_dog", object = "Data Structure")]
 struct DataStructure {
+    bogus: bool,
     id: Uuid,
     // Non-formalizing relationships
 }
 
 impl DataStructure {
     #[proxy(store = "lu_dog", object = "Data Structure", func = "new_enumeration")]
-    fn new_enumeration() -> Self;
+    fn new_enumeration(bogus: bool, enumeration: Enumeration
+) -> Self;
 
     #[proxy(store = "lu_dog", object = "Data Structure", func = "new_woog_struct")]
-    fn new_woog_struct() -> Self;
+    fn new_woog_struct(bogus: bool, woog_struct: Struct
+) -> Self;
 
     #[proxy(store = "lu_dog", object = "Data Structure", func = "instances")]
     fn instances() -> [Self];
@@ -919,6 +951,7 @@ impl DataStructure {
 
     fn info() -> () {
         print("struct DataStructure {\n");
+        print("    bogus: bool,\n");
         print("    id: Uuid,\n");
         print("}\n");
     }
@@ -1165,6 +1198,7 @@ impl EnumGeneric {
 struct Enumeration {
     id: Uuid,
     name: string,
+    x_path: string,
     first_generic: Option<EnumGeneric>,
     implementation: Option<ImplementationBlock>,
     // Non-formalizing relationships
@@ -1172,7 +1206,7 @@ struct Enumeration {
 
 impl Enumeration {
     #[proxy(store = "lu_dog", object = "Enumeration", func = "new")]
-    fn new(name: string, first_generic: Option<EnumGeneric>, implementation: Option<ImplementationBlock>) -> Self;
+    fn new(name: string, x_path: string, first_generic: Option<EnumGeneric>, implementation: Option<ImplementationBlock>) -> Self;
 
     #[proxy(store = "lu_dog", object = "Enumeration", func = "instances")]
     fn instances() -> [Self];
@@ -1189,6 +1223,7 @@ impl Enumeration {
         print("struct Enumeration {\n");
         print("    id: Uuid,\n");
         print("    name: string,\n");
+        print("    x_path: string,\n");
         print("    first_generic: Option<EnumGeneric>,\n");
         print("    implementation: Option<ImplementationBlock>,\n");
         print("}\n");
@@ -1228,82 +1263,107 @@ impl Equal {
 // "Expression" in the store named "lu_dog"; declared above.
 #[proxy(store = "lu_dog", object = "Expression")]
 struct Expression {
+    bogus: bool,
     id: Uuid,
     // Non-formalizing relationships
 }
 
 impl Expression {
     #[proxy(store = "lu_dog", object = "Expression", func = "new_a_wait")]
-    fn new_a_wait() -> Self;
+    fn new_a_wait(bogus: bool, a_wait: Await
+) -> Self;
 
     #[proxy(store = "lu_dog", object = "Expression", func = "new_block")]
-    fn new_block() -> Self;
+    fn new_block(bogus: bool, block: Block
+) -> Self;
 
     #[proxy(store = "lu_dog", object = "Expression", func = "new_call")]
-    fn new_call() -> Self;
+    fn new_call(bogus: bool, call: Call
+) -> Self;
 
-    #[proxy(store = "lu_dog", object = "Expression", func = "new_debugger")]
-    fn new_debugger() -> Self;
+    #[proxy(store = "lu_dog", object = "Expression", func = "new_x_debugger")]
+    fn new_x_debugger(bogus: bool, x_debugger: Debugger
+) -> Self;
 
     #[proxy(store = "lu_dog", object = "Expression", func = "new_empty_expression")]
-    fn new_empty_expression() -> Self;
+    fn new_empty_expression(bogus: bool, empty_expression: EmptyExpression
+) -> Self;
 
     #[proxy(store = "lu_dog", object = "Expression", func = "new_field_access")]
-    fn new_field_access() -> Self;
+    fn new_field_access(bogus: bool, field_access: FieldAccess
+) -> Self;
 
     #[proxy(store = "lu_dog", object = "Expression", func = "new_field_expression")]
-    fn new_field_expression() -> Self;
+    fn new_field_expression(bogus: bool, field_expression: FieldExpression
+) -> Self;
 
     #[proxy(store = "lu_dog", object = "Expression", func = "new_for_loop")]
-    fn new_for_loop() -> Self;
+    fn new_for_loop(bogus: bool, for_loop: ForLoop
+) -> Self;
 
     #[proxy(store = "lu_dog", object = "Expression", func = "new_grouped")]
-    fn new_grouped() -> Self;
+    fn new_grouped(bogus: bool, grouped: Grouped
+) -> Self;
 
     #[proxy(store = "lu_dog", object = "Expression", func = "new_x_if")]
-    fn new_x_if() -> Self;
+    fn new_x_if(bogus: bool, x_if: If
+) -> Self;
 
     #[proxy(store = "lu_dog", object = "Expression", func = "new_index")]
-    fn new_index() -> Self;
+    fn new_index(bogus: bool, index: Index
+) -> Self;
 
     #[proxy(store = "lu_dog", object = "Expression", func = "new_lambda")]
-    fn new_lambda() -> Self;
+    fn new_lambda(bogus: bool, lambda: Lambda
+) -> Self;
 
     #[proxy(store = "lu_dog", object = "Expression", func = "new_list_element")]
-    fn new_list_element() -> Self;
+    fn new_list_element(bogus: bool, list_element: ListElement
+) -> Self;
 
     #[proxy(store = "lu_dog", object = "Expression", func = "new_list_expression")]
-    fn new_list_expression() -> Self;
+    fn new_list_expression(bogus: bool, list_expression: ListExpression
+) -> Self;
 
     #[proxy(store = "lu_dog", object = "Expression", func = "new_literal")]
-    fn new_literal() -> Self;
+    fn new_literal(bogus: bool, literal: Literal
+) -> Self;
 
     #[proxy(store = "lu_dog", object = "Expression", func = "new_x_match")]
-    fn new_x_match() -> Self;
+    fn new_x_match(bogus: bool, x_match: Match
+) -> Self;
 
     #[proxy(store = "lu_dog", object = "Expression", func = "new_operator")]
-    fn new_operator() -> Self;
+    fn new_operator(bogus: bool, operator: Operator
+) -> Self;
 
     #[proxy(store = "lu_dog", object = "Expression", func = "new_x_path")]
-    fn new_x_path() -> Self;
+    fn new_x_path(bogus: bool, x_path: Path
+) -> Self;
 
     #[proxy(store = "lu_dog", object = "Expression", func = "new_x_print")]
-    fn new_x_print() -> Self;
+    fn new_x_print(bogus: bool, x_print: Print
+) -> Self;
 
     #[proxy(store = "lu_dog", object = "Expression", func = "new_range_expression")]
-    fn new_range_expression() -> Self;
+    fn new_range_expression(bogus: bool, range_expression: RangeExpression
+) -> Self;
 
     #[proxy(store = "lu_dog", object = "Expression", func = "new_x_return")]
-    fn new_x_return() -> Self;
+    fn new_x_return(bogus: bool, x_return: Return
+) -> Self;
 
     #[proxy(store = "lu_dog", object = "Expression", func = "new_struct_expression")]
-    fn new_struct_expression() -> Self;
+    fn new_struct_expression(bogus: bool, struct_expression: StructExpression
+) -> Self;
 
     #[proxy(store = "lu_dog", object = "Expression", func = "new_type_cast")]
-    fn new_type_cast() -> Self;
+    fn new_type_cast(bogus: bool, type_cast: TypeCast
+) -> Self;
 
     #[proxy(store = "lu_dog", object = "Expression", func = "new_variable_expression")]
-    fn new_variable_expression() -> Self;
+    fn new_variable_expression(bogus: bool, variable_expression: VariableExpression
+) -> Self;
 
     #[proxy(store = "lu_dog", object = "Expression", func = "instances")]
     fn instances() -> [Self];
@@ -1317,6 +1377,7 @@ impl Expression {
 
     fn info() -> () {
         print("struct Expression {\n");
+        print("    bogus: bool,\n");
         print("    id: Uuid,\n");
         print("}\n");
     }
@@ -1507,19 +1568,23 @@ impl FieldAccess {
 // "FieldAccessTarget" in the store named "lu_dog"; declared above.
 #[proxy(store = "lu_dog", object = "Field Access Target")]
 struct FieldAccessTarget {
+    bogus: bool,
     id: Uuid,
     // Non-formalizing relationships
 }
 
 impl FieldAccessTarget {
     #[proxy(store = "lu_dog", object = "Field Access Target", func = "new_enum_field")]
-    fn new_enum_field() -> Self;
+    fn new_enum_field(bogus: bool, enum_field: EnumField
+) -> Self;
 
     #[proxy(store = "lu_dog", object = "Field Access Target", func = "new_field")]
-    fn new_field() -> Self;
+    fn new_field(bogus: bool, field: Field
+) -> Self;
 
     #[proxy(store = "lu_dog", object = "Field Access Target", func = "new_function")]
-    fn new_function() -> Self;
+    fn new_function(bogus: bool, function: Function
+) -> Self;
 
     #[proxy(store = "lu_dog", object = "Field Access Target", func = "instances")]
     fn instances() -> [Self];
@@ -1533,6 +1598,7 @@ impl FieldAccessTarget {
 
     fn info() -> () {
         print("struct FieldAccessTarget {\n");
+        print("    bogus: bool,\n");
         print("    id: Uuid,\n");
         print("}\n");
     }
@@ -1625,14 +1691,14 @@ impl FloatLiteral {
 struct ForLoop {
     id: Uuid,
     ident: string,
-    block: Block,
+    block: Expression,
     expression: Expression,
     // Non-formalizing relationships
 }
 
 impl ForLoop {
     #[proxy(store = "lu_dog", object = "For Loop", func = "new")]
-    fn new(ident: string, block: Block, expression: Expression) -> Self;
+    fn new(ident: string, block: Expression, expression: Expression) -> Self;
 
     #[proxy(store = "lu_dog", object = "For Loop", func = "instances")]
     fn instances() -> [Self];
@@ -1648,7 +1714,7 @@ impl ForLoop {
         print("struct ForLoop {\n");
         print("    id: Uuid,\n");
         print("    ident: string,\n");
-        print("    block: Block,\n");
+        print("    block: Expression,\n");
         print("    expression: Expression,\n");
         print("}\n");
     }
@@ -1752,12 +1818,13 @@ impl Function {
 #[proxy(store = "lu_dog", object = "Function Call")]
 struct FunctionCall {
     id: Uuid,
+    name: string,
     // Non-formalizing relationships
 }
 
 impl FunctionCall {
     #[proxy(store = "lu_dog", object = "Function Call", func = "new")]
-    fn new() -> Self;
+    fn new(name: string) -> Self;
 
     #[proxy(store = "lu_dog", object = "Function Call", func = "instances")]
     fn instances() -> [Self];
@@ -1768,6 +1835,7 @@ impl FunctionCall {
     fn info() -> () {
         print("struct FunctionCall {\n");
         print("    id: Uuid,\n");
+        print("    name: string,\n");
         print("}\n");
     }
 }
@@ -1930,7 +1998,7 @@ impl Grouped {
 #[proxy(store = "lu_dog", object = "If")]
 struct If {
     id: Uuid,
-    false_block: Option<Block>,
+    false_block: Option<Expression>,
     test: Expression,
     true_block: Block,
     // Non-formalizing relationships
@@ -1938,7 +2006,7 @@ struct If {
 
 impl If {
     #[proxy(store = "lu_dog", object = "If", func = "new")]
-    fn new(false_block: Option<Block>, test: Expression, true_block: Block) -> Self;
+    fn new(false_block: Option<Expression>, test: Expression, true_block: Block) -> Self;
 
     #[proxy(store = "lu_dog", object = "If", func = "instances")]
     fn instances() -> [Self];
@@ -1953,7 +2021,7 @@ impl If {
     fn info() -> () {
         print("struct If {\n");
         print("    id: Uuid,\n");
-        print("    false_block: Option<Block>,\n");
+        print("    false_block: Option<Expression>,\n");
         print("    test: Expression,\n");
         print("    true_block: Block,\n");
         print("}\n");
@@ -2516,22 +2584,27 @@ impl ListExpression {
 // "Literal" in the store named "lu_dog"; declared above.
 #[proxy(store = "lu_dog", object = "Literal")]
 struct Literal {
+    bogus: bool,
     id: Uuid,
     // Non-formalizing relationships
 }
 
 impl Literal {
     #[proxy(store = "lu_dog", object = "Literal", func = "new_boolean_literal")]
-    fn new_boolean_literal() -> Self;
+    fn new_boolean_literal(bogus: bool, boolean_literal: BooleanLiteral
+) -> Self;
 
     #[proxy(store = "lu_dog", object = "Literal", func = "new_float_literal")]
-    fn new_float_literal() -> Self;
+    fn new_float_literal(bogus: bool, float_literal: FloatLiteral
+) -> Self;
 
     #[proxy(store = "lu_dog", object = "Literal", func = "new_integer_literal")]
-    fn new_integer_literal() -> Self;
+    fn new_integer_literal(bogus: bool, integer_literal: IntegerLiteral
+) -> Self;
 
     #[proxy(store = "lu_dog", object = "Literal", func = "new_string_literal")]
-    fn new_string_literal() -> Self;
+    fn new_string_literal(bogus: bool, string_literal: StringLiteral
+) -> Self;
 
     #[proxy(store = "lu_dog", object = "Literal", func = "instances")]
     fn instances() -> [Self];
@@ -2545,6 +2618,7 @@ impl Literal {
 
     fn info() -> () {
         print("struct Literal {\n");
+        print("    bogus: bool,\n");
         print("    id: Uuid,\n");
         print("}\n");
     }
@@ -3607,6 +3681,7 @@ impl StringLiteral {
 struct Struct {
     id: Uuid,
     name: string,
+    x_path: string,
     first_generic: Option<StructGeneric>,
     object: Option<Object>,
     // Non-formalizing relationships
@@ -3614,7 +3689,7 @@ struct Struct {
 
 impl Struct {
     #[proxy(store = "lu_dog", object = "Struct", func = "new")]
-    fn new(name: string, first_generic: Option<StructGeneric>, object: Option<Object>) -> Self;
+    fn new(name: string, x_path: string, first_generic: Option<StructGeneric>, object: Option<Object>) -> Self;
 
     #[proxy(store = "lu_dog", object = "Struct", func = "instances")]
     fn instances() -> [Self];
@@ -3630,6 +3705,7 @@ impl Struct {
         print("struct Struct {\n");
         print("    id: Uuid,\n");
         print("    name: string,\n");
+        print("    x_path: string,\n");
         print("    first_generic: Option<StructGeneric>,\n");
         print("    object: Option<Object>,\n");
         print("}\n");
@@ -3984,16 +4060,19 @@ impl TypeCast {
 // "Unary" in the store named "lu_dog"; declared above.
 #[proxy(store = "lu_dog", object = "Unary")]
 struct Unary {
+    bogus: bool,
     id: Uuid,
     // Non-formalizing relationships
 }
 
 impl Unary {
     #[proxy(store = "lu_dog", object = "Unary", func = "new_negation")]
-    fn new_negation() -> Self;
+    fn new_negation(bogus: bool, negation: Negation
+) -> Self;
 
     #[proxy(store = "lu_dog", object = "Unary", func = "new_not")]
-    fn new_not() -> Self;
+    fn new_not(bogus: bool, not: Not
+) -> Self;
 
     #[proxy(store = "lu_dog", object = "Unary", func = "instances")]
     fn instances() -> [Self];
@@ -4005,6 +4084,7 @@ impl Unary {
 
     fn info() -> () {
         print("struct Unary {\n");
+        print("    bogus: bool,\n");
         print("    id: Uuid,\n");
         print("}\n");
     }
@@ -4165,58 +4245,75 @@ impl Value {
 // "ValueType" in the store named "lu_dog"; declared above.
 #[proxy(store = "lu_dog", object = "Value Type")]
 struct ValueType {
+    bogus: bool,
     id: Uuid,
     // Non-formalizing relationships
 }
 
 impl ValueType {
     #[proxy(store = "lu_dog", object = "Value Type", func = "new_char")]
-    fn new_char() -> Self;
+    fn new_char(bogus: bool, char: Char
+) -> Self;
 
     #[proxy(store = "lu_dog", object = "Value Type", func = "new_empty")]
-    fn new_empty() -> Self;
+    fn new_empty(bogus: bool, empty: Empty
+) -> Self;
 
     #[proxy(store = "lu_dog", object = "Value Type", func = "new_enumeration")]
-    fn new_enumeration() -> Self;
+    fn new_enumeration(bogus: bool, enumeration: Enumeration
+) -> Self;
 
     #[proxy(store = "lu_dog", object = "Value Type", func = "new_function")]
-    fn new_function() -> Self;
+    fn new_function(bogus: bool, function: Function
+) -> Self;
 
     #[proxy(store = "lu_dog", object = "Value Type", func = "new_x_future")]
-    fn new_x_future() -> Self;
+    fn new_x_future(bogus: bool, x_future: XFuture
+) -> Self;
 
     #[proxy(store = "lu_dog", object = "Value Type", func = "new_generic")]
-    fn new_generic() -> Self;
+    fn new_generic(bogus: bool, generic: Generic
+) -> Self;
 
     #[proxy(store = "lu_dog", object = "Value Type", func = "new_import")]
-    fn new_import() -> Self;
+    fn new_import(bogus: bool, import: Import
+) -> Self;
 
     #[proxy(store = "lu_dog", object = "Value Type", func = "new_lambda")]
-    fn new_lambda() -> Self;
+    fn new_lambda(bogus: bool, lambda: Lambda
+) -> Self;
 
     #[proxy(store = "lu_dog", object = "Value Type", func = "new_list")]
-    fn new_list() -> Self;
+    fn new_list(bogus: bool, list: List
+) -> Self;
 
     #[proxy(store = "lu_dog", object = "Value Type", func = "new_z_object_store")]
-    fn new_z_object_store() -> Self;
+    fn new_z_object_store(bogus: bool, z_object_store: ObjectStore
+) -> Self;
 
     #[proxy(store = "lu_dog", object = "Value Type", func = "new_x_plugin")]
-    fn new_x_plugin() -> Self;
+    fn new_x_plugin(bogus: bool, x_plugin: Plugin
+) -> Self;
 
     #[proxy(store = "lu_dog", object = "Value Type", func = "new_range")]
-    fn new_range() -> Self;
+    fn new_range(bogus: bool, range: Range
+) -> Self;
 
     #[proxy(store = "lu_dog", object = "Value Type", func = "new_woog_struct")]
-    fn new_woog_struct() -> Self;
+    fn new_woog_struct(bogus: bool, woog_struct: Struct
+) -> Self;
 
     #[proxy(store = "lu_dog", object = "Value Type", func = "new_task")]
-    fn new_task() -> Self;
+    fn new_task(bogus: bool, task: Task
+) -> Self;
 
     #[proxy(store = "lu_dog", object = "Value Type", func = "new_ty")]
-    fn new_ty() -> Self;
+    fn new_ty(bogus: bool, ty: Type
+) -> Self;
 
     #[proxy(store = "lu_dog", object = "Value Type", func = "new_unknown")]
-    fn new_unknown() -> Self;
+    fn new_unknown(bogus: bool, unknown: Unknown
+) -> Self;
 
     #[proxy(store = "lu_dog", object = "Value Type", func = "instances")]
     fn instances() -> [Self];
@@ -4244,6 +4341,7 @@ impl ValueType {
 
     fn info() -> () {
         print("struct ValueType {\n");
+        print("    bogus: bool,\n");
         print("    id: Uuid,\n");
         print("}\n");
     }

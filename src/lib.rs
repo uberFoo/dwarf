@@ -87,6 +87,12 @@ pub(crate) const OK_CLR: Colour = Colour::Green;
 pub(crate) const POP_CLR: Colour = Colour::Yellow;
 pub(crate) const OTH_CLR: Colour = Colour::Cyan;
 
+pub(crate) const OBJECT_STORE: &str = "ObjectStore";
+pub(crate) const FUNCTION_NEW: &str = "new";
+pub(crate) const FUNCTION_LOAD: &str = "load";
+pub(crate) const MERLIN: &str = "merlin";
+pub(crate) const SARZAK: &str = "sarzak";
+
 use lu_dog::ObjectStore as LuDogStore;
 use sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL};
 
@@ -131,6 +137,45 @@ cfg_if::cfg_if! {
         }
     } else if #[cfg(feature = "single-vec-tracy")] {
         type SarzakStorePtr = usize;
+        type RcType<T> = std::rc::Rc<T>;
+        impl<T> NewRcType<T> for RcType<T> {
+            fn new_rc_type(value: T) -> RcType<T> {
+                std::rc::Rc::new(value)
+            }
+        }
+
+        pub type RefType<T> = std::rc::Rc<std::cell::RefCell<T>>;
+
+        impl<T> NewRef<T> for RefType<T> {
+            fn new_ref(value: T) -> RefType<T> {
+                std::rc::Rc::new(std::cell::RefCell::new(value))
+            }
+        }
+
+        // Macros to abstract the underlying read/write operations.
+        #[macro_export]
+        macro_rules! ref_read {
+            ($arg:expr) => {
+                $arg.borrow()
+            };
+        }
+
+        #[macro_export]
+        macro_rules! ref_write {
+            ($arg:expr) => {
+                $arg.borrow_mut()
+            };
+        }
+
+        #[macro_export]
+        macro_rules! ref_to_inner {
+            ($arg:expr) => {
+                $arg.into_inner().unwrap()
+            };
+        }
+
+    } else if #[cfg(feature = "debug")] {
+        type SarzakStorePtr = uuid::Uuid;
         type RcType<T> = std::rc::Rc<T>;
         impl<T> NewRcType<T> for RcType<T> {
             fn new_rc_type(value: T) -> RcType<T> {
@@ -431,6 +476,8 @@ impl Desanitize for &str {
             "Krate" => "Crate".to_owned(),
             "woog_const" => "const".to_owned(),
             "WoogConst" => "Const".to_owned(),
+            "x_debugger" => "debugger".to_owned(),
+            "XDebugger" => "Debugger".to_owned(),
             "woog_enum" => "enum".to_owned(),
             "WoogEnum" => "Enum".to_owned(),
             "x_error" => "error".to_owned(),

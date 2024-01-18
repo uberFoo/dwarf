@@ -4,9 +4,9 @@ use ansi_term::Colour;
 use rustc_hash::FxHashMap as HashMap;
 use serde::{Deserialize, Serialize};
 
-use crate::{s_read, RefType, Span, Value};
+use crate::{plug_in::PluginType, s_read, RefType, Span, Value};
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug)]
 pub enum Instruction {
     /// Add the top two values on the stack.
     ///
@@ -45,7 +45,7 @@ pub enum Instruction {
     /// This is a pseudo-instruction that stores the name of the function that
     /// we are calling. It is patched by the VM before execution.
     ///
-    CallDestination(RefType<Value>),
+    CallDestination(RefType<String>),
     /// Comment Instruction / NOP
     ///
     /// I don't like this because it increases the size of the instruction by 50%
@@ -155,7 +155,7 @@ pub enum Instruction {
     /// This is a pseudo-instruction to store the number of local variables in
     /// the function. It is patched by the VM before execution.
     ///
-    LocalCardinality(RefType<Value>),
+    LocalCardinality(RefType<String>),
     /// Multiply the top two values on the stack.
     ///
     /// ## Stack Effect
@@ -453,10 +453,11 @@ impl fmt::Display for Instruction {
     }
 }
 
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Clone)]
 pub struct Program {
     compiler_version: String,
     compiler_build_ts: String,
+    // libs: HashMap<String, PluginType>,
     symbols: HashMap<String, Value>,
     thonks: HashMap<String, Thonk>,
 }
@@ -530,7 +531,7 @@ impl fmt::Display for Program {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug)]
 pub struct Thonk {
     name: String,
     pub(crate) instructions: Vec<Instruction>,

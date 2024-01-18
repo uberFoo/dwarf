@@ -174,7 +174,7 @@ pub fn initialize_interpreter(
 
     let mut program = Program::new(VERSION.to_owned(), BUILD_TIME.to_owned());
     let ty = crate::sarzak::Ty::new_s_string(&sarzak);
-    let ty = ValueType::new_ty(&ty, &mut lu_dog);
+    let ty = ValueType::new_ty(true, &ty, &mut lu_dog);
     let ty = Value::ValueType((*s_read!(ty)).clone());
     program.add_symbol("STRING".to_owned(), ty);
 
@@ -572,7 +572,7 @@ fn eval_expression(
         }
         ExpressionEnum::Block(ref block) => block::eval(block, context, vm),
         ExpressionEnum::Call(ref call) => call::eval(call, &expression, context, vm),
-        ExpressionEnum::Debugger(_) => debugger::eval(context),
+        ExpressionEnum::XDebugger(_) => debugger::eval(context),
         ExpressionEnum::EmptyExpression(_) => Ok(new_ref!(Value, Value::Empty)),
         // ExpressionEnum::EnumField(ref enum_field) => enumeration::eval(enum_field, context, vm),
         ExpressionEnum::FieldAccess(ref field) => field::field_access::eval(field, context, vm),
@@ -730,7 +730,7 @@ pub fn start_func(
 
     let mut program = context.get_program().clone();
     let ty = crate::sarzak::Ty::new_s_string(&s_read!(context.sarzak_heel()));
-    let ty = ValueType::new_ty(&ty, &mut s_write!(context.lu_dog_heel()));
+    let ty = ValueType::new_ty(true, &ty, &mut s_write!(context.lu_dog_heel()));
     let ty = Value::ValueType((*s_read!(ty)).clone());
     program.add_symbol("STRING".to_owned(), ty);
 
@@ -748,6 +748,7 @@ pub fn start_func(
                 .unwrap();
 
             let value_ty = &s_read!(main).r1_value_type(&s_read!(context.lu_dog_heel()))[0];
+            dbg!(&value_ty);
             let span = &s_read!(value_ty).r62_span(&s_read!(context.lu_dog_heel()))[0];
 
             let result = eval_function_call(main, &[], None, true, span, context, &mut vm)?;
@@ -768,7 +769,7 @@ pub fn start_func(
 pub fn start_vm(n: DwarfInteger) -> Result<DwarfInteger, Error> {
     let mut thonk = Thonk::new("fib".to_string());
 
-    let fib = new_ref!(Value, "fib".into());
+    let fib = new_ref!(String, "fib".into());
 
     // Get the parameter off the stack
     // push {fp + 0}
@@ -820,14 +821,14 @@ pub fn start_vm(n: DwarfInteger) -> Result<DwarfInteger, Error> {
     let mut lu_dog = LuDogStore::new();
 
     // We need to stuff all of the sarzak types into the store.
-    ValueType::new_ty(&Ty::new_boolean(&sarzak), &mut lu_dog);
-    ValueType::new_ty(&Ty::new_float(&sarzak), &mut lu_dog);
-    ValueType::new_ty(&Ty::new_integer(&sarzak), &mut lu_dog);
-    ValueType::new_ty(&Ty::new_s_string(&sarzak), &mut lu_dog);
-    ValueType::new_ty(&Ty::new_s_uuid(&sarzak), &mut lu_dog);
+    ValueType::new_ty(true, &Ty::new_boolean(&sarzak), &mut lu_dog);
+    ValueType::new_ty(true, &Ty::new_float(&sarzak), &mut lu_dog);
+    ValueType::new_ty(true, &Ty::new_integer(&sarzak), &mut lu_dog);
+    ValueType::new_ty(true, &Ty::new_s_string(&sarzak), &mut lu_dog);
+    ValueType::new_ty(true, &Ty::new_s_uuid(&sarzak), &mut lu_dog);
 
     let ty = Ty::new_s_string(&sarzak);
-    let ty = ValueType::new_ty(&ty, &mut lu_dog);
+    let ty = ValueType::new_ty(true, &ty, &mut lu_dog);
     let ty = Value::ValueType((*s_read!(ty)).clone());
     program.add_symbol("STRING".to_owned(), ty);
 
@@ -850,7 +851,7 @@ fn typecheck(
     context: &Context,
 ) -> Result<()> {
     cfg_if::cfg_if! {
-        if #[cfg(any(feature = "single", feature = "single-vec", feature = "single-vec-tracy"))] {
+        if #[cfg(any(feature = "single", feature = "single-vec", feature = "single-vec-tracy", feature = "debug"))] {
             if std::rc::Rc::as_ptr(lhs) == std::rc::Rc::as_ptr(rhs) {
                 return Ok(());
             }
@@ -925,12 +926,12 @@ fn inter_func(
     if imp.is_empty() {
         let name = s_read!(func).name.clone();
         let value = Value::Function(func.clone());
+        let ty = s_read!(func).r1_value_type(lu_dog)[0].clone();
 
         // Build the local in the AST.
         let local = LocalVariable::new(Uuid::new_v4(), lu_dog);
         let var = Variable::new_local_variable(name.clone(), &local, lu_dog);
-        let _value =
-            XValue::new_variable(block, &ValueType::new_function(&func, lu_dog), &var, lu_dog);
+        let _value = XValue::new_variable(block, &ty, &var, lu_dog);
 
         trace!("inserting local function {}", name);
         stack.insert(name, new_ref!(Value, value));

@@ -238,7 +238,7 @@ impl Context {
 
     pub fn add_args(&mut self, args: Vec<String>) {
         let ty = Ty::new_s_string(&s_read!(self.sarzak_heel()));
-        let ty = ValueType::new_ty(&ty, &mut s_write!(self.lu_dog_heel()));
+        let ty = ValueType::new_ty(true, &ty, &mut s_write!(self.lu_dog_heel()));
         let inner: Vec<RefType<Value>> = args
             .into_iter()
             .map(|a| new_ref!(Value, a.into()))

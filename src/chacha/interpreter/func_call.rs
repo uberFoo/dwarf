@@ -32,14 +32,9 @@ use crate::{
     plug_in::PluginType,
     s_read, s_write,
     sarzak::ObjectStore,
-    Desanitize, NewRef, RefType, SarzakStorePtr, Value,
+    Desanitize, NewRef, RefType, SarzakStorePtr, Value, FUNCTION_LOAD, FUNCTION_NEW, MERLIN,
+    OBJECT_STORE, SARZAK,
 };
-
-const OBJECT_STORE: &str = "ObjectStore";
-const FUNCTION_NEW: &str = "new";
-const FUNCTION_LOAD: &str = "load";
-const MERLIN: &str = "merlin";
-const SARZAK: &str = "sarzak";
 
 pub fn eval_function_call(
     func: RefType<Function>,
@@ -253,7 +248,7 @@ fn eval_external_static_method(
                                 .map(|v| new_ref!(Value, v))
                                 .collect::<Vec<_>>();
                             let ty = if vec.is_empty() {
-                                ValueType::new_empty(&mut s_write!(lu_dog))
+                                ValueType::new_empty(true, &mut s_write!(lu_dog))
                             } else {
                                 s_read!(vec[0]).get_value_type(
                                     &s_read!(context.sarzak_heel()),
