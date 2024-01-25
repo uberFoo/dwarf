@@ -20,6 +20,13 @@ jobs:
               with:
                   toolchain: stable
 
+            - name: Checkout sarzak
+              uses: actions/checkout@v2
+              with:
+                  ref: develop
+                  path: sarzak
+                  repository: 'uberfoo/sarzak'
+
             - name: Checkout sarzak-cli
               uses: actions/checkout@v2
               with:
