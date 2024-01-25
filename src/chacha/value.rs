@@ -225,6 +225,32 @@ impl From<Value> for FfiValue {
     }
 }
 
+impl From<FfiValue> for Value {
+    fn from(value: FfiValue) -> Self {
+        match value {
+            FfiValue::Boolean(bool_) => Self::Boolean(bool_),
+            FfiValue::Empty => Self::Empty,
+            // FfiValue::Error(e) => Self::Error(e.into()),
+            FfiValue::Float(num) => Self::Float(num),
+            FfiValue::Integer(num) => Self::Integer(num),
+            FfiValue::ProxyType(plugin) => Self::ProxyType {
+                module: plugin.module.into(),
+                obj_ty: plugin.ty.into(),
+                id: plugin.id.into(),
+                plugin: new_ref!(PluginType, plugin.plugin),
+            },
+            FfiValue::Range(range) => Self::Range(range.start..range.end),
+            FfiValue::String(str_) => Self::String(str_.into()),
+            // FfiValue::UserType(uuid) => Self::UserType(new_ref!(UserType, uuid.into())),
+            FfiValue::Uuid(uuid) => Self::Uuid(uuid.into()),
+            // FfiValue::Vector(vec) => {
+            //     Self::Vector(vec.into_iter().map(|v| new_ref!(Value, v.into())).collect())
+            // }
+            _ => Self::Unknown,
+        }
+    }
+}
+
 impl From<(FfiValue, &LuDogStore)> for Value {
     fn from(value: (FfiValue, &LuDogStore)) -> Self {
         let lu_dog = value.1;
