@@ -144,9 +144,8 @@
                 // "use.ore"
                 // "tests/harness/types/generics/workout.ore"
                 // "tests/harness/types/generics/option.tao"
-                "mandelbrot.ore",
-                "--",
-                "1"
+                // "test.ore",
+                "tests/harness/types/generics/result.tao"
             ],
             "cwd": "${workspaceFolder}",
             "env": {

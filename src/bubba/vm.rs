@@ -117,7 +117,7 @@ impl std::ops::IndexMut<usize> for Stack {
     }
 }
 
-#[derive(Clone)]
+// #[derive(Clone)]
 pub struct VM {
     /// Instruction Pointer
     ///
@@ -1386,7 +1386,7 @@ impl VM {
                                         )?;
                                         new_ref!(Value, value.into())
                                     }
-                                    Ty::SString(_) => {
+                                    Ty::ZString(_) => {
                                         let value: String = (&*s_read!(lhs)).try_into().map_err(
                                             |e: ChaChaError| BubbaError::ValueError {
                                                 source: Box::new(e),
@@ -1395,7 +1395,7 @@ impl VM {
                                         )?;
                                         new_ref!(Value, value.into())
                                     }
-                                    Ty::SUuid(_) => {
+                                    Ty::ZUuid(_) => {
                                         let value: uuid::Uuid = (&*s_read!(lhs))
                                             .try_into()
                                             .map_err(|e: ChaChaError| BubbaError::ValueError {
@@ -1821,7 +1821,7 @@ mod tests {
                 &mut lu_dog,
             );
             // let _ = WoogItem::new_woog_struct(source, &mt, lu_dog);
-            let struct_ty = ValueType::new_woog_struct(&foo, &mut lu_dog);
+            let struct_ty = ValueType::new_woog_struct(true, &foo, &mut lu_dog);
             let ty = Ty::new_integer(&sarzak);
             let ty = ValueType::new_ty(true, &ty, &mut lu_dog);
             let _ = Field::new("bar".to_owned(), &foo, &ty, &mut lu_dog);
@@ -1831,7 +1831,7 @@ mod tests {
             struct_ty
         };
 
-        let ty = Ty::new_s_string(&sarzak);
+        let ty = Ty::new_z_string(&sarzak);
         let ty = ValueType::new_ty(true, &ty, &mut s_write!(ctx.lu_dog));
         let ty = Value::ValueType((*s_read!(ty)).clone());
 

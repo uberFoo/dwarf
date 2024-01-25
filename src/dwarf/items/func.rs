@@ -10,13 +10,13 @@ use crate::{
             debug, function, inter_statements, make_value_type, typecheck, Context,
             FunctionDefinition, Span, FUNC, OBJECT, PROXY, STORE,
         },
-        AttributeMap, BlockType, Expression as ParserExpression, InnerAttribute, Spanned,
-        Statement as ParserStatement, Type,
+        AttributeMap, BlockType, Expression as ParserExpression, InnerAttribute,
+        PrintableValueType, Spanned, Statement as ParserStatement, Type,
     },
     lu_dog::{
-        store::ObjectStore as LuDogStore, Block, Body, ExternalImplementation, Function, Generic,
-        ImplementationBlock, Item as WoogItem, LocalVariable, Parameter, Span as LuDogSpan,
-        ValueType, Variable, XFuture, XValue,
+        store::ObjectStore as LuDogStore, Block, Body, ExternalImplementation, FuncGeneric,
+        Function, ImplementationBlock, Item as WoogItem, LocalVariable, Parameter,
+        Span as LuDogSpan, ValueType, Variable, XFuture, XValue,
     },
     new_ref, s_read, s_write, Dirty, DwarfInteger, NewRef, RefType, SarzakStorePtr,
 };
@@ -115,10 +115,11 @@ pub fn inter_func(
 
     let type_str = return_type.0.to_string();
     let ret_span = &return_type.1;
+    dbg!(&type_str, &generics);
     let ret_ty = if let Some(generics) = generics {
         if generics.get(&type_str).is_some() {
-            let g = Generic::new(type_str, None, None, lu_dog);
-            let ty = ValueType::new_generic(true, &g, lu_dog);
+            let g = FuncGeneric::new(type_str, None, None, lu_dog);
+            let ty = ValueType::new_func_generic(true, &g, lu_dog);
             LuDogSpan::new(
                 ret_span.end as i64,
                 ret_span.start as i64,
@@ -141,6 +142,7 @@ pub fn inter_func(
             )?
         }
     } else {
+        dbg!("δ");
         context.location = location!();
         make_value_type(
             &return_type.0,
@@ -151,6 +153,9 @@ pub fn inter_func(
             lu_dog,
         )?
     };
+
+    let a = PrintableValueType(&ret_ty, context, lu_dog);
+    dbg!(a.to_string());
 
     let (func, block) =
         if let Some((ParserExpression::Block(block_a_sink, stmts, vars, tys), span)) = &stmts {
@@ -172,14 +177,32 @@ pub fn inter_func(
             }
 
             let body = Body::new_block(a_sink, &block, lu_dog);
-            let func = Function::new(name.to_owned(), &body, None, impl_block, &ret_ty, lu_dog);
+            // 🚧 We aren't picking up the generics we created during signature processing.
+            let func = Function::new(
+                name.to_owned(),
+                &body,
+                None,
+                None,
+                impl_block,
+                &ret_ty,
+                lu_dog,
+            );
             context.dirty.push(Dirty::Func(func.clone()));
             // let _ = ValueType::new_function(true, &func, lu_dog);
 
             (func, Some((block, stmts, span)))
         } else if let Some(body) = external {
             (
-                Function::new(name.to_owned(), &body, None, impl_block, &ret_ty, lu_dog),
+                // 🚧 We aren't picking up the generics we created during signature processing.
+                Function::new(
+                    name.to_owned(),
+                    &body,
+                    None,
+                    None,
+                    impl_block,
+                    &ret_ty,
+                    lu_dog,
+                ),
                 None,
             )
         } else {
@@ -215,8 +238,8 @@ pub fn inter_func(
         let type_str = param_ty.to_string();
         let param_ty = if let Some(generics) = generics {
             if generics.get(&type_str).is_some() {
-                let g = Generic::new(type_str, None, None, lu_dog);
-                ValueType::new_generic(true, &g, lu_dog)
+                let g = FuncGeneric::new(type_str, None, None, lu_dog);
+                ValueType::new_func_generic(true, &g, lu_dog)
             } else {
                 context.location = location!();
                 match make_value_type(param_ty, ty_span, impl_ty, context, context_stack, lu_dog) {
@@ -295,6 +318,7 @@ pub fn inter_func(
             false => block_ty,
         };
 
+        dbg!("boom");
         typecheck(
             (&ret_ty, ret_span),
             (&block_ty, &block_span),
@@ -330,8 +354,8 @@ pub fn parse_func_signature(
     let span = &return_type.1;
     let ret_ty = if let Some(generics) = generics {
         if generics.get(&type_str).is_some() {
-            let g = Generic::new(type_str, None, None, lu_dog);
-            let ty = ValueType::new_generic(true, &g, lu_dog);
+            let g = FuncGeneric::new(type_str, None, None, lu_dog);
+            let ty = ValueType::new_func_generic(true, &g, lu_dog);
             LuDogSpan::new(
                 span.end as i64,
                 span.start as i64,
@@ -371,8 +395,8 @@ pub fn parse_func_signature(
         let span = ty_span;
         let param_ty = if let Some(generics) = generics {
             if generics.get(&type_str).is_some() {
-                let g = Generic::new(type_str, None, None, lu_dog);
-                ValueType::new_generic(true, &g, lu_dog)
+                let g = FuncGeneric::new(type_str, None, None, lu_dog);
+                ValueType::new_func_generic(true, &g, lu_dog)
             } else {
                 context.location = location!();
                 make_value_type(param_ty, span, impl_ty, context, context_stack, lu_dog)?

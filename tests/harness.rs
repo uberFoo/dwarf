@@ -113,7 +113,7 @@ fn run_program(test: &str, program: &str) -> Result<(Value, String), String> {
                         format!(
                             "{}",
                             // This one is uber.
-                            dwarf::dwarf::error::DwarfErrorReporter(e, true, program)
+                            dwarf::dwarf::error::DwarfErrorReporter(e, true)
                         )
                     })
                     .collect::<Vec<_>>()
@@ -127,7 +127,7 @@ fn run_program(test: &str, program: &str) -> Result<(Value, String), String> {
                     format!(
                         "{}",
                         // This one is not uber.
-                        dwarf::dwarf::error::DwarfErrorReporter(e, false, program)
+                        dwarf::dwarf::error::DwarfErrorReporter(e, false)
                     )
                 })
                 .collect::<Vec<_>>()

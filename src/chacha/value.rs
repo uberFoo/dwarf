@@ -7,7 +7,7 @@ use std::{fmt, io::Write, ops::Range};
 use smol::future;
 
 use abi_stable::{
-    std_types::{RBox, ROption, RString, RVec},
+    std_types::{RBox, ROption, RResult, RString, RVec},
     StableAbi,
 };
 use ansi_term::Colour;
@@ -43,6 +43,12 @@ pub struct FfiRange {
 #[derive(Clone, Debug, StableAbi)]
 pub struct FfiUuid {
     pub inner: RString,
+}
+
+impl std::fmt::Display for FfiUuid {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{inner}", inner = self.inner)
+    }
 }
 
 impl From<Uuid> for FfiUuid {
@@ -108,6 +114,19 @@ pub struct FfiProxy {
     pub plugin: PluginType,
 }
 
+impl std::fmt::Display for FfiProxy {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(
+            f,
+            "{{ module: {}, ty: {}, id: {}, plugin: {} }}",
+            self.module,
+            self.ty,
+            self.id,
+            self.plugin.name()
+        )
+    }
+}
+
 /// This is an actual Value
 ///
 /// This is the type used by the interpreter to represent values.
@@ -123,12 +142,208 @@ pub enum FfiValue {
     PlugIn(PluginType),
     ProxyType(FfiProxy),
     Range(FfiRange),
+    Result(RResult<RBox<Self>, RBox<Self>>),
     String(RString),
     // Table(RHashMap<RString, RefType<Self>>),
     Unknown,
-    UserType(FfiUuid),
+    // UserType(FfiUuid),
     Uuid(FfiUuid),
     Vector(RVec<Self>),
+}
+
+impl std::fmt::Display for FfiValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Self::Boolean(bool_) => write!(f, "{bool_}"),
+            Self::Empty => write!(f, "()"),
+            Self::Error(e) => write!(f, "{}: {e}", Colour::Red.bold().paint("error")),
+            Self::Float(num) => write!(f, "{num}"),
+            Self::Integer(num) => write!(f, "{num}"),
+            Self::Option(option) => match option {
+                ROption::RNone => write!(f, "None"),
+                ROption::RSome(value) => write!(f, "Some({value})"),
+            },
+            Self::PlugIn(plugin) => write!(f, "plugin::{}", plugin.name()),
+            Self::ProxyType(proxy) => write!(f, "{proxy}"),
+            Self::Range(range) => write!(f, "{range:?}"),
+            Self::Result(result) => match result {
+                RResult::RErr(err) => write!(f, "Err({err})"),
+                RResult::ROk(ok) => write!(f, "Ok({ok})"),
+            },
+            Self::String(str_) => write!(f, "{str_}"),
+            Self::Unknown => write!(f, "<unknown>"),
+            // Self::UserType(uuid) => write!(f, "{uuid}"),
+            Self::Uuid(uuid) => write!(f, "{uuid}"),
+            Self::Vector(vec) => {
+                let mut first_time = true;
+                write!(f, "[")?;
+                for i in vec {
+                    if first_time {
+                        first_time = false;
+                    } else {
+                        write!(f, ", ")?;
+                    }
+
+                    write!(f, "{i}")?;
+                }
+                write!(f, "]")
+            }
+        }
+    }
+}
+
+impl From<Value> for FfiValue {
+    fn from(value: Value) -> Self {
+        match &value {
+            Value::Boolean(bool_) => Self::Boolean(bool_.to_owned()),
+            Value::Empty => Self::Empty,
+            // Value::Error(e) => Self::Error(e.to_owned().into()),
+            Value::Float(num) => Self::Float(num.to_owned()),
+            Value::Integer(num) => Self::Integer(num.to_owned()),
+            Value::ProxyType {
+                module,
+                obj_ty,
+                id,
+                plugin,
+            } => Self::ProxyType(FfiProxy {
+                module: module.to_owned().into(),
+                ty: obj_ty.to_owned().into(),
+                id: id.to_owned().into(),
+                plugin: s_read!(plugin).clone(),
+            }),
+            Value::Range(range) => Self::Range(FfiRange {
+                start: range.start,
+                end: range.end,
+            }),
+            Value::String(str_) => Self::String(str_.to_owned().into()),
+            Value::Uuid(uuid) => Self::Uuid(uuid.to_owned().into()),
+            // Value::Vector(vec) => {
+            //     Self::Vector(vec.iter().map(|v| s_read!(v).clone().into()).collect())
+            // }
+            _ => Self::Unknown,
+        }
+    }
+}
+
+impl From<(FfiValue, &LuDogStore)> for Value {
+    fn from(value: (FfiValue, &LuDogStore)) -> Self {
+        let lu_dog = value.1;
+        match value.0 {
+            FfiValue::Boolean(bool_) => Self::Boolean(bool_),
+            FfiValue::Empty => Self::Empty,
+            // FfiValue::Error(e) => Self::Error(e.into()),
+            FfiValue::Float(num) => Self::Float(num),
+            FfiValue::Integer(num) => Self::Integer(num),
+            FfiValue::Option(option) => match option {
+                ROption::RNone => Self::Empty,
+                ROption::RSome(value) => <(FfiValue, &LuDogStore) as Into<Value>>::into((
+                    RBox::into_inner(value),
+                    lu_dog,
+                )),
+            },
+            FfiValue::ProxyType(plugin) => Self::ProxyType {
+                module: plugin.module.into(),
+                obj_ty: plugin.ty.into(),
+                id: plugin.id.into(),
+                plugin: new_ref!(PluginType, plugin.plugin),
+            },
+            FfiValue::Range(range) => Self::Range(range.start..range.end),
+            FfiValue::Result(result) => {
+                let Some(ty) = lu_dog.exhume_enumeration_id_by_name("Result") else {
+                    panic!("Result type not found")
+                };
+                let ty = lu_dog.exhume_enumeration(&ty).unwrap();
+                let Some(ty) = lu_dog.iter_value_type().find(|vt| {
+                    if let ValueTypeEnum::Enumeration(id) = s_read!(vt).subtype {
+                        let id = lu_dog.exhume_enumeration(&id).unwrap();
+                        if s_read!(id).id == s_read!(ty).id {
+                            return true;
+                        }
+                    }
+                    false
+                }) else {
+                    unreachable!()
+                };
+
+                let tuple = match result {
+                    RResult::RErr(err) => TupleEnum {
+                        variant: "Err".to_owned(),
+                        value: new_ref!(
+                            Value,
+                            <(FfiValue, &LuDogStore) as Into<Value>>::into((
+                                RBox::into_inner(err),
+                                lu_dog,
+                            ))
+                        ),
+                    },
+                    RResult::ROk(ok) => TupleEnum {
+                        variant: "Ok".to_owned(),
+                        value: new_ref!(
+                            Value,
+                            <(FfiValue, &LuDogStore) as Into<Value>>::into((
+                                RBox::into_inner(ok),
+                                lu_dog,
+                            ))
+                        ),
+                    },
+                };
+
+                Value::Enumeration(EnumVariant::Tuple(
+                    (ty.clone(), "Result".to_owned()),
+                    new_ref!(TupleEnum, tuple),
+                ))
+            }
+            FfiValue::String(str_) => Self::String(str_.into()),
+            // FfiValue::UserType(uuid) => Self::UserType(new_ref!(UserType, uuid.into())),
+            FfiValue::Uuid(uuid) => Self::Uuid(uuid.into()),
+            // FfiValue::Vector(vec) => {
+            //     Self::Vector(vec.into_iter().map(|v| new_ref!(Value, v.into())).collect())
+            // }
+            _ => Self::Unknown,
+        }
+    }
+}
+
+impl TryFrom<FfiValue> for String {
+    type Error = ChaChaError;
+
+    fn try_from(value: FfiValue) -> Result<Self> {
+        match value {
+            FfiValue::String(s) => Ok(s.into()),
+            _ => Err(ChaChaError::Conversion {
+                src: value.to_string(),
+                dst: "String".to_owned(),
+            }),
+        }
+    }
+}
+
+impl TryFrom<&FfiValue> for String {
+    type Error = ChaChaError;
+
+    fn try_from(value: &FfiValue) -> Result<Self> {
+        match value {
+            FfiValue::String(s) => Ok(s.to_owned().into()),
+            _ => Err(ChaChaError::Conversion {
+                src: value.to_string(),
+                dst: "String".to_owned(),
+            }),
+        }
+    }
+}
+
+impl TryFrom<&FfiValue> for i64 {
+    type Error = ChaChaError;
+
+    fn try_from(value: &FfiValue) -> Result<Self> {
+        match value {
+            FfiValue::Integer(i) => Ok(*i),
+            _ => Err(ChaChaError::Conversion {
+                src: value.to_string(),
+                dst: "i64".to_owned(),
+            }),
+        }
+    }
 }
 
 /// The type of Enumeration Field
@@ -313,7 +528,7 @@ impl Value {
             Self::Integer(num) => write!(f, "{num}"),
             Self::Lambda(_) => write!(f, "<lambda>"),
             Self::ParsedDwarf(ctx) => write!(f, "{ctx:#?}"),
-            Self::Plugin(plugin) => write!(f, "Plugin: {}", s_read!(plugin).name()),
+            Self::Plugin(plugin) => write!(f, "plugin::{}", s_read!(plugin).name()),
             Self::ProxyType {
                 module: _,
                 obj_ty: _,
@@ -382,7 +597,6 @@ impl Value {
                 }
                 unreachable!()
             }
-            // Value::Enum(ref ut) => s_read!(ut).get_type().clone(),
             Value::Enumeration(var) => match var {
                 EnumVariant::Unit(t, _, _) => t.clone(),
                 EnumVariant::Struct(ut) => s_read!(ut).get_type().clone(),
@@ -422,6 +636,19 @@ impl Value {
                 #[allow(clippy::let_and_return)]
                 ƛ_type
             }
+            Value::Plugin(plugin) => {
+                let name = s_read!(plugin);
+                let name = name.name();
+                for vt in lu_dog.iter_value_type() {
+                    if let ValueTypeEnum::XPlugin(id) = s_read!(vt).subtype {
+                        let plugin = lu_dog.exhume_x_plugin(&id).unwrap();
+                        if s_read!(plugin).name == name {
+                            return vt.clone();
+                        }
+                    }
+                }
+                panic!("Plugin not found: {name}");
+            }
             Value::ProxyType {
                 module: _,
                 obj_ty: uuid,
@@ -451,7 +678,7 @@ impl Value {
             }
             Value::Store(store, _plugin) => s_read!(store).r1_value_type(lu_dog)[0].clone(),
             Value::String(_) => {
-                let ty = Ty::new_s_string(sarzak);
+                let ty = Ty::new_z_string(sarzak);
                 for vt in lu_dog.iter_value_type() {
                     if let ValueTypeEnum::Ty(_ty) = s_read!(vt).subtype {
                         if ty.read().unwrap().id() == _ty {
@@ -475,7 +702,7 @@ impl Value {
                 unreachable!()
             }
             Value::Uuid(_) => {
-                let ty = Ty::new_s_uuid(sarzak);
+                let ty = Ty::new_z_uuid(sarzak);
                 for vt in lu_dog.iter_value_type() {
                     if let ValueTypeEnum::Ty(_ty) = s_read!(vt).subtype {
                         if ty.read().unwrap().id() == _ty {
@@ -586,7 +813,7 @@ impl std::fmt::Debug for Value {
             Self::Integer(num) => write!(f, "{num:?}"),
             Self::Lambda(ƛ) => write!(f, "{:?}", s_read!(ƛ)),
             Self::ParsedDwarf(ctx) => write!(f, "{ctx:?}"),
-            Self::Plugin(plugin) => write!(f, "Plugin: {}", s_read!(plugin).name()),
+            Self::Plugin(plugin) => write!(f, "plugin::{}", s_read!(plugin).name()),
             Self::ProxyType {
                 module,
                 obj_ty,
@@ -680,65 +907,6 @@ impl Clone for Value {
     }
 }
 
-impl From<Value> for FfiValue {
-    fn from(value: Value) -> Self {
-        match &value {
-            Value::Boolean(bool_) => Self::Boolean(bool_.to_owned()),
-            Value::Empty => Self::Empty,
-            // Value::Error(e) => Self::Error(e.to_owned().into()),
-            Value::Float(num) => Self::Float(num.to_owned()),
-            Value::Integer(num) => Self::Integer(num.to_owned()),
-            Value::ProxyType {
-                module,
-                obj_ty,
-                id,
-                plugin,
-            } => Self::ProxyType(FfiProxy {
-                module: module.to_owned().into(),
-                ty: obj_ty.to_owned().into(),
-                id: id.to_owned().into(),
-                plugin: s_read!(plugin).clone(),
-            }),
-            Value::Range(range) => Self::Range(FfiRange {
-                start: range.start,
-                end: range.end,
-            }),
-            Value::String(str_) => Self::String(str_.to_owned().into()),
-            Value::Uuid(uuid) => Self::Uuid(uuid.to_owned().into()),
-            // Value::Vector(vec) => {
-            //     Self::Vector(vec.iter().map(|v| s_read!(v).clone().into()).collect())
-            // }
-            _ => Self::Unknown,
-        }
-    }
-}
-
-impl From<FfiValue> for Value {
-    fn from(value: FfiValue) -> Self {
-        match value {
-            FfiValue::Boolean(bool_) => Self::Boolean(bool_),
-            FfiValue::Empty => Self::Empty,
-            // FfiValue::Error(e) => Self::Error(e.into()),
-            FfiValue::Float(num) => Self::Float(num),
-            FfiValue::Integer(num) => Self::Integer(num),
-            FfiValue::ProxyType(plugin) => Self::ProxyType {
-                module: plugin.module.into(),
-                obj_ty: plugin.ty.into(),
-                id: plugin.id.into(),
-                plugin: new_ref!(PluginType, plugin.plugin),
-            },
-            FfiValue::Range(range) => Self::Range(range.start..range.end),
-            FfiValue::String(str_) => Self::String(str_.into()),
-            // FfiValue::UserType(uuid) => Self::UserType(new_ref!(UserType, uuid.into())),
-            FfiValue::Uuid(uuid) => Self::Uuid(uuid.into()),
-            // FfiValue::Vector(vec) => {
-            //     Self::Vector(vec.into_iter().map(|v| new_ref!(Value, v.into())).collect())
-            // }
-            _ => Self::Unknown,
-        }
-    }
-}
-
 /// NB: This is what get's spit out of dwarf print statements.
 impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -760,7 +928,7 @@ impl fmt::Display for Value {
             Self::Integer(num) => write!(f, "{num}"),
             Self::Lambda(_) => write!(f, "<lambda>"),
             Self::ParsedDwarf(ctx) => write!(f, "{ctx:#?}"),
-            Self::Plugin(plugin) => write!(f, "Plugin: {}", s_read!(plugin).name()),
+            Self::Plugin(plugin) => write!(f, "plugin::{}", s_read!(plugin).name()),
             Self::ProxyType {
                 module: _,
                 obj_ty: _,
@@ -1271,16 +1439,22 @@ impl std::ops::Add for Value {
         match (&self, &other) {
             (Value::Float(a), Value::Float(b)) => Value::Float(a + b),
             // (Value::Float(a), Value::String(b)) => Value::String(a.to_string() + &b),
-            (Value::String(a), Value::Float(b)) => Value::String(a.to_owned() + &b.to_string()),
+            (Value::String(a), Value::Float(b)) => {
+                Value::String(a.to_owned() + b.to_string().as_str())
+            }
             (Value::Integer(a), Value::Integer(b)) => Value::Integer(a + b),
             // (Value::Integer(a), Value::String(b)) => Value::String(a.to_string() + &b),
             (Value::String(a), Value::Integer(b)) => {
                 Value::String(a.to_owned() + b.to_string().as_str())
             }
-            (Value::String(a), Value::String(b)) => Value::String(a.to_owned() + b),
-            (Value::Char(a), Value::Char(b)) => Value::String(a.to_string() + &b.to_string()),
-            (Value::Char(a), Value::String(b)) => Value::String(a.to_string() + &b),
-            (Value::String(a), Value::Char(b)) => Value::String(a.to_owned() + &b.to_string()),
+            (Value::String(a), Value::String(b)) => Value::String(a.to_owned() + b.as_str()),
+            (Value::Char(a), Value::Char(b)) => {
+                Value::String(a.to_string() + b.to_string().as_str())
+            }
+            (Value::Char(a), Value::String(b)) => Value::String(a.to_string() + b.as_str()),
+            (Value::String(a), Value::Char(b)) => {
+                Value::String(a.to_owned() + b.to_string().as_str())
+            }
             (Value::Empty, Value::Empty) => Value::Empty,
             (Value::Boolean(a), Value::Boolean(b)) => Value::Boolean(*a || *b),
             // (Value::Boolean(a), Value::String(b)) => Value::String(a.to_string() + &b),

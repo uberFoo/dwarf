@@ -10,19 +10,22 @@ use uuid::Uuid;
 use crate::{
     dwarf::{
         error::{DwarfError, Result},
-        items::{enuum, func, strukt},
+        items::{
+            enuum::{self, create_generic_enum},
+            func, strukt,
+        },
         parse_dwarf, AttributeMap, BlockType, DwarfInteger, EnumField,
         Expression as ParserExpression, Generics, InnerAttribute, InnerItem, Item,
         PrintableValueType, Spanned, Statement as ParserStatement, Type, WrappedValueType,
     },
-    keywords::{CHACHA, FN_NEW, UUID_TYPE},
+    keywords::{ARGS, CHACHA, FN_NEW, UUID_TYPE},
     lu_dog::{
         store::ObjectStore as LuDogStore,
         types::{
             AWait, Block, Body, BooleanOperator, Call, DataStructure, EnumFieldEnum, Expression,
             ExpressionEnum, ExpressionStatement, Field, FieldExpression, ForLoop, FunctionCall,
-            Generic, ImplementationBlock, Index, IntegerLiteral, Item as WoogItem, ItemStatement,
-            Lambda, LambdaParameter, LetStatement, Literal, LocalVariable, NamedFieldExpression,
+            ImplementationBlock, Index, IntegerLiteral, Item as WoogItem, ItemStatement, Lambda,
+            LambdaParameter, LetStatement, Literal, LocalVariable, NamedFieldExpression,
             Pattern as AssocPat, RangeExpression, Span as LuDogSpan, Statement, StringLiteral,
             StructExpression, ValueType, ValueTypeEnum, Variable, VariableExpression, WoogStruct,
             XFuture, XIf, XMatch, XPath, XPrint, XValue, XValueEnum,
@@ -292,12 +295,14 @@ pub struct StructFields {
     pub location: Location,
 }
 
+#[derive(Debug)]
 pub struct FunctionDefinition {
     pub name: String,
     pub params: Vec<(String, RefType<ValueType>)>,
     pub return_type: RefType<ValueType>,
 }
 
+#[derive(Debug)]
 pub struct Context<'a> {
     /// Location of the current item
     ///
@@ -311,6 +316,7 @@ pub struct Context<'a> {
     /// have also been read in.
     pub struct_fields: Vec<StructFields>,
     pub source: RefType<DwarfSourceFile>,
+    pub source_string: String,
     pub models: &'a mut ModelStore,
     pub sarzak: &'a SarzakStore,
     pub dwarf_home: &'a PathBuf,
@@ -319,6 +325,7 @@ pub struct Context<'a> {
     pub file_name: &'a str,
     pub func_defs: HashMap<String, FunctionDefinition>,
     pub path: String,
+    pub in_impl: String,
 }
 
 impl<'a> Context<'a> {
@@ -338,7 +345,8 @@ impl<'a> Context<'a> {
         Self {
             location,
             struct_fields: Vec::new(),
-            source: DwarfSourceFile::new(source, lu_dog),
+            source: DwarfSourceFile::new(source.clone(), lu_dog),
+            source_string: source,
             models,
             sarzak,
             dwarf_home,
@@ -347,6 +355,7 @@ impl<'a> Context<'a> {
             file_name,
             func_defs: HashMap::default(),
             path,
+            in_impl: "".to_owned(),
         }
     }
 }
@@ -385,8 +394,8 @@ pub fn new_lu_dog(
     ValueType::new_ty(true, &Ty::new_boolean(sarzak), &mut lu_dog);
     ValueType::new_ty(true, &Ty::new_float(sarzak), &mut lu_dog);
     ValueType::new_ty(true, &Ty::new_integer(sarzak), &mut lu_dog);
-    ValueType::new_ty(true, &Ty::new_s_string(sarzak), &mut lu_dog);
-    ValueType::new_ty(true, &Ty::new_s_uuid(sarzak), &mut lu_dog);
+    ValueType::new_ty(true, &Ty::new_z_string(sarzak), &mut lu_dog);
+    ValueType::new_ty(true, &Ty::new_z_uuid(sarzak), &mut lu_dog);
 
     let mut models = HashMap::default();
     let mut dirty = Vec::new();
@@ -396,7 +405,8 @@ pub fn new_lu_dog(
         let mut context = Context {
             location: location!(),
             struct_fields: Vec::new(),
-            source: DwarfSourceFile::new(source, &mut lu_dog),
+            source: DwarfSourceFile::new(source.clone(), &mut lu_dog),
+            source_string: source,
             models: &mut models,
             sarzak,
             dwarf_home,
@@ -405,6 +415,7 @@ pub fn new_lu_dog(
             file_name: file_name.as_str(),
             func_defs: HashMap::default(),
             path: PATH_ROOT.to_string(),
+            in_impl: "".to_owned(),
         };
 
         walk_tree(ast, &mut context, &mut stack, &mut lu_dog)?;
@@ -432,7 +443,7 @@ fn walk_tree(
 
     // We need the structs before the impls. We also need function signatures.
     // So we walk the tree and cache what we find so that we may then inter
-    // things in the order that we want.
+    // things in the order that we need.
     for item in ast {
         match item {
             Item {
@@ -453,7 +464,7 @@ fn walk_tree(
                             .iter()
                             .map(|(t, _)| match t {
                                 generic @ Type::Generic((t, _)) => (t.to_owned(), generic.clone()),
-                                _ => unreachable!(),
+                                oops => panic!("Unexpected type: {oops:?}"),
                             })
                             .collect(),
                     )
@@ -630,7 +641,8 @@ fn walk_tree(
         }
     }
 
-    // Scan the function signatures for type information
+    // Scan the function signatures for type information, which is stored in the
+    // LuDog store.
     for ConveyFunc {
         a_sink: _,
         name,
@@ -896,6 +908,8 @@ pub fn inter_statement(
 
             debug!("inter let {var:?}");
 
+            dbg!(&expr);
+
             // Now parse the RHS, which is an expression.
             let (expr, expr_ty) = inter_expression(
                 &new_ref!(ParserExpression, expr.to_owned()),
@@ -909,13 +923,7 @@ pub fn inter_statement(
             debug!("inter let expr {expr:?}, ty {expr_ty:?}");
 
             let ty = if let Some((ty, span)) = var_type {
-                let lhs_ty = ty.into_value_type(
-                    context.file_name,
-                    span,
-                    lu_dog,
-                    context.models,
-                    context.sarzak,
-                )?;
+                let lhs_ty = ty.into_value_type(span, context, lu_dog)?;
 
                 typecheck(
                     (&lhs_ty, span),
@@ -1031,6 +1039,7 @@ pub(super) fn inter_expression(
     lu_dog: &mut LuDogStore,
 ) -> Result<(ExprSpan, RefType<ValueType>)> {
     debug!("expr {expr:?}, span {span:?}");
+    // debug!("source {}", context.source_string[span.clone()].to_owned());
 
     let span = LuDogSpan::new(
         span.end as i64,
@@ -1123,6 +1132,8 @@ pub(super) fn inter_expression(
         // Await
         //
         ParserExpression::Await(ref expr_p) => {
+            debug!("await: {expr_p:?}");
+
             let (expr, ty) = inter_expression(
                 &new_ref!(ParserExpression, expr_p.0.to_owned()),
                 &expr_p.1,
@@ -1138,6 +1149,7 @@ pub(super) fn inter_expression(
                     file: context.file_name.to_owned(),
                     found: ty.to_string(),
                     span: expr_p.1.clone(),
+                    program: context.source_string.to_owned(),
                 }])
             } else {
                 let future = match s_read!(ty).subtype {
@@ -1429,6 +1441,7 @@ pub(super) fn inter_expression(
                                 file: context.file_name.to_owned(),
                                 span,
                                 location: location!(),
+                                program: context.source_string.to_owned(),
                             }])
                         }
                     } else {
@@ -1437,6 +1450,7 @@ pub(super) fn inter_expression(
                             file: context.file_name.to_owned(),
                             span: rhs.1.to_owned(),
                             location: location!(),
+                            program: context.source_string.to_owned(),
                         }])
                     }
                 }
@@ -1498,6 +1512,7 @@ pub(super) fn inter_expression(
                                         file: context.file_name.to_owned(),
                                         span,
                                         location: location!(),
+                                        program: context.source_string.to_owned(),
                                     }])
                                 }
                             } else {
@@ -1506,6 +1521,7 @@ pub(super) fn inter_expression(
                                     file: context.file_name.to_owned(),
                                     span: rhs.1.to_owned(),
                                     location: location!(),
+                                    program: context.source_string.to_owned(),
                                 }])
                             }
                         }
@@ -1519,6 +1535,7 @@ pub(super) fn inter_expression(
                     file: context.file_name.to_owned(),
                     span: rhs.1.to_owned(),
                     ty: PrintableValueType(&ty, context, lu_dog).to_string(),
+                    program: context.source_string.to_owned(),
                 }]),
             }
         }
@@ -1567,7 +1584,7 @@ pub(super) fn inter_expression(
                     let ty = context.sarzak.exhume_ty(id).unwrap();
                     let ty = ty.read().unwrap();
                     match &*ty {
-                        Ty::SString(_) => ValueType::new_char(true, lu_dog),
+                        Ty::ZString(_) => ValueType::new_char(true, lu_dog),
                         _ => {
                             let ty =
                                 PrintableValueType(&collection_ty, context, lu_dog).to_string();
@@ -1576,6 +1593,7 @@ pub(super) fn inter_expression(
                                 span: cspan.to_owned(),
                                 ty,
                                 location: location!(),
+                                program: context.source_string.to_owned(),
                             }]);
                         }
                     }
@@ -1587,6 +1605,7 @@ pub(super) fn inter_expression(
                         span: cspan.to_owned(),
                         ty,
                         location: location!(),
+                        program: context.source_string.to_owned(),
                     }]);
                 }
             };
@@ -1659,6 +1678,7 @@ pub(super) fn inter_expression(
                             return Err(vec![DwarfError::MissingFunctionDefinition {
                                 span: fspan.to_owned(),
                                 file: context.file_name.to_owned(),
+                                program: context.source_string.to_owned(),
                             }]);
                         }
                     }
@@ -1666,6 +1686,7 @@ pub(super) fn inter_expression(
                         return Err(vec![DwarfError::MissingFunctionDefinition {
                             span: fspan.to_owned(),
                             file: context.file_name.to_owned(),
+                            program: context.source_string.to_owned(),
                         }]);
                     }
                 }
@@ -1868,6 +1889,7 @@ pub(super) fn inter_expression(
                         expected_span: cspan.to_owned(),
                         found_span: cspan.to_owned(),
                         location: location!(),
+                        program: context.source_string.to_owned(),
                     }]);
                 }
             } else {
@@ -1881,6 +1903,7 @@ pub(super) fn inter_expression(
                     expected_span: cspan.to_owned(),
                     found_span: cspan.to_owned(),
                     location: location!(),
+                    program: context.source_string.to_owned(),
                 }]);
             }
 
@@ -1958,7 +1981,7 @@ pub(super) fn inter_expression(
             } else if let ValueTypeEnum::Ty(ref ty) = s_read!(target_ty).subtype {
                 let ty = context.sarzak.exhume_ty(ty).unwrap();
                 let ty = ty.read().unwrap();
-                if let Ty::SString(_) = &*ty {
+                if let Ty::ZString(_) = &*ty {
                     ValueType::new_char(true, lu_dog)
                 } else {
                     let ty = PrintableValueType(&target_ty, context, lu_dog).to_string();
@@ -1967,6 +1990,7 @@ pub(super) fn inter_expression(
                         span: target_p.1.clone(),
                         ty,
                         location: location!(),
+                        program: context.source_string.to_owned(),
                     }]);
                 }
             } else {
@@ -1976,6 +2000,7 @@ pub(super) fn inter_expression(
                     span: target_p.1.clone(),
                     ty,
                     location: location!(),
+                    program: context.source_string.to_owned(),
                 }]);
             };
 
@@ -2324,7 +2349,6 @@ pub(super) fn inter_expression(
                 parent = s_read!(block).r93_block(lu_dog).pop();
             }
 
-            debug!("values: {values:?}");
             // Now search for a value that's a Variable, and see if the access matches
             // the variable.
             let mut expr_type_tuples = values
@@ -2355,7 +2379,7 @@ pub(super) fn inter_expression(
                                         let lhs_ty =
                                             PrintableValueType(&ty, context, lu_dog);
 
-                                        debug!("{}, {:?}, {}", name, &value, lhs_ty.to_string());
+                                        debug!("{name}, {:?}, {} ({ty:?})",&value, lhs_ty.to_string());
 
                                         let expr = lu_dog
                                             .iter_variable_expression()
@@ -2419,7 +2443,7 @@ pub(super) fn inter_expression(
             // So, yeah, we always want to grab the last one.
             // debug_assert!(expr_type_tuples.len() <= 1);
 
-            debug!("expr_ty {:?}", expr_type_tuples);
+            debug!("expr_type_tuples {:?}", expr_type_tuples);
 
             // Why are we taking the last one? -- Oh, read above.
             if let Some(expr_ty_tuple) = expr_type_tuples.pop() {
@@ -2539,6 +2563,8 @@ pub(super) fn inter_expression(
                     context_stack,
                     lu_dog,
                 )?;
+
+                dbg!(&ty, &scrutinee_ty);
 
                 typecheck(
                     (&scrutinee_ty, s_span),
@@ -2749,6 +2775,7 @@ pub(super) fn inter_expression(
                     found_span: lhs_p.1.to_owned(),
                     expected_span: rhs_p.1.to_owned(),
                     location: location!(),
+                    program: context.source_string.to_owned(),
                 }]);
             }
 
@@ -2933,7 +2960,7 @@ pub(super) fn inter_expression(
                 ),
                 lu_dog,
             );
-            let ty = ValueType::new_ty(true, &Ty::new_s_string(context.sarzak), lu_dog);
+            let ty = ValueType::new_ty(true, &Ty::new_z_string(context.sarzak), lu_dog);
             let value = XValue::new_expression(block, &ty, &expr, lu_dog);
             update_span_value(&span, &value, location!());
 
@@ -3011,6 +3038,7 @@ pub(super) fn inter_expression(
                         file: context.file_name.to_owned(),
                         span: name_span.to_owned(),
                         location: location!(),
+                        program: context.source_string.to_owned(),
                     }]);
                 }
             };
@@ -3039,7 +3067,10 @@ pub(super) fn inter_expression(
 
                 let pvt = PrintableValueType(&ty, context, lu_dog).to_string();
 
-                debug!("field `{name:?}` is of type `{pvt}`, expr: {field_expr:?}");
+                debug!(
+                    "field `{}` is of type `{pvt}`, expr: {field_expr:?}",
+                    field_name.0
+                );
 
                 if let Some(field) = struct_fields
                     .iter()
@@ -3057,18 +3088,13 @@ pub(super) fn inter_expression(
                     // type of the generic parameter. *After* that however, we
                     // need to use this new type to typecheck all subsequent uses
                     // of the pattern.
-                    if let ValueTypeEnum::Generic(ref id) = naked_ty.subtype {
+                    if let ValueTypeEnum::StructGeneric(ref id) = naked_ty.subtype {
                         // OK. We are instantiating a generic. We need to create the new type
-                        let generic = lu_dog.exhume_generic(id).unwrap();
+                        let generic = lu_dog.exhume_struct_generic(id).unwrap();
                         generic_substitutions.insert(s_read!(generic).name.to_owned(), ty.clone());
                     } else {
                         // We only need the type check if the type of the field in the struct
                         // is not generic. Otherwise we are explicitly defining the type above.
-                        //
-                        // This is about to get complicated. If the field is generic,
-                        // then we need to a) fill in the type value of the generic,
-                        // based on either i) the type of a previous field, or ii)
-                        // the type of this field.
                         typecheck(
                             (&field_ty, &field_name.1),
                             (&ty, &field_expr_span),
@@ -3085,6 +3111,7 @@ pub(super) fn inter_expression(
                         file: context.file_name.to_owned(),
                         span: field_name.1.to_owned(),
                         location: location!(),
+                        program: context.source_string.to_owned(),
                     }]);
                 }
 
@@ -3257,6 +3284,8 @@ fn inter_module(
                     trace!("processing dwarf import");
                     walk_tree(&ast, &mut new_ctx, context_stack, lu_dog)?;
                     trace!("done processing dwarf import");
+
+                    context.dirty.extend(dirty);
                 }
                 Err(_) => {
                     return Ok(());
@@ -3298,7 +3327,7 @@ fn inter_import(
 
     let module = path_root.first().unwrap(); // This will have _something_.
 
-    // 🚧 Why?
+    // 🚧 Why? Incomplete plugin idea.
     if module == "dwarf" {
         return Ok(());
     }
@@ -3351,6 +3380,8 @@ fn inter_import(
                     trace!("processing dwarf import");
                     walk_tree(&ast, &mut new_ctx, context_stack, lu_dog)?;
                     trace!("done processing dwarf import");
+
+                    context.dirty.extend(dirty);
                 }
                 Err(_) => {
                     e_warn!("Failed to parse import: {path:?}");
@@ -3453,6 +3484,7 @@ fn inter_implementation(
             unreachable!();
         }
     } else {
+        dbg!(&name);
         context.location = location!();
         let impl_ty = make_value_type(
             &Type::UserType((name.to_owned(), 0..0), vec![]),
@@ -3462,6 +3494,8 @@ fn inter_implementation(
             context_stack,
             lu_dog,
         )?;
+
+        context.in_impl = name.to_owned();
 
         let implementation = if let Some(id) = lu_dog.exhume_woog_struct_id_by_name(name) {
             let woog_struct = lu_dog.exhume_woog_struct(&id).unwrap();
@@ -3479,6 +3513,7 @@ fn inter_implementation(
                 file: context.file_name.to_owned(),
                 span: span.to_owned(),
                 location: location!(),
+                program: context.source_string.to_owned(),
             }]);
         };
 
@@ -3508,6 +3543,7 @@ fn inter_implementation(
                     ),
                 attributes,
             } => {
+                dbg!(&generics);
                 let generics = if let Some((generics, _)) = generics {
                     Some(
                         generics
@@ -3525,6 +3561,7 @@ fn inter_implementation(
                 } else {
                     None
                 };
+                dbg!(&name.0, &return_type);
 
                 match func::inter_func(
                     a_sink,
@@ -3552,11 +3589,13 @@ fn inter_implementation(
                 return Err(vec![DwarfError::ImplementationBlock {
                     file: context.file_name.to_owned(),
                     span: span.clone(),
+                    program: context.source_string.to_owned(),
                 }])
             }
         }
     }
-    // }
+
+    context.in_impl = "".to_owned();
 
     if errors.is_empty() {
         Ok(())
@@ -3593,7 +3632,7 @@ fn exorcise_generic_enum(
                         let field = lu_dog.exhume_tuple_field(id).unwrap();
                         let ty = lu_dog.exhume_value_type(&s_read!(field).ty).unwrap();
                         let ty = s_read!(ty);
-                        if let ValueTypeEnum::Generic(_) = ty.subtype {
+                        if let ValueTypeEnum::EnumGeneric(_) = ty.subtype {
                             // lu_dog.exorcise_tuple_field(id);
                         }
                     }
@@ -3664,13 +3703,14 @@ pub(crate) fn make_value_type(
     type_: &Type,
     span: &Span,
     enclosing_type: Option<&RefType<ValueType>>,
-    context: &Context,
+    context: &mut Context,
     context_stack: &Vec<(String, RefType<LuDogStore>)>,
     lu_dog: &mut LuDogStore,
 ) -> Result<RefType<ValueType>> {
     let sarzak = context.sarzak;
 
     debug!("make_value_type {type_:?}");
+    dbg!(type_.to_string());
 
     match type_ {
         Type::Boolean => {
@@ -3721,8 +3761,7 @@ pub(crate) fn make_value_type(
             Ok(lambda)
         }
         Type::Generic((t, _)) => {
-            let ty = Generic::new(t.to_owned(), None, None, lu_dog);
-            Ok(ValueType::new_generic(true, &ty, lu_dog))
+            panic!("don't call this function with a generic -- you wont't get anywhere.");
         }
         Type::Integer => {
             let ty = Ty::new_integer(sarzak);
@@ -3746,13 +3785,15 @@ pub(crate) fn make_value_type(
                 file: context.file_name.to_owned(),
                 span: span.clone(),
                 location: context.location,
+                program: context.source_string.to_owned(),
             }]),
         },
         Type::String => {
-            let ty = Ty::new_s_string(sarzak);
+            let ty = Ty::new_z_string(sarzak);
             Ok(ValueType::new_ty(true, &ty, lu_dog))
         }
         Type::UserType(tok, generics) => {
+            dbg!(&tok, &generics);
             let name = &tok.0;
 
             // Deal with imports
@@ -3780,14 +3821,30 @@ pub(crate) fn make_value_type(
                 // three `Item`s are already `ValueType`s, so it's not a stretch.
                 unreachable!();
             } else if name == "Future" {
-                let inner_type = make_value_type(
-                    &generics[0].0,
-                    span,
-                    enclosing_type,
-                    context,
-                    context_stack,
-                    lu_dog,
-                )?;
+                let inner_type = if let Type::Generic(name) = &generics[0].0 {
+                    dbg!("a");
+                    if let Some(ty) = lookup_user_defined_type(lu_dog, &name.0, span, context) {
+                        ty
+                    } else {
+                        make_value_type(
+                            &generics[0].0,
+                            span,
+                            enclosing_type,
+                            context,
+                            context_stack,
+                            lu_dog,
+                        )?
+                    }
+                } else {
+                    make_value_type(
+                        &generics[0].0,
+                        span,
+                        enclosing_type,
+                        context,
+                        context_stack,
+                        lu_dog,
+                    )?
+                };
                 let future = XFuture::new(&inner_type, lu_dog);
 
                 Ok(ValueType::new_x_future(true, &future, lu_dog))
@@ -3804,12 +3861,13 @@ pub(crate) fn make_value_type(
                         file: context.file_name.to_owned(),
                         span: tok.1.clone(),
                         location: context.location,
+                        program: context.source_string.to_owned(),
                     }]),
                 }
             } else if name == "String" {
-                Ok(ValueType::new_ty(true, &Ty::new_s_string(sarzak), lu_dog))
+                Ok(ValueType::new_ty(true, &Ty::new_z_string(sarzak), lu_dog))
             } else if name == UUID_TYPE {
-                Ok(ValueType::new_ty(true, &Ty::new_s_uuid(sarzak), lu_dog))
+                Ok(ValueType::new_ty(true, &Ty::new_z_uuid(sarzak), lu_dog))
             } else {
                 // 🚧 HashMapFix
                 for model in context.models.values() {
@@ -3829,25 +3887,74 @@ pub(crate) fn make_value_type(
                     }
                 }
 
-                if let Some(ty) = lookup_user_defined_type(lu_dog, name, span, context) {
-                    Ok(ty)
-                } else if let Some(ty) = {
-                    let mut iter = context_stack.iter();
-                    loop {
-                        if let Some((path, lu_dog)) = iter.next() {
-                            dbg!(&path, &name);
-                            if let Some(ty) =
-                                lookup_user_defined_type(&mut s_write!(lu_dog), name, span, context)
-                            {
-                                break Some(ty);
-                            }
-                        } else {
-                            break None;
+                let mut fq_name = tok.0.clone();
+                if !generics.is_empty() {
+                    fq_name.push('<');
+                    for (i, (generic, _)) in generics.iter().enumerate() {
+                        fq_name.extend([generic.to_string()]);
+
+                        if i != generics.len() - 1 {
+                            fq_name.extend([", "]);
                         }
                     }
-                } {
+                    fq_name.push('>');
+                }
+                dbg!(&fq_name);
+
+                dbg!("b");
+                if let Some(ty) = lookup_user_defined_type(lu_dog, &fq_name, span, context) {
+                    // 🔥 I think that I need to look at the returned type and see if it has
+                    // generics, and then match them up with the generics I have above. But
+                    // then what happens? I can't really return a new type with the substitutions
+                    // I don't think.
+                    dbg!(&ty, "ψ");
                     Ok(ty)
-                } else if let Some(ref id) = lu_dog.exhume_z_object_store_id_by_name(name) {
+                } else if &fq_name != name {
+                    dbg!("fq_name isn't name");
+                    // 🚧  I don't trust this code -- it needs testing.
+                    if let Some(ref id) = lu_dog.exhume_woog_struct_id_by_name(name) {
+                        let woog_struct = lu_dog.exhume_woog_struct(id).unwrap();
+                        let struct_fields = s_read!(woog_struct).r7_field(lu_dog);
+                        let mut generic_substitutions = HashMap::default();
+                        let mut i = 0;
+
+                        for field in struct_fields {
+                            let field = s_read!(field);
+                            let field_ty = lu_dog.exhume_value_type(&field.ty).unwrap();
+                            let field_ty = s_read!(field_ty);
+                            if let ValueTypeEnum::StructGeneric(ref id) = field_ty.subtype {
+                                let generic = lu_dog.exhume_struct_generic(id).unwrap();
+                                generic_substitutions.insert(
+                                    s_read!(generic).name.to_owned(),
+                                    make_value_type(
+                                        &generics[i].0,
+                                        span,
+                                        enclosing_type,
+                                        context,
+                                        context_stack,
+                                        lu_dog,
+                                    )?,
+                                );
+                                i += 1;
+                            }
+                        }
+                        let generic = create_generic_struct(
+                            &woog_struct,
+                            &generic_substitutions,
+                            context,
+                            context.sarzak,
+                            lu_dog,
+                        );
+                        Ok(ValueType::new_woog_struct(true, &generic, lu_dog))
+                    } else {
+                        dbg!("uber");
+                        let (_, ty) = create_generic_enum(&fq_name, &name, context, lu_dog);
+                        Ok(ty)
+                    }
+                } else if let Some(ty) = lookup_user_defined_type(lu_dog, &name, span, context) {
+                    dbg!("pulling archetype");
+                    Ok(ty)
+                } else if let Some(ref id) = lu_dog.exhume_z_object_store_id_by_name(&name) {
                     let store = lu_dog.exhume_z_object_store(id).unwrap();
                     Ok(ValueType::new_z_object_store(true, &store, lu_dog))
                 } else if let Some(ty) = sarzak.iter_ty().find(|ty| match &*ty.read().unwrap() {
@@ -3862,16 +3969,17 @@ pub(crate) fn make_value_type(
                     Ok(ValueType::new_ty(true, &ty, lu_dog))
                 } else {
                     Err(vec![DwarfError::UnknownType {
-                        ty: name.to_owned(),
+                        ty: fq_name.to_owned(),
                         file: context.file_name.to_owned(),
                         span: span.to_owned(),
                         location: context.location,
+                        program: context.source_string.to_owned(),
                     }])
                 }
             }
         }
         Type::Uuid => {
-            let ty = Ty::new_s_uuid(sarzak);
+            let ty = Ty::new_z_uuid(sarzak);
             Ok(ValueType::new_ty(true, &ty, lu_dog))
         }
         道 => todo!("get_value_type missing implementation for {:?}", 道),
@@ -3884,6 +3992,7 @@ pub(crate) fn lookup_user_defined_type(
     span: &Span,
     context: &Context,
 ) -> Option<RefType<ValueType>> {
+    dbg!(&name);
     if let Some(ref id) = lu_dog.exhume_woog_struct_id_by_name(name) {
         // Here is where we look for actual user defined types, as
         // in types that are defined in dwarf source.
@@ -3897,13 +4006,16 @@ pub(crate) fn lookup_user_defined_type(
             None,
             lu_dog,
         );
-
+        dbg!("ε");
         Some(ty)
     } else if let Some(ref id) = lu_dog.exhume_enumeration_id_by_name(name) {
         // Here too, but for enums.
+        dbg!("f");
         let woog_enum = lu_dog.exhume_enumeration(id).unwrap();
         Some(ValueType::new_enumeration(true, &woog_enum, lu_dog))
+        // 🚧 Don't we need a span here, like above?
     } else {
+        dbg!("γ");
         None
     }
 }
@@ -3926,11 +4038,11 @@ pub(crate) fn lookup_woog_struct_method_return_type(
                 lu_dog.exhume_value_type(&ret_ty).unwrap()
             })
         } else {
-            debug!("ParserExpression type not found");
+            debug!("type not found");
             e_warn!("Unknown type for variable {method}");
             Some(ValueType::new_unknown(true, lu_dog))
         };
-        debug!("ParserExpression found type: {ty:?}");
+        debug!("found type: {ty:?}");
         if let Some(ty) = ty {
             ty
         } else {
@@ -3939,8 +4051,8 @@ pub(crate) fn lookup_woog_struct_method_return_type(
         }
     } else if type_name == CHACHA {
         match method {
-            "args" => {
-                let ty = Ty::new_s_string(sarzak);
+            ARGS => {
+                let ty = Ty::new_z_string(sarzak);
                 // 🚧 Ideally we'd cache this when we startup.
                 let ty = lu_dog
                     .iter_value_type()
@@ -3955,7 +4067,7 @@ pub(crate) fn lookup_woog_struct_method_return_type(
             }
         }
     } else if type_name == UUID_TYPE && method == FN_NEW {
-        ValueType::new_ty(true, &Ty::new_s_uuid(sarzak), lu_dog)
+        ValueType::new_ty(true, &Ty::new_z_uuid(sarzak), lu_dog)
     } else {
         e_warn!("ParserExpression type not found");
         ValueType::new_unknown(true, lu_dog)
@@ -3994,37 +4106,111 @@ pub(super) fn typecheck(
         // Promote unknown to the other type.
         (ValueTypeEnum::Unknown(_), _) => Ok(()),
         (_, ValueTypeEnum::Unknown(_)) => Ok(()),
-        (ValueTypeEnum::Generic(g), _) => {
-            let g = lu_dog.exhume_generic(g).unwrap();
-            let ty = s_read!(g).r99_value_type(lu_dog);
-
-            if !ty.is_empty() {
-                typecheck(
-                    (&ty[0], lhs_span),
-                    (rhs, rhs_span),
-                    location,
-                    context,
-                    lu_dog,
-                )
-            } else {
-                // 🚧 I'd really much prefer to do something clever here.
+        (ValueTypeEnum::XPlugin(a), ValueTypeEnum::XPlugin(b)) => {
+            let a = lu_dog.exhume_x_plugin(a).unwrap();
+            let b = lu_dog.exhume_x_plugin(b).unwrap();
+            let a = s_read!(a);
+            let b = s_read!(b);
+            if a.name == b.name {
                 Ok(())
+            } else {
+                let a = PrintableValueType(lhs, context, lu_dog);
+                let b = PrintableValueType(rhs, context, lu_dog);
+
+                Err(vec![DwarfError::TypeMismatch {
+                    expected: a.to_string(),
+                    found: b.to_string(),
+                    file: context.file_name.to_owned(),
+                    expected_span: lhs_span.to_owned(),
+                    found_span: rhs_span.to_owned(),
+                    location,
+                    program: context.source_string.to_owned(),
+                }])
             }
         }
-        (_, ValueTypeEnum::Generic(g)) => {
-            let g = lu_dog.exhume_generic(g).unwrap();
-            let ty = s_read!(g).r99_value_type(lu_dog);
-            if !ty.is_empty() {
-                typecheck(
-                    (lhs, lhs_span),
-                    (&ty[0], rhs_span),
-                    location,
-                    context,
-                    lu_dog,
-                )
-            } else {
-                Ok(())
-            }
+        (ValueTypeEnum::FuncGeneric(_), _) => Ok(()),
+        (_, ValueTypeEnum::FuncGeneric(_)) => Ok(()),
+        (ValueTypeEnum::EnumGeneric(_g), _) => {
+            // let g = lu_dog.exhume_enum_generic(g).unwrap();
+            // let ty = s_read!(g).r99_value_type(lu_dog);
+            // dbg!(&ty, "a");
+
+            // if !ty.is_empty() {
+            //     typecheck(
+            //         (&ty[0], lhs_span),
+            //         (rhs, rhs_span),
+            //         location,
+            //         context,
+            //         lu_dog,
+            //     )
+            // } else {
+            // 🚧 I'd really much prefer to do something clever here.
+            // Why would we get here? If there is no value type for the generic?
+            // When would that happen?
+            Ok(())
+            // }
+        }
+        (_, ValueTypeEnum::EnumGeneric(_g)) => {
+            // let g = lu_dog.exhume_enum_generic(g).unwrap();
+            // let ty = s_read!(g).r99_value_type(lu_dog);
+            // dbg!(&ty, "b");
+            // let a = PrintableValueType(lhs, context, lu_dog);
+            // let b = PrintableValueType(rhs, context, lu_dog);
+
+            // dbg!(a.to_string(), b.to_string());
+
+            // if !ty.is_empty() {
+            //     typecheck(
+            //         (lhs, lhs_span),
+            //         (&ty[0], rhs_span),
+            //         location,
+            //         context,
+            //         lu_dog,
+            //     )
+            // } else {
+            Ok(())
+            // }
+        }
+        (ValueTypeEnum::StructGeneric(_g), _) => {
+            // let g = lu_dog.exhume_generic(g).unwrap();
+            // let ty = s_read!(g).r99_value_type(lu_dog);
+            // dbg!(&ty, "a");
+
+            // if !ty.is_empty() {
+            //     typecheck(
+            //         (&ty[0], lhs_span),
+            //         (rhs, rhs_span),
+            //         location,
+            //         context,
+            //         lu_dog,
+            //     )
+            // } else {
+            // 🚧 I'd really much prefer to do something clever here.
+            // Why would we get here? If there is no value type for the generic?
+            // When would that happen?
+            Ok(())
+            // }
+        }
+        (_, ValueTypeEnum::StructGeneric(_g)) => {
+            // let g = lu_dog.exhume_generic(g).unwrap();
+            // let ty = s_read!(g).r99_value_type(lu_dog);
+            // dbg!(&ty, "b");
+            // let a = PrintableValueType(lhs, context, lu_dog);
+            // let b = PrintableValueType(rhs, context, lu_dog);
+
+            // dbg!(a.to_string(), b.to_string());
+
+            // if !ty.is_empty() {
+            //     typecheck(
+            //         (lhs, lhs_span),
+            //         (&ty[0], rhs_span),
+            //         location,
+            //         context,
+            //         lu_dog,
+            //     )
+            // } else {
+            Ok(())
+            // }
         }
         (ValueTypeEnum::Ty(a), ValueTypeEnum::Ty(b)) => {
             let a = context.sarzak.exhume_ty(a).unwrap();
@@ -4035,8 +4221,8 @@ pub(super) fn typecheck(
                 (Ty::Integer(_), Ty::Integer(_)) => Ok(()),
                 (Ty::Float(_), Ty::Float(_)) => Ok(()),
                 (Ty::Boolean(_), Ty::Boolean(_)) => Ok(()),
-                (Ty::SString(_), Ty::SString(_)) => Ok(()),
-                (Ty::SUuid(_), Ty::SUuid(_)) => Ok(()),
+                (Ty::ZString(_), Ty::ZString(_)) => Ok(()),
+                (Ty::ZUuid(_), Ty::ZUuid(_)) => Ok(()),
                 (a, b) => {
                     // dbg!(PrintableValueType(lhs, context, lu_dog).to_string());
                     // dbg!(PrintableValueType(rhs, context, lu_dog).to_string());
@@ -4053,6 +4239,7 @@ pub(super) fn typecheck(
                             expected_span: lhs_span.to_owned(),
                             found_span: rhs_span.to_owned(),
                             location,
+                            program: context.source_string.to_owned(),
                         }])
                     }
                 }
@@ -4078,6 +4265,7 @@ pub(super) fn typecheck(
                         expected_span: lhs_span.to_owned(),
                         found_span: rhs_span.to_owned(),
                         location,
+                        program: context.source_string.to_owned(),
                     }])
                 }
             }
@@ -4100,6 +4288,7 @@ pub(super) fn typecheck(
                         expected_span: lhs_span.to_owned(),
                         found_span: rhs_span.to_owned(),
                         location,
+                        program: context.source_string.to_owned(),
                     }])
                 }
             }
@@ -4108,7 +4297,7 @@ pub(super) fn typecheck(
             let ty = context.sarzak.exhume_ty(id).unwrap();
             let ty = ty.read().unwrap();
             match &*ty {
-                Ty::SString(_) => Ok(()),
+                Ty::ZString(_) => Ok(()),
                 _ => {
                     // dbg!(PrintableValueType(lhs, context, lu_dog).to_string());
                     // dbg!(PrintableValueType(rhs, context, lu_dog).to_string());
@@ -4122,13 +4311,49 @@ pub(super) fn typecheck(
                         expected_span: lhs_span.to_owned(),
                         found_span: rhs_span.to_owned(),
                         location,
+                        program: context.source_string.to_owned(),
                     }])
                 }
             }
         }
+        (ValueTypeEnum::Enumeration(a), ValueTypeEnum::Enumeration(b)) => {
+            let a = lu_dog.exhume_enumeration(a).unwrap();
+            let b = lu_dog.exhume_enumeration(b).unwrap();
+            let a = s_read!(a);
+            let b = s_read!(b);
+
+            let a_name = if let Some(next) = a.name.split('<').next() {
+                next
+            } else {
+                &a.name
+            };
+            let b_name = if let Some(next) = b.name.split('<').next() {
+                next
+            } else {
+                &b.name
+            };
+
+            dbg!(&a_name, &b_name);
+
+            if a_name == b_name {
+                Ok(())
+            } else {
+                let a = PrintableValueType(lhs, context, lu_dog);
+                let b = PrintableValueType(rhs, context, lu_dog);
+
+                Err(vec![DwarfError::TypeMismatch {
+                    expected: a.to_string(),
+                    found: b.to_string(),
+                    file: context.file_name.to_owned(),
+                    expected_span: lhs_span.to_owned(),
+                    found_span: rhs_span.to_owned(),
+                    location,
+                    program: context.source_string.to_owned(),
+                }])
+            }
+        }
         (lhs_t, rhs_t) => {
-            // dbg!(PrintableValueType(lhs, context, lu_dog).to_string());
-            // dbg!(PrintableValueType(rhs, context, lu_dog).to_string());
+            dbg!(&lhs_t, &rhs_t);
             if lhs_t == rhs_t {
                 Ok(())
             } else {
@@ -4142,6 +4367,7 @@ pub(super) fn typecheck(
                     expected_span: lhs_span.to_owned(),
                     found_span: rhs_span.to_owned(),
                     location,
+                    program: context.source_string.to_owned(),
                 }])
             }
         }
@@ -4165,8 +4391,6 @@ pub(crate) fn create_generic_struct(
         let next = lu_dog.exhume_struct_generic(&next_id).unwrap();
         let next = s_read!(next);
         id = next.next;
-
-        // dbg!(&next.name, &substitutions);
 
         let ty = substitutions.get(&next.name).unwrap();
         let ty = PrintableValueType(ty, context, lu_dog).to_string();

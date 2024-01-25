@@ -38,17 +38,45 @@ impl<'a> PrintableValueType<'a> {
         match &value.subtype {
             ValueTypeEnum::Char(_) => write!(f, "{}", TY_CLR.italic().paint("char")),
             ValueTypeEnum::Enumeration(ref enumeration) => {
-                let enumeration = s_read!(lu_dog).exhume_enumeration(enumeration).unwrap();
-                debug!("enumeration: {enumeration:?}");
+                let lu_dog = s_read!(lu_dog);
+                let enumeration = lu_dog.exhume_enumeration(enumeration).unwrap();
                 let enumeration = s_read!(enumeration);
+                let mut generics = Vec::new();
+                if let Some(first) = enumeration.r105_enum_generic(&lu_dog).first() {
+                    let first = s_read!(first);
+                    generics.push(first.name.clone());
+                    let mut next = first.next;
+                    while let Some(id) = next {
+                        let generic = lu_dog.exhume_enum_generic(&id).unwrap();
+                        let generic = s_read!(generic);
+                        generics.push(generic.name.clone());
+                        next = generic.next;
+                    }
+                }
+                let mut name = enumeration.name.clone();
+                if !generics.is_empty() {
+                    name.push('<');
+                    name.push_str(generics.join(", ").as_str());
+                    name.push('>');
+                }
                 write!(
                     f,
                     "{} {}",
                     TY_WARN_CLR.paint("enum"),
-                    TY_CLR.italic().paint(&enumeration.name)
+                    TY_CLR.italic().paint(&name)
                 )
             }
+            ValueTypeEnum::EnumGeneric(ref id) => {
+                let enum_generic = s_read!(lu_dog).exhume_enum_generic(id).unwrap();
+                let enum_generic = s_read!(enum_generic);
+                write!(f, "{}", enum_generic.name)
+            }
             ValueTypeEnum::Empty(_) => write!(f, "{}", TY_CLR.italic().paint("()")),
+            ValueTypeEnum::FuncGeneric(ref id) => {
+                let func_generic = s_read!(lu_dog).exhume_func_generic(id).unwrap();
+                let func_generic = s_read!(func_generic);
+                write!(f, "{}", func_generic.name)
+            }
             ValueTypeEnum::Function(_) => write!(f, "{}", TY_CLR.italic().paint("function")),
             ValueTypeEnum::XFuture(ref id) => {
                 let future = s_read!(lu_dog).exhume_x_future(id).unwrap();
@@ -56,11 +84,6 @@ impl<'a> PrintableValueType<'a> {
                 let inner = PrintableValueType(true, inner, context);
 
                 write!(f, "{}<{inner}>", TY_CLR.paint("Future"))
-            }
-            ValueTypeEnum::Generic(g) => {
-                let g = s_read!(lu_dog).exhume_generic(g).unwrap();
-                let g = s_read!(g);
-                write!(f, "<{}>", TY_CLR.italic().paint(g.name.as_str()))
             }
             ValueTypeEnum::Import(ref import) => {
                 let import = s_read!(lu_dog).exhume_import(import).unwrap();
@@ -90,10 +113,15 @@ impl<'a> PrintableValueType<'a> {
                 write!(
                     f,
                     "{}",
-                    TY_CLR.italic().paint(format!("plugin: {}", plugin.name))
+                    TY_CLR.italic().paint(format!("plugin::{}", plugin.name))
                 )
             }
             ValueTypeEnum::Range(_) => write!(f, "{}", TY_CLR.italic().paint("range")),
+            ValueTypeEnum::StructGeneric(ref id) => {
+                let struct_generic = s_read!(lu_dog).exhume_struct_generic(id).unwrap();
+                let struct_generic = s_read!(struct_generic);
+                write!(f, "{}", struct_generic.name)
+            }
             ValueTypeEnum::Task(_) => write!(f, "{}", TY_CLR.italic().paint("task")),
             ValueTypeEnum::Ty(ref ty) => {
                 // So, sometimes these show up in the model domain. It'll get really
@@ -112,8 +140,8 @@ impl<'a> PrintableValueType<'a> {
                                 write!(f, "{}", TY_WARN_CLR.italic().paint("<unknown object>"))
                             }
                         }
-                        Ty::SString(_) => write!(f, "{}", TY_CLR.italic().paint("string")),
-                        Ty::SUuid(_) => write!(f, "{}", TY_CLR.italic().paint("Uuid")),
+                        Ty::ZString(_) => write!(f, "{}", TY_CLR.italic().paint("string")),
+                        Ty::ZUuid(_) => write!(f, "{}", TY_CLR.italic().paint("Uuid")),
                         gamma => {
                             error!("deal with sarzak type {gamma:?}");
                             write!(f, "todo")
@@ -180,19 +208,44 @@ impl<'a> PrintableValueType<'a> {
         match &value.subtype {
             ValueTypeEnum::Char(_) => write!(f, "char"),
             ValueTypeEnum::Enumeration(ref enumeration) => {
-                let enumeration = s_read!(lu_dog).exhume_enumeration(enumeration).unwrap();
+                let lu_dog = s_read!(lu_dog);
+                let enumeration = lu_dog.exhume_enumeration(enumeration).unwrap();
                 debug!("enumeration: {enumeration:?}");
                 let enumeration = s_read!(enumeration);
-                write!(f, "enum {}", enumeration.name)
+                let mut generics = Vec::new();
+                if let Some(first) = enumeration.r105_enum_generic(&lu_dog).first() {
+                    let first = s_read!(first);
+                    generics.push(first.name.clone());
+                    let mut next = first.next;
+                    while let Some(id) = next {
+                        let generic = lu_dog.exhume_enum_generic(&id).unwrap();
+                        let generic = s_read!(generic);
+                        generics.push(generic.name.clone());
+                        next = generic.next;
+                    }
+                }
+                let mut name = enumeration.name.clone();
+                if !generics.is_empty() {
+                    name.push('<');
+                    name.push_str(generics.join(", ").as_str());
+                    name.push('>');
+                }
+
+                write!(f, "enum {}", name)
+            }
+            ValueTypeEnum::EnumGeneric(ref id) => {
+                let enum_generic = s_read!(lu_dog).exhume_enum_generic(id).unwrap();
+                let enum_generic = s_read!(enum_generic);
+                write!(f, "{}", enum_generic.name)
             }
             ValueTypeEnum::Empty(_) => write!(f, "()"),
+            ValueTypeEnum::FuncGeneric(ref id) => {
+                let func_generic = s_read!(lu_dog).exhume_func_generic(id).unwrap();
+                let func_generic = s_read!(func_generic);
+                write!(f, "{}", func_generic.name)
+            }
             ValueTypeEnum::Function(_) => write!(f, "function"),
             ValueTypeEnum::XFuture(_) => write!(f, "future"),
-            ValueTypeEnum::Generic(g) => {
-                let g = s_read!(lu_dog).exhume_generic(g).unwrap();
-                let g = s_read!(g);
-                write!(f, "<{}>", g.name)
-            }
             ValueTypeEnum::Import(ref import) => {
                 let import = s_read!(lu_dog).exhume_import(import).unwrap();
                 let import = s_read!(import);
@@ -215,6 +268,11 @@ impl<'a> PrintableValueType<'a> {
                 write!(f, "plugin: {}", plugin.name)
             }
             ValueTypeEnum::Range(_) => write!(f, "range"),
+            ValueTypeEnum::StructGeneric(ref id) => {
+                let struct_generic = s_read!(lu_dog).exhume_struct_generic(id).unwrap();
+                let struct_generic = s_read!(struct_generic);
+                write!(f, "{}", struct_generic.name)
+            }
             ValueTypeEnum::Task(_) => write!(f, "task"),
             ValueTypeEnum::Ty(ref ty) => {
                 // So, sometimes these show up in the model domain. It'll get really
@@ -233,8 +291,8 @@ impl<'a> PrintableValueType<'a> {
                                 write!(f, "<unknown object>")
                             }
                         }
-                        Ty::SString(_) => write!(f, "string"),
-                        Ty::SUuid(_) => write!(f, "Uuid"),
+                        Ty::ZString(_) => write!(f, "string"),
+                        Ty::ZUuid(_) => write!(f, "Uuid"),
                         gamma => {
                             error!("deal with sarzak type {gamma:?}");
                             write!(f, "todo")

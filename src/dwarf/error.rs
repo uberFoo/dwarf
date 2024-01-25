@@ -19,6 +19,7 @@ pub enum DwarfError {
         file: String,
         found: String,
         span: Span,
+        program: String,
     },
     /// Self Error
     ///
@@ -28,6 +29,7 @@ pub enum DwarfError {
         file: String,
         span: Span,
         location: Location,
+        program: String,
     },
 
     /// Enum not found
@@ -38,6 +40,7 @@ pub enum DwarfError {
         name: String,
         file: String,
         span: Span,
+        program: String,
     },
 
     /// File Error
@@ -65,13 +68,18 @@ pub enum DwarfError {
         description: String,
         file: String,
         span: Span,
+        program: String,
     },
 
     /// Implementation Block Error
     ///
     /// An impl block may only contain functions.
     #[snafu(display("impl blocks may only contain functions."))]
-    ImplementationBlock { file: String, span: Span },
+    ImplementationBlock {
+        file: String,
+        span: Span,
+        program: String,
+    },
 
     /// Internal Error
     ///
@@ -96,7 +104,11 @@ pub enum DwarfError {
     ///
     /// A function is being called, but it's not defined.
     #[snafu(display("\n{}: Missing function definition\n  --> {}..{}", ERR_CLR.bold().paint("error"), span.start, span.end))]
-    MissingFunctionDefinition { file: String, span: Span },
+    MissingFunctionDefinition {
+        file: String,
+        span: Span,
+        program: String,
+    },
 
     /// Missing Implementation
     ///
@@ -117,6 +129,7 @@ pub enum DwarfError {
         file: String,
         span: Span,
         location: Location,
+        program: String,
     },
 
     /// Not a Struct Type
@@ -126,6 +139,7 @@ pub enum DwarfError {
         ty: String,
         file: String,
         span: Span,
+        program: String,
     },
 
     /// No Such Field
@@ -137,6 +151,7 @@ pub enum DwarfError {
         file: String,
         span: Span,
         location: Location,
+        program: String,
     },
 
     /// No Such Method
@@ -154,6 +169,7 @@ pub enum DwarfError {
         file: String,
         span: Span,
         location: Location,
+        program: String,
     },
 
     /// Struct Field Not Found Error
@@ -166,6 +182,7 @@ pub enum DwarfError {
         file: String,
         span: Span,
         location: Location,
+        program: String,
     },
 
     /// Object Name Lookup Error
@@ -177,6 +194,7 @@ pub enum DwarfError {
         file: String,
         span: Span,
         location: Location,
+        program: String,
     },
 
     /// Parse Error
@@ -200,6 +218,7 @@ pub enum DwarfError {
         expected_span: Span,
         found_span: Span,
         location: Location,
+        program: String,
     },
 
     /// Unknown Type
@@ -211,6 +230,7 @@ pub enum DwarfError {
         file: String,
         span: Span,
         location: Location,
+        program: String,
     },
     #[snafu(display("\n{}: wrong number of arguments. Expected `{}`, found `{}`.", ERR_CLR.bold().paint("error"), OK_CLR.paint(expected.to_string()), ERR_CLR.bold().paint(found.to_string())))]
     WrongNumberOfArguments {
@@ -219,19 +239,24 @@ pub enum DwarfError {
         file: String,
         span: Span,
         location: Location,
+        program: String,
     },
 }
 
-pub struct DwarfErrorReporter<'a, 'b>(pub &'a DwarfError, pub bool, pub &'b str);
-impl fmt::Display for DwarfErrorReporter<'_, '_> {
+pub struct DwarfErrorReporter<'a>(pub &'a DwarfError, pub bool);
+impl fmt::Display for DwarfErrorReporter<'_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let is_uber = self.1;
-        let program = &self.2;
 
         let mut std_err = Vec::new();
 
         match &self.0 {
-            DwarfError::AwaitNotFuture { file, found, span } => {
+            DwarfError::AwaitNotFuture {
+                file,
+                found,
+                span,
+                program,
+            } => {
                 let span = span.clone();
                 Report::build(ReportKind::Error, file, span.start)
                     .with_message("await may only be used on a future")
@@ -252,6 +277,7 @@ impl fmt::Display for DwarfErrorReporter<'_, '_> {
                 file,
                 span,
                 location,
+                program,
             } => {
                 let span = span.clone();
                 let report = Report::build(ReportKind::Error, file, span.start)
@@ -281,7 +307,12 @@ impl fmt::Display for DwarfErrorReporter<'_, '_> {
                     .map_err(|_| fmt::Error)?;
                 write!(f, "{}", String::from_utf8_lossy(&std_err))
             }
-            DwarfError::EnumNotFound { name, file, span } => {
+            DwarfError::EnumNotFound {
+                name,
+                file,
+                span,
+                program,
+            } => {
                 let span = span.clone();
                 Report::build(ReportKind::Error, file, span.start)
                     .with_message(format!("enum not found: {}", OTH_CLR.paint(name)))
@@ -299,6 +330,7 @@ impl fmt::Display for DwarfErrorReporter<'_, '_> {
                 description: desc,
                 file,
                 span,
+                program,
             } => {
                 Report::build(ReportKind::Error, file, span.start)
                     .with_message(desc)
@@ -312,7 +344,11 @@ impl fmt::Display for DwarfErrorReporter<'_, '_> {
                     .map_err(|_| fmt::Error)?;
                 write!(f, "{}", String::from_utf8_lossy(&std_err))
             }
-            DwarfError::ImplementationBlock { file, span } => {
+            DwarfError::ImplementationBlock {
+                file,
+                span,
+                program,
+            } => {
                 let span = span.clone();
                 Report::build(ReportKind::Error, file, span.start)
                     // 🚧 Figure out some error numbering scheme and use one of
@@ -329,7 +365,11 @@ impl fmt::Display for DwarfErrorReporter<'_, '_> {
                     .map_err(|_| fmt::Error)?;
                 write!(f, "{}", String::from_utf8_lossy(&std_err))
             }
-            DwarfError::MissingFunctionDefinition { file, span } => {
+            DwarfError::MissingFunctionDefinition {
+                file,
+                span,
+                program,
+            } => {
                 Report::build(ReportKind::Error, file, span.start)
                     .with_message("missing function definition")
                     .with_label(
@@ -347,6 +387,7 @@ impl fmt::Display for DwarfErrorReporter<'_, '_> {
                 span,
                 ty,
                 location,
+                program,
             } => {
                 let span = span.clone();
                 let report = Report::build(ReportKind::Error, file, span.start)
@@ -377,7 +418,12 @@ impl fmt::Display for DwarfErrorReporter<'_, '_> {
                     .map_err(|_| fmt::Error)?;
                 write!(f, "{}", String::from_utf8_lossy(&std_err))
             }
-            DwarfError::NotAStruct { file, span, ty } => {
+            DwarfError::NotAStruct {
+                file,
+                span,
+                ty,
+                program,
+            } => {
                 Report::build(ReportKind::Error, file, span.start)
                     .with_message(format!("expected a struct, found {}", OTH_CLR.paint(ty)))
                     .with_label(
@@ -397,6 +443,7 @@ impl fmt::Display for DwarfErrorReporter<'_, '_> {
                 file,
                 span,
                 location,
+                program,
             } => {
                 let report = Report::build(ReportKind::Error, file, span.start)
                     .with_message(format!("no such field {}", OTH_CLR.paint(field)))
@@ -433,6 +480,7 @@ impl fmt::Display for DwarfErrorReporter<'_, '_> {
                 file,
                 span,
                 location,
+                program,
             } => {
                 let report = Report::build(ReportKind::Error, file, span.start)
                     .with_message(format!(
@@ -467,6 +515,7 @@ impl fmt::Display for DwarfErrorReporter<'_, '_> {
                 file,
                 span,
                 location,
+                program,
             } => {
                 let report = Report::build(ReportKind::Error, file, span.start)
                     .with_message(format!(
@@ -503,6 +552,7 @@ impl fmt::Display for DwarfErrorReporter<'_, '_> {
                 expected_span,
                 found_span,
                 location,
+                program,
             } => {
                 let msg = format!("Type mismatch: expected `{expected}`, found `{found}`.");
 
@@ -544,6 +594,7 @@ impl fmt::Display for DwarfErrorReporter<'_, '_> {
                 file,
                 span,
                 location,
+                program,
             } => {
                 let report = Report::build(ReportKind::Error, file, span.start)
                     .with_message("struct field not found")
@@ -575,6 +626,7 @@ impl fmt::Display for DwarfErrorReporter<'_, '_> {
                 file,
                 span,
                 location,
+                program,
             } => {
                 let msg = format!("Unknown type: `{}`.", ty);
 
@@ -622,6 +674,7 @@ impl fmt::Display for DwarfErrorReporter<'_, '_> {
                 file,
                 span,
                 location,
+                program,
             } => {
                 let msg = format!("expected `{expected}`, found `{found}`.");
 

@@ -1,11 +1,17 @@
+use std::collections::VecDeque;
+
+use snafu::{location, Location};
+
 use crate::{
     bubba::VM,
-    chacha::{error::Result, value::EnumVariant},
+    chacha::{
+        error::{ChaChaError, Result},
+        value::EnumVariant,
+    },
     interpreter::{eval_expression, Context},
     lu_dog::ExpressionEnum,
     new_ref, s_read, NewRef, RefType, SarzakStorePtr, Value, PATH_SEP,
 };
-use std::collections::VecDeque;
 
 pub fn eval(
     match_expr: &SarzakStorePtr,
@@ -49,8 +55,10 @@ pub fn eval(
                 let field_exprs = s_read!(struct_expr).r26_field_expression(&lu_dog);
                 // let data_struct = &s_read!(struct_expr).r39_data_structure(&lu_dog)[0];
 
+                // This thing tears apart a value exposing each element as a (string, value) tuple.
                 fn decode_expression(value: RefType<Value>) -> (String, Option<RefType<Value>>) {
                     match &*s_read!(value) {
+                        Value::Boolean(value) => (value.to_string(), None),
                         Value::Enumeration(value) => match value {
                             // 🚧 I can't tell if this is gross, or a sweet hack.
                             // I think I'm referring to using the name as the scrutinee?
@@ -92,7 +100,7 @@ pub fn eval(
                             _ => unimplemented!(),
                         },
                         Value::String(value) => (value.to_owned(), None),
-                        _ => unreachable!(),
+                        huh => panic!("match encountered {huh}"),
                     }
                 }
 
@@ -106,6 +114,7 @@ pub fn eval(
 
                 let mut matched = false;
                 let (name, mut scrutinee) = decode_expression(scrutinee.clone());
+                dbg!(&name, &s_read!(pe).name);
                 if name == s_read!(pe).name {
                     while s_read!(pe).next.is_some() && scrutinee.is_some() {
                         let id = {
@@ -117,6 +126,7 @@ pub fn eval(
                         let (name, s) = decode_expression(scrutinee.unwrap());
                         scrutinee = s;
 
+                        dbg!(&name, &s_read!(pe).name);
                         if name == s_read!(pe).name {
                             matched = true;
                             continue;
@@ -183,6 +193,8 @@ pub fn eval(
         }
     }
 
-    // 🚧 What's this supposed to be?
-    Ok(new_ref!(Value, Value::Boolean(false)))
+    Err(ChaChaError::BadnessHappened {
+        message: "fall through match expression".to_owned(),
+        location: location!(),
+    })
 }

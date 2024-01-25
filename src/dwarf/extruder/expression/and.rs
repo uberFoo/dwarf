@@ -58,6 +58,7 @@ pub fn inter(
             found_span: lhs_p.1.to_owned(),
             expected_span: rhs_p.1.to_owned(),
             location: location!(),
+            program: context.source_string.to_owned(),
         }]);
     }
 

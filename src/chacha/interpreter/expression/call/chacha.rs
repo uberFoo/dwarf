@@ -160,10 +160,7 @@ pub(crate) fn parse_dwarf(
     let source_code: String = (*s_read!(source_code)).clone().try_into()?;
 
     let ast = crate::dwarf::parse_dwarf(name, &source_code).map_err(|e| {
-        eprintln!(
-            "{}",
-            crate::dwarf::error::DwarfErrorReporter(&e, false, &source_code)
-        );
+        eprintln!("{}", crate::dwarf::error::DwarfErrorReporter(&e, false));
 
         ChaChaError::Parse {
             src: source_code.clone(),
@@ -179,10 +176,7 @@ pub(crate) fn parse_dwarf(
     )
     .map_err(|errors| {
         for err in errors {
-            eprintln!(
-                "{}",
-                crate::dwarf::error::DwarfErrorReporter(&err, false, &source_code)
-            );
+            eprintln!("{}", crate::dwarf::error::DwarfErrorReporter(&err, false));
         }
 
         ChaChaError::Parse {

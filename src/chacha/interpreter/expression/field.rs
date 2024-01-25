@@ -82,7 +82,7 @@ pub mod field_access {
                     Ok(value) => {
                         debug!("ProxyType return value: {value:?}");
 
-                        let value: Value = value.into();
+                        let value: Value = (value, &*s_read!(lu_dog)).into();
                         debug!("ProxyType value: {value:?}");
 
                         Ok(new_ref!(Value, value))

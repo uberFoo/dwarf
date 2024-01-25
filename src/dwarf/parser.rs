@@ -914,10 +914,17 @@ impl DwarfParser {
         }
 
         let name = if let Some(ident) = self.parse_ident() {
-            if let Ok(Some(_g)) = self.parse_generics() {
-                // let g = generic_to_string(&g);
-                // (format!("{}{}", ident.0, g.0), ident.1.start..g.1.end)
-                ident
+            if let Ok(Some(g)) = self.parse_generics() {
+                let mut name = ident.clone();
+                // name.0.push_str("<");
+                // name.0.push_str(
+                //     &g.0.iter()
+                //         .map(|(ty, _)| ty.to_string())
+                //         .collect::<Vec<_>>()
+                //         .join(", "),
+                // );
+                // name.0.push_str(">");
+                name
             } else {
                 ident
             }
@@ -4213,10 +4220,12 @@ impl DwarfParser {
                 vec![]
             };
             debug!("exit parse_type: user defined", ident);
-            return Ok(Some((
+            let ty = Ok(Some((
                 Type::UserType(ident, inner),
                 start..self.peek().unwrap().1.start,
             )));
+
+            return ty;
         }
 
         Ok(None)
@@ -4240,8 +4249,12 @@ impl DwarfParser {
 
         while !self.at_end() && self.match_tokens(&[Token::Punct('>')]).is_none() {
             match self.parse_type() {
-                Ok(Some((Type::UserType(generic, _), span))) => {
-                    generics.push((Type::Generic(generic), span));
+                Ok(Some((Type::UserType(ty, generic), span))) => {
+                    if generic.is_empty() {
+                        generics.push((Type::Generic(ty), span));
+                    } else {
+                        generics.push((Type::UserType(ty, generic), span));
+                    }
                     let _ = self.match_tokens(&[Token::Punct(',')]);
                 }
                 Ok(Some(a)) => {
@@ -4535,7 +4548,7 @@ impl DwarfParser {
             return Ok(None);
         }
 
-        let name = if let Some(ident) = self.parse_ident() {
+        let mut name = if let Some(ident) = self.parse_ident() {
             ident
         } else {
             let tok = self.previous().unwrap();
@@ -4549,6 +4562,19 @@ impl DwarfParser {
         };
 
         let generics = self.parse_generics()?;
+
+        // if let Some(generics) = &generics {
+        // name.0.push_str("<");
+        // name.0.push_str(
+        //     &generics
+        //         .0
+        //         .iter()
+        //         .map(|(ty, _)| ty.to_string())
+        //         .collect::<Vec<_>>()
+        //         .join(", "),
+        // );
+        // name.0.push_str(">");
+        // }
 
         if self.match_tokens(&[Token::Punct('{')]).is_none() {
             let tok = self.previous().unwrap();

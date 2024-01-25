@@ -111,6 +111,14 @@ pub(in crate::dwarf::extruder) fn method_call_return_type(
     context: &mut Context,
     lu_dog: &mut LuDogStore,
 ) -> Result<RefType<ValueType>> {
+    debug!(
+        "{} instance type {instance_ty:?} ({}) {method}",
+        Colour::Red
+            .dimmed()
+            .italic()
+            .paint("method_call_return_type"),
+        PrintableValueType(&instance_ty, context, lu_dog).to_string()
+    );
     let ty = match s_read!(instance_ty).subtype {
         ValueTypeEnum::Char(_) => match method.as_str() {
             IS_DIGIT => {
@@ -127,6 +135,7 @@ pub(in crate::dwarf::extruder) fn method_call_return_type(
                     file: context.file_name.to_owned(),
                     span: meth_span.to_owned(),
                     location: location!(),
+                    program: context.source_string.to_owned(),
                 }])
             }
         },
@@ -139,6 +148,7 @@ pub(in crate::dwarf::extruder) fn method_call_return_type(
                         file: context.file_name.to_owned(),
                         span: meth_span.to_owned(),
                         location: location!(),
+                        program: context.source_string.to_owned(),
                     }]);
                 }
                 let inner = arg_ty.pop().unwrap();
@@ -152,6 +162,7 @@ pub(in crate::dwarf::extruder) fn method_call_return_type(
                     file: context.file_name.to_owned(),
                     span: meth_span.to_owned(),
                     location: location!(),
+                    program: context.source_string.to_owned(),
                 }])
             }
         },
@@ -167,6 +178,7 @@ pub(in crate::dwarf::extruder) fn method_call_return_type(
                     file: context.file_name.to_owned(),
                     span: meth_span.to_owned(),
                     location: location!(),
+                    program: context.source_string.to_owned(),
                 }])
             }
         },
@@ -185,33 +197,34 @@ pub(in crate::dwarf::extruder) fn method_call_return_type(
                             file: context.file_name.to_owned(),
                             span: meth_span.to_owned(),
                             location: location!(),
+                            program: context.source_string.to_owned(),
                         }])
                     }
                 },
-                Ty::SString(_) => {
+                Ty::ZString(_) => {
                     match method.as_str() {
                         LEN => {
                             let ty = Ty::new_integer(context.sarzak);
                             ValueType::new_ty(true, &ty, lu_dog)
                         }
                         LINES => {
-                            let string = Ty::new_s_string(context.sarzak);
+                            let string = Ty::new_z_string(context.sarzak);
                             let string = ValueType::new_ty(true, &string, lu_dog);
                             let list = List::new(&string, lu_dog);
                             ValueType::new_list(true, &list, lu_dog)
                         }
                         FORMAT => {
-                            let ty = Ty::new_s_string(context.sarzak);
+                            let ty = Ty::new_z_string(context.sarzak);
                             ValueType::new_ty(true, &ty, lu_dog)
                         }
                         SPLIT => {
-                            let string = Ty::new_s_string(context.sarzak);
+                            let string = Ty::new_z_string(context.sarzak);
                             let string = ValueType::new_ty(true, &string, lu_dog);
                             let list = List::new(&string, lu_dog);
                             ValueType::new_list(true, &list, lu_dog)
                         }
                         TRIM => {
-                            let ty = Ty::new_s_string(context.sarzak);
+                            let ty = Ty::new_z_string(context.sarzak);
                             ValueType::new_ty(true, &ty, lu_dog)
                         }
                         _ => {
@@ -221,6 +234,7 @@ pub(in crate::dwarf::extruder) fn method_call_return_type(
                                 span: meth_span.to_owned(),
                                 location: location!(),
                                 // commentary: "Type `string` has no such method.".to_owned(),
+                                program: context.source_string.to_owned(),
                             }]);
                         }
                     }
@@ -244,7 +258,7 @@ pub(in crate::dwarf::extruder) fn method_call_return_type(
             x
         }
         ref ty => {
-            e_warn!("Unknown type for method call {method}, {ty:?}", ty = ty);
+            e_warn!("Unknown type for method call {method}, {ty:?}");
 
             ValueType::new_unknown(true, lu_dog)
         }

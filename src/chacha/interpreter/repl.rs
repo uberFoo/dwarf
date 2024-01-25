@@ -119,6 +119,7 @@ pub fn start_repl(context: &mut Context, is_uber: bool) -> Result<(), Error> {
                                     location: location!(),
                                     struct_fields: Vec::new(),
                                     source: DwarfSourceFile::new(line.clone(), &mut lu_dog),
+                                    source_string: line.clone(),
                                     models: &mut s_write!(models),
                                     sarzak: &s_read!(sarzak),
                                     dwarf_home: &dwarf_home,
@@ -127,6 +128,7 @@ pub fn start_repl(context: &mut Context, is_uber: bool) -> Result<(), Error> {
                                     file_name: "REPL",
                                     func_defs: HashMap::default(),
                                     path: PATH_ROOT.to_owned(),
+                                    in_impl: "".to_owned(),
                                 },
                                 &mut Vec::new(),
                                 &mut lu_dog,
@@ -134,7 +136,7 @@ pub fn start_repl(context: &mut Context, is_uber: bool) -> Result<(), Error> {
                                 Ok(stmt) => stmt.0,
                                 Err(errors) => {
                                     for e in errors {
-                                        println!("{}", DwarfErrorReporter(&e, is_uber, &line));
+                                        println!("{}", DwarfErrorReporter(&e, is_uber));
                                     }
                                     continue;
                                 }

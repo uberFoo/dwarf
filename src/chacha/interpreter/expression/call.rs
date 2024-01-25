@@ -12,28 +12,33 @@ use tracing::{debug_span, Instrument};
 #[cfg(feature = "async")]
 use crate::keywords::{ASLEEP, HTTP_GET, ONE_SHOT, SPAWN, SPAWN_NAMED, TIMER};
 
+use abi_stable::std_types::{RErr, ROk};
 use snafu::{location, prelude::*, Location};
 use uuid::Uuid;
 
 use crate::{
     bubba::VM,
-    chacha::error::{NoSuchStaticMethodSnafu, Result, TypeMismatchSnafu},
+    chacha::{
+        error::{
+            ChaChaError::WrongNumberOfArguments, NoSuchStaticMethodSnafu, Result, TypeMismatchSnafu,
+        },
+        value::FfiValue,
+    },
     interpreter::{
         debug, error, eval_expression, eval_function_call, eval_lambda_expression, function,
         ChaChaError, Context, PrintableValueType,
     },
     keywords::{
-        ADD, ARGS, ASSERT, ASSERT_EQ, CHACHA, COMPLEX_EX, EPS, EVAL, FN_NEW, FORMAT, IS_DIGIT, LEN,
-        LINES, MAP, MAX, NEW, NORM_SQUARED, PARSE, PLUGIN, SLEEP, SPLIT, SQUARE, SUM, TIME,
-        TO_DIGIT, TRIM, TYPEOF, UUID_TYPE,
+        ADD, ARGS, ASSERT, ASSERT_EQ, CHACHA, COMPLEX_EX, EPS, EVAL, FN_NEW, FORMAT, INVOKE_FUNC,
+        IS_DIGIT, LEN, LINES, MAP, MAX, NEW, NORM_SQUARED, PARSE, PLUGIN, SLEEP, SPLIT, SQUARE,
+        SUM, TIME, TO_DIGIT, TRIM, TYPEOF, UUID_TYPE,
     },
     lu_dog::{CallEnum, Expression, ValueType, ValueTypeEnum},
     new_ref,
-    plug_in::PluginModRef,
-    plug_in::PluginType,
+    plug_in::{PluginModRef, PluginType},
     s_read, s_write,
     sarzak::Ty,
-    DwarfInteger, NewRef, RefType, SarzakStorePtr, Value, ValueResult,
+    DwarfInteger, NewRef, RefType, SarzakStorePtr, Value, ValueResult, PATH_SEP,
 };
 
 mod chacha;
@@ -119,10 +124,10 @@ pub fn eval(
             ValueTypeEnum::Char(_) => value,
             ValueTypeEnum::Ty(ref id) => {
                 let ty = s_read!(sarzak).exhume_ty(id).unwrap();
-                // SString is here because we have methods on that type
+                // ZString is here because we have methods on that type
                 // 🚧 We need to add Vector or whatever as well.
                 let x = match &*ty.read().unwrap() {
-                    Ty::SString(_) => value,
+                    Ty::ZString(_) => value,
                     _ => eval_lhs()?,
                 };
                 x
@@ -274,6 +279,110 @@ pub fn eval(
                         });
                     }
                 },
+                Value::Plugin(plugin) => match meth_name.as_str() {
+                    INVOKE_FUNC => {
+                        // self is tacked on.
+                        if args.len() - 1 != 4 {
+                            let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
+                            let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
+                            let read = s_read!(span);
+                            let span = read.start as usize..read.end as usize;
+
+                            return Err(WrongNumberOfArguments {
+                                expected: 4,
+                                got: args.len(),
+                                defn_span: 0..0,
+                                invocation_span: span,
+                                location: location!(),
+                            });
+                        }
+
+                        let arg_values = if !args.is_empty() {
+                            let mut arg_values = VecDeque::with_capacity(args.len());
+
+                            // Gotta do this goofy thing because we don't have a first pointer,
+                            // and they aren't in order.
+                            let next = args
+                                .iter()
+                                .find(|a| s_read!(a).r27c_argument(&s_read!(lu_dog)).is_empty())
+                                .unwrap()
+                                .clone();
+
+                            // This is because of the self parameter that is added by the extruder.
+                            let x = if let Some(next_id) = s_read!(next).next {
+                                let mut next = s_read!(lu_dog).exhume_argument(&next_id).unwrap();
+
+                                // We iterate over the arguments to the `format` call. For each one
+                                // we evaluate it and store it in a vac.
+                                loop {
+                                    let expr = s_read!(lu_dog)
+                                        .exhume_expression(&s_read!(next).expression)
+                                        .unwrap();
+
+                                    let value = eval_expression(expr, context, vm)?;
+                                    debug!("value {value:?}");
+
+                                    // This is where the magic happens and we turn the value
+                                    // into a string.
+                                    arg_values.push_back(value);
+
+                                    let next_id = s_read!(next).next;
+                                    if let Some(ref id) = next_id {
+                                        next = s_read!(lu_dog).exhume_argument(id).unwrap();
+                                    } else {
+                                        break;
+                                    }
+                                }
+
+                                arg_values
+                            } else {
+                                VecDeque::new()
+                            };
+                            x
+                        } else {
+                            VecDeque::new()
+                        };
+
+                        let Value::Vector { inner, .. } = &*s_read!(arg_values[3]) else {
+                            return Err(ChaChaError::TypeMismatch {
+                                expected: "Vector".to_owned(),
+                                found: s_read!(arg_values[3]).to_string(),
+                                span: 0..0,
+                                location: location!(),
+                            });
+                        };
+                        let inner = inner
+                            .iter()
+                            .map(|v| <Value as Into<FfiValue>>::into((*s_read!(v)).clone()))
+                            .collect::<Vec<FfiValue>>();
+
+                        let mut plugin = s_write!(plugin);
+                        let x = match plugin.invoke_func(
+                            s_read!(arg_values[0]).to_inner_string().as_str().into(),
+                            s_read!(arg_values[1]).to_inner_string().as_str().into(),
+                            s_read!(arg_values[2]).to_inner_string().as_str().into(),
+                            inner.into(),
+                        ) {
+                            ROk(value) => Ok(new_ref!(Value, (value, &*s_read!(lu_dog)).into())),
+                            RErr(e) => Err(ChaChaError::PluginError {
+                                message: e.to_string(),
+                            }),
+                        };
+                        x
+                    }
+                    _ => {
+                        let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
+                        let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
+                        let read = s_read!(span);
+                        let span = read.start as usize..read.end as usize;
+
+                        return Err(ChaChaError::NoSuchMethod {
+                            method: meth_name.to_owned(),
+                            span,
+                            location: location!(),
+                        });
+                    }
+                },
                 Value::ProxyType {
                     module: _,
                     obj_ty: ref id,
@@ -397,7 +506,7 @@ pub fn eval(
                         Ok(new_ref!(Value, Value::Integer(len as i64)))
                     }
                     LINES => {
-                        let ty = Ty::new_s_string(&s_read!(sarzak));
+                        let ty = Ty::new_z_string(&s_read!(sarzak));
                         let ty = ValueType::new_ty(true, &ty, &mut s_write!(lu_dog));
 
                         Ok(new_ref!(
@@ -428,7 +537,7 @@ pub fn eval(
                                 .unwrap()
                                 .clone();
 
-                            // This is because of the self parameter that is built on in the extruder.
+                            // This is because of the self parameter that is added by the extruder.
                             let x = if let Some(next_id) = s_read!(next).next {
                                 let mut next = s_read!(lu_dog).exhume_argument(&next_id).unwrap();
 
@@ -525,7 +634,7 @@ pub fn eval(
                             });
                         };
 
-                        let ty = Ty::new_s_string(&s_read!(sarzak));
+                        let ty = Ty::new_z_string(&s_read!(sarzak));
                         let ty = ValueType::new_ty(true, &ty, &mut s_write!(lu_dog));
 
                         Ok(new_ref!(
@@ -777,7 +886,7 @@ pub fn eval(
                             if let Some(args) = &context.get_args() {
                                 Ok(args.clone())
                             } else {
-                                let ty = Ty::new_s_string(&s_read!(sarzak));
+                                let ty = Ty::new_z_string(&s_read!(sarzak));
                                 let ty = ValueType::new_ty(true, &ty, &mut s_write!(lu_dog));
 
                                 Ok(new_ref!(
@@ -1049,16 +1158,30 @@ pub fn eval(
                     }
                 }
                 ty => {
-                    if Some(PLUGIN) == ty.split("::").next() {
-                        let plugin = ty.split("::").nth(1).unwrap();
+                    if Some(PLUGIN) == ty.split('<').next() {
                         match func.as_str() {
                             NEW => {
+                                let plugin =
+                                    ty.split('<').nth(1).unwrap().strip_suffix('>').unwrap();
+                                let plugin =
+                                    s_read!(lu_dog).exhume_x_plugin_id_by_name(plugin).unwrap();
+                                let plugin = s_read!(lu_dog).exhume_x_plugin(&plugin).unwrap();
+                                let plugin = s_read!(plugin);
+                                let plugin = &plugin.x_path;
+
+                                let plugin_name = plugin.split(PATH_SEP).next().unwrap();
+                                let args = if let Some(path) = plugin.split(PATH_SEP).nth(1) {
+                                    vec![Value::String(path.to_owned()).into()]
+                                } else {
+                                    Vec::new()
+                                };
+
                                 let library_path = RawLibrary::path_in_directory(
                                     Path::new(&format!(
-                                        "{}/extensions/{plugin}/lib",
+                                        "{}/extensions/{plugin_name}/lib",
                                         context.get_home().display()
                                     )),
-                                    plugin,
+                                    plugin_name,
                                     LibrarySuffix::NoSuffix,
                                 );
                                 let root_module = (|| {
@@ -1077,7 +1200,7 @@ pub fn eval(
                                 // let (_, path) = arg_values.pop().unwrap();
                                 // let path = s_read!(path).clone();
                                 // let plugin = new_ref!(PluginType, ctor(vec![path.into()].into()).unwrap());
-                                let plugin = new_ref!(PluginType, ctor(vec![].into()).unwrap());
+                                let plugin = new_ref!(PluginType, ctor(args.into()).unwrap());
                                 // model.1.replace(plugin.clone());
 
                                 // let value = new_ref!(Value, Value::Store(store, plugin));

@@ -45,9 +45,6 @@ pub fn inter(
 
     debug!("path {path:?}");
 
-    // 🚧 Looks like we are validating each element of the path, but int, in Option::<int> isn't a
-    // UserType, so I'm confused.
-    // I think that if you look, it's actually coming in as Option<int>, which can be a UserType.
     let full_enum_name = path.iter().map(|p| {
                 if let Type::UserType((obj, _), generics) = &p.0 {
                     let mut name = obj.to_owned();
@@ -65,14 +62,8 @@ pub fn inter(
                 }
             }).collect::<Vec<_>>().join("");
 
-    let enum_root = if let Some(root) = full_enum_name.split('<').next() {
-        root
-    } else {
-        full_enum_name.as_str()
-    };
+    debug!("enum_name {full_enum_name:?}, path {path:?}");
 
-    debug!("enum_name {:?}", full_enum_name);
-    // dbg!(&enum_root, &full_enum_name, &enum_path);
     let x_path = XPath::new(Uuid::new_v4(), None, lu_dog);
     let mut elts = path
         .iter()
@@ -111,44 +102,28 @@ pub fn inter(
     }
 
     if let Some(woog_enum_id) = {
-        if let Some(woog_enum) = lu_dog.exhume_enumeration_id_by_name(enum_root) {
+        if let Some(woog_enum) = lu_dog.exhume_enumeration_id_by_name(&full_enum_name) {
             Some(woog_enum)
+        } else if let Some(ty) = full_enum_name.split('<').next() {
+            lu_dog.exhume_enumeration_id_by_name(ty)
         } else {
-            let mut iter = context_stack.iter();
-            loop {
-                if let Some((path, lu_dog)) = iter.next() {
-                    dbg!(&path, &enum_root);
-                    if let Some(woog_enum) =
-                        s_read!(lu_dog).exhume_enumeration_id_by_name(enum_root)
-                    {
-                        dbg!("found it");
-                        break Some(woog_enum);
-                    }
-                } else {
-                    dbg!("not found");
-                    break None;
-                }
-            }
+            None
         }
     } {
-        let woog_enum_id = if enum_root != full_enum_name {
-            if let Some(id) = lu_dog.exhume_enumeration_id_by_name(&full_enum_name) {
-                id
-            } else {
-                let (new_enum, _) = create_generic_enum(
-                    &full_enum_name,
-                    &enum_path.0,
-                    context,
-                    context_stack,
-                    lu_dog,
-                );
-                let x = s_read!(new_enum).id;
-                #[allow(clippy::let_and_return)]
-                x
-            }
-        } else {
-            woog_enum_id
-        };
+        // let woog_enum_id = if full_enum_name != full_enum_name {
+        //     if let Some(id) = lu_dog.exhume_enumeration_id_by_name(&full_enum_name) {
+        //         id
+        //     } else {
+        //         dbg!("β");
+        //         let (new_enum, _) =
+        //             create_generic_enum(&full_enum_name, &full_enum_name, context, lu_dog);
+        //         let x = s_read!(new_enum).id;
+        //         #[allow(clippy::let_and_return)]
+        //         x
+        //     }
+        // } else {
+        //     woog_enum_id
+        // };
 
         let woog_enum = lu_dog.exhume_enumeration(&woog_enum_id).unwrap();
 
@@ -189,6 +164,7 @@ pub fn inter(
                 file: context.file_name.to_owned(),
                 span: field_span.to_owned(),
                 location: location!(),
+                program: context.source_string.to_owned(),
             }])
         }
     } else {
@@ -196,6 +172,7 @@ pub fn inter(
             name: full_enum_name.to_owned(),
             file: context.file_name.to_owned(),
             span: path_span.to_owned(),
+            program: context.source_string.to_owned(),
         }])
     }
 }

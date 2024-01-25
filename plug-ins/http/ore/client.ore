@@ -1,57 +1,89 @@
 use std::option::Option;
 use std::result::Result;
 
-use dwarf::Plugin;
-
+struct Plugin<T> {
+    inner: T,
+}
 struct HttpClient {
-    #[proxy(plugin = "http_client")]
-    inner: Plugin<http_client>,
+    // This plugin value must point to a valid plugin. The first part of the
+    // path is the name, and the second part is a parameter to send to the
+    // constructor.
+    #[proxy(plugin = "http::http_client")]
+    inner: Plugin<HttpClient>,
 }
 
 impl HttpClient {
     fn new() -> Self {
         HttpClient {
-            inner: Plugin::<http_client>::new(),
+            inner: Plugin::<HttpClient>::new(),
         }
     }
     // #[proxy(plugin = "http_client", object = "HttpClient", func = "get")]
-    fn get(self, url: String) -> RequestBuilder {
-        self.inner
-            .invoke_func("http_client", "HttpClient", "get", vec![url])
+    async fn get(self, url: String) -> Future<Request> {
+        let request = self
+            .inner
+            .invoke_func("http_client", "HttpClient", "get", [url]);
+        Request {
+            inner: request,
+            plugin: self.inner,
+        }
     }
 }
 
 // #[proxy(ty = "RequestBuilder")]
-struct RequestBuilder {
-    #[plugin = "http_client"]
-    inner: Plugin<http_client>,
+struct Request {
+    #[proxy(plugin = "http::http_client")]
+    plugin: Plugin<HttpClient>,
+    inner: int,
 }
 
-// // This is just to keep the type checking happy.
-// impl Request {
-//     // This is a function that exists on the ObjectStore, and the interpreter
-//     // will invoke it in the plugin.
-//     #[proxy(store = "request", object = "Request", func = "send")]
-//     async fn send(self) -> Future<Result<Request, Error>>;
-// }
+impl Request {
+    async fn send(self) -> Future<Result<Response, Error>> {
+        let response: Result<int, int> =
+            self.plugin
+                .invoke_func("http_client", "Request", "send", [self.inner]);
 
-// #[store(model = "response")]
-// struct Response {}
+        match response {
+            Result::<int, int>::Err(e) => Result::<Response, Error>::Err(Error {
+                inner: e,
+                plugin: self.plugin,
+            }),
+            Result::<int, int>::Ok(r) => Result::<Response, Error>::Ok(Response {
+                inner: r,
+                plugin: self.plugin,
+            }),
+        }
+    }
+}
 
-// // This is just to keep the type checking happy.
-// #[store(model = "response")]
-// impl Response {
-//     // This is a function that exists on the ObjectStore, and the interpreter
-//     // will invoke it in the plugin.
-//     #[proxy(store = "response", object = "Response", func = "text")]
-//     async fn text(self) -> Future<Result<String, Error>>;
-// }
+struct Response {
+    #[proxy(plugin = "http::http_client")]
+    plugin: Plugin<HttpClient>,
+    inner: int,
+}
 
-// #[store(model = "error")]
-// struct Error {}
+impl Response {
+    async fn text(self) -> Future<Result<string, Error>> {
+        let text: Result<string, int> =
+            self.plugin
+                .invoke_func("http_client", "Response", "text", [self.inner]);
 
-// // This is just to keep the type checking happy.
-// #[store(model = "error")]
+        match text {
+            Result::<string, int>::Err(e) => Result::<string, Error>::Err(Error {
+                inner: e,
+                plugin: self.plugin,
+            }),
+            Result::<string, int>::Ok(t) => Result::<string, Error>::Ok(t),
+        }
+    }
+}
+
+struct Error {
+    #[proxy(plugin = "http::http_client")]
+    plugin: Plugin<HttpClient>,
+    inner: int,
+}
+
 // impl Error {
 //     // This is a function that exists on the ObjectStore, and the interpreter
 //     // will invoke it in the plugin.

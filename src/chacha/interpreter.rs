@@ -173,7 +173,7 @@ pub fn initialize_interpreter(
     }
 
     let mut program = Program::new(VERSION.to_owned(), BUILD_TIME.to_owned());
-    let ty = crate::sarzak::Ty::new_s_string(&sarzak);
+    let ty = crate::sarzak::Ty::new_z_string(&sarzak);
     let ty = ValueType::new_ty(true, &ty, &mut lu_dog);
     let ty = Value::ValueType((*s_read!(ty)).clone());
     program.add_symbol("STRING".to_owned(), ty);
@@ -729,7 +729,7 @@ pub fn start_func(
     }
 
     let mut program = context.get_program().clone();
-    let ty = crate::sarzak::Ty::new_s_string(&s_read!(context.sarzak_heel()));
+    let ty = crate::sarzak::Ty::new_z_string(&s_read!(context.sarzak_heel()));
     let ty = ValueType::new_ty(true, &ty, &mut s_write!(context.lu_dog_heel()));
     let ty = Value::ValueType((*s_read!(ty)).clone());
     program.add_symbol("STRING".to_owned(), ty);
@@ -748,7 +748,6 @@ pub fn start_func(
                 .unwrap();
 
             let value_ty = &s_read!(main).r1_value_type(&s_read!(context.lu_dog_heel()))[0];
-            dbg!(&value_ty);
             let span = &s_read!(value_ty).r62_span(&s_read!(context.lu_dog_heel()))[0];
 
             let result = eval_function_call(main, &[], None, true, span, context, &mut vm)?;
@@ -824,10 +823,10 @@ pub fn start_vm(n: DwarfInteger) -> Result<DwarfInteger, Error> {
     ValueType::new_ty(true, &Ty::new_boolean(&sarzak), &mut lu_dog);
     ValueType::new_ty(true, &Ty::new_float(&sarzak), &mut lu_dog);
     ValueType::new_ty(true, &Ty::new_integer(&sarzak), &mut lu_dog);
-    ValueType::new_ty(true, &Ty::new_s_string(&sarzak), &mut lu_dog);
-    ValueType::new_ty(true, &Ty::new_s_uuid(&sarzak), &mut lu_dog);
+    ValueType::new_ty(true, &Ty::new_z_string(&sarzak), &mut lu_dog);
+    ValueType::new_ty(true, &Ty::new_z_uuid(&sarzak), &mut lu_dog);
 
-    let ty = Ty::new_s_string(&sarzak);
+    let ty = Ty::new_z_string(&sarzak);
     let ty = ValueType::new_ty(true, &ty, &mut lu_dog);
     let ty = Value::ValueType((*s_read!(ty)).clone());
     program.add_symbol("STRING".to_owned(), ty);
@@ -886,6 +885,35 @@ fn typecheck(
         }
     }
 
+    if let ValueTypeEnum::Enumeration(a) = lhs_t {
+        if let ValueTypeEnum::Enumeration(b) = rhs_t {
+            let lu_dog = context.lu_dog_heel();
+            let lu_dog = s_read!(lu_dog);
+
+            let a = lu_dog.exhume_enumeration(a).unwrap();
+            let b = lu_dog.exhume_enumeration(b).unwrap();
+            let a = s_read!(a);
+            let b = s_read!(b);
+
+            let a_name = if let Some(next) = a.name.split('<').next() {
+                next
+            } else {
+                &a.name
+            };
+            let b_name = if let Some(next) = b.name.split('<').next() {
+                next
+            } else {
+                &b.name
+            };
+
+            dbg!(&a_name, &b_name);
+
+            if a_name == b_name {
+                return Ok(());
+            }
+        }
+    }
+
     // Checking for proxy type/woog struct equivalence.
     if let ValueTypeEnum::WoogStruct(rhs_id) = rhs_t {
         if let ValueTypeEnum::Ty(lhs_id) = lhs_t {
@@ -898,7 +926,12 @@ fn typecheck(
         }
     }
 
-    if let ValueTypeEnum::Generic(_) = lhs_t {
+    if matches!(
+        lhs_t,
+        ValueTypeEnum::FuncGeneric(_)
+            | ValueTypeEnum::EnumGeneric(_)
+            | ValueTypeEnum::StructGeneric(_)
+    ) {
         return Ok(());
     }
 

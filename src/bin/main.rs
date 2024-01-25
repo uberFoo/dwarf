@@ -251,10 +251,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             Ok(lu_dog) => lu_dog,
             Err(errors) => {
                 for err in errors {
-                    eprintln!(
-                        "{}",
-                        dwarf::dwarf::error::DwarfErrorReporter(&err, is_uber, &source_code)
-                    );
+                    eprintln!("{}", dwarf::dwarf::error::DwarfErrorReporter(&err, is_uber));
                 }
                 return Ok(());
             }

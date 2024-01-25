@@ -47,9 +47,11 @@ mod keywords {
     pub(crate) const HTTP_GET: &str = "http_get";
     #[cfg(feature = "async")]
     pub(crate) const INTERVAL: &str = "interval";
+    pub(crate) const INVOKE_FUNC: &str = "invoke_func";
     pub(crate) const IS_DIGIT: &str = "is_digit";
     pub(crate) const LEN: &str = "len";
     pub(crate) const LINES: &str = "lines";
+    pub(crate) const LOAD_PLUGIN: &str = "load_plugin";
     pub(crate) const FORMAT: &str = "format";
     pub(crate) const MAP: &str = "map";
     pub(crate) const MAX: &str = "max";

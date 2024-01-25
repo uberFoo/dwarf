@@ -158,10 +158,7 @@ fn main() -> Result<()> {
         Ok(lu_dog) => lu_dog,
         Err(errors) => {
             for err in errors {
-                eprintln!(
-                    "{}",
-                    dwarf::dwarf::error::DwarfErrorReporter(&err, is_uber, &source_code,)
-                );
+                eprintln!("{}", dwarf::dwarf::error::DwarfErrorReporter(&err, is_uber));
             }
             return Ok(());
         }

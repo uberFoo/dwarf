@@ -182,7 +182,7 @@ mod test {
         let mut lu_dog = s_write!(ctx.lu_dog);
         let woog_struct = lu_dog.exhume_woog_struct_id_by_name("Foo").unwrap();
         let woog_struct = lu_dog.exhume_woog_struct(&woog_struct).unwrap();
-        let ty = crate::lu_dog::ValueType::new_woog_struct(&woog_struct, &mut lu_dog);
+        let ty = crate::lu_dog::ValueType::new_woog_struct(true, &woog_struct, &mut lu_dog);
         let mut result = UserStruct::new("Foo".to_owned(), &ty);
         result.define_field("x".to_owned(), new_ref!(Value, Value::Integer(42)));
         result.define_field("y".to_owned(), new_ref!(Value, Value::Float(0.42)));

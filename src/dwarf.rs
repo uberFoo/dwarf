@@ -10,13 +10,14 @@ use std::{fmt, ops, path::PathBuf};
 
 use clap::Args;
 use rustc_hash::FxHashMap as HashMap;
-use sarzak::sarzak::{store::ObjectStore as SarzakStore, types::Ty};
+use sarzak::sarzak::types::Ty;
 use serde::{Deserialize, Serialize};
 use snafu::{location, Location};
 
 use crate::{
-    lu_dog::{store::ObjectStore as LuDogStore, types::ValueType, Generic, Lambda, List},
-    s_read, ModelStore, RefType,
+    dwarf::items::enuum::create_generic_enum,
+    lu_dog::{store::ObjectStore as LuDogStore, types::ValueType, Lambda, List, XFuture},
+    s_read, RefType,
 };
 
 pub mod error;
@@ -206,24 +207,21 @@ impl fmt::Display for Type {
 impl Type {
     pub fn check_type(
         &self,
-        file_name: &str,
         span: &Span,
+        context: &mut Context,
         store: &mut LuDogStore,
-        models: &ModelStore,
-        sarzak: &SarzakStore,
     ) -> Result<bool> {
-        self.into_value_type(file_name, span, store, models, sarzak)
-            .map(|_| true)
+        self.into_value_type(span, context, store).map(|_| true)
     }
 
     pub fn into_value_type(
         &self,
-        file_name: &str,
         span: &Span,
+        context: &mut Context,
         store: &mut LuDogStore,
-        _models: &ModelStore,
-        sarzak: &SarzakStore,
     ) -> Result<RefType<ValueType>> {
+        let sarzak = context.sarzak;
+
         match self {
             Type::Boolean => {
                 let ty = Ty::new_boolean(sarzak);
@@ -235,68 +233,86 @@ impl Type {
                 Ok(ValueType::new_ty(true, &ty, store))
             }
             Type::Fn(_params, return_) => {
-                let return_ = return_
-                    .0
-                    .into_value_type(file_name, &return_.1, store, _models, sarzak)?;
+                let return_ = return_.0.into_value_type(&return_.1, context, store)?;
                 let ƛ = Lambda::new(None, None, &return_, store);
                 Ok(ValueType::new_lambda(true, &ƛ, store))
             }
             Type::Generic(name) => {
-                let generic = Generic::new(name.0.to_owned(), None, None, store);
-                Ok(ValueType::new_generic(true, &generic, store))
+                panic!("Generics need a next and a parent.");
             }
             Type::Integer => {
                 let ty = Ty::new_integer(sarzak);
                 Ok(ValueType::new_ty(true, &ty, store))
             }
             Type::List(type_) => {
-                let ty = type_
-                    .0
-                    .into_value_type(file_name, &type_.1, store, _models, sarzak)?;
+                let ty = type_.0.into_value_type(&type_.1, context, store)?;
                 let list = List::new(&ty, store);
                 Ok(ValueType::new_list(true, &list, store))
             }
             Type::Path(_) => unimplemented!(),
             Type::Self_ => panic!("Self is deprecated."),
             Type::String => {
-                let ty = Ty::new_s_string(sarzak);
+                let ty = Ty::new_z_string(sarzak);
                 Ok(ValueType::new_ty(true, &ty, store))
             }
             Type::Unknown => Ok(ValueType::new_unknown(true, store)),
-            Type::UserType(type_, _generics) => {
-                let name = &type_.0;
+            Type::UserType(type_, generics) => {
+                let base_type = &type_.0;
+                let mut name = type_.0.clone();
+                let generics_string = generics
+                    .iter()
+                    .map(|g| g.0.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                if !generics_string.is_empty() {
+                    name.push('<');
+                    name.push_str(&generics_string);
+                    name.push('>');
+                }
 
                 // This is a special case for Uuid, which is a built-in type.
                 // The parser just doesn't know that, and it's actually cleaner
                 // and easier to handle it here.
                 if name == "Uuid" {
-                    return Ok(ValueType::new_ty(true, &Ty::new_s_uuid(sarzak), store));
+                    return Ok(ValueType::new_ty(true, &Ty::new_z_uuid(sarzak), store));
                 }
 
                 log::debug!(target: "dwarf", "Type::UserType: {name}");
 
-                if let Some(obj_id) = store.exhume_woog_struct_id_by_name(name) {
+                dbg!(&name, &base_type);
+
+                if base_type == "Future" {
+                    let inner_type = &generics[0];
+                    let inner_type = inner_type
+                        .0
+                        .into_value_type(&inner_type.1, context, store)?;
+                    let future = XFuture::new(&inner_type, store);
+                    Ok(ValueType::new_x_future(true, &future, store))
+                } else if let Some(obj_id) = store.exhume_woog_struct_id_by_name(&name) {
                     let woog_struct = store.exhume_woog_struct(&obj_id).unwrap();
                     Ok(ValueType::new_woog_struct(true, &woog_struct, store))
-                } else if let Some(enum_id) = store.exhume_enumeration_id_by_name(name) {
+                } else if let Some(enum_id) = store.exhume_enumeration_id_by_name(&name) {
                     let enumeration = store.exhume_enumeration(&enum_id).unwrap();
                     Ok(ValueType::new_enumeration(true, &enumeration, store))
-                } else if let Some(obj_id) = sarzak.exhume_object_id_by_name(name) {
+                } else if let Some(obj_id) = sarzak.exhume_object_id_by_name(&name) {
                     // If it's not in one of the models, it must be in sarzak.
                     let ty = sarzak.exhume_ty(&obj_id).unwrap();
                     log::debug!(target: "dwarf", "into_value_type, UserType, ty: {ty:?}");
                     Ok(ValueType::new_ty(true, &ty, store))
+                } else if store.exhume_enumeration_id_by_name(base_type).is_some() {
+                    Ok(create_generic_enum(&name, base_type, context, store).1)
                 } else {
                     Err(vec![DwarfError::UnknownType {
                         ty: name.to_owned(),
-                        file: file_name.to_owned(),
+                        file: context.file_name.to_owned(),
                         span: span.to_owned(),
                         location: location!(),
+                        program: context.source_string.to_owned(),
                     }])
                 }
             }
             Type::Uuid => {
-                let ty = Ty::new_s_uuid(sarzak);
+                let ty = Ty::new_z_uuid(sarzak);
                 Ok(ValueType::new_ty(true, &ty, store))
             }
         }

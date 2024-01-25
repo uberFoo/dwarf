@@ -13,7 +13,7 @@ use crate::{
         AttributeMap, InnerAttribute, Spanned, Type,
     },
     lu_dog::{
-        store::ObjectStore as LuDogStore, Field, Generic, Item as WoogItem, Span as LuDogSpan,
+        store::ObjectStore as LuDogStore, Field, Item as WoogItem, Span as LuDogSpan,
         StructGeneric, ValueType, WoogStruct, XPlugin, ZObjectStore,
     },
     s_read, s_write, Desanitize, Dirty, RefType, SarzakStorePtr,
@@ -41,7 +41,7 @@ pub fn inter_struct(
     context: &mut Context,
     lu_dog: &mut LuDogStore,
 ) -> Result<()> {
-    debug!("struct {name}");
+    debug!("inter_struct {name}");
 
     // If there is a proxy attribute then we'll use it's info to attach an object
     // from the store to this UDT.
@@ -196,6 +196,15 @@ pub fn inter_struct(
         }
     } else {
         // This is just a plain vanilla user defined type.
+        // let name = if let Some(generics) = generics {
+        //     let generics = generics.keys().cloned().collect::<Vec<_>>();
+        //     format!("{}<{}>", name, generics.join(", "))
+        // } else {
+        //     name.to_owned()
+        // };
+
+        debug!("created struct {name}");
+
         let woog_struct =
             WoogStruct::new(name.to_owned(), context.path.clone(), None, None, lu_dog);
         context.dirty.push(Dirty::Struct(woog_struct.clone()));
@@ -250,28 +259,40 @@ pub fn inter_struct_fields(
                     // Get the plugin value
                     if let Some(plugin_vec) = attributes.get(PLUGIN) {
                         if let Some((_, ref value)) = plugin_vec.first() {
-                            let plugin_name: String = value.try_into().map_err(|e| vec![e])?;
-                            debug!("proxy.plugin: {plugin_name}");
-                            if let Type::UserType(tok, _generics) = type_ {
-                                // let ty_name = tok.0.de_sanitize();
-                                let ty_name = tok.0.to_owned();
-                                if ty_name == "Plugin" {
-                                    let plugin = XPlugin::new(plugin_name, lu_dog);
-                                    let ty = ValueType::new_x_plugin(true, &plugin, lu_dog);
-                                    LuDogSpan::new(
-                                        span.end as i64,
-                                        span.start as i64,
-                                        &context.source,
-                                        Some(&ty),
-                                        None,
-                                        lu_dog,
-                                    );
+                            let plugin_path: String = value.try_into().map_err(|e| vec![e])?;
+                            dbg!(&plugin_path, &type_);
+                            debug!("proxy.plugin: {plugin_path}");
+                            if let Type::UserType(tok, generics) = type_ {
+                                let plugin_ty = &generics.first().unwrap().0;
+                                dbg!(&plugin_ty);
+                                if let Type::Generic((plugin_ty, _)) = plugin_ty {
+                                    let ty_name = &tok.0;
+                                    dbg!("so what's type look like now?", &ty_name);
+                                    if ty_name == "Plugin" {
+                                        let plugin =
+                                            XPlugin::new(plugin_ty.to_owned(), plugin_path, lu_dog);
+                                        let ty = ValueType::new_x_plugin(true, &plugin, lu_dog);
+                                        LuDogSpan::new(
+                                            span.end as i64,
+                                            span.start as i64,
+                                            &context.source,
+                                            Some(&ty),
+                                            None,
+                                            lu_dog,
+                                        );
 
-                                    Ok(ty)
+                                        Ok(ty)
+                                    } else {
+                                        Err(vec![DwarfError::Generic {
+                                            description: format!(
+                                                "Expected `Plugin`, found `{ty_name}`.",
+                                            ),
+                                        }])
+                                    }
                                 } else {
                                     Err(vec![DwarfError::Generic {
                                         description: format!(
-                                            "Expected `Plugin`, found `{ty_name}`.",
+                                            "Expected `Plugin` to have a generic argument.",
                                         ),
                                     }])
                                 }
@@ -294,10 +315,14 @@ pub fn inter_struct_fields(
             };
 
         let type_str = type_.to_string();
+        dbg!("fu", &type_str, &name);
         let ty = if let Some(generics) = generics {
             if let Some(_definition_type) = generics.get(&type_str) {
-                let g = Generic::new(type_str, None, None, lu_dog);
-                let ty = ValueType::new_generic(true, &g, lu_dog);
+                dbg!(_definition_type, &type_str);
+                // 🚧 kts -- this thing doesn't have it's next sorted, and that
+                // can't be right.
+                let g = StructGeneric::new(type_str, None, &woog_struct, lu_dog);
+                let ty = ValueType::new_struct_generic(true, &g, lu_dog);
                 LuDogSpan::new(
                     span.end as i64,
                     span.start as i64,
@@ -309,6 +334,7 @@ pub fn inter_struct_fields(
 
                 ty
             } else if let Some(proxy_vec) = attrs.get(PROXY) {
+                dbg!("fubar");
                 proxy_thang(proxy_vec)?
             } else {
                 context.location = location;
@@ -332,6 +358,8 @@ pub fn inter_struct_fields(
                 }
             }
         };
+
+        dbg!(&ty);
 
         let _field = Field::new(name.to_owned(), &woog_struct, &ty, lu_dog);
     }

@@ -244,7 +244,7 @@ fn eval_external_static_method(
                         FfiValue::Vector(vec) => {
                             let vec = vec
                                 .into_iter()
-                                .map(Value::from)
+                                .map(|k| Value::from((k, &*s_read!(lu_dog))))
                                 .map(|v| new_ref!(Value, v))
                                 .collect::<Vec<_>>();
                             let ty = if vec.is_empty() {
@@ -372,8 +372,11 @@ fn eval_built_in_function_call(
                 // associated with the parameter and using it's type. I guess that's cool,
                 // but it's tricky if you aren't aware.
                 let var = s_read!(s_read!(next).r12_variable(&s_read!(lu_dog))[0]).clone();
+                dbg!(&var);
                 let value = s_read!(var.r11_x_value(&s_read!(lu_dog))[0]).clone();
+                dbg!(&value);
                 let ty = value.r24_value_type(&s_read!(lu_dog))[0].clone();
+                dbg!(&ty);
                 params.push((var.name.clone(), ty.clone()));
 
                 let next_id = { s_read!(next).next };
@@ -422,6 +425,7 @@ fn eval_built_in_function_call(
                 let x_value = &s_read!(expr).r11_x_value(&s_read!(lu_dog))[0];
                 let span = &s_read!(x_value).r63_span(&s_read!(lu_dog))[0];
 
+                debug!("type check arg_ty {arg_ty:?}");
                 typecheck(&param_ty, &arg_ty, span, location!(), context)?;
             }
 

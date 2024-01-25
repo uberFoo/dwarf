@@ -58,6 +58,10 @@ pub enum ChaChaError {
         src: String,
         span: Span,
     },
+    #[snafu(display("\n{}: ffi error: {}", ERR_CLR.bold().paint("error"), message))]
+    FfiError {
+        message: String,
+    },
     /// Index out of bounds
     ///
     #[snafu(display("\n{}: index `{}` is out of bounds for array of length `{}`.", ERR_CLR.bold().paint("error"), POP_CLR.paint(index.to_string()), POP_CLR.paint(len.to_string())))]
@@ -131,6 +135,10 @@ pub enum ChaChaError {
     Parse {
         src: String,
         span: Span,
+    },
+    #[snafu(display("\n{}: plugin error: {}", ERR_CLR.bold().paint("error"), message))]
+    PluginError {
+        message: String,
     },
     #[snafu(display("\n{}: {message}\n  --> {}:{}:{}", ERR_CLR.bold().paint("error"), location.file, location.line, location.column))]
     Unimplemented {

@@ -39,11 +39,11 @@ pub fn eval(expr: &SarzakStorePtr, context: &mut Context, vm: &mut VM) -> Result
                     let value: i64 = (&*s_read!(lhs)).try_into()?;
                     new_ref!(Value, value.into())
                 }
-                Ty::SString(_) => {
+                Ty::ZString(_) => {
                     let value: String = (&*s_read!(lhs)).try_into()?;
                     new_ref!(Value, value.into())
                 }
-                Ty::SUuid(_) => {
+                Ty::ZUuid(_) => {
                     let value: uuid::Uuid = (&*s_read!(lhs)).try_into()?;
                     new_ref!(Value, value.into())
                 }

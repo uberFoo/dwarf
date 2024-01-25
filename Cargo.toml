@@ -119,9 +119,11 @@ chrono = "0.4.31"
 walkdir = "2.3.3"
 
 [features]
-default = ["debug", "repl", "print-std-out"]
-# default = ["multi-nd-vec", "repl", "print-std-out", "async"]
-async_executor = ["multi-vec", "repl", "print-std-out", "async"]
+default = ["async-executor"]
+single = ["single-vec", "repl", "print-std-out"]
+debug = ["sarzak/lu-dog-rc", "repl", "print-std-out"]
+no-deadlocks = ["multi-nd-vec", "repl", "print-std-out", "async"]
+async-executor = ["multi-vec", "repl", "print-std-out", "async"]
 
 tracy-client = ["dep:tracy-client"]
 
@@ -147,12 +149,10 @@ tracy = [
 ]
 
 
-single = ["single-vec"]
 single-vec = ["sarzak/lu-dog-vec"]
 single-vec-tracy = ["sarzak/lu-dog-vec-tracy", "dep:tracy-client"]
 multi-vec = ["sarzak/lu-dog-rwlock-vec"]
 multi-nd-vec = ["sarzak/lu-dog-ndrwlock-vec", "dep:no_deadlocks"]
-debug = ["sarzak/lu-dog-rc"]
 
 print-std-out = []
 
