@@ -58,6 +58,7 @@ jobs:
 
             - name: Build and run tests with coverage
               run: |
+                  cd dwarf
                   cargo llvm-cov --lcov --output-path coverage.lcov --no-default-features --features "multi-vec, repl, async"
 
             - name: Upload coverage reports to Codecov
@@ -65,7 +66,7 @@ jobs:
               env:
                   CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
               with:
-                  directory: ./
+                  directory: dwarf
                   fail_ci_if_error: true
                   # files: ./coverage.xml
                   files: coverage.lcov
