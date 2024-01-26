@@ -44,8 +44,6 @@ mod keywords {
     pub(crate) const EVAL: &str = "eval";
     pub(crate) const FN_NEW: &str = "new";
     #[cfg(feature = "async")]
-    pub(crate) const HTTP_GET: &str = "http_get";
-    #[cfg(feature = "async")]
     pub(crate) const INTERVAL: &str = "interval";
     pub(crate) const INVOKE_FUNC: &str = "invoke_func";
     pub(crate) const IS_DIGIT: &str = "is_digit";
@@ -61,6 +59,7 @@ mod keywords {
     pub(crate) const ONE_SHOT: &str = "one_shot";
     pub(crate) const PARSE: &str = "parse";
     pub(crate) const PLUGIN: &str = "Plugin";
+    pub(crate) const PUSH: &str = "push";
     pub(crate) const SLEEP: &str = "sleep";
     #[cfg(feature = "async")]
     pub(crate) const SPAWN: &str = "spawn";

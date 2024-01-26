@@ -216,7 +216,6 @@ pub(crate) fn create_generic_enum(
         return (found_enum, ty);
     }
 
-    dbg!(&enum_name, &base_enum);
     let Some(ref id) = lu_dog.exhume_enumeration_id_by_name(base_enum) else {
         panic!("enum not found");
     };

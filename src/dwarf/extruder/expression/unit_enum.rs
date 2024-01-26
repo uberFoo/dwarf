@@ -8,7 +8,6 @@ use crate::{
     dwarf::{
         error::{DwarfError, Result},
         extruder::{update_span_value, Context, ExprSpan},
-        items::enuum::create_generic_enum,
         Expression as ParserExpression, Type,
     },
     lu_dog::{
@@ -29,7 +28,6 @@ pub fn inter(
     span: RefType<Span>,
     block: &RefType<Block>,
     context: &mut Context,
-    context_stack: &mut [(String, RefType<LuDogStore>)],
     lu_dog: &mut LuDogStore,
 ) -> Result<(ExprSpan, RefType<ValueType>)> {
     debug!("UnitEnum {:?}, Field {field_name}", enum_path);

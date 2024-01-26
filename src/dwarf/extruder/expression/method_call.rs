@@ -12,7 +12,7 @@ use crate::{
         },
         Expression as ParserExpression, PrintableValueType,
     },
-    keywords::{FORMAT, IS_DIGIT, LEN, LINES, MAP, MAX, SPLIT, SUM, TO_DIGIT, TRIM},
+    keywords::{FORMAT, IS_DIGIT, LEN, LINES, MAP, MAX, PUSH, SPLIT, SUM, TO_DIGIT, TRIM},
     lu_dog::{
         store::ObjectStore as LuDogStore, Argument, Block, Call, Expression, List, MethodCall,
         Span, Span as LuDogSpan, ValueType, ValueTypeEnum, XValue,
@@ -139,7 +139,7 @@ pub(in crate::dwarf::extruder) fn method_call_return_type(
                 }])
             }
         },
-        ValueTypeEnum::List(_) => match method.as_str() {
+        ValueTypeEnum::List(ref list) => match method.as_str() {
             MAP => {
                 if arg_ty.len() != 1 {
                     return Err(vec![DwarfError::WrongNumberOfArguments {
@@ -154,6 +154,39 @@ pub(in crate::dwarf::extruder) fn method_call_return_type(
                 let inner = arg_ty.pop().unwrap();
                 let list = List::new(&inner, lu_dog);
                 ValueType::new_list(true, &list, lu_dog)
+            }
+            PUSH => {
+                if arg_ty.len() != 1 {
+                    return Err(vec![DwarfError::WrongNumberOfArguments {
+                        expected: 1,
+                        found: arg_ty.len(),
+                        file: context.file_name.to_owned(),
+                        span: meth_span.to_owned(),
+                        location: location!(),
+                        program: context.source_string.to_owned(),
+                    }]);
+                }
+                let arg_ty = arg_ty.pop().unwrap();
+                let list = lu_dog.exhume_list(list).unwrap();
+                let inner_ty = s_read!(list).ty;
+                let inner_ty = lu_dog.exhume_value_type(&inner_ty).unwrap();
+                let inner_ty = s_read!(inner_ty);
+                let expected_span = &inner_ty.r62_span(lu_dog)[0];
+                let expected_span = s_read!(expected_span);
+                let expected_span = expected_span.start as usize..expected_span.end as usize;
+                if &*s_read!(arg_ty) != &*inner_ty {
+                    return Err(vec![DwarfError::TypeMismatch {
+                        expected: PrintableValueType(&instance_ty, context, lu_dog).to_string(),
+                        found: PrintableValueType(&arg_ty, context, lu_dog).to_string(),
+                        file: context.file_name.to_owned(),
+                        expected_span,
+                        found_span: meth_span.to_owned(),
+                        location: location!(),
+                        program: context.source_string.to_owned(),
+                    }]);
+                }
+
+                arg_ty.clone()
             }
             SUM => instance_ty.clone(),
             _ => {

@@ -4,7 +4,7 @@ use crate::{
     bubba::VM,
     chacha::error::Result,
     interpreter::{debug, eval_expression, function, Context},
-    lu_dog::{List, ValueType},
+    lu_dog::ValueType,
     new_ref, s_read, s_write, NewRef, RefType, SarzakStorePtr, Value,
 };
 
@@ -29,7 +29,6 @@ pub fn eval_list_expression(
     vm: &mut VM,
 ) -> Result<RefType<Value>> {
     let lu_dog = context.lu_dog_heel().clone();
-    let sarzak = context.sarzak_heel().clone();
 
     let list = s_read!(lu_dog).exhume_list_expression(list).unwrap();
     let list = s_read!(list);
@@ -62,10 +61,22 @@ pub fn eval_list_expression(
             next = element.next;
         }
 
-        Ok(new_ref!(Value, Value::Vector { ty, inner: values }))
+        Ok(new_ref!(
+            Value,
+            Value::Vector {
+                ty,
+                inner: new_ref!(Vec<RefType<Value>>, values)
+            }
+        ))
     } else {
         let ty = ValueType::new_empty(true, &mut s_write!(lu_dog));
 
-        Ok(new_ref!(Value, Value::Vector { ty, inner: vec![] }))
+        Ok(new_ref!(
+            Value,
+            Value::Vector {
+                ty,
+                inner: new_ref!(Vec<RefType<Value>>, vec![])
+            }
+        ))
     }
 }

@@ -10,7 +10,7 @@ use async_io::Timer;
 use tracing::{debug_span, Instrument};
 
 #[cfg(feature = "async")]
-use crate::keywords::{ASLEEP, HTTP_GET, ONE_SHOT, SPAWN, SPAWN_NAMED, TIMER};
+use crate::keywords::{ASLEEP, ONE_SHOT, SPAWN, SPAWN_NAMED, TIMER};
 
 use abi_stable::std_types::{RErr, ROk};
 use snafu::{location, prelude::*, Location};
@@ -30,8 +30,8 @@ use crate::{
     },
     keywords::{
         ADD, ARGS, ASSERT, ASSERT_EQ, CHACHA, COMPLEX_EX, EPS, EVAL, FN_NEW, FORMAT, INVOKE_FUNC,
-        IS_DIGIT, LEN, LINES, MAP, MAX, NEW, NORM_SQUARED, PARSE, PLUGIN, SLEEP, SPLIT, SQUARE,
-        SUM, TIME, TO_DIGIT, TRIM, TYPEOF, UUID_TYPE,
+        IS_DIGIT, LEN, LINES, MAP, MAX, NEW, NORM_SQUARED, PARSE, PLUGIN, PUSH, SLEEP, SPLIT,
+        SQUARE, SUM, TIME, TO_DIGIT, TRIM, TYPEOF, UUID_TYPE,
     },
     lu_dog::{CallEnum, Expression, ValueType, ValueTypeEnum},
     new_ref,
@@ -351,7 +351,7 @@ pub fn eval(
                                 location: location!(),
                             });
                         };
-                        let inner = inner
+                        let inner = s_read!(inner)
                             .iter()
                             .map(|v| <Value as Into<FfiValue>>::into((*s_read!(v)).clone()))
                             .collect::<Vec<FfiValue>>();
@@ -473,6 +473,7 @@ pub fn eval(
                             })
                             .collect::<Result<Vec<RefType<Value>>>>()?;
 
+                        let result = new_ref!(Vec<RefType<Value>>, result);
                         Ok(new_ref!(
                             Value,
                             Value::Vector {
@@ -509,16 +510,13 @@ pub fn eval(
                         let ty = Ty::new_z_string(&s_read!(sarzak));
                         let ty = ValueType::new_ty(true, &ty, &mut s_write!(lu_dog));
 
-                        Ok(new_ref!(
-                            Value,
-                            Value::Vector {
-                                ty,
-                                inner: string
-                                    .lines()
-                                    .map(|line| new_ref!(Value, Value::String(line.to_owned())))
-                                    .collect()
-                            }
-                        ))
+                        let inner = string
+                            .lines()
+                            .map(|line| new_ref!(Value, Value::String(line.to_owned())))
+                            .collect();
+                        let inner = new_ref!(Vec<RefType<Value>>, inner);
+
+                        Ok(new_ref!(Value, Value::Vector { ty, inner }))
                     }
                     FORMAT => {
                         debug!("evaluating String::format");
@@ -637,16 +635,14 @@ pub fn eval(
                         let ty = Ty::new_z_string(&s_read!(sarzak));
                         let ty = ValueType::new_ty(true, &ty, &mut s_write!(lu_dog));
 
-                        Ok(new_ref!(
-                            Value,
-                            Value::Vector {
-                                ty,
-                                inner: string
-                                    .split(separator)
-                                    .map(|line| new_ref!(Value, Value::String(line.to_owned())))
-                                    .collect()
-                            }
-                        ))
+                        let inner = string
+                            .split(separator)
+                            .map(|line| new_ref!(Value, Value::String(line.to_owned())))
+                            .collect();
+
+                        let inner = new_ref!(Vec<RefType<Value>>, inner);
+
+                        Ok(new_ref!(Value, Value::Vector { ty, inner }))
                     }
                     TRIM => {
                         let value = string.trim().to_owned();
@@ -729,7 +725,7 @@ pub fn eval(
                             panic!("Should be a lambda");
                         };
 
-                        let result = inner
+                        let result = s_read!(inner)
                             .iter()
                             .map(|value| {
                                 eval_lambda_expression(
@@ -747,16 +743,25 @@ pub fn eval(
                             Value,
                             Value::Vector {
                                 ty: ty.clone(),
-                                inner: result
+                                inner: new_ref!(Vec<RefType<Value>>, result)
                             }
                         ))
                     }
+                    PUSH => {
+                        let value = args.pop().unwrap();
+                        let value = s_read!(value).r37_expression(&s_read!(lu_dog))[0].clone();
+                        let value = eval_expression(value.clone(), context, vm).unwrap();
+
+                        s_write!(inner).push(value);
+
+                        Ok(new_ref!(Value, Value::Empty))
+                    }
                     SUM => {
                         let mut sum = 0;
-                        for value in inner {
-                            let mut value = s_write!(value);
-                            match &mut *value {
-                                Value::Integer(i) => sum += *i,
+                        for value in &*s_read!(inner) {
+                            let value = s_read!(value);
+                            match &*value {
+                                Value::Integer(i) => sum += i,
                                 v => {
                                     panic!("Should sum handle this type? {v:#?}")
                                 }
@@ -893,7 +898,7 @@ pub fn eval(
                                     Value,
                                     Value::Vector {
                                         ty,
-                                        inner: Vec::new()
+                                        inner: new_ref!(Vec<RefType<Value>>, Vec::new())
                                     }
                                 ))
                             }
@@ -953,8 +958,6 @@ pub fn eval(
                             Ok(new_ref!(Value, Value::String(result)))
                         }
                         EVAL => chacha::eval_dwarf(arg_values, expression, context),
-                        #[cfg(feature = "async")]
-                        HTTP_GET => chacha::http_get(arg_values, expression, context),
                         PARSE => chacha::parse_dwarf(arg_values, expression, context),
                         SLEEP => {
                             let (duration, _) = arg_values.pop_front().unwrap();
@@ -1059,7 +1062,6 @@ pub fn eval(
                 TIMER => {
                     match func.as_str() {
                         ONE_SHOT => {
-                            // dbg!("huh");
                             // 🚧 I should be checking that there is an argument before
                             // I go unwrapping it.
                             let (duration, _) = arg_values.pop_front().unwrap();
@@ -1295,7 +1297,6 @@ pub fn eval(
                             }
                         }
                     } else {
-                        dbg!(&ty, &func);
                         ensure!(false, {
                             let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
                             let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
@@ -1388,31 +1389,6 @@ fn spawn(
     .instrument(t_span);
 
     let child_task = child_worker.spawn_task(future).unwrap();
-
-    // let task = fubar.executor().spawn(future);
-    // context_copy.executor().park_value(new_ref!(Value, Value::Task(name, Some(task))));
-
-    // let future =
-    // async move { future::block_on(async { fubar.executor().resolve_task(task).await }) };
-    // future::block_on(async { ctx.executor().run().await });
-
-    // let task = nested_context_clone.executor().spawn(future);
-
-    // dbg!(driver.executor_index());
-
-    // let child_task = ExecutorTask::new("spawn".to_owned(), Executor::at_index(executor_id), future);
-
-    // This is *key*.
-    // task.detach();
-    // child_task.start();
-    // Executor::start_task(&child_task);
-    // context.executor().start_task(&child_task);
-
-    // let child = new_ref!(Value, Value::Future(name.clone(), Some(task)));
-    // let value = new_ref!(Value, Value::Task(ChaChaTask::new(name.clone(), task)));
-
-    // Stash the future away so that it doesn't get dropped when it's done running.
-    // nested_context_clone.executor().park_value(value.clone());
 
     let worker = child_worker.clone();
     let task = context

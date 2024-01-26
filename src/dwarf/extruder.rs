@@ -23,12 +23,13 @@ use crate::{
         store::ObjectStore as LuDogStore,
         types::{
             AWait, Block, Body, BooleanOperator, Call, DataStructure, EnumFieldEnum, Expression,
-            ExpressionEnum, ExpressionStatement, Field, FieldExpression, ForLoop, FunctionCall,
-            ImplementationBlock, Index, IntegerLiteral, Item as WoogItem, ItemStatement, Lambda,
-            LambdaParameter, LetStatement, Literal, LocalVariable, NamedFieldExpression,
-            Pattern as AssocPat, RangeExpression, Span as LuDogSpan, Statement, StringLiteral,
-            StructExpression, ValueType, ValueTypeEnum, Variable, VariableExpression, WoogStruct,
-            XFuture, XIf, XMatch, XPath, XPrint, XValue, XValueEnum,
+            ExpressionEnum, ExpressionStatement, Field, FieldExpression, ForLoop, FuncGeneric,
+            FunctionCall, ImplementationBlock, Index, IntegerLiteral, Item as WoogItem,
+            ItemStatement, Lambda, LambdaParameter, LetStatement, Literal, LocalVariable,
+            NamedFieldExpression, Pattern as AssocPat, RangeExpression, Span as LuDogSpan,
+            Statement, StringLiteral, StructExpression, ValueType, ValueTypeEnum, Variable,
+            VariableExpression, WoogStruct, XFuture, XIf, XMatch, XPath, XPrint, XValue,
+            XValueEnum,
         },
         Argument, Binary, BooleanLiteral, Comparison, DwarfSourceFile, FieldAccess,
         FieldAccessTarget, FloatLiteral, List, ListElement, ListExpression, Operator,
@@ -396,6 +397,13 @@ pub fn new_lu_dog(
     ValueType::new_ty(true, &Ty::new_integer(sarzak), &mut lu_dog);
     ValueType::new_ty(true, &Ty::new_z_string(sarzak), &mut lu_dog);
     ValueType::new_ty(true, &Ty::new_z_uuid(sarzak), &mut lu_dog);
+    // This one I'm not so sure about. It's here for initializing new lists.
+    // I don't know why it's not being put into the store where used.
+    ValueType::new_list(
+        true,
+        &List::new(&ValueType::new_empty(true, &mut lu_dog), &mut lu_dog),
+        &mut lu_dog,
+    );
 
     let mut models = HashMap::default();
     let mut dirty = Vec::new();
@@ -907,8 +915,6 @@ pub fn inter_statement(
             };
 
             debug!("inter let {var:?}");
-
-            dbg!(&expr);
 
             // Now parse the RHS, which is an expression.
             let (expr, expr_ty) = inter_expression(
@@ -2236,7 +2242,8 @@ pub(super) fn inter_expression(
         ParserExpression::List(ref elements) => {
             debug!("list {:?}", elements);
             if elements.is_empty() {
-                let list = List::new(&ValueType::new_empty(true, lu_dog), lu_dog);
+                let generic = FuncGeneric::new("UBER_HACK".to_owned(), None, None, lu_dog);
+                let list = List::new(&ValueType::new_func_generic(true, &generic, lu_dog), lu_dog);
                 let expr = Expression::new_list_expression(
                     true,
                     &ListExpression::new(None, lu_dog),
@@ -2564,8 +2571,6 @@ pub(super) fn inter_expression(
                     lu_dog,
                 )?;
 
-                dbg!(&ty, &scrutinee_ty);
-
                 typecheck(
                     (&scrutinee_ty, s_span),
                     (&ty, span),
@@ -2837,14 +2842,7 @@ pub(super) fn inter_expression(
         // Unit enumeration
         //
         ParserExpression::UnitEnum(enum_path, (field_name, field_span)) => unit_enum::inter(
-            &enum_path,
-            field_name,
-            field_span,
-            span,
-            block,
-            context,
-            context_stack,
-            lu_dog,
+            &enum_path, field_name, field_span, span, block, context, lu_dog,
         ),
         //
         // Range
@@ -3078,8 +3076,6 @@ pub(super) fn inter_expression(
                 {
                     let field_ty = lu_dog.exhume_value_type(&s_read!(field).ty).unwrap();
                     let naked_ty = s_read!(field_ty);
-
-                    // dbg!(&field_ty);
 
                     // Primarily we are here to check the type of the field against
                     // the type of the expression. If only it were so easily done.
@@ -3484,7 +3480,6 @@ fn inter_implementation(
             unreachable!();
         }
     } else {
-        dbg!(&name);
         context.location = location!();
         let impl_ty = make_value_type(
             &Type::UserType((name.to_owned(), 0..0), vec![]),
@@ -3543,7 +3538,6 @@ fn inter_implementation(
                     ),
                 attributes,
             } => {
-                dbg!(&generics);
                 let generics = if let Some((generics, _)) = generics {
                     Some(
                         generics
@@ -3561,7 +3555,6 @@ fn inter_implementation(
                 } else {
                     None
                 };
-                dbg!(&name.0, &return_type);
 
                 match func::inter_func(
                     a_sink,
@@ -3710,7 +3703,6 @@ pub(crate) fn make_value_type(
     let sarzak = context.sarzak;
 
     debug!("make_value_type {type_:?}");
-    dbg!(type_.to_string());
 
     match type_ {
         Type::Boolean => {
@@ -3793,7 +3785,6 @@ pub(crate) fn make_value_type(
             Ok(ValueType::new_ty(true, &ty, lu_dog))
         }
         Type::UserType(tok, generics) => {
-            dbg!(&tok, &generics);
             let name = &tok.0;
 
             // Deal with imports
@@ -3821,19 +3812,17 @@ pub(crate) fn make_value_type(
                 // three `Item`s are already `ValueType`s, so it's not a stretch.
                 unreachable!();
             } else if name == "Future" {
-                let inner_type = if let Type::Generic(name) = &generics[0].0 {
-                    dbg!("a");
-                    if let Some(ty) = lookup_user_defined_type(lu_dog, &name.0, span, context) {
+                let inner_type = if let Type::Generic((name, span)) = &generics[0].0 {
+                    if let Some(ty) = lookup_user_defined_type(lu_dog, &name, span, context) {
                         ty
                     } else {
-                        make_value_type(
-                            &generics[0].0,
-                            span,
-                            enclosing_type,
-                            context,
-                            context_stack,
-                            lu_dog,
-                        )?
+                        return Err(vec![DwarfError::UnknownType {
+                            ty: name.to_owned(),
+                            file: context.file_name.to_owned(),
+                            span: span.to_owned(),
+                            location: location!(),
+                            program: context.source_string.to_owned(),
+                        }]);
                     }
                 } else {
                     make_value_type(
@@ -3899,18 +3888,14 @@ pub(crate) fn make_value_type(
                     }
                     fq_name.push('>');
                 }
-                dbg!(&fq_name);
 
-                dbg!("b");
                 if let Some(ty) = lookup_user_defined_type(lu_dog, &fq_name, span, context) {
                     // 🔥 I think that I need to look at the returned type and see if it has
                     // generics, and then match them up with the generics I have above. But
                     // then what happens? I can't really return a new type with the substitutions
                     // I don't think.
-                    dbg!(&ty, "ψ");
                     Ok(ty)
                 } else if &fq_name != name {
-                    dbg!("fq_name isn't name");
                     // 🚧  I don't trust this code -- it needs testing.
                     if let Some(ref id) = lu_dog.exhume_woog_struct_id_by_name(name) {
                         let woog_struct = lu_dog.exhume_woog_struct(id).unwrap();
@@ -3947,12 +3932,10 @@ pub(crate) fn make_value_type(
                         );
                         Ok(ValueType::new_woog_struct(true, &generic, lu_dog))
                     } else {
-                        dbg!("uber");
                         let (_, ty) = create_generic_enum(&fq_name, &name, context, lu_dog);
                         Ok(ty)
                     }
                 } else if let Some(ty) = lookup_user_defined_type(lu_dog, &name, span, context) {
-                    dbg!("pulling archetype");
                     Ok(ty)
                 } else if let Some(ref id) = lu_dog.exhume_z_object_store_id_by_name(&name) {
                     let store = lu_dog.exhume_z_object_store(id).unwrap();
@@ -3992,7 +3975,6 @@ pub(crate) fn lookup_user_defined_type(
     span: &Span,
     context: &Context,
 ) -> Option<RefType<ValueType>> {
-    dbg!(&name);
     if let Some(ref id) = lu_dog.exhume_woog_struct_id_by_name(name) {
         // Here is where we look for actual user defined types, as
         // in types that are defined in dwarf source.
@@ -4006,16 +3988,13 @@ pub(crate) fn lookup_user_defined_type(
             None,
             lu_dog,
         );
-        dbg!("ε");
         Some(ty)
     } else if let Some(ref id) = lu_dog.exhume_enumeration_id_by_name(name) {
         // Here too, but for enums.
-        dbg!("f");
         let woog_enum = lu_dog.exhume_enumeration(id).unwrap();
         Some(ValueType::new_enumeration(true, &woog_enum, lu_dog))
         // 🚧 Don't we need a span here, like above?
     } else {
-        dbg!("γ");
         None
     }
 }
@@ -4212,6 +4191,15 @@ pub(super) fn typecheck(
             Ok(())
             // }
         }
+        (ValueTypeEnum::List(a), ValueTypeEnum::List(b)) => {
+            let a = lu_dog.exhume_list(a).unwrap();
+            let b = lu_dog.exhume_list(b).unwrap();
+            let a = s_read!(a);
+            let b = s_read!(b);
+            let a = lu_dog.exhume_value_type(&a.ty).unwrap();
+            let b = lu_dog.exhume_value_type(&b.ty).unwrap();
+            typecheck((&a, lhs_span), (&b, rhs_span), location, context, lu_dog)
+        }
         (ValueTypeEnum::Ty(a), ValueTypeEnum::Ty(b)) => {
             let a = context.sarzak.exhume_ty(a).unwrap();
             let b = context.sarzak.exhume_ty(b).unwrap();
@@ -4333,8 +4321,6 @@ pub(super) fn typecheck(
                 &b.name
             };
 
-            dbg!(&a_name, &b_name);
-
             if a_name == b_name {
                 Ok(())
             } else {
@@ -4353,7 +4339,6 @@ pub(super) fn typecheck(
             }
         }
         (lhs_t, rhs_t) => {
-            dbg!(&lhs_t, &rhs_t);
             if lhs_t == rhs_t {
                 Ok(())
             } else {

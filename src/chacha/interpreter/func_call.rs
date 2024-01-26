@@ -255,7 +255,13 @@ fn eval_external_static_method(
                                     &s_read!(lu_dog),
                                 )
                             };
-                            let value = new_ref!(Value, Value::Vector { ty, inner: vec });
+                            let value = new_ref!(
+                                Value,
+                                Value::Vector {
+                                    ty,
+                                    inner: new_ref!(Vec<RefType<Value>>, vec)
+                                }
+                            );
 
                             // let woog_struct = s_read!(lu_dog)
                             //     .iter_woog_struct()
@@ -372,11 +378,8 @@ fn eval_built_in_function_call(
                 // associated with the parameter and using it's type. I guess that's cool,
                 // but it's tricky if you aren't aware.
                 let var = s_read!(s_read!(next).r12_variable(&s_read!(lu_dog))[0]).clone();
-                dbg!(&var);
                 let value = s_read!(var.r11_x_value(&s_read!(lu_dog))[0]).clone();
-                dbg!(&value);
                 let ty = value.r24_value_type(&s_read!(lu_dog))[0].clone();
-                dbg!(&ty);
                 params.push((var.name.clone(), ty.clone()));
 
                 let next_id = { s_read!(next).next };

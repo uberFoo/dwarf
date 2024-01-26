@@ -174,7 +174,7 @@ impl VM {
                 Value,
                 Value::Vector {
                     ty: new_ref!(ValueType, str_ty.clone()),
-                    inner: args.to_vec()
+                    inner: new_ref!(Vec<RefType<Value>>, args.to_vec())
                 }
             ),
             libs: HashMap::default(),
@@ -762,6 +762,7 @@ impl VM {
                             Value::Integer(index) => {
                                 let index = *index as usize;
                                 if let Value::Vector { ty: _, inner: vec } = &list.clone() {
+                                    let vec = s_read!(vec);
                                     if index < vec.len() {
                                         self.stack.push(vec[index].clone());
                                     } else {
@@ -992,6 +993,7 @@ impl VM {
                         }
 
                         values.reverse();
+                        let values = new_ref!(Vec<RefType<Value>>, values);
 
                         self.stack
                             .push(new_ref!(Value, Value::Vector { ty, inner: values }));

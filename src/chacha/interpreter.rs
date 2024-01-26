@@ -906,8 +906,6 @@ fn typecheck(
                 &b.name
             };
 
-            dbg!(&a_name, &b_name);
-
             if a_name == b_name {
                 return Ok(());
             }

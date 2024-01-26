@@ -6,7 +6,7 @@ use crate::{
         instr::Instruction,
     },
     lu_dog::ValueTypeEnum,
-    new_ref, s_read, NewRef, RefType, SarzakStorePtr, Span, Value,
+    new_ref, s_read, NewRef, RefType, SarzakStorePtr, Span,
 };
 
 pub(in crate::bubba::compiler) fn compile(

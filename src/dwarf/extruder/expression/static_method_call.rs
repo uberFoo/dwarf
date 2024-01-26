@@ -6,7 +6,7 @@ use uuid::Uuid;
 
 #[cfg(feature = "async")]
 use crate::{
-    keywords::{ASLEEP, HTTP_GET, INTERVAL, ONE_SHOT, SPAWN, SPAWN_NAMED},
+    keywords::{ASLEEP, INTERVAL, ONE_SHOT, SPAWN, SPAWN_NAMED},
     lu_dog::XFuture,
 };
 
@@ -19,7 +19,6 @@ use crate::{
             make_value_type, typecheck, update_span_value, Context, ExprSpan,
         },
         items::enuum::create_generic_enum,
-        pvt::PrintableValueType,
         DwarfInteger, Expression as ParserExpression, Generics, Type,
     },
     keywords::{
@@ -30,7 +29,7 @@ use crate::{
         store::ObjectStore as LuDogStore, Argument, Block, Call, DataStructure, EnumField,
         EnumFieldEnum, Enumeration, Expression, FieldExpression, List, LocalVariable, MethodCall,
         PathElement, Span as LuDogSpan, Span, StaticMethodCall, StructExpression,
-        UnnamedFieldExpression, ValueType, ValueTypeEnum, Variable, XPath, XPlugin, XValue,
+        UnnamedFieldExpression, ValueType, ValueTypeEnum, Variable, XPath, XValue,
     },
     new_ref, s_read, s_write,
     sarzak::Ty,
@@ -198,12 +197,6 @@ pub fn inter(
                     ASSERT_EQ => ValueType::new_ty(true, &Ty::new_boolean(sarzak), lu_dog),
                     EPS => ValueType::new_ty(true, &Ty::new_float(sarzak), lu_dog),
                     EVAL => ValueType::new_unknown(true, lu_dog),
-                    #[cfg(feature = "async")]
-                    HTTP_GET => {
-                        let inner = ValueType::new_ty(true, &Ty::new_z_string(sarzak), lu_dog);
-                        let future = XFuture::new(&inner, lu_dog);
-                        ValueType::new_x_future(true, &future, lu_dog)
-                    }
                     LOAD_PLUGIN => ValueType::new_unknown(true, lu_dog),
                     PARSE => ValueType::new_unknown(true, lu_dog),
                     SLEEP => ValueType::new_empty(true, lu_dog),
@@ -314,7 +307,6 @@ pub fn inter(
         // use that to build a concrete type.
         //
         // Here we are interring an enum constructor.
-        dbg!(&type_name);
         let woog_enum = if let Some(woog_enum) = lu_dog.exhume_enumeration_id_by_name(&type_name) {
             lu_dog.exhume_enumeration(&woog_enum).unwrap()
         } else if lu_dog
@@ -454,8 +446,6 @@ fn inter_field(
             let tuple_field = lu_dog.exhume_tuple_field(id).unwrap();
             let ty = s_read!(tuple_field).r86_value_type(lu_dog)[0].clone();
 
-            dbg!("look here", &ty);
-
             let ty = match s_read!(ty).subtype {
                 ValueTypeEnum::EnumGeneric(ref id) => {
                     // The type is generic. This means that we need to create a
@@ -476,12 +466,10 @@ fn inter_field(
                     let woog_enum = s_read!(generic).r104_enumeration(lu_dog)[0].clone();
 
                     if s_read!(woog_enum).name != context.in_impl {
-                        let mut matched = false;
                         let mut ordinal = 0;
                         let mut iter = s_read!(woog_enum).r105_enum_generic(lu_dog)[0].clone();
                         loop {
                             if &*s_read!(iter) == &*s_read!(generic) {
-                                matched = true;
                                 break;
                             }
                             ordinal += 1;
@@ -492,18 +480,15 @@ fn inter_field(
                             iter = lu_dog.exhume_enum_generic(&id).unwrap();
                         }
 
-                        dbg!(&woog_enum, &matched, &generic, &ordinal, &path, &x_path);
                         let (Type::UserType(_, generics), _) = &path[0] else {
                             return Err(vec![DwarfError::Internal {
                                 description: "Expected generics".to_owned(),
                                 location: location!(),
                             }]);
                         };
-                        dbg!(&generics);
 
                         if !generics.is_empty() {
                             let target = &generics[ordinal];
-                            dbg!(&target);
                             let span = &target.1;
                             let target = match &target.0 {
                                 Type::Generic((target, _)) => {
@@ -527,8 +512,6 @@ fn inter_field(
                                 None,
                                 lu_dog,
                             );
-
-                            dbg!("fucker", &target);
 
                             target
                         } else {
@@ -584,16 +567,12 @@ fn inter_field(
                     panic!("I don't think that we should ever see anything other than a user type here: {:?}", path[0]);
                 };
 
-                dbg!(&context.in_impl);
-
                 if &context.in_impl == base_name {
                     let id = lu_dog.exhume_enumeration_id_by_name(&base_name).unwrap();
-                    dbg!(&base_name);
                     (lu_dog.exhume_enumeration(&id).unwrap(), expr)
                 } else {
                     let type_name = path.iter().map(|p| {
                     if let Type::UserType((obj, foo), generics) = &p.0 {
-                        dbg!(&obj, &foo, &generics);
                         let mut name = obj.to_owned();
                         let generics = generics.iter().map(|g| {
                             g.0.to_string()
@@ -609,7 +588,6 @@ fn inter_field(
                     }
                 }).collect::<Vec<_>>().join("");
 
-                    dbg!("α", &type_name, &context.path);
                     let (new_enum, _) = create_generic_enum(&type_name, base_name, context, lu_dog);
 
                     (new_enum, expr)

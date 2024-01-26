@@ -38,17 +38,17 @@ struct Request {
 }
 
 impl Request {
-    async fn send(self) -> Future<Result<Response, Error>> {
+    async fn send(self) -> Future<Result<Response, HttpError>> {
         let response: Result<int, int> =
             self.plugin
                 .invoke_func("http_client", "Request", "send", [self.inner]);
 
         match response {
-            Result::<int, int>::Err(e) => Result::<Response, Error>::Err(Error {
+            Result::Err(e) => Result::<Response, HttpError>::Err(HttpError {
                 inner: e,
                 plugin: self.plugin,
             }),
-            Result::<int, int>::Ok(r) => Result::<Response, Error>::Ok(Response {
+            Result::Ok(r) => Result::<Response, HttpError>::Ok(Response {
                 inner: r,
                 plugin: self.plugin,
             }),
@@ -63,30 +63,30 @@ struct Response {
 }
 
 impl Response {
-    async fn text(self) -> Future<Result<string, Error>> {
+    async fn text(self) -> Future<Result<string, HttpError>> {
         let text: Result<string, int> =
             self.plugin
                 .invoke_func("http_client", "Response", "text", [self.inner]);
 
         match text {
-            Result::<string, int>::Err(e) => Result::<string, Error>::Err(Error {
+            Result::Err(e) => Result::<string, HttpError>::Err(HttpError {
                 inner: e,
                 plugin: self.plugin,
             }),
-            Result::<string, int>::Ok(t) => Result::<string, Error>::Ok(t),
+            Result::Ok(t) => Result::<string, HttpError>::Ok(t),
         }
     }
 }
 
-struct Error {
+struct HttpError {
     #[proxy(plugin = "http::http_client")]
     plugin: Plugin<HttpClient>,
     inner: int,
 }
 
-// impl Error {
-//     // This is a function that exists on the ObjectStore, and the interpreter
-//     // will invoke it in the plugin.
-//     #[proxy(store = "error", object = "Error", func = "status")]
-//     fn status(self) -> Option<int>;
-// }
+impl HttpError {
+    fn to_string(self) -> string {
+        self.plugin
+            .invoke_func("http_client", "HttpError", "to_string", [self.inner])
+    }
+}

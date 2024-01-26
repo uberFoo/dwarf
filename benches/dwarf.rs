@@ -118,7 +118,6 @@ fn loop_(c: &mut Criterion) {
     Client::start();
     let _ = env_logger::builder().is_test(true).try_init();
     let source = fs::read_to_string(LOOP_SOURCE_FILE).unwrap();
-    dbg!(&source);
     let ast = parse_dwarf("loop", &source).unwrap();
     let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
 
@@ -150,7 +149,6 @@ fn loop_vm(c: &mut Criterion) {
     Client::start();
     let _ = env_logger::builder().is_test(true).try_init();
     let source = fs::read_to_string(LOOP_SOURCE_FILE).unwrap();
-    dbg!(&source);
     let ast = parse_dwarf("loop", &source).unwrap();
     let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
 

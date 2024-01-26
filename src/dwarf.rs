@@ -16,7 +16,10 @@ use snafu::{location, Location};
 
 use crate::{
     dwarf::items::enuum::create_generic_enum,
-    lu_dog::{store::ObjectStore as LuDogStore, types::ValueType, Lambda, List, XFuture},
+    lu_dog::{
+        store::ObjectStore as LuDogStore, types::ValueType, Lambda, List, Span as LuDogSpan,
+        XFuture,
+    },
     s_read, RefType,
 };
 
@@ -279,26 +282,60 @@ impl Type {
 
                 log::debug!(target: "dwarf", "Type::UserType: {name}");
 
-                dbg!(&name, &base_type);
-
                 if base_type == "Future" {
                     let inner_type = &generics[0];
                     let inner_type = inner_type
                         .0
                         .into_value_type(&inner_type.1, context, store)?;
                     let future = XFuture::new(&inner_type, store);
-                    Ok(ValueType::new_x_future(true, &future, store))
+                    let future = ValueType::new_x_future(true, &future, store);
+                    let _ = LuDogSpan::new(
+                        span.end as DwarfInteger,
+                        span.start as DwarfInteger,
+                        &context.source,
+                        Some(&future),
+                        None,
+                        store,
+                    );
+                    Ok(future)
                 } else if let Some(obj_id) = store.exhume_woog_struct_id_by_name(&name) {
                     let woog_struct = store.exhume_woog_struct(&obj_id).unwrap();
-                    Ok(ValueType::new_woog_struct(true, &woog_struct, store))
+                    let woog_struct = ValueType::new_woog_struct(true, &woog_struct, store);
+                    let _ = LuDogSpan::new(
+                        span.end as DwarfInteger,
+                        span.start as DwarfInteger,
+                        &context.source,
+                        Some(&woog_struct),
+                        None,
+                        store,
+                    );
+                    Ok(woog_struct)
                 } else if let Some(enum_id) = store.exhume_enumeration_id_by_name(&name) {
                     let enumeration = store.exhume_enumeration(&enum_id).unwrap();
-                    Ok(ValueType::new_enumeration(true, &enumeration, store))
+                    let enumeration = ValueType::new_enumeration(true, &enumeration, store);
+                    let _ = LuDogSpan::new(
+                        span.end as DwarfInteger,
+                        span.start as DwarfInteger,
+                        &context.source,
+                        Some(&enumeration),
+                        None,
+                        store,
+                    );
+                    Ok(enumeration)
                 } else if let Some(obj_id) = sarzak.exhume_object_id_by_name(&name) {
                     // If it's not in one of the models, it must be in sarzak.
                     let ty = sarzak.exhume_ty(&obj_id).unwrap();
                     log::debug!(target: "dwarf", "into_value_type, UserType, ty: {ty:?}");
-                    Ok(ValueType::new_ty(true, &ty, store))
+                    let ty = ValueType::new_ty(true, &ty, store);
+                    let _ = LuDogSpan::new(
+                        span.end as DwarfInteger,
+                        span.start as DwarfInteger,
+                        &context.source,
+                        Some(&ty),
+                        None,
+                        store,
+                    );
+                    Ok(ty)
                 } else if store.exhume_enumeration_id_by_name(base_type).is_some() {
                     Ok(create_generic_enum(&name, base_type, context, store).1)
                 } else {

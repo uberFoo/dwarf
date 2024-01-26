@@ -25,18 +25,21 @@ pub fn eval(
         .unwrap();
 
     let list = eval_expression(list, context, vm)?;
-    let list = if let Value::Vector { ty: _, inner: vec } = &s_read!(list).clone() {
+    let list = if let Value::Vector { ty: _, inner: vec } = &*s_read!(list) {
         vec.to_owned()
     } else if let Value::String(str) = &*s_read!(list) {
-        str.chars()
-            .map(|c| new_ref!(Value, Value::Char(c)))
-            .collect()
+        new_ref!(
+            Vec<RefType<Value>>,
+            str.chars()
+                .map(|c| new_ref!(Value, Value::Char(c)))
+                .collect()
+        )
     } else if let Value::Range(range) = &*s_read!(list) {
         let mut vec = Vec::new();
         for i in range.start..range.end {
             vec.push(new_ref!(Value, Value::Integer(i)));
         }
-        vec
+        new_ref!(Vec<RefType<Value>>, vec)
     } else {
         return Err(ChaChaError::BadnessHappened {
             message: "For loop expression is not a list".to_owned(),
@@ -47,8 +50,8 @@ pub fn eval(
     debug!("for loop {ident} in {list:?}");
 
     context.memory().push_frame();
-    for item in list {
-        context.memory().insert(ident.clone(), item);
+    for item in &*s_read!(list) {
+        context.memory().insert(ident.clone(), item.clone());
         let expr_ty = eval_expression(block.clone(), context, vm);
         match expr_ty {
             Ok(_) => {}

@@ -45,7 +45,6 @@ pub fn id() -> RStr<'static> {
 /// Instantiates the plugin.
 #[sabi_extern_fn]
 pub fn new(args: RVec<FfiValue>) -> RResult<PluginType, Error> {
-    dbg!(&args);
     if let Some(FfiValue::String(plugin)) = args.first() {
         match plugin.as_str() {
             "http_client" => {
@@ -86,7 +85,6 @@ impl Plugin for Http {
         args: RVec<FfiValue>,
     ) -> RResult<FfiValue, Error> {
         (|| -> Result<FfiValue, Error> {
-            dbg!(&module, &ty, &func, &args);
             let module_str = module.as_str();
             debug!("module: {module_str}, type: {ty}, func: {func}, args: {args:?}");
             match module_str {
@@ -258,16 +256,30 @@ mod http_client {
                         }
                         func => Err(Error::Uber(format!("Invalid function: {func}").into())),
                     },
+                    "HttpError" => match func.as_str() {
+                        "to_string" => {
+                            let key: DwarfInteger = args
+                                .first()
+                                .unwrap()
+                                .try_into()
+                                .map_err(|e: ChaChaError| Error::Uber(e.to_string().into()))
+                                .unwrap();
+
+                            let error = self.errors.remove(key as usize);
+                            if let Some(error) = Arc::into_inner(error) {
+                                let result =
+                                    ROk(RBox::new(FfiValue::String(error.to_string().into())));
+                                Ok(FfiValue::Result(result))
+                            } else {
+                                Ok(FfiValue::Error("Too many references to error.".into()))
+                            }
+                        }
+                        func => Err(Error::Uber(format!("Invalid function: {func}").into())),
+                    },
                     ty => Err(Error::Uber(format!("Invalid type: {ty}").into())),
                 }
                 .into()
             }))
-
-            // match module_str {
-            //     "sarzak" => self.sarzak.invoke_func(module, ty, func, args).into(),
-            //     "merlin" => self.merlin.invoke_func(module, ty, func, args).into(),
-            //     _ => Err(Error::Uber("Invalid module".into())),
-            // }
         }
     }
 }

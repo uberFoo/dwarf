@@ -1,57 +1,59 @@
-enum Result<T, E> {
-    Ok(T),
-    Err(E),
+use http::client::HttpClient;
+
+async fn async_get(urls: [String]) -> Future<[Result<string, HttpError>]> {
+    let client = HttpClient::new();
+
+    let tasks: [Future<Result<string, HttpError>>] = [];
+    // Start a task for each url and push them into the tasks array.
+    for url in urls {
+        let task = chacha::spawn(async || -> Result<string, HttpError> {
+            // This creates a request and sends it.
+            let get = client.get(url).await.send().await;
+            match get {
+                Result::<Response, HttpError>::Ok(response) => {
+                    let text = response.text().await;
+                    match text {
+                        Result::Ok(text) => Result::<string, HttpError>::Ok(text),
+                        // Return an error if there was a problem getting the page's text.
+                        Result::Err(e) => Result::<string, HttpError>::Err(e),
+                    }
+                }
+                // Return an Error if there was a problem creating or sending the request.
+                Result::<Response, HttpError>::Err(e) => Result::<string, HttpError>::Err(e),
+            }
+        });
+        tasks.push(task);
+    }
+
+    let results: [Result<string, HttpError>] = [];
+    for task in tasks {
+        // Await each task that was spawned above.
+        let result = task.await;
+        results.push(result);
+    }
+
+    results
 }
-
-enum Option<T> {
-    Some(T),
-    None,
-}
-
-// async fn async_get(urls: [String]) -> Future<[Result<String, HttpError>]> {
-//     let client = chacha::http_client();
-
-//     let tasks = [];
-//     for url in urls {
-//         let task = chacha::spawn(async || -> Future<HttpResponse> {
-//             let get = client.get(url).send().await;
-//             get.text().await
-//         });
-//         tasks.push(task);
-//     }
-
-//     let results = [];
-//     for task in tasks {
-//         let result = task.await;
-//         results.push(result);
-//     }
-
-//     results
-// }
 
 async fn main() -> Future<()> {
     let requests = [
-        "https://www.rust-lang.org/",
         "https://en.wikipedia.org/wiki/Main_Page",
+        "https://en.wikipedi.org/wiki/Main_Page",
+        "https://www.rust-lang.org/",
+        "https://www.github.com/",
     ];
-    let rust = chacha::http_get(requests[0]);
-    let future = chacha::http_get(requests[1]);
-    print(rust);
-    print(future);
-    print(future.await);
-    print(rust.await);
-    // future.await;
-    // rust.await;
-    // let results = async_get(requests).await;
-    // for result in results {
-    // print(result);
-    //     match result {
-    //         Result::<String, HttpError>::Ok(response) => {
-    //             print(response);
-    //         }
-    //         Result::<String, HttpError>::Err(e) => {
-    //             print(e);
-    //         }
-    //     }
-    // }
+    let results = async_get(requests).await;
+
+    let i = 0;
+    for result in results {
+        match result {
+            Result::Ok(response) => {
+                print("{1}: {0} bytes\n".format(response.len(), requests[i]));
+            }
+            Result::Err(e) => {
+                print("{1}: {0}\n".format(e.to_string(), requests[i]));
+            }
+        }
+        i = i + 1;
+    }
 }

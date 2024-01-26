@@ -517,7 +517,7 @@ pub enum Value {
     ValueType(ValueType),
     Vector {
         ty: RefType<ValueType>,
-        inner: Vec<RefType<Self>>,
+        inner: RefType<Vec<RefType<Self>>>,
     },
 }
 
@@ -578,9 +578,10 @@ impl Value {
             Self::Uuid(uuid) => write!(f, "{uuid}"),
             Self::ValueType(ty) => write!(f, "{:?}", ty),
             Self::Vector { ty: _, inner } => {
+                let inner = s_read!(inner);
                 let mut first_time = true;
                 write!(f, "[")?;
-                for i in inner {
+                for i in &*inner {
                     if first_time {
                         first_time = false;
                     } else {
@@ -979,9 +980,10 @@ impl fmt::Display for Value {
             Self::Uuid(uuid) => write!(f, "{uuid}"),
             Self::ValueType(ty) => write!(f, "{:?}", ty),
             Self::Vector { ty: _, inner } => {
+                let inner = s_read!(inner);
                 let mut first_time = true;
                 write!(f, "[")?;
-                for i in inner {
+                for i in &*inner {
                     if first_time {
                         first_time = false;
                     } else {
@@ -1713,6 +1715,9 @@ impl std::cmp::PartialEq for Value {
                 if *s_read!(ty_a) != *s_read!(ty_b) {
                     return false;
                 }
+
+                let a = s_read!(a);
+                let b = s_read!(b);
 
                 if a.len() != b.len() {
                     return false;

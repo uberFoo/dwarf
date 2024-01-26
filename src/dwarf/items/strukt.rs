@@ -260,14 +260,11 @@ pub fn inter_struct_fields(
                     if let Some(plugin_vec) = attributes.get(PLUGIN) {
                         if let Some((_, ref value)) = plugin_vec.first() {
                             let plugin_path: String = value.try_into().map_err(|e| vec![e])?;
-                            dbg!(&plugin_path, &type_);
                             debug!("proxy.plugin: {plugin_path}");
                             if let Type::UserType(tok, generics) = type_ {
                                 let plugin_ty = &generics.first().unwrap().0;
-                                dbg!(&plugin_ty);
                                 if let Type::Generic((plugin_ty, _)) = plugin_ty {
                                     let ty_name = &tok.0;
-                                    dbg!("so what's type look like now?", &ty_name);
                                     if ty_name == "Plugin" {
                                         let plugin =
                                             XPlugin::new(plugin_ty.to_owned(), plugin_path, lu_dog);
@@ -315,10 +312,8 @@ pub fn inter_struct_fields(
             };
 
         let type_str = type_.to_string();
-        dbg!("fu", &type_str, &name);
         let ty = if let Some(generics) = generics {
             if let Some(_definition_type) = generics.get(&type_str) {
-                dbg!(_definition_type, &type_str);
                 // 🚧 kts -- this thing doesn't have it's next sorted, and that
                 // can't be right.
                 let g = StructGeneric::new(type_str, None, &woog_struct, lu_dog);
@@ -334,7 +329,6 @@ pub fn inter_struct_fields(
 
                 ty
             } else if let Some(proxy_vec) = attrs.get(PROXY) {
-                dbg!("fubar");
                 proxy_thang(proxy_vec)?
             } else {
                 context.location = location;
@@ -358,8 +352,6 @@ pub fn inter_struct_fields(
                 }
             }
         };
-
-        dbg!(&ty);
 
         let _field = Field::new(name.to_owned(), &woog_struct, &ty, lu_dog);
     }

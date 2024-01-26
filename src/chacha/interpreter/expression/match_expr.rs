@@ -114,7 +114,6 @@ pub fn eval(
 
                 let mut matched = false;
                 let (name, mut scrutinee) = decode_expression(scrutinee.clone());
-                dbg!(&name, &s_read!(pe).name);
                 if name == s_read!(pe).name {
                     while s_read!(pe).next.is_some() && scrutinee.is_some() {
                         let id = {
@@ -126,7 +125,6 @@ pub fn eval(
                         let (name, s) = decode_expression(scrutinee.unwrap());
                         scrutinee = s;
 
-                        dbg!(&name, &s_read!(pe).name);
                         if name == s_read!(pe).name {
                             matched = true;
                             continue;

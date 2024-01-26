@@ -80,7 +80,7 @@ pub(in crate::bubba::compiler) fn compile_list_expression(
     } else {
         let ty = Value::Vector {
             ty: Value::Empty.get_value_type(&sarzak, &lu_dog),
-            inner: vec![],
+            inner: new_ref!(Vec<RefType<Value>>, vec![]),
         }
         .get_value_type(&sarzak, &lu_dog);
         let ty = (*s_read!(ty)).clone();

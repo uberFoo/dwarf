@@ -115,7 +115,6 @@ pub fn inter_func(
 
     let type_str = return_type.0.to_string();
     let ret_span = &return_type.1;
-    dbg!(&type_str, &generics);
     let ret_ty = if let Some(generics) = generics {
         if generics.get(&type_str).is_some() {
             let g = FuncGeneric::new(type_str, None, None, lu_dog);
@@ -142,7 +141,6 @@ pub fn inter_func(
             )?
         }
     } else {
-        dbg!("δ");
         context.location = location!();
         make_value_type(
             &return_type.0,
@@ -155,7 +153,6 @@ pub fn inter_func(
     };
 
     let a = PrintableValueType(&ret_ty, context, lu_dog);
-    dbg!(a.to_string());
 
     let (func, block) =
         if let Some((ParserExpression::Block(block_a_sink, stmts, vars, tys), span)) = &stmts {
@@ -318,7 +315,6 @@ pub fn inter_func(
             false => block_ty,
         };
 
-        dbg!("boom");
         typecheck(
             (&ret_ty, ret_span),
             (&block_ty, &block_span),
