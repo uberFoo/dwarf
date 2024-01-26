@@ -66,10 +66,10 @@ jobs:
               env:
                   CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
               with:
-                  directory: dwarf
+                  working-directory: .
                   fail_ci_if_error: true
                   # files: ./coverage.xml
-                  files: coverage.lcov
+                  files: dmarf/coverage.lcov
                   flags: unittests
                   name: codecov-umbrella
                   verbose: true
