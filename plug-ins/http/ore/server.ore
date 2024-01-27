@@ -1,0 +1,27 @@
+use std::option::Option;
+use std::result::Result;
+
+struct Plugin<T> {
+    inner: T,
+}
+
+struct HttpServer {
+    // This plugin value must point to a valid plugin. The first part of the
+    // path is the name, and the second part is a parameter to send to the
+    // constructor.
+    #[proxy(plugin = "http::http_server")]
+    inner: Plugin<HttpServer>,
+}
+
+impl HttpServer {
+    fn new() -> Self {
+        HttpServer {
+            inner: Plugin::<HttpServer>::new(),
+        }
+    }
+
+    // async fn serve(self) -> Future<()> {
+    //     self.inner
+    //         .invoke_func("http_server", "HttpServer", "serve", [])
+    // }
+}

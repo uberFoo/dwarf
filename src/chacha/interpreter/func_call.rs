@@ -137,7 +137,7 @@ fn inner_eval_function_call(
         //
         // This is an externally defined function that was declared in a dwarf file.
         BodyEnum::ExternalImplementation(ref id) => {
-            eval_external_static_method(id, args, first_arg, arg_check, span, context, vm)
+            eval_external_method(id, args, first_arg, arg_check, span, context, vm)
         }
     }
 }
@@ -149,7 +149,7 @@ fn inner_eval_function_call(
 /// ```ignore
 ///#[proxy(store = "sarzak", object = "Boolean", func = "flubber")]
 ///```
-fn eval_external_static_method(
+fn eval_external_method(
     block_id: &SarzakStorePtr,
     args: &[RefType<Argument>],
     first_arg: Option<SarzakStorePtr>,
@@ -187,6 +187,8 @@ fn eval_external_static_method(
     };
 
     let model_name = s_read!(external).x_model.clone();
+    // This is a hack since merlin and sarzak are in the same plugin, and it's
+    // called sarzak.
     let model_name = if model_name == MERLIN {
         SARZAK.to_owned()
     } else {
@@ -226,74 +228,46 @@ fn eval_external_static_method(
                     .collect::<Vec<_>>()
                     .into(),
             ) {
-                ROk(proxy_obj) => {
-                    match proxy_obj {
-                        FfiValue::ProxyType(proxy_obj) => {
-                            let value = new_ref!(
-                                Value,
-                                Value::ProxyType {
-                                    module: model_name,
-                                    obj_ty: obj_id,
-                                    id: proxy_obj.id.into(),
-                                    plugin: new_ref!(PluginType, proxy_obj.plugin)
-                                }
-                            );
+                ROk(proxy_obj) => match proxy_obj {
+                    FfiValue::ProxyType(proxy_obj) => {
+                        let value = new_ref!(
+                            Value,
+                            Value::ProxyType {
+                                module: model_name,
+                                obj_ty: obj_id,
+                                id: proxy_obj.id.into(),
+                                plugin: new_ref!(PluginType, proxy_obj.plugin)
+                            }
+                        );
 
-                            Ok(value)
-                        }
-                        FfiValue::Vector(vec) => {
-                            let vec = vec
-                                .into_iter()
-                                .map(|k| Value::from((k, &*s_read!(lu_dog))))
-                                .map(|v| new_ref!(Value, v))
-                                .collect::<Vec<_>>();
-                            let ty = if vec.is_empty() {
-                                ValueType::new_empty(true, &mut s_write!(lu_dog))
-                            } else {
-                                s_read!(vec[0]).get_value_type(
-                                    &s_read!(context.sarzak_heel()),
-                                    &s_read!(lu_dog),
-                                )
-                            };
-                            let value = new_ref!(
-                                Value,
-                                Value::Vector {
-                                    ty,
-                                    inner: new_ref!(Vec<RefType<Value>>, vec)
-                                }
-                            );
-
-                            // let woog_struct = s_read!(lu_dog)
-                            //     .iter_woog_struct()
-                            //     .find(|woog| {
-                            //         let woog = s_read!(woog);
-                            //         woog.name == object_name
-                            //     })
-                            //     .unwrap();
-
-                            // let ty = s_read!(lu_dog)
-                            //     .iter_value_type()
-                            //     .find(|ty| {
-                            //         let ty = s_read!(ty);
-                            //         if let ValueTypeEnum::WoogStruct(struct_id) = ty.subtype {
-                            //             struct_id == s_read!(woog_struct).id
-                            //         } else {
-                            //             false
-                            //         }
-                            //     })
-                            //     .unwrap();
-
-                            // let list = List::new(&ty, &mut s_write!(lu_dog));
-
-                            Ok(value)
-                        }
-                        all_manner_of_things => {
-                            panic!(
-                                "{all_manner_of_things:?} is not a proxy for model {model_name}."
-                            );
-                        }
+                        Ok(value)
                     }
-                }
+                    FfiValue::Vector(vec) => {
+                        let vec = vec
+                            .into_iter()
+                            .map(|k| Value::from((k, &*s_read!(lu_dog))))
+                            .map(|v| new_ref!(Value, v))
+                            .collect::<Vec<_>>();
+                        let ty = if vec.is_empty() {
+                            ValueType::new_empty(true, &mut s_write!(lu_dog))
+                        } else {
+                            s_read!(vec[0])
+                                .get_value_type(&s_read!(context.sarzak_heel()), &s_read!(lu_dog))
+                        };
+                        let value = new_ref!(
+                            Value,
+                            Value::Vector {
+                                ty,
+                                inner: new_ref!(Vec<RefType<Value>>, vec)
+                            }
+                        );
+
+                        Ok(value)
+                    }
+                    all_manner_of_things => {
+                        panic!("{all_manner_of_things:?} is not a proxy for model {model_name}.");
+                    }
+                },
                 RErr(e) => {
                     dbg!(e);
                     Err(ChaChaError::NoSuchMethod {

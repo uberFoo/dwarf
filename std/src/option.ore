@@ -6,15 +6,15 @@ enum Option<T> {
 impl Option<T> {
     fn is_some(self) -> bool {
         match self {
-            Option::<T>::Some(_) => true,
-            Option::<T>::None => false,
+            Option::Some(_) => true,
+            Option::None => false,
         }
     }
 
     fn is_none(self) -> bool {
         match self {
-            Option::<T>::Some(_) => false,
-            Option::<T>::None => true,
+            Option::Some(_) => false,
+            Option::None => true,
         }
     }
 }

@@ -234,6 +234,8 @@ fn compile_function(func: &RefType<Function>, context: &mut Context) -> Result<C
     let lu_dog = s_read!(lu_dog);
 
     let func = s_read!(func);
+    let body = func.r19_body(&lu_dog)[0].clone();
+    let body = s_read!(body);
 
     log::debug!(target: "instr", "{}: {}\n\t-->{}:{}:{}", POP_CLR.paint("compile_function"), func.name, file!(), line!(), column!());
 
@@ -241,7 +243,7 @@ fn compile_function(func: &RefType<Function>, context: &mut Context) -> Result<C
 
     let params = func.r13_parameter(&lu_dog);
 
-    // I need to iterate over the parameters to get the name.
+    // I need to iterate over the parameters to get the name of the parameter.
     if !params.is_empty() {
         let mut next = func
             .r13_parameter(&lu_dog)
@@ -251,19 +253,14 @@ fn compile_function(func: &RefType<Function>, context: &mut Context) -> Result<C
             .clone();
 
         loop {
-            // Apparently I'm being clever. I don't typecheck against an actual
-            // type associated with the parameter. No, I am looking up the variable
-            // associated with the parameter and using it's type. I guess that's cool,
-            // but it's tricky if you aren't aware.
-            let txen = next.clone();
-            let txen = s_read!(txen);
-            let var = s_read!(txen.r12_variable(&lu_dog)[0]).clone();
-            let value = s_read!(var.r11_x_value(&lu_dog)[0]).clone();
-            let ty = s_read!(value.r24_value_type(&lu_dog)[0]).clone();
+            let param = next.clone();
+            let param = s_read!(param);
+            let var = s_read!(param.r12_variable(&lu_dog)[0]).clone();
+            let ty = s_read!(param.r79_value_type(&lu_dog)[0]).clone();
 
             context.insert_symbol(var.name.clone(), ty);
 
-            let next_id = { txen.next };
+            let next_id = { param.next };
             if let Some(ref id) = next_id {
                 next = lu_dog.exhume_parameter(id).unwrap();
             } else {
@@ -316,8 +313,6 @@ fn compile_function(func: &RefType<Function>, context: &mut Context) -> Result<C
         thonk.increment_frame_size();
     }
 
-    let body = func.r19_body(&lu_dog)[0].clone();
-    let body = s_read!(body);
     match body.subtype {
         //
         // This is a function defined in a dwarf file.
@@ -1139,15 +1134,16 @@ mod test {
         assert_eq!(&*s_read!(run.unwrap()), &Value::Boolean(true));
     }
 
-    // #[test]
+    #[test]
     fn use_plugin() {
         let _ = env_logger::builder().is_test(true).try_init();
         color_backtrace::install();
 
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "
-                use sarzak;
+                use http::HttpClient;
                 fn main() -> bool {
+                    let client = HttpClient::new();
                     true
                 }";
         let ast = parse_dwarf("use_plugin", ore).unwrap();
@@ -1160,7 +1156,7 @@ mod test {
         .unwrap();
         let program = compile(&ctx).unwrap();
         println!("{program}");
-        assert_eq!(program.get_thonk_card(), 3);
+        assert_eq!(program.get_thonk_card(), 9);
 
         // assert_eq!(
         //     program.get_thonk("main").unwrap().get_instruction_card(),

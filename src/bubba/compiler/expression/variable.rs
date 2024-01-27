@@ -39,7 +39,7 @@ pub(in crate::bubba::compiler) fn compile(
                 woog_struct.name.to_owned()
             } else {
                 return Err(BubbaError::InternalCompilerError {
-                    message: "Asked to dereference something that isn't a function.".to_owned(),
+                    message: "Can not dereference something that is not a function.".to_owned(),
                     location: location!(),
                 }
                 .into());

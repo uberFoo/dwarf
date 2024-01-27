@@ -2,7 +2,7 @@ use std::collections::VecDeque;
 
 use ansi_term::Colour;
 use log::{self, log_enabled, Level::Trace};
-use rustc_hash::FxHashMap as HashMap;
+use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use snafu::{location, prelude::*, Location};
 
 use crate::{
@@ -190,30 +190,38 @@ impl VM {
             i += thonk.get_instruction_card();
         }
 
+        let mut missing_symbols = HashSet::default();
         // This is where we patch up the function calls.
         for instr in tmp_mem.iter() {
             match instr {
                 Instruction::CallDestination(name) => {
                     let name = &*s_read!(name);
-                    let (ip, _frame_size) = vm
-                        .func_map
-                        .get(name)
-                        .expect(format!("Unknown function: {name}").as_str());
-                    vm.program.push(Instruction::Push(new_ref!(
-                        Value,
-                        Value::Integer(*ip as DwarfInteger)
-                    )));
+                    if let Some((ip, _frame_size)) = vm.func_map.get(name) {
+                        vm.program.push(Instruction::Push(new_ref!(
+                            Value,
+                            Value::Integer(*ip as DwarfInteger)
+                        )));
+                    } else {
+                        missing_symbols.insert(name.to_owned());
+                    }
                 }
                 Instruction::LocalCardinality(name) => {
                     let name = &*s_read!(name);
-                    let (_ip, frame_size) = vm.func_map.get(name).unwrap();
-                    vm.program.push(Instruction::Push(new_ref!(
-                        Value,
-                        Value::Integer(*frame_size as DwarfInteger)
-                    )));
+                    if let Some((_ip, frame_size)) = vm.func_map.get(name) {
+                        vm.program.push(Instruction::Push(new_ref!(
+                            Value,
+                            Value::Integer(*frame_size as DwarfInteger)
+                        )));
+                    } else {
+                        missing_symbols.insert(name.to_owned());
+                    }
                 }
                 _ => vm.program.push(instr.clone()),
             }
+        }
+
+        if !missing_symbols.is_empty() {
+            panic!("Missing symbols: {:?}", missing_symbols);
         }
 
         vm
