@@ -53,7 +53,13 @@ pub fn new(args: RVec<FfiValue>) -> RResult<PluginType, Error> {
                 let plugin = plugin(vec![].into()).unwrap();
                 ROk(Plugin_TO::from_value(plugin, TD_Opaque))
             }
-            _ => RErr(Error::Uber("Invalid plugin".into())),
+            "http_server" => {
+                let plugin = http_server::instantiate_root_module();
+                let plugin = plugin.new();
+                let plugin = plugin(vec![].into()).unwrap();
+                ROk(Plugin_TO::from_value(plugin, TD_Opaque))
+            }
+            _ => RErr(Error::Uber(format!("Invalid plugin {plugin}").into())),
         }
     } else {
         RErr(Error::Uber("Invalid plugin".into()))
@@ -280,6 +286,66 @@ mod http_client {
                 }
                 .into()
             }))
+        }
+    }
+}
+
+mod http_server {
+    use super::*;
+
+    pub fn instantiate_root_module() -> PluginModRef {
+        PluginModule { name, id, new }.leak_into_prefix()
+    }
+
+    #[sabi_extern_fn]
+    pub fn name() -> RStr<'static> {
+        "HttpServer".into()
+    }
+
+    #[sabi_extern_fn]
+    pub fn id() -> RStr<'static> {
+        "HttpServer".into()
+    }
+
+    /// Instantiates the plugin.
+    #[sabi_extern_fn]
+    pub fn new(args: RVec<FfiValue>) -> RResult<PluginType, Error> {
+        ROk(Plugin_TO::from_value(HttpServer::default(), TD_Opaque))
+    }
+
+    #[derive(Clone, Debug)]
+    struct HttpServer {}
+
+    impl Default for HttpServer {
+        fn default() -> Self {
+            Self {}
+        }
+    }
+
+    impl Display for HttpServer {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            write!(f, "{:?}", self)
+        }
+    }
+
+    impl Plugin for HttpServer {
+        fn name(&self) -> RStr<'_> {
+            "HttpServer".into()
+        }
+
+        fn close(self) {}
+
+        fn invoke_func(
+            &mut self,
+            module: RStr<'_>,
+            ty: RStr<'_>,
+            func: RStr<'_>,
+            args: RVec<FfiValue>,
+        ) -> RResult<FfiValue, Error> {
+            // let module_str = module.as_str();
+            // debug!("module: {module_str}, type: {ty}, func: {func}, args: {args:?}");
+            // Ok(FfiValue::Empty)
+            future::block_on(Compat::new(async { Ok(FfiValue::Empty).into() }))
         }
     }
 }

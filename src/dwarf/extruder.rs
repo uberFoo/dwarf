@@ -2044,7 +2044,7 @@ pub(super) fn inter_expression(
                 };
                 (body, a_sink)
             } else {
-                unreachable!();
+                unreachable!("{:?}", body.0);
             };
             let block = Block::new(a_sink, Uuid::new_v4(), Some(block), None, lu_dog);
             let _body = Body::new_block(a_sink, &block, lu_dog);
@@ -2122,13 +2122,15 @@ pub(super) fn inter_expression(
             let (block_ty, block_span) =
                 inter_statements(&stmts, &body.1, &block, context, context_stack, lu_dog)?;
 
-            typecheck(
-                (&ret_ty, &return_type.1),
-                (&block_ty, &block_span),
-                location!(),
-                context,
-                lu_dog,
-            )?;
+            // 🚧 I think that turning this off is correct. For a lambda, we don't
+            // specify the return type.
+            // typecheck(
+            //     (&ret_ty, &return_type.1),
+            //     (&block_ty, &block_span),
+            //     location!(),
+            //     context,
+            //     lu_dog,
+            // )?;
 
             let expr = Expression::new_lambda(true, &lambda, lu_dog);
             let value = XValue::new_expression(&block, &ret_ty, &expr, lu_dog);

@@ -69,7 +69,7 @@ jobs:
                   working-directory: .
                   fail_ci_if_error: true
                   # files: ./coverage.xml
-                  files: dmarf/coverage.lcov
+                  files: coverage.lcov
                   flags: unittests
                   name: codecov-umbrella
                   verbose: true

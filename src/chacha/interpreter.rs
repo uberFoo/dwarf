@@ -586,6 +586,7 @@ fn eval_expression(
         //
         // I know it's called eval_expression, but we don't actually want to
         // evaluate the lambda, we just want to return it.
+        // It's eventually evaluated by ExpressionEnum::Call.
         //
         ExpressionEnum::Lambda(ref lambda) => {
             let lambda = s_read!(lu_dog).exhume_lambda(lambda).unwrap();

@@ -1099,7 +1099,7 @@ mod test {
         );
     }
 
-    // #[test]
+    #[test]
     fn use_std_option() {
         let _ = env_logger::builder().is_test(true).try_init();
         color_backtrace::install();
