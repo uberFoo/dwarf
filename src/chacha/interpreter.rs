@@ -570,8 +570,8 @@ fn eval_expression(
                     worker.start_task(parent);
                     future::block_on(parent)
                 }
-                wtf => {
-                    unreachable!("{wtf}")
+                huh => {
+                    unreachable!("{huh}")
                 }
             }
             // Ok(new_ref!(Value, Value::Empty))

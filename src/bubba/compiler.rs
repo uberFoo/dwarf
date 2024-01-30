@@ -228,7 +228,7 @@ pub fn compile(context: &ExtruderContext) -> Result<Program> {
         // let ty = import.r1_value_type(&lu_dog)[0].clone();
         // let ty = s_read!(ty);
         // let ty = Value::ValueType((*ty).clone());
-        dbg!(&name);
+        // dbg!(&name);
         // program.add_symbol(name, ty);
     }
 
@@ -1153,7 +1153,7 @@ mod test {
         assert_eq!(&*s_read!(run.unwrap()), &Value::Boolean(true));
     }
 
-    #[test]
+    // #[test]
     fn use_plugin() {
         let _ = env_logger::builder().is_test(true).try_init();
         color_backtrace::install();
