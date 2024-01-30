@@ -372,7 +372,6 @@ pub fn inter(
             .exhume_enumeration_id_by_name(type_name.split('<').next().unwrap())
             .is_some()
         {
-            dbg!("cge");
             let span = s_read!(span).start as usize..s_read!(span).end as usize;
             create_generic_enum(
                 &type_name,
@@ -383,7 +382,6 @@ pub fn inter(
             )?
             .0
         } else {
-            dbg!("err");
             let span = s_read!(span).start as usize..s_read!(span).end as usize;
             return Err(vec![DwarfError::ObjectNameNotFound {
                 name: type_name.strip_prefix(PATH_SEP).unwrap().to_owned(),

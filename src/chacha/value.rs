@@ -275,7 +275,7 @@ impl From<(FfiValue, &LuDogStore)> for Value {
             },
             FfiValue::Range(range) => Self::Range(range.start..range.end),
             FfiValue::Result(result) => {
-                let Some(ty) = lu_dog.exhume_enumeration_id_by_name("Result") else {
+                let Some(ty) = lu_dog.exhume_enumeration_id_by_name("::std::result::Result") else {
                     panic!("Result type not found")
                 };
                 let ty = lu_dog.exhume_enumeration(&ty).unwrap();
@@ -1794,7 +1794,6 @@ impl TupleEnum {
 
 impl fmt::Display for TupleEnum {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        dbg!(&self.value);
         write!(f, "{}({})", self.variant(), s_read!(self.value))
     }
 }

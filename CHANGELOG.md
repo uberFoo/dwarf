@@ -20,6 +20,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Undefined function are now caught at extrusion time
 - Now importing functions from external dwarf files in the REPL
 - Proxy objects from plugins are now properly looked up in the LuDog store
+- `use` statements now track scopes, and properly resolve references
 
 ### Changed
 

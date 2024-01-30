@@ -161,7 +161,7 @@ pub(in crate::bubba::compiler) fn compile(
                 let variant = path.pop().unwrap();
                 let path = path.join("::");
                 let path = format!("{}{path}", woog_enum.x_path);
-                dbg!(&path);
+
                 thonk.add_instruction(Instruction::Push(new_ref!(Value, path.into())), location!());
 
                 thonk.add_instruction(

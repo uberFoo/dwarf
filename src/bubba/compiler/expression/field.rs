@@ -37,6 +37,9 @@ pub(in crate::bubba::compiler) fn compile_field_access(
         FieldAccessTargetEnum::Field(ref field) => {
             let field = lu_dog.exhume_field(field).unwrap();
             let field = s_read!(field);
+            // kts -- We can check the type to see if it's a plugin and if so
+            // that we may do something special.
+            let _ty = &field.r5_value_type(&lu_dog)[0];
             field.name.to_owned()
         }
         FieldAccessTargetEnum::Function(ref func) => {

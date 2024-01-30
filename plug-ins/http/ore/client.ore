@@ -1,9 +1,6 @@
+use std::dwarf::Plugin;
 use std::option::Option;
 use std::result::Result;
-
-struct Plugin<T> {
-    inner: T,
-}
 
 struct HttpClient {
     // This plugin value must point to a valid plugin. The first part of the
@@ -19,6 +16,7 @@ impl HttpClient {
             inner: Plugin::<HttpClient>::new(),
         }
     }
+
     async fn get(self, url: String) -> Future<Request> {
         let request = self
             .inner

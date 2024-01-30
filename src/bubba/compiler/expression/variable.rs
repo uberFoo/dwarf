@@ -24,8 +24,6 @@ pub(in crate::bubba::compiler) fn compile(
     let expr = s_read!(expr);
     let name = &expr.name;
 
-    dbg!(&name, &context.method_name);
-
     if let Some(symbol) = context.get_symbol(name) {
         // It looks like if we pass something in context.method_name then we look
         // up the type based on the symbol name. Down below we build a fully qualified

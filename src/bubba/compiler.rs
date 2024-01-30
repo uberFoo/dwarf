@@ -225,11 +225,11 @@ pub fn compile(context: &ExtruderContext) -> Result<Program> {
     for import in lu_dog.iter_import() {
         let import = s_read!(import);
         let name = import.name.clone();
-        let ty = import.r1_value_type(&lu_dog)[0].clone();
-        let ty = s_read!(ty);
-        let ty = Value::ValueType((*ty).clone());
-        dbg!(&name, &ty);
-        program.add_symbol(name, ty);
+        // let ty = import.r1_value_type(&lu_dog)[0].clone();
+        // let ty = s_read!(ty);
+        // let ty = Value::ValueType((*ty).clone());
+        dbg!(&name);
+        // program.add_symbol(name, ty);
     }
 
     for func in lu_dog.iter_function() {
@@ -323,7 +323,6 @@ fn compile_function(func: &RefType<Function>, context: &mut Context) -> Result<C
         (format!("{ty_name}::{}", func.name), true)
     };
 
-    dbg!(&name);
     let mut thonk = CThonk::new(name.clone());
 
     if incr_fs {
@@ -1142,7 +1141,7 @@ mod test {
         .unwrap();
         let program = compile(&ctx).unwrap();
         println!("{program}");
-        assert_eq!(program.get_thonk_card(), 3);
+        assert_eq!(program.get_thonk_card(), 5);
 
         assert_eq!(
             program.get_thonk("main").unwrap().get_instruction_card(),
@@ -1154,14 +1153,14 @@ mod test {
         assert_eq!(&*s_read!(run.unwrap()), &Value::Boolean(true));
     }
 
-    // #[test]
+    #[test]
     fn use_plugin() {
         let _ = env_logger::builder().is_test(true).try_init();
         color_backtrace::install();
 
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "
-                use http::HttpClient;
+                use http::client::HttpClient;
                 fn main() -> bool {
                     let client = HttpClient::new();
                     true
@@ -1176,7 +1175,7 @@ mod test {
         .unwrap();
         let program = compile(&ctx).unwrap();
         println!("{program}");
-        assert_eq!(program.get_thonk_card(), 9);
+        assert_eq!(program.get_thonk_card(), 11);
 
         // assert_eq!(
         //     program.get_thonk("main").unwrap().get_instruction_card(),

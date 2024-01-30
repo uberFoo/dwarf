@@ -226,11 +226,6 @@ impl Context {
         result
     }
 
-    // #[cfg(feature = "async")]
-    // pub fn set_executor_index(&mut self, index: usize) {
-    //     self.executor_index = index;
-    // }
-
     pub fn dirty(&self) -> Vec<Dirty> {
         self.dirty.clone()
     }

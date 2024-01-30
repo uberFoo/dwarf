@@ -1,2 +1,3 @@
+mod dwarf;
 mod option;
 mod result;

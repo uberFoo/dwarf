@@ -163,8 +163,6 @@ impl VM {
         let mut vm = VM {
             ip: 0,
             fp: 0,
-            // 🚧 This shouldn't be hard-coded, and they should be configurable.
-            // stack: Stack::new(),
             stack: Vec::new(),
             program: Vec::new(),
             source_map: Vec::new(),

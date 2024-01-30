@@ -24,7 +24,7 @@ use crate::{
         types::{
             AWait, Block, Body, BooleanOperator, Call, DataStructure, EnumFieldEnum, Expression,
             ExpressionEnum, ExpressionStatement, Field, FieldExpression, ForLoop, FuncGeneric,
-            FunctionCall, ImplementationBlock, Index, IntegerLiteral, Item as WoogItem,
+            FunctionCall, ImplementationBlock, Import, Index, IntegerLiteral, Item as WoogItem,
             ItemStatement, Lambda, LambdaParameter, LetStatement, Literal, LocalVariable,
             NamedFieldExpression, Pattern as AssocPat, RangeExpression, Span as LuDogSpan,
             Statement, StringLiteral, StructExpression, ValueType, ValueTypeEnum, Variable,
@@ -3282,8 +3282,8 @@ fn inter_module(
                     type_path += name;
                     type_path += PATH_SEP;
 
-                    let mut scopes = context.scopes.clone();
-                    // let mut scopes = HashMap::default();
+                    // let mut scopes = context.scopes.clone();
+                    let mut scopes = HashMap::default();
 
                     let mut dirty = Vec::new();
 
@@ -3333,7 +3333,7 @@ fn inter_module(
 
 fn inter_import(
     import_path: &[Spanned<String>],
-    _alias: &Option<(String, Range<usize>)>,
+    alias: &Option<(String, Range<usize>)>,
     context: &mut Context,
     context_stack: &mut Vec<(String, RefType<LuDogStore>)>,
     lu_dog: &mut LuDogStore,
@@ -3348,11 +3348,6 @@ fn inter_import(
 
     let ty = path_root.pop().unwrap();
     let module = path_root.first().unwrap(); // This will have _something_.
-
-    // 🚧 Incomplete plugin idea.
-    if module == "dwarf" {
-        return Ok(());
-    }
 
     // It looks like we are first trying to load an extension.
     let mut path = context.dwarf_home.clone();
@@ -3383,8 +3378,8 @@ fn inter_import(
                 Ok(ast) => {
                     let path = format!("{}", path.display());
                     let mut dirty = Vec::new();
-                    let mut scopes = context.scopes.clone();
-                    // let mut scopes = HashMap::default();
+                    // let mut scopes = context.scopes.clone();
+                    let mut scopes = HashMap::default();
 
                     let mut new_ctx = Context::new(
                         source_code,
@@ -3408,7 +3403,7 @@ fn inter_import(
 
                     context.dirty.extend(dirty);
                     context.scopes.insert(
-                        ty,
+                        ty.clone(),
                         PATH_SEP.to_owned() + path_root.join(PATH_SEP).as_str() + PATH_SEP,
                     );
                 }
@@ -3428,15 +3423,20 @@ fn inter_import(
         }
     }
 
-    // let import = Import::new(
-    //     alias,
-    //     has_alias,
-    //     obj_name.0.to_owned(),
-    //     path_root,
-    //     None,
-    //     lu_dog,
-    // );
-    // debug!("import {import:?}");
+    let (alias, has_alias) = match alias {
+        Some((alias, _)) => (alias.to_owned(), true),
+        None => ("".to_owned(), false),
+    };
+
+    let import = Import::new(
+        alias,
+        has_alias,
+        ty,
+        path.into_os_string().into_string().unwrap(),
+        None,
+        lu_dog,
+    );
+    debug!("import {import:?}");
 
     if errors.is_empty() {
         Ok(())
@@ -3823,31 +3823,7 @@ pub(crate) fn make_value_type(
         Type::UserType(tok, generics) => {
             let name = &tok.0;
 
-            // Deal with imports
-            let import = lu_dog.iter_import().find(|import| {
-                let import = s_read!(import);
-                &import.name == name || (import.has_alias && &import.alias == name)
-            });
-
-            if let Some(_import) = import {
-                // 🚧 Holy cow, it's been a while since I've plumbed these depths.
-                // I seem to be having an interesting conversation with myself below.
-                // I wonder what will come of it? TBH, I'm not sure how I'm getting
-                // away with this code. I guess it's just not being used?
-                //
-                // Now what do we do with it? If it's something that we generated,
-                // then we could load up the store, if we knew where it was, and
-                // but we don't.
-                //
-                // I don't think that we can actually connect the dots until we've
-                // generated the imports themselves. So the best we can do is leave
-                // behind a breadcrumb.
-                //
-                // It might be sort of cool to make `Import` a `ValueType`, and then
-                // just return this. `Function` and `Struct`, two out of the other
-                // three `Item`s are already `ValueType`s, so it's not a stretch.
-                unreachable!();
-            } else if name == "Future" {
+            if name == "Future" {
                 let inner_type = if let Type::Generic((name, span)) = &generics[0].0 {
                     let name = if let Some(path) = context.scopes.get(name) {
                         path.to_owned() + name.as_str()

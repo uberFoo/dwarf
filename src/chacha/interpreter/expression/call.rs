@@ -1160,7 +1160,8 @@ pub fn eval(
                     }
                 }
                 ty => {
-                    if Some(PLUGIN) == ty.split('<').next() {
+                    if Some(Some(PLUGIN)) == ty.split('<').next().map(|s| s.split(PATH_SEP).last())
+                    {
                         match func.as_str() {
                             NEW => {
                                 let plugin =
@@ -1199,11 +1200,7 @@ pub fn eval(
                                 })?;
 
                                 let ctor = root_module.new();
-                                // let (_, path) = arg_values.pop().unwrap();
-                                // let path = s_read!(path).clone();
-                                // let plugin = new_ref!(PluginType, ctor(vec![path.into()].into()).unwrap());
                                 let plugin = new_ref!(PluginType, ctor(args.into()).unwrap());
-                                // model.1.replace(plugin.clone());
 
                                 // let value = new_ref!(Value, Value::Store(store, plugin));
                                 let value = new_ref!(Value, Value::Plugin(plugin));
@@ -1356,15 +1353,9 @@ fn spawn(
     let expression = expression.clone();
     let mut nested_context = context.clone();
 
-    // let executor_id = Executor::new_worker();
-    // nested_context.set_executor_index(executor_id);
-
     let child_context = context.new_worker();
     let child_worker = child_context.worker().unwrap().clone();
 
-    // let child_task = child_context
-    // .worker()
-    // .create_task(async move {
     let t_span = debug_span!("spawn_span", target = "async", name = ?name);
     let future = async move {
         let mut vm = VM::new(child_context.get_program(), &[]);
@@ -1404,14 +1395,10 @@ fn spawn(
     let value = new_ref!(
         Value,
         Value::Task {
-            // executor_id: Some(executor_id),
             worker: Some(child_worker),
             parent: Some(task),
-            // child: None
         }
     );
-
-    // context.executor().park_value(v.clone());
 
     Ok(value)
 }

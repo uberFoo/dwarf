@@ -552,22 +552,26 @@ fn eval_expression(
                         panic!("Who took my task!?");
                     }
                 }
-                Value::Task { worker, parent } => {
-                    if let Some(parent) = parent {
-                        if let Some(worker) = worker {
-                            worker.start_task(parent);
-                            future::block_on(parent)
-                        } else {
-                            executor.start_task(parent);
-                            future::block_on(parent)
-                        }
-                    } else {
-                        Ok(value.clone())
-                    }
+                Value::Task {
+                    worker: _,
+                    parent: None,
+                } => Ok(value.clone()),
+                Value::Task {
+                    worker: None,
+                    parent: Some(parent),
+                } => {
+                    executor.start_task(parent);
+                    future::block_on(parent)
+                }
+                Value::Task {
+                    worker: Some(worker),
+                    parent: Some(parent),
+                } => {
+                    worker.start_task(parent);
+                    future::block_on(parent)
                 }
                 wtf => {
-                    dbg!(wtf);
-                    unreachable!()
+                    unreachable!("{wtf}")
                 }
             }
             // Ok(new_ref!(Value, Value::Empty))
