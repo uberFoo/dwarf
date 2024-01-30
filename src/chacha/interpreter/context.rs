@@ -5,6 +5,7 @@ use puteketeke::{Executor, Worker};
 
 use circular_queue::CircularQueue;
 use crossbeam::channel::{Receiver, Sender};
+use rustc_hash::{FxHashMap as HashMap, FxHashSet as HasSet};
 
 use crate::{
     bubba::Program,
@@ -74,6 +75,8 @@ pub struct Context {
     executor: Executor,
     source_file: String,
     program: Program,
+    scopes: HashMap<String, String>,
+    imports: HasSet<PathBuf>,
 }
 
 /// Save the lu_dog model when the context is dropped
@@ -117,6 +120,8 @@ impl Context {
         source_file: String,
         program: Program,
         executor: Executor,
+        scopes: HashMap<String, String>,
+        imports: HasSet<PathBuf>,
     ) -> Self {
         Self {
             prompt,
@@ -137,6 +142,8 @@ impl Context {
             program,
             worker: Some(executor.root_worker()),
             executor,
+            scopes,
+            imports,
         }
     }
 
@@ -161,6 +168,8 @@ impl Context {
         dirty: Vec<Dirty>,
         source_file: String,
         program: Program,
+        scopes: HashMap<String, String>,
+        imports: HasSet<PathBuf>,
     ) -> Self {
         Self {
             prompt,
@@ -179,7 +188,17 @@ impl Context {
             dirty,
             source_file,
             program,
+            scopes,
+            imports,
         }
+    }
+
+    pub fn imports(&mut self) -> &mut HasSet<PathBuf> {
+        &mut self.imports
+    }
+
+    pub fn scopes(&mut self) -> &mut HashMap<String, String> {
+        &mut self.scopes
     }
 
     pub fn get_program(&self) -> &Program {

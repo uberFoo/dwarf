@@ -3,7 +3,7 @@ use std::{env, fs, ops::Range, path::PathBuf};
 use ansi_term::Colour;
 use heck::ToUpperCamelCase;
 use log;
-use rustc_hash::FxHashMap as HashMap;
+use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use snafu::{location, Location};
 use uuid::Uuid;
 
@@ -18,7 +18,7 @@ use crate::{
         Expression as ParserExpression, Generics, InnerAttribute, InnerItem, Item,
         PrintableValueType, Spanned, Statement as ParserStatement, Type, WrappedValueType,
     },
-    keywords::{ARGS, CHACHA, FN_NEW, UUID_TYPE},
+    keywords::{ARGS, CHACHA, FN_NEW, FQ_UUID_TYPE, UUID_TYPE},
     lu_dog::{
         store::ObjectStore as LuDogStore,
         types::{
@@ -247,7 +247,7 @@ impl<'a> ConveyStruct<'a> {
 }
 
 struct ConveyEnum<'a> {
-    name: &'a str,
+    name: &'a Spanned<String>,
     attributes: &'a AttributeMap,
     fields: &'a [(Spanned<String>, Option<EnumField>)],
     generics: Option<HashMap<String, Type>>,
@@ -255,7 +255,7 @@ struct ConveyEnum<'a> {
 
 impl<'a> ConveyEnum<'a> {
     fn new(
-        name: &'a str,
+        name: &'a Spanned<String>,
         attributes: &'a AttributeMap,
         fields: &'a [(Spanned<String>, Option<EnumField>)],
         generics: Option<HashMap<String, Type>>,
@@ -327,6 +327,8 @@ pub struct Context<'a> {
     pub func_defs: HashMap<String, FunctionDefinition>,
     pub path: String,
     pub in_impl: String,
+    pub scopes: &'a mut HashMap<String, String>,
+    pub imports: &'a mut HashSet<PathBuf>,
 }
 
 impl<'a> Context<'a> {
@@ -342,6 +344,8 @@ impl<'a> Context<'a> {
         location: Location,
         lu_dog: &mut LuDogStore,
         path: String,
+        scopes: &'a mut HashMap<String, String>,
+        imports: &'a mut HashSet<PathBuf>,
     ) -> Self {
         Self {
             location,
@@ -357,6 +361,8 @@ impl<'a> Context<'a> {
             func_defs: HashMap::default(),
             path,
             in_impl: "".to_owned(),
+            scopes,
+            imports,
         }
     }
 }
@@ -406,8 +412,10 @@ pub fn new_lu_dog(
     );
 
     let mut models = HashMap::default();
+    let mut scopes = HashMap::default();
     let mut dirty = Vec::new();
     let mut stack = Vec::new();
+    let mut imports = HashSet::default();
 
     if let Some((source, ast)) = source {
         let mut context = Context {
@@ -424,6 +432,8 @@ pub fn new_lu_dog(
             func_defs: HashMap::default(),
             path: PATH_ROOT.to_string(),
             in_impl: "".to_owned(),
+            scopes: &mut scopes,
+            imports: &mut imports,
         };
 
         walk_tree(ast, &mut context, &mut stack, &mut lu_dog)?;
@@ -435,6 +445,8 @@ pub fn new_lu_dog(
         models,
         dirty,
         sarzak: new_ref!(SarzakStore, sarzak.clone()),
+        scopes,
+        imports,
     })
 }
 
@@ -479,7 +491,7 @@ fn walk_tree(
                 } else {
                     None
                 };
-                enums.push(ConveyEnum::new(&name.0, attributes, fields, generics))
+                enums.push(ConveyEnum::new(&name, attributes, fields, generics))
             }
             Item {
                 item:
@@ -609,7 +621,7 @@ fn walk_tree(
         generics,
     } in &enums
     {
-        debug!("Interring enum `{}` fields", name);
+        debug!("Interring enum `{}` fields", name.0);
         let _ = enuum::inter_enum(
             name,
             attributes,
@@ -1477,8 +1489,6 @@ pub(super) fn inter_expression(
 
                             if let Some(field) = lu_dog.exhume_field_id_by_name(&rhs.0) {
                                 let field = lu_dog.exhume_field(&field);
-                                // let field = woog_struct.r7_field(lu_dog);
-                                // let field = field.iter().find(|f| s_read!(f).name == rhs);
                                 let func = if let Some(impl_) =
                                     s_read!(woog_struct).r8c_implementation_block(lu_dog).pop()
                                 {
@@ -3024,23 +3034,29 @@ pub(super) fn inter_expression(
                 }]);
             };
 
+            let base = if let Some(path) = context.scopes.get(&name) {
+                path.to_owned() + name.as_str()
+            } else {
+                context.path.clone() + base.as_str()
+            };
+
             debug!("ParserExpression::Struct {}", name);
 
-            // Here we don't de_sanitize the name, and we are looking it up in the
-            // dwarf model.
-            // 🚧 This method isn't sufficient any longer. The name can be aliased
-            // with a different path.
+            // 🚧 Base or name? This is black magic at this point.
             let id = match lu_dog.exhume_woog_struct_id_by_name(&base) {
                 Some(id) => id,
-                None => {
-                    return Err(vec![DwarfError::UnknownType {
-                        ty: name.to_owned(),
-                        file: context.file_name.to_owned(),
-                        span: name_span.to_owned(),
-                        location: location!(),
-                        program: context.source_string.to_owned(),
-                    }]);
-                }
+                None => match lu_dog.exhume_woog_struct_id_by_name(&name) {
+                    Some(id) => id,
+                    None => {
+                        return Err(vec![DwarfError::UnknownType {
+                            ty: name.to_owned(),
+                            file: context.file_name.to_owned(),
+                            span: name_span.to_owned(),
+                            location: location!(),
+                            program: context.source_string.to_owned(),
+                        }]);
+                    }
+                },
             };
 
             let woog_struct = lu_dog.exhume_woog_struct(&id).unwrap();
@@ -3251,6 +3267,10 @@ fn inter_module(
     path.set_file_name(name);
     path.set_extension(TAO_EXT);
 
+    if !context.imports.insert(path.clone()) {
+        return Ok(());
+    }
+
     match fs::read_to_string(&path) {
         Ok(source_code) => {
             // parse, and extrude the dwarf file
@@ -3262,7 +3282,9 @@ fn inter_module(
                     type_path += name;
                     type_path += PATH_SEP;
 
-                    // let mut models = HashMap::default();
+                    let mut scopes = context.scopes.clone();
+                    // let mut scopes = HashMap::default();
+
                     let mut dirty = Vec::new();
 
                     let mut new_ctx = Context::new(
@@ -3276,6 +3298,8 @@ fn inter_module(
                         location!(),
                         lu_dog,
                         type_path,
+                        &mut scopes,
+                        context.imports,
                     );
 
                     // Extrusion time
@@ -3317,15 +3341,15 @@ fn inter_import(
     debug!("inter_import: {import_path:?}");
     let mut errors = Vec::new();
 
-    let path_root = import_path
+    let mut path_root = import_path
         .iter()
         .map(|p| p.0.to_owned())
         .collect::<Vec<_>>();
-    // let import_path = path_root.join(PATH_SEP);
 
+    let ty = path_root.pop().unwrap();
     let module = path_root.first().unwrap(); // This will have _something_.
 
-    // 🚧 Why? Incomplete plugin idea.
+    // 🚧 Incomplete plugin idea.
     if module == "dwarf" {
         return Ok(());
     }
@@ -3358,8 +3382,9 @@ fn inter_import(
             match parse_dwarf(path.to_str().unwrap(), &source_code) {
                 Ok(ast) => {
                     let path = format!("{}", path.display());
-                    // let mut models = HashMap::default();
                     let mut dirty = Vec::new();
+                    let mut scopes = context.scopes.clone();
+                    // let mut scopes = HashMap::default();
 
                     let mut new_ctx = Context::new(
                         source_code,
@@ -3372,6 +3397,8 @@ fn inter_import(
                         location!(),
                         lu_dog,
                         format!("::{module}::"),
+                        &mut scopes,
+                        context.imports,
                     );
 
                     // Extrusion time
@@ -3380,6 +3407,10 @@ fn inter_import(
                     trace!("done processing dwarf import");
 
                     context.dirty.extend(dirty);
+                    context.scopes.insert(
+                        ty,
+                        PATH_SEP.to_owned() + path_root.join(PATH_SEP).as_str() + PATH_SEP,
+                    );
                 }
                 Err(_) => {
                     e_warn!("Failed to parse import: {path:?}");
@@ -3423,6 +3454,9 @@ fn inter_implementation(
     context_stack: &mut Vec<(String, RefType<LuDogStore>)>,
     lu_dog: &mut LuDogStore,
 ) -> Result<()> {
+    // 🚧 I'm not sure if I should look this up or force it.
+    let name = context.path.clone() + name;
+
     debug!("inter_implementation: {name}");
 
     let (impl_ty, implementation) = if let Some(store_vec) = attributes.get(STORE) {
@@ -3494,10 +3528,10 @@ fn inter_implementation(
 
         context.in_impl = name.to_owned();
 
-        let implementation = if let Some(id) = lu_dog.exhume_woog_struct_id_by_name(name) {
+        let implementation = if let Some(id) = lu_dog.exhume_woog_struct_id_by_name(&name) {
             let woog_struct = lu_dog.exhume_woog_struct(&id).unwrap();
             ImplementationBlock::new(Some(&woog_struct), None, lu_dog)
-        } else if let Some(id) = lu_dog.exhume_enumeration_id_by_name(name) {
+        } else if let Some(id) = lu_dog.exhume_enumeration_id_by_name(&name) {
             // OMG this is ugly.
             // 🚧 Fix the model.
             let woog_enum = lu_dog.exhume_enumeration(&id).unwrap();
@@ -3815,11 +3849,22 @@ pub(crate) fn make_value_type(
                 unreachable!();
             } else if name == "Future" {
                 let inner_type = if let Type::Generic((name, span)) = &generics[0].0 {
+                    let name = if let Some(path) = context.scopes.get(name) {
+                        path.to_owned() + name.as_str()
+                    } else {
+                        context.path.clone() + name.as_str()
+                    };
+
                     if let Some(ty) = lookup_user_defined_type(lu_dog, &name, span, context) {
                         ty
                     } else {
+                        let name = if let Some(name) = name.strip_prefix(PATH_SEP) {
+                            name.to_owned()
+                        } else {
+                            name.to_owned()
+                        };
                         return Err(vec![DwarfError::UnknownType {
-                            ty: name.to_owned(),
+                            ty: name,
                             file: context.file_name.to_owned(),
                             span: span.to_owned(),
                             location: location!(),
@@ -3857,28 +3902,44 @@ pub(crate) fn make_value_type(
                 }
             } else if name == "String" {
                 Ok(ValueType::new_ty(true, &Ty::new_z_string(sarzak), lu_dog))
-            } else if name == UUID_TYPE {
+            } else if name == UUID_TYPE || name == FQ_UUID_TYPE {
                 Ok(ValueType::new_ty(true, &Ty::new_z_uuid(sarzak), lu_dog))
             } else {
                 // 🚧 HashMapFix
-                for model in context.models.values() {
-                    // Look for the Object in the model domains first.
-                    if let Some(ty) = model.0.iter_ty().find(|ty| match &*ty.read().unwrap() {
-                        Ty::Object(ref obj) => {
-                            let obj = model.0.exhume_object(obj).unwrap();
-                            // We are going to cheat a little bit here. Say we have an
-                            // object called `Point`. We want to be able to also handle
-                            // proxy objects for `Point`. Those are suffixed with "Proxy".
-                            let obj = obj.read().unwrap().name.to_upper_camel_case();
-                            obj == *name || name == format!("{}Proxy", obj).as_str()
-                        }
-                        _ => false,
-                    }) {
-                        return Ok(ValueType::new_ty(true, &ty, lu_dog));
-                    }
-                }
+                // for model in context.models.values() {
+                //     // Look for the Object in the model domains first.
+                //     if let Some(ty) = model.0.iter_ty().find(|ty| match &*ty.read().unwrap() {
+                //         Ty::Object(ref obj) => {
+                //             let obj = model.0.exhume_object(obj).unwrap();
+                //             // We are going to cheat a little bit here. Say we have an
+                //             // object called `Point`. We want to be able to also handle
+                //             // proxy objects for `Point`. Those are suffixed with "Proxy".
+                //             let obj = obj.read().unwrap().name.to_upper_camel_case();
+                //             obj == *name || name == format!("{}Proxy", obj).as_str()
+                //         }
+                //         _ => false,
+                //     }) {
+                //         return Ok(ValueType::new_ty(true, &ty, lu_dog));
+                //     }
+                // }
 
-                let mut fq_name = tok.0.clone();
+                // This feels sort of dirty. Sometimes the name has leading `::`, and
+                // sometimes it does not. We don't want it here because below we
+                // concatenate the name and the path and the path has a trailing `::`.
+                let fq_name = if let Some(name) = tok.0.split(PATH_SEP).last() {
+                    name.to_owned()
+                } else {
+                    tok.0.clone()
+                };
+
+                let mut fq_name = if let Some(path) = context.scopes.get(&fq_name) {
+                    path.to_owned() + fq_name.as_str()
+                } else {
+                    context.path.clone() + fq_name.as_str()
+                };
+
+                let name = fq_name.clone();
+
                 if !generics.is_empty() {
                     fq_name.push('<');
                     for (i, (generic, _)) in generics.iter().enumerate() {
@@ -3897,9 +3958,9 @@ pub(crate) fn make_value_type(
                     // then what happens? I can't really return a new type with the substitutions
                     // I don't think.
                     Ok(ty)
-                } else if &fq_name != name {
+                } else if fq_name != name {
                     // 🚧  I don't trust this code -- it needs testing.
-                    if let Some(ref id) = lu_dog.exhume_woog_struct_id_by_name(name) {
+                    if let Some(ref id) = lu_dog.exhume_woog_struct_id_by_name(&name) {
                         let woog_struct = lu_dog.exhume_woog_struct(id).unwrap();
                         let struct_fields = s_read!(woog_struct).r7_field(lu_dog);
                         let mut generic_substitutions = HashMap::default();
@@ -3934,7 +3995,8 @@ pub(crate) fn make_value_type(
                         );
                         Ok(ValueType::new_woog_struct(true, &generic, lu_dog))
                     } else {
-                        let (_, ty) = create_generic_enum(&fq_name, &name, context, lu_dog);
+                        let (_, ty) =
+                            create_generic_enum(&fq_name, &name, span.to_owned(), context, lu_dog)?;
                         Ok(ty)
                     }
                 } else if let Some(ty) = lookup_user_defined_type(lu_dog, &name, span, context) {
@@ -3954,7 +4016,7 @@ pub(crate) fn make_value_type(
                     Ok(ValueType::new_ty(true, &ty, lu_dog))
                 } else {
                     Err(vec![DwarfError::UnknownType {
-                        ty: fq_name.to_owned(),
+                        ty: fq_name.strip_prefix(PATH_SEP).unwrap().to_owned(),
                         file: context.file_name.to_owned(),
                         span: span.to_owned(),
                         location: context.location,
@@ -4047,10 +4109,10 @@ pub(crate) fn lookup_woog_struct_method_return_type(
                 ValueType::new_unknown(true, lu_dog)
             }
         }
-    } else if type_name == UUID_TYPE && method == FN_NEW {
+    } else if (type_name == UUID_TYPE || type_name == FQ_UUID_TYPE) && method == FN_NEW {
         ValueType::new_ty(true, &Ty::new_z_uuid(sarzak), lu_dog)
     } else {
-        e_warn!("ParserExpression type not found");
+        e_warn!("ParserExpression type not found: {type_name}");
         ValueType::new_unknown(true, lu_dog)
     }
 }

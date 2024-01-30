@@ -222,6 +222,16 @@ pub fn compile(context: &ExtruderContext) -> Result<Program> {
 
     let lu_dog = s_read!(lu_dog);
 
+    for import in lu_dog.iter_import() {
+        let import = s_read!(import);
+        let name = import.name.clone();
+        let ty = import.r1_value_type(&lu_dog)[0].clone();
+        let ty = s_read!(ty);
+        let ty = Value::ValueType((*ty).clone());
+        dbg!(&name, &ty);
+        program.add_symbol(name, ty);
+    }
+
     for func in lu_dog.iter_function() {
         program.add_thonk(compile_function(&func, &mut context)?.into());
     }
@@ -269,25 +279,31 @@ fn compile_function(func: &RefType<Function>, context: &mut Context) -> Result<C
         }
     }
 
-    let ty_name = if let Some(i_block) = func.r9_implementation_block(&lu_dog).first() {
+    let (ty_name, ty_path) = if let Some(i_block) = func.r9_implementation_block(&lu_dog).first() {
         let i_block = s_read!(i_block);
         if let Some(woog_struct) = i_block.r8_woog_struct(&lu_dog).first() {
-            s_read!(woog_struct).name.clone()
+            let woog_struct = s_read!(woog_struct);
+            let path = woog_struct.x_path.clone();
+            let name = woog_struct.name.clone();
+            (name, path)
         } else if let Some(woog_enum) = i_block.r84c_enumeration(&lu_dog).first() {
-            s_read!(woog_enum).name.clone()
+            let woog_enum = s_read!(woog_enum);
+            let path = woog_enum.x_path.clone();
+            let name = woog_enum.name.clone();
+            (name, path)
         } else {
-            "".to_owned()
+            ("".to_owned(), "".to_owned())
         }
     } else {
-        "".to_owned()
+        ("".to_owned(), "".to_owned())
     };
 
     let (name, incr_fs) = if ty_name.is_empty() {
         (func.name.clone(), false)
     } else {
+        // Here is where we look for actual user defined types, as
+        // in types that are defined in dwarf source.
         let ty = if let Some(ref id) = lu_dog.exhume_woog_struct_id_by_name(&ty_name) {
-            // Here is where we look for actual user defined types, as
-            // in types that are defined in dwarf source.
             let woog_struct = lu_dog.exhume_woog_struct(id).unwrap();
             let woog_struct = s_read!(woog_struct);
             woog_struct.r1_value_type(&lu_dog)[0].clone()
@@ -307,6 +323,7 @@ fn compile_function(func: &RefType<Function>, context: &mut Context) -> Result<C
         (format!("{ty_name}::{}", func.name), true)
     };
 
+    dbg!(&name);
     let mut thonk = CThonk::new(name.clone());
 
     if incr_fs {
@@ -368,6 +385,8 @@ fn compile_function(func: &RefType<Function>, context: &mut Context) -> Result<C
 
             let object_name = &external.object;
             let object_name = object_name.to_upper_camel_case();
+
+            dbg!(model, func_name, object_name);
         }
     };
 
@@ -840,7 +859,7 @@ mod test {
         let ty = {
             let mut lu_dog = s_write!(ctx.lu_dog);
 
-            let id = lu_dog.exhume_enumeration_id_by_name("Foo").unwrap();
+            let id = lu_dog.exhume_enumeration_id_by_name("::Foo").unwrap();
             let woog_enum = lu_dog.exhume_enumeration(&id).unwrap();
             ValueType::new_enumeration(true, &woog_enum, &mut lu_dog)
         };
@@ -857,7 +876,7 @@ mod test {
 
         assert_eq!(
             &*s_read!(run_vm(&program).unwrap()),
-            &Value::Enumeration(EnumVariant::Unit(ty, "Foo".to_owned(), "Bar".to_owned()))
+            &Value::Enumeration(EnumVariant::Unit(ty, "::Foo".to_owned(), "Bar".to_owned()))
         );
     }
 
@@ -892,7 +911,7 @@ mod test {
         let lu_dog = &ctx.lu_dog;
 
         let id = s_read!(lu_dog)
-            .exhume_enumeration_id_by_name("Foo")
+            .exhume_enumeration_id_by_name("::Foo")
             .unwrap();
         let woog_enum = s_read!(lu_dog).exhume_enumeration(&id).unwrap();
         let ty = ValueType::new_enumeration(true, &woog_enum, &mut s_write!(lu_dog));
@@ -1101,7 +1120,7 @@ mod test {
 
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "
-                   use std::Option;
+                   use std::option::Option;
                    fn main() -> bool {
                        let foo = Option::Some(1);
                        chacha::assert(foo.is_some());
@@ -1130,6 +1149,7 @@ mod test {
             59
         );
         let run = run_vm(&program);
+        eprintln!("{:?}", run);
         assert!(run.is_ok());
         assert_eq!(&*s_read!(run.unwrap()), &Value::Boolean(true));
     }

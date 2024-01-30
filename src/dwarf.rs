@@ -20,7 +20,7 @@ use crate::{
         store::ObjectStore as LuDogStore, types::ValueType, Lambda, List, Span as LuDogSpan,
         XFuture,
     },
-    s_read, RefType,
+    s_read, RefType, PATH_SEP,
 };
 
 pub mod error;
@@ -261,7 +261,13 @@ impl Type {
             Type::Unknown => Ok(ValueType::new_unknown(true, store)),
             Type::UserType(type_, generics) => {
                 let base_type = &type_.0;
-                let mut name = type_.0.clone();
+                let base_type = if let Some(path) = context.scopes.get(base_type) {
+                    path.to_owned() + base_type.as_str()
+                } else {
+                    base_type.to_owned()
+                };
+
+                let mut name = base_type.clone();
                 let generics_string = generics
                     .iter()
                     .map(|g| g.0.to_string())
@@ -272,6 +278,12 @@ impl Type {
                     name.push_str(&generics_string);
                     name.push('>');
                 }
+
+                let name = if let Some(path) = context.scopes.get(&name) {
+                    path.to_owned() + name.as_str()
+                } else {
+                    name
+                };
 
                 // This is a special case for Uuid, which is a built-in type.
                 // The parser just doesn't know that, and it's actually cleaner
@@ -336,8 +348,8 @@ impl Type {
                         store,
                     );
                     Ok(ty)
-                } else if store.exhume_enumeration_id_by_name(base_type).is_some() {
-                    Ok(create_generic_enum(&name, base_type, context, store).1)
+                } else if store.exhume_enumeration_id_by_name(&base_type).is_some() {
+                    Ok(create_generic_enum(&name, &base_type, span.to_owned(), context, store)?.1)
                 } else {
                     Err(vec![DwarfError::UnknownType {
                         ty: name.to_owned(),

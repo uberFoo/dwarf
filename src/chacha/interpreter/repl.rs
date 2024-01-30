@@ -25,6 +25,8 @@ pub fn start_repl(context: &mut Context, is_uber: bool) -> Result<(), Error> {
     const HISTORY_FILE: &str = ".dwarf_history";
 
     let models = context.models().models().clone();
+    let mut scopes = context.scopes().clone();
+    let mut imports = context.imports().clone();
     let lu_dog = context.lu_dog_heel().clone();
     let sarzak = context.sarzak_heel().clone();
 
@@ -129,6 +131,8 @@ pub fn start_repl(context: &mut Context, is_uber: bool) -> Result<(), Error> {
                                     func_defs: HashMap::default(),
                                     path: PATH_ROOT.to_owned(),
                                     in_impl: "".to_owned(),
+                                    scopes: &mut scopes,
+                                    imports: &mut imports,
                                 },
                                 &mut Vec::new(),
                                 &mut lu_dog,

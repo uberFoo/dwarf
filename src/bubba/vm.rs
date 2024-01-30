@@ -38,8 +38,8 @@ pub(crate) enum BubbaError {
         source: Box<dyn std::error::Error>,
         location: Location,
     },
-    #[snafu(display("\n{}: vm panic: {message}", ERR_CLR.bold().paint("error")))]
-    VmPanic { message: String },
+    #[snafu(display("\n{}: vm panic: {message}\n\t--> {}:{}:{}", ERR_CLR.bold().paint("error"), location.file, location.line, location.column))]
+    VmPanic { message: String, location: Location },
 }
 
 type Result<T, E = Error> = std::result::Result<T, E>;
@@ -170,6 +170,7 @@ impl VM {
             source_map: Vec::new(),
             func_map: HashMap::default(),
             sarzak: SarzakStore::from_bincode(SARZAK_MODEL).unwrap(),
+            // These are the arguments to the program. The type is String.
             args: new_ref!(
                 Value,
                 Value::Vector {
@@ -951,6 +952,45 @@ impl VM {
                             1
                         }
                     }
+                    Instruction::MethodLookup(name) => {
+                        let ty = self.stack.pop().unwrap();
+                        let ty = match &*s_read!(ty) {
+                            Value::Enumeration(variant) => match variant {
+                                EnumVariant::Struct(ty) => {
+                                    let ty = s_read!(ty);
+                                    let name = ty.type_name();
+                                    name.to_owned()
+                                }
+                                EnumVariant::Tuple((_, ty), _) => ty.to_owned(),
+                                EnumVariant::Unit(_, ty, _) => ty.to_owned(),
+                            },
+                            Value::Struct(ty) => {
+                                let ty = s_read!(ty);
+                                let name = ty.type_name();
+                                name.to_owned()
+                            }
+                            _ => unreachable!(),
+                        };
+
+                        let func = format!("{}::{}", ty, &*s_read!(name));
+
+                        if let Some((ip, frame_size)) = self.func_map.get(&func) {
+                            dbg!(&func);
+                            self.stack
+                                .push(new_ref!(Value, Value::Integer(*ip as DwarfInteger)));
+                            self.stack
+                                .push(new_ref!(Value, Value::Integer(*frame_size as DwarfInteger)));
+                        } else {
+                            dbg!("hey");
+                            return Err(BubbaError::VmPanic {
+                                message: format!("Missing function definition: {func}"),
+                                location: location!(),
+                            }
+                            .into());
+                        }
+
+                        1
+                    }
                     Instruction::Multiply => {
                         let b = self.stack.pop().unwrap();
                         let a = self.stack.pop().unwrap();
@@ -1112,20 +1152,22 @@ impl VM {
 
                         let ty = new_ref!(ValueType, ty);
 
-                        let mut inst = UserStruct::new(name, &ty);
+                        let mut instance = UserStruct::new(name, &ty);
 
                         for _i in 0..*n as i32 {
                             let name = self.stack.pop().unwrap();
                             let value = self.stack.pop().unwrap();
 
-                            inst.define_field(s_read!(name).to_inner_string(), value.clone());
+                            instance.define_field(s_read!(name).to_inner_string(), value.clone());
                             if trace {
                                 println!("\t\t\t\t{}: {}", s_read!(name), s_read!(value));
                             }
                         }
 
-                        self.stack
-                            .push(new_ref!(Value, Value::Struct(new_ref!(UserStruct, inst))));
+                        self.stack.push(new_ref!(
+                            Value,
+                            Value::Struct(new_ref!(UserStruct, instance))
+                        ));
 
                         if trace {
                             println!("\t\t\t\t}}");
@@ -1235,6 +1277,7 @@ impl VM {
                                         "Expected an integer, but got: {fp:?}.",
                                         fp = s_read!(self.stack.pop().unwrap())
                                     ),
+                                    location: location!(),
                                 }
                                 .into());
                             }
@@ -1359,6 +1402,7 @@ impl VM {
                                     "Expected a ValueType, but got: {as_ty:?}.",
                                     as_ty = s_read!(as_ty)
                                 ),
+                                location: location!(),
                             }
                             .into());
                         };
@@ -1417,6 +1461,7 @@ impl VM {
                                     ref alpha => {
                                         return Err(BubbaError::VmPanic {
                                             message: format!("Unexpected type: {alpha:?}.",),
+                                            location: location!(),
                                         }
                                         .into())
                                     }
@@ -1426,6 +1471,7 @@ impl VM {
                             ty => {
                                 return Err(BubbaError::VmPanic {
                                     message: format!("Unexpected type: {ty:?}.",),
+                                    location: location!(),
                                 }
                                 .into())
                             }

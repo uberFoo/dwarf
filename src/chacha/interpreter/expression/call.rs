@@ -29,9 +29,9 @@ use crate::{
         ChaChaError, Context, PrintableValueType,
     },
     keywords::{
-        ADD, ARGS, ASSERT, ASSERT_EQ, CHACHA, COMPLEX_EX, EPS, EVAL, FN_NEW, FORMAT, INVOKE_FUNC,
-        IS_DIGIT, LEN, LINES, MAP, MAX, NEW, NORM_SQUARED, PARSE, PLUGIN, PUSH, SLEEP, SPLIT,
-        SQUARE, SUM, TIME, TO_DIGIT, TRIM, TYPEOF, UUID_TYPE,
+        ADD, ARGS, ASSERT, ASSERT_EQ, CHACHA, COMPLEX_EX, EPS, EVAL, FN_NEW, FORMAT, FQ_UUID_TYPE,
+        INVOKE_FUNC, IS_DIGIT, LEN, LINES, MAP, MAX, NEW, NORM_SQUARED, PARSE, PLUGIN, PUSH, SLEEP,
+        SPLIT, SQUARE, SUM, TIME, TO_DIGIT, TRIM, TYPEOF, UUID_TYPE,
     },
     lu_dog::{CallEnum, Expression, ValueType, ValueTypeEnum},
     new_ref,
@@ -837,7 +837,7 @@ pub fn eval(
             debug!("StaticMethodCall func {func:?}");
 
             match ty.as_str() {
-                UUID_TYPE if func == FN_NEW => {
+                UUID_TYPE | FQ_UUID_TYPE if func == FN_NEW => {
                     let value = Value::Uuid(Uuid::new_v4());
 
                     Ok(new_ref!(Value, value))
@@ -876,7 +876,7 @@ pub fn eval(
                         let span = read.start as usize..read.end as usize;
 
                         Err(ChaChaError::NoSuchStaticMethod {
-                            ty: ty.to_owned(),
+                            ty: ty.strip_prefix(PATH_SEP).unwrap().to_owned(),
                             method: method.to_owned(),
                             span,
                             location: location!(),
@@ -1050,7 +1050,7 @@ pub fn eval(
                             let span = read.start as usize..read.end as usize;
 
                             Err(ChaChaError::NoSuchStaticMethod {
-                                ty: ty.to_owned(),
+                                ty: ty.strip_prefix(PATH_SEP).unwrap().to_owned(),
                                 method: method.to_owned(),
                                 span,
                                 location: location!(),
@@ -1151,7 +1151,7 @@ pub fn eval(
                             let span = read.start as usize..read.end as usize;
 
                             Err(ChaChaError::NoSuchStaticMethod {
-                                ty: ty.to_owned(),
+                                ty: ty.strip_prefix(PATH_SEP).unwrap().to_owned(),
                                 method: missing_method.to_owned(),
                                 span,
                                 location: location!(),
@@ -1217,7 +1217,7 @@ pub fn eval(
                                 let span = read.start as usize..read.end as usize;
 
                                 Err(ChaChaError::NoSuchStaticMethod {
-                                    ty: ty.to_owned(),
+                                    ty: ty.strip_prefix(PATH_SEP).unwrap().to_owned(),
                                     method: missing_method.to_owned(),
                                     span,
                                     location: location!(),
@@ -1304,7 +1304,7 @@ pub fn eval(
                             let span = read.start as usize..read.end as usize;
 
                             NoSuchStaticMethodSnafu {
-                                ty: ty.to_owned(),
+                                ty: ty.strip_prefix(PATH_SEP).unwrap().to_owned(),
                                 method: func.to_owned(),
                                 span,
                             }

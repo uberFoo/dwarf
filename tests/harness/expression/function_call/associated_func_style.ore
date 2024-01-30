@@ -1,4 +1,4 @@
-use std::Option;
+use std::option::Option;
 
 fn main() {
     let foo = Option::Some(1);

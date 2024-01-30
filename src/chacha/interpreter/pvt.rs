@@ -8,7 +8,7 @@ use crate::{
     lu_dog::{ValueType, ValueTypeEnum},
     s_read,
     sarzak::Ty,
-    RefType,
+    RefType, PATH_SEP,
 };
 
 pub(crate) struct PrintableValueType<'a>(pub bool, pub RefType<ValueType>, pub &'a ModelContext);
@@ -175,11 +175,16 @@ impl<'a> PrintableValueType<'a> {
                 let woog_struct = s_read!(lu_dog).exhume_woog_struct(woog_struct).unwrap();
                 debug!("woog_struct {woog_struct:?}");
                 let woog_struct = s_read!(woog_struct);
+                let name = if let Some(name) = woog_struct.name.strip_prefix(PATH_SEP) {
+                    name
+                } else {
+                    &woog_struct.name
+                };
                 write!(
                     f,
                     "{} {}",
                     TY_WARN_CLR.paint("struct"),
-                    TY_CLR.italic().paint(&woog_struct.name)
+                    TY_CLR.italic().paint(name)
                 )
             }
             ValueTypeEnum::ZObjectStore(ref id) => {
@@ -320,7 +325,12 @@ impl<'a> PrintableValueType<'a> {
                 let woog_struct = s_read!(lu_dog).exhume_woog_struct(woog_struct).unwrap();
                 debug!("woog_struct {woog_struct:?}");
                 let woog_struct = s_read!(woog_struct);
-                write!(f, "struct {}", woog_struct.name)
+                let name = if let Some(name) = woog_struct.name.strip_prefix(PATH_SEP) {
+                    name
+                } else {
+                    &woog_struct.name
+                };
+                write!(f, "struct {name}")
             }
             ValueTypeEnum::ZObjectStore(ref id) => {
                 let zobject_store = s_read!(lu_dog).exhume_z_object_store(id).unwrap();

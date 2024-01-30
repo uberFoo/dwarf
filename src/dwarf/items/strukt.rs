@@ -34,13 +34,30 @@ macro_rules! link_struct_generic {
 
 pub fn inter_struct(
     name: &str,
-    _span: &Span,
+    span: &Span,
     attributes: &AttributeMap,
     fields: &[(Spanned<String>, Spanned<Type>, AttributeMap)],
     generics: Option<&HashMap<String, Type>>,
     context: &mut Context,
     lu_dog: &mut LuDogStore,
 ) -> Result<()> {
+    if let Some(path) = context.scopes.insert(name.to_owned(), context.path.clone()) {
+        if path == context.path {
+            return Ok(());
+        }
+
+        return Err(vec![DwarfError::MultiplyDefinedSymbol {
+            name: name.to_owned(),
+            span: span.clone(),
+            path: context.path.clone(),
+            orig_path: path,
+            file: context.file_name.to_owned(),
+            location: location!(),
+        }]);
+    }
+
+    let name = context.path.clone() + name;
+
     debug!("inter_struct {name}");
 
     // If there is a proxy attribute then we'll use it's info to attach an object
@@ -51,14 +68,14 @@ pub fn inter_struct(
             if let Some(store_vec) = attributes.get(STORE) {
                 if let Some((_, ref value)) = store_vec.first() {
                     let store_name: String = value.try_into().map_err(|e| vec![e])?;
-                    debug!("proxy.store: {store_name}");
+                    debug!("proxy_store: {store_name}");
 
                     if let Some(name_vec) = attributes.get(OBJECT) {
                         if let Some((_, ref value)) = name_vec.first() {
                             let proxy_obj: String = value.try_into().map_err(|e| vec![e])?;
                             let proxy_obj = proxy_obj.desanitize();
                             // let proxy_obj = proxy_obj.to_upper_camel_case();
-                            debug!("proxy.object: {proxy_obj}");
+                            debug!("proxy_object: {proxy_obj}");
                             if let Some(model) = context.models.get(&store_name) {
                                 if let Some(ref obj_id) =
                                     model.0.exhume_object_id_by_name(&proxy_obj)
@@ -182,6 +199,11 @@ pub fn inter_struct(
                     context.dirty.push(Dirty::Store(s_read!(store).id));
                     let _ = ValueType::new_z_object_store(true, &store, lu_dog);
 
+                    let woog_struct =
+                        WoogStruct::new(name.to_owned(), context.path.clone(), None, None, lu_dog);
+                    context.dirty.push(Dirty::Struct(woog_struct.clone()));
+                    let _ = WoogItem::new_woog_struct(&context.source, &woog_struct, lu_dog);
+
                     Ok(())
                 } else {
                     unreachable!();
@@ -195,14 +217,6 @@ pub fn inter_struct(
             unreachable!();
         }
     } else {
-        // This is just a plain vanilla user defined type.
-        // let name = if let Some(generics) = generics {
-        //     let generics = generics.keys().cloned().collect::<Vec<_>>();
-        //     format!("{}<{}>", name, generics.join(", "))
-        // } else {
-        //     name.to_owned()
-        // };
-
         debug!("created struct {name}");
 
         let woog_struct =
@@ -249,7 +263,6 @@ pub fn inter_struct_fields(
     let mut errors = Vec::new();
     for ((name, _), (type_, span), attrs) in fields {
         // let name = name.de_sanitize();
-
         debug!("field {name}");
 
         use std::ops::Range;

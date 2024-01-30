@@ -10,7 +10,7 @@ use crate::{
     lu_dog::{store::ObjectStore as LuDogStore, ValueType, ValueTypeEnum},
     s_read,
     sarzak::Ty,
-    RefType,
+    RefType, PATH_SEP,
 };
 
 // #[derive(Debug)]
@@ -148,7 +148,8 @@ impl<'d, 'a, 'b> fmt::Display for PrintableValueType<'d, 'a, 'b> {
                 debug!("woog_struct {:?}", woog_struct);
                 let woog_struct = lu_dog.exhume_woog_struct(woog_struct).unwrap();
                 let woog_struct = s_read!(woog_struct);
-                write!(f, "{}", TY_WARN_CLR.paint(&woog_struct.name))
+                let name = woog_struct.name.strip_prefix(PATH_SEP).unwrap();
+                write!(f, "{}", TY_WARN_CLR.paint(name))
             }
             ValueTypeEnum::ZObjectStore(ref id) => {
                 let zobject_store = lu_dog.exhume_z_object_store(id).unwrap();

@@ -1,4 +1,7 @@
 use http::client::HttpClient;
+use http::client::HttpError;
+use http::client::Response;
+use std::result::Result;
 
 async fn async_get(urls: [String]) -> Future<[Result<string, HttpError>]> {
     let client = HttpClient::new();

@@ -1,13 +1,13 @@
 use std::ops::Range;
 
-use log::debug;
+use ansi_term::Colour;
 use snafu::{location, Location};
 use uuid::Uuid;
 
 use crate::{
     dwarf::{
         error::{DwarfError, Result},
-        extruder::{update_span_value, Context, ExprSpan},
+        extruder::{debug, function, update_span_value, Context, ExprSpan},
         Expression as ParserExpression, Type,
     },
     lu_dog::{
@@ -30,7 +30,7 @@ pub fn inter(
     context: &mut Context,
     lu_dog: &mut LuDogStore,
 ) -> Result<(ExprSpan, RefType<ValueType>)> {
-    debug!("UnitEnum {:?}, Field {field_name}", enum_path);
+    debug!("UnitEnum {enum_path:?}, Field {field_name}");
     let (path, path_span) =
         if let (ParserExpression::PathInExpression(path), span) = enum_path.as_ref() {
             (path, span)
@@ -43,7 +43,19 @@ pub fn inter(
 
     debug!("path {path:?}");
 
-    let full_enum_name = path.iter().map(|p| {
+    let Type::UserType((base_name, _), _) = &path[0].0 else {
+        panic!(
+            "I don't think that we should ever see anything other than a user type here: {:?}",
+            path[0]
+        );
+    };
+    let base_path = if let Some(path) = context.scopes.get(base_name) {
+        path
+    } else {
+        &context.path
+    };
+
+    let full_enum_name = base_path.clone() + path.iter().map(|p| {
                 if let Type::UserType((obj, _), generics) = &p.0 {
                     let mut name = obj.to_owned();
                     let generics = generics.iter().map(|g| {
@@ -58,7 +70,7 @@ pub fn inter(
                 } else {
                     panic!("I don't think that we should ever see anything other than a user type here: {:?}", p);
                 }
-            }).collect::<Vec<_>>().join("");
+            }).collect::<Vec<_>>().join("").as_str();
 
     debug!("enum_name {full_enum_name:?}, path {path:?}");
 
@@ -170,6 +182,7 @@ pub fn inter(
             name: full_enum_name.to_owned(),
             file: context.file_name.to_owned(),
             span: path_span.to_owned(),
+            location: location!(),
             program: context.source_string.to_owned(),
         }])
     }

@@ -425,6 +425,8 @@ pub fn initialize_interpreter(
             e_context.source.to_owned(),
             program,
             executor,
+            e_context.scopes,
+            e_context.imports,
         ))
     }
     #[cfg(not(feature = "async"))]

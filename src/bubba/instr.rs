@@ -156,6 +156,19 @@ pub enum Instruction {
     /// the function. It is patched by the VM before execution.
     ///
     LocalCardinality(RefType<String>),
+    /// Look up a method
+    ///
+    /// The top of the stack is a reference to the user defined type upon which
+    /// we are performing the lookup. The operand is the method name we are seeking.
+    ///
+    /// The UDT is removed from the stack and the address of the method is pushed
+    /// as well as the number of locals.
+    ///
+    /// ## Stack Effect
+    ///
+    /// The stack is one element longer.
+    ///
+    MethodLookup(RefType<String>),
     /// Multiply the top two values on the stack.
     ///
     /// ## Stack Effect
@@ -394,6 +407,12 @@ impl fmt::Display for Instruction {
                 f,
                 "{} {}",
                 opcode_style.paint("lc  "),
+                operand_style.paint(s_read!(name).to_string())
+            ),
+            Instruction::MethodLookup(name) => write!(
+                f,
+                "{} {}",
+                opcode_style.paint("mlu "),
                 operand_style.paint(s_read!(name).to_string())
             ),
             Instruction::Multiply => write!(f, "{}", opcode_style.paint("mul ")),

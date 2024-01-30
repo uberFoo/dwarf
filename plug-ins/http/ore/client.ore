@@ -4,6 +4,7 @@ use std::result::Result;
 struct Plugin<T> {
     inner: T,
 }
+
 struct HttpClient {
     // This plugin value must point to a valid plugin. The first part of the
     // path is the name, and the second part is a parameter to send to the
@@ -18,7 +19,6 @@ impl HttpClient {
             inner: Plugin::<HttpClient>::new(),
         }
     }
-    // #[proxy(plugin = "http_client", object = "HttpClient", func = "get")]
     async fn get(self, url: String) -> Future<Request> {
         let request = self
             .inner
@@ -30,7 +30,6 @@ impl HttpClient {
     }
 }
 
-// #[proxy(ty = "RequestBuilder")]
 struct Request {
     #[proxy(plugin = "http::http_client")]
     plugin: Plugin<HttpClient>,
@@ -39,9 +38,9 @@ struct Request {
 
 impl Request {
     async fn send(self) -> Future<Result<Response, HttpError>> {
-        let response: Result<int, int> =
-            self.plugin
-                .invoke_func("http_client", "Request", "send", [self.inner]);
+        let response = self
+            .plugin
+            .invoke_func("http_client", "Request", "send", [self.inner]);
 
         match response {
             Result::Err(e) => Result::<Response, HttpError>::Err(HttpError {
@@ -64,9 +63,9 @@ struct Response {
 
 impl Response {
     async fn text(self) -> Future<Result<string, HttpError>> {
-        let text: Result<string, int> =
-            self.plugin
-                .invoke_func("http_client", "Response", "text", [self.inner]);
+        let text = self
+            .plugin
+            .invoke_func("http_client", "Response", "text", [self.inner]);
 
         match text {
             Result::Err(e) => Result::<string, HttpError>::Err(HttpError {

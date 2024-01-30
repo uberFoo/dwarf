@@ -6,7 +6,7 @@ use crate::{
         instr::Instruction,
     },
     lu_dog::ValueTypeEnum,
-    new_ref, s_read, NewRef, RefType, SarzakStorePtr, Span,
+    new_ref, s_read, NewRef, RefType, SarzakStorePtr, Span, POP_CLR,
 };
 
 pub(in crate::bubba::compiler) fn compile(
@@ -15,7 +15,7 @@ pub(in crate::bubba::compiler) fn compile(
     context: &mut Context,
     span: Span,
 ) -> Result<()> {
-    log::debug!(target: "instr", "{}:{}:{}", file!(), line!(), column!());
+    log::debug!(target: "instr", "{}: {}:{}:{}", POP_CLR.paint("compile_variable"), file!(), line!(), column!());
 
     let lu_dog = context.lu_dog_heel();
     let lu_dog = s_read!(lu_dog);
@@ -24,10 +24,13 @@ pub(in crate::bubba::compiler) fn compile(
     let expr = s_read!(expr);
     let name = &expr.name;
 
+    dbg!(&name, &context.method_name);
+
     if let Some(symbol) = context.get_symbol(name) {
         // It looks like if we pass something in context.method_name then we look
         // up the type based on the symbol name. Down below we build a fully qualified
-        // static method call.
+        // static method call. The intension is that we invoke a method as a static
+        // by passing self as the first argument.
         if let Some(method) = &context.method_name {
             let ty = if let ValueTypeEnum::Enumeration(ref id) = symbol.ty.subtype {
                 let enum_ty = lu_dog.exhume_enumeration(id).unwrap();

@@ -7,7 +7,7 @@ use crate::{
     },
     keywords::{ARGS, ASSERT, ASSERT_EQ, CHACHA, FORMAT},
     lu_dog::{Call, CallEnum, Expression},
-    new_ref, s_read, NewRef, RefType, SarzakStorePtr, Span, Value,
+    new_ref, s_read, NewRef, RefType, SarzakStorePtr, Span, Value, POP_CLR,
 };
 
 pub(in crate::bubba::compiler) fn compile(
@@ -16,7 +16,7 @@ pub(in crate::bubba::compiler) fn compile(
     context: &mut Context,
     span: Span,
 ) -> Result<()> {
-    log::debug!(target: "instr", "{}:{}:{}", file!(), line!(), column!());
+    log::debug!(target: "instr", "{}: {}:{}:{}", POP_CLR.paint("compile_call"), file!(), line!(), column!());
 
     let lu_dog = context.lu_dog_heel();
     let lu_dog = s_read!(lu_dog);
@@ -87,6 +87,8 @@ fn compile_function_call(
     thonk: &mut CThonk,
     context: &mut Context,
 ) -> Result<()> {
+    log::debug!(target: "instr", "{}: {}:{}:{}", POP_CLR.paint("compile_function_call"), file!(), line!(), column!());
+
     let lu_dog = context.lu_dog_heel();
     let lu_dog = s_read!(lu_dog);
 
@@ -119,6 +121,8 @@ fn compile_method_call(
     thonk: &mut CThonk,
     context: &mut Context,
 ) -> Result<()> {
+    log::debug!(target: "instr", "{}: {}:{}:{}", POP_CLR.paint("compile_method_call"), file!(), line!(), column!());
+
     let lu_dog = context.lu_dog_heel();
     let lu_dog = s_read!(lu_dog);
 
@@ -127,10 +131,18 @@ fn compile_method_call(
         let expr = lu_dog.exhume_expression(expr).unwrap();
         let span = get_span(&expr, &lu_dog);
         // Evaluate the LHS to get at the underlying value/instance.
-        // Note the magic bit.
-        context.method_name = Some(name.clone());
+        // Note the magic bit with the context.
+        // There is more to this story. The current implementation is naive
+        // because it assumes
+        // context.method_name = Some(name.clone());
+        // dbg!("enter");
         compile_expression(&expr, thonk, context, span)?;
-        context.method_name = None;
+        thonk.add_instruction(
+            Instruction::MethodLookup(new_ref!(String, name)),
+            location!(),
+        );
+        // dbg!("exit");
+        // context.method_name = None;
     };
 
     for expr in args {
@@ -151,6 +163,8 @@ fn compile_static_method_call(
     context: &mut Context,
     span: Span,
 ) -> Result<()> {
+    log::debug!(target: "instr", "{}: {}:{}:{}", POP_CLR.paint("compile_static_method_call"), file!(), line!(), column!());
+
     let lu_dog = context.lu_dog_heel();
     let lu_dog = s_read!(lu_dog);
 
@@ -557,22 +571,22 @@ mod test {
 
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "
-                   struct Foo {
-                       bar: int,
-                   }
-                   impl Foo {
-                       fn new() -> Foo {
-                           Foo { bar: 42 }
-                       }
+                struct Foo {
+                    bar: int,
+                }
+                impl Foo {
+                    fn new() -> Foo {
+                        Foo { bar: 42 }
+                    }
 
-                          fn bar(self) -> int {
-                            self.bar
-                          }
-                   }
-                   fn main() -> int {
-                       let foo = Foo::new();
-                       foo.bar()
-                   }";
+                    fn bar(self) -> int {
+                        self.bar
+                    }
+                }
+                fn main() -> int {
+                    let foo = Foo::new();
+                    foo.bar()
+                }";
         let ast = parse_dwarf("test_method_call", ore).unwrap();
         let ctx = new_lu_dog(
             "test_method_call".to_owned(),

@@ -22,8 +22,8 @@ use crate::{
         DwarfInteger, Expression as ParserExpression, Generics, Type,
     },
     keywords::{
-        ARGS, ASSERT, ASSERT_EQ, CHACHA, COMPLEX_EX, EPS, EVAL, FN_NEW, LOAD_PLUGIN, NEW,
-        NORM_SQUARED, PARSE, PLUGIN, SLEEP, TIME, TIMER, TYPEOF, UUID_TYPE,
+        ARGS, ASSERT, ASSERT_EQ, CHACHA, COMPLEX_EX, EPS, EVAL, FN_NEW, FQ_UUID_TYPE, LOAD_PLUGIN,
+        NEW, NORM_SQUARED, PARSE, PLUGIN, SLEEP, TIME, TIMER, TYPEOF, UUID_TYPE,
     },
     lu_dog::{
         store::ObjectStore as LuDogStore, Argument, Block, Call, DataStructure, EnumField,
@@ -33,7 +33,7 @@ use crate::{
     },
     new_ref, s_read, s_write,
     sarzak::Ty,
-    NewRef, RefType, SarzakStorePtr,
+    NewRef, RefType, SarzakStorePtr, PATH_SEP,
 };
 
 #[allow(clippy::too_many_arguments)]
@@ -87,6 +87,17 @@ pub fn inter(
 
     let (type_name, type_span, mut elts) = recursion(path, x_path.clone());
 
+    let base_name = if let Some(name) = type_name.split('<').next() {
+        name
+    } else {
+        &type_name
+    };
+    let type_name = if let Some(path) = context.scopes.get(base_name) {
+        path.to_owned() + type_name.as_str()
+    } else {
+        context.path.clone() + type_name.as_str()
+    };
+
     elts.push(PathElement::new(method.to_owned(), None, &x_path, lu_dog));
 
     debug!("path elements: {elts:?}");
@@ -136,9 +147,9 @@ pub fn inter(
             .is_some()
         || type_name == CHACHA
         || type_name == COMPLEX_EX
-        || type_name.split('<').next() == Some(PLUGIN)
         || type_name == TIMER
         || type_name == UUID_TYPE
+        || type_name == FQ_UUID_TYPE
     {
         // Here we are interring a static method call.
         let meth =
@@ -235,24 +246,6 @@ pub fn inter(
                     ValueType::new_unknown(true, lu_dog)
                 }
             },
-            PLUGIN => match method {
-                NEW => {
-                    let plugin_type = &generics.first().unwrap().0;
-                    let Type::Generic((plugin_type, _)) = plugin_type else {
-                        panic!(
-            "I don't think that we should ever see anything other than a user type here: {generics:?}",
-        );
-                    };
-
-                    let plugin = lu_dog.exhume_x_plugin_id_by_name(plugin_type).unwrap();
-                    let plugin = lu_dog.exhume_x_plugin(&plugin).unwrap();
-                    ValueType::new_x_plugin(true, &plugin, lu_dog)
-                }
-                method => {
-                    e_warn!("Plugin method `{method}` not found");
-                    ValueType::new_unknown(true, lu_dog)
-                }
-            },
             TIMER => {
                 match method {
                     #[cfg(feature = "async")]
@@ -275,12 +268,78 @@ pub fn inter(
                     }
                 }
             }
-            UUID_TYPE if method == FN_NEW => {
+            UUID_TYPE | FQ_UUID_TYPE if method == FN_NEW => {
                 ValueType::new_ty(true, &Ty::new_z_uuid(sarzak), lu_dog)
             }
             _ => {
                 debug!("ParserExpression::StaticMethodCall: looking up type {type_name}");
                 lookup_woog_struct_method_return_type(&type_name, method, context.sarzak, lu_dog)
+            }
+        };
+
+        let value = XValue::new_expression(block, &ty, &call_expr, lu_dog);
+        update_span_value(&span, &value, location!());
+
+        Ok(((call_expr, span), ty))
+    } else if {
+        if let Some(prefix) = type_name.split('<').next() {
+            if let Some(plugin) = prefix.split(PATH_SEP).last() {
+                if plugin == PLUGIN {
+                    true
+                } else {
+                    false
+                }
+            } else {
+                false
+            }
+        } else {
+            false
+        }
+    } {
+        let meth =
+            StaticMethodCall::new(method.to_owned(), type_name.clone(), Uuid::new_v4(), lu_dog);
+        let call = Call::new_static_method_call(true, None, None, &meth, lu_dog);
+        let call_expr = Expression::new_call(true, &call, lu_dog);
+
+        // Process the args.
+        let mut arg_types = Vec::new();
+        let mut last_arg_uuid: Option<SarzakStorePtr> = None;
+        for (position, param) in params.iter().enumerate() {
+            let (arg_expr, ty) = inter_expression(
+                &new_ref!(ParserExpression, param.0.to_owned()),
+                &param.1,
+                block,
+                context,
+                context_stack,
+                lu_dog,
+            )?;
+            arg_types.push(ty);
+
+            let arg = Argument::new(position as DwarfInteger, &arg_expr.0, &call, None, lu_dog);
+            if position == 0 {
+                // Here I'm setting the pointer to the first argument.
+                s_write!(call).argument = Some(s_read!(arg).id);
+            }
+
+            last_arg_uuid = link_argument!(last_arg_uuid, arg, lu_dog);
+        }
+
+        let ty = match method {
+            NEW => {
+                let plugin_type = &generics.first().unwrap().0;
+                let Type::Generic((plugin_type, _)) = plugin_type else {
+                    panic!(
+            "I don't think that we should ever see anything other than a user type here: {generics:?}",
+        );
+                };
+
+                let plugin = lu_dog.exhume_x_plugin_id_by_name(plugin_type).unwrap();
+                let plugin = lu_dog.exhume_x_plugin(&plugin).unwrap();
+                ValueType::new_x_plugin(true, &plugin, lu_dog)
+            }
+            method => {
+                e_warn!("Plugin method `{method}` not found");
+                ValueType::new_unknown(true, lu_dog)
             }
         };
 
@@ -313,17 +372,21 @@ pub fn inter(
             .exhume_enumeration_id_by_name(type_name.split('<').next().unwrap())
             .is_some()
         {
+            dbg!("cge");
+            let span = s_read!(span).start as usize..s_read!(span).end as usize;
             create_generic_enum(
                 &type_name,
                 type_name.split('<').next().unwrap(),
+                span,
                 context,
                 lu_dog,
-            )
+            )?
             .0
         } else {
+            dbg!("err");
             let span = s_read!(span).start as usize..s_read!(span).end as usize;
             return Err(vec![DwarfError::ObjectNameNotFound {
-                name: type_name.to_owned(),
+                name: type_name.strip_prefix(PATH_SEP).unwrap().to_owned(),
                 file: context.file_name.to_owned(),
                 span,
                 location: location!(),
@@ -571,24 +634,33 @@ fn inter_field(
                     let id = lu_dog.exhume_enumeration_id_by_name(&base_name).unwrap();
                     (lu_dog.exhume_enumeration(&id).unwrap(), expr)
                 } else {
-                    let type_name = path.iter().map(|p| {
-                    if let Type::UserType((obj, foo), generics) = &p.0 {
-                        let mut name = obj.to_owned();
-                        let generics = generics.iter().map(|g| {
-                            g.0.to_string()
-                        }).collect::<Vec<_>>().join(", ");
-                        if !generics.is_empty() {
-                            name.push('<');
-                            name.push_str(&generics);
-                            name.push('>');
-                        }
-                        name
+                    let base_path = if let Some(path) = context.scopes.get(base_name) {
+                        path
                     } else {
-                        panic!("I don't think that we should ever see anything other than a user type here: {:?}", p);
-                    }
-                }).collect::<Vec<_>>().join("");
+                        &context.path
+                    };
 
-                    let (new_enum, _) = create_generic_enum(&type_name, base_name, context, lu_dog);
+                    let type_name = base_path.to_owned() + path.iter().map(|p| {
+                        if let Type::UserType((obj, _), generics) = &p.0 {
+                            let mut name = obj.to_owned();
+                            let generics = generics.iter().map(|g| {
+                                g.0.to_string()
+                            }).collect::<Vec<_>>().join(", ");
+                            if !generics.is_empty() {
+                                name.push('<');
+                                name.push_str(&generics);
+                                name.push('>');
+                            }
+                            name
+                        } else {
+                            panic!("I don't think that we should ever see anything other than a user type here: {:?}", p);
+                        }
+                    }).collect::<Vec<_>>().join("").as_str();
+
+                    let base_name = base_path.clone() + base_name;
+
+                    let (new_enum, _) =
+                        create_generic_enum(&type_name, &base_name, span, context, lu_dog)?;
 
                     (new_enum, expr)
                 }

@@ -6,7 +6,7 @@ use std::{ops, path::PathBuf};
 use ansi_term::Colour;
 use clap::Args;
 use heck::ToUpperCamelCase;
-use rustc_hash::FxHashMap as HashMap;
+use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use serde::{Deserialize, Serialize};
 
 pub mod bubba;
@@ -38,7 +38,7 @@ mod keywords {
     pub(crate) const ASLEEP: &str = "asleep";
     pub(crate) const ASSERT: &str = "assert";
     pub(crate) const ASSERT_EQ: &str = "assert_eq";
-    pub(crate) const CHACHA: &str = "chacha";
+    pub(crate) const CHACHA: &str = "::chacha";
     pub(crate) const COMPLEX_EX: &str = "ComplexEx";
     pub(crate) const EPS: &str = "eps";
     pub(crate) const EVAL: &str = "eval";
@@ -77,6 +77,7 @@ mod keywords {
     pub(crate) const TRIM: &str = "trim";
     pub(crate) const TYPEOF: &str = "typeof";
     // 🚧 We have a token already...
+    pub(crate) const FQ_UUID_TYPE: &str = "::Uuid";
     pub(crate) const UUID_TYPE: &str = "Uuid";
 }
 
@@ -430,6 +431,10 @@ pub struct Context {
     pub dirty: Vec<Dirty>,
     /// This is a reference to the sarzak store.
     pub sarzak: RefType<SarzakStore>,
+    /// These are scopes for types -- it maps the type to the full path.
+    pub scopes: HashMap<String, String>,
+    /// The paths of imported modules -- so we only import them once.
+    pub imports: HashSet<PathBuf>,
 }
 
 impl Context {
@@ -454,6 +459,8 @@ impl Default for Context {
                 SarzakStore,
                 SarzakStore::from_bincode(SARZAK_MODEL).unwrap()
             ),
+            scopes: HashMap::default(),
+            imports: HashSet::default(),
         }
     }
 }

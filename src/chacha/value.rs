@@ -29,7 +29,7 @@ use crate::{
     plug_in::PluginType,
     s_read,
     sarzak::{ObjectStore as SarzakStore, Ty},
-    ChaChaError, Context, DwarfFloat, DwarfInteger, NewRef, RefType,
+    ChaChaError, Context, DwarfFloat, DwarfInteger, NewRef, RefType, PATH_SEP,
 };
 
 #[repr(C)]
@@ -388,14 +388,6 @@ impl TryFrom<&FfiValue> for i64 {
 ///
 #[derive(Clone, Debug)]
 pub enum EnumVariant {
-    /// Unit Enumeration Field
-    ///
-    /// This sort of enumeration is the simplest. In `Foo`, this refers to the
-    /// field `One`: `Foo::One`. The final field in the path is stored as a
-    /// string.
-    ///
-    /// The tuple is: (Type, TypeName, FieldValue)
-    Unit(RefType<ValueType>, String, String),
     /// Struct Enumeration Field
     ///
     /// This type of field is for when it contains a struct, as `Baz` does above.
@@ -410,6 +402,14 @@ pub enum EnumVariant {
     /// The type is stored as the first element of the tuple, and the path/type
     /// as a string in the second. The third element is the enum itself.
     Tuple((RefType<ValueType>, String), RefType<TupleEnum>),
+    /// Unit Enumeration Field
+    ///
+    /// This sort of enumeration is the simplest. In `Foo`, this refers to the
+    /// field `One`: `Foo::One`. The final field in the path is stored as a
+    /// string.
+    ///
+    /// The tuple is: (Type, TypeName, FieldValue)
+    Unit(RefType<ValueType>, String, String),
 }
 
 impl EnumVariant {
@@ -511,7 +511,7 @@ pub enum Value {
         worker: Option<puteketeke::Worker>,
         parent: Option<puteketeke::AsyncTask<'static, ValueResult>>,
     },
-    Thonk(ThonkInner),
+    // Thonk(ThonkInner),
     Unknown,
     Uuid(uuid::Uuid),
     ValueType(ValueType),
@@ -522,9 +522,9 @@ pub enum Value {
 }
 
 impl Value {
-    pub fn new_thonk(name: String) -> Self {
-        Self::Thonk(ThonkInner::Thonk(name))
-    }
+    // pub fn new_thonk(name: String) -> Self {
+    //     Self::Thonk(ThonkInner::Thonk(name))
+    // }
 
     #[inline]
     pub fn to_inner_string(&self) -> String {
@@ -570,10 +570,10 @@ impl Value {
             Self::Table(table) => write!(f, "{table:?}"),
             #[cfg(feature = "async")]
             Self::Task { worker, parent } => write!(f, "Task: {parent:?} running on {worker:?}"),
-            Self::Thonk(inner) => match inner {
-                ThonkInner::Thonk(name) => write!(f, "{name}"),
-                ThonkInner::Index(index) => write!(f, "{index}"),
-            },
+            // Self::Thonk(inner) => match inner {
+            //     ThonkInner::Thonk(name) => write!(f, "{name}"),
+            //     ThonkInner::Index(index) => write!(f, "{index}"),
+            // },
             Self::Unknown => write!(f, "<unknown>"),
             Self::Uuid(uuid) => write!(f, "{uuid}"),
             Self::ValueType(ty) => write!(f, "{:?}", ty),
@@ -866,7 +866,7 @@ impl std::fmt::Debug for Value {
             Self::Table(table) => write!(f, "{table:?}"),
             #[cfg(feature = "async")]
             Self::Task { worker, parent } => write!(f, "Task: {parent:?} running on {worker:?}"),
-            Self::Thonk(inner) => write!(f, "{inner:?}"),
+            // Self::Thonk(inner) => write!(f, "{inner:?}"),
             Self::Unknown => write!(f, "<unknown>"),
             Self::Uuid(uuid) => write!(f, "{uuid:?}"),
             Self::ValueType(ty) => write!(f, "{:?}", ty),
@@ -922,7 +922,7 @@ impl Clone for Value {
                 worker: worker.clone(),
                 parent: None,
             },
-            Self::Thonk(inner) => Self::Thonk(inner.clone()),
+            // Self::Thonk(inner) => Self::Thonk(inner.clone()),
             Self::Unknown => Self::Unknown,
             Self::Uuid(uuid) => Self::Uuid(*uuid),
             Self::ValueType(ty) => Self::ValueType(ty.clone()),
@@ -972,10 +972,10 @@ impl fmt::Display for Value {
             Self::Table(table) => write!(f, "{table:?}"),
             #[cfg(feature = "async")]
             Self::Task { worker, parent } => write!(f, "Task: {parent:?} running on {worker:?}"),
-            Self::Thonk(inner) => match inner {
-                ThonkInner::Thonk(name) => write!(f, "Thonk({name})"),
-                ThonkInner::Index(index) => write!(f, "Thonk({index})"),
-            },
+            // Self::Thonk(inner) => match inner {
+            //     ThonkInner::Thonk(name) => write!(f, "Thonk({name})"),
+            //     ThonkInner::Index(index) => write!(f, "Thonk({index})"),
+            // },
             Self::Unknown => write!(f, "<unknown>"),
             Self::Uuid(uuid) => write!(f, "{uuid}"),
             Self::ValueType(ty) => write!(f, "{:?}", ty),
@@ -1196,13 +1196,13 @@ impl TryFrom<Value> for usize {
                 src: str_.to_owned(),
                 dst: "usize".to_owned(),
             }),
-            Value::Thonk(inner) => match inner {
-                ThonkInner::Thonk(name) => Err(ChaChaError::Conversion {
-                    src: (*name).to_owned(),
-                    dst: "usize".to_owned(),
-                }),
-                ThonkInner::Index(index) => Ok(*index),
-            },
+            // Value::Thonk(inner) => match inner {
+            //     ThonkInner::Thonk(name) => Err(ChaChaError::Conversion {
+            //         src: (*name).to_owned(),
+            //         dst: "usize".to_owned(),
+            //     }),
+            //     ThonkInner::Index(index) => Ok(*index),
+            // },
             _ => Err(ChaChaError::Conversion {
                 src: value.to_string(),
                 dst: "usize".to_owned(),
@@ -1222,13 +1222,13 @@ impl TryFrom<&Value> for usize {
                 src: str_.to_owned(),
                 dst: "usize".to_owned(),
             }),
-            Value::Thonk(inner) => match inner {
-                ThonkInner::Thonk(name) => Err(ChaChaError::Conversion {
-                    src: (*name).to_owned(),
-                    dst: "usize".to_owned(),
-                }),
-                ThonkInner::Index(index) => Ok(*index),
-            },
+            // Value::Thonk(inner) => match inner {
+            //     ThonkInner::Thonk(name) => Err(ChaChaError::Conversion {
+            //         src: (*name).to_owned(),
+            //         dst: "usize".to_owned(),
+            //     }),
+            //     ThonkInner::Index(index) => Ok(*index),
+            // },
             _ => Err(ChaChaError::Conversion {
                 src: value.to_string(),
                 dst: "usize".to_owned(),
@@ -1248,13 +1248,13 @@ impl TryFrom<Value> for isize {
                 src: str_.to_owned(),
                 dst: "isize".to_owned(),
             }),
-            Value::Thonk(inner) => match inner {
-                ThonkInner::Thonk(name) => Err(ChaChaError::Conversion {
-                    src: (*name).to_owned(),
-                    dst: "isize".to_owned(),
-                }),
-                ThonkInner::Index(index) => Ok(*index as isize),
-            },
+            // Value::Thonk(inner) => match inner {
+            //     ThonkInner::Thonk(name) => Err(ChaChaError::Conversion {
+            //         src: (*name).to_owned(),
+            //         dst: "isize".to_owned(),
+            //     }),
+            //     ThonkInner::Index(index) => Ok(*index as isize),
+            // },
             _ => Err(ChaChaError::Conversion {
                 src: value.to_string(),
                 dst: "isize".to_owned(),
@@ -1274,13 +1274,13 @@ impl TryFrom<&Value> for isize {
                 src: str_.to_owned(),
                 dst: "isize".to_owned(),
             }),
-            Value::Thonk(inner) => match inner {
-                ThonkInner::Thonk(name) => Err(ChaChaError::Conversion {
-                    src: (*name).to_owned(),
-                    dst: "isize".to_owned(),
-                }),
-                ThonkInner::Index(index) => Ok(*index as isize),
-            },
+            // Value::Thonk(inner) => match inner {
+            //     ThonkInner::Thonk(name) => Err(ChaChaError::Conversion {
+            //         src: (*name).to_owned(),
+            //         dst: "isize".to_owned(),
+            //     }),
+            //     ThonkInner::Index(index) => Ok(*index as isize),
+            // },
             _ => Err(ChaChaError::Conversion {
                 src: value.to_string(),
                 dst: "isize".to_owned(),
@@ -1794,6 +1794,7 @@ impl TupleEnum {
 
 impl fmt::Display for TupleEnum {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        dbg!(&self.value);
         write!(f, "{}({})", self.variant(), s_read!(self.value))
     }
 }
@@ -1855,7 +1856,13 @@ impl fmt::Display for UserStruct {
         let mut attrs = self.attrs.0.iter().collect::<Vec<_>>();
         attrs.sort_by(|(k1, _), (k2, _)| k1.cmp(k2));
 
-        let mut out = f.debug_struct(&self.type_name);
+        let name = if let Some(name) = self.type_name.strip_prefix(PATH_SEP) {
+            name
+        } else {
+            &self.type_name
+        };
+
+        let mut out = f.debug_struct(name);
         for (k, v) in attrs {
             out.field(k, &format_args!("{}", &s_read!(v)));
         }

@@ -40,6 +40,7 @@ pub enum DwarfError {
         name: String,
         file: String,
         span: Span,
+        location: Location,
         program: String,
     },
 
@@ -110,6 +111,17 @@ pub enum DwarfError {
         program: String,
     },
 
+    /// Multiply Defined Symbol
+    ///
+    #[snafu(display("\n{}: Multiply defined symbol: {name}\n  --> {}:{}:{}", ERR_CLR.bold().paint("error"), location.file, location.line, location.column))]
+    MultiplyDefinedSymbol {
+        name: String,
+        path: String,
+        orig_path: String,
+        file: String,
+        span: Span,
+        location: Location,
+    },
     /// Missing Implementation
     ///
     /// This is just not done yet.
@@ -311,16 +323,30 @@ impl fmt::Display for DwarfErrorReporter<'_> {
                 name,
                 file,
                 span,
+                location,
                 program,
             } => {
                 let span = span.clone();
-                Report::build(ReportKind::Error, file, span.start)
+                let report = Report::build(ReportKind::Error, file, span.start)
                     .with_message(format!("enum not found: {}", OTH_CLR.paint(name)))
                     .with_label(
                         Label::new((file, span))
                             .with_message("this enum does not exist")
                             .with_color(Color::Red),
-                    )
+                    );
+
+                let report = if is_uber {
+                    report.with_note(format!(
+                        "{}:{}:{}",
+                        OTH_CLR.paint(location.file.to_string()),
+                        POP_CLR.paint(format!("{}", location.line)),
+                        OK_CLR.paint(format!("{}", location.column)),
+                    ))
+                } else {
+                    report
+                };
+
+                report
                     .finish()
                     .write((file, Source::from(&program)), &mut std_err)
                     .map_err(|_| fmt::Error)?;
@@ -415,6 +441,48 @@ impl fmt::Display for DwarfErrorReporter<'_> {
                 report
                     .finish()
                     .write((file, Source::from(&program)), &mut std_err)
+                    .map_err(|_| fmt::Error)?;
+                write!(f, "{}", String::from_utf8_lossy(&std_err))
+            }
+            DwarfError::MultiplyDefinedSymbol {
+                name,
+                path,
+                orig_path,
+                file,
+                span,
+                location,
+            } => {
+                let span = span.clone();
+                let report = Report::build(ReportKind::Error, file, span.start)
+                    .with_message(format!(
+                        "multiply defined symbol: {}::{}",
+                        OTH_CLR.paint(orig_path),
+                        OTH_CLR.paint(name)
+                    ))
+                    .with_label(
+                        Label::new((file, span))
+                            .with_message("this symbol is multiply defined")
+                            .with_color(Color::Red),
+                    );
+
+                let report = if is_uber {
+                    report.with_note(format!(
+                        "{}:{}:{}",
+                        OTH_CLR.paint(location.file.to_string()),
+                        POP_CLR.paint(format!("{}", location.line)),
+                        OK_CLR.paint(format!("{}", location.column)),
+                    ))
+                } else {
+                    report.with_note(format!(
+                        "The new path is {}::{}",
+                        OTH_CLR.paint(path),
+                        OTH_CLR.paint(name)
+                    ))
+                };
+
+                report
+                    .finish()
+                    .write((file, Source::from(&location.file)), &mut std_err)
                     .map_err(|_| fmt::Error)?;
                 write!(f, "{}", String::from_utf8_lossy(&std_err))
             }
@@ -556,7 +624,7 @@ impl fmt::Display for DwarfErrorReporter<'_> {
             } => {
                 let msg = format!("Type mismatch: expected `{expected}`, found `{found}`.");
 
-                let report = Report::build(ReportKind::Error, file, expected_span.start)
+                let report = Report::build(ReportKind::Error, file, found_span.start)
                     .with_message(&msg)
                     .with_label(
                         Label::new((file, expected_span.to_owned()))

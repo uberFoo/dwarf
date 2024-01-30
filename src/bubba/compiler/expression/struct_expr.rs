@@ -33,6 +33,8 @@ pub(in crate::bubba::compiler) fn compile(
             log::debug!(target: "instr", "{}: {}:{}:{}", POP_CLR.paint("creating enum"), file!(), line!(), column!());
 
             let woog_enum = lu_dog.exhume_enumeration(id).unwrap();
+            let woog_enum = s_read!(woog_enum);
+
             let x_path = &lu_dog.exhume_x_path(&expr.x_path).unwrap();
             // We know that there is always a pe. It's only in an option so that
             // we can construct everything.
@@ -49,10 +51,11 @@ pub(in crate::bubba::compiler) fn compile(
                 path.push(s_read!(pe).name.to_owned());
             }
 
-            let ty = s_read!(woog_enum).r1_value_type(&lu_dog)[0].clone();
+            let ty = woog_enum.r1_value_type(&lu_dog)[0].clone();
             let variant = path.pop().unwrap();
             let variant = new_ref!(Value, Value::String(variant));
             let path = path.join("::");
+            let path = format!("{}{path}", woog_enum.x_path);
 
             //
             // This is where the rubber hits the road -- we give the enums actual values.
@@ -119,7 +122,8 @@ pub(in crate::bubba::compiler) fn compile(
             let ty = new_ref!(Value, Value::ValueType((*s_read!(ty)).to_owned()));
             thonk.add_instruction(Instruction::Push(ty), location!());
 
-            let name = new_ref!(Value, Value::String(woog_struct.name.clone()));
+            let name = &woog_struct.name;
+            let name = new_ref!(Value, name.to_owned().into());
             thonk.add_instruction(Instruction::Push(name), location!());
 
             thonk.add_instruction_with_span(
@@ -180,7 +184,7 @@ mod test {
         assert!(run.is_ok());
 
         let mut lu_dog = s_write!(ctx.lu_dog);
-        let woog_struct = lu_dog.exhume_woog_struct_id_by_name("Foo").unwrap();
+        let woog_struct = lu_dog.exhume_woog_struct_id_by_name("::Foo").unwrap();
         let woog_struct = lu_dog.exhume_woog_struct(&woog_struct).unwrap();
         let ty = crate::lu_dog::ValueType::new_woog_struct(true, &woog_struct, &mut lu_dog);
         let mut result = UserStruct::new("Foo".to_owned(), &ty);

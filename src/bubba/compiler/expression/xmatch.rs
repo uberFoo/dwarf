@@ -5,7 +5,7 @@ use crate::{
         compiler::{compile_expression, expression::literal, get_span, CThonk, Context, Result},
         instr::Instruction,
     },
-    lu_dog::ExpressionEnum,
+    lu_dog::{DataStructureEnum, ExpressionEnum},
     new_ref, s_read, NewRef, RefType, SarzakStorePtr, Span, Value,
 };
 
@@ -53,6 +53,13 @@ pub(in crate::bubba::compiler) fn compile(
             ExpressionEnum::StructExpression(ref id) => {
                 let struct_expr = lu_dog.exhume_struct_expression(id).unwrap();
                 let struct_expr = s_read!(struct_expr);
+
+                let ds = struct_expr.r39_data_structure(&lu_dog)[0].clone();
+                let DataStructureEnum::Enumeration(woog_enum) = &s_read!(ds).subtype else {
+                    unreachable!()
+                };
+                let woog_enum = lu_dog.exhume_enumeration(woog_enum).unwrap();
+                let woog_enum = s_read!(woog_enum);
 
                 let field_exprs = struct_expr.r26_field_expression(&lu_dog);
 
@@ -134,20 +141,31 @@ pub(in crate::bubba::compiler) fn compile(
                 // We know that there is always a pe. It's only in an option so that
                 // we can construct everything.
                 let mut pe = s_read!(x_path).r97_path_element(&lu_dog)[0].clone();
+                let mut path = vec![s_read!(pe).name.to_owned()];
+
                 while s_read!(pe).next.is_some() {
                     let id = {
                         let id = &s_read!(pe).next;
                         #[allow(clippy::clone_on_copy)]
                         id.as_ref().unwrap().clone()
                     };
-                    thonk.add_instruction(
-                        Instruction::Push(new_ref!(Value, s_read!(pe).name.clone().into())),
-                        location!(),
-                    );
+                    // thonk.add_instruction(
+                    //     Instruction::Push(new_ref!(Value, s_read!(pe).name.clone().into())),
+                    //     location!(),
+                    // );
                     pe = lu_dog.exhume_path_element(&id).unwrap();
+                    path.push(s_read!(pe).name.to_owned());
                 }
+
+                // dbg!(")", &pe);
+                let variant = path.pop().unwrap();
+                let path = path.join("::");
+                let path = format!("{}{path}", woog_enum.x_path);
+                dbg!(&path);
+                thonk.add_instruction(Instruction::Push(new_ref!(Value, path.into())), location!());
+
                 thonk.add_instruction(
-                    Instruction::Push(new_ref!(Value, s_read!(pe).name.clone().into())),
+                    Instruction::Push(new_ref!(Value, variant.into())),
                     location!(),
                 );
 
