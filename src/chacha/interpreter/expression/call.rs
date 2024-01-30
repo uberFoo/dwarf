@@ -1178,7 +1178,7 @@ pub fn eval(
                                 } else {
                                     Vec::new()
                                 };
-
+                                // kts -- I have a hard time finding this.
                                 let library_path = RawLibrary::path_in_directory(
                                     Path::new(&format!(
                                         "{}/extensions/{plugin_name}/lib",
@@ -1391,6 +1391,10 @@ fn spawn(
             result
         })
         .unwrap();
+
+    // This can also happen during the await processing. I'm not sure if this
+    // even actually starts anything.
+    // child_worker.start_task(&task);
 
     let value = new_ref!(
         Value,

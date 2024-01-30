@@ -5,9 +5,9 @@ use crate::{
         compiler::{compile_expression, get_span, CThonk, Context, Result},
         instr::Instruction,
     },
-    keywords::{ARGS, ASSERT, ASSERT_EQ, CHACHA, FORMAT},
+    keywords::{ARGS, ASSERT, ASSERT_EQ, CHACHA, FORMAT, NEW, PLUGIN},
     lu_dog::{Call, CallEnum, Expression},
-    new_ref, s_read, NewRef, RefType, SarzakStorePtr, Span, Value, POP_CLR,
+    new_ref, s_read, NewRef, RefType, SarzakStorePtr, Span, Value, PATH_SEP, POP_CLR,
 };
 
 pub(in crate::bubba::compiler) fn compile(
@@ -252,21 +252,45 @@ fn compile_static_method_call(
             meth => todo!("handle chacha method: {meth}"),
         },
         ty => {
-            let func_name = format!("{ty}::{func}");
-            let name = new_ref!(String, func_name);
-            // We are here because we need to look up a function.
-            thonk.add_instruction(Instruction::CallDestination(name.clone()), location!());
+            if Some(Some(PLUGIN)) == ty.split('<').next().map(|s| s.split(PATH_SEP).last()) {
+                match func {
+                    NEW => {
+                        let plugin = ty.split('<').nth(1).unwrap().strip_suffix('>').unwrap();
+                        let plugin = lu_dog.exhume_x_plugin_id_by_name(plugin).unwrap();
+                        let plugin = lu_dog.exhume_x_plugin(&plugin).unwrap();
+                        let plugin = s_read!(plugin);
+                        let plugin_name = &plugin.name;
+                        let path = &plugin.x_path;
 
-            // This instruction will be patched by the VM with the number of locals in the
-            // function.
-            thonk.add_instruction(Instruction::LocalCardinality(name), location!());
+                        let args = if let Some(path) = path.split(PATH_SEP).nth(1) {
+                            vec![Value::String(path.to_owned()).into()]
+                        } else {
+                            Vec::<Value>::new()
+                        };
 
-            for expr in args {
-                let span = get_span(expr, &lu_dog);
-                compile_expression(expr, thonk, context, span)?;
+                        dbg!(plugin_name, path, args);
+                    }
+                    missing_method => {
+                        panic!("plugin only supports `new`, found: {missing_method}");
+                    }
+                }
+            } else {
+                let func_name = format!("{ty}::{func}");
+                let name = new_ref!(String, func_name);
+                // We are here because we need to look up a function.
+                thonk.add_instruction(Instruction::CallDestination(name.clone()), location!());
+
+                // This instruction will be patched by the VM with the number of locals in the
+                // function.
+                thonk.add_instruction(Instruction::LocalCardinality(name), location!());
+
+                for expr in args {
+                    let span = get_span(expr, &lu_dog);
+                    compile_expression(expr, thonk, context, span)?;
+                }
+
+                thonk.add_instruction(Instruction::Call(args.len()), location!());
             }
-
-            thonk.add_instruction(Instruction::Call(args.len()), location!());
         }
     }
 

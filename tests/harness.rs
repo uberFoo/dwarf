@@ -1,5 +1,11 @@
 use std::{env, path::PathBuf};
 
+#[cfg(feature = "async")]
+use futures_lite::future;
+
+#[cfg(feature = "async")]
+use dwarf::ref_to_inner;
+
 use ansi_term::Colour;
 use lazy_static::lazy_static;
 use parking_lot::Mutex;
@@ -142,7 +148,23 @@ fn run_program(test: &str, program: &str) -> Result<(Value, String), String> {
     let mut ctx = initialize_interpreter(1, dwarf_home, ctx).unwrap();
     let result = match start_func("main", false, &mut ctx) {
         Ok(value) => {
+            #[cfg(not(feature = "async"))]
             let value = (*s_read!(value)).clone();
+            #[cfg(feature = "async")]
+            let value = {
+                unsafe {
+                    let value = std::sync::Arc::into_raw(value);
+                    let value = std::ptr::read(value);
+                    let value = ref_to_inner!(value);
+
+                    let value = future::block_on(value);
+
+                    let value = std::sync::Arc::into_raw(value);
+                    let value = std::ptr::read(value);
+                    ref_to_inner!(value)
+                }
+            };
+
             match value {
                 Value::Error(msg) => {
                     let msg = *msg;

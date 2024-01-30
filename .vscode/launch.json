@@ -145,11 +145,11 @@
                 // "tests/harness/types/generics/workout.ore"
                 // "tests/harness/types/generics/option.tao"
                 // "test.ore",
-                "tests/proxy/declare.tao"
+                "tests/harness/chacha/async/async.ore"
             ],
             "cwd": "${workspaceFolder}",
             "env": {
-                "RUST_LOG": "vm=trace"
+                "RUST_LOG": "exec=debug"
             },
             "preRunCommands": [
                 "script lldb.debugger.HandleCommand('settings set target.source-map /rustc/{} \"{}/lib/rustlib/src/rust\"'.format(os.popen('rustc --version --verbose').read().split('commit-hash: ')[1].split('\\n')[0].strip(), os.popen('rustc --print sysroot').readline().strip()))"

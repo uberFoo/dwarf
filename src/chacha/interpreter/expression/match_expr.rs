@@ -24,6 +24,8 @@ pub fn eval(
     let match_expr = lu_dog.exhume_x_match(match_expr).unwrap();
     let match_expr = s_read!(match_expr);
 
+    dbg!(&match_expr);
+
     let patterns = match_expr.r87_pattern(&lu_dog);
     let scrutinee = match_expr.r91_expression(&lu_dog)[0].clone();
 
@@ -33,6 +35,7 @@ pub fn eval(
     // 🚧 Darn. Match arms need to be ordered the same as they are written, and
     // they are not ordered in the model.
     for pattern in patterns {
+        dbg!(&pattern);
         let match_expr = s_read!(pattern).r87_expression(&lu_dog)[0].clone();
         let pattern_expr = s_read!(pattern).r92_expression(&lu_dog)[0].clone();
 
@@ -129,7 +132,8 @@ pub fn eval(
                             matched = true;
                             continue;
                         } else {
-                            matched = false;
+                            // kts -- if something breaks -- it might be this.
+                            // matched = false;
                             break;
                         }
                     }
@@ -191,8 +195,14 @@ pub fn eval(
         }
     }
 
-    Err(ChaChaError::BadnessHappened {
-        message: "fall through match expression".to_owned(),
-        location: location!(),
-    })
+    // 🚧 I'm torn about this. Returning Empty makes if let work, but if a
+    // match expression falls through we get here. I suppose the right answer
+    // is to test the match expression in the extruder to make sure that nothing
+    // can actually fall through. Well, nothing but the if let.
+    Ok(new_ref!(Value, Value::Empty))
+
+    // Err(ChaChaError::BadnessHappened {
+    //     message: "fall through match expression".to_owned(),
+    //     location: location!(),
+    // })
 }

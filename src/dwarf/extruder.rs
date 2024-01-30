@@ -2254,6 +2254,7 @@ pub(super) fn inter_expression(
         ParserExpression::List(ref elements) => {
             debug!("list {:?}", elements);
             if elements.is_empty() {
+                // 🚧 Darn -- more of this and no comment. I think it's replaced someplace.
                 let generic = FuncGeneric::new("UBER_HACK".to_owned(), None, None, lu_dog);
                 let list = List::new(&ValueType::new_func_generic(true, &generic, lu_dog), lu_dog);
                 let expr = Expression::new_list_expression(

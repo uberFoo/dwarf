@@ -5,7 +5,7 @@ use crate::{
         compiler::{compile_expression, get_span, CThonk, Context, Result},
         instr::Instruction,
     },
-    lu_dog::FieldAccessTargetEnum,
+    lu_dog::{FieldAccessTargetEnum, ValueTypeEnum},
     new_ref, s_read, NewRef, RefType, SarzakStorePtr, Span, Value,
 };
 
@@ -37,9 +37,17 @@ pub(in crate::bubba::compiler) fn compile_field_access(
         FieldAccessTargetEnum::Field(ref field) => {
             let field = lu_dog.exhume_field(field).unwrap();
             let field = s_read!(field);
-            // kts -- We can check the type to see if it's a plugin and if so
-            // that we may do something special.
-            let _ty = &field.r5_value_type(&lu_dog)[0];
+            // We check the type to see if it's a plugin and if so we insert it
+            // into the context, to be used later.
+            let ty = &field.r5_value_type(&lu_dog)[0];
+            match s_read!(ty).subtype {
+                ValueTypeEnum::XPlugin(ref plugin) => {
+                    let plugin = lu_dog.exhume_x_plugin(plugin).unwrap();
+                    let plugin = s_read!(plugin);
+                    context.insert_plugin(plugin.name.clone(), plugin.x_path.clone());
+                }
+                _ => {}
+            }
             field.name.to_owned()
         }
         FieldAccessTargetEnum::Function(ref func) => {

@@ -49,6 +49,7 @@ command = [
 need_stdout = false
 # cargo llvm-cov --lcov --output-path coverage.lcov --no-default-features --features "async, multi-vec, repl"
 [jobs.test]
+env.RUST_MIN_STACK = "4194304"
 command = [
     "cargo",
     "llvm-cov",

@@ -155,6 +155,7 @@ struct Context<'a> {
     extruder_context: &'a ExtruderContext,
     symbol_tables: Vec<SymbolTable>,
     method_name: Option<String>,
+    plugins: HashMap<String, String>,
 }
 
 impl<'a> Context<'a> {
@@ -163,6 +164,7 @@ impl<'a> Context<'a> {
             extruder_context,
             symbol_tables: vec![SymbolTable::new(0)],
             method_name: None,
+            plugins: HashMap::default(),
         }
     }
 
@@ -172,6 +174,10 @@ impl<'a> Context<'a> {
 
     fn sarzak_heel(&self) -> RefType<SarzakStore> {
         self.extruder_context.sarzak.clone()
+    }
+
+    fn insert_plugin(&mut self, name: String, path: String) {
+        self.plugins.insert(name, path);
     }
 
     fn push_symbol_table(&mut self) {
@@ -214,7 +220,7 @@ pub fn compile(context: &ExtruderContext) -> Result<Program> {
 
     let lu_dog = context.lu_dog_heel();
 
-    // We need to grab this specific instance's value of of the string type.
+    // We need to grab this specific instance's value of the string type.
     let ty = Ty::new_z_string(&s_read!(context.sarzak_heel()));
     let ty = ValueType::new_ty(true, &ty, &mut s_write!(lu_dog));
     let ty = Value::ValueType((*s_read!(ty)).clone());
@@ -228,12 +234,16 @@ pub fn compile(context: &ExtruderContext) -> Result<Program> {
         // let ty = import.r1_value_type(&lu_dog)[0].clone();
         // let ty = s_read!(ty);
         // let ty = Value::ValueType((*ty).clone());
-        // dbg!(&name);
+        dbg!(&name);
         // program.add_symbol(name, ty);
     }
 
     for func in lu_dog.iter_function() {
         program.add_thonk(compile_function(&func, &mut context)?.into());
+    }
+
+    for (name, path) in context.plugins.iter() {
+        program.add_symbol(format!("PLUGIN_{}", name), path.clone().into());
     }
 
     Ok(program)

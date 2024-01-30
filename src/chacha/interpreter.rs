@@ -565,6 +565,7 @@ fn eval_expression(
                 }
                 Value::Task {
                     worker: Some(worker),
+                    // worker: _,
                     parent: Some(parent),
                 } => {
                     worker.start_task(parent);

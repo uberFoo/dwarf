@@ -88,6 +88,7 @@ pub(in crate::dwarf::extruder) fn inter(
         position += 1;
 
         last_arg_uuid = link_argument!(last_arg_uuid, arg, lu_dog);
+        // Note that self isn't being push onto this vec.
         arg_ty.push(ty);
     }
 
@@ -201,7 +202,17 @@ pub(in crate::dwarf::extruder) fn method_call_return_type(
         },
         ValueTypeEnum::Range(_) => match method.as_str() {
             MAP => {
-                let inner = ValueType::new_ty(true, &Ty::new_integer(context.sarzak), lu_dog);
+                if arg_ty.len() != 1 {
+                    return Err(vec![DwarfError::WrongNumberOfArguments {
+                        expected: 1,
+                        found: arg_ty.len(),
+                        file: context.file_name.to_owned(),
+                        span: meth_span.to_owned(),
+                        location: location!(),
+                        program: context.source_string.to_owned(),
+                    }]);
+                }
+                let inner = arg_ty.pop().unwrap();
                 let list = List::new(&inner, lu_dog);
                 ValueType::new_list(true, &list, lu_dog)
             }

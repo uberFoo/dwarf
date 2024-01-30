@@ -152,6 +152,7 @@ impl std::fmt::Debug for VM {
 impl VM {
     pub fn new(program: &Program, args: &[RefType<Value>]) -> Self {
         // println!("{}", program);
+        // dbg!(&program);
         let Some(Value::ValueType(str_ty)) = program.get_symbol("STRING") else {
             panic!("No STRING symbol found.")
         };
