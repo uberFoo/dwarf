@@ -449,6 +449,8 @@ pub fn initialize_interpreter(
         dirty,
         e_context.source.to_owned(),
         program,
+        e_context.scopes,
+        e_context.imports,
     ))
 }
 

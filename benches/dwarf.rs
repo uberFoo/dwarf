@@ -1,4 +1,4 @@
-use std::{env, fs};
+use std::{env, fs, path::PathBuf};
 
 use criterion::{criterion_group, criterion_main, Criterion};
 use dwarf::{
@@ -70,11 +70,11 @@ fn fib_vm(c: &mut Criterion) {
     };
 
     let args = vec![new_ref!(Value, "fib".into()), new_ref!(Value, "17".into())];
-    let mut vm = VM::new(&program, &args);
+    let mut vm = VM::new(&program, &args, &PathBuf::new());
     c.bench_function("fib-vm-17", |b| b.iter(|| vm.invoke("main", &[]).unwrap()));
 
     let args = vec![new_ref!(Value, "fib".into()), new_ref!(Value, "28".into())];
-    let mut vm = VM::new(&program, &args);
+    let mut vm = VM::new(&program, &args, &PathBuf::new());
     c.bench_function("fib-vm-28", |b| b.iter(|| vm.invoke("main", &[]).unwrap()));
 }
 
@@ -171,7 +171,7 @@ fn loop_vm(c: &mut Criterion) {
     let Ok(program) = compile(&lu_dog_ctx) else {
         panic!("Failed to compile program");
     };
-    let mut vm = VM::new(&program, &[]);
+    let mut vm = VM::new(&program, &[], &PathBuf::new());
 
     c.bench_function("loop-vm", |b| b.iter(|| vm.invoke("main", &[]).unwrap()));
 }

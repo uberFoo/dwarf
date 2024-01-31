@@ -1,11 +1,14 @@
 use snafu::{location, Location};
 
+#[cfg(feature = "async")]
+use crate::keywords::SPAWN;
+
 use crate::{
     bubba::{
         compiler::{compile_expression, get_span, CThonk, Context, Result},
         instr::Instruction,
     },
-    keywords::{ARGS, ASSERT, ASSERT_EQ, CHACHA, FORMAT, NEW, PLUGIN, SPAWN},
+    keywords::{ARGS, ASSERT, ASSERT_EQ, CHACHA, FORMAT, NEW, PLUGIN},
     lu_dog::{Call, CallEnum, Expression},
     new_ref, s_read, NewRef, RefType, SarzakStorePtr, Span, Value, PATH_SEP, POP_CLR,
 };
