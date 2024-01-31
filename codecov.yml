@@ -1,2 +1,5 @@
 ignore:
     - 'plug-ins/**/*'
+
+fixes:
+    - 'dwarf/::'
