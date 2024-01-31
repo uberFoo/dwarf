@@ -228,16 +228,6 @@ pub fn compile(context: &ExtruderContext) -> Result<Program> {
 
     let lu_dog = s_read!(lu_dog);
 
-    for import in lu_dog.iter_import() {
-        let import = s_read!(import);
-        let name = import.name.clone();
-        // let ty = import.r1_value_type(&lu_dog)[0].clone();
-        // let ty = s_read!(ty);
-        // let ty = Value::ValueType((*ty).clone());
-        dbg!(&name);
-        // program.add_symbol(name, ty);
-    }
-
     for func in lu_dog.iter_function() {
         program.add_thonk(compile_function(&func, &mut context)?.into());
     }
@@ -545,7 +535,7 @@ mod test {
     }
 
     pub(super) fn run_vm(program: &Program) -> Result<RefType<Value>, Error> {
-        let mut vm = VM::new(program, &[]);
+        let mut vm = VM::new(program, &[], &get_dwarf_home());
         vm.invoke("main", &[])
     }
 
@@ -553,7 +543,7 @@ mod test {
         program: &Program,
         args: &[RefType<Value>],
     ) -> Result<RefType<Value>, Error> {
-        let mut vm = VM::new(program, args);
+        let mut vm = VM::new(program, args, &get_dwarf_home());
         vm.invoke("main", &[])
     }
 
@@ -1163,7 +1153,7 @@ mod test {
         assert_eq!(&*s_read!(run.unwrap()), &Value::Boolean(true));
     }
 
-    // #[test]
+    #[test]
     fn use_plugin() {
         let _ = env_logger::builder().is_test(true).try_init();
         color_backtrace::install();
@@ -1192,6 +1182,7 @@ mod test {
         //     59
         // );
         let run = run_vm(&program);
+        println!("{:?}", run);
         assert!(run.is_ok());
         assert_eq!(&*s_read!(run.unwrap()), &Value::Boolean(true));
     }

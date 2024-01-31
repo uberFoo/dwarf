@@ -170,35 +170,26 @@ mod http_client {
             func: RStr<'_>,
             args: RVec<FfiValue>,
         ) -> RResult<FfiValue, Error> {
-            // let module_str = module.as_str();
-            // debug!("module: {module_str}, type: {ty}, func: {func}, args: {args:?}");
-            // Ok(FfiValue::Empty)
             future::block_on(Compat::new(async {
                 match ty.as_str() {
-                    "HttpClient" => {
-                        match func.as_str() {
-                            "get" => {
-                                let url: String = args
-                                    .first()
-                                    .unwrap()
-                                    .try_into()
-                                    .map_err(|e: ChaChaError| Error::Uber(e.to_string().into()))
-                                    .unwrap();
+                    "HttpClient" => match func.as_str() {
+                        "get" => {
+                            let url: String = args
+                                .first()
+                                .unwrap()
+                                .try_into()
+                                .map_err(|e: ChaChaError| Error::Uber(e.to_string().into()))
+                                .unwrap();
 
-                                // let res = self.0.get(url).send().await.unwrap();
-                                // let body = res.text().await.unwrap();
-                                // Ok(FfiValue::String(body.into()))
+                            let request = self.client.get(url);
+                            let entry = self.requests.vacant_entry();
+                            let key = entry.key();
+                            self.requests.insert(Arc::new(request));
 
-                                let request = self.client.get(url);
-                                let entry = self.requests.vacant_entry();
-                                let key = entry.key();
-                                self.requests.insert(Arc::new(request));
-
-                                Ok(FfiValue::Integer(key as DwarfInteger))
-                            }
-                            func => Err(Error::Uber(format!("Invalid function: {func}").into())),
+                            Ok(FfiValue::Integer(key as DwarfInteger))
                         }
-                    }
+                        func => Err(Error::Uber(format!("Invalid function: {func}").into())),
+                    },
                     "Request" => match func.as_str() {
                         "send" => {
                             let key: DwarfInteger = args
@@ -211,8 +202,6 @@ mod http_client {
                             let request = self.requests.remove(key as usize);
                             if let Some(request) = Arc::into_inner(request) {
                                 let response = request.send().await;
-                                // let body = response.text().await.unwrap();
-                                // Ok(FfiValue::String(body.into()))
                                 let response = match response {
                                     Ok(response) => {
                                         let entry = self.responses.vacant_entry();

@@ -1097,7 +1097,7 @@ pub fn eval(
                             let mut fubar = context.clone();
                             // let mut baz = fubar.executor().clone();
                             let future = async move {
-                                let mut vm = VM::new(fubar.get_program(), &[]);
+                                let mut vm = VM::new(fubar.get_program(), &[], fubar.get_home());
 
                                 // let func = func.clone();
 
@@ -1170,10 +1170,9 @@ pub fn eval(
                                     s_read!(lu_dog).exhume_x_plugin_id_by_name(plugin).unwrap();
                                 let plugin = s_read!(lu_dog).exhume_x_plugin(&plugin).unwrap();
                                 let plugin = s_read!(plugin);
-                                let plugin = &plugin.x_path;
-
-                                let plugin_name = plugin.split(PATH_SEP).next().unwrap();
-                                let args = if let Some(path) = plugin.split(PATH_SEP).nth(1) {
+                                let path = &plugin.x_path;
+                                let plugin_root = path.split(PATH_SEP).next().unwrap();
+                                let args = if let Some(path) = path.split(PATH_SEP).nth(1) {
                                     vec![Value::String(path.to_owned()).into()]
                                 } else {
                                     Vec::new()
@@ -1181,10 +1180,10 @@ pub fn eval(
                                 // kts -- I have a hard time finding this.
                                 let library_path = RawLibrary::path_in_directory(
                                     Path::new(&format!(
-                                        "{}/extensions/{plugin_name}/lib",
+                                        "{}/extensions/{plugin_root}/lib",
                                         context.get_home().display()
                                     )),
-                                    plugin_name,
+                                    plugin_root,
                                     LibrarySuffix::NoSuffix,
                                 );
                                 let root_module = (|| {
@@ -1358,7 +1357,7 @@ fn spawn(
 
     let t_span = debug_span!("spawn_span", target = "async", name = ?name);
     let future = async move {
-        let mut vm = VM::new(child_context.get_program(), &[]);
+        let mut vm = VM::new(child_context.get_program(), &[], child_context.get_home());
         let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
         let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
         if let Value::Function(func) = &func {

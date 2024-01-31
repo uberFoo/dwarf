@@ -6,7 +6,7 @@ use crate::{
         instr::Instruction,
     },
     lu_dog::{FieldAccessTargetEnum, ValueTypeEnum},
-    new_ref, s_read, NewRef, RefType, SarzakStorePtr, Span, Value,
+    new_ref, s_read, NewRef, RefType, SarzakStorePtr, Span, Value, PATH_SEP,
 };
 
 pub(in crate::bubba::compiler) fn compile_field_access(
@@ -44,7 +44,9 @@ pub(in crate::bubba::compiler) fn compile_field_access(
                 ValueTypeEnum::XPlugin(ref plugin) => {
                     let plugin = lu_dog.exhume_x_plugin(plugin).unwrap();
                     let plugin = s_read!(plugin);
-                    context.insert_plugin(plugin.name.clone(), plugin.x_path.clone());
+                    let path = &plugin.x_path;
+                    let plugin_root = path.split(PATH_SEP).next().unwrap();
+                    context.insert_plugin(plugin.name.clone(), plugin_root.to_owned());
                 }
                 _ => {}
             }

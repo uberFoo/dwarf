@@ -736,6 +736,7 @@ pub fn start_func(
         *running = !stopped;
     }
 
+    let dwarf_home = context.get_home().clone();
     let mut program = context.get_program().clone();
     let ty = crate::sarzak::Ty::new_z_string(&s_read!(context.sarzak_heel()));
     let ty = ValueType::new_ty(true, &ty, &mut s_write!(context.lu_dog_heel()));
@@ -743,7 +744,7 @@ pub fn start_func(
     program.add_symbol("STRING".to_owned(), ty);
 
     let stack = context.memory();
-    let mut vm = VM::new(&program, &[]);
+    let mut vm = VM::new(&program, &[], &dwarf_home);
 
     if let Some(main) = stack.get(name) {
         // This should fail if it's not a function. Actually, I think that it _has_
@@ -839,7 +840,7 @@ pub fn start_vm(n: DwarfInteger) -> Result<DwarfInteger, Error> {
     let ty = Value::ValueType((*s_read!(ty)).clone());
     program.add_symbol("STRING".to_owned(), ty);
 
-    let mut vm = VM::new(&program, &[]);
+    let mut vm = VM::new(&program, &[], &PathBuf::new());
     let result = vm.invoke("fib", &[new_ref!(Value, n.into())]);
 
     // vm.pop_stack();

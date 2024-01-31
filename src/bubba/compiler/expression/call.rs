@@ -259,16 +259,21 @@ fn compile_static_method_call(
                         let plugin = lu_dog.exhume_x_plugin_id_by_name(plugin).unwrap();
                         let plugin = lu_dog.exhume_x_plugin(&plugin).unwrap();
                         let plugin = s_read!(plugin);
-                        let plugin_name = &plugin.name;
                         let path = &plugin.x_path;
+                        let plugin_root = path.split(PATH_SEP).next().unwrap();
 
-                        let args = if let Some(path) = path.split(PATH_SEP).nth(1) {
-                            vec![Value::String(path.to_owned()).into()]
-                        } else {
-                            Vec::<Value>::new()
+                        if let Some(path) = path.split(PATH_SEP).nth(1) {
+                            thonk.add_instruction(
+                                Instruction::Push(new_ref!(Value, Value::String(path.to_owned()))),
+                                location!(),
+                            );
                         };
 
-                        dbg!(plugin_name, path, args);
+                        thonk.add_instruction(
+                            Instruction::Push(new_ref!(Value, plugin_root.into())),
+                            location!(),
+                        );
+                        thonk.add_instruction(Instruction::PluginNew(1), location!());
                     }
                     missing_method => {
                         panic!("plugin only supports `new`, found: {missing_method}");

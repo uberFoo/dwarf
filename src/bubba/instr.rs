@@ -247,6 +247,7 @@ pub enum Instruction {
     /// ## Stack Effect
     ///
     Out(usize),
+    PluginNew(usize),
     /// Pop the value off the top of the stack.
     ///
     /// The value is dropped on the floor and forgotten.
@@ -441,6 +442,12 @@ impl fmt::Display for Instruction {
                 "{} {}",
                 opcode_style.paint("out "),
                 operand_style.paint(stream.to_string())
+            ),
+            Instruction::PluginNew(arg_count) => write!(
+                f,
+                "{} {}",
+                opcode_style.paint("pnew"),
+                operand_style.paint(arg_count.to_string())
             ),
             Instruction::Pop => write!(f, "{}", opcode_style.paint("pop ")),
             Instruction::Push(value) => write!(

@@ -1,5 +1,9 @@
-use std::collections::VecDeque;
+use std::{
+    collections::VecDeque,
+    path::{Path, PathBuf},
+};
 
+use abi_stable::library::{lib_header_from_path, LibrarySuffix, RawLibrary};
 use ansi_term::Colour;
 use log::{self, log_enabled, Level::Trace};
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
@@ -9,7 +13,7 @@ use crate::{
     chacha::value::{EnumVariant, TupleEnum, UserStruct},
     lu_dog::{ValueType, ValueTypeEnum},
     new_ref,
-    plug_in::PluginType,
+    plug_in::{PluginModRef, PluginType},
     s_read, s_write,
     sarzak::{ObjectStore as SarzakStore, Ty, MODEL as SARZAK_MODEL},
     ChaChaError, DwarfInteger, NewRef, RefType, Span, Value, PATH_SEP,
@@ -46,77 +50,6 @@ type Result<T, E = Error> = std::result::Result<T, E>;
 
 const STACK_SIZE: usize = 1024;
 
-#[derive(Clone)]
-struct Stack {
-    stack: [RefType<Value>; STACK_SIZE],
-    sp: usize,
-}
-
-impl std::fmt::Debug for Stack {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let len = self.len();
-        for i in 0..len {
-            if i == self.sp {
-                write!(f, "\t{} ->\t", Colour::Green.bold().paint("sp"))?;
-            } else {
-                write!(f, "\t     \t")?;
-            }
-            writeln!(f, "stack {i}:\t{}", s_read!(self.stack[i]))?;
-        }
-        Ok(())
-    }
-}
-
-impl Stack {
-    fn new() -> Self {
-        let stack: [RefType<Value>; STACK_SIZE] =
-            std::array::from_fn(|_| new_ref!(Value, Value::default()));
-        Stack { stack, sp: 0 }
-    }
-
-    fn push(&mut self, value: RefType<Value>) {
-        if self.sp == STACK_SIZE {
-            panic!("Stack overflow.");
-        }
-
-        self.stack[self.sp] = value;
-        self.sp += 1;
-    }
-
-    fn pop(&mut self) -> RefType<Value> {
-        if self.sp == 0 {
-            panic!("Stack underflow.");
-        }
-
-        self.sp -= 1;
-        self.stack[self.sp].clone()
-    }
-
-    fn len(&self) -> usize {
-        self.sp
-    }
-
-    #[allow(dead_code)]
-    fn is_empty(&self) -> bool {
-        dbg!(&self.sp);
-        self.sp == 0
-    }
-}
-
-impl std::ops::Index<usize> for Stack {
-    type Output = RefType<Value>;
-
-    fn index(&self, index: usize) -> &Self::Output {
-        &self.stack[index]
-    }
-}
-
-impl std::ops::IndexMut<usize> for Stack {
-    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
-        &mut self.stack[index]
-    }
-}
-
 // #[derive(Clone)]
 pub struct VM {
     /// Instruction Pointer
@@ -126,7 +59,6 @@ pub struct VM {
     /// Frame Pointer
     ///
     fp: usize,
-    // stack: Stack,
     stack: Vec<RefType<Value>>,
     program: Vec<Instruction>,
     source_map: Vec<Span>,
@@ -134,6 +66,7 @@ pub struct VM {
     sarzak: SarzakStore,
     args: RefType<Value>,
     libs: HashMap<String, PluginType>,
+    home: PathBuf,
 }
 
 impl std::fmt::Debug for VM {
@@ -145,12 +78,13 @@ impl std::fmt::Debug for VM {
         writeln!(f, "source_map: {:?}", self.source_map)?;
         writeln!(f, "func_map: {:?}", self.func_map)?;
         writeln!(f, "args: {:?}", self.args)?;
+        writeln!(f, "home_dir: {:?}", self.home)?;
         Ok(())
     }
 }
 
 impl VM {
-    pub fn new(program: &Program, args: &[RefType<Value>]) -> Self {
+    pub fn new(program: &Program, args: &[RefType<Value>], home: &PathBuf) -> Self {
         // println!("{}", program);
         // dbg!(&program);
         let Some(Value::ValueType(str_ty)) = program.get_symbol("STRING") else {
@@ -178,6 +112,7 @@ impl VM {
                 }
             ),
             libs: HashMap::default(),
+            home: home.clone(),
         };
 
         let mut tmp_mem: Vec<Instruction> = Vec::new();
@@ -1240,6 +1175,52 @@ impl VM {
 
                         1
                     }
+                    Instruction::PluginNew(arg_count) => {
+                        let plugin_root: String = (&*s_read!(self.stack.pop().unwrap()))
+                            .try_into()
+                            .map_err(|e| BubbaError::ValueError {
+                                source: Box::new(e),
+                                location: location!(),
+                            })?;
+
+                        let mut args = Vec::with_capacity(*arg_count as usize);
+                        for _ in 0..*arg_count as usize {
+                            let arg: Value = (&*s_read!(self.stack.pop().unwrap())).clone();
+                            args.push(arg.into());
+                        }
+
+                        let library_path = RawLibrary::path_in_directory(
+                            Path::new(&format!(
+                                "{}/extensions/{}/lib",
+                                self.home.display(),
+                                plugin_root,
+                            )),
+                            plugin_root.as_str(),
+                            LibrarySuffix::NoSuffix,
+                        );
+                        let root_module = (|| {
+                            let header = lib_header_from_path(&library_path)?;
+                            header.init_root_module::<PluginModRef>()
+                        })()
+                        .map_err(|e| {
+                            eprintln!("{e}");
+                            ChaChaError::BadnessHappened {
+                                message: "Plug-in error".to_owned(),
+                                location: location!(),
+                            }
+                        })
+                        .map_err(|e| BubbaError::ValueError {
+                            source: Box::new(e),
+                            location: location!(),
+                        })?;
+
+                        let ctor = root_module.new();
+                        let plugin = new_ref!(PluginType, ctor(args.into()).unwrap());
+                        let value = new_ref!(Value, Value::Plugin(plugin));
+                        self.stack.push(value);
+
+                        1
+                    }
                     Instruction::Pop => {
                         self.stack.pop();
 
@@ -1529,7 +1510,7 @@ mod tests {
             ),
         );
 
-        let mut vm = VM::new(&program, &[]);
+        let mut vm = VM::new(&program, &[], &PathBuf::new());
         let result = vm.invoke("test", &[]);
         println!("{:?}", result);
         println!("{:?}", vm);
@@ -1554,7 +1535,7 @@ mod tests {
             ),
         );
 
-        let mut vm = VM::new(&program, &[]);
+        let mut vm = VM::new(&program, &[], &PathBuf::new());
         let result = vm.invoke("test", &[]);
         println!("{:?}", result);
         println!("{:?}", vm);
@@ -1589,7 +1570,7 @@ mod tests {
             ),
         );
 
-        let mut vm = VM::new(&program, &[]);
+        let mut vm = VM::new(&program, &[], &PathBuf::new());
         let result = vm.invoke("test", &[]);
         println!("{:?}", result);
         println!("{:?}", vm);
@@ -1624,7 +1605,7 @@ mod tests {
             ),
         );
 
-        let mut vm = VM::new(&program, &[]);
+        let mut vm = VM::new(&program, &[], &PathBuf::new());
         let result = vm.invoke("test", &[]);
         println!("{:?}", result);
         println!("{:?}", vm);
@@ -1658,7 +1639,7 @@ mod tests {
             ),
         );
 
-        let mut vm = VM::new(&program, &[]);
+        let mut vm = VM::new(&program, &[], &PathBuf::new());
         let result = vm.invoke("test", &[]);
         println!("{:?}", result);
         println!("{:?}", vm);
@@ -1691,7 +1672,7 @@ mod tests {
             ),
         );
 
-        let mut vm = VM::new(&program, &[]);
+        let mut vm = VM::new(&program, &[], &PathBuf::new());
         let result = vm.invoke("test", &[]);
         println!("{:?}", result);
         println!("{:?}", vm);
@@ -1723,7 +1704,7 @@ mod tests {
             ),
         );
 
-        let mut vm = VM::new(&program, &[]);
+        let mut vm = VM::new(&program, &[], &PathBuf::new());
         let result = vm.invoke("test", &[]);
         println!("{:?}", result);
         println!("{:?}", vm);
@@ -1755,7 +1736,7 @@ mod tests {
             ),
         );
 
-        let mut vm = VM::new(&program, &[]);
+        let mut vm = VM::new(&program, &[], &PathBuf::new());
         let result = vm.invoke("test", &[]);
         println!("{:?}", result);
         println!("{:?}", vm);
@@ -1800,7 +1781,7 @@ mod tests {
             ),
         );
 
-        let mut vm = VM::new(&program, &[]);
+        let mut vm = VM::new(&program, &[], &PathBuf::new());
         let result = vm.invoke("test", &[]);
         println!("{:?}", result);
         println!("{:?}", vm);
@@ -1835,7 +1816,7 @@ mod tests {
             ),
         );
 
-        let mut vm = VM::new(&program, &[]);
+        let mut vm = VM::new(&program, &[], &PathBuf::new());
 
         let result = vm.invoke("test", &[]);
         println!("{:?}", result);
@@ -1922,7 +1903,7 @@ mod tests {
 
         program.add_symbol("STRING".to_owned(), ty);
 
-        let mut vm = VM::new(&program, &[]);
+        let mut vm = VM::new(&program, &[], &PathBuf::new());
 
         let result = vm.invoke("test", &[]);
         println!("{:?}", result);
