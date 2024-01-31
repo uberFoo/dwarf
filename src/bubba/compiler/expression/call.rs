@@ -5,7 +5,7 @@ use crate::{
         compiler::{compile_expression, get_span, CThonk, Context, Result},
         instr::Instruction,
     },
-    keywords::{ARGS, ASSERT, ASSERT_EQ, CHACHA, FORMAT, NEW, PLUGIN},
+    keywords::{ARGS, ASSERT, ASSERT_EQ, CHACHA, FORMAT, NEW, PLUGIN, SPAWN},
     lu_dog::{Call, CallEnum, Expression},
     new_ref, s_read, NewRef, RefType, SarzakStorePtr, Span, Value, PATH_SEP, POP_CLR,
 };
@@ -248,6 +248,10 @@ fn compile_static_method_call(
                     location!(),
                 );
                 thonk.add_instruction_with_span(Instruction::HaltAndCatchFire, span, location!());
+            }
+            #[cfg(feature = "async")]
+            SPAWN => {
+                todo!("handle spawn");
             }
             meth => todo!("handle chacha method: {meth}"),
         },
@@ -671,5 +675,40 @@ mod test {
         ];
 
         assert!(run_vm_with_args(&program, &args).is_ok());
+    }
+
+    // #[test]
+    fn test_lambda() {
+        let _ = env_logger::builder().is_test(true).try_init();
+        color_backtrace::install();
+
+        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
+
+        let ore = "
+                   fn main() -> int {
+                       let foo = |x: int, y: int| -> int {
+                           x + y
+                       };
+                       foo(1, 2)
+                   }";
+        let ast = parse_dwarf("test_lambda", ore).unwrap();
+        let ctx = new_lu_dog(
+            "test_lambda".to_owned(),
+            Some((ore.to_owned(), &ast)),
+            &get_dwarf_home(),
+            &sarzak,
+        )
+        .unwrap();
+        let program = compile(&ctx).unwrap();
+        println!("{program}");
+
+        assert_eq!(program.get_thonk_card(), 1);
+
+        // assert_eq!(
+        //     program.get_thonk("main").unwrap().get_instruction_card(),
+        //     11
+        // );
+
+        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &3.into());
     }
 }

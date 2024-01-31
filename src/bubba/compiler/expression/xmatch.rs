@@ -240,3 +240,360 @@ pub(in crate::bubba::compiler) fn compile(
 
     Ok(())
 }
+
+#[cfg(test)]
+mod test {
+    use crate::{
+        bubba::compiler::{
+            test::{get_dwarf_home, run_vm},
+            *,
+        },
+        chacha::value::{EnumVariant, TupleEnum},
+        dwarf::{new_lu_dog, parse_dwarf},
+        sarzak::MODEL as SARZAK_MODEL,
+    };
+
+    #[test]
+    fn match_literal_expression() {
+        let _ = env_logger::builder().is_test(true).try_init();
+        color_backtrace::install();
+
+        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
+        let ore = "
+                   fn main() -> int {
+                       match 1 {
+                           1 => 1,
+                           2 => 2,
+                           3 => 3,
+                           _ => 4,
+                       }
+                   }";
+        let ast = parse_dwarf("match_expression", ore).unwrap();
+        let ctx = new_lu_dog(
+            "match_expression".to_owned(),
+            Some((ore.to_owned(), &ast)),
+            &get_dwarf_home(),
+            &sarzak,
+        )
+        .unwrap();
+
+        let program = compile(&ctx).unwrap();
+        println!("{program}");
+
+        assert_eq!(program.get_thonk_card(), 1);
+
+        assert_eq!(
+            program.get_thonk("main").unwrap().get_instruction_card(),
+            30
+        );
+
+        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(1));
+    }
+
+    #[test]
+    fn match_literal_catchall() {
+        let _ = env_logger::builder().is_test(true).try_init();
+        color_backtrace::install();
+
+        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
+        let ore = "
+                   fn main() -> int {
+                       match 6 {
+                           1 => 1,
+                           2 => 2,
+                           3 => 3,
+                           a => {
+                                print(a);
+                                4
+                           }
+                       }
+                   }";
+        let ast = parse_dwarf("match_expression", ore).unwrap();
+        let ctx = new_lu_dog(
+            "match_expression".to_owned(),
+            Some((ore.to_owned(), &ast)),
+            &get_dwarf_home(),
+            &sarzak,
+        )
+        .unwrap();
+
+        let program = compile(&ctx).unwrap();
+        println!("{program}");
+
+        assert_eq!(program.get_thonk_card(), 1);
+
+        assert_eq!(
+            program.get_thonk("main").unwrap().get_instruction_card(),
+            33
+        );
+
+        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &4.into());
+    }
+
+    #[test]
+    fn match_literal_exp_middle() {
+        let _ = env_logger::builder().is_test(true).try_init();
+        color_backtrace::install();
+
+        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
+        let ore = "
+                   fn main() -> int {
+                       match 3 {
+                           1 => 1,
+                           2 => 2,
+                           3 => 3,
+                           _ => 4,
+                       }
+                   }";
+        let ast = parse_dwarf("match_expression", ore).unwrap();
+        let ctx = new_lu_dog(
+            "match_expression".to_owned(),
+            Some((ore.to_owned(), &ast)),
+            &get_dwarf_home(),
+            &sarzak,
+        )
+        .unwrap();
+
+        let program = compile(&ctx).unwrap();
+        println!("{program}");
+
+        assert_eq!(program.get_thonk_card(), 1);
+
+        assert_eq!(
+            program.get_thonk("main").unwrap().get_instruction_card(),
+            30
+        );
+
+        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &3.into());
+    }
+
+    #[test]
+    fn match_string_literal_expression() {
+        let _ = env_logger::builder().is_test(true).try_init();
+        color_backtrace::install();
+
+        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
+        let ore = "
+                   fn main() -> string {
+                       match \"foo\" {
+                           \"foo\" => \"foo\",
+                           \"bar\" => \"bar\",
+                           \"baz\" => \"baz\",
+                           _ => \"qux\",
+                       }
+                   }";
+        let ast = parse_dwarf("match_expression", ore).unwrap();
+        let ctx = new_lu_dog(
+            "match_expression".to_owned(),
+            Some((ore.to_owned(), &ast)),
+            &get_dwarf_home(),
+            &sarzak,
+        )
+        .unwrap();
+
+        let program = compile(&ctx).unwrap();
+        println!("{program}");
+
+        assert_eq!(program.get_thonk_card(), 1);
+
+        assert_eq!(
+            program.get_thonk("main").unwrap().get_instruction_card(),
+            30
+        );
+
+        assert_eq!(
+            &*s_read!(run_vm(&program).unwrap()),
+            &Value::String("foo".to_owned())
+        );
+    }
+
+    #[test]
+    fn match_enum() {
+        let _ = env_logger::builder().is_test(true).try_init();
+        color_backtrace::install();
+
+        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
+        let ore = "
+                   enum Foo {
+                       Bar,
+                       Baz,
+                       Qux,
+                   }
+                   fn main() -> Foo {
+                       match Foo::Bar {
+                           Foo::Bar => Foo::Bar,
+                           Foo::Baz => Foo::Baz,
+                           Foo::Qux => Foo::Qux,
+                       }
+                   }";
+        let ast = parse_dwarf("match_expression", ore).unwrap();
+        let ctx = new_lu_dog(
+            "match_expression".to_owned(),
+            Some((ore.to_owned(), &ast)),
+            &get_dwarf_home(),
+            &sarzak,
+        )
+        .unwrap();
+
+        let ty = {
+            let mut lu_dog = s_write!(ctx.lu_dog);
+
+            let id = lu_dog.exhume_enumeration_id_by_name("::Foo").unwrap();
+            let woog_enum = lu_dog.exhume_enumeration(&id).unwrap();
+            ValueType::new_enumeration(true, &woog_enum, &mut lu_dog)
+        };
+
+        let program = compile(&ctx).unwrap();
+        println!("{program}");
+
+        assert_eq!(program.get_thonk_card(), 1);
+
+        assert_eq!(
+            program.get_thonk("main").unwrap().get_instruction_card(),
+            32
+        );
+
+        assert_eq!(
+            &*s_read!(run_vm(&program).unwrap()),
+            &Value::Enumeration(EnumVariant::Unit(ty, "::Foo".to_owned(), "Bar".to_owned()))
+        );
+    }
+
+    #[test]
+    fn match_tuple_enum() {
+        let _ = env_logger::builder().is_test(true).try_init();
+        color_backtrace::install();
+
+        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
+        let ore = "
+                   enum Foo {
+                       Bar(int),
+                       Baz(int),
+                       Qux(int),
+                   }
+                   fn main() -> Foo {
+                       match Foo::Bar(40 + 2) {
+                           Foo::Baz(1) => Foo::Baz(1),
+                           Foo::Bar(42) => Foo::Bar(42),
+                           Foo::Qux(1) => Foo::Qux(1),
+                       }
+                   }";
+        let ast = parse_dwarf("match_expression", ore).unwrap();
+        let ctx = new_lu_dog(
+            "match_expression".to_owned(),
+            Some((ore.to_owned(), &ast)),
+            &get_dwarf_home(),
+            &sarzak,
+        )
+        .unwrap();
+
+        let lu_dog = &ctx.lu_dog;
+
+        let id = s_read!(lu_dog)
+            .exhume_enumeration_id_by_name("::Foo")
+            .unwrap();
+        let woog_enum = s_read!(lu_dog).exhume_enumeration(&id).unwrap();
+        let ty = ValueType::new_enumeration(true, &woog_enum, &mut s_write!(lu_dog));
+        let user_enum = TupleEnum::new("Bar", new_ref!(Value, Value::Integer(42)));
+        let user_enum = new_ref!(TupleEnum, user_enum);
+
+        let program = compile(&ctx).unwrap();
+        println!("{program}");
+
+        assert_eq!(program.get_thonk_card(), 1);
+
+        assert_eq!(
+            program.get_thonk("main").unwrap().get_instruction_card(),
+            53
+        );
+
+        assert_eq!(
+            &*s_read!(run_vm(&program).unwrap()),
+            &Value::Enumeration(EnumVariant::Tuple((ty, "Foo".to_owned()), user_enum))
+        );
+    }
+
+    #[test]
+    fn match_pattern_variable() {
+        let _ = env_logger::builder().is_test(true).try_init();
+        color_backtrace::install();
+
+        let sarzak_store = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
+        let ore = "
+                   enum Foo {
+                       Bar(int),
+                       Baz(int),
+                       Qux(int),
+                   }
+                   fn main() -> int {
+                       let x = Foo::Baz(42);
+                       match x {
+                           Foo::Bar(u) => u,
+                           Foo::Baz(v) => v,
+                           Foo::Qux(w) => w,
+                       }
+                   }";
+        let ast = parse_dwarf("match_expression", ore).unwrap();
+        let ctx = new_lu_dog(
+            "match_expression".to_owned(),
+            Some((ore.to_owned(), &ast)),
+            &get_dwarf_home(),
+            &sarzak_store,
+        )
+        .unwrap();
+
+        let program = compile(&ctx).unwrap();
+        println!("{program}");
+
+        assert_eq!(program.get_thonk_card(), 1);
+
+        assert_eq!(
+            program.get_thonk("main").unwrap().get_instruction_card(),
+            50
+        );
+
+        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(42));
+    }
+
+    #[test]
+    fn something_interesting_in_match() {
+        let _ = env_logger::builder().is_test(true).try_init();
+        color_backtrace::install();
+
+        let sarzak_store = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
+        let ore = "
+                   enum Foo {
+                       Bar(int),
+                       Baz(int),
+                       Qux(int),
+                   }
+                   fn main() -> int {
+                       let x = Foo::Baz(40);
+                       match x {
+                           Foo::Bar(u) => u + 2,
+                           Foo::Baz(v) => v + 2,
+                           Foo::Qux(w) => w + 2,
+                       }
+                   }";
+        let ast = parse_dwarf("match_expression", ore).unwrap();
+        let ctx = new_lu_dog(
+            "match_expression".to_owned(),
+            Some((ore.to_owned(), &ast)),
+            &get_dwarf_home(),
+            &sarzak_store,
+        )
+        .unwrap();
+
+        let program = compile(&ctx).unwrap();
+        println!("{program}");
+
+        assert_eq!(program.get_thonk_card(), 1);
+
+        assert_eq!(
+            program.get_thonk("main").unwrap().get_instruction_card(),
+            56
+        );
+
+        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(42));
+    }
+}

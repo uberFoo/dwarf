@@ -473,6 +473,7 @@ fn compile_expression(
 
         ExpressionEnum::ForLoop(ref for_loop) => for_loop::compile(for_loop, thonk, context, span)?,
         ExpressionEnum::Index(ref index) => index::compile(index, thonk, context, span)?,
+        ExpressionEnum::Lambda(ref λ) => {}
         ExpressionEnum::ListElement(ref list) => list::compile_list_element(list, thonk, context)?,
         ExpressionEnum::ListExpression(ref list) => {
             list::compile_list_expression(list, thonk, context, span)?
@@ -674,350 +675,6 @@ mod test {
     }
 
     #[test]
-    fn match_literal_expression() {
-        let _ = env_logger::builder().is_test(true).try_init();
-        color_backtrace::install();
-
-        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
-        let ore = "
-                   fn main() -> int {
-                       match 1 {
-                           1 => 1,
-                           2 => 2,
-                           3 => 3,
-                           _ => 4,
-                       }
-                   }";
-        let ast = parse_dwarf("match_expression", ore).unwrap();
-        let ctx = new_lu_dog(
-            "match_expression".to_owned(),
-            Some((ore.to_owned(), &ast)),
-            &get_dwarf_home(),
-            &sarzak,
-        )
-        .unwrap();
-
-        let program = compile(&ctx).unwrap();
-        println!("{program}");
-
-        assert_eq!(program.get_thonk_card(), 1);
-
-        assert_eq!(
-            program.get_thonk("main").unwrap().get_instruction_card(),
-            30
-        );
-
-        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(1));
-    }
-
-    #[test]
-    fn match_literal_catchall() {
-        let _ = env_logger::builder().is_test(true).try_init();
-        color_backtrace::install();
-
-        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
-        let ore = "
-                   fn main() -> int {
-                       match 6 {
-                           1 => 1,
-                           2 => 2,
-                           3 => 3,
-                           a => {
-                                print(a);
-                                4
-                           }
-                       }
-                   }";
-        let ast = parse_dwarf("match_expression", ore).unwrap();
-        let ctx = new_lu_dog(
-            "match_expression".to_owned(),
-            Some((ore.to_owned(), &ast)),
-            &get_dwarf_home(),
-            &sarzak,
-        )
-        .unwrap();
-
-        let program = compile(&ctx).unwrap();
-        println!("{program}");
-
-        assert_eq!(program.get_thonk_card(), 1);
-
-        assert_eq!(
-            program.get_thonk("main").unwrap().get_instruction_card(),
-            33
-        );
-
-        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &4.into());
-    }
-
-    #[test]
-    fn match_literal_exp_middle() {
-        let _ = env_logger::builder().is_test(true).try_init();
-        color_backtrace::install();
-
-        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
-        let ore = "
-                   fn main() -> int {
-                       match 3 {
-                           1 => 1,
-                           2 => 2,
-                           3 => 3,
-                           _ => 4,
-                       }
-                   }";
-        let ast = parse_dwarf("match_expression", ore).unwrap();
-        let ctx = new_lu_dog(
-            "match_expression".to_owned(),
-            Some((ore.to_owned(), &ast)),
-            &get_dwarf_home(),
-            &sarzak,
-        )
-        .unwrap();
-
-        let program = compile(&ctx).unwrap();
-        println!("{program}");
-
-        assert_eq!(program.get_thonk_card(), 1);
-
-        assert_eq!(
-            program.get_thonk("main").unwrap().get_instruction_card(),
-            30
-        );
-
-        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &3.into());
-    }
-
-    #[test]
-    fn match_string_literal_expression() {
-        let _ = env_logger::builder().is_test(true).try_init();
-        color_backtrace::install();
-
-        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
-        let ore = "
-                   fn main() -> string {
-                       match \"foo\" {
-                           \"foo\" => \"foo\",
-                           \"bar\" => \"bar\",
-                           \"baz\" => \"baz\",
-                           _ => \"qux\",
-                       }
-                   }";
-        let ast = parse_dwarf("match_expression", ore).unwrap();
-        let ctx = new_lu_dog(
-            "match_expression".to_owned(),
-            Some((ore.to_owned(), &ast)),
-            &get_dwarf_home(),
-            &sarzak,
-        )
-        .unwrap();
-
-        let program = compile(&ctx).unwrap();
-        println!("{program}");
-
-        assert_eq!(program.get_thonk_card(), 1);
-
-        assert_eq!(
-            program.get_thonk("main").unwrap().get_instruction_card(),
-            30
-        );
-
-        assert_eq!(
-            &*s_read!(run_vm(&program).unwrap()),
-            &Value::String("foo".to_owned())
-        );
-    }
-
-    #[test]
-    fn match_enum() {
-        let _ = env_logger::builder().is_test(true).try_init();
-        color_backtrace::install();
-
-        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
-        let ore = "
-                   enum Foo {
-                       Bar,
-                       Baz,
-                       Qux,
-                   }
-                   fn main() -> Foo {
-                       match Foo::Bar {
-                           Foo::Bar => Foo::Bar,
-                           Foo::Baz => Foo::Baz,
-                           Foo::Qux => Foo::Qux,
-                       }
-                   }";
-        let ast = parse_dwarf("match_expression", ore).unwrap();
-        let ctx = new_lu_dog(
-            "match_expression".to_owned(),
-            Some((ore.to_owned(), &ast)),
-            &get_dwarf_home(),
-            &sarzak,
-        )
-        .unwrap();
-
-        let ty = {
-            let mut lu_dog = s_write!(ctx.lu_dog);
-
-            let id = lu_dog.exhume_enumeration_id_by_name("::Foo").unwrap();
-            let woog_enum = lu_dog.exhume_enumeration(&id).unwrap();
-            ValueType::new_enumeration(true, &woog_enum, &mut lu_dog)
-        };
-
-        let program = compile(&ctx).unwrap();
-        println!("{program}");
-
-        assert_eq!(program.get_thonk_card(), 1);
-
-        assert_eq!(
-            program.get_thonk("main").unwrap().get_instruction_card(),
-            32
-        );
-
-        assert_eq!(
-            &*s_read!(run_vm(&program).unwrap()),
-            &Value::Enumeration(EnumVariant::Unit(ty, "::Foo".to_owned(), "Bar".to_owned()))
-        );
-    }
-
-    #[test]
-    fn match_tuple_enum() {
-        let _ = env_logger::builder().is_test(true).try_init();
-        color_backtrace::install();
-
-        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
-        let ore = "
-                   enum Foo {
-                       Bar(int),
-                       Baz(int),
-                       Qux(int),
-                   }
-                   fn main() -> Foo {
-                       match Foo::Bar(40 + 2) {
-                           Foo::Baz(1) => Foo::Baz(1),
-                           Foo::Bar(42) => Foo::Bar(42),
-                           Foo::Qux(1) => Foo::Qux(1),
-                       }
-                   }";
-        let ast = parse_dwarf("match_expression", ore).unwrap();
-        let ctx = new_lu_dog(
-            "match_expression".to_owned(),
-            Some((ore.to_owned(), &ast)),
-            &get_dwarf_home(),
-            &sarzak,
-        )
-        .unwrap();
-
-        let lu_dog = &ctx.lu_dog;
-
-        let id = s_read!(lu_dog)
-            .exhume_enumeration_id_by_name("::Foo")
-            .unwrap();
-        let woog_enum = s_read!(lu_dog).exhume_enumeration(&id).unwrap();
-        let ty = ValueType::new_enumeration(true, &woog_enum, &mut s_write!(lu_dog));
-        let user_enum = TupleEnum::new("Bar", new_ref!(Value, Value::Integer(42)));
-        let user_enum = new_ref!(TupleEnum, user_enum);
-
-        let program = compile(&ctx).unwrap();
-        println!("{program}");
-
-        assert_eq!(program.get_thonk_card(), 1);
-
-        assert_eq!(
-            program.get_thonk("main").unwrap().get_instruction_card(),
-            53
-        );
-
-        assert_eq!(
-            &*s_read!(run_vm(&program).unwrap()),
-            &Value::Enumeration(EnumVariant::Tuple((ty, "Foo".to_owned()), user_enum))
-        );
-    }
-
-    #[test]
-    fn match_pattern_variable() {
-        let _ = env_logger::builder().is_test(true).try_init();
-        color_backtrace::install();
-
-        let sarzak_store = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
-        let ore = "
-                   enum Foo {
-                       Bar(int),
-                       Baz(int),
-                       Qux(int),
-                   }
-                   fn main() -> int {
-                       let x = Foo::Baz(42);
-                       match x {
-                           Foo::Bar(u) => u,
-                           Foo::Baz(v) => v,
-                           Foo::Qux(w) => w,
-                       }
-                   }";
-        let ast = parse_dwarf("match_expression", ore).unwrap();
-        let ctx = new_lu_dog(
-            "match_expression".to_owned(),
-            Some((ore.to_owned(), &ast)),
-            &get_dwarf_home(),
-            &sarzak_store,
-        )
-        .unwrap();
-
-        let program = compile(&ctx).unwrap();
-        println!("{program}");
-
-        assert_eq!(program.get_thonk_card(), 1);
-
-        assert_eq!(
-            program.get_thonk("main").unwrap().get_instruction_card(),
-            50
-        );
-
-        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(42));
-    }
-
-    #[test]
-    fn something_interesting_in_match() {
-        let _ = env_logger::builder().is_test(true).try_init();
-        color_backtrace::install();
-
-        let sarzak_store = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
-        let ore = "
-                   enum Foo {
-                       Bar(int),
-                       Baz(int),
-                       Qux(int),
-                   }
-                   fn main() -> int {
-                       let x = Foo::Baz(40);
-                       match x {
-                           Foo::Bar(u) => u + 2,
-                           Foo::Baz(v) => v + 2,
-                           Foo::Qux(w) => w + 2,
-                       }
-                   }";
-        let ast = parse_dwarf("match_expression", ore).unwrap();
-        let ctx = new_lu_dog(
-            "match_expression".to_owned(),
-            Some((ore.to_owned(), &ast)),
-            &get_dwarf_home(),
-            &sarzak_store,
-        )
-        .unwrap();
-
-        let program = compile(&ctx).unwrap();
-        println!("{program}");
-
-        assert_eq!(program.get_thonk_card(), 1);
-
-        assert_eq!(
-            program.get_thonk("main").unwrap().get_instruction_card(),
-            56
-        );
-
-        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(42));
-    }
-
-    #[test]
     fn index_into_list() {
         let _ = env_logger::builder().is_test(true).try_init();
         color_backtrace::install();
@@ -1165,6 +822,97 @@ mod test {
                     let client = HttpClient::new();
                     true
                 }";
+        let ast = parse_dwarf("use_plugin", ore).unwrap();
+        let ctx = new_lu_dog(
+            "use_plugin".to_owned(),
+            Some((ore.to_owned(), &ast)),
+            &get_dwarf_home(),
+            &sarzak,
+        )
+        .unwrap();
+        let program = compile(&ctx).unwrap();
+        println!("{program}");
+        assert_eq!(program.get_thonk_card(), 11);
+
+        // assert_eq!(
+        //     program.get_thonk("main").unwrap().get_instruction_card(),
+        //     59
+        // );
+        let run = run_vm(&program);
+        println!("{:?}", run);
+        assert!(run.is_ok());
+        assert_eq!(&*s_read!(run.unwrap()), &Value::Boolean(true));
+    }
+
+    // #[test]
+    fn use_async() {
+        let _ = env_logger::builder().is_test(true).try_init();
+        color_backtrace::install();
+
+        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
+        let ore = r#"
+use http::client::HttpClient;
+use http::client::HttpError;
+use http::client::Response;
+use std::result::Result;
+
+async fn async_get(urls: [String]) -> Future<[Result<string, HttpError>]> {
+    let client = HttpClient::new();
+
+    let tasks: [Future<Result<string, HttpError>>] = [];
+    // Start a task for each url and push them into the tasks array.
+    for url in urls {
+        let task = chacha::spawn(async || -> Result<string, HttpError> {
+            // This creates a request and sends it.
+            let get = client.get(url).await.send().await;
+            match get {
+                Result::<Response, HttpError>::Ok(response) => {
+                    let text = response.text().await;
+                    match text {
+                        Result::Ok(text) => Result::<string, HttpError>::Ok(text),
+                        // Return an error if there was a problem getting the page's text.
+                        Result::Err(e) => Result::<string, HttpError>::Err(e),
+                    }
+                }
+                // Return an Error if there was a problem creating or sending the request.
+                Result::<Response, HttpError>::Err(e) => Result::<string, HttpError>::Err(e),
+            }
+        });
+        tasks.push(task);
+    }
+
+    let results: [Result<string, HttpError>] = [];
+    for task in tasks {
+        // Await each task that was spawned above.
+        let result = task.await;
+        results.push(result);
+    }
+
+    results
+}
+
+async fn main() -> Future<()> {
+    let requests = [
+        "https://en.wikipedia.org/wiki/Main_Page",
+        "https://en.wikipedi.org/wiki/Main_Page",
+        "https://www.rust-lang.org/",
+        "https://www.github.com/",
+    ];
+    let results = async_get(requests).await;
+
+    let i = 0;
+    for result in results {
+        match result {
+            Result::Ok(response) => {
+                print("{1}: {0} bytes\n".format(response.len(), requests[i]));
+            }
+            Result::Err(e) => {
+                print("{1}: {0}\n".format(e.to_string(), requests[i]));
+            }
+        }
+        i = i + 1;
+    }
+}                "#;
         let ast = parse_dwarf("use_plugin", ore).unwrap();
         let ctx = new_lu_dog(
             "use_plugin".to_owned(),
