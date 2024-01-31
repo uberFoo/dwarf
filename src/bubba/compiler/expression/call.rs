@@ -37,7 +37,7 @@ pub(in crate::bubba::compiler) fn compile(
             let expr = s_read!(next).r37_expression(&lu_dog)[0].clone();
             exprs.push(expr);
 
-            let next_id = { s_read!(next).next };
+            let next_id = s_read!(next).next;
             if let Some(ref id) = next_id {
                 next = lu_dog.exhume_argument(id).unwrap();
             } else {
@@ -83,6 +83,36 @@ pub(in crate::bubba::compiler) fn compile(
     Ok(())
 }
 
+pub(in crate::bubba::compiler) fn compile_lambda(
+    λ: &SarzakStorePtr,
+    thonk: &mut CThonk,
+    context: &mut Context,
+    span: Span,
+) -> Result<()> {
+    log::debug!(target: "instr", "{}: {}:{}:{}", POP_CLR.paint("compile_lambda"), file!(), line!(), column!());
+
+    let lu_dog = context.lu_dog_heel();
+    let lu_dog = s_read!(lu_dog);
+
+    let wrapped_λ = lu_dog.exhume_lambda(λ).unwrap();
+    let λ = s_read!(wrapped_λ);
+
+    dbg!(&λ);
+    // let thonk = compile_function(&func, &mut context)?.into();
+    // context.get_program().add_thonk(thonk);
+
+    Ok(())
+}
+
+/// Compile a Function Call
+///
+/// We aren't really doing that -- functions are compiled at the entrypoint, and
+/// we are here because we are compiling a function. What this really does is
+/// compile the expression containing the call, and then compile the arg
+/// expressions.
+///
+/// It does all so that the stack is setup for a function call, which we issue
+/// at the tail of the function.
 fn compile_function_call(
     name: &str,
     call: RefType<Call>,
@@ -134,18 +164,11 @@ fn compile_method_call(
         let expr = lu_dog.exhume_expression(expr).unwrap();
         let span = get_span(&expr, &lu_dog);
         // Evaluate the LHS to get at the underlying value/instance.
-        // Note the magic bit with the context.
-        // There is more to this story. The current implementation is naive
-        // because it assumes
-        // context.method_name = Some(name.clone());
-        // dbg!("enter");
         compile_expression(&expr, thonk, context, span)?;
         thonk.add_instruction(
             Instruction::MethodLookup(new_ref!(String, name)),
             location!(),
         );
-        // dbg!("exit");
-        // context.method_name = None;
     };
 
     for expr in args {
@@ -259,6 +282,8 @@ fn compile_static_method_call(
             meth => todo!("handle chacha method: {meth}"),
         },
         ty => {
+            // This is where we load the shared library that is the extension.
+            // Note that we are doing magic with the word "Plugin".
             if Some(Some(PLUGIN)) == ty.split('<').next().map(|s| s.split(PATH_SEP).last()) {
                 match func {
                     NEW => {

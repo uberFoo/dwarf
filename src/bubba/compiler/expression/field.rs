@@ -37,19 +37,6 @@ pub(in crate::bubba::compiler) fn compile_field_access(
         FieldAccessTargetEnum::Field(ref field) => {
             let field = lu_dog.exhume_field(field).unwrap();
             let field = s_read!(field);
-            // We check the type to see if it's a plugin and if so we insert it
-            // into the context, to be used later.
-            let ty = &field.r5_value_type(&lu_dog)[0];
-            match s_read!(ty).subtype {
-                ValueTypeEnum::XPlugin(ref plugin) => {
-                    let plugin = lu_dog.exhume_x_plugin(plugin).unwrap();
-                    let plugin = s_read!(plugin);
-                    let path = &plugin.x_path;
-                    let plugin_root = path.split(PATH_SEP).next().unwrap();
-                    context.insert_plugin(plugin.name.clone(), plugin_root.to_owned());
-                }
-                _ => {}
-            }
             field.name.to_owned()
         }
         FieldAccessTargetEnum::Function(ref func) => {

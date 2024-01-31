@@ -1093,6 +1093,20 @@ impl TryFrom<&Value> for ValueType {
     }
 }
 
+impl TryFrom<Value> for ValueType {
+    type Error = ChaChaError;
+
+    fn try_from(value: Value) -> Result<Self, <ValueType as TryFrom<Value>>::Error> {
+        match &value {
+            Value::ValueType(ty) => Ok(ty.to_owned()),
+            _ => Err(ChaChaError::Conversion {
+                src: value.to_string(),
+                dst: "ValueType".to_owned(),
+            }),
+        }
+    }
+}
+
 impl TryFrom<Value> for Context {
     type Error = ChaChaError;
 

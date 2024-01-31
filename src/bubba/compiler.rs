@@ -151,21 +151,25 @@ impl SymbolTable {
 }
 
 #[derive(Debug)]
-struct Context<'a> {
+struct Context<'a, 'b> {
     extruder_context: &'a ExtruderContext,
     symbol_tables: Vec<SymbolTable>,
     method_name: Option<String>,
-    plugins: HashMap<String, String>,
+    program: &'b mut Program,
 }
 
-impl<'a> Context<'a> {
-    fn new(extruder_context: &'a ExtruderContext) -> Self {
+impl<'a, 'b> Context<'a, 'b> {
+    fn new(extruder_context: &'a ExtruderContext, program: &'b mut Program) -> Self {
         Context {
             extruder_context,
             symbol_tables: vec![SymbolTable::new(0)],
             method_name: None,
-            plugins: HashMap::default(),
+            program,
         }
+    }
+
+    fn get_program(&mut self) -> &mut Program {
+        self.program
     }
 
     fn lu_dog_heel(&self) -> RefType<LuDogStore> {
@@ -174,10 +178,6 @@ impl<'a> Context<'a> {
 
     fn sarzak_heel(&self) -> RefType<SarzakStore> {
         self.extruder_context.sarzak.clone()
-    }
-
-    fn insert_plugin(&mut self, name: String, path: String) {
-        self.plugins.insert(name, path);
     }
 
     fn push_symbol_table(&mut self) {
@@ -216,7 +216,7 @@ impl<'a> Context<'a> {
 pub fn compile(context: &ExtruderContext) -> Result<Program> {
     let mut program = Program::new(VERSION.to_owned(), BUILD_TIME.to_owned());
 
-    let mut context = Context::new(context);
+    let mut context = Context::new(context, &mut program);
 
     let lu_dog = context.lu_dog_heel();
 
@@ -224,16 +224,13 @@ pub fn compile(context: &ExtruderContext) -> Result<Program> {
     let ty = Ty::new_z_string(&s_read!(context.sarzak_heel()));
     let ty = ValueType::new_ty(true, &ty, &mut s_write!(lu_dog));
     let ty = Value::ValueType((*s_read!(ty)).clone());
-    program.add_symbol("STRING".to_owned(), ty);
+    context.get_program().add_symbol("STRING".to_owned(), ty);
 
     let lu_dog = s_read!(lu_dog);
 
     for func in lu_dog.iter_function() {
-        program.add_thonk(compile_function(&func, &mut context)?.into());
-    }
-
-    for (name, path) in context.plugins.iter() {
-        program.add_symbol(format!("PLUGIN_{}", name), path.clone().into());
+        let thonk = compile_function(&func, &mut context)?.into();
+        context.get_program().add_thonk(thonk);
     }
 
     Ok(program)
@@ -279,23 +276,21 @@ fn compile_function(func: &RefType<Function>, context: &mut Context) -> Result<C
         }
     }
 
-    let (ty_name, ty_path) = if let Some(i_block) = func.r9_implementation_block(&lu_dog).first() {
+    let ty_name = if let Some(i_block) = func.r9_implementation_block(&lu_dog).first() {
         let i_block = s_read!(i_block);
         if let Some(woog_struct) = i_block.r8_woog_struct(&lu_dog).first() {
             let woog_struct = s_read!(woog_struct);
-            let path = woog_struct.x_path.clone();
             let name = woog_struct.name.clone();
-            (name, path)
+            name
         } else if let Some(woog_enum) = i_block.r84c_enumeration(&lu_dog).first() {
             let woog_enum = s_read!(woog_enum);
-            let path = woog_enum.x_path.clone();
             let name = woog_enum.name.clone();
-            (name, path)
+            name
         } else {
-            ("".to_owned(), "".to_owned())
+            "".to_owned()
         }
     } else {
-        ("".to_owned(), "".to_owned())
+        "".to_owned()
     };
 
     let (name, incr_fs) = if ty_name.is_empty() {
@@ -473,7 +468,7 @@ fn compile_expression(
 
         ExpressionEnum::ForLoop(ref for_loop) => for_loop::compile(for_loop, thonk, context, span)?,
         ExpressionEnum::Index(ref index) => index::compile(index, thonk, context, span)?,
-        ExpressionEnum::Lambda(ref λ) => {}
+        ExpressionEnum::Lambda(ref λ) => call::compile_lambda(λ, thonk, context, span)?,
         ExpressionEnum::ListElement(ref list) => list::compile_list_element(list, thonk, context)?,
         ExpressionEnum::ListExpression(ref list) => {
             list::compile_list_expression(list, thonk, context, span)?
