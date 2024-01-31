@@ -46,6 +46,11 @@ jobs:
                   ref: ${{ github.ref }}
                   path: dwarf
 
+            - name: Remove Sarzak, and the CLI
+              run: |
+                  rm -rf dwarf/sarzak
+                  rm -rf dwarf/sarzak-cli
+
             - name: Install cargo-llvm-cov
               uses: taiki-e/install-action@cargo-llvm-cov
 
