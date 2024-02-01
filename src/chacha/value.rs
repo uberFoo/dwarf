@@ -479,6 +479,10 @@ pub enum Value {
     /// why I need the inner Function to be behind a RefType<<T>>. It seems
     /// excessive, and yet I know I've looked into it before.
     Function(RefType<Function>),
+    FunctionPointer {
+        name: String,
+        arity: usize,
+    },
     #[cfg(feature = "async")]
     // #[serde(skip)]
     Future {
@@ -545,6 +549,7 @@ impl Value {
             Self::Error(e) => write!(f, "{}: {e}", Colour::Red.bold().paint("error")),
             Self::Float(num) => write!(f, "{num}"),
             Self::Function(_) => write!(f, "<function>"),
+            Self::FunctionPointer { name, arity } => write!(f, "{name}/{arity}"),
             #[cfg(feature = "async")]
             Self::Future {
                 name,
@@ -831,6 +836,7 @@ impl std::fmt::Debug for Value {
             Self::Error(e) => write!(f, "{}: {e}", Colour::Red.bold().paint("error")),
             Self::Float(num) => write!(f, "{num:?}"),
             Self::Function(func) => write!(f, "{:?}", s_read!(func)),
+            Self::FunctionPointer { name, arity } => write!(f, "{name}/{arity}"),
             #[cfg(feature = "async")]
             Self::Future {
                 name,
@@ -885,6 +891,10 @@ impl Clone for Value {
             Self::Error(_e) => unimplemented!(),
             Self::Float(num) => Self::Float(*num),
             Self::Function(func) => Self::Function(func.clone()),
+            Self::FunctionPointer { name, arity } => Self::FunctionPointer {
+                name: name.to_owned(),
+                arity: *arity,
+            },
             #[cfg(feature = "async")]
             // Note that cloned values do not inherit the task
             Self::Future {
@@ -946,6 +956,7 @@ impl fmt::Display for Value {
             Self::Error(e) => write!(f, "{}: {e}", Colour::Red.bold().paint("error")),
             Self::Float(num) => write!(f, "{num}"),
             Self::Function(_) => write!(f, "<function>"),
+            Self::FunctionPointer { name, arity } => write!(f, "{name}/{arity}"),
             #[cfg(feature = "async")]
             Self::Future {
                 name,

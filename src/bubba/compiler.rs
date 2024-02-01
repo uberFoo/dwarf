@@ -93,7 +93,7 @@ impl CThonk {
     }
 
     fn get_frame_size(&self) -> usize {
-        self.inner.get_frame_size()
+        self.inner.frame_size()
     }
 
     fn append(&mut self, other: CThonk) {
@@ -240,25 +240,18 @@ fn compile_function(func: &RefType<Function>, context: &mut Context) -> Result<C
     let lu_dog = context.lu_dog_heel();
     let lu_dog = s_read!(lu_dog);
 
+    context.push_symbol_table();
+
     let func = s_read!(func);
     let body = func.r19_body(&lu_dog)[0].clone();
     let body = s_read!(body);
+    let params = func.r13_parameter(&lu_dog);
 
     log::debug!(target: "instr", "{}: {}\n\t-->{}:{}:{}", POP_CLR.paint("compile_function"), func.name, file!(), line!(), column!());
 
-    context.push_symbol_table();
-
-    let params = func.r13_parameter(&lu_dog);
-
     // I need to iterate over the parameters to get the name of the parameter.
     if !params.is_empty() {
-        let mut next = func
-            .r13_parameter(&lu_dog)
-            .iter()
-            .find(|p| s_read!(p).r14c_parameter(&lu_dog).is_empty())
-            .unwrap()
-            .clone();
-
+        let mut next = func.r82_parameter(&lu_dog)[0].clone();
         loop {
             let param = next.clone();
             let param = s_read!(param);
@@ -267,7 +260,7 @@ fn compile_function(func: &RefType<Function>, context: &mut Context) -> Result<C
 
             context.insert_symbol(var.name.clone(), ty);
 
-            let next_id = { param.next };
+            let next_id = param.next;
             if let Some(ref id) = next_id {
                 next = lu_dog.exhume_parameter(id).unwrap();
             } else {
@@ -320,6 +313,7 @@ fn compile_function(func: &RefType<Function>, context: &mut Context) -> Result<C
 
     let mut thonk = CThonk::new(name.clone());
 
+    // This is making room for the self parameter.
     if incr_fs {
         thonk.increment_frame_size();
     }

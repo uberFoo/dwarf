@@ -30,7 +30,7 @@ pub mod parser;
 mod pvt;
 
 use error::{DwarfError, Result};
-use pvt::PrintableValueType;
+pub(crate) use pvt::PrintableValueType;
 
 pub use extruder::{inter_statement, new_lu_dog, Context};
 pub use parser::{parse_dwarf, parse_line};

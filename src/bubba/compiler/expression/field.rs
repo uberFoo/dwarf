@@ -5,8 +5,8 @@ use crate::{
         compiler::{compile_expression, get_span, CThonk, Context, Result},
         instr::Instruction,
     },
-    lu_dog::{FieldAccessTargetEnum, ValueTypeEnum},
-    new_ref, s_read, NewRef, RefType, SarzakStorePtr, Span, Value, PATH_SEP,
+    lu_dog::FieldAccessTargetEnum,
+    new_ref, s_read, NewRef, RefType, SarzakStorePtr, Span, Value,
 };
 
 pub(in crate::bubba::compiler) fn compile_field_access(

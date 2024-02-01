@@ -1,15 +1,16 @@
 use snafu::{location, Location};
+use uuid::Uuid;
 
 #[cfg(feature = "async")]
 use crate::keywords::SPAWN;
 
 use crate::{
     bubba::{
-        compiler::{compile_expression, get_span, CThonk, Context, Result},
+        compiler::{compile_expression, compile_statement, get_span, CThonk, Context, Result},
         instr::Instruction,
     },
     keywords::{ARGS, ASSERT, ASSERT_EQ, CHACHA, FORMAT, NEW, PLUGIN},
-    lu_dog::{Call, CallEnum, Expression},
+    lu_dog::{BodyEnum, Call, CallEnum, Expression},
     new_ref, s_read, NewRef, RefType, SarzakStorePtr, Span, Value, PATH_SEP, POP_CLR,
 };
 
@@ -85,7 +86,7 @@ pub(in crate::bubba::compiler) fn compile(
 
 pub(in crate::bubba::compiler) fn compile_lambda(
     λ: &SarzakStorePtr,
-    thonk: &mut CThonk,
+    outer_thonk: &mut CThonk,
     context: &mut Context,
     span: Span,
 ) -> Result<()> {
@@ -94,12 +95,98 @@ pub(in crate::bubba::compiler) fn compile_lambda(
     let lu_dog = context.lu_dog_heel();
     let lu_dog = s_read!(lu_dog);
 
+    context.push_symbol_table();
+
     let wrapped_λ = lu_dog.exhume_lambda(λ).unwrap();
     let λ = s_read!(wrapped_λ);
+    // let ret_ty = λ.r74_value_type(&lu_dog)[0].clone();
+    let body = λ.r73_body(&lu_dog)[0].clone();
+    let body = s_read!(body);
+    let params = λ.r76_lambda_parameter(&lu_dog);
+    // let mut name = "(".to_owned();
 
-    dbg!(&λ);
-    // let thonk = compile_function(&func, &mut context)?.into();
-    // context.get_program().add_thonk(thonk);
+    if !params.is_empty() {
+        let mut next = λ.r103_lambda_parameter(&lu_dog)[0].clone();
+        loop {
+            let param = next.clone();
+            let param = s_read!(param);
+            let var = s_read!(param.r12_variable(&lu_dog)[0]).clone();
+            let ty = s_read!(param.r77_value_type(&lu_dog)[0]).clone();
+
+            context.insert_symbol(var.name.clone(), ty);
+            // name += var.name.as_str();
+            // name += ",";
+
+            let next_id = param.next;
+            if let Some(ref id) = next_id {
+                next = lu_dog.exhume_lambda_parameter(id).unwrap();
+            } else {
+                break;
+            }
+        }
+    }
+
+    // let ret_ty = PrintableValueType(&ret_ty, context.extruder_context, &lu_dog);
+    // name += format!(")->{ret_ty:?}").as_str();
+    let name = format!("{}", Uuid::new_v4());
+
+    let mut thonk = CThonk::new(name.clone());
+    match body.subtype {
+        //
+        // This is a function defined in a dwarf file.
+        BodyEnum::Block(ref id) => {
+            let block = lu_dog.exhume_block(id).unwrap();
+            let has_stmts = !s_read!(block).r18_statement(&lu_dog).is_empty();
+
+            if has_stmts {
+                if let Some(ref id) = s_read!(block).statement {
+                    let mut next = lu_dog.exhume_statement(id).unwrap();
+
+                    loop {
+                        compile_statement(&next, &mut thonk, context)?;
+
+                        if let Some(ref id) = s_read!(next.clone()).next {
+                            next = lu_dog.exhume_statement(id).unwrap();
+                        } else if thonk.returned {
+                            break;
+                        } else {
+                            thonk.add_instruction(
+                                Instruction::Push(new_ref!(Value, Value::Empty)),
+                                location!(),
+                            );
+                            thonk.add_instruction(Instruction::Return, location!());
+                            thonk.returned = true;
+                            break;
+                        }
+                    }
+                }
+            } else {
+                thonk.add_instruction(
+                    Instruction::Push(new_ref!(Value, Value::Empty)),
+                    location!(),
+                );
+                thonk.add_instruction(Instruction::Return, location!());
+                thonk.returned = true;
+            }
+        }
+        //
+        // This is an externally defined function that was declared in a dwarf file.
+        BodyEnum::ExternalImplementation(ref block_id) => {
+            todo!("handle external implementation: {block_id:?}");
+        }
+    };
+
+    context.pop_symbol_table();
+    let arity = thonk.inner.frame_size();
+
+    context.get_program().add_thonk(thonk.into());
+
+    let pointer = Value::FunctionPointer {
+        name: name.clone(),
+        arity,
+    };
+
+    outer_thonk.add_instruction(Instruction::Push(new_ref!(Value, pointer)), location!());
 
     Ok(())
 }
@@ -705,7 +792,7 @@ mod test {
         assert!(run_vm_with_args(&program, &args).is_ok());
     }
 
-    // #[test]
+    #[test]
     fn test_lambda() {
         let _ = env_logger::builder().is_test(true).try_init();
         color_backtrace::install();
@@ -730,12 +817,9 @@ mod test {
         let program = compile(&ctx).unwrap();
         println!("{program}");
 
-        assert_eq!(program.get_thonk_card(), 1);
+        assert_eq!(program.get_thonk_card(), 2);
 
-        // assert_eq!(
-        //     program.get_thonk("main").unwrap().get_instruction_card(),
-        //     11
-        // );
+        assert_eq!(program.get_instruction_count(), 11);
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &3.into());
     }

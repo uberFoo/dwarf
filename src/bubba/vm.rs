@@ -171,7 +171,7 @@ impl VM {
             tmp_mem.append(&mut thonk.instructions.clone());
             vm.source_map.append(&mut thonk.spans.clone());
             vm.func_map
-                .insert(thonk.get_name().to_owned(), (i, thonk.get_frame_size()));
+                .insert(thonk.name().to_owned(), (i, thonk.frame_size()));
             i += thonk.get_instruction_card();
         }
 
@@ -354,28 +354,39 @@ impl VM {
                     Instruction::Call(func_arity) => {
                         let callee = &self.stack[self.stack.len() - func_arity - 2];
                         if trace {
-                            println!("\t\t{}:\t{}", Colour::Green.paint("func:"), callee);
+                            println!("\t\t{}:\t{callee}", Colour::Green.paint("func:"));
                         }
 
                         let stack_local_count = &self.stack[self.stack.len() - func_arity - 1];
-                        // This is in the function's scope.
-                        local_count =
-                            stack_local_count
-                                .clone()
-                                .into_value()
-                                .try_into()
-                                .map_err(|e| BubbaError::ValueError {
-                                    source: Box::new(e),
-                                    location: location!(),
-                                })?;
+                        if trace {
+                            println!("\t\t{}:\t{stack_local_count}", Colour::Green.paint("func:"));
+                        }
 
-                        let callee: isize =
-                            callee.clone().into_value().try_into().map_err(|e| {
-                                BubbaError::ValueError {
-                                    source: Box::new(e),
+                        let callee = match stack_local_count.clone().into_value() {
+                            Value::FunctionPointer { name, arity } => {
+                                let addr = self.func_map.get(&name).unwrap().0;
+                                local_count = arity;
+                                addr as isize
+                            }
+                            Value::Integer(arity) => {
+                                let callee: isize =
+                                    callee.clone().into_value().try_into().map_err(|e| {
+                                        BubbaError::ValueError {
+                                            source: Box::new(e),
+                                            location: location!(),
+                                        }
+                                    })?;
+                                local_count = arity as usize;
+                                callee
+                            }
+                            _ => {
+                                return Err(BubbaError::VmPanic {
+                                    message: format!("Unexpected value: {stack_local_count:?}.",),
                                     location: location!(),
                                 }
-                            })?;
+                                .into())
+                            }
+                        };
 
                         let old_fp = self.fp;
                         let old_ip = self.ip;

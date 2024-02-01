@@ -1334,9 +1334,6 @@ fn spawn(
     ensure!(
         matches!(&*func, Value::Lambda(_)) || matches!(&*func, Value::Function(_)),
         {
-            // 🚧 I'm not really sure what to do about this here. It's
-            // all really a hack for now anyway.
-            // 🚧 OMFG -- FML
             let ty = func.get_value_type(&s_read!(sarzak), &s_read!(lu_dog));
             let ty = PrintableValueType(true, ty, context.models());
             let ty = ty.to_string();

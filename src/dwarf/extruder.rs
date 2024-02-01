@@ -2080,22 +2080,6 @@ pub(super) fn inter_expression(
                 debug!("param name {}", param_name);
                 debug!("param ty {}", param_ty);
 
-                let param =
-                    LambdaParameter::new(position as DwarfInteger, &lambda, None, None, lu_dog);
-
-                debug!("param {:?}", param);
-
-                if position == 0 {
-                    // 🚧 This should be marked as unsafe, as there is no type
-                    // check happening.
-                    s_write!(lambda).first_param = Some(s_read!(param).id);
-                }
-
-                let var = Variable::new_lambda_parameter(param_name.to_owned(), &param, lu_dog);
-                debug!("var {:?}", var);
-                // We need to introduce the values into the block, so that we don't
-                // error out when parsing the statements.
-                //
                 context.location = location!();
                 let param_ty = match make_value_type(
                     param_ty,
@@ -2112,6 +2096,28 @@ pub(super) fn inter_expression(
                     }
                 };
                 debug!("param_ty {:?}", param_ty);
+
+                let param = LambdaParameter::new(
+                    position as DwarfInteger,
+                    &lambda,
+                    None,
+                    Some(&param_ty),
+                    lu_dog,
+                );
+
+                debug!("param {:?}", param);
+
+                if position == 0 {
+                    // 🚧 This should be marked as unsafe, as there is no type
+                    // check happening.
+                    s_write!(lambda).first_param = Some(s_read!(param).id);
+                }
+
+                let var = Variable::new_lambda_parameter(param_name.to_owned(), &param, lu_dog);
+                debug!("var {:?}", var);
+                // We need to introduce the values into the block, so that we don't
+                // error out when parsing the statements.
+                //
                 let value = XValue::new_variable(&block, &param_ty, &var, lu_dog);
                 LuDogSpan::new(
                     name_span.end as i64,
@@ -2129,7 +2135,7 @@ pub(super) fn inter_expression(
                 .map(|stmt| new_ref!(ParserStatement, stmt.0.clone()))
                 .collect();
 
-            let (block_ty, block_span) =
+            let (_block_ty, _block_span) =
                 inter_statements(&stmts, &body.1, &block, context, context_stack, lu_dog)?;
 
             // 🚧 I think that turning this off is correct. For a lambda, we don't

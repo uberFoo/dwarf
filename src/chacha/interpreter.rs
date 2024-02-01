@@ -37,7 +37,7 @@ mod context;
 mod expression;
 mod func_call;
 mod lambda;
-mod pvt;
+pub(crate) mod pvt;
 mod repl;
 mod statement;
 mod tui;

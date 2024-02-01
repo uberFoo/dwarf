@@ -14,7 +14,7 @@ use crate::{
 };
 
 // #[derive(Debug)]
-pub(super) struct PrintableValueType<'d, 'a, 'b>(
+pub(crate) struct PrintableValueType<'d, 'a, 'b>(
     pub &'d RefType<ValueType>,
     pub &'a Context<'a>,
     pub &'b LuDogStore,
