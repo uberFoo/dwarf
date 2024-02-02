@@ -2135,18 +2135,16 @@ pub(super) fn inter_expression(
                 .map(|stmt| new_ref!(ParserStatement, stmt.0.clone()))
                 .collect();
 
-            let (_block_ty, _block_span) =
+            let (block_ty, block_span) =
                 inter_statements(&stmts, &body.1, &block, context, context_stack, lu_dog)?;
 
-            // 🚧 I think that turning this off is correct. For a lambda, we don't
-            // specify the return type.
-            // typecheck(
-            //     (&ret_ty, &return_type.1),
-            //     (&block_ty, &block_span),
-            //     location!(),
-            //     context,
-            //     lu_dog,
-            // )?;
+            typecheck(
+                (&ret_ty, &return_type.1),
+                (&block_ty, &block_span),
+                location!(),
+                context,
+                lu_dog,
+            )?;
 
             let expr = Expression::new_lambda(true, &lambda, lu_dog);
             let value = XValue::new_expression(&block, &ret_ty, &expr, lu_dog);

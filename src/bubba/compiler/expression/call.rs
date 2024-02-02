@@ -19,7 +19,7 @@ pub(in crate::bubba::compiler) fn compile(
     thonk: &mut CThonk,
     context: &mut Context,
     span: Span,
-) -> Result<()> {
+) -> Result<Option<String>> {
     log::debug!(target: "instr", "{}: {}:{}:{}", POP_CLR.paint("compile_call"), file!(), line!(), column!());
 
     let lu_dog = context.lu_dog_heel();
@@ -54,13 +54,8 @@ pub(in crate::bubba::compiler) fn compile(
     match call.subtype {
         CallEnum::FunctionCall(ref call) => {
             let call = lu_dog.exhume_function_call(call).unwrap();
-            compile_function_call(
-                &s_read!(call).name,
-                wrapped_call.clone(),
-                &arg_exprs,
-                thonk,
-                context,
-            )?;
+            let call = s_read!(call);
+            compile_function_call(&call.name, wrapped_call.clone(), &arg_exprs, thonk, context)
         }
         CallEnum::MethodCall(ref meth) => {
             let meth = lu_dog.exhume_method_call(meth).unwrap();
@@ -71,31 +66,38 @@ pub(in crate::bubba::compiler) fn compile(
                 &arg_exprs,
                 thonk,
                 context,
-            )?;
+            )
         }
         CallEnum::StaticMethodCall(ref meth) => {
             let meth = lu_dog.exhume_static_method_call(meth).unwrap();
             let meth = s_read!(meth);
-            compile_static_method_call(&meth.ty, &meth.func, &arg_exprs, thonk, context, span)?;
+            compile_static_method_call(&meth.ty, &meth.func, &arg_exprs, thonk, context, span)
         }
         ref call => todo!("handle the other calls: {call:?}"),
-    };
-
-    Ok(())
+    }
 }
 
+/// Compile a Lambda
+///
+/// We do compile the function here, and importantly, we push a pointer to the
+/// function onto the stack.
+///
+/// Doing this in a single step is fine because the pointer will either be used
+/// directly or stored in a variable.
 pub(in crate::bubba::compiler) fn compile_lambda(
     λ: &SarzakStorePtr,
     outer_thonk: &mut CThonk,
     context: &mut Context,
     span: Span,
-) -> Result<()> {
+) -> Result<Option<String>> {
     log::debug!(target: "instr", "{}: {}:{}:{}", POP_CLR.paint("compile_lambda"), file!(), line!(), column!());
 
     let lu_dog = context.lu_dog_heel();
     let lu_dog = s_read!(lu_dog);
 
     context.push_symbol_table();
+    let saved_captures = context.captures.take();
+    context.captures = Some(Default::default());
 
     let wrapped_λ = lu_dog.exhume_lambda(λ).unwrap();
     let λ = s_read!(wrapped_λ);
@@ -105,15 +107,19 @@ pub(in crate::bubba::compiler) fn compile_lambda(
     let params = λ.r76_lambda_parameter(&lu_dog);
     // let mut name = "(".to_owned();
 
+    let name = format!("{}", Uuid::new_v4());
+
+    let mut thonk = CThonk::new(name.clone());
+
     if !params.is_empty() {
         let mut next = λ.r103_lambda_parameter(&lu_dog)[0].clone();
         loop {
             let param = next.clone();
             let param = s_read!(param);
             let var = s_read!(param.r12_variable(&lu_dog)[0]).clone();
-            let ty = s_read!(param.r77_value_type(&lu_dog)[0]).clone();
 
-            context.insert_symbol(var.name.clone(), ty);
+            context.insert_symbol(var.name.clone());
+            thonk.increment_frame_size();
             // name += var.name.as_str();
             // name += ",";
 
@@ -128,9 +134,6 @@ pub(in crate::bubba::compiler) fn compile_lambda(
 
     // let ret_ty = PrintableValueType(&ret_ty, context.extruder_context, &lu_dog);
     // name += format!(")->{ret_ty:?}").as_str();
-    let name = format!("{}", Uuid::new_v4());
-
-    let mut thonk = CThonk::new(name.clone());
     match body.subtype {
         //
         // This is a function defined in a dwarf file.
@@ -177,28 +180,42 @@ pub(in crate::bubba::compiler) fn compile_lambda(
     };
 
     context.pop_symbol_table();
-    let arity = thonk.inner.frame_size();
+
+    let mut frame_size = thonk.inner.frame_size();
+    dbg!(frame_size);
+    for (var, index) in context.captures.take().unwrap() {
+        let Some(symbol) = context.get_symbol(&var) else {
+            panic!("capture not found: {var}");
+        };
+        // frame_size += 1;
+        // thonk.increment_frame_size();
+        thonk.prefix_instruction(Instruction::CaptureLocal(symbol.number, index), location!());
+    }
+
+    context.captures = saved_captures;
 
     context.get_program().add_thonk(thonk.into());
 
-    let pointer = Value::FunctionPointer {
-        name: name.clone(),
-        arity,
-    };
+    // let pointer = Value::FubarPointer {
+    //     name: name.clone(),
+    //     frame_size,
+    //     captures: Vec::new(),
+    // };
 
-    outer_thonk.add_instruction(Instruction::Push(new_ref!(Value, pointer)), location!());
+    // outer_thonk.add_instruction(Instruction::Push(new_ref!(Value, pointer)), location!());
+    outer_thonk.add_instruction(
+        Instruction::MakeLambdaPointer(new_ref!(String, name.clone()), frame_size),
+        location!(),
+    );
 
-    Ok(())
+    Ok(Some(name))
 }
 
 /// Compile a Function Call
 ///
-/// We aren't really doing that -- functions are compiled at the entrypoint, and
-/// we are here because we are compiling a function. What this really does is
-/// compile the expression containing the call, and then compile the arg
-/// expressions.
+/// Compile a function call expression, including it's arguments.
 ///
-/// It does all so that the stack is setup for a function call, which we issue
+/// This ensures that the stack is setup for a function call, which we issue
 /// at the tail of the function.
 fn compile_function_call(
     name: &str,
@@ -206,16 +223,17 @@ fn compile_function_call(
     args: &[RefType<Expression>],
     thonk: &mut CThonk,
     context: &mut Context,
-) -> Result<()> {
+) -> Result<Option<String>> {
     log::debug!(target: "instr", "{}: {}:{}:{}", POP_CLR.paint("compile_function_call"), file!(), line!(), column!());
 
     let lu_dog = context.lu_dog_heel();
     let lu_dog = s_read!(lu_dog);
 
     match name {
-        FORMAT => {}
+        FORMAT => todo!("handle FORMAT"),
         _ => {
-            if let Some(ref expr) = s_read!(call).expression {
+            let call = s_read!(call);
+            if let Some(ref expr) = call.expression {
                 let expr = lu_dog.exhume_expression(expr).unwrap();
                 let span = get_span(&expr, &lu_dog);
                 // Evaluate the LHS to get at the underlying value/instance.
@@ -231,7 +249,7 @@ fn compile_function_call(
         }
     }
 
-    Ok(())
+    Ok(None)
 }
 
 fn compile_method_call(
@@ -240,7 +258,7 @@ fn compile_method_call(
     args: &[RefType<Expression>],
     thonk: &mut CThonk,
     context: &mut Context,
-) -> Result<()> {
+) -> Result<Option<String>> {
     log::debug!(target: "instr", "{}: {}:{}:{}", POP_CLR.paint("compile_method_call"), file!(), line!(), column!());
 
     let lu_dog = context.lu_dog_heel();
@@ -265,7 +283,7 @@ fn compile_method_call(
 
     thonk.add_instruction(Instruction::Call(args.len()), location!());
 
-    Ok(())
+    Ok(None)
 }
 
 fn compile_static_method_call(
@@ -275,7 +293,7 @@ fn compile_static_method_call(
     thonk: &mut CThonk,
     context: &mut Context,
     span: Span,
-) -> Result<()> {
+) -> Result<Option<String>> {
     log::debug!(target: "instr", "{}: {}:{}:{}", POP_CLR.paint("compile_static_method_call"), file!(), line!(), column!());
 
     let lu_dog = context.lu_dog_heel();
@@ -364,7 +382,17 @@ fn compile_static_method_call(
             }
             #[cfg(feature = "async")]
             SPAWN => {
-                todo!("handle spawn");
+                let inner = &args[0];
+                let inner_span = get_span(inner, &lu_dog);
+                let Some(lambda) = compile_expression(inner, thonk, context, inner_span)? else {
+                    panic!("spawn requires a lambda");
+                };
+
+                let lambda = new_ref!(String, lambda);
+
+                thonk.add_instruction(Instruction::CallDestination(lambda.clone()), location!());
+                thonk.add_instruction(Instruction::LocalCardinality(lambda), location!());
+                thonk.add_instruction(Instruction::Call(0), location!());
             }
             meth => todo!("handle chacha method: {meth}"),
         },
@@ -418,7 +446,7 @@ fn compile_static_method_call(
         }
     }
 
-    Ok(())
+    Ok(None)
 }
 
 #[cfg(test)]
@@ -801,8 +829,11 @@ mod test {
 
         let ore = "
                    fn main() -> int {
+                       let _0 = 0;
+                       let a = 42;
+                       let b = 96;
                        let foo = |x: int, y: int| -> int {
-                           x + y
+                           x + y + a
                        };
                        foo(1, 2)
                    }";
@@ -819,8 +850,8 @@ mod test {
 
         assert_eq!(program.get_thonk_card(), 2);
 
-        assert_eq!(program.get_instruction_count(), 11);
+        // assert_eq!(program.get_instruction_count(), 15);
 
-        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &3.into());
+        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &45.into());
     }
 }

@@ -12,7 +12,7 @@ pub(in crate::bubba::compiler) fn compile(
     print: &SarzakStorePtr,
     thonk: &mut CThonk,
     context: &mut Context,
-) -> Result<()> {
+) -> Result<Option<String>> {
     log::debug!(target: "instr", "{}:{}:{}", file!(), line!(), column!());
 
     let lu_dog = context.lu_dog_heel().clone();
@@ -23,7 +23,7 @@ pub(in crate::bubba::compiler) fn compile(
     compile_expression(&expr, thonk, context, get_span(&expr, &lu_dog))?;
     thonk.add_instruction(Instruction::Out(0), location!());
 
-    Ok(())
+    Ok(None)
 }
 
 #[cfg(test)]

@@ -13,7 +13,7 @@ pub(in crate::bubba::compiler) fn compile(
     thonk: &mut CThonk,
     context: &mut Context,
     span: Span,
-) -> Result<()> {
+) -> Result<Option<String>> {
     log::debug!(target: "instr", "{}:{}:{}", file!(), line!(), column!());
 
     let lu_dog = context.lu_dog_heel().clone();
@@ -31,5 +31,5 @@ pub(in crate::bubba::compiler) fn compile(
 
     thonk.add_instruction_with_span(Instruction::Index, span, location!());
 
-    Ok(())
+    Ok(None)
 }

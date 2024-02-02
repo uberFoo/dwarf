@@ -257,18 +257,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         };
 
-        if let Ok(program) = compile(&ctx) {
-            println!("running in the VM");
+        // if let Ok(program) = compile(&ctx) {
+        //     println!("running in the VM");
+        //     // println!("{program}");
 
-            let args: Vec<RefType<Value>> = dwarf_args
-                .into_iter()
-                .map(|a| new_ref!(Value, a.into()))
-                .collect();
+        //     let args: Vec<RefType<Value>> = dwarf_args
+        //         .into_iter()
+        //         .map(|a| new_ref!(Value, a.into()))
+        //         .collect();
 
-            let mut vm = VM::new(&program, &args, &dwarf_home);
-            vm.invoke("main", &[])?;
-            return Ok(());
-        }
+        //     let mut vm = VM::new(&program, &args, &dwarf_home);
+        //     vm.invoke("main", &[])?;
+        //     return Ok(());
+        // }
 
         let mut ctx = initialize_interpreter(threads, dwarf_home, ctx)?;
         ctx.add_args(dwarf_args);

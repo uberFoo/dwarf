@@ -14,7 +14,7 @@ pub(in crate::bubba::compiler) fn compile(
     thonk: &mut CThonk,
     context: &mut Context,
     span: Span,
-) -> Result<()> {
+) -> Result<Option<String>> {
     log::debug!(target: "instr", "{}:{}:{}", file!(), line!(), column!());
 
     let lu_dog = context.lu_dog_heel().clone();
@@ -34,7 +34,7 @@ pub(in crate::bubba::compiler) fn compile(
         log::debug!(target: "instr", "{}:{}:{}", file!(), line!(), column!());
 
         // We push this up here because of the pattern matching needs it's own context.
-        context.push_child_symbol_table();
+        context.push_scope();
 
         let pattern = s_read!(pattern);
         let match_expr = pattern.r87_expression(&lu_dog)[0].clone();
@@ -48,7 +48,7 @@ pub(in crate::bubba::compiler) fn compile(
             ExpressionEnum::Literal(ref literal) => {
                 log::debug!(target: "instr", "{}:{}:{}", file!(), line!(), column!());
 
-                literal::compile(literal, thonk, context, span.clone())?
+                literal::compile(literal, thonk, context, span.clone())?;
             }
             ExpressionEnum::StructExpression(ref id) => {
                 let struct_expr = lu_dog.exhume_struct_expression(id).unwrap();
@@ -77,7 +77,7 @@ pub(in crate::bubba::compiler) fn compile(
                                 ExpressionEnum::Literal(ref literal) => {
                                     log::debug!(target: "instr", "{}:{}:{}", file!(), line!(), column!());
 
-                                    literal::compile(literal, thonk, context, span.clone())?
+                                    literal::compile(literal, thonk, context, span.clone())?;
                                 }
                                 ExpressionEnum::VariableExpression(ref id) => {
                                     log::debug!(target: "instr", "{}:{}:{}", file!(), line!(), column!());
@@ -85,12 +85,7 @@ pub(in crate::bubba::compiler) fn compile(
                                     let var = lu_dog.exhume_variable_expression(id).unwrap();
                                     let var = s_read!(var);
                                     let expr = var.r15_expression(&lu_dog)[0].clone();
-                                    let value = s_read!(expr).r11_x_value(&lu_dog)[0].clone();
-                                    let ty = s_read!(value).r24_value_type(&lu_dog)[0].clone();
-
-                                    let idx = match context
-                                        .insert_symbol(var.name.clone(), s_read!(ty).clone())
-                                    {
+                                    let idx = match context.insert_symbol(var.name.clone()) {
                                         (true, index) => {
                                             thonk.increment_frame_size();
                                             index
@@ -176,9 +171,8 @@ pub(in crate::bubba::compiler) fn compile(
                 let var = s_read!(var);
                 let expr = var.r15_expression(&lu_dog)[0].clone();
                 let value = s_read!(expr).r11_x_value(&lu_dog)[0].clone();
-                let ty = s_read!(value).r24_value_type(&lu_dog)[0].clone();
 
-                let idx = match context.insert_symbol(var.name.clone(), s_read!(ty).clone()) {
+                let idx = match context.insert_symbol(var.name.clone()) {
                     (true, idx) => {
                         thonk.increment_frame_size();
                         idx
@@ -220,7 +214,7 @@ pub(in crate::bubba::compiler) fn compile(
         // Return if we matched.
         thonk.add_instruction(Instruction::Return, location!());
 
-        context.pop_symbol_table();
+        context.pop_scope();
     }
 
     // This should not really happen because if this were done right the compiler
@@ -238,7 +232,7 @@ pub(in crate::bubba::compiler) fn compile(
     );
     thonk.add_instruction(Instruction::HaltAndCatchFire, location!());
 
-    Ok(())
+    Ok(None)
 }
 
 #[cfg(test)]

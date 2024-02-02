@@ -3030,6 +3030,7 @@ impl DwarfParser {
             // The `;` is optional, so we take a peek, and if it's there we
             // snag it. Maybe print a warning?
             if self.match_tokens(&[Token::Punct(';')]).is_some() || !result {
+                // self.match_tokens(&[Token::Punct(';')]);
                 return Ok(Some((
                     Statement::Expression(expr.0),
                     start..self.previous().unwrap().1.end,
@@ -3046,8 +3047,6 @@ impl DwarfParser {
         //
         // Parse an expression that is not a block expression. It _must_ be
         // followed by a semicolon, _unless_ it's the last statement in a block.
-        // And how the fuck do we figure that out? We could look for a closing
-        // brace. I feel like we've tried that. But maybe not in this context.
         if let Some(expr) = self.parse_expression_without_block(ENTER)? {
             debug!("expression", expr);
             if self.match_tokens(&[Token::Punct(';')]).is_some() {

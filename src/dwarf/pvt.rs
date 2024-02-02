@@ -148,7 +148,11 @@ impl<'d, 'a, 'b> fmt::Display for PrintableValueType<'d, 'a, 'b> {
                 debug!("woog_struct {:?}", woog_struct);
                 let woog_struct = lu_dog.exhume_woog_struct(woog_struct).unwrap();
                 let woog_struct = s_read!(woog_struct);
-                let name = woog_struct.name.strip_prefix(PATH_SEP).unwrap();
+                let name = if let Some(name) = woog_struct.name.strip_prefix(PATH_SEP) {
+                    name
+                } else {
+                    &woog_struct.name
+                };
                 write!(f, "{}", TY_WARN_CLR.paint(name))
             }
             ValueTypeEnum::ZObjectStore(ref id) => {

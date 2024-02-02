@@ -99,7 +99,6 @@ pub fn inter_enum(
                 };
                 let struct_name = format!("{}{}{}", name, PATH_SEP, field_name);
                 let struct_path = format!("::{}{}{}", name, PATH_SEP, field_name);
-                dbg!(&struct_name, &name);
 
                 if let Some(path) = context
                     .scopes

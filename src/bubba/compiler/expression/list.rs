@@ -12,7 +12,7 @@ pub(in crate::bubba::compiler) fn compile_list_element(
     element: &SarzakStorePtr,
     thonk: &mut CThonk,
     context: &mut Context,
-) -> Result<()> {
+) -> Result<Option<String>> {
     log::debug!(target: "instr", "{}:{}:{}", file!(), line!(), column!());
 
     let lu_dog = context.lu_dog_heel().clone();
@@ -24,7 +24,7 @@ pub(in crate::bubba::compiler) fn compile_list_element(
     let span = get_span(&expr, &lu_dog);
     compile_expression(&expr, thonk, context, span)?;
 
-    Ok(())
+    Ok(None)
 }
 
 /// Compile a List Expression
@@ -37,7 +37,7 @@ pub(in crate::bubba::compiler) fn compile_list_expression(
     thonk: &mut CThonk,
     context: &mut Context,
     entry_span: Span,
-) -> Result<()> {
+) -> Result<Option<String>> {
     log::debug!(target: "instr", "{}:{}:{}", file!(), line!(), column!());
 
     let lu_dog = context.lu_dog_heel().clone();
@@ -91,5 +91,5 @@ pub(in crate::bubba::compiler) fn compile_list_expression(
         thonk.add_instruction_with_span(Instruction::NewList(0), entry_span, location!());
     }
 
-    Ok(())
+    Ok(None)
 }

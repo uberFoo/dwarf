@@ -14,7 +14,7 @@ pub(in crate::bubba::compiler) fn compile_field_access(
     thonk: &mut CThonk,
     context: &mut Context,
     span: Span,
-) -> Result<()> {
+) -> Result<Option<String>> {
     log::debug!(target: "instr", "{}:{}:{}", file!(), line!(), column!());
 
     let lu_dog = context.lu_dog_heel().clone();
@@ -53,14 +53,14 @@ pub(in crate::bubba::compiler) fn compile_field_access(
 
     thonk.add_instruction_with_span(Instruction::FieldRead, span, location!());
 
-    Ok(())
+    Ok(None)
 }
 
 pub(in crate::bubba::compiler) fn compile_field_expression(
     expr: &SarzakStorePtr,
     thonk: &mut CThonk,
     context: &mut Context,
-) -> Result<()> {
+) -> Result<Option<String>> {
     log::debug!(target: "instr", "{}:{}:{}", file!(), line!(), column!());
 
     let lu_dog = context.lu_dog_heel().clone();
@@ -71,7 +71,7 @@ pub(in crate::bubba::compiler) fn compile_field_expression(
 
     compile_expression(&expr, thonk, context, get_span(&expr, &lu_dog))?;
 
-    Ok(())
+    Ok(None)
 }
 
 #[cfg(test)]

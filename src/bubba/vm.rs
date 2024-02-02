@@ -118,6 +118,7 @@ pub struct VM {
     sarzak: SarzakStore,
     args: RefType<Value>,
     home: PathBuf,
+    captures: Option<Vec<RefType<Value>>>,
 }
 
 impl std::fmt::Debug for VM {
@@ -130,6 +131,7 @@ impl std::fmt::Debug for VM {
         writeln!(f, "func_map: {:?}", self.func_map)?;
         writeln!(f, "args: {:?}", self.args)?;
         writeln!(f, "home_dir: {:?}", self.home)?;
+        writeln!(f, "captures: {:?}", self.captures)?;
         Ok(())
     }
 }
@@ -163,6 +165,7 @@ impl VM {
                 }
             ),
             home: home.clone(),
+            captures: None,
         };
 
         let mut tmp_mem: Vec<Instruction> = Vec::new();
@@ -362,11 +365,24 @@ impl VM {
                             println!("\t\t{}:\t{stack_local_count}", Colour::Green.paint("func:"));
                         }
 
-                        let callee = match stack_local_count.clone().into_value() {
-                            Value::FunctionPointer { name, arity } => {
+                        let (callee, frame_size): (isize, Value) = match stack_local_count
+                            .clone()
+                            .into_value()
+                        {
+                            Value::FubarPointer {
+                                name,
+                                frame_size,
+                                captures,
+                            } => {
+                                self.captures = Some(captures);
                                 let addr = self.func_map.get(&name).unwrap().0;
-                                local_count = arity;
-                                addr as isize
+                                local_count = frame_size;
+                                (
+                                    addr as isize,
+                                    // This is plus one because the call frame does not include
+                                    // the frame size.
+                                    <usize as Into<Value>>::into(func_arity + local_count + 1),
+                                )
                             }
                             Value::Integer(arity) => {
                                 let callee: isize =
@@ -377,7 +393,10 @@ impl VM {
                                         }
                                     })?;
                                 local_count = arity as usize;
-                                callee
+                                (
+                                    callee,
+                                    <usize as Into<Value>>::into(func_arity + local_count + 2),
+                                )
                             }
                             _ => {
                                 return Err(BubbaError::VmPanic {
@@ -402,9 +421,7 @@ impl VM {
                         arity = *func_arity;
 
                         // Push the call frame size so that we can clean in out quickly
-                        self.stack.push(
-                            <usize as Into<Value>>::into(func_arity + local_count + 2).into(),
-                        );
+                        self.stack.push(frame_size.into());
 
                         // Push the old IP
                         self.stack.push(<isize as Into<Value>>::into(old_ip).into());
@@ -426,6 +443,22 @@ impl VM {
 
                         // self.stack.push(result);
                         callee - self.ip
+                    }
+                    Instruction::CaptureLocal(from, to) => {
+                        let Some(captures) = self.captures.as_ref() else {
+                            panic!("Attempt to capture a local outside of a lambda call.")
+                        };
+                        let value = captures[*from].clone();
+                        self.stack[self.fp - arity - local_count - 3 + to] = value.into();
+                        if trace {
+                            println!(
+                                "\t\t{}\t{},\t{}",
+                                Colour::Green.paint("capture_local:"),
+                                from,
+                                to
+                            );
+                        }
+                        1
                     }
                     Instruction::Comment(_) => 1,
                     Instruction::DeconstructStructExpression => {
@@ -939,6 +972,22 @@ impl VM {
                             1
                         }
                     }
+                    Instruction::MakeLambdaPointer(name, frame_size) => {
+                        let captures = self.stack[self.fp - arity - local_count - 3..self.fp - 3]
+                            .iter()
+                            .cloned()
+                            .map(|v| v.into_pointer())
+                            .collect();
+                        let name = s_read!(name).to_owned();
+                        let value = Value::FubarPointer {
+                            name,
+                            frame_size: *frame_size,
+                            captures,
+                        };
+                        self.stack.push(value.into());
+
+                        1
+                    }
                     Instruction::MethodLookup(name) => {
                         let ty = self.stack.pop().unwrap();
                         let ty = match ty.into_value() {
@@ -956,7 +1005,7 @@ impl VM {
                                 let name = ty.type_name();
                                 name.to_owned()
                             }
-                            _ => unreachable!(),
+                            oopsie => unreachable!("{oopsie:?}"),
                         };
 
                         let func = format!("{}::{}", ty, s_read!(name));

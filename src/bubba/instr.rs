@@ -46,6 +46,7 @@ pub enum Instruction {
     /// we are calling. It is patched by the VM before execution.
     ///
     CallDestination(RefType<String>),
+    CaptureLocal(usize, usize),
     /// Comment Instruction / NOP
     ///
     /// I don't like this because it increases the size of the instruction by 50%
@@ -156,6 +157,7 @@ pub enum Instruction {
     /// the function. It is patched by the VM before execution.
     ///
     LocalCardinality(RefType<String>),
+    MakeLambdaPointer(RefType<String>, usize),
     /// Look up a method
     ///
     /// The top of the stack is a reference to the user defined type upon which
@@ -360,6 +362,13 @@ impl fmt::Display for Instruction {
                 opcode_style.paint("calld"),
                 operand_style.paint(s_read!(name).to_string())
             ),
+            Instruction::CaptureLocal(index, distance) => write!(
+                f,
+                "{} {} {}",
+                opcode_style.paint("capl"),
+                operand_style.paint(index.to_string()),
+                operand_style.paint(distance.to_string())
+            ),
             Instruction::Comment(comment) => write!(
                 f,
                 "{} {}",
@@ -409,6 +418,13 @@ impl fmt::Display for Instruction {
                 "{} {}",
                 opcode_style.paint("lc  "),
                 operand_style.paint(s_read!(name).to_string())
+            ),
+            Instruction::MakeLambdaPointer(name, arity) => write!(
+                f,
+                "{} {} {}",
+                opcode_style.paint("mlp "),
+                operand_style.paint(s_read!(name).to_string()),
+                operand_style.paint(arity.to_string())
             ),
             Instruction::MethodLookup(name) => write!(
                 f,
@@ -582,6 +598,12 @@ impl Thonk {
     pub(crate) fn add_instruction(&mut self, instr: Instruction, span: Option<Span>) -> usize {
         self.instructions.push(instr);
         self.spans.push(span.unwrap_or_default());
+        self.instructions.len() - 1
+    }
+
+    pub(crate) fn prefix_instruction(&mut self, instr: Instruction, span: Option<Span>) -> usize {
+        self.instructions.insert(0, instr);
+        self.spans.insert(0, span.unwrap_or_default());
         self.instructions.len() - 1
     }
 

@@ -1,6 +1,6 @@
 use heck::ToUpperCamelCase;
 use log::{self, log_enabled, Level::Trace};
-use rustc_hash::FxHashMap as HashMap;
+use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use snafu::{location, prelude::*, Location};
 
 use crate::{
@@ -17,8 +17,8 @@ use crate::{
 mod expression;
 
 use expression::{
-    block, call, field, for_loop, if_expr, index, list, literal, operator, print, range, ret,
-    struct_expr, typecast, variable, xmatch,
+    a_weight, block, call, field, for_loop, if_expr, index, list, literal, operator, print, range,
+    ret, struct_expr, typecast, variable, xmatch,
 };
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -62,6 +62,21 @@ impl CThonk {
             );
         }
         self.inner.add_instruction(instruction, None);
+    }
+
+    fn prefix_instruction(&mut self, instruction: Instruction, location: Location) {
+        log::debug!(target: "instr", "{}: {}:{}:{}\n{instruction}", POP_CLR.paint("prefix_instruction"), location.file, location.line, location.column);
+
+        if log_enabled!(target: "instr", Trace) {
+            self.inner.add_instruction(
+                Instruction::Comment(new_ref!(
+                    String,
+                    format!("{}:{}:{}", location.file, location.line, location.column)
+                )),
+                None,
+            );
+        }
+        self.inner.prefix_instruction(instruction, None);
     }
 
     fn add_instruction_with_span(
@@ -110,7 +125,6 @@ impl From<CThonk> for Thonk {
 #[derive(Debug)]
 struct Symbol {
     number: usize,
-    ty: ValueType,
 }
 
 #[derive(Debug)]
@@ -121,23 +135,18 @@ struct SymbolTable {
 
 impl SymbolTable {
     fn new(start: usize) -> Self {
+        log::debug!(target: "instr", "{}: {start}", ERR_CLR.paint("new symbol table"));
         SymbolTable {
             start,
             map: HashMap::default(),
         }
     }
 
-    fn insert(&mut self, name: String, ty: ValueType) -> usize {
+    fn insert(&mut self, name: String) -> usize {
         let number = self.count();
-        log::debug!(target: "instr", "{}: {name}: {number}", ERR_CLR.paint("symbol insert"));
+        log::debug!(target: "instr", "{}: {name} ({number})", ERR_CLR.paint("symbol insert"));
 
-        self.map.insert(
-            name,
-            Symbol {
-                number,
-                ty: ty.clone(),
-            },
-        );
+        self.map.insert(name, Symbol { number });
         number
     }
 
@@ -148,6 +157,16 @@ impl SymbolTable {
     fn count(&self) -> usize {
         self.map.len() + self.start
     }
+
+    fn start(&self) -> usize {
+        self.start
+    }
+}
+
+impl Drop for SymbolTable {
+    fn drop(&mut self) {
+        log::debug!(target: "instr", "{}", ERR_CLR.paint("drop symbol table"));
+    }
 }
 
 #[derive(Debug)]
@@ -156,16 +175,30 @@ struct Context<'a, 'b> {
     symbol_tables: Vec<SymbolTable>,
     method_name: Option<String>,
     program: &'b mut Program,
+    st_depth: usize,
+    funcs: HashSet<String>,
+    pub(crate) captures: Option<HashMap<String, usize>>,
 }
 
 impl<'a, 'b> Context<'a, 'b> {
     fn new(extruder_context: &'a ExtruderContext, program: &'b mut Program) -> Self {
         Context {
             extruder_context,
-            symbol_tables: vec![SymbolTable::new(0)],
+            symbol_tables: vec![],
             method_name: None,
             program,
+            st_depth: 0,
+            funcs: HashSet::default(),
+            captures: None,
         }
+    }
+
+    fn insert_function(&mut self, name: String) {
+        self.funcs.insert(name);
+    }
+
+    fn check_function(&self, name: &str) -> bool {
+        self.funcs.contains(name)
     }
 
     fn get_program(&mut self) -> &mut Program {
@@ -181,34 +214,72 @@ impl<'a, 'b> Context<'a, 'b> {
     }
 
     fn push_symbol_table(&mut self) {
+        self.st_depth += 1;
         self.symbol_tables.push(SymbolTable::new(0));
     }
 
-    fn push_child_symbol_table(&mut self) {
+    fn push_scope(&mut self) {
         let start = self.symbol_tables.last().unwrap().count();
         self.symbol_tables.push(SymbolTable::new(start));
     }
 
     fn pop_symbol_table(&mut self) {
+        self.st_depth -= 1;
         self.symbol_tables.pop();
     }
 
-    fn insert_symbol(&mut self, name: String, ty: ValueType) -> (bool, usize) {
+    fn pop_scope(&mut self) {
+        self.symbol_tables.pop();
+    }
+
+    fn is_root_symbol_table(&self) -> bool {
+        self.st_depth == 1
+    }
+
+    fn insert_symbol(&mut self, name: String) -> (bool, usize) {
         match self.get_symbol(name.as_str()) {
             Some(value) => (false, value.number),
             None => {
                 let table = self.symbol_tables.last_mut().unwrap();
-                (true, table.insert(name, ty))
+                (true, table.insert(name))
             }
         }
     }
 
     fn get_symbol(&self, name: &str) -> Option<&Symbol> {
+        // This is a bit goofy, and I think I can work around it.
+        // The goofy bit is that our symbol tables aren't bound to just lexical
+        // scope. The extend across function calls. This shouldn't be a problem
+        // in general because the extruder takes care of checking that functions
+        // aren't referencing anything outside of their scope.
+        //
+        // The exception is lambdas. In their case, we'll get symbol offset
+        // duplicates. Think about it for a second -- you'll get there.
+        // I think this is ok.
+        //
+        // When we compile the lambda, we know which symbols are captured from
+        // the outer scope. We introduce them into the symbol table of the lambda.
+        // This will cause the symbol lookups to use the offset for the lambda.
+        //
+        // Yeah, so I'm wrong. The extruder does not check for variable validity:
+        // the interpreter does that. So I either need to change the extruder,
+        // or change the compiler. Presumably, it was hard checking in the
+        // extruder. I'll need to cogitate.
+        //
+        // Something interesting happens with missing variables. When they
+        // aren't found in the symbol table the variable code emits instructions
+        // for setting up a function call stack. When the VM get's hold of this
+        // they result in missing symbols.
+        //
         for table in self.symbol_tables.iter().rev() {
             if let Some(value) = table.get(name) {
                 return Some(value);
             }
+            if table.start() == 0 {
+                break;
+            }
         }
+
         None
     }
 }
@@ -229,11 +300,42 @@ pub fn compile(context: &ExtruderContext) -> Result<Program> {
     let lu_dog = s_read!(lu_dog);
 
     for func in lu_dog.iter_function() {
+        context.insert_function(get_function_name(&func, &lu_dog));
+    }
+
+    for func in lu_dog.iter_function() {
         let thonk = compile_function(&func, &mut context)?.into();
         context.get_program().add_thonk(thonk);
     }
 
     Ok(program)
+}
+
+fn get_function_name(func: &RefType<Function>, lu_dog: &LuDogStore) -> String {
+    let func = s_read!(func);
+    let name = func.name.clone();
+    let ty_name = if let Some(i_block) = func.r9_implementation_block(&lu_dog).first() {
+        let i_block = s_read!(i_block);
+        if let Some(woog_struct) = i_block.r8_woog_struct(&lu_dog).first() {
+            let woog_struct = s_read!(woog_struct);
+            let name = woog_struct.name.clone();
+            name
+        } else if let Some(woog_enum) = i_block.r84c_enumeration(&lu_dog).first() {
+            let woog_enum = s_read!(woog_enum);
+            let name = woog_enum.name.clone();
+            name
+        } else {
+            "".to_owned()
+        }
+    } else {
+        "".to_owned()
+    };
+
+    if ty_name.is_empty() {
+        name
+    } else {
+        format!("{ty_name}::{name}")
+    }
 }
 
 fn compile_function(func: &RefType<Function>, context: &mut Context) -> Result<CThonk> {
@@ -247,7 +349,7 @@ fn compile_function(func: &RefType<Function>, context: &mut Context) -> Result<C
     let body = s_read!(body);
     let params = func.r13_parameter(&lu_dog);
 
-    log::debug!(target: "instr", "{}: {}\n\t-->{}:{}:{}", POP_CLR.paint("compile_function"), func.name, file!(), line!(), column!());
+    log::debug!(target: "instr", "{}: {}\n  --> {}:{}:{}", POP_CLR.paint("compile_function"), func.name, file!(), line!(), column!());
 
     // I need to iterate over the parameters to get the name of the parameter.
     if !params.is_empty() {
@@ -256,9 +358,8 @@ fn compile_function(func: &RefType<Function>, context: &mut Context) -> Result<C
             let param = next.clone();
             let param = s_read!(param);
             let var = s_read!(param.r12_variable(&lu_dog)[0]).clone();
-            let ty = s_read!(param.r79_value_type(&lu_dog)[0]).clone();
 
-            context.insert_symbol(var.name.clone(), ty);
+            context.insert_symbol(var.name.clone());
 
             let next_id = param.next;
             if let Some(ref id) = next_id {
@@ -289,25 +390,7 @@ fn compile_function(func: &RefType<Function>, context: &mut Context) -> Result<C
     let (name, incr_fs) = if ty_name.is_empty() {
         (func.name.clone(), false)
     } else {
-        // Here is where we look for actual user defined types, as
-        // in types that are defined in dwarf source.
-        let ty = if let Some(ref id) = lu_dog.exhume_woog_struct_id_by_name(&ty_name) {
-            let woog_struct = lu_dog.exhume_woog_struct(id).unwrap();
-            let woog_struct = s_read!(woog_struct);
-            woog_struct.r1_value_type(&lu_dog)[0].clone()
-        } else if let Some(ref id) = lu_dog.exhume_enumeration_id_by_name(&ty_name) {
-            let woog_enum = lu_dog.exhume_enumeration(id).unwrap();
-            let woog_enum = s_read!(woog_enum);
-            woog_enum.r1_value_type(&lu_dog)[0].clone()
-        } else {
-            return Err(BubbaError::InternalCompilerError {
-                location: location!(),
-                message: format!("Could not find type: {ty_name}"),
-            }
-            .into());
-        };
-
-        context.insert_symbol("self".to_owned(), s_read!(ty).clone());
+        context.insert_symbol("self".to_owned());
         (format!("{ty_name}::{}", func.name), true)
     };
 
@@ -388,7 +471,7 @@ fn compile_statement(
     thonk: &mut CThonk,
     context: &mut Context,
 ) -> Result<()> {
-    log::debug!(target: "instr", "{}: {}:{}:{}", POP_CLR.paint("compile_statement"), file!(), line!(), column!());
+    log::debug!(target: "instr", "{}:\n --> {}:{}:{}", POP_CLR.paint("compile_statement"), file!(), line!(), column!());
 
     let lu_dog = context.lu_dog_heel();
     let lu_dog = s_read!(lu_dog);
@@ -411,11 +494,9 @@ fn compile_statement(
 
             let var = s_read!(stmt.r21_local_variable(&lu_dog)[0]).clone();
             let var = s_read!(var.r12_variable(&lu_dog)[0]).clone();
-            let value = s_read!(var.r11_x_value(&lu_dog)[0]).clone();
-            let ty = s_read!(value.r24_value_type(&lu_dog)[0]).clone();
 
             let name = var.name;
-            let offset = match context.insert_symbol(name.clone(), ty) {
+            let offset = match context.insert_symbol(name.clone()) {
                 (true, index) => {
                     thonk.increment_frame_size();
                     index
@@ -432,9 +513,10 @@ fn compile_statement(
             let span = get_span(&expr, &lu_dog);
             compile_expression(&expr, thonk, context, span)?;
 
-            // 🚧 This is incorrect. We should only return if we are in an outer scope.
+            // if context.is_root_symbol_table() {
             thonk.add_instruction(Instruction::Return, location!());
             thonk.returned = true;
+            // }
         }
         StatementEnum::ItemStatement(_) => {}
     }
@@ -446,47 +528,46 @@ fn compile_expression(
     thonk: &mut CThonk,
     context: &mut Context,
     span: Span,
-) -> Result<()> {
-    log::debug!(target: "instr", "{}: {}:{}:{}", POP_CLR.paint("compile_expression"), file!(), line!(), column!());
+) -> Result<Option<String>> {
+    log::debug!(target: "instr", "{}:\n  -> {}:{}:{}", POP_CLR.paint("compile_expression"), file!(), line!(), column!());
 
     match &s_read!(expression).subtype {
-        ExpressionEnum::Block(ref block) => block::compile(block, thonk, context)?,
-        ExpressionEnum::Call(ref call) => call::compile(call, thonk, context, span)?,
-        ExpressionEnum::XDebugger(_) => {}
+        ExpressionEnum::AWait(ref expr) => a_weight::compile(expr, thonk, context, span),
+        ExpressionEnum::Block(ref block) => block::compile(block, thonk, context),
+        ExpressionEnum::Call(ref call) => call::compile(call, thonk, context, span),
+        ExpressionEnum::XDebugger(_) => Ok(None),
         ExpressionEnum::FieldAccess(ref field) => {
-            field::compile_field_access(field, thonk, context, span)?
+            field::compile_field_access(field, thonk, context, span)
         }
         ExpressionEnum::FieldExpression(ref field) => {
-            field::compile_field_expression(field, thonk, context)?
+            field::compile_field_expression(field, thonk, context)
         }
 
-        ExpressionEnum::ForLoop(ref for_loop) => for_loop::compile(for_loop, thonk, context, span)?,
-        ExpressionEnum::Index(ref index) => index::compile(index, thonk, context, span)?,
-        ExpressionEnum::Lambda(ref λ) => call::compile_lambda(λ, thonk, context, span)?,
-        ExpressionEnum::ListElement(ref list) => list::compile_list_element(list, thonk, context)?,
+        ExpressionEnum::ForLoop(ref for_loop) => for_loop::compile(for_loop, thonk, context, span),
+        ExpressionEnum::Index(ref index) => index::compile(index, thonk, context, span),
+        ExpressionEnum::Lambda(ref λ) => call::compile_lambda(λ, thonk, context, span),
+        ExpressionEnum::ListElement(ref list) => list::compile_list_element(list, thonk, context),
         ExpressionEnum::ListExpression(ref list) => {
-            list::compile_list_expression(list, thonk, context, span)?
+            list::compile_list_expression(list, thonk, context, span)
         }
-        ExpressionEnum::Literal(ref literal) => literal::compile(literal, thonk, context, span)?,
-        ExpressionEnum::Operator(ref op_type) => operator::compile(op_type, thonk, context, span)?,
-        ExpressionEnum::RangeExpression(ref range) => range::compile(range, thonk, context)?,
+        ExpressionEnum::Literal(ref literal) => literal::compile(literal, thonk, context, span),
+        ExpressionEnum::Operator(ref op_type) => operator::compile(op_type, thonk, context, span),
+        ExpressionEnum::RangeExpression(ref range) => range::compile(range, thonk, context),
         ExpressionEnum::StructExpression(ref expr) => {
-            struct_expr::compile(expr, thonk, context, span)?
+            struct_expr::compile(expr, thonk, context, span)
         }
-        ExpressionEnum::TypeCast(ref expr) => typecast::compile(expr, thonk, context, span)?,
+        ExpressionEnum::TypeCast(ref expr) => typecast::compile(expr, thonk, context, span),
         ExpressionEnum::VariableExpression(ref expr) => {
-            variable::compile(expr, thonk, context, span)?
+            variable::compile(expr, thonk, context, span)
         }
-        ExpressionEnum::XIf(ref expr) => if_expr::compile(expr, thonk, context)?,
-        ExpressionEnum::XMatch(ref expr) => xmatch::compile(expr, thonk, context, span)?,
-        ExpressionEnum::XPrint(ref print) => print::compile(print, thonk, context)?,
-        ExpressionEnum::XReturn(ref expr) => ret::compile(expr, thonk, context, span)?,
+        ExpressionEnum::XIf(ref expr) => if_expr::compile(expr, thonk, context),
+        ExpressionEnum::XMatch(ref expr) => xmatch::compile(expr, thonk, context, span),
+        ExpressionEnum::XPrint(ref print) => print::compile(print, thonk, context),
+        ExpressionEnum::XReturn(ref expr) => ret::compile(expr, thonk, context, span),
         missed => {
             panic!("Implement: {:?}", missed);
         }
     }
-
-    Ok(())
 }
 
 fn get_span(expression: &RefType<Expression>, lu_dog: &LuDogStore) -> Span {
@@ -912,7 +993,7 @@ async fn main() -> Future<()> {
         .unwrap();
         let program = compile(&ctx).unwrap();
         println!("{program}");
-        assert_eq!(program.get_thonk_card(), 11);
+        assert_eq!(program.get_thonk_card(), 13);
 
         // assert_eq!(
         //     program.get_thonk("main").unwrap().get_instruction_card(),
@@ -963,5 +1044,42 @@ async fn main() -> Future<()> {
         let run = run_vm(&program);
         assert!(run.is_ok());
         assert_eq!(&*s_read!(run.unwrap()), &Value::Integer(6));
+    }
+
+    #[test]
+    fn test_scopes() {
+        let _ = env_logger::builder().is_test(true).try_init();
+        color_backtrace::install();
+
+        let ore = "
+                   fn main() -> int {
+                    let a = 0;
+                    {
+                        let b = 1;
+                        {
+                            let c = 2;
+                        };
+                    };
+                    {
+                        let b = 3;
+                    };
+                    a
+                   }";
+        let ast = parse_dwarf("test_locals_and_params", ore).unwrap();
+        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
+        let ctx = new_lu_dog(
+            "test_locals_and_params".to_owned(),
+            Some((ore.to_owned(), &ast)),
+            &get_dwarf_home(),
+            &sarzak,
+        )
+        .unwrap();
+        let program = compile(&ctx).unwrap();
+        println!("{program}");
+        assert_eq!(program.get_thonk_card(), 1);
+
+        let run = run_vm(&program);
+        assert!(run.is_ok());
+        assert_eq!(&*s_read!(run.unwrap()), &Value::Integer(0));
     }
 }

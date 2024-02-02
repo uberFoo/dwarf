@@ -5,10 +5,7 @@ use crate::{
         compiler::{compile_expression, get_span, CThonk, Context, Result},
         instr::Instruction,
     },
-    lu_dog::{ValueType, ValueTypeEnum},
-    new_ref, s_read,
-    sarzak::Ty,
-    NewRef, RefType, SarzakStorePtr, Span, Value,
+    new_ref, s_read, NewRef, RefType, SarzakStorePtr, Span, Value,
 };
 
 pub(in crate::bubba::compiler) fn compile(
@@ -16,7 +13,7 @@ pub(in crate::bubba::compiler) fn compile(
     thonk: &mut CThonk,
     context: &mut Context,
     span: Span,
-) -> Result<()> {
+) -> Result<Option<String>> {
     log::debug!(target: "instr", "{}:{}:{}", file!(), line!(), column!());
 
     let lu_dog = context.lu_dog_heel().clone();
@@ -31,22 +28,10 @@ pub(in crate::bubba::compiler) fn compile(
     let list_span = get_span(&list, &lu_dog);
     compile_expression(&list, thonk, context, list_span)?;
 
-    context.push_child_symbol_table();
+    context.push_scope();
     let mut inner_thonk = CThonk::new(format!("for_{}", ident));
 
-    let get_integer = || -> RefType<ValueType> {
-        let ty = Ty::new_integer(&s_read!(context.sarzak_heel()));
-        for vt in lu_dog.iter_value_type() {
-            if let ValueTypeEnum::Ty(_ty) = s_read!(vt).subtype {
-                if ty.read().unwrap().id() == _ty {
-                    return vt.clone();
-                }
-            }
-        }
-        unreachable!();
-    };
-
-    let index = match context.insert_symbol(ident, s_read!(get_integer()).clone()) {
+    let index = match context.insert_symbol(ident) {
         (true, index) => {
             inner_thonk.increment_frame_size();
             index
@@ -89,9 +74,9 @@ pub(in crate::bubba::compiler) fn compile(
         location!(),
     );
 
-    context.pop_symbol_table();
+    context.pop_scope();
 
-    Ok(())
+    Ok(None)
 }
 
 #[cfg(test)]

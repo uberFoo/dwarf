@@ -12,7 +12,7 @@ pub(in crate::bubba::compiler) fn compile(
     expr: &SarzakStorePtr,
     thonk: &mut CThonk,
     context: &mut Context,
-) -> Result<()> {
+) -> Result<Option<String>> {
     log::debug!(target: "instr", "{}:{}:{}", file!(), line!(), column!());
 
     let lu_dog = context.lu_dog_heel().clone();
@@ -33,7 +33,7 @@ pub(in crate::bubba::compiler) fn compile(
 
     // Compile the false block
     let false_thonk = if let Some(ref expr) = expr.false_block {
-        context.push_child_symbol_table();
+        context.push_scope();
         let mut false_thonk = CThonk::new("if_false".to_owned());
         let block = lu_dog.exhume_expression(expr).unwrap();
         let block_span = get_span(&block, &lu_dog);
@@ -44,14 +44,14 @@ pub(in crate::bubba::compiler) fn compile(
         for _ in 0..fp {
             thonk.increment_frame_size();
         }
-        context.pop_symbol_table();
+        context.pop_scope();
         Some(false_thonk)
     } else {
         None
     };
 
     // Compile the true block.
-    context.push_child_symbol_table();
+    context.push_scope();
     let mut true_thonk = CThonk::new("if_true".to_owned());
     let block = lu_dog.exhume_block(&expr.true_block).unwrap();
     let block = s_read!(block).r15_expression(&lu_dog)[0].clone();
@@ -63,7 +63,7 @@ pub(in crate::bubba::compiler) fn compile(
         thonk.increment_frame_size();
     }
     let true_block_len = true_thonk.get_instruction_card() as isize;
-    context.pop_symbol_table();
+    context.pop_scope();
 
     thonk.add_instruction(Instruction::JumpIfFalse(true_block_len + 1), location!());
     thonk.append(true_thonk);
@@ -77,7 +77,7 @@ pub(in crate::bubba::compiler) fn compile(
         thonk.append(false_thonk);
     }
 
-    Ok(())
+    Ok(None)
 }
 
 #[cfg(test)]

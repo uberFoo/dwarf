@@ -7,7 +7,7 @@ pub(in crate::bubba::compiler) fn compile(
     block: &SarzakStorePtr,
     thonk: &mut CThonk,
     context: &mut Context,
-) -> Result<()> {
+) -> Result<Option<String>> {
     log::debug!(target: "instr", "{}:{}:{}", file!(), line!(), column!());
 
     let lu_dog = context.lu_dog_heel();
@@ -16,6 +16,7 @@ pub(in crate::bubba::compiler) fn compile(
     let block = lu_dog.exhume_block(block).unwrap();
     let stmts = s_read!(block).r18_statement(&lu_dog);
     if !stmts.is_empty() {
+        context.push_scope();
         let mut next = s_read!(block).r71_statement(&lu_dog)[0].clone();
 
         loop {
@@ -27,7 +28,8 @@ pub(in crate::bubba::compiler) fn compile(
                 break;
             }
         }
+        context.pop_scope();
     }
 
-    Ok(())
+    Ok(None)
 }

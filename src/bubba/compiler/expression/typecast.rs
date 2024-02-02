@@ -13,7 +13,7 @@ pub(in crate::bubba::compiler) fn compile(
     thonk: &mut CThonk,
     context: &mut Context,
     span: Span,
-) -> Result<()> {
+) -> Result<Option<String>> {
     log::debug!(target: "instr", "{}:{}:{}", file!(), line!(), column!());
 
     let lu_dog = context.lu_dog_heel();
@@ -32,7 +32,7 @@ pub(in crate::bubba::compiler) fn compile(
         location!(),
     );
 
-    Ok(())
+    Ok(None)
 }
 
 #[cfg(test)]

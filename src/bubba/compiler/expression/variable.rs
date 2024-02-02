@@ -5,7 +5,6 @@ use crate::{
         compiler::{BubbaError, CThonk, Context, Result},
         instr::Instruction,
     },
-    lu_dog::ValueTypeEnum,
     new_ref, s_read, NewRef, RefType, SarzakStorePtr, Span, POP_CLR,
 };
 
@@ -14,7 +13,7 @@ pub(in crate::bubba::compiler) fn compile(
     thonk: &mut CThonk,
     context: &mut Context,
     span: Span,
-) -> Result<()> {
+) -> Result<Option<String>> {
     log::debug!(target: "instr", "{}: {}:{}:{}", POP_CLR.paint("compile_variable"), file!(), line!(), column!());
 
     let lu_dog = context.lu_dog_heel();
@@ -25,43 +24,8 @@ pub(in crate::bubba::compiler) fn compile(
     let name = &expr.name;
 
     if let Some(symbol) = context.get_symbol(name) {
-        // It looks like if we pass something in context.method_name then we look
-        // up the type based on the symbol name. Down below we build a fully qualified
-        // static method call. The intension is that we invoke a method as a static
-        // by passing self as the first argument.
-        if let Some(method) = &context.method_name {
-            let ty = if let ValueTypeEnum::Enumeration(ref id) = symbol.ty.subtype {
-                let enum_ty = lu_dog.exhume_enumeration(id).unwrap();
-                let enum_ty = s_read!(enum_ty);
-                enum_ty.name.to_owned()
-            } else if let ValueTypeEnum::WoogStruct(ref id) = symbol.ty.subtype {
-                let woog_struct = lu_dog.exhume_woog_struct(id).unwrap();
-                let woog_struct = s_read!(woog_struct);
-                woog_struct.name.to_owned()
-            } else {
-                return Err(BubbaError::InternalCompilerError {
-                    message: "Can not dereference something that is not a function.".to_owned(),
-                    location: location!(),
-                }
-                .into());
-            };
-
-            let func_name = format!("{ty}::{method}");
-            let name = new_ref!(String, func_name);
-            // We are here because we need to look up a function.
-            thonk.add_instruction(Instruction::CallDestination(name.clone()), location!());
-
-            // This instruction will be patched by the VM with the number of locals in the
-            // function.
-            thonk.add_instruction(Instruction::LocalCardinality(name), location!());
-        } else {
-            thonk.add_instruction_with_span(
-                Instruction::FetchLocal(symbol.number),
-                span,
-                location!(),
-            );
-        }
-    } else {
+        thonk.add_instruction_with_span(Instruction::FetchLocal(symbol.number), span, location!());
+    } else if context.check_function(name) {
         let name = new_ref!(String, name.to_owned());
         // We are here because we need to look up a function.
         thonk.add_instruction(Instruction::CallDestination(name.clone()), location!());
@@ -69,7 +33,22 @@ pub(in crate::bubba::compiler) fn compile(
         // This instruction will be patched by the VM with the number of locals in the
         // function.
         thonk.add_instruction(Instruction::LocalCardinality(name), location!());
+    } else {
+        let (new, number) = context.insert_symbol(name.to_owned());
+        if new {
+            thonk.increment_frame_size();
+        }
+        if let Some(ref mut captures) = context.captures {
+            captures.insert(name.to_owned(), number);
+            thonk.add_instruction_with_span(Instruction::FetchLocal(number), span, location!());
+        } else {
+            return Err(BubbaError::InternalCompilerError {
+                message: format!("Variable {} not found", name),
+                location: location!(),
+            }
+            .into());
+        }
     }
 
-    Ok(())
+    Ok(None)
 }

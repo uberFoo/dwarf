@@ -479,9 +479,10 @@ pub enum Value {
     /// why I need the inner Function to be behind a RefType<<T>>. It seems
     /// excessive, and yet I know I've looked into it before.
     Function(RefType<Function>),
-    FunctionPointer {
+    FubarPointer {
         name: String,
-        arity: usize,
+        frame_size: usize,
+        captures: Vec<RefType<Value>>,
     },
     #[cfg(feature = "async")]
     // #[serde(skip)]
@@ -549,7 +550,21 @@ impl Value {
             Self::Error(e) => write!(f, "{}: {e}", Colour::Red.bold().paint("error")),
             Self::Float(num) => write!(f, "{num}"),
             Self::Function(_) => write!(f, "<function>"),
-            Self::FunctionPointer { name, arity } => write!(f, "{name}/{arity}"),
+            Self::FubarPointer {
+                name,
+                frame_size,
+                captures,
+            } => {
+                write!(
+                    f,
+                    "FubarPointer {{ name: {name}, frame_size: {frame_size}, captures: ["
+                )?;
+                for i in captures {
+                    let i = s_read!(i);
+                    write!(f, "{i}, ")?;
+                }
+                write!(f, "] }}")
+            }
             #[cfg(feature = "async")]
             Self::Future {
                 name,
@@ -836,7 +851,21 @@ impl std::fmt::Debug for Value {
             Self::Error(e) => write!(f, "{}: {e}", Colour::Red.bold().paint("error")),
             Self::Float(num) => write!(f, "{num:?}"),
             Self::Function(func) => write!(f, "{:?}", s_read!(func)),
-            Self::FunctionPointer { name, arity } => write!(f, "{name}/{arity}"),
+            Self::FubarPointer {
+                name,
+                frame_size,
+                captures,
+            } => {
+                write!(
+                    f,
+                    "FubarPointer {{ name: {name}, frame_size: {frame_size}, captures: ["
+                )?;
+                for i in captures {
+                    let i = s_read!(i);
+                    write!(f, "{i}, ")?;
+                }
+                write!(f, "] }}")
+            }
             #[cfg(feature = "async")]
             Self::Future {
                 name,
@@ -891,9 +920,14 @@ impl Clone for Value {
             Self::Error(_e) => unimplemented!(),
             Self::Float(num) => Self::Float(*num),
             Self::Function(func) => Self::Function(func.clone()),
-            Self::FunctionPointer { name, arity } => Self::FunctionPointer {
+            Self::FubarPointer {
+                name,
+                frame_size,
+                captures: captured,
+            } => Self::FubarPointer {
                 name: name.to_owned(),
-                arity: *arity,
+                frame_size: *frame_size,
+                captures: captured.clone(),
             },
             #[cfg(feature = "async")]
             // Note that cloned values do not inherit the task
@@ -956,7 +990,21 @@ impl fmt::Display for Value {
             Self::Error(e) => write!(f, "{}: {e}", Colour::Red.bold().paint("error")),
             Self::Float(num) => write!(f, "{num}"),
             Self::Function(_) => write!(f, "<function>"),
-            Self::FunctionPointer { name, arity } => write!(f, "{name}/{arity}"),
+            Self::FubarPointer {
+                name,
+                frame_size,
+                captures,
+            } => {
+                write!(
+                    f,
+                    "FubarPointer {{ name: {name}, frame_size: {frame_size}, captures: ["
+                )?;
+                for i in captures {
+                    let i = s_read!(i);
+                    write!(f, "{i}, ")?;
+                }
+                write!(f, "] }}")
+            }
             #[cfg(feature = "async")]
             Self::Future {
                 name,
