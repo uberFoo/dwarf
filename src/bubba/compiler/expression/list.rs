@@ -5,6 +5,7 @@ use crate::{
         compiler::{compile_expression, get_span, CThonk, Context, Result},
         instr::Instruction,
     },
+    lu_dog::ValueType,
     new_ref, s_read, NewRef, RefType, SarzakStorePtr, Span, Value,
 };
 
@@ -12,7 +13,7 @@ pub(in crate::bubba::compiler) fn compile_list_element(
     element: &SarzakStorePtr,
     thonk: &mut CThonk,
     context: &mut Context,
-) -> Result<Option<String>> {
+) -> Result<Option<ValueType>> {
     log::debug!(target: "instr", "{}:{}:{}", file!(), line!(), column!());
 
     let lu_dog = context.lu_dog_heel().clone();
@@ -37,7 +38,7 @@ pub(in crate::bubba::compiler) fn compile_list_expression(
     thonk: &mut CThonk,
     context: &mut Context,
     entry_span: Span,
-) -> Result<Option<String>> {
+) -> Result<Option<ValueType>> {
     log::debug!(target: "instr", "{}:{}:{}", file!(), line!(), column!());
 
     let lu_dog = context.lu_dog_heel().clone();

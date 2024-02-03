@@ -120,16 +120,6 @@ pub enum Instruction {
     /// conflagration
     ///
     HaltAndCatchFire,
-    /// Index into a list
-    ///
-    /// The top of the stack is the index to read. The second value on the stack
-    /// is the list to read from. The result is pushed onto the stack.
-    ///
-    /// ## Stack Effect
-    ///
-    /// The stack is one element shorter after this instruction.
-    ///
-    Index,
     /// Jump to the given offset.
     ///
     /// ## Stack Effect
@@ -151,6 +141,17 @@ pub enum Instruction {
     /// Pops the value off the top of the stack for the condition.
     ///
     JumpIfTrue(isize),
+    /// Index into a list
+    ///
+    /// The top of the stack is the index to read. The second value on the stack
+    /// is the list to read from. The result is pushed onto the stack.
+    ///
+    /// ## Stack Effect
+    ///
+    /// The stack is one element shorter after this instruction.
+    ///
+    ListIndex,
+    ListLength,
     /// Local Cardinality
     ///
     /// This is a pseudo-instruction to store the number of local variables in
@@ -394,7 +395,6 @@ impl fmt::Display for Instruction {
             ),
             Instruction::FieldWrite => write!(f, "{}", opcode_style.paint("field_write")),
             Instruction::HaltAndCatchFire => write!(f, "{}", opcode_style.paint("hcf 🔥")),
-            Instruction::Index => write!(f, "{}", opcode_style.paint("idx ")),
             Instruction::Jump(offset) => write!(
                 f,
                 "{} {}",
@@ -413,6 +413,8 @@ impl fmt::Display for Instruction {
                 opcode_style.paint("jift"),
                 operand_style.paint(address.to_string())
             ),
+            Instruction::ListIndex => write!(f, "{}", opcode_style.paint("idx ")),
+            Instruction::ListLength => write!(f, "{}", opcode_style.paint("len ")),
             Instruction::LocalCardinality(name) => write!(
                 f,
                 "{} {}",

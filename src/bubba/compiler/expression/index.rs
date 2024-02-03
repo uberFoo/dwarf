@@ -5,6 +5,7 @@ use crate::{
         compiler::{compile_expression, get_span, CThonk, Context, Result},
         instr::Instruction,
     },
+    lu_dog::ValueType,
     s_read, SarzakStorePtr, Span,
 };
 
@@ -13,7 +14,7 @@ pub(in crate::bubba::compiler) fn compile(
     thonk: &mut CThonk,
     context: &mut Context,
     span: Span,
-) -> Result<Option<String>> {
+) -> Result<Option<ValueType>> {
     log::debug!(target: "instr", "{}:{}:{}", file!(), line!(), column!());
 
     let lu_dog = context.lu_dog_heel().clone();
@@ -29,7 +30,7 @@ pub(in crate::bubba::compiler) fn compile(
     let index_expr_span = get_span(&index_expr, &lu_dog);
     compile_expression(&index_expr, thonk, context, index_expr_span)?;
 
-    thonk.add_instruction_with_span(Instruction::Index, span, location!());
+    thonk.add_instruction_with_span(Instruction::ListIndex, span, location!());
 
     Ok(None)
 }

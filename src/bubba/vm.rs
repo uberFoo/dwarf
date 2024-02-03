@@ -3,14 +3,19 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use abi_stable::library::{lib_header_from_path, LibrarySuffix, RawLibrary};
+use abi_stable::{
+    library::{lib_header_from_path, LibrarySuffix, RawLibrary},
+    std_types::{RErr, ROk},
+};
 use ansi_term::Colour;
 use log::{self, log_enabled, Level::Trace};
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use snafu::{location, prelude::*, Location};
 
 use crate::{
-    chacha::value::{EnumVariant, TupleEnum, UserStruct},
+    bubba::{RESULT, STRING},
+    chacha::value::{EnumVariant, FfiValue, TupleEnum, UserStruct},
+    keywords::INVOKE_FUNC,
     lu_dog::{ValueType, ValueTypeEnum},
     new_ref,
     plug_in::{PluginModRef, PluginType},
@@ -140,9 +145,11 @@ impl VM {
     pub fn new(program: &Program, args: &[RefType<Value>], home: &PathBuf) -> Self {
         // println!("{}", program);
         // dbg!(&program);
-        let Some(Value::ValueType(str_ty)) = program.get_symbol("STRING") else {
+        let Some(Value::ValueType(str_ty)) = program.get_symbol(STRING) else {
             panic!("No STRING symbol found.")
         };
+
+        dbg!(program.get_symbol(RESULT));
 
         if log_enabled!(target: "vm", Trace) {
             eprintln!("{program}");
@@ -365,84 +372,150 @@ impl VM {
                             println!("\t\t{}:\t{stack_local_count}", Colour::Green.paint("func:"));
                         }
 
-                        let (callee, frame_size): (isize, Value) = match stack_local_count
-                            .clone()
-                            .into_value()
-                        {
-                            Value::FubarPointer {
-                                name,
-                                frame_size,
-                                captures,
-                            } => {
-                                self.captures = Some(captures);
-                                let addr = self.func_map.get(&name).unwrap().0;
-                                local_count = frame_size;
-                                (
-                                    addr as isize,
-                                    // This is plus one because the call frame does not include
-                                    // the frame size.
-                                    <usize as Into<Value>>::into(func_arity + local_count + 1),
-                                )
-                            }
-                            Value::Integer(arity) => {
-                                let callee: isize =
-                                    callee.clone().into_value().try_into().map_err(|e| {
-                                        BubbaError::ValueError {
-                                            source: Box::new(e),
-                                            location: location!(),
-                                        }
-                                    })?;
-                                local_count = arity as usize;
-                                (
-                                    callee,
-                                    <usize as Into<Value>>::into(func_arity + local_count + 2),
-                                )
-                            }
-                            _ => {
-                                return Err(BubbaError::VmPanic {
-                                    message: format!("Unexpected value: {stack_local_count:?}.",),
+                        if let Value::Plugin(plugin) = callee.clone().into_value() {
+                            let method: String = stack_local_count
+                                .clone()
+                                .into_value()
+                                .try_into()
+                                .map_err(|e| BubbaError::ValueError {
+                                    source: Box::new(e),
                                     location: location!(),
+                                })?;
+
+                            match method.as_str() {
+                                INVOKE_FUNC => {
+                                    let mut plugin = s_write!(plugin);
+                                    let args = self.stack.pop().clone().unwrap().into_value();
+                                    dbg!(&args);
+                                    let Value::Vector { inner, .. } = args else {
+                                        panic!("Expected a vector of arguments.")
+                                    };
+                                    let args = s_read!(inner)
+                                        .iter()
+                                        .map(|v| {
+                                            dbg!(&v);
+                                            <Value as Into<FfiValue>>::into((*s_read!(v)).clone())
+                                        })
+                                        .collect::<Vec<FfiValue>>();
+                                    let func = self.stack.pop().clone().unwrap().into_value();
+                                    let func = func.to_inner_string();
+                                    let ty = self.stack.pop().clone().unwrap().into_value();
+                                    let ty = ty.to_inner_string();
+                                    let module = self.stack.pop().clone().unwrap().into_value();
+                                    let module = module.to_inner_string();
+
+                                    dbg!(&module, &ty, &func, &args);
+                                    match plugin.invoke_func(
+                                        module.as_str().into(),
+                                        ty.as_str().into(),
+                                        func.as_str().into(),
+                                        args.into(),
+                                    ) {
+                                        ROk(value) => {
+                                            // self.stack.push(value.into().into());
+                                        }
+                                        RErr(e) => {
+                                            return Err(BubbaError::ValueError {
+                                                source: Box::new(e),
+                                                location: location!(),
+                                            }
+                                            .into())
+                                        }
+                                    }
                                 }
-                                .into())
+                                _ => {
+                                    return Err(BubbaError::VmPanic {
+                                        message: format!("Unknown method: {method}.",),
+                                        location: location!(),
+                                    }
+                                    .into())
+                                }
                             }
-                        };
 
-                        let old_fp = self.fp;
-                        let old_ip = self.ip;
+                            1
+                        } else {
+                            let (callee, frame_size): (isize, Value) = match stack_local_count
+                                .clone()
+                                .into_value()
+                            {
+                                Value::Integer(arity) => {
+                                    let callee: isize =
+                                        callee.clone().into_value().try_into().map_err(|e| {
+                                            BubbaError::ValueError {
+                                                source: Box::new(e),
+                                                location: location!(),
+                                            }
+                                        })?;
+                                    local_count = arity as usize;
+                                    (
+                                        callee,
+                                        <usize as Into<Value>>::into(func_arity + local_count + 2),
+                                    )
+                                }
+                                Value::FubarPointer {
+                                    name,
+                                    frame_size,
+                                    captures,
+                                } => {
+                                    self.captures = Some(captures);
+                                    let addr = self.func_map.get(&name).unwrap().0;
+                                    local_count = frame_size;
+                                    (
+                                        addr as isize,
+                                        // This is plus one because the call frame does not include
+                                        // the frame size.
+                                        <usize as Into<Value>>::into(func_arity + local_count + 1),
+                                    )
+                                }
+                                // Value::Plugin(plugin) => {}
+                                _ => {
+                                    return Err(BubbaError::VmPanic {
+                                        message: format!(
+                                            "Unexpected value: {stack_local_count:?}.",
+                                        ),
+                                        location: location!(),
+                                    }
+                                    .into())
+                                }
+                            };
 
-                        // The call stack has been setup, but we need to make room
-                        // for locals.
-                        for _ in 0..local_count {
-                            self.stack.push(Value::Empty.into());
+                            let old_fp = self.fp;
+                            let old_ip = self.ip;
+
+                            // The call stack has been setup, but we need to make room
+                            // for locals.
+                            for _ in 0..local_count {
+                                self.stack.push(Value::Empty.into());
+                            }
+
+                            // Push the arity
+                            self.stack.push(<usize as Into<Value>>::into(arity).into());
+                            arity = *func_arity;
+
+                            // Push the call frame size so that we can clean in out quickly
+                            self.stack.push(frame_size.into());
+
+                            // Push the old IP
+                            self.stack.push(<isize as Into<Value>>::into(old_ip).into());
+
+                            self.fp = self.stack.len();
+                            self.stack.push(<usize as Into<Value>>::into(old_fp).into());
+
+                            // self.ip = callee;
+                            // let result = self.inner_run(arity, local_count, trace)?;
+
+                            // Move the frame pointer back
+                            // self.fp = (&*s_read!(self.stack[self.fp])).try_into().unwrap();
+                            // self.fp = old_fp;
+                            // self.ip = old_ip;
+
+                            // (0..arity + local_count + 3).for_each(|_| {
+                            //     self.stack.pop();
+                            // });
+
+                            // self.stack.push(result);
+                            callee - self.ip
                         }
-
-                        // Push the arity
-                        self.stack.push(<usize as Into<Value>>::into(arity).into());
-                        arity = *func_arity;
-
-                        // Push the call frame size so that we can clean in out quickly
-                        self.stack.push(frame_size.into());
-
-                        // Push the old IP
-                        self.stack.push(<isize as Into<Value>>::into(old_ip).into());
-
-                        self.fp = self.stack.len();
-                        self.stack.push(<usize as Into<Value>>::into(old_fp).into());
-
-                        // self.ip = callee;
-                        // let result = self.inner_run(arity, local_count, trace)?;
-
-                        // Move the frame pointer back
-                        // self.fp = (&*s_read!(self.stack[self.fp])).try_into().unwrap();
-                        // self.fp = old_fp;
-                        // self.ip = old_ip;
-
-                        // (0..arity + local_count + 3).for_each(|_| {
-                        //     self.stack.pop();
-                        // });
-
-                        // self.stack.push(result);
-                        callee - self.ip
                     }
                     Instruction::CaptureLocal(from, to) => {
                         let Some(captures) = self.captures.as_ref() else {
@@ -461,75 +534,75 @@ impl VM {
                         1
                     }
                     Instruction::Comment(_) => 1,
-                    Instruction::DeconstructStructExpression => {
-                        fn decode_expression(
-                            value: RefType<Value>,
-                        ) -> Result<(RefType<Value>, Option<RefType<Value>>)>
-                        {
-                            let read = s_read!(value);
-                            match &*read {
-                                Value::Enumeration(value) => match value {
-                                    // 🚧 I can't tell if this is gross, or a sweet hack.
-                                    // I think I'm referring to using the name as the scrutinee?
-                                    EnumVariant::Unit(_, ty, value) => Ok((
-                                        new_ref!(Value, Value::String(ty.to_owned())),
-                                        Some(new_ref!(Value, Value::String(value.to_owned()))),
-                                    )),
-                                    // EnumFieldVariant::Struct(value) => (
-                                    //     *value.type_name().to_owned(),
-                                    //     Some(*value.get_value()),
-                                    // ),
-                                    EnumVariant::Tuple((ty, path), value) => {
-                                        let path = path.split(PATH_SEP).collect::<Vec<&str>>();
-                                        let mut path = VecDeque::from(path);
-                                        let name = path.pop_front().unwrap().to_owned();
-                                        if name.is_empty() {
-                                            Ok((
-                                                new_ref!(
-                                                    Value,
-                                                    Value::String(
-                                                        s_read!(value).variant().to_owned()
-                                                    )
-                                                ),
-                                                Some(s_read!(value).value().clone()),
-                                            ))
-                                        } else {
-                                            Ok((
-                                                new_ref!(Value, Value::String(name)),
-                                                Some(new_ref!(
-                                                    Value,
-                                                    Value::Enumeration(EnumVariant::Tuple(
-                                                        (
-                                                            ty.clone(),
-                                                            path.into_iter()
-                                                                .collect::<Vec<&str>>()
-                                                                .join(PATH_SEP)
-                                                        ),
-                                                        value.clone(),
-                                                    ))
-                                                )),
-                                            ))
-                                        }
-                                    }
-                                    _ => unimplemented!(),
-                                },
-                                _ => Ok((value.clone(), None)),
-                            }
-                        }
+                    // Instruction::DeconstructStructExpression => {
+                    //     fn decode_expression(
+                    //         value: RefType<Value>,
+                    //     ) -> Result<(RefType<Value>, Option<RefType<Value>>)>
+                    //     {
+                    //         let read = s_read!(value);
+                    //         match &*read {
+                    //             Value::Enumeration(value) => match value {
+                    //                 // 🚧 I can't tell if this is gross, or a sweet hack.
+                    //                 // I think I'm referring to using the name as the scrutinee?
+                    //                 EnumVariant::Unit(_, ty, value) => Ok((
+                    //                     new_ref!(Value, Value::String(ty.to_owned())),
+                    //                     Some(new_ref!(Value, Value::String(value.to_owned()))),
+                    //                 )),
+                    //                 // EnumFieldVariant::Struct(value) => (
+                    //                 //     *value.type_name().to_owned(),
+                    //                 //     Some(*value.get_value()),
+                    //                 // ),
+                    //                 EnumVariant::Tuple((ty, path), value) => {
+                    //                     let path = path.split(PATH_SEP).collect::<Vec<&str>>();
+                    //                     let mut path = VecDeque::from(path);
+                    //                     let name = path.pop_front().unwrap().to_owned();
+                    //                     if name.is_empty() {
+                    //                         Ok((
+                    //                             new_ref!(
+                    //                                 Value,
+                    //                                 Value::String(
+                    //                                     s_read!(value).variant().to_owned()
+                    //                                 )
+                    //                             ),
+                    //                             Some(s_read!(value).value().clone()),
+                    //                         ))
+                    //                     } else {
+                    //                         Ok((
+                    //                             new_ref!(Value, Value::String(name)),
+                    //                             Some(new_ref!(
+                    //                                 Value,
+                    //                                 Value::Enumeration(EnumVariant::Tuple(
+                    //                                     (
+                    //                                         ty.clone(),
+                    //                                         path.into_iter()
+                    //                                             .collect::<Vec<&str>>()
+                    //                                             .join(PATH_SEP)
+                    //                                     ),
+                    //                                     value.clone(),
+                    //                                 ))
+                    //                             )),
+                    //                         ))
+                    //                     }
+                    //                 }
+                    //                 _ => unimplemented!(),
+                    //             },
+                    //             _ => Ok((value.clone(), None)),
+                    //         }
+                    //     }
 
-                        let mut variant = self.stack.pop().unwrap();
-                        while let Ok((name, value)) = decode_expression(variant.into_pointer()) {
-                            dbg!(&name, &value);
-                            self.stack.push(name.into());
-                            if let Some(value) = value {
-                                variant = value.into();
-                            } else {
-                                break;
-                            }
-                        }
+                    //     let mut variant = self.stack.pop().unwrap();
+                    //     while let Ok((name, value)) = decode_expression(variant.into_pointer()) {
+                    //         dbg!(&name, &value);
+                    //         self.stack.push(name.into());
+                    //         if let Some(value) = value {
+                    //             variant = value.into();
+                    //         } else {
+                    //             break;
+                    //         }
+                    //     }
 
-                        1
-                    }
+                    //     1
+                    // }
                     Instruction::Divide => {
                         let b = self.stack.pop().unwrap();
                         let a = self.stack.pop().unwrap();
@@ -782,7 +855,70 @@ impl VM {
 
                         return Err(BubbaError::HaltAndCatchFire { file, span }.into());
                     }
-                    Instruction::Index => {
+                    Instruction::Jump(offset) => {
+                        if trace {
+                            println!(
+                                "\t\t{} {}",
+                                Colour::Red.bold().paint("jmp"),
+                                Colour::Yellow
+                                    .bold()
+                                    .paint(format!("0x{:08x}", self.ip + offset + 1))
+                            );
+                        }
+                        offset + 1
+                    }
+                    Instruction::JumpIfFalse(offset) => {
+                        let condition = self.stack.pop().unwrap();
+                        let condition: bool =
+                            condition
+                                .into_value()
+                                .try_into()
+                                .map_err(|e: ChaChaError| BubbaError::ValueError {
+                                    source: Box::new(e),
+                                    location: location!(),
+                                })?;
+
+                        if !condition {
+                            if trace {
+                                println!(
+                                    "\t\t{} {}",
+                                    Colour::Red.bold().paint("jiff"),
+                                    Colour::Yellow
+                                        .bold()
+                                        .paint(format!("0x{:08x}", self.ip + offset + 1))
+                                );
+                            }
+                            offset + 1
+                        } else {
+                            1
+                        }
+                    }
+                    Instruction::JumpIfTrue(offset) => {
+                        let condition = self.stack.pop().unwrap();
+                        let condition: bool =
+                            condition
+                                .into_value()
+                                .try_into()
+                                .map_err(|e: ChaChaError| BubbaError::ValueError {
+                                    source: Box::new(e),
+                                    location: location!(),
+                                })?;
+                        if condition {
+                            if trace {
+                                println!(
+                                    "\t\t{} {}",
+                                    Colour::Red.bold().paint("jift"),
+                                    Colour::Yellow
+                                        .bold()
+                                        .paint(format!("0x{:08x}", self.ip + offset + 1))
+                                );
+                            }
+                            offset + 1
+                        } else {
+                            1
+                        }
+                    }
+                    Instruction::ListIndex => {
                         let index = self.stack.pop().unwrap();
                         let list = self.stack.pop().unwrap();
                         let list = list.into_pointer();
@@ -909,68 +1045,33 @@ impl VM {
 
                         1
                     }
-                    Instruction::Jump(offset) => {
-                        if trace {
-                            println!(
-                                "\t\t{} {}",
-                                Colour::Red.bold().paint("jmp"),
-                                Colour::Yellow
-                                    .bold()
-                                    .paint(format!("0x{:08x}", self.ip + offset + 1))
-                            );
-                        }
-                        offset + 1
-                    }
-                    Instruction::JumpIfFalse(offset) => {
-                        let condition = self.stack.pop().unwrap();
-                        let condition: bool =
-                            condition
-                                .into_value()
-                                .try_into()
-                                .map_err(|e: ChaChaError| BubbaError::ValueError {
-                                    source: Box::new(e),
+                    Instruction::ListLength => {
+                        let list = self.stack.pop().unwrap();
+                        let list = list.into_pointer();
+                        let list = s_read!(list);
+                        match &*list {
+                            Value::Vector { inner, .. } => {
+                                let inner = s_read!(inner);
+                                self.stack
+                                    .push(Value::Integer(inner.len() as DwarfInteger).into());
+                            }
+                            Value::String(str) => {
+                                self.stack
+                                    .push(Value::Integer(str.len() as DwarfInteger).into());
+                            }
+                            _ => {
+                                return Err(BubbaError::ValueError {
                                     location: location!(),
-                                })?;
+                                    source: Box::new(ChaChaError::NotIndexable {
+                                        span: self.get_span(),
+                                        location: location!(),
+                                    }),
+                                }
+                                .into());
+                            }
+                        }
 
-                        if !condition {
-                            if trace {
-                                println!(
-                                    "\t\t{} {}",
-                                    Colour::Red.bold().paint("jiff"),
-                                    Colour::Yellow
-                                        .bold()
-                                        .paint(format!("0x{:08x}", self.ip + offset + 1))
-                                );
-                            }
-                            offset + 1
-                        } else {
-                            1
-                        }
-                    }
-                    Instruction::JumpIfTrue(offset) => {
-                        let condition = self.stack.pop().unwrap();
-                        let condition: bool =
-                            condition
-                                .into_value()
-                                .try_into()
-                                .map_err(|e: ChaChaError| BubbaError::ValueError {
-                                    source: Box::new(e),
-                                    location: location!(),
-                                })?;
-                        if condition {
-                            if trace {
-                                println!(
-                                    "\t\t{} {}",
-                                    Colour::Red.bold().paint("jift"),
-                                    Colour::Yellow
-                                        .bold()
-                                        .paint(format!("0x{:08x}", self.ip + offset + 1))
-                                );
-                            }
-                            offset + 1
-                        } else {
-                            1
-                        }
+                        1
                     }
                     Instruction::MakeLambdaPointer(name, frame_size) => {
                         let captures = self.stack[self.fp - arity - local_count - 3..self.fp - 3]
@@ -990,37 +1091,44 @@ impl VM {
                     }
                     Instruction::MethodLookup(name) => {
                         let ty = self.stack.pop().unwrap();
-                        let ty = match ty.into_value() {
-                            Value::Enumeration(variant) => match variant {
-                                EnumVariant::Struct(ty) => {
+
+                        if let Value::Plugin(_) = ty.clone().into_value() {
+                            self.stack.push(ty);
+                            self.stack.push(
+                                <String as Into<Value>>::into((*s_read!(name)).clone()).into(),
+                            );
+                        } else {
+                            let ty = match ty.into_value() {
+                                Value::Enumeration(variant) => match variant {
+                                    EnumVariant::Struct(ty) => {
+                                        let ty = s_read!(ty);
+                                        let name = ty.type_name();
+                                        name.to_owned()
+                                    }
+                                    EnumVariant::Tuple((_, ty), _) => ty.to_owned(),
+                                    EnumVariant::Unit(_, ty, _) => ty.to_owned(),
+                                },
+                                Value::Struct(ty) => {
                                     let ty = s_read!(ty);
                                     let name = ty.type_name();
                                     name.to_owned()
                                 }
-                                EnumVariant::Tuple((_, ty), _) => ty.to_owned(),
-                                EnumVariant::Unit(_, ty, _) => ty.to_owned(),
-                            },
-                            Value::Struct(ty) => {
-                                let ty = s_read!(ty);
-                                let name = ty.type_name();
-                                name.to_owned()
-                            }
-                            oopsie => unreachable!("{oopsie:?}"),
-                        };
+                                oopsie => unreachable!("{oopsie:?}"),
+                            };
 
-                        let func = format!("{}::{}", ty, s_read!(name));
+                            let func = format!("{}::{}", ty, s_read!(name));
 
-                        if let Some((ip, frame_size)) = self.func_map.get(&func) {
-                            self.stack.push(Value::Integer(*ip as DwarfInteger).into());
-                            self.stack.push(StackValue::Value(Value::Integer(
-                                *frame_size as DwarfInteger,
-                            )));
-                        } else {
-                            return Err(BubbaError::VmPanic {
-                                message: format!("Missing function definition: {func}"),
-                                location: location!(),
+                            if let Some((ip, frame_size)) = self.func_map.get(&func) {
+                                self.stack.push(Value::Integer(*ip as DwarfInteger).into());
+                                self.stack
+                                    .push(Value::Integer(*frame_size as DwarfInteger).into());
+                            } else {
+                                return Err(BubbaError::VmPanic {
+                                    message: format!("Missing function definition: {func}"),
+                                    location: location!(),
+                                }
+                                .into());
                             }
-                            .into());
                         }
 
                         1
@@ -1337,6 +1445,8 @@ impl VM {
                     }
                     Instruction::Return => {
                         let result = self.stack.pop().unwrap();
+
+                        self.captures = None;
 
                         // Clear the stack up to the frame pointer.
                         while self.stack.len() > self.fp + 1 {

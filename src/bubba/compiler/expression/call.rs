@@ -10,8 +10,10 @@ use crate::{
         instr::Instruction,
     },
     keywords::{ARGS, ASSERT, ASSERT_EQ, CHACHA, FORMAT, NEW, PLUGIN},
-    lu_dog::{BodyEnum, Call, CallEnum, Expression},
-    new_ref, s_read, NewRef, RefType, SarzakStorePtr, Span, Value, PATH_SEP, POP_CLR,
+    lu_dog::{BodyEnum, Call, CallEnum, Expression, ValueType, ValueTypeEnum},
+    new_ref, s_read, s_write,
+    sarzak::Ty,
+    NewRef, RefType, SarzakStorePtr, Span, Value, PATH_SEP, POP_CLR,
 };
 
 pub(in crate::bubba::compiler) fn compile(
@@ -19,7 +21,7 @@ pub(in crate::bubba::compiler) fn compile(
     thonk: &mut CThonk,
     context: &mut Context,
     span: Span,
-) -> Result<Option<String>> {
+) -> Result<Option<ValueType>> {
     log::debug!(target: "instr", "{}: {}:{}:{}", POP_CLR.paint("compile_call"), file!(), line!(), column!());
 
     let lu_dog = context.lu_dog_heel();
@@ -89,7 +91,7 @@ pub(in crate::bubba::compiler) fn compile_lambda(
     outer_thonk: &mut CThonk,
     context: &mut Context,
     span: Span,
-) -> Result<Option<String>> {
+) -> Result<Option<ValueType>> {
     log::debug!(target: "instr", "{}: {}:{}:{}", POP_CLR.paint("compile_lambda"), file!(), line!(), column!());
 
     let lu_dog = context.lu_dog_heel();
@@ -117,8 +119,9 @@ pub(in crate::bubba::compiler) fn compile_lambda(
             let param = next.clone();
             let param = s_read!(param);
             let var = s_read!(param.r12_variable(&lu_dog)[0]).clone();
+            let ty = s_read!(param.r77_value_type(&lu_dog)[0]).clone();
 
-            context.insert_symbol(var.name.clone());
+            context.insert_symbol(var.name.clone(), ty);
             thonk.increment_frame_size();
             // name += var.name.as_str();
             // name += ",";
@@ -208,7 +211,7 @@ pub(in crate::bubba::compiler) fn compile_lambda(
         location!(),
     );
 
-    Ok(Some(name))
+    Ok(Some((*s_read!(λ.r1_value_type(&lu_dog)[0])).clone()))
 }
 
 /// Compile a Function Call
@@ -223,7 +226,7 @@ fn compile_function_call(
     args: &[RefType<Expression>],
     thonk: &mut CThonk,
     context: &mut Context,
-) -> Result<Option<String>> {
+) -> Result<Option<ValueType>> {
     log::debug!(target: "instr", "{}: {}:{}:{}", POP_CLR.paint("compile_function_call"), file!(), line!(), column!());
 
     let lu_dog = context.lu_dog_heel();
@@ -233,11 +236,15 @@ fn compile_function_call(
         FORMAT => todo!("handle FORMAT"),
         _ => {
             let call = s_read!(call);
-            if let Some(ref expr) = call.expression {
+            let result = if let Some(ref expr) = call.expression {
                 let expr = lu_dog.exhume_expression(expr).unwrap();
                 let span = get_span(&expr, &lu_dog);
                 // Evaluate the LHS to get at the underlying value/instance.
-                compile_expression(&expr, thonk, context, span)?;
+                // I'm not sure that this is the correct type. OTOH, what other
+                // type would I use?
+                compile_expression(&expr, thonk, context, span)
+            } else {
+                panic!();
             };
 
             for expr in args {
@@ -246,10 +253,10 @@ fn compile_function_call(
             }
 
             thonk.add_instruction(Instruction::Call(args.len()), location!());
+
+            result
         }
     }
-
-    Ok(None)
 }
 
 fn compile_method_call(
@@ -258,22 +265,25 @@ fn compile_method_call(
     args: &[RefType<Expression>],
     thonk: &mut CThonk,
     context: &mut Context,
-) -> Result<Option<String>> {
+) -> Result<Option<ValueType>> {
     log::debug!(target: "instr", "{}: {}:{}:{}", POP_CLR.paint("compile_method_call"), file!(), line!(), column!());
 
     let lu_dog = context.lu_dog_heel();
     let lu_dog = s_read!(lu_dog);
 
     // First off we need to evaluate the expression associated with this call.
-    if let Some(ref expr) = s_read!(call).expression {
+    let result = if let Some(ref expr) = s_read!(call).expression {
         let expr = lu_dog.exhume_expression(expr).unwrap();
         let span = get_span(&expr, &lu_dog);
         // Evaluate the LHS to get at the underlying value/instance.
-        compile_expression(&expr, thonk, context, span)?;
+        let result = compile_expression(&expr, thonk, context, span);
         thonk.add_instruction(
             Instruction::MethodLookup(new_ref!(String, name)),
             location!(),
         );
+        result
+    } else {
+        panic!();
     };
 
     for expr in args {
@@ -283,7 +293,7 @@ fn compile_method_call(
 
     thonk.add_instruction(Instruction::Call(args.len()), location!());
 
-    Ok(None)
+    result
 }
 
 fn compile_static_method_call(
@@ -293,16 +303,36 @@ fn compile_static_method_call(
     thonk: &mut CThonk,
     context: &mut Context,
     span: Span,
-) -> Result<Option<String>> {
+) -> Result<Option<ValueType>> {
     log::debug!(target: "instr", "{}: {}:{}:{}", POP_CLR.paint("compile_static_method_call"), file!(), line!(), column!());
 
     let lu_dog = context.lu_dog_heel();
+    let boolean = Ty::new_boolean(&s_read!(context.sarzak_heel()));
+    let boolean = (*s_read!(ValueType::new_ty(true, &boolean, &mut s_write!(lu_dog)))).clone();
+    let string = Ty::new_z_string(&s_read!(context.sarzak_heel()));
+    let string = ValueType::new_ty(true, &string, &mut s_write!(lu_dog));
+    let mut string_array = ValueType::new_empty(true, &mut s_write!(lu_dog));
+
     let lu_dog = s_read!(lu_dog);
+
+    for vt in lu_dog.iter_value_type() {
+        if let ValueTypeEnum::List(id) = s_read!(vt).subtype {
+            let list = lu_dog.exhume_list(&id).unwrap();
+            let list_ty = s_read!(list).r36_value_type(&lu_dog)[0].clone();
+            if *s_read!(string) == *s_read!(list_ty) {
+                string_array = vt.clone();
+            }
+        }
+    }
+
+    let string = (*s_read!(string)).clone();
+    let string_array = (*s_read!(string_array)).clone();
 
     match ty {
         CHACHA => match func {
             ARGS => {
                 thonk.add_instruction_with_span(Instruction::PushArgs, span.clone(), location!());
+                Ok(Some(string_array))
             }
             ASSERT => {
                 let expr = &args[0];
@@ -342,6 +372,8 @@ fn compile_static_method_call(
                     location!(),
                 );
                 thonk.add_instruction(Instruction::HaltAndCatchFire, location!());
+
+                Ok(Some(boolean))
             }
             ASSERT_EQ => {
                 let lhs = &args[0];
@@ -379,20 +411,18 @@ fn compile_static_method_call(
                     location!(),
                 );
                 thonk.add_instruction_with_span(Instruction::HaltAndCatchFire, span, location!());
+
+                Ok(Some(boolean))
             }
             #[cfg(feature = "async")]
             SPAWN => {
                 let inner = &args[0];
                 let inner_span = get_span(inner, &lu_dog);
-                let Some(lambda) = compile_expression(inner, thonk, context, inner_span)? else {
-                    panic!("spawn requires a lambda");
-                };
+                let result = compile_expression(inner, thonk, context, inner_span);
 
-                let lambda = new_ref!(String, lambda);
-
-                thonk.add_instruction(Instruction::CallDestination(lambda.clone()), location!());
-                thonk.add_instruction(Instruction::LocalCardinality(lambda), location!());
                 thonk.add_instruction(Instruction::Call(0), location!());
+
+                result
             }
             meth => todo!("handle chacha method: {meth}"),
         },
@@ -421,6 +451,14 @@ fn compile_static_method_call(
                             location!(),
                         );
                         thonk.add_instruction(Instruction::PluginNew(1), location!());
+
+                        let id = lu_dog.exhume_woog_struct_id_by_name(&plugin.name).unwrap();
+                        let woog_struct = lu_dog.exhume_woog_struct(&id).unwrap();
+                        let woog_struct = s_read!(woog_struct);
+
+                        Ok(Some(
+                            (*s_read!(woog_struct.r1_value_type(&lu_dog)[0])).clone(),
+                        ))
                     }
                     missing_method => {
                         panic!("plugin only supports `new`, found: {missing_method}");
@@ -429,11 +467,8 @@ fn compile_static_method_call(
             } else {
                 let func_name = format!("{ty}::{func}");
                 let name = new_ref!(String, func_name);
-                // We are here because we need to look up a function.
+                // These instructions will be patched by the VM.
                 thonk.add_instruction(Instruction::CallDestination(name.clone()), location!());
-
-                // This instruction will be patched by the VM with the number of locals in the
-                // function.
                 thonk.add_instruction(Instruction::LocalCardinality(name), location!());
 
                 for expr in args {
@@ -442,11 +477,11 @@ fn compile_static_method_call(
                 }
 
                 thonk.add_instruction(Instruction::Call(args.len()), location!());
+
+                Ok(None)
             }
         }
     }
-
-    Ok(None)
 }
 
 #[cfg(test)]
@@ -850,7 +885,7 @@ mod test {
 
         assert_eq!(program.get_thonk_card(), 2);
 
-        // assert_eq!(program.get_instruction_count(), 15);
+        assert_eq!(program.get_instruction_count(), 20);
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &45.into());
     }

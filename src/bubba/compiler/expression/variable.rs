@@ -5,6 +5,7 @@ use crate::{
         compiler::{BubbaError, CThonk, Context, Result},
         instr::Instruction,
     },
+    lu_dog::{ValueType, ValueTypeEnum},
     new_ref, s_read, NewRef, RefType, SarzakStorePtr, Span, POP_CLR,
 };
 
@@ -13,7 +14,7 @@ pub(in crate::bubba::compiler) fn compile(
     thonk: &mut CThonk,
     context: &mut Context,
     span: Span,
-) -> Result<Option<String>> {
+) -> Result<Option<ValueType>> {
     log::debug!(target: "instr", "{}: {}:{}:{}", POP_CLR.paint("compile_variable"), file!(), line!(), column!());
 
     let lu_dog = context.lu_dog_heel();
@@ -23,9 +24,12 @@ pub(in crate::bubba::compiler) fn compile(
     let expr = s_read!(expr);
     let name = &expr.name;
 
+    log::debug!(target: "instr", "Variable: {}", POP_CLR.paint(name));
+
     if let Some(symbol) = context.get_symbol(name) {
         thonk.add_instruction_with_span(Instruction::FetchLocal(symbol.number), span, location!());
-    } else if context.check_function(name) {
+        Ok(Some(symbol.ty.clone()))
+    } else if let Some(ty) = context.check_function(name) {
         let name = new_ref!(String, name.to_owned());
         // We are here because we need to look up a function.
         thonk.add_instruction(Instruction::CallDestination(name.clone()), location!());
@@ -33,8 +37,26 @@ pub(in crate::bubba::compiler) fn compile(
         // This instruction will be patched by the VM with the number of locals in the
         // function.
         thonk.add_instruction(Instruction::LocalCardinality(name), location!());
+
+        Ok(Some(ty.clone()))
     } else {
-        let (new, number) = context.insert_symbol(name.to_owned());
+        // We get down here if the variable is not in scope, and it's not a function.
+        // Therefor we must be doing a lambda and it's accessing it's enclosing
+        // scope. We store it in the table, so that it has a local index, and then
+        // we place it in the captures list.
+        let get_unknown = || -> RefType<ValueType> {
+            for vt in lu_dog.iter_value_type() {
+                if let ValueTypeEnum::Unknown(_) = s_read!(vt).subtype {
+                    return vt.clone();
+                }
+            }
+            unreachable!();
+        };
+
+        let unknown = get_unknown();
+        let unknown = (*s_read!(unknown)).clone();
+
+        let (new, number) = context.insert_symbol(name.to_owned(), unknown.clone());
         if new {
             thonk.increment_frame_size();
         }
@@ -48,7 +70,7 @@ pub(in crate::bubba::compiler) fn compile(
             }
             .into());
         }
-    }
 
-    Ok(None)
+        Ok(Some(unknown))
+    }
 }

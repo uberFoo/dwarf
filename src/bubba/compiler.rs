@@ -4,10 +4,13 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use snafu::{location, prelude::*, Location};
 
 use crate::{
-    bubba::instr::{Instruction, Program, Thonk},
+    bubba::{
+        instr::{Instruction, Program, Thonk},
+        RESULT, STRING,
+    },
     lu_dog::{
         BodyEnum, Expression, ExpressionEnum, Function, ObjectStore as LuDogStore, Statement,
-        StatementEnum, ValueType,
+        StatementEnum, ValueType, ValueTypeEnum,
     },
     new_ref, s_read, s_write,
     sarzak::{ObjectStore as SarzakStore, Ty},
@@ -125,6 +128,7 @@ impl From<CThonk> for Thonk {
 #[derive(Debug)]
 struct Symbol {
     number: usize,
+    ty: ValueType,
 }
 
 #[derive(Debug)]
@@ -142,11 +146,11 @@ impl SymbolTable {
         }
     }
 
-    fn insert(&mut self, name: String) -> usize {
+    fn insert(&mut self, name: String, ty: ValueType) -> usize {
         let number = self.count();
         log::debug!(target: "instr", "{}: {name} ({number})", ERR_CLR.paint("symbol insert"));
 
-        self.map.insert(name, Symbol { number });
+        self.map.insert(name, Symbol { number, ty });
         number
     }
 
@@ -176,7 +180,7 @@ struct Context<'a, 'b> {
     method_name: Option<String>,
     program: &'b mut Program,
     st_depth: usize,
-    funcs: HashSet<String>,
+    funcs: HashMap<String, ValueType>,
     pub(crate) captures: Option<HashMap<String, usize>>,
 }
 
@@ -188,17 +192,17 @@ impl<'a, 'b> Context<'a, 'b> {
             method_name: None,
             program,
             st_depth: 0,
-            funcs: HashSet::default(),
+            funcs: HashMap::default(),
             captures: None,
         }
     }
 
-    fn insert_function(&mut self, name: String) {
-        self.funcs.insert(name);
+    fn insert_function(&mut self, name: String, ty: ValueType) {
+        self.funcs.insert(name, ty);
     }
 
-    fn check_function(&self, name: &str) -> bool {
-        self.funcs.contains(name)
+    fn check_function(&self, name: &str) -> Option<&ValueType> {
+        self.funcs.get(name)
     }
 
     fn get_program(&mut self) -> &mut Program {
@@ -236,12 +240,12 @@ impl<'a, 'b> Context<'a, 'b> {
         self.st_depth == 1
     }
 
-    fn insert_symbol(&mut self, name: String) -> (bool, usize) {
+    fn insert_symbol(&mut self, name: String, ty: ValueType) -> (bool, usize) {
         match self.get_symbol(name.as_str()) {
             Some(value) => (false, value.number),
             None => {
                 let table = self.symbol_tables.last_mut().unwrap();
-                (true, table.insert(name))
+                (true, table.insert(name, ty))
             }
         }
     }
@@ -295,12 +299,33 @@ pub fn compile(context: &ExtruderContext) -> Result<Program> {
     let ty = Ty::new_z_string(&s_read!(context.sarzak_heel()));
     let ty = ValueType::new_ty(true, &ty, &mut s_write!(lu_dog));
     let ty = Value::ValueType((*s_read!(ty)).clone());
-    context.get_program().add_symbol("STRING".to_owned(), ty);
+    context.get_program().add_symbol(STRING.to_owned(), ty);
+    // And Result
+    if let Some(ref ty) = s_read!(lu_dog).exhume_enumeration_id_by_name("::std::result::Result") {
+        let ty = s_read!(lu_dog).exhume_enumeration(&ty).unwrap();
+        let Some(ty) = s_read!(lu_dog).iter_value_type().find(|vt| {
+            if let ValueTypeEnum::Enumeration(id) = s_read!(vt).subtype {
+                let id = s_read!(lu_dog).exhume_enumeration(&id).unwrap();
+                if s_read!(id).id == s_read!(ty).id {
+                    return true;
+                }
+            }
+            false
+        }) else {
+            unreachable!()
+        };
+        context
+            .get_program()
+            .add_symbol(RESULT.to_owned(), Value::ValueType((*s_read!(ty)).clone()));
+    };
 
     let lu_dog = s_read!(lu_dog);
 
     for func in lu_dog.iter_function() {
-        context.insert_function(get_function_name(&func, &lu_dog));
+        context.insert_function(
+            get_function_name(&func, &lu_dog),
+            get_function_type(&func, &lu_dog),
+        );
     }
 
     for func in lu_dog.iter_function() {
@@ -309,6 +334,14 @@ pub fn compile(context: &ExtruderContext) -> Result<Program> {
     }
 
     Ok(program)
+}
+
+fn get_function_type(func: &RefType<Function>, lu_dog: &LuDogStore) -> ValueType {
+    let func = s_read!(func);
+    let ty = func.r1_value_type(lu_dog)[0].clone();
+    let ty = (*s_read!(ty)).clone();
+
+    ty
 }
 
 fn get_function_name(func: &RefType<Function>, lu_dog: &LuDogStore) -> String {
@@ -358,8 +391,9 @@ fn compile_function(func: &RefType<Function>, context: &mut Context) -> Result<C
             let param = next.clone();
             let param = s_read!(param);
             let var = s_read!(param.r12_variable(&lu_dog)[0]).clone();
+            let ty = s_read!(param.r79_value_type(&lu_dog)[0]).clone();
 
-            context.insert_symbol(var.name.clone());
+            context.insert_symbol(var.name.clone(), ty);
 
             let next_id = param.next;
             if let Some(ref id) = next_id {
@@ -390,7 +424,25 @@ fn compile_function(func: &RefType<Function>, context: &mut Context) -> Result<C
     let (name, incr_fs) = if ty_name.is_empty() {
         (func.name.clone(), false)
     } else {
-        context.insert_symbol("self".to_owned());
+        // Here is where we look for actual user defined types, as
+        // in types that are defined in dwarf source.
+        let ty = if let Some(ref id) = lu_dog.exhume_woog_struct_id_by_name(&ty_name) {
+            let woog_struct = lu_dog.exhume_woog_struct(id).unwrap();
+            let woog_struct = s_read!(woog_struct);
+            woog_struct.r1_value_type(&lu_dog)[0].clone()
+        } else if let Some(ref id) = lu_dog.exhume_enumeration_id_by_name(&ty_name) {
+            let woog_enum = lu_dog.exhume_enumeration(id).unwrap();
+            let woog_enum = s_read!(woog_enum);
+            woog_enum.r1_value_type(&lu_dog)[0].clone()
+        } else {
+            return Err(BubbaError::InternalCompilerError {
+                location: location!(),
+                message: format!("Could not find type: {ty_name}"),
+            }
+            .into());
+        };
+
+        context.insert_symbol("self".to_owned(), s_read!(ty).clone());
         (format!("{ty_name}::{}", func.name), true)
     };
 
@@ -470,10 +522,12 @@ fn compile_statement(
     statement: &RefType<Statement>,
     thonk: &mut CThonk,
     context: &mut Context,
-) -> Result<()> {
+) -> Result<Option<ValueType>> {
     log::debug!(target: "instr", "{}:\n --> {}:{}:{}", POP_CLR.paint("compile_statement"), file!(), line!(), column!());
 
     let lu_dog = context.lu_dog_heel();
+    // let empty = ValueType::new_empty(true, &mut s_write!(lu_dog));
+    // let empty = (*s_read!(empty)).clone();
     let lu_dog = s_read!(lu_dog);
 
     match s_read!(statement).subtype {
@@ -482,7 +536,7 @@ fn compile_statement(
             let stmt = s_read!(stmt);
             let expr = stmt.r31_expression(&lu_dog)[0].clone();
             let span = get_span(&expr, &lu_dog);
-            compile_expression(&expr, thonk, context, span)?;
+            compile_expression(&expr, thonk, context, span)
         }
         StatementEnum::LetStatement(ref stmt) => {
             let stmt = lu_dog.exhume_let_statement(stmt).unwrap();
@@ -494,9 +548,11 @@ fn compile_statement(
 
             let var = s_read!(stmt.r21_local_variable(&lu_dog)[0]).clone();
             let var = s_read!(var.r12_variable(&lu_dog)[0]).clone();
+            let value = s_read!(var.r11_x_value(&lu_dog)[0]).clone();
+            let ty = s_read!(value.r24_value_type(&lu_dog)[0]).clone();
 
             let name = var.name;
-            let offset = match context.insert_symbol(name.clone()) {
+            let offset = match context.insert_symbol(name.clone(), ty) {
                 (true, index) => {
                     thonk.increment_frame_size();
                     index
@@ -505,22 +561,24 @@ fn compile_statement(
             };
 
             thonk.add_instruction(Instruction::StoreLocal(offset), location!());
+
+            // Ok(Some(empty))
+            Ok(None)
         }
         StatementEnum::ResultStatement(ref stmt) => {
             let stmt = lu_dog.exhume_result_statement(stmt).unwrap();
             let stmt = s_read!(stmt);
             let expr = stmt.r41_expression(&lu_dog)[0].clone();
             let span = get_span(&expr, &lu_dog);
-            compile_expression(&expr, thonk, context, span)?;
+            let result = compile_expression(&expr, thonk, context, span);
 
-            // if context.is_root_symbol_table() {
             thonk.add_instruction(Instruction::Return, location!());
             thonk.returned = true;
-            // }
+
+            result
         }
-        StatementEnum::ItemStatement(_) => {}
+        StatementEnum::ItemStatement(_) => unimplemented!(),
     }
-    Ok(())
 }
 
 fn compile_expression(
@@ -528,7 +586,7 @@ fn compile_expression(
     thonk: &mut CThonk,
     context: &mut Context,
     span: Span,
-) -> Result<Option<String>> {
+) -> Result<Option<ValueType>> {
     log::debug!(target: "instr", "{}:\n  -> {}:{}:{}", POP_CLR.paint("compile_expression"), file!(), line!(), column!());
 
     match &s_read!(expression).subtype {
@@ -904,17 +962,14 @@ mod test {
         println!("{program}");
         assert_eq!(program.get_thonk_card(), 11);
 
-        // assert_eq!(
-        //     program.get_thonk("main").unwrap().get_instruction_card(),
-        //     59
-        // );
+        assert_eq!(program.get_instruction_count(), 316);
         let run = run_vm(&program);
         println!("{:?}", run);
         assert!(run.is_ok());
         assert_eq!(&*s_read!(run.unwrap()), &Value::Boolean(true));
     }
 
-    // #[test]
+    #[test]
     fn use_async() {
         let _ = env_logger::builder().is_test(true).try_init();
         color_backtrace::install();
@@ -932,6 +987,7 @@ async fn async_get(urls: [String]) -> Future<[Result<string, HttpError>]> {
     let tasks: [Future<Result<string, HttpError>>] = [];
     // Start a task for each url and push them into the tasks array.
     for url in urls {
+        print(url);
         let task = chacha::spawn(async || -> Result<string, HttpError> {
             // This creates a request and sends it.
             let get = client.get(url).await.send().await;
@@ -983,7 +1039,7 @@ async fn main() -> Future<()> {
         i = i + 1;
     }
 }                "#;
-        let ast = parse_dwarf("use_plugin", ore).unwrap();
+        let ast = parse_dwarf("use_async", ore).unwrap();
         let ctx = new_lu_dog(
             "use_plugin".to_owned(),
             Some((ore.to_owned(), &ast)),
@@ -996,7 +1052,7 @@ async fn main() -> Future<()> {
         assert_eq!(program.get_thonk_card(), 13);
 
         // assert_eq!(
-        //     program.get_thonk("main").unwrap().get_instruction_card(),
+        //     program..get_instruction_count(),
         //     59
         // );
         let run = run_vm(&program);

@@ -5,7 +5,7 @@ use crate::{
         compiler::{compile_expression, expression::literal, get_span, CThonk, Context, Result},
         instr::Instruction,
     },
-    lu_dog::{DataStructureEnum, ExpressionEnum},
+    lu_dog::{DataStructureEnum, ExpressionEnum, ValueType},
     new_ref, s_read, NewRef, RefType, SarzakStorePtr, Span, Value,
 };
 
@@ -14,7 +14,7 @@ pub(in crate::bubba::compiler) fn compile(
     thonk: &mut CThonk,
     context: &mut Context,
     span: Span,
-) -> Result<Option<String>> {
+) -> Result<Option<ValueType>> {
     log::debug!(target: "instr", "{}:{}:{}", file!(), line!(), column!());
 
     let lu_dog = context.lu_dog_heel().clone();
@@ -85,7 +85,12 @@ pub(in crate::bubba::compiler) fn compile(
                                     let var = lu_dog.exhume_variable_expression(id).unwrap();
                                     let var = s_read!(var);
                                     let expr = var.r15_expression(&lu_dog)[0].clone();
-                                    let idx = match context.insert_symbol(var.name.clone()) {
+                                    let value = s_read!(expr).r11_x_value(&lu_dog)[0].clone();
+                                    let ty = s_read!(value).r24_value_type(&lu_dog)[0].clone();
+
+                                    let idx = match context
+                                        .insert_symbol(var.name.clone(), (*s_read!(ty)).clone())
+                                    {
                                         (true, index) => {
                                             thonk.increment_frame_size();
                                             index
@@ -171,8 +176,10 @@ pub(in crate::bubba::compiler) fn compile(
                 let var = s_read!(var);
                 let expr = var.r15_expression(&lu_dog)[0].clone();
                 let value = s_read!(expr).r11_x_value(&lu_dog)[0].clone();
+                let value = s_read!(expr).r11_x_value(&lu_dog)[0].clone();
+                let ty = s_read!(value).r24_value_type(&lu_dog)[0].clone();
 
-                let idx = match context.insert_symbol(var.name.clone()) {
+                let idx = match context.insert_symbol(var.name.clone(), (*s_read!(ty)).clone()) {
                     (true, idx) => {
                         thonk.increment_frame_size();
                         idx

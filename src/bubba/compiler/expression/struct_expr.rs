@@ -6,7 +6,7 @@ use crate::{
         instr::Instruction,
     },
     chacha::value::EnumVariant,
-    lu_dog::{DataStructureEnum, FieldExpressionEnum},
+    lu_dog::{DataStructureEnum, FieldExpressionEnum, ValueType},
     new_ref, s_read, NewRef, RefType, SarzakStorePtr, Span, Value, POP_CLR,
 };
 
@@ -15,7 +15,7 @@ pub(in crate::bubba::compiler) fn compile(
     thonk: &mut CThonk,
     context: &mut Context,
     span: Span,
-) -> Result<Option<String>> {
+) -> Result<Option<ValueType>> {
     log::debug!(target: "instr", "{}:{}:{}", file!(), line!(), column!());
 
     let lu_dog = context.lu_dog_heel().clone();

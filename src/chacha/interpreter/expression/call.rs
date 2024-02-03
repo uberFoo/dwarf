@@ -297,50 +297,41 @@ pub fn eval(
                             });
                         }
 
-                        let arg_values = if !args.is_empty() {
-                            let mut arg_values = VecDeque::with_capacity(args.len());
+                        let mut arg_values = VecDeque::with_capacity(args.len());
 
-                            // Gotta do this goofy thing because we don't have a first pointer,
-                            // and they aren't in order.
-                            let next = args
-                                .iter()
-                                .find(|a| s_read!(a).r27c_argument(&s_read!(lu_dog)).is_empty())
-                                .unwrap()
-                                .clone();
+                        // Gotta do this goofy thing because we don't have a first pointer,
+                        // and they aren't in order.
+                        let next = args
+                            .iter()
+                            .find(|a| s_read!(a).r27c_argument(&s_read!(lu_dog)).is_empty())
+                            .unwrap()
+                            .clone();
 
-                            // This is because of the self parameter that is added by the extruder.
-                            let x = if let Some(next_id) = s_read!(next).next {
-                                let mut next = s_read!(lu_dog).exhume_argument(&next_id).unwrap();
+                        // This is because of the self parameter that is added by the extruder.
+                        if let Some(next_id) = s_read!(next).next {
+                            let mut next = s_read!(lu_dog).exhume_argument(&next_id).unwrap();
 
-                                // We iterate over the arguments to the `format` call. For each one
-                                // we evaluate it and store it in a vac.
-                                loop {
-                                    let expr = s_read!(lu_dog)
-                                        .exhume_expression(&s_read!(next).expression)
-                                        .unwrap();
+                            // We iterate over the arguments to the `format` call. For each one
+                            // we evaluate it and store it in a vac.
+                            loop {
+                                let expr = s_read!(lu_dog)
+                                    .exhume_expression(&s_read!(next).expression)
+                                    .unwrap();
 
-                                    let value = eval_expression(expr, context, vm)?;
-                                    debug!("value {value:?}");
+                                let value = eval_expression(expr, context, vm)?;
+                                debug!("value {value:?}");
 
-                                    // This is where the magic happens and we turn the value
-                                    // into a string.
-                                    arg_values.push_back(value);
+                                // This is where the magic happens and we turn the value
+                                // into a string.
+                                arg_values.push_back(value);
 
-                                    let next_id = s_read!(next).next;
-                                    if let Some(ref id) = next_id {
-                                        next = s_read!(lu_dog).exhume_argument(id).unwrap();
-                                    } else {
-                                        break;
-                                    }
+                                let next_id = s_read!(next).next;
+                                if let Some(ref id) = next_id {
+                                    next = s_read!(lu_dog).exhume_argument(id).unwrap();
+                                } else {
+                                    break;
                                 }
-
-                                arg_values
-                            } else {
-                                VecDeque::new()
-                            };
-                            x
-                        } else {
-                            VecDeque::new()
+                            }
                         };
 
                         let Value::Vector { inner, .. } = &*s_read!(arg_values[3]) else {

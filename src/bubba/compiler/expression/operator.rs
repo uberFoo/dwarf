@@ -7,7 +7,7 @@ use crate::{
     },
     lu_dog::{
         BinaryEnum, BooleanOperatorEnum, ComparisonEnum, ExpressionEnum, FieldAccessTargetEnum,
-        OperatorEnum, UnaryEnum,
+        OperatorEnum, UnaryEnum, ValueType,
     },
     new_ref, s_read, NewRef, RefType, SarzakStorePtr, Span, Value,
 };
@@ -17,7 +17,7 @@ pub(in crate::bubba::compiler) fn compile(
     thonk: &mut CThonk,
     context: &mut Context,
     span: Span,
-) -> Result<Option<String>> {
+) -> Result<Option<ValueType>> {
     log::debug!(target: "instr", "{}:{}:{}", file!(), line!(), column!());
 
     let lu_dog = context.lu_dog_heel().clone();
