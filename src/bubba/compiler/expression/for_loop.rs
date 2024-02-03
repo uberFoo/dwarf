@@ -2,7 +2,9 @@ use snafu::{location, Location};
 
 use crate::{
     bubba::{
-        compiler::{compile_expression, get_span, BubbaError, CThonk, Context, Result},
+        compiler::{
+            compile_expression, get_span, BubbaError, CThonk, Context, Result, INT, STRING,
+        },
         instr::Instruction,
     },
     lu_dog::{ValueType, ValueTypeEnum},
@@ -10,6 +12,8 @@ use crate::{
     sarzak::Ty,
     NewRef, RefType, SarzakStorePtr, Span, Value,
 };
+
+const LIST_VAR: &str = "$$list_value";
 
 pub(in crate::bubba::compiler) fn compile(
     for_loop: &SarzakStorePtr,
@@ -22,9 +26,12 @@ pub(in crate::bubba::compiler) fn compile(
     let lu_dog = context.lu_dog_heel().clone();
     let lu_dog = s_read!(lu_dog);
 
+    let sarzak = context.sarzak_heel().clone();
+    let sarzak = s_read!(sarzak);
+
     let for_loop = lu_dog.exhume_for_loop(for_loop).unwrap();
     let for_loop = s_read!(for_loop);
-    let ident = for_loop.ident.to_owned();
+    let iter_ident = for_loop.ident.to_owned();
     let body = lu_dog.exhume_expression(&for_loop.block).unwrap();
     let body_span = get_span(&body, &lu_dog);
     let list = lu_dog.exhume_expression(&for_loop.expression).unwrap();
@@ -35,29 +42,115 @@ pub(in crate::bubba::compiler) fn compile(
     // This works as-is for range. For a list we need to do some extra work,
     // below.
     let ty = compile_expression(&list, thonk, context, list_span.clone())?;
+    // This unwrap is really going to become unnecessary as I plan on having
+    // compile_expression return just a Result. I'm just being lazy now.
+    let ty = ty.unwrap();
 
     context.push_scope();
-    let mut inner_thonk = CThonk::new(format!("for_{}", ident));
+    let mut inner_thonk = CThonk::new(format!("for_{}", iter_ident));
+    let iter = format!("iter_{}", iter_ident);
 
-    let get_integer = || -> RefType<ValueType> {
-        let ty = Ty::new_integer(&s_read!(context.sarzak_heel()));
-        for vt in lu_dog.iter_value_type() {
-            if let ValueTypeEnum::Ty(_ty) = s_read!(vt).subtype {
-                if ty.read().unwrap().id() == _ty {
-                    return vt.clone();
-                }
-            }
-        }
-        unreachable!();
-    };
-
-    let index = match context.insert_symbol(ident, (*s_read!(get_integer())).clone()) {
+    let int = context.get_type(INT).unwrap().clone();
+    let iter_index = match context.insert_symbol(iter, int) {
         (true, index) => {
             inner_thonk.increment_frame_size();
             index
         }
         (false, index) => index,
     };
+
+    let iter_ident_index = match ty.subtype {
+        ValueTypeEnum::List(ref list) => {
+            let list = lu_dog.exhume_list(list).unwrap();
+            let list = s_read!(list);
+            let ty = lu_dog.exhume_value_type(&list.ty).unwrap();
+            let ty = s_read!(ty);
+
+            match &ty.subtype {
+                ValueTypeEnum::Enumeration(ref en) => {
+                    let en = lu_dog.exhume_enumeration(en).unwrap();
+                    let en = s_read!(en);
+                    let ty = en.r1_value_type(&lu_dog)[0].clone();
+                    let ty = (*s_read!(ty)).clone();
+                    match context.insert_symbol(iter_ident, ty) {
+                        (true, index) => {
+                            inner_thonk.increment_frame_size();
+                            index
+                        }
+                        (false, index) => index,
+                    }
+                }
+                ValueTypeEnum::Ty(ref ty) => {
+                    let ty = sarzak.exhume_ty(ty).unwrap();
+                    let ty = s_read!(ty);
+
+                    match &*ty {
+                        Ty::Integer(_) => {
+                            let int = context.get_type(INT).unwrap().clone();
+                            match context.insert_symbol(iter_ident, int) {
+                                (true, index) => {
+                                    inner_thonk.increment_frame_size();
+                                    index
+                                }
+                                (false, index) => index,
+                            }
+                        }
+                        Ty::ZString(_) => {
+                            let string = context.get_type(STRING).unwrap().clone();
+                            match context.insert_symbol(iter_ident, string) {
+                                (true, index) => {
+                                    inner_thonk.increment_frame_size();
+                                    index
+                                }
+                                (false, index) => index,
+                            }
+                        }
+                        ty => todo!("list element ty: {:?}", ty),
+                    }
+                }
+                ValueTypeEnum::XFuture(ref future) => {
+                    let future = lu_dog.exhume_x_future(future).unwrap();
+                    let future = s_read!(future);
+                    let ty = future.r2_value_type(&lu_dog)[0].clone();
+                    let ty = (*s_read!(ty)).clone();
+                    match context.insert_symbol(iter_ident, ty) {
+                        (true, index) => {
+                            inner_thonk.increment_frame_size();
+                            index
+                        }
+                        (false, index) => index,
+                    }
+                }
+                ty => {
+                    dbg!(ty);
+                    return Err(BubbaError::InternalCompilerError {
+                        message: "For loop expression is not a list".to_owned(),
+                        location: location!(),
+                    }
+                    .into());
+                }
+            }
+        }
+        ValueTypeEnum::Range(_) => {
+            let int = context.get_type(INT).unwrap().clone();
+            match context.insert_symbol(iter_ident, int) {
+                (true, index) => {
+                    inner_thonk.increment_frame_size();
+                    index
+                }
+                (false, index) => index,
+            }
+        }
+        _ => {
+            return Err(BubbaError::InternalCompilerError {
+                message: "For loop expression is not a list".to_owned(),
+                location: location!(),
+            }
+            .into())
+        }
+    };
+
+    dbg!(&iter_index, &iter_ident_index);
 
     compile_expression(&body, &mut inner_thonk, context, body_span)?;
     for _ in 0..inner_thonk.get_frame_size() {
@@ -67,30 +160,111 @@ pub(in crate::bubba::compiler) fn compile(
     // Store the starting value
     // Here's where that extra work comes in when iterating over a list.
 
-    // This unwrap is really going to become unnecessary as I plan on having
-    // compile_expression return just a Result. I'm just being lazy now.
-    match ty.unwrap().subtype {
-        ValueTypeEnum::List(_) => {
-            thonk.add_instruction_with_span(
+    match ty.subtype {
+        ValueTypeEnum::List(ref list) => {
+            let list = lu_dog.exhume_list(list).unwrap();
+            let list = s_read!(list);
+            let ty = lu_dog.exhume_value_type(&list.ty).unwrap();
+            let ty = s_read!(ty);
+
+            let list_var_idx = match ty.subtype {
+                ValueTypeEnum::Enumeration(ref en) => {
+                    let en = lu_dog.exhume_enumeration(en).unwrap();
+                    let en = s_read!(en);
+                    let ty = en.r1_value_type(&lu_dog)[0].clone();
+                    let ty = (*s_read!(ty)).clone();
+                    match context.insert_symbol(LIST_VAR.into(), ty) {
+                        (true, index) => {
+                            inner_thonk.increment_frame_size();
+                            index
+                        }
+                        (false, index) => index,
+                    }
+                }
+                ValueTypeEnum::Ty(ref ty) => {
+                    let ty = sarzak.exhume_ty(ty).unwrap();
+                    let ty = s_read!(ty);
+
+                    match &*ty {
+                        Ty::Integer(_) => {
+                            let int = context.get_type(INT).unwrap().clone();
+                            match context.insert_symbol(LIST_VAR.into(), int) {
+                                (true, index) => {
+                                    inner_thonk.increment_frame_size();
+                                    index
+                                }
+                                (false, index) => index,
+                            }
+                        }
+                        Ty::ZString(_) => {
+                            let string = context.get_type(STRING).unwrap().clone();
+                            match context.insert_symbol(LIST_VAR.to_owned(), string) {
+                                (true, index) => {
+                                    inner_thonk.increment_frame_size();
+                                    index
+                                }
+                                (false, index) => index,
+                            }
+                        }
+                        ty => todo!("list element ty: {:?}", ty),
+                    }
+                }
+                ValueTypeEnum::XFuture(ref future) => {
+                    let future = lu_dog.exhume_x_future(future).unwrap();
+                    let future = s_read!(future);
+                    let ty = future.r2_value_type(&lu_dog)[0].clone();
+                    let ty = (*s_read!(ty)).clone();
+                    match context.insert_symbol(LIST_VAR.to_owned(), ty) {
+                        (true, index) => {
+                            inner_thonk.increment_frame_size();
+                            index
+                        }
+                        (false, index) => index,
+                    }
+                }
+                _ => {
+                    return Err(BubbaError::InternalCompilerError {
+                        message: "For loop expression is not a list".to_owned(),
+                        location: location!(),
+                    }
+                    .into())
+                }
+            };
+
+            thonk.insert_instruction_with_span(Instruction::Dup, list_span.clone(), location!());
+
+            thonk.insert_instruction_with_span(
+                Instruction::StoreLocal(list_var_idx),
+                list_span.clone(),
+                location!(),
+            );
+
+            // We need to create the stack with the top value being 0 and the
+            // penultimate value being the length of the list.
+            // The last instruction will store the starting value of the iteration
+            // in the iterator.
+            thonk.insert_instruction_with_span(
                 Instruction::ListLength,
                 list_span.clone(),
                 location!(),
             );
-            thonk.add_instruction_with_span(
-                Instruction::Push(new_ref!(Value, Value::Integer(1))),
+            thonk.insert_instruction_with_span(
+                Instruction::Push(new_ref!(Value, Value::Integer(0))),
                 list_span.clone(),
                 location!(),
             );
-            thonk.add_instruction_with_span(Instruction::Add, list_span.clone(), location!());
-            thonk.add_instruction_with_span(
-                Instruction::Push(new_ref!(Value, Value::Integer(0))),
-                list_span,
+            thonk.insert_instruction_with_span(
+                Instruction::StoreLocal(iter_index),
+                span,
                 location!(),
             );
-            thonk.add_instruction_with_span(Instruction::StoreLocal(index), span, location!());
         }
         ValueTypeEnum::Range(_) => {
-            thonk.add_instruction_with_span(Instruction::StoreLocal(index), span, location!());
+            thonk.insert_instruction_with_span(
+                Instruction::StoreLocal(iter_index),
+                span,
+                location!(),
+            );
         }
         _ => {
             return Err(BubbaError::InternalCompilerError {
@@ -103,26 +277,71 @@ pub(in crate::bubba::compiler) fn compile(
 
     let top_of_loop = thonk.get_instruction_card() as isize;
 
+    match ty.subtype {
+        ValueTypeEnum::List(_) => {
+            let list_var_idx = context.get_symbol(LIST_VAR).unwrap().number;
+            thonk.insert_instruction_with_span(
+                Instruction::FetchLocal(list_var_idx),
+                list_span.clone(),
+                location!(),
+            );
+            thonk.insert_instruction_with_span(
+                Instruction::FetchLocal(iter_index),
+                list_span.clone(),
+                location!(),
+            );
+            thonk.insert_instruction_with_span(
+                Instruction::ListIndex,
+                list_span.clone(),
+                location!(),
+            );
+            thonk.insert_instruction_with_span(
+                Instruction::StoreLocal(iter_ident_index),
+                list_span.clone(),
+                location!(),
+            );
+        }
+        ValueTypeEnum::Range(_) => {
+            thonk.insert_instruction_with_span(
+                Instruction::FetchLocal(iter_index),
+                list_span.clone(),
+                location!(),
+            );
+            thonk.insert_instruction_with_span(
+                Instruction::StoreLocal(iter_ident_index),
+                list_span.clone(),
+                location!(),
+            );
+        }
+        _ => {
+            return Err(BubbaError::InternalCompilerError {
+                message: "For loop expression is not a list".to_owned(),
+                location: location!(),
+            }
+            .into())
+        }
+    }
+
     thonk.append(inner_thonk);
 
-    // Duplicate the range end so that we can compare against it.
-    thonk.add_instruction(Instruction::Dup, location!());
+    // Duplicate the end so that we can compare against it.
+    thonk.insert_instruction(Instruction::Dup, location!());
 
     // Increment the index
-    thonk.add_instruction(Instruction::FetchLocal(index), location!());
-    thonk.add_instruction(
+    thonk.insert_instruction(Instruction::FetchLocal(iter_index), location!());
+    thonk.insert_instruction(
         Instruction::Push(new_ref!(Value, Value::Integer(1))),
         location!(),
     );
-    thonk.add_instruction(Instruction::Add, location!());
-    thonk.add_instruction(Instruction::Dup, location!());
-    thonk.add_instruction(Instruction::StoreLocal(index), location!());
+    thonk.insert_instruction(Instruction::Add, location!());
+    thonk.insert_instruction(Instruction::Dup, location!());
+    thonk.insert_instruction(Instruction::StoreLocal(iter_index), location!());
 
     // Test the index against the length of the list
-    thonk.add_instruction(Instruction::TestLessThanOrEqual, location!());
+    thonk.insert_instruction(Instruction::TestLessThanOrEqual, location!());
 
     // go do it again if index is < end.
-    thonk.add_instruction(
+    thonk.insert_instruction(
         Instruction::JumpIfFalse(top_of_loop - thonk.get_instruction_card() as isize - 1),
         location!(),
     );
@@ -172,7 +391,7 @@ mod test {
         assert_eq!(program.get_thonk_card(), 1);
         assert_eq!(
             program.get_thonk("main").unwrap().get_instruction_card(),
-            19
+            21
         );
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(45));
@@ -209,7 +428,7 @@ mod test {
         assert_eq!(program.get_thonk_card(), 1);
         assert_eq!(
             program.get_thonk("main").unwrap().get_instruction_card(),
-            32
+            36
         );
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(900));
@@ -245,7 +464,7 @@ mod test {
         assert_eq!(program.get_thonk_card(), 1);
         assert_eq!(
             program.get_thonk("main").unwrap().get_instruction_card(),
-            21
+            23
         );
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(45));
@@ -288,7 +507,7 @@ mod test {
     }
 
     #[test]
-    fn for_loop_iter_array() {
+    fn for_loop_iter_array_one() {
         let _ = env_logger::builder().is_test(true).try_init();
         color_backtrace::install();
 
@@ -315,11 +534,50 @@ mod test {
         println!("{program}");
 
         assert_eq!(program.get_thonk_card(), 1);
-        // assert_eq!(
-        //     program.get_thonk("main").unwrap().get_instruction_card(),
-        //     26
-        // );
+        assert_eq!(
+            program.get_thonk("main").unwrap().get_instruction_card(),
+            34
+        );
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(15));
+    }
+
+    #[test]
+    fn for_loop_iter_array_two() {
+        let _ = env_logger::builder().is_test(true).try_init();
+        color_backtrace::install();
+
+        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
+        let ore = r#"fn main() -> string {{
+                       let x = "";
+                       let arr = ["u", "b", "e", "r"];
+                       for i in arr {{
+                           x = x + i;
+                       }}
+                       x
+                   }}"#;
+        let ast = parse_dwarf("for_loop_iter_array_two", ore).unwrap();
+        let ctx = new_lu_dog(
+            "for_loop_iter_array".to_owned(),
+            Some((ore.to_owned(), &ast)),
+            &get_dwarf_home(),
+            &sarzak,
+        )
+        .unwrap();
+
+        let program = compile(&ctx).unwrap();
+
+        println!("{program}");
+
+        assert_eq!(program.get_thonk_card(), 1);
+        assert_eq!(
+            program.get_thonk("main").unwrap().get_instruction_card(),
+            33
+        );
+
+        assert_eq!(
+            &*s_read!(run_vm(&program).unwrap()),
+            &Value::String("uber".to_owned())
+        );
     }
 }

@@ -69,7 +69,7 @@ pub(in crate::bubba::compiler) fn compile(
                     Value,
                     Value::Enumeration(EnumVariant::Unit(ty, path, s_read!(pe).name.to_owned()))
                 );
-                thonk.add_instruction(Instruction::Push(value), location!());
+                thonk.insert_instruction(Instruction::Push(value), location!());
             } else {
                 let field_count = field_exprs.len();
                 for f in field_exprs {
@@ -80,11 +80,11 @@ pub(in crate::bubba::compiler) fn compile(
 
                 let ty = new_ref!(Value, Value::ValueType((*s_read!(ty)).to_owned()));
                 let path = new_ref!(Value, Value::String(path));
-                thonk.add_instruction(Instruction::Push(ty), location!());
-                thonk.add_instruction(Instruction::Push(path), location!());
-                thonk.add_instruction(Instruction::Push(variant), location!());
+                thonk.insert_instruction(Instruction::Push(ty), location!());
+                thonk.insert_instruction(Instruction::Push(path), location!());
+                thonk.insert_instruction(Instruction::Push(variant), location!());
 
-                thonk.add_instruction_with_span(
+                thonk.insert_instruction_with_span(
                     Instruction::NewTupleEnum(field_count),
                     span,
                     location!(),
@@ -115,18 +115,18 @@ pub(in crate::bubba::compiler) fn compile(
                 let name = lu_dog.exhume_named_field_expression(name).unwrap();
                 let name = s_read!(name).name.clone();
                 let name = new_ref!(Value, Value::String(name));
-                thonk.add_instruction(Instruction::Push(name), location!());
+                thonk.insert_instruction(Instruction::Push(name), location!());
             }
 
             let ty = woog_struct.r1_value_type(&lu_dog)[0].clone();
             let ty = new_ref!(Value, Value::ValueType((*s_read!(ty)).to_owned()));
-            thonk.add_instruction(Instruction::Push(ty), location!());
+            thonk.insert_instruction(Instruction::Push(ty), location!());
 
             let name = &woog_struct.name;
             let name = new_ref!(Value, name.to_owned().into());
-            thonk.add_instruction(Instruction::Push(name), location!());
+            thonk.insert_instruction(Instruction::Push(name), location!());
 
-            thonk.add_instruction_with_span(
+            thonk.insert_instruction_with_span(
                 Instruction::NewUserType(field_count),
                 span,
                 location!(),

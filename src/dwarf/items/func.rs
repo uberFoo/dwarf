@@ -152,8 +152,6 @@ pub fn inter_func(
         )?
     };
 
-    let a = PrintableValueType(&ret_ty, context, lu_dog);
-
     let (func, block) =
         if let Some((ParserExpression::Block(block_a_sink, stmts, vars, tys), span)) = &stmts {
             let a_sink = a_sink

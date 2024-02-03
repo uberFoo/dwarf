@@ -72,12 +72,12 @@ pub(in crate::bubba::compiler) fn compile_list_expression(
         let ty = &s_read!(expr).r11_x_value(&lu_dog)[0];
         let ty = s_read!(ty).r24_value_type(&lu_dog)[0].clone();
         let ty = (*s_read!(ty)).clone();
-        thonk.add_instruction(
+        thonk.insert_instruction(
             Instruction::Push(new_ref!(Value, Value::ValueType(ty))),
             location!(),
         );
 
-        thonk.add_instruction(Instruction::NewList(size), location!());
+        thonk.insert_instruction(Instruction::NewList(size), location!());
     } else {
         let ty = Value::Vector {
             ty: Value::Empty.get_value_type(&sarzak, &lu_dog),
@@ -85,11 +85,11 @@ pub(in crate::bubba::compiler) fn compile_list_expression(
         }
         .get_value_type(&sarzak, &lu_dog);
         let ty = (*s_read!(ty)).clone();
-        thonk.add_instruction(
+        thonk.insert_instruction(
             Instruction::Push(new_ref!(Value, Value::ValueType(ty))),
             location!(),
         );
-        thonk.add_instruction_with_span(Instruction::NewList(0), entry_span, location!());
+        thonk.insert_instruction_with_span(Instruction::NewList(0), entry_span, location!());
     }
 
     Ok(None)

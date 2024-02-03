@@ -8,6 +8,7 @@ use crate::{
     bubba::{
         compiler::{compile_expression, compile_statement, get_span, CThonk, Context, Result},
         instr::Instruction,
+        BOOL, STRING_ARRAY,
     },
     keywords::{ARGS, ASSERT, ASSERT_EQ, CHACHA, FORMAT, NEW, PLUGIN},
     lu_dog::{BodyEnum, Call, CallEnum, Expression, ValueType, ValueTypeEnum},
@@ -153,25 +154,25 @@ pub(in crate::bubba::compiler) fn compile_lambda(
 
                         if let Some(ref id) = s_read!(next.clone()).next {
                             next = lu_dog.exhume_statement(id).unwrap();
-                        } else if thonk.returned {
-                            break;
+                        // } else if thonk.returned {
+                        //     break;
                         } else {
-                            thonk.add_instruction(
-                                Instruction::Push(new_ref!(Value, Value::Empty)),
-                                location!(),
-                            );
-                            thonk.add_instruction(Instruction::Return, location!());
+                            // thonk.insert_instruction(
+                            //     Instruction::Push(new_ref!(Value, Value::Empty)),
+                            //     location!(),
+                            // );
+                            thonk.insert_instruction(Instruction::Return, location!());
                             thonk.returned = true;
                             break;
                         }
                     }
                 }
             } else {
-                thonk.add_instruction(
+                thonk.insert_instruction(
                     Instruction::Push(new_ref!(Value, Value::Empty)),
                     location!(),
                 );
-                thonk.add_instruction(Instruction::Return, location!());
+                thonk.insert_instruction(Instruction::Return, location!());
                 thonk.returned = true;
             }
         }
@@ -206,7 +207,7 @@ pub(in crate::bubba::compiler) fn compile_lambda(
     // };
 
     // outer_thonk.add_instruction(Instruction::Push(new_ref!(Value, pointer)), location!());
-    outer_thonk.add_instruction(
+    outer_thonk.insert_instruction(
         Instruction::MakeLambdaPointer(new_ref!(String, name.clone()), frame_size),
         location!(),
     );
@@ -252,7 +253,7 @@ fn compile_function_call(
                 compile_expression(expr, thonk, context, span)?;
             }
 
-            thonk.add_instruction(Instruction::Call(args.len()), location!());
+            thonk.insert_instruction(Instruction::Call(args.len()), location!());
 
             result
         }
@@ -277,7 +278,7 @@ fn compile_method_call(
         let span = get_span(&expr, &lu_dog);
         // Evaluate the LHS to get at the underlying value/instance.
         let result = compile_expression(&expr, thonk, context, span);
-        thonk.add_instruction(
+        thonk.insert_instruction(
             Instruction::MethodLookup(new_ref!(String, name)),
             location!(),
         );
@@ -291,7 +292,7 @@ fn compile_method_call(
         compile_expression(expr, thonk, context, span)?;
     }
 
-    thonk.add_instruction(Instruction::Call(args.len()), location!());
+    thonk.insert_instruction(Instruction::Call(args.len()), location!());
 
     result
 }
@@ -307,49 +308,37 @@ fn compile_static_method_call(
     log::debug!(target: "instr", "{}: {}:{}:{}", POP_CLR.paint("compile_static_method_call"), file!(), line!(), column!());
 
     let lu_dog = context.lu_dog_heel();
-    let boolean = Ty::new_boolean(&s_read!(context.sarzak_heel()));
-    let boolean = (*s_read!(ValueType::new_ty(true, &boolean, &mut s_write!(lu_dog)))).clone();
-    let string = Ty::new_z_string(&s_read!(context.sarzak_heel()));
-    let string = ValueType::new_ty(true, &string, &mut s_write!(lu_dog));
-    let mut string_array = ValueType::new_empty(true, &mut s_write!(lu_dog));
-
     let lu_dog = s_read!(lu_dog);
 
-    for vt in lu_dog.iter_value_type() {
-        if let ValueTypeEnum::List(id) = s_read!(vt).subtype {
-            let list = lu_dog.exhume_list(&id).unwrap();
-            let list_ty = s_read!(list).r36_value_type(&lu_dog)[0].clone();
-            if *s_read!(string) == *s_read!(list_ty) {
-                string_array = vt.clone();
-            }
-        }
-    }
-
-    let string = (*s_read!(string)).clone();
-    let string_array = (*s_read!(string_array)).clone();
+    let boolean = context.get_type(BOOL).unwrap().clone();
+    let string_array = context.get_type(STRING_ARRAY).unwrap().clone();
 
     match ty {
         CHACHA => match func {
             ARGS => {
-                thonk.add_instruction_with_span(Instruction::PushArgs, span.clone(), location!());
+                thonk.insert_instruction_with_span(
+                    Instruction::PushArgs,
+                    span.clone(),
+                    location!(),
+                );
                 Ok(Some(string_array))
             }
             ASSERT => {
                 let expr = &args[0];
                 let expr_span = get_span(expr, &lu_dog);
                 compile_expression(expr, thonk, context, expr_span)?;
-                thonk.add_instruction_with_span(
+                thonk.insert_instruction_with_span(
                     Instruction::Push(new_ref!(Value, true.into())),
                     span.clone(),
                     location!(),
                 );
-                thonk.add_instruction_with_span(Instruction::TestEq, span.clone(), location!());
-                thonk.add_instruction_with_span(
+                thonk.insert_instruction_with_span(Instruction::TestEq, span.clone(), location!());
+                thonk.insert_instruction_with_span(
                     Instruction::JumpIfTrue(5),
                     span.clone(),
                     location!(),
                 );
-                thonk.add_instruction_with_span(
+                thonk.insert_instruction_with_span(
                     Instruction::Push(new_ref!(
                         Value,
                         format!("assertion failed: {span:?}").into()
@@ -357,21 +346,21 @@ fn compile_static_method_call(
                     span.clone(),
                     location!(),
                 );
-                thonk.add_instruction_with_span(Instruction::Out(1), span.clone(), location!());
+                thonk.insert_instruction_with_span(Instruction::Out(1), span.clone(), location!());
 
                 // Bail on false
-                thonk.add_instruction(
+                thonk.insert_instruction(
                     Instruction::Push(new_ref!(
                         Value,
                         context.extruder_context.source.clone().into()
                     )),
                     location!(),
                 );
-                thonk.add_instruction(
+                thonk.insert_instruction(
                     Instruction::Push(new_ref!(Value, span.clone().into())),
                     location!(),
                 );
-                thonk.add_instruction(Instruction::HaltAndCatchFire, location!());
+                thonk.insert_instruction(Instruction::HaltAndCatchFire, location!());
 
                 Ok(Some(boolean))
             }
@@ -382,13 +371,13 @@ fn compile_static_method_call(
                 compile_expression(lhs, thonk, context, lhs_span)?;
                 let rhs_span = get_span(rhs, &lu_dog);
                 compile_expression(rhs, thonk, context, rhs_span)?;
-                thonk.add_instruction_with_span(Instruction::TestEq, span.clone(), location!());
-                thonk.add_instruction_with_span(
+                thonk.insert_instruction_with_span(Instruction::TestEq, span.clone(), location!());
+                thonk.insert_instruction_with_span(
                     Instruction::JumpIfTrue(5),
                     span.clone(),
                     location!(),
                 );
-                thonk.add_instruction_with_span(
+                thonk.insert_instruction_with_span(
                     Instruction::Push(new_ref!(
                         Value,
                         format!("assertion failed: {span:?}").into()
@@ -396,21 +385,25 @@ fn compile_static_method_call(
                     span.clone(),
                     location!(),
                 );
-                thonk.add_instruction_with_span(Instruction::Out(1), span.clone(), location!());
+                thonk.insert_instruction_with_span(Instruction::Out(1), span.clone(), location!());
 
                 // This is the bad path.
-                thonk.add_instruction(
+                thonk.insert_instruction(
                     Instruction::Push(new_ref!(
                         Value,
                         context.extruder_context.source.clone().into()
                     )),
                     location!(),
                 );
-                thonk.add_instruction(
+                thonk.insert_instruction(
                     Instruction::Push(new_ref!(Value, span.clone().into())),
                     location!(),
                 );
-                thonk.add_instruction_with_span(Instruction::HaltAndCatchFire, span, location!());
+                thonk.insert_instruction_with_span(
+                    Instruction::HaltAndCatchFire,
+                    span,
+                    location!(),
+                );
 
                 Ok(Some(boolean))
             }
@@ -420,7 +413,7 @@ fn compile_static_method_call(
                 let inner_span = get_span(inner, &lu_dog);
                 let result = compile_expression(inner, thonk, context, inner_span);
 
-                thonk.add_instruction(Instruction::Call(0), location!());
+                thonk.insert_instruction(Instruction::Call(0), location!());
 
                 result
             }
@@ -440,25 +433,27 @@ fn compile_static_method_call(
                         let plugin_root = path.split(PATH_SEP).next().unwrap();
 
                         if let Some(path) = path.split(PATH_SEP).nth(1) {
-                            thonk.add_instruction(
+                            thonk.insert_instruction(
                                 Instruction::Push(new_ref!(Value, Value::String(path.to_owned()))),
                                 location!(),
                             );
                         };
 
-                        thonk.add_instruction(
+                        thonk.insert_instruction(
                             Instruction::Push(new_ref!(Value, plugin_root.into())),
                             location!(),
                         );
-                        thonk.add_instruction(Instruction::PluginNew(1), location!());
+                        thonk.insert_instruction(Instruction::PluginNew(1), location!());
 
-                        let id = lu_dog.exhume_woog_struct_id_by_name(&plugin.name).unwrap();
-                        let woog_struct = lu_dog.exhume_woog_struct(&id).unwrap();
-                        let woog_struct = s_read!(woog_struct);
+                        // let id = lu_dog.exhume_woog_struct_id_by_name(&plugin.name).unwrap();
+                        // let woog_struct = lu_dog.exhume_woog_struct(&id).unwrap();
+                        // let woog_struct = s_read!(woog_struct);
 
-                        Ok(Some(
-                            (*s_read!(woog_struct.r1_value_type(&lu_dog)[0])).clone(),
-                        ))
+                        // Ok(Some(
+                        //     (*s_read!(woog_struct.r1_value_type(&lu_dog)[0])).clone(),
+                        // ))
+
+                        Ok(None)
                     }
                     missing_method => {
                         panic!("plugin only supports `new`, found: {missing_method}");
@@ -468,15 +463,15 @@ fn compile_static_method_call(
                 let func_name = format!("{ty}::{func}");
                 let name = new_ref!(String, func_name);
                 // These instructions will be patched by the VM.
-                thonk.add_instruction(Instruction::CallDestination(name.clone()), location!());
-                thonk.add_instruction(Instruction::LocalCardinality(name), location!());
+                thonk.insert_instruction(Instruction::CallDestination(name.clone()), location!());
+                thonk.insert_instruction(Instruction::LocalCardinality(name), location!());
 
                 for expr in args {
                     let span = get_span(expr, &lu_dog);
                     compile_expression(expr, thonk, context, span)?;
                 }
 
-                thonk.add_instruction(Instruction::Call(args.len()), location!());
+                thonk.insert_instruction(Instruction::Call(args.len()), location!());
 
                 Ok(None)
             }

@@ -1,12 +1,12 @@
 use heck::ToUpperCamelCase;
 use log::{self, log_enabled, Level::Trace};
-use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use rustc_hash::FxHashMap as HashMap;
 use snafu::{location, prelude::*, Location};
 
 use crate::{
     bubba::{
         instr::{Instruction, Program, Thonk},
-        RESULT, STRING,
+        BOOL, EMPTY, INT, RANGE, RESULT, STRING, STRING_ARRAY, UNKNOWN,
     },
     lu_dog::{
         BodyEnum, Expression, ExpressionEnum, Function, ObjectStore as LuDogStore, Statement,
@@ -52,7 +52,7 @@ impl CThonk {
         }
     }
 
-    fn add_instruction(&mut self, instruction: Instruction, location: Location) {
+    fn insert_instruction(&mut self, instruction: Instruction, location: Location) {
         log::debug!(target: "instr", "{}: {}:{}:{}\n{instruction}", POP_CLR.paint("add_instruction"), location.file, location.line, location.column);
 
         if log_enabled!(target: "instr", Trace) {
@@ -82,7 +82,7 @@ impl CThonk {
         self.inner.prefix_instruction(instruction, None);
     }
 
-    fn add_instruction_with_span(
+    fn insert_instruction_with_span(
         &mut self,
         instruction: Instruction,
         span: Span,
@@ -177,11 +177,11 @@ impl Drop for SymbolTable {
 struct Context<'a, 'b> {
     extruder_context: &'a ExtruderContext,
     symbol_tables: Vec<SymbolTable>,
-    method_name: Option<String>,
     program: &'b mut Program,
     st_depth: usize,
     funcs: HashMap<String, ValueType>,
     pub(crate) captures: Option<HashMap<String, usize>>,
+    types: HashMap<String, ValueType>,
 }
 
 impl<'a, 'b> Context<'a, 'b> {
@@ -189,12 +189,20 @@ impl<'a, 'b> Context<'a, 'b> {
         Context {
             extruder_context,
             symbol_tables: vec![],
-            method_name: None,
             program,
             st_depth: 0,
             funcs: HashMap::default(),
             captures: None,
+            types: HashMap::default(),
         }
+    }
+
+    fn insert_type(&mut self, name: String, ty: ValueType) {
+        self.types.insert(name, ty);
+    }
+
+    fn get_type(&self, name: &str) -> Option<&ValueType> {
+        self.types.get(name)
     }
 
     fn insert_function(&mut self, name: String, ty: ValueType) {
@@ -223,6 +231,7 @@ impl<'a, 'b> Context<'a, 'b> {
     }
 
     fn push_scope(&mut self) {
+        self.st_depth += 1;
         let start = self.symbol_tables.last().unwrap().count();
         self.symbol_tables.push(SymbolTable::new(start));
     }
@@ -233,6 +242,7 @@ impl<'a, 'b> Context<'a, 'b> {
     }
 
     fn pop_scope(&mut self) {
+        self.st_depth -= 1;
         self.symbol_tables.pop();
     }
 
@@ -294,12 +304,57 @@ pub fn compile(context: &ExtruderContext) -> Result<Program> {
     let mut context = Context::new(context, &mut program);
 
     let lu_dog = context.lu_dog_heel();
+    let sarzak = context.sarzak_heel();
 
     // We need to grab this specific instance's value of the string type.
-    let ty = Ty::new_z_string(&s_read!(context.sarzak_heel()));
-    let ty = ValueType::new_ty(true, &ty, &mut s_write!(lu_dog));
-    let ty = Value::ValueType((*s_read!(ty)).clone());
-    context.get_program().add_symbol(STRING.to_owned(), ty);
+    let string = Ty::new_z_string(&s_read!(sarzak));
+    let string = ValueType::new_ty(true, &string, &mut s_write!(lu_dog));
+    let string = (*s_read!(string)).clone();
+    let string_value = Value::ValueType(string.clone());
+    context
+        .get_program()
+        .add_symbol(STRING.to_owned(), string_value);
+
+    context.insert_type(STRING.to_owned(), string.clone());
+
+    let boolean = Ty::new_boolean(&s_read!(context.sarzak_heel()));
+    let boolean = (*s_read!(ValueType::new_ty(true, &boolean, &mut s_write!(lu_dog)))).clone();
+    context.insert_type(BOOL.to_owned(), boolean);
+
+    let empty = ValueType::new_empty(true, &mut s_write!(lu_dog));
+    let empty = (*s_read!(empty)).clone();
+    context.insert_type("Empty".to_owned(), empty);
+
+    let range_ty = ValueType::new_range(true, &mut s_write!(lu_dog));
+    let range_ty = (*s_read!(range_ty)).clone();
+    context.insert_type(RANGE.to_owned(), range_ty);
+
+    let unknown = ValueType::new_unknown(true, &mut s_write!(lu_dog));
+    let unknown = (*s_read!(unknown)).clone();
+    context.insert_type(UNKNOWN.to_owned(), unknown);
+
+    let int = Ty::new_integer(&s_read!(sarzak));
+    let int = ValueType::new_ty(true, &int, &mut s_write!(lu_dog));
+    let int = (*s_read!(int)).clone();
+    context.insert_type(INT.to_owned(), int);
+
+    let empty = ValueType::new_empty(true, &mut s_write!(lu_dog));
+    let empty = (*s_read!(empty)).clone();
+    context.insert_type(EMPTY.to_owned(), empty);
+
+    let mut string_array = ValueType::new_empty(true, &mut s_write!(lu_dog));
+    for vt in s_read!(lu_dog).iter_value_type() {
+        if let ValueTypeEnum::List(id) = s_read!(vt).subtype {
+            let list = s_read!(lu_dog).exhume_list(&id).unwrap();
+            let list_ty = s_read!(list).r36_value_type(&s_read!(lu_dog))[0].clone();
+            if string == *s_read!(list_ty) {
+                string_array = vt.clone();
+            }
+        }
+    }
+    let string_array = (*s_read!(string_array)).clone();
+    context.insert_type(STRING_ARRAY.to_owned(), string_array);
+
     // And Result
     if let Some(ref ty) = s_read!(lu_dog).exhume_enumeration_id_by_name("::std::result::Result") {
         let ty = s_read!(lu_dog).exhume_enumeration(&ty).unwrap();
@@ -472,22 +527,22 @@ fn compile_function(func: &RefType<Function>, context: &mut Context) -> Result<C
                         } else if thonk.returned {
                             break;
                         } else {
-                            thonk.add_instruction(
+                            thonk.insert_instruction(
                                 Instruction::Push(new_ref!(Value, Value::Empty)),
                                 location!(),
                             );
-                            thonk.add_instruction(Instruction::Return, location!());
+                            thonk.insert_instruction(Instruction::Return, location!());
                             thonk.returned = true;
                             break;
                         }
                     }
                 }
             } else {
-                thonk.add_instruction(
+                thonk.insert_instruction(
                     Instruction::Push(new_ref!(Value, Value::Empty)),
                     location!(),
                 );
-                thonk.add_instruction(Instruction::Return, location!());
+                thonk.insert_instruction(Instruction::Return, location!());
                 thonk.returned = true;
             }
         }
@@ -526,8 +581,6 @@ fn compile_statement(
     log::debug!(target: "instr", "{}:\n --> {}:{}:{}", POP_CLR.paint("compile_statement"), file!(), line!(), column!());
 
     let lu_dog = context.lu_dog_heel();
-    // let empty = ValueType::new_empty(true, &mut s_write!(lu_dog));
-    // let empty = (*s_read!(empty)).clone();
     let lu_dog = s_read!(lu_dog);
 
     match s_read!(statement).subtype {
@@ -560,10 +613,10 @@ fn compile_statement(
                 (false, index) => index,
             };
 
-            thonk.add_instruction(Instruction::StoreLocal(offset), location!());
+            thonk.insert_instruction(Instruction::StoreLocal(offset), location!());
 
-            // Ok(Some(empty))
-            Ok(None)
+            let empty = context.get_type(EMPTY).unwrap().clone();
+            Ok(Some(empty))
         }
         StatementEnum::ResultStatement(ref stmt) => {
             let stmt = lu_dog.exhume_result_statement(stmt).unwrap();
@@ -572,8 +625,10 @@ fn compile_statement(
             let span = get_span(&expr, &lu_dog);
             let result = compile_expression(&expr, thonk, context, span);
 
-            thonk.add_instruction(Instruction::Return, location!());
-            thonk.returned = true;
+            if context.is_root_symbol_table() {
+                thonk.insert_instruction(Instruction::Return, location!());
+                thonk.returned = true;
+            }
 
             result
         }
@@ -797,7 +852,7 @@ mod test {
 
         assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 5);
 
-        assert_eq!(program.get_thonk("fib").unwrap().get_instruction_card(), 33);
+        assert_eq!(program.get_thonk("fib").unwrap().get_instruction_card(), 30);
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(55));
     }

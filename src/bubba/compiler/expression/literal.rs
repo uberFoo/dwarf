@@ -66,7 +66,7 @@ pub(in crate::bubba::compiler) fn compile(
         }
     };
 
-    thonk.add_instruction_with_span(Instruction::Push(literal?), span, location!());
+    thonk.insert_instruction_with_span(Instruction::Push(literal?), span, location!());
 
     Ok(None)
 }

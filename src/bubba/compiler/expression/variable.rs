@@ -27,16 +27,20 @@ pub(in crate::bubba::compiler) fn compile(
     log::debug!(target: "instr", "Variable: {}", POP_CLR.paint(name));
 
     if let Some(symbol) = context.get_symbol(name) {
-        thonk.add_instruction_with_span(Instruction::FetchLocal(symbol.number), span, location!());
+        thonk.insert_instruction_with_span(
+            Instruction::FetchLocal(symbol.number),
+            span,
+            location!(),
+        );
         Ok(Some(symbol.ty.clone()))
     } else if let Some(ty) = context.check_function(name) {
         let name = new_ref!(String, name.to_owned());
         // We are here because we need to look up a function.
-        thonk.add_instruction(Instruction::CallDestination(name.clone()), location!());
+        thonk.insert_instruction(Instruction::CallDestination(name.clone()), location!());
 
         // This instruction will be patched by the VM with the number of locals in the
         // function.
-        thonk.add_instruction(Instruction::LocalCardinality(name), location!());
+        thonk.insert_instruction(Instruction::LocalCardinality(name), location!());
 
         Ok(Some(ty.clone()))
     } else {
@@ -44,17 +48,7 @@ pub(in crate::bubba::compiler) fn compile(
         // Therefor we must be doing a lambda and it's accessing it's enclosing
         // scope. We store it in the table, so that it has a local index, and then
         // we place it in the captures list.
-        let get_unknown = || -> RefType<ValueType> {
-            for vt in lu_dog.iter_value_type() {
-                if let ValueTypeEnum::Unknown(_) = s_read!(vt).subtype {
-                    return vt.clone();
-                }
-            }
-            unreachable!();
-        };
-
-        let unknown = get_unknown();
-        let unknown = (*s_read!(unknown)).clone();
+        let unknown = context.get_type("UNKNOWN").unwrap().clone();
 
         let (new, number) = context.insert_symbol(name.to_owned(), unknown.clone());
         if new {
@@ -62,7 +56,7 @@ pub(in crate::bubba::compiler) fn compile(
         }
         if let Some(ref mut captures) = context.captures {
             captures.insert(name.to_owned(), number);
-            thonk.add_instruction_with_span(Instruction::FetchLocal(number), span, location!());
+            thonk.insert_instruction_with_span(Instruction::FetchLocal(number), span, location!());
         } else {
             return Err(BubbaError::InternalCompilerError {
                 message: format!("Variable {} not found", name),

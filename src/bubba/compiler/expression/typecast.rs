@@ -27,7 +27,7 @@ pub(in crate::bubba::compiler) fn compile(
 
     compile_expression(&lhs, thonk, context, get_span(&lhs, &lu_dog))?;
 
-    thonk.add_instruction_with_span(
+    thonk.insert_instruction_with_span(
         Instruction::Typecast(new_ref!(Value, Value::ValueType((*s_read!(as_ty)).clone()))),
         span,
         location!(),

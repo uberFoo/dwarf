@@ -1,5 +1,5 @@
 use crate::{
-    bubba::compiler::{compile_expression, get_span, CThonk, Context, Result},
+    bubba::compiler::{compile_expression, get_span, CThonk, Context, Result, RANGE},
     lu_dog::ValueType,
     s_read, s_write, SarzakStorePtr,
 };
@@ -12,9 +12,9 @@ pub(in crate::bubba::compiler) fn compile(
     log::debug!(target: "instr", "{}:{}:{}", file!(), line!(), column!());
 
     let lu_dog = context.lu_dog_heel().clone();
-    let range_ty = ValueType::new_range(true, &mut s_write!(lu_dog));
-    let range_ty = (*s_read!(range_ty)).clone();
     let lu_dog = s_read!(lu_dog);
+
+    let range_ty = context.get_type(RANGE).unwrap().clone();
 
     let range = lu_dog.exhume_range_expression(range).unwrap();
     let range = s_read!(range);

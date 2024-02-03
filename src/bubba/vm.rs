@@ -386,7 +386,6 @@ impl VM {
                                 INVOKE_FUNC => {
                                     let mut plugin = s_write!(plugin);
                                     let args = self.stack.pop().clone().unwrap().into_value();
-                                    dbg!(&args);
                                     let Value::Vector { inner, .. } = args else {
                                         panic!("Expected a vector of arguments.")
                                     };
@@ -404,7 +403,6 @@ impl VM {
                                     let module = self.stack.pop().clone().unwrap().into_value();
                                     let module = module.to_inner_string();
 
-                                    dbg!(&module, &ty, &func, &args);
                                     match plugin.invoke_func(
                                         module.as_str().into(),
                                         ty.as_str().into(),
@@ -412,7 +410,9 @@ impl VM {
                                         args.into(),
                                     ) {
                                         ROk(value) => {
-                                            // self.stack.push(value.into().into());
+                                            self.stack.push(
+                                                <FfiValue as Into<Value>>::into(value).into(),
+                                            );
                                         }
                                         RErr(e) => {
                                             return Err(BubbaError::ValueError {
@@ -1513,6 +1513,7 @@ impl VM {
 
                         // Fetch the local count from the stack, under the func addr.
                         let stack_local_count = &self.stack[self.fp - frame_size - 3 + 1];
+                        dbg!(&self.fp, &frame_size, &stack_local_count, local_count);
                         local_count =
                             stack_local_count
                                 .clone()

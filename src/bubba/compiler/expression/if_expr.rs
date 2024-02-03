@@ -26,11 +26,11 @@ pub(in crate::bubba::compiler) fn compile(
     let cond_expr_span = get_span(&cond_expr, &lu_dog);
     compile_expression(&cond_expr, thonk, context, cond_expr_span)?;
 
-    thonk.add_instruction(
+    thonk.insert_instruction(
         Instruction::Push(new_ref!(Value, Value::Boolean(true))),
         location!(),
     );
-    thonk.add_instruction(Instruction::TestEq, location!());
+    thonk.insert_instruction(Instruction::TestEq, location!());
 
     // Compile the false block
     let false_thonk = if let Some(ref expr) = expr.false_block {
@@ -66,10 +66,10 @@ pub(in crate::bubba::compiler) fn compile(
     let true_block_len = true_thonk.get_instruction_card() as isize;
     context.pop_scope();
 
-    thonk.add_instruction(Instruction::JumpIfFalse(true_block_len + 1), location!());
+    thonk.insert_instruction(Instruction::JumpIfFalse(true_block_len + 1), location!());
     thonk.append(true_thonk);
     if let Some(false_thonk) = &false_thonk {
-        thonk.add_instruction(
+        thonk.insert_instruction(
             Instruction::Jump(false_thonk.get_instruction_card() as isize),
             location!(),
         );
@@ -121,10 +121,7 @@ mod test {
 
         assert_eq!(program.get_thonk_card(), 1);
 
-        assert_eq!(
-            program.get_thonk("main").unwrap().get_instruction_card(),
-            10
-        );
+        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 8);
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(1));
     }
@@ -157,10 +154,7 @@ mod test {
 
         assert_eq!(program.get_thonk_card(), 1);
 
-        assert_eq!(
-            program.get_thonk("main").unwrap().get_instruction_card(),
-            10
-        );
+        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 8);
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(2));
     }
@@ -212,7 +206,7 @@ mod test {
 
         assert_eq!(
             program.get_thonk("main").unwrap().get_instruction_card(),
-            65
+            68
         );
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(1));

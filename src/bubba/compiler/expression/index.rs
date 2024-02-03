@@ -30,7 +30,7 @@ pub(in crate::bubba::compiler) fn compile(
     let index_expr_span = get_span(&index_expr, &lu_dog);
     compile_expression(&index_expr, thonk, context, index_expr_span)?;
 
-    thonk.add_instruction_with_span(Instruction::ListIndex, span, location!());
+    thonk.insert_instruction_with_span(Instruction::ListIndex, span, location!());
 
     Ok(None)
 }

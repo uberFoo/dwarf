@@ -24,7 +24,7 @@ pub(in crate::bubba::compiler) fn compile(
     let expr = lu_dog.exhume_expression(&s_read!(expr).expression).unwrap();
     compile_expression(&expr, thonk, context, span.clone())?;
 
-    thonk.add_instruction_with_span(Instruction::Return, span, location!());
+    thonk.insert_instruction_with_span(Instruction::Return, span, location!());
 
     Ok(None)
 }

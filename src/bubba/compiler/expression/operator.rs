@@ -38,7 +38,7 @@ pub(in crate::bubba::compiler) fn compile(
                 BinaryEnum::Addition(_) => {
                     compile_expression(&lhs, thonk, context, lhs_span)?;
                     compile_expression(&rhs, thonk, context, rhs_span)?;
-                    thonk.add_instruction_with_span(Instruction::Add, span, location!());
+                    thonk.insert_instruction_with_span(Instruction::Add, span, location!());
                 }
                 BinaryEnum::Assignment(_) => {
                     compile_expression(&rhs, thonk, context, rhs_span)?;
@@ -70,13 +70,13 @@ pub(in crate::bubba::compiler) fn compile(
                                 }
                             };
 
-                            thonk.add_instruction_with_span(
+                            thonk.insert_instruction_with_span(
                                 Instruction::Push(new_ref!(Value, Value::String(field_name))),
                                 span.clone(),
                                 location!(),
                             );
 
-                            thonk.add_instruction_with_span(
+                            thonk.insert_instruction_with_span(
                                 Instruction::FieldWrite,
                                 span,
                                 location!(),
@@ -90,7 +90,7 @@ pub(in crate::bubba::compiler) fn compile(
                                 .unwrap_or_else(|| panic!("symbol lookup failed for {}", expr.name))
                                 .number;
 
-                            thonk.add_instruction_with_span(
+                            thonk.insert_instruction_with_span(
                                 Instruction::StoreLocal(offset),
                                 span,
                                 location!(),
@@ -108,27 +108,27 @@ pub(in crate::bubba::compiler) fn compile(
                     compile_expression(&rhs, thonk, context, rhs_span)?;
                     match &boolean_operator.subtype {
                         BooleanOperatorEnum::And(_) => {
-                            thonk.add_instruction_with_span(Instruction::And, span, location!());
+                            thonk.insert_instruction_with_span(Instruction::And, span, location!());
                         }
                         BooleanOperatorEnum::Or(_) => {
-                            thonk.add_instruction_with_span(Instruction::Or, span, location!());
+                            thonk.insert_instruction_with_span(Instruction::Or, span, location!());
                         }
                     }
                 }
                 BinaryEnum::Division(_) => {
                     compile_expression(&lhs, thonk, context, lhs_span)?;
                     compile_expression(&rhs, thonk, context, rhs_span)?;
-                    thonk.add_instruction_with_span(Instruction::Divide, span, location!());
+                    thonk.insert_instruction_with_span(Instruction::Divide, span, location!());
                 }
                 BinaryEnum::Subtraction(_) => {
                     compile_expression(&lhs, thonk, context, lhs_span)?;
                     compile_expression(&rhs, thonk, context, rhs_span)?;
-                    thonk.add_instruction_with_span(Instruction::Subtract, span, location!());
+                    thonk.insert_instruction_with_span(Instruction::Subtract, span, location!());
                 }
                 BinaryEnum::Multiplication(_) => {
                     compile_expression(&lhs, thonk, context, lhs_span)?;
                     compile_expression(&rhs, thonk, context, rhs_span)?;
-                    thonk.add_instruction_with_span(Instruction::Multiply, span, location!());
+                    thonk.insert_instruction_with_span(Instruction::Multiply, span, location!());
                 }
             }
         }
@@ -143,12 +143,12 @@ pub(in crate::bubba::compiler) fn compile(
                 ComparisonEnum::Equal(_) => {
                     compile_expression(&lhs, thonk, context, lhs_span)?;
                     compile_expression(&rhs, thonk, context, rhs_span)?;
-                    thonk.add_instruction_with_span(Instruction::TestEq, span, location!());
+                    thonk.insert_instruction_with_span(Instruction::TestEq, span, location!());
                 }
                 ComparisonEnum::GreaterThan(_) => {
                     compile_expression(&lhs, thonk, context, lhs_span)?;
                     compile_expression(&rhs, thonk, context, rhs_span)?;
-                    thonk.add_instruction_with_span(
+                    thonk.insert_instruction_with_span(
                         Instruction::TestGreaterThan,
                         span,
                         location!(),
@@ -157,7 +157,7 @@ pub(in crate::bubba::compiler) fn compile(
                 ComparisonEnum::LessThanOrEqual(_) => {
                     compile_expression(&lhs, thonk, context, lhs_span)?;
                     compile_expression(&rhs, thonk, context, rhs_span)?;
-                    thonk.add_instruction_with_span(
+                    thonk.insert_instruction_with_span(
                         Instruction::TestLessThanOrEqual,
                         span,
                         location!(),
@@ -172,15 +172,15 @@ pub(in crate::bubba::compiler) fn compile(
             compile_expression(&lhs, thonk, context, lhs_span)?;
             match &unary.subtype {
                 UnaryEnum::Negation(_) => {
-                    thonk.add_instruction_with_span(
+                    thonk.insert_instruction_with_span(
                         Instruction::Push(new_ref!(Value, Value::Integer(-1))),
                         span.clone(),
                         location!(),
                     );
-                    thonk.add_instruction_with_span(Instruction::Multiply, span, location!());
+                    thonk.insert_instruction_with_span(Instruction::Multiply, span, location!());
                 }
                 UnaryEnum::Not(_) => {
-                    thonk.add_instruction_with_span(Instruction::Not, span, location!());
+                    thonk.insert_instruction_with_span(Instruction::Not, span, location!());
                 }
             }
         }

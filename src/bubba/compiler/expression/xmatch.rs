@@ -41,7 +41,7 @@ pub(in crate::bubba::compiler) fn compile(
         let pattern_expr = pattern.r92_expression(&lu_dog)[0].clone();
 
         // Duplicate the scrutinee with which to compare against.
-        thonk.add_instruction(Instruction::Dup, location!());
+        thonk.insert_instruction(Instruction::Dup, location!());
 
         // Compile the match expression.
         match &s_read!(match_expr).subtype {
@@ -101,14 +101,16 @@ pub(in crate::bubba::compiler) fn compile(
                                     // Instruction::DeconstructStructExpression,
                                     // location!(),
                                     // );
-                                    thonk.add_instruction(Instruction::Dup, location!());
-                                    thonk.add_instruction(
+                                    thonk.insert_instruction(Instruction::Dup, location!());
+                                    thonk.insert_instruction(
                                         Instruction::ExtractEnumValue,
                                         location!(),
                                     );
-                                    thonk.add_instruction(Instruction::Dup, location!());
-                                    thonk
-                                        .add_instruction(Instruction::StoreLocal(idx), location!());
+                                    thonk.insert_instruction(Instruction::Dup, location!());
+                                    thonk.insert_instruction(
+                                        Instruction::StoreLocal(idx),
+                                        location!(),
+                                    );
                                     // let pattern_span = get_span(&pattern_expr, &lu_dog);
 
                                     // compile_expression(
@@ -135,7 +137,7 @@ pub(in crate::bubba::compiler) fn compile(
                 let value = s_read!(expr).r11_x_value(&lu_dog)[0].clone();
                 let ty = s_read!(value).r24_value_type(&lu_dog)[0].clone();
                 let ty = new_ref!(Value, Value::ValueType((*s_read!(ty)).to_owned()));
-                thonk.add_instruction(Instruction::Push(ty), location!());
+                thonk.insert_instruction(Instruction::Push(ty), location!());
 
                 let x_path = &lu_dog.exhume_x_path(&struct_expr.x_path).unwrap();
                 // We know that there is always a pe. It's only in an option so that
@@ -162,14 +164,17 @@ pub(in crate::bubba::compiler) fn compile(
                 let path = path.join("::");
                 let path = format!("{}{path}", woog_enum.x_path);
 
-                thonk.add_instruction(Instruction::Push(new_ref!(Value, path.into())), location!());
+                thonk.insert_instruction(
+                    Instruction::Push(new_ref!(Value, path.into())),
+                    location!(),
+                );
 
-                thonk.add_instruction(
+                thonk.insert_instruction(
                     Instruction::Push(new_ref!(Value, variant.into())),
                     location!(),
                 );
 
-                thonk.add_instruction(Instruction::NewTupleEnum(field_exprs.len()), location!());
+                thonk.insert_instruction(Instruction::NewTupleEnum(field_exprs.len()), location!());
             }
             ExpressionEnum::VariableExpression(ref id) => {
                 let var = lu_dog.exhume_variable_expression(id).unwrap();
@@ -187,13 +192,13 @@ pub(in crate::bubba::compiler) fn compile(
                     (false, idx) => idx,
                 };
 
-                thonk.add_instruction(Instruction::Dup, location!());
-                thonk.add_instruction(Instruction::StoreLocal(idx), location!());
+                thonk.insert_instruction(Instruction::Dup, location!());
+                thonk.insert_instruction(Instruction::StoreLocal(idx), location!());
             }
             todo => todo!("Match expression type: {todo:?}"),
         }
 
-        thonk.add_instruction(Instruction::TestEq, location!());
+        thonk.insert_instruction(Instruction::TestEq, location!());
 
         // Compile the match block.
         let mut match_thonk = CThonk::new("match".to_owned());
@@ -213,31 +218,31 @@ pub(in crate::bubba::compiler) fn compile(
         let match_len = match_thonk.get_instruction_card() as isize;
 
         // Jump over the matching block if we don't match.
-        thonk.add_instruction(Instruction::JumpIfFalse(match_len + 1), location!());
+        thonk.insert_instruction(Instruction::JumpIfFalse(match_len + 1), location!());
 
         // Insert the compiled matching block
         thonk.append(match_thonk);
 
         // Return if we matched.
-        thonk.add_instruction(Instruction::Return, location!());
+        thonk.insert_instruction(Instruction::Return, location!());
 
         context.pop_scope();
     }
 
     // This should not really happen because if this were done right the compiler
     // would notice that there are cases not caught and  fall through.
-    thonk.add_instruction(
+    thonk.insert_instruction(
         Instruction::Push(new_ref!(
             Value,
             context.extruder_context.source.clone().into()
         )),
         location!(),
     );
-    thonk.add_instruction(
+    thonk.insert_instruction(
         Instruction::Push(new_ref!(Value, span.clone().into())),
         location!(),
     );
-    thonk.add_instruction(Instruction::HaltAndCatchFire, location!());
+    thonk.insert_instruction(Instruction::HaltAndCatchFire, location!());
 
     Ok(None)
 }
@@ -325,7 +330,7 @@ mod test {
 
         assert_eq!(
             program.get_thonk("main").unwrap().get_instruction_card(),
-            33
+            32
         );
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &4.into());
