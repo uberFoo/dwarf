@@ -27,6 +27,7 @@
         "jemalloc",
         "jift",
         "krate",
+        "lpush",
         "metamodel",
         "mimalloc",
         "msvc",

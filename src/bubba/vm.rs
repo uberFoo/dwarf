@@ -1,11 +1,8 @@
-use std::{
-    collections::VecDeque,
-    path::{Path, PathBuf},
-};
+use std::path::{Path, PathBuf};
 
 use abi_stable::{
     library::{lib_header_from_path, LibrarySuffix, RawLibrary},
-    std_types::{RErr, ROk},
+    std_types::{RBox, RErr, ROk, ROption, RResult},
 };
 use ansi_term::Colour;
 use log::{self, log_enabled, Level::Trace};
@@ -117,13 +114,14 @@ pub struct VM {
     ///
     fp: usize,
     stack: Vec<StackValue>,
-    program: Vec<Instruction>,
+    instrs: Vec<Instruction>,
     source_map: Vec<Span>,
     func_map: HashMap<String, (usize, usize)>,
     sarzak: SarzakStore,
     args: RefType<Value>,
     home: PathBuf,
     captures: Option<Vec<RefType<Value>>>,
+    program: Program,
 }
 
 impl std::fmt::Debug for VM {
@@ -131,7 +129,7 @@ impl std::fmt::Debug for VM {
         writeln!(f, "ip: {}", self.ip)?;
         writeln!(f, "fp: {}", self.fp)?;
         writeln!(f, "stack: {:?}", self.stack)?;
-        writeln!(f, "program: {:?}", self.program)?;
+        writeln!(f, "program: {:?}", self.instrs)?;
         writeln!(f, "source_map: {:?}", self.source_map)?;
         writeln!(f, "func_map: {:?}", self.func_map)?;
         writeln!(f, "args: {:?}", self.args)?;
@@ -159,7 +157,7 @@ impl VM {
             ip: 0,
             fp: 0,
             stack: Vec::new(),
-            program: Vec::new(),
+            instrs: Vec::new(),
             source_map: Vec::new(),
             func_map: HashMap::default(),
             sarzak: SarzakStore::from_bincode(SARZAK_MODEL).unwrap(),
@@ -173,6 +171,7 @@ impl VM {
             ),
             home: home.clone(),
             captures: None,
+            program: program.clone(),
         };
 
         let mut tmp_mem: Vec<Instruction> = Vec::new();
@@ -192,7 +191,7 @@ impl VM {
                 Instruction::CallDestination(name) => {
                     let name = &*s_read!(name);
                     if let Some((ip, _frame_size)) = vm.func_map.get(name) {
-                        vm.program.push(Instruction::Push(new_ref!(
+                        vm.instrs.push(Instruction::Push(new_ref!(
                             Value,
                             Value::Integer(*ip as DwarfInteger)
                         )));
@@ -203,7 +202,7 @@ impl VM {
                 Instruction::LocalCardinality(name) => {
                     let name = &*s_read!(name);
                     if let Some((_ip, frame_size)) = vm.func_map.get(name) {
-                        vm.program.push(Instruction::Push(new_ref!(
+                        vm.instrs.push(Instruction::Push(new_ref!(
                             Value,
                             Value::Integer(*frame_size as DwarfInteger)
                         )));
@@ -211,7 +210,7 @@ impl VM {
                         missing_symbols.insert(name.to_owned());
                     }
                 }
-                _ => vm.program.push(instr.clone()),
+                _ => vm.instrs.push(instr.clone()),
             }
         }
 
@@ -299,7 +298,7 @@ impl VM {
         trace: bool,
     ) -> Result<RefType<Value>> {
         loop {
-            if self.ip as usize >= self.program.len() {
+            if self.ip as usize >= self.instrs.len() {
                 return Err(BubbaError::IPOutOfBounds {
                     ip: self.ip as usize,
                 }
@@ -308,8 +307,8 @@ impl VM {
 
             if trace {
                 self.print_stack();
-                for ip in 0.max(self.ip - 3)..(self.program.len() as isize).min(self.ip + 3isize) {
-                    let instr = &self.program[ip as usize];
+                for ip in 0.max(self.ip - 3)..(self.instrs.len() as isize).min(self.ip + 3isize) {
+                    let instr = &self.instrs[ip as usize];
                     if ip == self.ip {
                         println!(
                             "<{:08x}:\t{instr}\t\t<- {}",
@@ -323,7 +322,7 @@ impl VM {
                 println!();
             }
 
-            let instr = &self.program[self.ip as usize];
+            let instr = &self.instrs[self.ip as usize];
             let ip_offset: isize = {
                 match instr {
                     Instruction::Add => {
@@ -410,8 +409,14 @@ impl VM {
                                         args.into(),
                                     ) {
                                         ROk(value) => {
+                                            let result = self.program.get_symbol(RESULT).expect(
+                                                "The RESULT symbol is missing from the program.",
+                                            );
                                             self.stack.push(
-                                                <FfiValue as Into<Value>>::into(value).into(),
+                                                <(FfiValue, &Value) as Into<Value>>::into((
+                                                    value, result,
+                                                ))
+                                                .into(),
                                             );
                                         }
                                         RErr(e) => {
@@ -1073,6 +1078,29 @@ impl VM {
 
                         1
                     }
+                    Instruction::ListPush => {
+                        let element = self.stack.pop().unwrap();
+                        let list = self.stack.pop().unwrap();
+                        let list = list.into_pointer();
+                        match &*s_read!(list) {
+                            Value::Vector { inner, .. } => {
+                                let mut inner = s_write!(inner);
+                                inner.push(element.into_pointer());
+                            }
+                            _ => {
+                                return Err(BubbaError::ValueError {
+                                    location: location!(),
+                                    source: Box::new(ChaChaError::NotIndexable {
+                                        span: self.get_span(),
+                                        location: location!(),
+                                    }),
+                                }
+                                .into());
+                            }
+                        }
+
+                        1
+                    }
                     Instruction::MakeLambdaPointer(name, frame_size) => {
                         let captures = self.stack[self.fp - arity - local_count - 3..self.fp - 3]
                             .iter()
@@ -1113,6 +1141,11 @@ impl VM {
                                     let name = ty.type_name();
                                     name.to_owned()
                                 }
+                                // Value::Vector { ty, .. } => {
+                                //     let ty = s_read!(ty);
+                                //     let name = ty.type_name();
+                                //     name.to_owned()
+                                // }
                                 oopsie => unreachable!("{oopsie:?}"),
                             };
 
@@ -1513,16 +1546,36 @@ impl VM {
 
                         // Fetch the local count from the stack, under the func addr.
                         let stack_local_count = &self.stack[self.fp - frame_size - 3 + 1];
-                        dbg!(&self.fp, &frame_size, &stack_local_count, local_count);
-                        local_count =
-                            stack_local_count
-                                .clone()
-                                .into_value()
-                                .try_into()
-                                .map_err(|e| BubbaError::ValueError {
-                                    source: Box::new(e),
-                                    location: location!(),
-                                })?;
+
+                        // This feels pretty gross. It's trying to get the local count
+                        // from the stack. If the type conversion fails, then it looks
+                        // to see if there is a FubarPointer at the top of the frame
+                        // and pulls the value from there.
+                        //
+                        // Why would there be a pointer named Fubar at the top of
+                        // the frame? Well, that's what is put there when we are
+                        // invoking a function on a plugin.
+                        local_count = match stack_local_count.clone().into_value().try_into() {
+                            Ok(local_count) => local_count,
+                            Err(e) => {
+                                let pointer = &self.stack[self.fp - frame_size - 3];
+                                let pointer = pointer.clone().into_value();
+                                if let Value::FubarPointer {
+                                    name: _,
+                                    frame_size,
+                                    captures: _,
+                                } = pointer
+                                {
+                                    frame_size
+                                } else {
+                                    return Err(BubbaError::ValueError {
+                                        source: Box::new(e),
+                                        location: location!(),
+                                    }
+                                    .into());
+                                }
+                            }
+                        };
 
                         self.stack.push(result);
 
@@ -1554,8 +1607,9 @@ impl VM {
                     Instruction::TestEq => {
                         let b = self.stack.pop().unwrap();
                         let a = self.stack.pop().unwrap();
-                        self.stack
-                            .push(Value::Boolean(a.into_value() == b.into_value()).into());
+                        let a = a.into_value();
+                        let b = b.into_value();
+                        self.stack.push(Value::Boolean(a == b).into());
 
                         1
                     }
@@ -1686,6 +1740,65 @@ impl VM {
             };
 
             self.ip += ip_offset;
+        }
+    }
+}
+
+impl From<(FfiValue, &Value)> for Value {
+    fn from((ffi_value, ty): (FfiValue, &Value)) -> Self {
+        match ffi_value {
+            FfiValue::Boolean(bool_) => Self::Boolean(bool_),
+            FfiValue::Empty => Self::Empty,
+            // FfiValue::Error(e) => Self::Error(e.into()),
+            FfiValue::Float(num) => Self::Float(num),
+            FfiValue::Integer(num) => Self::Integer(num),
+            FfiValue::Option(option) => match option {
+                ROption::RNone => Self::Empty,
+                ROption::RSome(value) => {
+                    <(FfiValue, &Value) as Into<Value>>::into((RBox::into_inner(value), ty))
+                }
+            },
+            FfiValue::ProxyType(plugin) => Self::ProxyType {
+                module: plugin.module.into(),
+                obj_ty: plugin.ty.into(),
+                id: plugin.id.into(),
+                plugin: new_ref!(PluginType, plugin.plugin),
+            },
+            FfiValue::Range(range) => Self::Range(range.start..range.end),
+            FfiValue::Result(result) => {
+                let tuple = match result {
+                    RResult::RErr(err) => TupleEnum {
+                        variant: "Err".to_owned(),
+                        value: new_ref!(
+                            Value,
+                            <(FfiValue, &Value) as Into<Value>>::into((RBox::into_inner(err), ty,))
+                        ),
+                    },
+                    RResult::ROk(ok) => TupleEnum {
+                        variant: "Ok".to_owned(),
+                        value: new_ref!(
+                            Value,
+                            <(FfiValue, &Value) as Into<Value>>::into((RBox::into_inner(ok), ty))
+                        ),
+                    },
+                };
+
+                let Value::ValueType(ty) = ty else {
+                    unreachable!()
+                };
+
+                Value::Enumeration(EnumVariant::Tuple(
+                    (new_ref!(ValueType, ty.to_owned()), "Result".to_owned()),
+                    new_ref!(TupleEnum, tuple),
+                ))
+            }
+            FfiValue::String(str_) => Self::String(str_.into()),
+            // FfiValue::UserType(uuid) => Self::UserType(new_ref!(UserType, uuid.into())),
+            FfiValue::Uuid(uuid) => Self::Uuid(uuid.into()),
+            // FfiValue::Vector(vec) => {
+            //     Self::Vector(vec.into_iter().map(|v| new_ref!(Value, v.into())).collect())
+            // }
+            _ => Self::Unknown,
         }
     }
 }

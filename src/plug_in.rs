@@ -97,6 +97,17 @@ pub trait Plugin: Clone + Debug + Display + Send + Sync {
 }
 
 pub type PluginType = Plugin_TO<'static, RBox<()>>;
+// #[derive(Clone,Debug)]
+// pub struct PluginType {
+//     pub(crate) name: String,
+//     pub(crate) inner: Plugin_TO<'static, RBox<()>>,
+// }
+
+// impl PartialEq for PluginType {
+//     fn eq(&self, other: &Self) -> bool {
+//         self.name == other.name
+//     }
+// }
 
 /// The root module of a`plugin` dynamic library.
 ///

@@ -152,6 +152,7 @@ pub enum Instruction {
     ///
     ListIndex,
     ListLength,
+    ListPush,
     /// Local Cardinality
     ///
     /// This is a pseudo-instruction to store the number of local variables in
@@ -415,6 +416,7 @@ impl fmt::Display for Instruction {
             ),
             Instruction::ListIndex => write!(f, "{}", opcode_style.paint("idx ")),
             Instruction::ListLength => write!(f, "{}", opcode_style.paint("len ")),
+            Instruction::ListPush => write!(f, "{}", opcode_style.paint("lpush")),
             Instruction::LocalCardinality(name) => write!(
                 f,
                 "{} {}",

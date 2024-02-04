@@ -27,10 +27,10 @@ use expression::{
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub const BUILD_TIME: &str = include!(concat!(env!("OUT_DIR"), "/timestamp.txt"));
 
-#[derive(Debug, Snafu)]
+#[derive(Clone, Debug, Snafu)]
 pub struct Error(BubbaError);
 
-#[derive(Debug, Snafu)]
+#[derive(Clone, Debug, Snafu)]
 pub(crate) enum BubbaError {
     #[snafu(display("\n{}: `{message}`\n  --> {}::{}::{}", ERR_CLR.bold().paint("error"), location.file, location.line, location.column))]
     InternalCompilerError { location: Location, message: String },
@@ -437,7 +437,7 @@ fn compile_function(func: &RefType<Function>, context: &mut Context) -> Result<C
     let body = s_read!(body);
     let params = func.r13_parameter(&lu_dog);
 
-    log::debug!(target: "instr", "{}: {}\n  --> {}:{}:{}", POP_CLR.paint("compile_function"), func.name, file!(), line!(), column!());
+    log::debug!(target: "instr", "{}: {}\n  --> {}:{}:{}", ERR_CLR.paint("compile_function"), func.name, file!(), line!(), column!());
 
     // I need to iterate over the parameters to get the name of the parameter.
     if !params.is_empty() {
@@ -1045,7 +1045,8 @@ async fn async_get(urls: [String]) -> Future<[Result<string, HttpError>]> {
         print(url);
         let task = chacha::spawn(async || -> Result<string, HttpError> {
             // This creates a request and sends it.
-            let get = client.get(url).await.send().await;
+            let get = client.get(url).await;
+            let get = get.send().await;
             match get {
                 Result::<Response, HttpError>::Ok(response) => {
                     let text = response.text().await;
@@ -1074,10 +1075,11 @@ async fn async_get(urls: [String]) -> Future<[Result<string, HttpError>]> {
 
 async fn main() -> Future<()> {
     let requests = [
-        "https://en.wikipedia.org/wiki/Main_Page",
+        "https://10.0.1.1",
+        // "https://www.rust-lang.org/",
+        // "https://en.wikipedia.org/wiki/Main_Page",
         "https://en.wikipedi.org/wiki/Main_Page",
-        "https://www.rust-lang.org/",
-        "https://www.github.com/",
+        // "https://www.github.com/",
     ];
     let results = async_get(requests).await;
 

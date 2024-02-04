@@ -152,11 +152,6 @@ pub(in crate::bubba::compiler) fn compile(
 
     dbg!(&iter_index, &iter_ident_index);
 
-    compile_expression(&body, &mut inner_thonk, context, body_span)?;
-    for _ in 0..inner_thonk.get_frame_size() {
-        thonk.increment_frame_size();
-    }
-
     // Store the starting value
     // Here's where that extra work comes in when iterating over a list.
 
@@ -273,6 +268,11 @@ pub(in crate::bubba::compiler) fn compile(
             }
             .into())
         }
+    }
+
+    compile_expression(&body, &mut inner_thonk, context, body_span)?;
+    for _ in 0..inner_thonk.get_frame_size() {
+        thonk.increment_frame_size();
     }
 
     let top_of_loop = thonk.get_instruction_card() as isize;

@@ -2,7 +2,7 @@ use snafu::{location, Location};
 use uuid::Uuid;
 
 #[cfg(feature = "async")]
-use crate::keywords::SPAWN;
+use crate::keywords::{PUSH, SPAWN};
 
 use crate::{
     bubba::{
@@ -228,7 +228,7 @@ fn compile_function_call(
     thonk: &mut CThonk,
     context: &mut Context,
 ) -> Result<Option<ValueType>> {
-    log::debug!(target: "instr", "{}: {}:{}:{}", POP_CLR.paint("compile_function_call"), file!(), line!(), column!());
+    log::debug!(target: "instr", "{}: {name}\n -> {}:{}:{}", POP_CLR.paint("compile_function_call"), file!(), line!(), column!());
 
     let lu_dog = context.lu_dog_heel();
     let lu_dog = s_read!(lu_dog);
@@ -267,7 +267,7 @@ fn compile_method_call(
     thonk: &mut CThonk,
     context: &mut Context,
 ) -> Result<Option<ValueType>> {
-    log::debug!(target: "instr", "{}: {}:{}:{}", POP_CLR.paint("compile_method_call"), file!(), line!(), column!());
+    log::debug!(target: "instr", "{}: {name}\n  -> {}:{}:{}", POP_CLR.paint("compile_method_call"), file!(), line!(), column!());
 
     let lu_dog = context.lu_dog_heel();
     let lu_dog = s_read!(lu_dog);
@@ -278,6 +278,24 @@ fn compile_method_call(
         let span = get_span(&expr, &lu_dog);
         // Evaluate the LHS to get at the underlying value/instance.
         let result = compile_expression(&expr, thonk, context, span);
+
+        if name == PUSH {
+            match result.clone()?.unwrap().subtype {
+                ValueTypeEnum::List(_) => {
+                    for expr in args {
+                        let span = get_span(expr, &lu_dog);
+                        compile_expression(expr, thonk, context, span)?;
+                    }
+
+                    thonk.insert_instruction(Instruction::ListPush, location!());
+
+                    return result;
+                }
+                _ => unreachable!(),
+            }
+        }
+        dbg!(&result);
+
         thonk.insert_instruction(
             Instruction::MethodLookup(new_ref!(String, name)),
             location!(),
@@ -287,6 +305,8 @@ fn compile_method_call(
         panic!();
     };
 
+    // Don't forget that the first one of these is self. So it's effectively
+    // re-evaluating the call.expression above. Somehow it's plumbed to do that.
     for expr in args {
         let span = get_span(expr, &lu_dog);
         compile_expression(expr, thonk, context, span)?;
@@ -411,9 +431,11 @@ fn compile_static_method_call(
             SPAWN => {
                 let inner = &args[0];
                 let inner_span = get_span(inner, &lu_dog);
+                dbg!("SPAWN");
                 let result = compile_expression(inner, thonk, context, inner_span);
 
                 thonk.insert_instruction(Instruction::Call(0), location!());
+                dbg!("SPAWN_END");
 
                 result
             }

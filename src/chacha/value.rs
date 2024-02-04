@@ -35,8 +35,8 @@ use crate::{
 #[repr(C)]
 #[derive(Clone, Debug, StableAbi)]
 pub struct FfiRange {
-    start: DwarfInteger,
-    end: DwarfInteger,
+    pub(crate) start: DwarfInteger,
+    pub(crate) end: DwarfInteger,
 }
 
 #[repr(C)]
@@ -1781,6 +1781,7 @@ impl std::cmp::PartialEq for Value {
                     plugin: _,
                 },
             ) => a == b,
+            (Value::Plugin(a), Value::Plugin(b)) => s_read!(a).name() == s_read!(b).name(),
             (Value::String(a), Value::String(b)) => a == b,
             (Value::Struct(a), Value::Struct(b)) => *s_read!(a) == *s_read!(b),
             (Value::Uuid(a), Value::Uuid(b)) => a == b,
@@ -1823,7 +1824,9 @@ impl PartialEq for UserTypeAttribute {
                 return false;
             }
 
-            if !s_read!(v).eq(&s_read!(other.0.get(k).unwrap())) {
+            let ov = other.0.get(k).unwrap();
+
+            if !s_read!(v).eq(&s_read!(ov)) {
                 return false;
             }
         }
@@ -1836,8 +1839,8 @@ impl Eq for UserTypeAttribute {}
 
 #[derive(Clone, Debug)]
 pub struct TupleEnum {
-    variant: String,
-    value: RefType<Value>,
+    pub(crate) variant: String,
+    pub(crate) value: RefType<Value>,
 }
 
 impl PartialEq for TupleEnum {
