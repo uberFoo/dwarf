@@ -421,7 +421,7 @@ pub enum Dirty {
 #[derive(Clone, Debug)]
 pub struct Context {
     /// The path to the source.
-    pub source: String,
+    pub source_path: String,
     /// This is the compiled source code.
     pub lu_dog: RefType<LuDogStore>,
     /// These are the plugins that represent imported domains.
@@ -451,7 +451,7 @@ impl Context {
 impl Default for Context {
     fn default() -> Self {
         Self {
-            source: "unknown".into(),
+            source_path: "unknown".into(),
             lu_dog: new_ref!(LuDogStore, LuDogStore::new()),
             models: HashMap::default(),
             dirty: Vec::default(),

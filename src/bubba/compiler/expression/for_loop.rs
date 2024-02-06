@@ -10,7 +10,7 @@ use crate::{
     lu_dog::{ValueType, ValueTypeEnum},
     new_ref, s_read,
     sarzak::Ty,
-    NewRef, RefType, SarzakStorePtr, Span, Value,
+    NewRef, RefType, SarzakStorePtr, Span, Value, POP_CLR,
 };
 
 const LIST_VAR: &str = "$$list_value";
@@ -21,7 +21,7 @@ pub(in crate::bubba::compiler) fn compile(
     context: &mut Context,
     span: Span,
 ) -> Result<Option<ValueType>> {
-    log::debug!(target: "instr", "{}:{}:{}", file!(), line!(), column!());
+    log::debug!(target: "instr", "{}\n  --> {}:{}:{}", POP_CLR.paint("compile_for_loop"), file!(), line!(), column!());
 
     let lu_dog = context.lu_dog_heel().clone();
     let lu_dog = s_read!(lu_dog);
@@ -149,8 +149,6 @@ pub(in crate::bubba::compiler) fn compile(
             .into())
         }
     };
-
-    dbg!(&iter_index, &iter_ident_index);
 
     // Store the starting value
     // Here's where that extra work comes in when iterating over a list.
@@ -362,6 +360,7 @@ mod test {
         dwarf::{new_lu_dog, parse_dwarf},
         sarzak::MODEL as SARZAK_MODEL,
     };
+
     #[test]
     fn test_for_in_range() {
         let _ = env_logger::builder().is_test(true).try_init();
@@ -389,10 +388,7 @@ mod test {
         println!("{program}");
 
         assert_eq!(program.get_thonk_card(), 1);
-        assert_eq!(
-            program.get_thonk("main").unwrap().get_instruction_card(),
-            21
-        );
+        assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 21);
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(45));
     }
@@ -426,10 +422,7 @@ mod test {
         println!("{program}");
 
         assert_eq!(program.get_thonk_card(), 1);
-        assert_eq!(
-            program.get_thonk("main").unwrap().get_instruction_card(),
-            36
-        );
+        assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 36);
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(900));
     }
@@ -462,10 +455,7 @@ mod test {
         println!("{program}");
 
         assert_eq!(program.get_thonk_card(), 1);
-        assert_eq!(
-            program.get_thonk("main").unwrap().get_instruction_card(),
-            23
-        );
+        assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 23);
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(45));
     }
@@ -501,7 +491,7 @@ mod test {
         println!("{program}");
 
         assert_eq!(program.get_thonk_card(), 2);
-        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 7);
+        assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 7);
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(45));
     }
@@ -534,10 +524,7 @@ mod test {
         println!("{program}");
 
         assert_eq!(program.get_thonk_card(), 1);
-        assert_eq!(
-            program.get_thonk("main").unwrap().get_instruction_card(),
-            34
-        );
+        assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 34);
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(15));
     }
@@ -570,10 +557,7 @@ mod test {
         println!("{program}");
 
         assert_eq!(program.get_thonk_card(), 1);
-        assert_eq!(
-            program.get_thonk("main").unwrap().get_instruction_card(),
-            33
-        );
+        assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 33);
 
         assert_eq!(
             &*s_read!(run_vm(&program).unwrap()),

@@ -427,8 +427,8 @@ impl PartialEq for EnumVariant {
         match (self, other) {
             (Self::Unit(_a, b, e), Self::Unit(_c, d, f)) => b == d && e == f,
             (Self::Struct(a), Self::Struct(b)) => *s_read!(a) == *s_read!(b),
-            (Self::Tuple(a, c), Self::Tuple(b, d)) => {
-                *s_read!(a.0) == *s_read!(b.0) && *s_read!(c) == *s_read!(d)
+            (Self::Tuple((a, _), c), Self::Tuple((b, _), d)) => {
+                *s_read!(a) == *s_read!(b) && *s_read!(c) == *s_read!(d)
             }
             _ => false,
         }

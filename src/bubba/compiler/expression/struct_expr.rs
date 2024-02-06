@@ -16,7 +16,7 @@ pub(in crate::bubba::compiler) fn compile(
     context: &mut Context,
     span: Span,
 ) -> Result<Option<ValueType>> {
-    log::debug!(target: "instr", "{}:{}:{}", file!(), line!(), column!());
+    log::debug!(target: "instr", "{}: {}:{}:{}", POP_CLR.paint("compile_struct_expr"), file!(), line!(), column!());
 
     let lu_dog = context.lu_dog_heel().clone();
     let lu_dog = s_read!(lu_dog);
@@ -179,7 +179,7 @@ mod test {
         println!("{program}");
         assert_eq!(program.get_thonk_card(), 1);
 
-        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 8);
+        assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 8);
         let run = run_vm(&program);
         assert!(run.is_ok());
 

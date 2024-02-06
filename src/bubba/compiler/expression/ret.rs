@@ -6,7 +6,7 @@ use crate::{
         instr::Instruction,
     },
     lu_dog::ValueType,
-    s_read, SarzakStorePtr, Span,
+    s_read, SarzakStorePtr, Span, POP_CLR,
 };
 
 pub(in crate::bubba::compiler) fn compile(
@@ -15,7 +15,7 @@ pub(in crate::bubba::compiler) fn compile(
     context: &mut Context,
     span: Span,
 ) -> Result<Option<ValueType>> {
-    log::debug!(target: "instr", "{}:{}:{}", file!(), line!(), column!());
+    log::debug!(target: "instr", "{}: {}:{}:{}", POP_CLR.paint("compile_return"), file!(), line!(), column!());
 
     let lu_dog = context.lu_dog_heel();
     let lu_dog = s_read!(lu_dog);

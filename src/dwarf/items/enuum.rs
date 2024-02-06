@@ -237,18 +237,23 @@ pub(crate) fn create_generic_enum(
 
     debug!("interring generic enum {enum_name}");
 
+    let name_without_generics = enum_name.split('<').collect::<Vec<_>>()[0];
+    debug!("name_without_generics {:?}", name_without_generics);
+
+    let mut path = name_without_generics.split(PATH_SEP).collect::<Vec<_>>();
+    path.pop();
+    let path = path.join(PATH_SEP) + PATH_SEP;
+
+    dbg!("bj", &enum_name, &path);
     let new_enum = Enumeration::new(
         enum_name.to_owned(),
-        context.path.clone(),
+        path.to_owned(),
         None,
         base_enum_impl.as_ref(),
         lu_dog,
     );
     let ty = ValueType::new_enumeration(true, &new_enum, lu_dog);
 
-    let name_without_generics = enum_name.split('<').collect::<Vec<_>>()[0];
-
-    debug!("name_without_generics {:?}", name_without_generics);
     let Some(ref id) = lu_dog.exhume_enumeration_id_by_name(name_without_generics) else {
         panic!("enum not found");
     };

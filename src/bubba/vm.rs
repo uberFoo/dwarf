@@ -18,7 +18,7 @@ use crate::{
     plug_in::{PluginModRef, PluginType},
     s_read, s_write,
     sarzak::{ObjectStore as SarzakStore, Ty, MODEL as SARZAK_MODEL},
-    ChaChaError, DwarfFloat, DwarfInteger, NewRef, RefType, Span, Value, PATH_SEP,
+    ChaChaError, DwarfInteger, NewRef, RefType, Span, Value,
 };
 
 use super::instr::{Instruction, Program};
@@ -82,17 +82,6 @@ impl std::fmt::Display for StackValue {
     }
 }
 
-// impl std::ops::Deref for StackValue {
-//     type Target = Value;
-
-//     fn deref(&self) -> &Self::Target {
-//         match self {
-//             StackValue::Pointer(p) => &*s_read!(p),
-//             StackValue::Value(v) => v,
-//         }
-//     }
-// }
-
 impl From<RefType<Value>> for StackValue {
     fn from(p: RefType<Value>) -> Self {
         StackValue::Pointer(p)
@@ -122,19 +111,20 @@ pub struct VM {
     home: PathBuf,
     captures: Option<Vec<RefType<Value>>>,
     program: Program,
+    labels: HashMap<String, usize>,
 }
 
 impl std::fmt::Debug for VM {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "ip: {}", self.ip)?;
         writeln!(f, "fp: {}", self.fp)?;
-        writeln!(f, "stack: {:?}", self.stack)?;
-        writeln!(f, "program: {:?}", self.instrs)?;
-        writeln!(f, "source_map: {:?}", self.source_map)?;
+        writeln!(f, "stack: ")?;
+        self.debug_stack(f)?;
         writeln!(f, "func_map: {:?}", self.func_map)?;
         writeln!(f, "args: {:?}", self.args)?;
         writeln!(f, "home_dir: {:?}", self.home)?;
         writeln!(f, "captures: {:?}", self.captures)?;
+        writeln!(f, "labels: {:?}", self.labels)?;
         Ok(())
     }
 }
@@ -146,8 +136,6 @@ impl VM {
         let Some(Value::ValueType(str_ty)) = program.get_symbol(STRING) else {
             panic!("No STRING symbol found.")
         };
-
-        dbg!(program.get_symbol(RESULT));
 
         if log_enabled!(target: "vm", Trace) {
             eprintln!("{program}");
@@ -172,22 +160,28 @@ impl VM {
             home: home.clone(),
             captures: None,
             program: program.clone(),
+            labels: HashMap::default(),
         };
 
         let mut tmp_mem: Vec<Instruction> = Vec::new();
         let mut i = 0;
         for thonk in program.iter() {
-            tmp_mem.append(&mut thonk.instructions.clone());
-            vm.source_map.append(&mut thonk.spans.clone());
+            tmp_mem.append(&mut thonk.instructions().to_owned());
+            vm.source_map.append(&mut thonk.spans().to_owned());
             vm.func_map
                 .insert(thonk.name().to_owned(), (i, thonk.frame_size()));
-            i += thonk.get_instruction_card();
+            i += thonk.instruction_card();
         }
 
         let mut missing_symbols = HashSet::default();
         // This is where we patch up the function calls.
-        for instr in tmp_mem.iter() {
+        for (addr, instr) in tmp_mem.iter().enumerate() {
             match instr {
+                Instruction::Label(name) => {
+                    let r_name = &*s_read!(name);
+                    vm.labels.insert(r_name.to_owned(), addr);
+                    vm.instrs.push(Instruction::Label(name.clone()));
+                }
                 Instruction::CallDestination(name) => {
                     let name = &*s_read!(name);
                     if let Some((ip, _frame_size)) = vm.func_map.get(name) {
@@ -291,6 +285,20 @@ impl VM {
         }
     }
 
+    fn debug_stack(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let len = self.stack.len();
+        for i in 0..len {
+            if i == self.fp {
+                write!(f, "\t{} ->\t", Colour::Green.bold().paint("fp"))?;
+            } else {
+                write!(f, "\t     \t")?;
+            }
+            writeln!(f, "stack {i}:\t{}", self.stack[i])?;
+        }
+
+        Ok(())
+    }
+
     fn inner_run(
         &mut self,
         mut arity: usize,
@@ -309,14 +317,27 @@ impl VM {
                 self.print_stack();
                 for ip in 0.max(self.ip - 3)..(self.instrs.len() as isize).min(self.ip + 3isize) {
                     let instr = &self.instrs[ip as usize];
+
+                    let src = if let Some(source) = self.program.get_source() {
+                        let span = self.source_map[ip as usize].clone();
+                        &source[span]
+                    } else {
+                        ""
+                    };
+
                     if ip == self.ip {
                         println!(
-                            "<{:08x}:\t{instr}\t\t<- {}",
+                            "<{:08x}:\t{instr}\t\t<- {}\t{}",
                             ip,
-                            Colour::Purple.bold().paint("ip")
+                            Colour::Purple.bold().paint("ip"),
+                            Colour::White.dimmed().paint(src)
                         );
                     } else {
-                        println!("<{:08x}:\t{instr}", ip);
+                        println!(
+                            "<{:08x}:\t{instr}\t\t\t{}",
+                            ip,
+                            Colour::White.dimmed().paint(src)
+                        );
                     }
                 }
                 println!();
@@ -391,7 +412,6 @@ impl VM {
                                     let args = s_read!(inner)
                                         .iter()
                                         .map(|v| {
-                                            dbg!(&v);
                                             <Value as Into<FfiValue>>::into((*s_read!(v)).clone())
                                         })
                                         .collect::<Vec<FfiValue>>();
@@ -839,6 +859,25 @@ impl VM {
 
                         1
                     }
+                    Instruction::Goto(label) => {
+                        let label = &*s_read!(label);
+                        if let Some(ip) = self.labels.get(label) {
+                            if trace {
+                                println!(
+                                    "\t\t{} {}",
+                                    Colour::Red.bold().paint("goto"),
+                                    Colour::Yellow.bold().paint(format!("0x{:08x}", *ip + 1))
+                                );
+                            }
+                            *ip as isize - self.ip
+                        } else {
+                            return Err(BubbaError::VmPanic {
+                                location: location!(),
+                                message: format!("Unknown label: {label}."),
+                            }
+                            .into());
+                        }
+                    }
                     Instruction::HaltAndCatchFire => {
                         let span = self.stack.pop().unwrap();
                         let span: std::ops::Range<usize> =
@@ -923,6 +962,7 @@ impl VM {
                             1
                         }
                     }
+                    Instruction::Label(_) => 1,
                     Instruction::ListIndex => {
                         let index = self.stack.pop().unwrap();
                         let list = self.stack.pop().unwrap();
@@ -936,7 +976,6 @@ impl VM {
                                     if index < vec.len() {
                                         self.stack.push(vec[index].clone().into());
                                     } else {
-                                        self.print_stack();
                                         eprintln!("{self:?}");
                                         return Err(BubbaError::ValueError {
                                             location: location!(),
@@ -1604,7 +1643,7 @@ impl VM {
 
                         1
                     }
-                    Instruction::TestEq => {
+                    Instruction::TestEqual => {
                         let b = self.stack.pop().unwrap();
                         let a = self.stack.pop().unwrap();
                         let a = a.into_value();

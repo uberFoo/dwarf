@@ -440,7 +440,7 @@ pub fn new_lu_dog(
     };
 
     Ok(InterContext {
-        source: file_name,
+        source_path: file_name,
         lu_dog: new_ref!(LuDogStore, lu_dog),
         models,
         dirty,
@@ -2415,7 +2415,7 @@ pub(super) fn inter_expression(
                                             let expr =
                                                 VariableExpression::new(name.to_owned(), lu_dog);
                                             debug!("created a new variable expression {:?}", expr);
-                                            Expression::new_variable_expression(true, &expr, lu_dog)
+                                             Expression::new_variable_expression(true, &expr, lu_dog)
                                         };
 
                                         let value =

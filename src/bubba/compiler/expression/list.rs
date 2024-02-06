@@ -6,7 +6,7 @@ use crate::{
         instr::Instruction,
     },
     lu_dog::ValueType,
-    new_ref, s_read, NewRef, RefType, SarzakStorePtr, Span, Value,
+    new_ref, s_read, NewRef, RefType, SarzakStorePtr, Span, Value, POP_CLR,
 };
 
 pub(in crate::bubba::compiler) fn compile_list_element(
@@ -14,7 +14,7 @@ pub(in crate::bubba::compiler) fn compile_list_element(
     thonk: &mut CThonk,
     context: &mut Context,
 ) -> Result<Option<ValueType>> {
-    log::debug!(target: "instr", "{}:{}:{}", file!(), line!(), column!());
+    log::debug!(target: "instr", "{}\n  --> {}:{}:{}", POP_CLR.paint("compile_list_element"), file!(), line!(), column!());
 
     let lu_dog = context.lu_dog_heel().clone();
     let lu_dog = s_read!(lu_dog);
@@ -39,7 +39,7 @@ pub(in crate::bubba::compiler) fn compile_list_expression(
     context: &mut Context,
     entry_span: Span,
 ) -> Result<Option<ValueType>> {
-    log::debug!(target: "instr", "{}:{}:{}", file!(), line!(), column!());
+    log::debug!(target: "instr", "{}\n  --> {}:{}:{}", POP_CLR.paint("compile_list_expression"), file!(), line!(), column!());
 
     let lu_dog = context.lu_dog_heel().clone();
     let lu_dog = s_read!(lu_dog);
@@ -93,4 +93,17 @@ pub(in crate::bubba::compiler) fn compile_list_expression(
     }
 
     Ok(None)
+}
+
+#[cfg(test)]
+mod test {
+
+    use crate::{
+        bubba::compiler::{
+            test::{get_dwarf_home, run_vm},
+            *,
+        },
+        dwarf::{new_lu_dog, parse_dwarf},
+        sarzak::MODEL as SARZAK_MODEL,
+    };
 }

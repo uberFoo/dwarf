@@ -113,6 +113,7 @@ pub enum Instruction {
     /// ## Stack Effect
     ///
     FieldWrite,
+    Goto(RefType<String>),
     /// Stop processing and panic the VM
     ///
     /// ## Stack Effect
@@ -150,6 +151,7 @@ pub enum Instruction {
     ///
     /// The stack is one element shorter after this instruction.
     ///
+    Label(RefType<String>),
     ListIndex,
     ListLength,
     ListPush,
@@ -279,6 +281,7 @@ pub enum Instruction {
     /// ## Stack Effect
     ///
     StoreLocal(usize),
+    StringLength,
     /// Compare the top two values on the stack.
     ///
     /// a == b
@@ -292,7 +295,7 @@ pub enum Instruction {
     ///
     /// Net effect -1.
     ///
-    TestEq,
+    TestEqual,
     /// Greater Than Operator (>)
     ///
     /// ## Stack Effect
@@ -395,6 +398,12 @@ impl fmt::Display for Instruction {
                 operand_style.paint(count.to_string())
             ),
             Instruction::FieldWrite => write!(f, "{}", opcode_style.paint("field_write")),
+            Instruction::Goto(label) => write!(
+                f,
+                "{} {}",
+                opcode_style.paint("goto"),
+                operand_style.paint(s_read!(label).to_string())
+            ),
             Instruction::HaltAndCatchFire => write!(f, "{}", opcode_style.paint("hcf 🔥")),
             Instruction::Jump(offset) => write!(
                 f,
@@ -413,6 +422,12 @@ impl fmt::Display for Instruction {
                 "{} {}",
                 opcode_style.paint("jift"),
                 operand_style.paint(address.to_string())
+            ),
+            Instruction::Label(name) => write!(
+                f,
+                "{} {}",
+                opcode_style.paint("label"),
+                operand_style.paint(s_read!(name).to_string())
             ),
             Instruction::ListIndex => write!(f, "{}", opcode_style.paint("idx ")),
             Instruction::ListLength => write!(f, "{}", opcode_style.paint("len ")),
@@ -484,8 +499,9 @@ impl fmt::Display for Instruction {
                 opcode_style.paint("store"),
                 operand_style.paint(index.to_string())
             ),
+            Instruction::StringLength => write!(f, "{}", opcode_style.paint("slen ")),
             Instruction::Subtract => write!(f, "{}", opcode_style.paint("sub ")),
-            Instruction::TestEq => write!(f, "{}", opcode_style.paint("eq  ")),
+            Instruction::TestEqual => write!(f, "{}", opcode_style.paint("eq  ")),
             Instruction::TestGreaterThan => write!(f, "{}", opcode_style.paint("gt  ")),
             Instruction::TestLessThan => write!(f, "{}", opcode_style.paint("lt  ")),
             Instruction::TestLessThanOrEqual => write!(f, "{}", opcode_style.paint("lte ")),
@@ -503,9 +519,9 @@ impl fmt::Display for Instruction {
 pub struct Program {
     compiler_version: String,
     compiler_build_ts: String,
-    // libs: HashMap<String, PluginType>,
     symbols: HashMap<String, Value>,
     thonks: HashMap<String, Thonk>,
+    source: Option<String>,
 }
 
 impl Program {
@@ -515,7 +531,16 @@ impl Program {
             compiler_build_ts: build_time,
             symbols: HashMap::default(),
             thonks: HashMap::default(),
+            source: None,
         }
+    }
+
+    pub(crate) fn set_source(&mut self, source: String) {
+        self.source = Some(source);
+    }
+
+    pub(crate) fn get_source(&self) -> Option<&str> {
+        self.source.as_deref()
     }
 
     pub(crate) fn add_symbol(&mut self, name: String, value: Value) {
@@ -551,7 +576,7 @@ impl Program {
     }
 
     pub(crate) fn get_instruction_count(&self) -> usize {
-        self.thonks.values().map(|t| t.get_instruction_card()).sum()
+        self.thonks.values().map(|t| t.instruction_card()).sum()
     }
 }
 
@@ -575,7 +600,7 @@ impl fmt::Display for Program {
         for (name, thonk) in self.thonks.iter() {
             writeln!(f, "{name} ({}):", thonk.frame_size())?;
             thonk.print_in_program(offset, f)?;
-            offset += thonk.get_instruction_card();
+            offset += thonk.instruction_card();
         }
         Ok(())
     }
@@ -584,8 +609,8 @@ impl fmt::Display for Program {
 #[derive(Clone, Debug)]
 pub struct Thonk {
     name: String,
-    pub(crate) instructions: Vec<Instruction>,
-    pub(crate) spans: Vec<Span>,
+    instructions: Vec<Instruction>,
+    spans: Vec<Span>,
     frame_size: usize,
 }
 
@@ -615,12 +640,25 @@ impl Thonk {
         &self.name
     }
 
-    pub(crate) fn get_instruction_card(&self) -> usize {
+    pub(crate) fn instruction_card(&self) -> usize {
         self.instructions.len()
+    }
+
+    pub(crate) fn instructions(&self) -> &[Instruction] {
+        &self.instructions
+    }
+
+    pub(crate) fn spans(&self) -> &[Span] {
+        &self.spans
     }
 
     pub(crate) fn increment_frame_size(&mut self) {
         self.frame_size += 1;
+    }
+
+    pub(crate) fn append_thonk(&mut self, thonk: &Thonk) {
+        self.instructions.extend(thonk.instructions.iter().cloned());
+        self.spans.extend(thonk.spans.iter().cloned());
     }
 
     #[inline]

@@ -9,7 +9,7 @@ use crate::{
         BinaryEnum, BooleanOperatorEnum, ComparisonEnum, ExpressionEnum, FieldAccessTargetEnum,
         OperatorEnum, UnaryEnum, ValueType,
     },
-    new_ref, s_read, NewRef, RefType, SarzakStorePtr, Span, Value,
+    new_ref, s_read, NewRef, RefType, SarzakStorePtr, Span, Value, POP_CLR,
 };
 
 pub(in crate::bubba::compiler) fn compile(
@@ -18,7 +18,7 @@ pub(in crate::bubba::compiler) fn compile(
     context: &mut Context,
     span: Span,
 ) -> Result<Option<ValueType>> {
-    log::debug!(target: "instr", "{}:{}:{}", file!(), line!(), column!());
+    log::debug!(target: "instr", "{}: {}:{}:{}", POP_CLR.paint("compile_operator"), file!(), line!(), column!());
 
     let lu_dog = context.lu_dog_heel().clone();
     let lu_dog = s_read!(lu_dog);
@@ -143,7 +143,7 @@ pub(in crate::bubba::compiler) fn compile(
                 ComparisonEnum::Equal(_) => {
                     compile_expression(&lhs, thonk, context, lhs_span)?;
                     compile_expression(&rhs, thonk, context, rhs_span)?;
-                    thonk.insert_instruction_with_span(Instruction::TestEq, span, location!());
+                    thonk.insert_instruction_with_span(Instruction::TestEqual, span, location!());
                 }
                 ComparisonEnum::GreaterThan(_) => {
                     compile_expression(&lhs, thonk, context, lhs_span)?;
@@ -222,7 +222,7 @@ mod test {
         println!("{program}");
 
         assert_eq!(program.get_thonk_card(), 1);
-        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 4);
+        assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 4);
 
         assert_eq!(
             &*s_read!(run_vm(&program).unwrap()),
@@ -252,7 +252,7 @@ mod test {
         println!("{program}");
 
         assert_eq!(program.get_thonk_card(), 1);
-        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 4);
+        assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 4);
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(3));
     }
@@ -280,7 +280,7 @@ mod test {
         println!("{program}");
 
         assert_eq!(program.get_thonk_card(), 1);
-        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 4);
+        assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 4);
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(10));
     }
@@ -308,7 +308,7 @@ mod test {
         println!("{program}");
 
         assert_eq!(program.get_thonk_card(), 1);
-        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 4);
+        assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 4);
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(2));
     }
@@ -338,7 +338,7 @@ mod test {
         println!("{program}");
 
         assert_eq!(program.get_thonk_card(), 1);
-        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 6);
+        assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 6);
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(10));
     }
@@ -366,7 +366,7 @@ mod test {
 
         assert_eq!(program.get_thonk_card(), 1);
 
-        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 4);
+        assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 4);
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &true.into());
     }
@@ -394,7 +394,7 @@ mod test {
 
         assert_eq!(program.get_thonk_card(), 1);
 
-        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 4);
+        assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 4);
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &true.into());
     }
@@ -422,7 +422,7 @@ mod test {
 
         assert_eq!(program.get_thonk_card(), 1);
 
-        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 3);
+        assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 3);
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &true.into());
     }

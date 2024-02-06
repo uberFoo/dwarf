@@ -6,7 +6,7 @@ use crate::{
         instr::Instruction,
     },
     lu_dog::{BooleanLiteralEnum, LiteralEnum, ValueType},
-    new_ref, s_read, NewRef, RefType, SarzakStorePtr, Span, Value,
+    new_ref, s_read, NewRef, RefType, SarzakStorePtr, Span, Value, POP_CLR,
 };
 
 pub(in crate::bubba::compiler) fn compile(
@@ -15,7 +15,7 @@ pub(in crate::bubba::compiler) fn compile(
     context: &mut Context,
     span: Span,
 ) -> Result<Option<ValueType>> {
-    log::debug!(target: "instr", "{}:{}:{}", file!(), line!(), column!());
+    log::debug!(target: "instr", "{}\n  --> {}:{}:{}", POP_CLR.paint("compile_literal"), file!(), line!(), column!());
 
     let lu_dog = context.lu_dog_heel().clone();
     let lu_dog = s_read!(lu_dog);

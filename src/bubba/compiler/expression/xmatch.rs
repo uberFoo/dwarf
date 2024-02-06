@@ -1,4 +1,5 @@
 use snafu::{location, Location};
+use uuid::Uuid;
 
 use crate::{
     bubba::{
@@ -6,7 +7,7 @@ use crate::{
         instr::Instruction,
     },
     lu_dog::{DataStructureEnum, ExpressionEnum, ValueType},
-    new_ref, s_read, NewRef, RefType, SarzakStorePtr, Span, Value,
+    new_ref, s_read, NewRef, RefType, SarzakStorePtr, Span, Value, POP_CLR,
 };
 
 pub(in crate::bubba::compiler) fn compile(
@@ -15,7 +16,7 @@ pub(in crate::bubba::compiler) fn compile(
     context: &mut Context,
     span: Span,
 ) -> Result<Option<ValueType>> {
-    log::debug!(target: "instr", "{}:{}:{}", file!(), line!(), column!());
+    log::debug!(target: "instr", "{}: {}:{}:{}", POP_CLR.paint("compile_match"), file!(), line!(), column!());
 
     let lu_dog = context.lu_dog_heel().clone();
     let lu_dog = s_read!(lu_dog);
@@ -27,10 +28,11 @@ pub(in crate::bubba::compiler) fn compile(
     let scrutinee = match_expr.r91_expression(&lu_dog)[0].clone();
     let scrutinee_span = get_span(&scrutinee, &lu_dog);
 
-    // Compiling the scrutinee
-    compile_expression(&scrutinee, thonk, context, scrutinee_span)?;
-
+    let label = format!("{}", Uuid::new_v4());
     for pattern in patterns {
+        // Compiling the scrutinee
+        compile_expression(&scrutinee, thonk, context, scrutinee_span.clone())?;
+
         log::debug!(target: "instr", "{}:{}:{}", file!(), line!(), column!());
 
         // We push this up here because of the pattern matching needs it's own context.
@@ -39,9 +41,6 @@ pub(in crate::bubba::compiler) fn compile(
         let pattern = s_read!(pattern);
         let match_expr = pattern.r87_expression(&lu_dog)[0].clone();
         let pattern_expr = pattern.r92_expression(&lu_dog)[0].clone();
-
-        // Duplicate the scrutinee with which to compare against.
-        thonk.insert_instruction(Instruction::Dup, location!());
 
         // Compile the match expression.
         match &s_read!(match_expr).subtype {
@@ -80,8 +79,6 @@ pub(in crate::bubba::compiler) fn compile(
                                     literal::compile(literal, thonk, context, span.clone())?;
                                 }
                                 ExpressionEnum::VariableExpression(ref id) => {
-                                    log::debug!(target: "instr", "{}:{}:{}", file!(), line!(), column!());
-
                                     let var = lu_dog.exhume_variable_expression(id).unwrap();
                                     let var = s_read!(var);
                                     let expr = var.r15_expression(&lu_dog)[0].clone();
@@ -111,17 +108,7 @@ pub(in crate::bubba::compiler) fn compile(
                                         Instruction::StoreLocal(idx),
                                         location!(),
                                     );
-                                    // let pattern_span = get_span(&pattern_expr, &lu_dog);
-
-                                    // compile_expression(
-                                    //     &pattern_expr,
-                                    //     thonk,
-                                    //     context,
-                                    //     pattern_span,
-                                    // )?;
                                 }
-
-                                // thonk.add_instruction(Instruction::Dup, location!());
                                 todo => {
                                     todo!("Match expression, field expression, type: {todo:?}");
                                 }
@@ -181,7 +168,6 @@ pub(in crate::bubba::compiler) fn compile(
                 let var = s_read!(var);
                 let expr = var.r15_expression(&lu_dog)[0].clone();
                 let value = s_read!(expr).r11_x_value(&lu_dog)[0].clone();
-                let value = s_read!(expr).r11_x_value(&lu_dog)[0].clone();
                 let ty = s_read!(value).r24_value_type(&lu_dog)[0].clone();
 
                 let idx = match context.insert_symbol(var.name.clone(), (*s_read!(ty)).clone()) {
@@ -193,17 +179,18 @@ pub(in crate::bubba::compiler) fn compile(
                 };
 
                 thonk.insert_instruction(Instruction::Dup, location!());
+                thonk.insert_instruction(Instruction::Dup, location!());
                 thonk.insert_instruction(Instruction::StoreLocal(idx), location!());
             }
             todo => todo!("Match expression type: {todo:?}"),
         }
 
-        thonk.insert_instruction(Instruction::TestEq, location!());
+        thonk.insert_instruction(Instruction::TestEqual, location!());
 
         // Compile the match block.
         let mut match_thonk = CThonk::new("match".to_owned());
 
-        log::debug!(target: "instr", "{}:{}:{}", file!(), line!(), column!());
+        log::debug!(target: "instr", "{}: {}:{}:{}", POP_CLR.paint("compile_pattern_expr"), file!(), line!(), column!());
         compile_expression(
             &pattern_expr,
             &mut match_thonk,
@@ -223,8 +210,11 @@ pub(in crate::bubba::compiler) fn compile(
         // Insert the compiled matching block
         thonk.append(match_thonk);
 
-        // Return if we matched.
-        thonk.insert_instruction(Instruction::Return, location!());
+        // Escape from New York
+        thonk.insert_instruction(
+            Instruction::Goto(new_ref!(String, label.clone())),
+            location!(),
+        );
 
         context.pop_scope();
     }
@@ -234,7 +224,7 @@ pub(in crate::bubba::compiler) fn compile(
     thonk.insert_instruction(
         Instruction::Push(new_ref!(
             Value,
-            context.extruder_context.source.clone().into()
+            context.extruder_context.source_path.clone().into()
         )),
         location!(),
     );
@@ -243,6 +233,8 @@ pub(in crate::bubba::compiler) fn compile(
         location!(),
     );
     thonk.insert_instruction(Instruction::HaltAndCatchFire, location!());
+
+    thonk.insert_instruction(Instruction::Label(new_ref!(String, label)), location!());
 
     Ok(None)
 }
@@ -288,10 +280,7 @@ mod test {
 
         assert_eq!(program.get_thonk_card(), 1);
 
-        assert_eq!(
-            program.get_thonk("main").unwrap().get_instruction_card(),
-            30
-        );
+        assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 31);
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(1));
     }
@@ -328,10 +317,7 @@ mod test {
 
         assert_eq!(program.get_thonk_card(), 1);
 
-        assert_eq!(
-            program.get_thonk("main").unwrap().get_instruction_card(),
-            32
-        );
+        assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 33);
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &4.into());
     }
@@ -365,10 +351,7 @@ mod test {
 
         assert_eq!(program.get_thonk_card(), 1);
 
-        assert_eq!(
-            program.get_thonk("main").unwrap().get_instruction_card(),
-            30
-        );
+        assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 31);
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &3.into());
     }
@@ -402,10 +385,7 @@ mod test {
 
         assert_eq!(program.get_thonk_card(), 1);
 
-        assert_eq!(
-            program.get_thonk("main").unwrap().get_instruction_card(),
-            30
-        );
+        assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 31);
 
         assert_eq!(
             &*s_read!(run_vm(&program).unwrap()),
@@ -454,10 +434,7 @@ mod test {
 
         assert_eq!(program.get_thonk_card(), 1);
 
-        assert_eq!(
-            program.get_thonk("main").unwrap().get_instruction_card(),
-            32
-        );
+        assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 32);
 
         assert_eq!(
             &*s_read!(run_vm(&program).unwrap()),
@@ -508,10 +485,7 @@ mod test {
 
         assert_eq!(program.get_thonk_card(), 1);
 
-        assert_eq!(
-            program.get_thonk("main").unwrap().get_instruction_card(),
-            53
-        );
+        assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 65);
 
         assert_eq!(
             &*s_read!(run_vm(&program).unwrap()),
@@ -553,10 +527,7 @@ mod test {
 
         assert_eq!(program.get_thonk_card(), 1);
 
-        assert_eq!(
-            program.get_thonk("main").unwrap().get_instruction_card(),
-            50
-        );
+        assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 50);
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(42));
     }
@@ -595,10 +566,7 @@ mod test {
 
         assert_eq!(program.get_thonk_card(), 1);
 
-        assert_eq!(
-            program.get_thonk("main").unwrap().get_instruction_card(),
-            56
-        );
+        assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 56);
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(42));
     }

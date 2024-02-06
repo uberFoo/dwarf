@@ -141,6 +141,10 @@ pub(in crate::dwarf::extruder) fn method_call_return_type(
             }
         },
         ValueTypeEnum::List(ref list) => match method.as_str() {
+            LEN => {
+                let ty = Ty::new_integer(context.sarzak);
+                ValueType::new_ty(true, &ty, lu_dog)
+            }
             MAP => {
                 if arg_ty.len() != 1 {
                     return Err(vec![DwarfError::WrongNumberOfArguments {

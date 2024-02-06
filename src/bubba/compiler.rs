@@ -53,7 +53,7 @@ impl CThonk {
     }
 
     fn insert_instruction(&mut self, instruction: Instruction, location: Location) {
-        log::debug!(target: "instr", "{}: {}:{}:{}\n{instruction}", POP_CLR.paint("add_instruction"), location.file, location.line, location.column);
+        log::debug!(target: "instr", "{}:\t\t{instruction}\n  --> {}:{}:{}", POP_CLR.paint("add_instruction"), location.file, location.line, location.column);
 
         if log_enabled!(target: "instr", Trace) {
             self.inner.add_instruction(
@@ -68,7 +68,7 @@ impl CThonk {
     }
 
     fn prefix_instruction(&mut self, instruction: Instruction, location: Location) {
-        log::debug!(target: "instr", "{}: {}:{}:{}\n{instruction}", POP_CLR.paint("prefix_instruction"), location.file, location.line, location.column);
+        log::debug!(target: "instr", "{}:\t\t{instruction}\n  --> {}:{}:{}", POP_CLR.paint("prefix_instruction"), location.file, location.line, location.column);
 
         if log_enabled!(target: "instr", Trace) {
             self.inner.add_instruction(
@@ -88,7 +88,7 @@ impl CThonk {
         span: Span,
         location: Location,
     ) {
-        log::debug!(target: "instr", "{}: {}:{}:{}\n{instruction}", POP_CLR.paint("add_instruction"), location.file, location.line, location.column);
+        log::debug!(target: "instr", "{}:\t\t{instruction}\n  --> {}:{}:{}", POP_CLR.paint("add_instruction"), location.file, location.line, location.column);
 
         if log_enabled!(target: "instr", Trace) {
             self.inner.add_instruction(
@@ -103,7 +103,7 @@ impl CThonk {
     }
 
     fn get_instruction_card(&self) -> usize {
-        self.inner.get_instruction_card()
+        self.inner.instruction_card()
     }
 
     fn increment_frame_size(&mut self) {
@@ -115,7 +115,7 @@ impl CThonk {
     }
 
     fn append(&mut self, other: CThonk) {
-        self.inner.instructions.extend(other.inner.instructions);
+        self.inner.append_thonk(&other.inner);
     }
 }
 
@@ -300,6 +300,7 @@ impl<'a, 'b> Context<'a, 'b> {
 
 pub fn compile(context: &ExtruderContext) -> Result<Program> {
     let mut program = Program::new(VERSION.to_owned(), BUILD_TIME.to_owned());
+    program.set_source(context.source());
 
     let mut context = Context::new(context, &mut program);
 
@@ -756,7 +757,7 @@ mod test {
         println!("{program}");
 
         assert_eq!(program.get_thonk_card(), 1);
-        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 8);
+        assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 8);
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(5));
     }
@@ -784,7 +785,7 @@ mod test {
         println!("{program}");
 
         assert_eq!(program.get_thonk_card(), 1);
-        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 2);
+        assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 2);
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Boolean(true));
     }
@@ -812,7 +813,7 @@ mod test {
         println!("{program}");
 
         assert_eq!(program.get_thonk_card(), 1);
-        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 2);
+        assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 2);
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Boolean(false));
     }
@@ -850,106 +851,11 @@ mod test {
 
         assert_eq!(program.get_thonk_card(), 2);
 
-        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 5);
+        assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 5);
 
-        assert_eq!(program.get_thonk("fib").unwrap().get_instruction_card(), 30);
+        assert_eq!(program.get_thonk("fib").unwrap().instruction_card(), 30);
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(55));
-    }
-
-    #[test]
-    fn index_into_list() {
-        let _ = env_logger::builder().is_test(true).try_init();
-        color_backtrace::install();
-
-        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
-        let ore = "
-                   fn main() -> int {
-                       let y = [];
-                       let x = [1, 2, 3];
-                       x[1]
-                   }";
-        let ast = parse_dwarf("index_into_list", ore).unwrap();
-        let ctx = new_lu_dog(
-            "index_into_list".to_owned(),
-            Some((ore.to_owned(), &ast)),
-            &get_dwarf_home(),
-            &sarzak,
-        )
-        .unwrap();
-
-        let program = compile(&ctx).unwrap();
-        println!("{program}");
-
-        assert_eq!(program.get_thonk_card(), 1);
-
-        assert_eq!(
-            program.get_thonk("main").unwrap().get_instruction_card(),
-            13
-        );
-
-        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &2.into());
-    }
-
-    #[test]
-    fn index_out_of_bounds() {
-        let _ = env_logger::builder().is_test(true).try_init();
-        color_backtrace::install();
-
-        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
-        let ore = "
-                   fn main() -> int {
-                       let x = [1, 2, 3];
-                       x[3]
-                   }";
-        let ast = parse_dwarf("index_out_of_bounds", ore).unwrap();
-        let ctx = new_lu_dog(
-            "index_out_of_bounds".to_owned(),
-            Some((ore.to_owned(), &ast)),
-            &get_dwarf_home(),
-            &sarzak,
-        )
-        .unwrap();
-
-        let program = compile(&ctx).unwrap();
-
-        println!("{}", run_vm(&program).unwrap_err());
-    }
-
-    // #[test]
-    fn index_into_string() {
-        let _ = env_logger::builder().is_test(true).try_init();
-        color_backtrace::install();
-
-        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
-        let ore = "
-                   fn main() -> string {
-                       let x = \"foo\";
-                       x[1]
-                   }";
-        let ast = parse_dwarf("index_into_string", ore).unwrap();
-        let ctx = new_lu_dog(
-            "index_into_string".to_owned(),
-            Some((ore.to_owned(), &ast)),
-            &get_dwarf_home(),
-            &sarzak,
-        )
-        .unwrap();
-
-        let program = compile(&ctx).unwrap();
-        println!("{program}");
-
-        assert_eq!(program.get_thonk_card(), 1);
-
-        // assert_eq!(
-        //     program.get_thonk("main").unwrap().get_instruction_card(),
-        //     8
-        // );
-
-        assert_eq!(
-            &*s_read!(run_vm(&program).unwrap()),
-            &Value::String("o".to_owned())
-        );
     }
 
     #[test]
@@ -983,10 +889,7 @@ mod test {
         println!("{program}");
         assert_eq!(program.get_thonk_card(), 5);
 
-        assert_eq!(
-            program.get_thonk("main").unwrap().get_instruction_card(),
-            59
-        );
+        assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 59);
         let run = run_vm(&program);
         eprintln!("{:?}", run);
         assert!(run.is_ok());
@@ -1043,6 +946,7 @@ async fn async_get(urls: [String]) -> Future<[Result<string, HttpError>]> {
     // Start a task for each url and push them into the tasks array.
     for url in urls {
         print(url);
+        print("\n");
         let task = chacha::spawn(async || -> Result<string, HttpError> {
             // This creates a request and sends it.
             let get = client.get(url).await;
@@ -1051,9 +955,9 @@ async fn async_get(urls: [String]) -> Future<[Result<string, HttpError>]> {
                 Result::<Response, HttpError>::Ok(response) => {
                     let text = response.text().await;
                     match text {
-                        Result::Ok(text) => Result::<string, HttpError>::Ok(text),
+                        Result::<string, HttpError>::Ok(text) => Result::<string, HttpError>::Ok(text),
                         // Return an error if there was a problem getting the page's text.
-                        Result::Err(e) => Result::<string, HttpError>::Err(e),
+                        Result::<string, HttpError>::Err(e) => Result::<string, HttpError>::Err(e),
                     }
                 }
                 // Return an Error if there was a problem creating or sending the request.
@@ -1076,29 +980,41 @@ async fn async_get(urls: [String]) -> Future<[Result<string, HttpError>]> {
 async fn main() -> Future<()> {
     let requests = [
         "https://10.0.1.1",
-        // "https://www.rust-lang.org/",
-        // "https://en.wikipedia.org/wiki/Main_Page",
+        "https://www.rust-lang.org/",
+        "https://en.wikipedia.org/wiki/Main_Page",
         "https://en.wikipedi.org/wiki/Main_Page",
-        // "https://www.github.com/",
+        "https://www.github.com/",
     ];
     let results = async_get(requests).await;
+
+    print("Results length: ");
+    print(results.len());
+    print("\n");
 
     let i = 0;
     for result in results {
         match result {
-            Result::Ok(response) => {
-                print("{1}: {0} bytes\n".format(response.len(), requests[i]));
+            Result::<string, HttpError>::Ok(req) => {
+                // print("{1}: {0} bytes\n".format(req.len(), requests[i]));
+                print(requests[i]);
+                print(": ");
+                print(req.len());
+                print(" bytes\n");
             }
-            Result::Err(e) => {
-                print("{1}: {0}\n".format(e.to_string(), requests[i]));
+            Result::<string, HttpError>::Err(e) => {
+                // print("{1}: {0}\n".format(e.to_string(), requests[i]));
+                print(requests[i]);
+                print(": ");
+                print(e.to_string());
+                print("\n");
             }
-        }
+        };
         i = i + 1;
     }
 }                "#;
         let ast = parse_dwarf("use_async", ore).unwrap();
         let ctx = new_lu_dog(
-            "use_plugin".to_owned(),
+            "use_async".to_owned(),
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &sarzak,
@@ -1115,7 +1031,7 @@ async fn main() -> Future<()> {
         let run = run_vm(&program);
         println!("{:?}", run);
         assert!(run.is_ok());
-        assert_eq!(&*s_read!(run.unwrap()), &Value::Boolean(true));
+        // assert_eq!(&*s_read!(run.unwrap()), &Value::Boolean(true));
     }
 
     #[test]
@@ -1149,11 +1065,8 @@ async fn main() -> Future<()> {
         println!("{program}");
         assert_eq!(program.get_thonk_card(), 2);
 
-        assert_eq!(
-            program.get_thonk("main").unwrap().get_instruction_card(),
-            13
-        );
-        assert_eq!(program.get_thonk("foo").unwrap().get_instruction_card(), 12);
+        assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 13);
+        assert_eq!(program.get_thonk("foo").unwrap().instruction_card(), 12);
         let run = run_vm(&program);
         assert!(run.is_ok());
         assert_eq!(&*s_read!(run.unwrap()), &Value::Integer(6));

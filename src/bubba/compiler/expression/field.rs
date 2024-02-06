@@ -6,7 +6,7 @@ use crate::{
         instr::Instruction,
     },
     lu_dog::{FieldAccessTargetEnum, ValueType},
-    new_ref, s_read, NewRef, RefType, SarzakStorePtr, Span, Value,
+    new_ref, s_read, NewRef, RefType, SarzakStorePtr, Span, Value, POP_CLR,
 };
 
 pub(in crate::bubba::compiler) fn compile_field_access(
@@ -15,7 +15,7 @@ pub(in crate::bubba::compiler) fn compile_field_access(
     context: &mut Context,
     span: Span,
 ) -> Result<Option<ValueType>> {
-    log::debug!(target: "instr", "{}:{}:{}", file!(), line!(), column!());
+    log::debug!(target: "instr", "{}: {}:{}:{}", POP_CLR.paint("compile_field_access"), file!(), line!(), column!());
 
     let lu_dog = context.lu_dog_heel().clone();
     let lu_dog = s_read!(lu_dog);
@@ -61,7 +61,7 @@ pub(in crate::bubba::compiler) fn compile_field_expression(
     thonk: &mut CThonk,
     context: &mut Context,
 ) -> Result<Option<ValueType>> {
-    log::debug!(target: "instr", "{}:{}:{}", file!(), line!(), column!());
+    log::debug!(target: "instr", "{}: {}:{}:{}", POP_CLR.paint("compile_field_expression"), file!(), line!(), column!());
 
     let lu_dog = context.lu_dog_heel().clone();
     let lu_dog = s_read!(lu_dog);

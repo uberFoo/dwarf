@@ -2,7 +2,7 @@ use snafu::{location, Location};
 use uuid::Uuid;
 
 #[cfg(feature = "async")]
-use crate::keywords::{PUSH, SPAWN};
+use crate::keywords::{LEN, PUSH, SPAWN};
 
 use crate::{
     bubba::{
@@ -12,7 +12,7 @@ use crate::{
     },
     keywords::{ARGS, ASSERT, ASSERT_EQ, CHACHA, FORMAT, NEW, PLUGIN},
     lu_dog::{BodyEnum, Call, CallEnum, Expression, ValueType, ValueTypeEnum},
-    new_ref, s_read, s_write,
+    new_ref, s_read,
     sarzak::Ty,
     NewRef, RefType, SarzakStorePtr, Span, Value, PATH_SEP, POP_CLR,
 };
@@ -23,7 +23,7 @@ pub(in crate::bubba::compiler) fn compile(
     context: &mut Context,
     span: Span,
 ) -> Result<Option<ValueType>> {
-    log::debug!(target: "instr", "{}: {}:{}:{}", POP_CLR.paint("compile_call"), file!(), line!(), column!());
+    log::debug!(target: "instr", "{}\n  --> {}:{}:{}", POP_CLR.paint("compile_call"), file!(), line!(), column!());
 
     let lu_dog = context.lu_dog_heel();
     let lu_dog = s_read!(lu_dog);
@@ -272,6 +272,9 @@ fn compile_method_call(
     let lu_dog = context.lu_dog_heel();
     let lu_dog = s_read!(lu_dog);
 
+    let sarzak = context.sarzak_heel();
+    let sarzak = s_read!(sarzak);
+
     // First off we need to evaluate the expression associated with this call.
     let result = if let Some(ref expr) = s_read!(call).expression {
         let expr = lu_dog.exhume_expression(expr).unwrap();
@@ -279,22 +282,44 @@ fn compile_method_call(
         // Evaluate the LHS to get at the underlying value/instance.
         let result = compile_expression(&expr, thonk, context, span);
 
-        if name == PUSH {
-            match result.clone()?.unwrap().subtype {
-                ValueTypeEnum::List(_) => {
-                    for expr in args {
-                        let span = get_span(expr, &lu_dog);
-                        compile_expression(expr, thonk, context, span)?;
+        match name.as_str() {
+            PUSH => {
+                match result.clone()?.unwrap().subtype {
+                    ValueTypeEnum::List(_) => {
+                        // skip self
+                        for (_, expr) in args.iter().enumerate().skip(1) {
+                            let span = get_span(expr, &lu_dog);
+                            compile_expression(expr, thonk, context, span)?;
+                        }
+
+                        thonk.insert_instruction(Instruction::ListPush, location!());
+
+                        return result;
                     }
-
-                    thonk.insert_instruction(Instruction::ListPush, location!());
-
+                    _ => unreachable!(),
+                }
+            }
+            LEN => match result.clone()?.unwrap().subtype {
+                ValueTypeEnum::List(_) => {
+                    thonk.insert_instruction(Instruction::ListLength, location!());
                     return result;
                 }
-                _ => unreachable!(),
-            }
+                ValueTypeEnum::Ty(ref id) => {
+                    let ty = sarzak.exhume_ty(id).unwrap();
+                    let ty = s_read!(ty);
+
+                    match &*ty {
+                        Ty::ZString(_) => {
+                            thonk.insert_instruction(Instruction::ListLength, location!());
+                            return result;
+                        }
+                        darn => unreachable!("{darn:?}"),
+                    }
+                }
+                whoa => unreachable!("{whoa:?}"),
+            },
+            _ => {}
         }
-        dbg!(&result);
 
         thonk.insert_instruction(
             Instruction::MethodLookup(new_ref!(String, name)),
@@ -352,7 +377,11 @@ fn compile_static_method_call(
                     span.clone(),
                     location!(),
                 );
-                thonk.insert_instruction_with_span(Instruction::TestEq, span.clone(), location!());
+                thonk.insert_instruction_with_span(
+                    Instruction::TestEqual,
+                    span.clone(),
+                    location!(),
+                );
                 thonk.insert_instruction_with_span(
                     Instruction::JumpIfTrue(5),
                     span.clone(),
@@ -372,7 +401,7 @@ fn compile_static_method_call(
                 thonk.insert_instruction(
                     Instruction::Push(new_ref!(
                         Value,
-                        context.extruder_context.source.clone().into()
+                        context.extruder_context.source_path.clone().into()
                     )),
                     location!(),
                 );
@@ -391,7 +420,11 @@ fn compile_static_method_call(
                 compile_expression(lhs, thonk, context, lhs_span)?;
                 let rhs_span = get_span(rhs, &lu_dog);
                 compile_expression(rhs, thonk, context, rhs_span)?;
-                thonk.insert_instruction_with_span(Instruction::TestEq, span.clone(), location!());
+                thonk.insert_instruction_with_span(
+                    Instruction::TestEqual,
+                    span.clone(),
+                    location!(),
+                );
                 thonk.insert_instruction_with_span(
                     Instruction::JumpIfTrue(5),
                     span.clone(),
@@ -411,7 +444,7 @@ fn compile_static_method_call(
                 thonk.insert_instruction(
                     Instruction::Push(new_ref!(
                         Value,
-                        context.extruder_context.source.clone().into()
+                        context.extruder_context.source_path.clone().into()
                     )),
                     location!(),
                 );
@@ -431,11 +464,10 @@ fn compile_static_method_call(
             SPAWN => {
                 let inner = &args[0];
                 let inner_span = get_span(inner, &lu_dog);
-                dbg!("SPAWN");
+
                 let result = compile_expression(inner, thonk, context, inner_span);
 
                 thonk.insert_instruction(Instruction::Call(0), location!());
-                dbg!("SPAWN_END");
 
                 result
             }
@@ -530,7 +562,7 @@ mod test {
         let program = compile(&ctx).unwrap();
 
         assert_eq!(program.get_thonk_card(), 1);
-        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 2);
+        assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 2);
 
         run_vm(&program).unwrap();
     }
@@ -555,9 +587,9 @@ mod test {
         let program = compile(&ctx).unwrap();
 
         assert_eq!(program.get_thonk_card(), 3);
-        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 2);
-        assert_eq!(program.get_thonk("foo").unwrap().get_instruction_card(), 2);
-        assert_eq!(program.get_thonk("bar").unwrap().get_instruction_card(), 2);
+        assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 2);
+        assert_eq!(program.get_thonk("foo").unwrap().instruction_card(), 2);
+        assert_eq!(program.get_thonk("bar").unwrap().instruction_card(), 2);
 
         run_vm(&program).unwrap();
     }
@@ -587,8 +619,8 @@ mod test {
         println!("{program}");
 
         assert_eq!(program.get_thonk_card(), 2);
-        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 5);
-        assert_eq!(program.get_thonk("foo").unwrap().get_instruction_card(), 4);
+        assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 5);
+        assert_eq!(program.get_thonk("foo").unwrap().instruction_card(), 4);
 
         run_vm(&program).unwrap();
     }
@@ -618,8 +650,8 @@ mod test {
         println!("{program}");
 
         assert_eq!(program.get_thonk_card(), 2);
-        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 7);
-        assert_eq!(program.get_thonk("foo").unwrap().get_instruction_card(), 6);
+        assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 7);
+        assert_eq!(program.get_thonk("foo").unwrap().instruction_card(), 6);
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(6));
     }
@@ -652,8 +684,8 @@ mod test {
         println!("{program}");
 
         assert_eq!(program.get_thonk_card(), 2);
-        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 7);
-        assert_eq!(program.get_thonk("foo").unwrap().get_instruction_card(), 18);
+        assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 7);
+        assert_eq!(program.get_thonk("foo").unwrap().instruction_card(), 18);
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(12));
     }
@@ -685,8 +717,8 @@ mod test {
         println!("{program}");
 
         assert_eq!(program.get_thonk_card(), 2);
-        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 7);
-        assert_eq!(program.get_thonk("foo").unwrap().get_instruction_card(), 29);
+        assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 7);
+        assert_eq!(program.get_thonk("foo").unwrap().instruction_card(), 29);
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Empty);
     }
@@ -717,10 +749,7 @@ mod test {
 
         assert_eq!(program.get_thonk_card(), 1);
 
-        assert_eq!(
-            program.get_thonk("main").unwrap().get_instruction_card(),
-            11
-        );
+        assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 11);
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &"test 1 2 3".into());
     }
@@ -750,10 +779,7 @@ mod test {
 
         assert_eq!(program.get_thonk_card(), 1);
 
-        assert_eq!(
-            program.get_thonk("main").unwrap().get_instruction_card(),
-            11
-        );
+        assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 11);
 
         assert_eq!(
             &*s_read!(run_vm(&program).unwrap()),
@@ -784,10 +810,7 @@ mod test {
 
         assert_eq!(program.get_thonk_card(), 1);
 
-        assert_eq!(
-            program.get_thonk("main").unwrap().get_instruction_card(),
-            11
-        );
+        assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 11);
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Empty);
     }
@@ -828,7 +851,7 @@ mod test {
 
         assert_eq!(program.get_thonk_card(), 3);
 
-        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 9);
+        assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 9);
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &42.into());
     }
@@ -859,10 +882,7 @@ mod test {
 
         assert_eq!(program.get_thonk_card(), 1);
 
-        assert_eq!(
-            program.get_thonk("main").unwrap().get_instruction_card(),
-            28
-        );
+        assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 28);
 
         let args = vec![
             new_ref!(Value, 42.into()),

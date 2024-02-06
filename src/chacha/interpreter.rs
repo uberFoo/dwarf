@@ -422,7 +422,7 @@ pub fn initialize_interpreter(
             None,
             dwarf_home,
             dirty,
-            e_context.source.to_owned(),
+            e_context.source_path.to_owned(),
             program,
             executor,
             e_context.scopes,
