@@ -24,6 +24,7 @@ pub mod tui;
 // pub mod lu_dog_proxy;
 
 pub use ::sarzak::{lu_dog, sarzak};
+use bubba::vm::Error as BubbaError;
 pub use chacha::value::Value;
 pub(crate) use chacha::{error::ChaChaError, interpreter};
 
@@ -466,6 +467,7 @@ impl Default for Context {
 }
 
 pub type ValueResult = Result<RefType<Value>, ChaChaError>;
+pub type VmValueResult = Result<RefType<Value>, BubbaError>;
 
 pub(crate) trait Desanitize {
     fn desanitize(&self) -> String;

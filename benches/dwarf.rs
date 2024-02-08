@@ -3,7 +3,7 @@ use std::{env, fs, path::PathBuf};
 use criterion::{criterion_group, criterion_main, Criterion};
 use dwarf::{
     bubba::{compiler::compile, VM},
-    chacha::interpreter::{initialize_interpreter, start_func, start_vm},
+    chacha::interpreter::{initialize_interpreter, run_fib, start_func},
     dwarf::{new_lu_dog, parse_dwarf},
     new_ref, NewRef, RefType, Value,
 };
@@ -180,28 +180,28 @@ fn vm_28(c: &mut Criterion) {
     #[cfg(feature = "tracy")]
     Client::start();
 
-    c.bench_function("vm-fib-28", |b| b.iter(|| start_vm(28.into()).unwrap()));
+    c.bench_function("vm-fib-28", |b| b.iter(|| run_fib(28.into()).unwrap()));
 }
 
 fn vm_25(c: &mut Criterion) {
     #[cfg(feature = "tracy")]
     Client::start();
 
-    c.bench_function("vm-fib-25", |b| b.iter(|| start_vm(25.into()).unwrap()));
+    c.bench_function("vm-fib-25", |b| b.iter(|| run_fib(25.into()).unwrap()));
 }
 
 fn vm_17(c: &mut Criterion) {
     #[cfg(feature = "tracy")]
     Client::start();
 
-    c.bench_function("vm-fib-17", |b| b.iter(|| start_vm(17.into()).unwrap()));
+    c.bench_function("vm-fib-17", |b| b.iter(|| run_fib(17.into()).unwrap()));
 }
 
 fn vm_5(c: &mut Criterion) {
     #[cfg(feature = "tracy")]
     Client::start();
 
-    c.bench_function("vm-fib-5", |b| b.iter(|| start_vm(5.into()).unwrap()));
+    c.bench_function("vm-fib-5", |b| b.iter(|| run_fib(5.into()).unwrap()));
 }
 
 // criterion_group!(benches, loop_, mandelbrot, fib, vm_28, vm_25, vm_17, vm_5);

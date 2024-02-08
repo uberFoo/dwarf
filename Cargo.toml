@@ -102,6 +102,7 @@ tui-tree-widget = { git = "https://github.com/uberFoo/tui-rs-tree-widget", optio
 unicode-segmentation = "1.10.1"
 uuid = { version = "1.6.1", features = ["v4", "serde"] }
 smartstring = { version = "1.0.1", features = ["serde"] }
+tracing-test = "0.2.4"
 
 # [patch.crates-io]
 # puteketeke = { path = "../puteketeke" }

@@ -141,7 +141,7 @@ pub(in crate::bubba::compiler) fn compile(
 mod test {
     use crate::{
         bubba::compiler::{
-            test::{get_dwarf_home, run_vm},
+            test::{get_dwarf_home, run_vm, setup_logging},
             *,
         },
         chacha::value::UserStruct,
@@ -152,9 +152,7 @@ mod test {
 
     #[test]
     fn struct_expression() {
-        let _ = env_logger::builder().is_test(true).try_init();
-        color_backtrace::install();
-
+        setup_logging();
         let sarzak_store = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "
                    struct Foo {

@@ -40,7 +40,7 @@ pub(in crate::bubba::compiler) fn compile(
 mod test {
     use crate::{
         bubba::compiler::{
-            test::{get_dwarf_home, run_vm},
+            test::{get_dwarf_home, run_vm, setup_logging},
             *,
         },
         dwarf::{new_lu_dog, parse_dwarf},
@@ -49,9 +49,7 @@ mod test {
 
     #[test]
     fn test_typecast_boolean() {
-        let _ = env_logger::builder().is_test(true).try_init();
-        color_backtrace::install();
-
+        setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "
                    fn main() -> bool {
@@ -77,9 +75,7 @@ mod test {
 
     #[test]
     fn test_typecast_integer() {
-        let _ = env_logger::builder().is_test(true).try_init();
-        color_backtrace::install();
-
+        setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "
                    fn main() -> int {
@@ -105,9 +101,7 @@ mod test {
 
     #[test]
     fn test_typecast_float() {
-        let _ = env_logger::builder().is_test(true).try_init();
-        color_backtrace::install();
-
+        setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "
                    fn main() -> float {
@@ -133,9 +127,7 @@ mod test {
 
     #[test]
     fn test_typecast_string() {
-        let _ = env_logger::builder().is_test(true).try_init();
-        color_backtrace::install();
-
+        setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "
                    fn main() -> string {
@@ -161,9 +153,7 @@ mod test {
 
     #[test]
     fn test_typecast_uuid() {
-        let _ = env_logger::builder().is_test(true).try_init();
-        color_backtrace::install();
-
+        setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "
                    fn main() -> Uuid {

@@ -243,7 +243,7 @@ pub(in crate::bubba::compiler) fn compile(
 mod test {
     use crate::{
         bubba::compiler::{
-            test::{get_dwarf_home, run_vm},
+            test::{get_dwarf_home, run_vm, setup_logging},
             *,
         },
         chacha::value::{EnumVariant, TupleEnum},
@@ -253,9 +253,7 @@ mod test {
 
     #[test]
     fn match_literal_expression() {
-        let _ = env_logger::builder().is_test(true).try_init();
-        color_backtrace::install();
-
+        setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "
                    fn main() -> int {
@@ -287,9 +285,7 @@ mod test {
 
     #[test]
     fn match_literal_catchall() {
-        let _ = env_logger::builder().is_test(true).try_init();
-        color_backtrace::install();
-
+        setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "
                    fn main() -> int {
@@ -324,9 +320,7 @@ mod test {
 
     #[test]
     fn match_literal_exp_middle() {
-        let _ = env_logger::builder().is_test(true).try_init();
-        color_backtrace::install();
-
+        setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "
                    fn main() -> int {
@@ -358,9 +352,7 @@ mod test {
 
     #[test]
     fn match_string_literal_expression() {
-        let _ = env_logger::builder().is_test(true).try_init();
-        color_backtrace::install();
-
+        setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "
                    fn main() -> string {
@@ -395,9 +387,7 @@ mod test {
 
     #[test]
     fn match_enum() {
-        let _ = env_logger::builder().is_test(true).try_init();
-        color_backtrace::install();
-
+        setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "
                    enum Foo {
@@ -444,9 +434,7 @@ mod test {
 
     #[test]
     fn match_tuple_enum() {
-        let _ = env_logger::builder().is_test(true).try_init();
-        color_backtrace::install();
-
+        setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "
                    enum Foo {
@@ -495,9 +483,7 @@ mod test {
 
     #[test]
     fn match_pattern_variable() {
-        let _ = env_logger::builder().is_test(true).try_init();
-        color_backtrace::install();
-
+        setup_logging();
         let sarzak_store = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "
                    enum Foo {
@@ -534,9 +520,7 @@ mod test {
 
     #[test]
     fn something_interesting_in_match() {
-        let _ = env_logger::builder().is_test(true).try_init();
-        color_backtrace::install();
-
+        setup_logging();
         let sarzak_store = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "
                    enum Foo {

@@ -427,6 +427,7 @@ pub fn initialize_interpreter(
             executor,
             e_context.scopes,
             e_context.imports,
+            thread_count,
         ))
     }
     #[cfg(not(feature = "async"))]
@@ -745,8 +746,9 @@ pub fn start_func(
     let ty = Value::ValueType((*s_read!(ty)).clone());
     program.add_symbol("STRING".to_owned(), ty);
 
+    let thread_count = context.thread_count();
     let stack = context.memory();
-    let mut vm = VM::new(&program, &[], &dwarf_home);
+    let mut vm = VM::new(&program, &[], &dwarf_home, thread_count);
 
     if let Some(main) = stack.get(name) {
         // This should fail if it's not a function. Actually, I think that it _has_
@@ -776,7 +778,7 @@ pub fn start_func(
     }
 }
 
-pub fn start_vm(n: DwarfInteger) -> Result<DwarfInteger, Error> {
+pub fn run_fib(n: DwarfInteger, thread_count: usize) -> Result<DwarfInteger, Error> {
     let mut thonk = Thonk::new("fib".to_string());
 
     let fib = new_ref!(String, "fib".into());
@@ -842,7 +844,7 @@ pub fn start_vm(n: DwarfInteger) -> Result<DwarfInteger, Error> {
     let ty = Value::ValueType((*s_read!(ty)).clone());
     program.add_symbol("STRING".to_owned(), ty);
 
-    let mut vm = VM::new(&program, &[], &PathBuf::new());
+    let mut vm = VM::new(&program, &[], &PathBuf::new(), thread_count);
     let result = vm.invoke("fib", &[new_ref!(Value, n.into())]);
 
     // vm.pop_stack();

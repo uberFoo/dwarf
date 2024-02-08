@@ -354,7 +354,7 @@ mod test {
 
     use crate::{
         bubba::compiler::{
-            test::{get_dwarf_home, run_vm},
+            test::{get_dwarf_home, run_vm, setup_logging},
             *,
         },
         dwarf::{new_lu_dog, parse_dwarf},
@@ -363,9 +363,7 @@ mod test {
 
     #[test]
     fn test_for_in_range() {
-        let _ = env_logger::builder().is_test(true).try_init();
-        color_backtrace::install();
-
+        setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "fn main() -> int {
                        let x = 0;
@@ -395,9 +393,7 @@ mod test {
 
     #[test]
     fn nested_for_loop() {
-        let _ = env_logger::builder().is_test(true).try_init();
-        color_backtrace::install();
-
+        setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "fn main() -> int {
                        let x = 0;
@@ -429,9 +425,7 @@ mod test {
 
     #[test]
     fn for_loop_variable() {
-        let _ = env_logger::builder().is_test(true).try_init();
-        color_backtrace::install();
-
+        setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "fn main() -> int {
                        let max = 10;
@@ -462,9 +456,7 @@ mod test {
 
     #[test]
     fn test_for_loop_iterator_param() {
-        let _ = env_logger::builder().is_test(true).try_init();
-        color_backtrace::install();
-
+        setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "fn add(x: int) -> int {
                        let accum = 0;
@@ -498,9 +490,7 @@ mod test {
 
     #[test]
     fn for_loop_iter_array_one() {
-        let _ = env_logger::builder().is_test(true).try_init();
-        color_backtrace::install();
-
+        setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "fn main() -> int {
                        let x = 0;
@@ -531,9 +521,7 @@ mod test {
 
     #[test]
     fn for_loop_iter_array_two() {
-        let _ = env_logger::builder().is_test(true).try_init();
-        color_backtrace::install();
-
+        setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = r#"fn main() -> string {{
                        let x = "";

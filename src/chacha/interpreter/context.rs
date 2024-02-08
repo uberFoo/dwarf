@@ -77,6 +77,7 @@ pub struct Context {
     program: Program,
     scopes: HashMap<String, String>,
     imports: HasSet<PathBuf>,
+    thread_count: usize,
 }
 
 /// Save the lu_dog model when the context is dropped
@@ -122,6 +123,7 @@ impl Context {
         executor: Executor,
         scopes: HashMap<String, String>,
         imports: HasSet<PathBuf>,
+        thread_count: usize,
     ) -> Self {
         Self {
             prompt,
@@ -144,6 +146,7 @@ impl Context {
             executor,
             scopes,
             imports,
+            thread_count,
         }
     }
 
@@ -191,6 +194,10 @@ impl Context {
             scopes,
             imports,
         }
+    }
+
+    pub fn thread_count(&self) -> usize {
+        self.thread_count
     }
 
     pub fn imports(&mut self) -> &mut HasSet<PathBuf> {

@@ -14,7 +14,7 @@ use crate::{
     new_ref, s_read, s_write, ChaChaError, NewRef, RefType, PATH_ROOT,
 };
 
-pub fn start_repl(context: &mut Context, is_uber: bool) -> Result<(), Error> {
+pub fn start_repl(context: &mut Context, is_uber: bool, thread_count: usize) -> Result<(), Error> {
     use std::io;
 
     use rustyline::error::ReadlineError;
@@ -32,7 +32,7 @@ pub fn start_repl(context: &mut Context, is_uber: bool) -> Result<(), Error> {
 
     let block = context.block().clone();
 
-    let mut vm = VM::new(context.get_program(), &[], context.get_home());
+    let mut vm = VM::new(context.get_program(), &[], context.get_home(), thread_count);
 
     let notice_style = Colour::Red.bold().italic();
     let prompt_style = Colour::Blue.normal();

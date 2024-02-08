@@ -40,7 +40,7 @@ mod test {
 
     use crate::{
         bubba::compiler::{
-            test::{get_dwarf_home, run_vm},
+            test::{get_dwarf_home, run_vm, setup_logging},
             *,
         },
         dwarf::{new_lu_dog, parse_dwarf},
@@ -49,9 +49,7 @@ mod test {
 
     #[test]
     fn index_into_list() {
-        let _ = env_logger::builder().is_test(true).try_init();
-        color_backtrace::install();
-
+        setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "
                    fn main() -> int {
@@ -80,9 +78,7 @@ mod test {
 
     #[test]
     fn index_out_of_bounds() {
-        let _ = env_logger::builder().is_test(true).try_init();
-        color_backtrace::install();
-
+        setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "
                    fn main() -> int {
@@ -105,9 +101,7 @@ mod test {
 
     // #[test]
     fn index_into_string() {
-        let _ = env_logger::builder().is_test(true).try_init();
-        color_backtrace::install();
-
+        setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "
                    fn main() -> string {

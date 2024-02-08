@@ -279,7 +279,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         if args.repl.is_some() && args.repl.unwrap() {
-            start_repl(&mut ctx, is_uber)
+            start_repl(&mut ctx, is_uber, threads)
                 .map_err(|e| {
                     println!("Interpreter exited with: {}", e);
                     e
@@ -379,7 +379,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let ctx = Context::default();
         let mut ctx = initialize_interpreter(2, dwarf_home, ctx)?;
 
-        start_repl(&mut ctx, is_uber).map_err(|e| {
+        start_repl(&mut ctx, is_uber, threads).map_err(|e| {
             println!("Interpreter exited with: {}", e);
             e
         })?;

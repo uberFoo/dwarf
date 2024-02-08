@@ -699,14 +699,13 @@ mod test {
 
     use super::*;
 
+    use tracing_test::traced_test;
+
     use crate::{
         bubba::{vm::Error, VM},
-        chacha::value::{EnumVariant, TupleEnum},
         dwarf::{new_lu_dog, parse_dwarf},
-        lu_dog::ValueType,
-        s_write,
         sarzak::MODEL as SARZAK_MODEL,
-        NewRef, RefType,
+        RefType,
     };
 
     pub(super) fn get_dwarf_home() -> PathBuf {
@@ -719,8 +718,10 @@ mod test {
             .into()
     }
 
+    // Nothing special about this number.
+    const THREADS: usize = 5;
     pub(super) fn run_vm(program: &Program) -> Result<RefType<Value>, Error> {
-        let mut vm = VM::new(program, &[], &get_dwarf_home());
+        let mut vm = VM::new(program, &[], &get_dwarf_home(), THREADS);
         vm.invoke("main", &[])
     }
 
@@ -728,14 +729,18 @@ mod test {
         program: &Program,
         args: &[RefType<Value>],
     ) -> Result<RefType<Value>, Error> {
-        let mut vm = VM::new(program, args, &get_dwarf_home());
+        let mut vm = VM::new(program, args, &get_dwarf_home(), THREADS);
         vm.invoke("main", &[])
     }
 
+    pub(super) fn setup_logging() {
+        color_backtrace::install();
+    }
+
+    #[traced_test]
     #[test]
     fn test_let_statements() {
-        let _ = env_logger::builder().is_test(true).try_init();
-        color_backtrace::install();
+        setup_logging();
 
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "fn main() -> int {
@@ -762,11 +767,10 @@ mod test {
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(5));
     }
 
+    #[traced_test]
     #[test]
     fn test_boolean_true() {
-        let _ = env_logger::builder().is_test(true).try_init();
-        color_backtrace::install();
-
+        setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "fn main() -> bool {
                        true
@@ -790,11 +794,10 @@ mod test {
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Boolean(true));
     }
 
+    #[traced_test]
     #[test]
     fn test_boolean_false() {
-        let _ = env_logger::builder().is_test(true).try_init();
-        color_backtrace::install();
-
+        setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "fn main() -> bool {
                        false
@@ -818,11 +821,10 @@ mod test {
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Boolean(false));
     }
 
+    #[traced_test]
     #[test]
     fn fibonacci() {
-        let _ = env_logger::builder().is_test(true).try_init();
-        color_backtrace::install();
-
+        setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "
                    fn main() -> int {
@@ -858,11 +860,10 @@ mod test {
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(55));
     }
 
+    #[traced_test]
     #[test]
     fn use_std_option() {
-        let _ = env_logger::builder().is_test(true).try_init();
-        color_backtrace::install();
-
+        setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "
                    use std::option::Option;
@@ -896,11 +897,10 @@ mod test {
         assert_eq!(&*s_read!(run.unwrap()), &Value::Boolean(true));
     }
 
+    #[traced_test]
     #[test]
     fn use_plugin() {
-        let _ = env_logger::builder().is_test(true).try_init();
-        color_backtrace::install();
-
+        setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "
                 use http::client::HttpClient;
@@ -927,10 +927,11 @@ mod test {
         assert_eq!(&*s_read!(run.unwrap()), &Value::Boolean(true));
     }
 
+    #[traced_test]
     #[test]
     fn use_async() {
-        let _ = env_logger::builder().is_test(true).try_init();
-        color_backtrace::install();
+        setup_logging();
+        // let _ = env_logger::builder().is_test(true).try_init();
 
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = r#"
@@ -1034,11 +1035,10 @@ async fn main() -> Future<()> {
         // assert_eq!(&*s_read!(run.unwrap()), &Value::Boolean(true));
     }
 
+    #[traced_test]
     #[test]
     fn test_locals_and_params() {
-        let _ = env_logger::builder().is_test(true).try_init();
-        color_backtrace::install();
-
+        setup_logging();
         let ore = "
                    fn main() -> int {
                        let x = 1;
@@ -1072,11 +1072,10 @@ async fn main() -> Future<()> {
         assert_eq!(&*s_read!(run.unwrap()), &Value::Integer(6));
     }
 
+    #[traced_test]
     #[test]
     fn test_scopes() {
-        let _ = env_logger::builder().is_test(true).try_init();
-        color_backtrace::install();
-
+        setup_logging();
         let ore = "
                    fn main() -> int {
                     let a = 0;

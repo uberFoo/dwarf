@@ -233,6 +233,15 @@ fn compile_function_call(
     let lu_dog = context.lu_dog_heel();
     let lu_dog = s_read!(lu_dog);
 
+    let a_sink = if let Some(func) = lu_dog.exhume_function_id_by_name(&name) {
+        let func = lu_dog.exhume_function(&func).unwrap();
+        let body = s_read!(func).r19_body(&lu_dog)[0].clone();
+        let body = s_read!(body);
+        body.a_sink
+    } else {
+        false
+    };
+
     match name {
         FORMAT => todo!("handle FORMAT"),
         _ => {
@@ -253,7 +262,11 @@ fn compile_function_call(
                 compile_expression(expr, thonk, context, span)?;
             }
 
-            thonk.insert_instruction(Instruction::Call(args.len()), location!());
+            if a_sink {
+                thonk.insert_instruction(Instruction::AsyncCall(args.len()), location!());
+            } else {
+                thonk.insert_instruction(Instruction::Call(args.len()), location!());
+            }
 
             result
         }
@@ -274,6 +287,15 @@ fn compile_method_call(
 
     let sarzak = context.sarzak_heel();
     let sarzak = s_read!(sarzak);
+
+    let a_sink = if let Some(func) = lu_dog.exhume_function_id_by_name(&name) {
+        let func = lu_dog.exhume_function(&func).unwrap();
+        let body = s_read!(func).r19_body(&lu_dog)[0].clone();
+        let body = s_read!(body);
+        body.a_sink
+    } else {
+        false
+    };
 
     // First off we need to evaluate the expression associated with this call.
     let result = if let Some(ref expr) = s_read!(call).expression {
@@ -337,7 +359,11 @@ fn compile_method_call(
         compile_expression(expr, thonk, context, span)?;
     }
 
-    thonk.insert_instruction(Instruction::Call(args.len()), location!());
+    if a_sink {
+        thonk.insert_instruction(Instruction::AsyncCall(args.len()), location!());
+    } else {
+        thonk.insert_instruction(Instruction::Call(args.len()), location!());
+    }
 
     result
 }
@@ -467,7 +493,7 @@ fn compile_static_method_call(
 
                 let result = compile_expression(inner, thonk, context, inner_span);
 
-                thonk.insert_instruction(Instruction::Call(0), location!());
+                thonk.insert_instruction(Instruction::AsyncCall(0), location!());
 
                 result
             }
@@ -514,6 +540,11 @@ fn compile_static_method_call(
                     }
                 }
             } else {
+                let func1 = lu_dog.exhume_function_id_by_name(&func).unwrap();
+                let func1 = lu_dog.exhume_function(&func1).unwrap();
+                let body = s_read!(func1).r19_body(&lu_dog)[0].clone();
+                let a_sink = s_read!(body).a_sink;
+
                 let func_name = format!("{ty}::{func}");
                 let name = new_ref!(String, func_name);
                 // These instructions will be patched by the VM.
@@ -525,7 +556,11 @@ fn compile_static_method_call(
                     compile_expression(expr, thonk, context, span)?;
                 }
 
-                thonk.insert_instruction(Instruction::Call(args.len()), location!());
+                if a_sink {
+                    thonk.insert_instruction(Instruction::AsyncCall(args.len()), location!());
+                } else {
+                    thonk.insert_instruction(Instruction::Call(args.len()), location!());
+                }
 
                 Ok(None)
             }
@@ -535,20 +570,21 @@ fn compile_static_method_call(
 
 #[cfg(test)]
 mod test {
+    use tracing_test::traced_test;
+
     use crate::{
         bubba::compiler::{
-            test::{get_dwarf_home, run_vm, run_vm_with_args},
+            test::{get_dwarf_home, run_vm, run_vm_with_args, setup_logging},
             *,
         },
         dwarf::{new_lu_dog, parse_dwarf},
         sarzak::MODEL as SARZAK_MODEL,
     };
 
+    #[traced_test]
     #[test]
     fn empty_func() {
-        let _ = env_logger::builder().is_test(true).try_init();
-        color_backtrace::install();
-
+        setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "fn main() {}";
         let ast = parse_dwarf("empty_func", ore).unwrap();
@@ -567,11 +603,10 @@ mod test {
         run_vm(&program).unwrap();
     }
 
+    #[traced_test]
     #[test]
     fn empty_funcs() {
-        let _ = env_logger::builder().is_test(true).try_init();
-        color_backtrace::install();
-
+        setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "fn main() {}
                    fn foo() {}
@@ -594,11 +629,10 @@ mod test {
         run_vm(&program).unwrap();
     }
 
+    #[traced_test]
     #[test]
     fn func_call() {
-        let _ = env_logger::builder().is_test(true).try_init();
-        color_backtrace::install();
-
+        setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "fn main() {
                        foo();
@@ -625,11 +659,10 @@ mod test {
         run_vm(&program).unwrap();
     }
 
+    #[traced_test]
     #[test]
     fn test_func_args() {
-        let _ = env_logger::builder().is_test(true).try_init();
-        color_backtrace::install();
-
+        setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "fn main() -> int {
                        foo(1, 2, 3)
@@ -656,11 +689,10 @@ mod test {
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(6));
     }
 
+    #[traced_test]
     #[test]
     fn test_func_with_args_and_locals() {
-        let _ = env_logger::builder().is_test(true).try_init();
-        color_backtrace::install();
-
+        setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "fn main() -> int {
                        foo(1, 2, 3)
@@ -690,11 +722,10 @@ mod test {
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(12));
     }
 
+    #[traced_test]
     #[test]
     fn test_argument_ordering() {
-        let _ = env_logger::builder().is_test(true).try_init();
-        color_backtrace::install();
-
+        setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "fn main() {
                        foo(1, 2, 3)
@@ -723,11 +754,10 @@ mod test {
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Empty);
     }
 
+    // #[traced_test]
     // #[test]
     fn string_format_locals() {
-        let _ = env_logger::builder().is_test(true).try_init();
-        color_backtrace::install();
-
+        setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "
                    fn main() -> string {
@@ -754,11 +784,10 @@ mod test {
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &"test 1 2 3".into());
     }
 
+    // #[traced_test]
     // #[test]
     fn string_format_indices() {
-        let _ = env_logger::builder().is_test(true).try_init();
-        color_backtrace::install();
-
+        setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "
                    fn main() -> string {
@@ -787,11 +816,10 @@ mod test {
         );
     }
 
+    #[traced_test]
     #[test]
     fn test_assert() {
-        let _ = env_logger::builder().is_test(true).try_init();
-        color_backtrace::install();
-
+        setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "
                    fn main() {
@@ -815,11 +843,10 @@ mod test {
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Empty);
     }
 
+    #[traced_test]
     #[test]
     fn test_method_call() {
-        let _ = env_logger::builder().is_test(true).try_init();
-        color_backtrace::install();
-
+        setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "
                 struct Foo {
@@ -856,11 +883,10 @@ mod test {
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &42.into());
     }
 
+    #[traced_test]
     #[test]
     fn test_args() {
-        let _ = env_logger::builder().is_test(true).try_init();
-        color_backtrace::install();
-
+        setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "
                    fn main() -> () {
@@ -892,11 +918,10 @@ mod test {
         assert!(run_vm_with_args(&program, &args).is_ok());
     }
 
+    #[traced_test]
     #[test]
     fn test_lambda() {
-        let _ = env_logger::builder().is_test(true).try_init();
-        color_backtrace::install();
-
+        setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
 
         let ore = "

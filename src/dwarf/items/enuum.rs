@@ -244,7 +244,6 @@ pub(crate) fn create_generic_enum(
     path.pop();
     let path = path.join(PATH_SEP) + PATH_SEP;
 
-    dbg!("bj", &enum_name, &path);
     let new_enum = Enumeration::new(
         enum_name.to_owned(),
         path.to_owned(),

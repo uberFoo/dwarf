@@ -13,8 +13,7 @@ use crate::{
 
 #[derive(Debug, Snafu)]
 pub struct Error(pub(super) ChaChaError);
-// 🚧  If the VM get's it's own errors, make this pub(super).
-pub type Result<T, E = ChaChaError> = std::result::Result<T, E>;
+pub(super) type Result<T, E = ChaChaError> = std::result::Result<T, E>;
 
 #[derive(Debug, Snafu)]
 #[snafu(visibility(pub))]

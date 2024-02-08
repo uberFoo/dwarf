@@ -174,6 +174,7 @@ pub fn inter_func(
 
             let body = Body::new_block(a_sink, &block, lu_dog);
             // 🚧 We aren't picking up the generics we created during signature processing.
+            // 🚧 And neither are we picking up the type if it's an impl block
             let func = Function::new(
                 name.to_owned(),
                 &body,
@@ -183,6 +184,7 @@ pub fn inter_func(
                 &ret_ty,
                 lu_dog,
             );
+
             context.dirty.push(Dirty::Func(func.clone()));
             // let _ = ValueType::new_function(true, &func, lu_dog);
 

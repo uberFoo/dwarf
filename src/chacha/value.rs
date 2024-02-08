@@ -20,7 +20,7 @@ use uuid::Uuid;
 use puteketeke::Executor;
 
 #[cfg(feature = "async")]
-use crate::ValueResult;
+use crate::{ValueResult, VmValueResult};
 
 use crate::{
     chacha::error::Result,
@@ -524,6 +524,12 @@ pub enum Value {
         ty: RefType<ValueType>,
         inner: RefType<Vec<RefType<Self>>>,
     },
+    #[cfg(feature = "async")]
+    VmFuture {
+        name: String,
+        executor: Executor,
+        task: Option<puteketeke::AsyncTask<'static, VmValueResult>>,
+    },
 }
 
 impl Value {
@@ -612,6 +618,12 @@ impl Value {
                 }
                 write!(f, "]")
             }
+            #[cfg(feature = "async")]
+            Self::VmFuture {
+                name,
+                executor,
+                task,
+            } => write!(f, "VmTask `{name}`: {task:?}, executor: {executor:?}"),
         }
     }
 
@@ -906,6 +918,12 @@ impl std::fmt::Debug for Value {
             Self::Uuid(uuid) => write!(f, "{uuid:?}"),
             Self::ValueType(ty) => write!(f, "{:?}", ty),
             Self::Vector { ty, inner } => write!(f, "{ty:?}: {inner:?}"),
+            #[cfg(feature = "async")]
+            Self::VmFuture {
+                name,
+                executor,
+                task,
+            } => write!(f, "VmTask `{name}`: {task:?}, executor: {executor:?}"),
         }
     }
 }
@@ -973,6 +991,17 @@ impl Clone for Value {
             Self::Vector { ty, inner } => Self::Vector {
                 ty: ty.clone(),
                 inner: inner.clone(),
+            },
+            #[cfg(feature = "async")]
+            // Note that cloned values do not inherit the task
+            Self::VmFuture {
+                name,
+                executor,
+                task: _,
+            } => Self::VmFuture {
+                name: name.to_owned(),
+                executor: executor.clone(),
+                task: None,
             },
         }
     }
@@ -1053,6 +1082,12 @@ impl fmt::Display for Value {
                 }
                 write!(f, "]")
             }
+            #[cfg(feature = "async")]
+            Self::VmFuture {
+                name,
+                executor,
+                task,
+            } => write!(f, "VmTask `{name}`: {task:?}, executor: {executor:?}"),
         }
     }
 }

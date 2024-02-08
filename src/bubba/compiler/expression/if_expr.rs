@@ -86,7 +86,7 @@ mod test {
 
     use crate::{
         bubba::compiler::{
-            test::{get_dwarf_home, run_vm},
+            test::{get_dwarf_home, run_vm, setup_logging},
             *,
         },
         dwarf::{new_lu_dog, parse_dwarf},
@@ -95,9 +95,7 @@ mod test {
 
     #[test]
     fn if_expression_true_arm() {
-        let _ = env_logger::builder().is_test(true).try_init();
-        color_backtrace::install();
-
+        setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "fn main() -> int {
                        if true {
@@ -128,9 +126,7 @@ mod test {
 
     #[test]
     fn if_expression_false_arm() {
-        let _ = env_logger::builder().is_test(true).try_init();
-        color_backtrace::install();
-
+        setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "fn main() -> int {
                        if false {
@@ -161,9 +157,7 @@ mod test {
 
     #[test]
     fn if_expression_complex() {
-        let _ = env_logger::builder().is_test(true).try_init();
-        color_backtrace::install();
-
+        setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "fn main() -> int {
                        let x = 0;

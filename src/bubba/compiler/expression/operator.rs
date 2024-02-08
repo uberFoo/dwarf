@@ -193,7 +193,7 @@ pub(in crate::bubba::compiler) fn compile(
 mod test {
     use crate::{
         bubba::compiler::{
-            test::{get_dwarf_home, run_vm},
+            test::{get_dwarf_home, run_vm, setup_logging},
             *,
         },
         dwarf::{new_lu_dog, parse_dwarf},
@@ -202,9 +202,7 @@ mod test {
 
     #[test]
     fn test_add_strings() {
-        let _ = env_logger::builder().is_test(true).try_init();
-        color_backtrace::install();
-
+        setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "fn main() -> string {
                        \"Hello, \" + \"world!\"
@@ -232,9 +230,7 @@ mod test {
 
     #[test]
     fn test_subtraction() {
-        let _ = env_logger::builder().is_test(true).try_init();
-        color_backtrace::install();
-
+        setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "fn main() -> int {
                        5 - 2
@@ -259,9 +255,7 @@ mod test {
 
     #[test]
     fn test_multiplication() {
-        let _ = env_logger::builder().is_test(true).try_init();
-        color_backtrace::install();
-
+        setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "fn main() -> int {
                        5 * 2
@@ -287,9 +281,7 @@ mod test {
 
     #[test]
     fn test_division() {
-        let _ = env_logger::builder().is_test(true).try_init();
-        color_backtrace::install();
-
+        setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "fn main() -> int {
                        5 / 2
@@ -315,9 +307,7 @@ mod test {
 
     #[test]
     fn test_assignment() {
-        let _ = env_logger::builder().is_test(true).try_init();
-        color_backtrace::install();
-
+        setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "fn main() -> int {
                        let x = 5;
@@ -345,9 +335,7 @@ mod test {
 
     #[test]
     fn test_and_expression() {
-        let _ = env_logger::builder().is_test(true).try_init();
-        color_backtrace::install();
-
+        setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "
                    fn main() -> bool {
@@ -373,9 +361,7 @@ mod test {
 
     #[test]
     fn test_or_expression() {
-        let _ = env_logger::builder().is_test(true).try_init();
-        color_backtrace::install();
-
+        setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "
                    fn main() -> bool {
@@ -401,9 +387,7 @@ mod test {
 
     #[test]
     fn test_binary_not() {
-        let _ = env_logger::builder().is_test(true).try_init();
-        color_backtrace::install();
-
+        setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "
                    fn main() -> bool {
@@ -429,9 +413,7 @@ mod test {
 
     #[test]
     fn test_assign_to_struct_field() {
-        let _ = env_logger::builder().is_test(true).try_init();
-        color_backtrace::install();
-
+        setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
 
         let ore = "struct Foo {
@@ -465,9 +447,7 @@ mod test {
 
     #[test]
     fn test_greater_than() {
-        let _ = env_logger::builder().is_test(true).try_init();
-        color_backtrace::install();
-
+        setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
 
         let ore = "

@@ -24,6 +24,8 @@ pub enum Instruction {
     ///
     /// The stack is one element shorter after this instruction.
     And,
+    AsyncCall(usize),
+    Await,
     /// Call a function with the given arity.
     ///
     /// ## Calling Convention
@@ -355,6 +357,13 @@ impl fmt::Display for Instruction {
         match self {
             Instruction::Add => write!(f, "{}", opcode_style.paint("add ")),
             Instruction::And => write!(f, "{}", opcode_style.paint("and ")),
+            Instruction::AsyncCall(arity) => write!(
+                f,
+                "{} {}",
+                opcode_style.paint("acall"),
+                operand_style.paint(arity.to_string())
+            ),
+            Instruction::Await => write!(f, "{}", opcode_style.paint("await")),
             Instruction::Call(arity) => write!(
                 f,
                 "{} {}",

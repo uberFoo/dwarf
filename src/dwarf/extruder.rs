@@ -1671,10 +1671,10 @@ pub(super) fn inter_expression(
         // FunctionCall
         //
         ParserExpression::FunctionCall(func, args) => {
-            debug!("func {:?}", func);
+            debug!("func {func:?}");
             let fspan = &func.1;
             let func = &func.0;
-            debug!("args {:?}", args);
+            debug!("args {args:?}");
 
             let (func_expr, ret_ty) = inter_expression(
                 &new_ref!(ParserExpression, func.to_owned()),
@@ -1684,6 +1684,7 @@ pub(super) fn inter_expression(
                 context_stack,
                 lu_dog,
             )?;
+            debug!("func_expr {func_expr:?}");
 
             let ret_ty = if let ValueTypeEnum::Unknown(_) = s_read!(ret_ty).subtype {
                 match func {
