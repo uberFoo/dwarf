@@ -104,11 +104,11 @@ uuid = { version = "1.6.1", features = ["v4", "serde"] }
 
 smartstring = { version = "1.0.1", features = ["serde"] }
 
-[patch.crates-io]
-puteketeke = { path = "../../github/puteketeke" }
+# [patch.crates-io]
+# puteketeke = { path = "../../github/puteketeke" }
 
-[patch."https://github.com/uberFoo/sarzak"]
-sarzak = { path = "../sarzak" }
+# [patch."https://github.com/uberFoo/sarzak"]
+# sarzak = { path = "../sarzak" }
 
 [dev-dependencies]
 backtrace = "0.3.67"
