@@ -138,6 +138,46 @@ cfg_if::cfg_if! {
                 $arg.into_inner().unwrap()
             };
         }
+    }
+
+    else if #[cfg(feature = "pl-vec")] {
+        type SarzakStorePtr = usize;
+        type RcType<T> = std::sync::Arc<T>;
+        impl<T> NewRcType<T> for RcType<T> {
+            fn new_rc_type(value: T) -> RcType<T> {
+                std::sync::Arc::new(value)
+            }
+        }
+
+        pub type RefType<T> = std::sync::Arc<parking_lot::RwLock<T>>;
+        impl<T> NewRef<T> for RefType<T> {
+            fn new_ref(value: T) -> RefType<T> {
+                std::sync::Arc::new(parking_lot::RwLock::new(value))
+            }
+        }
+
+        // Macros to abstract the underlying read/write operations.
+        #[macro_export]
+        macro_rules! ref_read {
+            ($arg:expr) => {
+                $arg.read()
+            };
+        }
+
+        #[macro_export]
+        macro_rules! ref_write {
+            ($arg:expr) => {
+                $arg.write()
+            };
+        }
+
+        #[macro_export]
+        macro_rules! ref_to_inner {
+            ($arg:expr) => {
+                $arg.into_inner()
+            };
+        }
+
     } else if #[cfg(feature = "single-vec-tracy")] {
         type SarzakStorePtr = usize;
         type RcType<T> = std::rc::Rc<T>;

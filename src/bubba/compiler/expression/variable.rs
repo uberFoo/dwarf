@@ -9,13 +9,14 @@ use crate::{
     new_ref, s_read, NewRef, RefType, SarzakStorePtr, Span, POP_CLR,
 };
 
+#[tracing::instrument]
 pub(in crate::bubba::compiler) fn compile(
     expr: &SarzakStorePtr,
     thonk: &mut CThonk,
     context: &mut Context,
     span: Span,
 ) -> Result<Option<ValueType>> {
-    log::debug!(target: "instr", "{}:\n  --> {}:{}:{}", POP_CLR.paint("compile_variable"), file!(), line!(), column!());
+    tracing::debug!(target: "instr", "{}:\n  --> {}:{}:{}", POP_CLR.paint("compile_variable"), file!(), line!(), column!());
 
     let lu_dog = context.lu_dog_heel();
     let lu_dog = s_read!(lu_dog);
@@ -24,7 +25,7 @@ pub(in crate::bubba::compiler) fn compile(
     let expr = s_read!(expr);
     let name = &expr.name;
 
-    log::debug!(target: "instr", "Variable: {}", POP_CLR.paint(name));
+    tracing::debug!(target: "instr", "Variable: {}", POP_CLR.paint(name));
 
     if let Some(symbol) = context.get_symbol(name) {
         thonk.insert_instruction_with_span(

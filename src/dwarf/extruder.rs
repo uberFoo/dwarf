@@ -1217,6 +1217,7 @@ pub(super) fn inter_expression(
             for (var, ty) in vars.into_iter().zip(tys.into_iter()) {
                 let local = LocalVariable::new(Uuid::new_v4(), lu_dog);
                 let var = Variable::new_local_variable(var, &local, lu_dog);
+                debug!("variable {var:?}");
                 let _value = XValue::new_variable(&block, &ty.0, &var, lu_dog);
                 // 🚧 We should really be passing a span in the Block so that
                 // we can link this XValue to it.
@@ -2260,6 +2261,8 @@ pub(super) fn inter_expression(
             debug!("list {:?}", elements);
             if elements.is_empty() {
                 // 🚧 Darn -- more of this and no comment. I think it's replaced someplace.
+                // This has something to do with creating empty lists. This will cause
+                // an error if the list initialization is not typed.
                 let generic = FuncGeneric::new("UBER_HACK".to_owned(), None, None, lu_dog);
                 let list = List::new(&ValueType::new_func_generic(true, &generic, lu_dog), lu_dog);
                 let expr = Expression::new_list_expression(
@@ -2379,7 +2382,7 @@ pub(super) fn inter_expression(
             let mut expr_type_tuples = values
                 .iter()
                 .filter_map(|value| {
-                    let value = s_read!(value);
+                    let value = &*s_read!(value);
                     match value.subtype {
                         XValueEnum::Expression(ref _expr) => {
                             // What's going on is that there are a bunch of values in the block.
@@ -2401,10 +2404,9 @@ pub(super) fn inter_expression(
                                     VariableEnum::LambdaParameter(_)=> {
                                         let ty = value.r24_value_type(lu_dog)[0].clone();
 
-                                        let lhs_ty =
+                                        let ty_str =
                                             PrintableValueType(&ty, context, lu_dog);
-
-                                        debug!("{name}, {:?}, {} ({ty:?})",&value, lhs_ty.to_string());
+                                        debug!("{name}, {}, {value:?} ({ty:?})", ty_str.to_string());
 
                                         let expr = lu_dog
                                             .iter_variable_expression()

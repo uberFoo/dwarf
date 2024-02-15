@@ -9,12 +9,13 @@ use crate::{
     new_ref, s_read, NewRef, RefType, SarzakStorePtr, Value, POP_CLR,
 };
 
+#[tracing::instrument]
 pub(in crate::bubba::compiler) fn compile(
     expr: &SarzakStorePtr,
     thonk: &mut CThonk,
     context: &mut Context,
 ) -> Result<Option<ValueType>> {
-    log::debug!(target: "instr", "{}: {}:{}:{}", POP_CLR.paint("compile_if_expr"), file!(), line!(), column!());
+    tracing::debug!(target: "instr", "{}: {}:{}:{}", POP_CLR.paint("compile_if_expr"), file!(), line!(), column!());
 
     let lu_dog = context.lu_dog_heel().clone();
     let lu_dog = s_read!(lu_dog);

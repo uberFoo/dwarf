@@ -131,6 +131,11 @@ struct Arguments {
     /// The number of threads to use for the executor. Defaults to the number of cpus.
     #[arg(long)]
     threads: Option<usize>,
+    /// Use Interpreter
+    ///
+    /// With this option the interpreter will be used instead of the VM.
+    #[arg(long, short, action=ArgAction::SetTrue)]
+    interpreter: Option<bool>,
 }
 
 #[derive(Clone, Debug, Args)]
@@ -168,6 +173,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let is_uber = args.uber.is_some() && args.uber.unwrap();
     let print_ast = args.ast.is_some() && args.ast.unwrap();
     let threads = args.threads.unwrap_or_else(num_cpus::get);
+    let interpreter = args.interpreter.is_some() && args.interpreter.unwrap();
 
     // if threads == 0 {
     //     return Err(Box::new(std::io::Error::new(
@@ -257,35 +263,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         };
 
-        // if let Ok(program) = compile(&ctx) {
-        //     println!("running in the VM");
-        //     // println!("{program}");
-
-        //     let args: Vec<RefType<Value>> = dwarf_args
-        //         .into_iter()
-        //         .map(|a| new_ref!(Value, a.into()))
-        //         .collect();
-
-        //     let mut vm = VM::new(&program, &args, &dwarf_home);
-        //     vm.invoke("main", &[])?;
-        //     return Ok(());
-        // }
-
-        let mut ctx = initialize_interpreter(threads, dwarf_home, ctx)?;
-        ctx.add_args(dwarf_args);
-
         if args.banner.is_some() && args.banner.unwrap() {
             println!("{}", banner2());
         }
 
         if args.repl.is_some() && args.repl.unwrap() {
+            let mut ctx = initialize_interpreter(threads, dwarf_home, ctx)?;
+            ctx.add_args(dwarf_args);
             start_repl(&mut ctx, is_uber, threads)
                 .map_err(|e| {
                     println!("Interpreter exited with: {}", e);
                     e
                 })
                 .unwrap();
-        } else {
+        } else if interpreter {
+            let mut ctx = initialize_interpreter(threads, dwarf_home, ctx)?;
+            ctx.add_args(dwarf_args);
             match start_func("main", false, &mut ctx) {
                 // 🚧 What's a sensible thing to do with this?
                 #[allow(unused_variables)]
@@ -334,6 +327,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
             .unwrap();
+        } else {
+            if let Ok(program) = compile(&ctx) {
+                println!("running in the VM");
+                println!("{program}");
+
+                let args: Vec<RefType<Value>> = dwarf_args
+                    .into_iter()
+                    .map(|a| new_ref!(Value, a.into()))
+                    .collect();
+
+                let mut vm = VM::new(&program, &args, &dwarf_home, threads);
+                vm.invoke("main", &[])?;
+                return Ok(());
+            }
         }
     } else if args.dap.is_some() && args.dap.unwrap() {
         let listener = TcpListener::bind("127.0.0.1:4711").unwrap();

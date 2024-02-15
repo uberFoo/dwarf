@@ -17,19 +17,21 @@ use crate::{
     NewRef, RefType, SarzakStorePtr, Span, Value, PATH_SEP, POP_CLR,
 };
 
+#[tracing::instrument]
 pub(in crate::bubba::compiler) fn compile(
     call: &SarzakStorePtr,
     thonk: &mut CThonk,
     context: &mut Context,
     span: Span,
 ) -> Result<Option<ValueType>> {
-    log::debug!(target: "instr", "{}\n  --> {}:{}:{}", POP_CLR.paint("compile_call"), file!(), line!(), column!());
-
     let lu_dog = context.lu_dog_heel();
     let lu_dog = s_read!(lu_dog);
 
     let wrapped_call = lu_dog.exhume_call(call).unwrap();
     let call = s_read!(wrapped_call);
+
+    tracing::debug!(target: "instr", "{}: {:?}\n  --> {}:{}:{}", POP_CLR.paint("compile_call"), call.subtype, file!(), line!(), column!());
+
     let first_arg = call.argument;
     let args = call.r28_argument(&lu_dog);
 
@@ -87,13 +89,14 @@ pub(in crate::bubba::compiler) fn compile(
 ///
 /// Doing this in a single step is fine because the pointer will either be used
 /// directly or stored in a variable.
+#[tracing::instrument]
 pub(in crate::bubba::compiler) fn compile_lambda(
     λ: &SarzakStorePtr,
     outer_thonk: &mut CThonk,
     context: &mut Context,
     span: Span,
 ) -> Result<Option<ValueType>> {
-    log::debug!(target: "instr", "{}: {}:{}:{}", POP_CLR.paint("compile_lambda"), file!(), line!(), column!());
+    tracing::debug!(target: "instr", "{}: {}:{}:{}", POP_CLR.paint("compile_lambda"), file!(), line!(), column!());
 
     let lu_dog = context.lu_dog_heel();
     let lu_dog = s_read!(lu_dog);
@@ -185,26 +188,17 @@ pub(in crate::bubba::compiler) fn compile_lambda(
 
     context.pop_symbol_table();
 
-    let mut frame_size = thonk.inner.frame_size();
-    dbg!(frame_size);
+    let frame_size = thonk.inner.frame_size();
     for (var, index) in context.captures.take().unwrap() {
         let Some(symbol) = context.get_symbol(&var) else {
             panic!("capture not found: {var}");
         };
-        // frame_size += 1;
-        // thonk.increment_frame_size();
         thonk.prefix_instruction(Instruction::CaptureLocal(symbol.number, index), location!());
     }
 
     context.captures = saved_captures;
 
     context.get_program().add_thonk(thonk.into());
-
-    // let pointer = Value::FubarPointer {
-    //     name: name.clone(),
-    //     frame_size,
-    //     captures: Vec::new(),
-    // };
 
     // outer_thonk.add_instruction(Instruction::Push(new_ref!(Value, pointer)), location!());
     outer_thonk.insert_instruction(
@@ -221,6 +215,7 @@ pub(in crate::bubba::compiler) fn compile_lambda(
 ///
 /// This ensures that the stack is setup for a function call, which we issue
 /// at the tail of the function.
+#[tracing::instrument]
 fn compile_function_call(
     name: &str,
     call: RefType<Call>,
@@ -228,7 +223,7 @@ fn compile_function_call(
     thonk: &mut CThonk,
     context: &mut Context,
 ) -> Result<Option<ValueType>> {
-    log::debug!(target: "instr", "{}: {name}\n -> {}:{}:{}", POP_CLR.paint("compile_function_call"), file!(), line!(), column!());
+    tracing::debug!(target: "instr", "{}: {name}\n -> {}:{}:{}", POP_CLR.paint("compile_function_call"), file!(), line!(), column!());
 
     let lu_dog = context.lu_dog_heel();
     let lu_dog = s_read!(lu_dog);
@@ -273,6 +268,7 @@ fn compile_function_call(
     }
 }
 
+#[tracing::instrument]
 fn compile_method_call(
     name: String,
     call: RefType<Call>,
@@ -280,7 +276,7 @@ fn compile_method_call(
     thonk: &mut CThonk,
     context: &mut Context,
 ) -> Result<Option<ValueType>> {
-    log::debug!(target: "instr", "{}: {name}\n  -> {}:{}:{}", POP_CLR.paint("compile_method_call"), file!(), line!(), column!());
+    tracing::debug!(target: "instr", "{}: {name}\n  -> {}:{}:{}", POP_CLR.paint("compile_method_call"), file!(), line!(), column!());
 
     let lu_dog = context.lu_dog_heel();
     let lu_dog = s_read!(lu_dog);
@@ -368,6 +364,7 @@ fn compile_method_call(
     result
 }
 
+#[tracing::instrument]
 fn compile_static_method_call(
     ty: &str,
     func: &str,
@@ -376,7 +373,7 @@ fn compile_static_method_call(
     context: &mut Context,
     span: Span,
 ) -> Result<Option<ValueType>> {
-    log::debug!(target: "instr", "{}: {}:{}:{}", POP_CLR.paint("compile_static_method_call"), file!(), line!(), column!());
+    tracing::debug!(target: "instr", "{}: {}:{}:{}", POP_CLR.paint("compile_static_method_call"), file!(), line!(), column!());
 
     let lu_dog = context.lu_dog_heel();
     let lu_dog = s_read!(lu_dog);
@@ -570,7 +567,7 @@ fn compile_static_method_call(
 
 #[cfg(test)]
 mod test {
-    use tracing_test::traced_test;
+    use test_log::test;
 
     use crate::{
         bubba::compiler::{
@@ -581,7 +578,6 @@ mod test {
         sarzak::MODEL as SARZAK_MODEL,
     };
 
-    #[traced_test]
     #[test]
     fn empty_func() {
         setup_logging();
@@ -603,7 +599,6 @@ mod test {
         run_vm(&program).unwrap();
     }
 
-    #[traced_test]
     #[test]
     fn empty_funcs() {
         setup_logging();
@@ -629,7 +624,6 @@ mod test {
         run_vm(&program).unwrap();
     }
 
-    #[traced_test]
     #[test]
     fn func_call() {
         setup_logging();
@@ -659,7 +653,6 @@ mod test {
         run_vm(&program).unwrap();
     }
 
-    #[traced_test]
     #[test]
     fn test_func_args() {
         setup_logging();
@@ -689,7 +682,6 @@ mod test {
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(6));
     }
 
-    #[traced_test]
     #[test]
     fn test_func_with_args_and_locals() {
         setup_logging();
@@ -722,7 +714,6 @@ mod test {
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(12));
     }
 
-    #[traced_test]
     #[test]
     fn test_argument_ordering() {
         setup_logging();
@@ -754,7 +745,6 @@ mod test {
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Empty);
     }
 
-    // #[traced_test]
     // #[test]
     fn string_format_locals() {
         setup_logging();
@@ -784,7 +774,6 @@ mod test {
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &"test 1 2 3".into());
     }
 
-    // #[traced_test]
     // #[test]
     fn string_format_indices() {
         setup_logging();
@@ -816,7 +805,6 @@ mod test {
         );
     }
 
-    #[traced_test]
     #[test]
     fn test_assert() {
         setup_logging();
@@ -843,7 +831,6 @@ mod test {
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Empty);
     }
 
-    #[traced_test]
     #[test]
     fn test_method_call() {
         setup_logging();
@@ -883,7 +870,6 @@ mod test {
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &42.into());
     }
 
-    #[traced_test]
     #[test]
     fn test_args() {
         setup_logging();
@@ -918,7 +904,6 @@ mod test {
         assert!(run_vm_with_args(&program, &args).is_ok());
     }
 
-    #[traced_test]
     #[test]
     fn test_lambda() {
         setup_logging();
@@ -950,5 +935,47 @@ mod test {
         assert_eq!(program.get_instruction_count(), 20);
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &45.into());
+    }
+
+    // #[test]
+    fn test_call_chain() {
+        setup_logging();
+        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
+
+        let ore = "
+                struct Callee {
+                    count: int,
+                }
+                impl Callee {
+                    fn new() -> Callee {
+                        Callee { count: 0 }
+                    }
+
+                    fn call(self) -> Callee {
+                        self.count = self.count + 1;
+                        self
+                    }
+                }
+                fn main() -> bool {
+                    let callee = Callee::new();
+                    callee.call().call();
+                    chacha::assert(callee.count == 2)
+                }";
+        let ast = parse_dwarf("test_call_chain", ore).unwrap();
+        let ctx = new_lu_dog(
+            "test_call_chain".to_owned(),
+            Some((ore.to_owned(), &ast)),
+            &get_dwarf_home(),
+            &sarzak,
+        )
+        .unwrap();
+        let program = compile(&ctx).unwrap();
+        println!("{program}");
+
+        assert_eq!(program.get_thonk_card(), 3);
+
+        // assert_eq!(program.get_instruction_count(), 39);
+
+        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &true.into());
     }
 }

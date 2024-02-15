@@ -496,7 +496,7 @@ pub enum Value {
     // #[serde(skip)]
     ParsedDwarf(Context),
     // #[serde(skip)]
-    Plugin(RefType<PluginType>),
+    Plugin((String, RefType<PluginType>)),
     // #[serde(skip)]
     ProxyType {
         module: String,
@@ -580,7 +580,7 @@ impl Value {
             Self::Integer(num) => write!(f, "{num}"),
             Self::Lambda(_) => write!(f, "<lambda>"),
             Self::ParsedDwarf(ctx) => write!(f, "{ctx:#?}"),
-            Self::Plugin(plugin) => write!(f, "plugin::{}", s_read!(plugin).name()),
+            Self::Plugin((name, _plugin)) => write!(f, "plugin::{name}"),
             Self::ProxyType {
                 module: _,
                 obj_ty: _,
@@ -695,13 +695,11 @@ impl Value {
                 #[allow(clippy::let_and_return)]
                 ƛ_type
             }
-            Value::Plugin(plugin) => {
-                let name = s_read!(plugin);
-                let name = name.name();
+            Value::Plugin((name, _plugin)) => {
                 for vt in lu_dog.iter_value_type() {
                     if let ValueTypeEnum::XPlugin(id) = s_read!(vt).subtype {
                         let plugin = lu_dog.exhume_x_plugin(&id).unwrap();
-                        if s_read!(plugin).name == name {
+                        if s_read!(plugin).name == name.as_str() {
                             return vt.clone();
                         }
                     }
@@ -887,7 +885,7 @@ impl std::fmt::Debug for Value {
             Self::Integer(num) => write!(f, "{num:?}"),
             Self::Lambda(ƛ) => write!(f, "{:?}", s_read!(ƛ)),
             Self::ParsedDwarf(ctx) => write!(f, "{ctx:?}"),
-            Self::Plugin(plugin) => write!(f, "plugin::{}", s_read!(plugin).name()),
+            Self::Plugin((name, _plugin)) => write!(f, "plugin::{name}"),
             Self::ProxyType {
                 module,
                 obj_ty,
@@ -1043,7 +1041,7 @@ impl fmt::Display for Value {
             Self::Integer(num) => write!(f, "{num}"),
             Self::Lambda(_) => write!(f, "<lambda>"),
             Self::ParsedDwarf(ctx) => write!(f, "{ctx:#?}"),
-            Self::Plugin(plugin) => write!(f, "plugin::{}", s_read!(plugin).name()),
+            Self::Plugin((name, _plugin)) => write!(f, "plugin::{name}"),
             Self::ProxyType {
                 module: _,
                 obj_ty: _,
@@ -1816,7 +1814,7 @@ impl std::cmp::PartialEq for Value {
                     plugin: _,
                 },
             ) => a == b,
-            (Value::Plugin(a), Value::Plugin(b)) => s_read!(a).name() == s_read!(b).name(),
+            (Value::Plugin((a, _)), Value::Plugin((b, _))) => a == b,
             (Value::String(a), Value::String(b)) => a == b,
             (Value::Struct(a), Value::Struct(b)) => *s_read!(a) == *s_read!(b),
             (Value::Uuid(a), Value::Uuid(b)) => a == b,

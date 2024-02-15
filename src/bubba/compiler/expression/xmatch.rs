@@ -10,13 +10,14 @@ use crate::{
     new_ref, s_read, NewRef, RefType, SarzakStorePtr, Span, Value, POP_CLR,
 };
 
+#[tracing::instrument]
 pub(in crate::bubba::compiler) fn compile(
     expr: &SarzakStorePtr,
     thonk: &mut CThonk,
     context: &mut Context,
     span: Span,
 ) -> Result<Option<ValueType>> {
-    log::debug!(target: "instr", "{}: {}:{}:{}", POP_CLR.paint("compile_match"), file!(), line!(), column!());
+    tracing::debug!(target: "instr", "{}: {}:{}:{}", POP_CLR.paint("compile_match"), file!(), line!(), column!());
 
     let lu_dog = context.lu_dog_heel().clone();
     let lu_dog = s_read!(lu_dog);
@@ -33,7 +34,7 @@ pub(in crate::bubba::compiler) fn compile(
         // Compiling the scrutinee
         compile_expression(&scrutinee, thonk, context, scrutinee_span.clone())?;
 
-        log::debug!(target: "instr", "{}:{}:{}", file!(), line!(), column!());
+        tracing::debug!(target: "instr", "{}:{}:{}", file!(), line!(), column!());
 
         // We push this up here because of the pattern matching needs it's own context.
         context.push_scope();
@@ -45,7 +46,7 @@ pub(in crate::bubba::compiler) fn compile(
         // Compile the match expression.
         match &s_read!(match_expr).subtype {
             ExpressionEnum::Literal(ref literal) => {
-                log::debug!(target: "instr", "{}:{}:{}", file!(), line!(), column!());
+                tracing::debug!(target: "instr", "{}:{}:{}", file!(), line!(), column!());
 
                 literal::compile(literal, thonk, context, span.clone())?;
             }
@@ -74,7 +75,7 @@ pub(in crate::bubba::compiler) fn compile(
                             // 🚧 I'm already in the middle of one of these.
                             match &expr.subtype {
                                 ExpressionEnum::Literal(ref literal) => {
-                                    log::debug!(target: "instr", "{}:{}:{}", file!(), line!(), column!());
+                                    tracing::debug!(target: "instr", "{}:{}:{}", file!(), line!(), column!());
 
                                     literal::compile(literal, thonk, context, span.clone())?;
                                 }
@@ -190,7 +191,7 @@ pub(in crate::bubba::compiler) fn compile(
         // Compile the match block.
         let mut match_thonk = CThonk::new("match".to_owned());
 
-        log::debug!(target: "instr", "{}: {}:{}:{}", POP_CLR.paint("compile_pattern_expr"), file!(), line!(), column!());
+        tracing::debug!(target: "instr", "{}: {}:{}:{}", POP_CLR.paint("compile_pattern_expr"), file!(), line!(), column!());
         compile_expression(
             &pattern_expr,
             &mut match_thonk,

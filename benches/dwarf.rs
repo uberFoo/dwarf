@@ -70,11 +70,11 @@ fn fib_vm(c: &mut Criterion) {
     };
 
     let args = vec![new_ref!(Value, "fib".into()), new_ref!(Value, "17".into())];
-    let mut vm = VM::new(&program, &args, &PathBuf::new());
+    let mut vm = VM::new(&program, &args, &PathBuf::new(), num_cpus::get());
     c.bench_function("fib-vm-17", |b| b.iter(|| vm.invoke("main", &[]).unwrap()));
 
     let args = vec![new_ref!(Value, "fib".into()), new_ref!(Value, "28".into())];
-    let mut vm = VM::new(&program, &args, &PathBuf::new());
+    let mut vm = VM::new(&program, &args, &PathBuf::new(), num_cpus::get());
     c.bench_function("fib-vm-28", |b| b.iter(|| vm.invoke("main", &[]).unwrap()));
 }
 
@@ -171,7 +171,7 @@ fn loop_vm(c: &mut Criterion) {
     let Ok(program) = compile(&lu_dog_ctx) else {
         panic!("Failed to compile program");
     };
-    let mut vm = VM::new(&program, &[], &PathBuf::new());
+    let mut vm = VM::new(&program, &[], &PathBuf::new(), num_cpus::get());
 
     c.bench_function("loop-vm", |b| b.iter(|| vm.invoke("main", &[]).unwrap()));
 }
@@ -180,28 +180,36 @@ fn vm_28(c: &mut Criterion) {
     #[cfg(feature = "tracy")]
     Client::start();
 
-    c.bench_function("vm-fib-28", |b| b.iter(|| run_fib(28.into()).unwrap()));
+    c.bench_function("vm-fib-28", |b| {
+        b.iter(|| run_fib(28.into(), num_cpus::get()).unwrap())
+    });
 }
 
 fn vm_25(c: &mut Criterion) {
     #[cfg(feature = "tracy")]
     Client::start();
 
-    c.bench_function("vm-fib-25", |b| b.iter(|| run_fib(25.into()).unwrap()));
+    c.bench_function("vm-fib-25", |b| {
+        b.iter(|| run_fib(25.into(), num_cpus::get()).unwrap())
+    });
 }
 
 fn vm_17(c: &mut Criterion) {
     #[cfg(feature = "tracy")]
     Client::start();
 
-    c.bench_function("vm-fib-17", |b| b.iter(|| run_fib(17.into()).unwrap()));
+    c.bench_function("vm-fib-17", |b| {
+        b.iter(|| run_fib(17.into(), num_cpus::get()).unwrap())
+    });
 }
 
 fn vm_5(c: &mut Criterion) {
     #[cfg(feature = "tracy")]
     Client::start();
 
-    c.bench_function("vm-fib-5", |b| b.iter(|| run_fib(5.into()).unwrap()));
+    c.bench_function("vm-fib-5", |b| {
+        b.iter(|| run_fib(5.into(), num_cpus::get()).unwrap())
+    });
 }
 
 // criterion_group!(benches, loop_, mandelbrot, fib, vm_28, vm_25, vm_17, vm_5);

@@ -163,6 +163,7 @@ mod http_client {
 
         fn close(self) {}
 
+        #[tracing::instrument]
         fn invoke_func(
             &mut self,
             module: RStr<'_>,
@@ -174,6 +175,7 @@ mod http_client {
                 match ty.as_str() {
                     "HttpClient" => match func.as_str() {
                         "get" => {
+                            tracing::trace!("get enter");
                             let url: String = args
                                 .first()
                                 .unwrap()
@@ -186,12 +188,14 @@ mod http_client {
                             let key = entry.key();
                             self.requests.insert(Arc::new(request));
 
+                            tracing::trace!("get exit");
                             Ok(FfiValue::Integer(key as DwarfInteger))
                         }
                         func => Err(Error::Uber(format!("Invalid function: {func}").into())),
                     },
                     "Request" => match func.as_str() {
                         "send" => {
+                            tracing::trace!("send enter");
                             let key: DwarfInteger = args
                                 .first()
                                 .unwrap()
@@ -216,8 +220,10 @@ mod http_client {
                                         RErr(RBox::new(FfiValue::Integer(key as DwarfInteger)))
                                     }
                                 };
+                                tracing::trace!("send exit");
                                 Ok(FfiValue::Result(response))
                             } else {
+                                tracing::trace!("send exit");
                                 Ok(FfiValue::Error("Too many references to request.".into()))
                             }
                         }
@@ -225,6 +231,7 @@ mod http_client {
                     },
                     "Response" => match func.as_str() {
                         "text" => {
+                            tracing::trace!("text enter");
                             let key: DwarfInteger = args
                                 .first()
                                 .unwrap()
@@ -244,8 +251,10 @@ mod http_client {
                                         RErr(RBox::new(FfiValue::Integer(key as DwarfInteger)))
                                     }
                                 };
+                                tracing::trace!("text exit");
                                 Ok(FfiValue::Result(result))
                             } else {
+                                tracing::trace!("text exit");
                                 Ok(FfiValue::Error("Too many references to response.".into()))
                             }
                         }
@@ -253,6 +262,7 @@ mod http_client {
                     },
                     "HttpError" => match func.as_str() {
                         "to_string" => {
+                            tracing::trace!("to_string enter");
                             let key: DwarfInteger = args
                                 .first()
                                 .unwrap()
@@ -264,8 +274,10 @@ mod http_client {
                             if let Some(error) = Arc::into_inner(error) {
                                 let result =
                                     ROk(RBox::new(FfiValue::String(error.to_string().into())));
+                                tracing::trace!("to_string exit");
                                 Ok(FfiValue::Result(result))
                             } else {
+                                tracing::trace!("to_string exit");
                                 Ok(FfiValue::Error("Too many references to error.".into()))
                             }
                         }

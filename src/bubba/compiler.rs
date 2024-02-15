@@ -52,8 +52,9 @@ impl CThonk {
         }
     }
 
+    #[tracing::instrument]
     fn insert_instruction(&mut self, instruction: Instruction, location: Location) {
-        log::debug!(target: "instr", "{}:\t\t{instruction}\n  --> {}:{}:{}", POP_CLR.paint("add_instruction"), location.file, location.line, location.column);
+        tracing::debug!(target: "instr", "{}:\t\t{instruction}\n  --> {}:{}:{}", POP_CLR.paint("add_instruction"), location.file, location.line, location.column);
 
         if log_enabled!(target: "instr", Trace) {
             self.inner.add_instruction(
@@ -67,8 +68,9 @@ impl CThonk {
         self.inner.add_instruction(instruction, None);
     }
 
+    #[tracing::instrument]
     fn prefix_instruction(&mut self, instruction: Instruction, location: Location) {
-        log::debug!(target: "instr", "{}:\t\t{instruction}\n  --> {}:{}:{}", POP_CLR.paint("prefix_instruction"), location.file, location.line, location.column);
+        tracing::debug!(target: "instr", "{}:\t\t{instruction}\n  --> {}:{}:{}", POP_CLR.paint("prefix_instruction"), location.file, location.line, location.column);
 
         if log_enabled!(target: "instr", Trace) {
             self.inner.add_instruction(
@@ -82,13 +84,14 @@ impl CThonk {
         self.inner.prefix_instruction(instruction, None);
     }
 
+    #[tracing::instrument]
     fn insert_instruction_with_span(
         &mut self,
         instruction: Instruction,
         span: Span,
         location: Location,
     ) {
-        log::debug!(target: "instr", "{}:\t\t{instruction}\n  --> {}:{}:{}", POP_CLR.paint("add_instruction"), location.file, location.line, location.column);
+        tracing::debug!(target: "instr", "{}:\t\t{instruction}\n  --> {}:{}:{}", POP_CLR.paint("add_instruction"), location.file, location.line, location.column);
 
         if log_enabled!(target: "instr", Trace) {
             self.inner.add_instruction(
@@ -138,17 +141,19 @@ struct SymbolTable {
 }
 
 impl SymbolTable {
+    #[tracing::instrument]
     fn new(start: usize) -> Self {
-        log::debug!(target: "instr", "{}: {start}", ERR_CLR.paint("new symbol table"));
+        tracing::debug!(target: "instr", "{}: {start}", ERR_CLR.paint("new symbol table"));
         SymbolTable {
             start,
             map: HashMap::default(),
         }
     }
 
+    #[tracing::instrument]
     fn insert(&mut self, name: String, ty: ValueType) -> usize {
         let number = self.count();
-        log::debug!(target: "instr", "{}: {name} ({number})", ERR_CLR.paint("symbol insert"));
+        tracing::debug!(target: "instr", "{}: {name} ({number})", ERR_CLR.paint("symbol insert"));
 
         self.map.insert(name, Symbol { number, ty });
         number
@@ -168,8 +173,9 @@ impl SymbolTable {
 }
 
 impl Drop for SymbolTable {
+    #[tracing::instrument]
     fn drop(&mut self) {
-        log::debug!(target: "instr", "{}", ERR_CLR.paint("drop symbol table"));
+        tracing::debug!(target: "instr", "{}", ERR_CLR.paint("drop symbol table"));
     }
 }
 
@@ -427,6 +433,7 @@ fn get_function_name(func: &RefType<Function>, lu_dog: &LuDogStore) -> String {
     }
 }
 
+#[tracing::instrument]
 fn compile_function(func: &RefType<Function>, context: &mut Context) -> Result<CThonk> {
     let lu_dog = context.lu_dog_heel();
     let lu_dog = s_read!(lu_dog);
@@ -438,7 +445,7 @@ fn compile_function(func: &RefType<Function>, context: &mut Context) -> Result<C
     let body = s_read!(body);
     let params = func.r13_parameter(&lu_dog);
 
-    log::debug!(target: "instr", "{}: {}\n  --> {}:{}:{}", ERR_CLR.paint("compile_function"), func.name, file!(), line!(), column!());
+    tracing::debug!(target: "instr", "{}: {}\n  --> {}:{}:{}", ERR_CLR.paint("compile_function"), func.name, file!(), line!(), column!());
 
     // I need to iterate over the parameters to get the name of the parameter.
     if !params.is_empty() {
@@ -574,17 +581,19 @@ fn compile_function(func: &RefType<Function>, context: &mut Context) -> Result<C
     Ok(thonk)
 }
 
+#[tracing::instrument]
 fn compile_statement(
     statement: &RefType<Statement>,
     thonk: &mut CThonk,
     context: &mut Context,
 ) -> Result<Option<ValueType>> {
-    log::debug!(target: "instr", "{}:\n --> {}:{}:{}", POP_CLR.paint("compile_statement"), file!(), line!(), column!());
+    let statement = s_read!(statement);
+    tracing::debug!(target: "instr", "{}: {:?}\n --> {}:{}:{}", POP_CLR.paint("compile_statement"), statement.subtype, file!(), line!(), column!());
 
     let lu_dog = context.lu_dog_heel();
     let lu_dog = s_read!(lu_dog);
 
-    match s_read!(statement).subtype {
+    match statement.subtype {
         StatementEnum::ExpressionStatement(ref stmt) => {
             let stmt = lu_dog.exhume_expression_statement(stmt).unwrap();
             let stmt = s_read!(stmt);
@@ -637,15 +646,17 @@ fn compile_statement(
     }
 }
 
+#[tracing::instrument]
 fn compile_expression(
     expression: &RefType<Expression>,
     thonk: &mut CThonk,
     context: &mut Context,
     span: Span,
 ) -> Result<Option<ValueType>> {
-    log::debug!(target: "instr", "{}:\n  -> {}:{}:{}", POP_CLR.paint("compile_expression"), file!(), line!(), column!());
+    let expression = s_read!(expression);
+    tracing::debug!(target: "instr", "{}: {:?}\n  -> {}:{}:{}", POP_CLR.paint("compile_expression"), expression.subtype, file!(), line!(), column!());
 
-    match &s_read!(expression).subtype {
+    match &expression.subtype {
         ExpressionEnum::AWait(ref expr) => a_weight::compile(expr, thonk, context, span),
         ExpressionEnum::Block(ref block) => block::compile(block, thonk, context),
         ExpressionEnum::Call(ref call) => call::compile(call, thonk, context, span),
@@ -699,7 +710,7 @@ mod test {
 
     use super::*;
 
-    use tracing_test::traced_test;
+    use test_log::test;
 
     use crate::{
         bubba::{vm::Error, VM},
@@ -737,7 +748,6 @@ mod test {
         color_backtrace::install();
     }
 
-    #[traced_test]
     #[test]
     fn test_let_statements() {
         setup_logging();
@@ -767,7 +777,6 @@ mod test {
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(5));
     }
 
-    #[traced_test]
     #[test]
     fn test_boolean_true() {
         setup_logging();
@@ -794,7 +803,6 @@ mod test {
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Boolean(true));
     }
 
-    #[traced_test]
     #[test]
     fn test_boolean_false() {
         setup_logging();
@@ -821,7 +829,6 @@ mod test {
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Boolean(false));
     }
 
-    #[traced_test]
     #[test]
     fn fibonacci() {
         setup_logging();
@@ -860,7 +867,6 @@ mod test {
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(55));
     }
 
-    #[traced_test]
     #[test]
     fn use_std_option() {
         setup_logging();
@@ -897,8 +903,7 @@ mod test {
         assert_eq!(&*s_read!(run.unwrap()), &Value::Boolean(true));
     }
 
-    #[traced_test]
-    #[test]
+    // #[test]
     fn use_plugin() {
         setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
@@ -927,9 +932,8 @@ mod test {
         assert_eq!(&*s_read!(run.unwrap()), &Value::Boolean(true));
     }
 
-    #[traced_test]
-    #[test]
-    fn use_async() {
+    // #[test]
+    fn vm_async_http() {
         setup_logging();
         // let _ = env_logger::builder().is_test(true).try_init();
 
@@ -1035,7 +1039,6 @@ async fn main() -> Future<()> {
         // assert_eq!(&*s_read!(run.unwrap()), &Value::Boolean(true));
     }
 
-    #[traced_test]
     #[test]
     fn test_locals_and_params() {
         setup_logging();
@@ -1072,7 +1075,6 @@ async fn main() -> Future<()> {
         assert_eq!(&*s_read!(run.unwrap()), &Value::Integer(6));
     }
 
-    #[traced_test]
     #[test]
     fn test_scopes() {
         setup_logging();

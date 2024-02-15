@@ -9,13 +9,14 @@ use crate::{
     s_read, SarzakStorePtr, Span, POP_CLR,
 };
 
+#[tracing::instrument]
 pub(in crate::bubba::compiler) fn compile(
     expr: &SarzakStorePtr,
     thonk: &mut CThonk,
     context: &mut Context,
     span: Span,
 ) -> Result<Option<ValueType>> {
-    log::debug!(target: "instr", "{}: {}:{}:{}", POP_CLR.paint("compile_return"), file!(), line!(), column!());
+    tracing::debug!(target: "instr", "{}: {}:{}:{}", POP_CLR.paint("compile_return"), file!(), line!(), column!());
 
     let lu_dog = context.lu_dog_heel();
     let lu_dog = s_read!(lu_dog);

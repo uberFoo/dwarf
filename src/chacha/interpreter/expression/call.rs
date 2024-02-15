@@ -279,7 +279,7 @@ pub fn eval(
                         });
                     }
                 },
-                Value::Plugin(plugin) => match meth_name.as_str() {
+                Value::Plugin((_name, plugin)) => match meth_name.as_str() {
                     INVOKE_FUNC => {
                         // self is tacked on.
                         if args.len() - 1 != 4 {
@@ -1195,10 +1195,11 @@ pub fn eval(
                                 })?;
 
                                 let ctor = root_module.new();
-                                let plugin = new_ref!(PluginType, ctor(args.into()).unwrap());
+                                let plugin = ctor(args.into()).unwrap();
+                                let name = plugin.name().to_string();
+                                let plugin = new_ref!(PluginType, plugin);
 
-                                // let value = new_ref!(Value, Value::Store(store, plugin));
-                                let value = new_ref!(Value, Value::Plugin(plugin));
+                                let value = new_ref!(Value, Value::Plugin((name, plugin)));
 
                                 Ok(value)
                             }

@@ -15,13 +15,14 @@ use crate::{
 
 const LIST_VAR: &str = "$$list_value";
 
+#[tracing::instrument]
 pub(in crate::bubba::compiler) fn compile(
     for_loop: &SarzakStorePtr,
     thonk: &mut CThonk,
     context: &mut Context,
     span: Span,
 ) -> Result<Option<ValueType>> {
-    log::debug!(target: "instr", "{}\n  --> {}:{}:{}", POP_CLR.paint("compile_for_loop"), file!(), line!(), column!());
+    tracing::debug!(target: "instr", "{}\n  --> {}:{}:{}", POP_CLR.paint("compile_for_loop"), file!(), line!(), column!());
 
     let lu_dog = context.lu_dog_heel().clone();
     let lu_dog = s_read!(lu_dog);
@@ -122,7 +123,6 @@ pub(in crate::bubba::compiler) fn compile(
                     }
                 }
                 ty => {
-                    dbg!(ty);
                     return Err(BubbaError::InternalCompilerError {
                         message: "For loop expression is not a list".to_owned(),
                         location: location!(),

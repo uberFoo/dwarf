@@ -28,6 +28,7 @@
         "jift",
         "krate",
         "lpush",
+        "MANDEL",
         "metamodel",
         "mimalloc",
         "msvc",
