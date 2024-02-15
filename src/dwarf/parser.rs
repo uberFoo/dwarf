@@ -382,6 +382,10 @@ impl DwarfParser {
         }
 
         if path.is_empty() {
+            if let Some(literal) = self.parse_simple_expression()? {
+                return Ok(Some((Pattern::Literal(literal.0), path_span)));
+            }
+
             Ok(None)
         } else if path.len() == 1 {
             let ty = if let Type::UserType(ty, _) = path[0].clone() {
@@ -467,6 +471,9 @@ impl DwarfParser {
         let false_block = if self.match_tokens(&[Token::Else]).is_some() {
             debug!("getting false block");
             let false_block = if let Some(expr) = self.parse_block_expression()? {
+                debug!("false block", expr);
+                expr
+            } else if let Some(expr) = self.parse_if_expression()? {
                 debug!("false block", expr);
                 expr
             } else {
@@ -907,10 +914,17 @@ impl DwarfParser {
         }
 
         let name = if let Some(ident) = self.parse_ident() {
-            if let Ok(Some(_g)) = self.parse_generics() {
-                // let g = generic_to_string(&g);
-                // (format!("{}{}", ident.0, g.0), ident.1.start..g.1.end)
-                ident
+            if let Ok(Some(g)) = self.parse_generics() {
+                let mut name = ident.clone();
+                // name.0.push_str("<");
+                // name.0.push_str(
+                //     &g.0.iter()
+                //         .map(|(ty, _)| ty.to_string())
+                //         .collect::<Vec<_>>()
+                //         .join(", "),
+                // );
+                // name.0.push_str(">");
+                name
             } else {
                 ident
             }
@@ -2091,7 +2105,7 @@ impl DwarfParser {
             return Ok(Some(expression));
         }
 
-        if let Some(expression) = self.parse_expression_with_block()? {
+        if let (Some(expression), _) = self.parse_expression_with_block()? {
             debug!("expression with block", expression);
             return Ok(Some(expression));
         };
@@ -2103,45 +2117,45 @@ impl DwarfParser {
     /// Parse an expression with a block
     ///
     /// expression -> block | for | if | lambda | match
-    fn parse_expression_with_block(&mut self) -> Result<Option<Expression>> {
+    fn parse_expression_with_block(&mut self) -> Result<(Option<Expression>, bool)> {
         debug!("enter");
 
         // parse a lambda expression
         if let Some(expression) = self.parse_lambda_expression()? {
             debug!("lambda expression", expression);
-            return Ok(Some(expression));
+            return Ok((Some(expression), true));
         }
 
         // parse a block expression
         if let Some(expression) = self.parse_block_expression()? {
             debug!("block expression", expression);
             if let Some(expression) = self.parse_await(&expression, BLOCK.0)? {
-                return Ok(Some(expression));
+                return Ok((Some(expression), true));
             } else {
-                return Ok(Some(expression));
+                return Ok((Some(expression), true));
             }
         }
 
         // parse a for loop expression
         if let Some(expression) = self.parse_for_loop_expression()? {
             debug!("for loop expression", expression);
-            return Ok(Some(expression));
+            return Ok((Some(expression), false));
         }
 
         // parse an if expression
         if let Some(expression) = self.parse_if_expression()? {
             debug!("if expression", expression);
-            return Ok(Some(expression));
+            return Ok((Some(expression), true));
         }
 
         // parse a match expression
         if let Some(expression) = self.parse_match_expression()? {
             debug!("match expression", expression);
-            return Ok(Some(expression));
+            return Ok((Some(expression), true));
         }
 
         debug!("None");
-        Ok(None)
+        Ok((None, false))
     }
 
     /// Parse a Boolean Literal
@@ -3011,11 +3025,12 @@ impl DwarfParser {
         //
         // Parse a block expression. It may or may not be followed by a semi-
         // colon.
-        if let Some(expr) = self.parse_expression_with_block()? {
+        if let (Some(expr), result) = self.parse_expression_with_block()? {
             debug!("block expression", expr);
             // The `;` is optional, so we take a peek, and if it's there we
             // snag it. Maybe print a warning?
-            if self.match_tokens(&[Token::Punct(';')]).is_some() {
+            if self.match_tokens(&[Token::Punct(';')]).is_some() || !result {
+                // self.match_tokens(&[Token::Punct(';')]);
                 return Ok(Some((
                     Statement::Expression(expr.0),
                     start..self.previous().unwrap().1.end,
@@ -3032,8 +3047,6 @@ impl DwarfParser {
         //
         // Parse an expression that is not a block expression. It _must_ be
         // followed by a semicolon, _unless_ it's the last statement in a block.
-        // And how the fuck do we figure that out? We could look for a closing
-        // brace. I feel like we've tried that. But maybe not in this context.
         if let Some(expr) = self.parse_expression_without_block(ENTER)? {
             debug!("expression", expr);
             if self.match_tokens(&[Token::Punct(';')]).is_some() {
@@ -4206,10 +4219,12 @@ impl DwarfParser {
                 vec![]
             };
             debug!("exit parse_type: user defined", ident);
-            return Ok(Some((
+            let ty = Ok(Some((
                 Type::UserType(ident, inner),
                 start..self.peek().unwrap().1.start,
             )));
+
+            return ty;
         }
 
         Ok(None)
@@ -4233,8 +4248,12 @@ impl DwarfParser {
 
         while !self.at_end() && self.match_tokens(&[Token::Punct('>')]).is_none() {
             match self.parse_type() {
-                Ok(Some((Type::UserType(generic, _), span))) => {
-                    generics.push((Type::Generic(generic), span));
+                Ok(Some((Type::UserType(ty, generic), span))) => {
+                    if generic.is_empty() {
+                        generics.push((Type::Generic(ty), span));
+                    } else {
+                        generics.push((Type::UserType(ty, generic), span));
+                    }
                     let _ = self.match_tokens(&[Token::Punct(',')]);
                 }
                 Ok(Some(a)) => {
@@ -4451,7 +4470,7 @@ impl DwarfParser {
                     }
 
                     expr
-                } else if let Some(expr) = self.parse_expression_with_block()? {
+                } else if let (Some(expr), _) = self.parse_expression_with_block()? {
                     expr
                 } else {
                     let token = self.previous().unwrap();
@@ -4528,7 +4547,7 @@ impl DwarfParser {
             return Ok(None);
         }
 
-        let name = if let Some(ident) = self.parse_ident() {
+        let mut name = if let Some(ident) = self.parse_ident() {
             ident
         } else {
             let tok = self.previous().unwrap();
@@ -4542,6 +4561,19 @@ impl DwarfParser {
         };
 
         let generics = self.parse_generics()?;
+
+        // if let Some(generics) = &generics {
+        // name.0.push_str("<");
+        // name.0.push_str(
+        //     &generics
+        //         .0
+        //         .iter()
+        //         .map(|(ty, _)| ty.to_string())
+        //         .collect::<Vec<_>>()
+        //         .join(", "),
+        // );
+        // name.0.push_str(">");
+        // }
 
         if self.match_tokens(&[Token::Punct('{')]).is_none() {
             let tok = self.previous().unwrap();
@@ -5771,6 +5803,26 @@ mod tests {
         "#;
 
         let ast = parse_dwarf("test_await", src);
+        assert!(ast.is_ok());
+    }
+
+    #[test]
+    fn if_else_if() {
+        let _ = env_logger::builder().is_test(true).try_init();
+
+        let src = r#"
+            fn main() {
+                if a == b {
+                    print("a == b");
+                } else if a < b {
+                    print("a < b");
+                } else {
+                    print("a > b");
+                }
+            }
+        "#;
+
+        let ast = parse_dwarf("test_if_else_if", src);
         assert!(ast.is_ok());
     }
 }

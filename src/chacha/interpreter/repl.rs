@@ -6,14 +6,15 @@ use rustc_hash::FxHashMap as HashMap;
 use snafu::{location, Location};
 
 use crate::{
-    chacha::{error::ChaChaErrorReporter, vm::VM},
+    bubba::VM,
+    chacha::error::ChaChaErrorReporter,
     dwarf::{error::DwarfErrorReporter, inter_statement, parse_line, Context as ExtruderContext},
     interpreter::{banner2, debug, eval_statement, function, Context, Error, PrintableValueType},
     lu_dog::DwarfSourceFile,
-    new_ref, s_read, s_write, ChaChaError, NewRef, RefType,
+    new_ref, s_read, s_write, ChaChaError, NewRef, RefType, PATH_ROOT,
 };
 
-pub fn start_repl(context: &mut Context, is_uber: bool) -> Result<(), Error> {
+pub fn start_repl(context: &mut Context, is_uber: bool, thread_count: usize) -> Result<(), Error> {
     use std::io;
 
     use rustyline::error::ReadlineError;
@@ -24,13 +25,14 @@ pub fn start_repl(context: &mut Context, is_uber: bool) -> Result<(), Error> {
     const HISTORY_FILE: &str = ".dwarf_history";
 
     let models = context.models().models().clone();
+    let mut scopes = context.scopes().clone();
+    let mut imports = context.imports().clone();
     let lu_dog = context.lu_dog_heel().clone();
     let sarzak = context.sarzak_heel().clone();
 
     let block = context.block().clone();
 
-    let vm_stack = context.memory().clone();
-    let mut vm = VM::new(&vm_stack);
+    let mut vm = VM::new(context.get_program(), &[], context.get_home(), thread_count);
 
     let notice_style = Colour::Red.bold().italic();
     let prompt_style = Colour::Blue.normal();
@@ -119,6 +121,7 @@ pub fn start_repl(context: &mut Context, is_uber: bool) -> Result<(), Error> {
                                     location: location!(),
                                     struct_fields: Vec::new(),
                                     source: DwarfSourceFile::new(line.clone(), &mut lu_dog),
+                                    source_string: line.clone(),
                                     models: &mut s_write!(models),
                                     sarzak: &s_read!(sarzak),
                                     dwarf_home: &dwarf_home,
@@ -126,13 +129,18 @@ pub fn start_repl(context: &mut Context, is_uber: bool) -> Result<(), Error> {
                                     dirty: &mut dirty,
                                     file_name: "REPL",
                                     func_defs: HashMap::default(),
+                                    path: PATH_ROOT.to_owned(),
+                                    in_impl: "".to_owned(),
+                                    scopes: &mut scopes,
+                                    imports: &mut imports,
                                 },
+                                &mut Vec::new(),
                                 &mut lu_dog,
                             ) {
                                 Ok(stmt) => stmt.0,
                                 Err(errors) => {
                                     for e in errors {
-                                        println!("{}", DwarfErrorReporter(&e, is_uber, &line));
+                                        println!("{}", DwarfErrorReporter(&e, is_uber));
                                     }
                                     continue;
                                 }

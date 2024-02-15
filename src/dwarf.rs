@@ -10,24 +10,27 @@ use std::{fmt, ops, path::PathBuf};
 
 use clap::Args;
 use rustc_hash::FxHashMap as HashMap;
-use sarzak::sarzak::{store::ObjectStore as SarzakStore, types::Ty};
+use sarzak::sarzak::types::Ty;
 use serde::{Deserialize, Serialize};
 use snafu::{location, Location};
 
 use crate::{
-    lu_dog::{store::ObjectStore as LuDogStore, types::ValueType, Generic, Lambda, List},
-    s_read, ModelStore, RefType,
+    dwarf::items::enuum::create_generic_enum,
+    lu_dog::{
+        store::ObjectStore as LuDogStore, types::ValueType, Lambda, List, Span as LuDogSpan,
+        XFuture,
+    },
+    s_read, RefType, PATH_SEP,
 };
 
 pub mod error;
-mod expression;
 pub mod extruder;
 mod items;
 pub mod parser;
 mod pvt;
 
 use error::{DwarfError, Result};
-use pvt::PrintableValueType;
+pub(crate) use pvt::PrintableValueType;
 
 pub use extruder::{inter_statement, new_lu_dog, Context};
 pub use parser::{parse_dwarf, parse_line};
@@ -207,98 +210,159 @@ impl fmt::Display for Type {
 impl Type {
     pub fn check_type(
         &self,
-        file_name: &str,
         span: &Span,
+        context: &mut Context,
         store: &mut LuDogStore,
-        models: &ModelStore,
-        sarzak: &SarzakStore,
     ) -> Result<bool> {
-        self.into_value_type(file_name, span, store, models, sarzak)
-            .map(|_| true)
+        self.into_value_type(span, context, store).map(|_| true)
     }
 
     pub fn into_value_type(
         &self,
-        file_name: &str,
         span: &Span,
+        context: &mut Context,
         store: &mut LuDogStore,
-        _models: &ModelStore,
-        sarzak: &SarzakStore,
     ) -> Result<RefType<ValueType>> {
+        let sarzak = context.sarzak;
+
         match self {
             Type::Boolean => {
                 let ty = Ty::new_boolean(sarzak);
-                Ok(ValueType::new_ty(&ty, store))
+                Ok(ValueType::new_ty(true, &ty, store))
             }
-            Type::Empty => Ok(ValueType::new_empty(store)),
+            Type::Empty => Ok(ValueType::new_empty(true, store)),
             Type::Float => {
                 let ty = Ty::new_float(sarzak);
-                Ok(ValueType::new_ty(&ty, store))
+                Ok(ValueType::new_ty(true, &ty, store))
             }
             Type::Fn(_params, return_) => {
-                let return_ = return_
-                    .0
-                    .into_value_type(file_name, &return_.1, store, _models, sarzak)?;
+                let return_ = return_.0.into_value_type(&return_.1, context, store)?;
                 let ƛ = Lambda::new(None, None, &return_, store);
-                Ok(ValueType::new_lambda(&ƛ, store))
+                Ok(ValueType::new_lambda(true, &ƛ, store))
             }
             Type::Generic(name) => {
-                let generic = Generic::new(name.0.to_owned(), None, None, store);
-                Ok(ValueType::new_generic(&generic, store))
+                panic!("Generics need a next and a parent.");
             }
             Type::Integer => {
                 let ty = Ty::new_integer(sarzak);
-                Ok(ValueType::new_ty(&ty, store))
+                Ok(ValueType::new_ty(true, &ty, store))
             }
             Type::List(type_) => {
-                let ty = type_
-                    .0
-                    .into_value_type(file_name, &type_.1, store, _models, sarzak)?;
+                let ty = type_.0.into_value_type(&type_.1, context, store)?;
                 let list = List::new(&ty, store);
-                Ok(ValueType::new_list(&list, store))
+                Ok(ValueType::new_list(true, &list, store))
             }
             Type::Path(_) => unimplemented!(),
             Type::Self_ => panic!("Self is deprecated."),
             Type::String => {
-                let ty = Ty::new_s_string(sarzak);
-                Ok(ValueType::new_ty(&ty, store))
+                let ty = Ty::new_z_string(sarzak);
+                Ok(ValueType::new_ty(true, &ty, store))
             }
-            Type::Unknown => Ok(ValueType::new_unknown(store)),
-            Type::UserType(type_, _generics) => {
-                let name = &type_.0;
+            Type::Unknown => Ok(ValueType::new_unknown(true, store)),
+            Type::UserType(type_, generics) => {
+                let base_type = &type_.0;
+                let base_type = if let Some(path) = context.scopes.get(base_type) {
+                    path.to_owned() + base_type.as_str()
+                } else {
+                    base_type.to_owned()
+                };
+
+                let mut name = base_type.clone();
+                let generics_string = generics
+                    .iter()
+                    .map(|g| g.0.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                if !generics_string.is_empty() {
+                    name.push('<');
+                    name.push_str(&generics_string);
+                    name.push('>');
+                }
+
+                let name = if let Some(path) = context.scopes.get(&name) {
+                    path.to_owned() + name.as_str()
+                } else {
+                    name
+                };
 
                 // This is a special case for Uuid, which is a built-in type.
                 // The parser just doesn't know that, and it's actually cleaner
                 // and easier to handle it here.
                 if name == "Uuid" {
-                    return Ok(ValueType::new_ty(&Ty::new_s_uuid(sarzak), store));
+                    return Ok(ValueType::new_ty(true, &Ty::new_z_uuid(sarzak), store));
                 }
 
                 log::debug!(target: "dwarf", "Type::UserType: {name}");
 
-                if let Some(obj_id) = store.exhume_woog_struct_id_by_name(name) {
+                if base_type == "Future" {
+                    let inner_type = &generics[0];
+                    let inner_type = inner_type
+                        .0
+                        .into_value_type(&inner_type.1, context, store)?;
+                    let future = XFuture::new(&inner_type, store);
+                    let future = ValueType::new_x_future(true, &future, store);
+                    let _ = LuDogSpan::new(
+                        span.end as DwarfInteger,
+                        span.start as DwarfInteger,
+                        &context.source,
+                        Some(&future),
+                        None,
+                        store,
+                    );
+                    Ok(future)
+                } else if let Some(obj_id) = store.exhume_woog_struct_id_by_name(&name) {
                     let woog_struct = store.exhume_woog_struct(&obj_id).unwrap();
-                    Ok(ValueType::new_woog_struct(&woog_struct, store))
-                } else if let Some(enum_id) = store.exhume_enumeration_id_by_name(name) {
+                    let woog_struct = ValueType::new_woog_struct(true, &woog_struct, store);
+                    let _ = LuDogSpan::new(
+                        span.end as DwarfInteger,
+                        span.start as DwarfInteger,
+                        &context.source,
+                        Some(&woog_struct),
+                        None,
+                        store,
+                    );
+                    Ok(woog_struct)
+                } else if let Some(enum_id) = store.exhume_enumeration_id_by_name(&name) {
                     let enumeration = store.exhume_enumeration(&enum_id).unwrap();
-                    Ok(ValueType::new_enumeration(&enumeration, store))
-                } else if let Some(obj_id) = sarzak.exhume_object_id_by_name(name) {
+                    let enumeration = ValueType::new_enumeration(true, &enumeration, store);
+                    let _ = LuDogSpan::new(
+                        span.end as DwarfInteger,
+                        span.start as DwarfInteger,
+                        &context.source,
+                        Some(&enumeration),
+                        None,
+                        store,
+                    );
+                    Ok(enumeration)
+                } else if let Some(obj_id) = sarzak.exhume_object_id_by_name(&name) {
                     // If it's not in one of the models, it must be in sarzak.
                     let ty = sarzak.exhume_ty(&obj_id).unwrap();
                     log::debug!(target: "dwarf", "into_value_type, UserType, ty: {ty:?}");
-                    Ok(ValueType::new_ty(&ty, store))
+                    let ty = ValueType::new_ty(true, &ty, store);
+                    let _ = LuDogSpan::new(
+                        span.end as DwarfInteger,
+                        span.start as DwarfInteger,
+                        &context.source,
+                        Some(&ty),
+                        None,
+                        store,
+                    );
+                    Ok(ty)
+                } else if store.exhume_enumeration_id_by_name(&base_type).is_some() {
+                    Ok(create_generic_enum(&name, &base_type, span.to_owned(), context, store)?.1)
                 } else {
                     Err(vec![DwarfError::UnknownType {
                         ty: name.to_owned(),
-                        file: file_name.to_owned(),
+                        file: context.file_name.to_owned(),
                         span: span.to_owned(),
                         location: location!(),
+                        program: context.source_string.to_owned(),
                     }])
                 }
             }
             Type::Uuid => {
-                let ty = Ty::new_s_uuid(sarzak);
-                Ok(ValueType::new_ty(&ty, store))
+                let ty = Ty::new_z_uuid(sarzak);
+                Ok(ValueType::new_ty(true, &ty, store))
             }
         }
     }
@@ -325,7 +389,7 @@ pub enum Pattern {
     /// A literal
     ///
     /// E.g., `420`
-    Literal(Spanned<String>),
+    Literal(Spanned<Expression>),
     /// A path pattern
     ///
     /// E.g., `Foo::Bar`
@@ -347,9 +411,14 @@ impl From<Pattern> for Expression {
             // transmogrify an identifier into a local variable
             Pattern::Identifier((name, _span)) => Expression::LocalVariable(name),
             // 🚧 Need to do something about this.
-            Pattern::Literal((_value, _span)) => {
-                unreachable!()
-            }
+            Pattern::Literal((literal, _span)) => match literal {
+                Expression::BooleanLiteral(b) => Expression::BooleanLiteral(b),
+                Expression::Empty => Expression::Empty,
+                Expression::FloatLiteral(f) => Expression::FloatLiteral(f),
+                Expression::IntegerLiteral(i) => Expression::IntegerLiteral(i),
+                Expression::StringLiteral(s) => Expression::StringLiteral(s),
+                _ => unreachable!(),
+            },
             // Here we turn a path into a unit enum, which is really just a static
             // method call with storage.
             Pattern::PathPattern((path, span)) => {

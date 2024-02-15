@@ -71,8 +71,6 @@ pub trait Plugin: Clone + Debug + Display + Send + Sync {
         args: RVec<FfiValue>,
     ) -> RResult<FfiValue, Error>;
 
-    /// Gets the PluginId that was passed to this plugin in its constructor.
-    // fn plugin_id(&self) -> &PluginId;
     fn name(&self) -> RStr<'_>;
 
     /// Closes the plugin,
@@ -99,15 +97,17 @@ pub trait Plugin: Clone + Debug + Display + Send + Sync {
 }
 
 pub type PluginType = Plugin_TO<'static, RBox<()>>;
+// #[derive(Clone,Debug)]
+// pub struct PluginType {
+//     pub(crate) name: String,
+//     pub(crate) inner: Plugin_TO<'static, RBox<()>>,
+// }
 
-/// The identifier for a plugin.
-#[repr(C)]
-#[derive(Debug, Clone, PartialEq, Eq, StableAbi, Serialize, Deserialize)]
-pub struct PluginId {
-    pub named: RCowStr<'static>,
-    /// The number of the instance of this Plugin.
-    pub instance: u64,
-}
+// impl PartialEq for PluginType {
+//     fn eq(&self, other: &Self) -> bool {
+//         self.name == other.name
+//     }
+// }
 
 /// The root module of a`plugin` dynamic library.
 ///

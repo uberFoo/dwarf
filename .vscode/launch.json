@@ -142,11 +142,14 @@
             },
             "args": [
                 // "use.ore"
-                "tests/harness/types/generics/option.tao"
+                // "tests/harness/types/generics/workout.ore"
+                // "tests/harness/types/generics/option.tao"
+                "test.ore",
+                // "tests/harness/chacha/async/http.ore"
             ],
             "cwd": "${workspaceFolder}",
             "env": {
-                "RUST_LOG": "store=debug"
+                // "RUST_LOG": "vm=trace"
             },
             "preRunCommands": [
                 "script lldb.debugger.HandleCommand('settings set target.source-map /rustc/{} \"{}/lib/rustlib/src/rust\"'.format(os.popen('rustc --version --verbose').read().split('commit-hash: ')[1].split('\\n')[0].strip(), os.popen('rustc --print sysroot').readline().strip()))"

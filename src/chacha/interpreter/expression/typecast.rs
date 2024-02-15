@@ -2,10 +2,8 @@ use ansi_term::Colour;
 use snafu::prelude::*;
 
 use crate::{
-    chacha::{
-        error::{Result, UnimplementedSnafu},
-        vm::VM,
-    },
+    bubba::VM,
+    chacha::error::{Result, UnimplementedSnafu},
     interpreter::{debug, eval_expression, function, Context},
     lu_dog::ValueTypeEnum,
     new_ref, s_read,
@@ -41,11 +39,11 @@ pub fn eval(expr: &SarzakStorePtr, context: &mut Context, vm: &mut VM) -> Result
                     let value: i64 = (&*s_read!(lhs)).try_into()?;
                     new_ref!(Value, value.into())
                 }
-                Ty::SString(_) => {
+                Ty::ZString(_) => {
                     let value: String = (&*s_read!(lhs)).try_into()?;
                     new_ref!(Value, value.into())
                 }
-                Ty::SUuid(_) => {
+                Ty::ZUuid(_) => {
                     let value: uuid::Uuid = (&*s_read!(lhs)).try_into()?;
                     new_ref!(Value, value.into())
                 }

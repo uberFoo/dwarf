@@ -1,6 +1,6 @@
 [package]
 name = "dwarf"
-version = "0.7.0"
+version = "0.8.0"
 authors = ["Keith T. Star <uberfoo@me.com>"]
 categories = ["compilers", "command-line-interface"]
 description = "A Rust-like, typed, interpreted programming language"
@@ -34,8 +34,8 @@ path = "src/bin/tui.rs"
 abi_stable = "0.11.2"
 ansi_term = "0.12.1"
 ansi-to-tui = { git = "https://github.com/uberFoo/ansi-to-tui" }
-async-compat = "0.2.3"
-async-condvar-fair = { version = "1.0.0", features = ["smol"] }
+async-compat = { version = "0.2.3", optional = true }
+async-condvar-fair = { version = "1.0.0", features = ["smol"], optional = true }
 async-executor = { version = "1.6.0", optional = true }
 async-io = { version = "2.2.0", optional = true }
 async-task = { version = "4.5.0", optional = true }
@@ -69,7 +69,7 @@ parking_lot = { version = "0.12.1", features = [
     "hardware-lock-elision",
 ] }
 pretty_env_logger = "0.5.0"
-puteketeke = "0.0.3"
+puteketeke = { version = "0.0.4", optional = true }
 ratatui = { git = "https://github.com/uberFoo/ratatui", optional = true }
 reqwest = { version = "0.11.18", features = ["blocking", "rustls-tls"] }
 rustc-hash = "1.1.0"
@@ -85,9 +85,9 @@ serde_json = "1.0.96"
 slab = "0.4.9"
 smol = { version = "1.3.0", optional = true }
 snafu = { version = "0.7.4", features = ["backtraces"] }
-syntect = "5.0.0"
+syntect = { version = "5.0.0", optional = true }
+test-log = { version = "0.2.14", features = ["trace"] }
 threadpool = "1.8.1"
-tokio = { version = "1.28.2", features = ["macros", "rt"], optional = true }
 tracing = { version = "0.1.40" }
 tracing-subscriber = { version = "0.3.17", features = ["env-filter"] }
 tracy-client = { version = "0.15.2", default-features = false, optional = true }
@@ -102,8 +102,10 @@ tui-tree-widget = { git = "https://github.com/uberFoo/tui-rs-tree-widget", optio
 unicode-segmentation = "1.10.1"
 uuid = { version = "1.6.1", features = ["v4", "serde"] }
 
+smartstring = { version = "1.0.1", features = ["serde"] }
+
 # [patch.crates-io]
-# puteketeke = { path = "../puteketeke" }
+# puteketeke = { path = "../../github/puteketeke" }
 
 # [patch."https://github.com/uberFoo/sarzak"]
 # sarzak = { path = "../sarzak" }
@@ -114,12 +116,17 @@ criterion = { version = "0.5.1", features = ["html_reports"] }
 diff = "0.1.13"
 
 [build-dependencies]
+chrono = "0.4.31"
 walkdir = "2.3.3"
 
 [features]
-default = ["single", "repl", "print-std-out"]
-# default = ["multi-vec", "repl", "print-std-out", "async"]
-async_executor = ["multi-vec", "repl", "print-std-out", "async"]
+default = ["async-executor"]
+single = ["single-vec", "repl", "print-std-out"]
+debug = ["sarzak/lu-dog-rc", "repl", "print-std-out"]
+nd-executor = ["multi-nd-vec", "repl", "print-std-out", "async"]
+async-executor = ["multi-vec", "repl", "print-std-out", "async"]
+
+tracy-client = ["dep:tracy-client"]
 
 tui = [
     "dep:tui-input",
@@ -127,6 +134,7 @@ tui = [
     "dep:tui-textarea",
     "dep:tui-tree-widget",
     "dep:ratatui",
+    "dep:syntect",
 ]
 
 repl = ["dep:rustyline"]
@@ -142,12 +150,11 @@ tracy = [
 ]
 
 
-single = ["single-vec"]
 single-vec = ["sarzak/lu-dog-vec"]
 single-vec-tracy = ["sarzak/lu-dog-vec-tracy", "dep:tracy-client"]
 multi-vec = ["sarzak/lu-dog-rwlock-vec"]
+pl-vec = ["sarzak/lu-dog-pl-vec"]
 multi-nd-vec = ["sarzak/lu-dog-ndrwlock-vec", "dep:no_deadlocks"]
-debug = ["sarzak/lu-dog-rc"]
 
 print-std-out = []
 
@@ -157,6 +164,9 @@ async = [
     "dep:async-executor",
     "dep:async-io",
     "dep:once_cell",
+    "dep:puteketeke",
+    "dep:async-compat",
+    "dep:async-condvar-fair",
 ]
 
 [[bench]]
@@ -165,3 +175,6 @@ harness = false
 
 [profile.release]
 lto = "fat"
+
+[lib]
+crate-type = ["cdylib", "rlib"]

@@ -3,10 +3,13 @@
 #![allow(clippy::disallowed_names)]
 use std::{ops, path::PathBuf};
 
+use ansi_term::Colour;
 use clap::Args;
-use rustc_hash::FxHashMap as HashMap;
+use heck::ToUpperCamelCase;
+use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use serde::{Deserialize, Serialize};
 
+pub mod bubba;
 pub mod chacha;
 pub mod dwarf;
 pub mod plug_in;
@@ -21,6 +24,7 @@ pub mod tui;
 // pub mod lu_dog_proxy;
 
 pub use ::sarzak::{lu_dog, sarzak};
+use bubba::vm::Error as BubbaError;
 pub use chacha::value::Value;
 pub(crate) use chacha::{error::ChaChaError, interpreter};
 
@@ -35,18 +39,18 @@ mod keywords {
     pub(crate) const ASLEEP: &str = "asleep";
     pub(crate) const ASSERT: &str = "assert";
     pub(crate) const ASSERT_EQ: &str = "assert_eq";
-    pub(crate) const CHACHA: &str = "chacha";
+    pub(crate) const CHACHA: &str = "::chacha";
     pub(crate) const COMPLEX_EX: &str = "ComplexEx";
     pub(crate) const EPS: &str = "eps";
     pub(crate) const EVAL: &str = "eval";
     pub(crate) const FN_NEW: &str = "new";
     #[cfg(feature = "async")]
-    pub(crate) const HTTP_GET: &str = "http_get";
-    #[cfg(feature = "async")]
     pub(crate) const INTERVAL: &str = "interval";
+    pub(crate) const INVOKE_FUNC: &str = "invoke_func";
     pub(crate) const IS_DIGIT: &str = "is_digit";
     pub(crate) const LEN: &str = "len";
     pub(crate) const LINES: &str = "lines";
+    pub(crate) const LOAD_PLUGIN: &str = "load_plugin";
     pub(crate) const FORMAT: &str = "format";
     pub(crate) const MAP: &str = "map";
     pub(crate) const MAX: &str = "max";
@@ -56,6 +60,7 @@ mod keywords {
     pub(crate) const ONE_SHOT: &str = "one_shot";
     pub(crate) const PARSE: &str = "parse";
     pub(crate) const PLUGIN: &str = "Plugin";
+    pub(crate) const PUSH: &str = "push";
     pub(crate) const SLEEP: &str = "sleep";
     #[cfg(feature = "async")]
     pub(crate) const SPAWN: &str = "spawn";
@@ -73,10 +78,26 @@ mod keywords {
     pub(crate) const TRIM: &str = "trim";
     pub(crate) const TYPEOF: &str = "typeof";
     // 🚧 We have a token already...
+    pub(crate) const FQ_UUID_TYPE: &str = "::Uuid";
     pub(crate) const UUID_TYPE: &str = "Uuid";
 }
 
-use lu_dog::{ObjectStore as LuDogStore, ValueType};
+pub(crate) const PATH_SEP: &str = "::";
+pub(crate) const PATH_ROOT: &str = PATH_SEP;
+
+pub(crate) const ERR_CLR: Colour = Colour::Red;
+pub(crate) const OK_CLR: Colour = Colour::Green;
+pub(crate) const POP_CLR: Colour = Colour::Yellow;
+pub(crate) const OTH_CLR: Colour = Colour::Cyan;
+
+pub(crate) const OBJECT_STORE: &str = "ObjectStore";
+pub(crate) const FUNCTION_NEW: &str = "new";
+pub(crate) const FUNCTION_LOAD: &str = "load";
+pub(crate) const MERLIN: &str = "merlin";
+pub(crate) const SARZAK: &str = "sarzak";
+
+use lu_dog::ObjectStore as LuDogStore;
+use sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL};
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "single-vec")] {
@@ -117,8 +138,87 @@ cfg_if::cfg_if! {
                 $arg.into_inner().unwrap()
             };
         }
+    }
+
+    else if #[cfg(feature = "pl-vec")] {
+        type SarzakStorePtr = usize;
+        type RcType<T> = std::sync::Arc<T>;
+        impl<T> NewRcType<T> for RcType<T> {
+            fn new_rc_type(value: T) -> RcType<T> {
+                std::sync::Arc::new(value)
+            }
+        }
+
+        pub type RefType<T> = std::sync::Arc<parking_lot::RwLock<T>>;
+        impl<T> NewRef<T> for RefType<T> {
+            fn new_ref(value: T) -> RefType<T> {
+                std::sync::Arc::new(parking_lot::RwLock::new(value))
+            }
+        }
+
+        // Macros to abstract the underlying read/write operations.
+        #[macro_export]
+        macro_rules! ref_read {
+            ($arg:expr) => {
+                $arg.read()
+            };
+        }
+
+        #[macro_export]
+        macro_rules! ref_write {
+            ($arg:expr) => {
+                $arg.write()
+            };
+        }
+
+        #[macro_export]
+        macro_rules! ref_to_inner {
+            ($arg:expr) => {
+                $arg.into_inner()
+            };
+        }
+
     } else if #[cfg(feature = "single-vec-tracy")] {
         type SarzakStorePtr = usize;
+        type RcType<T> = std::rc::Rc<T>;
+        impl<T> NewRcType<T> for RcType<T> {
+            fn new_rc_type(value: T) -> RcType<T> {
+                std::rc::Rc::new(value)
+            }
+        }
+
+        pub type RefType<T> = std::rc::Rc<std::cell::RefCell<T>>;
+
+        impl<T> NewRef<T> for RefType<T> {
+            fn new_ref(value: T) -> RefType<T> {
+                std::rc::Rc::new(std::cell::RefCell::new(value))
+            }
+        }
+
+        // Macros to abstract the underlying read/write operations.
+        #[macro_export]
+        macro_rules! ref_read {
+            ($arg:expr) => {
+                $arg.borrow()
+            };
+        }
+
+        #[macro_export]
+        macro_rules! ref_write {
+            ($arg:expr) => {
+                $arg.borrow_mut()
+            };
+        }
+
+        #[macro_export]
+        macro_rules! ref_to_inner {
+            ($arg:expr) => {
+                $arg.into_inner().unwrap()
+            };
+        }
+
+    } else if #[cfg(feature = "debug")] {
+        type SarzakStorePtr = uuid::Uuid;
         type RcType<T> = std::rc::Rc<T>;
         impl<T> NewRcType<T> for RcType<T> {
             fn new_rc_type(value: T) -> RcType<T> {
@@ -362,7 +462,7 @@ pub enum Dirty {
 #[derive(Clone, Debug)]
 pub struct Context {
     /// The path to the source.
-    pub source: String,
+    pub source_path: String,
     /// This is the compiled source code.
     pub lu_dog: RefType<LuDogStore>,
     /// These are the plugins that represent imported domains.
@@ -370,6 +470,12 @@ pub struct Context {
     /// This contains things that the extruder added, that the interpreter
     /// needs to know about.
     pub dirty: Vec<Dirty>,
+    /// This is a reference to the sarzak store.
+    pub sarzak: RefType<SarzakStore>,
+    /// These are scopes for types -- it maps the type to the full path.
+    pub scopes: HashMap<String, String>,
+    /// The paths of imported modules -- so we only import them once.
+    pub imports: HashSet<PathBuf>,
 }
 
 impl Context {
@@ -386,12 +492,101 @@ impl Context {
 impl Default for Context {
     fn default() -> Self {
         Self {
-            source: "unknown".into(),
+            source_path: "unknown".into(),
             lu_dog: new_ref!(LuDogStore, LuDogStore::new()),
             models: HashMap::default(),
             dirty: Vec::default(),
+            sarzak: new_ref!(
+                SarzakStore,
+                SarzakStore::from_bincode(SARZAK_MODEL).unwrap()
+            ),
+            scopes: HashMap::default(),
+            imports: HashSet::default(),
         }
     }
 }
 
 pub type ValueResult = Result<RefType<Value>, ChaChaError>;
+pub type VmValueResult = Result<RefType<Value>, BubbaError>;
+
+pub(crate) trait Desanitize {
+    fn desanitize(&self) -> String;
+}
+
+impl Desanitize for &str {
+    fn desanitize(&self) -> String {
+        let result = match *self {
+            "a_sink" => "async".to_owned(),
+            "a_wait" => "await".to_owned(),
+            "AWait" => "Await".to_owned(),
+            "x_box" => "box".to_owned(),
+            "XBox" => "Box".to_owned(),
+            "x_break" => "break".to_owned(),
+            "krate" => "crate".to_owned(),
+            "Krate" => "Crate".to_owned(),
+            "woog_const" => "const".to_owned(),
+            "WoogConst" => "Const".to_owned(),
+            "x_debugger" => "debugger".to_owned(),
+            "XDebugger" => "Debugger".to_owned(),
+            "woog_enum" => "enum".to_owned(),
+            "WoogEnum" => "Enum".to_owned(),
+            "x_error" => "error".to_owned(),
+            "XError" => "Error".to_owned(),
+            "false_literal" => "false".to_owned(),
+            "FalseLiteral" => "False".to_owned(),
+            "x_future" => "future".to_owned(),
+            "XFuture" => "Future".to_owned(),
+            "x_if" => "if".to_owned(),
+            "XIf" => "If".to_owned(),
+            "x_let" => "let".to_owned(),
+            "XLet" => "Let".to_owned(),
+            "x_macro" => "macro".to_owned(),
+            "XMacro" => "Macro".to_owned(),
+            "x_match" => "match".to_owned(),
+            "XMatch" => "Match".to_owned(),
+            "x_model" => "model".to_owned(),
+            "XModel" => "Model".to_owned(),
+            "ZNone" => "None".to_owned(),
+            "ZObjectStore" => "Object Store".to_owned(),
+            "woog_option" => "option".to_owned(),
+            "WoogOption" => "Option".to_owned(),
+            "x_path" => "path".to_owned(),
+            "XPath" => "Path".to_owned(),
+            "x_plugin" => "plugin".to_owned(),
+            "XPlugin" => "Plugin".to_owned(),
+            "x_print" => "print".to_owned(),
+            "XPrint" => "Print".to_owned(),
+            "x_ref" => "ref".to_owned(),
+            "x_return" => "return".to_owned(),
+            "XReturn" => "Return".to_owned(),
+            "ZSome" => "Some".to_owned(),
+            "z_string" => "string".to_owned(),
+            "ZString" => "String".to_owned(),
+            "woog_struct" => "struct".to_owned(),
+            "WoogStruct" => "Struct".to_owned(),
+            "z_super" => "super".to_owned(),
+            "ZSuper" => "Super".to_owned(),
+            "true_literal" => "true".to_owned(),
+            "TrueLiteral" => "True".to_owned(),
+            "ty" => "type".to_owned(),
+            "Ty" => "Type".to_owned(),
+            "z_uuid" => "uuid".to_owned(),
+            "ZUuid" => "Uuid".to_owned(),
+            // "z_uuid" => "UUID".to_owned(),
+            "x_value" => "value".to_owned(),
+            "XValue" => "Value".to_owned(),
+            _ => self.to_upper_camel_case(),
+        };
+
+        if self != &result {
+            log::debug!("sanitized: {} -> {}", self, result);
+        }
+        result
+    }
+}
+
+impl Desanitize for String {
+    fn desanitize(&self) -> String {
+        self.as_str().desanitize()
+    }
+}

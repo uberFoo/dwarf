@@ -1,16 +1,12 @@
 use std::{fmt, path::PathBuf};
 
-use ansi_term::Colour;
 use ariadne::{Color, Fmt, Label, Report, ReportKind, Source};
 use snafu::{prelude::*, Location};
 
-use crate::dwarf::{Item, Span};
-
-// Error handling
-const C_ERR: Colour = Colour::Red;
-const C_OK: Colour = Colour::Green;
-const C_WARN: Colour = Colour::Yellow;
-const C_OTHER: Colour = Colour::Cyan;
+use crate::{
+    dwarf::{Item, Span},
+    ERR_CLR, OK_CLR, OTH_CLR, POP_CLR,
+};
 
 pub type Result<T, E = Vec<DwarfError>> = std::result::Result<T, E>;
 
@@ -23,31 +19,35 @@ pub enum DwarfError {
         file: String,
         found: String,
         span: Span,
+        program: String,
     },
     /// Self Error
     ///
     /// The Self keyword is being used outside of an impl block.
-    #[snafu(display("\n{}: `{}` may only be used inside an impl block.\n  --> {}..{}", C_ERR.bold().paint("error"), C_OTHER.underline().paint("Self"), span.start, span.end))]
+    #[snafu(display("\n{}: `{}` may only be used inside an impl block.\n  --> {}..{}", ERR_CLR.bold().paint("error"), OTH_CLR.underline().paint("Self"), span.start, span.end))]
     BadSelf {
         file: String,
         span: Span,
         location: Location,
+        program: String,
     },
 
     /// Enum not found
     ///
     /// An enum has been referenced that does not exist.
-    #[snafu(display("\n{}: enum not found: {}", C_ERR.bold().paint("error"), C_OTHER.paint(name)))]
+    #[snafu(display("\n{}: enum not found: {}", ERR_CLR.bold().paint("error"), OTH_CLR.paint(name)))]
     EnumNotFound {
         name: String,
         file: String,
         span: Span,
+        location: Location,
+        program: String,
     },
 
     /// File Error
     ///
     /// Something went wrong with the file system.
-    #[snafu(display("\n{}: {description}\n{}:{}:{}\n  --> {source} ({})", C_ERR.bold().paint("error"), location.file, location.line, location.column, path.display()))]
+    #[snafu(display("\n{}: {description}\n{}:{}:{}\n  --> {source} ({})", ERR_CLR.bold().paint("error"), location.file, location.line, location.column, path.display()))]
     File {
         location: Location,
         description: String,
@@ -58,29 +58,34 @@ pub enum DwarfError {
     /// Generic Error
     ///
     /// This non-specific error is a catch-all error type.
-    #[snafu(display("\n{}: {description}", C_ERR.bold().paint("error")))]
+    #[snafu(display("\n{}: {description}", ERR_CLR.bold().paint("error")))]
     Generic { description: String },
 
     /// Generic Warning
     ///
     /// This non-specific error is a catch-all warning type.
-    #[snafu(display("\n{}: {description}\n  --> {}..{}", C_WARN.bold().paint("warning"), span.start, span.end))]
+    #[snafu(display("\n{}: {description}\n  --> {}..{}", POP_CLR.bold().paint("warning"), span.start, span.end))]
     GenericWarning {
         description: String,
         file: String,
         span: Span,
+        program: String,
     },
 
     /// Implementation Block Error
     ///
     /// An impl block may only contain functions.
     #[snafu(display("impl blocks may only contain functions."))]
-    ImplementationBlock { file: String, span: Span },
+    ImplementationBlock {
+        file: String,
+        span: Span,
+        program: String,
+    },
 
     /// Internal Error
     ///
     /// This is an unrecoverable internal error.
-    #[snafu(display("\n{}: unrecoverable internal error\n  -->{description}\n  --> {}:{}:{}", C_ERR.bold().paint("error"), location.file, location.line, location.column))]
+    #[snafu(display("\n{}: unrecoverable internal error\n  -->{description}\n  --> {}:{}:{}", ERR_CLR.bold().paint("error"), location.file, location.line, location.column))]
     Internal {
         description: String,
         location: Location,
@@ -89,17 +94,38 @@ pub enum DwarfError {
     /// IO Related Error
     ///
     /// This is used to wrag std::io::Error into the DwarfError type.
-    #[snafu(display("\n{}: {description}: {}:{}:{}\n  --> {source}", C_ERR.bold().paint("error"), location.file, location.line, location.column))]
+    #[snafu(display("\n{}: {description}: {}:{}:{}\n  --> {source}", ERR_CLR.bold().paint("error"), location.file, location.line, location.column))]
     IO {
         source: std::io::Error,
         description: String,
         location: Location,
     },
 
+    /// Missing Function Definition
+    ///
+    /// A function is being called, but it's not defined.
+    #[snafu(display("\n{}: Missing function definition\n  --> {}..{}", ERR_CLR.bold().paint("error"), span.start, span.end))]
+    MissingFunctionDefinition {
+        file: String,
+        span: Span,
+        program: String,
+    },
+
+    /// Multiply Defined Symbol
+    ///
+    #[snafu(display("\n{}: Multiply defined symbol: {name}\n  --> {}:{}:{}", ERR_CLR.bold().paint("error"), location.file, location.line, location.column))]
+    MultiplyDefinedSymbol {
+        name: String,
+        path: String,
+        orig_path: String,
+        file: String,
+        span: Span,
+        location: Location,
+    },
     /// Missing Implementation
     ///
     /// This is just not done yet.
-    #[snafu(display("\n{}: Missing implementation: {missing}\n  --> {}", C_WARN.bold().paint("warning"), C_WARN.underline().paint(code)))]
+    #[snafu(display("\n{}: Missing implementation: {missing}\n  --> {}", POP_CLR.bold().paint("warning"), POP_CLR.underline().paint(code)))]
     NoImplementation {
         missing: String,
         code: String,
@@ -115,25 +141,29 @@ pub enum DwarfError {
         file: String,
         span: Span,
         location: Location,
+        program: String,
     },
 
     /// Not a Struct Type
     ///
-    #[snafu(display("\n{}: Not a struct: {ty}", C_ERR.bold().paint("error")))]
+    #[snafu(display("\n{}: Not a struct: {ty}", ERR_CLR.bold().paint("error")))]
     NotAStruct {
         ty: String,
         file: String,
         span: Span,
+        program: String,
     },
 
     /// No Such Field
-    #[snafu(display("\n{}: no such field `{}`.", C_ERR.bold().paint("error"), C_OTHER.paint(field)))]
+    #[snafu(display("\n{}: no such field `{}`.", ERR_CLR.bold().paint("error"), OTH_CLR.paint(field)))]
     NoSuchField {
         name: String,
         name_span: Span,
         field: String,
         file: String,
         span: Span,
+        location: Location,
+        program: String,
     },
 
     /// No Such Method
@@ -145,41 +175,44 @@ pub enum DwarfError {
     /// UDTs for the proxies, so we have that information to go on. So basically
     /// we can protect the interface, which is wide open IIRC, by checking calls
     /// at extrusion time.
-    #[snafu(display("\n{}: no such method `{}`.", C_ERR.bold().paint("error"), C_OTHER.paint(method)))]
+    #[snafu(display("\n{}: no such method `{}`.", ERR_CLR.bold().paint("error"), OTH_CLR.paint(method)))]
     NoSuchMethod {
         method: String,
         file: String,
         span: Span,
         location: Location,
+        program: String,
     },
 
     /// Struct Field Not Found Error
     ///
     /// This is used when a struct field is used and it's not found on the struct
     /// definition.
-    #[snafu(display("\n{}: Struct field not found: {field}\n  --> {}:{}", C_ERR.bold().paint("error"), span.start, span.end))]
+    #[snafu(display("\n{}: Struct field not found: {field}\n  --> {}:{}", ERR_CLR.bold().paint("error"), span.start, span.end))]
     StructFieldNotFound {
         field: String,
         file: String,
         span: Span,
         location: Location,
+        program: String,
     },
 
     /// Object Name Lookup Error
     ///
     /// This is used when an object lookup in one of the domains fails.
-    #[snafu(display("\n{}: Object lookup failed for {name}", C_ERR.bold().paint("error")))]
+    #[snafu(display("\n{}: Object lookup failed for {name}", ERR_CLR.bold().paint("error")))]
     ObjectNameNotFound {
         name: String,
         file: String,
         span: Span,
         location: Location,
+        program: String,
     },
 
     /// Parse Error
     ///
     /// Error parsing the source code.
-    #[snafu(display("\n{}: parser completed with errors:\n  --> {error}", C_ERR.bold().paint("error")))]
+    #[snafu(display("\n{}: parser completed with errors:\n  --> {error}", ERR_CLR.bold().paint("error")))]
     Parse { error: String, ast: Vec<Item> },
 
     /// Type Mismatch
@@ -189,6 +222,7 @@ pub enum DwarfError {
     /// I think that this doesn't implement Display because it's displayed
     /// someplace other than where error go? I'm not really sure, and it needs
     /// looking into.
+    #[snafu(display("\n{}: Type mismatch: expected `{expected}`, found `{found}`.", ERR_CLR.bold().paint("error")))]
     TypeMismatch {
         expected: String,
         found: String,
@@ -196,38 +230,45 @@ pub enum DwarfError {
         expected_span: Span,
         found_span: Span,
         location: Location,
+        program: String,
     },
 
     /// Unknown Type
     ///
     /// This is used when a type is not found in any domain.
-    #[snafu(display("\n{}: Unknown type: {ty}", C_ERR.bold().paint("error")))]
+    #[snafu(display("\n{}: Unknown type: {ty}", ERR_CLR.bold().paint("error")))]
     UnknownType {
         ty: String,
         file: String,
         span: Span,
         location: Location,
+        program: String,
     },
-    #[snafu(display("\n{}: wrong number of arguments. Expected `{}`, found `{}`.", C_ERR.bold().paint("error"), C_OK.paint(expected.to_string()), C_ERR.bold().paint(found.to_string())))]
+    #[snafu(display("\n{}: wrong number of arguments. Expected `{}`, found `{}`.", ERR_CLR.bold().paint("error"), OK_CLR.paint(expected.to_string()), ERR_CLR.bold().paint(found.to_string())))]
     WrongNumberOfArguments {
         expected: usize,
         found: usize,
         file: String,
         span: Span,
         location: Location,
+        program: String,
     },
 }
 
-pub struct DwarfErrorReporter<'a, 'b>(pub &'a DwarfError, pub bool, pub &'b str);
-impl fmt::Display for DwarfErrorReporter<'_, '_> {
+pub struct DwarfErrorReporter<'a>(pub &'a DwarfError, pub bool);
+impl fmt::Display for DwarfErrorReporter<'_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let is_uber = self.1;
-        let program = &self.2;
 
         let mut std_err = Vec::new();
 
         match &self.0 {
-            DwarfError::AwaitNotFuture { file, found, span } => {
+            DwarfError::AwaitNotFuture {
+                file,
+                found,
+                span,
+                program,
+            } => {
                 let span = span.clone();
                 Report::build(ReportKind::Error, file, span.start)
                     .with_message("await may only be used on a future")
@@ -235,7 +276,7 @@ impl fmt::Display for DwarfErrorReporter<'_, '_> {
                         Label::new((file, span))
                             .with_message(format!(
                                 "expected a future and found {}",
-                                C_OTHER.paint(found)
+                                OTH_CLR.paint(found)
                             ))
                             .with_color(Color::Red),
                     )
@@ -248,6 +289,7 @@ impl fmt::Display for DwarfErrorReporter<'_, '_> {
                 file,
                 span,
                 location,
+                program,
             } => {
                 let span = span.clone();
                 let report = Report::build(ReportKind::Error, file, span.start)
@@ -263,9 +305,9 @@ impl fmt::Display for DwarfErrorReporter<'_, '_> {
                 let report = if is_uber {
                     report.with_note(format!(
                         "{}:{}:{}",
-                        C_OTHER.paint(location.file.to_string()),
-                        C_WARN.paint(format!("{}", location.line)),
-                        C_OK.paint(format!("{}", location.column)),
+                        OTH_CLR.paint(location.file.to_string()),
+                        POP_CLR.paint(format!("{}", location.line)),
+                        OK_CLR.paint(format!("{}", location.column)),
                     ))
                 } else {
                     report
@@ -277,15 +319,34 @@ impl fmt::Display for DwarfErrorReporter<'_, '_> {
                     .map_err(|_| fmt::Error)?;
                 write!(f, "{}", String::from_utf8_lossy(&std_err))
             }
-            DwarfError::EnumNotFound { name, file, span } => {
+            DwarfError::EnumNotFound {
+                name,
+                file,
+                span,
+                location,
+                program,
+            } => {
                 let span = span.clone();
-                Report::build(ReportKind::Error, file, span.start)
-                    .with_message(format!("enum not found: {}", C_OTHER.paint(name)))
+                let report = Report::build(ReportKind::Error, file, span.start)
+                    .with_message(format!("enum not found: {}", OTH_CLR.paint(name)))
                     .with_label(
                         Label::new((file, span))
                             .with_message("this enum does not exist")
                             .with_color(Color::Red),
-                    )
+                    );
+
+                let report = if is_uber {
+                    report.with_note(format!(
+                        "{}:{}:{}",
+                        OTH_CLR.paint(location.file.to_string()),
+                        POP_CLR.paint(format!("{}", location.line)),
+                        OK_CLR.paint(format!("{}", location.column)),
+                    ))
+                } else {
+                    report
+                };
+
+                report
                     .finish()
                     .write((file, Source::from(&program)), &mut std_err)
                     .map_err(|_| fmt::Error)?;
@@ -295,6 +356,7 @@ impl fmt::Display for DwarfErrorReporter<'_, '_> {
                 description: desc,
                 file,
                 span,
+                program,
             } => {
                 Report::build(ReportKind::Error, file, span.start)
                     .with_message(desc)
@@ -308,7 +370,11 @@ impl fmt::Display for DwarfErrorReporter<'_, '_> {
                     .map_err(|_| fmt::Error)?;
                 write!(f, "{}", String::from_utf8_lossy(&std_err))
             }
-            DwarfError::ImplementationBlock { file, span } => {
+            DwarfError::ImplementationBlock {
+                file,
+                span,
+                program,
+            } => {
                 let span = span.clone();
                 Report::build(ReportKind::Error, file, span.start)
                     // 🚧 Figure out some error numbering scheme and use one of
@@ -325,11 +391,29 @@ impl fmt::Display for DwarfErrorReporter<'_, '_> {
                     .map_err(|_| fmt::Error)?;
                 write!(f, "{}", String::from_utf8_lossy(&std_err))
             }
+            DwarfError::MissingFunctionDefinition {
+                file,
+                span,
+                program,
+            } => {
+                Report::build(ReportKind::Error, file, span.start)
+                    .with_message("missing function definition")
+                    .with_label(
+                        Label::new((file, span.to_owned()))
+                            .with_message("function called here is not found")
+                            .with_color(Color::Red),
+                    )
+                    .finish()
+                    .write((file, Source::from(&program)), &mut std_err)
+                    .map_err(|_| fmt::Error)?;
+                write!(f, "{}", String::from_utf8_lossy(&std_err))
+            }
             DwarfError::NotAList {
                 file,
                 span,
                 ty,
                 location,
+                program,
             } => {
                 let span = span.clone();
                 let report = Report::build(ReportKind::Error, file, span.start)
@@ -346,9 +430,9 @@ impl fmt::Display for DwarfErrorReporter<'_, '_> {
                 let report = if is_uber {
                     report.with_note(format!(
                         "{}:{}:{}",
-                        C_OTHER.paint(location.file.to_string()),
-                        C_WARN.paint(format!("{}", location.line)),
-                        C_OK.paint(format!("{}", location.column)),
+                        OTH_CLR.paint(location.file.to_string()),
+                        POP_CLR.paint(format!("{}", location.line)),
+                        OK_CLR.paint(format!("{}", location.column)),
                     ))
                 } else {
                     report.with_note(format!("Found {ty}"))
@@ -360,9 +444,56 @@ impl fmt::Display for DwarfErrorReporter<'_, '_> {
                     .map_err(|_| fmt::Error)?;
                 write!(f, "{}", String::from_utf8_lossy(&std_err))
             }
-            DwarfError::NotAStruct { file, span, ty } => {
+            DwarfError::MultiplyDefinedSymbol {
+                name,
+                path,
+                orig_path,
+                file,
+                span,
+                location,
+            } => {
+                let span = span.clone();
+                let report = Report::build(ReportKind::Error, file, span.start)
+                    .with_message(format!(
+                        "multiply defined symbol: {}::{}",
+                        OTH_CLR.paint(orig_path),
+                        OTH_CLR.paint(name)
+                    ))
+                    .with_label(
+                        Label::new((file, span))
+                            .with_message("this symbol is multiply defined")
+                            .with_color(Color::Red),
+                    );
+
+                let report = if is_uber {
+                    report.with_note(format!(
+                        "{}:{}:{}",
+                        OTH_CLR.paint(location.file.to_string()),
+                        POP_CLR.paint(format!("{}", location.line)),
+                        OK_CLR.paint(format!("{}", location.column)),
+                    ))
+                } else {
+                    report.with_note(format!(
+                        "The new path is {}::{}",
+                        OTH_CLR.paint(path),
+                        OTH_CLR.paint(name)
+                    ))
+                };
+
+                report
+                    .finish()
+                    .write((file, Source::from(&location.file)), &mut std_err)
+                    .map_err(|_| fmt::Error)?;
+                write!(f, "{}", String::from_utf8_lossy(&std_err))
+            }
+            DwarfError::NotAStruct {
+                file,
+                span,
+                ty,
+                program,
+            } => {
                 Report::build(ReportKind::Error, file, span.start)
-                    .with_message(format!("expected a struct, found {}", C_OTHER.paint(ty)))
+                    .with_message(format!("expected a struct, found {}", OTH_CLR.paint(ty)))
                     .with_label(
                         Label::new((file, span.to_owned()))
                             .with_message("this is not a struct")
@@ -379,9 +510,11 @@ impl fmt::Display for DwarfErrorReporter<'_, '_> {
                 field,
                 file,
                 span,
+                location,
+                program,
             } => {
-                Report::build(ReportKind::Error, file, span.start)
-                    .with_message(format!("no such field {}", C_OTHER.paint(field)))
+                let report = Report::build(ReportKind::Error, file, span.start)
+                    .with_message(format!("no such field {}", OTH_CLR.paint(field)))
                     .with_label(
                         Label::new((file, span.to_owned()))
                             .with_message("this field does not exist")
@@ -389,9 +522,22 @@ impl fmt::Display for DwarfErrorReporter<'_, '_> {
                     )
                     .with_label(
                         Label::new((file, name_span.to_owned()))
-                            .with_message("on this struct")
+                            .with_message("on this type")
                             .with_color(Color::Yellow),
-                    )
+                    );
+
+                let report = if is_uber {
+                    report.with_note(format!(
+                        "{}:{}:{}",
+                        OTH_CLR.paint(location.file.to_string()),
+                        POP_CLR.paint(format!("{}", location.line)),
+                        OK_CLR.paint(format!("{}", location.column)),
+                    ))
+                } else {
+                    report
+                };
+
+                report
                     .finish()
                     .write((file, Source::from(&program)), &mut std_err)
                     .map_err(|_| fmt::Error)?;
@@ -402,11 +548,12 @@ impl fmt::Display for DwarfErrorReporter<'_, '_> {
                 file,
                 span,
                 location,
+                program,
             } => {
                 let report = Report::build(ReportKind::Error, file, span.start)
                     .with_message(format!(
                         "No such method: {}",
-                        C_WARN.paint(method.to_string())
+                        POP_CLR.paint(method.to_string())
                     ))
                     .with_label(
                         Label::new((file, span.to_owned()))
@@ -417,9 +564,9 @@ impl fmt::Display for DwarfErrorReporter<'_, '_> {
                 let report = if is_uber {
                     report.with_note(format!(
                         "{}:{}:{}",
-                        C_OTHER.paint(location.file.to_string()),
-                        C_WARN.paint(format!("{}", location.line)),
-                        C_OK.paint(format!("{}", location.column)),
+                        OTH_CLR.paint(location.file.to_string()),
+                        POP_CLR.paint(format!("{}", location.line)),
+                        OK_CLR.paint(format!("{}", location.column)),
                     ))
                 } else {
                     report
@@ -436,11 +583,12 @@ impl fmt::Display for DwarfErrorReporter<'_, '_> {
                 file,
                 span,
                 location,
+                program,
             } => {
                 let report = Report::build(ReportKind::Error, file, span.start)
                     .with_message(format!(
                         "Type not found: {}",
-                        C_WARN.paint(name.to_string())
+                        POP_CLR.paint(name.to_string())
                     ))
                     .with_label(
                         Label::new((file, span.to_owned()))
@@ -451,9 +599,9 @@ impl fmt::Display for DwarfErrorReporter<'_, '_> {
                 let report = if is_uber {
                     report.with_note(format!(
                         "{}:{}:{}",
-                        C_OTHER.paint(location.file.to_string()),
-                        C_WARN.paint(format!("{}", location.line)),
-                        C_OK.paint(format!("{}", location.column)),
+                        OTH_CLR.paint(location.file.to_string()),
+                        POP_CLR.paint(format!("{}", location.line)),
+                        OK_CLR.paint(format!("{}", location.column)),
                     ))
                 } else {
                     report
@@ -472,28 +620,29 @@ impl fmt::Display for DwarfErrorReporter<'_, '_> {
                 expected_span,
                 found_span,
                 location,
+                program,
             } => {
                 let msg = format!("Type mismatch: expected `{expected}`, found `{found}`.");
 
-                let report = Report::build(ReportKind::Error, file, expected_span.start)
+                let report = Report::build(ReportKind::Error, file, found_span.start)
                     .with_message(&msg)
                     .with_label(
                         Label::new((file, expected_span.to_owned()))
-                            .with_message(format!("expected {}", C_OTHER.paint(expected)))
+                            .with_message(format!("expected {}", OTH_CLR.paint(expected)))
                             .with_color(Color::Yellow),
                     )
                     .with_label(
                         Label::new((file, found_span.to_owned()))
-                            .with_message(format!("found {}", C_OTHER.paint(found)))
+                            .with_message(format!("found {}", OTH_CLR.paint(found)))
                             .with_color(Color::Red),
                     );
 
                 let report = if is_uber {
                     report.with_note(format!(
                         "{}:{}:{}",
-                        C_OTHER.paint(location.file.to_string()),
-                        C_WARN.paint(format!("{}", location.line)),
-                        C_OK.paint(format!("{}", location.column)),
+                        OTH_CLR.paint(location.file.to_string()),
+                        POP_CLR.paint(format!("{}", location.line)),
+                        OK_CLR.paint(format!("{}", location.column)),
                     ))
                 } else if expected == found {
                     report
@@ -513,21 +662,22 @@ impl fmt::Display for DwarfErrorReporter<'_, '_> {
                 file,
                 span,
                 location,
+                program,
             } => {
                 let report = Report::build(ReportKind::Error, file, span.start)
                     .with_message("struct field not found")
                     .with_label(
                         Label::new((file, span.to_owned()))
-                            .with_message(format!("unknown field {}", C_OTHER.paint(field)))
+                            .with_message(format!("unknown field {}", OTH_CLR.paint(field)))
                             .with_color(Color::Red),
                     );
 
                 let report = if is_uber {
                     report.with_note(format!(
                         "{}:{}:{}",
-                        C_OTHER.paint(location.file.to_string()),
-                        C_WARN.paint(format!("{}", location.line)),
-                        C_OK.paint(format!("{}", location.column)),
+                        OTH_CLR.paint(location.file.to_string()),
+                        POP_CLR.paint(format!("{}", location.line)),
+                        OK_CLR.paint(format!("{}", location.column)),
                     ))
                 } else {
                     report
@@ -544,6 +694,7 @@ impl fmt::Display for DwarfErrorReporter<'_, '_> {
                 file,
                 span,
                 location,
+                program,
             } => {
                 let msg = format!("Unknown type: `{}`.", ty);
 
@@ -551,16 +702,16 @@ impl fmt::Display for DwarfErrorReporter<'_, '_> {
                     .with_message(&msg)
                     .with_label(
                         Label::new((file, span.to_owned()))
-                            .with_message(format!("unknown type {}", C_OTHER.paint(ty)))
+                            .with_message(format!("unknown type {}", OTH_CLR.paint(ty)))
                             .with_color(Color::Red),
                     );
 
                 let report = if is_uber {
                     report.with_note(format!(
                         "{}:{}:{}",
-                        C_OTHER.paint(location.file.to_string()),
-                        C_WARN.paint(format!("{}", location.line)),
-                        C_OK.paint(format!("{}", location.column)),
+                        OTH_CLR.paint(location.file.to_string()),
+                        POP_CLR.paint(format!("{}", location.line)),
+                        OK_CLR.paint(format!("{}", location.column)),
                     ))
                 } else if ty.contains('8')
                     || ty.contains("16")
@@ -569,9 +720,9 @@ impl fmt::Display for DwarfErrorReporter<'_, '_> {
                     || ty.contains("128")
                 {
                     if &ty[0..1] == "i" || &ty[0..1] == "u" {
-                        report.with_note(format!("try `{}`", C_WARN.paint("int")))
+                        report.with_note(format!("try `{}`", POP_CLR.paint("int")))
                     } else if &ty[0..1] == "f" {
-                        report.with_note(format!("try `{}`", C_WARN.paint("float")))
+                        report.with_note(format!("try `{}`", POP_CLR.paint("float")))
                     } else {
                         report
                     }
@@ -591,6 +742,7 @@ impl fmt::Display for DwarfErrorReporter<'_, '_> {
                 file,
                 span,
                 location,
+                program,
             } => {
                 let msg = format!("expected `{expected}`, found `{found}`.");
 
@@ -605,9 +757,9 @@ impl fmt::Display for DwarfErrorReporter<'_, '_> {
                 let report = if is_uber {
                     report.with_note(format!(
                         "{}:{}:{}",
-                        C_OTHER.paint(location.file.to_string()),
-                        C_WARN.paint(format!("{}", location.line)),
-                        C_OK.paint(format!("{}", location.column)),
+                        OTH_CLR.paint(location.file.to_string()),
+                        POP_CLR.paint(format!("{}", location.line)),
+                        OK_CLR.paint(format!("{}", location.column)),
                     ))
                 } else {
                     report

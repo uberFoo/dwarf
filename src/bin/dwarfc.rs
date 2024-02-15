@@ -158,15 +158,17 @@ fn main() -> Result<()> {
         Ok(lu_dog) => lu_dog,
         Err(errors) => {
             for err in errors {
-                eprintln!(
-                    "{}",
-                    dwarf::dwarf::error::DwarfErrorReporter(&err, is_uber, &source_code,)
-                );
+                eprintln!("{}", dwarf::dwarf::error::DwarfErrorReporter(&err, is_uber));
             }
             return Ok(());
         }
     };
 
+    /*
+     * I am going to come back to this once I have a better idea of what a real
+     * binary format needs to look like. I don't think using dwarfc to persist
+     * lu-dog stores is a good idea. Maybe, but I need to think about it.
+     */
     #[cfg(not(feature = "multi-nd-vec"))]
     if args.debug.is_some() && args.debug.unwrap() {
         s_read!(ctx.lu_dog)

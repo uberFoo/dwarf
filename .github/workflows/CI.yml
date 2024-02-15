@@ -20,6 +20,13 @@ jobs:
               with:
                   toolchain: stable
 
+            - name: Checkout sarzak
+              uses: actions/checkout@v2
+              with:
+                  ref: develop
+                  path: sarzak
+                  repository: 'uberfoo/sarzak'
+
             - name: Checkout sarzak-cli
               uses: actions/checkout@v2
               with:
@@ -52,14 +59,14 @@ jobs:
             - name: Build and run tests with coverage
               run: |
                   cd dwarf
-                  cargo llvm-cov --lcov --output-path coverage.lcov --no-default-features --features "multi-vec, repl, async"
+                  RUST_MIN_STACK=4194304 cargo llvm-cov --lcov --output-path coverage.lcov --no-default-features --features "multi-vec, repl, async"
 
             - name: Upload coverage reports to Codecov
               uses: codecov/codecov-action@v3
               env:
                   CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
               with:
-                  directory: ./
+                  working-directory: .
                   fail_ci_if_error: true
                   # files: ./coverage.xml
                   files: coverage.lcov

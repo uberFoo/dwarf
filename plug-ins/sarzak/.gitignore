@@ -2,3 +2,5 @@ src/sarzak/*
 src/sarzak.rs
 src/merlin/*
 src/merlin.rs
+ore/sarzak.ore
+ore/merlin.ore

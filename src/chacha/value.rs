@@ -7,19 +7,20 @@ use std::{fmt, io::Write, ops::Range};
 use smol::future;
 
 use abi_stable::{
-    std_types::{RBox, ROption, RString, RVec},
+    std_types::{RBox, ROption, RResult, RString, RVec},
     StableAbi,
 };
 use ansi_term::Colour;
 use rustc_hash::FxHashMap as HashMap;
 use sarzak::lu_dog::ValueTypeEnum;
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 #[cfg(feature = "async")]
 use puteketeke::Executor;
 
 #[cfg(feature = "async")]
-use crate::ValueResult;
+use crate::{ValueResult, VmValueResult};
 
 use crate::{
     chacha::error::Result,
@@ -28,20 +29,26 @@ use crate::{
     plug_in::PluginType,
     s_read,
     sarzak::{ObjectStore as SarzakStore, Ty},
-    ChaChaError, Context, DwarfFloat, DwarfInteger, NewRef, RefType,
+    ChaChaError, Context, DwarfFloat, DwarfInteger, NewRef, RefType, PATH_SEP,
 };
 
 #[repr(C)]
 #[derive(Clone, Debug, StableAbi)]
 pub struct FfiRange {
-    start: DwarfInteger,
-    end: DwarfInteger,
+    pub(crate) start: DwarfInteger,
+    pub(crate) end: DwarfInteger,
 }
 
 #[repr(C)]
 #[derive(Clone, Debug, StableAbi)]
 pub struct FfiUuid {
     pub inner: RString,
+}
+
+impl std::fmt::Display for FfiUuid {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{inner}", inner = self.inner)
+    }
 }
 
 impl From<Uuid> for FfiUuid {
@@ -102,9 +109,22 @@ where
 #[derive(Clone, Debug, StableAbi)]
 pub struct FfiProxy {
     pub module: RString,
-    pub uuid: FfiUuid,
+    pub ty: FfiUuid,
     pub id: FfiUuid,
     pub plugin: PluginType,
+}
+
+impl std::fmt::Display for FfiProxy {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(
+            f,
+            "{{ module: {}, ty: {}, id: {}, plugin: {} }}",
+            self.module,
+            self.ty,
+            self.id,
+            self.plugin.name()
+        )
+    }
 }
 
 /// This is an actual Value
@@ -122,12 +142,234 @@ pub enum FfiValue {
     PlugIn(PluginType),
     ProxyType(FfiProxy),
     Range(FfiRange),
+    Result(RResult<RBox<Self>, RBox<Self>>),
     String(RString),
     // Table(RHashMap<RString, RefType<Self>>),
     Unknown,
-    UserType(FfiUuid),
+    // UserType(FfiUuid),
     Uuid(FfiUuid),
     Vector(RVec<Self>),
+}
+
+impl std::fmt::Display for FfiValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Self::Boolean(bool_) => write!(f, "{bool_}"),
+            Self::Empty => write!(f, "()"),
+            Self::Error(e) => write!(f, "{}: {e}", Colour::Red.bold().paint("error")),
+            Self::Float(num) => write!(f, "{num}"),
+            Self::Integer(num) => write!(f, "{num}"),
+            Self::Option(option) => match option {
+                ROption::RNone => write!(f, "None"),
+                ROption::RSome(value) => write!(f, "Some({value})"),
+            },
+            Self::PlugIn(plugin) => write!(f, "plugin::{}", plugin.name()),
+            Self::ProxyType(proxy) => write!(f, "{proxy}"),
+            Self::Range(range) => write!(f, "{range:?}"),
+            Self::Result(result) => match result {
+                RResult::RErr(err) => write!(f, "Err({err})"),
+                RResult::ROk(ok) => write!(f, "Ok({ok})"),
+            },
+            Self::String(str_) => write!(f, "{str_}"),
+            Self::Unknown => write!(f, "<unknown>"),
+            // Self::UserType(uuid) => write!(f, "{uuid}"),
+            Self::Uuid(uuid) => write!(f, "{uuid}"),
+            Self::Vector(vec) => {
+                let mut first_time = true;
+                write!(f, "[")?;
+                for i in vec {
+                    if first_time {
+                        first_time = false;
+                    } else {
+                        write!(f, ", ")?;
+                    }
+
+                    write!(f, "{i}")?;
+                }
+                write!(f, "]")
+            }
+        }
+    }
+}
+
+impl From<Value> for FfiValue {
+    fn from(value: Value) -> Self {
+        match &value {
+            Value::Boolean(bool_) => Self::Boolean(bool_.to_owned()),
+            Value::Empty => Self::Empty,
+            // Value::Error(e) => Self::Error(e.to_owned().into()),
+            Value::Float(num) => Self::Float(num.to_owned()),
+            Value::Integer(num) => Self::Integer(num.to_owned()),
+            Value::ProxyType {
+                module,
+                obj_ty,
+                id,
+                plugin,
+            } => Self::ProxyType(FfiProxy {
+                module: module.to_owned().into(),
+                ty: obj_ty.to_owned().into(),
+                id: id.to_owned().into(),
+                plugin: s_read!(plugin).clone(),
+            }),
+            Value::Range(range) => Self::Range(FfiRange {
+                start: range.start,
+                end: range.end,
+            }),
+            Value::String(str_) => Self::String(str_.to_owned().into()),
+            Value::Uuid(uuid) => Self::Uuid(uuid.to_owned().into()),
+            // Value::Vector(vec) => {
+            //     Self::Vector(vec.iter().map(|v| s_read!(v).clone().into()).collect())
+            // }
+            _ => Self::Unknown,
+        }
+    }
+}
+
+impl From<FfiValue> for Value {
+    fn from(value: FfiValue) -> Self {
+        match value {
+            FfiValue::Boolean(bool_) => Self::Boolean(bool_),
+            FfiValue::Empty => Self::Empty,
+            // FfiValue::Error(e) => Self::Error(e.into()),
+            FfiValue::Float(num) => Self::Float(num),
+            FfiValue::Integer(num) => Self::Integer(num),
+            FfiValue::ProxyType(plugin) => Self::ProxyType {
+                module: plugin.module.into(),
+                obj_ty: plugin.ty.into(),
+                id: plugin.id.into(),
+                plugin: new_ref!(PluginType, plugin.plugin),
+            },
+            FfiValue::Range(range) => Self::Range(range.start..range.end),
+            FfiValue::String(str_) => Self::String(str_.into()),
+            // FfiValue::UserType(uuid) => Self::UserType(new_ref!(UserType, uuid.into())),
+            FfiValue::Uuid(uuid) => Self::Uuid(uuid.into()),
+            // FfiValue::Vector(vec) => {
+            //     Self::Vector(vec.into_iter().map(|v| new_ref!(Value, v.into())).collect())
+            // }
+            _ => Self::Unknown,
+        }
+    }
+}
+
+impl From<(FfiValue, &LuDogStore)> for Value {
+    fn from(value: (FfiValue, &LuDogStore)) -> Self {
+        let lu_dog = value.1;
+        match value.0 {
+            FfiValue::Boolean(bool_) => Self::Boolean(bool_),
+            FfiValue::Empty => Self::Empty,
+            // FfiValue::Error(e) => Self::Error(e.into()),
+            FfiValue::Float(num) => Self::Float(num),
+            FfiValue::Integer(num) => Self::Integer(num),
+            FfiValue::Option(option) => match option {
+                ROption::RNone => Self::Empty,
+                ROption::RSome(value) => <(FfiValue, &LuDogStore) as Into<Value>>::into((
+                    RBox::into_inner(value),
+                    lu_dog,
+                )),
+            },
+            FfiValue::ProxyType(plugin) => Self::ProxyType {
+                module: plugin.module.into(),
+                obj_ty: plugin.ty.into(),
+                id: plugin.id.into(),
+                plugin: new_ref!(PluginType, plugin.plugin),
+            },
+            FfiValue::Range(range) => Self::Range(range.start..range.end),
+            FfiValue::Result(result) => {
+                let Some(ty) = lu_dog.exhume_enumeration_id_by_name("::std::result::Result") else {
+                    panic!("Result type not found")
+                };
+                let ty = lu_dog.exhume_enumeration(&ty).unwrap();
+                let Some(ty) = lu_dog.iter_value_type().find(|vt| {
+                    if let ValueTypeEnum::Enumeration(id) = s_read!(vt).subtype {
+                        let id = lu_dog.exhume_enumeration(&id).unwrap();
+                        if s_read!(id).id == s_read!(ty).id {
+                            return true;
+                        }
+                    }
+                    false
+                }) else {
+                    unreachable!()
+                };
+
+                let tuple = match result {
+                    RResult::RErr(err) => TupleEnum {
+                        variant: "Err".to_owned(),
+                        value: new_ref!(
+                            Value,
+                            <(FfiValue, &LuDogStore) as Into<Value>>::into((
+                                RBox::into_inner(err),
+                                lu_dog,
+                            ))
+                        ),
+                    },
+                    RResult::ROk(ok) => TupleEnum {
+                        variant: "Ok".to_owned(),
+                        value: new_ref!(
+                            Value,
+                            <(FfiValue, &LuDogStore) as Into<Value>>::into((
+                                RBox::into_inner(ok),
+                                lu_dog,
+                            ))
+                        ),
+                    },
+                };
+
+                Value::Enumeration(EnumVariant::Tuple(
+                    (ty.clone(), "Result".to_owned()),
+                    new_ref!(TupleEnum, tuple),
+                ))
+            }
+            FfiValue::String(str_) => Self::String(str_.into()),
+            // FfiValue::UserType(uuid) => Self::UserType(new_ref!(UserType, uuid.into())),
+            FfiValue::Uuid(uuid) => Self::Uuid(uuid.into()),
+            // FfiValue::Vector(vec) => {
+            //     Self::Vector(vec.into_iter().map(|v| new_ref!(Value, v.into())).collect())
+            // }
+            _ => Self::Unknown,
+        }
+    }
+}
+
+impl TryFrom<FfiValue> for String {
+    type Error = ChaChaError;
+
+    fn try_from(value: FfiValue) -> Result<Self> {
+        match value {
+            FfiValue::String(s) => Ok(s.into()),
+            _ => Err(ChaChaError::Conversion {
+                src: value.to_string(),
+                dst: "String".to_owned(),
+            }),
+        }
+    }
+}
+
+impl TryFrom<&FfiValue> for String {
+    type Error = ChaChaError;
+
+    fn try_from(value: &FfiValue) -> Result<Self> {
+        match value {
+            FfiValue::String(s) => Ok(s.to_owned().into()),
+            _ => Err(ChaChaError::Conversion {
+                src: value.to_string(),
+                dst: "String".to_owned(),
+            }),
+        }
+    }
+}
+
+impl TryFrom<&FfiValue> for i64 {
+    type Error = ChaChaError;
+
+    fn try_from(value: &FfiValue) -> Result<Self> {
+        match value {
+            FfiValue::Integer(i) => Ok(*i),
+            _ => Err(ChaChaError::Conversion {
+                src: value.to_string(),
+                dst: "i64".to_owned(),
+            }),
+        }
+    }
 }
 
 /// The type of Enumeration Field
@@ -146,14 +388,6 @@ pub enum FfiValue {
 ///
 #[derive(Clone, Debug)]
 pub enum EnumVariant {
-    /// Unit Enumeration Field
-    ///
-    /// This sort of enumeration is the simplest. In `Foo`, this refers to the
-    /// field `One`: `Foo::One`. The final field in the path is stored as a
-    /// string.
-    ///
-    /// The tuple is: (Type, TypeName, FieldValue)
-    Unit(RefType<ValueType>, String, String),
     /// Struct Enumeration Field
     ///
     /// This type of field is for when it contains a struct, as `Baz` does above.
@@ -165,9 +399,17 @@ pub enum EnumVariant {
     /// This type of field is for when it contains a tuple, as `Bar` does above.
     /// That is to say, `Foo::Bar(int)`.
     ///
-    /// The type is stored as the first element of the tuple, and the variant
-    /// as the second.
+    /// The type is stored as the first element of the tuple, and the path/type
+    /// as a string in the second. The third element is the enum itself.
     Tuple((RefType<ValueType>, String), RefType<TupleEnum>),
+    /// Unit Enumeration Field
+    ///
+    /// This sort of enumeration is the simplest. In `Foo`, this refers to the
+    /// field `One`: `Foo::One`. The final field in the path is stored as a
+    /// string.
+    ///
+    /// The tuple is: (Type, TypeName, FieldValue)
+    Unit(RefType<ValueType>, String, String),
 }
 
 impl EnumVariant {
@@ -185,8 +427,8 @@ impl PartialEq for EnumVariant {
         match (self, other) {
             (Self::Unit(_a, b, e), Self::Unit(_c, d, f)) => b == d && e == f,
             (Self::Struct(a), Self::Struct(b)) => *s_read!(a) == *s_read!(b),
-            (Self::Tuple(a, c), Self::Tuple(b, d)) => {
-                *s_read!(a.0) == *s_read!(b.0) && *s_read!(c) == *s_read!(d)
+            (Self::Tuple((a, _), c), Self::Tuple((b, _), d)) => {
+                *s_read!(a) == *s_read!(b) && *s_read!(c) == *s_read!(d)
             }
             _ => false,
         }
@@ -205,6 +447,13 @@ impl fmt::Display for EnumVariant {
     }
 }
 
+// 🚧 This can be deleted and replaced with just a String.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub enum ThonkInner {
+    Thonk(String),
+    Index(usize),
+}
+
 #[derive(Default)]
 pub enum Value {
     /// Boolean
@@ -221,6 +470,7 @@ pub enum Value {
     /// ()
     Empty,
     Enumeration(EnumVariant),
+    // #[serde(skip)]
     Error(Box<ChaChaError>),
     Float(DwarfFloat),
     /// Function
@@ -229,7 +479,13 @@ pub enum Value {
     /// why I need the inner Function to be behind a RefType<<T>>. It seems
     /// excessive, and yet I know I've looked into it before.
     Function(RefType<Function>),
+    FubarPointer {
+        name: String,
+        frame_size: usize,
+        captures: Vec<RefType<Value>>,
+    },
     #[cfg(feature = "async")]
+    // #[serde(skip)]
     Future {
         name: String,
         executor: Executor,
@@ -237,8 +493,11 @@ pub enum Value {
     },
     Integer(DwarfInteger),
     Lambda(RefType<Lambda>),
+    // #[serde(skip)]
     ParsedDwarf(Context),
-    Plugin(RefType<PluginType>),
+    // #[serde(skip)]
+    Plugin((String, RefType<PluginType>)),
+    // #[serde(skip)]
     ProxyType {
         module: String,
         obj_ty: Uuid,
@@ -246,26 +505,38 @@ pub enum Value {
         plugin: RefType<PluginType>,
     },
     Range(Range<DwarfInteger>),
+    // #[serde(skip)]
     Store(RefType<ZObjectStore>, RefType<PluginType>),
     String(String),
     Struct(RefType<UserStruct>),
     Table(HashMap<String, RefType<Self>>),
     #[cfg(feature = "async")]
+    // #[serde(skip)]
     Task {
         worker: Option<puteketeke::Worker>,
         parent: Option<puteketeke::AsyncTask<'static, ValueResult>>,
     },
-    Thonk(&'static str, usize),
-    TupleEnum(RefType<TupleEnum>),
+    // Thonk(ThonkInner),
     Unknown,
     Uuid(uuid::Uuid),
+    ValueType(ValueType),
     Vector {
         ty: RefType<ValueType>,
-        inner: Vec<RefType<Self>>,
+        inner: RefType<Vec<RefType<Self>>>,
+    },
+    #[cfg(feature = "async")]
+    VmFuture {
+        name: String,
+        executor: Executor,
+        task: Option<puteketeke::AsyncTask<'static, VmValueResult>>,
     },
 }
 
 impl Value {
+    // pub fn new_thonk(name: String) -> Self {
+    //     Self::Thonk(ThonkInner::Thonk(name))
+    // }
+
     #[inline]
     pub fn to_inner_string(&self) -> String {
         let mut buf = Vec::new();
@@ -274,6 +545,7 @@ impl Value {
         String::from_utf8(buf).expect("inner_string returned invalid UTF-8")
     }
 
+    #[inline]
     fn inner_string(&self, f: &mut Vec<u8>) -> std::io::Result<()> {
         match self {
             Self::Boolean(bool_) => write!(f, "{bool_}"),
@@ -284,6 +556,21 @@ impl Value {
             Self::Error(e) => write!(f, "{}: {e}", Colour::Red.bold().paint("error")),
             Self::Float(num) => write!(f, "{num}"),
             Self::Function(_) => write!(f, "<function>"),
+            Self::FubarPointer {
+                name,
+                frame_size,
+                captures,
+            } => {
+                write!(
+                    f,
+                    "FubarPointer {{ name: {name}, frame_size: {frame_size}, captures: ["
+                )?;
+                for i in captures {
+                    let i = s_read!(i);
+                    write!(f, "{i}, ")?;
+                }
+                write!(f, "] }}")
+            }
             #[cfg(feature = "async")]
             Self::Future {
                 name,
@@ -293,7 +580,7 @@ impl Value {
             Self::Integer(num) => write!(f, "{num}"),
             Self::Lambda(_) => write!(f, "<lambda>"),
             Self::ParsedDwarf(ctx) => write!(f, "{ctx:#?}"),
-            Self::Plugin(plugin) => write!(f, "Plugin: {}", s_read!(plugin).name()),
+            Self::Plugin((name, _plugin)) => write!(f, "plugin::{name}"),
             Self::ProxyType {
                 module: _,
                 obj_ty: _,
@@ -309,14 +596,18 @@ impl Value {
             Self::Table(table) => write!(f, "{table:?}"),
             #[cfg(feature = "async")]
             Self::Task { worker, parent } => write!(f, "Task: {parent:?} running on {worker:?}"),
-            Self::Thonk(name, number) => write!(f, "{name} [{number}]"),
-            Self::TupleEnum(te) => write!(f, "{}", s_read!(te)),
+            // Self::Thonk(inner) => match inner {
+            //     ThonkInner::Thonk(name) => write!(f, "{name}"),
+            //     ThonkInner::Index(index) => write!(f, "{index}"),
+            // },
             Self::Unknown => write!(f, "<unknown>"),
             Self::Uuid(uuid) => write!(f, "{uuid}"),
+            Self::ValueType(ty) => write!(f, "{:?}", ty),
             Self::Vector { ty: _, inner } => {
+                let inner = s_read!(inner);
                 let mut first_time = true;
                 write!(f, "[")?;
-                for i in inner {
+                for i in &*inner {
                     if first_time {
                         first_time = false;
                     } else {
@@ -327,6 +618,12 @@ impl Value {
                 }
                 write!(f, "]")
             }
+            #[cfg(feature = "async")]
+            Self::VmFuture {
+                name,
+                executor,
+                task,
+            } => write!(f, "VmTask `{name}`: {task:?}, executor: {executor:?}"),
         }
     }
 
@@ -359,7 +656,6 @@ impl Value {
                 }
                 unreachable!()
             }
-            // Value::Enum(ref ut) => s_read!(ut).get_type().clone(),
             Value::Enumeration(var) => match var {
                 EnumVariant::Unit(t, _, _) => t.clone(),
                 EnumVariant::Struct(ut) => s_read!(ut).get_type().clone(),
@@ -399,6 +695,17 @@ impl Value {
                 #[allow(clippy::let_and_return)]
                 ƛ_type
             }
+            Value::Plugin((name, _plugin)) => {
+                for vt in lu_dog.iter_value_type() {
+                    if let ValueTypeEnum::XPlugin(id) = s_read!(vt).subtype {
+                        let plugin = lu_dog.exhume_x_plugin(&id).unwrap();
+                        if s_read!(plugin).name == name.as_str() {
+                            return vt.clone();
+                        }
+                    }
+                }
+                panic!("Plugin not found: {name}");
+            }
             Value::ProxyType {
                 module: _,
                 obj_ty: uuid,
@@ -428,7 +735,7 @@ impl Value {
             }
             Value::Store(store, _plugin) => s_read!(store).r1_value_type(lu_dog)[0].clone(),
             Value::String(_) => {
-                let ty = Ty::new_s_string(sarzak);
+                let ty = Ty::new_z_string(sarzak);
                 for vt in lu_dog.iter_value_type() {
                     if let ValueTypeEnum::Ty(_ty) = s_read!(vt).subtype {
                         if ty.read().unwrap().id() == _ty {
@@ -452,7 +759,7 @@ impl Value {
                 unreachable!()
             }
             Value::Uuid(_) => {
-                let ty = Ty::new_s_uuid(sarzak);
+                let ty = Ty::new_z_uuid(sarzak);
                 for vt in lu_dog.iter_value_type() {
                     if let ValueTypeEnum::Ty(_ty) = s_read!(vt).subtype {
                         if ty.read().unwrap().id() == _ty {
@@ -463,16 +770,6 @@ impl Value {
                 unreachable!()
             }
             Value::Vector { ty, inner: _ } => {
-                // 🚧 This code was here and I don't know why. I think it must
-                // have been a copy/paste error. I commented it out on 12/11/2023.
-                // let ty = match &s_read!(ty).subtype {
-                //     ValueTypeEnum::XFuture(id) => {
-                //         let ty = lu_dog.exhume_x_future(id).unwrap();
-                //         let ty = s_read!(ty);
-                //         ty.r2_value_type(lu_dog)[0].clone()
-                //     }
-                //     _ => ty.clone(),
-                // };
                 for vt in lu_dog.iter_value_type() {
                     if let ValueTypeEnum::List(id) = s_read!(vt).subtype {
                         let list = lu_dog.exhume_list(&id).unwrap();
@@ -564,6 +861,21 @@ impl std::fmt::Debug for Value {
             Self::Error(e) => write!(f, "{}: {e}", Colour::Red.bold().paint("error")),
             Self::Float(num) => write!(f, "{num:?}"),
             Self::Function(func) => write!(f, "{:?}", s_read!(func)),
+            Self::FubarPointer {
+                name,
+                frame_size,
+                captures,
+            } => {
+                write!(
+                    f,
+                    "FubarPointer {{ name: {name}, frame_size: {frame_size}, captures: ["
+                )?;
+                for i in captures {
+                    let i = s_read!(i);
+                    write!(f, "{i}, ")?;
+                }
+                write!(f, "] }}")
+            }
             #[cfg(feature = "async")]
             Self::Future {
                 name,
@@ -573,7 +885,7 @@ impl std::fmt::Debug for Value {
             Self::Integer(num) => write!(f, "{num:?}"),
             Self::Lambda(ƛ) => write!(f, "{:?}", s_read!(ƛ)),
             Self::ParsedDwarf(ctx) => write!(f, "{ctx:?}"),
-            Self::Plugin(plugin) => write!(f, "Plugin: {}", s_read!(plugin).name()),
+            Self::Plugin((name, _plugin)) => write!(f, "plugin::{name}"),
             Self::ProxyType {
                 module,
                 obj_ty,
@@ -599,11 +911,17 @@ impl std::fmt::Debug for Value {
             Self::Table(table) => write!(f, "{table:?}"),
             #[cfg(feature = "async")]
             Self::Task { worker, parent } => write!(f, "Task: {parent:?} running on {worker:?}"),
-            Self::Thonk(name, number) => write!(f, "{name:?} [{number:?}]"),
-            Self::TupleEnum(te) => write!(f, "{:?}", s_read!(te)),
+            // Self::Thonk(inner) => write!(f, "{inner:?}"),
             Self::Unknown => write!(f, "<unknown>"),
             Self::Uuid(uuid) => write!(f, "{uuid:?}"),
+            Self::ValueType(ty) => write!(f, "{:?}", ty),
             Self::Vector { ty, inner } => write!(f, "{ty:?}: {inner:?}"),
+            #[cfg(feature = "async")]
+            Self::VmFuture {
+                name,
+                executor,
+                task,
+            } => write!(f, "VmTask `{name}`: {task:?}, executor: {executor:?}"),
         }
     }
 }
@@ -618,6 +936,15 @@ impl Clone for Value {
             Self::Error(_e) => unimplemented!(),
             Self::Float(num) => Self::Float(*num),
             Self::Function(func) => Self::Function(func.clone()),
+            Self::FubarPointer {
+                name,
+                frame_size,
+                captures: captured,
+            } => Self::FubarPointer {
+                name: name.to_owned(),
+                frame_size: *frame_size,
+                captures: captured.clone(),
+            },
             #[cfg(feature = "async")]
             // Note that cloned values do not inherit the task
             Self::Future {
@@ -655,73 +982,25 @@ impl Clone for Value {
                 worker: worker.clone(),
                 parent: None,
             },
-            Self::Thonk(name, number) => Self::Thonk(name, *number),
-            Self::TupleEnum(te) => Self::TupleEnum(te.clone()),
+            // Self::Thonk(inner) => Self::Thonk(inner.clone()),
             Self::Unknown => Self::Unknown,
             Self::Uuid(uuid) => Self::Uuid(*uuid),
+            Self::ValueType(ty) => Self::ValueType(ty.clone()),
             Self::Vector { ty, inner } => Self::Vector {
                 ty: ty.clone(),
                 inner: inner.clone(),
             },
-        }
-    }
-}
-
-impl From<Value> for FfiValue {
-    fn from(value: Value) -> Self {
-        match &value {
-            Value::Boolean(bool_) => Self::Boolean(bool_.to_owned()),
-            Value::Empty => Self::Empty,
-            // Value::Error(e) => Self::Error(e.to_owned().into()),
-            Value::Float(num) => Self::Float(num.to_owned()),
-            Value::Integer(num) => Self::Integer(num.to_owned()),
-            Value::ProxyType {
-                module,
-                obj_ty,
-                id,
-                plugin,
-            } => Self::ProxyType(FfiProxy {
-                module: module.to_owned().into(),
-                uuid: obj_ty.to_owned().into(),
-                id: id.to_owned().into(),
-                plugin: s_read!(plugin).clone(),
-            }),
-            Value::Range(range) => Self::Range(FfiRange {
-                start: range.start,
-                end: range.end,
-            }),
-            Value::String(str_) => Self::String(str_.to_owned().into()),
-            Value::Uuid(uuid) => Self::Uuid(uuid.to_owned().into()),
-            // Value::Vector(vec) => {
-            //     Self::Vector(vec.iter().map(|v| s_read!(v).clone().into()).collect())
-            // }
-            _ => Self::Unknown,
-        }
-    }
-}
-
-impl From<FfiValue> for Value {
-    fn from(value: FfiValue) -> Self {
-        match value {
-            FfiValue::Boolean(bool_) => Self::Boolean(bool_),
-            FfiValue::Empty => Self::Empty,
-            // FfiValue::Error(e) => Self::Error(e.into()),
-            FfiValue::Float(num) => Self::Float(num),
-            FfiValue::Integer(num) => Self::Integer(num),
-            FfiValue::ProxyType(plugin) => Self::ProxyType {
-                module: plugin.module.into(),
-                obj_ty: plugin.uuid.into(),
-                id: plugin.id.into(),
-                plugin: new_ref!(PluginType, plugin.plugin),
+            #[cfg(feature = "async")]
+            // Note that cloned values do not inherit the task
+            Self::VmFuture {
+                name,
+                executor,
+                task: _,
+            } => Self::VmFuture {
+                name: name.to_owned(),
+                executor: executor.clone(),
+                task: None,
             },
-            FfiValue::Range(range) => Self::Range(range.start..range.end),
-            FfiValue::String(str_) => Self::String(str_.into()),
-            // FfiValue::UserType(uuid) => Self::UserType(new_ref!(UserType, uuid.into())),
-            FfiValue::Uuid(uuid) => Self::Uuid(uuid.into()),
-            // FfiValue::Vector(vec) => {
-            //     Self::Vector(vec.into_iter().map(|v| new_ref!(Value, v.into())).collect())
-            // }
-            _ => Self::Unknown,
         }
     }
 }
@@ -738,6 +1017,21 @@ impl fmt::Display for Value {
             Self::Error(e) => write!(f, "{}: {e}", Colour::Red.bold().paint("error")),
             Self::Float(num) => write!(f, "{num}"),
             Self::Function(_) => write!(f, "<function>"),
+            Self::FubarPointer {
+                name,
+                frame_size,
+                captures,
+            } => {
+                write!(
+                    f,
+                    "FubarPointer {{ name: {name}, frame_size: {frame_size}, captures: ["
+                )?;
+                for i in captures {
+                    let i = s_read!(i);
+                    write!(f, "{i}, ")?;
+                }
+                write!(f, "] }}")
+            }
             #[cfg(feature = "async")]
             Self::Future {
                 name,
@@ -747,7 +1041,7 @@ impl fmt::Display for Value {
             Self::Integer(num) => write!(f, "{num}"),
             Self::Lambda(_) => write!(f, "<lambda>"),
             Self::ParsedDwarf(ctx) => write!(f, "{ctx:#?}"),
-            Self::Plugin(plugin) => write!(f, "Plugin: {}", s_read!(plugin).name()),
+            Self::Plugin((name, _plugin)) => write!(f, "plugin::{name}"),
             Self::ProxyType {
                 module: _,
                 obj_ty: _,
@@ -764,14 +1058,18 @@ impl fmt::Display for Value {
             Self::Table(table) => write!(f, "{table:?}"),
             #[cfg(feature = "async")]
             Self::Task { worker, parent } => write!(f, "Task: {parent:?} running on {worker:?}"),
-            Self::Thonk(name, number) => write!(f, "{name} [{number}]"),
-            Self::TupleEnum(te) => write!(f, "{}", s_read!(te)),
+            // Self::Thonk(inner) => match inner {
+            //     ThonkInner::Thonk(name) => write!(f, "Thonk({name})"),
+            //     ThonkInner::Index(index) => write!(f, "Thonk({index})"),
+            // },
             Self::Unknown => write!(f, "<unknown>"),
             Self::Uuid(uuid) => write!(f, "{uuid}"),
+            Self::ValueType(ty) => write!(f, "{:?}", ty),
             Self::Vector { ty: _, inner } => {
+                let inner = s_read!(inner);
                 let mut first_time = true;
                 write!(f, "[")?;
-                for i in inner {
+                for i in &*inner {
                     if first_time {
                         first_time = false;
                     } else {
@@ -782,6 +1080,12 @@ impl fmt::Display for Value {
                 }
                 write!(f, "]")
             }
+            #[cfg(feature = "async")]
+            Self::VmFuture {
+                name,
+                executor,
+                task,
+            } => write!(f, "VmTask `{name}`: {task:?}, executor: {executor:?}"),
         }
     }
 }
@@ -794,7 +1098,13 @@ impl From<bool> for Value {
 
 impl From<usize> for Value {
     fn from(value: usize) -> Self {
-        Self::Integer(value as i64)
+        Self::Integer(value as DwarfInteger)
+    }
+}
+
+impl From<isize> for Value {
+    fn from(value: isize) -> Self {
+        Self::Integer(value as DwarfInteger)
     }
 }
 
@@ -806,19 +1116,19 @@ impl From<i64> for Value {
 
 impl From<u64> for Value {
     fn from(value: u64) -> Self {
-        Self::Integer(value as i64)
+        Self::Integer(value as DwarfInteger)
     }
 }
 
 impl From<i32> for Value {
     fn from(value: i32) -> Self {
-        Self::Integer(value as i64)
+        Self::Integer(value as DwarfInteger)
     }
 }
 
 impl From<u32> for Value {
     fn from(value: u32) -> Self {
-        Self::Integer(value as i64)
+        Self::Integer(value as DwarfInteger)
     }
 }
 
@@ -846,11 +1156,45 @@ impl From<Uuid> for Value {
     }
 }
 
+impl From<Range<usize>> for Value {
+    fn from(value: Range<usize>) -> Self {
+        Self::Range(value.start as DwarfInteger..value.end as DwarfInteger)
+    }
+}
+
 impl From<Value> for Option<Uuid> {
     fn from(option: Value) -> Self {
         match option {
             Value::Uuid(uuid) => Some(uuid),
             _ => None,
+        }
+    }
+}
+
+impl TryFrom<&Value> for ValueType {
+    type Error = ChaChaError;
+
+    fn try_from(value: &Value) -> Result<Self, <ValueType as TryFrom<&Value>>::Error> {
+        match &value {
+            Value::ValueType(ty) => Ok(ty.to_owned()),
+            _ => Err(ChaChaError::Conversion {
+                src: value.to_string(),
+                dst: "ValueType".to_owned(),
+            }),
+        }
+    }
+}
+
+impl TryFrom<Value> for ValueType {
+    type Error = ChaChaError;
+
+    fn try_from(value: Value) -> Result<Self, <ValueType as TryFrom<Value>>::Error> {
+        match &value {
+            Value::ValueType(ty) => Ok(ty.to_owned()),
+            _ => Err(ChaChaError::Conversion {
+                src: value.to_string(),
+                dst: "ValueType".to_owned(),
+            }),
         }
     }
 }
@@ -877,7 +1221,7 @@ impl TryFrom<Value> for Range<DwarfInteger> {
             Value::Range(range) => Ok(range.start..range.end),
             _ => Err(ChaChaError::Conversion {
                 src: value.to_string(),
-                dst: "Uuid".to_owned(),
+                dst: "range".to_owned(),
             }),
         }
     }
@@ -891,7 +1235,21 @@ impl TryFrom<Value> for Range<usize> {
             Value::Range(range) => Ok(range.start as usize..range.end as usize),
             _ => Err(ChaChaError::Conversion {
                 src: value.to_string(),
-                dst: "Uuid".to_owned(),
+                dst: "range".to_owned(),
+            }),
+        }
+    }
+}
+
+impl TryFrom<&Value> for Range<usize> {
+    type Error = ChaChaError;
+
+    fn try_from(value: &Value) -> Result<Self, <Range<usize> as TryFrom<&Value>>::Error> {
+        match value {
+            Value::Range(range) => Ok(range.start as usize..range.end as usize),
+            _ => Err(ChaChaError::Conversion {
+                src: value.to_string(),
+                dst: "range".to_owned(),
             }),
         }
     }
@@ -944,7 +1302,13 @@ impl TryFrom<Value> for usize {
                 src: str_.to_owned(),
                 dst: "usize".to_owned(),
             }),
-            Value::Thonk(_, num) => Ok(num.to_owned()),
+            // Value::Thonk(inner) => match inner {
+            //     ThonkInner::Thonk(name) => Err(ChaChaError::Conversion {
+            //         src: (*name).to_owned(),
+            //         dst: "usize".to_owned(),
+            //     }),
+            //     ThonkInner::Index(index) => Ok(*index),
+            // },
             _ => Err(ChaChaError::Conversion {
                 src: value.to_string(),
                 dst: "usize".to_owned(),
@@ -964,10 +1328,68 @@ impl TryFrom<&Value> for usize {
                 src: str_.to_owned(),
                 dst: "usize".to_owned(),
             }),
-            Value::Thonk(_, num) => Ok(*num),
+            // Value::Thonk(inner) => match inner {
+            //     ThonkInner::Thonk(name) => Err(ChaChaError::Conversion {
+            //         src: (*name).to_owned(),
+            //         dst: "usize".to_owned(),
+            //     }),
+            //     ThonkInner::Index(index) => Ok(*index),
+            // },
             _ => Err(ChaChaError::Conversion {
                 src: value.to_string(),
                 dst: "usize".to_owned(),
+            }),
+        }
+    }
+}
+
+impl TryFrom<Value> for isize {
+    type Error = ChaChaError;
+
+    fn try_from(value: Value) -> Result<Self, <isize as TryFrom<Value>>::Error> {
+        match &value {
+            Value::Float(num) => Ok(num.to_owned() as isize),
+            Value::Integer(num) => Ok(num.to_owned() as isize),
+            Value::String(str_) => str_.parse::<isize>().map_err(|_| ChaChaError::Conversion {
+                src: str_.to_owned(),
+                dst: "isize".to_owned(),
+            }),
+            // Value::Thonk(inner) => match inner {
+            //     ThonkInner::Thonk(name) => Err(ChaChaError::Conversion {
+            //         src: (*name).to_owned(),
+            //         dst: "isize".to_owned(),
+            //     }),
+            //     ThonkInner::Index(index) => Ok(*index as isize),
+            // },
+            _ => Err(ChaChaError::Conversion {
+                src: value.to_string(),
+                dst: "isize".to_owned(),
+            }),
+        }
+    }
+}
+
+impl TryFrom<&Value> for isize {
+    type Error = ChaChaError;
+
+    fn try_from(value: &Value) -> Result<Self, <isize as TryFrom<&Value>>::Error> {
+        match value {
+            Value::Float(num) => Ok(*num as isize),
+            Value::Integer(num) => Ok(*num as isize),
+            Value::String(str_) => str_.parse::<isize>().map_err(|_| ChaChaError::Conversion {
+                src: str_.to_owned(),
+                dst: "isize".to_owned(),
+            }),
+            // Value::Thonk(inner) => match inner {
+            //     ThonkInner::Thonk(name) => Err(ChaChaError::Conversion {
+            //         src: (*name).to_owned(),
+            //         dst: "isize".to_owned(),
+            //     }),
+            //     ThonkInner::Index(index) => Ok(*index as isize),
+            // },
+            _ => Err(ChaChaError::Conversion {
+                src: value.to_string(),
+                dst: "isize".to_owned(),
             }),
         }
     }
@@ -978,7 +1400,7 @@ impl TryFrom<Value> for i64 {
 
     fn try_from(value: Value) -> Result<Self, <i64 as TryFrom<Value>>::Error> {
         match &value {
-            Value::Float(num) => Ok(num.to_owned() as i64),
+            Value::Float(num) => Ok(num.to_owned() as DwarfInteger),
             Value::Integer(num) => Ok(num.to_owned()),
             Value::String(str_) => str_.parse::<i64>().map_err(|_| ChaChaError::Conversion {
                 src: str_.to_owned(),
@@ -997,7 +1419,7 @@ impl TryFrom<&Value> for i64 {
 
     fn try_from(value: &Value) -> Result<Self, <i64 as TryFrom<&Value>>::Error> {
         match value {
-            Value::Float(num) => Ok(*num as i64),
+            Value::Float(num) => Ok(*num as DwarfInteger),
             Value::Integer(num) => Ok(*num),
             Value::String(str_) => str_.parse::<i64>().map_err(|_| ChaChaError::Conversion {
                 src: str_.to_owned(),
@@ -1099,7 +1521,7 @@ impl TryFrom<&Value> for String {
     type Error = ChaChaError;
 
     fn try_from(value: &Value) -> Result<Self, <String as TryFrom<&Value>>::Error> {
-        Ok(value.to_string())
+        Ok(value.to_inner_string())
     }
 }
 
@@ -1151,16 +1573,22 @@ impl std::ops::Add for Value {
         match (&self, &other) {
             (Value::Float(a), Value::Float(b)) => Value::Float(a + b),
             // (Value::Float(a), Value::String(b)) => Value::String(a.to_string() + &b),
-            (Value::String(a), Value::Float(b)) => Value::String(a.to_owned() + &b.to_string()),
+            (Value::String(a), Value::Float(b)) => {
+                Value::String(a.to_owned() + b.to_string().as_str())
+            }
             (Value::Integer(a), Value::Integer(b)) => Value::Integer(a + b),
             // (Value::Integer(a), Value::String(b)) => Value::String(a.to_string() + &b),
             (Value::String(a), Value::Integer(b)) => {
                 Value::String(a.to_owned() + b.to_string().as_str())
             }
-            (Value::String(a), Value::String(b)) => Value::String(a.to_owned() + b),
-            (Value::Char(a), Value::Char(b)) => Value::String(a.to_string() + &b.to_string()),
-            (Value::Char(a), Value::String(b)) => Value::String(a.to_string() + &b),
-            (Value::String(a), Value::Char(b)) => Value::String(a.to_owned() + &b.to_string()),
+            (Value::String(a), Value::String(b)) => Value::String(a.to_owned() + b.as_str()),
+            (Value::Char(a), Value::Char(b)) => {
+                Value::String(a.to_string() + b.to_string().as_str())
+            }
+            (Value::Char(a), Value::String(b)) => Value::String(a.to_string() + b.as_str()),
+            (Value::String(a), Value::Char(b)) => {
+                Value::String(a.to_owned() + b.to_string().as_str())
+            }
             (Value::Empty, Value::Empty) => Value::Empty,
             (Value::Boolean(a), Value::Boolean(b)) => Value::Boolean(*a || *b),
             // (Value::Boolean(a), Value::String(b)) => Value::String(a.to_string() + &b),
@@ -1218,6 +1646,8 @@ impl std::ops::Mul for Value {
     fn mul(self, other: Self) -> Self::Output {
         match (self, other) {
             (Value::Float(a), Value::Float(b)) => Value::Float(a * b),
+            (Value::Float(a), Value::Integer(b)) => Value::Float(a * b as DwarfFloat),
+            (Value::Integer(a), Value::Float(b)) => Value::Float(a as DwarfFloat * b),
             (Value::Integer(a), Value::Integer(b)) => Value::Integer(a * b),
             (Value::Empty, Value::Empty) => Value::Empty,
             (a, b) => Value::Error(Box::new(ChaChaError::Multiplication {
@@ -1384,6 +1814,7 @@ impl std::cmp::PartialEq for Value {
                     plugin: _,
                 },
             ) => a == b,
+            (Value::Plugin((a, _)), Value::Plugin((b, _))) => a == b,
             (Value::String(a), Value::String(b)) => a == b,
             (Value::Struct(a), Value::Struct(b)) => *s_read!(a) == *s_read!(b),
             (Value::Uuid(a), Value::Uuid(b)) => a == b,
@@ -1391,6 +1822,9 @@ impl std::cmp::PartialEq for Value {
                 if *s_read!(ty_a) != *s_read!(ty_b) {
                     return false;
                 }
+
+                let a = s_read!(a);
+                let b = s_read!(b);
 
                 if a.len() != b.len() {
                     return false;
@@ -1423,7 +1857,9 @@ impl PartialEq for UserTypeAttribute {
                 return false;
             }
 
-            if !s_read!(v).eq(&s_read!(other.0.get(k).unwrap())) {
+            let ov = other.0.get(k).unwrap();
+
+            if !s_read!(v).eq(&s_read!(ov)) {
                 return false;
             }
         }
@@ -1436,8 +1872,8 @@ impl Eq for UserTypeAttribute {}
 
 #[derive(Clone, Debug)]
 pub struct TupleEnum {
-    variant: String,
-    value: RefType<Value>,
+    pub(crate) variant: String,
+    pub(crate) value: RefType<Value>,
 }
 
 impl PartialEq for TupleEnum {
@@ -1528,7 +1964,13 @@ impl fmt::Display for UserStruct {
         let mut attrs = self.attrs.0.iter().collect::<Vec<_>>();
         attrs.sort_by(|(k1, _), (k2, _)| k1.cmp(k2));
 
-        let mut out = f.debug_struct(&self.type_name);
+        let name = if let Some(name) = self.type_name.strip_prefix(PATH_SEP) {
+            name
+        } else {
+            &self.type_name
+        };
+
+        let mut out = f.debug_struct(name);
         for (k, v) in attrs {
             out.field(k, &format_args!("{}", &s_read!(v)));
         }

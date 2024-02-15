@@ -2,7 +2,7 @@ use std::{path::Path, time::Instant};
 
 use abi_stable::{
     library::{lib_header_from_path, LibrarySuffix, RawLibrary},
-    std_types::ROk,
+    std_types::{RErr, ROk},
 };
 use ansi_term::Colour;
 use heck::ToUpperCamelCase;
@@ -14,10 +14,10 @@ use tracy_client::span;
 use tracing::{debug_span, Instrument};
 
 use crate::{
+    bubba::VM,
     chacha::{
         error::{Result, WrongNumberOfArgumentsSnafu},
         value::FfiValue,
-        vm::VM,
     },
     interpreter::{
         debug, error, eval_expression, eval_statement, function, trace, typecheck, ChaChaError,
@@ -32,14 +32,9 @@ use crate::{
     plug_in::PluginType,
     s_read, s_write,
     sarzak::ObjectStore,
-    NewRef, RefType, SarzakStorePtr, Value,
+    Desanitize, NewRef, RefType, SarzakStorePtr, Value, FUNCTION_LOAD, FUNCTION_NEW, MERLIN,
+    OBJECT_STORE, SARZAK,
 };
-
-const OBJECT_STORE: &str = "ObjectStore";
-const FUNCTION_NEW: &str = "new";
-const FUNCTION_LOAD: &str = "load";
-const MERLIN: &str = "merlin";
-const SARZAK: &str = "sarzak";
 
 pub fn eval_function_call(
     func: RefType<Function>,
@@ -68,8 +63,10 @@ pub fn eval_function_call(
     if s_read!(body).a_sink {
         #[cfg(not(feature = "async"))]
         {
-            // compile_error!("The async feature flag is required for async functions.");
-            Ok(new_ref!(Value, Value::Empty))
+            Ok(new_ref!(
+                Value,
+                Value::Error(Box::new(ChaChaError::AsyncNotSupported))
+            ))
         }
         #[cfg(feature = "async")]
         {
@@ -80,8 +77,12 @@ pub fn eval_function_call(
             let t_span = debug_span!("async func_call", target = "async");
 
             let future = async move {
-                let mem = cloned_context.memory().clone();
-                let mut vm = VM::new(&mem);
+                let mut vm = VM::new(
+                    cloned_context.get_program(),
+                    &[],
+                    cloned_context.get_home(),
+                    cloned_context.thread_count(),
+                );
 
                 inner_eval_function_call(
                     func,
@@ -141,7 +142,7 @@ fn inner_eval_function_call(
         //
         // This is an externally defined function that was declared in a dwarf file.
         BodyEnum::ExternalImplementation(ref id) => {
-            eval_external_static_method(id, args, first_arg, arg_check, span, context, vm)
+            eval_external_method(id, args, first_arg, arg_check, span, context, vm)
         }
     }
 }
@@ -153,7 +154,7 @@ fn inner_eval_function_call(
 /// ```ignore
 ///#[proxy(store = "sarzak", object = "Boolean", func = "flubber")]
 ///```
-fn eval_external_static_method(
+fn eval_external_method(
     block_id: &SarzakStorePtr,
     args: &[RefType<Argument>],
     first_arg: Option<SarzakStorePtr>,
@@ -191,6 +192,8 @@ fn eval_external_static_method(
     };
 
     let model_name = s_read!(external).x_model.clone();
+    // This is a hack since merlin and sarzak are in the same plugin, and it's
+    // called sarzak.
     let model_name = if model_name == MERLIN {
         SARZAK.to_owned()
     } else {
@@ -215,9 +218,9 @@ fn eval_external_static_method(
         )
     }
     // 🚧 Should these be wrapped in a mutex-like?
-    else if let Some(obj_id) = model.0.exhume_object_id_by_name(&object_name) {
+    else if let Some(obj_id) = model.0.exhume_object_id_by_name(&object_name.desanitize()) {
         if let Some(plugin) = &model.1 {
-            if let ROk(proxy_obj) = s_write!(plugin).invoke_func(
+            match s_write!(plugin).invoke_func(
                 model_name.as_str().into(),
                 object_name.as_str().into(),
                 func_name.as_str().into(),
@@ -230,7 +233,7 @@ fn eval_external_static_method(
                     .collect::<Vec<_>>()
                     .into(),
             ) {
-                match proxy_obj {
+                ROk(proxy_obj) => match proxy_obj {
                     FfiValue::ProxyType(proxy_obj) => {
                         let value = new_ref!(
                             Value,
@@ -247,57 +250,43 @@ fn eval_external_static_method(
                     FfiValue::Vector(vec) => {
                         let vec = vec
                             .into_iter()
-                            .map(Value::from)
+                            .map(|k| Value::from((k, &*s_read!(lu_dog))))
                             .map(|v| new_ref!(Value, v))
                             .collect::<Vec<_>>();
                         let ty = if vec.is_empty() {
-                            ValueType::new_empty(&mut s_write!(lu_dog))
+                            ValueType::new_empty(true, &mut s_write!(lu_dog))
                         } else {
                             s_read!(vec[0])
                                 .get_value_type(&s_read!(context.sarzak_heel()), &s_read!(lu_dog))
                         };
-                        let value = new_ref!(Value, Value::Vector { ty, inner: vec });
-
-                        // let woog_struct = s_read!(lu_dog)
-                        //     .iter_woog_struct()
-                        //     .find(|woog| {
-                        //         let woog = s_read!(woog);
-                        //         woog.name == object_name
-                        //     })
-                        //     .unwrap();
-
-                        // let ty = s_read!(lu_dog)
-                        //     .iter_value_type()
-                        //     .find(|ty| {
-                        //         let ty = s_read!(ty);
-                        //         if let ValueTypeEnum::WoogStruct(struct_id) = ty.subtype {
-                        //             struct_id == s_read!(woog_struct).id
-                        //         } else {
-                        //             false
-                        //         }
-                        //     })
-                        //     .unwrap();
-
-                        // let list = List::new(&ty, &mut s_write!(lu_dog));
+                        let value = new_ref!(
+                            Value,
+                            Value::Vector {
+                                ty,
+                                inner: new_ref!(Vec<RefType<Value>>, vec)
+                            }
+                        );
 
                         Ok(value)
                     }
                     all_manner_of_things => {
                         panic!("{all_manner_of_things:?} is not a proxy for model {model_name}.");
                     }
+                },
+                RErr(e) => {
+                    dbg!(e);
+                    Err(ChaChaError::NoSuchMethod {
+                        method: func_name,
+                        span: s_read!(span).start as usize..s_read!(span).end as usize,
+                        location: location!(),
+                    })
                 }
-            } else {
-                Err(ChaChaError::NoSuchMethod {
-                    method: func_name,
-                    span: s_read!(span).start as usize..s_read!(span).end as usize,
-                    location: location!(),
-                })
             }
         } else {
             panic!("no plugin");
         }
     } else {
-        error!("object not found");
+        error!("object not found: {object_name}");
         unimplemented!()
     }
 }
@@ -418,6 +407,7 @@ fn eval_built_in_function_call(
                 let x_value = &s_read!(expr).r11_x_value(&s_read!(lu_dog))[0];
                 let span = &s_read!(x_value).r63_span(&s_read!(lu_dog))[0];
 
+                debug!("type check arg_ty {arg_ty:?}");
                 typecheck(&param_ty, &arg_ty, span, location!(), context)?;
             }
 

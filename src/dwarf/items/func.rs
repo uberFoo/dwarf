@@ -10,15 +10,15 @@ use crate::{
             debug, function, inter_statements, make_value_type, typecheck, Context,
             FunctionDefinition, Span, FUNC, OBJECT, PROXY, STORE,
         },
-        AttributeMap, BlockType, Expression as ParserExpression, InnerAttribute, Spanned,
-        Statement as ParserStatement, Type,
+        AttributeMap, BlockType, Expression as ParserExpression, InnerAttribute,
+        PrintableValueType, Spanned, Statement as ParserStatement, Type,
     },
     lu_dog::{
-        store::ObjectStore as LuDogStore, Block, Body, ExternalImplementation, Function, Generic,
-        ImplementationBlock, Item as WoogItem, LocalVariable, Parameter, Span as LuDogSpan,
-        ValueType, Variable, XFuture, XValue,
+        store::ObjectStore as LuDogStore, Block, Body, ExternalImplementation, FuncGeneric,
+        Function, ImplementationBlock, Item as WoogItem, LocalVariable, Parameter,
+        Span as LuDogSpan, ValueType, Variable, XFuture, XValue,
     },
-    new_ref, s_read, s_write, Dirty, DwarfInteger, NewRef, RefType,
+    new_ref, s_read, s_write, Dirty, DwarfInteger, NewRef, RefType, SarzakStorePtr,
 };
 
 macro_rules! link_parameter {
@@ -47,6 +47,7 @@ pub fn inter_func(
     impl_ty: Option<&RefType<ValueType>>,
     span: &Span,
     context: &mut Context,
+    context_stack: &mut Vec<(String, RefType<LuDogStore>)>,
     lu_dog: &mut LuDogStore,
 ) -> Result<()> {
     debug!("inter_func {}", name);
@@ -57,21 +58,21 @@ pub fn inter_func(
     };
 
     let external = if let Some(proxy_vec) = attributes.get(PROXY) {
-        if let Some((_, InnerAttribute::Attribute(ref attributes))) = proxy_vec.get(0) {
+        if let Some((_, InnerAttribute::Attribute(ref attributes))) = proxy_vec.first() {
             debug!("proxy");
 
             if let Some(store_vec) = attributes.get(STORE) {
-                if let Some((_, ref value)) = store_vec.get(0) {
+                if let Some((_, ref value)) = store_vec.first() {
                     let store_name: String = value.try_into().map_err(|e| vec![e])?;
                     debug!("proxy.store.: {store_name}");
 
                     if let Some(func_vec) = attributes.get(FUNC) {
-                        if let Some((_, ref value)) = func_vec.get(0) {
+                        if let Some((_, ref value)) = func_vec.first() {
                             let func_name: String = value.try_into().map_err(|e| vec![e])?;
                             debug!("proxy.func: {func_name}");
 
                             if let Some(obj_vec) = attributes.get(OBJECT) {
-                                if let Some((_, ref value)) = obj_vec.get(0) {
+                                if let Some((_, ref value)) = obj_vec.first() {
                                     let obj_name: String = value.try_into().map_err(|e| vec![e])?;
                                     debug!("proxy.object: {obj_name}");
 
@@ -116,8 +117,8 @@ pub fn inter_func(
     let ret_span = &return_type.1;
     let ret_ty = if let Some(generics) = generics {
         if generics.get(&type_str).is_some() {
-            let g = Generic::new(type_str, None, None, lu_dog);
-            let ty = ValueType::new_generic(&g, lu_dog);
+            let g = FuncGeneric::new(type_str, None, None, lu_dog);
+            let ty = ValueType::new_func_generic(true, &g, lu_dog);
             LuDogSpan::new(
                 ret_span.end as i64,
                 ret_span.start as i64,
@@ -130,11 +131,25 @@ pub fn inter_func(
             ty
         } else {
             context.location = location!();
-            make_value_type(&return_type.0, ret_span, impl_ty, context, lu_dog)?
+            make_value_type(
+                &return_type.0,
+                ret_span,
+                impl_ty,
+                context,
+                context_stack,
+                lu_dog,
+            )?
         }
     } else {
         context.location = location!();
-        make_value_type(&return_type.0, ret_span, impl_ty, context, lu_dog)?
+        make_value_type(
+            &return_type.0,
+            ret_span,
+            impl_ty,
+            context,
+            context_stack,
+            lu_dog,
+        )?
     };
 
     let (func, block) =
@@ -157,14 +172,34 @@ pub fn inter_func(
             }
 
             let body = Body::new_block(a_sink, &block, lu_dog);
-            let func = Function::new(name.to_owned(), &body, None, impl_block, &ret_ty, lu_dog);
+            // 🚧 We aren't picking up the generics we created during signature processing.
+            // 🚧 And neither are we picking up the type if it's an impl block
+            let func = Function::new(
+                name.to_owned(),
+                &body,
+                None,
+                None,
+                impl_block,
+                &ret_ty,
+                lu_dog,
+            );
+
             context.dirty.push(Dirty::Func(func.clone()));
-            let _ = ValueType::new_function(&func, lu_dog);
+            // let _ = ValueType::new_function(true, &func, lu_dog);
 
             (func, Some((block, stmts, span)))
         } else if let Some(body) = external {
             (
-                Function::new(name.to_owned(), &body, None, impl_block, &ret_ty, lu_dog),
+                // 🚧 We aren't picking up the generics we created during signature processing.
+                Function::new(
+                    name.to_owned(),
+                    &body,
+                    None,
+                    None,
+                    impl_block,
+                    &ret_ty,
+                    lu_dog,
+                ),
                 None,
             )
         } else {
@@ -175,7 +210,7 @@ pub fn inter_func(
 
     let _ = WoogItem::new_function(&context.source, &func, lu_dog);
     // Create a type for our function
-    let ty = ValueType::new_function(&func, lu_dog);
+    let ty = ValueType::new_function(true, &func, lu_dog);
     LuDogSpan::new(
         span.end as i64,
         span.start as i64,
@@ -188,7 +223,7 @@ pub fn inter_func(
     // Check the parameters
     //
     let mut errors = Vec::new();
-    let mut last_param_uuid: Option<usize> = None;
+    let mut last_param_uuid: Option<SarzakStorePtr> = None;
 
     for (position, ((param_name, name_span), (param_ty, ty_span))) in params.iter().enumerate() {
         debug!("param name {}", param_name);
@@ -200,11 +235,11 @@ pub fn inter_func(
         let type_str = param_ty.to_string();
         let param_ty = if let Some(generics) = generics {
             if generics.get(&type_str).is_some() {
-                let g = Generic::new(type_str, None, None, lu_dog);
-                ValueType::new_generic(&g, lu_dog)
+                let g = FuncGeneric::new(type_str, None, None, lu_dog);
+                ValueType::new_func_generic(true, &g, lu_dog)
             } else {
                 context.location = location!();
-                match make_value_type(param_ty, ty_span, impl_ty, context, lu_dog) {
+                match make_value_type(param_ty, ty_span, impl_ty, context, context_stack, lu_dog) {
                     Ok(ty) => ty,
                     Err(mut e) => {
                         errors.append(&mut e);
@@ -214,7 +249,7 @@ pub fn inter_func(
             }
         } else {
             context.location = location!();
-            match make_value_type(param_ty, ty_span, impl_ty, context, lu_dog) {
+            match make_value_type(param_ty, ty_span, impl_ty, context, context_stack, lu_dog) {
                 Ok(ty) => ty,
                 Err(mut e) => {
                     errors.append(&mut e);
@@ -269,12 +304,13 @@ pub fn inter_func(
             .map(|stmt| new_ref!(ParserStatement, stmt.0.clone()))
             .collect();
 
-        let (block_ty, block_span) = inter_statements(&stmts, stmt_span, &block, context, lu_dog)?;
+        let (block_ty, block_span) =
+            inter_statements(&stmts, stmt_span, &block, context, context_stack, lu_dog)?;
 
         let block_ty = match a_sink {
             true => {
                 let future = XFuture::new(&block_ty, lu_dog);
-                ValueType::new_x_future(&future, lu_dog)
+                ValueType::new_x_future(true, &future, lu_dog)
             }
             false => block_ty,
         };
@@ -305,6 +341,7 @@ pub fn parse_func_signature(
     return_type: &Spanned<Type>,
     impl_ty: Option<&RefType<ValueType>>,
     context: &mut Context,
+    context_stack: &Vec<(String, RefType<LuDogStore>)>,
     lu_dog: &mut LuDogStore,
 ) -> Result<()> {
     debug!("parse_func_signature {}", name);
@@ -313,8 +350,8 @@ pub fn parse_func_signature(
     let span = &return_type.1;
     let ret_ty = if let Some(generics) = generics {
         if generics.get(&type_str).is_some() {
-            let g = Generic::new(type_str, None, None, lu_dog);
-            let ty = ValueType::new_generic(&g, lu_dog);
+            let g = FuncGeneric::new(type_str, None, None, lu_dog);
+            let ty = ValueType::new_func_generic(true, &g, lu_dog);
             LuDogSpan::new(
                 span.end as i64,
                 span.start as i64,
@@ -327,11 +364,25 @@ pub fn parse_func_signature(
             ty
         } else {
             context.location = location!();
-            make_value_type(&return_type.0, span, impl_ty, context, lu_dog)?
+            make_value_type(
+                &return_type.0,
+                span,
+                impl_ty,
+                context,
+                context_stack,
+                lu_dog,
+            )?
         }
     } else {
         context.location = location!();
-        make_value_type(&return_type.0, span, impl_ty, context, lu_dog)?
+        make_value_type(
+            &return_type.0,
+            span,
+            impl_ty,
+            context,
+            context_stack,
+            lu_dog,
+        )?
     };
 
     let mut param_tuples = Vec::new();
@@ -340,15 +391,15 @@ pub fn parse_func_signature(
         let span = ty_span;
         let param_ty = if let Some(generics) = generics {
             if generics.get(&type_str).is_some() {
-                let g = Generic::new(type_str, None, None, lu_dog);
-                ValueType::new_generic(&g, lu_dog)
+                let g = FuncGeneric::new(type_str, None, None, lu_dog);
+                ValueType::new_func_generic(true, &g, lu_dog)
             } else {
                 context.location = location!();
-                make_value_type(param_ty, span, impl_ty, context, lu_dog)?
+                make_value_type(param_ty, span, impl_ty, context, context_stack, lu_dog)?
             }
         } else {
             context.location = location!();
-            make_value_type(param_ty, span, impl_ty, context, lu_dog)?
+            make_value_type(param_ty, span, impl_ty, context, context_stack, lu_dog)?
         };
 
         LuDogSpan::new(

@@ -53,7 +53,7 @@ fn run_program(test: &str, program: &str) -> Result<(RefType<Value>, String), St
                         format!(
                             "{}",
                             // Print the "uber" error message.
-                            dwarf::dwarf::error::DwarfErrorReporter(e, true, program)
+                            dwarf::dwarf::error::DwarfErrorReporter(e, true)
                         )
                     })
                     .collect::<Vec<_>>()
@@ -63,12 +63,7 @@ fn run_program(test: &str, program: &str) -> Result<(RefType<Value>, String), St
 
             let errors = e
                 .iter()
-                .map(|e| {
-                    format!(
-                        "{}",
-                        dwarf::dwarf::error::DwarfErrorReporter(e, false, program)
-                    )
-                })
+                .map(|e| format!("{}", dwarf::dwarf::error::DwarfErrorReporter(e, false)))
                 .collect::<Vec<_>>()
                 .join("\n")
                 .trim()
@@ -78,7 +73,7 @@ fn run_program(test: &str, program: &str) -> Result<(RefType<Value>, String), St
         }
     };
 
-    let mut ctx = initialize_interpreter(2, dwarf_home, ctx, sarzak).unwrap();
+    let mut ctx = initialize_interpreter(2, dwarf_home, ctx).unwrap();
     match start_func("main", false, &mut ctx) {
         Ok(v) => {
             let stdout = ctx.drain_std_out().join("").trim().to_owned();

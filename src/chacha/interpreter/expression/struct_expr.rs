@@ -1,10 +1,10 @@
 use ansi_term::Colour;
 
 use crate::{
+    bubba::VM,
     chacha::{
         error::Result,
         value::{EnumVariant, TupleEnum},
-        vm::VM,
     },
     interpreter::{debug, eval_expression, function, Context, UserStruct},
     lu_dog::types::{DataStructureEnum, FieldExpressionEnum},
@@ -30,7 +30,7 @@ pub fn eval(expr: &SarzakStorePtr, context: &mut Context, vm: &mut VM) -> Result
             let mut pe = s_read!(x_path).r97_path_element(&s_read!(lu_dog))[0].clone();
             let mut path = vec![s_read!(pe).name.to_owned()];
 
-            // Get the last path element.
+            // Build the path from the elements.
             while s_read!(pe).next.is_some() {
                 let id = {
                     let id = &s_read!(pe).next;
@@ -47,8 +47,6 @@ pub fn eval(expr: &SarzakStorePtr, context: &mut Context, vm: &mut VM) -> Result
 
             //
             // This is where we give the enums actual values -- the rubber hits the road.
-            // Feels like wrapping this if expression in an Ok Option variant is
-            // somehow bad. I'm doing it anyway. 😜
             Ok(if field_exprs.is_empty() {
                 new_ref!(
                     Value,
@@ -70,7 +68,6 @@ pub fn eval(expr: &SarzakStorePtr, context: &mut Context, vm: &mut VM) -> Result
                 // 🚧 Punting here -- we are just doing tuple enums for now. And
                 // only single ones at that. I should just lift the restriction.
                 // Tuples are only a notional thing anyway I think.
-                // (field_values[0].clone(), UserEnumType::Tuple)
                 let value = field_values[0].clone();
 
                 let user_enum = TupleEnum::new(variant, value);
@@ -110,9 +107,12 @@ pub fn eval(expr: &SarzakStorePtr, context: &mut Context, vm: &mut VM) -> Result
                 } else {
                     unreachable!()
                 };
-            let ty = s_read!(woog_struct).r1_value_type(&s_read!(lu_dog))[0].clone();
+            let woog_struct = s_read!(woog_struct);
+            let ty = woog_struct.r1_value_type(&s_read!(lu_dog))[0].clone();
 
-            let mut user_type = UserStruct::new(&s_read!(woog_struct).name, &ty);
+            let name = &woog_struct.name;
+
+            let mut user_type = UserStruct::new(name, &ty);
             for (name, value) in field_exprs {
                 user_type.define_field(&name, value);
             }

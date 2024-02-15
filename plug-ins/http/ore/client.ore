@@ -1,0 +1,89 @@
+use std::dwarf::Plugin;
+use std::option::Option;
+use std::result::Result;
+
+struct HttpClient {
+    // This plugin value must point to a valid plugin. The first part of the
+    // path is the name, and the second part is a parameter to send to the
+    // constructor.
+    #[proxy(plugin = "http::http_client")]
+    inner: Plugin<HttpClient>,
+}
+
+impl HttpClient {
+    fn new() -> Self {
+        HttpClient {
+            inner: Plugin::<HttpClient>::new(),
+        }
+    }
+
+    async fn get(self, url: String) -> Future<Request> {
+        let request = self
+            .inner
+            .invoke_func("http_client", "HttpClient", "get", [url]);
+        Request {
+            inner: request,
+            plugin: self.inner,
+        }
+    }
+}
+
+struct Request {
+    #[proxy(plugin = "http::http_client")]
+    plugin: Plugin<HttpClient>,
+    inner: int,
+}
+
+impl Request {
+    async fn send(self) -> Future<Result<Response, HttpError>> {
+        let response = self
+            .plugin
+            .invoke_func("http_client", "Request", "send", [self.inner]);
+
+        match response {
+            Result::Err(e) => Result::<Response, HttpError>::Err(HttpError {
+                inner: e,
+                plugin: self.plugin,
+            }),
+            Result::Ok(r) => Result::<Response, HttpError>::Ok(Response {
+                inner: r,
+                plugin: self.plugin,
+            }),
+        }
+    }
+}
+
+struct Response {
+    #[proxy(plugin = "http::http_client")]
+    plugin: Plugin<HttpClient>,
+    inner: int,
+}
+
+impl Response {
+    async fn text(self) -> Future<Result<string, HttpError>> {
+        let text = self
+            .plugin
+            .invoke_func("http_client", "Response", "text", [self.inner]);
+
+        match text {
+            Result::Err(e) => Result::<string, HttpError>::Err(HttpError {
+                inner: e,
+                plugin: self.plugin,
+            }),
+            Result::Ok(t) => Result::<string, HttpError>::Ok(t),
+        }
+    }
+}
+
+struct HttpError {
+    #[proxy(plugin = "http::http_client")]
+    plugin: Plugin<HttpClient>,
+    inner: int,
+}
+
+impl HttpError {
+    fn to_string(self) -> string {
+        self.plugin
+            .invoke_func("http_client", "HttpError", "to_string", [self.inner])
+    }
+}

@@ -2,7 +2,8 @@ use ansi_term::Colour;
 use snafu::{location, Location};
 
 use crate::{
-    chacha::{error::Result, vm::VM},
+    bubba::VM,
+    chacha::error::Result,
     interpreter::{debug, eval_expression, function, ChaChaError, Context},
     lu_dog::FieldAccessTargetEnum,
     new_ref, s_read, s_write, NewRef, RefType, SarzakStorePtr, Value,
@@ -81,7 +82,7 @@ pub mod field_access {
                     Ok(value) => {
                         debug!("ProxyType return value: {value:?}");
 
-                        let value: Value = value.into();
+                        let value: Value = (value, &*s_read!(lu_dog)).into();
                         debug!("ProxyType value: {value:?}");
 
                         Ok(new_ref!(Value, value))

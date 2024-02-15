@@ -10,36 +10,40 @@ use async_io::Timer;
 use tracing::{debug_span, Instrument};
 
 #[cfg(feature = "async")]
-use crate::keywords::{ASLEEP, HTTP_GET, ONE_SHOT, SPAWN, SPAWN_NAMED, TIMER};
+use crate::keywords::{ASLEEP, ONE_SHOT, SPAWN, SPAWN_NAMED, TIMER};
 
+use abi_stable::std_types::{RErr, ROk};
 use snafu::{location, prelude::*, Location};
 use uuid::Uuid;
 
 use crate::{
+    bubba::VM,
     chacha::{
-        error::{NoSuchStaticMethodSnafu, Result, TypeMismatchSnafu},
-        vm::{CallFrame, VM},
+        error::{
+            ChaChaError::WrongNumberOfArguments, NoSuchStaticMethodSnafu, Result, TypeMismatchSnafu,
+        },
+        value::FfiValue,
     },
     interpreter::{
         debug, error, eval_expression, eval_function_call, eval_lambda_expression, function,
         ChaChaError, Context, PrintableValueType,
     },
     keywords::{
-        ADD, ARGS, ASSERT, ASSERT_EQ, CHACHA, COMPLEX_EX, EPS, EVAL, FN_NEW, FORMAT, IS_DIGIT, LEN,
-        LINES, MAP, MAX, NEW, NORM_SQUARED, PARSE, PLUGIN, SLEEP, SPLIT, SQUARE, SUM, TIME,
-        TO_DIGIT, TRIM, TYPEOF, UUID_TYPE,
+        ADD, ARGS, ASSERT, ASSERT_EQ, CHACHA, COMPLEX_EX, EPS, EVAL, FN_NEW, FORMAT, FQ_UUID_TYPE,
+        INVOKE_FUNC, IS_DIGIT, LEN, LINES, MAP, MAX, NEW, NORM_SQUARED, PARSE, PLUGIN, PUSH, SLEEP,
+        SPLIT, SQUARE, SUM, TIME, TO_DIGIT, TRIM, TYPEOF, UUID_TYPE,
     },
     lu_dog::{CallEnum, Expression, ValueType, ValueTypeEnum},
     new_ref,
-    plug_in::PluginModRef,
-    plug_in::PluginType,
+    plug_in::{PluginModRef, PluginType},
     s_read, s_write,
     sarzak::Ty,
-    DwarfInteger, NewRef, RefType, SarzakStorePtr, Value, ValueResult,
+    DwarfInteger, NewRef, RefType, SarzakStorePtr, Value, ValueResult, PATH_SEP,
 };
 
 mod chacha;
 
+// 🚧 I feel like this could use a good looking at. It smells bad.
 pub fn eval(
     call_id: &SarzakStorePtr,
     expression: &RefType<Expression>,
@@ -72,13 +76,11 @@ pub fn eval(
         let value = eval_expression(expr, context, vm)?;
         debug!("ExpressionEnum::Call LHS value {:?}", s_read!(value));
 
-        // 🚧 I don't remember why this is a closure.
         let mut eval_lhs = || -> Result<RefType<Value>> {
             // Below we are reading the value of the LHS, and then using that
             // to determine what to do with the RHS.
             let read_value = s_read!(value);
             match &*read_value {
-                Value::Enumeration(_) => Ok(value.clone()),
                 Value::Function(ref func) => {
                     let func = s_read!(lu_dog).exhume_function(&s_read!(func).id).unwrap();
                     debug!("ExpressionEnum::Call func: {func:?}");
@@ -87,7 +89,6 @@ pub fn eval(
                     debug!("value {value:?}");
                     Ok(value)
                 }
-                Value::Integer(_) => Ok(value.clone()),
                 Value::Lambda(ref ƛ) => {
                     let ƛ = s_read!(lu_dog).exhume_lambda(&s_read!(ƛ).id).unwrap();
                     debug!("ExpressionEnum::Call ƛ: {ƛ:?}");
@@ -105,38 +106,7 @@ pub fn eval(
                     debug!("value {value:?}");
                     Ok(value)
                 }
-                Value::ProxyType {
-                    module: _,
-                    obj_ty: _,
-                    id: _,
-                    plugin: _,
-                } => Ok(value.clone()),
-                Value::Range(_) => Ok(value.clone()),
-                Value::Struct(_) => Ok(value.clone()),
-                Value::Store(_store, _plugin) => Ok(value.clone()),
-                #[cfg(feature = "async")]
-                Value::Task {
-                    worker: _,
-                    parent: _,
-                } => Ok(value.clone()),
-                Value::Vector { ty: _, inner: _ } => Ok(value.clone()),
-                misc_value => {
-                    let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
-                    debug!("value {value:?}");
-
-                    let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
-
-                    let read = s_read!(span);
-                    let span = read.start as usize..read.end as usize;
-
-                    dbg!(&misc_value);
-
-                    Err(ChaChaError::NotAFunction {
-                        value: misc_value.to_owned(),
-                        span,
-                        location: location!(),
-                    })
-                }
+                _ => Ok(value.clone()),
             }
         };
 
@@ -154,10 +124,10 @@ pub fn eval(
             ValueTypeEnum::Char(_) => value,
             ValueTypeEnum::Ty(ref id) => {
                 let ty = s_read!(sarzak).exhume_ty(id).unwrap();
-                // SString is here because we have methods on that type
+                // ZString is here because we have methods on that type
                 // 🚧 We need to add Vector or whatever as well.
                 let x = match &*ty.read().unwrap() {
-                    Ty::SString(_) => value,
+                    Ty::ZString(_) => value,
                     _ => eval_lhs()?,
                 };
                 x
@@ -229,24 +199,39 @@ pub fn eval(
                     let woog_enum = s_read!(lu_dog).exhume_enumeration(&woog_enum).unwrap();
                     let woog_enum = s_read!(woog_enum);
 
-                    let impl_ = &woog_enum.r84_implementation_block(&s_read!(lu_dog))[0];
-                    let x = if let Some(func) = s_read!(impl_)
-                        .r9_function(&s_read!(lu_dog))
-                        .iter()
-                        .find(|f| s_read!(f).name == *meth_name)
+                    if let Some(impl_) =
+                        &woog_enum.r84_implementation_block(&s_read!(lu_dog)).first()
                     {
-                        let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
-                        let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
+                        let x = if let Some(func) = s_read!(impl_)
+                            .r9_function(&s_read!(lu_dog))
+                            .iter()
+                            .find(|f| s_read!(f).name == *meth_name)
+                        {
+                            let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
+                            let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
 
-                        eval_function_call(
-                            (*func).clone(),
-                            &args,
-                            first_arg,
-                            arg_check,
-                            span,
-                            context,
-                            vm,
-                        )
+                            eval_function_call(
+                                (*func).clone(),
+                                &args,
+                                first_arg,
+                                arg_check,
+                                span,
+                                context,
+                                vm,
+                            )
+                        } else {
+                            let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
+                            let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
+                            let read = s_read!(span);
+                            let span = read.start as usize..read.end as usize;
+
+                            return Err(ChaChaError::NoSuchMethod {
+                                method: meth_name.to_owned(),
+                                span,
+                                location: location!(),
+                            });
+                        };
+                        x
                     } else {
                         let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
                         let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
@@ -258,8 +243,7 @@ pub fn eval(
                             span,
                             location: location!(),
                         });
-                    };
-                    x
+                    }
                 }
                 Value::Integer(i) => match meth_name.as_str() {
                     MAX => {
@@ -281,6 +265,101 @@ pub fn eval(
                         let value = *i.max(other);
 
                         Ok(new_ref!(Value, Value::Integer(value)))
+                    }
+                    _ => {
+                        let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
+                        let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
+                        let read = s_read!(span);
+                        let span = read.start as usize..read.end as usize;
+
+                        return Err(ChaChaError::NoSuchMethod {
+                            method: meth_name.to_owned(),
+                            span,
+                            location: location!(),
+                        });
+                    }
+                },
+                Value::Plugin((_name, plugin)) => match meth_name.as_str() {
+                    INVOKE_FUNC => {
+                        // self is tacked on.
+                        if args.len() - 1 != 4 {
+                            let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
+                            let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
+                            let read = s_read!(span);
+                            let span = read.start as usize..read.end as usize;
+
+                            return Err(WrongNumberOfArguments {
+                                expected: 4,
+                                got: args.len(),
+                                defn_span: 0..0,
+                                invocation_span: span,
+                                location: location!(),
+                            });
+                        }
+
+                        let mut arg_values = VecDeque::with_capacity(args.len());
+
+                        // Gotta do this goofy thing because we don't have a first pointer,
+                        // and they aren't in order.
+                        let next = args
+                            .iter()
+                            .find(|a| s_read!(a).r27c_argument(&s_read!(lu_dog)).is_empty())
+                            .unwrap()
+                            .clone();
+
+                        // This is because of the self parameter that is added by the extruder.
+                        if let Some(next_id) = s_read!(next).next {
+                            let mut next = s_read!(lu_dog).exhume_argument(&next_id).unwrap();
+
+                            // We iterate over the arguments to the `format` call. For each one
+                            // we evaluate it and store it in a vac.
+                            loop {
+                                let expr = s_read!(lu_dog)
+                                    .exhume_expression(&s_read!(next).expression)
+                                    .unwrap();
+
+                                let value = eval_expression(expr, context, vm)?;
+                                debug!("value {value:?}");
+
+                                // This is where the magic happens and we turn the value
+                                // into a string.
+                                arg_values.push_back(value);
+
+                                let next_id = s_read!(next).next;
+                                if let Some(ref id) = next_id {
+                                    next = s_read!(lu_dog).exhume_argument(id).unwrap();
+                                } else {
+                                    break;
+                                }
+                            }
+                        };
+
+                        let Value::Vector { inner, .. } = &*s_read!(arg_values[3]) else {
+                            return Err(ChaChaError::TypeMismatch {
+                                expected: "Vector".to_owned(),
+                                found: s_read!(arg_values[3]).to_string(),
+                                span: 0..0,
+                                location: location!(),
+                            });
+                        };
+                        let inner = s_read!(inner)
+                            .iter()
+                            .map(|v| <Value as Into<FfiValue>>::into((*s_read!(v)).clone()))
+                            .collect::<Vec<FfiValue>>();
+
+                        let mut plugin = s_write!(plugin);
+                        let x = match plugin.invoke_func(
+                            s_read!(arg_values[0]).to_inner_string().as_str().into(),
+                            s_read!(arg_values[1]).to_inner_string().as_str().into(),
+                            s_read!(arg_values[2]).to_inner_string().as_str().into(),
+                            inner.into(),
+                        ) {
+                            ROk(value) => Ok(new_ref!(Value, (value, &*s_read!(lu_dog)).into())),
+                            RErr(e) => Err(ChaChaError::PluginError {
+                                message: e.to_string(),
+                            }),
+                        };
+                        x
                     }
                     _ => {
                         let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
@@ -385,6 +464,7 @@ pub fn eval(
                             })
                             .collect::<Result<Vec<RefType<Value>>>>()?;
 
+                        let result = new_ref!(Vec<RefType<Value>>, result);
                         Ok(new_ref!(
                             Value,
                             Value::Vector {
@@ -418,23 +498,20 @@ pub fn eval(
                         Ok(new_ref!(Value, Value::Integer(len as i64)))
                     }
                     LINES => {
-                        let ty = Ty::new_s_string(&s_read!(sarzak));
-                        let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
+                        let ty = Ty::new_z_string(&s_read!(sarzak));
+                        let ty = ValueType::new_ty(true, &ty, &mut s_write!(lu_dog));
 
-                        Ok(new_ref!(
-                            Value,
-                            Value::Vector {
-                                ty,
-                                inner: string
-                                    .lines()
-                                    .map(|line| new_ref!(Value, Value::String(line.to_owned())))
-                                    .collect()
-                            }
-                        ))
+                        let inner = string
+                            .lines()
+                            .map(|line| new_ref!(Value, Value::String(line.to_owned())))
+                            .collect();
+                        let inner = new_ref!(Vec<RefType<Value>>, inner);
+
+                        Ok(new_ref!(Value, Value::Vector { ty, inner }))
                     }
                     FORMAT => {
                         debug!("evaluating String::format");
-                        // let mut arg_map = HashMap::default();
+
                         let arg_values = if !args.is_empty() {
                             // The VecDeque is so that I can pop off the args, and then push them
                             // back onto a queue in the same order. What? That doesn't make sense.
@@ -443,63 +520,43 @@ pub fn eval(
 
                             // Gotta do this goofy thing because we don't have a first pointer,
                             // and they aren't in order.
-                            let mut next = args
+                            let next = args
                                 .iter()
-                                .inspect(|a| {
-                                    debug!("arg: {a:?}");
-                                })
                                 .find(|a| s_read!(a).r27c_argument(&s_read!(lu_dog)).is_empty())
                                 .unwrap()
                                 .clone();
 
-                            // This is because of the self parameter that is built on in the extruder.
-                            let next_id = s_read!(next).next.unwrap();
-                            next = s_read!(lu_dog).exhume_argument(&next_id).unwrap();
+                            // This is because of the self parameter that is added by the extruder.
+                            let x = if let Some(next_id) = s_read!(next).next {
+                                let mut next = s_read!(lu_dog).exhume_argument(&next_id).unwrap();
 
-                            // It's not clear what's happening below really. Here's the scoop:
-                            // We iterate over the arguments to the `format` call. For each one
-                            // we evaluate it and store it in a map. And also push it onto vac.
-                            loop {
-                                let expr = s_read!(lu_dog)
-                                    .exhume_expression(&s_read!(next).expression)
-                                    .unwrap();
+                                // We iterate over the arguments to the `format` call. For each one
+                                // we evaluate it and store it in a vac.
+                                loop {
+                                    let expr = s_read!(lu_dog)
+                                        .exhume_expression(&s_read!(next).expression)
+                                        .unwrap();
 
-                                // let source =
-                                //     s_read!(lu_dog).iter_dwarf_source_file().next().unwrap();
-                                // let source = s_read!(source);
-                                // let source = &source.source;
+                                    let value = eval_expression(expr, context, vm)?;
+                                    debug!("value {value:?}");
 
-                                // let value = &s_read!(expr).r11_x_value(&s_read!(lu_dog))[0];
+                                    // This is where the magic happens and we turn the value
+                                    // into a string.
+                                    arg_values.push_back(s_read!(value).to_inner_string());
 
-                                // let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
-                                // let read = s_read!(span);
-                                // let span = read.start as usize..read.end as usize;
-
-                                // let key = source[span].to_owned();
-
-                                let value = eval_expression(expr, context, vm)?;
-                                debug!("value {value:?}");
-
-                                // This is where the magic happens and we turn the value
-                                // into a string.
-                                arg_values.push_back(s_read!(value).to_inner_string());
-
-                                // debug!(
-                                // "insert into arg_map `{}`: `{}`",
-                                // key,
-                                // s_read!(value).to_string()
-                                // );
-                                // arg_map.insert(key, s_read!(value).to_string());
-
-                                let next_id = s_read!(next).next;
-                                if let Some(ref id) = next_id {
-                                    next = s_read!(lu_dog).exhume_argument(id).unwrap();
-                                } else {
-                                    break;
+                                    let next_id = s_read!(next).next;
+                                    if let Some(ref id) = next_id {
+                                        next = s_read!(lu_dog).exhume_argument(id).unwrap();
+                                    } else {
+                                        break;
+                                    }
                                 }
-                            }
 
-                            arg_values
+                                arg_values
+                            } else {
+                                VecDeque::new()
+                            };
+                            x
                         } else {
                             VecDeque::new()
                         };
@@ -528,10 +585,10 @@ pub fn eval(
                                             result.push_str(&value);
                                             current.clear();
                                             state = State::Normal;
-                                        // } else if let Some(value) = arg_map.get(&current) {
-                                        //     result.push_str(&value);
-                                        //     current.clear();
-                                        //     state = State::Normal;
+                                        } else if let Some(value) = context.memory().get(&current) {
+                                            result.push_str(&s_read!(value).to_inner_string());
+                                            current.clear();
+                                            state = State::Normal;
                                         } else {
                                             // 🚧 this is the wrong error
                                             return Err(ChaChaError::NoSuchMethod {
@@ -566,19 +623,17 @@ pub fn eval(
                             });
                         };
 
-                        let ty = Ty::new_s_string(&s_read!(sarzak));
-                        let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
+                        let ty = Ty::new_z_string(&s_read!(sarzak));
+                        let ty = ValueType::new_ty(true, &ty, &mut s_write!(lu_dog));
 
-                        Ok(new_ref!(
-                            Value,
-                            Value::Vector {
-                                ty,
-                                inner: string
-                                    .split(separator)
-                                    .map(|line| new_ref!(Value, Value::String(line.to_owned())))
-                                    .collect()
-                            }
-                        ))
+                        let inner = string
+                            .split(separator)
+                            .map(|line| new_ref!(Value, Value::String(line.to_owned())))
+                            .collect();
+
+                        let inner = new_ref!(Vec<RefType<Value>>, inner);
+
+                        Ok(new_ref!(Value, Value::Vector { ty, inner }))
                     }
                     TRIM => {
                         let value = string.trim().to_owned();
@@ -661,7 +716,7 @@ pub fn eval(
                             panic!("Should be a lambda");
                         };
 
-                        let result = inner
+                        let result = s_read!(inner)
                             .iter()
                             .map(|value| {
                                 eval_lambda_expression(
@@ -679,16 +734,25 @@ pub fn eval(
                             Value,
                             Value::Vector {
                                 ty: ty.clone(),
-                                inner: result
+                                inner: new_ref!(Vec<RefType<Value>>, result)
                             }
                         ))
                     }
+                    PUSH => {
+                        let value = args.pop().unwrap();
+                        let value = s_read!(value).r37_expression(&s_read!(lu_dog))[0].clone();
+                        let value = eval_expression(value.clone(), context, vm).unwrap();
+
+                        s_write!(inner).push(value);
+
+                        Ok(new_ref!(Value, Value::Empty))
+                    }
                     SUM => {
                         let mut sum = 0;
-                        for value in inner {
-                            let mut value = s_write!(value);
-                            match &mut *value {
-                                Value::Integer(i) => sum += *i,
+                        for value in &*s_read!(inner) {
+                            let value = s_read!(value);
+                            match &*value {
+                                Value::Integer(i) => sum += i,
                                 v => {
                                     panic!("Should sum handle this type? {v:#?}")
                                 }
@@ -717,7 +781,6 @@ pub fn eval(
         //
         (CallEnum::StaticMethodCall(ref meth), _) => {
             let meth = s_read!(lu_dog).exhume_static_method_call(meth).unwrap();
-            let call = s_read!(meth).r30_call(&s_read!(lu_dog))[0].clone();
 
             let arg_check = s_read!(call).arg_check;
             if arg_check {
@@ -765,7 +828,7 @@ pub fn eval(
             debug!("StaticMethodCall func {func:?}");
 
             match ty.as_str() {
-                UUID_TYPE if func == FN_NEW => {
+                UUID_TYPE | FQ_UUID_TYPE if func == FN_NEW => {
                     let value = Value::Uuid(Uuid::new_v4());
 
                     Ok(new_ref!(Value, value))
@@ -773,42 +836,26 @@ pub fn eval(
                 COMPLEX_EX => match func.as_str() {
                     NORM_SQUARED => {
                         let value = arg_values.pop_front().unwrap().0;
-                        let thonk = context.memory().get_thonk(0).unwrap();
-                        let mut frame = CallFrame::new(0, 0, thonk);
-                        vm.push_stack(new_ref!(Value, "norm_squared".into()));
-                        vm.push_stack(value);
-                        let result = vm.run(&mut frame, false);
-                        vm.pop_stack();
-                        vm.pop_stack();
+                        // 🚧 It would be neat to turn the tracing on with a flag.
+                        let result = vm.invoke("norm_squared", &[value]);
+
                         context.increment_expression_count(2);
 
                         Ok(result.unwrap())
                     }
                     SQUARE => {
                         let value = arg_values.pop_front().unwrap().0;
-                        let thonk = context.memory().get_thonk(2).unwrap();
-                        let mut frame = CallFrame::new(0, 0, thonk);
-                        vm.push_stack(new_ref!(Value, "square".into()));
-                        vm.push_stack(value);
-                        let result = vm.run(&mut frame, false);
-                        vm.pop_stack();
-                        vm.pop_stack();
+                        let result = vm.invoke("square", &[value]);
+
                         context.increment_expression_count(5);
 
                         Ok(result.unwrap())
                     }
                     ADD => {
-                        let thonk = context.memory().get_thonk(1).unwrap();
-                        let mut frame = CallFrame::new(0, 0, thonk);
-                        vm.push_stack(new_ref!(Value, "add".into()));
-                        let value = arg_values.pop_front().unwrap().0;
-                        vm.push_stack(value);
-                        let value = arg_values.pop_front().unwrap().0;
-                        vm.push_stack(value);
-                        let result = vm.run(&mut frame, false);
-                        vm.pop_stack();
-                        vm.pop_stack();
-                        vm.pop_stack();
+                        let lhs = arg_values.pop_front().unwrap().0;
+                        let rhs = arg_values.pop_front().unwrap().0;
+                        let result = vm.invoke("add", &[lhs, rhs]);
+
                         context.increment_expression_count(2);
 
                         Ok(result.unwrap())
@@ -820,7 +867,7 @@ pub fn eval(
                         let span = read.start as usize..read.end as usize;
 
                         Err(ChaChaError::NoSuchStaticMethod {
-                            ty: ty.to_owned(),
+                            ty: ty.strip_prefix(PATH_SEP).unwrap().to_owned(),
                             method: method.to_owned(),
                             span,
                             location: location!(),
@@ -835,14 +882,14 @@ pub fn eval(
                             if let Some(args) = &context.get_args() {
                                 Ok(args.clone())
                             } else {
-                                let ty = Ty::new_s_string(&s_read!(sarzak));
-                                let ty = ValueType::new_ty(&ty, &mut s_write!(lu_dog));
+                                let ty = Ty::new_z_string(&s_read!(sarzak));
+                                let ty = ValueType::new_ty(true, &ty, &mut s_write!(lu_dog));
 
                                 Ok(new_ref!(
                                     Value,
                                     Value::Vector {
                                         ty,
-                                        inner: Vec::new()
+                                        inner: new_ref!(Vec<RefType<Value>>, Vec::new())
                                     }
                                 ))
                             }
@@ -902,8 +949,6 @@ pub fn eval(
                             Ok(new_ref!(Value, Value::String(result)))
                         }
                         EVAL => chacha::eval_dwarf(arg_values, expression, context),
-                        #[cfg(feature = "async")]
-                        HTTP_GET => chacha::http_get(arg_values, expression, context),
                         PARSE => chacha::parse_dwarf(arg_values, expression, context),
                         SLEEP => {
                             let (duration, _) = arg_values.pop_front().unwrap();
@@ -996,7 +1041,7 @@ pub fn eval(
                             let span = read.start as usize..read.end as usize;
 
                             Err(ChaChaError::NoSuchStaticMethod {
-                                ty: ty.to_owned(),
+                                ty: ty.strip_prefix(PATH_SEP).unwrap().to_owned(),
                                 method: method.to_owned(),
                                 span,
                                 location: location!(),
@@ -1008,7 +1053,6 @@ pub fn eval(
                 TIMER => {
                     match func.as_str() {
                         ONE_SHOT => {
-                            // dbg!("huh");
                             // 🚧 I should be checking that there is an argument before
                             // I go unwrapping it.
                             let (duration, _) = arg_values.pop_front().unwrap();
@@ -1044,8 +1088,12 @@ pub fn eval(
                             let mut fubar = context.clone();
                             // let mut baz = fubar.executor().clone();
                             let future = async move {
-                                let mem = fubar.memory().clone();
-                                let mut vm = VM::new(&mem);
+                                let mut vm = VM::new(
+                                    fubar.get_program(),
+                                    &[],
+                                    fubar.get_home(),
+                                    fubar.thread_count(),
+                                );
 
                                 // let func = func.clone();
 
@@ -1099,7 +1147,7 @@ pub fn eval(
                             let span = read.start as usize..read.end as usize;
 
                             Err(ChaChaError::NoSuchStaticMethod {
-                                ty: ty.to_owned(),
+                                ty: ty.strip_prefix(PATH_SEP).unwrap().to_owned(),
                                 method: missing_method.to_owned(),
                                 span,
                                 location: location!(),
@@ -1108,16 +1156,30 @@ pub fn eval(
                     }
                 }
                 ty => {
-                    if Some(PLUGIN) == ty.split("::").next() {
-                        let plugin = ty.split("::").nth(1).unwrap();
+                    if Some(Some(PLUGIN)) == ty.split('<').next().map(|s| s.split(PATH_SEP).last())
+                    {
                         match func.as_str() {
                             NEW => {
+                                let plugin =
+                                    ty.split('<').nth(1).unwrap().strip_suffix('>').unwrap();
+                                let plugin =
+                                    s_read!(lu_dog).exhume_x_plugin_id_by_name(plugin).unwrap();
+                                let plugin = s_read!(lu_dog).exhume_x_plugin(&plugin).unwrap();
+                                let plugin = s_read!(plugin);
+                                let path = &plugin.x_path;
+                                let plugin_root = path.split(PATH_SEP).next().unwrap();
+                                let args = if let Some(path) = path.split(PATH_SEP).nth(1) {
+                                    vec![Value::String(path.to_owned()).into()]
+                                } else {
+                                    Vec::new()
+                                };
+                                // kts -- I have a hard time finding this.
                                 let library_path = RawLibrary::path_in_directory(
                                     Path::new(&format!(
-                                        "{}/extensions/{plugin}/lib",
+                                        "{}/extensions/{plugin_root}/lib",
                                         context.get_home().display()
                                     )),
-                                    plugin,
+                                    plugin_root,
                                     LibrarySuffix::NoSuffix,
                                 );
                                 let root_module = (|| {
@@ -1133,14 +1195,11 @@ pub fn eval(
                                 })?;
 
                                 let ctor = root_module.new();
-                                // let (_, path) = arg_values.pop().unwrap();
-                                // let path = s_read!(path).clone();
-                                // let plugin = new_ref!(PluginType, ctor(vec![path.into()].into()).unwrap());
-                                let plugin = new_ref!(PluginType, ctor(vec![].into()).unwrap());
-                                // model.1.replace(plugin.clone());
+                                let plugin = ctor(args.into()).unwrap();
+                                let name = plugin.name().to_string();
+                                let plugin = new_ref!(PluginType, plugin);
 
-                                // let value = new_ref!(Value, Value::Store(store, plugin));
-                                let value = new_ref!(Value, Value::Plugin(plugin));
+                                let value = new_ref!(Value, Value::Plugin((name, plugin)));
 
                                 Ok(value)
                             }
@@ -1151,7 +1210,7 @@ pub fn eval(
                                 let span = read.start as usize..read.end as usize;
 
                                 Err(ChaChaError::NoSuchStaticMethod {
-                                    ty: ty.to_owned(),
+                                    ty: ty.strip_prefix(PATH_SEP).unwrap().to_owned(),
                                     method: missing_method.to_owned(),
                                     span,
                                     location: location!(),
@@ -1221,7 +1280,7 @@ pub fn eval(
                             //         }
                             //         _ => Ok((
                             //             Value::Error("make point work".to_owned()),
-                            //             ValueType::new_empty(),
+                            //             ValueType::new_empty(true, ),
                             //         )),
                             //     }
                             // }
@@ -1231,7 +1290,6 @@ pub fn eval(
                             }
                         }
                     } else {
-                        dbg!(&ty, &func);
                         ensure!(false, {
                             let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
                             let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
@@ -1239,7 +1297,7 @@ pub fn eval(
                             let span = read.start as usize..read.end as usize;
 
                             NoSuchStaticMethodSnafu {
-                                ty: ty.to_owned(),
+                                ty: ty.strip_prefix(PATH_SEP).unwrap().to_owned(),
                                 method: func.to_owned(),
                                 span,
                             }
@@ -1273,9 +1331,6 @@ fn spawn(
     ensure!(
         matches!(&*func, Value::Lambda(_)) || matches!(&*func, Value::Function(_)),
         {
-            // 🚧 I'm not really sure what to do about this here. It's
-            // all really a hack for now anyway.
-            // 🚧 OMFG -- FML
             let ty = func.get_value_type(&s_read!(sarzak), &s_read!(lu_dog));
             let ty = PrintableValueType(true, ty, context.models());
             let ty = ty.to_string();
@@ -1291,19 +1346,17 @@ fn spawn(
     let expression = expression.clone();
     let mut nested_context = context.clone();
 
-    // let executor_id = Executor::new_worker();
-    // nested_context.set_executor_index(executor_id);
-
-    let mut child_context = context.new_worker();
+    let child_context = context.new_worker();
     let child_worker = child_context.worker().unwrap().clone();
 
-    // let child_task = child_context
-    // .worker()
-    // .create_task(async move {
     let t_span = debug_span!("spawn_span", target = "async", name = ?name);
     let future = async move {
-        let mem = child_context.memory().clone();
-        let mut vm = VM::new(&mem);
+        let mut vm = VM::new(
+            child_context.get_program(),
+            &[],
+            child_context.get_home(),
+            child_context.thread_count(),
+        );
         let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
         let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
         if let Value::Function(func) = &func {
@@ -1326,31 +1379,6 @@ fn spawn(
 
     let child_task = child_worker.spawn_task(future).unwrap();
 
-    // let task = fubar.executor().spawn(future);
-    // context_copy.executor().park_value(new_ref!(Value, Value::Task(name, Some(task))));
-
-    // let future =
-    // async move { future::block_on(async { fubar.executor().resolve_task(task).await }) };
-    // future::block_on(async { ctx.executor().run().await });
-
-    // let task = nested_context_clone.executor().spawn(future);
-
-    // dbg!(driver.executor_index());
-
-    // let child_task = ExecutorTask::new("spawn".to_owned(), Executor::at_index(executor_id), future);
-
-    // This is *key*.
-    // task.detach();
-    // child_task.start();
-    // Executor::start_task(&child_task);
-    // context.executor().start_task(&child_task);
-
-    // let child = new_ref!(Value, Value::Future(name.clone(), Some(task)));
-    // let value = new_ref!(Value, Value::Task(ChaChaTask::new(name.clone(), task)));
-
-    // Stash the future away so that it doesn't get dropped when it's done running.
-    // nested_context_clone.executor().park_value(value.clone());
-
     let worker = child_worker.clone();
     let task = context
         .worker()
@@ -1362,17 +1390,17 @@ fn spawn(
         })
         .unwrap();
 
+    // This can also happen during the await processing. I'm not sure if this
+    // even actually starts anything.
+    // child_worker.start_task(&task);
+
     let value = new_ref!(
         Value,
         Value::Task {
-            // executor_id: Some(executor_id),
             worker: Some(child_worker),
             parent: Some(task),
-            // child: None
         }
     );
-
-    // context.executor().park_value(v.clone());
 
     Ok(value)
 }

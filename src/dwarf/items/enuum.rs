@@ -5,30 +5,17 @@ use uuid::Uuid;
 
 use crate::{
     dwarf::{
-        error::Result,
+        error::{DwarfError, Result},
         extruder::{debug, function, make_value_type, Context},
-        AttributeMap, EnumField, Expression as ParserExpression, Spanned, Type,
+        AttributeMap, EnumField, Spanned, Type,
     },
     lu_dog::{
         store::ObjectStore as LuDogStore, EnumField as LuDogEnumField, EnumFieldEnum, EnumGeneric,
-        Enumeration, Field, Generic, Span as LuDogSpan, StructField, TupleField, Unit, ValueType,
+        Enumeration, Field, Span as LuDogSpan, StructField, TupleField, Unit, ValueType,
         WoogStruct,
     },
-    s_read, s_write, Dirty, DwarfInteger, RefType,
+    s_read, s_write, Dirty, DwarfInteger, RefType, SarzakStorePtr, Span, PATH_SEP,
 };
-
-macro_rules! link_generic {
-    ($last:expr, $next:expr, $store:expr) => {{
-        let next = s_read!($next);
-        if let Some(last) = $last {
-            let last = $store.exhume_generic(&last).unwrap().clone();
-            let mut last = s_write!(last);
-            last.next = Some(next.id);
-        }
-
-        Some(next.id)
-    }};
-}
 
 macro_rules! link_enum_generic {
     ($last:expr, $next:expr, $store:expr) => {{
@@ -44,25 +31,54 @@ macro_rules! link_enum_generic {
 }
 
 pub fn inter_enum(
-    name: &str,
+    name: &Spanned<String>,
     _attributes: &AttributeMap,
     variants: &[(Spanned<String>, Option<EnumField>)],
     enum_generics: Option<&HashMap<String, Type>>,
     context: &mut Context,
+    context_stack: &mut Vec<(String, RefType<LuDogStore>)>,
     lu_dog: &mut LuDogStore,
 ) -> Result<()> {
+    if let Some(path) = context.scopes.insert(name.0.clone(), context.path.clone()) {
+        if path == context.path {
+            return Ok(());
+        }
+
+        return Err(vec![DwarfError::MultiplyDefinedSymbol {
+            name: name.0.clone(),
+            span: name.1.clone(),
+            path: context.path.clone(),
+            orig_path: path,
+            file: context.file_name.to_owned(),
+            location: location!(),
+        }]);
+    }
+
+    let name = context.path.clone() + &name.0;
     debug!("inter_enum {name}");
 
-    let woog_enum = Enumeration::new(name.to_owned(), None, None, lu_dog);
+    let woog_enum = Enumeration::new(name.to_owned(), context.path.clone(), None, None, lu_dog);
     context.dirty.push(Dirty::Enum(woog_enum.clone()));
-    let _ = ValueType::new_enumeration(&woog_enum, lu_dog);
+    let _ = ValueType::new_enumeration(true, &woog_enum, lu_dog);
 
+    let mut local_generics = HashMap::default();
     let mut first = true;
     let mut first_generic = None;
-    let mut last_generic_uuid: Option<usize> = None;
+    let mut last_generic_uuid: Option<SarzakStorePtr> = None;
     if let Some(generics) = enum_generics {
-        for generic in generics.keys() {
-            let generic = EnumGeneric::new(generic.to_owned(), &woog_enum, None, lu_dog);
+        for name in generics.keys() {
+            let generic = EnumGeneric::new(name.to_owned(), &woog_enum, None, lu_dog);
+            let ty = ValueType::new_enum_generic(true, &generic, lu_dog);
+            local_generics.insert(name.to_owned(), ty.clone());
+            //         LuDogSpan::new(
+            //             span.end as i64,
+            //             span.start as i64,
+            //             &context.source,
+            //             Some(&ty),
+            //             None,
+            //             lu_dog,
+            //         );
+
             if first {
                 first = false;
                 first_generic = Some(s_read!(generic).id);
@@ -76,15 +92,32 @@ pub fn inter_enum(
     for (number, ((field_name, span), field)) in variants.iter().enumerate() {
         match field {
             Some(EnumField::Struct(ref fields)) => {
-                // We create a struct in the store here so that it's available for construction
-                // in the struct expression code.
-                // Note that the name of the struct includes the name of the enum, with a path
-                // separator. This is cheap. I really need to think about how paths and imports
-                // and the like are going to work. The model will need some updating methinks.
+                let name = if let Some(name) = name.strip_prefix(PATH_SEP) {
+                    name
+                } else {
+                    &name
+                };
+                let struct_name = format!("{}{}{}", name, PATH_SEP, field_name);
+                let struct_path = format!("::{}{}{}", name, PATH_SEP, field_name);
+
+                if let Some(path) = context
+                    .scopes
+                    .insert(struct_name.clone(), struct_path.clone())
+                {
+                    return Err(vec![DwarfError::MultiplyDefinedSymbol {
+                        name: struct_name.clone(),
+                        span: span.clone(),
+                        path: struct_name.clone(),
+                        orig_path: path,
+                        file: context.file_name.to_owned(),
+                        location: location!(),
+                    }]);
+                }
+
                 let woog_struct =
-                    WoogStruct::new(format!("{}::{}", name, field_name), None, None, lu_dog);
+                    WoogStruct::new(struct_name.to_owned(), struct_path, None, None, lu_dog);
                 context.dirty.push(Dirty::Struct(woog_struct.clone()));
-                let ty = ValueType::new_woog_struct(&woog_struct, lu_dog);
+                let ty = ValueType::new_woog_struct(true, &woog_struct, lu_dog);
                 LuDogSpan::new(
                     span.end as i64,
                     span.start as i64,
@@ -96,7 +129,7 @@ pub fn inter_enum(
 
                 for ((name, _), (ty, ty_span), _attrs) in fields {
                     context.location = location!();
-                    let ty = make_value_type(ty, ty_span, None, context, lu_dog)?;
+                    let ty = make_value_type(ty, ty_span, None, context, context_stack, lu_dog)?;
                     let _ = Field::new(name.to_owned(), &woog_struct, &ty, lu_dog);
                 }
                 let field = StructField::new(field_name.to_owned(), lu_dog);
@@ -104,71 +137,28 @@ pub fn inter_enum(
             }
             Some(EnumField::Tuple(type_)) => {
                 let ty = match type_ {
-                    (Type::UserType(_, generics), _outer_span) if !generics.is_empty() => {
-                        let mut first = true;
-                        let mut first_generic = ValueType::new_empty(lu_dog);
-                        let mut last_generic_uuid: Option<usize> = None;
-                        for generic in generics {
-                            let (generic, _span) =
-                                if let Type::UserType((name, span), _) = &generic.0 {
-                                    (name, span)
-                                } else {
-                                    unreachable!();
-                                };
-                            let generic = Generic::new(generic.to_owned(), None, None, lu_dog);
-                            let ty = ValueType::new_generic(&generic, lu_dog);
-                            // let span = LuDogSpan::new(
-                            //     span.end as i64,
-                            //     span.start as i64,
-                            //     &context.source,
-                            //     Some(&ty),
-                            //     None,
-                            //     lu_dog,
-                            // );
-                            // update_span_value(&span, &ty, location!());
-
-                            if first {
-                                first = false;
-                                first_generic = ty.clone()
-                            }
-                            last_generic_uuid = link_generic!(last_generic_uuid, generic, lu_dog);
-                        }
-
-                        first_generic
-                    }
                     (Type::UserType((ty, span), generics), _) if generics.is_empty() => {
                         // Pass the user type to the lookup business if this isn't a generic parameter.
-                        if let Some(generics) = enum_generics {
-                            if let Some(generic) = generics.get(ty) {
-                                context.location = location!();
-                                let ty = make_value_type(generic, span, None, context, lu_dog)?;
-                                LuDogSpan::new(
-                                    span.end as i64,
-                                    span.start as i64,
-                                    &context.source,
-                                    Some(&ty),
-                                    None,
-                                    lu_dog,
-                                );
-
-                                ty
-                            } else {
-                                context.location = location!();
-                                let ty = make_value_type(&type_.0, span, None, context, lu_dog)?;
-                                LuDogSpan::new(
-                                    span.end as i64,
-                                    span.start as i64,
-                                    &context.source,
-                                    Some(&ty),
-                                    None,
-                                    lu_dog,
-                                );
-
-                                ty
-                            }
+                        if let Some(ty) = local_generics.get(ty) {
+                            LuDogSpan::new(
+                                span.end as i64,
+                                span.start as i64,
+                                &context.source,
+                                Some(&ty),
+                                None,
+                                lu_dog,
+                            );
+                            ty.clone()
                         } else {
                             context.location = location!();
-                            let ty = make_value_type(&type_.0, span, None, context, lu_dog)?;
+                            let ty = make_value_type(
+                                &type_.0,
+                                span,
+                                None,
+                                context,
+                                context_stack,
+                                lu_dog,
+                            )?;
                             LuDogSpan::new(
                                 span.end as i64,
                                 span.start as i64,
@@ -183,7 +173,8 @@ pub fn inter_enum(
                     }
                     _ => {
                         context.location = location!();
-                        let ty = make_value_type(&type_.0, span, None, context, lu_dog)?;
+                        let ty =
+                            make_value_type(&type_.0, span, None, context, context_stack, lu_dog)?;
                         LuDogSpan::new(
                             span.end as i64,
                             span.start as i64,
@@ -210,49 +201,63 @@ pub fn inter_enum(
     Ok(())
 }
 
-// Note that the name is expected to contain the generic component.
 pub(crate) fn create_generic_enum(
     enum_name: &str,
-    enum_path: &ParserExpression,
+    base_enum: &str,
+    span: Span,
+    context: &mut Context,
     lu_dog: &mut LuDogStore,
-) -> (RefType<Enumeration>, RefType<ValueType>) {
+) -> Result<(RefType<Enumeration>, RefType<ValueType>)> {
     // Check to see if this already exists
-    if let Some(id) = lu_dog.exhume_enumeration_id_by_name(enum_name) {
+    if let Some(id) = lu_dog.exhume_enumeration_id_by_name(&enum_name) {
         let found_enum = lu_dog.exhume_enumeration(&id).unwrap();
-        let ty = ValueType::new_enumeration(&found_enum, lu_dog);
+        let ty = ValueType::new_enumeration(true, &found_enum, lu_dog);
 
-        return (found_enum, ty);
+        return Ok((found_enum, ty));
     }
 
-    let base_enum_impl = if let ParserExpression::PathInExpression(path) = enum_path {
-        if let Type::UserType(enum_name, _) = &path[0].0 {
-            let id = lu_dog.exhume_enumeration_id_by_name(&enum_name.0).unwrap();
-            let base_enum = lu_dog.exhume_enumeration(&id).unwrap();
-            let impl_block_vec = s_read!(base_enum).r84_implementation_block(lu_dog);
-            if !impl_block_vec.is_empty() {
-                Some(impl_block_vec[0].clone())
-            } else {
-                None
-            }
-        } else {
-            unreachable!();
-        }
+    let id = if let Some(id) = lu_dog.exhume_enumeration_id_by_name(&base_enum) {
+        id
     } else {
-        unreachable!();
+        return Err(vec![DwarfError::EnumNotFound {
+            name: base_enum.to_owned(),
+            file: context.file_name.to_owned(),
+            span: span.to_owned(),
+            location: location!(),
+            program: context.source_string.to_owned(),
+        }]);
+    };
+    let base_enum = lu_dog.exhume_enumeration(&id).unwrap();
+    let impl_block_vec = s_read!(base_enum).r84_implementation_block(lu_dog);
+    let base_enum_impl = if !impl_block_vec.is_empty() {
+        Some(impl_block_vec[0].clone())
+    } else {
+        None
     };
 
     debug!("interring generic enum {enum_name}");
-    dbg!(&enum_path);
-    let new_enum = Enumeration::new(enum_name.to_owned(), None, base_enum_impl.as_ref(), lu_dog);
-    let ty = ValueType::new_enumeration(&new_enum, lu_dog);
 
     let name_without_generics = enum_name.split('<').collect::<Vec<_>>()[0];
-
     debug!("name_without_generics {:?}", name_without_generics);
-    let id = lu_dog
-        .exhume_enumeration_id_by_name(name_without_generics)
-        .unwrap();
-    let woog_enum = lu_dog.exhume_enumeration(&id).unwrap();
+
+    let mut path = name_without_generics.split(PATH_SEP).collect::<Vec<_>>();
+    path.pop();
+    let path = path.join(PATH_SEP) + PATH_SEP;
+
+    let new_enum = Enumeration::new(
+        enum_name.to_owned(),
+        path.to_owned(),
+        None,
+        base_enum_impl.as_ref(),
+        lu_dog,
+    );
+    let ty = ValueType::new_enumeration(true, &new_enum, lu_dog);
+
+    let Some(ref id) = lu_dog.exhume_enumeration_id_by_name(name_without_generics) else {
+        panic!("enum not found");
+    };
+
+    let woog_enum = lu_dog.exhume_enumeration(id).unwrap();
     for field in s_read!(woog_enum).r88_enum_field(lu_dog) {
         let field = s_read!(field);
         match field.subtype {
@@ -286,5 +291,5 @@ pub(crate) fn create_generic_enum(
         }
     }
 
-    (new_enum, ty)
+    Ok((new_enum, ty))
 }

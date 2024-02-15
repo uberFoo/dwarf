@@ -1,7 +1,8 @@
 use ansi_term::Colour;
 
 use crate::{
-    chacha::{error::Result, vm::VM},
+    bubba::VM,
+    chacha::error::Result,
     interpreter::{debug, eval_expression, function, Context},
     lu_dog::{ComparisonEnum, Expression, Operator},
     new_ref, s_read, NewRef, RefType, SarzakStorePtr, Value,
@@ -27,7 +28,7 @@ pub fn eval(
     debug!("eval_comparison: {lhs:?} {comp:?} {rhs:?}");
 
     let comp = s_read!(comp);
-    match &comp.subtype {
+    match comp.subtype {
         ComparisonEnum::Equal(_) => {
             let value = *s_read!(lhs) == *s_read!(rhs);
             let value = Value::Boolean(value);

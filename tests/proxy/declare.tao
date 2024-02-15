@@ -1,5 +1,6 @@
-use sarzak::Object;
-use sarzak::SarzakStore;
+use sarzak::sarzak::Attribute;
+use sarzak::sarzak::Object;
+use sarzak::sarzak::SarzakStore;
 
 fn main() {
     // Specifying the type of the lhs forces a type check.

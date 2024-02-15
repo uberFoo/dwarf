@@ -2,7 +2,8 @@
 use tracing::{debug_span, Instrument};
 
 use crate::{
-    chacha::{error::Result, vm::VM},
+    bubba::VM,
+    chacha::error::Result,
     interpreter::{eval_statement, Context},
     lu_dog::Block,
     new_ref, s_read, NewRef, RefType, SarzakStorePtr, Value,
@@ -23,8 +24,12 @@ pub fn eval(
             let mut cloned_context = context.clone();
             let span = debug_span!("async block", target = "async");
             let future = async move {
-                let mem = cloned_context.memory().clone();
-                let mut vm = VM::new(&mem);
+                let mut vm = VM::new(
+                    cloned_context.get_program(),
+                    &[],
+                    cloned_context.get_home(),
+                    cloned_context.thread_count(),
+                );
                 eval_inner(block, &mut cloned_context, &mut vm)
             }
             .instrument(span);

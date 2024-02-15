@@ -9,20 +9,20 @@ imported_domains = ["sarzak/v2/sarzak"]
 use_paths = ["serde::{Deserialize, Serialize}"]
 
 [modules.lu_dog.compiler.target]
+target = "domain"
 optimization_level = "None"
 is_meta_model = true
 is_sarzak = false
 persist = true
 persist_timestamps = false
 uber_store = "StdRwLock"
-target = "domain"
 
 [[modules.lu_dog.compiler]]
 always_process = true
 compiler = "grace"
 
 [modules.lu_dog.compiler.target]
+target = "dwarf"
 is_meta_model = true
 is_sarzak = false
-target = "dwarf"
 uber_store = "StdRwLock"

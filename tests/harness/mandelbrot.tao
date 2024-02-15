@@ -59,9 +59,12 @@ fn escape_time(c: Complex, limit: int) -> int {
     for i in 1..limit {
         // 🚧 this does not work
         // let z = z.square_2().add_2(c);
-        ComplexEx::square(z);
-        ComplexEx::add(z, c);
-        let foo = ComplexEx::norm_squared(z);
+        z.square_2();
+        z.add_2(c);
+        // ComplexEx::square(z);
+        // ComplexEx::add(z, c);
+        // let foo = ComplexEx::norm_squared(z);
+        let foo = z.norm_squared();
         // 🚧  this is wrong.
         if foo as float > 4.0 {
             // if z.norm_squared(z) > 4.0 {
@@ -72,8 +75,8 @@ fn escape_time(c: Complex, limit: int) -> int {
 }
 
 fn main() {
-    let width = 14;
-    let height = 4;
+    let width = 7;
+    let height = 2;
     let upper_left = Complex { re: -2.5, im: 1.0 };
     let lower_right = Complex { re: 2.0, im: -1.0 };
 

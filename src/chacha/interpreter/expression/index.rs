@@ -4,7 +4,8 @@ use ansi_term::Colour;
 use snafu::{location, Location};
 
 use crate::{
-    chacha::{error::Result, vm::VM},
+    bubba::VM,
+    chacha::error::Result,
     interpreter::{debug, eval_expression, function, ChaChaError, Context},
     new_ref, s_read, NewRef, RefType, SarzakStorePtr, Value,
 };
@@ -31,6 +32,7 @@ pub fn eval_index(
             let list = eval_expression(target.clone(), context, vm)?;
             let list = s_read!(list);
             if let Value::Vector { ty: _, inner: vec } = &list.clone() {
+                let vec = s_read!(vec);
                 if index < vec.len() {
                     Ok(vec[index].to_owned())
                 } else {
@@ -85,12 +87,13 @@ pub fn eval_index(
             let list = eval_expression(target.clone(), context, vm)?;
             let list = s_read!(list);
             if let Value::Vector { ty, inner: vec } = &list.clone() {
+                let vec = s_read!(vec);
                 if range.end < vec.len() {
                     Ok(new_ref!(
                         Value,
                         Value::Vector {
                             ty: ty.clone(),
-                            inner: vec[range].to_owned()
+                            inner: new_ref!(Vec<RefType<Value>>, vec[range].to_owned())
                         }
                     ))
                 } else {

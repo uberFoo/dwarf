@@ -1,3 +1,5 @@
+struct ComplexEx;
+
 fn main() {
     ComplexEx::this_will_fail();
 }

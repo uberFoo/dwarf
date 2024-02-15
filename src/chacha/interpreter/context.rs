@@ -5,8 +5,10 @@ use puteketeke::{Executor, Worker};
 
 use circular_queue::CircularQueue;
 use crossbeam::channel::{Receiver, Sender};
+use rustc_hash::{FxHashMap as HashMap, FxHashSet as HasSet};
 
 use crate::{
+    bubba::Program,
     interpreter::{DebuggerStatus, Memory, MemoryUpdateMessage},
     lu_dog::{Block, ObjectStore as LuDogStore, ValueType},
     new_ref, s_read, s_write,
@@ -72,6 +74,10 @@ pub struct Context {
     #[cfg(feature = "async")]
     executor: Executor,
     source_file: String,
+    program: Program,
+    scopes: HashMap<String, String>,
+    imports: HasSet<PathBuf>,
+    thread_count: usize,
 }
 
 /// Save the lu_dog model when the context is dropped
@@ -113,7 +119,11 @@ impl Context {
         dwarf_home: PathBuf,
         dirty: Vec<Dirty>,
         source_file: String,
+        program: Program,
         executor: Executor,
+        scopes: HashMap<String, String>,
+        imports: HasSet<PathBuf>,
+        thread_count: usize,
     ) -> Self {
         Self {
             prompt,
@@ -131,8 +141,12 @@ impl Context {
             dwarf_home,
             dirty,
             source_file,
+            program,
             worker: Some(executor.root_worker()),
             executor,
+            scopes,
+            imports,
+            thread_count,
         }
     }
 
@@ -156,6 +170,9 @@ impl Context {
         dwarf_home: PathBuf,
         dirty: Vec<Dirty>,
         source_file: String,
+        program: Program,
+        scopes: HashMap<String, String>,
+        imports: HasSet<PathBuf>,
     ) -> Self {
         Self {
             prompt,
@@ -173,7 +190,26 @@ impl Context {
             dwarf_home,
             dirty,
             source_file,
+            program,
+            scopes,
+            imports,
         }
+    }
+
+    pub fn thread_count(&self) -> usize {
+        self.thread_count
+    }
+
+    pub fn imports(&mut self) -> &mut HasSet<PathBuf> {
+        &mut self.imports
+    }
+
+    pub fn scopes(&mut self) -> &mut HashMap<String, String> {
+        &mut self.scopes
+    }
+
+    pub fn get_program(&self) -> &Program {
+        &self.program
     }
 
     pub fn get_source_file(&self) -> &str {
@@ -196,11 +232,6 @@ impl Context {
         result.worker = Some(self.executor.new_worker());
         result
     }
-
-    // #[cfg(feature = "async")]
-    // pub fn set_executor_index(&mut self, index: usize) {
-    //     self.executor_index = index;
-    // }
 
     pub fn dirty(&self) -> Vec<Dirty> {
         self.dirty.clone()
@@ -227,12 +258,13 @@ impl Context {
     }
 
     pub fn add_args(&mut self, args: Vec<String>) {
-        let ty = Ty::new_s_string(&s_read!(self.sarzak_heel()));
-        let ty = ValueType::new_ty(&ty, &mut s_write!(self.lu_dog_heel()));
+        let ty = Ty::new_z_string(&s_read!(self.sarzak_heel()));
+        let ty = ValueType::new_ty(true, &ty, &mut s_write!(self.lu_dog_heel()));
         let inner: Vec<RefType<Value>> = args
             .into_iter()
             .map(|a| new_ref!(Value, a.into()))
             .collect();
+        let inner = new_ref!(Vec<RefType<Value>>, inner);
         self.args = Some(new_ref!(Value, Value::Vector { ty, inner }));
     }
 
