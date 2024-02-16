@@ -1,0 +1,94 @@
+use http::client::HttpClient;
+use http::client::HttpError;
+use http::client::Response;
+use std::result::Result;
+
+async fn stress_http() -> Future<()> {
+    let n = 10;
+
+    let foo: [Future<string>] = [];
+
+    for i in 0..n {
+        foo.push(chacha::spawn(async || -> string {
+            let client = HttpClient::new();
+            let response = client.get("https://www.rust-lang.org").await;
+            let response = response.send().await;
+            match response {
+                Result::<Response, HttpError>::Ok(response) => {
+                    let text = response.text().await;
+                    match text {
+                        Result::<string, HttpError>::Ok(text) => text,
+                        // Return an error if there was a problem getting the page's text.
+                        Result::<string, HttpError>::Err(e) => e.to_string(),
+                    }
+                }
+                // Return an Error if there was a problem creating or sending the request.
+                Result::<Response, HttpError>::Err(e) => e.to_string(),
+            }
+        }));
+    }
+
+    for i in foo {
+        // print(i.await);
+        let _ = i.await;
+    }
+}
+
+fn fib(n: int) -> int {
+    if n <= 1 {
+        1
+    } else {
+        fib(n - 1) + fib(n - 2)
+    }
+}
+
+fn waste_time(id: int, n: int) -> () {
+    // print(id);
+    // print("\n");
+    for i in 0..n {}
+}
+
+async fn cpu_heavy() -> Future<()> {
+    let n = 18;
+    let j = 10000;
+
+    let foo: [Future<int>] = [];
+    for i in 0..1000 {
+        // foo.push(chacha::spawn(|| -> int { fib(n) }));
+        foo.push(chacha::spawn(|| -> int {
+            waste_time(i, j);
+            0
+        }));
+    }
+
+    for i in foo {
+        i.await;
+        // print(i.await);
+        // print("\n");
+    }
+}
+
+async fn main() -> Future<()> {
+    let _ = stress_http().await;
+    // let _ = cpu_heavy().await;
+}
+
+// use http::server::HttpServer;
+// // use lu_dog::LuDogStore;
+
+// fn main() -> () {
+//     // LuDogStore::load("./mandelbrot.道");
+//     // let server = HttpServer::new();
+//     // let hello = server.path("/").map(|| {
+//     //     // Comment to keep the editor from collapsing the block.
+//     //     "Hello, world!"
+//     // });
+//     // server.serve().await
+//     let x = 0;
+//     let arr = [1, 2, 3, 4, 5];
+//     for i in arr {
+//         x = x + i;
+//     }
+//     print(x);
+
+// }

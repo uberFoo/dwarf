@@ -1,0 +1,52 @@
+name: Fuzz the Parser
+
+on:
+    push:
+        paths:
+            - src/dwraf/parser.rs
+
+jobs:
+    my-job:
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v2
+              with:
+                  ref: develop
+            - name: Set up Rust
+              uses: actions-rs/toolchain@v1
+              with:
+                  toolchain: nightly
+            - name: Download grcov
+              run: |
+                  curl -L https://github.com/mozilla/grcov/releases/download/v0.8.18/grcov-x86_64-unknown-linux-gnu.tar.bz2 | tar jxf -
+                  sudo mv grcov /usr/local/bin/
+            - name: Install llvm-tools-preview
+              run: rustup component add llvm-tools-preview
+            - name: Install cargo fuzz
+              run: cargo install cargo-fuzz
+            - name: Run coverage fuzzing
+              run: |
+                  cargo +nightly fuzz coverage fuzz_target_1 || true
+                  grcov . --binary-path ./target/debug/deps/ -s . -t lcov --branch --ignore-not-existing --ignore '../*' --ignore "/*" -o coverage.lcov
+            - name: Install lcov
+              run: sudo apt-get install lcov
+            - name: Install lcov_cobertura
+              run: pip install lcov_cobertura
+            - name: Generate coverage report
+              run: |
+                  lcov --summary coverage.lcov
+                  lcov_cobertura coverage.lcov --output coverage.xml
+              env:
+                  CI: true
+            - name: Upload coverage reports to Codecov
+              uses: codecov/codecov-action@v3
+              env:
+                  CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+              with:
+                  directory: ./
+                  fail_ci_if_error: true
+                  files: ./coverage.xml
+                  flags: unittests
+                  name: codecov-umbrella
+                  verbose: true

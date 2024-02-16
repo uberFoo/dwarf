@@ -1178,9 +1178,36 @@ async fn main() -> Future<()> {
         println!("{program}");
 
         assert_eq!(program.get_thonk_card(), 2);
-        // assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 14);
-        // assert_eq!(program.get_thonk("foo").unwrap().get_instruction_card(), 14);
+        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 8);
+        assert_eq!(program.get_thonk("foo").unwrap().get_instruction_card(), 20);
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(12));
+    }
+
+    #[test]
+    fn test_add_strings() {
+        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
+        let ore = "fn main() -> string {
+                       \"Hello, \" + \"world!\"
+                   }";
+        let ast = parse_dwarf("test_add_strings", ore).unwrap();
+        let ctx = new_lu_dog(
+            "test_add_strings".to_owned(),
+            Some((ore.to_owned(), &ast)),
+            &get_dwarf_home(),
+            &sarzak,
+        )
+        .unwrap();
+        let program = compile(&ctx).unwrap();
+
+        println!("{program}");
+
+        assert_eq!(program.get_thonk_card(), 1);
+        assert_eq!(program.get_thonk("main").unwrap().get_instruction_card(), 6);
+
+        assert_eq!(
+            &*s_read!(run_vm(&program).unwrap()),
+            &Value::String("Hello, world!".to_owned())
+        );
     }
 }
