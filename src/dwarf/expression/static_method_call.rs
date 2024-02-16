@@ -121,21 +121,6 @@ pub fn inter(
     // 🚧 This smells bad.
     // We need to check if the type name is a struct or an enum.
     if lu_dog.exhume_woog_struct_id_by_name(&type_name).is_some()
-        || {
-            let mut iter = context_stack.iter();
-            loop {
-                if let Some((path, lu_dog)) = iter.next() {
-                    if s_read!(lu_dog)
-                        .exhume_woog_struct_id_by_name(&type_name)
-                        .is_some()
-                    {
-                        break true;
-                    }
-                } else {
-                    break false;
-                }
-            }
-        }
         || lu_dog
             .exhume_z_object_store_id_by_name(&type_name)
             .is_some()
@@ -345,61 +330,13 @@ pub fn inter(
                 }])
             }
         } else {
-            let mut iter = context_stack.iter();
-            loop {
-                if let Some((mod_path, lu_dog)) = iter.next() {
-                    let mut lu_dog = s_write!(lu_dog);
-                    dbg!(&mod_path, &type_name_no_generics);
-                    if let Some(woog_enum) =
-                        lu_dog.exhume_enumeration_id_by_name(type_name_no_generics)
-                    {
-                        dbg!("found it");
-                        let woog_enum = lu_dog.exhume_enumeration(&woog_enum).unwrap().clone();
-                        dbg!(&woog_enum);
-                        let foo = s_read!(woog_enum).r88_enum_field(&lu_dog);
-                        let field = foo.iter().find(|field| {
-                            let field = s_read!(field);
-                            field.name == method
-                        });
-                        dbg!(&field);
-
-                        if let Some(field) = field {
-                            break inter_field(
-                                field,
-                                params,
-                                block,
-                                path,
-                                save_path,
-                                woog_enum,
-                                &span,
-                                &x_path,
-                                context,
-                                &mut Vec::new(),
-                                &mut lu_dog,
-                            );
-                        } else {
-                            let span = s_read!(span).start as usize..s_read!(span).end as usize;
-                            break Err(vec![DwarfError::NoSuchField {
-                                name: type_name.to_owned(),
-                                name_span: type_span.to_owned(),
-                                field: method.to_owned(),
-                                file: context.file_name.to_owned(),
-                                span,
-                                location: location!(),
-                            }]);
-                        }
-                    } else {
-                        dbg!("not found");
-                        let span = s_read!(span).start as usize..s_read!(span).end as usize;
-                        break Err(vec![DwarfError::ObjectNameNotFound {
-                            name: type_name.to_owned(),
-                            file: context.file_name.to_owned(),
-                            span,
-                            location: location!(),
-                        }]);
-                    }
-                }
-            }
+            let span = s_read!(span).start as usize..s_read!(span).end as usize;
+            Err(vec![DwarfError::ObjectNameNotFound {
+                name: type_name.to_owned(),
+                file: context.file_name.to_owned(),
+                span,
+                location: location!(),
+            }])
         }
     }
 }

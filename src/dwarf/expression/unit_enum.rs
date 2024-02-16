@@ -108,7 +108,7 @@ pub fn inter(
         let first = s_read!(first).id;
         s_write!(x_path).first = Some(first);
     }
-    dbg!(&enum_root);
+
     if let Some(woog_enum_id) = {
         if let Some(woog_enum) = lu_dog.exhume_enumeration_id_by_name(enum_root) {
             Some(woog_enum)
