@@ -1917,7 +1917,6 @@ impl TupleEnum {
 
 impl fmt::Display for TupleEnum {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        dbg!(&self.value);
         write!(f, "{}({})", self.variant(), s_read!(self.value))
     }
 }
