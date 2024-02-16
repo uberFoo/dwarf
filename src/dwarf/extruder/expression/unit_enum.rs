@@ -82,7 +82,6 @@ pub fn inter(
         })
         .map(|ty| {
             if let Type::UserType((name, _), _generics) = &ty.0 {
-                dbg!("fierce", &name);
                 PathElement::new(name.to_owned(), None, &x_path, lu_dog)
             } else {
                 unreachable!()
