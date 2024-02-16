@@ -15,7 +15,7 @@ use crate::{
     lu_dog::{
         store::ObjectStore as LuDogStore, Block, Expression, Span, TypeCast, ValueType, XValue,
     },
-    new_ref, NewRef, RefType,
+    new_ref, s_write, NewRef, RefType,
 };
 
 // Let's just say that I don't get this lint. The docs say you have to box it

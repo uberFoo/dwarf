@@ -110,9 +110,9 @@ pub fn start_repl(context: &mut Context, is_uber: bool, thread_count: usize) -> 
                     Ok(Some((stmt, _))) => {
                         debug!("stmt from readline {stmt:?}");
 
+                        let mut lu_dog = s_write!(lu_dog);
                         let mut dirty = Vec::new();
                         let stmt = {
-                            let mut lu_dog = s_write!(lu_dog);
                             match inter_statement(
                                 &new_ref!(crate::dwarf::Statement, stmt),
                                 stmt_index,
@@ -152,8 +152,7 @@ pub fn start_repl(context: &mut Context, is_uber: bool, thread_count: usize) -> 
 
                         match eval_statement(stmt.0, context, &mut vm) {
                             Ok(value) => {
-                                let ty = s_read!(value)
-                                    .get_value_type(&s_read!(sarzak), &s_read!(lu_dog));
+                                let ty = s_read!(value).get_value_type(&s_read!(sarzak), &lu_dog);
                                 let value = format!("{}", s_read!(value));
                                 print!("\n'{}'", result_style.paint(value));
 
