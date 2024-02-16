@@ -2,6 +2,8 @@ use ansi_term::Colour;
 use ariadne::{Color, Fmt, Label, Report, ReportKind, Source};
 use chumsky::{prelude::*, text::Character};
 use log;
+use once_cell::sync::OnceCell;
+use regex::Regex;
 use rustc_hash::FxHashMap as HashMap;
 
 use crate::dwarf::{
@@ -99,6 +101,8 @@ macro_rules! error {
 type Result<T, E = Box<Simple<String>>> = std::result::Result<T, E>;
 type Expression = (Spanned<DwarfExpression>, (u8, u8));
 
+static RE: OnceCell<Regex> = OnceCell::new();
+
 // These are the binding strengths of the operators used by the parser.
 // The idea comes from
 // [this article](https://matklad.github.io/2020/04/13/simple-but-powerful-pratt-parsing.html)
@@ -136,11 +140,17 @@ fn lexer() -> impl Parser<char, Vec<Spanned<Token>>, Error = Simple<char>> {
         .map(Token::Float);
 
     // A parser for strings
-    let str_ = just('"')
+    let string = just('"')
         .ignore_then(filter(|c| *c != '"').repeated())
         .then_ignore(just('"'))
         .collect::<String>()
         .map(Token::String);
+
+    let format_string = just('`')
+        .ignore_then(filter(|c| *c != '`').repeated())
+        .then_ignore(just('`'))
+        .collect::<String>()
+        .map(Token::FormatString);
 
     // A parser for identifiers and keywords
     fn ident(
@@ -189,13 +199,9 @@ fn lexer() -> impl Parser<char, Vec<Spanned<Token>>, Error = Simple<char>> {
     // A single token can be one of the above
     let token = float
         .or(int)
-        .or(str_)
-        // .or(dagger)
-        // .or(double_colon)
-        // .or(op)
+        .or(string)
+        .or(format_string)
         .or(punct)
-        // .or(object)
-        // .or(some)
         .or(ident)
         .recover_with(skip_then_retry_until([]));
 
@@ -2036,6 +2042,12 @@ impl DwarfParser {
             return Ok(Some(expression));
         }
 
+        // parse a format string
+        if let Some(expression) = self.parse_format_string() {
+            debug!("format string", expression);
+            return Ok(Some(expression));
+        }
+
         // parse a list literal
         if let Some(expression) = self.parse_list_literal()? {
             debug!("list literal", expression);
@@ -3501,6 +3513,65 @@ impl DwarfParser {
         }
     }
 
+    /// Parse a Format String
+    ///
+    /// format_string -> `(.*|\$\{([^}]*)\})*`
+    fn parse_format_string(&mut self) -> Option<Expression> {
+        debug!("enter parse_format_string");
+
+        let token = self.peek()?.clone();
+
+        if let (Token::FormatString(string), span) = token {
+            let re = match RE.get() {
+                Some(re) => re,
+                None => {
+                    let re = Regex::new(r"(.*?)\$\{([^}]*)\}|(.+)").unwrap();
+                    RE.set(re).unwrap();
+                    RE.get().unwrap()
+                }
+            };
+
+            let mut inside = span.start;
+            let mut exprs = Vec::new();
+            for caps in re.captures_iter(&string) {
+                if let Some(before) = caps.get(1) {
+                    if !before.is_empty() {
+                        let delta = before.end() - before.start();
+                        exprs.push((
+                            DwarfExpression::StringLiteral(before.as_str().to_owned()),
+                            inside..inside + delta,
+                        ));
+                        inside += delta;
+                    }
+                }
+
+                if let Some(expr_str) = caps.get(2) {
+                    let expr = parse_expression(expr_str.as_str());
+                    if let Ok(Some(mut expr)) = expr {
+                        expr.0 .1.start += inside + 2;
+                        expr.0 .1.end += inside + 2;
+                        exprs.push(expr.0);
+                        inside += (expr_str.end() - expr_str.start() + 3);
+                    }
+                }
+
+                if let Some(after) = caps.get(3) {
+                    let delta = after.end() - after.start();
+                    exprs.push((
+                        DwarfExpression::StringLiteral(after.as_str().to_owned()),
+                        inside..inside + delta,
+                    ));
+                    inside += delta;
+                }
+            }
+
+            self.advance();
+            Some(((DwarfExpression::FormatString(exprs), span), LITERAL))
+        } else {
+            None
+        }
+    }
+
     fn parse_block_expression(&mut self) -> Result<Option<Expression>> {
         debug!("enter parse_block_expression");
 
@@ -4871,6 +4942,21 @@ impl DwarfParser {
     }
 }
 
+fn parse_expression(src: &str) -> Result<Option<Expression>, String> {
+    let (tokens, errs) = lexer().parse_recovery_verbose(src);
+
+    let mut parser = DwarfParser::new(tokens.unwrap());
+    let ast = parser
+        .parse_expression(LITERAL.1)
+        .map_err(|e| e.to_string())?;
+
+    if !errs.is_empty() || !parser.errors.is_empty() {
+        Err(report_errors(errs, parser.errors, "REPL", src))
+    } else {
+        Ok(ast)
+    }
+}
+
 /// Interpreter Entry Point
 ///
 /// Parses a single line of input as a statement.
@@ -5823,6 +5909,25 @@ mod tests {
         "#;
 
         let ast = parse_dwarf("test_if_else_if", src);
+        assert!(ast.is_ok());
+    }
+
+    #[test]
+    fn format_string() {
+        let _ = env_logger::builder().is_test(true).try_init();
+
+        let src = r#"
+        fn main() {
+            let a = 42;
+            let b = 96;
+            print(`a = ${a}, b = ${b}, and this is the end of the string`);
+            print(`${a}`);
+            ``
+        }
+        "#;
+
+        let ast = parse_dwarf("test_format_string", src);
+        dbg!(&ast);
         assert!(ast.is_ok());
     }
 }

@@ -1,0 +1,21 @@
+struct Callee {
+    count: int,
+}
+
+impl Callee {
+    fn new() -> Callee {
+        Callee { count: 0 }
+    }
+
+    fn call(self) -> Callee {
+        self.count = self.count + 1;
+        self
+    }
+}
+
+fn main() -> bool {
+    let callee = Callee::new();
+    callee.call().call();
+    print(callee.count);
+    chacha::assert(callee.count == 2)
+}

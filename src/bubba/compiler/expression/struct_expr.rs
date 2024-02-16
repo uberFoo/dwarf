@@ -76,7 +76,7 @@ pub(in crate::bubba::compiler) fn compile(
                 for f in field_exprs {
                     let expr = s_read!(f).r15_expression(&lu_dog)[0].clone();
                     let span = get_span(&expr, &lu_dog);
-                    compile_expression(&expr, thonk, context, span)?;
+                    compile_expression(&expr, thonk, context)?;
                 }
 
                 let ty = new_ref!(Value, Value::ValueType((*s_read!(ty)).to_owned()));
@@ -108,7 +108,7 @@ pub(in crate::bubba::compiler) fn compile(
                 let f = s_read!(f);
                 let expr = f.r15_expression(&lu_dog)[0].clone();
                 let span = get_span(&expr, &lu_dog);
-                compile_expression(&expr, thonk, context, span)?;
+                compile_expression(&expr, thonk, context)?;
 
                 let FieldExpressionEnum::NamedFieldExpression(ref name) = f.subtype else {
                     unreachable!()

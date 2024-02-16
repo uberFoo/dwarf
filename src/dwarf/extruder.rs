@@ -23,13 +23,13 @@ use crate::{
         store::ObjectStore as LuDogStore,
         types::{
             AWait, Block, Body, BooleanOperator, Call, DataStructure, EnumFieldEnum, Expression,
-            ExpressionEnum, ExpressionStatement, Field, FieldExpression, ForLoop, FuncGeneric,
-            FunctionCall, ImplementationBlock, Import, Index, IntegerLiteral, Item as WoogItem,
-            ItemStatement, Lambda, LambdaParameter, LetStatement, Literal, LocalVariable,
-            NamedFieldExpression, Pattern as AssocPat, RangeExpression, Span as LuDogSpan,
-            Statement, StringLiteral, StructExpression, ValueType, ValueTypeEnum, Variable,
-            VariableExpression, WoogStruct, XFuture, XIf, XMatch, XPath, XPrint, XValue,
-            XValueEnum,
+            ExpressionBit, ExpressionEnum, ExpressionStatement, Field, FieldExpression, ForLoop,
+            FormatBits, FormatString, FuncGeneric, FunctionCall, ImplementationBlock, Import,
+            Index, IntegerLiteral, Item as WoogItem, ItemStatement, Lambda, LambdaParameter,
+            LetStatement, Literal, LocalVariable, NamedFieldExpression, Pattern as AssocPat,
+            RangeExpression, Span as LuDogSpan, Statement, StringBit, StringLiteral,
+            StructExpression, ValueType, ValueTypeEnum, Variable, VariableExpression, WoogStruct,
+            XFuture, XIf, XMatch, XPath, XPrint, XValue, XValueEnum,
         },
         Argument, Binary, BooleanLiteral, Comparison, DwarfSourceFile, FieldAccess,
         FieldAccessTarget, FloatLiteral, List, ListElement, ListExpression, Operator,
@@ -57,6 +57,19 @@ macro_rules! link_ƛ_parameter {
         let next = s_read!($next);
         if let Some(last) = $last {
             let last = $store.exhume_lambda_parameter(&last).unwrap().clone();
+            let mut last = s_write!(last);
+            last.next = Some(next.id);
+        }
+
+        Some(next.id)
+    }};
+}
+
+macro_rules! link_format_bits {
+    ($last:expr, $next:expr, $store:expr) => {{
+        let next = s_read!($next);
+        if let Some(last) = $last {
+            let last = $store.exhume_format_bits(&last).unwrap().clone();
             let mut last = s_write!(last);
             last.next = Some(next.id);
         }
@@ -1667,6 +1680,33 @@ pub(super) fn inter_expression(
             update_span_value(&span, &value, location!());
 
             Ok(((expr, span), ty))
+        }
+        //
+        // FormatString
+        //
+        ParserExpression::FormatString(bits) => {
+            let format_string = FormatString::new(None, lu_dog);
+            let mut last_format_bit_uuid: Option<SarzakStorePtr> = None;
+            for (bit, _span) in bits {
+                let format_bit = match bit {
+                    ParserExpression::LocalVariable(name) => unreachable!(),
+                    ParserExpression::StringLiteral(string) => {
+                        let literal = StringLiteral::new(string.to_owned(), lu_dog);
+                        let string_bit = StringBit::new(&literal, lu_dog);
+                        let format_bit =
+                            FormatBits::new_string_bit(&format_string, None, &string_bit, lu_dog);
+                        last_format_bit_uuid =
+                            link_format_bits!(last_format_bit_uuid, format_bit, lu_dog);
+                        format_bit
+                    }
+                    huh => panic!("Unexpected expression: {huh:?}"),
+                };
+                if last_format_bit_uuid.is_none() {
+                    s_write!(format_string).first_format_bit = Some(s_read!(format_bit).id);
+                }
+            }
+
+            unreachable!();
         }
         //
         // FunctionCall

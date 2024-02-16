@@ -331,6 +331,7 @@ pub enum Instruction {
     /// Net effect -1.
     ///
     TestLessThanOrEqual,
+    ToString,
     /// Typecast
     ///
     Typecast(RefType<Value>),
@@ -514,6 +515,7 @@ impl fmt::Display for Instruction {
             Instruction::TestGreaterThan => write!(f, "{}", opcode_style.paint("gt  ")),
             Instruction::TestLessThan => write!(f, "{}", opcode_style.paint("lt  ")),
             Instruction::TestLessThanOrEqual => write!(f, "{}", opcode_style.paint("lte ")),
+            Instruction::ToString => write!(f, "{}", opcode_style.paint("ts  ")),
             Instruction::Typecast(name) => write!(
                 f,
                 "{} {}",
@@ -584,7 +586,7 @@ impl Program {
         &self.compiler_build_ts
     }
 
-    pub(crate) fn get_instruction_count(&self) -> usize {
+    pub(crate) fn get_instruction_card(&self) -> usize {
         self.thonks.values().map(|t| t.instruction_card()).sum()
     }
 }

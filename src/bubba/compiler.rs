@@ -599,7 +599,7 @@ fn compile_statement(
             let stmt = s_read!(stmt);
             let expr = stmt.r31_expression(&lu_dog)[0].clone();
             let span = get_span(&expr, &lu_dog);
-            compile_expression(&expr, thonk, context, span)
+            compile_expression(&expr, thonk, context)
         }
         StatementEnum::LetStatement(ref stmt) => {
             let stmt = lu_dog.exhume_let_statement(stmt).unwrap();
@@ -607,7 +607,7 @@ fn compile_statement(
 
             let expr = stmt.r20_expression(&lu_dog)[0].clone();
             let span = get_span(&expr, &lu_dog);
-            compile_expression(&expr, thonk, context, span)?;
+            compile_expression(&expr, thonk, context)?;
 
             let var = s_read!(stmt.r21_local_variable(&lu_dog)[0]).clone();
             let var = s_read!(var.r12_variable(&lu_dog)[0]).clone();
@@ -632,8 +632,7 @@ fn compile_statement(
             let stmt = lu_dog.exhume_result_statement(stmt).unwrap();
             let stmt = s_read!(stmt);
             let expr = stmt.r41_expression(&lu_dog)[0].clone();
-            let span = get_span(&expr, &lu_dog);
-            let result = compile_expression(&expr, thonk, context, span);
+            let result = compile_expression(&expr, thonk, context);
 
             if context.is_root_symbol_table() {
                 thonk.insert_instruction(Instruction::Return, location!());
@@ -651,8 +650,12 @@ fn compile_expression(
     expression: &RefType<Expression>,
     thonk: &mut CThonk,
     context: &mut Context,
-    span: Span,
 ) -> Result<Option<ValueType>> {
+    let lu_dog = context.lu_dog_heel();
+    let lu_dog = s_read!(lu_dog);
+
+    let span = get_span(expression, &lu_dog);
+
     let expression = s_read!(expression);
     tracing::debug!(target: "instr", "{}: {:?}\n  -> {}:{}:{}", POP_CLR.paint("compile_expression"), expression.subtype, file!(), line!(), column!());
 
@@ -903,7 +906,7 @@ mod test {
         assert_eq!(&*s_read!(run.unwrap()), &Value::Boolean(true));
     }
 
-    // #[test]
+    #[test]
     fn use_plugin() {
         setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
@@ -925,14 +928,14 @@ mod test {
         println!("{program}");
         assert_eq!(program.get_thonk_card(), 11);
 
-        assert_eq!(program.get_instruction_count(), 316);
+        assert_eq!(program.get_instruction_card(), 316);
         let run = run_vm(&program);
         println!("{:?}", run);
         assert!(run.is_ok());
         assert_eq!(&*s_read!(run.unwrap()), &Value::Boolean(true));
     }
 
-    // #[test]
+    #[test]
     fn vm_async_http() {
         setup_logging();
         // let _ = env_logger::builder().is_test(true).try_init();
@@ -1108,5 +1111,39 @@ async fn main() -> Future<()> {
         let run = run_vm(&program);
         assert!(run.is_ok());
         assert_eq!(&*s_read!(run.unwrap()), &Value::Integer(0));
+    }
+
+    // #[test]
+    fn format_string() {
+        setup_logging();
+        let ore = r#"
+                   fn main() -> string {
+                       let x = 42;
+                       let y = "Hello";
+                       let z = "world";
+                       print(`MOTD: ${y} ${z}!, the magic number is ${x}.`);
+                   }
+                       "#;
+
+        let ast = parse_dwarf("format_string", ore).unwrap();
+        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
+        let ctx = new_lu_dog(
+            "format_string".to_owned(),
+            Some((ore.to_owned(), &ast)),
+            &get_dwarf_home(),
+            &sarzak,
+        )
+        .unwrap();
+        let program = compile(&ctx).unwrap();
+        println!("{program}");
+        assert_eq!(program.get_thonk_card(), 1);
+        assert_eq!(program.get_instruction_card(), 5);
+
+        let run = run_vm(&program);
+        assert!(run.is_ok());
+        assert_eq!(
+            &*s_read!(run.unwrap()),
+            &Value::String("MOTD: Hello world!, the magic number is 42.".to_owned())
+        );
     }
 }

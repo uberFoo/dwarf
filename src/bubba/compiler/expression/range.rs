@@ -26,8 +26,8 @@ pub(in crate::bubba::compiler) fn compile(
     let end_span = get_span(&end, &lu_dog);
 
     // We push first the end, and then the start, onto the stack.
-    compile_expression(&end, thonk, context, end_span)?;
-    compile_expression(&start, thonk, context, start_span)?;
+    compile_expression(&end, thonk, context)?;
+    compile_expression(&start, thonk, context)?;
 
     Ok(Some(range_ty))
 }

@@ -1,0 +1,8 @@
+fn main() -> string {
+    let x = 42;
+    let y = "Hello";
+    let z = "world";
+    let a = `MOTD: ${y} ${z}!, the magic number is ${x}.`;
+    print(a);
+    chacha::assert_eq(a, "MOTD: Hello world!, the magic number is 42.");
+}

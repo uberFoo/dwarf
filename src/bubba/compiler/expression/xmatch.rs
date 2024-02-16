@@ -32,7 +32,7 @@ pub(in crate::bubba::compiler) fn compile(
     let label = format!("{}", Uuid::new_v4());
     for pattern in patterns {
         // Compiling the scrutinee
-        compile_expression(&scrutinee, thonk, context, scrutinee_span.clone())?;
+        compile_expression(&scrutinee, thonk, context)?;
 
         tracing::debug!(target: "instr", "{}:{}:{}", file!(), line!(), column!());
 
@@ -192,12 +192,7 @@ pub(in crate::bubba::compiler) fn compile(
         let mut match_thonk = CThonk::new("match".to_owned());
 
         tracing::debug!(target: "instr", "{}: {}:{}:{}", POP_CLR.paint("compile_pattern_expr"), file!(), line!(), column!());
-        compile_expression(
-            &pattern_expr,
-            &mut match_thonk,
-            context,
-            get_span(&pattern_expr, &lu_dog),
-        )?;
+        compile_expression(&pattern_expr, &mut match_thonk, context)?;
 
         let fp = match_thonk.get_frame_size();
         for _ in 0..fp {

@@ -24,12 +24,12 @@ pub(in crate::bubba::compiler) fn compile(
     let index = lu_dog.exhume_index(index).unwrap();
     let index = s_read!(index);
     let target = lu_dog.exhume_expression(&index.target).unwrap();
-    let target_span = get_span(&target, &lu_dog);
-    compile_expression(&target, thonk, context, target_span)?;
+
+    compile_expression(&target, thonk, context)?;
 
     let index_expr = lu_dog.exhume_expression(&index.index).unwrap();
-    let index_expr_span = get_span(&index_expr, &lu_dog);
-    compile_expression(&index_expr, thonk, context, index_expr_span)?;
+
+    compile_expression(&index_expr, thonk, context)?;
 
     thonk.insert_instruction_with_span(Instruction::ListIndex, span, location!());
 

@@ -2,10 +2,10 @@ use snafu::{location, Location};
 
 use crate::{
     bubba::{
-        compiler::{CThonk, Context, Error, Result},
+        compiler::{compile_expression, get_span, CThonk, Context, Error, Result, EMPTY, STRING},
         instr::Instruction,
     },
-    lu_dog::{BooleanLiteralEnum, LiteralEnum, ValueType},
+    lu_dog::{BooleanLiteralEnum, FormatBits, FormatBitsEnum, LiteralEnum, ValueType},
     new_ref, s_read, NewRef, RefType, SarzakStorePtr, Span, Value, POP_CLR,
 };
 
@@ -48,6 +48,111 @@ pub(in crate::bubba::compiler) fn compile(
             Ok(new_ref!(Value, value))
         }
         //
+        // FormatString
+        //
+        LiteralEnum::FormatString(ref string) => {
+            // let mut compile_bit = |bit: &FormatBits| -> Result<Option<ValueType>> {
+            //     match bit.subtype {
+            //         FormatBitsEnum::ExpressionBit(ref expr) => {
+            //             let expr = lu_dog.exhume_expression(expr).unwrap();
+            //             let span = get_span(&expr, &lu_dog);
+            //             let result = compile_expression(&expr, thonk, context);
+            //             thonk.insert_instruction_with_span(
+            //                 Instruction::ToString,
+            //                 span,
+            //                 location!(),
+            //             );
+            //             result
+            //         }
+            //         FormatBitsEnum::StringBit(ref string) => {
+            //             let string = lu_dog.exhume_string_literal(string).unwrap();
+            //             let string = s_read!(string);
+            //             let literal = &string.r22_literal(&lu_dog)[0];
+            //             let expr = &s_read!(literal).r15_expression(&lu_dog)[0];
+            //             let span = get_span(expr, &lu_dog);
+
+            //             let value = Value::String(string.x_value.clone());
+            //             thonk.insert_instruction_with_span(
+            //                 Instruction::Push(new_ref!(Value, value)),
+            //                 span,
+            //                 location!(),
+            //             );
+            //             Ok(Some(context.get_type(STRING).unwrap().clone()))
+            //         }
+            //     }
+            // };
+
+            let string = lu_dog.exhume_format_string(string).unwrap();
+            if let Some(ref first) = s_read!(string).first_format_bit {
+                let first = lu_dog.exhume_format_bits(first).unwrap();
+                let first = s_read!(first);
+
+                // compile_bit(&first)?;
+                match first.subtype {
+                    FormatBitsEnum::ExpressionBit(ref expr) => {
+                        let expr = lu_dog.exhume_expression(expr).unwrap();
+                        let span = get_span(&expr, &lu_dog);
+                        compile_expression(&expr, thonk, context)?;
+                        thonk.insert_instruction_with_span(
+                            Instruction::ToString,
+                            span,
+                            location!(),
+                        );
+                    }
+                    FormatBitsEnum::StringBit(ref string) => {
+                        let string = lu_dog.exhume_string_literal(string).unwrap();
+                        let string = s_read!(string);
+                        let literal = &string.r22_literal(&lu_dog)[0];
+                        let expr = &s_read!(literal).r15_expression(&lu_dog)[0];
+                        let span = get_span(expr, &lu_dog);
+
+                        let value = Value::String(string.x_value.clone());
+                        thonk.insert_instruction_with_span(
+                            Instruction::Push(new_ref!(Value, value)),
+                            span,
+                            location!(),
+                        );
+                    }
+                }
+
+                while let Some(ref next) = first.next {
+                    let next = lu_dog.exhume_format_bits(next).unwrap();
+                    let next = s_read!(next);
+                    // compile_bit(&next)?;
+                    match next.subtype {
+                        FormatBitsEnum::ExpressionBit(ref expr) => {
+                            let expr = lu_dog.exhume_expression(expr).unwrap();
+                            let span = get_span(&expr, &lu_dog);
+                            compile_expression(&expr, thonk, context)?;
+                            thonk.insert_instruction_with_span(
+                                Instruction::ToString,
+                                span,
+                                location!(),
+                            );
+                        }
+                        FormatBitsEnum::StringBit(ref string) => {
+                            let string = lu_dog.exhume_string_literal(string).unwrap();
+                            let string = s_read!(string);
+                            let literal = &string.r22_literal(&lu_dog)[0];
+                            let expr = &s_read!(literal).r15_expression(&lu_dog)[0];
+                            let span = get_span(expr, &lu_dog);
+
+                            let value = Value::String(string.x_value.clone());
+                            thonk.insert_instruction_with_span(
+                                Instruction::Push(new_ref!(Value, value)),
+                                span,
+                                location!(),
+                            );
+                        }
+                    }
+                    thonk.insert_instruction_with_span(Instruction::Add, span.clone(), location!());
+                }
+
+                return Ok(Some(context.get_type(STRING).unwrap().clone()));
+            }
+            return Ok(Some(context.get_type(EMPTY).unwrap().clone()));
+        }
+        //
         // IntegerLiteral
         //
         LiteralEnum::IntegerLiteral(ref literal) => {
@@ -61,7 +166,6 @@ pub(in crate::bubba::compiler) fn compile(
         //
         LiteralEnum::StringLiteral(ref literal) => {
             let literal = lu_dog.exhume_string_literal(literal).unwrap();
-            // 🚧 It'd be great if this were an Rc...
             let value = Value::String(s_read!(literal).x_value.clone());
             Ok(new_ref!(Value, value))
         }

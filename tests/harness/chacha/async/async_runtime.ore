@@ -1,0 +1,5 @@
+async fn foo() -> Future<()> {}
+
+async fn main() -> Future<()> {
+    foo().await;
+}
