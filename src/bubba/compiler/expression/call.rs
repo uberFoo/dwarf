@@ -6,7 +6,7 @@ use crate::keywords::{LEN, PUSH, SPAWN};
 
 use crate::{
     bubba::{
-        compiler::{compile_expression, compile_statement, get_span, CThonk, Context, Result},
+        compiler::{compile_expression, compile_statement, CThonk, Context, Result},
         instr::Instruction,
         BOOL, STRING_ARRAY,
     },
@@ -243,18 +243,16 @@ fn compile_function_call(
             let call = s_read!(call);
             let result = if let Some(ref expr) = call.expression {
                 let expr = lu_dog.exhume_expression(expr).unwrap();
-                let span = get_span(&expr, &lu_dog);
                 // Evaluate the LHS to get at the underlying value/instance.
                 // I'm not sure that this is the correct type. OTOH, what other
                 // type would I use?
-                compile_expression(&expr, thonk, context, span)
+                compile_expression(&expr, thonk, context)
             } else {
                 panic!();
             };
 
             for expr in args {
-                let span = get_span(expr, &lu_dog);
-                compile_expression(expr, thonk, context, span)?;
+                compile_expression(expr, thonk, context)?;
             }
 
             if a_sink {
@@ -296,9 +294,8 @@ fn compile_method_call(
     // First off we need to evaluate the expression associated with this call.
     let result = if let Some(ref expr) = s_read!(call).expression {
         let expr = lu_dog.exhume_expression(expr).unwrap();
-        let span = get_span(&expr, &lu_dog);
         // Evaluate the LHS to get at the underlying value/instance.
-        let result = compile_expression(&expr, thonk, context, span);
+        let result = compile_expression(&expr, thonk, context);
 
         match name.as_str() {
             PUSH => {
@@ -306,8 +303,7 @@ fn compile_method_call(
                     ValueTypeEnum::List(_) => {
                         // skip self
                         for (_, expr) in args.iter().enumerate().skip(1) {
-                            let span = get_span(expr, &lu_dog);
-                            compile_expression(expr, thonk, context, span)?;
+                            compile_expression(expr, thonk, context)?;
                         }
 
                         thonk.insert_instruction(Instruction::ListPush, location!());
@@ -351,8 +347,7 @@ fn compile_method_call(
     // Don't forget that the first one of these is self. So it's effectively
     // re-evaluating the call.expression above. Somehow it's plumbed to do that.
     for expr in args {
-        let span = get_span(expr, &lu_dog);
-        compile_expression(expr, thonk, context, span)?;
+        compile_expression(expr, thonk, context)?;
     }
 
     if a_sink {
@@ -393,8 +388,7 @@ fn compile_static_method_call(
             }
             ASSERT => {
                 let expr = &args[0];
-                let expr_span = get_span(expr, &lu_dog);
-                compile_expression(expr, thonk, context, expr_span)?;
+                compile_expression(expr, thonk, context)?;
                 thonk.insert_instruction_with_span(
                     Instruction::Push(new_ref!(Value, true.into())),
                     span.clone(),
@@ -439,10 +433,8 @@ fn compile_static_method_call(
             ASSERT_EQ => {
                 let lhs = &args[0];
                 let rhs = &args[1];
-                let lhs_span = get_span(lhs, &lu_dog);
-                compile_expression(lhs, thonk, context, lhs_span)?;
-                let rhs_span = get_span(rhs, &lu_dog);
-                compile_expression(rhs, thonk, context, rhs_span)?;
+                compile_expression(lhs, thonk, context)?;
+                compile_expression(rhs, thonk, context)?;
                 thonk.insert_instruction_with_span(
                     Instruction::TestEqual,
                     span.clone(),
@@ -486,9 +478,8 @@ fn compile_static_method_call(
             #[cfg(feature = "async")]
             SPAWN => {
                 let inner = &args[0];
-                let inner_span = get_span(inner, &lu_dog);
 
-                let result = compile_expression(inner, thonk, context, inner_span);
+                let result = compile_expression(inner, thonk, context);
 
                 thonk.insert_instruction(Instruction::AsyncCall(0), location!());
 
@@ -537,7 +528,7 @@ fn compile_static_method_call(
                     }
                 }
             } else {
-                let func1 = lu_dog.exhume_function_id_by_name(&func).unwrap();
+                let func1 = lu_dog.exhume_function_id_by_name(func).unwrap();
                 let func1 = lu_dog.exhume_function(&func1).unwrap();
                 let body = s_read!(func1).r19_body(&lu_dog)[0].clone();
                 let a_sink = s_read!(body).a_sink;
@@ -549,8 +540,7 @@ fn compile_static_method_call(
                 thonk.insert_instruction(Instruction::LocalCardinality(name), location!());
 
                 for expr in args {
-                    let span = get_span(expr, &lu_dog);
-                    compile_expression(expr, thonk, context, span)?;
+                    compile_expression(expr, thonk, context)?;
                 }
 
                 if a_sink {
@@ -664,14 +654,14 @@ mod test {
                        x + y + z
                    }";
         let ast = parse_dwarf("test_func_args", ore).unwrap();
-        let mut ctx = new_lu_dog(
+        let ctx = new_lu_dog(
             "test_func_args".to_owned(),
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &sarzak,
         )
         .unwrap();
-        let program = compile(&mut ctx).unwrap();
+        let program = compile(&ctx).unwrap();
 
         println!("{program}");
 
@@ -932,7 +922,7 @@ mod test {
 
         assert_eq!(program.get_thonk_card(), 2);
 
-        assert_eq!(program.get_instruction_count(), 20);
+        assert_eq!(program.get_instruction_card(), 20);
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &45.into());
     }

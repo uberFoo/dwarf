@@ -2,7 +2,7 @@ use snafu::{location, Location};
 
 use crate::{
     bubba::{
-        compiler::{compile_expression, get_span, CThonk, Context, Result},
+        compiler::{compile_expression, CThonk, Context, Result},
         instr::Instruction,
     },
     lu_dog::ValueType,
@@ -23,8 +23,8 @@ pub(in crate::bubba::compiler) fn compile_list_element(
     let element = lu_dog.exhume_list_element(element).unwrap();
     let element = s_read!(element);
     let expr = element.r55_expression(&lu_dog)[0].clone();
-    let span = get_span(&expr, &lu_dog);
-    compile_expression(&expr, thonk, context, span)?;
+
+    compile_expression(&expr, thonk, context)?;
 
     Ok(None)
 }
@@ -55,16 +55,16 @@ pub(in crate::bubba::compiler) fn compile_list_expression(
         let element = lu_dog.exhume_list_element(element).unwrap();
         let element = s_read!(element);
         let expr = element.r15_expression(&lu_dog)[0].clone();
-        let span = get_span(&expr, &lu_dog);
-        compile_expression(&expr, thonk, context, span)?;
+
+        compile_expression(&expr, thonk, context)?;
 
         let mut next = element.next;
         while let Some(ref id) = next {
             let element = lu_dog.exhume_list_element(id).unwrap();
             let element = s_read!(element);
             let expr = element.r15_expression(&lu_dog)[0].clone();
-            let span = get_span(&expr, &lu_dog);
-            compile_expression(&expr, thonk, context, span)?;
+
+            compile_expression(&expr, thonk, context)?;
             size += 1;
 
             next = element.next;

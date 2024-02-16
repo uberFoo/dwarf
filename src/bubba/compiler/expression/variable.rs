@@ -5,7 +5,7 @@ use crate::{
         compiler::{BubbaError, CThonk, Context, Result},
         instr::Instruction,
     },
-    lu_dog::{ValueType, ValueTypeEnum},
+    lu_dog::ValueType,
     new_ref, s_read, NewRef, RefType, SarzakStorePtr, Span, POP_CLR,
 };
 
