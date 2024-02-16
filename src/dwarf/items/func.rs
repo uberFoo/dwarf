@@ -166,6 +166,7 @@ pub fn inter_func(
             for (var, ty) in vars.iter().zip(tys.iter()) {
                 let local = LocalVariable::new(Uuid::new_v4(), lu_dog);
                 let var = Variable::new_local_variable(var.to_owned(), &local, lu_dog);
+                dbg!("blarg", &ty.0);
                 let _value = XValue::new_variable(&block, &ty.0, &var, lu_dog);
                 // 🚧 We should really be passing a span in the Block so that
                 // we can link this XValue to it.
