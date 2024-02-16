@@ -1893,6 +1893,14 @@ impl VM {
 
                         1
                     }
+                    Instruction::TestGreaterThan => {
+                        let b = self.stack.pop().unwrap();
+                        let a = self.stack.pop().unwrap();
+                        self.stack
+                            .push(new_ref!(Value, Value::Boolean(s_read!(a).gt(&s_read!(b)))));
+
+                        1
+                    }
                     Instruction::TestLessThan => {
                         let b = stack.pop().unwrap();
                         let a = stack.pop().unwrap();
