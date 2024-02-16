@@ -1255,6 +1255,20 @@ impl TryFrom<&Value> for Range<usize> {
     }
 }
 
+impl TryFrom<&Value> for Range<usize> {
+    type Error = ChaChaError;
+
+    fn try_from(value: &Value) -> Result<Self, <Range<usize> as TryFrom<&Value>>::Error> {
+        match value {
+            Value::Range(range) => Ok(range.start as usize..range.end as usize),
+            _ => Err(ChaChaError::Conversion {
+                src: value.to_string(),
+                dst: "Uuid".to_owned(),
+            }),
+        }
+    }
+}
+
 impl TryFrom<Value> for Uuid {
     type Error = ChaChaError;
 
