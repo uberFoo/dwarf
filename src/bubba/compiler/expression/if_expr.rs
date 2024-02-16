@@ -2,7 +2,7 @@ use snafu::{location, Location};
 
 use crate::{
     bubba::{
-        compiler::{compile_expression, get_span, CThonk, Context, Result},
+        compiler::{compile_expression, CThonk, Context, Result},
         instr::Instruction,
     },
     lu_dog::ValueType,

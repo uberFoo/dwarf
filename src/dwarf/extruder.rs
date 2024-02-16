@@ -24,12 +24,12 @@ use crate::{
         types::{
             AWait, Block, Body, BooleanOperator, Call, DataStructure, EnumFieldEnum, Expression,
             ExpressionBit, ExpressionEnum, ExpressionStatement, Field, FieldExpression, ForLoop,
-            FormatBits, FormatString, FuncGeneric, FunctionCall, ImplementationBlock, Import,
-            Index, IntegerLiteral, Item as WoogItem, ItemStatement, Lambda, LambdaParameter,
-            LetStatement, Literal, LocalVariable, NamedFieldExpression, Pattern as AssocPat,
-            RangeExpression, Span as LuDogSpan, Statement, StringBit, StringLiteral,
-            StructExpression, ValueType, ValueTypeEnum, Variable, VariableExpression, WoogStruct,
-            XFuture, XIf, XMatch, XPath, XPrint, XValue, XValueEnum,
+            FormatBit, FormatString, FuncGeneric, FunctionCall, ImplementationBlock, Import, Index,
+            IntegerLiteral, Item as WoogItem, ItemStatement, Lambda, LambdaParameter, LetStatement,
+            Literal, LocalVariable, NamedFieldExpression, Pattern as AssocPat, RangeExpression,
+            Span as LuDogSpan, Statement, StringBit, StringLiteral, StructExpression, ValueType,
+            ValueTypeEnum, Variable, VariableExpression, WoogStruct, XFuture, XIf, XMatch, XPath,
+            XPrint, XValue, XValueEnum,
         },
         Argument, Binary, BooleanLiteral, Comparison, DwarfSourceFile, FieldAccess,
         FieldAccessTarget, FloatLiteral, List, ListElement, ListExpression, Operator,
@@ -69,7 +69,7 @@ macro_rules! link_format_bits {
     ($last:expr, $next:expr, $store:expr) => {{
         let next = s_read!($next);
         if let Some(last) = $last {
-            let last = $store.exhume_format_bits(&last).unwrap().clone();
+            let last = $store.exhume_format_bit(&last).unwrap().clone();
             let mut last = s_write!(last);
             last.next = Some(next.id);
         }
@@ -1686,27 +1686,57 @@ pub(super) fn inter_expression(
         //
         ParserExpression::FormatString(bits) => {
             let format_string = FormatString::new(None, lu_dog);
+            let literal = Literal::new_format_string(true, &format_string, lu_dog);
+            let expr = Expression::new_literal(true, &literal, lu_dog);
+            let ty = ValueType::new_ty(true, &Ty::new_z_string(context.sarzak), lu_dog);
+            let value = XValue::new_expression(block, &ty, &expr, lu_dog);
+            update_span_value(&span, &value, location!());
+
             let mut last_format_bit_uuid: Option<SarzakStorePtr> = None;
-            for (bit, _span) in bits {
+            for (bit, span) in bits {
+                let span = LuDogSpan::new(
+                    span.end as i64,
+                    span.start as i64,
+                    &context.source,
+                    None,
+                    Some(&value),
+                    lu_dog,
+                );
+
                 let format_bit = match bit {
-                    ParserExpression::LocalVariable(name) => unreachable!(),
+                    ParserExpression::LocalVariable(name) => {
+                        let expr = VariableExpression::new(name.to_owned(), lu_dog);
+                        debug!("created a new variable expression {:?}", expr);
+                        let expr = Expression::new_variable_expression(true, &expr, lu_dog);
+                        let value = XValue::new_expression(block, &ty, &expr, lu_dog);
+                        update_span_value(&span, &value, location!());
+
+                        let expr_bit = ExpressionBit::new(&expr, lu_dog);
+                        FormatBit::new_expression_bit(&format_string, None, &expr_bit, lu_dog)
+                    }
                     ParserExpression::StringLiteral(string) => {
                         let literal = StringLiteral::new(string.to_owned(), lu_dog);
+                        let expr = Expression::new_literal(
+                            true,
+                            &Literal::new_string_literal(true, &literal, lu_dog),
+                            lu_dog,
+                        );
+                        let ty = ValueType::new_ty(true, &Ty::new_z_string(context.sarzak), lu_dog);
+                        let value = XValue::new_expression(block, &ty, &expr, lu_dog);
+                        update_span_value(&span, &value, location!());
+
                         let string_bit = StringBit::new(&literal, lu_dog);
-                        let format_bit =
-                            FormatBits::new_string_bit(&format_string, None, &string_bit, lu_dog);
-                        last_format_bit_uuid =
-                            link_format_bits!(last_format_bit_uuid, format_bit, lu_dog);
-                        format_bit
+                        FormatBit::new_string_bit(&format_string, None, &string_bit, lu_dog)
                     }
                     huh => panic!("Unexpected expression: {huh:?}"),
                 };
                 if last_format_bit_uuid.is_none() {
                     s_write!(format_string).first_format_bit = Some(s_read!(format_bit).id);
                 }
+                last_format_bit_uuid = link_format_bits!(last_format_bit_uuid, format_bit, lu_dog);
             }
 
-            unreachable!();
+            Ok(((expr, span), ty))
         }
         //
         // FunctionCall

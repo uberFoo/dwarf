@@ -20,7 +20,7 @@ use crate::{
         store::ObjectStore as LuDogStore, types::ValueType, Lambda, List, Span as LuDogSpan,
         XFuture,
     },
-    s_read, RefType, PATH_SEP,
+    s_read, RefType,
 };
 
 pub mod error;

@@ -4,7 +4,7 @@ use ansi_term::Colour;
 use rustc_hash::FxHashMap as HashMap;
 use serde::{Deserialize, Serialize};
 
-use crate::{plug_in::PluginType, s_read, RefType, Span, Value};
+use crate::{s_read, RefType, Span, Value};
 
 #[derive(Clone, Debug)]
 pub enum Instruction {

@@ -3551,7 +3551,7 @@ impl DwarfParser {
                         expr.0 .1.start += inside + 2;
                         expr.0 .1.end += inside + 2;
                         exprs.push(expr.0);
-                        inside += (expr_str.end() - expr_str.start() + 3);
+                        inside += expr_str.end() - expr_str.start() + 3;
                     }
                 }
 
@@ -5913,7 +5913,7 @@ mod tests {
     }
 
     #[test]
-    fn format_string() {
+    fn format_str() {
         let _ = env_logger::builder().is_test(true).try_init();
 
         let src = r#"

@@ -699,7 +699,9 @@ fn compile_expression(
 }
 
 fn get_span(expression: &RefType<Expression>, lu_dog: &LuDogStore) -> Span {
+    dbg!(&expression);
     let value = &s_read!(expression).r11_x_value(lu_dog)[0];
+    dbg!(&value);
     let span = &s_read!(value).r63_span(lu_dog)[0];
     let read = s_read!(span);
     read.start as usize..read.end as usize
@@ -1113,7 +1115,7 @@ async fn main() -> Future<()> {
         assert_eq!(&*s_read!(run.unwrap()), &Value::Integer(0));
     }
 
-    // #[test]
+    #[test]
     fn format_string() {
         setup_logging();
         let ore = r#"
@@ -1121,7 +1123,10 @@ async fn main() -> Future<()> {
                        let x = 42;
                        let y = "Hello";
                        let z = "world";
-                       print(`MOTD: ${y} ${z}!, the magic number is ${x}.`);
+                       let α = `MOTD: ${y} ${z}!, the magic number is ${x}.`;
+                       print(α);
+
+                       α
                    }
                        "#;
 
@@ -1137,7 +1142,7 @@ async fn main() -> Future<()> {
         let program = compile(&ctx).unwrap();
         println!("{program}");
         assert_eq!(program.get_thonk_card(), 1);
-        assert_eq!(program.get_instruction_card(), 5);
+        assert_eq!(program.get_instruction_card(), 27);
 
         let run = run_vm(&program);
         assert!(run.is_ok());

@@ -6,7 +6,7 @@ use crate::keywords::{LEN, PUSH, SPAWN};
 
 use crate::{
     bubba::{
-        compiler::{compile_expression, compile_statement, get_span, CThonk, Context, Result},
+        compiler::{compile_expression, compile_statement, CThonk, Context, Result},
         instr::Instruction,
         BOOL, STRING_ARRAY,
     },

@@ -1897,6 +1897,13 @@ impl VM {
 
                         1
                     }
+                    Instruction::ToString => {
+                        let value = stack.pop().unwrap();
+                        let value = value.into_value().to_inner_string();
+                        stack.push(Value::String(value).into());
+
+                        1
+                    }
                     Instruction::Typecast(as_ty) => {
                         let Value::ValueType(as_ty) = &*s_read!(as_ty) else {
                             return Err(BubbaError::VmPanic {
@@ -2004,12 +2011,14 @@ impl VM {
     }
 }
 
+/// Into Value From (FfiValue, &Value)
+///
+/// This is a cute function. Especially the way we convert an RResult to a Result.
 impl From<(FfiValue, &Value)> for Value {
     fn from((ffi_value, ty): (FfiValue, &Value)) -> Self {
         match ffi_value {
             FfiValue::Boolean(bool_) => Self::Boolean(bool_),
             FfiValue::Empty => Self::Empty,
-            // FfiValue::Error(e) => Self::Error(e.into()),
             FfiValue::Float(num) => Self::Float(num),
             FfiValue::Integer(num) => Self::Integer(num),
             FfiValue::Option(option) => match option {
@@ -2053,12 +2062,8 @@ impl From<(FfiValue, &Value)> for Value {
                 ))
             }
             FfiValue::String(str_) => Self::String(str_.into()),
-            // FfiValue::UserType(uuid) => Self::UserType(new_ref!(UserType, uuid.into())),
             FfiValue::Uuid(uuid) => Self::Uuid(uuid.into()),
-            // FfiValue::Vector(vec) => {
-            //     Self::Vector(vec.into_iter().map(|v| new_ref!(Value, v.into())).collect())
-            // }
-            _ => Self::Unknown,
+            catch => panic!("Unexpected FfiValue: {catch:?}"),
         }
     }
 }

@@ -4,7 +4,7 @@ use crate::{
     bubba::VM,
     chacha::error::Result,
     interpreter::{debug, eval_expression, function, Context},
-    lu_dog::{BooleanLiteralEnum, LiteralEnum},
+    lu_dog::{BooleanLiteralEnum, FormatBitEnum, LiteralEnum},
     new_ref, s_read, NewRef, RefType, SarzakStorePtr, Value,
 };
 
@@ -45,45 +45,48 @@ pub fn eval(
         //
         // FormatString
         //
-        LiteralEnum::FormatString(ref literal) => {
-            // let literal = lu_dog.exhume_format_string(literal).unwrap();
-            // let mut list = s_read!(literal).r108_list_expression(&lu_dog);
-            // let first = if let Some(list) = list.pop() {
-            //     let values = s_read!(list).r54_list_element(&lu_dog);
-            //     values.into_iter().find(|value| {
-            //         let value = s_read!(value);
-            //         if value.position == 0 {
-            //             true
-            //         } else {
-            //             false
-            //         }
-            //     })
-            // } else {
-            //     None
-            // };
-            // if let Some(first) = first {
-            //     let mut result = String::new();
-            //     let first = s_read!(first);
-            //     let next = first.next;
+        LiteralEnum::FormatString(ref string) => {
+            let string = lu_dog.exhume_format_string(string).unwrap();
+            let string = s_read!(string);
+            if let Some(ref first) = string.first_format_bit {
+                let mut next = lu_dog.exhume_format_bit(first).unwrap();
 
-            //     let expr = lu_dog.exhume_expression(&first.expression).unwrap();
-            //     let value = eval_expression(expr, context, vm)?;
-            //     result += &s_read!(value).to_inner_string();
+                let mut result = String::new();
+                loop {
+                    {
+                        let current = s_read!(next);
+                        match current.subtype {
+                            FormatBitEnum::ExpressionBit(ref expr) => {
+                                let expr_bit = lu_dog.exhume_expression_bit(expr).unwrap();
+                                let expr_bit = s_read!(expr_bit);
+                                let expr = lu_dog.exhume_expression(&expr_bit.expression).unwrap();
+                                let value = eval_expression(expr, context, vm)?;
 
-            //     while let Some(ref next) = next {
-            //         let next = lu_dog.exhume_list_element(next).unwrap();
-            //         let next = s_read!(next);
-            //         let expr = lu_dog.exhume_expression(&next.expression).unwrap();
-            //         let value = eval_expression(expr, context, vm)?;
-            //         result += &s_read!(value).to_inner_string();
+                                result += &s_read!(value).to_inner_string();
+                            }
+                            FormatBitEnum::StringBit(ref string) => {
+                                let string_bit = lu_dog.exhume_string_bit(string).unwrap();
+                                let string_bit = s_read!(string_bit);
+                                let string =
+                                    lu_dog.exhume_string_literal(&string_bit.z_string).unwrap();
+                                let string = s_read!(string);
 
-            //         next.next;
-            //     }
+                                result += &string.x_value;
+                            }
+                        }
+                    }
 
-            //     Ok(new_ref!(Value, result.into()))
-            // } else {
-            Ok(new_ref!(Value, Value::Empty))
-            // }
+                    if let Some(ref id) = s_read!(next.clone()).next {
+                        next = lu_dog.exhume_format_bit(id).unwrap();
+                    } else {
+                        break;
+                    }
+                }
+
+                Ok(new_ref!(Value, result.into()))
+            } else {
+                Ok(new_ref!(Value, Value::Empty))
+            }
         }
         //
         // IntegerLiteral
