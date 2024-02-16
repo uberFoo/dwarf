@@ -10,8 +10,8 @@ use crate::{
             debug, function, inter_statements, make_value_type, typecheck, Context,
             FunctionDefinition, Span, FUNC, OBJECT, PROXY, STORE,
         },
-        AttributeMap, BlockType, Expression as ParserExpression, InnerAttribute, Spanned,
-        Statement as ParserStatement, Type,
+        AttributeMap, BlockType, Expression as ParserExpression, InnerAttribute,
+        PrintableValueType, Spanned, Statement as ParserStatement, Type,
     },
     lu_dog::{
         store::ObjectStore as LuDogStore, Block, Body, ExternalImplementation, FuncGeneric,

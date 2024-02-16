@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="SELECTIVE" />
+  </component>
+  <component name="CMakeSettings">
+    <configurations>
+      <configuration PROFILE_NAME="Debug" ENABLED="true" CONFIG_NAME="Debug" />
+    </configurations>
+  </component>
+  <component name="CargoProjectFeatures">
+    <cargoProject file="$PROJECT_DIR$/Cargo.toml">
+      <package file="$PROJECT_DIR$">
+        <feature name="default" />
+        <feature name="async_executor" />
+      </package>
+    </cargoProject>
+  </component>
+  <component name="CargoProjects">
+    <cargoProject FILE="$PROJECT_DIR$/Cargo.toml" />
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="3e150cab-fa96-402f-85d5-ffab15739d99" name="Changes" comment="">
+      <change beforePath="$PROJECT_DIR$/Cargo.lock" beforeDir="false" afterPath="$PROJECT_DIR$/Cargo.lock" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/Cargo.toml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/plug-ins/http/Cargo.lock" beforeDir="false" afterPath="$PROJECT_DIR$/plug-ins/http/Cargo.lock" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/plug-ins/http/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/plug-ins/http/Cargo.toml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/plug-ins/http/ore/client.ore" beforeDir="false" afterPath="$PROJECT_DIR$/plug-ins/http/ore/client.ore" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/plug-ins/http/src/lib.rs" beforeDir="false" afterPath="$PROJECT_DIR$/plug-ins/http/src/lib.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/plug-ins/lu_dog/Cargo.lock" beforeDir="false" afterPath="$PROJECT_DIR$/plug-ins/lu_dog/Cargo.lock" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/plug-ins/sarzak/Cargo.lock" beforeDir="false" afterPath="$PROJECT_DIR$/plug-ins/sarzak/Cargo.lock" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/bin/dwarfc.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/bin/dwarfc.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/bin/main.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/bin/main.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/bubba/compiler.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/bubba/compiler.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/bubba/compiler/expression/struct_expr.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/bubba/compiler/expression/struct_expr.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/bubba/vm.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/bubba/vm.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/chacha/error.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/chacha/error.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/chacha/interpreter.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/chacha/interpreter.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/chacha/interpreter/expression/call.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/chacha/interpreter/expression/call.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/chacha/interpreter/expression/call/chacha.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/chacha/interpreter/expression/call/chacha.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/chacha/interpreter/expression/field.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/chacha/interpreter/expression/field.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/chacha/interpreter/expression/list.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/chacha/interpreter/expression/list.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/chacha/interpreter/expression/match_expr.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/chacha/interpreter/expression/match_expr.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/chacha/interpreter/func_call.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/chacha/interpreter/func_call.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/chacha/interpreter/pvt.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/chacha/interpreter/pvt.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/chacha/interpreter/repl.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/chacha/interpreter/repl.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/chacha/value.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/chacha/value.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/dwarf.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/dwarf.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/dwarf/error.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/dwarf/error.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/dwarf/extruder.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/dwarf/extruder.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/dwarf/extruder/expression/and.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/dwarf/extruder/expression/and.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/dwarf/extruder/expression/method_call.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/dwarf/extruder/expression/method_call.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/dwarf/extruder/expression/static_method_call.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/dwarf/extruder/expression/static_method_call.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/dwarf/extruder/expression/unit_enum.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/dwarf/extruder/expression/unit_enum.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/dwarf/items/enuum.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/dwarf/items/enuum.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/dwarf/items/func.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/dwarf/items/func.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/dwarf/items/strukt.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/dwarf/items/strukt.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/dwarf/parser.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/dwarf/parser.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/dwarf/pvt.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/dwarf/pvt.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/lib.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/lib.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/harness.rs" beforeDir="false" afterPath="$PROJECT_DIR$/tests/harness.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/proxy.rs" beforeDir="false" afterPath="$PROJECT_DIR$/tests/proxy.rs" afterDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="ClangdSettings">
+    <option name="formatViaClangd" value="false" />
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="MacroExpansionManager">
+    <option name="directoryName" value="jnx07d84" />
+  </component>
+  <component name="MarkdownSettingsMigration">
+    <option name="stateVersion" value="1" />
+  </component>
+  <component name="ProjectColorInfo">{
+  &quot;customColor&quot;: &quot;&quot;,
+  &quot;associatedIndex&quot;: 8
+}</component>
+  <component name="ProjectId" id="2ad7XXvhDdZxjoqH6g2dcwdM5HX" />
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "RunOnceActivity.OpenProjectViewOnStart": "true",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.cidr.known.project.marker": "true",
+    "WebServerToolWindowFactoryState": "false",
+    "cf.first.check.clang-format": "false",
+    "cidr.known.project.marker": "true",
+    "git-widget-placeholder": "feature/compiler",
+    "node.js.detected.package.eslint": "true",
+    "node.js.detected.package.tslint": "true",
+    "node.js.selected.package.eslint": "(autodetect)",
+    "node.js.selected.package.tslint": "(autodetect)",
+    "nodejs_package_manager_path": "npm",
+    "org.rust.cargo.project.model.PROJECT_DISCOVERY": "true",
+    "settings.editor.selected.configurable": "preferences.pluginManager",
+    "vue.rearranger.settings.migration": "true"
+  }
+}]]></component>
+  <component name="RustProjectSettings">
+    <option name="toolchainHomeDirectory" value="$USER_HOME$/.cargo/bin" />
+  </component>
+  <component name="SpellCheckerSettings" RuntimeDictionaries="0" Folders="0" CustomDictionaries="0" DefaultDictionary="application-level" UseSingleDictionary="true" transferred="true" />
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="3e150cab-fa96-402f-85d5-ffab15739d99" name="Changes" comment="" />
+      <created>1704636641612</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1704636641612</updated>
+      <workItem from="1704636643206" duration="27000" />
+      <workItem from="1704636839595" duration="1791000" />
+      <workItem from="1704722098318" duration="3052000" />
+    </task>
+    <servers />
+  </component>
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="3" />
+  </component>
+  <component name="XSLT-Support.FileAssociations.UIState">
+    <expand />
+    <select />
+  </component>
+</project>
