@@ -27,6 +27,9 @@ uuid = { version = "1.4.1", features = ["v4"] }
 sarzak = { git = "https://github.com/uberFoo/sarzak", branch = "develop", default-features = false, features = [
     "sarzak-rwlock",
 ] }
+futures-lite = "2.2.0"
+async-compat = "0.2.3"
+slab = "0.4.9"
 
 # [patch."https://github.com/uberFoo/sarzak"]
 # sarzak = { path = "../../../sarzak" }
