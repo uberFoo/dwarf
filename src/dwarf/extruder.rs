@@ -2207,7 +2207,7 @@ pub(super) fn inter_expression(
                 .map(|stmt| new_ref!(ParserStatement, stmt.0.clone()))
                 .collect();
 
-            let (block_ty, block_span) =
+            let (_block_ty, _block_span) =
                 inter_statements(&stmts, &body.1, &block, context, context_stack, lu_dog)?;
 
             // 🚧 I think that turning this off is correct. For a lambda, we don't
