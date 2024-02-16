@@ -920,20 +920,8 @@ impl DwarfParser {
         }
 
         let name = if let Some(ident) = self.parse_ident() {
-            if let Ok(Some(g)) = self.parse_generics() {
-                let mut name = ident.clone();
-                // name.0.push_str("<");
-                // name.0.push_str(
-                //     &g.0.iter()
-                //         .map(|(ty, _)| ty.to_string())
-                //         .collect::<Vec<_>>()
-                //         .join(", "),
-                // );
-                // name.0.push_str(">");
-                name
-            } else {
-                ident
-            }
+            let _ = self.parse_generics();
+            ident
         } else {
             let tok = self.previous().unwrap();
             let err = Simple::expected_input_found(
@@ -4618,7 +4606,7 @@ impl DwarfParser {
             return Ok(None);
         }
 
-        let mut name = if let Some(ident) = self.parse_ident() {
+        let name = if let Some(ident) = self.parse_ident() {
             ident
         } else {
             let tok = self.previous().unwrap();

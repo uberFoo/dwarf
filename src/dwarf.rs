@@ -242,7 +242,7 @@ impl Type {
                 let ƛ = Lambda::new(None, None, &return_, store);
                 Ok(ValueType::new_lambda(true, &ƛ, store))
             }
-            Type::Generic(name) => {
+            Type::Generic(_) => {
                 panic!("Generics need a next and a parent.");
             }
             Type::Integer => {

@@ -327,20 +327,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
             .unwrap();
-        } else {
-            if let Ok(program) = compile(&ctx) {
-                println!("running in the VM");
-                println!("{program}");
+        } else if let Ok(program) = compile(&ctx) {
+            println!("running in the VM");
+            println!("{program}");
 
-                let args: Vec<RefType<Value>> = dwarf_args
-                    .into_iter()
-                    .map(|a| new_ref!(Value, a.into()))
-                    .collect();
+            let args: Vec<RefType<Value>> = dwarf_args
+                .into_iter()
+                .map(|a| new_ref!(Value, a.into()))
+                .collect();
 
-                let mut vm = VM::new(&program, &args, &dwarf_home, threads);
-                vm.invoke("main", &[])?;
-                return Ok(());
-            }
+            let mut vm = VM::new(&program, &args, &dwarf_home, threads);
+            vm.invoke("main", &[])?;
+            return Ok(());
         }
     } else if args.dap.is_some() && args.dap.unwrap() {
         let listener = TcpListener::bind("127.0.0.1:4711").unwrap();

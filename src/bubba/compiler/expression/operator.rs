@@ -2,7 +2,7 @@ use snafu::{location, Location};
 
 use crate::{
     bubba::{
-        compiler::{compile_expression, get_span, CThonk, Context, Result},
+        compiler::{compile_expression, CThonk, Context, Result},
         instr::Instruction,
     },
     lu_dog::{
@@ -26,14 +26,12 @@ pub(in crate::bubba::compiler) fn compile(
     let operator = lu_dog.exhume_operator(op_type).unwrap();
     let operator = s_read!(operator);
     let lhs = lu_dog.exhume_expression(&operator.lhs).unwrap();
-    let lhs_span = get_span(&lhs, &lu_dog);
 
     match operator.subtype {
         OperatorEnum::Binary(ref op_type) => {
             let binary = lu_dog.exhume_binary(op_type).unwrap();
             let binary = s_read!(binary);
             let rhs = lu_dog.exhume_expression(&operator.rhs.unwrap()).unwrap();
-            let rhs_span = get_span(&rhs, &lu_dog);
 
             match binary.subtype {
                 BinaryEnum::Addition(_) => {
@@ -138,7 +136,6 @@ pub(in crate::bubba::compiler) fn compile(
             let op_type = s_read!(op_type);
 
             let rhs = lu_dog.exhume_expression(&operator.rhs.unwrap()).unwrap();
-            let rhs_span = get_span(&rhs, &lu_dog);
 
             match &op_type.subtype {
                 ComparisonEnum::Equal(_) => {

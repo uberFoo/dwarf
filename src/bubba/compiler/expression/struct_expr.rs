@@ -2,7 +2,7 @@ use snafu::{location, Location};
 
 use crate::{
     bubba::{
-        compiler::{compile_expression, get_span, CThonk, Context, Result},
+        compiler::{compile_expression, CThonk, Context, Result},
         instr::Instruction,
     },
     chacha::value::EnumVariant,
@@ -75,7 +75,6 @@ pub(in crate::bubba::compiler) fn compile(
                 let field_count = field_exprs.len();
                 for f in field_exprs {
                     let expr = s_read!(f).r15_expression(&lu_dog)[0].clone();
-                    let span = get_span(&expr, &lu_dog);
                     compile_expression(&expr, thonk, context)?;
                 }
 
@@ -107,7 +106,6 @@ pub(in crate::bubba::compiler) fn compile(
             for f in field_exprs {
                 let f = s_read!(f);
                 let expr = f.r15_expression(&lu_dog)[0].clone();
-                let span = get_span(&expr, &lu_dog);
                 compile_expression(&expr, thonk, context)?;
 
                 let FieldExpressionEnum::NamedFieldExpression(ref name) = f.subtype else {

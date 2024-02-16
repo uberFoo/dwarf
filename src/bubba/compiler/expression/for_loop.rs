@@ -34,7 +34,6 @@ pub(in crate::bubba::compiler) fn compile(
     let for_loop = s_read!(for_loop);
     let iter_ident = for_loop.ident.to_owned();
     let body = lu_dog.exhume_expression(&for_loop.block).unwrap();
-    let body_span = get_span(&body, &lu_dog);
     let list = lu_dog.exhume_expression(&for_loop.expression).unwrap();
     let list_span = get_span(&list, &lu_dog);
 
@@ -124,7 +123,7 @@ pub(in crate::bubba::compiler) fn compile(
                 }
                 ty => {
                     return Err(BubbaError::InternalCompilerError {
-                        message: "For loop expression is not a list".to_owned(),
+                        message: format!("For loop expression is not a list: {ty:?}"),
                         location: location!(),
                     }
                     .into());

@@ -228,7 +228,7 @@ fn compile_function_call(
     let lu_dog = context.lu_dog_heel();
     let lu_dog = s_read!(lu_dog);
 
-    let a_sink = if let Some(func) = lu_dog.exhume_function_id_by_name(&name) {
+    let a_sink = if let Some(func) = lu_dog.exhume_function_id_by_name(name) {
         let func = lu_dog.exhume_function(&func).unwrap();
         let body = s_read!(func).r19_body(&lu_dog)[0].clone();
         let body = s_read!(body);
@@ -527,7 +527,7 @@ fn compile_static_method_call(
                     }
                 }
             } else {
-                let func1 = lu_dog.exhume_function_id_by_name(&func).unwrap();
+                let func1 = lu_dog.exhume_function_id_by_name(func).unwrap();
                 let func1 = lu_dog.exhume_function(&func1).unwrap();
                 let body = s_read!(func1).r19_body(&lu_dog)[0].clone();
                 let a_sink = s_read!(body).a_sink;
@@ -653,14 +653,14 @@ mod test {
                        x + y + z
                    }";
         let ast = parse_dwarf("test_func_args", ore).unwrap();
-        let mut ctx = new_lu_dog(
+        let ctx = new_lu_dog(
             "test_func_args".to_owned(),
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &sarzak,
         )
         .unwrap();
-        let program = compile(&mut ctx).unwrap();
+        let program = compile(&ctx).unwrap();
 
         println!("{program}");
 

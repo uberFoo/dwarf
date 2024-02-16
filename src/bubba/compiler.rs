@@ -364,7 +364,7 @@ pub fn compile(context: &ExtruderContext) -> Result<Program> {
 
     // And Result
     if let Some(ref ty) = s_read!(lu_dog).exhume_enumeration_id_by_name("::std::result::Result") {
-        let ty = s_read!(lu_dog).exhume_enumeration(&ty).unwrap();
+        let ty = s_read!(lu_dog).exhume_enumeration(ty).unwrap();
         let Some(ty) = s_read!(lu_dog).iter_value_type().find(|vt| {
             if let ValueTypeEnum::Enumeration(id) = s_read!(vt).subtype {
                 let id = s_read!(lu_dog).exhume_enumeration(&id).unwrap();
@@ -409,7 +409,7 @@ fn get_function_type(func: &RefType<Function>, lu_dog: &LuDogStore) -> ValueType
 fn get_function_name(func: &RefType<Function>, lu_dog: &LuDogStore) -> String {
     let func = s_read!(func);
     let name = func.name.clone();
-    let ty_name = if let Some(i_block) = func.r9_implementation_block(&lu_dog).first() {
+    let ty_name = if let Some(i_block) = func.r9_implementation_block(lu_dog).first() {
         let i_block = s_read!(i_block);
         if let Some(woog_struct) = i_block.r8_woog_struct(&lu_dog).first() {
             let woog_struct = s_read!(woog_struct);
@@ -598,7 +598,7 @@ fn compile_statement(
             let stmt = lu_dog.exhume_expression_statement(stmt).unwrap();
             let stmt = s_read!(stmt);
             let expr = stmt.r31_expression(&lu_dog)[0].clone();
-            let span = get_span(&expr, &lu_dog);
+
             compile_expression(&expr, thonk, context)
         }
         StatementEnum::LetStatement(ref stmt) => {
@@ -606,7 +606,7 @@ fn compile_statement(
             let stmt = s_read!(stmt);
 
             let expr = stmt.r20_expression(&lu_dog)[0].clone();
-            let span = get_span(&expr, &lu_dog);
+
             compile_expression(&expr, thonk, context)?;
 
             let var = s_read!(stmt.r21_local_variable(&lu_dog)[0]).clone();

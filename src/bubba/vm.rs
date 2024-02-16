@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use smol::future;
 
 #[cfg(feature = "async")]
-use puteketeke::{Executor, Worker};
+use puteketeke::Executor;
 
 #[cfg(feature = "async")]
 use once_cell::sync::OnceCell;
@@ -120,11 +120,6 @@ pub struct VM {
     captures: Option<Vec<RefType<Value>>>,
     program: Program,
     labels: HashMap<String, usize>,
-    #[cfg(feature = "async")]
-    executor: Executor,
-    #[cfg(feature = "async")]
-    worker: Worker,
-    #[cfg(feature = "async")]
     thread_count: usize,
 }
 
@@ -160,12 +155,6 @@ impl VM {
             eprintln!("{program}");
         }
 
-        #[cfg(feature = "async")]
-        let executor = Executor::new(thread_count);
-
-        #[cfg(feature = "async")]
-        let worker = executor.root_worker();
-
         let mut vm = VM {
             // ip: 0,
             // fp: 0,
@@ -186,10 +175,6 @@ impl VM {
             captures: None,
             program: program.clone(),
             labels: HashMap::default(),
-            #[cfg(feature = "async")]
-            executor,
-            #[cfg(feature = "async")]
-            worker,
             #[cfg(feature = "async")]
             thread_count,
         };
@@ -564,7 +549,7 @@ impl VM {
                             Value::VmFuture {
                                 name: _,
                                 task,
-                                executor,
+                                executor: _,
                             } => {
                                 if let Some(task) = task.take() {
                                     // executor.start_task(&task);

@@ -3,7 +3,7 @@ use uuid::Uuid;
 
 use crate::{
     bubba::{
-        compiler::{compile_expression, expression::literal, get_span, CThonk, Context, Result},
+        compiler::{compile_expression, expression::literal, CThonk, Context, Result},
         instr::Instruction,
     },
     lu_dog::{DataStructureEnum, ExpressionEnum, ValueType},
@@ -27,7 +27,6 @@ pub(in crate::bubba::compiler) fn compile(
 
     let patterns = match_expr.r87_pattern(&lu_dog);
     let scrutinee = match_expr.r91_expression(&lu_dog)[0].clone();
-    let scrutinee_span = get_span(&scrutinee, &lu_dog);
 
     let label = format!("{}", Uuid::new_v4());
     for pattern in patterns {
