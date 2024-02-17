@@ -59,7 +59,7 @@ jobs:
             - name: Build and run tests with coverage
               run: |
                   cd dwarf
-                  RUST_MIN_STACK=4194304 cargo llvm-cov --lcov --output-path coverage.lcov --no-default-features --features "multi-vec, repl, async"
+                  RUST_MIN_STACK=6291456 cargo llvm-cov --lcov --output-path coverage.lcov --no-default-features --features "multi-vec, repl, async"
 
             - name: Upload coverage reports to Codecov
               uses: codecov/codecov-action@v3
