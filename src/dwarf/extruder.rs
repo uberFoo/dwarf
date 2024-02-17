@@ -1714,6 +1714,22 @@ pub(super) fn inter_expression(
                         let expr_bit = ExpressionBit::new(&expr, lu_dog);
                         FormatBit::new_expression_bit(&format_string, None, &expr_bit, lu_dog)
                     }
+                    ParserExpression::MethodCall(instance, (ref method, meth_span), args) => {
+                        let ((mc, _), _) = method_call::inter(
+                            instance,
+                            method,
+                            meth_span,
+                            args,
+                            span,
+                            block,
+                            context,
+                            context_stack,
+                            lu_dog,
+                        )?;
+
+                        let expr_bit = ExpressionBit::new(&mc, lu_dog);
+                        FormatBit::new_expression_bit(&format_string, None, &expr_bit, lu_dog)
+                    }
                     ParserExpression::StringLiteral(string) => {
                         let literal = StringLiteral::new(string.to_owned(), lu_dog);
                         let expr = Expression::new_literal(
