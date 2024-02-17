@@ -182,7 +182,7 @@ impl Drop for SymbolTable {
 #[derive(Debug)]
 struct Context<'a, 'b> {
     extruder_context: &'a ExtruderContext,
-    symbol_tables: Vec<SymbolTable>,
+    symbol_tables: Vec<(SymbolTable, bool)>,
     program: &'b mut Program,
     st_depth: usize,
     funcs: HashMap<String, ValueType>,
@@ -233,13 +233,13 @@ impl<'a, 'b> Context<'a, 'b> {
 
     fn push_symbol_table(&mut self) {
         self.st_depth += 1;
-        self.symbol_tables.push(SymbolTable::new(0));
+        self.symbol_tables.push((SymbolTable::new(0), true));
     }
 
     fn push_scope(&mut self) {
         self.st_depth += 1;
-        let start = self.symbol_tables.last().unwrap().count();
-        self.symbol_tables.push(SymbolTable::new(start));
+        let start = self.symbol_tables.last().unwrap().0.count();
+        self.symbol_tables.push((SymbolTable::new(start), false));
     }
 
     fn pop_symbol_table(&mut self) {
@@ -253,14 +253,14 @@ impl<'a, 'b> Context<'a, 'b> {
     }
 
     fn is_root_symbol_table(&self) -> bool {
-        self.st_depth == 1
+        self.symbol_tables.last().unwrap().1
     }
 
     fn insert_symbol(&mut self, name: String, ty: ValueType) -> (bool, usize) {
         match self.get_symbol(name.as_str()) {
             Some(value) => (false, value.number),
             None => {
-                let table = self.symbol_tables.last_mut().unwrap();
+                let table = &mut self.symbol_tables.last_mut().unwrap().0;
                 (true, table.insert(name, ty))
             }
         }
@@ -292,10 +292,10 @@ impl<'a, 'b> Context<'a, 'b> {
         // they result in missing symbols.
         //
         for table in self.symbol_tables.iter().rev() {
-            if let Some(value) = table.get(name) {
+            if let Some(value) = table.0.get(name) {
                 return Some(value);
             }
-            if table.start() == 0 {
+            if table.0.start() == 0 {
                 break;
             }
         }

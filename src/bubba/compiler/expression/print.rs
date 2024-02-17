@@ -75,7 +75,6 @@ mod test {
                        let z = "world";
                        let α = `MOTD: ${y} ${z}!, the magic number is ${x}.`;
                        print(α);
-
                        α
                    }
                        "#;

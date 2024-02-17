@@ -160,12 +160,14 @@ pub(in crate::bubba::compiler) fn compile_lambda(
                         // } else if thonk.returned {
                         //     break;
                         } else {
-                            // thonk.insert_instruction(
-                            //     Instruction::Push(new_ref!(Value, Value::Empty)),
-                            //     location!(),
-                            // );
-                            thonk.insert_instruction(Instruction::Return, location!());
-                            thonk.returned = true;
+                            if !thonk.returned {
+                                thonk.insert_instruction(
+                                    Instruction::Push(new_ref!(Value, Value::Empty)),
+                                    location!(),
+                                );
+                                thonk.insert_instruction(Instruction::Return, location!());
+                                thonk.returned = true;
+                            }
                             break;
                         }
                     }
@@ -925,6 +927,39 @@ mod test {
         assert_eq!(program.get_instruction_card(), 20);
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &45.into());
+    }
+
+    #[test]
+    fn test_lambda_empty() {
+        setup_logging();
+        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
+
+        let ore = "
+                   fn main() -> () {
+                       let _0 = 0;
+                       let a = 42;
+                       let b = 96;
+                       let foo = |x: int, y: int| -> () {
+                           x + y + a;
+                       };
+                       foo(1, 2)
+                   }";
+        let ast = parse_dwarf("test_lambda", ore).unwrap();
+        let ctx = new_lu_dog(
+            "test_lambda".to_owned(),
+            Some((ore.to_owned(), &ast)),
+            &get_dwarf_home(),
+            &sarzak,
+        )
+        .unwrap();
+        let program = compile(&ctx).unwrap();
+        println!("{program}");
+
+        assert_eq!(program.get_thonk_card(), 2);
+
+        assert_eq!(program.get_instruction_card(), 21);
+
+        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Empty);
     }
 
     // #[test]

@@ -3514,7 +3514,13 @@ impl DwarfParser {
                 Some(re) => re,
                 None => {
                     let re = Regex::new(r"(.*?)\$\{([^}]*)\}|(.+)").unwrap();
-                    RE.set(re).unwrap();
+                    match RE.set(re) {
+                        Ok(_) => {}
+                        Err(e) => {
+                            eprintln!("{e}");
+                            return None;
+                        }
+                    }
                     RE.get().unwrap()
                 }
             };
