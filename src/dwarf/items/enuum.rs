@@ -144,7 +144,7 @@ pub fn inter_enum(
                                 span.end as i64,
                                 span.start as i64,
                                 &context.source,
-                                Some(&ty),
+                                Some(ty),
                                 None,
                                 lu_dog,
                             );
@@ -209,14 +209,14 @@ pub(crate) fn create_generic_enum(
     lu_dog: &mut LuDogStore,
 ) -> Result<(RefType<Enumeration>, RefType<ValueType>)> {
     // Check to see if this already exists
-    if let Some(id) = lu_dog.exhume_enumeration_id_by_name(&enum_name) {
+    if let Some(id) = lu_dog.exhume_enumeration_id_by_name(enum_name) {
         let found_enum = lu_dog.exhume_enumeration(&id).unwrap();
         let ty = ValueType::new_enumeration(true, &found_enum, lu_dog);
 
         return Ok((found_enum, ty));
     }
 
-    let id = if let Some(id) = lu_dog.exhume_enumeration_id_by_name(&base_enum) {
+    let id = if let Some(id) = lu_dog.exhume_enumeration_id_by_name(base_enum) {
         id
     } else {
         return Err(vec![DwarfError::EnumNotFound {

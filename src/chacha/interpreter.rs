@@ -604,7 +604,7 @@ fn eval_expression(
         }
         ExpressionEnum::ListElement(ref element) => list::eval_list_element(element, context, vm),
         ExpressionEnum::ListExpression(ref list) => list::eval_list_expression(list, context, vm),
-        ExpressionEnum::Literal(ref literal) => literal::eval(literal, context),
+        ExpressionEnum::Literal(ref literal) => literal::eval(literal, context, vm),
         ExpressionEnum::Operator(ref operator) => {
             operator::eval_operator(operator, &expression, context, vm)
         }

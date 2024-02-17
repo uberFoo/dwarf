@@ -20,7 +20,7 @@ use crate::{
         store::ObjectStore as LuDogStore, types::ValueType, Lambda, List, Span as LuDogSpan,
         XFuture,
     },
-    s_read, RefType, PATH_SEP,
+    s_read, RefType,
 };
 
 pub mod error;
@@ -74,6 +74,7 @@ pub enum Token {
     Float(String),
     Fn,
     For,
+    FormatString(String),
     // Global,
     Ident(String),
     If,
@@ -111,6 +112,7 @@ impl fmt::Display for Token {
             Self::Float(num) => write!(f, "{}", num),
             Self::Fn => write!(f, "fn"),
             Self::For => write!(f, "for"),
+            Self::FormatString(str_) => write!(f, "{}", str_),
             Self::Ident(ident) => write!(f, "{}", ident),
             Self::If => write!(f, "if"),
             Self::Impl => write!(f, "impl"),
@@ -524,6 +526,7 @@ pub enum Expression {
     FieldAccess(Box<Spanned<Self>>, Spanned<String>),
     FloatLiteral(f64),
     For(Spanned<String>, Box<Spanned<Self>>, Box<Spanned<Self>>),
+    FormatString(Vec<Spanned<Self>>),
     // The first element is the function being called, the second is the list of
     // arguments.
     FunctionCall(Box<Spanned<Self>>, Vec<Spanned<Self>>),

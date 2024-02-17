@@ -23,7 +23,7 @@ pub(in crate::bubba::compiler) fn compile(
 
     let expr = lu_dog.exhume_a_wait(expr).unwrap();
     let expr = s_read!(expr).r98_expression(&lu_dog)[0].clone();
-    let result = compile_expression(&expr, thonk, context, span.clone());
+    let result = compile_expression(&expr, thonk, context);
 
     thonk.insert_instruction_with_span(Instruction::Await, span, location!());
 

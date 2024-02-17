@@ -2,7 +2,7 @@ use snafu::{location, Location};
 
 use crate::{
     bubba::{
-        compiler::{compile_expression, get_span, CThonk, Context, Result},
+        compiler::{compile_expression, CThonk, Context, Result},
         instr::Instruction,
     },
     chacha::value::EnumVariant,
@@ -75,8 +75,7 @@ pub(in crate::bubba::compiler) fn compile(
                 let field_count = field_exprs.len();
                 for f in field_exprs {
                     let expr = s_read!(f).r15_expression(&lu_dog)[0].clone();
-                    let span = get_span(&expr, &lu_dog);
-                    compile_expression(&expr, thonk, context, span)?;
+                    compile_expression(&expr, thonk, context)?;
                 }
 
                 let ty = new_ref!(Value, Value::ValueType((*s_read!(ty)).to_owned()));
@@ -107,8 +106,8 @@ pub(in crate::bubba::compiler) fn compile(
             for f in field_exprs {
                 let f = s_read!(f);
                 let expr = f.r15_expression(&lu_dog)[0].clone();
-                let span = get_span(&expr, &lu_dog);
-                compile_expression(&expr, thonk, context, span)?;
+
+                compile_expression(&expr, thonk, context)?;
 
                 let FieldExpressionEnum::NamedFieldExpression(ref name) = f.subtype else {
                     unreachable!()
@@ -186,9 +185,9 @@ mod test {
         let woog_struct = lu_dog.exhume_woog_struct_id_by_name("::Foo").unwrap();
         let woog_struct = lu_dog.exhume_woog_struct(&woog_struct).unwrap();
         let ty = crate::lu_dog::ValueType::new_woog_struct(true, &woog_struct, &mut lu_dog);
-        let mut result = UserStruct::new("Foo".to_owned(), &ty);
-        result.define_field("x".to_owned(), new_ref!(Value, Value::Integer(42)));
-        result.define_field("y".to_owned(), new_ref!(Value, Value::Float(0.42)));
+        let mut result = UserStruct::new("Foo", &ty);
+        result.define_field("x", new_ref!(Value, Value::Integer(42)));
+        result.define_field("y", new_ref!(Value, Value::Float(0.42)));
         let result = Value::Struct(new_ref!(UserStruct, result));
 
         assert_eq!(&*s_read!(run.unwrap()), &result,);

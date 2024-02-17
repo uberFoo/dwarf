@@ -9,7 +9,7 @@ use abi_stable::{
     package_version_strings, sabi_trait,
     sabi_types::VersionStrings,
     std_types::{RArc, RBox, RVec},
-    std_types::{RCowStr, RResult, RStr},
+    std_types::{RResult, RStr},
     StableAbi,
 };
 use serde::{Deserialize, Serialize};

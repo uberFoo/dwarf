@@ -364,7 +364,7 @@ pub fn compile(context: &ExtruderContext) -> Result<Program> {
 
     // And Result
     if let Some(ref ty) = s_read!(lu_dog).exhume_enumeration_id_by_name("::std::result::Result") {
-        let ty = s_read!(lu_dog).exhume_enumeration(&ty).unwrap();
+        let ty = s_read!(lu_dog).exhume_enumeration(ty).unwrap();
         let Some(ty) = s_read!(lu_dog).iter_value_type().find(|vt| {
             if let ValueTypeEnum::Enumeration(id) = s_read!(vt).subtype {
                 let id = s_read!(lu_dog).exhume_enumeration(&id).unwrap();
@@ -403,22 +403,21 @@ fn get_function_type(func: &RefType<Function>, lu_dog: &LuDogStore) -> ValueType
     let ty = func.r1_value_type(lu_dog)[0].clone();
     let ty = (*s_read!(ty)).clone();
 
+    #[allow(clippy::let_and_return)]
     ty
 }
 
 fn get_function_name(func: &RefType<Function>, lu_dog: &LuDogStore) -> String {
     let func = s_read!(func);
     let name = func.name.clone();
-    let ty_name = if let Some(i_block) = func.r9_implementation_block(&lu_dog).first() {
+    let ty_name = if let Some(i_block) = func.r9_implementation_block(lu_dog).first() {
         let i_block = s_read!(i_block);
-        if let Some(woog_struct) = i_block.r8_woog_struct(&lu_dog).first() {
+        if let Some(woog_struct) = i_block.r8_woog_struct(lu_dog).first() {
             let woog_struct = s_read!(woog_struct);
-            let name = woog_struct.name.clone();
-            name
-        } else if let Some(woog_enum) = i_block.r84c_enumeration(&lu_dog).first() {
+            woog_struct.name.clone()
+        } else if let Some(woog_enum) = i_block.r84c_enumeration(lu_dog).first() {
             let woog_enum = s_read!(woog_enum);
-            let name = woog_enum.name.clone();
-            name
+            woog_enum.name.clone()
         } else {
             "".to_owned()
         }
@@ -471,12 +470,10 @@ fn compile_function(func: &RefType<Function>, context: &mut Context) -> Result<C
         let i_block = s_read!(i_block);
         if let Some(woog_struct) = i_block.r8_woog_struct(&lu_dog).first() {
             let woog_struct = s_read!(woog_struct);
-            let name = woog_struct.name.clone();
-            name
+            woog_struct.name.clone()
         } else if let Some(woog_enum) = i_block.r84c_enumeration(&lu_dog).first() {
             let woog_enum = s_read!(woog_enum);
-            let name = woog_enum.name.clone();
-            name
+            woog_enum.name.clone()
         } else {
             "".to_owned()
         }
@@ -598,16 +595,16 @@ fn compile_statement(
             let stmt = lu_dog.exhume_expression_statement(stmt).unwrap();
             let stmt = s_read!(stmt);
             let expr = stmt.r31_expression(&lu_dog)[0].clone();
-            let span = get_span(&expr, &lu_dog);
-            compile_expression(&expr, thonk, context, span)
+
+            compile_expression(&expr, thonk, context)
         }
         StatementEnum::LetStatement(ref stmt) => {
             let stmt = lu_dog.exhume_let_statement(stmt).unwrap();
             let stmt = s_read!(stmt);
 
             let expr = stmt.r20_expression(&lu_dog)[0].clone();
-            let span = get_span(&expr, &lu_dog);
-            compile_expression(&expr, thonk, context, span)?;
+
+            compile_expression(&expr, thonk, context)?;
 
             let var = s_read!(stmt.r21_local_variable(&lu_dog)[0]).clone();
             let var = s_read!(var.r12_variable(&lu_dog)[0]).clone();
@@ -632,8 +629,8 @@ fn compile_statement(
             let stmt = lu_dog.exhume_result_statement(stmt).unwrap();
             let stmt = s_read!(stmt);
             let expr = stmt.r41_expression(&lu_dog)[0].clone();
-            let span = get_span(&expr, &lu_dog);
-            let result = compile_expression(&expr, thonk, context, span);
+
+            let result = compile_expression(&expr, thonk, context);
 
             if context.is_root_symbol_table() {
                 thonk.insert_instruction(Instruction::Return, location!());
@@ -651,8 +648,12 @@ fn compile_expression(
     expression: &RefType<Expression>,
     thonk: &mut CThonk,
     context: &mut Context,
-    span: Span,
 ) -> Result<Option<ValueType>> {
+    let lu_dog = context.lu_dog_heel();
+    let lu_dog = s_read!(lu_dog);
+
+    let span = get_span(expression, &lu_dog);
+
     let expression = s_read!(expression);
     tracing::debug!(target: "instr", "{}: {:?}\n  -> {}:{}:{}", POP_CLR.paint("compile_expression"), expression.subtype, file!(), line!(), column!());
 
@@ -925,14 +926,14 @@ mod test {
         println!("{program}");
         assert_eq!(program.get_thonk_card(), 11);
 
-        assert_eq!(program.get_instruction_count(), 316);
+        assert_eq!(program.get_instruction_card(), 316);
         let run = run_vm(&program);
         println!("{:?}", run);
         assert!(run.is_ok());
         assert_eq!(&*s_read!(run.unwrap()), &Value::Boolean(true));
     }
 
-    // #[test]
+    #[test]
     fn vm_async_http() {
         setup_logging();
         // let _ = env_logger::builder().is_test(true).try_init();
@@ -1108,5 +1109,42 @@ async fn main() -> Future<()> {
         let run = run_vm(&program);
         assert!(run.is_ok());
         assert_eq!(&*s_read!(run.unwrap()), &Value::Integer(0));
+    }
+
+    #[test]
+    fn format_string() {
+        setup_logging();
+        let ore = r#"
+                   fn main() -> string {
+                       let x = 42;
+                       let y = "Hello";
+                       let z = "world";
+                       let α = `MOTD: ${y} ${z}!, the magic number is ${x}.`;
+                       print(α);
+
+                       α
+                   }
+                       "#;
+
+        let ast = parse_dwarf("format_string", ore).unwrap();
+        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
+        let ctx = new_lu_dog(
+            "format_string".to_owned(),
+            Some((ore.to_owned(), &ast)),
+            &get_dwarf_home(),
+            &sarzak,
+        )
+        .unwrap();
+        let program = compile(&ctx).unwrap();
+        println!("{program}");
+        assert_eq!(program.get_thonk_card(), 1);
+        assert_eq!(program.get_instruction_card(), 27);
+
+        let run = run_vm(&program);
+        assert!(run.is_ok());
+        assert_eq!(
+            &*s_read!(run.unwrap()),
+            &Value::String("MOTD: Hello world!, the magic number is 42.".to_owned())
+        );
     }
 }

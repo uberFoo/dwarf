@@ -2,7 +2,7 @@ use snafu::{location, Location};
 
 use crate::{
     bubba::{
-        compiler::{compile_expression, get_span, CThonk, Context, Result},
+        compiler::{compile_expression, CThonk, Context, Result},
         instr::Instruction,
     },
     lu_dog::ValueType,
@@ -26,7 +26,7 @@ pub(in crate::bubba::compiler) fn compile(
     let lhs = expr.r68_expression(&lu_dog)[0].clone();
     let as_ty = expr.r69_value_type(&lu_dog)[0].clone();
 
-    compile_expression(&lhs, thonk, context, get_span(&lhs, &lu_dog))?;
+    compile_expression(&lhs, thonk, context)?;
 
     thonk.insert_instruction_with_span(
         Instruction::Typecast(new_ref!(Value, Value::ValueType((*s_read!(as_ty)).clone()))),

@@ -2,7 +2,7 @@ use snafu::{location, Location};
 
 use crate::{
     bubba::{
-        compiler::{compile_expression, get_span, CThonk, Context, Result},
+        compiler::{compile_expression, CThonk, Context, Result},
         instr::Instruction,
     },
     lu_dog::{FieldAccessTargetEnum, ValueType},
@@ -26,7 +26,7 @@ pub(in crate::bubba::compiler) fn compile_field_access(
 
     // This is the expression upon which we access the field
     let expr = lu_dog.exhume_expression(&field.expression).unwrap();
-    compile_expression(&expr, thonk, context, get_span(&expr, &lu_dog))?;
+    compile_expression(&expr, thonk, context)?;
 
     let fat = &field.r65_field_access_target(&lu_dog)[0];
     let field_name = match s_read!(fat).subtype {
@@ -71,7 +71,7 @@ pub(in crate::bubba::compiler) fn compile_field_expression(
     let field_expr = lu_dog.exhume_field_expression(expr).unwrap();
     let expr = s_read!(field_expr).r38_expression(&lu_dog)[0].clone();
 
-    compile_expression(&expr, thonk, context, get_span(&expr, &lu_dog))?;
+    compile_expression(&expr, thonk, context)?;
 
     Ok(None)
 }

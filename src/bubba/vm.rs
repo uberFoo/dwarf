@@ -147,7 +147,7 @@ impl VM {
     pub fn new(
         program: &Program,
         args: &[RefType<Value>],
-        home: &PathBuf,
+        home: &Path,
         thread_count: usize,
     ) -> Self {
         // println!("{}", program);
@@ -182,7 +182,7 @@ impl VM {
                     inner: new_ref!(Vec<RefType<Value>>, args.to_vec())
                 }
             ),
-            home: home.clone(),
+            home: home.to_path_buf(),
             captures: None,
             program: program.clone(),
             labels: HashMap::default(),
@@ -502,6 +502,7 @@ impl VM {
                         stack.push(Value::Empty.into());
 
                         let mut vm = self.clone();
+                        // This clone keeps the "escapes func body" ghoul away.
                         let func_arity = func_arity.clone();
 
                         let future = async move {
@@ -564,7 +565,7 @@ impl VM {
                             Value::VmFuture {
                                 name: _,
                                 task,
-                                executor,
+                                executor: _,
                             } => {
                                 if let Some(task) = task.take() {
                                     // executor.start_task(&task);
@@ -1411,7 +1412,7 @@ impl VM {
                                 oopsie => unreachable!("{oopsie:?}"),
                             };
 
-                            let func = format!("{}::{}", ty, (*s_read!(name)).clone().to_string());
+                            let func = format!("{}::{}", ty, (*s_read!(name)).clone());
 
                             if let Some((ip, frame_size)) = self.func_map.get(&func) {
                                 stack.push(Value::Integer(*ip as DwarfInteger).into());
@@ -1458,9 +1459,9 @@ impl VM {
 
                         let ty = new_ref!(ValueType, ty);
 
-                        let mut values = Vec::with_capacity(*n as usize);
+                        let mut values = Vec::with_capacity(*n);
 
-                        for _i in 0..*n as usize {
+                        for _i in 0..*n {
                             let value = stack.pop().unwrap();
                             values.push(value.clone().into_pointer());
                             if trace {
@@ -1649,7 +1650,7 @@ impl VM {
 
                         match stream {
                             0 => {
-                                print!("{}", Colour::Green.paint(format!("{value}")));
+                                print!("{}", Colour::Green.paint("{value}"));
                                 std::io::Write::flush(&mut std::io::stdout()).unwrap();
                             }
                             1 => {
@@ -1682,8 +1683,8 @@ impl VM {
                                 }
                             })?;
 
-                        let mut args = Vec::with_capacity(*arg_count as usize);
-                        for _ in 0..*arg_count as usize {
+                        let mut args = Vec::with_capacity(*arg_count);
+                        for _ in 0..*arg_count {
                             let arg = stack.pop().unwrap();
                             args.push(arg.into_value().into());
                         }
@@ -1717,7 +1718,7 @@ impl VM {
                         let plugin = ctor(args.into()).unwrap();
                         let name = plugin.name().to_string();
                         let plugin = new_ref!(PluginType, plugin);
-                        let value = Value::Plugin((name, plugin.into()));
+                        let value = Value::Plugin((name, plugin));
                         stack.push(value.into());
 
                         1
@@ -1894,6 +1895,13 @@ impl VM {
                         let b = stack.pop().unwrap();
                         let a = stack.pop().unwrap();
                         stack.push(Value::Boolean(a.into_value().lte(&b.into_value())).into());
+
+                        1
+                    }
+                    Instruction::ToString => {
+                        let value = stack.pop().unwrap();
+                        let value = value.into_value().to_inner_string();
+                        stack.push(Value::String(value).into());
 
                         1
                     }
@@ -2507,12 +2515,12 @@ mod tests {
 }
 
 fn print_stack(stack: &[StackValue], fp: usize) {
-    for i in 0..stack.len() {
+    for (i, entry) in stack.iter().enumerate() {
         if i == fp {
             eprint!("\t{} ->\t", Colour::Green.bold().paint("fp"));
         } else {
             eprint!("\t     \t");
         }
-        eprintln!("stack {i}:\t{}", stack[i]);
+        eprintln!("stack {i}:\t{}", entry);
     }
 }

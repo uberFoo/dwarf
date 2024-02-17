@@ -975,6 +975,7 @@ dependencies = [
  "pretty_env_logger",
  "puteketeke",
  "ratatui",
+ "regex",
  "reqwest",
  "rustc-hash",
  "rustyline",
@@ -2170,6 +2171,8 @@ dependencies = [
 [[package]]
 name = "puteketeke"
 version = "0.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9ad95a1704b0e689a3ade643e1c64428632b6b5e5259f4894232dd3a5f74965e"
 dependencies = [
  "async-executor",
  "async-io 2.3.1",
@@ -2585,7 +2588,8 @@ dependencies = [
 
 [[package]]
 name = "sarzak"
-version = "2.13.11"
+version = "2.13.15"
+source = "git+https://github.com/uberFoo/sarzak?branch=develop#7bc6fdf9c7e8b8a59f396300c9c4d91a30a05b91"
 dependencies = [
  "ansi_term",
  "bincode",
