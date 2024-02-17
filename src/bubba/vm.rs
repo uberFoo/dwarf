@@ -1650,7 +1650,7 @@ impl VM {
 
                         match stream {
                             0 => {
-                                print!("{}", Colour::Green.paint("{value}"));
+                                print!("{}", Colour::Green.paint(format!("{value}")));
                                 std::io::Write::flush(&mut std::io::stdout()).unwrap();
                             }
                             1 => {
