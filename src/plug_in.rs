@@ -3,6 +3,7 @@ use std::{
     ops::{Deref, DerefMut},
 };
 
+use crate::chacha::value::FfiValue;
 use abi_stable::{
     declare_root_module_statics,
     library::RootModule,
@@ -12,52 +13,9 @@ use abi_stable::{
     std_types::{RResult, RStr},
     StableAbi,
 };
-use serde::{Deserialize, Serialize};
-
-use crate::chacha::value::FfiValue;
 
 pub mod error;
 pub use error::{Error, Unsupported};
-
-#[repr(C)]
-#[derive(Clone, StableAbi)]
-pub struct StorePluginType {
-    pub inner: RArc<PluginModRef>,
-}
-
-impl StorePluginType {
-    pub fn name(&self) -> &str {
-        self.inner.name()().into()
-    }
-}
-
-impl Deref for StorePluginType {
-    type Target = PluginModRef;
-
-    fn deref(&self) -> &Self::Target {
-        &self.inner
-    }
-}
-
-impl DerefMut for StorePluginType {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        RArc::get_mut(&mut self.inner).unwrap()
-    }
-}
-
-impl std::fmt::Debug for StorePluginType {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("StorePluginType")
-            .field("inner", &self.inner.name())
-            .finish()
-    }
-}
-
-impl std::fmt::Display for StorePluginType {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self.inner.name())
-    }
-}
 
 #[sabi_trait]
 /// A plugin which is loaded by the application,and provides some functionality.

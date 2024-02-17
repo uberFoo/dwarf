@@ -804,7 +804,7 @@ checksum = "fea41bba32d969b513997752735605054bc0dfa92b4c56bf1189f2e174be7a10"
 
 [[package]]
 name = "dwarf"
-version = "0.8.1"
+version = "0.8.0"
 dependencies = [
  "abi_stable",
  "ansi-to-tui",
@@ -837,6 +837,7 @@ dependencies = [
  "parking_lot",
  "pretty_env_logger",
  "puteketeke",
+ "regex",
  "reqwest",
  "rustc-hash",
  "rustyline",
