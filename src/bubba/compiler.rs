@@ -933,7 +933,7 @@ mod test {
         assert_eq!(&*s_read!(run.unwrap()), &Value::Boolean(true));
     }
 
-    // #[test]
+    #[test]
     fn vm_async_http() {
         setup_logging();
         // let _ = env_logger::builder().is_test(true).try_init();
