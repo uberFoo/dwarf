@@ -64,4 +64,85 @@ mod test {
 
         run_vm(&program).unwrap();
     }
+
+    #[test]
+    fn format_string() {
+        setup_logging();
+        let ore = r#"
+                   fn main() -> string {
+                       let x = 42;
+                       let y = "Hello";
+                       let z = "world";
+                       let α = `MOTD: ${y} ${z}!, the magic number is ${x}.`;
+                       print(α);
+
+                       α
+                   }
+                       "#;
+
+        let ast = parse_dwarf("format_string", ore).unwrap();
+        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
+        let ctx = new_lu_dog(
+            "format_string".to_owned(),
+            Some((ore.to_owned(), &ast)),
+            &get_dwarf_home(),
+            &sarzak,
+        )
+        .unwrap();
+        let program = compile(&ctx).unwrap();
+        println!("{program}");
+        assert_eq!(program.get_thonk_card(), 1);
+        assert_eq!(program.get_instruction_card(), 27);
+
+        let run = run_vm(&program);
+        assert!(run.is_ok());
+        assert_eq!(
+            &*s_read!(run.unwrap()),
+            &Value::String("MOTD: Hello world!, the magic number is 42.".to_owned())
+        );
+    }
+
+    #[test]
+    fn format_string_with_func_call() {
+        setup_logging();
+        let ore = r#"
+        struct Foo {}
+
+        impl Foo {
+            fn magic() -> int {
+                42
+            }
+        }
+
+                   fn main() -> string {
+                    let x = Foo {};
+                       let y = "Hello";
+                       let z = "world";
+                       let α = `MOTD: ${y} ${z}!, the magic number is ${x.magic()}.`;
+                       print(α);
+                        α
+                   }
+                       "#;
+
+        let ast = parse_dwarf("format_string_with_func_call", ore).unwrap();
+        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
+        let ctx = new_lu_dog(
+            "format_string_with_func_call".to_owned(),
+            Some((ore.to_owned(), &ast)),
+            &get_dwarf_home(),
+            &sarzak,
+        )
+        .unwrap();
+        let program = compile(&ctx).unwrap();
+        println!("{program}");
+        assert_eq!(program.get_thonk_card(), 2);
+        assert_eq!(program.get_instruction_card(), 34);
+
+        let run = run_vm(&program);
+        assert!(run.is_ok());
+        assert_eq!(
+            &*s_read!(run.unwrap()),
+            &Value::String("MOTD: Hello world!, the magic number is 42.".to_owned())
+        );
+    }
 }
