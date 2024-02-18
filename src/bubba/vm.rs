@@ -121,10 +121,6 @@ pub struct VM {
     program: Program,
     labels: HashMap<String, usize>,
     #[cfg(feature = "async")]
-    executor: Executor,
-    #[cfg(feature = "async")]
-    worker: Worker,
-    #[cfg(feature = "async")]
     thread_count: usize,
 }
 
@@ -186,10 +182,6 @@ impl VM {
             captures: None,
             program: program.clone(),
             labels: HashMap::default(),
-            #[cfg(feature = "async")]
-            executor,
-            #[cfg(feature = "async")]
-            worker,
             #[cfg(feature = "async")]
             thread_count,
         };
@@ -506,7 +498,151 @@ impl VM {
                         let func_arity = func_arity.clone();
 
                         let future = async move {
-                            vm.inner_run(callee, fp, stack, func_arity, local_card, trace)
+                            vm.inner_run(callee, fp, stack, func_arity, local_card, false)
+                        };
+
+                        let executor = match unsafe { EXECUTOR.get() } {
+                            Some(executor) => executor,
+                            None => {
+                                let executor = Executor::new(self.thread_count);
+                                unsafe {
+                                    EXECUTOR.set(executor).unwrap();
+                                    EXECUTOR.get().unwrap()
+                                }
+                            }
+                        };
+                        let worker = executor.root_worker();
+                        let child_task = worker.create_task(future).unwrap();
+
+                        // let task = executor
+                        //     .new_worker()
+                        //     .create_task(async move {
+                        //         let result = child_task.await.unwrap();
+                        //         worker.destroy();
+                        //         Ok(result.into())
+                        //     })
+                        //     .unwrap();
+
+                        let value = new_ref!(
+                            Value,
+                            Value::VmFuture {
+                                name: "invoke".to_owned(),
+                                executor: executor.clone(),
+                                task: Some(child_task)
+                            }
+                        );
+
+                        old_stack.push(value.into());
+
+                        // ip = callee;
+                        // let result = self.inner_run(arity, local_count, trace)?;
+
+                        // Move the frame pointer back
+                        // fp = (&*s_read!(stack[fp])).try_into().unwrap();
+                        // fp = old_fp;
+                        // ip = old_ip;
+
+                        // (0..arity + local_count + 3).for_each(|_| {
+                        //     stack.pop();
+                        // });
+
+                        // stack.push(result);
+                        1
+                    }
+                    #[cfg(feature = "async")]
+                    Instruction::AsyncSpawn(func_arity) => {
+                        let callee = &stack[stack.len() - func_arity - 2].clone();
+                        if trace {
+                            println!("\t\t{}:\t{callee}", Colour::Green.paint("func:"));
+                        }
+
+                        let stack_local_count = &stack[stack.len() - func_arity - 1].clone();
+                        if trace {
+                            println!("\t\t{}:\t{stack_local_count}", Colour::Green.paint("func:"));
+                        }
+
+                        let (callee, frame_size, local_card, stack_count): (
+                            isize,
+                            Value,
+                            usize,
+                            usize,
+                        ) = match stack_local_count.clone().into_value() {
+                            Value::Integer(arity) => {
+                                let callee: isize =
+                                    callee.clone().into_value().try_into().map_err(|e| {
+                                        BubbaError::ValueError {
+                                            source: Box::new(e),
+                                            location: location!(),
+                                        }
+                                    })?;
+                                let local_count = arity as usize;
+                                (
+                                    callee,
+                                    <usize as Into<Value>>::into(func_arity + local_count + 2),
+                                    local_count,
+                                    2,
+                                )
+                            }
+                            Value::FubarPointer {
+                                name,
+                                frame_size,
+                                captures,
+                            } => {
+                                self.captures = Some(captures);
+                                let addr = self.func_map.get(&name).unwrap().0;
+                                let local_count = frame_size;
+                                (
+                                    addr as isize,
+                                    // This is plus one because the call frame does not include
+                                    // the frame size.
+                                    <usize as Into<Value>>::into(func_arity + local_count + 1),
+                                    local_count,
+                                    1,
+                                )
+                            }
+                            _ => {
+                                return Err(BubbaError::VmPanic {
+                                    message: format!("Unexpected value: {stack_local_count:?}.",),
+                                    location: location!(),
+                                }
+                                .into())
+                            }
+                        };
+
+                        let mut new_stack = Vec::new();
+                        for _ in 0..*func_arity + stack_count {
+                            new_stack.push(stack.pop().unwrap());
+                        }
+                        new_stack.reverse();
+
+                        let old_stack = &mut stack;
+                        let mut stack = new_stack;
+
+                        // The call stack has been setup, but we need to make room
+                        // for locals.
+                        (0..local_card).for_each(|_| {
+                            stack.push(Value::Empty.into());
+                        });
+
+                        // Push the arity
+                        stack.push(<usize as Into<Value>>::into(arity).into());
+
+                        // Push the call frame size so that we can clean in out quickly
+                        stack.push(frame_size.into());
+
+                        // Push the sentinel IP
+                        stack.push(Value::Empty.into());
+
+                        let fp = stack.len();
+                        // Push the sentinel frame pointer
+                        stack.push(Value::Empty.into());
+
+                        let mut vm = self.clone();
+                        // This clone keeps the "escapes func body" ghoul away.
+                        let func_arity = func_arity.clone();
+
+                        let future = async move {
+                            vm.inner_run(callee, fp, stack, func_arity, local_card, false)
                         };
 
                         let executor = match unsafe { EXECUTOR.get() } {
@@ -565,10 +701,10 @@ impl VM {
                             Value::VmFuture {
                                 name: _,
                                 task,
-                                executor: _,
+                                executor,
                             } => {
                                 if let Some(task) = task.take() {
-                                    // executor.start_task(&task);
+                                    executor.start_task(&task);
                                     future::block_on(task).map_err(|e| BubbaError::ValueError {
                                         source: Box::new(e),
                                         location: location!(),

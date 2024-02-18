@@ -483,7 +483,7 @@ fn compile_static_method_call(
 
                 let result = compile_expression(inner, thonk, context);
 
-                thonk.insert_instruction(Instruction::AsyncCall(0), location!());
+                thonk.insert_instruction(Instruction::AsyncSpawn(0), location!());
 
                 result
             }

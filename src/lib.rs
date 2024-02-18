@@ -88,7 +88,7 @@ pub(crate) const PATH_ROOT: &str = PATH_SEP;
 pub(crate) const ERR_CLR: Colour = Colour::Red;
 pub(crate) const OK_CLR: Colour = Colour::Green;
 pub(crate) const POP_CLR: Colour = Colour::Yellow;
-pub(crate) const OTH_CLR: Colour = Colour::Cyan;
+pub(crate) const OTHER_CLR: Colour = Colour::Cyan;
 
 pub(crate) const OBJECT_STORE: &str = "ObjectStore";
 pub(crate) const FUNCTION_NEW: &str = "new";

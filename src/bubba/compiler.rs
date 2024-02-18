@@ -14,7 +14,8 @@ use crate::{
     },
     new_ref, s_read, s_write,
     sarzak::{ObjectStore as SarzakStore, Ty},
-    Context as ExtruderContext, NewRef, RefType, Span, Value, ERR_CLR, MERLIN, POP_CLR, SARZAK,
+    Context as ExtruderContext, NewRef, RefType, Span, Value, ERR_CLR, MERLIN, OTHER_CLR, POP_CLR,
+    SARZAK,
 };
 
 mod expression;
@@ -54,7 +55,7 @@ impl CThonk {
 
     #[tracing::instrument]
     fn insert_instruction(&mut self, instruction: Instruction, location: Location) {
-        tracing::debug!(target: "instr", "{}:\t\t{instruction}\n  --> {}:{}:{}", POP_CLR.paint("add_instruction"), location.file, location.line, location.column);
+        tracing::debug!(target: "instr", "{}:\t\t{}: {instruction}\n  --> {}:{}:{}", POP_CLR.paint("add_instruction"), OTHER_CLR.paint(self.inner.name()), location.file, location.line, location.column);
 
         if log_enabled!(target: "instr", Trace) {
             self.inner.add_instruction(
@@ -70,7 +71,7 @@ impl CThonk {
 
     #[tracing::instrument]
     fn prefix_instruction(&mut self, instruction: Instruction, location: Location) {
-        tracing::debug!(target: "instr", "{}:\t\t{instruction}\n  --> {}:{}:{}", POP_CLR.paint("prefix_instruction"), location.file, location.line, location.column);
+        tracing::debug!(target: "instr", "{}:\t\t{}: {instruction}\n  --> {}:{}:{}", POP_CLR.paint("prefix_instruction"), OTHER_CLR.paint(self.inner.name()), location.file, location.line, location.column);
 
         if log_enabled!(target: "instr", Trace) {
             self.inner.add_instruction(
@@ -91,7 +92,7 @@ impl CThonk {
         span: Span,
         location: Location,
     ) {
-        tracing::debug!(target: "instr", "{}:\t\t{instruction}\n  --> {}:{}:{}", POP_CLR.paint("add_instruction"), location.file, location.line, location.column);
+        tracing::debug!(target: "instr", "{}:\t\t{}: {instruction}\n  --> {}:{}:{}", POP_CLR.paint("add_instruction"), OTHER_CLR.paint(self.inner.name()), location.file, location.line, location.column);
 
         if log_enabled!(target: "instr", Trace) {
             self.inner.add_instruction(
