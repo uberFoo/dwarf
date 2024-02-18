@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- Async call semantics to VM
+- Method calls now work in format strings.
+
+### Fixed
+
+- Lambda's with an empty return type were returning the wrong thing.
+
+
 ## [0.8.0] - 2024-2-15
 
 ### Added
