@@ -8,7 +8,6 @@ use crossbeam::channel::{Receiver, Sender};
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HasSet};
 
 use crate::{
-    bubba::Program,
     interpreter::{DebuggerStatus, Memory, MemoryUpdateMessage},
     lu_dog::{Block, ObjectStore as LuDogStore, ValueType},
     new_ref, s_read, s_write,
@@ -74,9 +73,9 @@ pub struct Context {
     #[cfg(feature = "async")]
     executor: Executor,
     source_file: String,
-    program: Program,
     scopes: HashMap<String, String>,
     imports: HasSet<PathBuf>,
+    #[cfg(feature = "async")]
     thread_count: usize,
 }
 
@@ -119,7 +118,6 @@ impl Context {
         dwarf_home: PathBuf,
         dirty: Vec<Dirty>,
         source_file: String,
-        program: Program,
         executor: Executor,
         scopes: HashMap<String, String>,
         imports: HasSet<PathBuf>,
@@ -141,7 +139,6 @@ impl Context {
             dwarf_home,
             dirty,
             source_file,
-            program,
             worker: Some(executor.root_worker()),
             executor,
             scopes,
@@ -170,7 +167,6 @@ impl Context {
         dwarf_home: PathBuf,
         dirty: Vec<Dirty>,
         source_file: String,
-        program: Program,
         scopes: HashMap<String, String>,
         imports: HasSet<PathBuf>,
     ) -> Self {
@@ -190,12 +186,12 @@ impl Context {
             dwarf_home,
             dirty,
             source_file,
-            program,
             scopes,
             imports,
         }
     }
 
+    #[cfg(feature = "async")]
     pub fn thread_count(&self) -> usize {
         self.thread_count
     }
@@ -206,10 +202,6 @@ impl Context {
 
     pub fn scopes(&mut self) -> &mut HashMap<String, String> {
         &mut self.scopes
-    }
-
-    pub fn get_program(&self) -> &Program {
-        &self.program
     }
 
     pub fn get_source_file(&self) -> &str {

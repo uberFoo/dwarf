@@ -4,9 +4,10 @@ use crate::{
     bubba::{
         compiler::{compile_expression, get_span, CThonk, Context, Error, Result, EMPTY, STRING},
         instr::Instruction,
+        value::Value,
     },
     lu_dog::{BooleanLiteralEnum, FormatBitEnum, LiteralEnum, ValueType},
-    new_ref, s_read, NewRef, RefType, SarzakStorePtr, Span, Value, POP_CLR,
+    new_ref, s_read, NewRef, RefType, SarzakStorePtr, Span, POP_CLR,
 };
 
 #[tracing::instrument]

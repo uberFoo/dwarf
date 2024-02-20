@@ -8,13 +8,14 @@ use crate::{
     bubba::{
         compiler::{compile_expression, compile_statement, CThonk, Context, Result},
         instr::Instruction,
+        value::Value,
         BOOL, STRING_ARRAY,
     },
     keywords::{ARGS, ASSERT, ASSERT_EQ, CHACHA, FORMAT, NEW, PLUGIN},
     lu_dog::{BodyEnum, Call, CallEnum, Expression, ValueType, ValueTypeEnum},
     new_ref, s_read,
     sarzak::Ty,
-    NewRef, RefType, SarzakStorePtr, Span, Value, PATH_SEP, POP_CLR,
+    NewRef, RefType, SarzakStorePtr, Span, PATH_SEP, POP_CLR,
 };
 
 #[tracing::instrument]
@@ -322,7 +323,7 @@ fn compile_method_call(
                 }
                 ValueTypeEnum::Ty(ref id) => {
                     let ty = sarzak.exhume_ty(id).unwrap();
-                    let ty = s_read!(ty);
+                    let ty = ty.read().unwrap();
 
                     match &*ty {
                         Ty::ZString(_) => {

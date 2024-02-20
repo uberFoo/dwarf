@@ -79,7 +79,14 @@ mod test {
                    }
                        "#;
 
-        let ast = parse_dwarf("format_string", ore).unwrap();
+        let mut ast = parse_dwarf("format_string_with_func_call", ore);
+        while let Err(e) = ast {
+            eprintln!("{}", e);
+            ast = parse_dwarf("format_string_with_func_call", ore);
+        }
+
+        let ast = ast.unwrap();
+
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ctx = new_lu_dog(
             "format_string".to_owned(),

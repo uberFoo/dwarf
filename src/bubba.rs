@@ -1,11 +1,12 @@
 pub mod compiler;
 pub mod instr;
+pub mod value;
 pub mod vm;
 
 pub use instr::Instruction;
 pub use instr::Program;
 pub(crate) use instr::Thonk;
-pub use vm::VM;
+pub use vm::{Error, VM};
 
 pub(crate) const BOOL: &str = "BOOL";
 pub(crate) const EMPTY: &str = "EMPTY";

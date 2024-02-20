@@ -4,10 +4,11 @@ use crate::{
     bubba::{
         compiler::{compile_expression, CThonk, Context, Result},
         instr::Instruction,
+        value::Value,
     },
     chacha::value::EnumVariant,
     lu_dog::{DataStructureEnum, FieldExpressionEnum, ValueType},
-    new_ref, s_read, NewRef, RefType, SarzakStorePtr, Span, Value, POP_CLR,
+    new_ref, s_read, NewRef, RefType, SarzakStorePtr, Span, POP_CLR,
 };
 
 #[tracing::instrument]
@@ -188,7 +189,7 @@ mod test {
         let mut result = UserStruct::new("Foo", &ty);
         result.define_field("x", new_ref!(Value, Value::Integer(42)));
         result.define_field("y", new_ref!(Value, Value::Float(0.42)));
-        let result = Value::Struct(new_ref!(UserStruct, result));
+        let result = Value::Struct(new_ref!(UserStruct<Value>, result));
 
         assert_eq!(&*s_read!(run.unwrap()), &result,);
     }

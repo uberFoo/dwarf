@@ -1,8 +1,7 @@
 use ansi_term::Colour;
-use snafu::prelude::*;
+use snafu::{location, prelude::*, Location};
 
 use crate::{
-    bubba::VM,
     chacha::error::{Result, UnimplementedSnafu},
     interpreter::{debug, eval_expression, function, Context},
     lu_dog::ValueTypeEnum,
@@ -11,7 +10,7 @@ use crate::{
     NewRef, RefType, SarzakStorePtr, Value,
 };
 
-pub fn eval(expr: &SarzakStorePtr, context: &mut Context, vm: &mut VM) -> Result<RefType<Value>> {
+pub fn eval(expr: &SarzakStorePtr, context: &mut Context) -> Result<RefType<Value>> {
     let lu_dog = context.lu_dog_heel().clone();
     let sarzak = context.sarzak_heel().clone();
 
@@ -21,7 +20,7 @@ pub fn eval(expr: &SarzakStorePtr, context: &mut Context, vm: &mut VM) -> Result
     let lhs = s_read!(expr).r68_expression(&s_read!(lu_dog))[0].clone();
     let as_ty = s_read!(expr).r69_value_type(&s_read!(lu_dog))[0].clone();
 
-    let lhs = eval_expression(lhs, context, vm)?;
+    let lhs = eval_expression(lhs, context)?;
 
     let value = match &s_read!(as_ty).subtype {
         ValueTypeEnum::Ty(ref ty) => {
@@ -52,6 +51,7 @@ pub fn eval(expr: &SarzakStorePtr, context: &mut Context, vm: &mut VM) -> Result
                         false,
                         UnimplementedSnafu {
                             message: format!("deal with type cast as: {:?}", alpha),
+                            location: location!(),
                         }
                     );
                     unreachable!();
@@ -64,6 +64,7 @@ pub fn eval(expr: &SarzakStorePtr, context: &mut Context, vm: &mut VM) -> Result
                 false,
                 UnimplementedSnafu {
                     message: format!("deal with type cast as: {:?}", alpha),
+                    location: location!(),
                 }
             );
             unreachable!();

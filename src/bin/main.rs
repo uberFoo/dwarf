@@ -24,7 +24,7 @@ use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 use dwarf::ref_to_inner;
 
 use dwarf::{
-    bubba::{compiler::compile, VM},
+    bubba::{compiler::compile, value::Value as BubbaValue, VM},
     chacha::{
         dap::DapAdapter,
         error::{ChaChaError, ChaChaErrorReporter},
@@ -332,12 +332,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 println!("running in the VM");
                 println!("{program}");
 
-                let args: Vec<RefType<Value>> = dwarf_args
+                let args: Vec<RefType<BubbaValue>> = dwarf_args
                     .into_iter()
-                    .map(|a| new_ref!(Value, a.into()))
+                    .map(|a| new_ref!(BubbaValue, a.into()))
                     .collect();
 
+                #[cfg(feature = "async")]
                 let mut vm = VM::new(&program, &args, &dwarf_home, threads);
+                #[cfg(not(feature = "async"))]
+                let mut vm = VM::new(&program, &args, &dwarf_home);
                 vm.invoke("main", &[])?;
                 return Ok(());
             }

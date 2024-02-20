@@ -1,7 +1,6 @@
 use ansi_term::Colour;
 
 use crate::{
-    bubba::VM,
     chacha::{
         error::Result,
         value::{EnumVariant, TupleEnum},
@@ -11,7 +10,7 @@ use crate::{
     new_ref, s_read, NewRef, RefType, SarzakStorePtr, Value,
 };
 
-pub fn eval(expr: &SarzakStorePtr, context: &mut Context, vm: &mut VM) -> Result<RefType<Value>> {
+pub fn eval(expr: &SarzakStorePtr, context: &mut Context) -> Result<RefType<Value>> {
     let lu_dog = context.lu_dog_heel().clone();
 
     let expr = s_read!(lu_dog).exhume_struct_expression(expr).unwrap();
@@ -58,7 +57,7 @@ pub fn eval(expr: &SarzakStorePtr, context: &mut Context, vm: &mut VM) -> Result
                     .iter()
                     .map(|f| {
                         let expr = s_read!(f).r15_expression(&s_read!(lu_dog))[0].clone();
-                        let value = eval_expression(expr.clone(), context, vm)?;
+                        let value = eval_expression(expr.clone(), context)?;
 
                         debug!("StructExpression field value: {}", s_read!(value),);
                         Ok(value)
@@ -71,7 +70,7 @@ pub fn eval(expr: &SarzakStorePtr, context: &mut Context, vm: &mut VM) -> Result
                 let value = field_values[0].clone();
 
                 let user_enum = TupleEnum::new(variant, value);
-                let user_enum = new_ref!(TupleEnum, user_enum);
+                let user_enum = new_ref!(TupleEnum<Value>, user_enum);
                 new_ref!(
                     Value,
                     Value::Enumeration(EnumVariant::Tuple((ty, path), user_enum))
@@ -84,7 +83,7 @@ pub fn eval(expr: &SarzakStorePtr, context: &mut Context, vm: &mut VM) -> Result
                 .iter()
                 .map(|f| {
                     let expr = s_read!(f).r15_expression(&s_read!(lu_dog))[0].clone();
-                    let value = eval_expression(expr.clone(), context, vm)?;
+                    let value = eval_expression(expr.clone(), context)?;
 
                     let name = if let FieldExpressionEnum::NamedFieldExpression(ref id) =
                         s_read!(f).subtype
@@ -119,7 +118,7 @@ pub fn eval(expr: &SarzakStorePtr, context: &mut Context, vm: &mut VM) -> Result
 
             Ok(new_ref!(
                 Value,
-                Value::Struct(new_ref!(UserStruct, user_type))
+                Value::Struct(new_ref!(UserStruct<Value>, user_type))
             ))
         }
     }

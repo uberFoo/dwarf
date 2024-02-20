@@ -6,12 +6,12 @@ use rustc_hash::FxHashMap as HashMap;
 use snafu::{location, Location};
 
 use crate::{
-    bubba::VM,
+    bubba::{Program, VM},
     chacha::error::ChaChaErrorReporter,
     dwarf::{error::DwarfErrorReporter, inter_statement, parse_line, Context as ExtruderContext},
     interpreter::{banner2, debug, eval_statement, function, Context, Error, PrintableValueType},
     lu_dog::DwarfSourceFile,
-    new_ref, s_read, s_write, ChaChaError, NewRef, RefType, PATH_ROOT,
+    new_ref, s_read, s_write, ChaChaError, NewRef, RefType, BUILD_TIME, PATH_ROOT, VERSION,
 };
 
 pub fn start_repl(context: &mut Context, is_uber: bool, thread_count: usize) -> Result<(), Error> {
@@ -32,7 +32,19 @@ pub fn start_repl(context: &mut Context, is_uber: bool, thread_count: usize) -> 
 
     let block = context.block().clone();
 
-    let mut vm = VM::new(context.get_program(), &[], context.get_home(), thread_count);
+    #[cfg(feature = "async")]
+    let mut vm = VM::new(
+        &Program::new(VERSION.to_owned(), BUILD_TIME.to_owned()),
+        &[],
+        context.get_home(),
+        thread_count,
+    );
+    #[cfg(not(feature = "async"))]
+    let mut vm = VM::new(
+        &Program::new(VERSION.to_owned(), BUILD_TIME.to_owned()),
+        &[],
+        context.get_home(),
+    );
 
     let notice_style = Colour::Red.bold().italic();
     let prompt_style = Colour::Blue.normal();
@@ -150,7 +162,7 @@ pub fn start_repl(context: &mut Context, is_uber: bool, thread_count: usize) -> 
 
                         context.set_dirty(dirty);
 
-                        match eval_statement(stmt.0, context, &mut vm) {
+                        match eval_statement(stmt.0, context) {
                             Ok(value) => {
                                 let ty = s_read!(value)
                                     .get_value_type(&s_read!(sarzak), &s_read!(lu_dog));

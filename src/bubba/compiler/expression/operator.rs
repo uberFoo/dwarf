@@ -4,12 +4,13 @@ use crate::{
     bubba::{
         compiler::{compile_expression, CThonk, Context, Result},
         instr::Instruction,
+        value::Value,
     },
     lu_dog::{
         BinaryEnum, BooleanOperatorEnum, ComparisonEnum, ExpressionEnum, FieldAccessTargetEnum,
         OperatorEnum, UnaryEnum, ValueType,
     },
-    new_ref, s_read, NewRef, RefType, SarzakStorePtr, Span, Value, POP_CLR,
+    new_ref, s_read, NewRef, RefType, SarzakStorePtr, Span, POP_CLR,
 };
 
 #[tracing::instrument]

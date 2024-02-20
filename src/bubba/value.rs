@@ -1,129 +1,19 @@
-#[cfg(feature = "async")]
-use std::future::Future;
-
 use std::{fmt, io::Write, ops::Range};
 
-#[cfg(feature = "async")]
-use smol::future;
-
 use ansi_term::Colour;
-use rustc_hash::FxHashMap as HashMap;
-use sarzak::lu_dog::ValueTypeEnum;
-use serde::{Deserialize, Serialize};
+#[cfg(feature = "async")]
+use puteketeke::{AsyncTask, Executor};
 use uuid::Uuid;
 
-#[cfg(feature = "async")]
-use puteketeke::Executor;
-
-#[cfg(feature = "async")]
-use crate::{ValueResult, VmValueResult};
-
 use crate::{
-    chacha::error::Result,
-    lu_dog::{Function, Lambda, ObjectStore as LuDogStore, ValueType, ZObjectStore},
-    new_ref,
+    bubba::vm::{BubbaError, Error},
+    chacha::value::{EnumVariant, UserStruct},
+    lu_dog::{ObjectStore as LuDogStore, ValueType, ValueTypeEnum},
     plug_in::PluginType,
     s_read,
     sarzak::{ObjectStore as SarzakStore, Ty},
-    ChaChaError, Context, DwarfFloat, DwarfInteger, NewRef, RefType, PATH_SEP,
+    DwarfFloat, DwarfInteger, RefType, VmValueResult,
 };
-
-/// The type of Enumeration Field
-///
-/// There are three types of enumeration fields: Unit, Struct, and Tuple.
-///
-/// The field descriptions refer to the following enumeration, `Foo`.
-///
-/// ```ignore
-/// enum Foo {
-///     One,
-///     Bar(int),
-///     Baz { qux: string },
-/// }
-/// ```
-///
-#[derive(Clone, Debug)]
-pub enum EnumVariant<T>
-where
-    T: Clone + std::fmt::Debug + PartialEq + std::fmt::Display + std::default::Default,
-{
-    /// Struct Enumeration Field
-    ///
-    /// This type of field is for when it contains a struct, as `Baz` does above.
-    /// That is to say, `Foo::Baz { qux: string }`. We store the final path element
-    /// as a string, and the struct as a `RefType<UserStruct>`.
-    Struct(RefType<UserStruct<T>>),
-    /// Tuple Enumeration Field
-    ///
-    /// This type of field is for when it contains a tuple, as `Bar` does above.
-    /// That is to say, `Foo::Bar(int)`.
-    ///
-    /// The type is stored as the first element of the tuple, and the path/type
-    /// as a string in the second. The third element is the enum itself.
-    Tuple((RefType<ValueType>, String), RefType<TupleEnum<T>>),
-    /// Unit Enumeration Field
-    ///
-    /// This sort of enumeration is the simplest. In `Foo`, this refers to the
-    /// field `One`: `Foo::One`. The final field in the path is stored as a
-    /// string.
-    ///
-    /// The tuple is: (Type, TypeName, FieldValue)
-    Unit(RefType<ValueType>, String, String),
-}
-
-impl<T> EnumVariant<T>
-where
-    T: Clone + std::fmt::Debug + PartialEq + std::fmt::Display + std::default::Default,
-{
-    pub fn get_type(&self) -> RefType<ValueType> {
-        match self {
-            Self::Unit(ty, _, _) => ty.clone(),
-            Self::Struct(ut) => s_read!(ut).get_type().clone(),
-            Self::Tuple((ty, _), _) => ty.clone(),
-        }
-    }
-}
-
-impl<T> PartialEq for EnumVariant<T>
-where
-    T: Clone + std::fmt::Debug + PartialEq + std::fmt::Display + std::default::Default,
-{
-    fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (Self::Unit(_a, b, e), Self::Unit(_c, d, f)) => b == d && e == f,
-            (Self::Struct(a), Self::Struct(b)) => *s_read!(a) == *s_read!(b),
-            (Self::Tuple((a, _), c), Self::Tuple((b, _), d)) => {
-                *s_read!(a) == *s_read!(b) && *s_read!(c) == *s_read!(d)
-            }
-            _ => false,
-        }
-    }
-}
-
-impl<T> Eq for EnumVariant<T> where
-    T: Clone + std::fmt::Debug + PartialEq + std::fmt::Display + std::default::Default
-{
-}
-
-impl<T> fmt::Display for EnumVariant<T>
-where
-    T: Clone + std::fmt::Debug + PartialEq + std::fmt::Display + std::default::Default,
-{
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Self::Unit(_, t, s) => write!(f, "{t}::{s}",),
-            Self::Struct(s) => write!(f, "{}", s_read!(s)),
-            Self::Tuple((_, t), e) => write!(f, "{t}::{}", s_read!(e)),
-        }
-    }
-}
-
-// 🚧 This can be deleted and replaced with just a String.
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub enum ThonkInner {
-    Thonk(String),
-    Index(usize),
-}
 
 #[derive(Default)]
 pub enum Value {
@@ -140,55 +30,19 @@ pub enum Value {
     ///
     /// ()
     Empty,
+    Error(Box<Error>),
     Enumeration(EnumVariant<Self>),
-    // #[serde(skip)]
-    Error(Box<ChaChaError>),
     Float(DwarfFloat),
-    /// Function
-    ///
-    /// 🚧 I really need to write something here describing, once and for all,
-    /// why I need the inner Function to be behind a RefType<<T>>. It seems
-    /// excessive, and yet I know I've looked into it before.
-    Function(RefType<Function>),
     FubarPointer {
         name: String,
         frame_size: usize,
         captures: Vec<RefType<Value>>,
     },
-    #[cfg(feature = "async")]
-    // #[serde(skip)]
-    Future {
-        name: String,
-        executor: Executor,
-        task: Option<puteketeke::AsyncTask<'static, ValueResult>>,
-    },
     Integer(DwarfInteger),
-    Lambda(RefType<Lambda>),
-    // #[serde(skip)]
-    ParsedDwarf(Context),
-    // #[serde(skip)]
     Plugin((String, RefType<PluginType>)),
-    // #[serde(skip)]
-    ProxyType {
-        module: String,
-        obj_ty: Uuid,
-        id: Uuid,
-        plugin: RefType<PluginType>,
-    },
     Range(Range<DwarfInteger>),
-    // #[serde(skip)]
-    Store(RefType<ZObjectStore>, RefType<PluginType>),
     String(String),
     Struct(RefType<UserStruct<Self>>),
-    Table(HashMap<String, RefType<Self>>),
-    #[cfg(feature = "async")]
-    // #[serde(skip)]
-    Task {
-        worker: Option<puteketeke::Worker>,
-        parent: Option<puteketeke::AsyncTask<'static, ValueResult>>,
-    },
-    // Thonk(ThonkInner),
-    Unknown,
     Uuid(uuid::Uuid),
     ValueType(ValueType),
     Vector {
@@ -196,18 +50,14 @@ pub enum Value {
         inner: RefType<Vec<RefType<Self>>>,
     },
     #[cfg(feature = "async")]
-    VmFuture {
+    Task {
         name: String,
-        executor: Executor,
-        task: Option<puteketeke::AsyncTask<'static, VmValueResult>>,
+        running: bool,
+        task: Option<AsyncTask<'static, VmValueResult>>,
     },
 }
 
 impl Value {
-    // pub fn new_thonk(name: String) -> Self {
-    //     Self::Thonk(ThonkInner::Thonk(name))
-    // }
-
     #[inline]
     pub fn to_inner_string(&self) -> String {
         let mut buf = Vec::new();
@@ -226,7 +76,6 @@ impl Value {
             Self::Enumeration(var) => write!(f, "{var}"),
             Self::Error(e) => write!(f, "{}: {e}", Colour::Red.bold().paint("error")),
             Self::Float(num) => write!(f, "{num}"),
-            Self::Function(_) => write!(f, "<function>"),
             Self::FubarPointer {
                 name,
                 frame_size,
@@ -242,36 +91,11 @@ impl Value {
                 }
                 write!(f, "] }}")
             }
-            #[cfg(feature = "async")]
-            Self::Future {
-                name,
-                executor,
-                task,
-            } => write!(f, "Task `{name}`: {task:?}, executor: {executor:?}"),
             Self::Integer(num) => write!(f, "{num}"),
-            Self::Lambda(_) => write!(f, "<lambda>"),
-            Self::ParsedDwarf(ctx) => write!(f, "{ctx:#?}"),
             Self::Plugin((name, _plugin)) => write!(f, "plugin::{name}"),
-            Self::ProxyType {
-                module: _,
-                obj_ty: _,
-                id: _,
-                plugin,
-            } => write!(f, "{}", s_read!(plugin)),
             Self::Range(range) => write!(f, "{range:?}"),
-            // Self::StoreType(store) => write!(f, "{:?}", store),
-            Self::Store(_store, plugin) => write!(f, "Plug-in ({})", s_read!(plugin).name()),
             Self::String(str_) => write!(f, "{str_}"),
             Self::Struct(ty) => write!(f, "{}", s_read!(ty)),
-            // Self::String(str_) => write!(f, "\"{}\"", str_),
-            Self::Table(table) => write!(f, "{table:?}"),
-            #[cfg(feature = "async")]
-            Self::Task { worker, parent } => write!(f, "Task: {parent:?} running on {worker:?}"),
-            // Self::Thonk(inner) => match inner {
-            //     ThonkInner::Thonk(name) => write!(f, "{name}"),
-            //     ThonkInner::Index(index) => write!(f, "{index}"),
-            // },
-            Self::Unknown => write!(f, "<unknown>"),
             Self::Uuid(uuid) => write!(f, "{uuid}"),
             Self::ValueType(ty) => write!(f, "{:?}", ty),
             Self::Vector { ty: _, inner } => {
@@ -290,11 +114,11 @@ impl Value {
                 write!(f, "]")
             }
             #[cfg(feature = "async")]
-            Self::VmFuture {
+            Self::Task {
                 name,
-                executor,
+                running,
                 task,
-            } => write!(f, "VmTask `{name}`: {task:?}, executor: {executor:?}"),
+            } => write!(f, "VmTask `{name}`: {task:?}, running: {running}"),
         }
     }
 
@@ -343,12 +167,6 @@ impl Value {
                 }
                 unreachable!()
             }
-            Value::Function(ref func) => {
-                let func = lu_dog.exhume_function(&s_read!(func).id).unwrap();
-                let z = s_read!(func).r1_value_type(lu_dog)[0].clone();
-                #[allow(clippy::let_and_return)]
-                z
-            }
             Value::Integer(_) => {
                 let ty = Ty::new_integer(sarzak);
                 for vt in lu_dog.iter_value_type() {
@@ -359,12 +177,6 @@ impl Value {
                     }
                 }
                 unreachable!()
-            }
-            Value::Lambda(ref ƛ) => {
-                let ƛ = lu_dog.exhume_lambda(&s_read!(ƛ).id).unwrap();
-                let ƛ_type = s_read!(ƛ).r1_value_type(lu_dog)[0].clone();
-                #[allow(clippy::let_and_return)]
-                ƛ_type
             }
             Value::Plugin((name, _plugin)) => {
                 for vt in lu_dog.iter_value_type() {
@@ -377,25 +189,6 @@ impl Value {
                 }
                 panic!("Plugin not found: {name}");
             }
-            Value::ProxyType {
-                module: _,
-                obj_ty: uuid,
-                id: _,
-                plugin: _,
-            } => {
-                for vt in lu_dog.iter_value_type() {
-                    if let ValueTypeEnum::WoogStruct(woog) = s_read!(vt).subtype {
-                        let woog = lu_dog.exhume_woog_struct(&woog).unwrap();
-                        let object = s_read!(woog).object;
-                        if let Some(ref obj_id) = object {
-                            if uuid == obj_id {
-                                return vt.clone();
-                            }
-                        }
-                    }
-                }
-                unreachable!()
-            }
             Value::Range(_) => {
                 for vt in lu_dog.iter_value_type() {
                     if let ValueTypeEnum::Range(_) = s_read!(vt).subtype {
@@ -404,7 +197,6 @@ impl Value {
                 }
                 unreachable!()
             }
-            Value::Store(store, _plugin) => s_read!(store).r1_value_type(lu_dog)[0].clone(),
             Value::String(_) => {
                 let ty = Ty::new_z_string(sarzak);
                 for vt in lu_dog.iter_value_type() {
@@ -417,18 +209,6 @@ impl Value {
                 unreachable!()
             }
             Value::Struct(ref ut) => s_read!(ut).get_type().clone(),
-            #[cfg(feature = "async")]
-            Value::Task {
-                worker: _,
-                parent: _,
-            } => {
-                for vt in lu_dog.iter_value_type() {
-                    if let ValueTypeEnum::Task(_) = s_read!(vt).subtype {
-                        return vt.clone();
-                    }
-                }
-                unreachable!()
-            }
             Value::Uuid(_) => {
                 let ty = Ty::new_z_uuid(sarzak);
                 for vt in lu_dog.iter_value_type() {
@@ -465,63 +245,6 @@ impl Value {
     }
 }
 
-#[cfg(feature = "async")]
-impl Future for Value {
-    type Output = RefType<Value>;
-
-    fn poll(
-        self: std::pin::Pin<&mut Self>,
-        _cx_: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Self::Output> {
-        let this = std::pin::Pin::into_inner(self);
-
-        match this {
-            Self::Future {
-                name: _,
-                executor,
-                task,
-            } => {
-                if let Some(task) = task.take() {
-                    executor.start_task(&task);
-                    match future::block_on(task) {
-                        Ok(value) => std::task::Poll::Ready(value),
-                        Err(e) => {
-                            std::task::Poll::Ready(new_ref!(Value, Value::Error(Box::new(e))))
-                        }
-                    }
-                } else {
-                    std::task::Poll::Ready(new_ref!(Value, Value::Empty))
-                }
-            }
-            Self::Task { worker: _, parent } => {
-                if let Some(task) = parent.take() {
-                    match future::block_on(task) {
-                        Ok(value) => std::task::Poll::Ready(value),
-                        Err(e) => {
-                            std::task::Poll::Ready(new_ref!(Value, Value::Error(Box::new(e))))
-                        }
-                    }
-                } else {
-                    std::task::Poll::Ready(new_ref!(Value, Value::Empty))
-                }
-            }
-            _ => std::task::Poll::Ready(new_ref!(Value, Value::Empty)),
-        }
-    }
-}
-
-// impl Drop for Value {
-//     fn drop(&mut self) {
-//         match self {
-//             Self::Task(_, Some(task)) => {
-//                 log::debug!(target: "async", "drop task: {:?}", task);
-//                 // future::block_on(task);
-//             }
-//             _ => {}
-//         }
-//     }
-// }
-
 impl std::fmt::Debug for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
@@ -531,7 +254,6 @@ impl std::fmt::Debug for Value {
             Self::Enumeration(var) => write!(f, "{var:?}"),
             Self::Error(e) => write!(f, "{}: {e}", Colour::Red.bold().paint("error")),
             Self::Float(num) => write!(f, "{num:?}"),
-            Self::Function(func) => write!(f, "{:?}", s_read!(func)),
             Self::FubarPointer {
                 name,
                 frame_size,
@@ -547,52 +269,20 @@ impl std::fmt::Debug for Value {
                 }
                 write!(f, "] }}")
             }
-            #[cfg(feature = "async")]
-            Self::Future {
-                name,
-                executor,
-                task,
-            } => write!(f, "Task `{name}`: {task:?}, executor: {executor:?}"),
             Self::Integer(num) => write!(f, "{num:?}"),
-            Self::Lambda(ƛ) => write!(f, "{:?}", s_read!(ƛ)),
-            Self::ParsedDwarf(ctx) => write!(f, "{ctx:?}"),
             Self::Plugin((name, _plugin)) => write!(f, "plugin::{name}"),
-            Self::ProxyType {
-                module,
-                obj_ty,
-                id,
-                plugin,
-            } => write!(
-                f,
-                "ProxyType {{ module: {}, obj_ty: {}, id: {}, plugin: {} }}",
-                module,
-                obj_ty,
-                id,
-                s_read!(plugin).name()
-            ),
             Self::Range(range) => write!(f, "{range:?}"),
-            Self::Store(store, plugin) => write!(
-                f,
-                "Store {{ store: {:?}, plugin: {} }}",
-                s_read!(store),
-                s_read!(plugin).name()
-            ),
             Self::String(s) => write!(f, "{s:?}"),
             Self::Struct(ty) => write!(f, "{:?}", s_read!(ty)),
-            Self::Table(table) => write!(f, "{table:?}"),
-            #[cfg(feature = "async")]
-            Self::Task { worker, parent } => write!(f, "Task: {parent:?} running on {worker:?}"),
-            // Self::Thonk(inner) => write!(f, "{inner:?}"),
-            Self::Unknown => write!(f, "<unknown>"),
-            Self::Uuid(uuid) => write!(f, "{uuid:?}"),
             Self::ValueType(ty) => write!(f, "{:?}", ty),
+            Self::Uuid(uuid) => write!(f, "{uuid:?}"),
             Self::Vector { ty, inner } => write!(f, "{ty:?}: {inner:?}"),
             #[cfg(feature = "async")]
-            Self::VmFuture {
+            Self::Task {
                 name,
-                executor,
+                running,
                 task,
-            } => write!(f, "VmTask `{name}`: {task:?}, executor: {executor:?}"),
+            } => write!(f, "VmTask `{name}`: {task:?}, running: {running}"),
         }
     }
 }
@@ -606,7 +296,6 @@ impl Clone for Value {
             Self::Enumeration(var) => Self::Enumeration(var.clone()),
             Self::Error(_e) => unimplemented!(),
             Self::Float(num) => Self::Float(*num),
-            Self::Function(func) => Self::Function(func.clone()),
             Self::FubarPointer {
                 name,
                 frame_size,
@@ -616,60 +305,26 @@ impl Clone for Value {
                 frame_size: *frame_size,
                 captures: captured.clone(),
             },
-            #[cfg(feature = "async")]
-            // Note that cloned values do not inherit the task
-            Self::Future {
-                name,
-                executor,
-                task: _,
-            } => Self::Future {
-                name: name.to_owned(),
-                executor: executor.clone(),
-                task: None,
-            },
             Self::Integer(num) => Self::Integer(*num),
-            Self::Lambda(ƛ) => Self::Lambda(ƛ.clone()),
-            Self::ParsedDwarf(ctx) => Self::ParsedDwarf(ctx.clone()),
             Self::Plugin(plugin) => Self::Plugin(plugin.clone()),
-            Self::ProxyType {
-                module,
-                obj_ty,
-                id,
-                plugin,
-            } => Self::ProxyType {
-                module: module.clone(),
-                obj_ty: *obj_ty,
-                id: *id,
-                plugin: plugin.clone(),
-            },
             Self::Range(range) => Self::Range(range.clone()),
-            Self::Store(store, plugin) => Self::Store(store.clone(), plugin.clone()),
             Self::String(str_) => Self::String(str_.clone()),
             Self::Struct(ty) => Self::Struct(ty.clone()),
-            Self::Table(table) => Self::Table(table.clone()),
-            #[cfg(feature = "async")]
-            // Note that cloned values do not inherit the task
-            Self::Task { worker, parent: _ } => Self::Task {
-                worker: worker.clone(),
-                parent: None,
-            },
-            // Self::Thonk(inner) => Self::Thonk(inner.clone()),
-            Self::Unknown => Self::Unknown,
-            Self::Uuid(uuid) => Self::Uuid(*uuid),
             Self::ValueType(ty) => Self::ValueType(ty.clone()),
+            Self::Uuid(uuid) => Self::Uuid(*uuid),
             Self::Vector { ty, inner } => Self::Vector {
                 ty: ty.clone(),
                 inner: inner.clone(),
             },
             #[cfg(feature = "async")]
             // Note that cloned values do not inherit the task
-            Self::VmFuture {
+            Self::Task {
                 name,
-                executor,
+                running: _,
                 task: _,
-            } => Self::VmFuture {
+            } => Self::Task {
                 name: name.to_owned(),
-                executor: executor.clone(),
+                running: false,
                 task: None,
             },
         }
@@ -687,7 +342,6 @@ impl fmt::Display for Value {
             Self::Enumeration(var) => write!(f, "{var}"),
             Self::Error(e) => write!(f, "{}: {e}", Colour::Red.bold().paint("error")),
             Self::Float(num) => write!(f, "{num}"),
-            Self::Function(_) => write!(f, "<function>"),
             Self::FubarPointer {
                 name,
                 frame_size,
@@ -703,39 +357,13 @@ impl fmt::Display for Value {
                 }
                 write!(f, "] }}")
             }
-            #[cfg(feature = "async")]
-            Self::Future {
-                name,
-                executor,
-                task,
-            } => write!(f, "Task `{name}`: {task:?}, executor: {executor:?}"),
             Self::Integer(num) => write!(f, "{num}"),
-            Self::Lambda(_) => write!(f, "<lambda>"),
-            Self::ParsedDwarf(ctx) => write!(f, "{ctx:#?}"),
             Self::Plugin((name, _plugin)) => write!(f, "plugin::{name}"),
-            Self::ProxyType {
-                module: _,
-                obj_ty: _,
-                id: _,
-                plugin,
-            } => write!(f, "{}", s_read!(plugin)),
             Self::Range(range) => write!(f, "{range:?}"),
-            // Self::StoreType(store) => write!(f, "{:?}", store),
-            Self::Store(_store, plugin) => write!(f, "Plug-in ({})", s_read!(plugin).name()),
-            // Self::String(str_) => write!(f, "{str_}"),
             Self::String(str_) => write!(f, "\"{str_}\""),
             Self::Struct(ty) => write!(f, "{}", s_read!(ty)),
-            // Self::String(str_) => write!(f, "\"{}\"", str_),
-            Self::Table(table) => write!(f, "{table:?}"),
-            #[cfg(feature = "async")]
-            Self::Task { worker, parent } => write!(f, "Task: {parent:?} running on {worker:?}"),
-            // Self::Thonk(inner) => match inner {
-            //     ThonkInner::Thonk(name) => write!(f, "Thonk({name})"),
-            //     ThonkInner::Index(index) => write!(f, "Thonk({index})"),
-            // },
-            Self::Unknown => write!(f, "<unknown>"),
-            Self::Uuid(uuid) => write!(f, "{uuid}"),
             Self::ValueType(ty) => write!(f, "{:?}", ty),
+            Self::Uuid(uuid) => write!(f, "{uuid}"),
             Self::Vector { ty: _, inner } => {
                 let inner = s_read!(inner);
                 let mut first_time = true;
@@ -752,11 +380,11 @@ impl fmt::Display for Value {
                 write!(f, "]")
             }
             #[cfg(feature = "async")]
-            Self::VmFuture {
+            Self::Task {
                 name,
-                executor,
+                running,
                 task,
-            } => write!(f, "VmTask `{name}`: {task:?}, executor: {executor:?}"),
+            } => write!(f, "VmTask `{name}`: {task:?}, running: {running}"),
         }
     }
 }
@@ -827,12 +455,6 @@ impl From<Uuid> for Value {
     }
 }
 
-impl From<Range<usize>> for Value {
-    fn from(value: Range<usize>) -> Self {
-        Self::Range(value.start as DwarfInteger..value.end as DwarfInteger)
-    }
-}
-
 impl From<Value> for Option<Uuid> {
     fn from(option: Value) -> Self {
         match option {
@@ -842,346 +464,391 @@ impl From<Value> for Option<Uuid> {
     }
 }
 
+impl From<Range<usize>> for Value {
+    fn from(value: Range<usize>) -> Self {
+        Self::Range(value.start as DwarfInteger..value.end as DwarfInteger)
+    }
+}
+
 impl TryFrom<&Value> for ValueType {
-    type Error = ChaChaError;
+    type Error = Error;
 
     fn try_from(value: &Value) -> Result<Self, <ValueType as TryFrom<&Value>>::Error> {
         match &value {
             Value::ValueType(ty) => Ok(ty.to_owned()),
-            _ => Err(ChaChaError::Conversion {
+            _ => Err(BubbaError::Conversion {
                 src: value.to_string(),
                 dst: "ValueType".to_owned(),
-            }),
+            }
+            .into()),
         }
     }
 }
 
 impl TryFrom<Value> for ValueType {
-    type Error = ChaChaError;
+    type Error = Error;
 
     fn try_from(value: Value) -> Result<Self, <ValueType as TryFrom<Value>>::Error> {
         match &value {
             Value::ValueType(ty) => Ok(ty.to_owned()),
-            _ => Err(ChaChaError::Conversion {
+            _ => Err(BubbaError::Conversion {
                 src: value.to_string(),
                 dst: "ValueType".to_owned(),
-            }),
-        }
-    }
-}
-
-impl TryFrom<Value> for Context {
-    type Error = ChaChaError;
-
-    fn try_from(value: Value) -> Result<Self, <Context as TryFrom<Value>>::Error> {
-        match &value {
-            Value::ParsedDwarf(ctx) => Ok(ctx.to_owned()),
-            _ => Err(ChaChaError::Conversion {
-                src: value.to_string(),
-                dst: "Context".to_owned(),
-            }),
-        }
-    }
-}
-
-impl TryFrom<Value> for Range<DwarfInteger> {
-    type Error = ChaChaError;
-
-    fn try_from(value: Value) -> Result<Self, <Range<DwarfInteger> as TryFrom<Value>>::Error> {
-        match &value {
-            Value::Range(range) => Ok(range.start..range.end),
-            _ => Err(ChaChaError::Conversion {
-                src: value.to_string(),
-                dst: "range".to_owned(),
-            }),
-        }
-    }
-}
-
-impl TryFrom<Value> for Range<usize> {
-    type Error = ChaChaError;
-
-    fn try_from(value: Value) -> Result<Self, <Range<usize> as TryFrom<Value>>::Error> {
-        match &value {
-            Value::Range(range) => Ok(range.start as usize..range.end as usize),
-            _ => Err(ChaChaError::Conversion {
-                src: value.to_string(),
-                dst: "range".to_owned(),
-            }),
-        }
-    }
-}
-
-impl TryFrom<&Value> for Range<usize> {
-    type Error = ChaChaError;
-
-    fn try_from(value: &Value) -> Result<Self, <Range<usize> as TryFrom<&Value>>::Error> {
-        match value {
-            Value::Range(range) => Ok(range.start as usize..range.end as usize),
-            _ => Err(ChaChaError::Conversion {
-                src: value.to_string(),
-                dst: "range".to_owned(),
-            }),
+            }
+            .into()),
         }
     }
 }
 
 impl TryFrom<Value> for Uuid {
-    type Error = ChaChaError;
+    type Error = Error;
 
     fn try_from(value: Value) -> Result<Self, <Uuid as TryFrom<Value>>::Error> {
         match &value {
             Value::Uuid(uuid) => Ok(uuid.to_owned()),
-            Value::String(str_) => str_.parse::<Uuid>().map_err(|_| ChaChaError::Conversion {
-                src: str_.to_owned(),
-                dst: "Uuid".to_owned(),
+            Value::String(str_) => str_.parse::<Uuid>().map_err(|_| {
+                BubbaError::Conversion {
+                    src: str_.to_owned(),
+                    dst: "Uuid".to_owned(),
+                }
+                .into()
             }),
-            _ => Err(ChaChaError::Conversion {
+            _ => Err(BubbaError::Conversion {
                 src: value.to_string(),
                 dst: "Uuid".to_owned(),
-            }),
+            }
+            .into()),
         }
     }
 }
 
 impl TryFrom<&Value> for Uuid {
-    type Error = ChaChaError;
+    type Error = Error;
 
     fn try_from(value: &Value) -> Result<Self, <Uuid as TryFrom<&Value>>::Error> {
         match value {
             Value::Uuid(uuid) => Ok(*uuid),
-            Value::String(str_) => str_.parse::<Uuid>().map_err(|_| ChaChaError::Conversion {
-                src: str_.to_owned(),
-                dst: "Uuid".to_owned(),
+            Value::String(str_) => str_.parse::<Uuid>().map_err(|_| {
+                BubbaError::Conversion {
+                    src: str_.to_owned(),
+                    dst: "Uuid".to_owned(),
+                }
+                .into()
             }),
-            _ => Err(ChaChaError::Conversion {
+            _ => Err(BubbaError::Conversion {
                 src: value.to_string(),
                 dst: "Uuid".to_owned(),
-            }),
+            }
+            .into()),
+        }
+    }
+}
+
+impl TryFrom<Value> for Range<DwarfInteger> {
+    type Error = Error;
+
+    fn try_from(value: Value) -> Result<Self, <Range<DwarfInteger> as TryFrom<Value>>::Error> {
+        match &value {
+            Value::Range(range) => Ok(range.start..range.end),
+            _ => Err(BubbaError::Conversion {
+                src: value.to_string(),
+                dst: "range".to_owned(),
+            }
+            .into()),
+        }
+    }
+}
+
+impl TryFrom<Value> for Range<usize> {
+    type Error = Error;
+
+    fn try_from(value: Value) -> Result<Self, <Range<usize> as TryFrom<Value>>::Error> {
+        match &value {
+            Value::Range(range) => Ok(range.start as usize..range.end as usize),
+            _ => Err(BubbaError::Conversion {
+                src: value.to_string(),
+                dst: "range".to_owned(),
+            }
+            .into()),
+        }
+    }
+}
+
+impl TryFrom<&Value> for Range<usize> {
+    type Error = Error;
+
+    fn try_from(value: &Value) -> Result<Self, <Range<usize> as TryFrom<&Value>>::Error> {
+        match value {
+            Value::Range(range) => Ok(range.start as usize..range.end as usize),
+            _ => Err(BubbaError::Conversion {
+                src: value.to_string(),
+                dst: "range".to_owned(),
+            }
+            .into()),
         }
     }
 }
 
 impl TryFrom<Value> for usize {
-    type Error = ChaChaError;
+    type Error = Error;
 
     fn try_from(value: Value) -> Result<Self, <usize as TryFrom<Value>>::Error> {
         match &value {
             Value::Float(num) => Ok(num.to_owned() as usize),
             Value::Integer(num) => Ok(num.to_owned() as usize),
-            Value::String(str_) => str_.parse::<usize>().map_err(|_| ChaChaError::Conversion {
-                src: str_.to_owned(),
-                dst: "usize".to_owned(),
+            Value::String(str_) => str_.parse::<usize>().map_err(|_| {
+                BubbaError::Conversion {
+                    src: str_.to_owned(),
+                    dst: "usize".to_owned(),
+                }
+                .into()
             }),
             // Value::Thonk(inner) => match inner {
-            //     ThonkInner::Thonk(name) => Err(ChaChaError::Conversion {
+            //     ThonkInner::Thonk(name) => Err(BubbaError::Conversion {
             //         src: (*name).to_owned(),
             //         dst: "usize".to_owned(),
             //     }),
             //     ThonkInner::Index(index) => Ok(*index),
             // },
-            _ => Err(ChaChaError::Conversion {
+            _ => Err(BubbaError::Conversion {
                 src: value.to_string(),
                 dst: "usize".to_owned(),
-            }),
+            }
+            .into()),
         }
     }
 }
 
 impl TryFrom<&Value> for usize {
-    type Error = ChaChaError;
+    type Error = Error;
 
     fn try_from(value: &Value) -> Result<Self, <usize as TryFrom<&Value>>::Error> {
         match value {
             Value::Float(num) => Ok(*num as usize),
             Value::Integer(num) => Ok(*num as usize),
-            Value::String(str_) => str_.parse::<usize>().map_err(|_| ChaChaError::Conversion {
-                src: str_.to_owned(),
-                dst: "usize".to_owned(),
+            Value::String(str_) => str_.parse::<usize>().map_err(|_| {
+                BubbaError::Conversion {
+                    src: str_.to_owned(),
+                    dst: "usize".to_owned(),
+                }
+                .into()
             }),
             // Value::Thonk(inner) => match inner {
-            //     ThonkInner::Thonk(name) => Err(ChaChaError::Conversion {
+            //     ThonkInner::Thonk(name) => Err(BubbaError::Conversion {
             //         src: (*name).to_owned(),
             //         dst: "usize".to_owned(),
             //     }),
             //     ThonkInner::Index(index) => Ok(*index),
             // },
-            _ => Err(ChaChaError::Conversion {
+            _ => Err(BubbaError::Conversion {
                 src: value.to_string(),
                 dst: "usize".to_owned(),
-            }),
+            }
+            .into()),
         }
     }
 }
 
 impl TryFrom<Value> for isize {
-    type Error = ChaChaError;
+    type Error = Error;
 
     fn try_from(value: Value) -> Result<Self, <isize as TryFrom<Value>>::Error> {
         match &value {
             Value::Float(num) => Ok(num.to_owned() as isize),
             Value::Integer(num) => Ok(num.to_owned() as isize),
-            Value::String(str_) => str_.parse::<isize>().map_err(|_| ChaChaError::Conversion {
-                src: str_.to_owned(),
-                dst: "isize".to_owned(),
+            Value::String(str_) => str_.parse::<isize>().map_err(|_| {
+                BubbaError::Conversion {
+                    src: str_.to_owned(),
+                    dst: "isize".to_owned(),
+                }
+                .into()
             }),
             // Value::Thonk(inner) => match inner {
-            //     ThonkInner::Thonk(name) => Err(ChaChaError::Conversion {
+            //     ThonkInner::Thonk(name) => Err(BubbaError::Conversion {
             //         src: (*name).to_owned(),
             //         dst: "isize".to_owned(),
             //     }),
             //     ThonkInner::Index(index) => Ok(*index as isize),
             // },
-            _ => Err(ChaChaError::Conversion {
+            _ => Err(BubbaError::Conversion {
                 src: value.to_string(),
                 dst: "isize".to_owned(),
-            }),
+            }
+            .into()),
         }
     }
 }
 
 impl TryFrom<&Value> for isize {
-    type Error = ChaChaError;
+    type Error = Error;
 
     fn try_from(value: &Value) -> Result<Self, <isize as TryFrom<&Value>>::Error> {
         match value {
             Value::Float(num) => Ok(*num as isize),
             Value::Integer(num) => Ok(*num as isize),
-            Value::String(str_) => str_.parse::<isize>().map_err(|_| ChaChaError::Conversion {
-                src: str_.to_owned(),
-                dst: "isize".to_owned(),
+            Value::String(str_) => str_.parse::<isize>().map_err(|_| {
+                BubbaError::Conversion {
+                    src: str_.to_owned(),
+                    dst: "isize".to_owned(),
+                }
+                .into()
             }),
             // Value::Thonk(inner) => match inner {
-            //     ThonkInner::Thonk(name) => Err(ChaChaError::Conversion {
+            //     ThonkInner::Thonk(name) => Err(BubbaError::Conversion {
             //         src: (*name).to_owned(),
             //         dst: "isize".to_owned(),
             //     }),
             //     ThonkInner::Index(index) => Ok(*index as isize),
             // },
-            _ => Err(ChaChaError::Conversion {
+            _ => Err(BubbaError::Conversion {
                 src: value.to_string(),
                 dst: "isize".to_owned(),
-            }),
+            }
+            .into()),
         }
     }
 }
 
 impl TryFrom<Value> for i64 {
-    type Error = ChaChaError;
+    type Error = Error;
 
     fn try_from(value: Value) -> Result<Self, <i64 as TryFrom<Value>>::Error> {
         match &value {
             Value::Float(num) => Ok(num.to_owned() as DwarfInteger),
             Value::Integer(num) => Ok(num.to_owned()),
-            Value::String(str_) => str_.parse::<i64>().map_err(|_| ChaChaError::Conversion {
-                src: str_.to_owned(),
-                dst: "i64".to_owned(),
+            Value::String(str_) => str_.parse::<i64>().map_err(|_| {
+                BubbaError::Conversion {
+                    src: str_.to_owned(),
+                    dst: "i64".to_owned(),
+                }
+                .into()
             }),
-            _ => Err(ChaChaError::Conversion {
+            _ => Err(BubbaError::Conversion {
                 src: value.to_string(),
                 dst: "i64".to_owned(),
-            }),
+            }
+            .into()),
         }
     }
 }
 
 impl TryFrom<&Value> for i64 {
-    type Error = ChaChaError;
+    type Error = Error;
 
     fn try_from(value: &Value) -> Result<Self, <i64 as TryFrom<&Value>>::Error> {
         match value {
             Value::Float(num) => Ok(*num as DwarfInteger),
             Value::Integer(num) => Ok(*num),
-            Value::String(str_) => str_.parse::<i64>().map_err(|_| ChaChaError::Conversion {
-                src: str_.to_owned(),
-                dst: "i64".to_owned(),
+            Value::String(str_) => str_.parse::<i64>().map_err(|_| {
+                BubbaError::Conversion {
+                    src: str_.to_owned(),
+                    dst: "i64".to_owned(),
+                }
+                .into()
             }),
-            _ => Err(ChaChaError::Conversion {
+            _ => Err(BubbaError::Conversion {
                 src: value.to_string(),
                 dst: "i64".to_owned(),
-            }),
+            }
+            .into()),
         }
     }
 }
 
 impl TryFrom<Value> for u64 {
-    type Error = ChaChaError;
+    type Error = Error;
 
     fn try_from(value: Value) -> Result<Self, <u64 as TryFrom<Value>>::Error> {
         match &value {
             Value::Float(num) => Ok(num.to_owned() as u64),
             Value::Integer(num) => Ok(num.to_owned() as u64),
-            Value::String(str_) => str_.parse::<u64>().map_err(|_| ChaChaError::Conversion {
-                src: str_.to_owned(),
-                dst: "u64".to_owned(),
+            Value::String(str_) => str_.parse::<u64>().map_err(|_| {
+                BubbaError::Conversion {
+                    src: str_.to_owned(),
+                    dst: "u64".to_owned(),
+                }
+                .into()
             }),
-            _ => Err(ChaChaError::Conversion {
+            _ => Err(BubbaError::Conversion {
                 src: value.to_string(),
                 dst: "u64".to_owned(),
-            }),
+            }
+            .into()),
         }
     }
 }
 
 impl TryFrom<&Value> for u64 {
-    type Error = ChaChaError;
+    type Error = Error;
 
     fn try_from(value: &Value) -> Result<Self, <u64 as TryFrom<&Value>>::Error> {
         match value {
             Value::Float(num) => Ok(*num as u64),
             Value::Integer(num) => Ok(*num as u64),
-            Value::String(str_) => str_.parse::<u64>().map_err(|_| ChaChaError::Conversion {
-                src: str_.to_owned(),
-                dst: "u64".to_owned(),
+            Value::String(str_) => str_.parse::<u64>().map_err(|_| {
+                BubbaError::Conversion {
+                    src: str_.to_owned(),
+                    dst: "u64".to_owned(),
+                }
+                .into()
             }),
-            _ => Err(ChaChaError::Conversion {
+            _ => Err(BubbaError::Conversion {
                 src: value.to_string(),
                 dst: "u64".to_owned(),
-            }),
+            }
+            .into()),
         }
     }
 }
 
 impl TryFrom<Value> for f64 {
-    type Error = ChaChaError;
+    type Error = Error;
 
     fn try_from(value: Value) -> Result<Self, <f64 as TryFrom<Value>>::Error> {
         match &value {
             Value::Float(num) => Ok(num.to_owned()),
             Value::Integer(num) => Ok(num.to_owned() as f64),
-            Value::String(str_) => str_.parse::<f64>().map_err(|_| ChaChaError::Conversion {
-                src: str_.to_owned(),
-                dst: "f64".to_owned(),
+            Value::String(str_) => str_.parse::<f64>().map_err(|_| {
+                BubbaError::Conversion {
+                    src: str_.to_owned(),
+                    dst: "f64".to_owned(),
+                }
+                .into()
             }),
-            _ => Err(ChaChaError::Conversion {
+            _ => Err(BubbaError::Conversion {
                 src: value.to_string(),
                 dst: "f64".to_owned(),
-            }),
+            }
+            .into()),
         }
     }
 }
 
 impl TryFrom<&Value> for f64 {
-    type Error = ChaChaError;
+    type Error = Error;
 
     fn try_from(value: &Value) -> Result<Self, <f64 as TryFrom<&Value>>::Error> {
         match value {
             Value::Float(num) => Ok(*num),
             Value::Integer(num) => Ok(*num as f64),
-            Value::String(str_) => str_.parse::<f64>().map_err(|_| ChaChaError::Conversion {
-                src: str_.to_owned(),
-                dst: "f64".to_owned(),
+            Value::String(str_) => str_.parse::<f64>().map_err(|_| {
+                BubbaError::Conversion {
+                    src: str_.to_owned(),
+                    dst: "f64".to_owned(),
+                }
+                .into()
             }),
-            _ => Err(ChaChaError::Conversion {
+            _ => Err(BubbaError::Conversion {
                 src: value.to_string(),
                 dst: "f64".to_owned(),
-            }),
+            }
+            .into()),
         }
     }
 }
 
 impl TryFrom<Value> for String {
-    type Error = ChaChaError;
+    type Error = Error;
 
     fn try_from(value: Value) -> Result<Self, <String as TryFrom<Value>>::Error> {
         Ok(value.to_inner_string())
@@ -1189,7 +856,7 @@ impl TryFrom<Value> for String {
 }
 
 impl TryFrom<&Value> for String {
-    type Error = ChaChaError;
+    type Error = Error;
 
     fn try_from(value: &Value) -> Result<Self, <String as TryFrom<&Value>>::Error> {
         Ok(value.to_inner_string())
@@ -1197,39 +864,47 @@ impl TryFrom<&Value> for String {
 }
 
 impl TryFrom<Value> for bool {
-    type Error = ChaChaError;
+    type Error = Error;
 
     fn try_from(value: Value) -> Result<Self, <bool as TryFrom<Value>>::Error> {
         match &value {
             Value::Boolean(bool_) => Ok(bool_.to_owned()),
             Value::Integer(num) => Ok(num != &0),
-            Value::String(str_) => str_.parse::<bool>().map_err(|_| ChaChaError::Conversion {
-                src: str_.to_owned(),
-                dst: "bool".to_owned(),
+            Value::String(str_) => str_.parse::<bool>().map_err(|_| {
+                BubbaError::Conversion {
+                    src: str_.to_owned(),
+                    dst: "bool".to_owned(),
+                }
+                .into()
             }),
-            _ => Err(ChaChaError::Conversion {
+            _ => Err(BubbaError::Conversion {
                 src: value.to_string(),
                 dst: "bool".to_owned(),
-            }),
+            }
+            .into()),
         }
     }
 }
 
 impl TryFrom<&Value> for bool {
-    type Error = ChaChaError;
+    type Error = Error;
 
     fn try_from(value: &Value) -> Result<Self, <bool as TryFrom<&Value>>::Error> {
         match value {
             Value::Boolean(bool_) => Ok(*bool_),
             Value::Integer(num) => Ok(*num != 0),
-            Value::String(str_) => str_.parse::<bool>().map_err(|_| ChaChaError::Conversion {
-                src: str_.to_owned(),
-                dst: "bool".to_owned(),
+            Value::String(str_) => str_.parse::<bool>().map_err(|_| {
+                BubbaError::Conversion {
+                    src: str_.to_owned(),
+                    dst: "bool".to_owned(),
+                }
+                .into()
             }),
-            _ => Err(ChaChaError::Conversion {
+            _ => Err(BubbaError::Conversion {
                 src: value.to_string(),
                 dst: "bool".to_owned(),
-            }),
+            }
+            .into()),
         }
     }
 }
@@ -1264,10 +939,13 @@ impl std::ops::Add for Value {
             (Value::Boolean(a), Value::Boolean(b)) => Value::Boolean(*a || *b),
             // (Value::Boolean(a), Value::String(b)) => Value::String(a.to_string() + &b),
             // (Value::String(a), Value::Boolean(b)) => Value::String(a + &b.to_string()),
-            (a, b) => Value::Error(Box::new(ChaChaError::Addition {
-                left: a.clone(),
-                right: b.clone(),
-            })),
+            (a, b) => Value::Error(Box::new(
+                BubbaError::Addition {
+                    left: a.clone(),
+                    right: b.clone(),
+                }
+                .into(),
+            )),
         }
     }
 }
@@ -1300,10 +978,13 @@ impl std::ops::Sub for Value {
             (Value::Integer(a), Value::Integer(b)) => Value::Integer(a - b),
             (Value::Empty, Value::Empty) => Value::Empty,
             (Value::Boolean(a), Value::Boolean(b)) => Value::Boolean(a && b),
-            (a, b) => Value::Error(Box::new(ChaChaError::Subtraction {
-                left: a.clone(),
-                right: b.clone(),
-            })),
+            (a, b) => Value::Error(Box::new(
+                BubbaError::Subtraction {
+                    left: a.clone(),
+                    right: b.clone(),
+                }
+                .into(),
+            )),
         }
     }
 }
@@ -1321,10 +1002,13 @@ impl std::ops::Mul for Value {
             (Value::Integer(a), Value::Float(b)) => Value::Float(a as DwarfFloat * b),
             (Value::Integer(a), Value::Integer(b)) => Value::Integer(a * b),
             (Value::Empty, Value::Empty) => Value::Empty,
-            (a, b) => Value::Error(Box::new(ChaChaError::Multiplication {
-                left: a.clone(),
-                right: b.clone(),
-            })),
+            (a, b) => Value::Error(Box::new(
+                BubbaError::Multiplication {
+                    left: a.clone(),
+                    right: b.clone(),
+                }
+                .into(),
+            )),
         }
     }
 }
@@ -1340,7 +1024,7 @@ impl std::ops::Neg for Value {
             Value::Float(a) => Value::Float(-a),
             Value::Integer(a) => Value::Integer(-a),
             Value::Empty => Value::Empty,
-            a => Value::Error(Box::new(ChaChaError::Negation { value: a })),
+            a => Value::Error(Box::new(BubbaError::Negation { value: a }.into())),
         }
     }
 }
@@ -1355,7 +1039,7 @@ impl std::ops::Not for Value {
         match self {
             Value::Boolean(a) => Value::Boolean(!a),
             Value::Empty => Value::Empty,
-            a => Value::Error(Box::new(ChaChaError::Bang { value: a })),
+            a => Value::Error(Box::new(BubbaError::Bang { value: a }.into())),
         }
     }
 }
@@ -1371,10 +1055,13 @@ impl std::ops::Div for Value {
             (Value::Float(a), Value::Float(b)) => Value::Float(a / b),
             (Value::Integer(a), Value::Integer(b)) => Value::Integer(a / b),
             (Value::Empty, Value::Empty) => Value::Empty,
-            (a, b) => Value::Error(Box::new(ChaChaError::Division {
-                left: a.clone(),
-                right: b.clone(),
-            })),
+            (a, b) => Value::Error(Box::new(
+                BubbaError::Division {
+                    left: a.clone(),
+                    right: b.clone(),
+                }
+                .into(),
+            )),
         }
     }
 }
@@ -1471,20 +1158,6 @@ impl std::cmp::PartialEq for Value {
             (Value::Float(a), Value::Integer(b)) => a == &(*b as DwarfFloat),
             (Value::Integer(a), Value::Integer(b)) => a == b,
             (Value::Integer(a), Value::Float(b)) => (*a as DwarfFloat) == *b,
-            (
-                Value::ProxyType {
-                    module: _,
-                    obj_ty: _,
-                    id: a,
-                    plugin: _,
-                },
-                Value::ProxyType {
-                    module: _,
-                    obj_ty: _,
-                    id: b,
-                    plugin: _,
-                },
-            ) => a == b,
             (Value::Plugin((a, _)), Value::Plugin((b, _))) => a == b,
             (Value::String(a), Value::String(b)) => a == b,
             (Value::Struct(a), Value::Struct(b)) => *s_read!(a) == *s_read!(b),
@@ -1512,175 +1185,4 @@ impl std::cmp::PartialEq for Value {
             (_, _) => false, //Value::Error(format!("Cannot compare {} and {}", a, b)),
         }
     }
-}
-
-#[derive(Clone, Debug)]
-pub struct TupleEnum<T>
-where
-    T: Clone + std::fmt::Debug + PartialEq + std::fmt::Display,
-{
-    pub(crate) variant: String,
-    pub(crate) value: RefType<T>,
-}
-
-impl<T> PartialEq for TupleEnum<T>
-where
-    T: Clone + std::fmt::Debug + PartialEq + std::fmt::Display,
-{
-    fn eq(&self, other: &Self) -> bool {
-        self.variant == other.variant && s_read!(self.value).eq(&s_read!(other.value))
-    }
-}
-
-impl<T> Eq for TupleEnum<T> where T: Clone + std::fmt::Debug + PartialEq + std::fmt::Display {}
-
-impl<T> TupleEnum<T>
-where
-    T: Clone + std::fmt::Debug + PartialEq + std::fmt::Display,
-{
-    pub fn new<S: AsRef<str>>(variant_name: S, value: RefType<T>) -> Self {
-        Self {
-            variant: variant_name.as_ref().to_owned(),
-            value,
-        }
-    }
-
-    pub fn value(&self) -> RefType<T> {
-        self.value.clone()
-    }
-
-    pub fn variant(&self) -> &str {
-        &self.variant
-    }
-}
-
-impl<T> fmt::Display for TupleEnum<T>
-where
-    T: Clone + std::fmt::Debug + PartialEq + std::fmt::Display,
-{
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}({})", self.variant(), s_read!(self.value))
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct UserStruct<T>
-where
-    T: Clone + std::fmt::Debug + PartialEq + std::fmt::Display + std::default::Default,
-{
-    type_name: String,
-    type_: RefType<ValueType>,
-    attrs: UserTypeAttribute<T>,
-}
-
-impl<T> PartialEq for UserStruct<T>
-where
-    T: Clone + std::fmt::Debug + PartialEq + std::fmt::Display + std::default::Default,
-{
-    fn eq(&self, other: &Self) -> bool {
-        s_read!(self.type_).eq(&s_read!(other.type_)) && self.attrs.eq(&other.attrs)
-    }
-}
-
-impl<T> Eq for UserStruct<T> where
-    T: Clone + std::fmt::Debug + PartialEq + std::fmt::Display + std::default::Default
-{
-}
-
-impl<T> UserStruct<T>
-where
-    T: Clone + std::fmt::Debug + PartialEq + std::fmt::Display + std::default::Default,
-{
-    pub fn new<S: AsRef<str>>(type_name: S, type_: &RefType<ValueType>) -> Self {
-        Self {
-            type_name: type_name.as_ref().to_owned(),
-            type_: type_.clone(),
-            attrs: UserTypeAttribute::default(),
-        }
-    }
-
-    /// Create a field for the user type
-    ///
-    /// This is called during type definition, from a declaration in a source file.
-    pub fn define_field<S: AsRef<str>>(&mut self, name: S, value: RefType<T>) {
-        self.attrs.0.insert(name.as_ref().to_owned(), value);
-    }
-
-    pub fn get_field_value<S: AsRef<str>>(&self, name: S) -> Option<&RefType<T>> {
-        self.attrs.0.get(name.as_ref())
-    }
-
-    pub fn set_field_value<S: AsRef<str>>(
-        &mut self,
-        name: S,
-        value: RefType<T>,
-    ) -> Option<RefType<T>> {
-        self.attrs.0.insert(name.as_ref().to_owned(), value)
-    }
-
-    pub fn get_type(&self) -> &RefType<ValueType> {
-        &self.type_
-    }
-
-    pub fn type_name(&self) -> &str {
-        &self.type_name
-    }
-}
-
-impl<T> fmt::Display for UserStruct<T>
-where
-    T: Clone + std::fmt::Debug + PartialEq + std::fmt::Display + std::default::Default,
-{
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let mut attrs = self.attrs.0.iter().collect::<Vec<_>>();
-        attrs.sort_by(|(k1, _), (k2, _)| k1.cmp(k2));
-
-        let name = if let Some(name) = self.type_name.strip_prefix(PATH_SEP) {
-            name
-        } else {
-            &self.type_name
-        };
-
-        let mut out = f.debug_struct(name);
-        for (k, v) in attrs {
-            out.field(k, &format_args!("{}", &s_read!(v)));
-        }
-
-        out.finish()
-    }
-}
-
-#[derive(Clone, Debug, Default)]
-pub struct UserTypeAttribute<T>(HashMap<String, RefType<T>>)
-where
-    T: Clone + std::fmt::Debug + PartialEq + std::fmt::Display + std::default::Default;
-
-impl<T> PartialEq for UserTypeAttribute<T>
-where
-    T: Clone + std::fmt::Debug + PartialEq + std::fmt::Display + std::default::Default,
-{
-    fn eq(&self, other: &Self) -> bool {
-        if self.0.len() != other.0.len() {
-            return false;
-        }
-
-        for (k, v) in self.0.iter() {
-            if !other.0.contains_key(k) {
-                return false;
-            }
-
-            let ov = other.0.get(k).unwrap();
-
-            if !s_read!(v).eq(&s_read!(ov)) {
-                return false;
-            }
-        }
-
-        true
-    }
-}
-
-impl<T> Eq for UserTypeAttribute<T> where
-    T: Clone + std::fmt::Debug + PartialEq + std::fmt::Display + std::default::Default
-{
 }

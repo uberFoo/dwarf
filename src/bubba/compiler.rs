@@ -6,6 +6,7 @@ use snafu::{location, prelude::*, Location};
 use crate::{
     bubba::{
         instr::{Instruction, Program, Thonk},
+        value::Value,
         BOOL, EMPTY, INT, RANGE, RESULT, STRING, STRING_ARRAY, UNKNOWN,
     },
     lu_dog::{
@@ -14,8 +15,8 @@ use crate::{
     },
     new_ref, s_read, s_write,
     sarzak::{ObjectStore as SarzakStore, Ty},
-    Context as ExtruderContext, NewRef, RefType, Span, Value, ERR_CLR, MERLIN, OTHER_CLR, POP_CLR,
-    SARZAK,
+    Context as ExtruderContext, NewRef, RefType, Span, BUILD_TIME, ERR_CLR, MERLIN, OTHER_CLR,
+    POP_CLR, SARZAK, VERSION,
 };
 
 mod expression;
@@ -24,9 +25,6 @@ use expression::{
     a_weight, block, call, field, for_loop, if_expr, index, list, literal, operator, print, range,
     ret, struct_expr, typecast, variable, xmatch,
 };
-
-const VERSION: &str = env!("CARGO_PKG_VERSION");
-pub const BUILD_TIME: &str = include!(concat!(env!("OUT_DIR"), "/timestamp.txt"));
 
 #[derive(Clone, Debug, Snafu)]
 pub struct Error(BubbaError);
@@ -732,9 +730,13 @@ mod test {
     }
 
     // Nothing special about this number.
+    #[cfg(feature = "async")]
     const THREADS: usize = 5;
     pub(super) fn run_vm(program: &Program) -> Result<RefType<Value>, Error> {
+        #[cfg(feature = "async")]
         let mut vm = VM::new(program, &[], &get_dwarf_home(), THREADS);
+        #[cfg(not(feature = "async"))]
+        let mut vm = VM::new(program, &[], &get_dwarf_home());
         vm.invoke("main", &[])
     }
 
@@ -742,7 +744,10 @@ mod test {
         program: &Program,
         args: &[RefType<Value>],
     ) -> Result<RefType<Value>, Error> {
+        #[cfg(feature = "async")]
         let mut vm = VM::new(program, args, &get_dwarf_home(), THREADS);
+        #[cfg(not(feature = "async"))]
+        let mut vm = VM::new(program, args, &get_dwarf_home());
         vm.invoke("main", &[])
     }
 

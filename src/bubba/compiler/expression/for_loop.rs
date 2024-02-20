@@ -6,11 +6,12 @@ use crate::{
             compile_expression, get_span, BubbaError, CThonk, Context, Result, INT, STRING,
         },
         instr::Instruction,
+        value::Value,
     },
     lu_dog::{ValueType, ValueTypeEnum},
     new_ref, s_read,
     sarzak::Ty,
-    NewRef, RefType, SarzakStorePtr, Span, Value, POP_CLR,
+    NewRef, RefType, SarzakStorePtr, Span, POP_CLR,
 };
 
 const LIST_VAR: &str = "$$list_value";
@@ -82,7 +83,7 @@ pub(in crate::bubba::compiler) fn compile(
                 }
                 ValueTypeEnum::Ty(ref ty) => {
                     let ty = sarzak.exhume_ty(ty).unwrap();
-                    let ty = s_read!(ty);
+                    let ty = ty.read().unwrap();
 
                     match &*ty {
                         Ty::Integer(_) => {
@@ -175,7 +176,7 @@ pub(in crate::bubba::compiler) fn compile(
                 }
                 ValueTypeEnum::Ty(ref ty) => {
                     let ty = sarzak.exhume_ty(ty).unwrap();
-                    let ty = s_read!(ty);
+                    let ty = ty.read().unwrap();
 
                     match &*ty {
                         Ty::Integer(_) => {

@@ -32,6 +32,9 @@ pub(crate) use chacha::{error::ChaChaError, interpreter};
 pub type DwarfInteger = i64;
 pub type DwarfFloat = f64;
 
+const VERSION: &str = env!("CARGO_PKG_VERSION");
+pub const BUILD_TIME: &str = include!(concat!(env!("OUT_DIR"), "/timestamp.txt"));
+
 mod keywords {
     pub(crate) const ADD: &str = "add";
     pub(crate) const ARGS: &str = "args";
@@ -507,7 +510,7 @@ impl Default for Context {
 }
 
 pub type ValueResult = Result<RefType<Value>, ChaChaError>;
-pub type VmValueResult = Result<RefType<Value>, BubbaError>;
+pub type VmValueResult = Result<RefType<crate::bubba::value::Value>, BubbaError>;
 
 pub(crate) trait Desanitize {
     fn desanitize(&self) -> String;

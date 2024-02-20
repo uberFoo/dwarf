@@ -5,9 +5,10 @@ use crate::{
     bubba::{
         compiler::{compile_expression, expression::literal, CThonk, Context, Result},
         instr::Instruction,
+        value::Value,
     },
     lu_dog::{DataStructureEnum, ExpressionEnum, ValueType},
-    new_ref, s_read, NewRef, RefType, SarzakStorePtr, Span, Value, POP_CLR,
+    new_ref, s_read, NewRef, RefType, SarzakStorePtr, Span, POP_CLR,
 };
 
 #[tracing::instrument]
@@ -461,7 +462,7 @@ mod test {
         let woog_enum = s_read!(lu_dog).exhume_enumeration(&id).unwrap();
         let ty = ValueType::new_enumeration(true, &woog_enum, &mut s_write!(lu_dog));
         let user_enum = TupleEnum::new("Bar", new_ref!(Value, Value::Integer(42)));
-        let user_enum = new_ref!(TupleEnum, user_enum);
+        let user_enum = new_ref!(TupleEnum<Value>, user_enum);
 
         let program = compile(&ctx).unwrap();
         println!("{program}");

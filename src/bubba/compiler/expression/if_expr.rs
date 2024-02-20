@@ -4,9 +4,10 @@ use crate::{
     bubba::{
         compiler::{compile_expression, CThonk, Context, Result},
         instr::Instruction,
+        value::Value,
     },
     lu_dog::ValueType,
-    new_ref, s_read, NewRef, RefType, SarzakStorePtr, Value, POP_CLR,
+    new_ref, s_read, NewRef, RefType, SarzakStorePtr, POP_CLR,
 };
 
 #[tracing::instrument]

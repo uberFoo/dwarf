@@ -3,7 +3,7 @@ use std::{
     ops::{Deref, DerefMut},
 };
 
-use crate::chacha::value::FfiValue;
+use crate::chacha::ffi_value::FfiValue;
 use abi_stable::{
     declare_root_module_statics,
     library::RootModule,

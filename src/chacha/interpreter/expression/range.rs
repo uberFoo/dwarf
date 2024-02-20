@@ -7,11 +7,7 @@ use crate::{
     new_ref, s_read, DwarfInteger, NewRef, RefType, SarzakStorePtr, Value,
 };
 
-pub fn eval_range(
-    range: &SarzakStorePtr,
-    context: &mut Context,
-    vm: &mut VM,
-) -> Result<RefType<Value>> {
+pub fn eval_range(range: &SarzakStorePtr, context: &mut Context) -> Result<RefType<Value>> {
     let lu_dog = context.lu_dog_heel().clone();
 
     let range = s_read!(lu_dog).exhume_range_expression(range).unwrap();
@@ -22,8 +18,8 @@ pub fn eval_range(
 
     debug!("range lhs: {lhs:?}, range: {range:?}");
 
-    let lhs = eval_expression(lhs, context, vm)?;
-    let rhs = eval_expression(rhs, context, vm)?;
+    let lhs = eval_expression(lhs, context)?;
+    let rhs = eval_expression(rhs, context)?;
 
     let range = std::ops::Range {
         start: <Value as TryInto<DwarfInteger>>::try_into(s_read!(lhs).clone())?,
