@@ -6,6 +6,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::{bubba::value::Value, new_ref, s_read, NewRef, RefType, Span};
 
+/// Instruction
+///
+/// Note to self: leave the Strings wrapped in RefType, as changing it slows
+/// the VM down between 10-23%.
 #[derive(Clone, Debug)]
 pub enum Instruction {
     /// Add the top two values on the stack.

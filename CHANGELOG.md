@@ -61,7 +61,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Todo
 
 - [ ] VM improvements
-  - [ ] Create specialized Value type for VM
+  - [x] Create specialized Value type for VM
   - [ ] Streamline instruction size
   - [ ] Re-implement the VM run loop to utilize recursion instead of managing the stack manually -- it's faster.
 - [ ] Compiler improvements
