@@ -33,7 +33,7 @@ use crate::{
     plug_in::{PluginModRef, PluginType},
     s_read, s_write,
     sarzak::{ObjectStore as SarzakStore, Ty, MODEL as SARZAK_MODEL},
-    ChaChaError, DwarfInteger, NewRef, RefType, Span, ERR_CLR, POP_CLR,
+    DwarfInteger, NewRef, RefType, Span, ERR_CLR, POP_CLR,
 };
 
 use super::instr::{Instruction, Program};
@@ -248,10 +248,8 @@ impl VM {
                 Instruction::CallDestination(name) => {
                     let name = &*s_read!(name);
                     if let Some((ip, _frame_size)) = vm.func_map.get(name) {
-                        vm.instrs.push(Instruction::Push(new_ref!(
-                            Value,
-                            Value::Integer(*ip as DwarfInteger)
-                        )));
+                        vm.instrs
+                            .push(Instruction::Push(Value::Integer(*ip as DwarfInteger)));
                     } else {
                         missing_symbols.insert(name.to_owned());
                     }
@@ -259,9 +257,8 @@ impl VM {
                 Instruction::LocalCardinality(name) => {
                     let name = &*s_read!(name);
                     if let Some((_ip, frame_size)) = vm.func_map.get(name) {
-                        vm.instrs.push(Instruction::Push(new_ref!(
-                            Value,
-                            Value::Integer(*frame_size as DwarfInteger)
+                        vm.instrs.push(Instruction::Push(Value::Integer(
+                            *frame_size as DwarfInteger,
                         )));
                     } else {
                         missing_symbols.insert(name.to_owned());
@@ -318,7 +315,15 @@ impl VM {
 
         let trace = log_enabled!(target: "vm", Trace);
 
-        let result = self.inner_run(ip, fp, stack, args.len(), frame_size, trace);
+        let result = self.inner_run(
+            ip,
+            fp,
+            stack,
+            args.len(),
+            frame_size,
+            self.program.clone(),
+            trace,
+        );
 
         // The FP is taken by the return handling code.
         // stack.pop(); // fp
@@ -370,10 +375,12 @@ impl VM {
         mut stack: Vec<StackValue>,
         mut arity: usize,
         mut local_count: usize,
+        program: Program,
         trace: bool,
     ) -> Result<RefType<Value>> {
         #[cfg(feature = "tracy-client")]
         let _frame = non_continuous_frame!("inner_run");
+
         loop {
             if ip as usize >= self.instrs.len() {
                 return Err(BubbaError::IPOutOfBounds { ip: ip as usize }.into());
@@ -384,7 +391,7 @@ impl VM {
                 for iip in 0.max(ip - 3)..(self.instrs.len() as isize).min(ip + 3isize) {
                     let instr = &self.instrs[iip as usize];
 
-                    let src = if let Some(source) = self.program.get_source() {
+                    let src = if let Some(source) = program.get_source() {
                         let span = self.source_map[ip as usize].clone();
                         &source[span]
                     } else {
@@ -415,9 +422,7 @@ impl VM {
                     Instruction::Add => {
                         let b = stack.pop().unwrap();
                         let a = stack.pop().unwrap();
-                        if trace {
-                            println!("\t\t{}\t{},\t{}", Colour::Green.paint("add:"), a, b,);
-                        }
+
                         let c = a.into_value() + b.into_value();
                         stack.push(c.into());
 
@@ -426,9 +431,7 @@ impl VM {
                     Instruction::And => {
                         let b = stack.pop().unwrap();
                         let a = stack.pop().unwrap();
-                        if trace {
-                            println!("\t\t{}\t{},\t{}", Colour::Green.paint("and:"), a, b,);
-                        }
+
                         let c = Value::Boolean(
                             a.into_value().try_into()? && b.into_value().try_into()?,
                         );
@@ -440,16 +443,11 @@ impl VM {
                     Instruction::AsyncCall(func_arity) => {
                         #[cfg(feature = "tracy-client")]
                         let _span = span!("AsyncCall");
+
+                        self.captures = None;
+
                         let callee = &stack[stack.len() - func_arity - 2].clone();
-                        if trace {
-                            println!("\t\t{}:\t{callee}", Colour::Green.paint("func:"));
-                        }
-
                         let stack_local_count = &stack[stack.len() - func_arity - 1].clone();
-                        if trace {
-                            println!("\t\t{}:\t{stack_local_count}", Colour::Green.paint("func:"));
-                        }
-
                         let (callee, frame_size, local_card, stack_count): (
                             isize,
                             Value,
@@ -501,7 +499,7 @@ impl VM {
                         let old_stack = &mut stack;
                         let mut stack = new_stack;
 
-                        // The call stack has been setup, but we need to make room
+                        // The call frame has been mostly setup, but we need to make room
                         // for locals.
                         (0..local_card).for_each(|_| {
                             stack.push(Value::Empty.into());
@@ -524,8 +522,9 @@ impl VM {
                         // This clone keeps the "escapes func body" ghoul away.
                         let func_arity = func_arity.clone();
 
+                        let program = program.clone();
                         let future = async move {
-                            vm.inner_run(callee, fp, stack, func_arity, local_card, false)
+                            vm.inner_run(callee, fp, stack, func_arity, local_card, program, false)
                         };
 
                         let executor = match unsafe { EXECUTOR.get() } {
@@ -580,16 +579,9 @@ impl VM {
                     Instruction::AsyncSpawn(func_arity) => {
                         #[cfg(feature = "tracy-client")]
                         let _span = span!("AsyncSpawn");
+
                         let callee = &stack[stack.len() - func_arity - 2].clone();
-                        if trace {
-                            println!("\t\t{}:\t{callee}", Colour::Green.paint("func:"));
-                        }
-
                         let stack_local_count = &stack[stack.len() - func_arity - 1].clone();
-                        if trace {
-                            println!("\t\t{}:\t{stack_local_count}", Colour::Green.paint("func:"));
-                        }
-
                         let (callee, frame_size, local_card, stack_count): (
                             isize,
                             Value,
@@ -664,8 +656,9 @@ impl VM {
                         // This clone keeps the "escapes func body" ghoul away.
                         let func_arity = func_arity.clone();
 
+                        let program = program.clone();
                         let future = async move {
-                            vm.inner_run(callee, fp, stack, func_arity, local_card, false)
+                            vm.inner_run(callee, fp, stack, func_arity, local_card, program, false)
                         };
 
                         let executor = match unsafe { EXECUTOR.get() } {
@@ -745,9 +738,7 @@ impl VM {
                                     if !*running {
                                         executor.start_task(&task);
                                     }
-                                    log::trace!(target: "async", "block on");
                                     let f = future::block_on(task)?;
-                                    log::trace!(target: "async", "block off");
                                     f
                                 } else {
                                     panic!("Task is missing -- already awaited.");
@@ -784,16 +775,10 @@ impl VM {
                         1
                     }
                     Instruction::Call(func_arity) => {
+                        self.captures = None;
+
                         let callee = &stack[stack.len() - func_arity - 2];
-                        if trace {
-                            println!("\t\t{}:\t{callee}", Colour::Green.paint("func:"));
-                        }
-
                         let stack_local_count = &stack[stack.len() - func_arity - 1];
-                        if trace {
-                            println!("\t\t{}:\t{stack_local_count}", Colour::Green.paint("func:"));
-                        }
-
                         if let Value::Plugin((_, plugin)) = callee.clone().into_value() {
                             let method: String =
                                 stack_local_count.clone().into_value().try_into()?;
@@ -825,7 +810,7 @@ impl VM {
                                         args.into(),
                                     ) {
                                         ROk(value) => {
-                                            let result = self.program.get_symbol(RESULT).expect(
+                                            let result = program.get_symbol(RESULT).expect(
                                                 "The RESULT symbol is missing from the program.",
                                             );
                                             stack.push(
@@ -937,16 +922,17 @@ impl VM {
                         let Some(captures) = self.captures.as_ref() else {
                             panic!("Attempt to capture a local outside of a lambda call.")
                         };
+                        // The first one is faster, but it doesn't share captured
+                        // variables across tasks.
+                        // The second one does the latter, and is slower due to the
+                        // locking involved.
+                        // Maybe this could be configurable? Feature flag? Maybe
+                        // even something at runtime, although we'd need to see
+                        // how mut that extra condition costs.
+                        // let value = (*s_read!(captures[*from])).clone();
                         let value = captures[*from].clone();
                         stack[fp - arity - local_count - 3 + to] = value.into();
-                        if trace {
-                            println!(
-                                "\t\t{}\t{},\t{}",
-                                Colour::Green.paint("capture_local:"),
-                                from,
-                                to
-                            );
-                        }
+
                         1
                     }
                     Instruction::Comment(_) => 1,
@@ -1022,9 +1008,7 @@ impl VM {
                     Instruction::Divide => {
                         let b = stack.pop().unwrap();
                         let a = stack.pop().unwrap();
-                        if trace {
-                            println!("\t\t{}\t{},\t{}", Colour::Green.paint("div:"), a, b,);
-                        }
+
                         let c = a.into_value() / b.into_value();
 
                         stack.push(c.into());
@@ -1086,13 +1070,6 @@ impl VM {
                                     .get_field_value(field.clone().into_value().to_inner_string())
                                 {
                                     Some(value) => {
-                                        if trace {
-                                            println!(
-                                                "\t\t{}\t{}",
-                                                Colour::Green.paint("field_read:"),
-                                                s_read!(value)
-                                            );
-                                        }
                                         stack.push(value.clone().into());
                                     }
                                     None => {
@@ -1130,15 +1107,7 @@ impl VM {
                                     field.clone().into_value().to_inner_string(),
                                     value.clone().into_pointer().clone(),
                                 ) {
-                                    Some(_) => {
-                                        if trace {
-                                            println!(
-                                                "\t\t{}\t{}",
-                                                Colour::Green.paint("field_write:"),
-                                                value
-                                            );
-                                        }
-                                    }
+                                    Some(_) => {}
                                     None => {
                                         return Err::<RefType<Value>, Error>(
                                             BubbaError::NoSuchField {
@@ -1166,13 +1135,6 @@ impl VM {
                     Instruction::Goto(label) => {
                         let label = &*s_read!(label);
                         if let Some(new_ip) = self.labels.get(label) {
-                            if trace {
-                                println!(
-                                    "\t\t{} {}",
-                                    Colour::Red.bold().paint("goto"),
-                                    Colour::Yellow.bold().paint(format!("0x{:08x}", new_ip + 1))
-                                );
-                            }
                             *new_ip as isize - ip
                         } else {
                             return Err(BubbaError::VmPanic {
@@ -1191,32 +1153,12 @@ impl VM {
 
                         return Err(BubbaError::HaltAndCatchFire { file, span }.into());
                     }
-                    Instruction::Jump(offset) => {
-                        if trace {
-                            println!(
-                                "\t\t{} {}",
-                                Colour::Red.bold().paint("jmp"),
-                                Colour::Yellow
-                                    .bold()
-                                    .paint(format!("0x{:08x}", ip + offset + 1))
-                            );
-                        }
-                        offset + 1
-                    }
+                    Instruction::Jump(offset) => offset + 1,
                     Instruction::JumpIfFalse(offset) => {
                         let condition = stack.pop().unwrap();
                         let condition: bool = condition.into_value().try_into()?;
 
                         if !condition {
-                            if trace {
-                                println!(
-                                    "\t\t{} {}",
-                                    Colour::Red.bold().paint("jiff"),
-                                    Colour::Yellow
-                                        .bold()
-                                        .paint(format!("0x{:08x}", ip + offset + 1))
-                                );
-                            }
                             offset + 1
                         } else {
                             1
@@ -1226,15 +1168,6 @@ impl VM {
                         let condition = stack.pop().unwrap();
                         let condition: bool = condition.into_value().try_into()?;
                         if condition {
-                            if trace {
-                                println!(
-                                    "\t\t{} {}",
-                                    Colour::Red.bold().paint("jift"),
-                                    Colour::Yellow
-                                        .bold()
-                                        .paint(format!("0x{:08x}", ip + offset + 1))
-                                );
-                            }
                             offset + 1
                         } else {
                             1
@@ -1467,25 +1400,15 @@ impl VM {
                     Instruction::Multiply => {
                         let b = stack.pop().unwrap();
                         let a = stack.pop().unwrap();
-                        if trace {
-                            println!("\t\t{}\t{},\t{}", Colour::Green.paint("mul:"), a, b,);
-                        }
+
                         let c = a.into_value() * b.into_value();
                         stack.push(c.into());
 
                         1
                     }
                     Instruction::NewList(n) => {
-                        if trace {
-                            println!("\t\t{}\t{}", Colour::Green.paint("nl:"), n);
-                        }
-
                         let ty = stack.pop().unwrap();
                         let ty: ValueType = ty.into_value().try_into()?;
-
-                        if trace {
-                            println!("\t\t\t\t{:?}", ty);
-                        }
 
                         let ty = new_ref!(ValueType, ty);
 
@@ -1494,9 +1417,6 @@ impl VM {
                         for _i in 0..*n {
                             let value = stack.pop().unwrap();
                             values.push(value.clone().into_pointer());
-                            if trace {
-                                println!("\t\t\t\t{}", value);
-                            }
                         }
 
                         values.reverse();
@@ -1507,30 +1427,14 @@ impl VM {
                         1
                     }
                     Instruction::NewTupleEnum(n) => {
-                        if trace {
-                            println!("\t\t{}\t{n}", Colour::Green.paint("nte:"));
-                        }
-
                         let variant = stack.pop().unwrap();
                         let variant: String = variant.into_value().try_into()?;
-
-                        if trace {
-                            println!("\t\t\t\t{}", variant);
-                        }
 
                         let path = stack.pop().unwrap();
                         let path: String = path.into_value().try_into()?;
 
-                        if trace {
-                            println!("\t\t\t\t{}", path);
-                        }
-
                         let ty = stack.pop().unwrap();
                         let ty: ValueType = ty.into_value().try_into()?;
-
-                        if trace {
-                            println!("\t\t\t\t{:?}", ty);
-                        }
 
                         let ty = new_ref!(ValueType, ty);
 
@@ -1539,9 +1443,6 @@ impl VM {
                         for _i in 0..*n as i32 {
                             let value = stack.pop().unwrap();
                             values.push(value.clone().into_pointer());
-                            if trace {
-                                println!("\t\t\t\t{}", value);
-                            }
                         }
 
                         if n > &0usize {
@@ -1560,24 +1461,11 @@ impl VM {
                         1
                     }
                     Instruction::NewUserType(n) => {
-                        if trace {
-                            println!("\t\t{}\t{n} {{", Colour::Green.paint("nut:"));
-                        }
-
                         let name = stack.pop().unwrap();
                         let name: String = name.into_value().try_into()?;
 
-                        if trace {
-                            println!("\t\t\t\t{}", name);
-                        }
-
                         let ty = stack.pop().unwrap();
                         let ty: ValueType = ty.into_value().try_into()?;
-
-                        if trace {
-                            println!("\t\t\t\t{:?}", ty);
-                        }
-
                         let ty = new_ref!(ValueType, ty);
 
                         let mut instance = UserStruct::new(name, &ty);
@@ -1590,16 +1478,9 @@ impl VM {
                                 name.clone().into_value().to_inner_string(),
                                 value.clone().into_pointer(),
                             );
-                            if trace {
-                                println!("\t\t\t\t{}: {}", name, value);
-                            }
                         }
 
                         stack.push(Value::Struct(new_ref!(UserStruct<Value>, instance)).into());
-
-                        if trace {
-                            println!("\t\t\t\t}}");
-                        }
 
                         1
                     }
@@ -1617,9 +1498,6 @@ impl VM {
                         let a: bool = a.into_value().try_into()?;
                         let b: bool = b.into_value().try_into()?;
 
-                        if trace {
-                            println!("\t\t{}\t{},\t{}", Colour::Green.paint("or:"), a, b,);
-                        }
                         let c = Value::Boolean(a || b);
                         stack.push(c.into());
 
@@ -1800,9 +1678,6 @@ impl VM {
                         let b = stack.pop().unwrap();
                         let a = stack.pop().unwrap();
                         let c = a.clone().into_value() - b.clone().into_value();
-                        if trace {
-                            println!("\t\t{}\t{},\t{}", Colour::Green.paint("sub:"), a, b,);
-                        }
 
                         stack.push(c.into());
 
@@ -2004,7 +1879,7 @@ mod tests {
     fn instr_constant() {
         let mut thonk = Thonk::new("test".to_string());
 
-        thonk.add_instruction(Instruction::Push(new_ref!(Value, 42.into())), None);
+        thonk.add_instruction(Instruction::Push(42.into()), None);
         println!("{}", thonk);
 
         let mut program = Program::new(VERSION.to_owned(), BUILD_TIME.to_owned());
@@ -2031,7 +1906,7 @@ mod tests {
     fn test_instr_return() {
         let mut thonk = Thonk::new("test".to_string());
 
-        thonk.add_instruction(Instruction::Push(new_ref!(Value, 42.into())), None);
+        thonk.add_instruction(Instruction::Push(42.into()), None);
         thonk.add_instruction(Instruction::Return, None);
         println!("{}", thonk);
 
@@ -2067,8 +1942,8 @@ mod tests {
     fn test_instr_add() {
         let mut thonk = Thonk::new("test".to_string());
 
-        thonk.add_instruction(Instruction::Push(new_ref!(Value, 69.into())), None);
-        thonk.add_instruction(Instruction::Push(new_ref!(Value, 42.into())), None);
+        thonk.add_instruction(Instruction::Push(69.into()), None);
+        thonk.add_instruction(Instruction::Push(42.into()), None);
         thonk.add_instruction(Instruction::Add, None);
         thonk.add_instruction(Instruction::Return, None);
         println!("{}", thonk);
@@ -2105,8 +1980,8 @@ mod tests {
     fn test_instr_subtract() {
         let mut thonk = Thonk::new("test".to_string());
 
-        thonk.add_instruction(Instruction::Push(new_ref!(Value, 111.into())), None);
-        thonk.add_instruction(Instruction::Push(new_ref!(Value, 69.into())), None);
+        thonk.add_instruction(Instruction::Push(111.into()), None);
+        thonk.add_instruction(Instruction::Push(69.into()), None);
         thonk.add_instruction(Instruction::Subtract, None);
         thonk.add_instruction(Instruction::Return, None);
         println!("{}", thonk);
@@ -2142,8 +2017,8 @@ mod tests {
     fn test_instr_multiply() {
         let mut thonk = Thonk::new("test".to_string());
 
-        thonk.add_instruction(Instruction::Push(new_ref!(Value, 42.into())), None);
-        thonk.add_instruction(Instruction::Push(new_ref!(Value, 69.into())), None);
+        thonk.add_instruction(Instruction::Push(42.into()), None);
+        thonk.add_instruction(Instruction::Push(69.into()), None);
         thonk.add_instruction(Instruction::Multiply, None);
         thonk.add_instruction(Instruction::Return, None);
         println!("{}", thonk);
@@ -2178,8 +2053,8 @@ mod tests {
         // False Case
         let mut thonk = Thonk::new("test".to_string());
 
-        thonk.add_instruction(Instruction::Push(new_ref!(Value, 111.into())), None);
-        thonk.add_instruction(Instruction::Push(new_ref!(Value, 69.into())), None);
+        thonk.add_instruction(Instruction::Push(111.into()), None);
+        thonk.add_instruction(Instruction::Push(69.into()), None);
         thonk.add_instruction(Instruction::TestLessThanOrEqual, None);
         thonk.add_instruction(Instruction::Return, None);
         println!("{}", thonk);
@@ -2213,8 +2088,8 @@ mod tests {
         // True case: less than
         let mut thonk = Thonk::new("test".to_string());
 
-        thonk.add_instruction(Instruction::Push(new_ref!(Value, 42.into())), None);
-        thonk.add_instruction(Instruction::Push(new_ref!(Value, 69.into())), None);
+        thonk.add_instruction(Instruction::Push(42.into()), None);
+        thonk.add_instruction(Instruction::Push(69.into()), None);
         thonk.add_instruction(Instruction::TestLessThanOrEqual, None);
         thonk.add_instruction(Instruction::Return, None);
         println!("{}", thonk);
@@ -2248,8 +2123,8 @@ mod tests {
         // True case: equal
         let mut thonk = Thonk::new("test".to_string());
 
-        thonk.add_instruction(Instruction::Push(new_ref!(Value, 42.into())), None);
-        thonk.add_instruction(Instruction::Push(new_ref!(Value, 42.into())), None);
+        thonk.add_instruction(Instruction::Push(42.into()), None);
+        thonk.add_instruction(Instruction::Push(42.into()), None);
         thonk.add_instruction(Instruction::TestLessThanOrEqual, None);
         thonk.add_instruction(Instruction::Return, None);
         println!("{}", thonk);
@@ -2286,17 +2161,17 @@ mod tests {
     fn test_instr_jump_if_false() {
         let mut thonk = Thonk::new("test".to_string());
 
-        thonk.add_instruction(Instruction::Push(new_ref!(Value, 69.into())), None);
-        thonk.add_instruction(Instruction::Push(new_ref!(Value, 42.into())), None);
+        thonk.add_instruction(Instruction::Push(69.into()), None);
+        thonk.add_instruction(Instruction::Push(42.into()), None);
         thonk.add_instruction(Instruction::TestLessThanOrEqual, None);
         thonk.add_instruction(Instruction::JumpIfFalse(2), None);
         thonk.add_instruction(
-            Instruction::Push(new_ref!(Value, Value::String("epic fail!".to_string()))),
+            Instruction::Push(Value::String("epic fail!".to_string())),
             None,
         );
         thonk.add_instruction(Instruction::Return, None);
         thonk.add_instruction(
-            Instruction::Push(new_ref!(Value, Value::String("you rock!".to_string()))),
+            Instruction::Push(Value::String("you rock!".to_string())),
             None,
         );
         thonk.add_instruction(Instruction::Return, None);
@@ -2335,7 +2210,7 @@ mod tests {
         // Simple
         let mut thonk = Thonk::new("test".to_string());
         thonk.increment_frame_size();
-        thonk.add_instruction(Instruction::Push(new_ref!(Value, 42.into())), None);
+        thonk.add_instruction(Instruction::Push(42.into()), None);
         thonk.add_instruction(Instruction::StoreLocal(0), None);
         thonk.add_instruction(Instruction::FetchLocal(0), None);
         thonk.add_instruction(Instruction::Return, None);
@@ -2424,13 +2299,10 @@ mod tests {
 
         let mut thonk = Thonk::new("test".to_string());
         thonk.add_instruction(
-            Instruction::Push(new_ref!(
-                Value,
-                Value::Struct(new_ref!(UserStruct<Value>, foo_inst))
-            )),
+            Instruction::Push(Value::Struct(new_ref!(UserStruct<Value>, foo_inst))),
             None,
         );
-        thonk.add_instruction(Instruction::Push(new_ref!(Value, "baz".into())), None);
+        thonk.add_instruction(Instruction::Push("baz".into()), None);
         thonk.add_instruction(Instruction::FieldRead, None);
         thonk.add_instruction(Instruction::Return, None);
         println!("{}", thonk);

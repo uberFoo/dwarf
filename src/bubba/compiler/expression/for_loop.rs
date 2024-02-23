@@ -242,7 +242,7 @@ pub(in crate::bubba::compiler) fn compile(
                 location!(),
             );
             thonk.insert_instruction_with_span(
-                Instruction::Push(new_ref!(Value, Value::Integer(0))),
+                Instruction::Push(Value::Integer(0)),
                 list_span.clone(),
                 location!(),
             );
@@ -327,10 +327,7 @@ pub(in crate::bubba::compiler) fn compile(
 
     // Increment the index
     thonk.insert_instruction(Instruction::FetchLocal(iter_index), location!());
-    thonk.insert_instruction(
-        Instruction::Push(new_ref!(Value, Value::Integer(1))),
-        location!(),
-    );
+    thonk.insert_instruction(Instruction::Push(Value::Integer(1)), location!());
     thonk.insert_instruction(Instruction::Add, location!());
     thonk.insert_instruction(Instruction::Dup, location!());
     thonk.insert_instruction(Instruction::StoreLocal(iter_index), location!());

@@ -531,10 +531,7 @@ fn compile_function(func: &RefType<Function>, context: &mut Context) -> Result<C
                         } else if thonk.returned {
                             break;
                         } else {
-                            thonk.insert_instruction(
-                                Instruction::Push(new_ref!(Value, Value::Empty)),
-                                location!(),
-                            );
+                            thonk.insert_instruction(Instruction::Push(Value::Empty), location!());
                             thonk.insert_instruction(Instruction::Return, location!());
                             thonk.returned = true;
                             break;
@@ -542,10 +539,7 @@ fn compile_function(func: &RefType<Function>, context: &mut Context) -> Result<C
                     }
                 }
             } else {
-                thonk.insert_instruction(
-                    Instruction::Push(new_ref!(Value, Value::Empty)),
-                    location!(),
-                );
+                thonk.insert_instruction(Instruction::Push(Value::Empty), location!());
                 thonk.insert_instruction(Instruction::Return, location!());
                 thonk.returned = true;
             }

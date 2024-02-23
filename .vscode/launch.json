@@ -129,6 +129,7 @@
             "name": "Debug executable 'dwarf'",
             "cargo": {
                 "args": [
+                    "+stage2",
                     "build",
                     "--bin=dwarf",
                     "--package=dwarf",
@@ -149,7 +150,7 @@
             ],
             "cwd": "${workspaceFolder}",
             "env": {
-                "RUST_LOG": "async=trace"
+                "RUST_LOG": "async=trace,vm=trace"
             },
             "preRunCommands": [
                 "script lldb.debugger.HandleCommand('settings set target.source-map /rustc/{} \"{}/lib/rustlib/src/rust\"'.format(os.popen('rustc --version --verbose').read().split('commit-hash: ')[1].split('\\n')[0].strip(), os.popen('rustc --print sysroot').readline().strip()))"

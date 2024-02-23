@@ -4,7 +4,7 @@ use ansi_term::Colour;
 use rustc_hash::FxHashMap as HashMap;
 use serde::{Deserialize, Serialize};
 
-use crate::{bubba::value::Value, s_read, RefType, Span};
+use crate::{bubba::value::Value, new_ref, s_read, NewRef, RefType, Span};
 
 #[derive(Clone, Debug)]
 pub enum Instruction {
@@ -269,7 +269,7 @@ pub enum Instruction {
     ///
     /// ## Stack Effect
     ///
-    Push(RefType<Value>),
+    Push(Value),
     /// Push the arguments to the program onto the stack
     ///
     /// ## Stack Effect
@@ -506,7 +506,7 @@ impl fmt::Display for Instruction {
                 f,
                 "{} {}",
                 opcode_style.paint("push"),
-                operand_style.paint(s_read!(value).to_string())
+                operand_style.paint(value.to_string())
             ),
             Instruction::PushArgs => write!(f, "{}", opcode_style.paint("parg")),
             Instruction::Return => write!(f, "{}", opcode_style.paint("ret ")),
@@ -700,3 +700,22 @@ impl fmt::Display for Thonk {
         Ok(())
     }
 }
+
+// impl Clone for Thonk {
+//     fn clone(&self) -> Self {
+//         let instructions = self
+//             .instructions
+//             .iter()
+//             .map(|i| match i {
+//                 Instruction::Push(v) => Instruction::Push(new_ref!(Value, (*s_read!(v)).clone())),
+//                 i => i.clone(),
+//             })
+//             .collect();
+//         Thonk {
+//             name: self.name.clone(),
+//             instructions,
+//             spans: self.spans.clone(),
+//             frame_size: self.frame_size,
+//         }
+//     }
+// }

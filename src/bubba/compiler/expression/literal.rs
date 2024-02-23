@@ -33,10 +33,8 @@ pub(in crate::bubba::compiler) fn compile(
             let literal = s_read!(literal);
 
             match literal.subtype {
-                BooleanLiteralEnum::FalseLiteral(_) => {
-                    Ok::<RefType<Value>, Error>(new_ref!(Value, Value::Boolean(false,)))
-                }
-                BooleanLiteralEnum::TrueLiteral(_) => Ok(new_ref!(Value, Value::Boolean(true,))),
+                BooleanLiteralEnum::FalseLiteral(_) => Ok::<Value, Error>(Value::Boolean(false)),
+                BooleanLiteralEnum::TrueLiteral(_) => Ok(Value::Boolean(true)),
             }
         }
         //
@@ -46,7 +44,7 @@ pub(in crate::bubba::compiler) fn compile(
             let literal = lu_dog.exhume_float_literal(literal).unwrap();
             let value = s_read!(literal).x_value;
             let value = Value::Float(value);
-            Ok(new_ref!(Value, value))
+            Ok(value)
         }
         //
         // FormatString
@@ -86,7 +84,7 @@ pub(in crate::bubba::compiler) fn compile(
 
                                 let value = Value::String(string.x_value.clone());
                                 thonk.insert_instruction_with_span(
-                                    Instruction::Push(new_ref!(Value, value)),
+                                    Instruction::Push(value),
                                     span,
                                     location!(),
                                 );
@@ -121,7 +119,7 @@ pub(in crate::bubba::compiler) fn compile(
             let literal = lu_dog.exhume_integer_literal(literal).unwrap();
             let value = s_read!(literal).x_value;
             let value = Value::Integer(value);
-            Ok(new_ref!(Value, value))
+            Ok(value)
         }
         //
         // StringLiteral
@@ -130,7 +128,7 @@ pub(in crate::bubba::compiler) fn compile(
             let literal = lu_dog.exhume_string_literal(literal).unwrap();
             // 🚧 It'd be great if this were an Rc...
             let value = Value::String(s_read!(literal).x_value.clone());
-            Ok(new_ref!(Value, value))
+            Ok(value)
         }
     };
 

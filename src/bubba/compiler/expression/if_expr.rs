@@ -27,10 +27,7 @@ pub(in crate::bubba::compiler) fn compile(
     let cond_expr = lu_dog.exhume_expression(&expr.test).unwrap();
     compile_expression(&cond_expr, thonk, context)?;
 
-    thonk.insert_instruction(
-        Instruction::Push(new_ref!(Value, Value::Boolean(true))),
-        location!(),
-    );
+    thonk.insert_instruction(Instruction::Push(Value::Boolean(true)), location!());
     thonk.insert_instruction(Instruction::TestEqual, location!());
 
     // Compile the false block

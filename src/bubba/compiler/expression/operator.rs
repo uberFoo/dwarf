@@ -71,7 +71,7 @@ pub(in crate::bubba::compiler) fn compile(
                             };
 
                             thonk.insert_instruction_with_span(
-                                Instruction::Push(new_ref!(Value, Value::String(field_name))),
+                                Instruction::Push(Value::String(field_name)),
                                 span.clone(),
                                 location!(),
                             );
@@ -172,7 +172,7 @@ pub(in crate::bubba::compiler) fn compile(
             match &unary.subtype {
                 UnaryEnum::Negation(_) => {
                     thonk.insert_instruction_with_span(
-                        Instruction::Push(new_ref!(Value, Value::Integer(-1))),
+                        Instruction::Push(Value::Integer(-1)),
                         span.clone(),
                         location!(),
                     );

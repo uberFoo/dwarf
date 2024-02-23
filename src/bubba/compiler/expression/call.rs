@@ -163,7 +163,7 @@ pub(in crate::bubba::compiler) fn compile_lambda(
                         } else {
                             if !thonk.returned {
                                 thonk.insert_instruction(
-                                    Instruction::Push(new_ref!(Value, Value::Empty)),
+                                    Instruction::Push(Value::Empty),
                                     location!(),
                                 );
                                 thonk.insert_instruction(Instruction::Return, location!());
@@ -174,10 +174,7 @@ pub(in crate::bubba::compiler) fn compile_lambda(
                     }
                 }
             } else {
-                thonk.insert_instruction(
-                    Instruction::Push(new_ref!(Value, Value::Empty)),
-                    location!(),
-                );
+                thonk.insert_instruction(Instruction::Push(Value::Empty), location!());
                 thonk.insert_instruction(Instruction::Return, location!());
                 thonk.returned = true;
             }
@@ -393,7 +390,7 @@ fn compile_static_method_call(
                 let expr = &args[0];
                 compile_expression(expr, thonk, context)?;
                 thonk.insert_instruction_with_span(
-                    Instruction::Push(new_ref!(Value, true.into())),
+                    Instruction::Push(true.into()),
                     span.clone(),
                     location!(),
                 );
@@ -408,10 +405,7 @@ fn compile_static_method_call(
                     location!(),
                 );
                 thonk.insert_instruction_with_span(
-                    Instruction::Push(new_ref!(
-                        Value,
-                        format!("assertion failed: {span:?}").into()
-                    )),
+                    Instruction::Push(format!("assertion failed: {span:?}").into()),
                     span.clone(),
                     location!(),
                 );
@@ -419,16 +413,10 @@ fn compile_static_method_call(
 
                 // Bail on false
                 thonk.insert_instruction(
-                    Instruction::Push(new_ref!(
-                        Value,
-                        context.extruder_context.source_path.clone().into()
-                    )),
+                    Instruction::Push(context.extruder_context.source_path.clone().into()),
                     location!(),
                 );
-                thonk.insert_instruction(
-                    Instruction::Push(new_ref!(Value, span.clone().into())),
-                    location!(),
-                );
+                thonk.insert_instruction(Instruction::Push(span.clone().into()), location!());
                 thonk.insert_instruction(Instruction::HaltAndCatchFire, location!());
 
                 Ok(Some(boolean))
@@ -449,10 +437,7 @@ fn compile_static_method_call(
                     location!(),
                 );
                 thonk.insert_instruction_with_span(
-                    Instruction::Push(new_ref!(
-                        Value,
-                        format!("assertion failed: {span:?}").into()
-                    )),
+                    Instruction::Push(format!("assertion failed: {span:?}").into()),
                     span.clone(),
                     location!(),
                 );
@@ -460,16 +445,10 @@ fn compile_static_method_call(
 
                 // This is the bad path.
                 thonk.insert_instruction(
-                    Instruction::Push(new_ref!(
-                        Value,
-                        context.extruder_context.source_path.clone().into()
-                    )),
+                    Instruction::Push(context.extruder_context.source_path.clone().into()),
                     location!(),
                 );
-                thonk.insert_instruction(
-                    Instruction::Push(new_ref!(Value, span.clone().into())),
-                    location!(),
-                );
+                thonk.insert_instruction(Instruction::Push(span.clone().into()), location!());
                 thonk.insert_instruction_with_span(
                     Instruction::HaltAndCatchFire,
                     span,
@@ -505,15 +484,13 @@ fn compile_static_method_call(
 
                         if let Some(path) = path.split(PATH_SEP).nth(1) {
                             thonk.insert_instruction(
-                                Instruction::Push(new_ref!(Value, Value::String(path.to_owned()))),
+                                Instruction::Push(Value::String(path.to_owned())),
                                 location!(),
                             );
                         };
 
-                        thonk.insert_instruction(
-                            Instruction::Push(new_ref!(Value, plugin_root.into())),
-                            location!(),
-                        );
+                        thonk
+                            .insert_instruction(Instruction::Push(plugin_root.into()), location!());
                         thonk.insert_instruction(Instruction::PluginNew(1), location!());
 
                         // let id = lu_dog.exhume_woog_struct_id_by_name(&plugin.name).unwrap();

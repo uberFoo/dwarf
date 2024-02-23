@@ -48,7 +48,7 @@ pub(in crate::bubba::compiler) fn compile_field_access(
         }
     };
     thonk.insert_instruction_with_span(
-        Instruction::Push(new_ref!(Value, Value::String(field_name))),
+        Instruction::Push(Value::String(field_name)),
         span.clone(),
         location!(),
     );

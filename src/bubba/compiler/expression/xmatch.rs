@@ -124,7 +124,7 @@ pub(in crate::bubba::compiler) fn compile(
                 let expr = struct_expr.r15_expression(&lu_dog)[0].clone();
                 let value = s_read!(expr).r11_x_value(&lu_dog)[0].clone();
                 let ty = s_read!(value).r24_value_type(&lu_dog)[0].clone();
-                let ty = new_ref!(Value, Value::ValueType((*s_read!(ty)).to_owned()));
+                let ty = Value::ValueType((*s_read!(ty)).to_owned());
                 thonk.insert_instruction(Instruction::Push(ty), location!());
 
                 let x_path = &lu_dog.exhume_x_path(&struct_expr.x_path).unwrap();
@@ -152,15 +152,9 @@ pub(in crate::bubba::compiler) fn compile(
                 let path = path.join("::");
                 let path = format!("{}{path}", woog_enum.x_path);
 
-                thonk.insert_instruction(
-                    Instruction::Push(new_ref!(Value, path.into())),
-                    location!(),
-                );
+                thonk.insert_instruction(Instruction::Push(path.into()), location!());
 
-                thonk.insert_instruction(
-                    Instruction::Push(new_ref!(Value, variant.into())),
-                    location!(),
-                );
+                thonk.insert_instruction(Instruction::Push(variant.into()), location!());
 
                 thonk.insert_instruction(Instruction::NewTupleEnum(field_exprs.len()), location!());
             }
@@ -218,16 +212,10 @@ pub(in crate::bubba::compiler) fn compile(
     // This should not really happen because if this were done right the compiler
     // would notice that there are cases not caught and  fall through.
     thonk.insert_instruction(
-        Instruction::Push(new_ref!(
-            Value,
-            context.extruder_context.source_path.clone().into()
-        )),
+        Instruction::Push(context.extruder_context.source_path.clone().into()),
         location!(),
     );
-    thonk.insert_instruction(
-        Instruction::Push(new_ref!(Value, span.clone().into())),
-        location!(),
-    );
+    thonk.insert_instruction(Instruction::Push(span.clone().into()), location!());
     thonk.insert_instruction(Instruction::HaltAndCatchFire, location!());
 
     thonk.insert_instruction(Instruction::Label(new_ref!(String, label)), location!());
