@@ -5,7 +5,6 @@ pub mod vm;
 
 pub use instr::Instruction;
 pub use instr::Program;
-pub(crate) use instr::Thonk;
 pub use vm::{Error, VM};
 
 pub(crate) const BOOL: &str = "BOOL";

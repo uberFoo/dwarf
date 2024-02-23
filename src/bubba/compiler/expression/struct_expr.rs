@@ -8,7 +8,7 @@ use crate::{
     },
     chacha::value::EnumVariant,
     lu_dog::{DataStructureEnum, FieldExpressionEnum, ValueType},
-    new_ref, s_read, NewRef, RefType, SarzakStorePtr, Span, POP_CLR,
+    s_read, SarzakStorePtr, Span, POP_CLR,
 };
 
 #[tracing::instrument]

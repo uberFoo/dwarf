@@ -2,7 +2,7 @@ use std::{fmt, io::Write, ops::Range};
 
 use ansi_term::Colour;
 #[cfg(feature = "async")]
-use puteketeke::{AsyncTask, Executor};
+use puteketeke::AsyncTask;
 use uuid::Uuid;
 
 use crate::{

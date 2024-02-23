@@ -1,7 +1,6 @@
 use ansi_term::Colour;
 
 use crate::{
-    bubba::VM,
     chacha::error::Result,
     interpreter::{debug, eval_expression, function, Context},
     lu_dog::{Expression, Operator},

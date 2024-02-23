@@ -9,9 +9,9 @@ use crate::{
         value::Value,
     },
     lu_dog::{ValueType, ValueTypeEnum},
-    new_ref, s_read,
+    s_read,
     sarzak::Ty,
-    NewRef, RefType, SarzakStorePtr, Span, POP_CLR,
+    SarzakStorePtr, Span, POP_CLR,
 };
 
 const LIST_VAR: &str = "$$list_value";

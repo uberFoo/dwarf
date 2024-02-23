@@ -10,7 +10,7 @@ use crate::{
         BinaryEnum, BooleanOperatorEnum, ComparisonEnum, ExpressionEnum, FieldAccessTargetEnum,
         OperatorEnum, UnaryEnum, ValueType,
     },
-    new_ref, s_read, NewRef, RefType, SarzakStorePtr, Span, POP_CLR,
+    s_read, SarzakStorePtr, Span, POP_CLR,
 };
 
 #[tracing::instrument]
@@ -149,6 +149,15 @@ pub(in crate::bubba::compiler) fn compile(
                     compile_expression(&rhs, thonk, context)?;
                     thonk.insert_instruction_with_span(
                         Instruction::TestGreaterThan,
+                        span,
+                        location!(),
+                    );
+                }
+                ComparisonEnum::LessThan(_) => {
+                    compile_expression(&lhs, thonk, context)?;
+                    compile_expression(&rhs, thonk, context)?;
+                    thonk.insert_instruction_with_span(
+                        Instruction::TestLessThan,
                         span,
                         location!(),
                     );

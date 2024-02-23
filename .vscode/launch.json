@@ -129,7 +129,6 @@
             "name": "Debug executable 'dwarf'",
             "cargo": {
                 "args": [
-                    "+stage2",
                     "build",
                     "--bin=dwarf",
                     "--package=dwarf",
@@ -146,6 +145,40 @@
                 // "tests/harness/types/generics/workout.ore"
                 // "tests/harness/types/generics/option.tao"
                 "test.ore",
+                // "tests/harness/chacha/async/http.ore"
+            ],
+            "cwd": "${workspaceFolder}",
+            "env": {
+                // "RUST_LOG": "async=trace,vm=trace"
+            },
+            "preRunCommands": [
+                "script lldb.debugger.HandleCommand('settings set target.source-map /rustc/{} \"{}/lib/rustlib/src/rust\"'.format(os.popen('rustc --version --verbose').read().split('commit-hash: ')[1].split('\\n')[0].strip(), os.popen('rustc --print sysroot').readline().strip()))"
+            ],
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug cargo bench",
+            "cargo": {
+                "args": [
+                    "bench",
+                    "--bin=dwarf",
+                    "--package=dwarf",
+                    // "--features=parking-lot-mutex, print-std-out, repl",
+                    // "--no-default-features"
+                ],
+                "filter": {
+                    "name": "dwarf",
+                    "kind": "bin"
+                }
+            },
+            "args": [
+                // "use.ore"
+                // "tests/harness/types/generics/workout.ore"
+                // "tests/harness/types/generics/option.tao"
+                "bench/fib.tao",
+                "--",
+                "17"
                 // "tests/harness/chacha/async/http.ore"
             ],
             "cwd": "${workspaceFolder}",

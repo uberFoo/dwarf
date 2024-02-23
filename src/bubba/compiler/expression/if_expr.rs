@@ -7,7 +7,7 @@ use crate::{
         value::Value,
     },
     lu_dog::ValueType,
-    new_ref, s_read, NewRef, RefType, SarzakStorePtr, POP_CLR,
+    s_read, SarzakStorePtr, POP_CLR,
 };
 
 #[tracing::instrument]

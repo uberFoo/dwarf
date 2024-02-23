@@ -31,8 +31,8 @@ use crate::{
     plug_in::PluginType,
     s_read, s_write,
     sarzak::ObjectStore,
-    Desanitize, NewRef, RefType, SarzakStorePtr, Value, BUILD_TIME, FUNCTION_LOAD, FUNCTION_NEW,
-    MERLIN, OBJECT_STORE, SARZAK, VERSION,
+    Desanitize, NewRef, RefType, SarzakStorePtr, Value, FUNCTION_LOAD, FUNCTION_NEW, MERLIN,
+    OBJECT_STORE, SARZAK,
 };
 
 pub fn eval_function_call(

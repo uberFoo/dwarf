@@ -1,7 +1,6 @@
 use ansi_term::Colour;
 
 use crate::{
-    bubba::VM,
     chacha::error::Result,
     interpreter::{debug, eval_expression, function, Context},
     new_ref, s_read, DwarfInteger, NewRef, RefType, SarzakStorePtr, Value,

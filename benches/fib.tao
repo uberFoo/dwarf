@@ -16,9 +16,9 @@ fn main() -> int {
     // }
     let a = chacha::args()[1];
 
-    // print("Calculating fibonacci number {0}:\n".format(n));
+    // print(`Calculating fibonacci number ${a}:\n`);
     let result = fib2(a as int);
     // print(result as string + "\n");
-    // chacha::assert_eq(result, 2584);
+
     result
 }

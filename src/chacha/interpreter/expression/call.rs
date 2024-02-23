@@ -37,8 +37,7 @@ use crate::{
     plug_in::{PluginModRef, PluginType},
     s_read, s_write,
     sarzak::Ty,
-    DwarfInteger, NewRef, RefType, SarzakStorePtr, Value, ValueResult, BUILD_TIME, PATH_SEP,
-    VERSION,
+    DwarfInteger, NewRef, RefType, SarzakStorePtr, Value, ValueResult, PATH_SEP,
 };
 
 mod chacha;
