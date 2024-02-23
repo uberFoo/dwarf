@@ -17,7 +17,8 @@ use async_compat::Compat;
 use dwarf::{
     chacha::{
         error::ChaChaError,
-        value::{FfiProxy, FfiValue, Value},
+        ffi_value::{FfiProxy, FfiValue},
+        value::Value,
     },
     plug_in::{Error, Plugin, PluginModRef, PluginModule, PluginType, Plugin_TO},
     DwarfInteger,
