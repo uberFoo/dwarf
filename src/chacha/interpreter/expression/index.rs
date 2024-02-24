@@ -50,7 +50,7 @@ pub fn eval_index(index: &SarzakStorePtr, context: &mut Context) -> Result<RefTy
                 if index < str.len() {
                     Ok(new_ref!(
                         Value,
-                        Value::String(str[index..index + 1].join(""),)
+                        Value::Char(str[index..index + 1].join("").chars().next().unwrap(),)
                     ))
                 } else {
                     let value = &s_read!(index_expr).r11_x_value(&s_read!(lu_dog))[0];

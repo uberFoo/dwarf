@@ -33,27 +33,27 @@ pub enum Value {
     Error(Box<Error>),
     Enumeration(EnumVariant<Self>),
     Float(DwarfFloat),
-    FubarPointer {
+    Integer(DwarfInteger),
+    LambdaPointer {
         name: String,
         frame_size: usize,
         captures: Vec<RefType<Value>>,
     },
-    Integer(DwarfInteger),
     Plugin((String, RefType<PluginType>)),
     Range(Range<DwarfInteger>),
     String(String),
     Struct(RefType<UserStruct<Self>>),
-    Uuid(uuid::Uuid),
-    ValueType(ValueType),
-    Vector {
-        ty: RefType<ValueType>,
-        inner: RefType<Vec<RefType<Self>>>,
-    },
     #[cfg(feature = "async")]
     Task {
         name: String,
         running: bool,
         task: Option<AsyncTask<'static, VmValueResult>>,
+    },
+    Uuid(uuid::Uuid),
+    ValueType(ValueType),
+    Vector {
+        ty: RefType<ValueType>,
+        inner: RefType<Vec<RefType<Self>>>,
     },
 }
 
@@ -76,7 +76,8 @@ impl Value {
             Self::Enumeration(var) => write!(f, "{var}"),
             Self::Error(e) => write!(f, "{}: {e}", Colour::Red.bold().paint("error")),
             Self::Float(num) => write!(f, "{num}"),
-            Self::FubarPointer {
+            Self::Integer(num) => write!(f, "{num}"),
+            Self::LambdaPointer {
                 name,
                 frame_size,
                 captures,
@@ -91,11 +92,16 @@ impl Value {
                 }
                 write!(f, "] }}")
             }
-            Self::Integer(num) => write!(f, "{num}"),
             Self::Plugin((name, _plugin)) => write!(f, "plugin::{name}"),
             Self::Range(range) => write!(f, "{range:?}"),
             Self::String(str_) => write!(f, "{str_}"),
             Self::Struct(ty) => write!(f, "{}", s_read!(ty)),
+            #[cfg(feature = "async")]
+            Self::Task {
+                name,
+                running,
+                task,
+            } => write!(f, "VmTask `{name}`: {task:?}, running: {running}"),
             Self::Uuid(uuid) => write!(f, "{uuid}"),
             Self::ValueType(ty) => write!(f, "{:?}", ty),
             Self::Vector { ty: _, inner } => {
@@ -113,12 +119,6 @@ impl Value {
                 }
                 write!(f, "]")
             }
-            #[cfg(feature = "async")]
-            Self::Task {
-                name,
-                running,
-                task,
-            } => write!(f, "VmTask `{name}`: {task:?}, running: {running}"),
         }
     }
 
@@ -254,7 +254,8 @@ impl std::fmt::Debug for Value {
             Self::Enumeration(var) => write!(f, "{var:?}"),
             Self::Error(e) => write!(f, "{}: {e}", Colour::Red.bold().paint("error")),
             Self::Float(num) => write!(f, "{num:?}"),
-            Self::FubarPointer {
+            Self::Integer(num) => write!(f, "{num:?}"),
+            Self::LambdaPointer {
                 name,
                 frame_size,
                 captures,
@@ -269,20 +270,19 @@ impl std::fmt::Debug for Value {
                 }
                 write!(f, "] }}")
             }
-            Self::Integer(num) => write!(f, "{num:?}"),
             Self::Plugin((name, _plugin)) => write!(f, "plugin::{name}"),
             Self::Range(range) => write!(f, "{range:?}"),
             Self::String(s) => write!(f, "{s:?}"),
             Self::Struct(ty) => write!(f, "{:?}", s_read!(ty)),
-            Self::ValueType(ty) => write!(f, "{:?}", ty),
-            Self::Uuid(uuid) => write!(f, "{uuid:?}"),
-            Self::Vector { ty, inner } => write!(f, "{ty:?}: {inner:?}"),
             #[cfg(feature = "async")]
             Self::Task {
                 name,
                 running,
                 task,
             } => write!(f, "VmTask `{name}`: {task:?}, running: {running}"),
+            Self::ValueType(ty) => write!(f, "{:?}", ty),
+            Self::Uuid(uuid) => write!(f, "{uuid:?}"),
+            Self::Vector { ty, inner } => write!(f, "{ty:?}: {inner:?}"),
         }
     }
 }
@@ -296,26 +296,20 @@ impl Clone for Value {
             Self::Enumeration(var) => Self::Enumeration(var.clone()),
             Self::Error(_e) => unimplemented!(),
             Self::Float(num) => Self::Float(*num),
-            Self::FubarPointer {
+            Self::Integer(num) => Self::Integer(*num),
+            Self::LambdaPointer {
                 name,
                 frame_size,
                 captures: captured,
-            } => Self::FubarPointer {
+            } => Self::LambdaPointer {
                 name: name.to_owned(),
                 frame_size: *frame_size,
                 captures: captured.clone(),
             },
-            Self::Integer(num) => Self::Integer(*num),
             Self::Plugin(plugin) => Self::Plugin(plugin.clone()),
             Self::Range(range) => Self::Range(range.clone()),
             Self::String(str_) => Self::String(str_.clone()),
             Self::Struct(ty) => Self::Struct(ty.clone()),
-            Self::ValueType(ty) => Self::ValueType(ty.clone()),
-            Self::Uuid(uuid) => Self::Uuid(*uuid),
-            Self::Vector { ty, inner } => Self::Vector {
-                ty: ty.clone(),
-                inner: inner.clone(),
-            },
             #[cfg(feature = "async")]
             // Note that cloned values do not inherit the task
             Self::Task {
@@ -326,6 +320,12 @@ impl Clone for Value {
                 name: name.to_owned(),
                 running: false,
                 task: None,
+            },
+            Self::ValueType(ty) => Self::ValueType(ty.clone()),
+            Self::Uuid(uuid) => Self::Uuid(*uuid),
+            Self::Vector { ty, inner } => Self::Vector {
+                ty: ty.clone(),
+                inner: inner.clone(),
             },
         }
     }
@@ -342,7 +342,8 @@ impl fmt::Display for Value {
             Self::Enumeration(var) => write!(f, "{var}"),
             Self::Error(e) => write!(f, "{}: {e}", Colour::Red.bold().paint("error")),
             Self::Float(num) => write!(f, "{num}"),
-            Self::FubarPointer {
+            Self::Integer(num) => write!(f, "{num}"),
+            Self::LambdaPointer {
                 name,
                 frame_size,
                 captures,
@@ -357,11 +358,16 @@ impl fmt::Display for Value {
                 }
                 write!(f, "] }}")
             }
-            Self::Integer(num) => write!(f, "{num}"),
             Self::Plugin((name, _plugin)) => write!(f, "plugin::{name}"),
             Self::Range(range) => write!(f, "{range:?}"),
             Self::String(str_) => write!(f, "\"{str_}\""),
             Self::Struct(ty) => write!(f, "{}", s_read!(ty)),
+            #[cfg(feature = "async")]
+            Self::Task {
+                name,
+                running,
+                task,
+            } => write!(f, "VmTask `{name}`: {task:?}, running: {running}"),
             Self::ValueType(ty) => write!(f, "{:?}", ty),
             Self::Uuid(uuid) => write!(f, "{uuid}"),
             Self::Vector { ty: _, inner } => {
@@ -379,12 +385,6 @@ impl fmt::Display for Value {
                 }
                 write!(f, "]")
             }
-            #[cfg(feature = "async")]
-            Self::Task {
-                name,
-                running,
-                task,
-            } => write!(f, "VmTask `{name}`: {task:?}, running: {running}"),
         }
     }
 }

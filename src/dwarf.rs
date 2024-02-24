@@ -67,6 +67,7 @@ pub enum Token {
     Async,
     Await,
     Bool(bool),
+    Char(char),
     Debugger,
     Else,
     Empty,
@@ -105,6 +106,7 @@ impl fmt::Display for Token {
             Self::Async => write!(f, "async"),
             Self::Await => write!(f, "await"),
             Self::Bool(bool_) => write!(f, "{}", bool_),
+            Self::Char(char_) => write!(f, "{}", char_),
             Self::Debugger => write!(f, "debugger"),
             Self::Else => write!(f, "else"),
             Self::Empty => write!(f, "()"),
@@ -139,6 +141,7 @@ impl fmt::Display for Token {
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum Type {
     Boolean,
+    Char,
     Empty,
     Float,
     Fn(Vec<Spanned<Self>>, Box<Spanned<Self>>),
@@ -163,6 +166,7 @@ impl fmt::Display for Type {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Self::Boolean => write!(f, "bool"),
+            Self::Char => write!(f, "char"),
             Self::Empty => write!(f, "()"),
             Self::Float => write!(f, "float"),
             Self::Fn(params, return_) => {
@@ -232,6 +236,7 @@ impl Type {
                 let ty = Ty::new_boolean(sarzak);
                 Ok(ValueType::new_ty(true, &ty, store))
             }
+            Type::Char => Ok(ValueType::new_char(true, store)),
             Type::Empty => Ok(ValueType::new_empty(true, store)),
             Type::Float => {
                 let ty = Ty::new_float(sarzak);
@@ -518,6 +523,7 @@ pub enum Expression {
         Vec<WrappedValueType>,
     ),
     BooleanLiteral(bool),
+    CharLiteral(DwarfInteger),
     Debug,
     Division(Box<Spanned<Self>>, Box<Spanned<Self>>),
     Empty,

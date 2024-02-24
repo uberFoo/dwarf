@@ -48,8 +48,8 @@ pub(in crate::bubba::compiler) fn compile(
     let ty = ty.unwrap();
 
     context.push_scope();
-    let mut inner_thonk = CThonk::new(format!("for_{}", iter_ident));
-    let iter = format!("iter_{}", iter_ident);
+    let mut inner_thonk = CThonk::new(format!("$$for_{}", iter_ident));
+    let iter = format!("$$iter_{}", iter_ident);
 
     let int = context.get_type(INT).unwrap().clone();
     let iter_index = match context.insert_symbol(iter, int) {
@@ -60,6 +60,9 @@ pub(in crate::bubba::compiler) fn compile(
         (false, index) => index,
     };
 
+    // This is literally the index, in the call frame, of the ident. Depending
+    // on it's type, we need to extract information from LuDog. Inside here we
+    // deal with symbols and frame sizes.
     let iter_ident_index = match ty.subtype {
         ValueTypeEnum::List(ref list) => {
             let list = lu_dog.exhume_list(list).unwrap();
@@ -67,19 +70,32 @@ pub(in crate::bubba::compiler) fn compile(
             let ty = lu_dog.exhume_value_type(&list.ty).unwrap();
             let ty = s_read!(ty);
 
-            match &ty.subtype {
+            let (iter_ident_index, list_var_idx) = match &ty.subtype {
                 ValueTypeEnum::Enumeration(ref en) => {
                     let en = lu_dog.exhume_enumeration(en).unwrap();
                     let en = s_read!(en);
                     let ty = en.r1_value_type(&lu_dog)[0].clone();
                     let ty = (*s_read!(ty)).clone();
-                    match context.insert_symbol(iter_ident, ty) {
+
+                    // Insert the iteration ident into the symbol table.
+                    let iter_ident_index = match context.insert_symbol(iter_ident, ty.clone()) {
                         (true, index) => {
                             inner_thonk.increment_frame_size();
                             index
                         }
                         (false, index) => index,
-                    }
+                    };
+
+                    // This is the starting value of the iteration.
+                    let list_var_idx = match context.insert_symbol(LIST_VAR.to_owned(), ty) {
+                        (true, index) => {
+                            inner_thonk.increment_frame_size();
+                            index
+                        }
+                        (false, index) => index,
+                    };
+
+                    (iter_ident_index, list_var_idx)
                 }
                 ValueTypeEnum::Ty(ref ty) => {
                     let ty = sarzak.exhume_ty(ty).unwrap();
@@ -88,23 +104,53 @@ pub(in crate::bubba::compiler) fn compile(
                     match &*ty {
                         Ty::Integer(_) => {
                             let int = context.get_type(INT).unwrap().clone();
-                            match context.insert_symbol(iter_ident, int) {
+
+                            // Insert the iteration ident into the symbol table.
+                            let iter_ident_index =
+                                match context.insert_symbol(iter_ident, int.clone()) {
+                                    (true, index) => {
+                                        inner_thonk.increment_frame_size();
+                                        index
+                                    }
+                                    (false, index) => index,
+                                };
+
+                            // This is the starting value of the iteration.
+                            let list_var_idx = match context.insert_symbol(LIST_VAR.to_owned(), int)
+                            {
                                 (true, index) => {
                                     inner_thonk.increment_frame_size();
                                     index
                                 }
                                 (false, index) => index,
-                            }
+                            };
+
+                            (iter_ident_index, list_var_idx)
                         }
                         Ty::ZString(_) => {
                             let string = context.get_type(STRING).unwrap().clone();
-                            match context.insert_symbol(iter_ident, string) {
-                                (true, index) => {
-                                    inner_thonk.increment_frame_size();
-                                    index
-                                }
-                                (false, index) => index,
-                            }
+
+                            // Insert the iteration ident into the symbol table.
+                            let iter_ident_index =
+                                match context.insert_symbol(iter_ident, string.clone()) {
+                                    (true, index) => {
+                                        inner_thonk.increment_frame_size();
+                                        index
+                                    }
+                                    (false, index) => index,
+                                };
+
+                            // This is the starting value of the iteration.
+                            let list_var_idx =
+                                match context.insert_symbol(LIST_VAR.to_owned(), string) {
+                                    (true, index) => {
+                                        inner_thonk.increment_frame_size();
+                                        index
+                                    }
+                                    (false, index) => index,
+                                };
+
+                            (iter_ident_index, list_var_idx)
                         }
                         ty => todo!("list element ty: {:?}", ty),
                     }
@@ -114,13 +160,26 @@ pub(in crate::bubba::compiler) fn compile(
                     let future = s_read!(future);
                     let ty = future.r2_value_type(&lu_dog)[0].clone();
                     let ty = (*s_read!(ty)).clone();
-                    match context.insert_symbol(iter_ident, ty) {
+
+                    // Insert the iteration ident into the symbol table.
+                    let iter_ident_index = match context.insert_symbol(iter_ident, ty.clone()) {
                         (true, index) => {
                             inner_thonk.increment_frame_size();
                             index
                         }
                         (false, index) => index,
-                    }
+                    };
+
+                    // This is the starting value of the iteration.
+                    let list_var_idx = match context.insert_symbol(LIST_VAR.to_owned(), ty) {
+                        (true, index) => {
+                            inner_thonk.increment_frame_size();
+                            index
+                        }
+                        (false, index) => index,
+                    };
+
+                    (iter_ident_index, list_var_idx)
                 }
                 ty => {
                     return Err(BubbaError::InternalCompilerError {
@@ -128,99 +187,6 @@ pub(in crate::bubba::compiler) fn compile(
                         location: location!(),
                     }
                     .into());
-                }
-            }
-        }
-        ValueTypeEnum::Range(_) => {
-            let int = context.get_type(INT).unwrap().clone();
-            match context.insert_symbol(iter_ident, int) {
-                (true, index) => {
-                    inner_thonk.increment_frame_size();
-                    index
-                }
-                (false, index) => index,
-            }
-        }
-        _ => {
-            return Err(BubbaError::InternalCompilerError {
-                message: "For loop expression is not a list".to_owned(),
-                location: location!(),
-            }
-            .into())
-        }
-    };
-
-    // Store the starting value
-    // Here's where that extra work comes in when iterating over a list.
-
-    match ty.subtype {
-        ValueTypeEnum::List(ref list) => {
-            let list = lu_dog.exhume_list(list).unwrap();
-            let list = s_read!(list);
-            let ty = lu_dog.exhume_value_type(&list.ty).unwrap();
-            let ty = s_read!(ty);
-
-            let list_var_idx = match ty.subtype {
-                ValueTypeEnum::Enumeration(ref en) => {
-                    let en = lu_dog.exhume_enumeration(en).unwrap();
-                    let en = s_read!(en);
-                    let ty = en.r1_value_type(&lu_dog)[0].clone();
-                    let ty = (*s_read!(ty)).clone();
-                    match context.insert_symbol(LIST_VAR.into(), ty) {
-                        (true, index) => {
-                            inner_thonk.increment_frame_size();
-                            index
-                        }
-                        (false, index) => index,
-                    }
-                }
-                ValueTypeEnum::Ty(ref ty) => {
-                    let ty = sarzak.exhume_ty(ty).unwrap();
-                    let ty = ty.read().unwrap();
-
-                    match &*ty {
-                        Ty::Integer(_) => {
-                            let int = context.get_type(INT).unwrap().clone();
-                            match context.insert_symbol(LIST_VAR.into(), int) {
-                                (true, index) => {
-                                    inner_thonk.increment_frame_size();
-                                    index
-                                }
-                                (false, index) => index,
-                            }
-                        }
-                        Ty::ZString(_) => {
-                            let string = context.get_type(STRING).unwrap().clone();
-                            match context.insert_symbol(LIST_VAR.to_owned(), string) {
-                                (true, index) => {
-                                    inner_thonk.increment_frame_size();
-                                    index
-                                }
-                                (false, index) => index,
-                            }
-                        }
-                        ty => todo!("list element ty: {:?}", ty),
-                    }
-                }
-                ValueTypeEnum::XFuture(ref future) => {
-                    let future = lu_dog.exhume_x_future(future).unwrap();
-                    let future = s_read!(future);
-                    let ty = future.r2_value_type(&lu_dog)[0].clone();
-                    let ty = (*s_read!(ty)).clone();
-                    match context.insert_symbol(LIST_VAR.to_owned(), ty) {
-                        (true, index) => {
-                            inner_thonk.increment_frame_size();
-                            index
-                        }
-                        (false, index) => index,
-                    }
-                }
-                _ => {
-                    return Err(BubbaError::InternalCompilerError {
-                        message: "For loop expression is not a list".to_owned(),
-                        location: location!(),
-                    }
-                    .into())
                 }
             };
 
@@ -251,13 +217,29 @@ pub(in crate::bubba::compiler) fn compile(
                 span,
                 location!(),
             );
+
+            iter_ident_index
         }
         ValueTypeEnum::Range(_) => {
+            let int = context.get_type(INT).unwrap().clone();
+
+            // Insert the iteration ident into the symbol table.
+            let iter_ident_index = match context.insert_symbol(iter_ident, int) {
+                (true, index) => {
+                    inner_thonk.increment_frame_size();
+                    index
+                }
+                (false, index) => index,
+            };
+
+            // This is the starting value of the iteration.
             thonk.insert_instruction_with_span(
                 Instruction::StoreLocal(iter_index),
                 span,
                 location!(),
             );
+
+            iter_ident_index
         }
         _ => {
             return Err(BubbaError::InternalCompilerError {
@@ -266,7 +248,7 @@ pub(in crate::bubba::compiler) fn compile(
             }
             .into())
         }
-    }
+    };
 
     compile_expression(&body, &mut inner_thonk, context)?;
     for _ in 0..inner_thonk.get_frame_size() {

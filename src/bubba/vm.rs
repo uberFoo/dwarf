@@ -464,7 +464,7 @@ impl VM {
                                     2,
                                 )
                             }
-                            Value::FubarPointer {
+                            Value::LambdaPointer {
                                 name,
                                 frame_size,
                                 captures,
@@ -598,7 +598,7 @@ impl VM {
                                     2,
                                 )
                             }
-                            Value::FubarPointer {
+                            Value::LambdaPointer {
                                 name,
                                 frame_size,
                                 captures,
@@ -853,7 +853,7 @@ impl VM {
                                         <usize as Into<Value>>::into(func_arity + local_count + 2),
                                     )
                                 }
-                                Value::FubarPointer {
+                                Value::LambdaPointer {
                                     name,
                                     frame_size,
                                     captures,
@@ -1340,7 +1340,7 @@ impl VM {
                             .map(|v| v.into_pointer())
                             .collect();
                         let name = s_read!(name).to_owned();
-                        let value = Value::FubarPointer {
+                        let value = Value::LambdaPointer {
                             name,
                             frame_size: *frame_size,
                             captures,
@@ -1646,7 +1646,7 @@ impl VM {
                             Err(e) => {
                                 let pointer = &stack[fp - frame_size - 3];
                                 let pointer = pointer.clone().into_value();
-                                if let Value::FubarPointer {
+                                if let Value::LambdaPointer {
                                     name: _,
                                     frame_size,
                                     captures: _,

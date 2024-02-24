@@ -100,12 +100,12 @@ mod test {
         println!("{}", run_vm(&program).unwrap_err());
     }
 
-    // #[test]
+    #[test]
     fn index_into_string() {
         setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "
-                   fn main() -> string {
+                   fn main() -> char {
                        let x = \"foo\";
                        x[1]
                    }";

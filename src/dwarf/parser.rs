@@ -146,6 +146,11 @@ fn lexer() -> impl Parser<char, Vec<Spanned<Token>>, Error = Simple<char>> {
         .collect::<String>()
         .map(Token::String);
 
+    let char_parser = just::<char, char, Simple<char>>('\'')
+        .ignore_then(filter(|c| *c != '\''))
+        .then_ignore(just('\''))
+        .map(Token::Char);
+
     let format_string = just('`')
         .ignore_then(filter(|c| *c != '`').repeated())
         .then_ignore(just('`'))
@@ -170,6 +175,7 @@ fn lexer() -> impl Parser<char, Vec<Spanned<Token>>, Error = Simple<char>> {
         "async" => Token::Async,
         "await" => Token::Await,
         "bool" => Token::Type(Type::Boolean),
+        "char" => Token::Type(Type::Char),
         "debugger" => Token::Debugger,
         "else" => Token::Else,
         "enum" => Token::Enum,
@@ -199,6 +205,7 @@ fn lexer() -> impl Parser<char, Vec<Spanned<Token>>, Error = Simple<char>> {
     // A single token can be one of the above
     let token = float
         .or(int)
+        .or(char_parser)
         .or(string)
         .or(format_string)
         .or(punct)
@@ -1045,12 +1052,13 @@ impl DwarfParser {
                     tok.1.clone(),
                     [
                         Some("'bool'".to_owned()),
+                        Some("'char'".to_owned()),
                         Some("'float'".to_owned()),
                         Some("'int'".to_owned()),
                         Some("'string'".to_owned()),
                         Some("'Uuid'".to_owned()),
-                        Some("'Option<T>'".to_owned()),
-                        Some("'[T]'".to_owned()),
+                        // Some("'Option<T>'".to_owned()),
+                        // Some("'[T]'".to_owned()),
                         Some("'()'".to_owned()),
                     ],
                     Some(tok.0.to_string()),
@@ -2009,6 +2017,12 @@ impl DwarfParser {
         // parse a boolean literal
         if let Some(expression) = self.parse_boolean_literal() {
             debug!("boolean literal", expression);
+            return Ok(Some(expression));
+        }
+
+        // parse a char literal
+        if let Some(expression) = self.parse_char_literal() {
+            debug!("char literal", expression);
             return Ok(Some(expression));
         }
 
@@ -3485,9 +3499,28 @@ impl DwarfParser {
         Ok(Some(((DwarfExpression::Return(expression), span), LITERAL)))
     }
 
+    /// Parse a char Literal
+    ///
+    /// 'char_literal' -> STRING
+    fn parse_char_literal(&mut self) -> Option<Expression> {
+        debug!("enter parse_char_literal");
+
+        let token = self.peek()?.clone();
+
+        if let (Token::Char(c), span) = token {
+            self.advance();
+            Some((
+                (DwarfExpression::CharLiteral(c as DwarfInteger), span),
+                LITERAL,
+            ))
+        } else {
+            None
+        }
+    }
+
     /// Parse a String Literal
     ///
-    /// string_literal -> STRING
+    /// "string_literal" -> STRING
     fn parse_string_literal(&mut self) -> Option<Expression> {
         debug!("enter parse_string_literal");
 
@@ -4070,6 +4103,12 @@ impl DwarfParser {
                         .peek()
                         .map_or(self.previous().unwrap().1.end, |t| t.1.end),
             )));
+        }
+
+        // Match a char
+        if self.match_tokens(&[Token::Type(Type::Char)]).is_some() {
+            debug!("exit parse_type: char");
+            return Ok(Some((Type::Char, start..self.peek().unwrap().1.end)));
         }
 
         // Match empty
@@ -5917,6 +5956,20 @@ mod tests {
             print(`a = ${a}, b = ${b}, and this is the end of the string`);
             print(`${a}`);
             ``
+        }
+        "#;
+
+        let ast = parse_dwarf("test_format_string", src);
+        assert!(ast.is_ok());
+    }
+
+    #[test]
+    fn char_literal() {
+        let _ = env_logger::builder().is_test(true).try_init();
+        let src = r#"
+        fn main() -> char {
+            let a = 'a';
+            a
         }
         "#;
 

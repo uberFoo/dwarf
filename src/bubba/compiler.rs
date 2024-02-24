@@ -904,7 +904,7 @@ mod test {
         assert_eq!(&*s_read!(run.unwrap()), &Value::Boolean(true));
     }
 
-    // #[test]
+    #[test]
     fn use_plugin() {
         setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
@@ -946,7 +946,6 @@ use http::client::Response;
 use std::result::Result;
 
 async fn async_get(urls: [String]) -> Future<[Result<string, HttpError>]> {
-    let client = HttpClient::new();
 
     let tasks: [Future<Result<string, HttpError>>] = [];
     // Start a task for each url and push them into the tasks array.
@@ -954,6 +953,7 @@ async fn async_get(urls: [String]) -> Future<[Result<string, HttpError>]> {
         print(url);
         print("\n");
         let task = chacha::spawn(async || -> Result<string, HttpError> {
+            let client = HttpClient::new();
             // This creates a request and sends it.
             let get = client.get(url).await;
             let get = get.send().await;

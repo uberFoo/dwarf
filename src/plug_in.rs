@@ -1,15 +1,10 @@
-use std::{
-    fmt,
-    ops::{Deref, DerefMut},
-};
-
 use crate::chacha::ffi_value::FfiValue;
 use abi_stable::{
     declare_root_module_statics,
     library::RootModule,
     package_version_strings, sabi_trait,
     sabi_types::VersionStrings,
-    std_types::{RArc, RBox, RVec},
+    std_types::{RBox, RVec},
     std_types::{RResult, RStr},
     StableAbi,
 };

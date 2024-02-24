@@ -33,7 +33,7 @@ pub fn start_repl(context: &mut Context, is_uber: bool, thread_count: usize) -> 
     let block = context.block().clone();
 
     #[cfg(feature = "async")]
-    let mut vm = VM::new(
+    let _ = VM::new(
         &Program::new(VERSION.to_owned(), BUILD_TIME.to_owned()),
         &[],
         context.get_home(),

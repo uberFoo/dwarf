@@ -11,6 +11,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - JS-style format strings, e.g., ```let name = "Bob"; let greeting = `Hello, ${name}!`;```
 - Async call semantics to VM
 - Method calls now work in format strings.
+- Character literals and `char` type.
 
 ### Fixed
 

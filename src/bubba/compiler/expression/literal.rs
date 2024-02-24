@@ -38,6 +38,15 @@ pub(in crate::bubba::compiler) fn compile(
             }
         }
         //
+        // StringLiteral
+        //
+        LiteralEnum::CharLiteral(ref literal) => {
+            let literal = lu_dog.exhume_char_literal(literal).unwrap();
+            let literal = std::char::from_u32(s_read!(literal).x_value as u32).unwrap();
+            let value = Value::Char(literal);
+            Ok(value)
+        }
+        //
         // FloatLiteral
         //
         LiteralEnum::FloatLiteral(ref literal) => {

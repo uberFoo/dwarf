@@ -22,14 +22,15 @@ use crate::{
     lu_dog::{
         store::ObjectStore as LuDogStore,
         types::{
-            AWait, Block, Body, BooleanOperator, Call, DataStructure, EnumFieldEnum, Expression,
-            ExpressionBit, ExpressionEnum, ExpressionStatement, Field, FieldExpression, ForLoop,
-            FormatBit, FormatString, FuncGeneric, FunctionCall, ImplementationBlock, Import, Index,
-            IntegerLiteral, Item as WoogItem, ItemStatement, Lambda, LambdaParameter, LetStatement,
-            Literal, LocalVariable, NamedFieldExpression, Pattern as AssocPat, RangeExpression,
-            Span as LuDogSpan, Statement, StringBit, StringLiteral, StructExpression, ValueType,
-            ValueTypeEnum, Variable, VariableExpression, WoogStruct, XFuture, XIf, XMatch, XPath,
-            XPrint, XValue, XValueEnum,
+            AWait, Block, Body, BooleanOperator, Call, CharLiteral, DataStructure, EnumFieldEnum,
+            Expression, ExpressionBit, ExpressionEnum, ExpressionStatement, Field, FieldExpression,
+            ForLoop, FormatBit, FormatString, FuncGeneric, FunctionCall, ImplementationBlock,
+            Import, Index, IntegerLiteral, Item as WoogItem, ItemStatement, Lambda,
+            LambdaParameter, LetStatement, Literal, LocalVariable, NamedFieldExpression,
+            Pattern as AssocPat, RangeExpression, Span as LuDogSpan, Statement, StringBit,
+            StringLiteral, StructExpression, ValueType, ValueTypeEnum, Variable,
+            VariableExpression, WoogStruct, XFuture, XIf, XMatch, XPath, XPrint, XValue,
+            XValueEnum,
         },
         Argument, Binary, BooleanLiteral, Comparison, DwarfSourceFile, FieldAccess,
         FieldAccessTarget, FloatLiteral, List, ListElement, ListExpression, Operator,
@@ -1288,6 +1289,22 @@ pub(super) fn inter_expression(
                 lu_dog,
             );
             let ty = ValueType::new_ty(true, &Ty::new_boolean(context.sarzak), lu_dog);
+            let value = XValue::new_expression(block, &ty, &expr, lu_dog);
+            update_span_value(&span, &value, location!());
+
+            Ok(((expr, span), ty))
+        }
+        //
+        // CharLiteral
+        //
+        ParserExpression::CharLiteral(literal) => {
+            let literal = CharLiteral::new(literal, lu_dog);
+            let expr = Expression::new_literal(
+                true,
+                &Literal::new_char_literal(true, &literal, lu_dog),
+                lu_dog,
+            );
+            let ty = ValueType::new_char(true, lu_dog);
             let value = XValue::new_expression(block, &ty, &expr, lu_dog);
             update_span_value(&span, &value, location!());
 
@@ -3839,6 +3856,7 @@ pub(crate) fn make_value_type(
             let ty = Ty::new_boolean(sarzak);
             Ok(ValueType::new_ty(true, &ty, lu_dog))
         }
+        Type::Char => Ok(ValueType::new_char(true, lu_dog)),
         Type::Empty => Ok(ValueType::new_empty(true, lu_dog)),
         Type::Float => {
             let ty = Ty::new_float(sarzak);

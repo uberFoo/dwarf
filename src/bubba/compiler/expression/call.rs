@@ -715,7 +715,7 @@ mod test {
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Empty);
     }
 
-    // #[test]
+    #[test]
     fn string_format_locals() {
         setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
@@ -724,7 +724,7 @@ mod test {
                          let a = 1;
                          let b = 2;
                          let c = 3;
-                         \"{a} {b} {c}\".format()
+                         `test ${a} ${b} ${c}`
                    }";
         let ast = parse_dwarf("test_or_expression", ore).unwrap();
         let ctx = new_lu_dog(
@@ -739,40 +739,9 @@ mod test {
 
         assert_eq!(program.get_thonk_card(), 1);
 
-        assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 11);
+        assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 21);
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &"test 1 2 3".into());
-    }
-
-    // #[test]
-    fn string_format_indices() {
-        setup_logging();
-        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
-        let ore = "
-                   fn main() -> string {
-                       \"test {0} {1} {2} {3} {4} {5} {6} {7} {8} {9}\".format(
-                           0, 1, 2, 3, 4, 5, 6, 7, 8, 9
-                       )
-                   }";
-        let ast = parse_dwarf("test_or_expression", ore).unwrap();
-        let ctx = new_lu_dog(
-            "test_or_expression".to_owned(),
-            Some((ore.to_owned(), &ast)),
-            &get_dwarf_home(),
-            &sarzak,
-        )
-        .unwrap();
-        let program = compile(&ctx).unwrap();
-        println!("{program}");
-
-        assert_eq!(program.get_thonk_card(), 1);
-
-        assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 11);
-
-        assert_eq!(
-            &*s_read!(run_vm(&program).unwrap()),
-            &"test 0 1 2 3 4 5 6 7 8 9".into()
-        );
     }
 
     #[test]
