@@ -71,7 +71,6 @@ mod keywords {
     pub(crate) const SPAWN_NAMED: &str = "spawn_named";
     pub(crate) const SPLIT: &str = "split";
     pub(crate) const SUM: &str = "sum";
-    pub(crate) const SQUARE: &str = "square";
     pub(crate) const TIME: &str = "time";
     // 🚧 Really this should be async only, but there's a nastiness in static_method_call.rs
     // that would make changing this a pain. That's on the todo list.

@@ -24,8 +24,6 @@ pub trait Plugin: Clone + Debug + Display + Send + Sync {
         args: RVec<FfiValue>,
     ) -> RResult<FfiValue, Error>;
 
-    fn name(&self) -> RStr<'_>;
-
     /// Closes the plugin,
     ///
     /// This does not unload the dynamic library of this plugin,
@@ -43,24 +41,10 @@ pub trait Plugin: Clone + Debug + Display + Send + Sync {
     /// bumps its "major" version,
     /// at which point it would be moved to the last method at the time.
     #[sabi(last_prefix_field)]
-    fn close(
-        self,
-        //app: ApplicationMut<'_>
-    );
+    fn name(&self) -> RStr<'_>;
 }
 
 pub type PluginType = Plugin_TO<'static, RBox<()>>;
-// #[derive(Clone,Debug)]
-// pub struct PluginType {
-//     pub(crate) name: String,
-//     pub(crate) inner: Plugin_TO<'static, RBox<()>>,
-// }
-
-// impl PartialEq for PluginType {
-//     fn eq(&self, other: &Self) -> bool {
-//         self.name == other.name
-//     }
-// }
 
 /// The root module of a`plugin` dynamic library.
 ///

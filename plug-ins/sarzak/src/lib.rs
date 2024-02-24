@@ -88,8 +88,6 @@ impl Plugin for Model {
         "sarzak".into()
     }
 
-    fn close(self) {}
-
     fn invoke_func(
         &mut self,
         module: RStr<'_>,

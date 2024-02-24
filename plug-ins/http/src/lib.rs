@@ -82,8 +82,6 @@ impl Plugin for Http {
         "Http".into()
     }
 
-    fn close(self) {}
-
     fn invoke_func(
         &mut self,
         module: RStr<'_>,
@@ -161,8 +159,6 @@ mod http_client {
         fn name(&self) -> RStr<'_> {
             "HttpClient".into()
         }
-
-        fn close(self) {}
 
         #[tracing::instrument]
         fn invoke_func(
@@ -334,8 +330,6 @@ mod http_server {
         fn name(&self) -> RStr<'_> {
             "HttpServer".into()
         }
-
-        fn close(self) {}
 
         fn invoke_func(
             &mut self,

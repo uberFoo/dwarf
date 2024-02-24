@@ -534,9 +534,9 @@ checksum = "df8670b8c7b9dae1793364eafadf7239c40d669904660c5960d74cfd80b46a53"
 
 [[package]]
 name = "cc"
-version = "1.0.86"
+version = "1.0.87"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7f9fa1897e4325be0d68d48df6aa1a71ac2ed4d27723887e7754192705350730"
+checksum = "3286b845d0fccbdd15af433f61c5970e711987036cb468f437ff6badd70f4e24"
 
 [[package]]
 name = "cfg-if"
@@ -2303,8 +2303,8 @@ dependencies = [
 
 [[package]]
 name = "sarzak"
-version = "2.13.15"
-source = "git+https://github.com/uberFoo/sarzak?branch=develop#7bc6fdf9c7e8b8a59f396300c9c4d91a30a05b91"
+version = "2.13.16"
+source = "git+https://github.com/uberFoo/sarzak?branch=develop#e5f171f6bdb7bfe273f22f007f591b906c6be31e"
 dependencies = [
  "ansi_term",
  "bincode",
