@@ -1,8 +1,9 @@
 use std::{
     env, fs,
-    io::{self, BufReader, BufWriter},
+    hash::{DefaultHasher, Hash, Hasher},
+    io::{self, BufReader, BufWriter, Write},
     net::TcpListener,
-    path::PathBuf,
+    path::{Path, PathBuf},
     thread,
 };
 
@@ -24,7 +25,7 @@ use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 use dwarf::ref_to_inner;
 
 use dwarf::{
-    bubba::{compiler::compile, value::Value as BubbaValue, VM},
+    bubba::{compiler::compile, value::Value as BubbaValue, Program, VM},
     chacha::{
         dap::DapAdapter,
         error::{ChaChaError, ChaChaErrorReporter},
@@ -237,37 +238,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     if let Some((source_code, dwarf_args, file_name)) = input {
-        let ast = match parse_dwarf(&file_name, &source_code) {
-            Ok(ast) => ast,
-            Err(_) => {
-                return Ok(());
-            }
-        };
-
-        if print_ast {
-            println!("{:#?}", ast);
-        }
-
-        let ctx = match new_lu_dog(
-            file_name.to_owned(),
-            Some((source_code.clone(), &ast)),
-            &dwarf_home,
-            &sarzak,
-        ) {
-            Ok(lu_dog) => lu_dog,
-            Err(errors) => {
-                for err in errors {
-                    eprintln!("{}", dwarf::dwarf::error::DwarfErrorReporter(&err, is_uber));
-                }
-                return Ok(());
-            }
-        };
-
         if args.banner.is_some() && args.banner.unwrap() {
             println!("{}", banner2());
         }
 
         if args.repl.is_some() && args.repl.unwrap() {
+            let ctx = match get_context(
+                &file_name,
+                &source_code,
+                &dwarf_home,
+                &sarzak,
+                is_uber,
+                print_ast,
+            ) {
+                Some(ctx) => ctx,
+                None => return Ok(()),
+            };
             let mut ctx = initialize_interpreter(threads, dwarf_home, ctx)?;
             ctx.add_args(dwarf_args);
             start_repl(&mut ctx, is_uber, threads)
@@ -277,6 +263,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 })
                 .unwrap();
         } else if interpreter {
+            let ctx = match get_context(
+                &file_name,
+                &source_code,
+                &dwarf_home,
+                &sarzak,
+                is_uber,
+                print_ast,
+            ) {
+                Some(ctx) => ctx,
+                None => return Ok(()),
+            };
             let mut ctx = initialize_interpreter(threads, dwarf_home, ctx)?;
             ctx.add_args(dwarf_args);
             match start_func("main", false, &mut ctx) {
@@ -328,22 +325,73 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             .unwrap();
         } else {
-            if let Ok(program) = compile(&ctx) {
-                println!("running in the VM");
-                println!("{program}");
+            // Running in the VM
+            //
+            // We will check $DWARF_HOME/compiled for a file named according to:
+            //      [hash(path_to_source)]_source_name.gp
+            // If we find it, we will compare timestamps, and recompile if the
+            // source is newer than the gp file. Otherwise we'll just load the
+            // file and go.
 
-                let args: Vec<RefType<BubbaValue>> = dwarf_args
-                    .into_iter()
-                    .map(|a| new_ref!(BubbaValue, a.into()))
-                    .collect();
+            let cwd = env::current_dir()?;
+            let mut hasher = DefaultHasher::new();
+            cwd.hash(&mut hasher);
+            let hash = hasher.finish();
+            let path = format!(
+                "{}/compiled/{}_{}.gp",
+                dwarf_home.display(),
+                hash,
+                file_name
+            );
+            let path = Path::new(&path);
 
-                #[cfg(feature = "async")]
-                let mut vm = VM::new(&program, &args, &dwarf_home, threads);
-                #[cfg(not(feature = "async"))]
-                let mut vm = VM::new(&program, &args, &dwarf_home);
-                vm.invoke("main", &[])?;
-                return Ok(());
-            }
+            let program = if path.exists() {
+                // Compare timestamps of source and gp file.
+                let source_meta = fs::metadata(&file_name)?;
+                let gp_meta = fs::metadata(path)?;
+                let source_time = source_meta.modified()?;
+                let gp_time = gp_meta.modified()?;
+
+                if source_time > gp_time {
+                    compile_program(
+                        &file_name,
+                        &source_code,
+                        &dwarf_home,
+                        &sarzak,
+                        is_uber,
+                        print_ast,
+                        path,
+                    )?
+                } else {
+                    let bin_file = fs::File::open(path)?;
+                    // bincode::deserialize_from(bin_file).unwrap()
+                    let reader = io::BufReader::new(bin_file);
+                    serde_json::from_reader(reader)?
+                }
+            } else {
+                compile_program(
+                    &file_name,
+                    &source_code,
+                    &dwarf_home,
+                    &sarzak,
+                    is_uber,
+                    print_ast,
+                    path,
+                )?
+            };
+
+            // Get args and call the VM.
+            let args: Vec<RefType<BubbaValue>> = dwarf_args
+                .into_iter()
+                .map(|a| new_ref!(BubbaValue, a.into()))
+                .collect();
+
+            #[cfg(feature = "async")]
+            let mut vm = VM::new(&program, &args, &dwarf_home, threads);
+            #[cfg(not(feature = "async"))]
+            let mut vm = VM::new(&program, &args, &dwarf_home);
+            vm.invoke("main", &[])?;
+            return Ok(());
         }
     } else if args.dap.is_some() && args.dap.unwrap() {
         let listener = TcpListener::bind("127.0.0.1:4711").unwrap();
@@ -396,4 +444,84 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     Ok(())
+}
+
+fn get_context(
+    file_name: &String,
+    source_code: &String,
+    dwarf_home: &PathBuf,
+    sarzak: &SarzakStore,
+    is_uber: bool,
+    print_ast: bool,
+) -> Option<Context> {
+    let ast = match parse_dwarf(&file_name, &source_code) {
+        Ok(ast) => ast,
+        Err(_) => {
+            return None;
+        }
+    };
+
+    if print_ast {
+        println!("{:#?}", ast);
+    }
+
+    match new_lu_dog(
+        file_name.to_owned(),
+        Some((source_code.clone(), &ast)),
+        &dwarf_home,
+        &sarzak,
+    ) {
+        Ok(lu_dog) => Some(lu_dog),
+        Err(errors) => {
+            for err in errors {
+                eprintln!("{}", dwarf::dwarf::error::DwarfErrorReporter(&err, is_uber));
+            }
+            None
+        }
+    }
+}
+
+fn compile_program(
+    file_name: &String,
+    source_code: &String,
+    dwarf_home: &PathBuf,
+    sarzak: &SarzakStore,
+    is_uber: bool,
+    print_ast: bool,
+    path: &Path,
+) -> Result<Program, Box<dyn std::error::Error>> {
+    let ctx = match get_context(
+        &file_name,
+        &source_code,
+        &dwarf_home,
+        &sarzak,
+        is_uber,
+        print_ast,
+    ) {
+        Some(ctx) => ctx,
+        None => {
+            return Err(Box::new(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "unable to create LuDogStore",
+            )))
+        }
+    };
+    if let Ok(program) = compile(&ctx) {
+        // println!("{program}");
+
+        // Write the compiled program to disk.
+        let mut bin_file = fs::File::create(path)?;
+        let mut writer = io::BufWriter::new(bin_file);
+        serde_json::to_writer(&mut writer, &program)?;
+        // let encoded: Vec<u8> = bincode::serialize(&program).unwrap();
+        // dbg!(&encoded);
+        // bin_file.write_all(&encoded)?;
+
+        Ok(program)
+    } else {
+        Err(Box::new(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            "unable to compile program",
+        )))
+    }
 }

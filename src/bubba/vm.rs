@@ -1025,6 +1025,7 @@ impl VM {
                     Instruction::ExtractEnumValue => {
                         let user_enum = stack.pop().unwrap();
                         let Value::Enumeration(user_enum) = user_enum.clone().into_value() else {
+                            eprintln!("{self:?}");
                             return Err(BubbaError::VmPanic {
                                 message: format!("Expeced enum, found: {user_enum:?}."),
                                 location: location!(),

@@ -143,7 +143,6 @@ pub fn initialize_interpreter(
     debug!("initialize_interpreter with {thread_count} threads");
 
     let mut lu_dog = s_write!(e_context.lu_dog);
-    let sarzak = s_read!(e_context.sarzak);
 
     // Initialize the stack with stuff from the compiled source.
     let block = Block::new(false, Uuid::new_v4(), None, None, &mut lu_dog);

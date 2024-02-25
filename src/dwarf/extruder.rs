@@ -3900,7 +3900,7 @@ pub(crate) fn make_value_type(
             let lambda = ValueType::new_lambda(true, &lambda, lu_dog);
             Ok(lambda)
         }
-        Type::Generic((t, _)) => {
+        Type::Generic((_, _)) => {
             panic!("don't call this function with a generic -- you wont't get anywhere.");
         }
         Type::Integer => {

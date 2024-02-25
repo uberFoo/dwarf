@@ -10,7 +10,7 @@ use crate::{bubba::value::Value, s_read, RefType, Span};
 ///
 /// Note to self: leave the Strings wrapped in RefType, as changing it slows
 /// the VM down between 10-23%.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum Instruction {
     /// Add the top two values on the stack.
     ///
@@ -537,7 +537,7 @@ impl fmt::Display for Instruction {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Deserialize, Serialize)]
 pub struct Program {
     compiler_version: String,
     compiler_build_ts: String,
@@ -628,7 +628,7 @@ impl fmt::Display for Program {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Thonk {
     name: String,
     instructions: Vec<Instruction>,

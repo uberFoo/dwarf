@@ -42,7 +42,7 @@ use crate::{
 /// }
 /// ```
 ///
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum EnumVariant<T>
 where
     T: Clone + std::fmt::Debug + PartialEq + std::fmt::Display + std::default::Default,
@@ -1514,7 +1514,7 @@ impl std::cmp::PartialEq for Value {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct TupleEnum<T>
 where
     T: Clone + std::fmt::Debug + PartialEq + std::fmt::Display,
@@ -1563,7 +1563,7 @@ where
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct UserStruct<T>
 where
     T: Clone + std::fmt::Debug + PartialEq + std::fmt::Display + std::default::Default,
@@ -1650,7 +1650,7 @@ where
     }
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct UserTypeAttribute<T>(HashMap<String, RefType<T>>)
 where
     T: Clone + std::fmt::Debug + PartialEq + std::fmt::Display + std::default::Default;

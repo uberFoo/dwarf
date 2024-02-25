@@ -36,7 +36,6 @@ const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub const BUILD_TIME: &str = include!(concat!(env!("OUT_DIR"), "/timestamp.txt"));
 
 mod keywords {
-    pub(crate) const ADD: &str = "add";
     pub(crate) const ARGS: &str = "args";
     #[cfg(feature = "async")]
     pub(crate) const ASLEEP: &str = "asleep";

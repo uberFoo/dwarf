@@ -3,6 +3,7 @@ use std::{fmt, io::Write, ops::Range};
 use ansi_term::Colour;
 #[cfg(feature = "async")]
 use puteketeke::AsyncTask;
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::{
@@ -15,7 +16,7 @@ use crate::{
     DwarfFloat, DwarfInteger, RefType, VmValueResult,
 };
 
-#[derive(Default)]
+#[derive(Default, Deserialize, Serialize)]
 pub enum Value {
     /// Boolean
     ///
@@ -30,6 +31,7 @@ pub enum Value {
     ///
     /// ()
     Empty,
+    #[serde(skip)]
     Error(Box<Error>),
     Enumeration(EnumVariant<Self>),
     Float(DwarfFloat),
@@ -39,10 +41,12 @@ pub enum Value {
         frame_size: usize,
         captures: Vec<RefType<Value>>,
     },
+    #[serde(skip)]
     Plugin((String, RefType<PluginType>)),
     Range(Range<DwarfInteger>),
     String(String),
     Struct(RefType<UserStruct<Self>>),
+    #[serde(skip)]
     #[cfg(feature = "async")]
     Task {
         name: String,
