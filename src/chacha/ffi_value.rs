@@ -39,9 +39,12 @@ impl std::fmt::Display for FfiProxy {
     }
 }
 
-/// This is an actual Value
+/// A value that can be passed across FFI boundaries.
 ///
-/// This is the type used by the interpreter to represent values.
+/// This is a simplified version of the `Value` type, which is used to represent
+/// values in the interpreter. Using the `VmValue` type we can send values from
+/// the VM as well.
+///
 #[repr(C)]
 #[derive(Clone, Debug, StableAbi)]
 pub enum FfiValue {

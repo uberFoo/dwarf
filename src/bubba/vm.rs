@@ -381,6 +381,8 @@ impl VM {
         #[cfg(feature = "tracy-client")]
         let _frame = non_continuous_frame!("inner_run");
 
+        let mut cx = 0;
+
         loop {
             if ip as usize >= self.instrs.len() {
                 return Err(BubbaError::IPOutOfBounds { ip: ip as usize }.into());
@@ -388,11 +390,12 @@ impl VM {
 
             if trace {
                 print_stack(&stack, fp);
+                println!("\t{} ->\t{cx}", Colour::Green.bold().paint("cx"));
                 for iip in 0.max(ip - 3)..(self.instrs.len() as isize).min(ip + 3isize) {
                     let instr = &self.instrs[iip as usize];
 
                     let src = if let Some(source) = program.get_source() {
-                        let span = self.source_map[ip as usize].clone();
+                        let span = self.source_map[iip as usize].clone();
                         &source[span]
                     } else {
                         ""
@@ -1154,6 +1157,11 @@ impl VM {
 
                         return Err(BubbaError::HaltAndCatchFire { file, span }.into());
                     }
+                    Instruction::Incr => {
+                        cx += 1;
+
+                        1
+                    }
                     Instruction::Jump(offset) => offset + 1,
                     Instruction::JumpIfFalse(offset) => {
                         let condition = stack.pop().unwrap();
@@ -1395,6 +1403,21 @@ impl VM {
                                 .into());
                             }
                         }
+
+                        1
+                    }
+                    Instruction::Mov => {
+                        let value = stack.pop().unwrap();
+                        let value = value.into_value();
+                        let Value::Integer(value) = value else {
+                            return Err(BubbaError::VmPanic {
+                                message: format!("Expected integer, found: {value:?}."),
+                                location: location!(),
+                            }
+                            .into());
+                        };
+
+                        cx = value;
 
                         1
                     }
@@ -1781,6 +1804,11 @@ impl VM {
                         };
 
                         stack.push(value);
+
+                        1
+                    }
+                    Instruction::Vom => {
+                        stack.push(Value::Integer(cx as DwarfInteger).into());
 
                         1
                     }
@@ -2333,10 +2361,10 @@ mod tests {
 fn print_stack(stack: &[StackValue], fp: usize) {
     for (i, entry) in stack.iter().enumerate() {
         if i == fp {
-            eprint!("\t{} ->\t", Colour::Green.bold().paint("fp"));
+            print!("\t{} ->\t", Colour::Green.bold().paint("fp"));
         } else {
-            eprint!("\t     \t");
+            print!("\t     \t");
         }
-        eprintln!("stack {i}:\t{}", entry);
+        println!("stack {i}:\t{}", entry);
     }
 }

@@ -176,7 +176,7 @@ name = "dwarf"
 harness = false
 
 [profile.release]
-lto = "thin"
+lto = "fat"
 
 [lib]
 crate-type = ["cdylib", "rlib"]

@@ -507,7 +507,7 @@ fn compile_program(
         }
     };
     if let Ok(program) = compile(&ctx) {
-        // println!("{program}");
+        println!("{program}");
 
         // Write the compiled program to disk.
         let mut bin_file = fs::File::create(path)?;

@@ -194,7 +194,7 @@ mod test {
 
         assert_eq!(program.get_thonk_card(), 1);
 
-        assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 68);
+        assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 72);
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(1));
     }

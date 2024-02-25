@@ -59,7 +59,7 @@ pub enum Instruction {
     /// I don't like this because it increases the size of the instruction by 50%
     /// -- from 16 bytes to 24.
     ///
-    Comment(RefType<String>),
+    Comment(String),
     /// Deconstruct a struct expression
     ///
     /// Given a struct expression, like Foo::Bar(x, y), this instruction will pop the
@@ -128,6 +128,7 @@ pub enum Instruction {
     /// conflagration
     ///
     HaltAndCatchFire,
+    Incr,
     /// Jump to the given offset.
     ///
     /// ## Stack Effect
@@ -182,6 +183,7 @@ pub enum Instruction {
     /// The stack is one element longer.
     ///
     MethodLookup(RefType<String>),
+    Mov,
     /// Multiply the top two values on the stack.
     ///
     /// ## Stack Effect
@@ -281,6 +283,14 @@ pub enum Instruction {
     /// The stack will be n elements longer, where n is the cardinality of the
     /// arguments.
     PushArgs,
+    /// Exit the function
+    ///
+    /// The value expressed by this instruction is the value at the top of the
+    /// stack.
+    ///
+    /// ## Stack Effect
+    ///
+    Return,
     ///
     /// Pop the top value off the stack and store it in a local variable at the
     /// given index.
@@ -289,6 +299,11 @@ pub enum Instruction {
     ///
     StoreLocal(usize),
     StringLength,
+    /// Subtract the top two values on the stack.
+    ///
+    /// ## Stack Effect
+    ///
+    Subtract,
     /// Compare the top two values on the stack.
     ///
     /// a == b
@@ -340,19 +355,7 @@ pub enum Instruction {
     /// Typecast
     ///
     Typecast(RefType<Value>),
-    /// Exit the function
-    ///
-    /// The value expressed by this instruction is the value at the top of the
-    /// stack.
-    ///
-    /// ## Stack Effect
-    ///
-    Return,
-    /// Subtract the top two values on the stack.
-    ///
-    /// ## Stack Effect
-    ///
-    Subtract,
+    Vom,
 }
 
 impl fmt::Display for Instruction {
@@ -399,7 +402,7 @@ impl fmt::Display for Instruction {
                 f,
                 "{} {}",
                 opcode_style.paint("nop "),
-                operand_style.paint(s_read!(comment).to_string())
+                operand_style.paint(comment)
             ),
             Instruction::DeconstructStructExpression => write!(f, "{}", opcode_style.paint("dse ")),
             Instruction::Divide => write!(f, "{}", opcode_style.paint("div ")),
@@ -426,6 +429,7 @@ impl fmt::Display for Instruction {
                 operand_style.paint(s_read!(label).to_string())
             ),
             Instruction::HaltAndCatchFire => write!(f, "{}", opcode_style.paint("hcf 🔥")),
+            Instruction::Incr => write!(f, "{}", opcode_style.paint("incr")),
             Instruction::Jump(offset) => write!(
                 f,
                 "{} {}",
@@ -472,6 +476,7 @@ impl fmt::Display for Instruction {
                 opcode_style.paint("mlu "),
                 operand_style.paint(s_read!(name).to_string())
             ),
+            Instruction::Mov => write!(f, "{}", opcode_style.paint("mov ")),
             Instruction::Multiply => write!(f, "{}", opcode_style.paint("mul ")),
             Instruction::NewList(n) => write!(
                 f,
@@ -533,6 +538,7 @@ impl fmt::Display for Instruction {
                 opcode_style.paint("tc  "),
                 operand_style.paint(s_read!(name).to_string())
             ),
+            Instruction::Vom => write!(f, "{}", opcode_style.paint("vom ")),
         }
     }
 }
