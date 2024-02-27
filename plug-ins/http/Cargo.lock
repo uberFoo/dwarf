@@ -534,9 +534,9 @@ checksum = "df8670b8c7b9dae1793364eafadf7239c40d669904660c5960d74cfd80b46a53"
 
 [[package]]
 name = "cc"
-version = "1.0.87"
+version = "1.0.88"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3286b845d0fccbdd15af433f61c5970e711987036cb468f437ff6badd70f4e24"
+checksum = "02f341c093d19155a6e41631ce5971aac4e9a868262212153124c15fa22d1cdc"
 
 [[package]]
 name = "cfg-if"
@@ -638,7 +638,7 @@ dependencies = [
  "heck",
  "proc-macro2",
  "quote",
- "syn 2.0.50",
+ "syn 2.0.51",
 ]
 
 [[package]]
@@ -890,7 +890,7 @@ dependencies = [
  "crossbeam",
  "crossterm",
  "dap",
- "env_logger",
+ "env_logger 0.10.2",
  "futures-lite 2.2.0",
  "heck",
  "lazy_static",
@@ -911,7 +911,7 @@ dependencies = [
  "slab",
  "smartstring",
  "smol 2.0.0",
- "snafu 0.8.0",
+ "snafu 0.8.1",
  "test-log",
  "threadpool",
  "tracing",
@@ -939,6 +939,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c34f04666d835ff5d62e058c3995147c06f42fe86ff053337632bca83e42702d"
 
 [[package]]
+name = "env_filter"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a009aa4810eb158359dda09d0c87378e4bbb89b5a801f016885a4707ba24f7ea"
+dependencies = [
+ "log",
+]
+
+[[package]]
 name = "env_logger"
 version = "0.10.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -949,6 +958,16 @@ dependencies = [
  "log",
  "regex",
  "termcolor",
+]
+
+[[package]]
+name = "env_logger"
+version = "0.11.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6c012a26a7f605efc424dd53697843a72be7dc86ad2d01f7814337794a12231d"
+dependencies = [
+ "env_filter",
+ "log",
 ]
 
 [[package]]
@@ -969,9 +988,9 @@ dependencies = [
 
 [[package]]
 name = "error-code"
-version = "3.0.0"
+version = "3.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "281e452d3bad4005426416cdba5ccfd4f5c1280e10099e21db27f7c1c28347fc"
+checksum = "26a147e1a6641a55d994b3e4e9fa4d9b180c8d652c09b363af8c9bf1b8e04139"
 
 [[package]]
 name = "event-listener"
@@ -1255,9 +1274,9 @@ dependencies = [
 
 [[package]]
 name = "hermit-abi"
-version = "0.3.6"
+version = "0.3.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bd5256b483761cd23699d0da46cc6fd2ee3be420bbe6d020ae4a091e70b7e9fd"
+checksum = "379dada1584ad501b383485dd706b8afb7a70fcbc7f4da7d780638a5a6124a60"
 
 [[package]]
 name = "home"
@@ -1449,7 +1468,7 @@ version = "1.0.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "eae7b9aee968036d54dce06cebaefd919e4472e753296daccd6d344e3e2df0c2"
 dependencies = [
- "hermit-abi 0.3.6",
+ "hermit-abi 0.3.8",
  "libc",
  "windows-sys 0.48.0",
 ]
@@ -1466,7 +1485,7 @@ version = "0.4.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f23ff5ef2b80d608d61efee834934d862cd92461afc0560dedf493e4c033738b"
 dependencies = [
- "hermit-abi 0.3.6",
+ "hermit-abi 0.3.8",
  "libc",
  "windows-sys 0.52.0",
 ]
@@ -1704,7 +1723,7 @@ version = "1.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4161fcb6d602d4d2081af7c3a45852d875a03dd337a6bfdd6e06407b61342a43"
 dependencies = [
- "hermit-abi 0.3.6",
+ "hermit-abi 0.3.8",
  "libc",
 ]
 
@@ -1769,7 +1788,7 @@ checksum = "a948666b637a0f465e8564c73e89d4dde00d72d4d473cc972f390fc3dcee7d9c"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.50",
+ "syn 2.0.51",
 ]
 
 [[package]]
@@ -1914,7 +1933,7 @@ version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "865724d4dbe39d9f3dd3b52b88d859d66bcb2d6a0acfd5ea68a65fb66d4bdc1c"
 dependencies = [
- "env_logger",
+ "env_logger 0.10.2",
  "log",
 ]
 
@@ -2283,7 +2302,7 @@ checksum = "e5af959c8bf6af1aff6d2b463a57f71aae53d1332da58419e30ad8dc7011d951"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.50",
+ "syn 2.0.51",
 ]
 
 [[package]]
@@ -2397,7 +2416,7 @@ checksum = "7eb0b34b42edc17f6b7cac84a52a1c5f0e1bb2227e997ca9011ea3dd34e8610b"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.50",
+ "syn 2.0.51",
 ]
 
 [[package]]
@@ -2541,11 +2560,11 @@ dependencies = [
 
 [[package]]
 name = "snafu"
-version = "0.8.0"
+version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d342c51730e54029130d7dc9fd735d28c4cd360f1368c01981d4f03ff207f096"
+checksum = "5ed22871b3fe6eff9f1b48f6cbd54149ff8e9acd740dea9146092435f9c43bd3"
 dependencies = [
- "snafu-derive 0.8.0",
+ "snafu-derive 0.8.1",
 ]
 
 [[package]]
@@ -2562,14 +2581,14 @@ dependencies = [
 
 [[package]]
 name = "snafu-derive"
-version = "0.8.0"
+version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "080c44971436b1af15d6f61ddd8b543995cf63ab8e677d46b00cc06f4ef267a0"
+checksum = "4651148226ec36010993fcba6c3381552e8463e9f3e337b75af202b0688b5274"
 dependencies = [
  "heck",
  "proc-macro2",
  "quote",
- "syn 2.0.50",
+ "syn 2.0.51",
 ]
 
 [[package]]
@@ -2642,9 +2661,9 @@ dependencies = [
 
 [[package]]
 name = "syn"
-version = "2.0.50"
+version = "2.0.51"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "74f1bdc9872430ce9b75da68329d1c1746faf50ffac5f19e02b71e37ff881ffb"
+checksum = "6ab617d94515e94ae53b8406c628598680aa0c9587474ecbe58188f7b345d66c"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2680,9 +2699,9 @@ dependencies = [
 
 [[package]]
 name = "tempfile"
-version = "3.10.0"
+version = "3.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a365e8cd18e44762ef95d87f284f4b5cd04107fec2ff3052bd6a3e6069669e67"
+checksum = "85b77fafb263dd9d05cbeac119526425676db3784113aa9295c88498cbf8bff1"
 dependencies = [
  "cfg-if",
  "fastrand 2.0.1",
@@ -2701,24 +2720,24 @@ dependencies = [
 
 [[package]]
 name = "test-log"
-version = "0.2.14"
+version = "0.2.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6159ab4116165c99fc88cce31f99fa2c9dbe08d3691cb38da02fc3b45f357d2b"
+checksum = "7b319995299c65d522680decf80f2c108d85b861d81dfe340a10d16cee29d9e6"
 dependencies = [
- "env_logger",
+ "env_logger 0.11.2",
  "test-log-macros",
  "tracing-subscriber",
 ]
 
 [[package]]
 name = "test-log-macros"
-version = "0.2.14"
+version = "0.2.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7ba277e77219e9eea169e8508942db1bf5d8a41ff2db9b20aab5a5aadc9fa25d"
+checksum = "c8f546451eaa38373f549093fe9fd05e7d2bade739e2ddf834b9968621d60107"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.50",
+ "syn 2.0.51",
 ]
 
 [[package]]
@@ -2744,7 +2763,7 @@ checksum = "a953cb265bef375dae3de6663da4d3804eee9682ea80d8e2542529b73c531c81"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.50",
+ "syn 2.0.51",
 ]
 
 [[package]]
@@ -2874,7 +2893,7 @@ checksum = "34704c8d6ebcbc939824180af020566b01a7c01f80641264eba0999f6c2b6be7"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.50",
+ "syn 2.0.51",
 ]
 
 [[package]]
@@ -3131,7 +3150,7 @@ dependencies = [
  "once_cell",
  "proc-macro2",
  "quote",
- "syn 2.0.50",
+ "syn 2.0.51",
  "wasm-bindgen-shared",
 ]
 
@@ -3165,7 +3184,7 @@ checksum = "642f325be6301eb8107a83d12a8ac6c1e1c54345a7ef1a9261962dfefda09e66"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.50",
+ "syn 2.0.51",
  "wasm-bindgen-backend",
  "wasm-bindgen-shared",
 ]
@@ -3406,5 +3425,5 @@ checksum = "9ce1b18ccd8e73a9321186f97e46f9f04b778851177567b1975109d26a08d2a6"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.50",
+ "syn 2.0.51",
 ]

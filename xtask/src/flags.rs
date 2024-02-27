@@ -11,6 +11,9 @@ xflags::xflags! {
         cmd package {
             optional --client-patch-version version: String
         }
+        cmd install {
+
+        }
     }
 }
 
@@ -26,6 +29,7 @@ pub struct Xtask {
 pub enum XtaskCmd {
     Plugins(Plugins),
     Package(Package),
+    Install(Install),
 }
 
 #[derive(Debug)]
@@ -37,6 +41,9 @@ pub struct Plugins {
 pub struct Package {
     pub client_patch_version: Option<String>,
 }
+
+#[derive(Debug)]
+pub struct Install;
 
 impl Xtask {
     #[allow(dead_code)]
