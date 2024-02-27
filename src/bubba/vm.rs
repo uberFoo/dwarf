@@ -241,12 +241,10 @@ impl VM {
         for (addr, instr) in tmp_mem.iter().enumerate() {
             match instr {
                 Instruction::Label(name) => {
-                    let r_name = &*s_read!(name);
-                    vm.labels.insert(r_name.to_owned(), addr);
-                    vm.instrs.push(Instruction::Label(name.clone()));
+                    vm.labels.insert(name.to_owned(), addr);
+                    vm.instrs.push(Instruction::Label(name.to_owned()));
                 }
                 Instruction::CallDestination(name) => {
-                    let name = &*s_read!(name);
                     if let Some((ip, _frame_size)) = vm.func_map.get(name) {
                         vm.instrs
                             .push(Instruction::Push(Value::Integer(*ip as DwarfInteger)));
@@ -255,7 +253,6 @@ impl VM {
                     }
                 }
                 Instruction::LocalCardinality(name) => {
-                    let name = &*s_read!(name);
                     if let Some((_ip, frame_size)) = vm.func_map.get(name) {
                         vm.instrs.push(Instruction::Push(Value::Integer(
                             *frame_size as DwarfInteger,
@@ -1019,8 +1016,9 @@ impl VM {
                         1
                     }
                     Instruction::Dup => {
-                        let value = stack.pop().unwrap();
-                        stack.push(value.clone());
+                        // let value = stack.pop().unwrap();
+                        // stack.push(value.clone());
+                        let value = stack[stack.len() - 1].clone();
                         stack.push(value);
 
                         1
@@ -1029,8 +1027,9 @@ impl VM {
                         let user_enum = stack.pop().unwrap();
                         let Value::Enumeration(user_enum) = user_enum.clone().into_value() else {
                             eprintln!("{self:?}");
+                            print_stack(&stack, fp);
                             return Err(BubbaError::VmPanic {
-                                message: format!("Expeced enum, found: {user_enum:?}."),
+                                message: format!("Expected enum, found: {user_enum:?}."),
                                 location: location!(),
                             }
                             .into());
@@ -1088,6 +1087,7 @@ impl VM {
                                 }
                             }
                             value => {
+                                eprintln!("{self:?}");
                                 print_stack(&stack, fp);
                                 return Err::<RefType<Value>, Error>(
                                     BubbaError::VmPanic {
@@ -1137,7 +1137,6 @@ impl VM {
                         1
                     }
                     Instruction::Goto(label) => {
-                        let label = &*s_read!(label);
                         if let Some(new_ip) = self.labels.get(label) {
                             *new_ip as isize - ip
                         } else {
@@ -1197,6 +1196,7 @@ impl VM {
                                         stack.push(vec[index].clone().into());
                                     } else {
                                         eprintln!("{self:?}");
+                                        print_stack(&stack, fp);
                                         return Err(BubbaError::IndexOutOfBounds {
                                             index,
                                             len: vec.len(),
@@ -1217,6 +1217,7 @@ impl VM {
                                         )
                                     } else {
                                         eprintln!("{self:?}");
+                                        print_stack(&stack, fp);
                                         return Err(BubbaError::IndexOutOfBounds {
                                             index,
                                             len: str.len(),
@@ -1312,6 +1313,8 @@ impl VM {
                                 stack.push(Value::Integer(str.len() as DwarfInteger).into());
                             }
                             _ => {
+                                eprintln!("{self:?}");
+                                print_stack(&stack, fp);
                                 return Err(BubbaError::NotIndexable {
                                     span: self.get_span(ip),
                                     location: location!(),
@@ -1332,6 +1335,8 @@ impl VM {
                                 inner.push(element.into_pointer());
                             }
                             _ => {
+                                eprintln!("{self:?}");
+                                print_stack(&stack, fp);
                                 return Err(BubbaError::NotIndexable {
                                     span: self.get_span(ip),
                                     location: location!(),
@@ -1348,7 +1353,7 @@ impl VM {
                             .cloned()
                             .map(|v| v.into_pointer())
                             .collect();
-                        let name = s_read!(name).to_owned();
+                        let name = name.to_owned();
                         let value = Value::LambdaPointer {
                             name,
                             frame_size: *frame_size,
@@ -1363,9 +1368,7 @@ impl VM {
 
                         if let Value::Plugin(_) = ty.clone().into_value() {
                             stack.push(ty);
-                            stack.push(
-                                <String as Into<Value>>::into((*s_read!(name)).clone()).into(),
-                            );
+                            stack.push(<String as Into<Value>>::into((name).clone()).into());
                         } else {
                             let ty = match ty.into_value() {
                                 Value::Enumeration(variant) => match variant {
@@ -1390,7 +1393,7 @@ impl VM {
                                 oopsie => unreachable!("{oopsie:?}"),
                             };
 
-                            let func = format!("{}::{}", ty, (*s_read!(name)).clone());
+                            let func = format!("{}::{}", ty, name);
 
                             if let Some((ip, frame_size)) = self.func_map.get(&func) {
                                 stack.push(Value::Integer(*ip as DwarfInteger).into());
@@ -1579,6 +1582,7 @@ impl VM {
                         })()
                         .map_err(|e| {
                             eprintln!("{e}");
+                            print_stack(&stack, fp);
                             BubbaError::VmPanic {
                                 message: "Plug-in error".to_owned(),
                                 location: location!(),

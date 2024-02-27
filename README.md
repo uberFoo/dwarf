@@ -7,7 +7,11 @@
 # The dwarf Programming Language
 
 dwarf is a programming language based heavily upon, and implemented in, [Rust](https://www.rust-lang.org).
-It's a typed, interpreted language that is designed to be easily embedded in other applications -- should one want to do so.
+It is a typed, (optionally) asynchronous, interpreted language.
+dwarf supports all the usual primitive types like int, float, bool, and string.
+It also has support for arrays, UUIDs, structs and enums, with tuples on the way.
+dwarf supports generic parameters to functions as well as structs and enums.
+Three is currently a compiler/VM, an interpreter, and a REPL.
 
 
 There is a [book 📒](https://uberfoo.github.io/assets/docs/dwarf/introduction.html) in progress.
@@ -17,12 +21,12 @@ Check it out!
 
 I appreciate feedback.
 Let me know if you love it, or hate it.
-There are likely as not bugs, and corner cases.
-File a bug report, and let me know.
+There are likely as not bugs, and corner cases yet to be uncovered.
+If you run across something, file a bug report, and I'll git a fix out ASAP.
 
 > **Free Stuff**
 >
-> I'm giving away dwarf stickers to anyone who files a bug report.
+> I'm giving away dwarf stickers to anyone who files a bug report!
 
 ## Installation
 

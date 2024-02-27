@@ -201,10 +201,7 @@ pub(in crate::bubba::compiler) fn compile(
         thonk.append(match_thonk);
 
         // Escape from New York
-        thonk.insert_instruction(
-            Instruction::Goto(new_ref!(String, label.clone())),
-            location!(),
-        );
+        thonk.insert_instruction(Instruction::Goto(label.clone()), location!());
 
         context.pop_scope();
     }
@@ -218,7 +215,7 @@ pub(in crate::bubba::compiler) fn compile(
     thonk.insert_instruction(Instruction::Push(span.clone().into()), location!());
     thonk.insert_instruction(Instruction::HaltAndCatchFire, location!());
 
-    thonk.insert_instruction(Instruction::Label(new_ref!(String, label)), location!());
+    thonk.insert_instruction(Instruction::Label(label), location!());
 
     Ok(None)
 }

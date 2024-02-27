@@ -35,13 +35,12 @@ pub(in crate::bubba::compiler) fn compile(
         );
         Ok(Some(symbol.ty.clone()))
     } else if let Some(ty) = context.check_function(name) {
-        let name = new_ref!(String, name.to_owned());
         // We are here because we need to look up a function.
-        thonk.insert_instruction(Instruction::CallDestination(name.clone()), location!());
+        thonk.insert_instruction(Instruction::CallDestination(name.to_owned()), location!());
 
         // This instruction will be patched by the VM with the number of locals in the
         // function.
-        thonk.insert_instruction(Instruction::LocalCardinality(name), location!());
+        thonk.insert_instruction(Instruction::LocalCardinality(name.to_owned()), location!());
 
         Ok(Some(ty.clone()))
     } else {

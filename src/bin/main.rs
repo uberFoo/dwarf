@@ -506,22 +506,24 @@ fn compile_program(
             )))
         }
     };
-    if let Ok(program) = compile(&ctx) {
-        println!("{program}");
+    match compile(&ctx) {
+        Ok(program) => {
+            println!("{program}");
 
-        // Write the compiled program to disk.
-        let mut bin_file = fs::File::create(path)?;
-        let mut writer = io::BufWriter::new(bin_file);
-        serde_json::to_writer(&mut writer, &program)?;
-        // let encoded: Vec<u8> = bincode::serialize(&program).unwrap();
-        // dbg!(&encoded);
-        // bin_file.write_all(&encoded)?;
+            // Write the compiled program to disk.
+            let bin_file = fs::File::create(path)?;
+            // let encoded: Vec<u8> = bincode::serialize(&program).unwrap();
+            // dbg!(&encoded);
+            // bin_file.write_all(&encoded)?;
 
-        Ok(program)
-    } else {
-        Err(Box::new(std::io::Error::new(
+            let mut writer = io::BufWriter::new(bin_file);
+            serde_json::to_writer(&mut writer, &program)?;
+
+            Ok(program)
+        }
+        Err(e) => Err(Box::new(std::io::Error::new(
             std::io::ErrorKind::Other,
-            "unable to compile program",
-        )))
+            format!("unable to compile program: {e}"),
+        ))),
     }
 }

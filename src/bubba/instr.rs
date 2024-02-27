@@ -52,7 +52,7 @@ pub enum Instruction {
     /// This is a pseudo-instruction that stores the name of the function that
     /// we are calling. It is patched by the VM before execution.
     ///
-    CallDestination(RefType<String>),
+    CallDestination(String),
     CaptureLocal(usize, usize),
     /// Comment Instruction / NOP
     ///
@@ -120,7 +120,7 @@ pub enum Instruction {
     /// ## Stack Effect
     ///
     FieldWrite,
-    Goto(RefType<String>),
+    Goto(String),
     /// Stop processing and panic the VM
     ///
     /// ## Stack Effect
@@ -159,7 +159,7 @@ pub enum Instruction {
     ///
     /// The stack is one element shorter after this instruction.
     ///
-    Label(RefType<String>),
+    Label(String),
     ListIndex,
     ListLength,
     ListPush,
@@ -168,8 +168,8 @@ pub enum Instruction {
     /// This is a pseudo-instruction to store the number of local variables in
     /// the function. It is patched by the VM before execution.
     ///
-    LocalCardinality(RefType<String>),
-    MakeLambdaPointer(RefType<String>, usize),
+    LocalCardinality(String),
+    MakeLambdaPointer(String, usize),
     /// Look up a method
     ///
     /// The top of the stack is a reference to the user defined type upon which
@@ -182,7 +182,7 @@ pub enum Instruction {
     ///
     /// The stack is one element longer.
     ///
-    MethodLookup(RefType<String>),
+    MethodLookup(String),
     Mov,
     /// Multiply the top two values on the stack.
     ///
@@ -389,7 +389,7 @@ impl fmt::Display for Instruction {
                 f,
                 "{} {}",
                 opcode_style.paint("calld"),
-                operand_style.paint(s_read!(name).to_string())
+                operand_style.paint(name.to_string())
             ),
             Instruction::CaptureLocal(index, distance) => write!(
                 f,
@@ -426,7 +426,7 @@ impl fmt::Display for Instruction {
                 f,
                 "{} {}",
                 opcode_style.paint("goto"),
-                operand_style.paint(s_read!(label).to_string())
+                operand_style.paint(label.to_string())
             ),
             Instruction::HaltAndCatchFire => write!(f, "{}", opcode_style.paint("hcf 🔥")),
             Instruction::Incr => write!(f, "{}", opcode_style.paint("incr")),
@@ -452,7 +452,7 @@ impl fmt::Display for Instruction {
                 f,
                 "{} {}",
                 opcode_style.paint("label"),
-                operand_style.paint(s_read!(name).to_string())
+                operand_style.paint(name.to_string())
             ),
             Instruction::ListIndex => write!(f, "{}", opcode_style.paint("idx ")),
             Instruction::ListLength => write!(f, "{}", opcode_style.paint("len ")),
@@ -461,20 +461,20 @@ impl fmt::Display for Instruction {
                 f,
                 "{} {}",
                 opcode_style.paint("lc  "),
-                operand_style.paint(s_read!(name).to_string())
+                operand_style.paint(name.to_string())
             ),
             Instruction::MakeLambdaPointer(name, arity) => write!(
                 f,
                 "{} {} {}",
                 opcode_style.paint("mlp "),
-                operand_style.paint(s_read!(name).to_string()),
+                operand_style.paint(name.to_string()),
                 operand_style.paint(arity.to_string())
             ),
             Instruction::MethodLookup(name) => write!(
                 f,
                 "{} {}",
                 opcode_style.paint("mlu "),
-                operand_style.paint(s_read!(name).to_string())
+                operand_style.paint(name.to_string())
             ),
             Instruction::Mov => write!(f, "{}", opcode_style.paint("mov ")),
             Instruction::Multiply => write!(f, "{}", opcode_style.paint("mul ")),

@@ -202,7 +202,7 @@ pub(in crate::bubba::compiler) fn compile_lambda(
 
     // outer_thonk.add_instruction(Instruction::Push(new_ref!(Value, pointer)), location!());
     outer_thonk.insert_instruction(
-        Instruction::MakeLambdaPointer(new_ref!(String, name.clone()), frame_size),
+        Instruction::MakeLambdaPointer(name.clone(), frame_size),
         location!(),
     );
 
@@ -335,10 +335,7 @@ fn compile_method_call(
             _ => {}
         }
 
-        thonk.insert_instruction(
-            Instruction::MethodLookup(new_ref!(String, name)),
-            location!(),
-        );
+        thonk.insert_instruction(Instruction::MethodLookup(name), location!());
         result
     } else {
         panic!();
@@ -514,10 +511,12 @@ fn compile_static_method_call(
                 let a_sink = s_read!(body).a_sink;
 
                 let func_name = format!("{ty}::{func}");
-                let name = new_ref!(String, func_name);
                 // These instructions will be patched by the VM.
-                thonk.insert_instruction(Instruction::CallDestination(name.clone()), location!());
-                thonk.insert_instruction(Instruction::LocalCardinality(name), location!());
+                thonk.insert_instruction(
+                    Instruction::CallDestination(func_name.clone()),
+                    location!(),
+                );
+                thonk.insert_instruction(Instruction::LocalCardinality(func_name), location!());
 
                 for expr in args {
                     compile_expression(expr, thonk, context)?;

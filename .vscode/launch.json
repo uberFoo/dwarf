@@ -129,6 +129,7 @@
             "name": "Debug executable 'dwarf'",
             "cargo": {
                 "args": [
+                    "+stage2",
                     "build",
                     "--bin=dwarf",
                     "--package=dwarf",
@@ -144,8 +145,9 @@
                 // "use.ore"
                 // "tests/harness/types/generics/workout.ore"
                 // "tests/harness/types/generics/option.tao"
-                "test.ore",
+                // "bench.ore",
                 // "tests/harness/chacha/async/http.ore"
+                "https://raw.githubusercontent.com/uberFoo/dwarf/develop/mandelbrot.ore"
             ],
             "cwd": "${workspaceFolder}",
             "env": {
