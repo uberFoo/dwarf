@@ -1,7 +1,6 @@
 use std::{
     env,
     fs::{self, DirEntry},
-    path::PathBuf,
 };
 
 use glob::glob;
@@ -16,7 +15,7 @@ const MODEL_DIR: &str = "models";
 const SRC_DIR: &str = "src";
 const TAO_DIR: &str = "ore";
 
-impl flags::Plugins {
+impl flags::Plugin {
     pub(crate) fn run(self, sh: &Shell) -> anyhow::Result<()> {
         let dwarf_home = env::var("DWARF_HOME").unwrap_or_else(|_| {
             let mut home = env::var("HOME").unwrap();

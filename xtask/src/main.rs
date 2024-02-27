@@ -34,7 +34,7 @@ fn main() -> anyhow::Result<()> {
 
     match flags.subcommand {
         flags::XtaskCmd::Package(cmd) => cmd.run(sh),
-        flags::XtaskCmd::Plugins(cmd) => cmd.run(sh),
+        flags::XtaskCmd::Plugin(cmd) => cmd.run(sh),
         flags::XtaskCmd::Install(cmd) => cmd.run(sh),
     }
 }
