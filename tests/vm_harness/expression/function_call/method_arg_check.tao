@@ -1,0 +1,11 @@
+struct Foo {}
+
+impl Foo {
+    fn test(self, a: int, b: float, c: string) -> int {
+        a + b as int + c.len()
+    }
+}
+fn main() {
+    let foo = Foo {};
+    print(foo.test(1, 2, "three"));
+}

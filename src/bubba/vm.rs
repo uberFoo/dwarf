@@ -1,4 +1,7 @@
-use std::path::{Path, PathBuf};
+use std::{
+    env,
+    path::{Path, PathBuf},
+};
 
 #[cfg(feature = "async")]
 use smol::future;
@@ -19,10 +22,14 @@ use abi_stable::{
 use ansi_term::Colour;
 use log::{self, log_enabled, Level::Trace};
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
-use snafu::{location, prelude::*, Location};
+use snafu::{location, Location};
 
 use crate::{
-    bubba::{value::Value, RESULT, STRING},
+    bubba::{
+        error::{BubbaError, Error, Result},
+        value::Value,
+        RESULT, STRING,
+    },
     chacha::{
         ffi_value::FfiValue,
         value::{EnumVariant, TupleEnum, UserStruct},
@@ -33,58 +40,13 @@ use crate::{
     plug_in::{PluginModRef, PluginType},
     s_read, s_write,
     sarzak::{ObjectStore as SarzakStore, Ty, MODEL as SARZAK_MODEL},
-    DwarfInteger, NewRef, RefType, Span, ERR_CLR, POP_CLR,
+    DwarfInteger, NewRef, RefType, Span,
 };
 
 use super::instr::{Instruction, Program};
 
-#[derive(Debug, Snafu)]
-pub struct Error(BubbaError);
-
 #[cfg(feature = "async")]
 static mut EXECUTOR: OnceCell<Executor> = OnceCell::new();
-
-#[derive(Debug, Snafu)]
-pub(crate) enum BubbaError {
-    #[snafu(display("\n{}: addition error: {} + {}", ERR_CLR.bold().paint("error"), left, right))]
-    Addition { left: Value, right: Value },
-    #[snafu(display("\n{}: negation error", ERR_CLR.bold().paint("error")))]
-    Bang { value: Value },
-    #[snafu(display("\n{}: could not convert `{}` to `{}`", ERR_CLR.bold().paint("error"), src, dst))]
-    Conversion { src: String, dst: String },
-    #[snafu(display("\n{}: division error: `{}` ÷ `{}`", ERR_CLR.bold().paint("error"), left, right))]
-    Division { left: Value, right: Value },
-    #[snafu(display("\n{}: Halt and catch fire...🔥", ERR_CLR.bold().paint("error")))]
-    HaltAndCatchFire { file: String, span: Span },
-    /// Index out of bounds
-    ///
-    #[snafu(display("\n{}: index `{}` is out of bounds for array of length `{}`.", ERR_CLR.bold().paint("error"), POP_CLR.paint(index.to_string()), POP_CLR.paint(len.to_string())))]
-    IndexOutOfBounds {
-        index: usize,
-        len: usize,
-        span: Span,
-    },
-    #[snafu(display("\n{}: invalid instruction: {instr}", ERR_CLR.bold().paint("error")))]
-    InvalidInstruction { instr: Instruction },
-    #[snafu(display("\n{}: ip out of bounds at {ip}", ERR_CLR.bold().paint("error")))]
-    IPOutOfBounds { ip: usize },
-    #[snafu(display("\n{}: multiplication error: {} × {}", ERR_CLR.bold().paint("error"), left, right))]
-    Multiplication { left: Value, right: Value },
-    #[snafu(display("\n{}: negation error: {}", ERR_CLR.bold().paint("error"), value))]
-    Negation { value: Value },
-    #[snafu(display("\n{}: no such field: {} in {}", ERR_CLR.bold().paint("error"), field, ty))]
-    NoSuchField { field: String, ty: String },
-    #[snafu(display("\n{}: not indexable.", ERR_CLR.bold().paint("error")))]
-    NotIndexable { span: Span, location: Location },
-    #[snafu(display("\n{}: subtraction error: {} - {}", ERR_CLR.bold().paint("error"), left, right))]
-    Subtraction { left: Value, right: Value },
-    // #[snafu(display("\n{}: value error: {value}\n\t--> {}:{}:{}", ERR_CLR.bold().paint("error"), location.file, location.line, location.column))]
-    // ValueError { value: Value, location: Location },
-    #[snafu(display("\n{}: vm panic: {message}\n\t--> {}:{}:{}", ERR_CLR.bold().paint("error"), location.file, location.line, location.column))]
-    VmPanic { message: String, location: Location },
-}
-
-type Result<T, E = Error> = std::result::Result<T, E>;
 
 #[derive(Clone, Debug)]
 enum StackValue {
@@ -151,6 +113,7 @@ pub struct VM {
     labels: HashMap<String, usize>,
     #[cfg(feature = "async")]
     thread_count: usize,
+    backtrace: bool,
 }
 
 impl std::fmt::Debug for VM {
@@ -202,6 +165,8 @@ impl VM {
             eprintln!("{program}");
         }
 
+        let backtrace = env::var("DWARF_BACKTRACE").is_ok();
+
         let mut vm = VM {
             // ip: 0,
             // fp: 0,
@@ -224,6 +189,7 @@ impl VM {
             labels: HashMap::default(),
             #[cfg(feature = "async")]
             thread_count,
+            backtrace,
         };
 
         let mut tmp_mem: Vec<Instruction> = Vec::new();
@@ -537,7 +503,7 @@ impl VM {
                                 }
                             }
                         };
-                        let worker = executor.root_worker();
+                        let worker = executor.new_worker();
                         let child_task = worker.create_task(future).unwrap();
 
                         // let task = executor
@@ -1026,8 +992,10 @@ impl VM {
                     Instruction::ExtractEnumValue => {
                         let user_enum = stack.pop().unwrap();
                         let Value::Enumeration(user_enum) = user_enum.clone().into_value() else {
-                            eprintln!("{self:?}");
-                            print_stack(&stack, fp);
+                            if self.backtrace {
+                                eprintln!("{self:?}");
+                                print_stack(&stack, fp);
+                            }
                             return Err(BubbaError::VmPanic {
                                 message: format!("Expected enum, found: {user_enum:?}."),
                                 location: location!(),
@@ -1087,8 +1055,10 @@ impl VM {
                                 }
                             }
                             value => {
-                                eprintln!("{self:?}");
-                                print_stack(&stack, fp);
+                                if self.backtrace {
+                                    eprintln!("{self:?}");
+                                    print_stack(&stack, fp);
+                                }
                                 return Err::<RefType<Value>, Error>(
                                     BubbaError::VmPanic {
                                         message: format!("FieldRead unexpected value: {value}."),
@@ -1187,115 +1157,129 @@ impl VM {
                         let list = stack.pop().unwrap();
                         let list = list.into_pointer();
                         let list = s_read!(list);
-                        match index {
-                            Value::Integer(index) => {
-                                let index = index as usize;
-                                if let Value::Vector { ty: _, inner: vec } = &list.clone() {
-                                    let vec = s_read!(vec);
-                                    if index < vec.len() {
-                                        stack.push(vec[index].clone().into());
-                                    } else {
-                                        eprintln!("{self:?}");
-                                        print_stack(&stack, fp);
-                                        return Err(BubbaError::IndexOutOfBounds {
-                                            index,
-                                            len: vec.len(),
-                                            span: self.get_span(ip),
-                                        }
-                                        .into());
-                                    }
-                                } else if let Value::String(str) = &*list {
-                                    let str = unicode_segmentation::UnicodeSegmentation::graphemes(
-                                        str.as_str(),
-                                        true,
-                                    )
-                                    .collect::<Vec<&str>>();
-
-                                    if index < str.len() {
-                                        stack.push(
-                                            Value::String(str[index..index + 1].join("")).into(),
-                                        )
-                                    } else {
-                                        eprintln!("{self:?}");
-                                        print_stack(&stack, fp);
-                                        return Err(BubbaError::IndexOutOfBounds {
-                                            index,
-                                            len: str.len(),
-                                            span: self.get_span(ip),
-                                        }
-                                        .into());
-                                    }
+                        let index: usize = index.try_into()?;
+                        match &*list {
+                            Value::Vector { ty: _, inner: vec } => {
+                                let vec = s_read!(vec);
+                                if index < vec.len() {
+                                    stack.push(vec[index].clone().into());
                                 } else {
-                                    return Err(BubbaError::NotIndexable {
+                                    if self.backtrace {
+                                        eprintln!("{self:?}");
+                                        print_stack(&stack, fp);
+                                    }
+                                    return Err(BubbaError::IndexOutOfBounds {
+                                        index,
+                                        len: vec.len(),
                                         span: self.get_span(ip),
                                         location: location!(),
                                     }
                                     .into());
                                 }
                             }
-                            // Value::Range(_) => {
-                            //     let range: Range<usize> = index.try_into()?;
-                            //     let list = eval_expression(list.clone(), context, vm)?;
-                            //     let list = *list;
-                            //     if let Value::Vector { ty, inner: vec } = &list.clone() {
-                            //         if range.end < vec.len() {
-                            //             Ok(new_ref!(
-                            //                 Value,
-                            //                 Value::Vector {
-                            //                     ty: ty.clone(),
-                            //                     inner: vec[range].to_owned()
-                            //                 }
-                            //             ))
-                            //         } else {
-                            //             let value =
-                            //                 &*index_expr.r11_x_value(&*lu_dog)[0];
-                            //             let span = &*value.r63_span(&*lu_dog)[0];
-                            //             let read = *span;
-                            //             let span = read.start as usize..read.end as usize;
+                            Value::String(str) => {
+                                let str = unicode_segmentation::UnicodeSegmentation::graphemes(
+                                    str.as_str(),
+                                    true,
+                                )
+                                .collect::<Vec<&str>>();
 
-                            //             Err(ChaChaError::IndexOutOfBounds {
-                            //                 index: range.end,
-                            //                 len: vec.len(),
-                            //                 span,
-                            //                 location: location!(),
-                            //             })
-                            //         }
-                            //     } else if let Value::String(str) = &*list {
-                            //         let str = unicode_segmentation::UnicodeSegmentation::graphemes(
-                            //             str.as_str(),
-                            //             true,
-                            //         )
-                            //         .collect::<Vec<&str>>();
+                                if index < str.len() {
+                                    stack.push(Value::String(str[index..index + 1].join("")).into())
+                                } else {
+                                    if self.backtrace {
+                                        eprintln!("{self:?}");
+                                        print_stack(&stack, fp);
+                                    }
+                                    return Err(BubbaError::IndexOutOfBounds {
+                                        index,
+                                        len: str.len(),
+                                        span: self.get_span(ip),
+                                        location: location!(),
+                                    }
+                                    .into());
+                                }
+                            }
+                            value => {
+                                return Err(BubbaError::NotIndexable {
+                                    span: self.get_span(ip),
+                                    value: value.to_owned(),
+                                    location: location!(),
+                                }
+                                .into());
+                            }
+                        }
 
-                            //         if range.end < str.len() {
-                            //             Ok(StackValue::Value(Value::String(str[range].join(""),)))
-                            //         } else {
-                            //             let value =
-                            //                 &*index_expr.r11_x_value(&*lu_dog)[0];
-                            //             let span = &*value.r63_span(&*lu_dog)[0];
-                            //             let read = *span;
-                            //             let span = read.start as usize..read.end as usize;
+                        1
+                    }
+                    Instruction::ListIndexRange => {
+                        let start: usize = stack.pop().unwrap().into_value().try_into()?;
+                        let end: usize = stack.pop().unwrap().into_value().try_into()?;
+                        let list = stack.pop().unwrap();
+                        let list = list.into_pointer();
+                        let list = s_read!(list);
 
-                            //             Err(ChaChaError::IndexOutOfBounds {
-                            //                 index: range.end,
-                            //                 len: str.len(),
-                            //                 span,
-                            //                 location: location!(),
-                            //             })
-                            //         }
-                            // } else {
-                            //     let value = &*list.r11_x_value(&*lu_dog)[0];
-                            //     let span = &*value.r63_span(&*lu_dog)[0];
-                            //     let read = *span;
-                            //     let span = read.start as usize..read.end as usize;
+                        match &*list {
+                            Value::Vector { ty, inner: vec } => {
+                                let vec = s_read!(vec);
+                                if end < vec.len() {
+                                    let list = new_ref!(
+                                        Value,
+                                        Value::Vector {
+                                            ty: ty.clone(),
+                                            inner: new_ref!(
+                                                Vec<RefType<Value>>,
+                                                vec[start..end].to_owned()
+                                            )
+                                        }
+                                    );
 
-                            //     Err(ChaChaError::NotIndexable {
-                            //         span,
-                            //         location: location!(),
-                            //     })
-                            // }
-                            // }
-                            _ => unreachable!(),
+                                    stack.push(list.into())
+                                } else {
+                                    if self.backtrace {
+                                        eprintln!("{self:?}");
+                                        print_stack(&stack, fp);
+                                    }
+                                    return Err(BubbaError::IndexOutOfBounds {
+                                        index: end,
+                                        len: vec.len(),
+                                        span: self.get_span(ip),
+                                        location: location!(),
+                                    }
+                                    .into());
+                                }
+                            }
+                            Value::String(str) => {
+                                let str = unicode_segmentation::UnicodeSegmentation::graphemes(
+                                    str.as_str(),
+                                    true,
+                                )
+                                .collect::<Vec<&str>>();
+
+                                if end < str.len() {
+                                    stack.push(Value::String(str[start..end + 1].join("")).into())
+                                } else {
+                                    if self.backtrace {
+                                        eprintln!("{self:?}");
+                                        print_stack(&stack, fp);
+                                    }
+                                    return Err(BubbaError::IndexOutOfBounds {
+                                        index: end,
+                                        len: str.len(),
+                                        span: self.get_span(ip),
+                                        location: location!(),
+                                    }
+                                    .into());
+                                }
+                            }
+                            value => {
+                                return Err(BubbaError::NotIndexable {
+                                    span: self.get_span(ip),
+                                    value: value.to_owned(),
+                                    location: location!(),
+                                }
+                                .into());
+                            }
                         }
 
                         1
@@ -1312,11 +1296,14 @@ impl VM {
                             Value::String(str) => {
                                 stack.push(Value::Integer(str.len() as DwarfInteger).into());
                             }
-                            _ => {
-                                eprintln!("{self:?}");
-                                print_stack(&stack, fp);
+                            value => {
+                                if self.backtrace {
+                                    eprintln!("{self:?}");
+                                    print_stack(&stack, fp);
+                                }
                                 return Err(BubbaError::NotIndexable {
                                     span: self.get_span(ip),
+                                    value: value.to_owned(),
                                     location: location!(),
                                 }
                                 .into());
@@ -1334,11 +1321,14 @@ impl VM {
                                 let mut inner = s_write!(inner);
                                 inner.push(element.into_pointer());
                             }
-                            _ => {
-                                eprintln!("{self:?}");
-                                print_stack(&stack, fp);
+                            value => {
+                                if self.backtrace {
+                                    eprintln!("{self:?}");
+                                    print_stack(&stack, fp);
+                                }
                                 return Err(BubbaError::NotIndexable {
                                     span: self.get_span(ip),
+                                    value: value.to_owned(),
                                     location: location!(),
                                 }
                                 .into());
@@ -1581,8 +1571,10 @@ impl VM {
                             header.init_root_module::<PluginModRef>()
                         })()
                         .map_err(|e| {
-                            eprintln!("{e}");
-                            print_stack(&stack, fp);
+                            if self.backtrace {
+                                eprintln!("{self:?}");
+                                print_stack(&stack, fp);
+                            }
                             BubbaError::VmPanic {
                                 message: "Plug-in error".to_owned(),
                                 location: location!(),
@@ -1727,6 +1719,13 @@ impl VM {
 
                         1
                     }
+                    Instruction::TestGreaterThanOrEqual => {
+                        let b = stack.pop().unwrap();
+                        let a = stack.pop().unwrap();
+                        stack.push(Value::Boolean(a.into_value().gte(&b.into_value())).into());
+
+                        1
+                    }
                     Instruction::TestLessThan => {
                         let b = stack.pop().unwrap();
                         let a = stack.pop().unwrap();
@@ -1738,6 +1737,15 @@ impl VM {
                         let b = stack.pop().unwrap();
                         let a = stack.pop().unwrap();
                         stack.push(Value::Boolean(a.into_value().lte(&b.into_value())).into());
+
+                        1
+                    }
+                    Instruction::TestNotEqual => {
+                        let b = stack.pop().unwrap();
+                        let a = stack.pop().unwrap();
+                        let a = a.into_value();
+                        let b = b.into_value();
+                        stack.push(Value::Boolean(a != b).into());
 
                         1
                     }
@@ -2365,10 +2373,10 @@ mod tests {
 fn print_stack(stack: &[StackValue], fp: usize) {
     for (i, entry) in stack.iter().enumerate() {
         if i == fp {
-            print!("\t{} ->\t", Colour::Green.bold().paint("fp"));
+            eprint!("\t{} ->\t", Colour::Green.bold().paint("fp"));
         } else {
-            print!("\t     \t");
+            eprint!("\t     \t");
         }
-        println!("stack {i}:\t{}", entry);
+        eprintln!("stack {i}:\t{}", entry);
     }
 }

@@ -2,7 +2,7 @@ use snafu::{location, Location};
 
 use crate::{
     bubba::{
-        compiler::{BubbaError, CThonk, Context, Result},
+        compiler::{BubbaCompilerError, CThonk, Context, Result},
         instr::Instruction,
     },
     lu_dog::ValueType,
@@ -58,8 +58,9 @@ pub(in crate::bubba::compiler) fn compile(
             captures.insert(name.to_owned(), number);
             thonk.insert_instruction_with_span(Instruction::FetchLocal(number), span, location!());
         } else {
-            return Err(BubbaError::InternalCompilerError {
-                message: format!("Variable {} not found", name),
+            return Err(BubbaCompilerError::VariableNotFound {
+                var: name.to_owned(),
+                span,
                 location: location!(),
             }
             .into());

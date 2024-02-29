@@ -1,0 +1,4 @@
+fn main() {
+    let a = "Hello, world!";
+    let b = a["a"];
+}

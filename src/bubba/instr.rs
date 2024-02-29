@@ -161,6 +161,7 @@ pub enum Instruction {
     ///
     Label(String),
     ListIndex,
+    ListIndexRange,
     ListLength,
     ListPush,
     /// Local Cardinality
@@ -323,6 +324,7 @@ pub enum Instruction {
     /// ## Stack Effect
     ///
     TestGreaterThan,
+    TestGreaterThanOrEqual,
     /// Compare the top two values on the stack.
     ///
     /// a < b
@@ -351,6 +353,7 @@ pub enum Instruction {
     /// Net effect -1.
     ///
     TestLessThanOrEqual,
+    TestNotEqual,
     ToString,
     /// Typecast
     ///
@@ -455,6 +458,7 @@ impl fmt::Display for Instruction {
                 operand_style.paint(name.to_string())
             ),
             Instruction::ListIndex => write!(f, "{}", opcode_style.paint("idx ")),
+            Instruction::ListIndexRange => write!(f, "{}", opcode_style.paint("idxr")),
             Instruction::ListLength => write!(f, "{}", opcode_style.paint("len ")),
             Instruction::ListPush => write!(f, "{}", opcode_style.paint("lpush")),
             Instruction::LocalCardinality(name) => write!(
@@ -529,8 +533,10 @@ impl fmt::Display for Instruction {
             Instruction::Subtract => write!(f, "{}", opcode_style.paint("sub ")),
             Instruction::TestEqual => write!(f, "{}", opcode_style.paint("eq  ")),
             Instruction::TestGreaterThan => write!(f, "{}", opcode_style.paint("gt  ")),
+            Instruction::TestGreaterThanOrEqual => write!(f, "{}", opcode_style.paint("gte ")),
             Instruction::TestLessThan => write!(f, "{}", opcode_style.paint("lt  ")),
             Instruction::TestLessThanOrEqual => write!(f, "{}", opcode_style.paint("lte ")),
+            Instruction::TestNotEqual => write!(f, "{}", opcode_style.paint("ne  ")),
             Instruction::ToString => write!(f, "{}", opcode_style.paint("ts  ")),
             Instruction::Typecast(name) => write!(
                 f,

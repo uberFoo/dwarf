@@ -1,0 +1,8 @@
+fn main() {
+    // test the truth branch of an if expression
+    let a = if true { 1 } else { 2 };
+    chacha::assert_eq(a, 1);
+    // and now the false branch
+    let b = if false { 1 } else { 2 };
+    chacha::assert_eq(b, 2);
+}

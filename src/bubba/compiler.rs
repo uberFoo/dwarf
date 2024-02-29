@@ -1,3 +1,17 @@
+//! Compiler
+//!
+//! Notes for optimizer:
+//!
+//! push true, push true, eq => push true
+//! push true, push false, eq => push false
+//! push false, push true, eq => push false
+//! push false, push false, eq => push true
+//!
+//! push true, push true, eq, jift n => jmp n
+//! push false, push false, eq, jift n => jmp n
+//! push true, push false, eq, jiff n => jmp n
+//! push false, push true, eq, jiff => jmp n
+//!
 use heck::ToUpperCamelCase;
 use log::{self, log_enabled, Level::Trace};
 use rustc_hash::FxHashMap as HashMap;
@@ -7,35 +21,27 @@ use crate::{
     bubba::{
         instr::{Instruction, Program, Thonk},
         value::Value,
-        BOOL, EMPTY, INT, RANGE, RESULT, STRING, STRING_ARRAY, UNKNOWN,
+        BOOL, CHAR, EMPTY, FLOAT, INT, RANGE, RESULT, STRING, STRING_ARRAY, UNKNOWN, UUID,
     },
     lu_dog::{
         BodyEnum, Expression, ExpressionEnum, Function, ObjectStore as LuDogStore, Statement,
         StatementEnum, ValueType, ValueTypeEnum,
     },
-    new_ref, s_read, s_write,
+    s_read, s_write,
     sarzak::{ObjectStore as SarzakStore, Ty},
-    Context as ExtruderContext, NewRef, RefType, Span, BUILD_TIME, ERR_CLR, MERLIN, OTHER_CLR,
-    POP_CLR, SARZAK, VERSION,
+    Context as ExtruderContext, RefType, Span, BUILD_TIME, ERR_CLR, MERLIN, OTHER_CLR, POP_CLR,
+    SARZAK, VERSION,
 };
 
+mod error;
 mod expression;
+
+pub use error::{BubbaCompilerError, BubbaCompilerErrorReporter, Result};
 
 use expression::{
     a_weight, block, call, field, for_loop, if_expr, index, list, literal, operator, print, range,
     ret, struct_expr, typecast, variable, xmatch,
 };
-
-#[derive(Clone, Debug, Snafu)]
-pub struct Error(BubbaError);
-
-#[derive(Clone, Debug, Snafu)]
-pub(crate) enum BubbaError {
-    #[snafu(display("\n{}: `{message}`\n  --> {}::{}::{}", ERR_CLR.bold().paint("error"), location.file, location.line, location.column))]
-    InternalCompilerError { location: Location, message: String },
-}
-
-type Result<T, E = Error> = std::result::Result<T, E>;
 
 #[derive(Debug)]
 struct CThonk {
@@ -327,9 +333,13 @@ pub fn compile(context: &ExtruderContext) -> Result<Program> {
     let boolean = (*s_read!(ValueType::new_ty(true, &boolean, &mut s_write!(lu_dog)))).clone();
     context.insert_type(BOOL.to_owned(), boolean);
 
-    let empty = ValueType::new_empty(true, &mut s_write!(lu_dog));
-    let empty = (*s_read!(empty)).clone();
-    context.insert_type("Empty".to_owned(), empty);
+    let float = Ty::new_float(&s_read!(context.sarzak_heel()));
+    let float = (*s_read!(ValueType::new_ty(true, &float, &mut s_write!(lu_dog)))).clone();
+    context.insert_type(FLOAT.to_owned(), float);
+
+    let char_ty = ValueType::new_char(true, &mut s_write!(lu_dog));
+    let char_ty = (*s_read!(char_ty)).clone();
+    context.insert_type(CHAR.to_owned(), char_ty);
 
     let range_ty = ValueType::new_range(true, &mut s_write!(lu_dog));
     let range_ty = (*s_read!(range_ty)).clone();
@@ -347,6 +357,14 @@ pub fn compile(context: &ExtruderContext) -> Result<Program> {
     let empty = ValueType::new_empty(true, &mut s_write!(lu_dog));
     let empty = (*s_read!(empty)).clone();
     context.insert_type(EMPTY.to_owned(), empty);
+
+    let uuid = ValueType::new_ty(
+        true,
+        &Ty::new_z_uuid(&s_read!(sarzak)),
+        &mut s_write!(lu_dog),
+    );
+    let uuid = (*s_read!(uuid)).clone();
+    context.insert_type(UUID.to_owned(), uuid);
 
     let mut string_array = ValueType::new_empty(true, &mut s_write!(lu_dog));
     for vt in s_read!(lu_dog).iter_value_type() {
@@ -494,7 +512,7 @@ fn compile_function(func: &RefType<Function>, context: &mut Context) -> Result<C
             let woog_enum = s_read!(woog_enum);
             woog_enum.r1_value_type(&lu_dog)[0].clone()
         } else {
-            return Err(BubbaError::InternalCompilerError {
+            return Err(BubbaCompilerError::InternalCompilerError {
                 location: location!(),
                 message: format!("Could not find type: {ty_name}"),
             }
@@ -654,7 +672,10 @@ fn compile_expression(
         ExpressionEnum::AWait(ref expr) => a_weight::compile(expr, thonk, context, span),
         ExpressionEnum::Block(ref block) => block::compile(block, thonk, context),
         ExpressionEnum::Call(ref call) => call::compile(call, thonk, context, span),
-        ExpressionEnum::XDebugger(_) => Ok(None),
+        ExpressionEnum::EmptyExpression(_) => {
+            thonk.insert_instruction(Instruction::Push(Value::Empty), location!());
+            Ok(Some(context.get_type(EMPTY).unwrap().clone()))
+        }
         ExpressionEnum::FieldAccess(ref field) => {
             field::compile_field_access(field, thonk, context, span)
         }
@@ -680,6 +701,7 @@ fn compile_expression(
             variable::compile(expr, thonk, context, span)
         }
         ExpressionEnum::XIf(ref expr) => if_expr::compile(expr, thonk, context),
+        ExpressionEnum::XDebugger(_) => Ok(None),
         ExpressionEnum::XMatch(ref expr) => xmatch::compile(expr, thonk, context, span),
         ExpressionEnum::XPrint(ref print) => print::compile(print, thonk, context),
         ExpressionEnum::XReturn(ref expr) => ret::compile(expr, thonk, context, span),
@@ -707,7 +729,7 @@ mod test {
     use test_log::test;
 
     use crate::{
-        bubba::{vm::Error, VM},
+        bubba::{error::Error, VM},
         dwarf::{new_lu_dog, parse_dwarf},
         sarzak::MODEL as SARZAK_MODEL,
         RefType,

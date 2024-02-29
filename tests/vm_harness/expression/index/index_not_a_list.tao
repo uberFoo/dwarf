@@ -1,0 +1,4 @@
+fn main() {
+    let a = 88;
+    let b = a[0];
+}

@@ -25,14 +25,19 @@ use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 use dwarf::ref_to_inner;
 
 use dwarf::{
-    bubba::{compiler::compile, value::Value as BubbaValue, Program, VM},
+    bubba::{
+        compiler::{compile, BubbaCompilerErrorReporter},
+        error::BubbaErrorReporter,
+        value::Value as BubbaValue,
+        Program, VM,
+    },
     chacha::{
         dap::DapAdapter,
         error::{ChaChaError, ChaChaErrorReporter},
         interpreter::{banner2, initialize_interpreter, start_func, start_repl},
     },
     dwarf::{new_lu_dog, parse_dwarf},
-    new_ref,
+    new_ref, s_read,
     sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL},
     Context, NewRef, RefType, Value,
 };
@@ -380,6 +385,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 )?
             };
 
+            // let program = compile_program(
+            //     &file_name,
+            //     &source_code,
+            //     &dwarf_home,
+            //     &sarzak,
+            //     is_uber,
+            //     print_ast,
+            //     path,
+            // )?;
+
             // Get args and call the VM.
             let args: Vec<RefType<BubbaValue>> = dwarf_args
                 .into_iter()
@@ -390,7 +405,29 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let mut vm = VM::new(&program, &args, &dwarf_home, threads);
             #[cfg(not(feature = "async"))]
             let mut vm = VM::new(&program, &args, &dwarf_home);
-            vm.invoke("main", &[])?;
+
+            let value = match vm.invoke("main", &[]) {
+                Ok(value) => value,
+                Err(e) => {
+                    eprintln!(
+                        "VM exited with:\n{}",
+                        BubbaErrorReporter(&e, is_uber, &source_code, &file_name)
+                    );
+                    std::process::exit(1);
+                }
+            };
+
+            let value = s_read!(value);
+            match &*value {
+                BubbaValue::Error(msg) => {
+                    eprintln!(
+                        "VM exited with:\n{}",
+                        BubbaErrorReporter(&msg, is_uber, &source_code, &file_name)
+                    );
+                }
+                _ => println!("{value}"),
+            }
+
             return Ok(());
         }
     } else if args.dap.is_some() && args.dap.unwrap() {
@@ -508,10 +545,12 @@ fn compile_program(
     };
     match compile(&ctx) {
         Ok(program) => {
-            println!("{program}");
+            // println!("{program}");
+
+            let file_name = path.file_name().unwrap().to_str().unwrap();
 
             // Write the compiled program to disk.
-            let bin_file = fs::File::create(path)?;
+            let bin_file = fs::File::create(file_name)?;
             // let encoded: Vec<u8> = bincode::serialize(&program).unwrap();
             // dbg!(&encoded);
             // bin_file.write_all(&encoded)?;
@@ -521,9 +560,12 @@ fn compile_program(
 
             Ok(program)
         }
-        Err(e) => Err(Box::new(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            format!("unable to compile program: {e}"),
-        ))),
+        Err(e) => {
+            eprintln!(
+                "Unable to compile program:\n{}",
+                BubbaCompilerErrorReporter(&e, is_uber, &source_code, &file_name)
+            );
+            std::process::exit(1);
+        }
     }
 }

@@ -3,7 +3,7 @@ use snafu::{location, Location};
 use crate::{
     bubba::{
         compiler::{
-            compile_expression, get_span, BubbaError, CThonk, Context, Result, INT, STRING,
+            compile_expression, get_span, BubbaCompilerError, CThonk, Context, Result, INT, STRING,
         },
         instr::Instruction,
         value::Value,
@@ -190,7 +190,7 @@ pub(in crate::bubba::compiler) fn compile(
                     (iter_ident_index, list_var_idx)
                 }
                 ty => {
-                    return Err(BubbaError::InternalCompilerError {
+                    return Err(BubbaCompilerError::InternalCompilerError {
                         message: format!("For loop expression is not a list: {ty:?}"),
                         location: location!(),
                     }
@@ -244,7 +244,7 @@ pub(in crate::bubba::compiler) fn compile(
             iter_ident_index
         }
         _ => {
-            return Err(BubbaError::InternalCompilerError {
+            return Err(BubbaCompilerError::InternalCompilerError {
                 message: "For loop expression is not a list".to_owned(),
                 location: location!(),
             }
@@ -290,7 +290,7 @@ pub(in crate::bubba::compiler) fn compile(
             );
         }
         _ => {
-            return Err(BubbaError::InternalCompilerError {
+            return Err(BubbaCompilerError::InternalCompilerError {
                 message: "For loop expression is not a list".to_owned(),
                 location: location!(),
             }

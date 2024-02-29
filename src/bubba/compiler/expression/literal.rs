@@ -2,7 +2,10 @@ use snafu::{location, Location};
 
 use crate::{
     bubba::{
-        compiler::{compile_expression, get_span, CThonk, Context, Error, Result, EMPTY, STRING},
+        compiler::{
+            compile_expression, error::Error, get_span, CThonk, Context, Result, BOOL, CHAR, EMPTY,
+            FLOAT, INT, STRING,
+        },
         instr::Instruction,
         value::Value,
     },
@@ -24,7 +27,7 @@ pub(in crate::bubba::compiler) fn compile(
 
     let literal = lu_dog.exhume_literal(literal).unwrap();
 
-    let literal = match &s_read!(literal).subtype {
+    let (literal, ty) = match &s_read!(literal).subtype {
         //
         // BooleanLiteral
         //
@@ -32,19 +35,21 @@ pub(in crate::bubba::compiler) fn compile(
             let literal = lu_dog.exhume_boolean_literal(literal).unwrap();
             let literal = s_read!(literal);
 
-            match literal.subtype {
+            let value = match literal.subtype {
                 BooleanLiteralEnum::FalseLiteral(_) => Ok::<Value, Error>(Value::Boolean(false)),
                 BooleanLiteralEnum::TrueLiteral(_) => Ok(Value::Boolean(true)),
-            }
+            };
+
+            (value, context.get_type(BOOL).unwrap().clone())
         }
         //
-        // StringLiteral
+        // CharLiteral
         //
         LiteralEnum::CharLiteral(ref literal) => {
             let literal = lu_dog.exhume_char_literal(literal).unwrap();
             let literal = std::char::from_u32(s_read!(literal).x_value as u32).unwrap();
             let value = Value::Char(literal);
-            Ok(value)
+            (Ok(value), context.get_type(CHAR).unwrap().clone())
         }
         //
         // FloatLiteral
@@ -53,7 +58,7 @@ pub(in crate::bubba::compiler) fn compile(
             let literal = lu_dog.exhume_float_literal(literal).unwrap();
             let value = s_read!(literal).x_value;
             let value = Value::Float(value);
-            Ok(value)
+            (Ok(value), context.get_type(FLOAT).unwrap().clone())
         }
         //
         // FormatString
@@ -128,7 +133,7 @@ pub(in crate::bubba::compiler) fn compile(
             let literal = lu_dog.exhume_integer_literal(literal).unwrap();
             let value = s_read!(literal).x_value;
             let value = Value::Integer(value);
-            Ok(value)
+            (Ok(value), context.get_type(INT).unwrap().clone())
         }
         //
         // StringLiteral
@@ -137,11 +142,11 @@ pub(in crate::bubba::compiler) fn compile(
             let literal = lu_dog.exhume_string_literal(literal).unwrap();
             // 🚧 It'd be great if this were an Rc...
             let value = Value::String(s_read!(literal).x_value.clone());
-            Ok(value)
+            (Ok(value), context.get_type(STRING).unwrap().clone())
         }
     };
 
     thonk.insert_instruction_with_span(Instruction::Push(literal?), span, location!());
 
-    Ok(None)
+    Ok(Some(ty))
 }

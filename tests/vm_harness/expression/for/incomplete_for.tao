@@ -1,0 +1,3 @@
+fn main() {
+    for a in "hello" {
+}

@@ -1,19 +1,25 @@
+#[cfg(feature = "async")]
+use std::future::Future;
+
 use std::{fmt, io::Write, ops::Range};
 
 use ansi_term::Colour;
 #[cfg(feature = "async")]
 use puteketeke::AsyncTask;
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "async")]
+use smol::future;
 use uuid::Uuid;
 
 use crate::{
-    bubba::vm::{BubbaError, Error},
+    bubba::error::{BubbaError, Error},
     chacha::value::{EnumVariant, UserStruct},
     lu_dog::{ObjectStore as LuDogStore, ValueType, ValueTypeEnum},
+    new_ref,
     plug_in::PluginType,
     s_read,
     sarzak::{ObjectStore as SarzakStore, Ty},
-    DwarfFloat, DwarfInteger, RefType, VmValueResult,
+    DwarfFloat, DwarfInteger, NewRef, RefType, VmValueResult,
 };
 
 #[derive(Default, Deserialize, Serialize)]
@@ -60,6 +66,38 @@ pub enum Value {
         inner: RefType<Vec<RefType<Self>>>,
     },
 }
+
+// #[cfg(feature = "async")]
+// impl Future for Value {
+//     type Output = RefType<Value>;
+
+//     fn poll(
+//         self: std::pin::Pin<&mut Self>,
+//         _cx_: &mut std::task::Context<'_>,
+//     ) -> std::task::Poll<Self::Output> {
+//         let this = std::pin::Pin::into_inner(self);
+
+//         match this {
+//             Self::Task {
+//                 name: _,
+//                 running: _,
+//                 task,
+//             } => {
+//                 if let Some(task) = task.take() {
+//                     match future::block_on(task) {
+//                         Ok(value) => std::task::Poll::Ready(value),
+//                         Err(e) => {
+//                             std::task::Poll::Ready(new_ref!(Value, Value::Error(Box::new(e))))
+//                         }
+//                     }
+//                 } else {
+//                     std::task::Poll::Ready(new_ref!(Value, Value::Empty))
+//                 }
+//             }
+//             _ => std::task::Poll::Ready(new_ref!(Value, Value::Empty)),
+//         }
+//     }
+// }
 
 impl Value {
     #[inline]

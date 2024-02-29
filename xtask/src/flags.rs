@@ -7,12 +7,13 @@ xflags::xflags! {
     cmd xtask {
         cmd plugin {
             optional --plugin plugin: String
+            optional --debug debug: bool
         }
         cmd package {
             optional --client-patch-version version: String
         }
         cmd install {
-
+            optional --debug debug: bool
         }
     }
 }
@@ -35,6 +36,7 @@ pub enum XtaskCmd {
 #[derive(Debug)]
 pub struct Plugin {
     pub plugin: Option<String>,
+    pub debug: Option<bool>,
 }
 
 #[derive(Debug)]
@@ -43,7 +45,9 @@ pub struct Package {
 }
 
 #[derive(Debug)]
-pub struct Install;
+pub struct Install {
+    pub debug: Option<bool>,
+}
 
 impl Xtask {
     #[allow(dead_code)]

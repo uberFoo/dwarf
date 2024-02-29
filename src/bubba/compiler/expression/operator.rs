@@ -153,6 +153,15 @@ pub(in crate::bubba::compiler) fn compile(
                         location!(),
                     );
                 }
+                ComparisonEnum::GreaterThanOrEqual(_) => {
+                    compile_expression(&lhs, thonk, context)?;
+                    compile_expression(&rhs, thonk, context)?;
+                    thonk.insert_instruction_with_span(
+                        Instruction::TestGreaterThanOrEqual,
+                        span,
+                        location!(),
+                    );
+                }
                 ComparisonEnum::LessThan(_) => {
                     compile_expression(&lhs, thonk, context)?;
                     compile_expression(&rhs, thonk, context)?;
@@ -171,7 +180,15 @@ pub(in crate::bubba::compiler) fn compile(
                         location!(),
                     );
                 }
-                c => todo!("comparison {c:?}"),
+                ComparisonEnum::NotEqual(_) => {
+                    compile_expression(&lhs, thonk, context)?;
+                    compile_expression(&rhs, thonk, context)?;
+                    thonk.insert_instruction_with_span(
+                        Instruction::TestNotEqual,
+                        span,
+                        location!(),
+                    );
+                }
             }
         }
         OperatorEnum::Unary(ref id) => {

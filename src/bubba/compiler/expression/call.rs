@@ -6,16 +6,19 @@ use crate::keywords::{LEN, PUSH, SPAWN};
 
 use crate::{
     bubba::{
-        compiler::{compile_expression, compile_statement, CThonk, Context, Result},
+        compiler::{
+            compile_expression, compile_statement, error::BubbaCompilerError, CThonk, Context,
+            Result,
+        },
         instr::Instruction,
         value::Value,
-        BOOL, STRING_ARRAY,
+        BOOL, STRING_ARRAY, UUID,
     },
-    keywords::{ARGS, ASSERT, ASSERT_EQ, CHACHA, FORMAT, NEW, PLUGIN},
+    keywords::{ARGS, ASSERT, ASSERT_EQ, CHACHA, FORMAT, FQ_UUID_TYPE, NEW, PLUGIN},
     lu_dog::{BodyEnum, Call, CallEnum, Expression, ValueType, ValueTypeEnum},
-    new_ref, s_read,
+    s_read,
     sarzak::Ty,
-    NewRef, RefType, SarzakStorePtr, Span, PATH_SEP, POP_CLR,
+    RefType, SarzakStorePtr, Span, PATH_SEP, POP_CLR,
 };
 
 #[tracing::instrument]
@@ -466,6 +469,14 @@ fn compile_static_method_call(
             }
             meth => todo!("handle chacha method: {meth}"),
         },
+        FQ_UUID_TYPE => match func {
+            NEW => {
+                let uuid = Uuid::new_v4();
+                thonk.insert_instruction(Instruction::Push(uuid.into()), location!());
+                Ok(Some(context.get_type(UUID).unwrap().clone()))
+            }
+            meth => todo!("handle uuid method: {meth}"),
+        },
         ty => {
             // This is where we load the shared library that is the extension.
             // Note that we are doing magic with the word "Plugin".
@@ -505,7 +516,21 @@ fn compile_static_method_call(
                     }
                 }
             } else {
-                let func1 = lu_dog.exhume_function_id_by_name(func).unwrap();
+                // 🚧 I feel like the extruder should catch this.
+                let func1 = lu_dog.exhume_function_id_by_name(func);
+
+                let func1 = match func1 {
+                    Some(func1) => func1,
+                    None => {
+                        return Err(BubbaCompilerError::NoSuchMethod {
+                            method: func.to_owned(),
+                            span,
+                            location: location!(),
+                        }
+                        .into())
+                    }
+                };
+
                 let func1 = lu_dog.exhume_function(&func1).unwrap();
                 let body = s_read!(func1).r19_body(&lu_dog)[0].clone();
                 let a_sink = s_read!(body).a_sink;
@@ -544,7 +569,9 @@ mod test {
             *,
         },
         dwarf::{new_lu_dog, parse_dwarf},
+        new_ref,
         sarzak::MODEL as SARZAK_MODEL,
+        NewRef,
     };
 
     #[test]

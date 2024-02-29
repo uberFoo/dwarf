@@ -12,8 +12,18 @@ impl flags::Install {
             home
         });
 
-        cmd!(sh, "cargo install --path . --force --locked").run()?;
-        cmd!(sh, "cargo xtask plugin --plugin http").run()?;
+        let debug = if self.debug.unwrap_or(false) {
+            "--debug"
+        } else {
+            ""
+        };
+        cmd!(sh, "cargo install --path . --force --locked {debug}").run()?;
+        let debug = if self.debug.unwrap_or(false) {
+            "true"
+        } else {
+            "false"
+        };
+        cmd!(sh, "cargo xtask plugin --plugin http --debug {debug}").run()?;
 
         let std_dst = format!("{}/lib/std", dwarf_home);
         fs::create_dir_all(&std_dst)?;

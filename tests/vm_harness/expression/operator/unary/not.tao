@@ -1,0 +1,4 @@
+/// Test _logical_ NOT
+fn main() {
+    chacha::assert_eq(!false, true);
+}

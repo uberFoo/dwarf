@@ -1,0 +1,48 @@
+fn main() {
+    match 42 {
+        1 => chacha::assert(false),
+        2 => chacha::assert(false),
+        42 => chacha::assert(true),
+        99 => chacha::assert(false),
+        _ => chacha::assert(false),
+    };
+
+    match "hello" {
+        "hello" => chacha::assert(true),
+        "world" => chacha::assert(false),
+        _ => chacha::assert(false),
+    };
+
+    match 0.42 {
+        0.42 => chacha::assert(true),
+        0.43 => chacha::assert(false),
+        _ => chacha::assert(false),
+    };
+
+    match true {
+        true => chacha::assert(true),
+        false => chacha::assert(false),
+    };
+
+    match false {
+        true => chacha::assert(false),
+        false => chacha::assert(true),
+    };
+
+    match () {
+        () => chacha::assert(true),
+    };
+
+    match "not_found" {
+        "found" => chacha::assert(false),
+        _ => chacha::assert(true),
+    };
+
+    match "not_found" {
+        "found" => chacha::assert(false),
+        value => {
+            chacha::assert(true);
+            chacha::assert_eq(value, "not_found")
+        }
+    };
+}

@@ -1,0 +1,8 @@
+struct Foo {
+    bar: int,
+}
+
+fn main() {
+    let foo = Foo { bar: 42
+    return;
+}

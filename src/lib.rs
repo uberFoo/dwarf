@@ -24,7 +24,7 @@ pub mod tui;
 // pub mod lu_dog_proxy;
 
 pub use ::sarzak::{lu_dog, sarzak};
-use bubba::vm::Error as BubbaError;
+use bubba::error::Error as BubbaError;
 pub use chacha::value::Value;
 pub(crate) use chacha::{error::ChaChaError, interpreter};
 

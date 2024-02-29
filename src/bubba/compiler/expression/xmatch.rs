@@ -31,7 +31,7 @@ pub(in crate::bubba::compiler) fn compile(
 
     let label = format!("{}", Uuid::new_v4());
     for pattern in patterns {
-        // Compiling the scrutinee
+        // Compile the scrutinee first, as this is what we'll be matching against.
         compile_expression(&scrutinee, thonk, context)?;
 
         tracing::debug!(target: "instr", "{}:{}:{}", file!(), line!(), column!());
@@ -45,6 +45,11 @@ pub(in crate::bubba::compiler) fn compile(
 
         // Compile the match expression.
         match &s_read!(match_expr).subtype {
+            ExpressionEnum::EmptyExpression(_) => {
+                // 🚧 I saw what I did in the interpreter, and did the same here.
+                // It works, but I don't know if it's the right thing.
+                compile_expression(&pattern_expr, thonk, context)?;
+            }
             ExpressionEnum::Literal(ref literal) => {
                 tracing::debug!(target: "instr", "{}:{}:{}", file!(), line!(), column!());
 
@@ -229,7 +234,9 @@ mod test {
         },
         chacha::value::{EnumVariant, TupleEnum},
         dwarf::{new_lu_dog, parse_dwarf},
+        new_ref,
         sarzak::MODEL as SARZAK_MODEL,
+        NewRef,
     };
 
     #[test]

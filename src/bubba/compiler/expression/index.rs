@@ -2,11 +2,13 @@ use snafu::{location, Location};
 
 use crate::{
     bubba::{
-        compiler::{compile_expression, CThonk, Context, Result},
+        compiler::{compile_expression, BubbaCompilerError, CThonk, Context, Result},
         instr::Instruction,
     },
-    lu_dog::ValueType,
-    s_read, SarzakStorePtr, Span, POP_CLR,
+    lu_dog::{ValueType, ValueTypeEnum},
+    s_read,
+    sarzak::Ty,
+    SarzakStorePtr, Span, POP_CLR,
 };
 
 #[tracing::instrument]
@@ -20,20 +22,53 @@ pub(in crate::bubba::compiler) fn compile(
 
     let lu_dog = context.lu_dog_heel().clone();
     let lu_dog = s_read!(lu_dog);
+    let sarzak = context.sarzak_heel().clone();
+    let sarzak = s_read!(sarzak);
 
     let index = lu_dog.exhume_index(index).unwrap();
     let index = s_read!(index);
     let target = lu_dog.exhume_expression(&index.target).unwrap();
 
-    compile_expression(&target, thonk, context)?;
+    let list_type = compile_expression(&target, thonk, context)?;
 
     let index_expr = lu_dog.exhume_expression(&index.index).unwrap();
 
-    compile_expression(&index_expr, thonk, context)?;
+    let index_type = compile_expression(&index_expr, thonk, context)?;
 
-    thonk.insert_instruction_with_span(Instruction::ListIndex, span, location!());
+    match index_type {
+        Some(ty) => match ty.subtype {
+            ValueTypeEnum::Ty(ref ty) => {
+                let ty = sarzak.exhume_ty(ty).unwrap();
+                let ty = s_read!(ty);
+                match &*ty {
+                    Ty::Integer(_) => {
+                        thonk.insert_instruction_with_span(
+                            Instruction::ListIndex,
+                            span,
+                            location!(),
+                        );
+                    }
+                    ty => Err(BubbaCompilerError::InternalCompilerError {
+                        message: format!("index type is not an integer or a range. Found {ty:?}"),
+                        location: Location::new(file!(), line!(), column!()),
+                    })?,
+                }
+            }
+            ValueTypeEnum::Range(_) => {
+                thonk.insert_instruction_with_span(Instruction::ListIndexRange, span, location!());
+            }
+            ty => Err(BubbaCompilerError::InternalCompilerError {
+                message: format!("index type is not an integer or a range. Found {ty:?}"),
+                location: Location::new(file!(), line!(), column!()),
+            })?,
+        },
+        None => Err(BubbaCompilerError::InternalCompilerError {
+            message: "index type is None".to_owned(),
+            location: Location::new(file!(), line!(), column!()),
+        })?,
+    }
 
-    Ok(None)
+    Ok(list_type)
 }
 
 #[cfg(test)]

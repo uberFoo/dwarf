@@ -1721,6 +1721,34 @@ pub(super) fn inter_expression(
                 );
 
                 let format_bit = match bit {
+                    ParserExpression::Addition(lhs, rhs) => {
+                        let range_span = s_read!(span).start as usize..s_read!(span).end as usize;
+                        let (lhs, ty) = inter_expression(
+                            &new_ref!(ParserExpression, lhs.0.to_owned()),
+                            &range_span,
+                            block,
+                            context,
+                            context_stack,
+                            lu_dog,
+                        )?;
+                        let (rhs, _ty) = inter_expression(
+                            &new_ref!(ParserExpression, rhs.0.to_owned()),
+                            &range_span,
+                            block,
+                            context,
+                            context_stack,
+                            lu_dog,
+                        )?;
+
+                        let expr = Binary::new_addition(true, lu_dog);
+                        let expr = Operator::new_binary(&lhs.0, Some(&rhs.0), &expr, lu_dog);
+                        let expr = Expression::new_operator(true, &expr, lu_dog);
+                        let value = XValue::new_expression(block, &ty, &expr, lu_dog);
+                        update_span_value(&span, &value, location!());
+
+                        let expr_bit = ExpressionBit::new(&expr, lu_dog);
+                        FormatBit::new_expression_bit(&format_string, None, &expr_bit, lu_dog)
+                    }
                     ParserExpression::LocalVariable(name) => {
                         let expr = VariableExpression::new(name.to_owned(), lu_dog);
                         debug!("created a new variable expression {:?}", expr);
