@@ -42,6 +42,7 @@ mod statement;
 mod tui;
 
 pub use banner::banner2;
+pub(crate) use context::ModelContext;
 pub(crate) use pvt::PrintableValueType;
 
 #[cfg(feature = "repl")]

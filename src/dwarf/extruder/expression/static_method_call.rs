@@ -412,7 +412,7 @@ pub fn inter(
             )
         } else {
             // Lookup the functions on the enum and see if the field matches a func.
-            let foo = &s_read!(woog_enum).r84_implementation_block(lu_dog)[0];
+            let foo = &s_read!(woog_enum).r84c_implementation_block(lu_dog)[0];
             let foo = s_read!(foo).r9_function(lu_dog);
             let func = foo.iter().find(|func| {
                 let func = s_read!(func);

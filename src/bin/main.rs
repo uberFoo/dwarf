@@ -545,12 +545,10 @@ fn compile_program(
     };
     match compile(&ctx) {
         Ok(program) => {
-            // println!("{program}");
-
-            let file_name = path.file_name().unwrap().to_str().unwrap();
+            println!("{program}");
 
             // Write the compiled program to disk.
-            let bin_file = fs::File::create(file_name)?;
+            let bin_file = fs::File::create(path)?;
             // let encoded: Vec<u8> = bincode::serialize(&program).unwrap();
             // dbg!(&encoded);
             // bin_file.write_all(&encoded)?;

@@ -6,7 +6,7 @@ use crate::{
         instr::Instruction,
     },
     lu_dog::ValueType,
-    new_ref, s_read, NewRef, RefType, SarzakStorePtr, Span, POP_CLR,
+    s_read, SarzakStorePtr, Span, POP_CLR,
 };
 
 #[tracing::instrument]
@@ -33,6 +33,7 @@ pub(in crate::bubba::compiler) fn compile(
             span,
             location!(),
         );
+
         Ok(Some(symbol.ty.clone()))
     } else if let Some(ty) = context.check_function(name) {
         // We are here because we need to look up a function.

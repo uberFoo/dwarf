@@ -12,12 +12,11 @@ impl flags::Install {
             home
         });
 
-        let debug = if self.debug.unwrap_or(false) {
-            "--debug"
+        if self.debug.unwrap_or(false) {
+            cmd!(sh, "cargo install --path . --force --locked --debug").run()?;
         } else {
-            ""
-        };
-        cmd!(sh, "cargo install --path . --force --locked {debug}").run()?;
+            cmd!(sh, "cargo install --path . --force --locked").run()?;
+        }
         let debug = if self.debug.unwrap_or(false) {
             "true"
         } else {

@@ -1,0 +1,45 @@
+use std::option::Option;
+
+enum Simple {
+    Foo,
+    Bar,
+    Baz,
+}
+
+fn main() {
+    let a = Option::Some(42);
+    let b: Option<int> = Option::None;
+    let c = Option::Some("Hello world!");
+    let d = Option::Some(69);
+    // let e = Option::<string>::None;
+    let e: Option<string> = Option::None;
+
+    let control = Simple::Baz;
+
+    print(`a = ${a}\n`);
+    print(`b = ${b}\n`);
+    print(`c = ${c}\n`);
+    print(`d = ${d}\n`);
+    print(`e = ${e}\n`);
+
+    print(`control = ${control}\n`);
+
+    chacha::assert_eq(a, Option::Some(42));
+    chacha::assert_eq(b, Option::<int>::None);
+    chacha::assert_eq(c, Option::Some("Hello world!"));
+    chacha::assert_eq(d, Option::Some(69));
+    chacha::assert_eq(e, Option::<string>::None);
+
+    chacha::assert_eq(control, Simple::Baz);
+
+    chacha::assert(a.is_some());
+    chacha::assert(!a.is_none());
+    chacha::assert(!b.is_some());
+    chacha::assert(b.is_none());
+    chacha::assert(c.is_some());
+    chacha::assert(!c.is_none());
+    chacha::assert(d.is_some());
+    chacha::assert(!d.is_none());
+    chacha::assert(!e.is_some());
+    chacha::assert(e.is_none());
+}

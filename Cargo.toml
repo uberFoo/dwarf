@@ -110,8 +110,8 @@ regex = "1.10.3"
 # [patch.crates-io]
 # puteketeke = { path = "../../github/puteketeke" }
 
-# [patch."https://github.com/uberFoo/sarzak"]
-# sarzak = { path = "../sarzak" }
+[patch."https://github.com/uberFoo/sarzak"]
+sarzak = { path = "../sarzak" }
 
 [dev-dependencies]
 backtrace = "0.3.67"
@@ -176,7 +176,7 @@ name = "dwarf"
 harness = false
 
 [profile.release]
-lto = "fat"
+lto = "thin"
 
 [lib]
 crate-type = ["cdylib", "rlib"]

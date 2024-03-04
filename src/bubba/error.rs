@@ -19,7 +19,7 @@ pub enum BubbaError {
     #[snafu(display("\n{}: division error: `{}` ÷ `{}`", ERR_CLR.bold().paint("error"), left, right))]
     Division { left: Value, right: Value },
     #[snafu(display("\n{}: Halt and catch fire...🔥", ERR_CLR.bold().paint("error")))]
-    HaltAndCatchFire { file: String, span: Span },
+    HaltAndCatchFire { file: String, span: Span, ip: usize },
     /// Index out of bounds
     ///
     #[snafu(display("\n{}: index `{}` is out of bounds for array of length `{}`.", ERR_CLR.bold().paint("error"), POP_CLR.paint(index.to_string()), POP_CLR.paint(len.to_string())))]
@@ -68,6 +68,20 @@ impl fmt::Display for BubbaErrorReporter<'_, '_, '_> {
         let mut std_err = Vec::new();
 
         match &self.0 .0 {
+            BubbaError::HaltAndCatchFire { file, span, ip } => {
+                Report::build(ReportKind::Error, file_name, span.start)
+                    .with_message("halt and catch fire...🔥")
+                    .with_label(
+                        Label::new((file_name, span.to_owned()))
+                            .with_message("So sorry".to_owned())
+                            .with_color(Color::Red),
+                    )
+                    .with_note(format!("ip register: 0x{ip:08x}"))
+                    .finish()
+                    .write((file_name, Source::from(&program)), &mut std_err)
+                    .map_err(|_| fmt::Error)?;
+                write!(f, "{}", String::from_utf8_lossy(&std_err))
+            }
             BubbaError::IndexOutOfBounds {
                 index,
                 len,

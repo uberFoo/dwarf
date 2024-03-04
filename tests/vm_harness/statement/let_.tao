@@ -1,0 +1,15 @@
+fn main() {
+    let s: string = "Hello, world!";
+    chacha::assert_eq(s, "Hello, world!");
+    let i: int = 42;
+    chacha::assert_eq(i, 42);
+    let f: float = 1.618;
+    chacha::assert_eq(f, 1.618);
+    let b: bool = false;
+    chacha::assert_eq(b, false);
+    let u: Uuid = Uuid::new();
+    let l: [int] = [1, 2, 3];
+    chacha::assert_eq(l[0], 1);
+    chacha::assert_eq(l[1], 2);
+    chacha::assert_eq(l[2], 3);
+}

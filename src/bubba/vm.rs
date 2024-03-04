@@ -358,8 +358,9 @@ impl VM {
                     let instr = &self.instrs[iip as usize];
 
                     let src = if let Some(source) = program.get_source() {
-                        let span = self.source_map[iip as usize].clone();
-                        &source[span]
+                        // let span = self.source_map[iip as usize].clone();
+                        // &source[span]
+                        ""
                     } else {
                         ""
                     };
@@ -1124,7 +1125,12 @@ impl VM {
                         let file = stack.pop().unwrap();
                         let file: String = file.into_value().try_into()?;
 
-                        return Err(BubbaError::HaltAndCatchFire { file, span }.into());
+                        return Err(BubbaError::HaltAndCatchFire {
+                            file,
+                            span,
+                            ip: ip as usize,
+                        }
+                        .into());
                     }
                     Instruction::Incr => {
                         cx += 1;
@@ -1185,7 +1191,12 @@ impl VM {
                                 .collect::<Vec<&str>>();
 
                                 if index < str.len() {
-                                    stack.push(Value::String(str[index..index + 1].join("")).into())
+                                    stack.push(
+                                        Value::Char(
+                                            str[index..index + 1].join("").chars().next().unwrap(),
+                                        )
+                                        .into(),
+                                    )
                                 } else {
                                     if self.backtrace {
                                         eprintln!("{self:?}");
@@ -1375,6 +1386,7 @@ impl VM {
                                     let name = ty.type_name();
                                     name.to_owned()
                                 }
+                                Value::String(_) => "::String".to_owned(),
                                 // Value::Vector { ty, .. } => {
                                 //     let ty = s_read!(ty);
                                 //     let name = ty.type_name();
@@ -1691,6 +1703,25 @@ impl VM {
                         let value = stack.pop().unwrap();
                         // We gotta index into the stack in reverse order from the index.
                         stack[fp - arity - local_count - 3 + index] = value;
+
+                        1
+                    }
+                    Instruction::StringLength => {
+                        let string = stack.pop().unwrap().into_value();
+                        let Value::String(string) = string else {
+                            return Err(BubbaError::VmPanic {
+                                message: format!("Expected a string, but got: {string:?}."),
+                                location: location!(),
+                            }
+                            .into());
+                        };
+                        let len = unicode_segmentation::UnicodeSegmentation::graphemes(
+                            string.as_str(),
+                            true,
+                        )
+                        .collect::<Vec<&str>>()
+                        .len();
+                        stack.push(Value::Integer(len as DwarfInteger).into());
 
                         1
                     }

@@ -64,7 +64,7 @@ pub(in crate::bubba::compiler) fn compile(
     //     (false, index) => index,
     // };
 
-    // This is literally the index, in the call frame, of the loop iterator.
+    // This is literally the index of the loop iterator in the call frame.
     // Depending on it's type, we need to extract information from LuDog. Inside
     // here we deal with symbols and frame sizes.
     //
@@ -107,7 +107,7 @@ pub(in crate::bubba::compiler) fn compile(
                 }
                 ValueTypeEnum::Ty(ref ty) => {
                     let ty = sarzak.exhume_ty(ty).unwrap();
-                    let ty = ty.read().unwrap();
+                    let ty = s_read!(ty);
 
                     match &*ty {
                         Ty::Integer(_) => {
@@ -207,7 +207,7 @@ pub(in crate::bubba::compiler) fn compile(
             );
 
             // We need to create the stack with the top value being 0 and the
-            // penultimate value being the length of the list.
+            // penultimate value, given that top is the last, being the length of the list.
             // The last instruction will store the starting value of the iteration
             // in the iterator.
             thonk.insert_instruction_with_span(
@@ -243,9 +243,73 @@ pub(in crate::bubba::compiler) fn compile(
 
             iter_ident_index
         }
-        _ => {
+        ValueTypeEnum::Ty(ref ty) => {
+            let ty = sarzak.exhume_ty(ty).unwrap();
+            let ty = s_read!(ty);
+            match &*ty {
+                Ty::ZString(_) => {
+                    let string = context.get_type(STRING).unwrap().clone();
+
+                    // Insert the iteration ident into the symbol table.
+                    let iter_ident_index = match context.insert_symbol(iter_ident, string.clone()) {
+                        (true, index) => {
+                            inner_thonk.increment_frame_size();
+                            index
+                        }
+                        (false, index) => index,
+                    };
+
+                    // This is the starting value of the iteration.
+                    let list_var_idx = match context.insert_symbol(LIST_VAR.to_owned(), string) {
+                        (true, index) => {
+                            inner_thonk.increment_frame_size();
+                            index
+                        }
+                        (false, index) => index,
+                    };
+
+                    thonk.insert_instruction_with_span(
+                        Instruction::Dup,
+                        list_span.clone(),
+                        location!(),
+                    );
+
+                    thonk.insert_instruction_with_span(
+                        Instruction::StoreLocal(list_var_idx),
+                        list_span.clone(),
+                        location!(),
+                    );
+
+                    // We need to create the stack with the top value being 0 and the
+                    // penultimate value, given that top is the last, being the length of the list.
+                    // The last instruction will store the starting value of the iteration
+                    // in the iterator.
+                    thonk.insert_instruction_with_span(
+                        Instruction::StringLength,
+                        list_span.clone(),
+                        location!(),
+                    );
+                    thonk.insert_instruction_with_span(
+                        Instruction::Push(Value::Integer(0)),
+                        list_span.clone(),
+                        location!(),
+                    );
+                    thonk.insert_instruction_with_span(Instruction::Mov, span, location!());
+
+                    iter_ident_index
+                }
+                found => {
+                    return Err(BubbaCompilerError::InternalCompilerError {
+                        message: format!("For loop expression is not a list. Found: {found:?}"),
+                        location: location!(),
+                    }
+                    .into())
+                }
+            }
+        }
+        found => {
             return Err(BubbaCompilerError::InternalCompilerError {
-                message: "For loop expression is not a list".to_owned(),
+                message: format!("For loop expression is not a list. Found: {found:?}"),
                 location: location!(),
             }
             .into())
@@ -289,6 +353,26 @@ pub(in crate::bubba::compiler) fn compile(
                 location!(),
             );
         }
+        ValueTypeEnum::Ty(ref ty) => {
+            let ty = sarzak.exhume_ty(ty).unwrap();
+            let ty = s_read!(ty);
+            match &*ty {
+                Ty::ZString(_) => {
+                    thonk.insert_instruction_with_span(
+                        Instruction::StoreLocal(iter_ident_index),
+                        list_span.clone(),
+                        location!(),
+                    );
+                }
+                found => {
+                    return Err(BubbaCompilerError::InternalCompilerError {
+                        message: format!("For loop expression is not a list. Found: {found:?}"),
+                        location: location!(),
+                    }
+                    .into())
+                }
+            }
+        }
         _ => {
             return Err(BubbaCompilerError::InternalCompilerError {
                 message: "For loop expression is not a list".to_owned(),
@@ -321,12 +405,13 @@ pub(in crate::bubba::compiler) fn compile(
     // Test the index against the length of the list
     thonk.insert_instruction(Instruction::TestLessThanOrEqual, location!());
 
-    // go do it again if index is < end.
+    // Get out if we're done.
     thonk.insert_instruction(
         Instruction::JumpIfFalse(top_of_loop - thonk.get_instruction_card() as isize),
         location!(),
     );
 
+    // go do it again if index is < end.
     thonk.insert_instruction(Instruction::Pop, location!());
     thonk.insert_instruction(Instruction::Mov, location!());
 

@@ -1749,9 +1749,37 @@ pub(super) fn inter_expression(
                         let expr_bit = ExpressionBit::new(&expr, lu_dog);
                         FormatBit::new_expression_bit(&format_string, None, &expr_bit, lu_dog)
                     }
+                    ParserExpression::Index(target_p, index_p) => {
+                        debug!("index {target_p:?}, {index_p:?}");
+                        let (target, target_ty) = inter_expression(
+                            &new_ref!(ParserExpression, target_p.0.to_owned()),
+                            &target_p.1,
+                            block,
+                            context,
+                            context_stack,
+                            lu_dog,
+                        )?;
+                        debug!("target: {target:?}, ty: {target_ty:?}");
+                        let (index, index_ty) = inter_expression(
+                            &new_ref!(ParserExpression, index_p.0.to_owned()),
+                            &index_p.1,
+                            block,
+                            context,
+                            context_stack,
+                            lu_dog,
+                        )?;
+
+                        let expr = Index::new(&index.0, &target.0, lu_dog);
+                        let expr = Expression::new_index(true, &expr, lu_dog);
+                        let value = XValue::new_expression(block, &ty, &expr, lu_dog);
+                        update_span_value(&span, &value, location!());
+
+                        let expr_bit = ExpressionBit::new(&expr, lu_dog);
+                        FormatBit::new_expression_bit(&format_string, None, &expr_bit, lu_dog)
+                    }
                     ParserExpression::LocalVariable(name) => {
                         let expr = VariableExpression::new(name.to_owned(), lu_dog);
-                        debug!("created a new variable expression {:?}", expr);
+
                         let expr = Expression::new_variable_expression(true, &expr, lu_dog);
                         let value = XValue::new_expression(block, &ty, &expr, lu_dog);
                         update_span_value(&span, &value, location!());
@@ -1773,6 +1801,34 @@ pub(super) fn inter_expression(
                         )?;
 
                         let expr_bit = ExpressionBit::new(&mc, lu_dog);
+                        FormatBit::new_expression_bit(&format_string, None, &expr_bit, lu_dog)
+                    }
+                    ParserExpression::Multiplication(lhs, rhs) => {
+                        let range_span = s_read!(span).start as usize..s_read!(span).end as usize;
+                        let (lhs, ty) = inter_expression(
+                            &new_ref!(ParserExpression, lhs.0.to_owned()),
+                            &range_span,
+                            block,
+                            context,
+                            context_stack,
+                            lu_dog,
+                        )?;
+                        let (rhs, _ty) = inter_expression(
+                            &new_ref!(ParserExpression, rhs.0.to_owned()),
+                            &range_span,
+                            block,
+                            context,
+                            context_stack,
+                            lu_dog,
+                        )?;
+
+                        let expr = Binary::new_multiplication(true, lu_dog);
+                        let expr = Operator::new_binary(&lhs.0, Some(&rhs.0), &expr, lu_dog);
+                        let expr = Expression::new_operator(true, &expr, lu_dog);
+                        let value = XValue::new_expression(block, &ty, &expr, lu_dog);
+                        update_span_value(&span, &value, location!());
+
+                        let expr_bit = ExpressionBit::new(&expr, lu_dog);
                         FormatBit::new_expression_bit(&format_string, None, &expr_bit, lu_dog)
                     }
                     ParserExpression::StringLiteral(string) => {
@@ -3635,7 +3691,8 @@ fn inter_implementation(
                         (ty, None)
                     };
 
-                    let implementation = ImplementationBlock::new(None, store.as_ref(), lu_dog);
+                    let implementation =
+                        ImplementationBlock::new(None, None, store.as_ref(), lu_dog);
                     let _ = WoogItem::new_implementation_block(
                         &context.source,
                         &implementation,
@@ -3669,14 +3726,12 @@ fn inter_implementation(
 
         let implementation = if let Some(id) = lu_dog.exhume_woog_struct_id_by_name(&name) {
             let woog_struct = lu_dog.exhume_woog_struct(&id).unwrap();
-            ImplementationBlock::new(Some(&woog_struct), None, lu_dog)
+            ImplementationBlock::new(None, Some(&woog_struct), None, lu_dog)
         } else if let Some(id) = lu_dog.exhume_enumeration_id_by_name(&name) {
             // OMG this is ugly.
             // 🚧 Fix the model.
             let woog_enum = lu_dog.exhume_enumeration(&id).unwrap();
-            let implementation = ImplementationBlock::new(None, None, lu_dog);
-            s_write!(woog_enum).implementation = Some(s_read!(implementation).id);
-            implementation
+            ImplementationBlock::new(Some(&woog_enum), None, None, lu_dog)
         } else {
             return Err(vec![DwarfError::ObjectNameNotFound {
                 name: name.to_owned(),
@@ -4111,9 +4166,10 @@ pub(crate) fn make_value_type(
                         );
                         Ok(ValueType::new_woog_struct(true, &generic, lu_dog))
                     } else {
-                        let (_, ty) =
-                            create_generic_enum(&fq_name, &name, span.to_owned(), context, lu_dog)?;
-                        Ok(ty)
+                        Ok(
+                            create_generic_enum(&fq_name, &name, span.to_owned(), context, lu_dog)?
+                                .1,
+                        )
                     }
                 } else if let Some(ty) = lookup_user_defined_type(lu_dog, &name, span, context) {
                     Ok(ty)

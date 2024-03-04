@@ -274,7 +274,7 @@ impl<'a, 'b> Context<'a, 'b> {
     fn get_symbol(&self, name: &str) -> Option<&Symbol> {
         // This is a bit goofy, and I think I can work around it.
         // The goofy bit is that our symbol tables aren't bound to just lexical
-        // scope. The extend across function calls. This shouldn't be a problem
+        // scope. They extend across function calls. This shouldn't be a problem
         // in general because the extruder takes care of checking that functions
         // aren't referencing anything outside of their scope.
         //
@@ -432,7 +432,7 @@ fn get_function_name(func: &RefType<Function>, lu_dog: &LuDogStore) -> String {
         if let Some(woog_struct) = i_block.r8_woog_struct(lu_dog).first() {
             let woog_struct = s_read!(woog_struct);
             woog_struct.name.clone()
-        } else if let Some(woog_enum) = i_block.r84c_enumeration(lu_dog).first() {
+        } else if let Some(woog_enum) = i_block.r84_enumeration(lu_dog).first() {
             let woog_enum = s_read!(woog_enum);
             woog_enum.name.clone()
         } else {
@@ -488,7 +488,7 @@ fn compile_function(func: &RefType<Function>, context: &mut Context) -> Result<C
         if let Some(woog_struct) = i_block.r8_woog_struct(&lu_dog).first() {
             let woog_struct = s_read!(woog_struct);
             woog_struct.name.clone()
-        } else if let Some(woog_enum) = i_block.r84c_enumeration(&lu_dog).first() {
+        } else if let Some(woog_enum) = i_block.r84_enumeration(&lu_dog).first() {
             let woog_enum = s_read!(woog_enum);
             woog_enum.name.clone()
         } else {

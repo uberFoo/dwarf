@@ -5,10 +5,11 @@ use crate::{
         compiler::{compile_expression, BubbaCompilerError, CThonk, Context, Result},
         instr::Instruction,
     },
+    chacha::interpreter::{ModelContext, PrintableValueType},
     lu_dog::{ValueType, ValueTypeEnum},
-    s_read,
+    new_ref, s_read,
     sarzak::Ty,
-    SarzakStorePtr, Span, POP_CLR,
+    ModelStore, NewRef, RefType, SarzakStorePtr, Span, POP_CLR,
 };
 
 #[tracing::instrument]
@@ -27,16 +28,15 @@ pub(in crate::bubba::compiler) fn compile(
 
     let index = lu_dog.exhume_index(index).unwrap();
     let index = s_read!(index);
-    let target = lu_dog.exhume_expression(&index.target).unwrap();
 
+    let target = lu_dog.exhume_expression(&index.target).unwrap();
     let list_type = compile_expression(&target, thonk, context)?;
 
     let index_expr = lu_dog.exhume_expression(&index.index).unwrap();
-
     let index_type = compile_expression(&index_expr, thonk, context)?;
 
     match index_type {
-        Some(ty) => match ty.subtype {
+        Some(v_ty) => match v_ty.subtype {
             ValueTypeEnum::Ty(ref ty) => {
                 let ty = sarzak.exhume_ty(ty).unwrap();
                 let ty = s_read!(ty);
@@ -48,23 +48,41 @@ pub(in crate::bubba::compiler) fn compile(
                             location!(),
                         );
                     }
-                    ty => Err(BubbaCompilerError::InternalCompilerError {
-                        message: format!("index type is not an integer or a range. Found {ty:?}"),
-                        location: Location::new(file!(), line!(), column!()),
-                    })?,
+                    _ => {
+                        let ctx = ModelContext::new(
+                            context.lu_dog_heel(),
+                            context.sarzak_heel(),
+                            new_ref!(ModelStore, context.extruder_context.models.clone()),
+                        );
+                        let ty = PrintableValueType(true, new_ref!(ValueType, v_ty), &ctx);
+                        Err(BubbaCompilerError::NotIndexable {
+                            ty: ty.to_string(),
+                            span,
+                            location: Location::new(file!(), line!(), column!()),
+                        })?
+                    }
                 }
             }
             ValueTypeEnum::Range(_) => {
                 thonk.insert_instruction_with_span(Instruction::ListIndexRange, span, location!());
             }
-            ty => Err(BubbaCompilerError::InternalCompilerError {
-                message: format!("index type is not an integer or a range. Found {ty:?}"),
-                location: Location::new(file!(), line!(), column!()),
-            })?,
+            _ => {
+                let ctx = ModelContext::new(
+                    context.lu_dog_heel(),
+                    context.sarzak_heel(),
+                    new_ref!(ModelStore, context.extruder_context.models.clone()),
+                );
+                let ty = PrintableValueType(true, new_ref!(ValueType, v_ty), &ctx);
+                Err(BubbaCompilerError::NotIndexable {
+                    ty: ty.to_string(),
+                    span,
+                    location: location!(),
+                })?
+            }
         },
         None => Err(BubbaCompilerError::InternalCompilerError {
             message: "index type is None".to_owned(),
-            location: Location::new(file!(), line!(), column!()),
+            location: location!(),
         })?,
     }
 
@@ -158,14 +176,8 @@ mod test {
 
         assert_eq!(program.get_thonk_card(), 1);
 
-        // assert_eq!(
-        //     program.get_thonk("main").unwrap().get_instruction_card(),
-        //     8
-        // );
+        assert_eq!(program.get_instruction_card(), 6);
 
-        assert_eq!(
-            &*s_read!(run_vm(&program).unwrap()),
-            &Value::String("o".to_owned())
-        );
+        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Char('o'));
     }
 }

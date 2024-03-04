@@ -142,7 +142,7 @@
                 }
             },
             "args": [
-                "fib.ore"
+                "tests/vm_harness/types/generics/result.tao"
                 // "tests/harness/types/generics/workout.ore"
                 // "tests/harness/types/generics/option.tao"
                 // "bench.ore",

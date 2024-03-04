@@ -16,6 +16,12 @@ pub enum BubbaCompilerError {
         span: Span,
         location: Location,
     },
+    #[snafu(display("\n{}: not indexable.", ERR_CLR.bold().paint("error")))]
+    NotIndexable {
+        ty: String,
+        span: Span,
+        location: Location,
+    },
     #[snafu(display("\n{}: `{message}`\n  --> {}::{}::{}", ERR_CLR.bold().paint("error"), location.file, location.line, location.column))]
     InternalCompilerError { location: Location, message: String },
     #[snafu(display("\n{}: variable `{}` not found.", ERR_CLR.bold().paint("error"), POP_CLR.paint(var)))]
@@ -87,6 +93,33 @@ impl fmt::Display for BubbaCompilerErrorReporter<'_, '_, '_> {
                             ))
                             .with_color(Color::Red),
                     );
+
+                let report = if is_uber {
+                    report.with_note(format!(
+                        "{}:{}:{}",
+                        OTHER_CLR.paint(location.file.to_string()),
+                        POP_CLR.paint(format!("{}", location.line)),
+                        OK_CLR.paint(format!("{}", location.column)),
+                    ))
+                } else {
+                    report
+                };
+
+                report
+                    .finish()
+                    .write((file_name, Source::from(&program)), &mut std_err)
+                    .map_err(|_| fmt::Error)?;
+                write!(f, "{}", String::from_utf8_lossy(&std_err))
+            }
+            BubbaCompilerError::NotIndexable { ty, span, location } => {
+                let report = Report::build(ReportKind::Error, file_name, span.start)
+                    .with_message("not indexable")
+                    .with_label(
+                        Label::new((file_name, span.to_owned()))
+                            .with_message("in this expression")
+                            .with_color(Color::Red),
+                    )
+                    .with_note(format!("expected a list type and found {}.", ty));
 
                 let report = if is_uber {
                     report.with_note(format!(

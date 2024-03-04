@@ -2,7 +2,7 @@ use snafu::{location, Location};
 
 use crate::{
     bubba::{
-        compiler::{compile_expression, CThonk, Context, Result},
+        compiler::{compile_expression, CThonk, Context, Result, BOOL, EMPTY, INT},
         instr::Instruction,
         value::Value,
     },
@@ -28,7 +28,7 @@ pub(in crate::bubba::compiler) fn compile(
     let operator = s_read!(operator);
     let lhs = lu_dog.exhume_expression(&operator.lhs).unwrap();
 
-    match operator.subtype {
+    let ty = match operator.subtype {
         OperatorEnum::Binary(ref op_type) => {
             let binary = lu_dog.exhume_binary(op_type).unwrap();
             let binary = s_read!(binary);
@@ -39,6 +39,8 @@ pub(in crate::bubba::compiler) fn compile(
                     compile_expression(&lhs, thonk, context)?;
                     compile_expression(&rhs, thonk, context)?;
                     thonk.insert_instruction_with_span(Instruction::Add, span, location!());
+
+                    context.get_type(INT).unwrap().clone()
                 }
                 BinaryEnum::Assignment(_) => {
                     compile_expression(&rhs, thonk, context)?;
@@ -81,6 +83,8 @@ pub(in crate::bubba::compiler) fn compile(
                                 span,
                                 location!(),
                             );
+
+                            context.get_type(EMPTY).unwrap().clone()
                         }
                         ExpressionEnum::VariableExpression(ref expr) => {
                             let expr = lu_dog.exhume_variable_expression(expr).unwrap();
@@ -95,6 +99,8 @@ pub(in crate::bubba::compiler) fn compile(
                                 span,
                                 location!(),
                             );
+
+                            context.get_type(EMPTY).unwrap().clone()
                         }
                         _ => {
                             panic!("In assignment and lhs is not a variable: {lhs:?}")
@@ -114,21 +120,29 @@ pub(in crate::bubba::compiler) fn compile(
                             thonk.insert_instruction_with_span(Instruction::Or, span, location!());
                         }
                     }
+
+                    context.get_type(BOOL).unwrap().clone()
                 }
                 BinaryEnum::Division(_) => {
                     compile_expression(&lhs, thonk, context)?;
                     compile_expression(&rhs, thonk, context)?;
                     thonk.insert_instruction_with_span(Instruction::Divide, span, location!());
+
+                    context.get_type(INT).unwrap().clone()
                 }
                 BinaryEnum::Subtraction(_) => {
                     compile_expression(&lhs, thonk, context)?;
                     compile_expression(&rhs, thonk, context)?;
                     thonk.insert_instruction_with_span(Instruction::Subtract, span, location!());
+
+                    context.get_type(INT).unwrap().clone()
                 }
                 BinaryEnum::Multiplication(_) => {
                     compile_expression(&lhs, thonk, context)?;
                     compile_expression(&rhs, thonk, context)?;
                     thonk.insert_instruction_with_span(Instruction::Multiply, span, location!());
+
+                    context.get_type(INT).unwrap().clone()
                 }
             }
         }
@@ -143,6 +157,8 @@ pub(in crate::bubba::compiler) fn compile(
                     compile_expression(&lhs, thonk, context)?;
                     compile_expression(&rhs, thonk, context)?;
                     thonk.insert_instruction_with_span(Instruction::TestEqual, span, location!());
+
+                    context.get_type(BOOL).unwrap().clone()
                 }
                 ComparisonEnum::GreaterThan(_) => {
                     compile_expression(&lhs, thonk, context)?;
@@ -152,6 +168,8 @@ pub(in crate::bubba::compiler) fn compile(
                         span,
                         location!(),
                     );
+
+                    context.get_type(BOOL).unwrap().clone()
                 }
                 ComparisonEnum::GreaterThanOrEqual(_) => {
                     compile_expression(&lhs, thonk, context)?;
@@ -161,6 +179,8 @@ pub(in crate::bubba::compiler) fn compile(
                         span,
                         location!(),
                     );
+
+                    context.get_type(BOOL).unwrap().clone()
                 }
                 ComparisonEnum::LessThan(_) => {
                     compile_expression(&lhs, thonk, context)?;
@@ -170,6 +190,8 @@ pub(in crate::bubba::compiler) fn compile(
                         span,
                         location!(),
                     );
+
+                    context.get_type(BOOL).unwrap().clone()
                 }
                 ComparisonEnum::LessThanOrEqual(_) => {
                     compile_expression(&lhs, thonk, context)?;
@@ -179,6 +201,8 @@ pub(in crate::bubba::compiler) fn compile(
                         span,
                         location!(),
                     );
+
+                    context.get_type(BOOL).unwrap().clone()
                 }
                 ComparisonEnum::NotEqual(_) => {
                     compile_expression(&lhs, thonk, context)?;
@@ -188,6 +212,8 @@ pub(in crate::bubba::compiler) fn compile(
                         span,
                         location!(),
                     );
+
+                    context.get_type(BOOL).unwrap().clone()
                 }
             }
         }
@@ -203,15 +229,20 @@ pub(in crate::bubba::compiler) fn compile(
                         location!(),
                     );
                     thonk.insert_instruction_with_span(Instruction::Multiply, span, location!());
+
+                    // 🚧 WHat if it's a float?
+                    context.get_type(INT).unwrap().clone()
                 }
                 UnaryEnum::Not(_) => {
                     thonk.insert_instruction_with_span(Instruction::Not, span, location!());
+
+                    context.get_type(BOOL).unwrap().clone()
                 }
             }
         }
-    }
+    };
 
-    Ok(None)
+    Ok(Some(ty))
 }
 
 #[cfg(test)]

@@ -6,14 +6,14 @@ fn main() {
     // let b: Result<int, string> = Result::<int, string>::Err("oops");
     let b = Result::Err("oops");
 
-    print("a = {0}\n".format(a));
-    print("b = {0}\n".format(b));
+    print(`a = ${a}\n`);
+    print(`b = ${b}\n`);
 
     chacha::assert_eq(a, Result::Ok(42));
     chacha::assert_eq(b, Result::Err("oops"));
 
-    chacha::assert_eq("a = {0}".format(a), "a = Result::Ok(42)");
-    // chacha::assert_eq("b = {0}".format(b), "b = Result<int, string>::Err(\"oops\")");
+    chacha::assert_eq(`a = ${a}`, "a = ::std::result::Result::Ok(42)");
+    // chacha::assert_eq("b = {0}".format(b), `b = Result<int, string>::Err(\"oops\")`);
 
     chacha::assert(a.is_ok());
     chacha::assert(!a.is_err());

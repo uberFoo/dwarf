@@ -57,7 +57,7 @@ pub fn inter_enum(
     let name = context.path.clone() + &name.0;
     debug!("inter_enum {name}");
 
-    let woog_enum = Enumeration::new(name.to_owned(), context.path.clone(), None, None, lu_dog);
+    let woog_enum = Enumeration::new(name.to_owned(), context.path.clone(), None, lu_dog);
     context.dirty.push(Dirty::Enum(woog_enum.clone()));
     let _ = ValueType::new_enumeration(true, &woog_enum, lu_dog);
 
@@ -227,13 +227,6 @@ pub(crate) fn create_generic_enum(
             program: context.source_string.to_owned(),
         }]);
     };
-    let base_enum = lu_dog.exhume_enumeration(&id).unwrap();
-    let impl_block_vec = s_read!(base_enum).r84_implementation_block(lu_dog);
-    let base_enum_impl = if !impl_block_vec.is_empty() {
-        Some(impl_block_vec[0].clone())
-    } else {
-        None
-    };
 
     debug!("interring generic enum {enum_name}");
 
@@ -244,13 +237,7 @@ pub(crate) fn create_generic_enum(
     path.pop();
     let path = path.join(PATH_SEP) + PATH_SEP;
 
-    let new_enum = Enumeration::new(
-        enum_name.to_owned(),
-        path.to_owned(),
-        None,
-        base_enum_impl.as_ref(),
-        lu_dog,
-    );
+    let new_enum = Enumeration::new(enum_name.to_owned(), path.to_owned(), None, lu_dog);
     let ty = ValueType::new_enumeration(true, &new_enum, lu_dog);
 
     let Some(ref id) = lu_dog.exhume_enumeration_id_by_name(name_without_generics) else {
