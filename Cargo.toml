@@ -1,6 +1,6 @@
 [package]
 name = "dwarf"
-version = "0.8.0"
+version = "0.8.1"
 authors = ["Keith T. Star <uberfoo@me.com>"]
 categories = ["compilers", "command-line-interface"]
 description = "A Rust-like, typed, interpreted programming language"
@@ -110,8 +110,8 @@ regex = "1.10.3"
 # [patch.crates-io]
 # puteketeke = { path = "../../github/puteketeke" }
 
-[patch."https://github.com/uberFoo/sarzak"]
-sarzak = { path = "../sarzak" }
+# [patch."https://github.com/uberFoo/sarzak"]
+# sarzak = { path = "../sarzak" }
 
 [dev-dependencies]
 backtrace = "0.3.67"

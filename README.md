@@ -75,11 +75,6 @@ Check out [ariadne](https://docs.rs/ariadne/latest/ariadne/) and you too can hav
 * Easily embeddable
 * Rust-like syntax
 
-## Non-Goals
-
-* Interpreter / debugger performance
-* 100% Rust feature / syntax parity
-
 ## On the Horizon
 
 These are the thins that spring to mind when I think of what I'd most like to do next with dwarf.
@@ -90,7 +85,7 @@ In no particular order:
 * [x] Multiple files (use items)
 * [x] enums
 * [x] lambdas
-* [ ] Compiler for VM
+* [x] Compiler for VM
 * [ ] Visibility modifiers
 * [x] Generics
 * [ ] Macros (Yes, and I don't know why other interpreted languages don't have them. Am I crazy?)
@@ -111,7 +106,7 @@ There's a sort-of hybrid-VM currently, but no compiler.
 
 ## Syntax
 
-dwarf syntax is a strict subset of Rust's.
+dwarf syntax is (nearly) a strict subset of Rust's.
 In fact, I use the Rust language syntax parser in `vscode` to highlight, navigate, and edit Dwarf source.
 
 The bits that are missing include iterators, enumerations, paths, visibility modifiers, generics (for now), and the list goes on.
@@ -120,35 +115,6 @@ The bits that are missing include iterators, enumerations, paths, visibility mod
 
 dwarf has a REPL.
 Pass the `-r` flag to start it.
-
-## Architecture
-
-### Parser
-
-There is a hand written parser that takes care of turning the source into an AST.
-The parser is great at parsing good code, and terrible and everything else.
-Fixing this is on my todo list.
-
-### Compiler
-
-The AST is "compiled" into an in-memory representation that is comprised of the generated code.
-It's a model, and I should probably include pictures, or some way to look at it, despite it's terrible layout.
-The model looks like a standard UML class diagram, and it may as well be.
-I sort of turn it sideways and treat it as an AST.
-
-So what the compiler really does is translate one AST into another.
-It really does more than that though.
-It resolves as much type information as it can.
-It resolves names.
-It may do more, I'll have to look.
-
-### Interpreter
-
-After the compiler comes the interpreter.
-It reads the model/AST and executes it.
-I think that the default is to execute a `main` function.
-
-If you start in the REPL, you get the execution in a loop.
 
 ## License
 

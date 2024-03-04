@@ -994,7 +994,7 @@ checksum = "fea41bba32d969b513997752735605054bc0dfa92b4c56bf1189f2e174be7a10"
 
 [[package]]
 name = "dwarf"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "abi_stable",
  "ansi-to-tui",
@@ -2711,6 +2711,7 @@ dependencies = [
 [[package]]
 name = "sarzak"
 version = "2.13.17"
+source = "git+https://github.com/uberFoo/sarzak?branch=develop#f166b7ad45d8b509c026bb9153a31a1b94357e47"
 dependencies = [
  "ansi_term",
  "bincode",
