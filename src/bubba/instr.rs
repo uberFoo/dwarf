@@ -219,7 +219,7 @@ pub enum Instruction {
     /// The stack is `n` + 2? elements shorter after this instruction.
     ///
     NewTupleEnum(usize),
-    /// New UserType
+    /// New Struct
     ///
     /// The first operand is the number of fields in the struct. Let's call this
     /// n. The stack shall then contain, in order, the name of the struct, the
@@ -232,7 +232,7 @@ pub enum Instruction {
     ///
     /// The stack is (`n` * 3) + 2? elements shorter after this instruction.
     ///
-    NewUserType(usize),
+    NewStruct(usize),
     /// Operator Not
     ///
     /// Take the top value off the stack and perform a logical not on it.
@@ -357,7 +357,8 @@ pub enum Instruction {
     ToString,
     /// Typecast
     ///
-    Typecast(RefType<Value>),
+    TypeCast(RefType<Value>),
+    TypeOf,
     Vom,
 }
 
@@ -494,7 +495,7 @@ impl fmt::Display for Instruction {
                 opcode_style.paint("nte "),
                 operand_style.paint(n.to_string())
             ),
-            Instruction::NewUserType(n) => write!(
+            Instruction::NewStruct(n) => write!(
                 f,
                 "{} {}",
                 opcode_style.paint("nut "),
@@ -529,7 +530,7 @@ impl fmt::Display for Instruction {
                 opcode_style.paint("store"),
                 operand_style.paint(index.to_string())
             ),
-            Instruction::StringLength => write!(f, "{}", opcode_style.paint("slen ")),
+            Instruction::StringLength => write!(f, "{}", opcode_style.paint("slen")),
             Instruction::Subtract => write!(f, "{}", opcode_style.paint("sub ")),
             Instruction::TestEqual => write!(f, "{}", opcode_style.paint("eq  ")),
             Instruction::TestGreaterThan => write!(f, "{}", opcode_style.paint("gt  ")),
@@ -538,12 +539,13 @@ impl fmt::Display for Instruction {
             Instruction::TestLessThanOrEqual => write!(f, "{}", opcode_style.paint("lte ")),
             Instruction::TestNotEqual => write!(f, "{}", opcode_style.paint("ne  ")),
             Instruction::ToString => write!(f, "{}", opcode_style.paint("ts  ")),
-            Instruction::Typecast(name) => write!(
+            Instruction::TypeCast(name) => write!(
                 f,
                 "{} {}",
                 opcode_style.paint("tc  "),
                 operand_style.paint(s_read!(name).to_string())
             ),
+            Instruction::TypeOf => write!(f, "{}", opcode_style.paint("tyof")),
             Instruction::Vom => write!(f, "{}", opcode_style.paint("vom ")),
         }
     }

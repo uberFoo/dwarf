@@ -84,7 +84,7 @@ pub fn eval_assignment(
                     }
                 }
                 Value::Struct(value) => {
-                    s_write!(value).set_field_value(&field_name, rhs);
+                    s_write!(value).set_field_value(&field_name, (*s_read!(rhs)).clone());
                 }
                 // 🚧 This needs it's own error.
                 _value => {

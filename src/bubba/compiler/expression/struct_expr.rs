@@ -6,7 +6,7 @@ use crate::{
         instr::Instruction,
         value::Value,
     },
-    chacha::value::EnumVariant,
+    chacha::value::Enum,
     lu_dog::{DataStructureEnum, FieldExpressionEnum, ValueType},
     s_read, SarzakStorePtr, Span, POP_CLR,
 };
@@ -67,8 +67,7 @@ pub(in crate::bubba::compiler) fn compile(
                 // be? Now that I think of it, I think the implementation of the nte instruction
                 // checks the cardinality of the fields, and if it's zero it generates a
                 // unit enum. So that's two fishy things.
-                let value =
-                    Value::Enumeration(EnumVariant::Unit(ty, path, s_read!(pe).name.to_owned()));
+                let value = Value::Enumeration(Enum::Unit(ty, path, s_read!(pe).name.to_owned()));
                 thonk.insert_instruction(Instruction::Push(value), location!());
             } else {
                 let field_count = field_exprs.len();
@@ -126,7 +125,7 @@ pub(in crate::bubba::compiler) fn compile(
             thonk.insert_instruction(Instruction::Push(name), location!());
 
             thonk.insert_instruction_with_span(
-                Instruction::NewUserType(field_count),
+                Instruction::NewStruct(field_count),
                 span,
                 location!(),
             );
@@ -143,7 +142,7 @@ mod test {
             test::{get_dwarf_home, run_vm, setup_logging},
             *,
         },
-        chacha::value::UserStruct,
+        chacha::value::Struct,
         dwarf::{new_lu_dog, parse_dwarf},
         new_ref, s_write,
         sarzak::MODEL as SARZAK_MODEL,
@@ -185,10 +184,10 @@ mod test {
         let woog_struct = lu_dog.exhume_woog_struct_id_by_name("::Foo").unwrap();
         let woog_struct = lu_dog.exhume_woog_struct(&woog_struct).unwrap();
         let ty = crate::lu_dog::ValueType::new_woog_struct(true, &woog_struct, &mut lu_dog);
-        let mut result = UserStruct::new("Foo", &ty);
-        result.define_field("x", new_ref!(Value, Value::Integer(42)));
-        result.define_field("y", new_ref!(Value, Value::Float(0.42)));
-        let result = Value::Struct(new_ref!(UserStruct<Value>, result));
+        let mut result = Struct::new("Foo", &ty);
+        result.define_field("x", Value::Integer(42));
+        result.define_field("y", Value::Float(0.42));
+        let result = Value::Struct(result);
 
         assert_eq!(&*s_read!(run.unwrap()), &result,);
     }

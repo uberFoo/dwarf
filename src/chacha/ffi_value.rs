@@ -9,7 +9,7 @@ use crate::{
     bubba::value::Value as VmValue,
     chacha::{
         error::{ChaChaError, Result},
-        value::{EnumVariant, TupleEnum},
+        value::{Enum, TupleEnum},
     },
     lu_dog::{ObjectStore as LuDogStore, ValueTypeEnum},
     new_ref,
@@ -283,7 +283,7 @@ impl From<(FfiValue, &LuDogStore)> for Value {
                     },
                 };
 
-                Value::Enumeration(EnumVariant::Tuple(
+                Value::Enumeration(Enum::Tuple(
                     (ty.clone(), "Result".to_owned()),
                     new_ref!(TupleEnum<Value>, tuple),
                 ))

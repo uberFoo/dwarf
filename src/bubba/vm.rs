@@ -32,7 +32,7 @@ use crate::{
     },
     chacha::{
         ffi_value::FfiValue,
-        value::{EnumVariant, TupleEnum, UserStruct},
+        value::{Enum, Struct, TupleEnum},
     },
     keywords::INVOKE_FUNC,
     lu_dog::{ValueType, ValueTypeEnum},
@@ -55,6 +55,7 @@ enum StackValue {
 }
 
 impl StackValue {
+    #[inline]
     fn into_pointer(self) -> RefType<Value> {
         match self {
             StackValue::Pointer(p) => p,
@@ -1005,10 +1006,10 @@ impl VM {
                         };
 
                         match user_enum {
-                            EnumVariant::Unit(_, _, value) => {
+                            Enum::Unit(_, _, value) => {
                                 stack.push(Value::String(value.to_owned()).into());
                             }
-                            EnumVariant::Tuple(_, value) => {
+                            Enum::Tuple(_, value) => {
                                 stack.push(s_read!(value).value().clone().into());
                             }
                             _ => unimplemented!(),
@@ -1021,15 +1022,23 @@ impl VM {
                     // Any locals will cause the fp to be moved up, with the
                     // locals existing between the Thonk name and the fp.
                     Instruction::FetchLocal(index) => {
-                        // We gotta index the stack in reverse order.
-                        // dbg!(
-                        // &arity,
-                        // &local_count,
-                        // &index,
-                        // fp - arity - local_count + index
-                        // );
+                        // We gotta index the stack from the top of the call frame.
                         let value = stack[fp - arity - local_count - 3 + index].clone();
-                        stack.push(value);
+
+                        // When fetching a local, we need to ensure that it's a
+                        // pointer so that modifications are reflected back in the
+                        // stack.
+                        match value {
+                            StackValue::Value(value) => {
+                                let value = StackValue::Pointer(new_ref!(Value, value));
+                                stack[fp - arity - local_count - 3 + index] = value.clone();
+
+                                stack.push(value);
+                            }
+                            StackValue::Pointer(value) => {
+                                stack.push(value.into());
+                            }
+                        }
 
                         1
                     }
@@ -1038,7 +1047,7 @@ impl VM {
                         let ty_ = stack.pop().unwrap();
                         match ty_.into_value() {
                             Value::Struct(ty_) => {
-                                match s_read!(ty_)
+                                match ty_
                                     .get_field_value(field.clone().into_value().to_inner_string())
                                 {
                                     Some(value) => {
@@ -1048,7 +1057,7 @@ impl VM {
                                         return Err::<RefType<Value>, Error>(
                                             BubbaError::NoSuchField {
                                                 field: field.to_string(),
-                                                ty: s_read!(ty_).to_string(),
+                                                ty: ty_.to_string(),
                                             }
                                             .into(),
                                         );
@@ -1074,20 +1083,23 @@ impl VM {
                     }
                     Instruction::FieldWrite => {
                         let field = stack.pop().unwrap();
-                        let ty_ = stack.pop().unwrap();
+                        let strukt = stack.pop().unwrap();
                         let value = stack.pop().unwrap();
-                        match ty_.into_value() {
-                            Value::Struct(ty_) => {
-                                match s_write!(ty_).set_field_value(
+
+                        let strukt = strukt.into_pointer();
+                        let mut strukt = s_write!(strukt);
+                        match &mut *strukt {
+                            Value::Struct(ty) => {
+                                match ty.set_field_value(
                                     field.clone().into_value().to_inner_string(),
-                                    value.clone().into_pointer().clone(),
+                                    value.into_value(),
                                 ) {
                                     Some(_) => {}
                                     None => {
                                         return Err::<RefType<Value>, Error>(
                                             BubbaError::NoSuchField {
                                                 field: field.to_string(),
-                                                ty: s_read!(ty_).to_string(),
+                                                ty: ty.to_string(),
                                             }
                                             .into(),
                                         )
@@ -1097,7 +1109,7 @@ impl VM {
                             value => {
                                 return Err::<RefType<Value>, Error>(
                                     BubbaError::VmPanic {
-                                        message: format!("Unexpected value type: {value}."),
+                                        message: format!("Unexpected value. type: {value}."),
                                         location: location!(),
                                     }
                                     .into(),
@@ -1373,16 +1385,15 @@ impl VM {
                         } else {
                             let ty = match ty.into_value() {
                                 Value::Enumeration(variant) => match variant {
-                                    EnumVariant::Struct(ty) => {
+                                    Enum::Struct(ty) => {
                                         let ty = s_read!(ty);
                                         let name = ty.type_name();
                                         name.to_owned()
                                     }
-                                    EnumVariant::Tuple((_, ty), _) => ty.to_owned(),
-                                    EnumVariant::Unit(_, ty, _) => ty.to_owned(),
+                                    Enum::Tuple((_, ty), _) => ty.to_owned(),
+                                    Enum::Unit(_, ty, _) => ty.to_owned(),
                                 },
                                 Value::Struct(ty) => {
-                                    let ty = s_read!(ty);
                                     let name = ty.type_name();
                                     name.to_owned()
                                 }
@@ -1479,17 +1490,16 @@ impl VM {
                             let user_enum = TupleEnum::new(variant, values[0].to_owned());
                             let user_enum = new_ref!(TupleEnum<Value>, user_enum);
                             stack.push(
-                                Value::Enumeration(EnumVariant::Tuple((ty, path), user_enum))
-                                    .into(),
+                                Value::Enumeration(Enum::Tuple((ty, path), user_enum)).into(),
                             );
                         } else {
-                            let user_enum = EnumVariant::Unit(ty, path, variant);
+                            let user_enum = Enum::Unit(ty, path, variant);
                             stack.push(Value::Enumeration(user_enum).into());
                         }
 
                         1
                     }
-                    Instruction::NewUserType(n) => {
+                    Instruction::NewStruct(n) => {
                         let name = stack.pop().unwrap();
                         let name: String = name.into_value().try_into()?;
 
@@ -1497,7 +1507,7 @@ impl VM {
                         let ty: ValueType = ty.into_value().try_into()?;
                         let ty = new_ref!(ValueType, ty);
 
-                        let mut instance = UserStruct::new(name, &ty);
+                        let mut instance = Struct::new(name, &ty);
 
                         for _i in 0..*n as i32 {
                             let name = stack.pop().unwrap();
@@ -1505,11 +1515,11 @@ impl VM {
 
                             instance.define_field(
                                 name.clone().into_value().to_inner_string(),
-                                value.clone().into_pointer(),
+                                value.into_value(),
                             );
                         }
 
-                        stack.push(Value::Struct(new_ref!(UserStruct<Value>, instance)).into());
+                        stack.push(Value::Struct(instance).into());
 
                         1
                     }
@@ -1787,7 +1797,7 @@ impl VM {
 
                         1
                     }
-                    Instruction::Typecast(as_ty) => {
+                    Instruction::TypeCast(as_ty) => {
                         let Value::ValueType(as_ty) = &*s_read!(as_ty) else {
                             return Err(BubbaError::VmPanic {
                                 message: format!(
@@ -1912,7 +1922,7 @@ impl From<(FfiValue, &Value)> for Value {
                     unreachable!()
                 };
 
-                Value::Enumeration(EnumVariant::Tuple(
+                Value::Enumeration(Enum::Tuple(
                     (new_ref!(ValueType, ty.to_owned()), "Result".to_owned()),
                     new_ref!(TupleEnum<Value>, tuple),
                 ))
@@ -2316,7 +2326,7 @@ mod tests {
     #[test]
     fn test_instr_field() {
         use crate::{
-            chacha::value::UserStruct,
+            chacha::value::Struct,
             lu_dog::{Field, ValueType, WoogStruct},
             PATH_ROOT,
         };
@@ -2365,15 +2375,12 @@ mod tests {
 
         let ctx = initialize_interpreter(2, dwarf_home, ctx).unwrap();
         let ty_name = PrintableValueType(false, struct_ty.clone(), ctx.models());
-        let mut foo_inst = UserStruct::new(ty_name.to_string(), &struct_ty);
-        foo_inst.define_field("bar", new_ref!(Value, 42.into()));
-        foo_inst.define_field("baz", new_ref!(Value, std::f64::consts::PI.into()));
+        let mut foo_inst = Struct::new(ty_name.to_string(), &struct_ty);
+        foo_inst.define_field("bar", 42.into());
+        foo_inst.define_field("baz", std::f64::consts::PI.into());
 
         let mut thonk = Thonk::new("test".to_string());
-        thonk.add_instruction(
-            Instruction::Push(Value::Struct(new_ref!(UserStruct<Value>, foo_inst))),
-            None,
-        );
+        thonk.add_instruction(Instruction::Push(Value::Struct(foo_inst)), None);
         thonk.add_instruction(Instruction::Push("baz".into()), None);
         thonk.add_instruction(Instruction::FieldRead, None);
         thonk.add_instruction(Instruction::Return, None);

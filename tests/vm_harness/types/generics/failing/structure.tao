@@ -39,17 +39,25 @@ fn main() {
         c: 3.14,
     };
 
-    print("d = {0}\n".format(d));
+    let a = Foo {
+        c: "test",
+        b: 3.14,
+        a: true,
+    };
+
+    print(`d = ${d}\n`);
+    print(`a = ${a}\n`);
+
     chacha::assert_eq(chacha::typeof(d.a), "int");
     chacha::assert_eq(chacha::typeof(d.b), "string");
     chacha::assert_eq(chacha::typeof(d.c), "float");
 
     let a = One { uno: 42 };
-    print("a = {0}\n".format(a));
+    print(`a = ${a}\n`);
 
     chacha::assert_eq(chacha::typeof(a.uno), "int");
 
     let b = One { uno: "hello" };
-    print("b = {0}\n".format(b));
+    print(`b = ${b}\n`);
     chacha::assert_eq(chacha::typeof(b.uno), "string");
 }

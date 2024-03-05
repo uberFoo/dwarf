@@ -232,7 +232,7 @@ mod test {
             test::{get_dwarf_home, run_vm, setup_logging},
             *,
         },
-        chacha::value::{EnumVariant, TupleEnum},
+        chacha::value::{Enum, TupleEnum},
         dwarf::{new_lu_dog, parse_dwarf},
         new_ref,
         sarzak::MODEL as SARZAK_MODEL,
@@ -416,7 +416,7 @@ mod test {
 
         assert_eq!(
             &*s_read!(run_vm(&program).unwrap()),
-            &Value::Enumeration(EnumVariant::Unit(ty, "::Foo".to_owned(), "Bar".to_owned()))
+            &Value::Enumeration(Enum::Unit(ty, "::Foo".to_owned(), "Bar".to_owned()))
         );
     }
 
@@ -465,7 +465,7 @@ mod test {
 
         assert_eq!(
             &*s_read!(run_vm(&program).unwrap()),
-            &Value::Enumeration(EnumVariant::Tuple((ty, "Foo".to_owned()), user_enum))
+            &Value::Enumeration(Enum::Tuple((ty, "Foo".to_owned()), user_enum))
         );
     }
 

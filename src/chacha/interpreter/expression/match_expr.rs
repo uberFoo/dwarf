@@ -1,7 +1,7 @@
 use std::collections::VecDeque;
 
 use crate::{
-    chacha::{error::Result, value::EnumVariant},
+    chacha::{error::Result, value::Enum},
     interpreter::{eval_expression, Context},
     lu_dog::ExpressionEnum,
     new_ref, s_read, NewRef, RefType, SarzakStorePtr, Value, PATH_SEP,
@@ -52,7 +52,7 @@ pub fn eval(match_expr: &SarzakStorePtr, context: &mut Context) -> Result<RefTyp
                         Value::Enumeration(value) => match value {
                             // 🚧 I can't tell if this is gross, or a sweet hack.
                             // I think I'm referring to using the name as the scrutinee?
-                            EnumVariant::Unit(_, ty, value) => (
+                            Enum::Unit(_, ty, value) => (
                                 ty.to_owned(),
                                 Some(new_ref!(Value, Value::String(value.to_owned()))),
                             ),
@@ -60,7 +60,7 @@ pub fn eval(match_expr: &SarzakStorePtr, context: &mut Context) -> Result<RefTyp
                             //     s_read!(value).type_name().to_owned(),
                             //     Some(s_read!(value).get_value()),
                             // ),
-                            EnumVariant::Tuple((ty, path), value) => {
+                            Enum::Tuple((ty, path), value) => {
                                 let path = path.split(PATH_SEP).collect::<Vec<&str>>();
                                 let mut path = VecDeque::from(path);
                                 let name = path.pop_front().unwrap().to_owned();
@@ -74,7 +74,7 @@ pub fn eval(match_expr: &SarzakStorePtr, context: &mut Context) -> Result<RefTyp
                                         name,
                                         Some(new_ref!(
                                             Value,
-                                            Value::Enumeration(EnumVariant::Tuple(
+                                            Value::Enumeration(Enum::Tuple(
                                                 (
                                                     ty.clone(),
                                                     path.into_iter()

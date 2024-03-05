@@ -94,7 +94,6 @@ pub mod field_access {
             Value::Struct(value) => {
                 let value = s_read!(value);
                 let value = value.get_field_value(&field_name).unwrap().clone();
-                let value = s_read!(value).clone();
 
                 Ok(new_ref!(Value, value))
             }

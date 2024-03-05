@@ -5,6 +5,7 @@ use walkdir::WalkDir;
 const EXT1: &str = "tao";
 const EXT2: &str = "ore";
 const TEST_DIR: &str = "tests";
+const TEST_FAILED: &str = "TEST_FAILED";
 const INTERP_HARNESS_DIR: &str = "harness";
 const VM_HARNESS_DIR: &str = "vm_harness";
 const INTERP_OUT_NAME: &str = "tests.rs";
@@ -27,9 +28,19 @@ fn main() {
     for entry in WalkDir::new(&in_dir).into_iter().filter_map(|e| e.ok()) {
         let path = entry.path();
         let root = path.parent().unwrap();
-        if root.file_name().unwrap() == "failing" {
-            continue;
+        match env::var(TEST_FAILED).unwrap_or_default() {
+            ref s if s.is_empty() => {
+                if root.file_name().unwrap() == "failing" {
+                    continue;
+                }
+            }
+            _ => {
+                if root.file_name().unwrap() != "failing" {
+                    continue;
+                }
+            }
         }
+
         if path.is_file() {
             let ext = path.extension().unwrap();
             if ext != EXT1 && ext != EXT2 {

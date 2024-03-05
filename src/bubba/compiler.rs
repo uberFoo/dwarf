@@ -185,7 +185,7 @@ impl Drop for SymbolTable {
 }
 
 #[derive(Debug)]
-struct Context<'a, 'b> {
+pub(crate) struct Context<'a, 'b> {
     extruder_context: &'a ExtruderContext,
     symbol_tables: Vec<(SymbolTable, bool)>,
     program: &'b mut Program,
@@ -228,11 +228,11 @@ impl<'a, 'b> Context<'a, 'b> {
         self.program
     }
 
-    fn lu_dog_heel(&self) -> RefType<LuDogStore> {
+    pub(crate) fn lu_dog_heel(&self) -> RefType<LuDogStore> {
         self.extruder_context.lu_dog.clone()
     }
 
-    fn sarzak_heel(&self) -> RefType<SarzakStore> {
+    pub(crate) fn sarzak_heel(&self) -> RefType<SarzakStore> {
         self.extruder_context.sarzak.clone()
     }
 

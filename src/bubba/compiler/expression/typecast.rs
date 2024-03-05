@@ -30,7 +30,7 @@ pub(in crate::bubba::compiler) fn compile(
     compile_expression(&lhs, thonk, context)?;
 
     thonk.insert_instruction_with_span(
-        Instruction::Typecast(new_ref!(Value, Value::ValueType((*s_read!(as_ty)).clone()))),
+        Instruction::TypeCast(new_ref!(Value, Value::ValueType((*s_read!(as_ty)).clone()))),
         span,
         location!(),
     );

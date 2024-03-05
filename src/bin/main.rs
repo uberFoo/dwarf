@@ -337,22 +337,30 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             // If we find it, we will compare timestamps, and recompile if the
             // source is newer than the gp file. Otherwise we'll just load the
             // file and go.
+            let file_name_orig = file_name.clone();
+            let source_path = Path::new(&file_name);
+            let source_path = match source_path.parent() {
+                Some(p) => p.into(),
+                None => env::current_dir()?,
+            };
+            let file_name = Path::new(&file_name);
+            let file_name = file_name.file_name().unwrap().to_str().unwrap().to_string();
 
-            let cwd = env::current_dir()?;
             let mut hasher = DefaultHasher::new();
-            cwd.hash(&mut hasher);
+            source_path.hash(&mut hasher);
             let hash = hasher.finish();
+
             let path = format!(
                 "{}/compiled/{}_{}.gp",
                 dwarf_home.display(),
                 hash,
                 file_name
             );
-            let path = Path::new(&path);
 
+            let path = Path::new(&path);
             let program = if path.exists() {
                 // Compare timestamps of source and gp file.
-                let source_meta = fs::metadata(&file_name)?;
+                let source_meta = fs::metadata(&file_name_orig)?;
                 let gp_meta = fs::metadata(path)?;
                 let source_time = source_meta.modified()?;
                 let gp_time = gp_meta.modified()?;

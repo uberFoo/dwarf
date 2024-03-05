@@ -1,5 +1,5 @@
-#[cfg(feature = "async")]
-use std::future::Future;
+// #[cfg(feature = "async")]
+// use std::future::Future;
 
 use std::{fmt, io::Write, ops::Range};
 
@@ -7,19 +7,21 @@ use ansi_term::Colour;
 #[cfg(feature = "async")]
 use puteketeke::AsyncTask;
 use serde::{Deserialize, Serialize};
-#[cfg(feature = "async")]
-use smol::future;
+// #[cfg(feature = "async")]
+// use smol::future;
 use uuid::Uuid;
 
 use crate::{
-    bubba::error::{BubbaError, Error},
-    chacha::value::{EnumVariant, UserStruct},
+    bubba::{
+        compiler::Context,
+        error::{BubbaError, Error},
+    },
+    chacha::value::{Enum, Struct},
     lu_dog::{ObjectStore as LuDogStore, ValueType, ValueTypeEnum},
-    new_ref,
     plug_in::PluginType,
     s_read,
     sarzak::{ObjectStore as SarzakStore, Ty},
-    DwarfFloat, DwarfInteger, NewRef, RefType, VmValueResult,
+    DwarfFloat, DwarfInteger, RefType, VmValueResult,
 };
 
 #[derive(Default, Deserialize, Serialize)]
@@ -39,7 +41,7 @@ pub enum Value {
     Empty,
     #[serde(skip)]
     Error(Box<Error>),
-    Enumeration(EnumVariant<Self>),
+    Enumeration(Enum<Self>),
     Float(DwarfFloat),
     Integer(DwarfInteger),
     LambdaPointer {
@@ -51,7 +53,7 @@ pub enum Value {
     Plugin((String, RefType<PluginType>)),
     Range(Range<DwarfInteger>),
     String(String),
-    Struct(RefType<UserStruct<Self>>),
+    Struct(Struct<Self>),
     #[serde(skip)]
     #[cfg(feature = "async")]
     Task {
@@ -137,7 +139,7 @@ impl Value {
             Self::Plugin((name, _plugin)) => write!(f, "plugin::{name}"),
             Self::Range(range) => write!(f, "{range:?}"),
             Self::String(str_) => write!(f, "{str_}"),
-            Self::Struct(ty) => write!(f, "{}", s_read!(ty)),
+            Self::Struct(ty) => write!(f, "{}", ty),
             #[cfg(feature = "async")]
             Self::Task {
                 name,
@@ -164,7 +166,12 @@ impl Value {
         }
     }
 
-    pub fn get_value_type(&self, sarzak: &SarzakStore, lu_dog: &LuDogStore) -> RefType<ValueType> {
+    pub fn get_value_type(&self, context: &Context) -> RefType<ValueType> {
+        let sarzak = context.sarzak_heel().clone();
+        let sarzak = &s_read!(sarzak);
+        let lu_dog = context.lu_dog_heel().clone();
+        let lu_dog = &s_read!(lu_dog);
+
         match &self {
             Value::Boolean(_) => {
                 let ty = Ty::new_boolean(sarzak);
@@ -194,9 +201,9 @@ impl Value {
                 unreachable!()
             }
             Value::Enumeration(var) => match var {
-                EnumVariant::Unit(t, _, _) => t.clone(),
-                EnumVariant::Struct(ut) => s_read!(ut).get_type().clone(),
-                EnumVariant::Tuple((ty, _), _) => ty.clone(),
+                Enum::Unit(t, _, _) => t.clone(),
+                Enum::Struct(ut) => s_read!(ut).get_type().clone(),
+                Enum::Tuple((ty, _), _) => ty.clone(),
             },
             Value::Float(_) => {
                 let ty = Ty::new_float(sarzak);
@@ -250,7 +257,7 @@ impl Value {
                 }
                 unreachable!()
             }
-            Value::Struct(ref ut) => s_read!(ut).get_type().clone(),
+            Value::Struct(ref ut) => ut.get_type().clone(),
             Value::Uuid(_) => {
                 let ty = Ty::new_z_uuid(sarzak);
                 for vt in lu_dog.iter_value_type() {
@@ -267,6 +274,7 @@ impl Value {
                     if let ValueTypeEnum::List(id) = s_read!(vt).subtype {
                         let list = lu_dog.exhume_list(&id).unwrap();
                         let list_ty = s_read!(list).r36_value_type(lu_dog)[0].clone();
+                        dbg!(&ty, &list, &list_ty);
                         if *s_read!(ty) == *s_read!(list_ty) {
                             return vt.clone();
                         }
@@ -315,7 +323,7 @@ impl std::fmt::Debug for Value {
             Self::Plugin((name, _plugin)) => write!(f, "plugin::{name}"),
             Self::Range(range) => write!(f, "{range:?}"),
             Self::String(s) => write!(f, "{s:?}"),
-            Self::Struct(ty) => write!(f, "{:?}", s_read!(ty)),
+            Self::Struct(ty) => write!(f, "{:?}", ty),
             #[cfg(feature = "async")]
             Self::Task {
                 name,
@@ -403,7 +411,7 @@ impl fmt::Display for Value {
             Self::Plugin((name, _plugin)) => write!(f, "plugin::{name}"),
             Self::Range(range) => write!(f, "{range:?}"),
             Self::String(str_) => write!(f, "\"{str_}\""),
-            Self::Struct(ty) => write!(f, "{}", s_read!(ty)),
+            Self::Struct(ty) => write!(f, "{}", ty),
             #[cfg(feature = "async")]
             Self::Task {
                 name,
@@ -1202,7 +1210,7 @@ impl std::cmp::PartialEq for Value {
             (Value::Integer(a), Value::Float(b)) => (*a as DwarfFloat) == *b,
             (Value::Plugin((a, _)), Value::Plugin((b, _))) => a == b,
             (Value::String(a), Value::String(b)) => a == b,
-            (Value::Struct(a), Value::Struct(b)) => *s_read!(a) == *s_read!(b),
+            (Value::Struct(a), Value::Struct(b)) => a == b,
             (Value::Uuid(a), Value::Uuid(b)) => a == b,
             (Value::Vector { ty: ty_a, inner: a }, Value::Vector { ty: ty_b, inner: b }) => {
                 if *s_read!(ty_a) != *s_read!(ty_b) {

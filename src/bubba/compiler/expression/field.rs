@@ -2,11 +2,11 @@ use snafu::{location, Location};
 
 use crate::{
     bubba::{
-        compiler::{compile_expression, CThonk, Context, Result},
+        compiler::{compile_expression, CThonk, Context, Result, INT},
         instr::Instruction,
         value::Value,
     },
-    lu_dog::{FieldAccessTargetEnum, ValueType},
+    lu_dog::{EnumFieldEnum, FieldAccessTargetEnum, ValueType},
     s_read, SarzakStorePtr, Span, POP_CLR,
 };
 
@@ -30,21 +30,39 @@ pub(in crate::bubba::compiler) fn compile_field_access(
     compile_expression(&expr, thonk, context)?;
 
     let fat = &field.r65_field_access_target(&lu_dog)[0];
-    let field_name = match s_read!(fat).subtype {
+    let (field_name, ty) = match s_read!(fat).subtype {
         FieldAccessTargetEnum::EnumField(ref field) => {
             let field = lu_dog.exhume_enum_field(field).unwrap();
             let field = s_read!(field);
-            field.name.to_owned()
+            let ty = match field.subtype {
+                EnumFieldEnum::StructField(_) => todo!(),
+                EnumFieldEnum::TupleField(ref tf) => {
+                    let tf = lu_dog.exhume_tuple_field(tf).unwrap();
+                    let tf = s_read!(tf);
+                    let ty = tf.r86_value_type(&lu_dog)[0].clone();
+                    let ty = (*s_read!(ty)).clone();
+                    ty
+                }
+                EnumFieldEnum::Unit(_) => context.get_type(INT).unwrap().clone(),
+            };
+
+            (field.name.to_owned(), ty)
         }
         FieldAccessTargetEnum::Field(ref field) => {
             let field = lu_dog.exhume_field(field).unwrap();
             let field = s_read!(field);
-            field.name.to_owned()
+            let ty = field.r5_value_type(&lu_dog)[0].clone();
+            let ty = (*s_read!(ty)).clone();
+
+            (field.name.to_owned(), ty)
         }
         FieldAccessTargetEnum::Function(ref func) => {
             let func = lu_dog.exhume_function(func).unwrap();
             let func = s_read!(func);
-            func.name.to_owned()
+            let ty = func.r10_value_type(&lu_dog)[0].clone();
+            let ty = (*s_read!(ty)).clone();
+
+            (func.name.to_owned(), ty)
         }
     };
     thonk.insert_instruction_with_span(
@@ -55,7 +73,7 @@ pub(in crate::bubba::compiler) fn compile_field_access(
 
     thonk.insert_instruction_with_span(Instruction::FieldRead, span, location!());
 
-    Ok(None)
+    Ok(Some(ty))
 }
 
 #[tracing::instrument]

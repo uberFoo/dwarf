@@ -10,6 +10,7 @@ include = [
     "build.rs",
     "src/**/*.rs",
     "README.md",
+    "CHANGELOG.md",
     "LICENSE-APACHE",
     "LICENSE-MIT",
 ]
@@ -176,7 +177,7 @@ name = "dwarf"
 harness = false
 
 [profile.release]
-lto = "thin"
+lto = "fat"
 
 [lib]
 crate-type = ["cdylib", "rlib"]

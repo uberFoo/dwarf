@@ -14,11 +14,12 @@ use crate::{
         value::Value,
         BOOL, STRING_ARRAY, UUID,
     },
-    keywords::{ARGS, ASSERT, ASSERT_EQ, CHACHA, FORMAT, FQ_UUID_TYPE, NEW, PLUGIN},
+    chacha::interpreter::{ModelContext, PrintableValueType},
+    keywords::{ARGS, ASSERT, ASSERT_EQ, CHACHA, FORMAT, FQ_UUID_TYPE, NEW, PLUGIN, TYPEOF},
     lu_dog::{BodyEnum, Call, CallEnum, Expression, ValueType, ValueTypeEnum},
-    s_read,
+    new_ref, s_read,
     sarzak::Ty,
-    RefType, SarzakStorePtr, Span, PATH_SEP, POP_CLR,
+    ModelStore, NewRef, RefType, SarzakStorePtr, Span, PATH_SEP, POP_CLR,
 };
 
 #[tracing::instrument]
@@ -373,6 +374,9 @@ fn compile_static_method_call(
     let lu_dog = context.lu_dog_heel();
     let lu_dog = s_read!(lu_dog);
 
+    let sarzak = context.sarzak_heel();
+    let sarzak = s_read!(sarzak);
+
     let boolean = context.get_type(BOOL).unwrap().clone();
     let string_array = context.get_type(STRING_ARRAY).unwrap().clone();
 
@@ -464,6 +468,29 @@ fn compile_static_method_call(
                 let result = compile_expression(inner, thonk, context);
 
                 thonk.insert_instruction(Instruction::AsyncSpawn(0), location!());
+
+                result
+            }
+            TYPEOF => {
+                let ty = &args[0];
+                let result = compile_expression(ty, thonk, context);
+
+                let value = result.clone().unwrap().unwrap();
+
+                let ctx = ModelContext::new(
+                    context.lu_dog_heel(),
+                    context.sarzak_heel(),
+                    new_ref!(ModelStore, context.extruder_context.models.clone()),
+                );
+                let value = PrintableValueType(false, new_ref!(ValueType, value), &ctx);
+                dbg!(ty, &result, value.to_string());
+
+                // thonk.insert_instruction(
+                //     Instruction::Push(Value::String(value.to_string())),
+                //     location!(),
+                // );
+
+                thonk.insert_instruction(Instruction::TypeOf, location!());
 
                 result
             }

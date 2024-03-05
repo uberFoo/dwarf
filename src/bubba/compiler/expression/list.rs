@@ -2,7 +2,7 @@ use snafu::{location, Location};
 
 use crate::{
     bubba::{
-        compiler::{compile_expression, CThonk, Context, Result},
+        compiler::{compile_expression, CThonk, Context, Result, EMPTY},
         instr::Instruction,
         value::Value,
     },
@@ -79,11 +79,12 @@ pub(in crate::bubba::compiler) fn compile_list_expression(
 
         thonk.insert_instruction(Instruction::NewList(size), location!());
     } else {
+        let empty = context.get_type(EMPTY).unwrap().clone();
         let ty = Value::Vector {
-            ty: Value::Empty.get_value_type(&sarzak, &lu_dog),
+            ty: new_ref!(ValueType, empty),
             inner: new_ref!(Vec<RefType<Value>>, vec![]),
         }
-        .get_value_type(&sarzak, &lu_dog);
+        .get_value_type(context);
         let ty = (*s_read!(ty)).clone();
         thonk.insert_instruction(Instruction::Push(Value::ValueType(ty)), location!());
         thonk.insert_instruction_with_span(Instruction::NewList(0), entry_span, location!());

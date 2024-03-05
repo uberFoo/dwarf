@@ -43,7 +43,7 @@ use crate::{
 /// ```
 ///
 #[derive(Clone, Debug, Deserialize, Serialize)]
-pub enum EnumVariant<T>
+pub enum Enum<T>
 where
     T: Clone + std::fmt::Debug + PartialEq + std::fmt::Display + std::default::Default,
 {
@@ -52,7 +52,7 @@ where
     /// This type of field is for when it contains a struct, as `Baz` does above.
     /// That is to say, `Foo::Baz { qux: string }`. We store the final path element
     /// as a string, and the struct as a `RefType<UserStruct>`.
-    Struct(RefType<UserStruct<T>>),
+    Struct(RefType<Struct<T>>),
     /// Tuple Enumeration Field
     ///
     /// This type of field is for when it contains a tuple, as `Bar` does above.
@@ -71,7 +71,7 @@ where
     Unit(RefType<ValueType>, String, String),
 }
 
-impl<T> EnumVariant<T>
+impl<T> Enum<T>
 where
     T: Clone + std::fmt::Debug + PartialEq + std::fmt::Display + std::default::Default,
 {
@@ -84,7 +84,7 @@ where
     }
 }
 
-impl<T> PartialEq for EnumVariant<T>
+impl<T> PartialEq for Enum<T>
 where
     T: Clone + std::fmt::Debug + PartialEq + std::fmt::Display + std::default::Default,
 {
@@ -100,12 +100,12 @@ where
     }
 }
 
-impl<T> Eq for EnumVariant<T> where
+impl<T> Eq for Enum<T> where
     T: Clone + std::fmt::Debug + PartialEq + std::fmt::Display + std::default::Default
 {
 }
 
-impl<T> fmt::Display for EnumVariant<T>
+impl<T> fmt::Display for Enum<T>
 where
     T: Clone + std::fmt::Debug + PartialEq + std::fmt::Display + std::default::Default,
 {
@@ -140,7 +140,7 @@ pub enum Value {
     ///
     /// ()
     Empty,
-    Enumeration(EnumVariant<Self>),
+    Enumeration(Enum<Self>),
     // #[serde(skip)]
     Error(Box<ChaChaError>),
     Float(DwarfFloat),
@@ -175,11 +175,12 @@ pub enum Value {
         id: Uuid,
         plugin: RefType<PluginType>,
     },
+    // Reference(RefType<Self>),
     Range(Range<DwarfInteger>),
     // #[serde(skip)]
     Store(RefType<ZObjectStore>, RefType<PluginType>),
     String(String),
-    Struct(RefType<UserStruct<Self>>),
+    Struct(RefType<Struct<Self>>),
     Table(HashMap<String, RefType<Self>>),
     #[cfg(feature = "async")]
     // #[serde(skip)]
@@ -259,6 +260,9 @@ impl Value {
                 plugin,
             } => write!(f, "{}", s_read!(plugin)),
             Self::Range(range) => write!(f, "{range:?}"),
+            // Self::Reference(value) => {
+            // write!(f, "<reference>({})", s_read!(value).to_inner_string())
+            // }
             // Self::StoreType(store) => write!(f, "{:?}", store),
             Self::Store(_store, plugin) => write!(f, "Plug-in ({})", s_read!(plugin).name()),
             Self::String(str_) => write!(f, "{str_}"),
@@ -328,9 +332,9 @@ impl Value {
                 unreachable!()
             }
             Value::Enumeration(var) => match var {
-                EnumVariant::Unit(t, _, _) => t.clone(),
-                EnumVariant::Struct(ut) => s_read!(ut).get_type().clone(),
-                EnumVariant::Tuple((ty, _), _) => ty.clone(),
+                Enum::Unit(t, _, _) => t.clone(),
+                Enum::Struct(ut) => s_read!(ut).get_type().clone(),
+                Enum::Tuple((ty, _), _) => ty.clone(),
             },
             Value::Float(_) => {
                 let ty = Ty::new_float(sarzak);
@@ -571,6 +575,9 @@ impl std::fmt::Debug for Value {
                 s_read!(plugin).name()
             ),
             Self::Range(range) => write!(f, "{range:?}"),
+            // Self::Reference(value) => {
+            //     write!(f, "<reference>({})", s_read!(value).to_inner_string())
+            // }
             Self::Store(store, plugin) => write!(
                 f,
                 "Store {{ store: {:?}, plugin: {} }}",
@@ -643,6 +650,7 @@ impl Clone for Value {
                 plugin: plugin.clone(),
             },
             Self::Range(range) => Self::Range(range.clone()),
+            // Self::Reference(value) => Self::Reference(value.clone()),
             Self::Store(store, plugin) => Self::Store(store.clone(), plugin.clone()),
             Self::String(str_) => Self::String(str_.clone()),
             Self::Struct(ty) => Self::Struct(ty.clone()),
@@ -720,6 +728,9 @@ impl fmt::Display for Value {
                 plugin,
             } => write!(f, "{}", s_read!(plugin)),
             Self::Range(range) => write!(f, "{range:?}"),
+            // Self::Reference(value) => {
+            //     write!(f, "<reference>({})", s_read!(value).to_inner_string())
+            // }
             // Self::StoreType(store) => write!(f, "{:?}", store),
             Self::Store(_store, plugin) => write!(f, "Plug-in ({})", s_read!(plugin).name()),
             // Self::String(str_) => write!(f, "{str_}"),
@@ -1564,16 +1575,16 @@ where
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct UserStruct<T>
+pub struct Struct<T>
 where
     T: Clone + std::fmt::Debug + PartialEq + std::fmt::Display + std::default::Default,
 {
     type_name: String,
     type_: RefType<ValueType>,
-    attrs: UserTypeAttribute<T>,
+    attrs: StructAttributes<T>,
 }
 
-impl<T> PartialEq for UserStruct<T>
+impl<T> PartialEq for Struct<T>
 where
     T: Clone + std::fmt::Debug + PartialEq + std::fmt::Display + std::default::Default,
 {
@@ -1582,12 +1593,12 @@ where
     }
 }
 
-impl<T> Eq for UserStruct<T> where
+impl<T> Eq for Struct<T> where
     T: Clone + std::fmt::Debug + PartialEq + std::fmt::Display + std::default::Default
 {
 }
 
-impl<T> UserStruct<T>
+impl<T> Struct<T>
 where
     T: Clone + std::fmt::Debug + PartialEq + std::fmt::Display + std::default::Default,
 {
@@ -1595,26 +1606,22 @@ where
         Self {
             type_name: type_name.as_ref().to_owned(),
             type_: type_.clone(),
-            attrs: UserTypeAttribute::default(),
+            attrs: StructAttributes::default(),
         }
     }
 
     /// Create a field for the user type
     ///
     /// This is called during type definition, from a declaration in a source file.
-    pub fn define_field<S: AsRef<str>>(&mut self, name: S, value: RefType<T>) {
+    pub fn define_field<S: AsRef<str>>(&mut self, name: S, value: T) {
         self.attrs.0.insert(name.as_ref().to_owned(), value);
     }
 
-    pub fn get_field_value<S: AsRef<str>>(&self, name: S) -> Option<&RefType<T>> {
+    pub fn get_field_value<S: AsRef<str>>(&self, name: S) -> Option<&T> {
         self.attrs.0.get(name.as_ref())
     }
 
-    pub fn set_field_value<S: AsRef<str>>(
-        &mut self,
-        name: S,
-        value: RefType<T>,
-    ) -> Option<RefType<T>> {
+    pub fn set_field_value<S: AsRef<str>>(&mut self, name: S, value: T) -> Option<T> {
         self.attrs.0.insert(name.as_ref().to_owned(), value)
     }
 
@@ -1627,7 +1634,7 @@ where
     }
 }
 
-impl<T> fmt::Display for UserStruct<T>
+impl<T> fmt::Display for Struct<T>
 where
     T: Clone + std::fmt::Debug + PartialEq + std::fmt::Display + std::default::Default,
 {
@@ -1643,7 +1650,7 @@ where
 
         let mut out = f.debug_struct(name);
         for (k, v) in attrs {
-            out.field(k, &format_args!("{}", &s_read!(v)));
+            out.field(k, &format_args!("{v}"));
         }
 
         out.finish()
@@ -1651,11 +1658,11 @@ where
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
-pub struct UserTypeAttribute<T>(HashMap<String, RefType<T>>)
+pub struct StructAttributes<T>(HashMap<String, T>)
 where
     T: Clone + std::fmt::Debug + PartialEq + std::fmt::Display + std::default::Default;
 
-impl<T> PartialEq for UserTypeAttribute<T>
+impl<T> PartialEq for StructAttributes<T>
 where
     T: Clone + std::fmt::Debug + PartialEq + std::fmt::Display + std::default::Default,
 {
@@ -1671,7 +1678,7 @@ where
 
             let ov = other.0.get(k).unwrap();
 
-            if !s_read!(v).eq(&s_read!(ov)) {
+            if !v.eq(&ov) {
                 return false;
             }
         }
@@ -1680,7 +1687,7 @@ where
     }
 }
 
-impl<T> Eq for UserTypeAttribute<T> where
+impl<T> Eq for StructAttributes<T> where
     T: Clone + std::fmt::Debug + PartialEq + std::fmt::Display + std::default::Default
 {
 }

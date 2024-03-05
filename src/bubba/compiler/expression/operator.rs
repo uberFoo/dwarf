@@ -257,7 +257,7 @@ mod test {
     };
 
     #[test]
-    fn test_add_strings() {
+    fn add_strings() {
         setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "fn main() -> string {
@@ -285,7 +285,7 @@ mod test {
     }
 
     #[test]
-    fn test_subtraction() {
+    fn subtraction() {
         setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "fn main() -> int {
@@ -310,7 +310,7 @@ mod test {
     }
 
     #[test]
-    fn test_multiplication() {
+    fn multiplication() {
         setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "fn main() -> int {
@@ -336,7 +336,7 @@ mod test {
     }
 
     #[test]
-    fn test_division() {
+    fn division() {
         setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "fn main() -> int {
@@ -362,7 +362,7 @@ mod test {
     }
 
     #[test]
-    fn test_assignment() {
+    fn assignment() {
         setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "fn main() -> int {
@@ -390,7 +390,7 @@ mod test {
     }
 
     #[test]
-    fn test_and_expression() {
+    fn and_expression() {
         setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "
@@ -416,7 +416,7 @@ mod test {
     }
 
     #[test]
-    fn test_or_expression() {
+    fn or_expression() {
         setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "
@@ -442,7 +442,7 @@ mod test {
     }
 
     #[test]
-    fn test_binary_not() {
+    fn binary_not() {
         setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "
@@ -468,7 +468,7 @@ mod test {
     }
 
     #[test]
-    fn test_assign_to_struct_field() {
+    fn assign_to_struct_field() {
         setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
 
@@ -502,7 +502,7 @@ mod test {
     }
 
     #[test]
-    fn test_greater_than() {
+    fn greater_than() {
         setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
 
