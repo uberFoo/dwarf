@@ -39,7 +39,7 @@ use dwarf::{
     dwarf::{new_lu_dog, parse_dwarf},
     new_ref, s_read,
     sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL},
-    Context, NewRef, RefType, Value,
+    Context, NewRef, RefType, Value, BUILD_TIME, VERSION,
 };
 use reqwest::Url;
 #[cfg(feature = "tracy")]
@@ -333,10 +333,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             // Running in the VM
             //
             // We will check $DWARF_HOME/compiled for a file named according to:
-            //      [hash(path_to_source)]_source_name.gp
+            //      [hash(path_to_source)]_source_name.[ore|tao|*].gp
             // If we find it, we will compare timestamps, and recompile if the
             // source is newer than the gp file. Otherwise we'll just load the
             // file and go.
+            //
+            // Not so fast buck-o. We also need to recompile if the compiler
+            // version is different, or if the compiler build time is newer than
+            // the gp file.
             let file_name_orig = file_name.clone();
             let source_path = Path::new(&file_name);
             let source_path = match source_path.parent() {
@@ -377,9 +381,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     )?
                 } else {
                     let bin_file = fs::File::open(path)?;
-                    // bincode::deserialize_from(bin_file).unwrap()
+                    // let program: Program = bincode::deserialize_from(bin_file).unwrap();
                     let reader = io::BufReader::new(bin_file);
-                    serde_json::from_reader(reader)?
+                    let program: Program = serde_json::from_reader(reader)?;
+
+                    if program.compiler_version() != VERSION
+                        || program.compiler_build_ts() != BUILD_TIME
+                    {
+                        compile_program(
+                            &file_name,
+                            &source_code,
+                            &dwarf_home,
+                            &sarzak,
+                            is_uber,
+                            print_ast,
+                            path,
+                        )?
+                    } else {
+                        program
+                    }
                 }
             } else {
                 compile_program(
@@ -556,7 +576,7 @@ fn compile_program(
             println!("{program}");
 
             // Write the compiled program to disk.
-            let bin_file = fs::File::create(path)?;
+            let mut bin_file = fs::File::create(path)?;
             // let encoded: Vec<u8> = bincode::serialize(&program).unwrap();
             // dbg!(&encoded);
             // bin_file.write_all(&encoded)?;
