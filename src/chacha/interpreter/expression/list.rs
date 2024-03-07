@@ -1,7 +1,6 @@
 use ansi_term::Colour;
 
 use crate::{
-    bubba::VM,
     chacha::error::Result,
     interpreter::{debug, eval_expression, function, Context},
     lu_dog::ValueType,
@@ -11,7 +10,6 @@ use crate::{
 pub fn eval_list_element(
     element: &SarzakStorePtr,
     context: &mut Context,
-    vm: &mut VM,
 ) -> Result<RefType<Value>> {
     let lu_dog = context.lu_dog_heel().clone();
 
@@ -20,13 +18,12 @@ pub fn eval_list_element(
     let element = s_read!(lu_dog).exhume_list_element(element).unwrap();
     let element = s_read!(element);
     let expr = element.r55_expression(&s_read!(lu_dog))[0].clone();
-    eval_expression(expr, context, vm)
+    eval_expression(expr, context)
 }
 
 pub fn eval_list_expression(
     list: &SarzakStorePtr,
     context: &mut Context,
-    vm: &mut VM,
 ) -> Result<RefType<Value>> {
     let lu_dog = context.lu_dog_heel().clone();
 
@@ -47,7 +44,7 @@ pub fn eval_list_expression(
         let ty = &s_read!(expr).r11_x_value(&s_read!(lu_dog))[0];
         let ty = s_read!(ty).r24_value_type(&s_read!(lu_dog))[0].clone();
 
-        let value = eval_expression(expr, context, vm)?;
+        let value = eval_expression(expr, context)?;
 
         let mut values = vec![value.clone()];
 
@@ -56,7 +53,7 @@ pub fn eval_list_expression(
             let element = s_read!(lu_dog).exhume_list_element(id).unwrap();
             let element = s_read!(element);
             let expr = element.r15_expression(&s_read!(lu_dog))[0].clone();
-            let value = eval_expression(expr, context, vm)?;
+            let value = eval_expression(expr, context)?;
             values.push(value);
             next = element.next;
         }

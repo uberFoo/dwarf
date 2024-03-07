@@ -1,0 +1,19 @@
+struct A {
+    b: B,
+}
+
+struct B {
+    b: int,
+}
+
+fn main() {
+    let a = A { b: B { b: 42 } };
+    chacha::assert_eq(a.b, B { b: 42 });
+    //
+    // 💃🕺
+    chacha::assert_eq(a.b.b, 42);
+    a.b = B { b: 420 };
+    chacha::assert_eq(a.b.b, 420);
+    a.b.b = 69;
+    // chacha::assert_eq(a.b.b, 69);
+}

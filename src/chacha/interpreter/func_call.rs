@@ -14,10 +14,9 @@ use tracy_client::span;
 use tracing::{debug_span, Instrument};
 
 use crate::{
-    bubba::VM,
     chacha::{
         error::{Result, WrongNumberOfArgumentsSnafu},
-        value::FfiValue,
+        ffi_value::FfiValue,
     },
     interpreter::{
         debug, error, eval_expression, eval_statement, function, trace, typecheck, ChaChaError,
@@ -43,7 +42,6 @@ pub fn eval_function_call(
     arg_check: bool,
     span: &RefType<Span>,
     context: &mut Context,
-    vm: &mut VM,
 ) -> Result<RefType<Value>> {
     let lu_dog = context.lu_dog_heel().clone();
 
@@ -77,13 +75,6 @@ pub fn eval_function_call(
             let t_span = debug_span!("async func_call", target = "async");
 
             let future = async move {
-                let mut vm = VM::new(
-                    cloned_context.get_program(),
-                    &[],
-                    cloned_context.get_home(),
-                    cloned_context.thread_count(),
-                );
-
                 inner_eval_function_call(
                     func,
                     &args,
@@ -91,7 +82,6 @@ pub fn eval_function_call(
                     arg_check,
                     &span,
                     &mut cloned_context,
-                    &mut vm,
                 )
             }
             .instrument(t_span);
@@ -110,7 +100,7 @@ pub fn eval_function_call(
             Ok(value)
         }
     } else {
-        inner_eval_function_call(func, args, first_arg, arg_check, span, context, vm)
+        inner_eval_function_call(func, args, first_arg, arg_check, span, context)
     }
 }
 
@@ -121,7 +111,6 @@ fn inner_eval_function_call(
     arg_check: bool,
     span: &RefType<Span>,
     context: &mut Context,
-    vm: &mut VM,
 ) -> Result<RefType<Value>> {
     let lu_dog = context.lu_dog_heel().clone();
 
@@ -137,12 +126,12 @@ fn inner_eval_function_call(
         //
         // This is a function defined in a dwarf file.
         BodyEnum::Block(ref id) => {
-            eval_built_in_function_call(func, id, args, first_arg, arg_check, span, context, vm)
+            eval_built_in_function_call(func, id, args, first_arg, arg_check, span, context)
         }
         //
         // This is an externally defined function that was declared in a dwarf file.
         BodyEnum::ExternalImplementation(ref id) => {
-            eval_external_method(id, args, first_arg, arg_check, span, context, vm)
+            eval_external_method(id, args, first_arg, arg_check, span, context)
         }
     }
 }
@@ -161,7 +150,6 @@ fn eval_external_method(
     _arg_check: bool,
     span: &RefType<Span>,
     context: &mut Context,
-    vm: &mut VM,
 ) -> Result<RefType<Value>> {
     let lu_dog = context.lu_dog_heel().clone();
 
@@ -175,7 +163,7 @@ fn eval_external_method(
 
         loop {
             let expr = s_read!(next).r37_expression(&s_read!(lu_dog))[0].clone();
-            let value = eval_expression(expr.clone(), context, vm)?;
+            let value = eval_expression(expr.clone(), context)?;
             arg_values.push((expr, value));
 
             let next_id = { s_read!(next).next };
@@ -300,7 +288,6 @@ fn eval_built_in_function_call(
     arg_check: bool,
     span: &RefType<Span>,
     context: &mut Context,
-    vm: &mut VM,
 ) -> Result<RefType<Value>> {
     let lu_dog = context.lu_dog_heel().clone();
     let sarzak = context.sarzak_heel().clone();
@@ -339,6 +326,7 @@ fn eval_built_in_function_call(
                 got: args.len(),
                 defn_span,
                 invocation_span,
+                location: location!(),
             }
         });
 
@@ -380,7 +368,7 @@ fn eval_built_in_function_call(
 
             loop {
                 let expr = s_read!(next).r37_expression(&s_read!(lu_dog))[0].clone();
-                let value = eval_expression(expr.clone(), context, vm)?;
+                let value = eval_expression(expr.clone(), context)?;
                 arg_values.push((expr, value));
 
                 let next_id = { s_read!(next).next };
@@ -419,7 +407,7 @@ fn eval_built_in_function_call(
             let mut next = s_read!(lu_dog).exhume_statement(id).unwrap();
 
             loop {
-                let result = eval_statement(next.clone(), context, vm).map_err(|e| {
+                let result = eval_statement(next.clone(), context).map_err(|e| {
                     context.memory().pop_frame();
                     e
                 });

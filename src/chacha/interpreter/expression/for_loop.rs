@@ -2,17 +2,12 @@ use ansi_term::Colour;
 use snafu::{location, Location};
 
 use crate::{
-    bubba::VM,
     chacha::error::Result,
     interpreter::{debug, eval_expression, function, ChaChaError, Context},
     new_ref, s_read, NewRef, RefType, SarzakStorePtr, Value,
 };
 
-pub fn eval(
-    for_loop: &SarzakStorePtr,
-    context: &mut Context,
-    vm: &mut VM,
-) -> Result<RefType<Value>> {
+pub fn eval(for_loop: &SarzakStorePtr, context: &mut Context) -> Result<RefType<Value>> {
     let lu_dog = context.lu_dog_heel().clone();
 
     let for_loop = s_read!(lu_dog).exhume_for_loop(for_loop).unwrap();
@@ -24,7 +19,7 @@ pub fn eval(
         .exhume_expression(&for_loop.expression)
         .unwrap();
 
-    let list = eval_expression(list, context, vm)?;
+    let list = eval_expression(list, context)?;
     let list = if let Value::Vector { ty: _, inner: vec } = &*s_read!(list) {
         vec.to_owned()
     } else if let Value::String(str) = &*s_read!(list) {
@@ -52,7 +47,7 @@ pub fn eval(
     context.memory().push_frame();
     for item in &*s_read!(list) {
         context.memory().insert(ident.clone(), item.clone());
-        let expr_ty = eval_expression(block.clone(), context, vm);
+        let expr_ty = eval_expression(block.clone(), context);
         match expr_ty {
             Ok(_) => {}
             Err(e) => {

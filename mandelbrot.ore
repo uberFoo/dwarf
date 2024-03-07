@@ -1,8 +1,4 @@
-enum Option<T> {
-    None,
-    Some(T),
-}
-
+use std::option::Option;
 struct Complex {
     re: float,
     im: float,
@@ -64,7 +60,7 @@ fn pixel_to_point(
 }
 
 // fn escape_time(c: Complex, limit: int) -> Option<int> {
-fn escape_time(c: Complex, limit: int) -> int {
+fn escape_time(c: Complex, limit: int) -> Option<int> {
     // debugger;
     let z = Complex::zero();
     // print(z);
@@ -96,14 +92,13 @@ fn escape_time(c: Complex, limit: int) -> int {
             // if z.norm_squared() > 4.0 {
             // debugger;
             // print("returning one\n");
-            return i;
+            return Option::<int>::Some(i);
             // return Option::<int>::Some(i);
         };
     }
-    // Option::<int>::None
+    Option::<int>::None
     // None
     // limit
-    0
 }
 
 fn main() {
@@ -179,6 +174,10 @@ fn do_column(
     print("row ");
     print(row);
     print("\n");
+    // print(`width ${width)`);
+    print("width ");
+    print(width);
+    print("\n");
     // print(width);
     for column in 0..width {
         print("col ");
@@ -189,16 +188,16 @@ fn do_column(
         // let time: Option<int> = escape_time(point, time);
         let et = escape_time(point, time);
         // print(time);
-        // match time {
-        //     Option::<int>::None => print("*"),
-        //     Option::<int>::Some(time) => print(" "),
-        // };
-
-        if et > 0 {
-            print(" ");
-        } else {
-            print("*");
+        match et {
+            Option::<int>::None => print("*"),
+            Option::<int>::Some(time) => print(" "),
         };
+
+        // if et > 0 {
+        //     print(" ");
+        // } else {
+        //     print("*");
+        // };
     }
     print("dude\n");
 }

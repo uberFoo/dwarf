@@ -1,7 +1,7 @@
 use std::collections::VecDeque;
 
 use ansi_term::Colour;
-use snafu::prelude::*;
+use snafu::{location, prelude::*, Location};
 
 use crate::{
     chacha::error::{Result, WrongNumberOfArgumentsSnafu},
@@ -33,6 +33,7 @@ pub(crate) fn eval_dwarf(
             got: arg_values.len(),
             defn_span: 0..0,
             invocation_span: span,
+            location: location!(),
         }
     });
 
@@ -97,6 +98,7 @@ pub(crate) fn parse_dwarf(
             got: arg_values.len(),
             defn_span: 0..0,
             invocation_span: span,
+            location: location!(),
         }
     });
 
@@ -154,6 +156,7 @@ pub(crate) fn assert_eq(
             got: arg_values.len(),
             defn_span: 0..0,
             invocation_span: span,
+            location: location!(),
         }
     });
 
@@ -211,6 +214,7 @@ pub(crate) fn assert(
             got: arg_values.len(),
             defn_span: 0..0,
             invocation_span: span,
+            location: location!(),
         }
     });
 

@@ -1,7 +1,7 @@
 use std::{env, ffi::OsString, fs, os::unix::ffi::OsStringExt, path::PathBuf, process};
 
 use clap::{ArgAction, Parser};
-use snafu::prelude::*;
+use snafu::{location, prelude::*, Location};
 #[cfg(feature = "tracy")]
 use tracy_client::Client;
 
@@ -58,6 +58,7 @@ fn find_package_dir(start_dir: &Option<PathBuf>) -> Result<PathBuf> {
         std::env::set_current_dir(dir)
             .context(IOSnafu {
                 description: "Failed to set current dir".to_owned(),
+                location: location!(),
             })
             .map_err(|e| vec![e])?;
     }
@@ -71,6 +72,7 @@ fn find_package_dir(start_dir: &Option<PathBuf>) -> Result<PathBuf> {
         .output()
         .context(IOSnafu {
             description: "Failed to run cargo locate-project".to_owned(),
+            location: location!(),
         })
         .map_err(|e| vec![e])?;
 
@@ -136,6 +138,7 @@ fn main() -> Result<()> {
         .context(FileSnafu {
             description: "Could not read source file".to_owned(),
             path: &args.source,
+            location: location!(),
         })
         .map_err(|e| vec![e])?;
 
@@ -176,6 +179,7 @@ fn main() -> Result<()> {
             .context(FileSnafu {
                 description: "Could not persist Lu-Dog domain".to_owned(),
                 path: &out_file,
+                location: location!(),
             })
             .map_err(|e| vec![e])?;
     } else {
@@ -184,6 +188,7 @@ fn main() -> Result<()> {
             .context(FileSnafu {
                 description: "Could not persist Lu-Dog domain".to_owned(),
                 path: &out_file,
+                location: location!(),
             })
             .map_err(|e| vec![e])?;
     }

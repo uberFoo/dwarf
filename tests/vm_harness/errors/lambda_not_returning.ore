@@ -1,0 +1,11 @@
+fn main() -> int {
+    let _0 = 0;
+    let a = 42;
+    let b = 96;
+    let foo = |x: int, y: int| -> int {
+        x + y + a;
+    };
+    let c = foo(1, 2);
+    chacha::assert_eq(c, 45);
+    c
+}

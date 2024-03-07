@@ -1,5 +1,6 @@
 {
     "cSpell.words": [
+        "acall",
         "accum",
         "appender",
         "Appender",
@@ -24,6 +25,7 @@
         "gandalf",
         "IIRC",
         "impls",
+        "INTERP",
         "jemalloc",
         "jift",
         "krate",
@@ -43,6 +45,7 @@
         "sabi",
         "shouty",
         "smol",
+        "spwn",
         "strukt",
         "thang",
         "thonks",

@@ -4,17 +4,12 @@ use ansi_term::Colour;
 use snafu::{location, Location};
 
 use crate::{
-    bubba::VM,
     chacha::error::Result,
     interpreter::{debug, eval_expression, function, ChaChaError, Context},
     new_ref, s_read, NewRef, RefType, SarzakStorePtr, Value,
 };
 
-pub fn eval_index(
-    index: &SarzakStorePtr,
-    context: &mut Context,
-    vm: &mut VM,
-) -> Result<RefType<Value>> {
+pub fn eval_index(index: &SarzakStorePtr, context: &mut Context) -> Result<RefType<Value>> {
     let lu_dog = context.lu_dog_heel().clone();
 
     let index = s_read!(lu_dog).exhume_index(index).unwrap();
@@ -24,12 +19,12 @@ pub fn eval_index(
 
     debug!("index {target:?}[{index:?}]");
 
-    let index = eval_expression(index_expr.clone(), context, vm)?;
+    let index = eval_expression(index_expr.clone(), context)?;
     let index = s_read!(index).clone();
     match &index {
         Value::Integer(index) => {
             let index = *index as usize;
-            let list = eval_expression(target.clone(), context, vm)?;
+            let list = eval_expression(target.clone(), context)?;
             let list = s_read!(list);
             if let Value::Vector { ty: _, inner: vec } = &list.clone() {
                 let vec = s_read!(vec);
@@ -55,7 +50,7 @@ pub fn eval_index(
                 if index < str.len() {
                     Ok(new_ref!(
                         Value,
-                        Value::String(str[index..index + 1].join(""),)
+                        Value::Char(str[index..index + 1].join("").chars().next().unwrap(),)
                     ))
                 } else {
                     let value = &s_read!(index_expr).r11_x_value(&s_read!(lu_dog))[0];
@@ -84,7 +79,7 @@ pub fn eval_index(
         }
         Value::Range(_) => {
             let range: Range<usize> = index.try_into()?;
-            let list = eval_expression(target.clone(), context, vm)?;
+            let list = eval_expression(target.clone(), context)?;
             let list = s_read!(list);
             if let Value::Vector { ty, inner: vec } = &list.clone() {
                 let vec = s_read!(vec);

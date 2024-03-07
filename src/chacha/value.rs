@@ -6,10 +6,6 @@ use std::{fmt, io::Write, ops::Range};
 #[cfg(feature = "async")]
 use smol::future;
 
-use abi_stable::{
-    std_types::{RBox, ROption, RResult, RString, RVec},
-    StableAbi,
-};
 use ansi_term::Colour;
 use rustc_hash::FxHashMap as HashMap;
 use sarzak::lu_dog::ValueTypeEnum;
@@ -32,346 +28,6 @@ use crate::{
     ChaChaError, Context, DwarfFloat, DwarfInteger, NewRef, RefType, PATH_SEP,
 };
 
-#[repr(C)]
-#[derive(Clone, Debug, StableAbi)]
-pub struct FfiRange {
-    pub(crate) start: DwarfInteger,
-    pub(crate) end: DwarfInteger,
-}
-
-#[repr(C)]
-#[derive(Clone, Debug, StableAbi)]
-pub struct FfiUuid {
-    pub inner: RString,
-}
-
-impl std::fmt::Display for FfiUuid {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{inner}", inner = self.inner)
-    }
-}
-
-impl From<Uuid> for FfiUuid {
-    fn from(uuid: Uuid) -> Self {
-        Self {
-            inner: uuid.to_string().into(),
-        }
-    }
-}
-
-impl From<FfiUuid> for Uuid {
-    fn from(uuid: FfiUuid) -> Self {
-        Uuid::parse_str(&uuid.inner).unwrap()
-    }
-}
-
-#[repr(C)]
-#[derive(Clone, Debug, StableAbi)]
-pub enum FfiOption<T> {
-    None,
-    Some(T),
-}
-
-impl<T> From<Option<T>> for FfiOption<T>
-where
-    T: Clone,
-{
-    fn from(option: Option<T>) -> Self {
-        match option {
-            None => Self::None,
-            Some(t) => Self::Some(t),
-        }
-    }
-}
-
-impl<T> From<ROption<T>> for FfiOption<T> {
-    fn from(option: ROption<T>) -> Self {
-        match option {
-            ROption::RNone => Self::None,
-            ROption::RSome(t) => Self::Some(t),
-        }
-    }
-}
-
-impl<T> From<ROption<RBox<T>>> for FfiOption<T>
-where
-    T: Clone,
-{
-    fn from(option: ROption<RBox<T>>) -> Self {
-        match option {
-            ROption::RNone => Self::None,
-            ROption::RSome(t) => Self::Some((*t).clone()),
-        }
-    }
-}
-
-#[repr(C)]
-#[derive(Clone, Debug, StableAbi)]
-pub struct FfiProxy {
-    pub module: RString,
-    pub ty: FfiUuid,
-    pub id: FfiUuid,
-    pub plugin: PluginType,
-}
-
-impl std::fmt::Display for FfiProxy {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(
-            f,
-            "{{ module: {}, ty: {}, id: {}, plugin: {} }}",
-            self.module,
-            self.ty,
-            self.id,
-            self.plugin.name()
-        )
-    }
-}
-
-/// This is an actual Value
-///
-/// This is the type used by the interpreter to represent values.
-#[repr(C)]
-#[derive(Clone, Debug, StableAbi)]
-pub enum FfiValue {
-    Boolean(bool),
-    Empty,
-    Error(RString),
-    Float(DwarfFloat),
-    Integer(DwarfInteger),
-    Option(ROption<RBox<Self>>),
-    PlugIn(PluginType),
-    ProxyType(FfiProxy),
-    Range(FfiRange),
-    Result(RResult<RBox<Self>, RBox<Self>>),
-    String(RString),
-    // Table(RHashMap<RString, RefType<Self>>),
-    Unknown,
-    // UserType(FfiUuid),
-    Uuid(FfiUuid),
-    Vector(RVec<Self>),
-}
-
-impl std::fmt::Display for FfiValue {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            Self::Boolean(bool_) => write!(f, "{bool_}"),
-            Self::Empty => write!(f, "()"),
-            Self::Error(e) => write!(f, "{}: {e}", Colour::Red.bold().paint("error")),
-            Self::Float(num) => write!(f, "{num}"),
-            Self::Integer(num) => write!(f, "{num}"),
-            Self::Option(option) => match option {
-                ROption::RNone => write!(f, "None"),
-                ROption::RSome(value) => write!(f, "Some({value})"),
-            },
-            Self::PlugIn(plugin) => write!(f, "plugin::{}", plugin.name()),
-            Self::ProxyType(proxy) => write!(f, "{proxy}"),
-            Self::Range(range) => write!(f, "{range:?}"),
-            Self::Result(result) => match result {
-                RResult::RErr(err) => write!(f, "Err({err})"),
-                RResult::ROk(ok) => write!(f, "Ok({ok})"),
-            },
-            Self::String(str_) => write!(f, "{str_}"),
-            Self::Unknown => write!(f, "<unknown>"),
-            // Self::UserType(uuid) => write!(f, "{uuid}"),
-            Self::Uuid(uuid) => write!(f, "{uuid}"),
-            Self::Vector(vec) => {
-                let mut first_time = true;
-                write!(f, "[")?;
-                for i in vec {
-                    if first_time {
-                        first_time = false;
-                    } else {
-                        write!(f, ", ")?;
-                    }
-
-                    write!(f, "{i}")?;
-                }
-                write!(f, "]")
-            }
-        }
-    }
-}
-
-impl From<Value> for FfiValue {
-    fn from(value: Value) -> Self {
-        match &value {
-            Value::Boolean(bool_) => Self::Boolean(bool_.to_owned()),
-            Value::Empty => Self::Empty,
-            // Value::Error(e) => Self::Error(e.to_owned().into()),
-            Value::Float(num) => Self::Float(num.to_owned()),
-            Value::Integer(num) => Self::Integer(num.to_owned()),
-            Value::ProxyType {
-                module,
-                obj_ty,
-                id,
-                plugin,
-            } => Self::ProxyType(FfiProxy {
-                module: module.to_owned().into(),
-                ty: obj_ty.to_owned().into(),
-                id: id.to_owned().into(),
-                plugin: s_read!(plugin).clone(),
-            }),
-            Value::Range(range) => Self::Range(FfiRange {
-                start: range.start,
-                end: range.end,
-            }),
-            Value::String(str_) => Self::String(str_.to_owned().into()),
-            Value::Uuid(uuid) => Self::Uuid(uuid.to_owned().into()),
-            // Value::Vector(vec) => {
-            //     Self::Vector(vec.iter().map(|v| s_read!(v).clone().into()).collect())
-            // }
-            _ => Self::Unknown,
-        }
-    }
-}
-
-impl From<FfiValue> for Value {
-    fn from(value: FfiValue) -> Self {
-        match value {
-            FfiValue::Boolean(bool_) => Self::Boolean(bool_),
-            FfiValue::Empty => Self::Empty,
-            // FfiValue::Error(e) => Self::Error(e.into()),
-            FfiValue::Float(num) => Self::Float(num),
-            FfiValue::Integer(num) => Self::Integer(num),
-            FfiValue::ProxyType(plugin) => Self::ProxyType {
-                module: plugin.module.into(),
-                obj_ty: plugin.ty.into(),
-                id: plugin.id.into(),
-                plugin: new_ref!(PluginType, plugin.plugin),
-            },
-            FfiValue::Range(range) => Self::Range(range.start..range.end),
-            FfiValue::String(str_) => Self::String(str_.into()),
-            // FfiValue::UserType(uuid) => Self::UserType(new_ref!(UserType, uuid.into())),
-            FfiValue::Uuid(uuid) => Self::Uuid(uuid.into()),
-            // FfiValue::Vector(vec) => {
-            //     Self::Vector(vec.into_iter().map(|v| new_ref!(Value, v.into())).collect())
-            // }
-            _ => Self::Unknown,
-        }
-    }
-}
-
-impl From<(FfiValue, &LuDogStore)> for Value {
-    fn from(value: (FfiValue, &LuDogStore)) -> Self {
-        let lu_dog = value.1;
-        match value.0 {
-            FfiValue::Boolean(bool_) => Self::Boolean(bool_),
-            FfiValue::Empty => Self::Empty,
-            // FfiValue::Error(e) => Self::Error(e.into()),
-            FfiValue::Float(num) => Self::Float(num),
-            FfiValue::Integer(num) => Self::Integer(num),
-            FfiValue::Option(option) => match option {
-                ROption::RNone => Self::Empty,
-                ROption::RSome(value) => <(FfiValue, &LuDogStore) as Into<Value>>::into((
-                    RBox::into_inner(value),
-                    lu_dog,
-                )),
-            },
-            FfiValue::ProxyType(plugin) => Self::ProxyType {
-                module: plugin.module.into(),
-                obj_ty: plugin.ty.into(),
-                id: plugin.id.into(),
-                plugin: new_ref!(PluginType, plugin.plugin),
-            },
-            FfiValue::Range(range) => Self::Range(range.start..range.end),
-            FfiValue::Result(result) => {
-                let Some(ty) = lu_dog.exhume_enumeration_id_by_name("::std::result::Result") else {
-                    panic!("Result type not found")
-                };
-                let ty = lu_dog.exhume_enumeration(&ty).unwrap();
-                let Some(ty) = lu_dog.iter_value_type().find(|vt| {
-                    if let ValueTypeEnum::Enumeration(id) = s_read!(vt).subtype {
-                        let id = lu_dog.exhume_enumeration(&id).unwrap();
-                        if s_read!(id).id == s_read!(ty).id {
-                            return true;
-                        }
-                    }
-                    false
-                }) else {
-                    unreachable!()
-                };
-
-                let tuple = match result {
-                    RResult::RErr(err) => TupleEnum {
-                        variant: "Err".to_owned(),
-                        value: new_ref!(
-                            Value,
-                            <(FfiValue, &LuDogStore) as Into<Value>>::into((
-                                RBox::into_inner(err),
-                                lu_dog,
-                            ))
-                        ),
-                    },
-                    RResult::ROk(ok) => TupleEnum {
-                        variant: "Ok".to_owned(),
-                        value: new_ref!(
-                            Value,
-                            <(FfiValue, &LuDogStore) as Into<Value>>::into((
-                                RBox::into_inner(ok),
-                                lu_dog,
-                            ))
-                        ),
-                    },
-                };
-
-                Value::Enumeration(EnumVariant::Tuple(
-                    (ty.clone(), "Result".to_owned()),
-                    new_ref!(TupleEnum, tuple),
-                ))
-            }
-            FfiValue::String(str_) => Self::String(str_.into()),
-            // FfiValue::UserType(uuid) => Self::UserType(new_ref!(UserType, uuid.into())),
-            FfiValue::Uuid(uuid) => Self::Uuid(uuid.into()),
-            // FfiValue::Vector(vec) => {
-            //     Self::Vector(vec.into_iter().map(|v| new_ref!(Value, v.into())).collect())
-            // }
-            _ => Self::Unknown,
-        }
-    }
-}
-
-impl TryFrom<FfiValue> for String {
-    type Error = ChaChaError;
-
-    fn try_from(value: FfiValue) -> Result<Self> {
-        match value {
-            FfiValue::String(s) => Ok(s.into()),
-            _ => Err(ChaChaError::Conversion {
-                src: value.to_string(),
-                dst: "String".to_owned(),
-            }),
-        }
-    }
-}
-
-impl TryFrom<&FfiValue> for String {
-    type Error = ChaChaError;
-
-    fn try_from(value: &FfiValue) -> Result<Self> {
-        match value {
-            FfiValue::String(s) => Ok(s.to_owned().into()),
-            _ => Err(ChaChaError::Conversion {
-                src: value.to_string(),
-                dst: "String".to_owned(),
-            }),
-        }
-    }
-}
-
-impl TryFrom<&FfiValue> for i64 {
-    type Error = ChaChaError;
-
-    fn try_from(value: &FfiValue) -> Result<Self> {
-        match value {
-            FfiValue::Integer(i) => Ok(*i),
-            _ => Err(ChaChaError::Conversion {
-                src: value.to_string(),
-                dst: "i64".to_owned(),
-            }),
-        }
-    }
-}
-
 /// The type of Enumeration Field
 ///
 /// There are three types of enumeration fields: Unit, Struct, and Tuple.
@@ -386,14 +42,17 @@ impl TryFrom<&FfiValue> for i64 {
 /// }
 /// ```
 ///
-#[derive(Clone, Debug)]
-pub enum EnumVariant {
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub enum Enum<T>
+where
+    T: Clone + std::fmt::Debug + PartialEq + std::fmt::Display + std::default::Default,
+{
     /// Struct Enumeration Field
     ///
     /// This type of field is for when it contains a struct, as `Baz` does above.
     /// That is to say, `Foo::Baz { qux: string }`. We store the final path element
     /// as a string, and the struct as a `RefType<UserStruct>`.
-    Struct(RefType<UserStruct>),
+    Struct(RefType<Struct<T>>),
     /// Tuple Enumeration Field
     ///
     /// This type of field is for when it contains a tuple, as `Bar` does above.
@@ -401,7 +60,7 @@ pub enum EnumVariant {
     ///
     /// The type is stored as the first element of the tuple, and the path/type
     /// as a string in the second. The third element is the enum itself.
-    Tuple((RefType<ValueType>, String), RefType<TupleEnum>),
+    Tuple((RefType<ValueType>, String), RefType<TupleEnum<T>>),
     /// Unit Enumeration Field
     ///
     /// This sort of enumeration is the simplest. In `Foo`, this refers to the
@@ -412,7 +71,10 @@ pub enum EnumVariant {
     Unit(RefType<ValueType>, String, String),
 }
 
-impl EnumVariant {
+impl<T> Enum<T>
+where
+    T: Clone + std::fmt::Debug + PartialEq + std::fmt::Display + std::default::Default,
+{
     pub fn get_type(&self) -> RefType<ValueType> {
         match self {
             Self::Unit(ty, _, _) => ty.clone(),
@@ -422,7 +84,10 @@ impl EnumVariant {
     }
 }
 
-impl PartialEq for EnumVariant {
+impl<T> PartialEq for Enum<T>
+where
+    T: Clone + std::fmt::Debug + PartialEq + std::fmt::Display + std::default::Default,
+{
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (Self::Unit(_a, b, e), Self::Unit(_c, d, f)) => b == d && e == f,
@@ -435,9 +100,15 @@ impl PartialEq for EnumVariant {
     }
 }
 
-impl Eq for EnumVariant {}
+impl<T> Eq for Enum<T> where
+    T: Clone + std::fmt::Debug + PartialEq + std::fmt::Display + std::default::Default
+{
+}
 
-impl fmt::Display for EnumVariant {
+impl<T> fmt::Display for Enum<T>
+where
+    T: Clone + std::fmt::Debug + PartialEq + std::fmt::Display + std::default::Default,
+{
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Self::Unit(_, t, s) => write!(f, "{t}::{s}",),
@@ -469,7 +140,7 @@ pub enum Value {
     ///
     /// ()
     Empty,
-    Enumeration(EnumVariant),
+    Enumeration(Enum<Self>),
     // #[serde(skip)]
     Error(Box<ChaChaError>),
     Float(DwarfFloat),
@@ -504,11 +175,12 @@ pub enum Value {
         id: Uuid,
         plugin: RefType<PluginType>,
     },
+    // Reference(RefType<Self>),
     Range(Range<DwarfInteger>),
     // #[serde(skip)]
     Store(RefType<ZObjectStore>, RefType<PluginType>),
     String(String),
-    Struct(RefType<UserStruct>),
+    Struct(RefType<Struct<Self>>),
     Table(HashMap<String, RefType<Self>>),
     #[cfg(feature = "async")]
     // #[serde(skip)]
@@ -588,6 +260,9 @@ impl Value {
                 plugin,
             } => write!(f, "{}", s_read!(plugin)),
             Self::Range(range) => write!(f, "{range:?}"),
+            // Self::Reference(value) => {
+            // write!(f, "<reference>({})", s_read!(value).to_inner_string())
+            // }
             // Self::StoreType(store) => write!(f, "{:?}", store),
             Self::Store(_store, plugin) => write!(f, "Plug-in ({})", s_read!(plugin).name()),
             Self::String(str_) => write!(f, "{str_}"),
@@ -657,9 +332,9 @@ impl Value {
                 unreachable!()
             }
             Value::Enumeration(var) => match var {
-                EnumVariant::Unit(t, _, _) => t.clone(),
-                EnumVariant::Struct(ut) => s_read!(ut).get_type().clone(),
-                EnumVariant::Tuple((ty, _), _) => ty.clone(),
+                Enum::Unit(t, _, _) => t.clone(),
+                Enum::Struct(ut) => s_read!(ut).get_type().clone(),
+                Enum::Tuple((ty, _), _) => ty.clone(),
             },
             Value::Float(_) => {
                 let ty = Ty::new_float(sarzak);
@@ -900,6 +575,9 @@ impl std::fmt::Debug for Value {
                 s_read!(plugin).name()
             ),
             Self::Range(range) => write!(f, "{range:?}"),
+            // Self::Reference(value) => {
+            //     write!(f, "<reference>({})", s_read!(value).to_inner_string())
+            // }
             Self::Store(store, plugin) => write!(
                 f,
                 "Store {{ store: {:?}, plugin: {} }}",
@@ -972,6 +650,7 @@ impl Clone for Value {
                 plugin: plugin.clone(),
             },
             Self::Range(range) => Self::Range(range.clone()),
+            // Self::Reference(value) => Self::Reference(value.clone()),
             Self::Store(store, plugin) => Self::Store(store.clone(), plugin.clone()),
             Self::String(str_) => Self::String(str_.clone()),
             Self::Struct(ty) => Self::Struct(ty.clone()),
@@ -1049,6 +728,9 @@ impl fmt::Display for Value {
                 plugin,
             } => write!(f, "{}", s_read!(plugin)),
             Self::Range(range) => write!(f, "{range:?}"),
+            // Self::Reference(value) => {
+            //     write!(f, "<reference>({})", s_read!(value).to_inner_string())
+            // }
             // Self::StoreType(store) => write!(f, "{:?}", store),
             Self::Store(_store, plugin) => write!(f, "Plug-in ({})", s_read!(plugin).name()),
             // Self::String(str_) => write!(f, "{str_}"),
@@ -1843,56 +1525,38 @@ impl std::cmp::PartialEq for Value {
     }
 }
 
-#[derive(Clone, Debug, Default)]
-pub struct UserTypeAttribute(HashMap<String, RefType<Value>>);
-
-impl PartialEq for UserTypeAttribute {
-    fn eq(&self, other: &Self) -> bool {
-        if self.0.len() != other.0.len() {
-            return false;
-        }
-
-        for (k, v) in self.0.iter() {
-            if !other.0.contains_key(k) {
-                return false;
-            }
-
-            let ov = other.0.get(k).unwrap();
-
-            if !s_read!(v).eq(&s_read!(ov)) {
-                return false;
-            }
-        }
-
-        true
-    }
-}
-
-impl Eq for UserTypeAttribute {}
-
-#[derive(Clone, Debug)]
-pub struct TupleEnum {
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct TupleEnum<T>
+where
+    T: Clone + std::fmt::Debug + PartialEq + std::fmt::Display,
+{
     pub(crate) variant: String,
-    pub(crate) value: RefType<Value>,
+    pub(crate) value: RefType<T>,
 }
 
-impl PartialEq for TupleEnum {
+impl<T> PartialEq for TupleEnum<T>
+where
+    T: Clone + std::fmt::Debug + PartialEq + std::fmt::Display,
+{
     fn eq(&self, other: &Self) -> bool {
         self.variant == other.variant && s_read!(self.value).eq(&s_read!(other.value))
     }
 }
 
-impl Eq for TupleEnum {}
+impl<T> Eq for TupleEnum<T> where T: Clone + std::fmt::Debug + PartialEq + std::fmt::Display {}
 
-impl TupleEnum {
-    pub fn new<S: AsRef<str>>(variant_name: S, value: RefType<Value>) -> Self {
+impl<T> TupleEnum<T>
+where
+    T: Clone + std::fmt::Debug + PartialEq + std::fmt::Display,
+{
+    pub fn new<S: AsRef<str>>(variant_name: S, value: RefType<T>) -> Self {
         Self {
             variant: variant_name.as_ref().to_owned(),
             value,
         }
     }
 
-    pub fn value(&self) -> RefType<Value> {
+    pub fn value(&self) -> RefType<T> {
         self.value.clone()
     }
 
@@ -1901,52 +1565,63 @@ impl TupleEnum {
     }
 }
 
-impl fmt::Display for TupleEnum {
+impl<T> fmt::Display for TupleEnum<T>
+where
+    T: Clone + std::fmt::Debug + PartialEq + std::fmt::Display,
+{
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}({})", self.variant(), s_read!(self.value))
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct UserStruct {
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct Struct<T>
+where
+    T: Clone + std::fmt::Debug + PartialEq + std::fmt::Display + std::default::Default,
+{
     type_name: String,
     type_: RefType<ValueType>,
-    attrs: UserTypeAttribute,
+    attrs: StructAttributes<T>,
 }
 
-impl PartialEq for UserStruct {
+impl<T> PartialEq for Struct<T>
+where
+    T: Clone + std::fmt::Debug + PartialEq + std::fmt::Display + std::default::Default,
+{
     fn eq(&self, other: &Self) -> bool {
         s_read!(self.type_).eq(&s_read!(other.type_)) && self.attrs.eq(&other.attrs)
     }
 }
 
-impl Eq for UserStruct {}
+impl<T> Eq for Struct<T> where
+    T: Clone + std::fmt::Debug + PartialEq + std::fmt::Display + std::default::Default
+{
+}
 
-impl UserStruct {
+impl<T> Struct<T>
+where
+    T: Clone + std::fmt::Debug + PartialEq + std::fmt::Display + std::default::Default,
+{
     pub fn new<S: AsRef<str>>(type_name: S, type_: &RefType<ValueType>) -> Self {
         Self {
             type_name: type_name.as_ref().to_owned(),
             type_: type_.clone(),
-            attrs: UserTypeAttribute::default(),
+            attrs: StructAttributes::default(),
         }
     }
 
     /// Create a field for the user type
     ///
     /// This is called during type definition, from a declaration in a source file.
-    pub fn define_field<S: AsRef<str>>(&mut self, name: S, value: RefType<Value>) {
+    pub fn define_field<S: AsRef<str>>(&mut self, name: S, value: T) {
         self.attrs.0.insert(name.as_ref().to_owned(), value);
     }
 
-    pub fn get_field_value<S: AsRef<str>>(&self, name: S) -> Option<&RefType<Value>> {
+    pub fn get_field_value<S: AsRef<str>>(&self, name: S) -> Option<&T> {
         self.attrs.0.get(name.as_ref())
     }
 
-    pub fn set_field_value<S: AsRef<str>>(
-        &mut self,
-        name: S,
-        value: RefType<Value>,
-    ) -> Option<RefType<Value>> {
+    pub fn set_field_value<S: AsRef<str>>(&mut self, name: S, value: T) -> Option<T> {
         self.attrs.0.insert(name.as_ref().to_owned(), value)
     }
 
@@ -1959,7 +1634,10 @@ impl UserStruct {
     }
 }
 
-impl fmt::Display for UserStruct {
+impl<T> fmt::Display for Struct<T>
+where
+    T: Clone + std::fmt::Debug + PartialEq + std::fmt::Display + std::default::Default,
+{
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut attrs = self.attrs.0.iter().collect::<Vec<_>>();
         attrs.sort_by(|(k1, _), (k2, _)| k1.cmp(k2));
@@ -1972,9 +1650,44 @@ impl fmt::Display for UserStruct {
 
         let mut out = f.debug_struct(name);
         for (k, v) in attrs {
-            out.field(k, &format_args!("{}", &s_read!(v)));
+            out.field(k, &format_args!("{v}"));
         }
 
         out.finish()
     }
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+pub struct StructAttributes<T>(HashMap<String, T>)
+where
+    T: Clone + std::fmt::Debug + PartialEq + std::fmt::Display + std::default::Default;
+
+impl<T> PartialEq for StructAttributes<T>
+where
+    T: Clone + std::fmt::Debug + PartialEq + std::fmt::Display + std::default::Default,
+{
+    fn eq(&self, other: &Self) -> bool {
+        if self.0.len() != other.0.len() {
+            return false;
+        }
+
+        for (k, v) in self.0.iter() {
+            if !other.0.contains_key(k) {
+                return false;
+            }
+
+            let ov = other.0.get(k).unwrap();
+
+            if !v.eq(&ov) {
+                return false;
+            }
+        }
+
+        true
+    }
+}
+
+impl<T> Eq for StructAttributes<T> where
+    T: Clone + std::fmt::Debug + PartialEq + std::fmt::Display + std::default::Default
+{
 }

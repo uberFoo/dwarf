@@ -1,41 +1,22 @@
-enum Result<T, E> {
-    Ok(T),
-    Err(E),
-}
-
-impl Result {
-    fn is_ok(self) -> bool {
-        match self {
-            Result::<bool>::Ok(_) => true,
-            Result::<bool>::Err(_) => false,
-        }
-    }
-
-    fn is_err(self) -> bool {
-        match self {
-            Result::<bool>::Ok(_) => false,
-            Result::<bool>::Err(_) => true,
-        }
-    }
-}
+use std::result::Result;
 
 fn main() {
     // let a: Result<int, string> = Result::<int, string>::Ok(42);
-    let a = Result::<int, string>::Ok(42);
+    let a = Result::Ok(42);
     // let b: Result<int, string> = Result::<int, string>::Err("oops");
-    let b = Result::<int, string>::Err("oops");
+    let b = Result::Err("oops");
 
     print("a = {0}\n".format(a));
     print("b = {0}\n".format(b));
 
-    chacha::assert_eq(a, Result::<int, string>::Ok(42));
-    chacha::assert_eq(b, Result::<int, string>::Err("oops"));
+    chacha::assert_eq(a, Result::Ok(42));
+    chacha::assert_eq(b, Result::Err("oops"));
 
     chacha::assert_eq("a = {0}".format(a), "a = Result::Ok(42)");
     // chacha::assert_eq("b = {0}".format(b), "b = Result<int, string>::Err(\"oops\")");
 
-    chacha::assert_eq(a.is_ok(), true);
-    chacha::assert_eq(a.is_err(), false);
-    chacha::assert_eq(b.is_ok(), false);
-    chacha::assert_eq(b.is_err(), true);
+    chacha::assert(a.is_ok());
+    chacha::assert(!a.is_err());
+    chacha::assert(!b.is_ok());
+    chacha::assert(b.is_err());
 }

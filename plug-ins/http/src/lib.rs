@@ -17,7 +17,8 @@ use async_compat::Compat;
 use dwarf::{
     chacha::{
         error::ChaChaError,
-        value::{FfiProxy, FfiValue, Value},
+        ffi_value::{FfiProxy, FfiValue},
+        value::Value,
     },
     plug_in::{Error, Plugin, PluginModRef, PluginModule, PluginType, Plugin_TO},
     DwarfInteger,
@@ -80,8 +81,6 @@ impl Plugin for Http {
     fn name(&self) -> RStr<'_> {
         "Http".into()
     }
-
-    fn close(self) {}
 
     fn invoke_func(
         &mut self,
@@ -160,8 +159,6 @@ mod http_client {
         fn name(&self) -> RStr<'_> {
             "HttpClient".into()
         }
-
-        fn close(self) {}
 
         #[tracing::instrument]
         fn invoke_func(
@@ -333,8 +330,6 @@ mod http_server {
         fn name(&self) -> RStr<'_> {
             "HttpServer".into()
         }
-
-        fn close(self) {}
 
         fn invoke_func(
             &mut self,

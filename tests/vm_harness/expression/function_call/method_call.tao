@@ -1,0 +1,24 @@
+struct Point {
+    x: int,
+    y: int,
+}
+
+impl Point {
+    fn new(x: int, y: int) -> Point {
+        Point { x: x, y: y }
+    }
+
+    fn x(self) -> int {
+        self.x
+    }
+
+    fn y(self) -> int {
+        self.y
+    }
+}
+
+fn main() {
+    let p = Point::new(42, 69);
+    p.x();
+    p.y();
+}

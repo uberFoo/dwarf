@@ -1,7 +1,6 @@
 use ansi_term::Colour;
 
 use crate::{
-    bubba::VM,
     chacha::error::Result,
     interpreter::{debug, function, Context},
     lu_dog::{BinaryEnum, Expression, Operator},
@@ -21,7 +20,6 @@ pub fn eval(
     operator: &RefType<Operator>,
     expression: &RefType<Expression>,
     context: &mut Context,
-    vm: &mut VM,
 ) -> Result<RefType<Value>> {
     let lu_dog = context.lu_dog_heel().clone();
 
@@ -31,19 +29,17 @@ pub fn eval(
     debug!("Evaluating binary operator: {:?}", binary.subtype);
 
     match &binary.subtype {
-        BinaryEnum::Addition(_) => addition::eval_addition(lhs_expr, operator, context, vm),
+        BinaryEnum::Addition(_) => addition::eval_addition(lhs_expr, operator, context),
         BinaryEnum::Assignment(_) => {
-            assignment::eval_assignment(lhs_expr, operator, expression, context, vm)
+            assignment::eval_assignment(lhs_expr, operator, expression, context)
         }
         BinaryEnum::BooleanOperator(ref op) => {
-            boolean_operator::eval_boolean_operator(op, lhs_expr, operator, context, vm)
+            boolean_operator::eval_boolean_operator(op, lhs_expr, operator, context)
         }
-        BinaryEnum::Division(_) => division::eval_division(lhs_expr, operator, context, vm),
-        BinaryEnum::Subtraction(_) => {
-            subtraction::eval_subtraction(lhs_expr, operator, context, vm)
-        }
+        BinaryEnum::Division(_) => division::eval_division(lhs_expr, operator, context),
+        BinaryEnum::Subtraction(_) => subtraction::eval_subtraction(lhs_expr, operator, context),
         BinaryEnum::Multiplication(_) => {
-            multiplication::eval_multiplication(lhs_expr, operator, context, vm)
+            multiplication::eval_multiplication(lhs_expr, operator, context)
         }
     }
 }

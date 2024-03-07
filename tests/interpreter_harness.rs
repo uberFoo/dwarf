@@ -209,4 +209,5 @@ fn run_program(test: &str, program: &str) -> Result<(Value, String), String> {
     result
 }
 
+// This loads the generated tests.
 include!(concat!(env!("OUT_DIR"), "/tests.rs"));

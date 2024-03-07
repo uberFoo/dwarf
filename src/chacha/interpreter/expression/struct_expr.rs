@@ -1,17 +1,16 @@
 use ansi_term::Colour;
 
 use crate::{
-    bubba::VM,
     chacha::{
         error::Result,
-        value::{EnumVariant, TupleEnum},
+        value::{Enum, TupleEnum},
     },
-    interpreter::{debug, eval_expression, function, Context, UserStruct},
+    interpreter::{debug, eval_expression, function, Context, Struct},
     lu_dog::types::{DataStructureEnum, FieldExpressionEnum},
     new_ref, s_read, NewRef, RefType, SarzakStorePtr, Value,
 };
 
-pub fn eval(expr: &SarzakStorePtr, context: &mut Context, vm: &mut VM) -> Result<RefType<Value>> {
+pub fn eval(expr: &SarzakStorePtr, context: &mut Context) -> Result<RefType<Value>> {
     let lu_dog = context.lu_dog_heel().clone();
 
     let expr = s_read!(lu_dog).exhume_struct_expression(expr).unwrap();
@@ -50,7 +49,7 @@ pub fn eval(expr: &SarzakStorePtr, context: &mut Context, vm: &mut VM) -> Result
             Ok(if field_exprs.is_empty() {
                 new_ref!(
                     Value,
-                    Value::Enumeration(EnumVariant::Unit(ty, path, s_read!(pe).name.to_owned()))
+                    Value::Enumeration(Enum::Unit(ty, path, s_read!(pe).name.to_owned()))
                 )
             } else {
                 // Get value and expression for each field expression.
@@ -58,7 +57,7 @@ pub fn eval(expr: &SarzakStorePtr, context: &mut Context, vm: &mut VM) -> Result
                     .iter()
                     .map(|f| {
                         let expr = s_read!(f).r15_expression(&s_read!(lu_dog))[0].clone();
-                        let value = eval_expression(expr.clone(), context, vm)?;
+                        let value = eval_expression(expr.clone(), context)?;
 
                         debug!("StructExpression field value: {}", s_read!(value),);
                         Ok(value)
@@ -71,10 +70,10 @@ pub fn eval(expr: &SarzakStorePtr, context: &mut Context, vm: &mut VM) -> Result
                 let value = field_values[0].clone();
 
                 let user_enum = TupleEnum::new(variant, value);
-                let user_enum = new_ref!(TupleEnum, user_enum);
+                let user_enum = new_ref!(TupleEnum<Value>, user_enum);
                 new_ref!(
                     Value,
-                    Value::Enumeration(EnumVariant::Tuple((ty, path), user_enum))
+                    Value::Enumeration(Enum::Tuple((ty, path), user_enum))
                 )
             })
         }
@@ -84,7 +83,7 @@ pub fn eval(expr: &SarzakStorePtr, context: &mut Context, vm: &mut VM) -> Result
                 .iter()
                 .map(|f| {
                     let expr = s_read!(f).r15_expression(&s_read!(lu_dog))[0].clone();
-                    let value = eval_expression(expr.clone(), context, vm)?;
+                    let value = eval_expression(expr.clone(), context)?;
 
                     let name = if let FieldExpressionEnum::NamedFieldExpression(ref id) =
                         s_read!(f).subtype
@@ -112,14 +111,14 @@ pub fn eval(expr: &SarzakStorePtr, context: &mut Context, vm: &mut VM) -> Result
 
             let name = &woog_struct.name;
 
-            let mut user_type = UserStruct::new(name, &ty);
+            let mut user_type = Struct::new(name, &ty);
             for (name, value) in field_exprs {
-                user_type.define_field(&name, value);
+                user_type.define_field(&name, (*s_read!(value)).clone());
             }
 
             Ok(new_ref!(
                 Value,
-                Value::Struct(new_ref!(UserStruct, user_type))
+                Value::Struct(new_ref!(Struct<Value>, user_type))
             ))
         }
     }

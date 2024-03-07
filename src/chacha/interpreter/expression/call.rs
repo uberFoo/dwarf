@@ -17,21 +17,20 @@ use snafu::{location, prelude::*, Location};
 use uuid::Uuid;
 
 use crate::{
-    bubba::VM,
     chacha::{
         error::{
             ChaChaError::WrongNumberOfArguments, NoSuchStaticMethodSnafu, Result, TypeMismatchSnafu,
         },
-        value::FfiValue,
+        ffi_value::FfiValue,
     },
     interpreter::{
         debug, error, eval_expression, eval_function_call, eval_lambda_expression, function,
         ChaChaError, Context, PrintableValueType,
     },
     keywords::{
-        ADD, ARGS, ASSERT, ASSERT_EQ, CHACHA, COMPLEX_EX, EPS, EVAL, FN_NEW, FORMAT, FQ_UUID_TYPE,
-        INVOKE_FUNC, IS_DIGIT, LEN, LINES, MAP, MAX, NEW, NORM_SQUARED, PARSE, PLUGIN, PUSH, SLEEP,
-        SPLIT, SQUARE, SUM, TIME, TO_DIGIT, TRIM, TYPEOF, UUID_TYPE,
+        ARGS, ASSERT, ASSERT_EQ, CHACHA, EPS, EVAL, FN_NEW, FORMAT, FQ_UUID_TYPE, INVOKE_FUNC,
+        IS_DIGIT, LEN, LINES, MAP, MAX, NEW, PARSE, PLUGIN, PUSH, SLEEP, SPLIT, SUM, TIME,
+        TO_DIGIT, TRIM, TYPEOF, UUID_TYPE,
     },
     lu_dog::{CallEnum, Expression, ValueType, ValueTypeEnum},
     new_ref,
@@ -48,7 +47,6 @@ pub fn eval(
     call_id: &SarzakStorePtr,
     expression: &RefType<Expression>,
     context: &mut Context,
-    vm: &mut VM,
 ) -> ValueResult {
     let lu_dog = context.lu_dog_heel().clone();
     let sarzak = context.sarzak_heel().clone();
@@ -73,7 +71,7 @@ pub fn eval(
     let value = if let Some(ref expr) = s_read!(call).expression {
         let expr = s_read!(lu_dog).exhume_expression(expr).unwrap();
         // Evaluate the LHS to get at the underlying value/instance.
-        let value = eval_expression(expr, context, vm)?;
+        let value = eval_expression(expr, context)?;
         debug!("ExpressionEnum::Call LHS value {:?}", s_read!(value));
 
         let mut eval_lhs = || -> Result<RefType<Value>> {
@@ -85,7 +83,7 @@ pub fn eval(
                     let func = s_read!(lu_dog).exhume_function(&s_read!(func).id).unwrap();
                     debug!("ExpressionEnum::Call func: {func:?}");
                     let value =
-                        eval_function_call(func, &args, first_arg, arg_check, &span, context, vm)?;
+                        eval_function_call(func, &args, first_arg, arg_check, &span, context)?;
                     debug!("value {value:?}");
                     Ok(value)
                 }
@@ -98,11 +96,11 @@ pub fn eval(
                             let expression = s_read!(arg).expression;
                             let expression =
                                 s_read!(lu_dog).exhume_expression(&expression).unwrap();
-                            eval_expression(expression, context, vm).unwrap()
+                            eval_expression(expression, context).unwrap()
                         })
                         .collect();
 
-                    let value = eval_lambda_expression(ƛ, &args, arg_check, &span, context, vm)?;
+                    let value = eval_lambda_expression(ƛ, &args, arg_check, &span, context)?;
                     debug!("value {value:?}");
                     Ok(value)
                 }
@@ -199,8 +197,9 @@ pub fn eval(
                     let woog_enum = s_read!(lu_dog).exhume_enumeration(&woog_enum).unwrap();
                     let woog_enum = s_read!(woog_enum);
 
-                    if let Some(impl_) =
-                        &woog_enum.r84_implementation_block(&s_read!(lu_dog)).first()
+                    if let Some(impl_) = &woog_enum
+                        .r84c_implementation_block(&s_read!(lu_dog))
+                        .first()
                     {
                         let x = if let Some(func) = s_read!(impl_)
                             .r9_function(&s_read!(lu_dog))
@@ -217,7 +216,6 @@ pub fn eval(
                                 arg_check,
                                 span,
                                 context,
-                                vm,
                             )
                         } else {
                             let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
@@ -249,7 +247,7 @@ pub fn eval(
                     MAX => {
                         let other = args.pop().unwrap();
                         let other = s_read!(other).r37_expression(&s_read!(lu_dog))[0].clone();
-                        let other = eval_expression(other.clone(), context, vm).unwrap();
+                        let other = eval_expression(other.clone(), context).unwrap();
                         let other = &*s_read!(other);
                         let other = if let Value::Integer(other) = other {
                             other
@@ -318,7 +316,7 @@ pub fn eval(
                                     .exhume_expression(&s_read!(next).expression)
                                     .unwrap();
 
-                                let value = eval_expression(expr, context, vm)?;
+                                let value = eval_expression(expr, context)?;
                                 debug!("value {value:?}");
 
                                 // This is where the magic happens and we turn the value
@@ -420,7 +418,6 @@ pub fn eval(
                             arg_check,
                             span,
                             context,
-                            vm,
                         )
                     } else {
                         let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
@@ -441,7 +438,7 @@ pub fn eval(
                         debug!("evaluating Range::map");
                         let func = args.pop().unwrap();
                         let func = s_read!(func).r37_expression(&s_read!(lu_dog))[0].clone();
-                        let ƛ = eval_expression(func.clone(), context, vm).unwrap();
+                        let ƛ = eval_expression(func.clone(), context).unwrap();
                         let ƛ = s_read!(ƛ);
                         let ƛ = if let Value::Lambda(ƛ) = &*ƛ {
                             ƛ
@@ -459,7 +456,6 @@ pub fn eval(
                                     false,
                                     &span,
                                     context,
-                                    vm,
                                 )
                             })
                             .collect::<Result<Vec<RefType<Value>>>>()?;
@@ -537,7 +533,7 @@ pub fn eval(
                                         .exhume_expression(&s_read!(next).expression)
                                         .unwrap();
 
-                                    let value = eval_expression(expr, context, vm)?;
+                                    let value = eval_expression(expr, context)?;
                                     debug!("value {value:?}");
 
                                     // This is where the magic happens and we turn the value
@@ -610,7 +606,7 @@ pub fn eval(
                         let separator = args.pop().unwrap();
                         let separator =
                             s_read!(separator).r37_expression(&s_read!(lu_dog))[0].clone();
-                        let separator = eval_expression(separator.clone(), context, vm).unwrap();
+                        let separator = eval_expression(separator.clone(), context).unwrap();
                         let separator = &*s_read!(separator);
                         let separator = if let Value::String(separator) = separator {
                             separator
@@ -687,7 +683,6 @@ pub fn eval(
                             arg_check,
                             span,
                             context,
-                            vm,
                         )
                     } else {
                         let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
@@ -708,7 +703,7 @@ pub fn eval(
                         debug!("evaluating Vector::map");
                         let func = args.pop().unwrap();
                         let func = s_read!(func).r37_expression(&s_read!(lu_dog))[0].clone();
-                        let ƛ = eval_expression(func.clone(), context, vm).unwrap();
+                        let ƛ = eval_expression(func.clone(), context).unwrap();
                         let ƛ = s_read!(ƛ);
                         let ƛ = if let Value::Lambda(ƛ) = &*ƛ {
                             ƛ
@@ -725,7 +720,6 @@ pub fn eval(
                                     false,
                                     &span,
                                     context,
-                                    vm,
                                 )
                             })
                             .collect::<Result<Vec<RefType<Value>>>>()?;
@@ -741,7 +735,7 @@ pub fn eval(
                     PUSH => {
                         let value = args.pop().unwrap();
                         let value = s_read!(value).r37_expression(&s_read!(lu_dog))[0].clone();
-                        let value = eval_expression(value.clone(), context, vm).unwrap();
+                        let value = eval_expression(value.clone(), context).unwrap();
 
                         s_write!(inner).push(value);
 
@@ -805,7 +799,7 @@ pub fn eval(
                         let x_value = &s_read!(expr).r11_x_value(&s_read!(lu_dog))[0];
                         let span = &s_read!(x_value).r63_span(&s_read!(lu_dog))[0];
                         let span = s_read!(span).start as usize..s_read!(span).end as usize;
-                        let value = eval_expression(expr, context, vm)?;
+                        let value = eval_expression(expr, context)?;
                         arg_values.push_back((value, span));
 
                         let next_id = { s_read!(next).next };
@@ -833,47 +827,6 @@ pub fn eval(
 
                     Ok(new_ref!(Value, value))
                 }
-                COMPLEX_EX => match func.as_str() {
-                    NORM_SQUARED => {
-                        let value = arg_values.pop_front().unwrap().0;
-                        // 🚧 It would be neat to turn the tracing on with a flag.
-                        let result = vm.invoke("norm_squared", &[value]);
-
-                        context.increment_expression_count(2);
-
-                        Ok(result.unwrap())
-                    }
-                    SQUARE => {
-                        let value = arg_values.pop_front().unwrap().0;
-                        let result = vm.invoke("square", &[value]);
-
-                        context.increment_expression_count(5);
-
-                        Ok(result.unwrap())
-                    }
-                    ADD => {
-                        let lhs = arg_values.pop_front().unwrap().0;
-                        let rhs = arg_values.pop_front().unwrap().0;
-                        let result = vm.invoke("add", &[lhs, rhs]);
-
-                        context.increment_expression_count(2);
-
-                        Ok(result.unwrap())
-                    }
-                    method => {
-                        let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
-                        let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
-                        let read = s_read!(span);
-                        let span = read.start as usize..read.end as usize;
-
-                        Err(ChaChaError::NoSuchStaticMethod {
-                            ty: ty.strip_prefix(PATH_SEP).unwrap().to_owned(),
-                            method: method.to_owned(),
-                            span,
-                            location: location!(),
-                        })
-                    }
-                },
                 CHACHA => {
                     match func.as_str() {
                         ARGS => {
@@ -988,6 +941,7 @@ pub fn eval(
                                         expected: "<function>".to_string(),
                                         found: ty,
                                         span,
+                                        location: location!(),
                                     }
                                 }
                             );
@@ -1004,17 +958,10 @@ pub fn eval(
                                     true,
                                     span,
                                     context,
-                                    vm,
                                 )?;
                             } else if let Value::Lambda(ƛ) = &*func {
-                                let _result = eval_lambda_expression(
-                                    ƛ.clone(),
-                                    &[],
-                                    true,
-                                    span,
-                                    context,
-                                    vm,
-                                )?;
+                                let _result =
+                                    eval_lambda_expression(ƛ.clone(), &[], true, span, context)?;
                             } else {
                                 panic!("missing implementation for timing this type: {func:?}");
                             };
@@ -1077,6 +1024,7 @@ pub fn eval(
                                         expected: "<function>".to_string(),
                                         found: ty,
                                         span,
+                                        location: location!(),
                                     }
                                 }
                             );
@@ -1088,19 +1036,8 @@ pub fn eval(
                             let mut fubar = context.clone();
                             // let mut baz = fubar.executor().clone();
                             let future = async move {
-                                let mut vm = VM::new(
-                                    fubar.get_program(),
-                                    &[],
-                                    fubar.get_home(),
-                                    fubar.thread_count(),
-                                );
-
-                                // let func = func.clone();
-
                                 debug!("sleeping for {duration:?}");
-                                // dbg!(&duration, &fubar.executor());
                                 let _instant = Timer::after(duration).await;
-                                // dbg!(&duration, _instant, &fubar.executor());
                                 debug!("done sleeping");
 
                                 if let Value::Function(func) = &func {
@@ -1111,17 +1048,9 @@ pub fn eval(
                                         true,
                                         &span,
                                         &mut fubar,
-                                        &mut vm,
                                     )
                                 } else if let Value::Lambda(ƛ) = &func {
-                                    eval_lambda_expression(
-                                        ƛ.clone(),
-                                        &[],
-                                        true,
-                                        &span,
-                                        &mut fubar,
-                                        &mut vm,
-                                    )
+                                    eval_lambda_expression(ƛ.clone(), &[], true, &span, &mut fubar)
                                 } else {
                                     panic!("missing implementation for timing this type: {func:?}");
                                 }
@@ -1232,7 +1161,6 @@ pub fn eval(
                                     arg_check,
                                     span,
                                     context,
-                                    vm,
                                 )?;
                                 debug!("StaticMethodCall meta value {value:?}");
                                 Ok(value)
@@ -1252,7 +1180,7 @@ pub fn eval(
                                     s_read!(lu_dog).exhume_function(&s_read!(func).id).unwrap();
                                 debug!("StaticMethodCall frame func {func:?}");
                                 let value = eval_function_call(
-                                    func, &args, first_arg, arg_check, span, context, vm,
+                                    func, &args, first_arg, arg_check, span, context,
                                 )?;
                                 debug!("StaticMethodCall frame value {value:?}");
                                 Ok(value)
@@ -1300,6 +1228,7 @@ pub fn eval(
                                 ty: ty.strip_prefix(PATH_SEP).unwrap().to_owned(),
                                 method: func.to_owned(),
                                 span,
+                                location: location!(),
                             }
                         });
 
@@ -1338,6 +1267,7 @@ fn spawn(
                 expected: "<function>".to_string(),
                 found: ty,
                 span,
+                location: location!(),
             }
         }
     );
@@ -1351,26 +1281,12 @@ fn spawn(
 
     let t_span = debug_span!("spawn_span", target = "async", name = ?name);
     let future = async move {
-        let mut vm = VM::new(
-            child_context.get_program(),
-            &[],
-            child_context.get_home(),
-            child_context.thread_count(),
-        );
         let value = &s_read!(expression).r11_x_value(&s_read!(lu_dog))[0];
         let span = &s_read!(value).r63_span(&s_read!(lu_dog))[0];
         if let Value::Function(func) = &func {
-            eval_function_call(
-                func.clone(),
-                &[],
-                None,
-                true,
-                span,
-                &mut nested_context,
-                &mut vm,
-            )
+            eval_function_call(func.clone(), &[], None, true, span, &mut nested_context)
         } else if let Value::Lambda(ƛ) = &func {
-            eval_lambda_expression(ƛ.clone(), &[], true, span, &mut nested_context, &mut vm)
+            eval_lambda_expression(ƛ.clone(), &[], true, span, &mut nested_context)
         } else {
             unreachable!()
         }

@@ -1,0 +1,4 @@
+fn main() {
+    chacha::assert_eq(2 * 21, 42);
+    chacha::assert_eq(2.0 * 21.0, 42.0);
+}

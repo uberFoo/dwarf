@@ -7,8 +7,8 @@ use rustyline::error::ReadlineError;
 use snafu::{prelude::*, Backtrace, Location};
 
 use crate::{
-    bubba::Instruction, lu_dog::ValueType, s_read, RefType, Span, Value, ERR_CLR, OK_CLR, OTH_CLR,
-    POP_CLR,
+    bubba::Instruction, lu_dog::ValueType, s_read, RefType, Span, Value, ERR_CLR, OK_CLR,
+    OTHER_CLR, POP_CLR,
 };
 
 #[derive(Debug, Snafu)]
@@ -75,18 +75,18 @@ pub enum ChaChaError {
         source: SendError<String>,
         message: String,
     },
-    #[snafu(display("\n{}: invalid instruction `{}`.", ERR_CLR.bold().paint("error"), OTH_CLR.paint(instr.to_string())))]
+    #[snafu(display("\n{}: invalid instruction `{}`.", ERR_CLR.bold().paint("error"), OTHER_CLR.paint(instr.to_string())))]
     InvalidInstruction {
         instr: Instruction,
     },
-    #[snafu(display("\n{}: error with input/output `{}`.", ERR_CLR.bold().paint("error"), OTH_CLR.paint(message)))]
+    #[snafu(display("\n{}: error with input/output `{}`.", ERR_CLR.bold().paint("error"), OTHER_CLR.paint(message)))]
     IO {
         message: String,
         source: std::io::Error,
     },
     #[snafu(display("\n{}: named item `main` found, but it is not a function.", ERR_CLR.bold().paint("error")))]
     MainIsNotAFunction,
-    #[snafu(display("\n{}: missing definition `{}` --> {}", ERR_CLR.bold().paint("error"), OTH_CLR.paint(name), ERR_CLR.italic().paint("this should be caught by the extruder!")))]
+    #[snafu(display("\n{}: missing definition `{}` --> {}", ERR_CLR.bold().paint("error"), OTHER_CLR.paint(name), ERR_CLR.italic().paint("this should be caught by the extruder!")))]
     MissingDefinition {
         name: String,
         span: Span,
@@ -117,13 +117,13 @@ pub enum ChaChaError {
         field: String,
         ty: String,
     },
-    #[snafu(display("\n{}: no such method `{}`.", ERR_CLR.bold().paint("error"), OTH_CLR.paint(method)))]
+    #[snafu(display("\n{}: no such method `{}`.", ERR_CLR.bold().paint("error"), OTHER_CLR.paint(method)))]
     NoSuchMethod {
         method: String,
         span: Span,
         location: Location,
     },
-    #[snafu(display("\n{}: could not find static method `{}::{}`.", ERR_CLR.bold().paint("error"), OTH_CLR.paint(ty), OTH_CLR.paint(method)))]
+    #[snafu(display("\n{}: could not find static method `{}::{}`.", ERR_CLR.bold().paint("error"), OTHER_CLR.paint(ty), OTHER_CLR.paint(method)))]
     NoSuchStaticMethod {
         method: String,
         ty: String,
@@ -216,7 +216,7 @@ impl fmt::Display for ChaChaErrorReporter<'_, '_, '_> {
                 if is_uber {
                     note += &format!(
                         " --> {}:{}:{}",
-                        OTH_CLR.paint(location.file.to_string()),
+                        OTHER_CLR.paint(location.file.to_string()),
                         POP_CLR.paint(format!("{}", location.line)),
                         OK_CLR.paint(format!("{}", location.column)),
                     );
@@ -257,7 +257,7 @@ impl fmt::Display for ChaChaErrorReporter<'_, '_, '_> {
                 let report = if is_uber {
                     report.with_note(format!(
                         "{}:{}:{}",
-                        OTH_CLR.paint(location.file.to_string()),
+                        OTHER_CLR.paint(location.file.to_string()),
                         POP_CLR.paint(format!("{}", location.line)),
                         OK_CLR.paint(format!("{}", location.column)),
                     ))
@@ -288,7 +288,7 @@ impl fmt::Display for ChaChaErrorReporter<'_, '_, '_> {
                 let report = if is_uber {
                     report.with_note(format!(
                         "{}:{}:{}",
-                        OTH_CLR.paint(location.file.to_string()),
+                        OTHER_CLR.paint(location.file.to_string()),
                         POP_CLR.paint(format!("{}", location.line)),
                         OK_CLR.paint(format!("{}", location.column)),
                     ))
@@ -322,7 +322,7 @@ impl fmt::Display for ChaChaErrorReporter<'_, '_, '_> {
                 let report = if is_uber {
                     report.with_note(format!(
                         "{}:{}:{}",
-                        OTH_CLR.paint(location.file.to_string()),
+                        OTHER_CLR.paint(location.file.to_string()),
                         POP_CLR.paint(format!("{}", location.line)),
                         OK_CLR.paint(format!("{}", location.column)),
                     ))
@@ -348,7 +348,7 @@ impl fmt::Display for ChaChaErrorReporter<'_, '_, '_> {
                 let report = if is_uber {
                     report.with_note(format!(
                         "{}:{}:{}",
-                        OTH_CLR.paint(location.file.to_string()),
+                        OTHER_CLR.paint(location.file.to_string()),
                         POP_CLR.paint(format!("{}", location.line)),
                         OK_CLR.paint(format!("{}", location.column)),
                     ))
@@ -388,7 +388,7 @@ impl fmt::Display for ChaChaErrorReporter<'_, '_, '_> {
                 let report = if is_uber {
                     report.with_note(format!(
                         "{}:{}:{}",
-                        OTH_CLR.paint(location.file.to_string()),
+                        OTHER_CLR.paint(location.file.to_string()),
                         POP_CLR.paint(format!("{}", location.line)),
                         OK_CLR.paint(format!("{}", location.column)),
                     ))
@@ -422,7 +422,7 @@ impl fmt::Display for ChaChaErrorReporter<'_, '_, '_> {
                 let report = if is_uber {
                     report.with_note(format!(
                         "{}:{}:{}\n{}",
-                        OTH_CLR.paint(location.file.to_string()),
+                        OTHER_CLR.paint(location.file.to_string()),
                         POP_CLR.paint(format!("{}", location.line)),
                         OK_CLR.paint(format!("{}", location.column)),
                         backtrace
@@ -468,7 +468,7 @@ impl fmt::Display for ChaChaErrorReporter<'_, '_, '_> {
                 let report = if is_uber {
                     report.with_note(format!(
                         "{}:{}:{}\n",
-                        OTH_CLR.paint(location.file.to_string()),
+                        OTHER_CLR.paint(location.file.to_string()),
                         POP_CLR.paint(format!("{}", location.line)),
                         OK_CLR.paint(format!("{}", location.column)),
                     ))

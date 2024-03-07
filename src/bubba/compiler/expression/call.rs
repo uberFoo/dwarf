@@ -6,15 +6,20 @@ use crate::keywords::{LEN, PUSH, SPAWN};
 
 use crate::{
     bubba::{
-        compiler::{compile_expression, compile_statement, CThonk, Context, Result},
+        compiler::{
+            compile_expression, compile_statement, error::BubbaCompilerError, CThonk, Context,
+            Result,
+        },
         instr::Instruction,
-        BOOL, STRING_ARRAY,
+        value::Value,
+        BOOL, STRING_ARRAY, UUID,
     },
-    keywords::{ARGS, ASSERT, ASSERT_EQ, CHACHA, FORMAT, NEW, PLUGIN},
+    chacha::interpreter::{ModelContext, PrintableValueType},
+    keywords::{ARGS, ASSERT, ASSERT_EQ, CHACHA, FORMAT, FQ_UUID_TYPE, NEW, PLUGIN, TYPEOF},
     lu_dog::{BodyEnum, Call, CallEnum, Expression, ValueType, ValueTypeEnum},
     new_ref, s_read,
     sarzak::Ty,
-    NewRef, RefType, SarzakStorePtr, Span, Value, PATH_SEP, POP_CLR,
+    ModelStore, NewRef, RefType, SarzakStorePtr, Span, PATH_SEP, POP_CLR,
 };
 
 #[tracing::instrument]
@@ -160,21 +165,20 @@ pub(in crate::bubba::compiler) fn compile_lambda(
                         // } else if thonk.returned {
                         //     break;
                         } else {
-                            // thonk.insert_instruction(
-                            //     Instruction::Push(new_ref!(Value, Value::Empty)),
-                            //     location!(),
-                            // );
-                            thonk.insert_instruction(Instruction::Return, location!());
-                            thonk.returned = true;
+                            if !thonk.returned {
+                                thonk.insert_instruction(
+                                    Instruction::Push(Value::Empty),
+                                    location!(),
+                                );
+                                thonk.insert_instruction(Instruction::Return, location!());
+                                thonk.returned = true;
+                            }
                             break;
                         }
                     }
                 }
             } else {
-                thonk.insert_instruction(
-                    Instruction::Push(new_ref!(Value, Value::Empty)),
-                    location!(),
-                );
+                thonk.insert_instruction(Instruction::Push(Value::Empty), location!());
                 thonk.insert_instruction(Instruction::Return, location!());
                 thonk.returned = true;
             }
@@ -202,7 +206,7 @@ pub(in crate::bubba::compiler) fn compile_lambda(
 
     // outer_thonk.add_instruction(Instruction::Push(new_ref!(Value, pointer)), location!());
     outer_thonk.insert_instruction(
-        Instruction::MakeLambdaPointer(new_ref!(String, name.clone()), frame_size),
+        Instruction::MakeLambdaPointer(name.clone(), frame_size),
         location!(),
     );
 
@@ -320,7 +324,7 @@ fn compile_method_call(
                 }
                 ValueTypeEnum::Ty(ref id) => {
                     let ty = sarzak.exhume_ty(id).unwrap();
-                    let ty = s_read!(ty);
+                    let ty = ty.read().unwrap();
 
                     match &*ty {
                         Ty::ZString(_) => {
@@ -335,10 +339,7 @@ fn compile_method_call(
             _ => {}
         }
 
-        thonk.insert_instruction(
-            Instruction::MethodLookup(new_ref!(String, name)),
-            location!(),
-        );
+        thonk.insert_instruction(Instruction::MethodLookup(name), location!());
         result
     } else {
         panic!();
@@ -373,6 +374,9 @@ fn compile_static_method_call(
     let lu_dog = context.lu_dog_heel();
     let lu_dog = s_read!(lu_dog);
 
+    let sarzak = context.sarzak_heel();
+    let sarzak = s_read!(sarzak);
+
     let boolean = context.get_type(BOOL).unwrap().clone();
     let string_array = context.get_type(STRING_ARRAY).unwrap().clone();
 
@@ -390,7 +394,7 @@ fn compile_static_method_call(
                 let expr = &args[0];
                 compile_expression(expr, thonk, context)?;
                 thonk.insert_instruction_with_span(
-                    Instruction::Push(new_ref!(Value, true.into())),
+                    Instruction::Push(true.into()),
                     span.clone(),
                     location!(),
                 );
@@ -405,10 +409,7 @@ fn compile_static_method_call(
                     location!(),
                 );
                 thonk.insert_instruction_with_span(
-                    Instruction::Push(new_ref!(
-                        Value,
-                        format!("assertion failed: {span:?}").into()
-                    )),
+                    Instruction::Push(format!("assertion failed: {span:?}").into()),
                     span.clone(),
                     location!(),
                 );
@@ -416,16 +417,10 @@ fn compile_static_method_call(
 
                 // Bail on false
                 thonk.insert_instruction(
-                    Instruction::Push(new_ref!(
-                        Value,
-                        context.extruder_context.source_path.clone().into()
-                    )),
+                    Instruction::Push(context.extruder_context.source_path.clone().into()),
                     location!(),
                 );
-                thonk.insert_instruction(
-                    Instruction::Push(new_ref!(Value, span.clone().into())),
-                    location!(),
-                );
+                thonk.insert_instruction(Instruction::Push(span.clone().into()), location!());
                 thonk.insert_instruction(Instruction::HaltAndCatchFire, location!());
 
                 Ok(Some(boolean))
@@ -446,10 +441,7 @@ fn compile_static_method_call(
                     location!(),
                 );
                 thonk.insert_instruction_with_span(
-                    Instruction::Push(new_ref!(
-                        Value,
-                        format!("assertion failed: {span:?}").into()
-                    )),
+                    Instruction::Push(format!("assertion failed: {span:?}").into()),
                     span.clone(),
                     location!(),
                 );
@@ -457,16 +449,10 @@ fn compile_static_method_call(
 
                 // This is the bad path.
                 thonk.insert_instruction(
-                    Instruction::Push(new_ref!(
-                        Value,
-                        context.extruder_context.source_path.clone().into()
-                    )),
+                    Instruction::Push(context.extruder_context.source_path.clone().into()),
                     location!(),
                 );
-                thonk.insert_instruction(
-                    Instruction::Push(new_ref!(Value, span.clone().into())),
-                    location!(),
-                );
+                thonk.insert_instruction(Instruction::Push(span.clone().into()), location!());
                 thonk.insert_instruction_with_span(
                     Instruction::HaltAndCatchFire,
                     span,
@@ -481,11 +467,42 @@ fn compile_static_method_call(
 
                 let result = compile_expression(inner, thonk, context);
 
-                thonk.insert_instruction(Instruction::AsyncCall(0), location!());
+                thonk.insert_instruction(Instruction::AsyncSpawn(0), location!());
+
+                result
+            }
+            TYPEOF => {
+                let ty = &args[0];
+                let result = compile_expression(ty, thonk, context);
+
+                let value = result.clone().unwrap().unwrap();
+
+                let ctx = ModelContext::new(
+                    context.lu_dog_heel(),
+                    context.sarzak_heel(),
+                    new_ref!(ModelStore, context.extruder_context.models.clone()),
+                );
+                let value = PrintableValueType(false, new_ref!(ValueType, value), &ctx);
+                dbg!(ty, &result, value.to_string());
+
+                thonk.insert_instruction(
+                    Instruction::Push(Value::String(value.to_string())),
+                    location!(),
+                );
+
+                // thonk.insert_instruction(Instruction::TypeOf, location!());
 
                 result
             }
             meth => todo!("handle chacha method: {meth}"),
+        },
+        FQ_UUID_TYPE => match func {
+            NEW => {
+                let uuid = Uuid::new_v4();
+                thonk.insert_instruction(Instruction::Push(uuid.into()), location!());
+                Ok(Some(context.get_type(UUID).unwrap().clone()))
+            }
+            meth => todo!("handle uuid method: {meth}"),
         },
         ty => {
             // This is where we load the shared library that is the extension.
@@ -502,15 +519,13 @@ fn compile_static_method_call(
 
                         if let Some(path) = path.split(PATH_SEP).nth(1) {
                             thonk.insert_instruction(
-                                Instruction::Push(new_ref!(Value, Value::String(path.to_owned()))),
+                                Instruction::Push(Value::String(path.to_owned())),
                                 location!(),
                             );
                         };
 
-                        thonk.insert_instruction(
-                            Instruction::Push(new_ref!(Value, plugin_root.into())),
-                            location!(),
-                        );
+                        thonk
+                            .insert_instruction(Instruction::Push(plugin_root.into()), location!());
                         thonk.insert_instruction(Instruction::PluginNew(1), location!());
 
                         // let id = lu_dog.exhume_woog_struct_id_by_name(&plugin.name).unwrap();
@@ -528,16 +543,32 @@ fn compile_static_method_call(
                     }
                 }
             } else {
-                let func1 = lu_dog.exhume_function_id_by_name(func).unwrap();
+                // 🚧 I feel like the extruder should catch this.
+                let func1 = lu_dog.exhume_function_id_by_name(func);
+
+                let func1 = match func1 {
+                    Some(func1) => func1,
+                    None => {
+                        return Err(BubbaCompilerError::NoSuchMethod {
+                            method: func.to_owned(),
+                            span,
+                            location: location!(),
+                        }
+                        .into())
+                    }
+                };
+
                 let func1 = lu_dog.exhume_function(&func1).unwrap();
                 let body = s_read!(func1).r19_body(&lu_dog)[0].clone();
                 let a_sink = s_read!(body).a_sink;
 
                 let func_name = format!("{ty}::{func}");
-                let name = new_ref!(String, func_name);
                 // These instructions will be patched by the VM.
-                thonk.insert_instruction(Instruction::CallDestination(name.clone()), location!());
-                thonk.insert_instruction(Instruction::LocalCardinality(name), location!());
+                thonk.insert_instruction(
+                    Instruction::CallDestination(func_name.clone()),
+                    location!(),
+                );
+                thonk.insert_instruction(Instruction::LocalCardinality(func_name), location!());
 
                 for expr in args {
                     compile_expression(expr, thonk, context)?;
@@ -565,7 +596,9 @@ mod test {
             *,
         },
         dwarf::{new_lu_dog, parse_dwarf},
+        new_ref,
         sarzak::MODEL as SARZAK_MODEL,
+        NewRef,
     };
 
     #[test]
@@ -735,7 +768,7 @@ mod test {
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Empty);
     }
 
-    // #[test]
+    #[test]
     fn string_format_locals() {
         setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
@@ -744,7 +777,7 @@ mod test {
                          let a = 1;
                          let b = 2;
                          let c = 3;
-                         \"{a} {b} {c}\".format()
+                         `test ${a} ${b} ${c}`
                    }";
         let ast = parse_dwarf("test_or_expression", ore).unwrap();
         let ctx = new_lu_dog(
@@ -759,40 +792,9 @@ mod test {
 
         assert_eq!(program.get_thonk_card(), 1);
 
-        assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 11);
+        assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 24);
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &"test 1 2 3".into());
-    }
-
-    // #[test]
-    fn string_format_indices() {
-        setup_logging();
-        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
-        let ore = "
-                   fn main() -> string {
-                       \"test {0} {1} {2} {3} {4} {5} {6} {7} {8} {9}\".format(
-                           0, 1, 2, 3, 4, 5, 6, 7, 8, 9
-                       )
-                   }";
-        let ast = parse_dwarf("test_or_expression", ore).unwrap();
-        let ctx = new_lu_dog(
-            "test_or_expression".to_owned(),
-            Some((ore.to_owned(), &ast)),
-            &get_dwarf_home(),
-            &sarzak,
-        )
-        .unwrap();
-        let program = compile(&ctx).unwrap();
-        println!("{program}");
-
-        assert_eq!(program.get_thonk_card(), 1);
-
-        assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 11);
-
-        assert_eq!(
-            &*s_read!(run_vm(&program).unwrap()),
-            &"test 0 1 2 3 4 5 6 7 8 9".into()
-        );
     }
 
     #[test]
@@ -925,6 +927,39 @@ mod test {
         assert_eq!(program.get_instruction_card(), 20);
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &45.into());
+    }
+
+    #[test]
+    fn test_lambda_empty() {
+        setup_logging();
+        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
+
+        let ore = "
+                   fn main() -> () {
+                       let _0 = 0;
+                       let a = 42;
+                       let b = 96;
+                       let foo = |x: int, y: int| -> () {
+                           x + y + a;
+                       };
+                       foo(1, 2)
+                   }";
+        let ast = parse_dwarf("test_lambda", ore).unwrap();
+        let ctx = new_lu_dog(
+            "test_lambda".to_owned(),
+            Some((ore.to_owned(), &ast)),
+            &get_dwarf_home(),
+            &sarzak,
+        )
+        .unwrap();
+        let program = compile(&ctx).unwrap();
+        println!("{program}");
+
+        assert_eq!(program.get_thonk_card(), 2);
+
+        assert_eq!(program.get_instruction_card(), 21);
+
+        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Empty);
     }
 
     // #[test]

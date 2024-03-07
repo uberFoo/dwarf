@@ -6,7 +6,6 @@ use snafu::{location, prelude::*, Location};
 use tracy_client::span;
 
 use crate::{
-    bubba::VM,
     chacha::error::{Result, WrongNumberOfArgumentsSnafu},
     interpreter::{debug, eval_statement, function, trace, typecheck, ChaChaError, Context},
     lu_dog::{BodyEnum, Lambda, Span},
@@ -19,7 +18,6 @@ pub fn eval_lambda_expression(
     arg_check: bool,
     span: &RefType<Span>,
     context: &mut Context,
-    vm: &mut VM,
 ) -> Result<RefType<Value>> {
     let lu_dog = context.lu_dog_heel().clone();
     let sarzak = context.sarzak_heel().clone();
@@ -75,6 +73,7 @@ pub fn eval_lambda_expression(
                 got: args.len(),
                 defn_span,
                 invocation_span,
+                location: location!(),
             }
         });
 
@@ -134,7 +133,7 @@ pub fn eval_lambda_expression(
             // 🚧 this needs to be sucked out and dealt with by a single block
             // execution function.
             loop {
-                let result = eval_statement(next.clone(), context, vm).map_err(|e| {
+                let result = eval_statement(next.clone(), context).map_err(|e| {
                     // This is cool, if it does what I think it does. We basically
                     // get the opportunity to look at the error, and do stuff with
                     // it, and then let it continue on as if nothing happened.

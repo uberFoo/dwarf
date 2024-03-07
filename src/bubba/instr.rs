@@ -4,9 +4,13 @@ use ansi_term::Colour;
 use rustc_hash::FxHashMap as HashMap;
 use serde::{Deserialize, Serialize};
 
-use crate::{s_read, RefType, Span, Value};
+use crate::{bubba::value::Value, s_read, RefType, Span};
 
-#[derive(Clone, Debug)]
+/// Instruction
+///
+/// Note to self: leave the Strings wrapped in RefType, as changing it slows
+/// the VM down between 10-23%.
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum Instruction {
     /// Add the top two values on the stack.
     ///
@@ -25,6 +29,7 @@ pub enum Instruction {
     /// The stack is one element shorter after this instruction.
     And,
     AsyncCall(usize),
+    AsyncSpawn(usize),
     Await,
     /// Call a function with the given arity.
     ///
@@ -47,14 +52,14 @@ pub enum Instruction {
     /// This is a pseudo-instruction that stores the name of the function that
     /// we are calling. It is patched by the VM before execution.
     ///
-    CallDestination(RefType<String>),
+    CallDestination(String),
     CaptureLocal(usize, usize),
     /// Comment Instruction / NOP
     ///
     /// I don't like this because it increases the size of the instruction by 50%
     /// -- from 16 bytes to 24.
     ///
-    Comment(RefType<String>),
+    Comment(String),
     /// Deconstruct a struct expression
     ///
     /// Given a struct expression, like Foo::Bar(x, y), this instruction will pop the
@@ -115,7 +120,7 @@ pub enum Instruction {
     /// ## Stack Effect
     ///
     FieldWrite,
-    Goto(RefType<String>),
+    Goto(String),
     /// Stop processing and panic the VM
     ///
     /// ## Stack Effect
@@ -123,6 +128,7 @@ pub enum Instruction {
     /// conflagration
     ///
     HaltAndCatchFire,
+    Incr,
     /// Jump to the given offset.
     ///
     /// ## Stack Effect
@@ -153,8 +159,9 @@ pub enum Instruction {
     ///
     /// The stack is one element shorter after this instruction.
     ///
-    Label(RefType<String>),
+    Label(String),
     ListIndex,
+    ListIndexRange,
     ListLength,
     ListPush,
     /// Local Cardinality
@@ -162,8 +169,8 @@ pub enum Instruction {
     /// This is a pseudo-instruction to store the number of local variables in
     /// the function. It is patched by the VM before execution.
     ///
-    LocalCardinality(RefType<String>),
-    MakeLambdaPointer(RefType<String>, usize),
+    LocalCardinality(String),
+    MakeLambdaPointer(String, usize),
     /// Look up a method
     ///
     /// The top of the stack is a reference to the user defined type upon which
@@ -176,7 +183,8 @@ pub enum Instruction {
     ///
     /// The stack is one element longer.
     ///
-    MethodLookup(RefType<String>),
+    MethodLookup(String),
+    Mov,
     /// Multiply the top two values on the stack.
     ///
     /// ## Stack Effect
@@ -211,7 +219,7 @@ pub enum Instruction {
     /// The stack is `n` + 2? elements shorter after this instruction.
     ///
     NewTupleEnum(usize),
-    /// New UserType
+    /// New Struct
     ///
     /// The first operand is the number of fields in the struct. Let's call this
     /// n. The stack shall then contain, in order, the name of the struct, the
@@ -224,7 +232,7 @@ pub enum Instruction {
     ///
     /// The stack is (`n` * 3) + 2? elements shorter after this instruction.
     ///
-    NewUserType(usize),
+    NewStruct(usize),
     /// Operator Not
     ///
     /// Take the top value off the stack and perform a logical not on it.
@@ -268,7 +276,7 @@ pub enum Instruction {
     ///
     /// ## Stack Effect
     ///
-    Push(RefType<Value>),
+    Push(Value),
     /// Push the arguments to the program onto the stack
     ///
     /// ## Stack Effect
@@ -276,6 +284,14 @@ pub enum Instruction {
     /// The stack will be n elements longer, where n is the cardinality of the
     /// arguments.
     PushArgs,
+    /// Exit the function
+    ///
+    /// The value expressed by this instruction is the value at the top of the
+    /// stack.
+    ///
+    /// ## Stack Effect
+    ///
+    Return,
     ///
     /// Pop the top value off the stack and store it in a local variable at the
     /// given index.
@@ -284,6 +300,11 @@ pub enum Instruction {
     ///
     StoreLocal(usize),
     StringLength,
+    /// Subtract the top two values on the stack.
+    ///
+    /// ## Stack Effect
+    ///
+    Subtract,
     /// Compare the top two values on the stack.
     ///
     /// a == b
@@ -303,6 +324,7 @@ pub enum Instruction {
     /// ## Stack Effect
     ///
     TestGreaterThan,
+    TestGreaterThanOrEqual,
     /// Compare the top two values on the stack.
     ///
     /// a < b
@@ -331,23 +353,12 @@ pub enum Instruction {
     /// Net effect -1.
     ///
     TestLessThanOrEqual,
+    TestNotEqual,
     ToString,
     /// Typecast
     ///
-    Typecast(RefType<Value>),
-    /// Exit the function
-    ///
-    /// The value expressed by this instruction is the value at the top of the
-    /// stack.
-    ///
-    /// ## Stack Effect
-    ///
-    Return,
-    /// Subtract the top two values on the stack.
-    ///
-    /// ## Stack Effect
-    ///
-    Subtract,
+    TypeCast(RefType<Value>),
+    Vom,
 }
 
 impl fmt::Display for Instruction {
@@ -364,6 +375,12 @@ impl fmt::Display for Instruction {
                 opcode_style.paint("acall"),
                 operand_style.paint(arity.to_string())
             ),
+            Instruction::AsyncSpawn(arity) => write!(
+                f,
+                "{} {}",
+                opcode_style.paint("spwn"),
+                operand_style.paint(arity.to_string())
+            ),
             Instruction::Await => write!(f, "{}", opcode_style.paint("await")),
             Instruction::Call(arity) => write!(
                 f,
@@ -375,7 +392,7 @@ impl fmt::Display for Instruction {
                 f,
                 "{} {}",
                 opcode_style.paint("calld"),
-                operand_style.paint(s_read!(name).to_string())
+                operand_style.paint(name.to_string())
             ),
             Instruction::CaptureLocal(index, distance) => write!(
                 f,
@@ -388,7 +405,7 @@ impl fmt::Display for Instruction {
                 f,
                 "{} {}",
                 opcode_style.paint("nop "),
-                operand_style.paint(s_read!(comment).to_string())
+                operand_style.paint(comment)
             ),
             Instruction::DeconstructStructExpression => write!(f, "{}", opcode_style.paint("dse ")),
             Instruction::Divide => write!(f, "{}", opcode_style.paint("div ")),
@@ -412,9 +429,10 @@ impl fmt::Display for Instruction {
                 f,
                 "{} {}",
                 opcode_style.paint("goto"),
-                operand_style.paint(s_read!(label).to_string())
+                operand_style.paint(label.to_string())
             ),
             Instruction::HaltAndCatchFire => write!(f, "{}", opcode_style.paint("hcf 🔥")),
+            Instruction::Incr => write!(f, "{}", opcode_style.paint("incr")),
             Instruction::Jump(offset) => write!(
                 f,
                 "{} {}",
@@ -437,30 +455,32 @@ impl fmt::Display for Instruction {
                 f,
                 "{} {}",
                 opcode_style.paint("label"),
-                operand_style.paint(s_read!(name).to_string())
+                operand_style.paint(name.to_string())
             ),
             Instruction::ListIndex => write!(f, "{}", opcode_style.paint("idx ")),
+            Instruction::ListIndexRange => write!(f, "{}", opcode_style.paint("idxr")),
             Instruction::ListLength => write!(f, "{}", opcode_style.paint("len ")),
             Instruction::ListPush => write!(f, "{}", opcode_style.paint("lpush")),
             Instruction::LocalCardinality(name) => write!(
                 f,
                 "{} {}",
                 opcode_style.paint("lc  "),
-                operand_style.paint(s_read!(name).to_string())
+                operand_style.paint(name.to_string())
             ),
             Instruction::MakeLambdaPointer(name, arity) => write!(
                 f,
                 "{} {} {}",
                 opcode_style.paint("mlp "),
-                operand_style.paint(s_read!(name).to_string()),
+                operand_style.paint(name.to_string()),
                 operand_style.paint(arity.to_string())
             ),
             Instruction::MethodLookup(name) => write!(
                 f,
                 "{} {}",
                 opcode_style.paint("mlu "),
-                operand_style.paint(s_read!(name).to_string())
+                operand_style.paint(name.to_string())
             ),
+            Instruction::Mov => write!(f, "{}", opcode_style.paint("mov ")),
             Instruction::Multiply => write!(f, "{}", opcode_style.paint("mul ")),
             Instruction::NewList(n) => write!(
                 f,
@@ -474,7 +494,7 @@ impl fmt::Display for Instruction {
                 opcode_style.paint("nte "),
                 operand_style.paint(n.to_string())
             ),
-            Instruction::NewUserType(n) => write!(
+            Instruction::NewStruct(n) => write!(
                 f,
                 "{} {}",
                 opcode_style.paint("nut "),
@@ -499,7 +519,7 @@ impl fmt::Display for Instruction {
                 f,
                 "{} {}",
                 opcode_style.paint("push"),
-                operand_style.paint(s_read!(value).to_string())
+                operand_style.paint(value.to_string())
             ),
             Instruction::PushArgs => write!(f, "{}", opcode_style.paint("parg")),
             Instruction::Return => write!(f, "{}", opcode_style.paint("ret ")),
@@ -509,24 +529,27 @@ impl fmt::Display for Instruction {
                 opcode_style.paint("store"),
                 operand_style.paint(index.to_string())
             ),
-            Instruction::StringLength => write!(f, "{}", opcode_style.paint("slen ")),
+            Instruction::StringLength => write!(f, "{}", opcode_style.paint("slen")),
             Instruction::Subtract => write!(f, "{}", opcode_style.paint("sub ")),
             Instruction::TestEqual => write!(f, "{}", opcode_style.paint("eq  ")),
             Instruction::TestGreaterThan => write!(f, "{}", opcode_style.paint("gt  ")),
+            Instruction::TestGreaterThanOrEqual => write!(f, "{}", opcode_style.paint("gte ")),
             Instruction::TestLessThan => write!(f, "{}", opcode_style.paint("lt  ")),
             Instruction::TestLessThanOrEqual => write!(f, "{}", opcode_style.paint("lte ")),
+            Instruction::TestNotEqual => write!(f, "{}", opcode_style.paint("ne  ")),
             Instruction::ToString => write!(f, "{}", opcode_style.paint("ts  ")),
-            Instruction::Typecast(name) => write!(
+            Instruction::TypeCast(name) => write!(
                 f,
                 "{} {}",
                 opcode_style.paint("tc  "),
                 operand_style.paint(s_read!(name).to_string())
             ),
+            Instruction::Vom => write!(f, "{}", opcode_style.paint("vom ")),
         }
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Deserialize, Serialize)]
 pub struct Program {
     compiler_version: String,
     compiler_build_ts: String,
@@ -617,7 +640,7 @@ impl fmt::Display for Program {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Thonk {
     name: String,
     instructions: Vec<Instruction>,
@@ -693,3 +716,22 @@ impl fmt::Display for Thonk {
         Ok(())
     }
 }
+
+// impl Clone for Thonk {
+//     fn clone(&self) -> Self {
+//         let instructions = self
+//             .instructions
+//             .iter()
+//             .map(|i| match i {
+//                 Instruction::Push(v) => Instruction::Push(new_ref!(Value, (*s_read!(v)).clone())),
+//                 i => i.clone(),
+//             })
+//             .collect();
+//         Thonk {
+//             name: self.name.clone(),
+//             instructions,
+//             spans: self.spans.clone(),
+//             frame_size: self.frame_size,
+//         }
+//     }
+// }

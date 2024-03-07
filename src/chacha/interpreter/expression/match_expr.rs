@@ -1,18 +1,13 @@
 use std::collections::VecDeque;
 
 use crate::{
-    bubba::VM,
-    chacha::{error::Result, value::EnumVariant},
+    chacha::{error::Result, value::Enum},
     interpreter::{eval_expression, Context},
     lu_dog::ExpressionEnum,
     new_ref, s_read, NewRef, RefType, SarzakStorePtr, Value, PATH_SEP,
 };
 
-pub fn eval(
-    match_expr: &SarzakStorePtr,
-    context: &mut Context,
-    vm: &mut VM,
-) -> Result<RefType<Value>> {
+pub fn eval(match_expr: &SarzakStorePtr, context: &mut Context) -> Result<RefType<Value>> {
     let lu_dog = context.lu_dog_heel().clone();
     let lu_dog = s_read!(lu_dog);
 
@@ -22,7 +17,7 @@ pub fn eval(
     let patterns = match_expr.r87_pattern(&lu_dog);
     let scrutinee = match_expr.r91_expression(&lu_dog)[0].clone();
 
-    let scrutinee = eval_expression(scrutinee, context, vm)?;
+    let scrutinee = eval_expression(scrutinee, context)?;
 
     // Check each pattern for a match.
     // 🚧 Darn. Match arms need to be ordered the same as they are written, and
@@ -34,14 +29,14 @@ pub fn eval(
         let match_expr_read = s_read!(match_expr);
         match &match_expr_read.subtype {
             ExpressionEnum::EmptyExpression(ref _id) => {
-                let value = eval_expression(pattern_expr, context, vm)?;
+                let value = eval_expression(pattern_expr, context)?;
                 return Ok(value);
             }
             ExpressionEnum::Literal(ref _id) => {
-                let value = eval_expression(match_expr.clone(), context, vm)?;
+                let value = eval_expression(match_expr.clone(), context)?;
                 let value = s_read!(value);
                 if *s_read!(scrutinee) == *value {
-                    let value = eval_expression(pattern_expr, context, vm)?;
+                    let value = eval_expression(pattern_expr, context)?;
                     return Ok(value);
                 }
             }
@@ -57,7 +52,7 @@ pub fn eval(
                         Value::Enumeration(value) => match value {
                             // 🚧 I can't tell if this is gross, or a sweet hack.
                             // I think I'm referring to using the name as the scrutinee?
-                            EnumVariant::Unit(_, ty, value) => (
+                            Enum::Unit(_, ty, value) => (
                                 ty.to_owned(),
                                 Some(new_ref!(Value, Value::String(value.to_owned()))),
                             ),
@@ -65,7 +60,7 @@ pub fn eval(
                             //     s_read!(value).type_name().to_owned(),
                             //     Some(s_read!(value).get_value()),
                             // ),
-                            EnumVariant::Tuple((ty, path), value) => {
+                            Enum::Tuple((ty, path), value) => {
                                 let path = path.split(PATH_SEP).collect::<Vec<&str>>();
                                 let mut path = VecDeque::from(path);
                                 let name = path.pop_front().unwrap().to_owned();
@@ -79,7 +74,7 @@ pub fn eval(
                                         name,
                                         Some(new_ref!(
                                             Value,
-                                            Value::Enumeration(EnumVariant::Tuple(
+                                            Value::Enumeration(Enum::Tuple(
                                                 (
                                                     ty.clone(),
                                                     path.into_iter()
@@ -135,7 +130,7 @@ pub fn eval(
                 // pattern expression.
                 match (matched, field_exprs.len()) {
                     (true, 0) => {
-                        let value = eval_expression(pattern_expr, context, vm)?;
+                        let value = eval_expression(pattern_expr, context)?;
                         return Ok(value);
                     }
                     (true, _) => {
@@ -144,10 +139,10 @@ pub fn eval(
                         let field_expr_read = s_read!(field_expr);
                         match field_expr_read.subtype {
                             ExpressionEnum::Literal(ref _id) => {
-                                let value = eval_expression(field_expr.clone(), context, vm)?;
+                                let value = eval_expression(field_expr.clone(), context)?;
                                 let value = s_read!(value);
                                 if *s_read!(scrutinee.unwrap()) == *value {
-                                    let value = eval_expression(pattern_expr, context, vm)?;
+                                    let value = eval_expression(pattern_expr, context)?;
                                     return Ok(value);
                                 }
                             }
@@ -158,7 +153,7 @@ pub fn eval(
                                 context
                                     .memory()
                                     .insert(s_read!(var).name.to_owned(), scrutinee.unwrap());
-                                let value = eval_expression(pattern_expr, context, vm)?;
+                                let value = eval_expression(pattern_expr, context)?;
 
                                 context.memory().pop_frame();
 
@@ -178,7 +173,7 @@ pub fn eval(
                 context
                     .memory()
                     .insert(s_read!(var).name.to_owned(), scrutinee);
-                let value = eval_expression(pattern_expr, context, vm)?;
+                let value = eval_expression(pattern_expr, context)?;
 
                 context.memory().pop_frame();
                 return Ok(value);

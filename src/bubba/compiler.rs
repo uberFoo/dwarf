@@ -1,3 +1,17 @@
+//! Compiler
+//!
+//! Notes for optimizer:
+//!
+//! push true, push true, eq => push true
+//! push true, push false, eq => push false
+//! push false, push true, eq => push false
+//! push false, push false, eq => push true
+//!
+//! push true, push true, eq, jift n => jmp n
+//! push false, push false, eq, jift n => jmp n
+//! push true, push false, eq, jiff n => jmp n
+//! push false, push true, eq, jiff => jmp n
+//!
 use heck::ToUpperCamelCase;
 use log::{self, log_enabled, Level::Trace};
 use rustc_hash::FxHashMap as HashMap;
@@ -6,37 +20,28 @@ use snafu::{location, prelude::*, Location};
 use crate::{
     bubba::{
         instr::{Instruction, Program, Thonk},
-        BOOL, EMPTY, INT, RANGE, RESULT, STRING, STRING_ARRAY, UNKNOWN,
+        value::Value,
+        BOOL, CHAR, EMPTY, FLOAT, INT, RANGE, RESULT, STRING, STRING_ARRAY, UNKNOWN, UUID,
     },
     lu_dog::{
         BodyEnum, Expression, ExpressionEnum, Function, ObjectStore as LuDogStore, Statement,
         StatementEnum, ValueType, ValueTypeEnum,
     },
-    new_ref, s_read, s_write,
+    s_read, s_write,
     sarzak::{ObjectStore as SarzakStore, Ty},
-    Context as ExtruderContext, NewRef, RefType, Span, Value, ERR_CLR, MERLIN, POP_CLR, SARZAK,
+    Context as ExtruderContext, RefType, Span, BUILD_TIME, ERR_CLR, MERLIN, OTHER_CLR, POP_CLR,
+    SARZAK, VERSION,
 };
 
+mod error;
 mod expression;
+
+pub use error::{BubbaCompilerError, BubbaCompilerErrorReporter, Result};
 
 use expression::{
     a_weight, block, call, field, for_loop, if_expr, index, list, literal, operator, print, range,
     ret, struct_expr, typecast, variable, xmatch,
 };
-
-const VERSION: &str = env!("CARGO_PKG_VERSION");
-pub const BUILD_TIME: &str = include!(concat!(env!("OUT_DIR"), "/timestamp.txt"));
-
-#[derive(Clone, Debug, Snafu)]
-pub struct Error(BubbaError);
-
-#[derive(Clone, Debug, Snafu)]
-pub(crate) enum BubbaError {
-    #[snafu(display("\n{}: `{message}`\n  --> {}::{}::{}", ERR_CLR.bold().paint("error"), location.file, location.line, location.column))]
-    InternalCompilerError { location: Location, message: String },
-}
-
-type Result<T, E = Error> = std::result::Result<T, E>;
 
 #[derive(Debug)]
 struct CThonk {
@@ -54,13 +59,13 @@ impl CThonk {
 
     #[tracing::instrument]
     fn insert_instruction(&mut self, instruction: Instruction, location: Location) {
-        tracing::debug!(target: "instr", "{}:\t\t{instruction}\n  --> {}:{}:{}", POP_CLR.paint("add_instruction"), location.file, location.line, location.column);
+        tracing::debug!(target: "instr", "{}:\t\t{}: {instruction}\n  --> {}:{}:{}", POP_CLR.paint("add_instruction"), OTHER_CLR.paint(self.inner.name()), location.file, location.line, location.column);
 
         if log_enabled!(target: "instr", Trace) {
             self.inner.add_instruction(
-                Instruction::Comment(new_ref!(
-                    String,
-                    format!("{}:{}:{}", location.file, location.line, location.column)
+                Instruction::Comment(format!(
+                    "{}:{}:{}",
+                    location.file, location.line, location.column
                 )),
                 None,
             );
@@ -70,13 +75,13 @@ impl CThonk {
 
     #[tracing::instrument]
     fn prefix_instruction(&mut self, instruction: Instruction, location: Location) {
-        tracing::debug!(target: "instr", "{}:\t\t{instruction}\n  --> {}:{}:{}", POP_CLR.paint("prefix_instruction"), location.file, location.line, location.column);
+        tracing::debug!(target: "instr", "{}:\t\t{}: {instruction}\n  --> {}:{}:{}", POP_CLR.paint("prefix_instruction"), OTHER_CLR.paint(self.inner.name()), location.file, location.line, location.column);
 
         if log_enabled!(target: "instr", Trace) {
             self.inner.add_instruction(
-                Instruction::Comment(new_ref!(
-                    String,
-                    format!("{}:{}:{}", location.file, location.line, location.column)
+                Instruction::Comment(format!(
+                    "{}:{}:{}",
+                    location.file, location.line, location.column
                 )),
                 None,
             );
@@ -91,13 +96,13 @@ impl CThonk {
         span: Span,
         location: Location,
     ) {
-        tracing::debug!(target: "instr", "{}:\t\t{instruction}\n  --> {}:{}:{}", POP_CLR.paint("add_instruction"), location.file, location.line, location.column);
+        tracing::debug!(target: "instr", "{}:\t\t{}: {instruction}\n  --> {}:{}:{}", POP_CLR.paint("add_instruction"), OTHER_CLR.paint(self.inner.name()), location.file, location.line, location.column);
 
         if log_enabled!(target: "instr", Trace) {
             self.inner.add_instruction(
-                Instruction::Comment(new_ref!(
-                    String,
-                    format!("{}:{}:{}", location.file, location.line, location.column)
+                Instruction::Comment(format!(
+                    "{}:{}:{}",
+                    location.file, location.line, location.column
                 )),
                 None,
             );
@@ -180,9 +185,9 @@ impl Drop for SymbolTable {
 }
 
 #[derive(Debug)]
-struct Context<'a, 'b> {
+pub(crate) struct Context<'a, 'b> {
     extruder_context: &'a ExtruderContext,
-    symbol_tables: Vec<SymbolTable>,
+    symbol_tables: Vec<(SymbolTable, bool)>,
     program: &'b mut Program,
     st_depth: usize,
     funcs: HashMap<String, ValueType>,
@@ -223,23 +228,23 @@ impl<'a, 'b> Context<'a, 'b> {
         self.program
     }
 
-    fn lu_dog_heel(&self) -> RefType<LuDogStore> {
+    pub(crate) fn lu_dog_heel(&self) -> RefType<LuDogStore> {
         self.extruder_context.lu_dog.clone()
     }
 
-    fn sarzak_heel(&self) -> RefType<SarzakStore> {
+    pub(crate) fn sarzak_heel(&self) -> RefType<SarzakStore> {
         self.extruder_context.sarzak.clone()
     }
 
     fn push_symbol_table(&mut self) {
         self.st_depth += 1;
-        self.symbol_tables.push(SymbolTable::new(0));
+        self.symbol_tables.push((SymbolTable::new(0), true));
     }
 
     fn push_scope(&mut self) {
         self.st_depth += 1;
-        let start = self.symbol_tables.last().unwrap().count();
-        self.symbol_tables.push(SymbolTable::new(start));
+        let start = self.symbol_tables.last().unwrap().0.count();
+        self.symbol_tables.push((SymbolTable::new(start), false));
     }
 
     fn pop_symbol_table(&mut self) {
@@ -253,14 +258,14 @@ impl<'a, 'b> Context<'a, 'b> {
     }
 
     fn is_root_symbol_table(&self) -> bool {
-        self.st_depth == 1
+        self.symbol_tables.last().unwrap().1
     }
 
     fn insert_symbol(&mut self, name: String, ty: ValueType) -> (bool, usize) {
         match self.get_symbol(name.as_str()) {
             Some(value) => (false, value.number),
             None => {
-                let table = self.symbol_tables.last_mut().unwrap();
+                let table = &mut self.symbol_tables.last_mut().unwrap().0;
                 (true, table.insert(name, ty))
             }
         }
@@ -269,7 +274,7 @@ impl<'a, 'b> Context<'a, 'b> {
     fn get_symbol(&self, name: &str) -> Option<&Symbol> {
         // This is a bit goofy, and I think I can work around it.
         // The goofy bit is that our symbol tables aren't bound to just lexical
-        // scope. The extend across function calls. This shouldn't be a problem
+        // scope. They extend across function calls. This shouldn't be a problem
         // in general because the extruder takes care of checking that functions
         // aren't referencing anything outside of their scope.
         //
@@ -292,10 +297,10 @@ impl<'a, 'b> Context<'a, 'b> {
         // they result in missing symbols.
         //
         for table in self.symbol_tables.iter().rev() {
-            if let Some(value) = table.get(name) {
+            if let Some(value) = table.0.get(name) {
                 return Some(value);
             }
-            if table.start() == 0 {
+            if table.0.start() == 0 {
                 break;
             }
         }
@@ -328,9 +333,13 @@ pub fn compile(context: &ExtruderContext) -> Result<Program> {
     let boolean = (*s_read!(ValueType::new_ty(true, &boolean, &mut s_write!(lu_dog)))).clone();
     context.insert_type(BOOL.to_owned(), boolean);
 
-    let empty = ValueType::new_empty(true, &mut s_write!(lu_dog));
-    let empty = (*s_read!(empty)).clone();
-    context.insert_type("Empty".to_owned(), empty);
+    let float = Ty::new_float(&s_read!(context.sarzak_heel()));
+    let float = (*s_read!(ValueType::new_ty(true, &float, &mut s_write!(lu_dog)))).clone();
+    context.insert_type(FLOAT.to_owned(), float);
+
+    let char_ty = ValueType::new_char(true, &mut s_write!(lu_dog));
+    let char_ty = (*s_read!(char_ty)).clone();
+    context.insert_type(CHAR.to_owned(), char_ty);
 
     let range_ty = ValueType::new_range(true, &mut s_write!(lu_dog));
     let range_ty = (*s_read!(range_ty)).clone();
@@ -348,6 +357,14 @@ pub fn compile(context: &ExtruderContext) -> Result<Program> {
     let empty = ValueType::new_empty(true, &mut s_write!(lu_dog));
     let empty = (*s_read!(empty)).clone();
     context.insert_type(EMPTY.to_owned(), empty);
+
+    let uuid = ValueType::new_ty(
+        true,
+        &Ty::new_z_uuid(&s_read!(sarzak)),
+        &mut s_write!(lu_dog),
+    );
+    let uuid = (*s_read!(uuid)).clone();
+    context.insert_type(UUID.to_owned(), uuid);
 
     let mut string_array = ValueType::new_empty(true, &mut s_write!(lu_dog));
     for vt in s_read!(lu_dog).iter_value_type() {
@@ -415,7 +432,7 @@ fn get_function_name(func: &RefType<Function>, lu_dog: &LuDogStore) -> String {
         if let Some(woog_struct) = i_block.r8_woog_struct(lu_dog).first() {
             let woog_struct = s_read!(woog_struct);
             woog_struct.name.clone()
-        } else if let Some(woog_enum) = i_block.r84c_enumeration(lu_dog).first() {
+        } else if let Some(woog_enum) = i_block.r84_enumeration(lu_dog).first() {
             let woog_enum = s_read!(woog_enum);
             woog_enum.name.clone()
         } else {
@@ -471,7 +488,7 @@ fn compile_function(func: &RefType<Function>, context: &mut Context) -> Result<C
         if let Some(woog_struct) = i_block.r8_woog_struct(&lu_dog).first() {
             let woog_struct = s_read!(woog_struct);
             woog_struct.name.clone()
-        } else if let Some(woog_enum) = i_block.r84c_enumeration(&lu_dog).first() {
+        } else if let Some(woog_enum) = i_block.r84_enumeration(&lu_dog).first() {
             let woog_enum = s_read!(woog_enum);
             woog_enum.name.clone()
         } else {
@@ -495,7 +512,7 @@ fn compile_function(func: &RefType<Function>, context: &mut Context) -> Result<C
             let woog_enum = s_read!(woog_enum);
             woog_enum.r1_value_type(&lu_dog)[0].clone()
         } else {
-            return Err(BubbaError::InternalCompilerError {
+            return Err(BubbaCompilerError::InternalCompilerError {
                 location: location!(),
                 message: format!("Could not find type: {ty_name}"),
             }
@@ -532,10 +549,7 @@ fn compile_function(func: &RefType<Function>, context: &mut Context) -> Result<C
                         } else if thonk.returned {
                             break;
                         } else {
-                            thonk.insert_instruction(
-                                Instruction::Push(new_ref!(Value, Value::Empty)),
-                                location!(),
-                            );
+                            thonk.insert_instruction(Instruction::Push(Value::Empty), location!());
                             thonk.insert_instruction(Instruction::Return, location!());
                             thonk.returned = true;
                             break;
@@ -543,10 +557,7 @@ fn compile_function(func: &RefType<Function>, context: &mut Context) -> Result<C
                     }
                 }
             } else {
-                thonk.insert_instruction(
-                    Instruction::Push(new_ref!(Value, Value::Empty)),
-                    location!(),
-                );
+                thonk.insert_instruction(Instruction::Push(Value::Empty), location!());
                 thonk.insert_instruction(Instruction::Return, location!());
                 thonk.returned = true;
             }
@@ -661,7 +672,10 @@ fn compile_expression(
         ExpressionEnum::AWait(ref expr) => a_weight::compile(expr, thonk, context, span),
         ExpressionEnum::Block(ref block) => block::compile(block, thonk, context),
         ExpressionEnum::Call(ref call) => call::compile(call, thonk, context, span),
-        ExpressionEnum::XDebugger(_) => Ok(None),
+        ExpressionEnum::EmptyExpression(_) => {
+            thonk.insert_instruction(Instruction::Push(Value::Empty), location!());
+            Ok(Some(context.get_type(EMPTY).unwrap().clone()))
+        }
         ExpressionEnum::FieldAccess(ref field) => {
             field::compile_field_access(field, thonk, context, span)
         }
@@ -687,6 +701,7 @@ fn compile_expression(
             variable::compile(expr, thonk, context, span)
         }
         ExpressionEnum::XIf(ref expr) => if_expr::compile(expr, thonk, context),
+        ExpressionEnum::XDebugger(_) => Ok(None),
         ExpressionEnum::XMatch(ref expr) => xmatch::compile(expr, thonk, context, span),
         ExpressionEnum::XPrint(ref print) => print::compile(print, thonk, context),
         ExpressionEnum::XReturn(ref expr) => ret::compile(expr, thonk, context, span),
@@ -698,6 +713,7 @@ fn compile_expression(
 
 fn get_span(expression: &RefType<Expression>, lu_dog: &LuDogStore) -> Span {
     let value = &s_read!(expression).r11_x_value(lu_dog)[0];
+    dbg!(&value);
     let span = &s_read!(value).r63_span(lu_dog)[0];
     let read = s_read!(span);
     read.start as usize..read.end as usize
@@ -714,7 +730,7 @@ mod test {
     use test_log::test;
 
     use crate::{
-        bubba::{vm::Error, VM},
+        bubba::{error::Error, VM},
         dwarf::{new_lu_dog, parse_dwarf},
         sarzak::MODEL as SARZAK_MODEL,
         RefType,
@@ -731,9 +747,13 @@ mod test {
     }
 
     // Nothing special about this number.
+    #[cfg(feature = "async")]
     const THREADS: usize = 5;
     pub(super) fn run_vm(program: &Program) -> Result<RefType<Value>, Error> {
+        #[cfg(feature = "async")]
         let mut vm = VM::new(program, &[], &get_dwarf_home(), THREADS);
+        #[cfg(not(feature = "async"))]
+        let mut vm = VM::new(program, &[], &get_dwarf_home());
         vm.invoke("main", &[])
     }
 
@@ -741,7 +761,10 @@ mod test {
         program: &Program,
         args: &[RefType<Value>],
     ) -> Result<RefType<Value>, Error> {
+        #[cfg(feature = "async")]
         let mut vm = VM::new(program, args, &get_dwarf_home(), THREADS);
+        #[cfg(not(feature = "async"))]
+        let mut vm = VM::new(program, args, &get_dwarf_home());
         vm.invoke("main", &[])
     }
 
@@ -904,7 +927,7 @@ mod test {
         assert_eq!(&*s_read!(run.unwrap()), &Value::Boolean(true));
     }
 
-    // #[test]
+    #[test]
     fn use_plugin() {
         setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
@@ -946,7 +969,6 @@ use http::client::Response;
 use std::result::Result;
 
 async fn async_get(urls: [String]) -> Future<[Result<string, HttpError>]> {
-    let client = HttpClient::new();
 
     let tasks: [Future<Result<string, HttpError>>] = [];
     // Start a task for each url and push them into the tasks array.
@@ -954,6 +976,7 @@ async fn async_get(urls: [String]) -> Future<[Result<string, HttpError>]> {
         print(url);
         print("\n");
         let task = chacha::spawn(async || -> Result<string, HttpError> {
+            let client = HttpClient::new();
             // This creates a request and sends it.
             let get = client.get(url).await;
             let get = get.send().await;
@@ -1109,42 +1132,5 @@ async fn main() -> Future<()> {
         let run = run_vm(&program);
         assert!(run.is_ok());
         assert_eq!(&*s_read!(run.unwrap()), &Value::Integer(0));
-    }
-
-    #[test]
-    fn format_string() {
-        setup_logging();
-        let ore = r#"
-                   fn main() -> string {
-                       let x = 42;
-                       let y = "Hello";
-                       let z = "world";
-                       let α = `MOTD: ${y} ${z}!, the magic number is ${x}.`;
-                       print(α);
-
-                       α
-                   }
-                       "#;
-
-        let ast = parse_dwarf("format_string", ore).unwrap();
-        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
-        let ctx = new_lu_dog(
-            "format_string".to_owned(),
-            Some((ore.to_owned(), &ast)),
-            &get_dwarf_home(),
-            &sarzak,
-        )
-        .unwrap();
-        let program = compile(&ctx).unwrap();
-        println!("{program}");
-        assert_eq!(program.get_thonk_card(), 1);
-        assert_eq!(program.get_instruction_card(), 27);
-
-        let run = run_vm(&program);
-        assert!(run.is_ok());
-        assert_eq!(
-            &*s_read!(run.unwrap()),
-            &Value::String("MOTD: Hello world!, the magic number is 42.".to_owned())
-        );
     }
 }

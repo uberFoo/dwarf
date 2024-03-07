@@ -2,11 +2,14 @@ use snafu::{location, Location};
 
 use crate::{
     bubba::{
-        compiler::{compile_expression, CThonk, Context, Result},
+        compiler::{compile_expression, BubbaCompilerError, CThonk, Context, Result},
         instr::Instruction,
     },
-    lu_dog::ValueType,
-    s_read, SarzakStorePtr, Span, POP_CLR,
+    chacha::interpreter::{ModelContext, PrintableValueType},
+    lu_dog::{ValueType, ValueTypeEnum},
+    new_ref, s_read,
+    sarzak::Ty,
+    ModelStore, NewRef, RefType, SarzakStorePtr, Span, POP_CLR,
 };
 
 #[tracing::instrument]
@@ -20,20 +23,70 @@ pub(in crate::bubba::compiler) fn compile(
 
     let lu_dog = context.lu_dog_heel().clone();
     let lu_dog = s_read!(lu_dog);
+    let sarzak = context.sarzak_heel().clone();
+    let sarzak = s_read!(sarzak);
 
     let index = lu_dog.exhume_index(index).unwrap();
     let index = s_read!(index);
-    let target = lu_dog.exhume_expression(&index.target).unwrap();
 
-    compile_expression(&target, thonk, context)?;
+    let target = lu_dog.exhume_expression(&index.target).unwrap();
+    let list_type = compile_expression(&target, thonk, context)?;
 
     let index_expr = lu_dog.exhume_expression(&index.index).unwrap();
+    let index_type = compile_expression(&index_expr, thonk, context)?;
 
-    compile_expression(&index_expr, thonk, context)?;
+    match index_type {
+        Some(v_ty) => match v_ty.subtype {
+            ValueTypeEnum::Ty(ref ty) => {
+                let ty = sarzak.exhume_ty(ty).unwrap();
+                let ty = s_read!(ty);
+                match &*ty {
+                    Ty::Integer(_) => {
+                        thonk.insert_instruction_with_span(
+                            Instruction::ListIndex,
+                            span,
+                            location!(),
+                        );
+                    }
+                    _ => {
+                        let ctx = ModelContext::new(
+                            context.lu_dog_heel(),
+                            context.sarzak_heel(),
+                            new_ref!(ModelStore, context.extruder_context.models.clone()),
+                        );
+                        let ty = PrintableValueType(true, new_ref!(ValueType, v_ty), &ctx);
+                        Err(BubbaCompilerError::NotIndexable {
+                            ty: ty.to_string(),
+                            span,
+                            location: Location::new(file!(), line!(), column!()),
+                        })?
+                    }
+                }
+            }
+            ValueTypeEnum::Range(_) => {
+                thonk.insert_instruction_with_span(Instruction::ListIndexRange, span, location!());
+            }
+            _ => {
+                let ctx = ModelContext::new(
+                    context.lu_dog_heel(),
+                    context.sarzak_heel(),
+                    new_ref!(ModelStore, context.extruder_context.models.clone()),
+                );
+                let ty = PrintableValueType(true, new_ref!(ValueType, v_ty), &ctx);
+                Err(BubbaCompilerError::NotIndexable {
+                    ty: ty.to_string(),
+                    span,
+                    location: location!(),
+                })?
+            }
+        },
+        None => Err(BubbaCompilerError::InternalCompilerError {
+            message: "index type is None".to_owned(),
+            location: location!(),
+        })?,
+    }
 
-    thonk.insert_instruction_with_span(Instruction::ListIndex, span, location!());
-
-    Ok(None)
+    Ok(list_type)
 }
 
 #[cfg(test)]
@@ -100,12 +153,12 @@ mod test {
         println!("{}", run_vm(&program).unwrap_err());
     }
 
-    // #[test]
+    #[test]
     fn index_into_string() {
         setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "
-                   fn main() -> string {
+                   fn main() -> char {
                        let x = \"foo\";
                        x[1]
                    }";
@@ -123,14 +176,8 @@ mod test {
 
         assert_eq!(program.get_thonk_card(), 1);
 
-        // assert_eq!(
-        //     program.get_thonk("main").unwrap().get_instruction_card(),
-        //     8
-        // );
+        assert_eq!(program.get_instruction_card(), 6);
 
-        assert_eq!(
-            &*s_read!(run_vm(&program).unwrap()),
-            &Value::String("o".to_owned())
-        );
+        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Char('o'));
     }
 }

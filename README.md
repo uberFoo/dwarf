@@ -7,12 +7,14 @@
 # The dwarf Programming Language
 
 dwarf is a programming language based heavily upon, and implemented in, [Rust](https://www.rust-lang.org).
-The language is interpreted (and slow) with a VM (fast-ish) on the way.
+It is a typed, (optionally) asynchronous, interpreted language.
+dwarf supports all the usual primitive types like int, float, bool, and string.
+It also has support for arrays, UUIDs, structs and enums, with tuples on the way.
+dwarf supports generic parameters to functions as well as structs and enums.
+Three is currently a compiler/VM, an interpreter, and a REPL.
 
-dwarf was initially meant to be a simple DSL for another project I'm working on.
-As I used it, I needed to keep adding features.
-Soon it was pretty general purpose, and interesting, and fun to play with.
-I'd simply like to share it with the world to see if anyone else may find it useful.
+Think of dwarf as Rust on easy mode!
+
 
 There is a [book 📒](https://uberfoo.github.io/assets/docs/dwarf/introduction.html) in progress.
 Check it out!
@@ -21,12 +23,12 @@ Check it out!
 
 I appreciate feedback.
 Let me know if you love it, or hate it.
-There are likely as not bugs, and corner cases.
-File a bug report, and let me know.
+There are likely as not bugs, and corner cases yet to be uncovered.
+If you run across something, file a bug report, and I'll git a fix out ASAP.
 
 > **Free Stuff**
 >
-> I'm giving away dwarf stickers to anyone who files a bug report.
+> I'm giving away dwarf stickers to anyone who files a bug report!
 
 ## Installation
 
@@ -53,14 +55,7 @@ Of course you'll need to have [rust installed ](https://rustup.rs).
 ```bash
 git clone https://github.com/uberFoo/dwarf.git
 cd dwarf
-cargo install --path . --bin dwarf
-```
-
-
-Once you have a binary, give it a whirl:
-
-```bash
-dwarf https://raw.githubusercontent.com/uberFoo/dwarf/develop/mandelbrot.ore -- 50
+cargo xtask install
 ```
 
 ## Beautiful Error Messages!
@@ -75,11 +70,6 @@ Check out [ariadne](https://docs.rs/ariadne/latest/ariadne/) and you too can hav
 * Easily embeddable
 * Rust-like syntax
 
-## Non-Goals
-
-* Interpreter / debugger performance
-* 100% Rust feature / syntax parity
-
 ## On the Horizon
 
 These are the thins that spring to mind when I think of what I'd most like to do next with dwarf.
@@ -90,7 +80,7 @@ In no particular order:
 * [x] Multiple files (use items)
 * [x] enums
 * [x] lambdas
-* [ ] Compiler for VM
+* [x] Compiler for VM
 * [ ] Visibility modifiers
 * [x] Generics
 * [ ] Macros (Yes, and I don't know why other interpreted languages don't have them. Am I crazy?)
@@ -105,13 +95,9 @@ In no particular order:
 There will be some sort of support for OO-like behavior.
 Minimally we need inheritance, and probably polymorphism.
 
-### Virtual Machine
-
-There's a sort-of hybrid-VM currently, but no compiler.
-
 ## Syntax
 
-dwarf syntax is a strict subset of Rust's.
+dwarf syntax is (nearly) a strict subset of Rust's.
 In fact, I use the Rust language syntax parser in `vscode` to highlight, navigate, and edit Dwarf source.
 
 The bits that are missing include iterators, enumerations, paths, visibility modifiers, generics (for now), and the list goes on.
@@ -120,35 +106,6 @@ The bits that are missing include iterators, enumerations, paths, visibility mod
 
 dwarf has a REPL.
 Pass the `-r` flag to start it.
-
-## Architecture
-
-### Parser
-
-There is a hand written parser that takes care of turning the source into an AST.
-The parser is great at parsing good code, and terrible and everything else.
-Fixing this is on my todo list.
-
-### Compiler
-
-The AST is "compiled" into an in-memory representation that is comprised of the generated code.
-It's a model, and I should probably include pictures, or some way to look at it, despite it's terrible layout.
-The model looks like a standard UML class diagram, and it may as well be.
-I sort of turn it sideways and treat it as an AST.
-
-So what the compiler really does is translate one AST into another.
-It really does more than that though.
-It resolves as much type information as it can.
-It resolves names.
-It may do more, I'll have to look.
-
-### Interpreter
-
-After the compiler comes the interpreter.
-It reads the model/AST and executes it.
-I think that the default is to execute a `main` function.
-
-If you start in the REPL, you get the execution in a loop.
 
 ## License
 

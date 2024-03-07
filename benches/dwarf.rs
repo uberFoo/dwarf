@@ -2,8 +2,8 @@ use std::{env, fs, path::PathBuf};
 
 use criterion::{criterion_group, criterion_main, Criterion};
 use dwarf::{
-    bubba::{compiler::compile, VM},
-    chacha::interpreter::{initialize_interpreter, run_fib, start_func},
+    bubba::{compiler::compile, value::Value as BubbaValue, VM},
+    chacha::interpreter::{initialize_interpreter, start_func},
     dwarf::{new_lu_dog, parse_dwarf},
     new_ref, NewRef, RefType, Value,
 };
@@ -69,13 +69,35 @@ fn fib_vm(c: &mut Criterion) {
         panic!("Failed to compile program");
     };
 
-    let args = vec![new_ref!(Value, "fib".into()), new_ref!(Value, "17".into())];
+    let args = vec![
+        new_ref!(BubbaValue, "fib".into()),
+        new_ref!(BubbaValue, "17".into()),
+    ];
+    #[cfg(feature = "async")]
     let mut vm = VM::new(&program, &args, &PathBuf::new(), num_cpus::get());
+    #[cfg(not(feature = "async"))]
+    let mut vm = VM::new(&program, &args, &PathBuf::new());
     c.bench_function("fib-vm-17", |b| b.iter(|| vm.invoke("main", &[]).unwrap()));
 
-    let args = vec![new_ref!(Value, "fib".into()), new_ref!(Value, "28".into())];
+    let args = vec![
+        new_ref!(BubbaValue, "fib".into()),
+        new_ref!(BubbaValue, "28".into()),
+    ];
+    #[cfg(feature = "async")]
     let mut vm = VM::new(&program, &args, &PathBuf::new(), num_cpus::get());
+    #[cfg(not(feature = "async"))]
+    let mut vm = VM::new(&program, &args, &PathBuf::new());
     c.bench_function("fib-vm-28", |b| b.iter(|| vm.invoke("main", &[]).unwrap()));
+
+    let args = vec![
+        new_ref!(BubbaValue, "fib".into()),
+        new_ref!(BubbaValue, "5".into()),
+    ];
+    #[cfg(feature = "async")]
+    let mut vm = VM::new(&program, &args, &PathBuf::new(), num_cpus::get());
+    #[cfg(not(feature = "async"))]
+    let mut vm = VM::new(&program, &args, &PathBuf::new());
+    c.bench_function("fib-vm-5", |b| b.iter(|| vm.invoke("main", &[]).unwrap()));
 }
 
 fn fib(c: &mut Criterion) {
@@ -171,48 +193,15 @@ fn loop_vm(c: &mut Criterion) {
     let Ok(program) = compile(&lu_dog_ctx) else {
         panic!("Failed to compile program");
     };
+    #[cfg(feature = "async")]
     let mut vm = VM::new(&program, &[], &PathBuf::new(), num_cpus::get());
+    #[cfg(not(feature = "async"))]
+    let mut vm = VM::new(&program, &[], &PathBuf::new());
 
     c.bench_function("loop-vm", |b| b.iter(|| vm.invoke("main", &[]).unwrap()));
 }
 
-fn vm_28(c: &mut Criterion) {
-    #[cfg(feature = "tracy")]
-    Client::start();
-
-    c.bench_function("vm-fib-28", |b| {
-        b.iter(|| run_fib(28.into(), num_cpus::get()).unwrap())
-    });
-}
-
-fn vm_25(c: &mut Criterion) {
-    #[cfg(feature = "tracy")]
-    Client::start();
-
-    c.bench_function("vm-fib-25", |b| {
-        b.iter(|| run_fib(25.into(), num_cpus::get()).unwrap())
-    });
-}
-
-fn vm_17(c: &mut Criterion) {
-    #[cfg(feature = "tracy")]
-    Client::start();
-
-    c.bench_function("vm-fib-17", |b| {
-        b.iter(|| run_fib(17.into(), num_cpus::get()).unwrap())
-    });
-}
-
-fn vm_5(c: &mut Criterion) {
-    #[cfg(feature = "tracy")]
-    Client::start();
-
-    c.bench_function("vm-fib-5", |b| {
-        b.iter(|| run_fib(5.into(), num_cpus::get()).unwrap())
-    });
-}
-
 // criterion_group!(benches, loop_, mandelbrot, fib, vm_28, vm_25, vm_17, vm_5);
 // criterion_group!(benches, vm_25, vm_17, vm_5);
-criterion_group!(benches, fib, fib_vm, loop_, loop_vm);
+criterion_group!(benches, fib, fib_vm, loop_vm);
 criterion_main!(benches);

@@ -24,7 +24,7 @@ pub mod tui;
 // pub mod lu_dog_proxy;
 
 pub use ::sarzak::{lu_dog, sarzak};
-use bubba::vm::Error as BubbaError;
+use bubba::error::Error as BubbaError;
 pub use chacha::value::Value;
 pub(crate) use chacha::{error::ChaChaError, interpreter};
 
@@ -32,8 +32,10 @@ pub(crate) use chacha::{error::ChaChaError, interpreter};
 pub type DwarfInteger = i64;
 pub type DwarfFloat = f64;
 
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+pub const BUILD_TIME: &str = include!(concat!(env!("OUT_DIR"), "/timestamp.txt"));
+
 mod keywords {
-    pub(crate) const ADD: &str = "add";
     pub(crate) const ARGS: &str = "args";
     #[cfg(feature = "async")]
     pub(crate) const ASLEEP: &str = "asleep";
@@ -68,7 +70,6 @@ mod keywords {
     pub(crate) const SPAWN_NAMED: &str = "spawn_named";
     pub(crate) const SPLIT: &str = "split";
     pub(crate) const SUM: &str = "sum";
-    pub(crate) const SQUARE: &str = "square";
     pub(crate) const TIME: &str = "time";
     // 🚧 Really this should be async only, but there's a nastiness in static_method_call.rs
     // that would make changing this a pain. That's on the todo list.
@@ -88,7 +89,7 @@ pub(crate) const PATH_ROOT: &str = PATH_SEP;
 pub(crate) const ERR_CLR: Colour = Colour::Red;
 pub(crate) const OK_CLR: Colour = Colour::Green;
 pub(crate) const POP_CLR: Colour = Colour::Yellow;
-pub(crate) const OTH_CLR: Colour = Colour::Cyan;
+pub(crate) const OTHER_CLR: Colour = Colour::Cyan;
 
 pub(crate) const OBJECT_STORE: &str = "ObjectStore";
 pub(crate) const FUNCTION_NEW: &str = "new";
@@ -507,7 +508,7 @@ impl Default for Context {
 }
 
 pub type ValueResult = Result<RefType<Value>, ChaChaError>;
-pub type VmValueResult = Result<RefType<Value>, BubbaError>;
+pub type VmValueResult = Result<RefType<crate::bubba::value::Value>, BubbaError>;
 
 pub(crate) trait Desanitize {
     fn desanitize(&self) -> String;

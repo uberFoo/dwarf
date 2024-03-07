@@ -1,0 +1,5 @@
+fn main() {
+    let a = [0, 1, 2, 3, "4" as int];
+    chacha::assert_eq(a[0], 0);
+    chacha::assert_eq(a[4], 4);
+}

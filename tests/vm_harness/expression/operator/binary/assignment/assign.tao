@@ -1,0 +1,6 @@
+fn main() {
+    let a = 42;
+    chacha::assert_eq(a, 42);
+    a = 69;
+    chacha::assert_eq(a, 69);
+}

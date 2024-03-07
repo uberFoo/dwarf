@@ -2,7 +2,6 @@ use ansi_term::Colour;
 use snafu::{location, Location};
 
 use crate::{
-    bubba::VM,
     chacha::error::Result,
     interpreter::{debug, eval_expression, function, ChaChaError, Context},
     lu_dog::FieldAccessTargetEnum,
@@ -12,11 +11,7 @@ use crate::{
 pub mod field_access {
     use super::*;
 
-    pub fn eval(
-        field: &SarzakStorePtr,
-        context: &mut Context,
-        vm: &mut VM,
-    ) -> Result<RefType<Value>> {
+    pub fn eval(field: &SarzakStorePtr, context: &mut Context) -> Result<RefType<Value>> {
         let lu_dog = context.lu_dog_heel().clone();
 
         let field = s_read!(lu_dog).exhume_field_access(field).unwrap();
@@ -57,7 +52,7 @@ pub mod field_access {
 
         debug!("expression: {expr:?}");
 
-        let value = eval_expression(expr, context, vm)?;
+        let value = eval_expression(expr, context)?;
 
         debug!("value: {value:?}");
 
@@ -99,7 +94,6 @@ pub mod field_access {
             Value::Struct(value) => {
                 let value = s_read!(value);
                 let value = value.get_field_value(&field_name).unwrap().clone();
-                let value = s_read!(value).clone();
 
                 Ok(new_ref!(Value, value))
             }
@@ -115,16 +109,12 @@ pub mod field_access {
 pub mod field_expression {
     use super::*;
 
-    pub fn eval(
-        field_expr: &SarzakStorePtr,
-        context: &mut Context,
-        vm: &mut VM,
-    ) -> Result<RefType<Value>> {
+    pub fn eval(field_expr: &SarzakStorePtr, context: &mut Context) -> Result<RefType<Value>> {
         let lu_dog = context.lu_dog_heel().clone();
 
         let field_expr = s_read!(lu_dog).exhume_field_expression(field_expr).unwrap();
         let expr = s_read!(field_expr).r38_expression(&s_read!(lu_dog))[0].clone();
 
-        eval_expression(expr, context, vm)
+        eval_expression(expr, context)
     }
 }

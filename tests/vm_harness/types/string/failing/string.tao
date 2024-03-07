@@ -1,0 +1,38 @@
+/// Test basic string stuff
+fn main() -> () {
+    let s = "Hello, world!🎉💥";
+    print(s + "\n");
+
+    // Strings are also iterable.
+    for c in s {
+        let hack = c;
+        let foo = hack;
+        print(hack as string + "\n");
+    }
+
+    // Can we get the length of a string?
+    print(s.len() as string + "\n");
+
+    // Of course you can fetch the length of a string.
+    // 🚧 This should be an inherent method that we know the type of.
+    let len = s.len();
+    chacha::assert_eq(len, 15);
+
+    // Note that indexing into a string is zero based. Also, we are indexing by
+    // unicode graphemes, which is a "printable character".
+    chacha::assert_eq(s[len - 1], '💥');
+    chacha::assert_eq(s[len - 2], '🎉');
+    chacha::assert_eq(s[len - 9], ' ');
+
+    // index into a string with a range.
+    let jumble = `${s[0..5]}${s[len - 3]}\n`; // Hello!
+    chacha::assert_eq(jumble, "Hello!\n");
+    print(jumble);
+
+    print(`The length of the string is ${len}. ${len} * ${len} = ${len * len}\n`);
+
+    let answer = 42;
+    let question = "Huh?";
+    let msg = `The answer to life, the universe, and everything is ${answer}. ${question} Really, ${answer}\n`;
+    print(msg);
+}

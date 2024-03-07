@@ -1,0 +1,15 @@
+fn main() -> bool {
+    if false {
+        print("false");
+        chacha::assert(false);
+        false
+    } else if true {
+        print("true");
+        chacha::assert(true);
+        true
+    } else {
+        print("false");
+        chacha::assert(false);
+        false
+    }
+}

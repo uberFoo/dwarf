@@ -4,9 +4,10 @@ use crate::{
     bubba::{
         compiler::{compile_expression, CThonk, Context, Result},
         instr::Instruction,
+        value::Value,
     },
     lu_dog::ValueType,
-    new_ref, s_read, NewRef, RefType, SarzakStorePtr, Span, Value, POP_CLR,
+    new_ref, s_read, NewRef, RefType, SarzakStorePtr, Span, POP_CLR,
 };
 
 #[tracing::instrument]
@@ -29,7 +30,7 @@ pub(in crate::bubba::compiler) fn compile(
     compile_expression(&lhs, thonk, context)?;
 
     thonk.insert_instruction_with_span(
-        Instruction::Typecast(new_ref!(Value, Value::ValueType((*s_read!(as_ty)).clone()))),
+        Instruction::TypeCast(new_ref!(Value, Value::ValueType((*s_read!(as_ty)).clone()))),
         span,
         location!(),
     );

@@ -50,7 +50,7 @@ pub fn inter(
         let ty = context.sarzak.exhume_ty(id).unwrap();
         matches!(&*ty.read().unwrap(), Ty::Boolean(_));
     } else {
-        let lhs = PrintableValueType(&lhs_ty, context, lu_dog);
+        let lhs = PrintableValueType(true, &lhs_ty, context, lu_dog);
         return Err(vec![DwarfError::TypeMismatch {
             found: lhs.to_string(),
             expected: "bool".to_string(),

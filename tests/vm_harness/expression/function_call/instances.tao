@@ -1,0 +1,30 @@
+struct Counter {
+    count: int,
+}
+
+impl Counter {
+    fn new() -> Self {
+        Counter { count: 0 }
+    }
+
+    fn increment(self) {
+        self.count = self.count + 1;
+    }
+
+    fn get(self) -> int {
+        self.count
+    }
+}
+
+fn main() {
+    let a = Counter::new();
+    let b = Counter::new();
+    b.increment();
+    chacha::assert_eq(a.get(), 0);
+    chacha::assert_eq(b.get(), 1);
+
+    a.increment();
+    b.increment();
+    chacha::assert_eq(a.get(), 1);
+    chacha::assert_eq(b.get(), 2);
+}

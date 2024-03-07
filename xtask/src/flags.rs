@@ -5,11 +5,15 @@ xflags::xflags! {
 
     /// Run custom build command.
     cmd xtask {
-        cmd plugins {
+        cmd plugin {
             optional --plugin plugin: String
+            optional --debug debug: bool
         }
         cmd package {
             optional --client-patch-version version: String
+        }
+        cmd install {
+            optional --debug debug: bool
         }
     }
 }
@@ -24,18 +28,25 @@ pub struct Xtask {
 
 #[derive(Debug)]
 pub enum XtaskCmd {
-    Plugins(Plugins),
+    Plugin(Plugin),
     Package(Package),
+    Install(Install),
 }
 
 #[derive(Debug)]
-pub struct Plugins {
+pub struct Plugin {
     pub plugin: Option<String>,
+    pub debug: Option<bool>,
 }
 
 #[derive(Debug)]
 pub struct Package {
     pub client_patch_version: Option<String>,
+}
+
+#[derive(Debug)]
+pub struct Install {
+    pub debug: Option<bool>,
 }
 
 impl Xtask {

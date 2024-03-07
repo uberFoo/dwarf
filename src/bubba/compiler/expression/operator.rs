@@ -2,14 +2,15 @@ use snafu::{location, Location};
 
 use crate::{
     bubba::{
-        compiler::{compile_expression, CThonk, Context, Result},
+        compiler::{compile_expression, CThonk, Context, Result, BOOL, EMPTY, INT},
         instr::Instruction,
+        value::Value,
     },
     lu_dog::{
         BinaryEnum, BooleanOperatorEnum, ComparisonEnum, ExpressionEnum, FieldAccessTargetEnum,
         OperatorEnum, UnaryEnum, ValueType,
     },
-    new_ref, s_read, NewRef, RefType, SarzakStorePtr, Span, Value, POP_CLR,
+    s_read, SarzakStorePtr, Span, POP_CLR,
 };
 
 #[tracing::instrument]
@@ -27,7 +28,7 @@ pub(in crate::bubba::compiler) fn compile(
     let operator = s_read!(operator);
     let lhs = lu_dog.exhume_expression(&operator.lhs).unwrap();
 
-    match operator.subtype {
+    let ty = match operator.subtype {
         OperatorEnum::Binary(ref op_type) => {
             let binary = lu_dog.exhume_binary(op_type).unwrap();
             let binary = s_read!(binary);
@@ -38,6 +39,8 @@ pub(in crate::bubba::compiler) fn compile(
                     compile_expression(&lhs, thonk, context)?;
                     compile_expression(&rhs, thonk, context)?;
                     thonk.insert_instruction_with_span(Instruction::Add, span, location!());
+
+                    context.get_type(INT).unwrap().clone()
                 }
                 BinaryEnum::Assignment(_) => {
                     compile_expression(&rhs, thonk, context)?;
@@ -70,7 +73,7 @@ pub(in crate::bubba::compiler) fn compile(
                             };
 
                             thonk.insert_instruction_with_span(
-                                Instruction::Push(new_ref!(Value, Value::String(field_name))),
+                                Instruction::Push(Value::String(field_name)),
                                 span.clone(),
                                 location!(),
                             );
@@ -80,6 +83,8 @@ pub(in crate::bubba::compiler) fn compile(
                                 span,
                                 location!(),
                             );
+
+                            context.get_type(EMPTY).unwrap().clone()
                         }
                         ExpressionEnum::VariableExpression(ref expr) => {
                             let expr = lu_dog.exhume_variable_expression(expr).unwrap();
@@ -94,6 +99,8 @@ pub(in crate::bubba::compiler) fn compile(
                                 span,
                                 location!(),
                             );
+
+                            context.get_type(EMPTY).unwrap().clone()
                         }
                         _ => {
                             panic!("In assignment and lhs is not a variable: {lhs:?}")
@@ -113,21 +120,29 @@ pub(in crate::bubba::compiler) fn compile(
                             thonk.insert_instruction_with_span(Instruction::Or, span, location!());
                         }
                     }
+
+                    context.get_type(BOOL).unwrap().clone()
                 }
                 BinaryEnum::Division(_) => {
                     compile_expression(&lhs, thonk, context)?;
                     compile_expression(&rhs, thonk, context)?;
                     thonk.insert_instruction_with_span(Instruction::Divide, span, location!());
+
+                    context.get_type(INT).unwrap().clone()
                 }
                 BinaryEnum::Subtraction(_) => {
                     compile_expression(&lhs, thonk, context)?;
                     compile_expression(&rhs, thonk, context)?;
                     thonk.insert_instruction_with_span(Instruction::Subtract, span, location!());
+
+                    context.get_type(INT).unwrap().clone()
                 }
                 BinaryEnum::Multiplication(_) => {
                     compile_expression(&lhs, thonk, context)?;
                     compile_expression(&rhs, thonk, context)?;
                     thonk.insert_instruction_with_span(Instruction::Multiply, span, location!());
+
+                    context.get_type(INT).unwrap().clone()
                 }
             }
         }
@@ -142,6 +157,8 @@ pub(in crate::bubba::compiler) fn compile(
                     compile_expression(&lhs, thonk, context)?;
                     compile_expression(&rhs, thonk, context)?;
                     thonk.insert_instruction_with_span(Instruction::TestEqual, span, location!());
+
+                    context.get_type(BOOL).unwrap().clone()
                 }
                 ComparisonEnum::GreaterThan(_) => {
                     compile_expression(&lhs, thonk, context)?;
@@ -151,6 +168,30 @@ pub(in crate::bubba::compiler) fn compile(
                         span,
                         location!(),
                     );
+
+                    context.get_type(BOOL).unwrap().clone()
+                }
+                ComparisonEnum::GreaterThanOrEqual(_) => {
+                    compile_expression(&lhs, thonk, context)?;
+                    compile_expression(&rhs, thonk, context)?;
+                    thonk.insert_instruction_with_span(
+                        Instruction::TestGreaterThanOrEqual,
+                        span,
+                        location!(),
+                    );
+
+                    context.get_type(BOOL).unwrap().clone()
+                }
+                ComparisonEnum::LessThan(_) => {
+                    compile_expression(&lhs, thonk, context)?;
+                    compile_expression(&rhs, thonk, context)?;
+                    thonk.insert_instruction_with_span(
+                        Instruction::TestLessThan,
+                        span,
+                        location!(),
+                    );
+
+                    context.get_type(BOOL).unwrap().clone()
                 }
                 ComparisonEnum::LessThanOrEqual(_) => {
                     compile_expression(&lhs, thonk, context)?;
@@ -160,8 +201,20 @@ pub(in crate::bubba::compiler) fn compile(
                         span,
                         location!(),
                     );
+
+                    context.get_type(BOOL).unwrap().clone()
                 }
-                c => todo!("comparison {c:?}"),
+                ComparisonEnum::NotEqual(_) => {
+                    compile_expression(&lhs, thonk, context)?;
+                    compile_expression(&rhs, thonk, context)?;
+                    thonk.insert_instruction_with_span(
+                        Instruction::TestNotEqual,
+                        span,
+                        location!(),
+                    );
+
+                    context.get_type(BOOL).unwrap().clone()
+                }
             }
         }
         OperatorEnum::Unary(ref id) => {
@@ -171,20 +224,25 @@ pub(in crate::bubba::compiler) fn compile(
             match &unary.subtype {
                 UnaryEnum::Negation(_) => {
                     thonk.insert_instruction_with_span(
-                        Instruction::Push(new_ref!(Value, Value::Integer(-1))),
+                        Instruction::Push(Value::Integer(-1)),
                         span.clone(),
                         location!(),
                     );
                     thonk.insert_instruction_with_span(Instruction::Multiply, span, location!());
+
+                    // 🚧 WHat if it's a float?
+                    context.get_type(INT).unwrap().clone()
                 }
                 UnaryEnum::Not(_) => {
                     thonk.insert_instruction_with_span(Instruction::Not, span, location!());
+
+                    context.get_type(BOOL).unwrap().clone()
                 }
             }
         }
-    }
+    };
 
-    Ok(None)
+    Ok(Some(ty))
 }
 
 #[cfg(test)]
@@ -199,7 +257,7 @@ mod test {
     };
 
     #[test]
-    fn test_add_strings() {
+    fn add_strings() {
         setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "fn main() -> string {
@@ -227,7 +285,7 @@ mod test {
     }
 
     #[test]
-    fn test_subtraction() {
+    fn subtraction() {
         setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "fn main() -> int {
@@ -252,7 +310,7 @@ mod test {
     }
 
     #[test]
-    fn test_multiplication() {
+    fn multiplication() {
         setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "fn main() -> int {
@@ -278,7 +336,7 @@ mod test {
     }
 
     #[test]
-    fn test_division() {
+    fn division() {
         setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "fn main() -> int {
@@ -304,7 +362,7 @@ mod test {
     }
 
     #[test]
-    fn test_assignment() {
+    fn assignment() {
         setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "fn main() -> int {
@@ -332,7 +390,7 @@ mod test {
     }
 
     #[test]
-    fn test_and_expression() {
+    fn and_expression() {
         setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "
@@ -358,7 +416,7 @@ mod test {
     }
 
     #[test]
-    fn test_or_expression() {
+    fn or_expression() {
         setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "
@@ -384,7 +442,7 @@ mod test {
     }
 
     #[test]
-    fn test_binary_not() {
+    fn binary_not() {
         setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "
@@ -410,7 +468,7 @@ mod test {
     }
 
     #[test]
-    fn test_assign_to_struct_field() {
+    fn assign_to_struct_field() {
         setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
 
@@ -444,7 +502,7 @@ mod test {
     }
 
     #[test]
-    fn test_greater_than() {
+    fn greater_than() {
         setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
 

@@ -1,18 +1,13 @@
 use ansi_term::Colour;
 
 use crate::{
-    bubba::vm::VM,
     chacha::error::Result,
     interpreter::{debug, eval_expression, function, Context},
     lu_dog::{BooleanLiteralEnum, FormatBitEnum, LiteralEnum},
     new_ref, s_read, NewRef, RefType, SarzakStorePtr, Value,
 };
 
-pub fn eval(
-    literal: &SarzakStorePtr,
-    context: &mut Context,
-    vm: &mut VM,
-) -> Result<RefType<Value>> {
+pub fn eval(literal: &SarzakStorePtr, context: &mut Context) -> Result<RefType<Value>> {
     let lu_dog = context.lu_dog_heel().clone();
     let lu_dog = s_read!(lu_dog);
 
@@ -32,6 +27,15 @@ pub fn eval(
                 BooleanLiteralEnum::FalseLiteral(_) => Ok(new_ref!(Value, Value::Boolean(false,))),
                 BooleanLiteralEnum::TrueLiteral(_) => Ok(new_ref!(Value, Value::Boolean(true,))),
             }
+        }
+        //
+        // CharLiteral
+        //
+        LiteralEnum::CharLiteral(ref literal) => {
+            let literal = lu_dog.exhume_char_literal(literal).unwrap();
+            let literal = std::char::from_u32(s_read!(literal).x_value as u32).unwrap();
+            let value = Value::Char(literal);
+            Ok(new_ref!(Value, value))
         }
         //
         // FloatLiteral
@@ -60,7 +64,7 @@ pub fn eval(
                                 let expr_bit = lu_dog.exhume_expression_bit(expr).unwrap();
                                 let expr_bit = s_read!(expr_bit);
                                 let expr = lu_dog.exhume_expression(&expr_bit.expression).unwrap();
-                                let value = eval_expression(expr, context, vm)?;
+                                let value = eval_expression(expr, context)?;
 
                                 result += &s_read!(value).to_inner_string();
                             }

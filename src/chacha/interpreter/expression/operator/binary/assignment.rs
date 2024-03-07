@@ -2,7 +2,6 @@ use ansi_term::Colour;
 use snafu::{location, Location};
 
 use crate::{
-    bubba::VM,
     chacha::error::Result,
     interpreter::{debug, eval_expression, function, ChaChaError, Context},
     lu_dog::{Expression, ExpressionEnum, FieldAccessTargetEnum, Operator},
@@ -14,7 +13,6 @@ pub fn eval_assignment(
     operator: &RefType<Operator>,
     _expression: &RefType<Expression>,
     context: &mut Context,
-    vm: &mut VM,
 ) -> Result<RefType<Value>> {
     let lu_dog = context.lu_dog_heel().clone();
 
@@ -26,7 +24,7 @@ pub fn eval_assignment(
             let rhs = {
                 let rhs = s_read!(operator).rhs.unwrap();
                 let rhs = s_read!(lu_dog).exhume_expression(&rhs).unwrap();
-                eval_expression(rhs, context, vm)?
+                eval_expression(rhs, context)?
             };
             let field = s_read!(lu_dog).exhume_field_access(field).unwrap();
 
@@ -54,7 +52,7 @@ pub fn eval_assignment(
 
             let expr = &s_read!(field).expression;
             let expr = s_read!(lu_dog).exhume_expression(expr).unwrap();
-            let value = eval_expression(expr, context, vm)?;
+            let value = eval_expression(expr, context)?;
 
             debug!("value: {value:?}");
 
@@ -86,7 +84,7 @@ pub fn eval_assignment(
                     }
                 }
                 Value::Struct(value) => {
-                    s_write!(value).set_field_value(&field_name, rhs);
+                    s_write!(value).set_field_value(&field_name, (*s_read!(rhs)).clone());
                 }
                 // 🚧 This needs it's own error.
                 _value => {
@@ -103,7 +101,7 @@ pub fn eval_assignment(
             let rhs = {
                 let rhs = s_read!(operator).rhs.unwrap();
                 let rhs = s_read!(lu_dog).exhume_expression(&rhs).unwrap();
-                eval_expression(rhs, context, vm)?
+                eval_expression(rhs, context)?
             };
             let expr = s_read!(lu_dog).exhume_type_cast(expr).unwrap();
             let expr = s_read!(expr).r68_expression(&s_read!(lu_dog))[0].clone();
@@ -138,7 +136,7 @@ pub fn eval_assignment(
             let rhs = {
                 let rhs = s_read!(operator).rhs.unwrap();
                 let rhs = s_read!(lu_dog).exhume_expression(&rhs).unwrap();
-                eval_expression(rhs, context, vm)?
+                eval_expression(rhs, context)?
             };
             let expr = s_read!(lu_dog).exhume_variable_expression(expr).unwrap();
             let expr = s_read!(expr);

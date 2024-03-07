@@ -1,7 +1,6 @@
 use std::{
     env,
     fs::{self, DirEntry},
-    path::PathBuf,
 };
 
 use glob::glob;
@@ -16,7 +15,7 @@ const MODEL_DIR: &str = "models";
 const SRC_DIR: &str = "src";
 const TAO_DIR: &str = "ore";
 
-impl flags::Plugins {
+impl flags::Plugin {
     pub(crate) fn run(self, sh: &Shell) -> anyhow::Result<()> {
         let dwarf_home = env::var("DWARF_HOME").unwrap_or_else(|_| {
             let mut home = env::var("HOME").unwrap();
@@ -27,6 +26,12 @@ impl flags::Plugins {
         let mut current_dir = std::env::current_dir()?;
         current_dir.push(PLUGIN_DIR);
         sh.change_dir(PLUGIN_DIR);
+
+        let debug = if self.debug.unwrap_or(false) {
+            true
+        } else {
+            false
+        };
 
         fs::read_dir(&current_dir)?
             .filter(|e| {
@@ -44,7 +49,7 @@ impl flags::Plugins {
                 let entry = entry.unwrap();
                 if entry.file_type().unwrap().is_dir() {
                     sh.change_dir(entry.path());
-                    build_plugin(&entry, &sh, &dwarf_home).unwrap()
+                    build_plugin(&entry, &sh, &dwarf_home, debug).unwrap()
                 }
             });
 
@@ -52,7 +57,12 @@ impl flags::Plugins {
     }
 }
 
-fn build_plugin(entry: &DirEntry, sh: &Shell, dwarf_home: &String) -> anyhow::Result<()> {
+fn build_plugin(
+    entry: &DirEntry,
+    sh: &Shell,
+    dwarf_home: &String,
+    debug: bool,
+) -> anyhow::Result<()> {
     println!("Building {}", entry.path().display());
     sh.change_dir(entry.path());
 
@@ -70,7 +80,11 @@ fn build_plugin(entry: &DirEntry, sh: &Shell, dwarf_home: &String) -> anyhow::Re
     }
 
     cmd!(sh, "cargo update").run()?;
-    cmd!(sh, "cargo build").run()?;
+    if debug {
+        cmd!(sh, "cargo build").run()?;
+    } else {
+        cmd!(sh, "cargo build --release").run()?;
+    }
 
     let name = entry.file_name();
     let name = name.to_str().unwrap();
@@ -81,15 +95,17 @@ fn build_plugin(entry: &DirEntry, sh: &Shell, dwarf_home: &String) -> anyhow::Re
     fs::create_dir_all(&src_dir)?;
     fs::create_dir_all(&model_dir)?;
 
+    let target_dir = if debug { "debug" } else { "release" };
+
     if env::consts::OS == "macos" {
         println!("Copying lib{}.dylib", name);
-        sh.copy_file(format!("target/debug/lib{}.dylib", name), lib_dir)?;
+        sh.copy_file(format!("target/{target_dir}/lib{name}.dylib"), lib_dir)?;
     } else if env::consts::OS == "linux" {
         println!("Copying lib{}.so", name);
-        sh.copy_file(format!("target/debug/lib{}.so", name), lib_dir)?;
+        sh.copy_file(format!("target/{target_dir}/lib{name}.so"), lib_dir)?;
     } else if env::consts::OS == "windows" {
         println!("Copying {}.dll", name);
-        sh.copy_file(format!("target/debug/{}.dll", name), lib_dir)?;
+        sh.copy_file(format!("target/{target_dir}/{name}.dll"), lib_dir)?;
     } else {
         panic!("{} is not a supported platform", env::consts::OS);
     }

@@ -18,9 +18,9 @@ fn main() -> () {
 
     // Note that indexing into a string is zero based. Also, we are indexing by
     // unicode graphemes, which is a "printable character".
-    chacha::assert_eq(s[len - 1], "💥");
-    chacha::assert_eq(s[len - 2], "🎉");
-    chacha::assert_eq(s[len - 9], " ");
+    chacha::assert_eq(s[len - 1], '💥');
+    chacha::assert_eq(s[len - 2], '🎉');
+    chacha::assert_eq(s[len - 9], ' ');
 
     // index into a string with a range.
     let jumble = "{0}{1}\n".format(s[0..5], s[len - 3]); // Hello!

@@ -129,7 +129,42 @@
             "name": "Debug executable 'dwarf'",
             "cargo": {
                 "args": [
+                    // "+stage2",
                     "build",
+                    "--bin=dwarf",
+                    "--package=dwarf",
+                    // "--features=parking-lot-mutex, print-std-out, repl",
+                    // "--no-default-features"
+                ],
+                "filter": {
+                    "name": "dwarf",
+                    "kind": "bin"
+                }
+            },
+            "args": [
+                // "tests/vm_harness/types/generics/failing/structure.ore",
+                // "tests/harness/types/generics/workout.ore"
+                // "tests/harness/types/generics/option.tao"
+                "test.ore",
+                // "tests/harness/chacha/async/http.ore"
+                // "tests/harness/expression/index/string_index_out_of_bounds.tao"
+                // "https://raw.githubusercontent.com/uberFoo/dwarf/develop/mandelbrot.ore"
+            ],
+            "cwd": "${workspaceFolder}",
+            "env": {
+                // "RUST_LOG": "async=trace,vm=trace"
+            },
+            "preRunCommands": [
+                "script lldb.debugger.HandleCommand('settings set target.source-map /rustc/{} \"{}/lib/rustlib/src/rust\"'.format(os.popen('rustc --version --verbose').read().split('commit-hash: ')[1].split('\\n')[0].strip(), os.popen('rustc --print sysroot').readline().strip()))"
+            ],
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug cargo bench",
+            "cargo": {
+                "args": [
+                    "bench",
                     "--bin=dwarf",
                     "--package=dwarf",
                     // "--features=parking-lot-mutex, print-std-out, repl",
@@ -144,12 +179,14 @@
                 // "use.ore"
                 // "tests/harness/types/generics/workout.ore"
                 // "tests/harness/types/generics/option.tao"
-                "test.ore",
+                "bench/fib.tao",
+                "--",
+                "17"
                 // "tests/harness/chacha/async/http.ore"
             ],
             "cwd": "${workspaceFolder}",
             "env": {
-                // "RUST_LOG": "vm=trace"
+                "RUST_LOG": "async=trace,vm=trace"
             },
             "preRunCommands": [
                 "script lldb.debugger.HandleCommand('settings set target.source-map /rustc/{} \"{}/lib/rustlib/src/rust\"'.format(os.popen('rustc --version --verbose').read().split('commit-hash: ')[1].split('\\n')[0].strip(), os.popen('rustc --print sysroot').readline().strip()))"

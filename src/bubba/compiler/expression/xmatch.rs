@@ -5,9 +5,10 @@ use crate::{
     bubba::{
         compiler::{compile_expression, expression::literal, CThonk, Context, Result},
         instr::Instruction,
+        value::Value,
     },
     lu_dog::{DataStructureEnum, ExpressionEnum, ValueType},
-    new_ref, s_read, NewRef, RefType, SarzakStorePtr, Span, Value, POP_CLR,
+    new_ref, s_read, NewRef, RefType, SarzakStorePtr, Span, POP_CLR,
 };
 
 #[tracing::instrument]
@@ -30,7 +31,7 @@ pub(in crate::bubba::compiler) fn compile(
 
     let label = format!("{}", Uuid::new_v4());
     for pattern in patterns {
-        // Compiling the scrutinee
+        // Compile the scrutinee first, as this is what we'll be matching against.
         compile_expression(&scrutinee, thonk, context)?;
 
         tracing::debug!(target: "instr", "{}:{}:{}", file!(), line!(), column!());
@@ -44,6 +45,11 @@ pub(in crate::bubba::compiler) fn compile(
 
         // Compile the match expression.
         match &s_read!(match_expr).subtype {
+            ExpressionEnum::EmptyExpression(_) => {
+                // 🚧 I saw what I did in the interpreter, and did the same here.
+                // It works, but I don't know if it's the right thing.
+                compile_expression(&pattern_expr, thonk, context)?;
+            }
             ExpressionEnum::Literal(ref literal) => {
                 tracing::debug!(target: "instr", "{}:{}:{}", file!(), line!(), column!());
 
@@ -123,7 +129,7 @@ pub(in crate::bubba::compiler) fn compile(
                 let expr = struct_expr.r15_expression(&lu_dog)[0].clone();
                 let value = s_read!(expr).r11_x_value(&lu_dog)[0].clone();
                 let ty = s_read!(value).r24_value_type(&lu_dog)[0].clone();
-                let ty = new_ref!(Value, Value::ValueType((*s_read!(ty)).to_owned()));
+                let ty = Value::ValueType((*s_read!(ty)).to_owned());
                 thonk.insert_instruction(Instruction::Push(ty), location!());
 
                 let x_path = &lu_dog.exhume_x_path(&struct_expr.x_path).unwrap();
@@ -151,15 +157,9 @@ pub(in crate::bubba::compiler) fn compile(
                 let path = path.join("::");
                 let path = format!("{}{path}", woog_enum.x_path);
 
-                thonk.insert_instruction(
-                    Instruction::Push(new_ref!(Value, path.into())),
-                    location!(),
-                );
+                thonk.insert_instruction(Instruction::Push(path.into()), location!());
 
-                thonk.insert_instruction(
-                    Instruction::Push(new_ref!(Value, variant.into())),
-                    location!(),
-                );
+                thonk.insert_instruction(Instruction::Push(variant.into()), location!());
 
                 thonk.insert_instruction(Instruction::NewTupleEnum(field_exprs.len()), location!());
             }
@@ -206,10 +206,7 @@ pub(in crate::bubba::compiler) fn compile(
         thonk.append(match_thonk);
 
         // Escape from New York
-        thonk.insert_instruction(
-            Instruction::Goto(new_ref!(String, label.clone())),
-            location!(),
-        );
+        thonk.insert_instruction(Instruction::Goto(label.clone()), location!());
 
         context.pop_scope();
     }
@@ -217,19 +214,13 @@ pub(in crate::bubba::compiler) fn compile(
     // This should not really happen because if this were done right the compiler
     // would notice that there are cases not caught and  fall through.
     thonk.insert_instruction(
-        Instruction::Push(new_ref!(
-            Value,
-            context.extruder_context.source_path.clone().into()
-        )),
+        Instruction::Push(context.extruder_context.source_path.clone().into()),
         location!(),
     );
-    thonk.insert_instruction(
-        Instruction::Push(new_ref!(Value, span.clone().into())),
-        location!(),
-    );
+    thonk.insert_instruction(Instruction::Push(span.clone().into()), location!());
     thonk.insert_instruction(Instruction::HaltAndCatchFire, location!());
 
-    thonk.insert_instruction(Instruction::Label(new_ref!(String, label)), location!());
+    thonk.insert_instruction(Instruction::Label(label), location!());
 
     Ok(None)
 }
@@ -241,9 +232,11 @@ mod test {
             test::{get_dwarf_home, run_vm, setup_logging},
             *,
         },
-        chacha::value::{EnumVariant, TupleEnum},
+        chacha::value::{Enum, TupleEnum},
         dwarf::{new_lu_dog, parse_dwarf},
+        new_ref,
         sarzak::MODEL as SARZAK_MODEL,
+        NewRef,
     };
 
     #[test]
@@ -423,7 +416,7 @@ mod test {
 
         assert_eq!(
             &*s_read!(run_vm(&program).unwrap()),
-            &Value::Enumeration(EnumVariant::Unit(ty, "::Foo".to_owned(), "Bar".to_owned()))
+            &Value::Enumeration(Enum::Unit(ty, "::Foo".to_owned(), "Bar".to_owned()))
         );
     }
 
@@ -461,7 +454,7 @@ mod test {
         let woog_enum = s_read!(lu_dog).exhume_enumeration(&id).unwrap();
         let ty = ValueType::new_enumeration(true, &woog_enum, &mut s_write!(lu_dog));
         let user_enum = TupleEnum::new("Bar", new_ref!(Value, Value::Integer(42)));
-        let user_enum = new_ref!(TupleEnum, user_enum);
+        let user_enum = new_ref!(TupleEnum<Value>, user_enum);
 
         let program = compile(&ctx).unwrap();
         println!("{program}");
@@ -472,7 +465,7 @@ mod test {
 
         assert_eq!(
             &*s_read!(run_vm(&program).unwrap()),
-            &Value::Enumeration(EnumVariant::Tuple((ty, "Foo".to_owned()), user_enum))
+            &Value::Enumeration(Enum::Tuple((ty, "Foo".to_owned()), user_enum))
         );
     }
 

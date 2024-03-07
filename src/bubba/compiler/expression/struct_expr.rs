@@ -4,10 +4,11 @@ use crate::{
     bubba::{
         compiler::{compile_expression, CThonk, Context, Result},
         instr::Instruction,
+        value::Value,
     },
-    chacha::value::EnumVariant,
+    chacha::value::Enum,
     lu_dog::{DataStructureEnum, FieldExpressionEnum, ValueType},
-    new_ref, s_read, NewRef, RefType, SarzakStorePtr, Span, Value, POP_CLR,
+    s_read, SarzakStorePtr, Span, POP_CLR,
 };
 
 #[tracing::instrument]
@@ -54,7 +55,7 @@ pub(in crate::bubba::compiler) fn compile(
 
             let ty = woog_enum.r1_value_type(&lu_dog)[0].clone();
             let variant = path.pop().unwrap();
-            let variant = new_ref!(Value, Value::String(variant));
+            let variant = Value::String(variant);
             let path = path.join("::");
             let path = format!("{}{path}", woog_enum.x_path);
 
@@ -66,10 +67,7 @@ pub(in crate::bubba::compiler) fn compile(
                 // be? Now that I think of it, I think the implementation of the nte instruction
                 // checks the cardinality of the fields, and if it's zero it generates a
                 // unit enum. So that's two fishy things.
-                let value = new_ref!(
-                    Value,
-                    Value::Enumeration(EnumVariant::Unit(ty, path, s_read!(pe).name.to_owned()))
-                );
+                let value = Value::Enumeration(Enum::Unit(ty, path, s_read!(pe).name.to_owned()));
                 thonk.insert_instruction(Instruction::Push(value), location!());
             } else {
                 let field_count = field_exprs.len();
@@ -78,8 +76,8 @@ pub(in crate::bubba::compiler) fn compile(
                     compile_expression(&expr, thonk, context)?;
                 }
 
-                let ty = new_ref!(Value, Value::ValueType((*s_read!(ty)).to_owned()));
-                let path = new_ref!(Value, Value::String(path));
+                let ty = Value::ValueType((*s_read!(ty)).to_owned());
+                let path = Value::String(path);
                 thonk.insert_instruction(Instruction::Push(ty), location!());
                 thonk.insert_instruction(Instruction::Push(path), location!());
                 thonk.insert_instruction(Instruction::Push(variant), location!());
@@ -114,20 +112,20 @@ pub(in crate::bubba::compiler) fn compile(
                 };
                 let name = lu_dog.exhume_named_field_expression(name).unwrap();
                 let name = s_read!(name).name.clone();
-                let name = new_ref!(Value, Value::String(name));
+                let name = Value::String(name);
                 thonk.insert_instruction(Instruction::Push(name), location!());
             }
 
             let ty = woog_struct.r1_value_type(&lu_dog)[0].clone();
-            let ty = new_ref!(Value, Value::ValueType((*s_read!(ty)).to_owned()));
+            let ty = Value::ValueType((*s_read!(ty)).to_owned());
             thonk.insert_instruction(Instruction::Push(ty), location!());
 
             let name = &woog_struct.name;
-            let name = new_ref!(Value, name.to_owned().into());
+            let name = name.to_owned().into();
             thonk.insert_instruction(Instruction::Push(name), location!());
 
             thonk.insert_instruction_with_span(
-                Instruction::NewUserType(field_count),
+                Instruction::NewStruct(field_count),
                 span,
                 location!(),
             );
@@ -144,10 +142,11 @@ mod test {
             test::{get_dwarf_home, run_vm, setup_logging},
             *,
         },
-        chacha::value::UserStruct,
+        chacha::value::Struct,
         dwarf::{new_lu_dog, parse_dwarf},
-        s_write,
+        new_ref, s_write,
         sarzak::MODEL as SARZAK_MODEL,
+        NewRef,
     };
 
     #[test]
@@ -185,10 +184,10 @@ mod test {
         let woog_struct = lu_dog.exhume_woog_struct_id_by_name("::Foo").unwrap();
         let woog_struct = lu_dog.exhume_woog_struct(&woog_struct).unwrap();
         let ty = crate::lu_dog::ValueType::new_woog_struct(true, &woog_struct, &mut lu_dog);
-        let mut result = UserStruct::new("Foo", &ty);
-        result.define_field("x", new_ref!(Value, Value::Integer(42)));
-        result.define_field("y", new_ref!(Value, Value::Float(0.42)));
-        let result = Value::Struct(new_ref!(UserStruct, result));
+        let mut result = Struct::new("Foo", &ty);
+        result.define_field("x", Value::Integer(42));
+        result.define_field("y", Value::Float(0.42));
+        let result = Value::Struct(result);
 
         assert_eq!(&*s_read!(run.unwrap()), &result,);
     }

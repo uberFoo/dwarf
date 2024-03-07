@@ -22,14 +22,15 @@ use crate::{
     lu_dog::{
         store::ObjectStore as LuDogStore,
         types::{
-            AWait, Block, Body, BooleanOperator, Call, DataStructure, EnumFieldEnum, Expression,
-            ExpressionBit, ExpressionEnum, ExpressionStatement, Field, FieldExpression, ForLoop,
-            FormatBit, FormatString, FuncGeneric, FunctionCall, ImplementationBlock, Import, Index,
-            IntegerLiteral, Item as WoogItem, ItemStatement, Lambda, LambdaParameter, LetStatement,
-            Literal, LocalVariable, NamedFieldExpression, Pattern as AssocPat, RangeExpression,
-            Span as LuDogSpan, Statement, StringBit, StringLiteral, StructExpression, ValueType,
-            ValueTypeEnum, Variable, VariableExpression, WoogStruct, XFuture, XIf, XMatch, XPath,
-            XPrint, XValue, XValueEnum,
+            AWait, Block, Body, BooleanOperator, Call, CharLiteral, DataStructure, EnumFieldEnum,
+            Expression, ExpressionBit, ExpressionEnum, ExpressionStatement, Field, FieldExpression,
+            ForLoop, FormatBit, FormatString, FuncGeneric, FunctionCall, ImplementationBlock,
+            Import, Index, IntegerLiteral, Item as WoogItem, ItemStatement, Lambda,
+            LambdaParameter, LetStatement, Literal, LocalVariable, NamedFieldExpression,
+            Pattern as AssocPat, RangeExpression, Span as LuDogSpan, Statement, StringBit,
+            StringLiteral, StructExpression, ValueType, ValueTypeEnum, Variable,
+            VariableExpression, WoogStruct, XFuture, XIf, XMatch, XPath, XPrint, XValue,
+            XValueEnum,
         },
         Argument, Binary, BooleanLiteral, Comparison, DwarfSourceFile, FieldAccess,
         FieldAccessTarget, FloatLiteral, List, ListElement, ListExpression, Operator,
@@ -1175,7 +1176,7 @@ pub(super) fn inter_expression(
             )?;
 
             if !matches!(s_read!(ty).subtype, ValueTypeEnum::XFuture(_)) {
-                let ty = PrintableValueType(&ty, context, lu_dog);
+                let ty = PrintableValueType(true, &ty, context, lu_dog);
                 Err(vec![DwarfError::AwaitNotFuture {
                     file: context.file_name.to_owned(),
                     found: ty.to_string(),
@@ -1288,6 +1289,22 @@ pub(super) fn inter_expression(
                 lu_dog,
             );
             let ty = ValueType::new_ty(true, &Ty::new_boolean(context.sarzak), lu_dog);
+            let value = XValue::new_expression(block, &ty, &expr, lu_dog);
+            update_span_value(&span, &value, location!());
+
+            Ok(((expr, span), ty))
+        }
+        //
+        // CharLiteral
+        //
+        ParserExpression::CharLiteral(literal) => {
+            let literal = CharLiteral::new(literal, lu_dog);
+            let expr = Expression::new_literal(
+                true,
+                &Literal::new_char_literal(true, &literal, lu_dog),
+                lu_dog,
+            );
+            let ty = ValueType::new_char(true, lu_dog);
             let value = XValue::new_expression(block, &ty, &expr, lu_dog);
             update_span_value(&span, &value, location!());
 
@@ -1564,7 +1581,7 @@ pub(super) fn inter_expression(
                 _ => Err(vec![DwarfError::NotAStruct {
                     file: context.file_name.to_owned(),
                     span: rhs.1.to_owned(),
-                    ty: PrintableValueType(&ty, context, lu_dog).to_string(),
+                    ty: PrintableValueType(true, &ty, context, lu_dog).to_string(),
                     program: context.source_string.to_owned(),
                 }]),
             }
@@ -1616,8 +1633,8 @@ pub(super) fn inter_expression(
                     match &*ty {
                         Ty::ZString(_) => ValueType::new_char(true, lu_dog),
                         _ => {
-                            let ty =
-                                PrintableValueType(&collection_ty, context, lu_dog).to_string();
+                            let ty = PrintableValueType(true, &collection_ty, context, lu_dog)
+                                .to_string();
                             return Err(vec![DwarfError::NotAList {
                                 file: context.file_name.to_owned(),
                                 span: cspan.to_owned(),
@@ -1629,7 +1646,7 @@ pub(super) fn inter_expression(
                     }
                 }
                 _ => {
-                    let ty = PrintableValueType(&collection_ty, context, lu_dog).to_string();
+                    let ty = PrintableValueType(true, &collection_ty, context, lu_dog).to_string();
                     return Err(vec![DwarfError::NotAList {
                         file: context.file_name.to_owned(),
                         span: cspan.to_owned(),
@@ -1694,42 +1711,19 @@ pub(super) fn inter_expression(
 
             let mut last_format_bit_uuid: Option<SarzakStorePtr> = None;
             for (bit, span) in bits {
-                let span = LuDogSpan::new(
-                    span.end as i64,
-                    span.start as i64,
-                    &context.source,
-                    None,
-                    Some(&value),
+                let ((expr, _), _) = inter_expression(
+                    &new_ref!(ParserExpression, bit.to_owned()),
+                    &span,
+                    block,
+                    context,
+                    context_stack,
                     lu_dog,
-                );
+                )?;
 
-                let format_bit = match bit {
-                    ParserExpression::LocalVariable(name) => {
-                        let expr = VariableExpression::new(name.to_owned(), lu_dog);
-                        debug!("created a new variable expression {:?}", expr);
-                        let expr = Expression::new_variable_expression(true, &expr, lu_dog);
-                        let value = XValue::new_expression(block, &ty, &expr, lu_dog);
-                        update_span_value(&span, &value, location!());
+                let expr_bit = ExpressionBit::new(&expr, lu_dog);
+                let format_bit =
+                    FormatBit::new_expression_bit(&format_string, None, &expr_bit, lu_dog);
 
-                        let expr_bit = ExpressionBit::new(&expr, lu_dog);
-                        FormatBit::new_expression_bit(&format_string, None, &expr_bit, lu_dog)
-                    }
-                    ParserExpression::StringLiteral(string) => {
-                        let literal = StringLiteral::new(string.to_owned(), lu_dog);
-                        let expr = Expression::new_literal(
-                            true,
-                            &Literal::new_string_literal(true, &literal, lu_dog),
-                            lu_dog,
-                        );
-                        let ty = ValueType::new_ty(true, &Ty::new_z_string(context.sarzak), lu_dog);
-                        let value = XValue::new_expression(block, &ty, &expr, lu_dog);
-                        update_span_value(&span, &value, location!());
-
-                        let string_bit = StringBit::new(&literal, lu_dog);
-                        FormatBit::new_string_bit(&format_string, None, &string_bit, lu_dog)
-                    }
-                    huh => panic!("Unexpected expression: {huh:?}"),
-                };
                 if last_format_bit_uuid.is_none() {
                     s_write!(format_string).first_format_bit = Some(s_read!(format_bit).id);
                 }
@@ -1828,7 +1822,7 @@ pub(super) fn inter_expression(
 
             debug!(
                 "return type {}",
-                PrintableValueType(&ret_ty, context, lu_dog).to_string()
+                PrintableValueType(true, &ret_ty, context, lu_dog).to_string()
             );
 
             Ok(((func, span), ret_ty))
@@ -1968,8 +1962,8 @@ pub(super) fn inter_expression(
                     // Good Times.
                 } else {
                     let bty = ValueType::new_ty(true, &Ty::new_boolean(context.sarzak), lu_dog);
-                    let bty = PrintableValueType(&bty, context, lu_dog);
-                    let ty = PrintableValueType(&conditional_ty, context, lu_dog);
+                    let bty = PrintableValueType(true, &bty, context, lu_dog);
+                    let ty = PrintableValueType(true, &conditional_ty, context, lu_dog);
                     return Err(vec![DwarfError::TypeMismatch {
                         expected: bty.to_string(),
                         found: ty.to_string(),
@@ -1982,8 +1976,8 @@ pub(super) fn inter_expression(
                 }
             } else {
                 let bty = ValueType::new_ty(true, &Ty::new_boolean(context.sarzak), lu_dog);
-                let bty = PrintableValueType(&bty, context, lu_dog);
-                let ty = PrintableValueType(&conditional_ty, context, lu_dog);
+                let bty = PrintableValueType(true, &bty, context, lu_dog);
+                let ty = PrintableValueType(true, &conditional_ty, context, lu_dog);
                 return Err(vec![DwarfError::TypeMismatch {
                     expected: bty.to_string(),
                     found: ty.to_string(),
@@ -2072,7 +2066,7 @@ pub(super) fn inter_expression(
                 if let Ty::ZString(_) = &*ty {
                     ValueType::new_char(true, lu_dog)
                 } else {
-                    let ty = PrintableValueType(&target_ty, context, lu_dog).to_string();
+                    let ty = PrintableValueType(true, &target_ty, context, lu_dog).to_string();
                     return Err(vec![DwarfError::NotAList {
                         file: context.file_name.to_owned(),
                         span: target_p.1.clone(),
@@ -2082,7 +2076,7 @@ pub(super) fn inter_expression(
                     }]);
                 }
             } else {
-                let ty = PrintableValueType(&target_ty, context, lu_dog).to_string();
+                let ty = PrintableValueType(true, &target_ty, context, lu_dog).to_string();
                 return Err(vec![DwarfError::NotAList {
                     file: context.file_name.to_owned(),
                     span: target_p.1.clone(),
@@ -2093,7 +2087,6 @@ pub(super) fn inter_expression(
             };
 
             let index = Index::new(&index.0, &target.0, lu_dog);
-
             let expr = Expression::new_index(true, &index, lu_dog);
             let value = XValue::new_expression(block, &target_ty, &expr, lu_dog);
             update_span_value(&span, &value, location!());
@@ -2475,7 +2468,7 @@ pub(super) fn inter_expression(
                                         let ty = value.r24_value_type(lu_dog)[0].clone();
 
                                         let ty_str =
-                                            PrintableValueType(&ty, context, lu_dog);
+                                            PrintableValueType(true, &ty, context, lu_dog);
                                         debug!("{name}, {}, {value:?} ({ty:?})", ty_str.to_string());
 
                                         let expr = lu_dog
@@ -2862,7 +2855,7 @@ pub(super) fn inter_expression(
                 let ty = context.sarzak.exhume_ty(id).unwrap();
                 matches!(&*ty.read().unwrap(), Ty::Boolean(_));
             } else {
-                let lhs = PrintableValueType(&lhs_ty, context, lu_dog);
+                let lhs = PrintableValueType(true, &lhs_ty, context, lu_dog);
                 return Err(vec![DwarfError::TypeMismatch {
                     found: lhs.to_string(),
                     expected: "bool".to_string(),
@@ -3159,7 +3152,7 @@ pub(super) fn inter_expression(
                     lu_dog,
                 )?;
 
-                let pvt = PrintableValueType(&ty, context, lu_dog).to_string();
+                let pvt = PrintableValueType(true, &ty, context, lu_dog).to_string();
 
                 debug!(
                     "field `{}` is of type `{pvt}`, expr: {field_expr:?}",
@@ -3259,15 +3252,22 @@ pub(super) fn inter_expression(
                 }
             }
 
-            if !generic_substitutions.is_empty() {
-                create_generic_struct(
+            let woog_struct = if !generic_substitutions.is_empty() {
+                let span = s_read!(span);
+                let span = span.start as usize..span.end as usize;
+                let (woog_struct, _) = create_generic_struct(
                     &woog_struct,
                     &generic_substitutions,
+                    &span,
                     context,
                     context.sarzak,
                     lu_dog,
                 );
-            }
+
+                woog_struct
+            } else {
+                woog_struct
+            };
 
             // I love that the type of the thing is the same as the thing itself.
             let expr = Expression::new_struct_expression(true, &struct_expr, lu_dog);
@@ -3574,7 +3574,8 @@ fn inter_implementation(
                         (ty, None)
                     };
 
-                    let implementation = ImplementationBlock::new(None, store.as_ref(), lu_dog);
+                    let implementation =
+                        ImplementationBlock::new(None, None, store.as_ref(), lu_dog);
                     let _ = WoogItem::new_implementation_block(
                         &context.source,
                         &implementation,
@@ -3608,14 +3609,12 @@ fn inter_implementation(
 
         let implementation = if let Some(id) = lu_dog.exhume_woog_struct_id_by_name(&name) {
             let woog_struct = lu_dog.exhume_woog_struct(&id).unwrap();
-            ImplementationBlock::new(Some(&woog_struct), None, lu_dog)
+            ImplementationBlock::new(None, Some(&woog_struct), None, lu_dog)
         } else if let Some(id) = lu_dog.exhume_enumeration_id_by_name(&name) {
             // OMG this is ugly.
             // 🚧 Fix the model.
             let woog_enum = lu_dog.exhume_enumeration(&id).unwrap();
-            let implementation = ImplementationBlock::new(None, None, lu_dog);
-            s_write!(woog_enum).implementation = Some(s_read!(implementation).id);
-            implementation
+            ImplementationBlock::new(Some(&woog_enum), None, None, lu_dog)
         } else {
             return Err(vec![DwarfError::ObjectNameNotFound {
                 name: name.to_owned(),
@@ -3823,6 +3822,7 @@ pub(crate) fn make_value_type(
             let ty = Ty::new_boolean(sarzak);
             Ok(ValueType::new_ty(true, &ty, lu_dog))
         }
+        Type::Char => Ok(ValueType::new_char(true, lu_dog)),
         Type::Empty => Ok(ValueType::new_empty(true, lu_dog)),
         Type::Float => {
             let ty = Ty::new_float(sarzak);
@@ -3866,7 +3866,7 @@ pub(crate) fn make_value_type(
             let lambda = ValueType::new_lambda(true, &lambda, lu_dog);
             Ok(lambda)
         }
-        Type::Generic((t, _)) => {
+        Type::Generic((_, _)) => {
             panic!("don't call this function with a generic -- you wont't get anywhere.");
         }
         Type::Integer => {
@@ -4040,18 +4040,21 @@ pub(crate) fn make_value_type(
                                 i += 1;
                             }
                         }
-                        let generic = create_generic_struct(
+                        let (_, ty) = create_generic_struct(
                             &woog_struct,
                             &generic_substitutions,
+                            span,
                             context,
                             context.sarzak,
                             lu_dog,
                         );
-                        Ok(ValueType::new_woog_struct(true, &generic, lu_dog))
-                    } else {
-                        let (_, ty) =
-                            create_generic_enum(&fq_name, &name, span.to_owned(), context, lu_dog)?;
+
                         Ok(ty)
+                    } else {
+                        Ok(
+                            create_generic_enum(&fq_name, &name, span.to_owned(), context, lu_dog)?
+                                .1,
+                        )
                     }
                 } else if let Some(ty) = lookup_user_defined_type(lu_dog, &name, span, context) {
                     Ok(ty)
@@ -4211,8 +4214,8 @@ pub(super) fn typecheck(
             if a.name == b.name {
                 Ok(())
             } else {
-                let a = PrintableValueType(lhs, context, lu_dog);
-                let b = PrintableValueType(rhs, context, lu_dog);
+                let a = PrintableValueType(true, lhs, context, lu_dog);
+                let b = PrintableValueType(true, rhs, context, lu_dog);
 
                 Err(vec![DwarfError::TypeMismatch {
                     expected: a.to_string(),
@@ -4335,8 +4338,8 @@ pub(super) fn typecheck(
                     if a == b {
                         Ok(())
                     } else {
-                        let a = PrintableValueType(lhs, context, lu_dog);
-                        let b = PrintableValueType(rhs, context, lu_dog);
+                        let a = PrintableValueType(true, lhs, context, lu_dog);
+                        let b = PrintableValueType(true, rhs, context, lu_dog);
 
                         Err(vec![DwarfError::TypeMismatch {
                             expected: a.to_string(),
@@ -4361,8 +4364,8 @@ pub(super) fn typecheck(
                 _ => {
                     // dbg!(PrintableValueType(lhs, context, lu_dog).to_string());
                     // dbg!(PrintableValueType(rhs, context, lu_dog).to_string());
-                    let lhs = PrintableValueType(lhs, context, lu_dog);
-                    let rhs = PrintableValueType(rhs, context, lu_dog);
+                    let lhs = PrintableValueType(true, lhs, context, lu_dog);
+                    let rhs = PrintableValueType(true, rhs, context, lu_dog);
 
                     Err(vec![DwarfError::TypeMismatch {
                         expected: lhs.to_string(),
@@ -4384,8 +4387,8 @@ pub(super) fn typecheck(
                 _ => {
                     // dbg!(PrintableValueType(lhs, context, lu_dog).to_string());
                     // dbg!(PrintableValueType(rhs, context, lu_dog).to_string());
-                    let lhs = PrintableValueType(lhs, context, lu_dog);
-                    let rhs = PrintableValueType(rhs, context, lu_dog);
+                    let lhs = PrintableValueType(true, lhs, context, lu_dog);
+                    let rhs = PrintableValueType(true, rhs, context, lu_dog);
 
                     Err(vec![DwarfError::TypeMismatch {
                         expected: lhs.to_string(),
@@ -4407,8 +4410,8 @@ pub(super) fn typecheck(
                 _ => {
                     // dbg!(PrintableValueType(lhs, context, lu_dog).to_string());
                     // dbg!(PrintableValueType(rhs, context, lu_dog).to_string());
-                    let lhs = PrintableValueType(lhs, context, lu_dog);
-                    let rhs = PrintableValueType(rhs, context, lu_dog);
+                    let lhs = PrintableValueType(true, lhs, context, lu_dog);
+                    let rhs = PrintableValueType(true, rhs, context, lu_dog);
 
                     Err(vec![DwarfError::TypeMismatch {
                         expected: lhs.to_string(),
@@ -4442,8 +4445,8 @@ pub(super) fn typecheck(
             if a_name == b_name {
                 Ok(())
             } else {
-                let a = PrintableValueType(lhs, context, lu_dog);
-                let b = PrintableValueType(rhs, context, lu_dog);
+                let a = PrintableValueType(true, lhs, context, lu_dog);
+                let b = PrintableValueType(true, rhs, context, lu_dog);
 
                 Err(vec![DwarfError::TypeMismatch {
                     expected: a.to_string(),
@@ -4460,8 +4463,8 @@ pub(super) fn typecheck(
             if lhs_t == rhs_t {
                 Ok(())
             } else {
-                let lhs = PrintableValueType(lhs, context, lu_dog);
-                let rhs = PrintableValueType(rhs, context, lu_dog);
+                let lhs = PrintableValueType(true, lhs, context, lu_dog);
+                let rhs = PrintableValueType(true, rhs, context, lu_dog);
 
                 Err(vec![DwarfError::TypeMismatch {
                     expected: lhs.to_string(),
@@ -4480,15 +4483,22 @@ pub(super) fn typecheck(
 pub(crate) fn create_generic_struct(
     woog_struct: &RefType<WoogStruct>,
     substitutions: &HashMap<String, RefType<ValueType>>,
+    span: &Span,
     context: &mut Context,
     sarzak: &SarzakStore,
     lu_dog: &mut LuDogStore,
-) -> RefType<WoogStruct> {
+) -> (RefType<WoogStruct>, RefType<ValueType>) {
     let woog_struct = s_read!(woog_struct);
+
     let mut name = woog_struct.name.to_owned();
     name.push('<');
     let first = woog_struct.r102_struct_generic(lu_dog)[0].clone();
-    name.push_str(&s_read!(first).name);
+    // name.push_str(&s_read!(first).name);
+
+    let ty = substitutions.get(&s_read!(first).name).unwrap();
+    let ty = PrintableValueType(false, ty, context, lu_dog).to_string();
+    name.push_str(&ty);
+
     let mut id = s_read!(first).next;
     while let Some(next_id) = id {
         let next = lu_dog.exhume_struct_generic(&next_id).unwrap();
@@ -4496,11 +4506,13 @@ pub(crate) fn create_generic_struct(
         id = next.next;
 
         let ty = substitutions.get(&next.name).unwrap();
-        let ty = PrintableValueType(ty, context, lu_dog).to_string();
+        let ty = PrintableValueType(false, ty, context, lu_dog).to_string();
 
         name.extend([", ", &ty]);
     }
     name.push('>');
+
+    dbg!(&name);
 
     let mut obj = woog_struct.r4_object(sarzak);
     let obj = if !obj.is_empty() {
@@ -4520,14 +4532,23 @@ pub(crate) fn create_generic_struct(
         lu_dog,
     );
     context.dirty.push(Dirty::Struct(new_struct.clone()));
-    let _ = ValueType::new_woog_struct(true, &new_struct, lu_dog);
+    let ty = ValueType::new_woog_struct(true, &new_struct, lu_dog);
+    LuDogSpan::new(
+        span.end as i64,
+        span.start as i64,
+        &context.source,
+        Some(&ty),
+        None,
+        lu_dog,
+    );
+
     for field in woog_struct.r7_field(lu_dog) {
         let field = s_read!(field);
         let ty = &field.r5_value_type(lu_dog)[0];
         let _ = Field::new(field.name.to_owned(), &new_struct, ty, lu_dog);
     }
 
-    new_struct
+    (new_struct, ty)
 }
 
 pub(crate) fn update_span_value(

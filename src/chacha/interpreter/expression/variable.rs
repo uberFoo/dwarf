@@ -1,5 +1,5 @@
 use ansi_term::Colour;
-use snafu::prelude::*;
+use snafu::{location, prelude::*, Location};
 
 use crate::{
     chacha::error::{Result, VariableNotFoundSnafu},
@@ -31,7 +31,11 @@ pub fn eval(
         let read = s_read!(span);
         let span = read.start as usize..read.end as usize;
         let var = name;
-        VariableNotFoundSnafu { var, span }
+        VariableNotFoundSnafu {
+            var,
+            span,
+            location: location!(),
+        }
     });
 
     let value = value.unwrap();

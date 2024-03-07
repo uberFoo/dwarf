@@ -1,0 +1,34 @@
+use std::result::Result;
+
+fn main() {
+    // let a: Result<int, string> = Result::<int, string>::Ok(42);
+    // let a = Result::<int, string>::Ok(42);
+    let a = Result::Ok(42);
+    // let b: Result<int, string> = Result::<int, string>::Err("oops");
+    let b = Result::Err("oops");
+
+    let c = Result::Ok("test");
+    let d = Result::Err(96);
+
+    print(`a = ${a}\n`);
+    print(`b = ${b}\n`);
+    print(`c = ${c}\n`);
+    print(`d = ${d}\n`);
+
+    chacha::assert_eq(a, Result::Ok(42));
+    chacha::assert_eq(b, Result::Err("oops"));
+
+    chacha::assert_eq(c, Result::Ok("test"));
+
+    chacha::assert_eq(`a = ${a}`, "a = ::std::result::Result::Ok(42)");
+    // chacha::assert_eq("b = {0}".format(b), `b = Result<int, string>::Err(\"oops\")`);
+
+    chacha::assert(a.is_ok());
+    chacha::assert(!a.is_err());
+    chacha::assert(!b.is_ok());
+    chacha::assert(b.is_err());
+    chacha::assert(c.is_ok());
+    chacha::assert(!c.is_err());
+
+    print(a == c);
+}

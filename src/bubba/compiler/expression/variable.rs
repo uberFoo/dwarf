@@ -2,11 +2,11 @@ use snafu::{location, Location};
 
 use crate::{
     bubba::{
-        compiler::{BubbaError, CThonk, Context, Result},
+        compiler::{BubbaCompilerError, CThonk, Context, Result},
         instr::Instruction,
     },
     lu_dog::ValueType,
-    new_ref, s_read, NewRef, RefType, SarzakStorePtr, Span, POP_CLR,
+    s_read, SarzakStorePtr, Span, POP_CLR,
 };
 
 #[tracing::instrument]
@@ -33,15 +33,15 @@ pub(in crate::bubba::compiler) fn compile(
             span,
             location!(),
         );
+
         Ok(Some(symbol.ty.clone()))
     } else if let Some(ty) = context.check_function(name) {
-        let name = new_ref!(String, name.to_owned());
         // We are here because we need to look up a function.
-        thonk.insert_instruction(Instruction::CallDestination(name.clone()), location!());
+        thonk.insert_instruction(Instruction::CallDestination(name.to_owned()), location!());
 
         // This instruction will be patched by the VM with the number of locals in the
         // function.
-        thonk.insert_instruction(Instruction::LocalCardinality(name), location!());
+        thonk.insert_instruction(Instruction::LocalCardinality(name.to_owned()), location!());
 
         Ok(Some(ty.clone()))
     } else {
@@ -59,8 +59,9 @@ pub(in crate::bubba::compiler) fn compile(
             captures.insert(name.to_owned(), number);
             thonk.insert_instruction_with_span(Instruction::FetchLocal(number), span, location!());
         } else {
-            return Err(BubbaError::InternalCompilerError {
-                message: format!("Variable {} not found", name),
+            return Err(BubbaCompilerError::VariableNotFound {
+                var: name.to_owned(),
+                span,
                 location: location!(),
             }
             .into());

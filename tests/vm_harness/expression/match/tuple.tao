@@ -1,0 +1,47 @@
+enum Tuple {
+    String(string),
+    Integer(int),
+    Float(float),
+}
+
+fn main() {
+    let hello = Tuple::String("hello");
+    let world = Tuple::String("world");
+    match hello {
+        Tuple::String(s) => {
+            chacha::assert_eq(s, "hello");
+        }
+        Tuple::Integer(i) => {
+            chacha::assert_eq(true, false);
+        }
+        Tuple::Float(f) => {
+            chacha::assert_eq(true, false);
+        }
+    };
+    match world {
+        Tuple::String(s) => {
+            chacha::assert_eq(s, "world");
+        }
+        Tuple::Integer(i) => {
+            chacha::assert_eq(true, false);
+        }
+        Tuple::Float(f) => {
+            chacha::assert_eq(true, false);
+        }
+    };
+    // let result = string_tuple(tuple);
+    // chacha::assert_eq(result, "hello");
+    // let result = string_tuple(Tuple::Integer(42));
+    // chacha::assert_eq(result, "42");
+}
+
+// fn string_tuple(tuple: Tuple) -> string {
+//     // let foo = match tuple {
+//     match tuple {
+//         Tuple::String(s) => s,
+//         Tuple::Integer(i) => "{0}".format(i),
+//         Tuple::Float(f) => "{0}".format(f),
+//     }
+//     // };
+//     // "{0}".format(foo)
+// }

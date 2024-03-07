@@ -366,21 +366,12 @@ pub fn inter(
         // use that to build a concrete type.
         //
         // Here we are interring an enum constructor.
+        let no_generics = type_name.split('<').next().unwrap();
         let woog_enum = if let Some(woog_enum) = lu_dog.exhume_enumeration_id_by_name(&type_name) {
             lu_dog.exhume_enumeration(&woog_enum).unwrap()
-        } else if lu_dog
-            .exhume_enumeration_id_by_name(type_name.split('<').next().unwrap())
-            .is_some()
-        {
+        } else if lu_dog.exhume_enumeration_id_by_name(no_generics).is_some() {
             let span = s_read!(span).start as usize..s_read!(span).end as usize;
-            create_generic_enum(
-                &type_name,
-                type_name.split('<').next().unwrap(),
-                span,
-                context,
-                lu_dog,
-            )?
-            .0
+            create_generic_enum(&type_name, no_generics, span, context, lu_dog)?.0
         } else {
             let span = s_read!(span).start as usize..s_read!(span).end as usize;
             return Err(vec![DwarfError::ObjectNameNotFound {
@@ -412,7 +403,7 @@ pub fn inter(
             )
         } else {
             // Lookup the functions on the enum and see if the field matches a func.
-            let foo = &s_read!(woog_enum).r84_implementation_block(lu_dog)[0];
+            let foo = &s_read!(woog_enum).r84c_implementation_block(lu_dog)[0];
             let foo = s_read!(foo).r9_function(lu_dog);
             let func = foo.iter().find(|func| {
                 let func = s_read!(func);
