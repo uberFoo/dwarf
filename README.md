@@ -13,6 +13,8 @@ It also has support for arrays, UUIDs, structs and enums, with tuples on the way
 dwarf supports generic parameters to functions as well as structs and enums.
 Three is currently a compiler/VM, an interpreter, and a REPL.
 
+Think of dwarf as Rust on easy mode!
+
 
 There is a [book 📒](https://uberfoo.github.io/assets/docs/dwarf/introduction.html) in progress.
 Check it out!
