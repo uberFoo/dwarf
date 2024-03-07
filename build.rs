@@ -4,11 +4,12 @@ use walkdir::WalkDir;
 
 const EXT1: &str = "tao";
 const EXT2: &str = "ore";
+const INTERP_HARNESS_DIR: &str = "harness";
+const INTERP_OUT_NAME: &str = "tests.rs";
+const SRC_DIR: &str = "src";
 const TEST_DIR: &str = "tests";
 const TEST_FAILED: &str = "TEST_FAILED";
-const INTERP_HARNESS_DIR: &str = "harness";
 const VM_HARNESS_DIR: &str = "vm_harness";
-const INTERP_OUT_NAME: &str = "tests.rs";
 const VM_OUT_NAME: &str = "vm_tests.rs";
 
 fn main() {
@@ -129,6 +130,7 @@ fn main() {
     let dest_path = Path::new(&out_dir).join(VM_OUT_NAME);
     fs::write(dest_path, tests).unwrap();
 
+    println!("cargo:rerun-if-changed={SRC_DIR}");
     println!("cargo:rerun-if-changed={TEST_DIR}/{INTERP_HARNESS_DIR}");
     println!("cargo:rerun-if-changed={TEST_DIR}/{VM_HARNESS_DIR}");
 }

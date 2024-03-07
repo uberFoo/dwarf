@@ -98,7 +98,7 @@ pub(in crate::dwarf::extruder) fn inter(
     debug!(
         "{} return type {}",
         Colour::Red.dimmed().italic().paint("MethodCall"),
-        PrintableValueType(&ret_ty, context, lu_dog).to_string()
+        PrintableValueType(true, &ret_ty, context, lu_dog).to_string()
     );
 
     Ok(((expr, span), ret_ty))
@@ -118,7 +118,7 @@ pub(in crate::dwarf::extruder) fn method_call_return_type(
             .dimmed()
             .italic()
             .paint("method_call_return_type"),
-        PrintableValueType(&instance_ty, context, lu_dog).to_string()
+        PrintableValueType(true, &instance_ty, context, lu_dog).to_string()
     );
     let ty = match s_read!(instance_ty).subtype {
         ValueTypeEnum::Char(_) => match method.as_str() {
@@ -181,8 +181,9 @@ pub(in crate::dwarf::extruder) fn method_call_return_type(
                 let expected_span = expected_span.start as usize..expected_span.end as usize;
                 if &*s_read!(arg_ty) != &*inner_ty {
                     return Err(vec![DwarfError::TypeMismatch {
-                        expected: PrintableValueType(&instance_ty, context, lu_dog).to_string(),
-                        found: PrintableValueType(&arg_ty, context, lu_dog).to_string(),
+                        expected: PrintableValueType(true, &instance_ty, context, lu_dog)
+                            .to_string(),
+                        found: PrintableValueType(true, &arg_ty, context, lu_dog).to_string(),
                         file: context.file_name.to_owned(),
                         expected_span,
                         found_span: meth_span.to_owned(),

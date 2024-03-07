@@ -98,7 +98,7 @@ mod test {
         let program = compile(&ctx).unwrap();
         println!("{program}");
         assert_eq!(program.get_thonk_card(), 1);
-        assert_eq!(program.get_instruction_card(), 27);
+        assert_eq!(program.get_instruction_card(), 31);
 
         let run = run_vm(&program);
         assert!(run.is_ok());
@@ -149,7 +149,7 @@ mod test {
         let program = compile(&ctx).unwrap();
         println!("{program}");
         assert_eq!(program.get_thonk_card(), 2);
-        assert_eq!(program.get_instruction_card(), 34);
+        assert_eq!(program.get_instruction_card(), 38);
 
         let run = run_vm(&program);
         assert!(run.is_ok());

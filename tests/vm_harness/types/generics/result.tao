@@ -2,15 +2,18 @@ use std::result::Result;
 
 fn main() {
     // let a: Result<int, string> = Result::<int, string>::Ok(42);
+    // let a = Result::<int, string>::Ok(42);
     let a = Result::Ok(42);
     // let b: Result<int, string> = Result::<int, string>::Err("oops");
     let b = Result::Err("oops");
 
     let c = Result::Ok("test");
+    let d = Result::Err(96);
 
     print(`a = ${a}\n`);
     print(`b = ${b}\n`);
     print(`c = ${c}\n`);
+    print(`d = ${d}\n`);
 
     chacha::assert_eq(a, Result::Ok(42));
     chacha::assert_eq(b, Result::Err("oops"));

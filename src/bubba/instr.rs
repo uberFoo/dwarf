@@ -358,7 +358,6 @@ pub enum Instruction {
     /// Typecast
     ///
     TypeCast(RefType<Value>),
-    TypeOf,
     Vom,
 }
 
@@ -545,7 +544,6 @@ impl fmt::Display for Instruction {
                 opcode_style.paint("tc  "),
                 operand_style.paint(s_read!(name).to_string())
             ),
-            Instruction::TypeOf => write!(f, "{}", opcode_style.paint("tyof")),
             Instruction::Vom => write!(f, "{}", opcode_style.paint("vom ")),
         }
     }

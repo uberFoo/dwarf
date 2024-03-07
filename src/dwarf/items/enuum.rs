@@ -14,7 +14,7 @@ use crate::{
         Enumeration, Field, Span as LuDogSpan, StructField, TupleField, Unit, ValueType,
         WoogStruct,
     },
-    s_read, s_write, Dirty, DwarfInteger, RefType, SarzakStorePtr, Span, PATH_SEP,
+    new_ref, s_read, s_write, Dirty, DwarfInteger, NewRef, RefType, SarzakStorePtr, Span, PATH_SEP,
 };
 
 macro_rules! link_enum_generic {
@@ -201,6 +201,11 @@ pub fn inter_enum(
     Ok(())
 }
 
+use once_cell::sync::OnceCell;
+use regex::Regex;
+
+static RE: OnceCell<Regex> = OnceCell::new();
+
 pub(crate) fn create_generic_enum(
     enum_name: &str,
     base_enum: &str,
@@ -216,31 +221,55 @@ pub(crate) fn create_generic_enum(
         return Ok((found_enum, ty));
     }
 
-    let id = if let Some(id) = lu_dog.exhume_enumeration_id_by_name(base_enum) {
-        id
-    } else {
-        return Err(vec![DwarfError::EnumNotFound {
-            name: base_enum.to_owned(),
-            file: context.file_name.to_owned(),
-            span: span.to_owned(),
-            location: location!(),
-            program: context.source_string.to_owned(),
-        }]);
-    };
-
     debug!("interring generic enum {enum_name}");
 
-    let name_without_generics = enum_name.split('<').collect::<Vec<_>>()[0];
-    debug!("name_without_generics {:?}", name_without_generics);
+    let re = match RE.get() {
+        Some(re) => re,
+        None => {
+            let re = Regex::new(r"^(::)?(\w+::)*\w+<(.*)>$").unwrap();
+            match RE.set(re) {
+                Ok(_) => {}
+                Err(e) => {
+                    panic!("Failed to set RE: {}", e);
+                }
+            }
+            RE.get().unwrap()
+        }
+    };
 
-    let mut path = name_without_generics.split(PATH_SEP).collect::<Vec<_>>();
+    // The regex matches the generic type, and group three is the inner type.
+    // One may iterate through all of them with a while let loop to get to the
+    // innermost types.
+    let captures = re.captures(enum_name).unwrap();
+    let inner = &captures[3];
+    let types = inner.split(',').map(|s| s.trim()).collect::<Vec<_>>();
+
+    let mut path = base_enum.split(PATH_SEP).collect::<Vec<_>>();
     path.pop();
     let path = path.join(PATH_SEP) + PATH_SEP;
 
     let new_enum = Enumeration::new(enum_name.to_owned(), path.to_owned(), None, lu_dog);
     let ty = ValueType::new_enumeration(true, &new_enum, lu_dog);
 
-    let Some(ref id) = lu_dog.exhume_enumeration_id_by_name(name_without_generics) else {
+    // We are cheating here. we are overloading the EnumGenerics type and relationship
+    // to store the type's of the generics. As strings.
+    let mut first = true;
+    let mut first_generic = None;
+    let mut last_generic_uuid: Option<SarzakStorePtr> = None;
+    for ty in types {
+        let generic = EnumGeneric::new(ty.to_owned(), &new_enum, None, lu_dog);
+        let _ = ValueType::new_enum_generic(true, &generic, lu_dog);
+
+        if first {
+            first = false;
+            first_generic = Some(s_read!(generic).id);
+        }
+        last_generic_uuid = link_enum_generic!(last_generic_uuid, generic, lu_dog);
+    }
+    s_write!(new_enum).first_generic = first_generic;
+
+    // Down here we are copying the enumeration's fields from base to new.
+    let Some(ref id) = lu_dog.exhume_enumeration_id_by_name(base_enum) else {
         panic!("enum not found");
     };
 

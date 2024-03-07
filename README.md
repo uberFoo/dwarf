@@ -53,14 +53,7 @@ Of course you'll need to have [rust installed ](https://rustup.rs).
 ```bash
 git clone https://github.com/uberFoo/dwarf.git
 cd dwarf
-cargo install --path . --bin dwarf
-```
-
-
-Once you have a binary, give it a whirl:
-
-```bash
-dwarf https://raw.githubusercontent.com/uberFoo/dwarf/develop/mandelbrot.ore -- 50
+cargo xtask install
 ```
 
 ## Beautiful Error Messages!
@@ -99,10 +92,6 @@ In no particular order:
 
 There will be some sort of support for OO-like behavior.
 Minimally we need inheritance, and probably polymorphism.
-
-### Virtual Machine
-
-There's a sort-of hybrid-VM currently, but no compiler.
 
 ## Syntax
 

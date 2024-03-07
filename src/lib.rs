@@ -32,7 +32,7 @@ pub(crate) use chacha::{error::ChaChaError, interpreter};
 pub type DwarfInteger = i64;
 pub type DwarfFloat = f64;
 
-const VERSION: &str = env!("CARGO_PKG_VERSION");
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub const BUILD_TIME: &str = include!(concat!(env!("OUT_DIR"), "/timestamp.txt"));
 
 mod keywords {

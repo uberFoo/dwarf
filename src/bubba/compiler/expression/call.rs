@@ -485,12 +485,12 @@ fn compile_static_method_call(
                 let value = PrintableValueType(false, new_ref!(ValueType, value), &ctx);
                 dbg!(ty, &result, value.to_string());
 
-                // thonk.insert_instruction(
-                //     Instruction::Push(Value::String(value.to_string())),
-                //     location!(),
-                // );
+                thonk.insert_instruction(
+                    Instruction::Push(Value::String(value.to_string())),
+                    location!(),
+                );
 
-                thonk.insert_instruction(Instruction::TypeOf, location!());
+                // thonk.insert_instruction(Instruction::TypeOf, location!());
 
                 result
             }
@@ -792,7 +792,7 @@ mod test {
 
         assert_eq!(program.get_thonk_card(), 1);
 
-        assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 21);
+        assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 24);
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &"test 1 2 3".into());
     }

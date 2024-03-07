@@ -25,6 +25,10 @@ pub(in crate::bubba::compiler) fn compile_field_access(
     let field = lu_dog.exhume_field_access(field).unwrap();
     let field = s_read!(field);
 
+    let s = field.woog_struct;
+    let s = lu_dog.exhume_woog_struct(&s).unwrap();
+    dbg!(s);
+
     // This is the expression upon which we access the field
     let expr = lu_dog.exhume_expression(&field.expression).unwrap();
     compile_expression(&expr, thonk, context)?;
@@ -40,7 +44,7 @@ pub(in crate::bubba::compiler) fn compile_field_access(
                     let tf = lu_dog.exhume_tuple_field(tf).unwrap();
                     let tf = s_read!(tf);
                     let ty = tf.r86_value_type(&lu_dog)[0].clone();
-                    let ty = (*s_read!(ty)).clone();
+                    let ty = s_read!(ty).clone();
                     ty
                 }
                 EnumFieldEnum::Unit(_) => context.get_type(INT).unwrap().clone(),
@@ -52,7 +56,7 @@ pub(in crate::bubba::compiler) fn compile_field_access(
             let field = lu_dog.exhume_field(field).unwrap();
             let field = s_read!(field);
             let ty = field.r5_value_type(&lu_dog)[0].clone();
-            let ty = (*s_read!(ty)).clone();
+            let ty = s_read!(ty).clone();
 
             (field.name.to_owned(), ty)
         }
@@ -60,7 +64,7 @@ pub(in crate::bubba::compiler) fn compile_field_access(
             let func = lu_dog.exhume_function(func).unwrap();
             let func = s_read!(func);
             let ty = func.r10_value_type(&lu_dog)[0].clone();
-            let ty = (*s_read!(ty)).clone();
+            let ty = s_read!(ty).clone();
 
             (func.name.to_owned(), ty)
         }

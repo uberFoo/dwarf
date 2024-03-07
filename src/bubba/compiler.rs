@@ -713,6 +713,7 @@ fn compile_expression(
 
 fn get_span(expression: &RefType<Expression>, lu_dog: &LuDogStore) -> Span {
     let value = &s_read!(expression).r11_x_value(lu_dog)[0];
+    dbg!(&value);
     let span = &s_read!(value).r63_span(lu_dog)[0];
     let read = s_read!(span);
     read.start as usize..read.end as usize

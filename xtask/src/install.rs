@@ -31,7 +31,7 @@ impl flags::Install {
         std_lib_dir.push("src");
         for entry in fs::read_dir(&std_lib_dir)? {
             let file = entry?.path();
-            println!("Copyning {}", file.display());
+            println!("Copying {}", file.display());
             sh.copy_file(file, &std_dst)?;
         }
 

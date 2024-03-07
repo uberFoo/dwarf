@@ -142,10 +142,10 @@
                 }
             },
             "args": [
-                "tests/vm_harness/types/generics/failing/structure.tao"
+                // "tests/vm_harness/types/generics/failing/structure.ore",
                 // "tests/harness/types/generics/workout.ore"
                 // "tests/harness/types/generics/option.tao"
-                // "bench.ore",
+                "test.ore",
                 // "tests/harness/chacha/async/http.ore"
                 // "tests/harness/expression/index/string_index_out_of_bounds.tao"
                 // "https://raw.githubusercontent.com/uberFoo/dwarf/develop/mandelbrot.ore"
