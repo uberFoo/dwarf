@@ -13,6 +13,7 @@ pub mod bubba;
 pub mod chacha;
 pub mod dwarf;
 pub mod plug_in;
+pub mod stdlib;
 
 #[cfg(all(
     feature = "tui",
