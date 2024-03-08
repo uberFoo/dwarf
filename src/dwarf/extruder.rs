@@ -22,15 +22,13 @@ use crate::{
     lu_dog::{
         store::ObjectStore as LuDogStore,
         types::{
-            AWait, Block, Body, BooleanOperator, Call, CharLiteral, DataStructure, EnumFieldEnum,
-            Expression, ExpressionBit, ExpressionEnum, ExpressionStatement, Field, FieldExpression,
-            ForLoop, FormatBit, FormatString, FuncGeneric, FunctionCall, ImplementationBlock,
-            Import, Index, IntegerLiteral, Item as WoogItem, ItemStatement, Lambda,
-            LambdaParameter, LetStatement, Literal, LocalVariable, NamedFieldExpression,
-            Pattern as AssocPat, RangeExpression, Span as LuDogSpan, Statement, StringLiteral,
-            StructExpression, StructGeneric, ValueType, ValueTypeEnum, Variable,
-            VariableExpression, WoogStruct, XFuture, XIf, XMatch, XPath, XPrint, XValue,
-            XValueEnum,
+            AWait, Block, Body, BooleanOperator, Call, CharLiteral, EnumFieldEnum, Expression,
+            ExpressionBit, ExpressionEnum, ExpressionStatement, Field, ForLoop, FormatBit,
+            FormatString, FuncGeneric, FunctionCall, ImplementationBlock, Import, Index,
+            IntegerLiteral, Item as WoogItem, ItemStatement, Lambda, LambdaParameter, LetStatement,
+            Literal, LocalVariable, Pattern as AssocPat, RangeExpression, Span as LuDogSpan,
+            Statement, StringLiteral, StructGeneric, ValueType, ValueTypeEnum, Variable,
+            VariableExpression, WoogStruct, XFuture, XIf, XMatch, XPrint, XValue, XValueEnum,
         },
         Argument, Binary, BooleanLiteral, Comparison, DwarfSourceFile, FieldAccess,
         FieldAccessTarget, FloatLiteral, List, ListElement, ListExpression, Operator,
@@ -43,7 +41,7 @@ use crate::{
 };
 
 mod expression;
-use expression::{addition, and, expr_as, method_call, static_method_call, unit_enum};
+use expression::{addition, and, expr_as, method_call, static_method_call, struct_expr, unit_enum};
 
 pub(super) const EXTENSION_DIR: &str = "extensions";
 pub(super) const JSON_EXT: &str = "json";
@@ -1084,13 +1082,13 @@ pub(super) fn inter_expression(
 
     let expr = s_read!(expr).clone();
     match expr {
-        ParserExpression::Addition(ref lhs_p, ref rhs_p) => {
-            addition::inter(lhs_p, rhs_p, span, block, context, context_stack, lu_dog)
+        ParserExpression::Addition(lhs_p, rhs_p) => {
+             addition::inter(lhs_p, rhs_p, span, block, context, context_stack, lu_dog)
         }
-        ParserExpression::And(ref lhs_p, ref rhs_p) => {
+        ParserExpression::And(lhs_p, rhs_p) => {
             and::inter(lhs_p, rhs_p, span, block, context, context_stack, lu_dog)
         }
-        ParserExpression::As(ref expr, ref ty) => {
+        ParserExpression::As(expr, ref ty) => {
             expr_as::inter(expr, ty, span, block, context, context_stack, lu_dog)
         }
         //
@@ -2925,7 +2923,7 @@ pub(super) fn inter_expression(
         // Unit enumeration
         //
         ParserExpression::UnitEnum(enum_path, (field_name, field_span)) => unit_enum::inter(
-            &enum_path, field_name, field_span, span, block, context, lu_dog,
+            enum_path, field_name, field_span, span, block, context, lu_dog,
         ),
         //
         // Range
@@ -3050,234 +3048,8 @@ pub(super) fn inter_expression(
         //
         // Struct
         //
-        ParserExpression::Struct(name, fields) => {
-            let name_span = &name.1;
-            let (_path, base, name) = if let ParserExpression::LocalVariable(obj) = &name.0 {
-                (PATH_ROOT.to_owned(), obj.to_owned(), obj.to_owned())
-            } else if let ParserExpression::PathInExpression(types) = &name.0 {
-                let mut path = String::new();
-                let mut base = String::new();
-                let mut name = String::new();
-
-                for (i, ty) in types.iter().enumerate() {
-                    if let Type::UserType((type_name, _), generics) = &ty.0 {
-                        name.extend([type_name.as_str()]);
-                        if i != types.len() - 1 {
-                            path.extend([type_name.as_str()]);
-                            path.extend(["::"]);
-                            name.extend(["::"]);
-                        }
-                        if i == types.len() - 1 {
-                            base = type_name.clone();
-                        }
-                        if !generics.is_empty() {
-                            name.push('<');
-                            for (i, (generic, _)) in generics.iter().enumerate() {
-                                // if let Type::Generic((generic_name, _)) = generic {
-                                name.extend([generic.to_string()]);
-
-                                if i != generics.len() - 1 {
-                                    name.extend([", "]);
-                                }
-                                // }
-                            }
-                            name.push('>');
-                        }
-                    } else {
-                        return Err(vec![DwarfError::Internal {
-                            description: format!(
-                                "Expected a user type in struct expression, found {:?}",
-                                ty
-                            ),
-                            location: location!(),
-                        }]);
-                    }
-                }
-
-                (path, base, name)
-            } else {
-                return Err(vec![DwarfError::Internal {
-                    description: format!(
-                        "Expected a local variable in struct expression, found {:?}",
-                        name.0
-                    ),
-                    location: location!(),
-                }]);
-            };
-
-            let base = if let Some(path) = context.scopes.get(&name) {
-                path.to_owned() + name.as_str()
-            } else {
-                context.path.clone() + base.as_str()
-            };
-
-            debug!("ParserExpression::Struct {}", name);
-
-            // 🚧 Base or name? This is black magic at this point.
-            let id = match lu_dog.exhume_woog_struct_id_by_name(&base) {
-                Some(id) => id,
-                None => match lu_dog.exhume_woog_struct_id_by_name(&name) {
-                    Some(id) => id,
-                    None => {
-                        return Err(vec![DwarfError::UnknownType {
-                            ty: name.to_owned(),
-                            file: context.file_name.to_owned(),
-                            span: name_span.to_owned(),
-                            location: location!(),
-                            program: context.source_string.to_owned(),
-                        }]);
-                    }
-                },
-            };
-
-            let woog_struct = lu_dog.exhume_woog_struct(&id).unwrap();
-            let struct_fields = s_read!(woog_struct).r7_field(lu_dog);
-
-            let data_struct = DataStructure::new_woog_struct(true, &woog_struct, lu_dog);
-
-            // 🚧 Fix this.
-            let x_path = XPath::new(Uuid::new_v4(), None, lu_dog);
-            let struct_expr = StructExpression::new(Uuid::new_v4(), &data_struct, &x_path, lu_dog);
-
-            let mut generic_substitutions = HashMap::default();
-
-            for (field_name, field_expr) in fields {
-                let field_expr_span = field_expr.1.to_owned();
-                let (field_expr, ty) = inter_expression(
-                    &new_ref!(ParserExpression, field_expr.0.to_owned()),
-                    &field_expr_span,
-                    block,
-                    context,
-                    context_stack,
-                    lu_dog,
-                )?;
-
-                let pvt = PrintableValueType(true, &ty, context, lu_dog).to_string();
-
-                debug!(
-                    "field `{}` is of type `{pvt}`, expr: {field_expr:?}",
-                    field_name.0
-                );
-
-                if let Some(field) = struct_fields
-                    .iter()
-                    .find(|f| s_read!(f).name == field_name.0)
-                {
-                    let field_ty = lu_dog.exhume_value_type(&s_read!(field).ty).unwrap();
-                    let naked_ty = s_read!(field_ty);
-
-                    // Primarily we are here to check the type of the field against
-                    // the type of the expression. If only it were so easily done.
-                    // The issue is generics. If the field is generic, then we need
-                    // to initially use the type of the expression to fill in the
-                    // type of the generic parameter. *After* that however, we
-                    // need to use this new type to typecheck all subsequent uses
-                    // of the pattern.
-                    if let ValueTypeEnum::StructGeneric(ref id) = naked_ty.subtype {
-                        // OK. We are instantiating a generic. We need to create the new type
-                        let generic = lu_dog.exhume_struct_generic(id).unwrap();
-                        generic_substitutions.insert(s_read!(generic).name.to_owned(), ty.clone());
-                    } else {
-                        // We only need the type check if the type of the field in the struct
-                        // is not generic. Otherwise we are explicitly defining the type above.
-                        typecheck(
-                            (&field_ty, &field_name.1),
-                            (&ty, &field_expr_span),
-                            location!(),
-                            context,
-                            lu_dog,
-                        )?;
-                    }
-                } else {
-                    return Err(vec![DwarfError::NoSuchField {
-                        name: name.to_string(),
-                        name_span: name_span.to_owned(),
-                        field: field_name.0.to_owned(),
-                        file: context.file_name.to_owned(),
-                        span: field_name.1.to_owned(),
-                        location: location!(),
-                        program: context.source_string.to_owned(),
-                    }]);
-                }
-
-                let nfe = NamedFieldExpression::new(field_name.0.to_owned(), lu_dog);
-                let field = FieldExpression::new_named_field_expression(
-                    &field_expr.0,
-                    &struct_expr,
-                    &nfe,
-                    lu_dog,
-                );
-
-                let expr = Expression::new_field_expression(true, &field, lu_dog);
-                let value = XValue::new_expression(block, &ty, &expr, lu_dog);
-                update_span_value(&span, &value, location!());
-
-                // # Span Bug
-                // This is exceptional, at least so for. What's happening is that
-                // the span is already pointing at a value. We've been clobbering
-                // it successfully until the following case:
-                // ```
-                // // Does not work
-                // Foo { bar: Bar::new()}
-                // // Works
-                // Foo { bar: Uuid::new()}
-                // ```
-                // So what do we do? Well I tried not overwriting, and lot's of
-                // stuff broke. And really, it's two different values pointing at
-                // the same span. So I just cloned it and inserted it.
-                //
-                // The thing that bothers me is where else might this be happening?
-                if s_read!(field_expr.1).x_value.is_none() {
-                    s_write!(field_expr.1).x_value = Some(s_read!(value).id);
-                } else {
-                    cfg_if::cfg_if! {
-                        if #[cfg(not(feature="debug"))] {
-                            lu_dog.inter_span(|id| {
-                                let mut span = s_read!(field_expr.1).clone();
-                                span.x_value = Some(s_read!(value).id);
-                                span.id = id;
-                                new_ref!(LuDogSpan, span)
-                            });
-                        } else {
-                            let span = LuDogSpan::new(
-                                s_read!(field_expr.1).end,
-                                s_read!(field_expr.1).start,
-                                &context.source,
-                                None,
-                                Some(&value),
-                                lu_dog,
-                            );
-                        }
-                    }
-                }
-            }
-
-            let woog_struct = if !generic_substitutions.is_empty() {
-                let span = s_read!(span);
-                let span = span.start as usize..span.end as usize;
-                let (woog_struct, _) = create_generic_struct(
-                    &woog_struct,
-                    &generic_substitutions,
-                    &span,
-                    context,
-                    context.sarzak,
-                    lu_dog,
-                );
-
-                woog_struct
-            } else {
-                woog_struct
-            };
-
-            // I love that the type of the thing is the same as the thing itself.
-            let expr = Expression::new_struct_expression(true, &struct_expr, lu_dog);
-            let ty = ValueType::new_woog_struct(true, &woog_struct, lu_dog);
-
-            let value = XValue::new_expression(block, &ty, &expr, lu_dog);
-            update_span_value(&span, &value, location!());
-
-            Ok(((expr, span), ty))
-        }
+        ParserExpression::Struct(name, fields) => struct_expr::inter(name, fields, span, block, context, context_stack, lu_dog)
+,
         //
         // Subtraction
         //
@@ -4051,10 +3823,7 @@ pub(crate) fn make_value_type(
 
                         Ok(ty)
                     } else {
-                        Ok(
-                            create_generic_enum(&fq_name, &name, span.to_owned(), context, lu_dog)?
-                                .1,
-                        )
+                        Ok(create_generic_enum(&fq_name, &name, lu_dog)?.1)
                     }
                 } else if let Some(ty) = lookup_user_defined_type(lu_dog, &name, span, context) {
                     Ok(ty)
@@ -4174,6 +3943,11 @@ pub(crate) fn lookup_woog_struct_method_return_type(
     }
 }
 
+use once_cell::sync::OnceCell;
+use regex::Regex;
+
+pub(crate) static RE: OnceCell<Regex> = OnceCell::new();
+
 pub(super) fn typecheck(
     lhs: (&RefType<ValueType>, &Span),
     rhs: (&RefType<ValueType>, &Span),
@@ -4203,6 +3977,68 @@ pub(super) fn typecheck(
     // Symmetry, right? Maybe a macro? We are also diving into sarzak in three
     // different places? Four?
     match (&s_read!(lhs).subtype, &s_read!(rhs).subtype) {
+        (ValueTypeEnum::Enumeration(a), ValueTypeEnum::Enumeration(b)) => {
+            let re = match RE.get() {
+                Some(re) => re,
+                None => {
+                    let re = Regex::new(r"^(::)?(\w+::)*\w+<(.*)>$").unwrap();
+                    match RE.set(re) {
+                        Ok(_) => {}
+                        Err(e) => {
+                            panic!("Failed to set RE: {}", e);
+                        }
+                    }
+                    RE.get().unwrap()
+                }
+            };
+
+            let a = lu_dog.exhume_enumeration(a).unwrap();
+            let b = lu_dog.exhume_enumeration(b).unwrap();
+            let a = s_read!(a);
+            let b = s_read!(b);
+
+            dbg!(&a.name, &b.name);
+
+            if let Some(a_c) = re.captures(&a.name) {
+                let mut inner = a_c[3].to_owned();
+                dbg!(&inner);
+                while let Some(captures) = re.captures(&inner) {
+                    inner = captures[3].to_owned();
+                    dbg!(&inner);
+                }
+            }
+
+            // We really need to check the generics, and we need to do it
+            // recursively so that inner types are checked. If one side is
+            // generic then the other must be as well.
+            let a_name = if let Some(next) = a.name.split('<').next() {
+                next
+            } else {
+                &a.name
+            };
+            let b_name = if let Some(next) = b.name.split('<').next() {
+                next
+            } else {
+                &b.name
+            };
+
+            if a_name == b_name {
+                Ok(())
+            } else {
+                let a = PrintableValueType(true, lhs, context, lu_dog);
+                let b = PrintableValueType(true, rhs, context, lu_dog);
+
+                Err(vec![DwarfError::TypeMismatch {
+                    expected: a.to_string(),
+                    found: b.to_string(),
+                    file: context.file_name.to_owned(),
+                    expected_span: lhs_span.to_owned(),
+                    found_span: rhs_span.to_owned(),
+                    location,
+                    program: context.source_string.to_owned(),
+                }])
+            }
+        }
         // Promote unknown to the other type.
         (ValueTypeEnum::Unknown(_), _) => Ok(()),
         (_, ValueTypeEnum::Unknown(_)) => Ok(()),
@@ -4437,40 +4273,6 @@ pub(super) fn typecheck(
                 }
             }
         }
-        (ValueTypeEnum::Enumeration(a), ValueTypeEnum::Enumeration(b)) => {
-            let a = lu_dog.exhume_enumeration(a).unwrap();
-            let b = lu_dog.exhume_enumeration(b).unwrap();
-            let a = s_read!(a);
-            let b = s_read!(b);
-
-            let a_name = if let Some(next) = a.name.split('<').next() {
-                next
-            } else {
-                &a.name
-            };
-            let b_name = if let Some(next) = b.name.split('<').next() {
-                next
-            } else {
-                &b.name
-            };
-
-            if a_name == b_name {
-                Ok(())
-            } else {
-                let a = PrintableValueType(true, lhs, context, lu_dog);
-                let b = PrintableValueType(true, rhs, context, lu_dog);
-
-                Err(vec![DwarfError::TypeMismatch {
-                    expected: a.to_string(),
-                    found: b.to_string(),
-                    file: context.file_name.to_owned(),
-                    expected_span: lhs_span.to_owned(),
-                    found_span: rhs_span.to_owned(),
-                    location,
-                    program: context.source_string.to_owned(),
-                }])
-            }
-        }
         (lhs_t, rhs_t) => {
             if lhs_t == rhs_t {
                 Ok(())
@@ -4579,7 +4381,6 @@ pub(crate) fn create_generic_struct(
         let ty = &field.r5_value_type(lu_dog)[0];
 
         let bby = PrintableValueType(false, &ty, context, lu_dog);
-        dbg!(bby.to_string(), &field_map);
         let ty = if let Some(ty) = field_map.get(&bby.to_string()) {
             ty
         } else {

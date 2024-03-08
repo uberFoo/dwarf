@@ -7,7 +7,7 @@ use uuid::Uuid;
 use crate::{
     dwarf::{
         error::{DwarfError, Result},
-        extruder::{debug, function, update_span_value, Context, ExprSpan},
+        extruder::{create_generic_enum, debug, function, update_span_value, Context, ExprSpan},
         Expression as ParserExpression, Type,
     },
     lu_dog::{
@@ -19,10 +19,9 @@ use crate::{
 
 // Let's just say that I don't get this lint. The docs say you have to box it
 // first, but what about when it's already boxed? I don't get it.
-#[allow(clippy::borrowed_box)]
 #[allow(clippy::too_many_arguments)]
 pub fn inter(
-    enum_path: &Box<(ParserExpression, Range<usize>)>,
+    enum_path: Box<(ParserExpression, Range<usize>)>,
     field_name: String,
     field_span: Range<usize>,
     span: RefType<Span>,
@@ -115,26 +114,12 @@ pub fn inter(
         if let Some(woog_enum) = lu_dog.exhume_enumeration_id_by_name(&full_enum_name) {
             Some(woog_enum)
         } else if let Some(ty) = full_enum_name.split('<').next() {
-            lu_dog.exhume_enumeration_id_by_name(ty)
+            let _ = create_generic_enum(&full_enum_name, ty, lu_dog)?;
+            lu_dog.exhume_enumeration_id_by_name(&full_enum_name)
         } else {
             None
         }
     } {
-        // let woog_enum_id = if full_enum_name != full_enum_name {
-        //     if let Some(id) = lu_dog.exhume_enumeration_id_by_name(&full_enum_name) {
-        //         id
-        //     } else {
-        //         dbg!("β");
-        //         let (new_enum, _) =
-        //             create_generic_enum(&full_enum_name, &full_enum_name, context, lu_dog);
-        //         let x = s_read!(new_enum).id;
-        //         #[allow(clippy::let_and_return)]
-        //         x
-        //     }
-        // } else {
-        //     woog_enum_id
-        // };
-
         let woog_enum = lu_dog.exhume_enumeration(&woog_enum_id).unwrap();
 
         let data_struct = DataStructure::new_enumeration(true, &woog_enum, lu_dog);

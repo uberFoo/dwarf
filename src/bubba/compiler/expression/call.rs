@@ -374,9 +374,6 @@ fn compile_static_method_call(
     let lu_dog = context.lu_dog_heel();
     let lu_dog = s_read!(lu_dog);
 
-    let sarzak = context.sarzak_heel();
-    let sarzak = s_read!(sarzak);
-
     let boolean = context.get_type(BOOL).unwrap().clone();
     let string_array = context.get_type(STRING_ARRAY).unwrap().clone();
 
@@ -473,7 +470,6 @@ fn compile_static_method_call(
             }
             TYPEOF => {
                 let ty = &args[0];
-                dbg!(&ty);
                 let result = compile_expression(ty, thonk, context);
 
                 let value = result.clone().unwrap().unwrap();
@@ -484,7 +480,6 @@ fn compile_static_method_call(
                     new_ref!(ModelStore, context.extruder_context.models.clone()),
                 );
                 let value = PrintableValueType(false, new_ref!(ValueType, value), &ctx);
-                dbg!(ty, &result, value.to_string());
 
                 thonk.insert_instruction(
                     Instruction::Push(Value::String(value.to_string())),

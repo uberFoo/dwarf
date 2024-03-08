@@ -201,16 +201,13 @@ pub fn inter_enum(
     Ok(())
 }
 
-use once_cell::sync::OnceCell;
 use regex::Regex;
 
-static RE: OnceCell<Regex> = OnceCell::new();
+use crate::dwarf::extruder::RE;
 
 pub(crate) fn create_generic_enum(
     enum_name: &str,
     base_enum: &str,
-    span: Span,
-    context: &mut Context,
     lu_dog: &mut LuDogStore,
 ) -> Result<(RefType<Enumeration>, RefType<ValueType>)> {
     // Check to see if this already exists

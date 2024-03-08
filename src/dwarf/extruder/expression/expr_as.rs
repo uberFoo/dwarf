@@ -20,9 +20,8 @@ use crate::{
 
 // Let's just say that I don't get this lint. The docs say you have to box it
 // first, but what about when it's already boxed? I don't get it.
-#[allow(clippy::borrowed_box)]
 pub fn inter(
-    expr: &Box<(ParserExpression, Range<usize>)>,
+    expr: Box<(ParserExpression, Range<usize>)>,
     ty: &(Type, Range<usize>),
     span: RefType<Span>,
     block: &RefType<Block>,
