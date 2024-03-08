@@ -17,7 +17,7 @@ pub(in crate::bubba::compiler) fn compile_field_access(
     context: &mut Context,
     span: Span,
 ) -> Result<Option<ValueType>> {
-    tracing::debug!(target: "instr", "{}: {}:{}:{}", POP_CLR.paint("compile_field_access"), file!(), line!(), column!());
+    tracing::debug!(target: "instr", "{}", POP_CLR.paint("compile_field_access"));
 
     let lu_dog = context.lu_dog_heel().clone();
     let lu_dog = s_read!(lu_dog);
@@ -86,7 +86,7 @@ pub(in crate::bubba::compiler) fn compile_field_expression(
     thonk: &mut CThonk,
     context: &mut Context,
 ) -> Result<Option<ValueType>> {
-    tracing::debug!(target: "instr", "{}: {}:{}:{}", POP_CLR.paint("compile_field_expression"), file!(), line!(), column!());
+    tracing::debug!(target: "instr", "{}", POP_CLR.paint("compile_field_expression"));
 
     let lu_dog = context.lu_dog_heel().clone();
     let lu_dog = s_read!(lu_dog);
@@ -94,9 +94,7 @@ pub(in crate::bubba::compiler) fn compile_field_expression(
     let field_expr = lu_dog.exhume_field_expression(expr).unwrap();
     let expr = s_read!(field_expr).r38_expression(&lu_dog)[0].clone();
 
-    compile_expression(&expr, thonk, context)?;
-
-    Ok(None)
+    compile_expression(&expr, thonk, context)
 }
 
 #[cfg(test)]

@@ -17,10 +17,10 @@ use crate::{
         error::{BubbaError, Error},
     },
     chacha::value::{Enum, Struct},
-    lu_dog::{ObjectStore as LuDogStore, ValueType, ValueTypeEnum},
+    lu_dog::{ValueType, ValueTypeEnum},
     plug_in::PluginType,
     s_read,
-    sarzak::{ObjectStore as SarzakStore, Ty},
+    sarzak::Ty,
     DwarfFloat, DwarfInteger, RefType, VmValueResult,
 };
 

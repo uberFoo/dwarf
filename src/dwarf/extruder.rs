@@ -27,8 +27,8 @@ use crate::{
             ForLoop, FormatBit, FormatString, FuncGeneric, FunctionCall, ImplementationBlock,
             Import, Index, IntegerLiteral, Item as WoogItem, ItemStatement, Lambda,
             LambdaParameter, LetStatement, Literal, LocalVariable, NamedFieldExpression,
-            Pattern as AssocPat, RangeExpression, Span as LuDogSpan, Statement, StringBit,
-            StringLiteral, StructExpression, ValueType, ValueTypeEnum, Variable,
+            Pattern as AssocPat, RangeExpression, Span as LuDogSpan, Statement, StringLiteral,
+            StructExpression, StructGeneric, ValueType, ValueTypeEnum, Variable,
             VariableExpression, WoogStruct, XFuture, XIf, XMatch, XPath, XPrint, XValue,
             XValueEnum,
         },
@@ -4230,10 +4230,15 @@ pub(super) fn typecheck(
         }
         (ValueTypeEnum::FuncGeneric(_), _) => Ok(()),
         (_, ValueTypeEnum::FuncGeneric(_)) => Ok(()),
-        (ValueTypeEnum::EnumGeneric(_g), _) => {
-            // let g = lu_dog.exhume_enum_generic(g).unwrap();
+        (ValueTypeEnum::EnumGeneric(g), _) => {
+            let g = lu_dog.exhume_enum_generic(g).unwrap();
             // let ty = s_read!(g).r99_value_type(lu_dog);
-            // dbg!(&ty, "a");
+            dbg!(&g, "a");
+
+            let a = PrintableValueType(true, lhs, context, lu_dog);
+            let b = PrintableValueType(true, rhs, context, lu_dog);
+
+            dbg!(a.to_string(), b.to_string());
 
             // if !ty.is_empty() {
             //     typecheck(
@@ -4250,14 +4255,15 @@ pub(super) fn typecheck(
             Ok(())
             // }
         }
-        (_, ValueTypeEnum::EnumGeneric(_g)) => {
-            // let g = lu_dog.exhume_enum_generic(g).unwrap();
+        (_, ValueTypeEnum::EnumGeneric(g)) => {
+            let g = lu_dog.exhume_enum_generic(g).unwrap();
             // let ty = s_read!(g).r99_value_type(lu_dog);
             // dbg!(&ty, "b");
-            // let a = PrintableValueType(lhs, context, lu_dog);
-            // let b = PrintableValueType(rhs, context, lu_dog);
+            dbg!(&g, "b");
+            let a = PrintableValueType(true, lhs, context, lu_dog);
+            let b = PrintableValueType(true, rhs, context, lu_dog);
 
-            // dbg!(a.to_string(), b.to_string());
+            dbg!(a.to_string(), b.to_string());
 
             // if !ty.is_empty() {
             //     typecheck(
@@ -4271,10 +4277,15 @@ pub(super) fn typecheck(
             Ok(())
             // }
         }
-        (ValueTypeEnum::StructGeneric(_g), _) => {
-            // let g = lu_dog.exhume_generic(g).unwrap();
+        (ValueTypeEnum::StructGeneric(g), _) => {
+            let g = lu_dog.exhume_struct_generic(g).unwrap();
             // let ty = s_read!(g).r99_value_type(lu_dog);
             // dbg!(&ty, "a");
+            dbg!(&g, "a");
+            let a = PrintableValueType(true, lhs, context, lu_dog);
+            let b = PrintableValueType(true, rhs, context, lu_dog);
+
+            dbg!(a.to_string(), b.to_string());
 
             // if !ty.is_empty() {
             //     typecheck(
@@ -4291,14 +4302,15 @@ pub(super) fn typecheck(
             Ok(())
             // }
         }
-        (_, ValueTypeEnum::StructGeneric(_g)) => {
-            // let g = lu_dog.exhume_generic(g).unwrap();
+        (_, ValueTypeEnum::StructGeneric(g)) => {
+            let g = lu_dog.exhume_struct_generic(g).unwrap();
             // let ty = s_read!(g).r99_value_type(lu_dog);
             // dbg!(&ty, "b");
-            // let a = PrintableValueType(lhs, context, lu_dog);
-            // let b = PrintableValueType(rhs, context, lu_dog);
+            dbg!(&g, "b");
+            let a = PrintableValueType(true, lhs, context, lu_dog);
+            let b = PrintableValueType(true, rhs, context, lu_dog);
 
-            // dbg!(a.to_string(), b.to_string());
+            dbg!(a.to_string(), b.to_string());
 
             // if !ty.is_empty() {
             //     typecheck(
@@ -4490,14 +4502,16 @@ pub(crate) fn create_generic_struct(
 ) -> (RefType<WoogStruct>, RefType<ValueType>) {
     let woog_struct = s_read!(woog_struct);
 
+    let mut generic_substitutions = Vec::new();
     let mut name = woog_struct.name.to_owned();
     name.push('<');
     let first = woog_struct.r102_struct_generic(lu_dog)[0].clone();
-    // name.push_str(&s_read!(first).name);
+    let generic_name = &s_read!(first).name;
 
-    let ty = substitutions.get(&s_read!(first).name).unwrap();
+    let ty = substitutions.get(generic_name).unwrap();
     let ty = PrintableValueType(false, ty, context, lu_dog).to_string();
     name.push_str(&ty);
+    generic_substitutions.push((generic_name.to_owned(), ty));
 
     let mut id = s_read!(first).next;
     while let Some(next_id) = id {
@@ -4509,10 +4523,9 @@ pub(crate) fn create_generic_struct(
         let ty = PrintableValueType(false, ty, context, lu_dog).to_string();
 
         name.extend([", ", &ty]);
+        generic_substitutions.push((next.name.to_owned(), ty));
     }
     name.push('>');
-
-    dbg!(&name);
 
     let mut obj = woog_struct.r4_object(sarzak);
     let obj = if !obj.is_empty() {
@@ -4531,6 +4544,25 @@ pub(crate) fn create_generic_struct(
         obj.as_ref(),
         lu_dog,
     );
+
+    // This is where we cheat and use the StructGeneric to store substitution types.
+    let mut field_map = HashMap::default();
+
+    let (generic_name, prev) = generic_substitutions.pop().unwrap();
+    let mut prev = StructGeneric::new(prev, None, &new_struct, lu_dog);
+    let ty = ValueType::new_struct_generic(true, &prev, lu_dog);
+    field_map.insert(generic_name, ty);
+
+    for (generic_name, ty) in generic_substitutions {
+        let sg = StructGeneric::new(ty, Some(&prev), &new_struct, lu_dog);
+        let ty = ValueType::new_struct_generic(true, &sg, lu_dog);
+        field_map.insert(generic_name, ty);
+
+        // This is cheap, and it get's the job done.
+        s_write!(new_struct).first_generic = Some(s_read!(sg).id);
+        prev = sg;
+    }
+
     context.dirty.push(Dirty::Struct(new_struct.clone()));
     let ty = ValueType::new_woog_struct(true, &new_struct, lu_dog);
     LuDogSpan::new(
@@ -4545,6 +4577,15 @@ pub(crate) fn create_generic_struct(
     for field in woog_struct.r7_field(lu_dog) {
         let field = s_read!(field);
         let ty = &field.r5_value_type(lu_dog)[0];
+
+        let bby = PrintableValueType(false, &ty, context, lu_dog);
+        dbg!(bby.to_string(), &field_map);
+        let ty = if let Some(ty) = field_map.get(&bby.to_string()) {
+            ty
+        } else {
+            ty
+        };
+
         let _ = Field::new(field.name.to_owned(), &new_struct, ty, lu_dog);
     }
 

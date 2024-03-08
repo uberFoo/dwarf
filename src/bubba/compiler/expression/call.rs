@@ -473,6 +473,7 @@ fn compile_static_method_call(
             }
             TYPEOF => {
                 let ty = &args[0];
+                dbg!(&ty);
                 let result = compile_expression(ty, thonk, context);
 
                 let value = result.clone().unwrap().unwrap();
@@ -489,8 +490,6 @@ fn compile_static_method_call(
                     Instruction::Push(Value::String(value.to_string())),
                     location!(),
                 );
-
-                // thonk.insert_instruction(Instruction::TypeOf, location!());
 
                 result
             }
