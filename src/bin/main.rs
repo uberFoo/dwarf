@@ -19,7 +19,11 @@ use dap::{prelude::BasicClient, server::Server};
 // #[cfg(feature = "async")]
 // use smol::future;
 #[cfg(feature = "async")]
-use tracing_subscriber::{fmt, prelude::*, EnvFilter};
+use tracing_subscriber::{
+    fmt::{self, format},
+    prelude::*,
+    EnvFilter, FmtSubscriber,
+};
 
 #[cfg(feature = "async")]
 use dwarf::ref_to_inner;
@@ -158,14 +162,27 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     color_backtrace::install();
     #[cfg(feature = "async")]
     {
-        let format_layer = fmt::layer().with_thread_ids(true).pretty();
+        // let format_layer = fmt::layer().with_thread_ids(true).pretty();
         let filter_layer =
             EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("error"));
 
-        tracing_subscriber::registry()
-            .with(filter_layer)
-            .with(format_layer)
-            .init();
+        // tracing_subscriber::registry()
+        //     .with(filter_layer)
+        //     .with(format_layer)
+        //     .init();
+
+        let subscriber = FmtSubscriber::builder()
+            .with_env_filter(filter_layer)
+            .event_format(format().pretty())
+            .with_writer(fmt::writer::BoxMakeWriter::new(|| {
+                Box::new(std::io::stderr())
+            }))
+            .fmt_fields(fmt::format::PrettyFields::new())
+            .with_max_level(tracing::Level::DEBUG)
+            .finish();
+
+        tracing::subscriber::set_global_default(subscriber)
+            .expect("setting default subscriber failed");
     }
     #[cfg(not(feature = "async"))]
     pretty_env_logger::init();
@@ -381,8 +398,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     )?
                 } else {
                     let bin_file = fs::File::open(path)?;
-                    // let program: Program = bincode::deserialize_from(bin_file).unwrap();
                     let reader = io::BufReader::new(bin_file);
+                    // let program: Program = bincode::deserialize_from(reader).unwrap();
                     let program: Program = serde_json::from_reader(reader)?;
 
                     if program.compiler_version() != VERSION
@@ -576,12 +593,13 @@ fn compile_program(
             println!("{program}");
 
             // Write the compiled program to disk.
-            let mut bin_file = fs::File::create(path)?;
-            // let encoded: Vec<u8> = bincode::serialize(&program).unwrap();
+            let bin_file = fs::File::create(path)?;
+            let mut writer = io::BufWriter::new(bin_file);
+
+            // let _ = bincode::serialize_into(writer, &program);
             // dbg!(&encoded);
             // bin_file.write_all(&encoded)?;
 
-            let mut writer = io::BufWriter::new(bin_file);
             serde_json::to_writer(&mut writer, &program)?;
 
             Ok(program)

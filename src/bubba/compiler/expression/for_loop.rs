@@ -16,7 +16,7 @@ use crate::{
 
 const LIST_VAR: &str = "$$list_value";
 
-#[tracing::instrument]
+#[cfg_attr(not(test), tracing::instrument(skip(context)))]
 pub(in crate::bubba::compiler) fn compile(
     for_loop: &SarzakStorePtr,
     thonk: &mut CThonk,

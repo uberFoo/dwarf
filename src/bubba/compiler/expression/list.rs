@@ -10,13 +10,13 @@ use crate::{
     new_ref, s_read, NewRef, RefType, SarzakStorePtr, Span, POP_CLR,
 };
 
-#[tracing::instrument]
+#[cfg_attr(not(test), tracing::instrument(skip(context)))]
 pub(in crate::bubba::compiler) fn compile_list_element(
     element: &SarzakStorePtr,
     thonk: &mut CThonk,
     context: &mut Context,
 ) -> Result<Option<ValueType>> {
-    tracing::debug!(target: "instr", "{}\n  --> {}:{}:{}", POP_CLR.paint("compile_list_element"), file!(), line!(), column!());
+    tracing::debug!(target: "instr", "{}", POP_CLR.paint("compile_list_element"));
 
     let lu_dog = context.lu_dog_heel().clone();
     let lu_dog = s_read!(lu_dog);
@@ -35,19 +35,17 @@ pub(in crate::bubba::compiler) fn compile_list_element(
 /// Note that we can't do too much here in the compiler. We can evaluate the
 /// list elements and push them on the stack, but we don't have a way of building
 /// the list. That has to be taken care of at runtime.
-#[tracing::instrument]
+#[cfg_attr(not(test), tracing::instrument(skip(context)))]
 pub(in crate::bubba::compiler) fn compile_list_expression(
     list: &SarzakStorePtr,
     thonk: &mut CThonk,
     context: &mut Context,
     entry_span: Span,
 ) -> Result<Option<ValueType>> {
-    tracing::debug!(target: "instr", "{}\n  --> {}:{}:{}", POP_CLR.paint("compile_list_expression"), file!(), line!(), column!());
+    tracing::debug!(target: "instr", "{}", POP_CLR.paint("compile_list_expression"));
 
     let lu_dog = context.lu_dog_heel().clone();
     let lu_dog = s_read!(lu_dog);
-    let sarzak = context.sarzak_heel().clone();
-    let sarzak = s_read!(sarzak);
 
     let list = lu_dog.exhume_list_expression(list).unwrap();
     let list = s_read!(list);

@@ -8,8 +8,6 @@ use crate::{bubba::value::Value, s_read, RefType, Span};
 
 /// Instruction
 ///
-/// Note to self: leave the Strings wrapped in RefType, as changing it slows
-/// the VM down between 10-23%.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum Instruction {
     /// Add the top two values on the stack.

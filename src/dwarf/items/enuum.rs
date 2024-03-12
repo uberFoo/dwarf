@@ -14,7 +14,7 @@ use crate::{
         Enumeration, Field, Span as LuDogSpan, StructField, TupleField, Unit, ValueType,
         WoogStruct,
     },
-    new_ref, s_read, s_write, Dirty, DwarfInteger, NewRef, RefType, SarzakStorePtr, Span, PATH_SEP,
+    s_read, s_write, Dirty, DwarfInteger, RefType, SarzakStorePtr, PATH_SEP,
 };
 
 macro_rules! link_enum_generic {

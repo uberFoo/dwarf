@@ -107,6 +107,7 @@ uuid = { version = "1.6.1", features = ["v4", "serde"] }
 
 smartstring = { version = "1.0.1", features = ["serde"] }
 regex = "1.10.3"
+bitcode = "=0.6.0-alpha.2"
 
 # [patch.crates-io]
 # puteketeke = { path = "../../github/puteketeke" }
@@ -178,6 +179,11 @@ harness = false
 
 [profile.release]
 lto = "thin"
+codegen-units = 1
+panic = "abort"
+
+[profile.dev]
+debug = 0
 
 [lib]
 crate-type = ["cdylib", "rlib"]

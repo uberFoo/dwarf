@@ -10,7 +10,7 @@ use crate::{
     s_read, SarzakStorePtr, Span, POP_CLR,
 };
 
-#[tracing::instrument]
+#[cfg_attr(not(test), tracing::instrument(skip(context)))]
 pub(in crate::bubba::compiler) fn compile_field_access(
     field: &SarzakStorePtr,
     thonk: &mut CThonk,
@@ -79,7 +79,7 @@ pub(in crate::bubba::compiler) fn compile_field_access(
     Ok(Some(ty))
 }
 
-#[tracing::instrument]
+#[cfg_attr(not(test), tracing::instrument(skip(context)))]
 pub(in crate::bubba::compiler) fn compile_field_expression(
     expr: &SarzakStorePtr,
     thonk: &mut CThonk,

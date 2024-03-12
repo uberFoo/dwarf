@@ -22,7 +22,7 @@ use crate::{
     ModelStore, NewRef, RefType, SarzakStorePtr, Span, PATH_SEP, POP_CLR,
 };
 
-#[tracing::instrument]
+#[cfg_attr(not(test), tracing::instrument(skip(context)))]
 pub(in crate::bubba::compiler) fn compile(
     call: &SarzakStorePtr,
     thonk: &mut CThonk,
@@ -94,7 +94,7 @@ pub(in crate::bubba::compiler) fn compile(
 ///
 /// Doing this in a single step is fine because the pointer will either be used
 /// directly or stored in a variable.
-#[tracing::instrument]
+#[cfg_attr(not(test), tracing::instrument(skip(context)))]
 pub(in crate::bubba::compiler) fn compile_lambda(
     λ: &SarzakStorePtr,
     outer_thonk: &mut CThonk,
@@ -219,7 +219,7 @@ pub(in crate::bubba::compiler) fn compile_lambda(
 ///
 /// This ensures that the stack is setup for a function call, which we issue
 /// at the tail of the function.
-#[tracing::instrument]
+#[cfg_attr(not(test), tracing::instrument(skip(context)))]
 fn compile_function_call(
     name: &str,
     call: RefType<Call>,
@@ -270,7 +270,7 @@ fn compile_function_call(
     }
 }
 
-#[tracing::instrument]
+#[cfg_attr(not(test), tracing::instrument(skip(context)))]
 fn compile_method_call(
     name: String,
     call: RefType<Call>,
@@ -360,7 +360,7 @@ fn compile_method_call(
     result
 }
 
-#[tracing::instrument]
+#[cfg_attr(not(test), tracing::instrument(skip(context)))]
 fn compile_static_method_call(
     ty: &str,
     func: &str,

@@ -36,7 +36,7 @@ pub fn eval(block_id: &SarzakStorePtr, context: &mut Context) -> Result<RefType<
         }
     }
     #[cfg(not(feature = "async"))]
-    eval_inner(block, context, vm)
+    eval_inner(block, context)
 }
 
 pub fn eval_inner(block: RefType<Block>, context: &mut Context) -> Result<RefType<Value>> {
