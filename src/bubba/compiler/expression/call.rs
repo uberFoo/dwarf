@@ -369,7 +369,7 @@ fn compile_static_method_call(
     context: &mut Context,
     span: Span,
 ) -> Result<Option<ValueType>> {
-    tracing::debug!(target: "instr", "{}: {}:{}:{}", POP_CLR.paint("compile_static_method_call"), file!(), line!(), column!());
+    tracing::debug!(target: "instr", "{}", POP_CLR.paint("compile_static_method_call"));
 
     let lu_dog = context.lu_dog_heel();
     let lu_dog = s_read!(lu_dog);
@@ -771,7 +771,7 @@ mod test {
                          let a = 1;
                          let b = 2;
                          let c = 3;
-                         `test ${a} ${b} ${c}`
+                         \"test ${a} ${b} ${c}\"
                    }";
         let ast = parse_dwarf("test_or_expression", ore).unwrap();
         let ctx = new_lu_dog(
@@ -786,7 +786,7 @@ mod test {
 
         assert_eq!(program.get_thonk_card(), 1);
 
-        assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 24);
+        assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 21);
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &"test 1 2 3".into());
     }

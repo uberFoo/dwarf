@@ -296,6 +296,7 @@ pub fn inter(
             false
         }
     } {
+        dbg!(&method, &type_name);
         let meth =
             StaticMethodCall::new(method.to_owned(), type_name.clone(), Uuid::new_v4(), lu_dog);
         let call = Call::new_static_method_call(true, None, None, &meth, lu_dog);
@@ -332,7 +333,7 @@ pub fn inter(
             "I don't think that we should ever see anything other than a user type here: {generics:?}",
         );
                 };
-
+                dbg!(&plugin_type);
                 let plugin = lu_dog.exhume_x_plugin_id_by_name(plugin_type).unwrap();
                 let plugin = lu_dog.exhume_x_plugin(&plugin).unwrap();
                 ValueType::new_x_plugin(true, &plugin, lu_dog)

@@ -29,9 +29,9 @@ fn main() {
         next: Option::<Node<int>>::Some(node_b),
     };
 
-    print(`node_a = ${node_a}\n`);
-    print(`node_b = ${node_b}\n`);
-    print(`node_c = ${node_c}\n`);
+    print("node_a = ${node_a}\n");
+    print("node_b = ${node_b}\n");
+    print("node_c = ${node_c}\n");
 
     let d = Foo {
         a: 42,
@@ -45,19 +45,19 @@ fn main() {
         a: true,
     };
 
-    print(`d = ${d}\n`);
-    print(`a = ${a}\n`);
+    print("d = ${d}\n");
+    print("a = ${a}\n");
 
     chacha::assert_eq(chacha::typeof(d.a), "int");
     chacha::assert_eq(chacha::typeof(d.b), "string");
     chacha::assert_eq(chacha::typeof(d.c), "float");
 
     let a = One { uno: 42 };
-    print(`a = ${a}\n`);
+    print("a = ${a}\n");
 
     chacha::assert_eq(chacha::typeof(a.uno), "int");
 
     let b = One { uno: "hello" };
-    print(`b = ${b}\n`);
+    print("b = ${b}\n");
     chacha::assert_eq(chacha::typeof(b.uno), "string");
 }

@@ -81,12 +81,14 @@ pub(in crate::bubba::compiler) fn compile(
                                 let expr_bit = s_read!(expr_bit);
                                 let expr = lu_dog.exhume_expression(&expr_bit.expression).unwrap();
                                 let span = get_span(&expr, &lu_dog);
-                                compile_expression(&expr, thonk, context)?;
-                                thonk.insert_instruction_with_span(
-                                    Instruction::ToString,
-                                    span,
-                                    location!(),
-                                );
+                                let ty = compile_expression(&expr, thonk, context)?.unwrap();
+                                if ty != context.get_type(STRING).unwrap().clone() {
+                                    thonk.insert_instruction_with_span(
+                                        Instruction::ToString,
+                                        span,
+                                        location!(),
+                                    );
+                                }
                             }
                             FormatBitEnum::StringBit(ref string) => {
                                 let string_bit = lu_dog.exhume_string_bit(string).unwrap();
@@ -142,7 +144,6 @@ pub(in crate::bubba::compiler) fn compile(
         //
         LiteralEnum::StringLiteral(ref literal) => {
             let literal = lu_dog.exhume_string_literal(literal).unwrap();
-            // 🚧 It'd be great if this were an Rc...
             let value = Value::String(s_read!(literal).x_value.clone());
             (value, context.get_type(STRING).unwrap().clone())
         }

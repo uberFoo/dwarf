@@ -12,7 +12,7 @@ fn main() {
             false
         }
         Option::<string>::Some(y) => {
-            print(`top: {y}\n`);
+            print("top: {y}\n");
             chacha::assert_eq(true, false);
             true
         }
@@ -27,7 +27,7 @@ fn main() {
             chacha::assert_eq(" not none", "oops");
         }
         Option::<string>::Some(y) => {
-            print(`bottom: {i}\n`);
+            print("bottom: {i}\n");
             chacha::assert_eq(y, "hello");
         }
     };

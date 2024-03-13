@@ -10,17 +10,17 @@ fn main() {
     let c = Result::Ok("test");
     let d = Result::Err(96);
 
-    print(`a = ${a}\n`);
-    print(`b = ${b}\n`);
-    print(`c = ${c}\n`);
-    print(`d = ${d}\n`);
+    print("a = ${a}\n");
+    print("b = ${b}\n");
+    print("c = ${c}\n");
+    print("d = ${d}\n");
 
     chacha::assert_eq(a, Result::Ok(42));
     chacha::assert_eq(b, Result::Err("oops"));
 
     chacha::assert_eq(c, Result::Ok("test"));
 
-    chacha::assert_eq(`a = ${a}`, "a = ::std::result::Result::Ok(42)");
+    chacha::assert_eq("a = ${a}", "a = ::std::result::Result::Ok(42)");
     // chacha::assert_eq("b = {0}".format(b), `b = Result<int, string>::Err(\"oops\")`);
 
     chacha::assert(a.is_ok());

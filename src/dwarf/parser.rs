@@ -151,12 +151,6 @@ fn lexer() -> impl Parser<char, Vec<Spanned<Token>>, Error = Simple<char>> {
         .then_ignore(just('\''))
         .map(Token::Char);
 
-    let format_string = just('`')
-        .ignore_then(filter(|c| *c != '`').repeated())
-        .then_ignore(just('`'))
-        .collect::<String>()
-        .map(Token::FormatString);
-
     // A parser for identifiers and keywords
     fn ident(
     ) -> impl Parser<char, <char as Character>::Collection, Error = Simple<char>> + Copy + Clone
@@ -207,7 +201,6 @@ fn lexer() -> impl Parser<char, Vec<Spanned<Token>>, Error = Simple<char>> {
         .or(int)
         .or(char_parser)
         .or(string)
-        .or(format_string)
         .or(punct)
         .or(ident)
         .recover_with(skip_then_retry_until([]));
@@ -2038,15 +2031,15 @@ impl DwarfParser {
             return Ok(Some(expression));
         }
 
-        // parse a string literal
-        if let Some(expression) = self.parse_string_literal() {
-            debug!("string literal", expression);
-            return Ok(Some(expression));
-        }
-
         // parse a format string
         if let Some(expression) = self.parse_format_string() {
             debug!("format string", expression);
+            return Ok(Some(expression));
+        }
+
+        // parse a string literal
+        if let Some(expression) = self.parse_string_literal() {
+            debug!("string literal", expression);
             return Ok(Some(expression));
         }
 
@@ -3542,58 +3535,67 @@ impl DwarfParser {
 
         let token = self.peek()?.clone();
 
-        if let (Token::FormatString(string), span) = token {
+        if let (Token::String(string), span) = token {
             let re = match RE.get() {
                 Some(re) => re,
                 None => {
                     let re = Regex::new(r"(.*?)\$\{([^}]*)\}|(.+)").unwrap();
-                    match RE.set(re) {
-                        Ok(_) => {}
-                        Err(e) => {
-                            eprintln!("{e}");
-                            return None;
-                        }
-                    }
+                    // I hate this, and I wouldn't do it but for whatever happens
+                    // during test breaking.
+                    while RE.set(re.clone()).is_err() {}
+
                     RE.get().unwrap()
                 }
             };
 
-            let mut inside = span.start;
-            let mut exprs = Vec::new();
-            for caps in re.captures_iter(&string) {
-                if let Some(before) = caps.get(1) {
-                    if !before.is_empty() {
-                        let delta = before.end() - before.start();
+            // If we don't have any matches then parse this as a regular string.
+            let captures = re.captures(&string);
+            if captures.is_some() && captures.unwrap().get(1).is_some() {
+                let mut inside = span.start;
+                let mut exprs = Vec::new();
+
+                // It doesn't implement Range or something. I could do it I suppose,
+                // but I don't think it really matters that much.
+                // let captures = captures.unwrap();
+                // for caps in &captures[1..] {
+
+                for caps in re.captures_iter(&string) {
+                    if let Some(before) = caps.get(1) {
+                        if !before.is_empty() {
+                            let delta = before.end() - before.start();
+                            exprs.push((
+                                DwarfExpression::StringLiteral(before.as_str().to_owned()),
+                                inside..inside + delta,
+                            ));
+                            inside += delta;
+                        }
+                    }
+
+                    if let Some(expr_str) = caps.get(2) {
+                        let expr = parse_expression(expr_str.as_str());
+                        if let Ok(Some(mut expr)) = expr {
+                            expr.0 .1.start += inside + 2;
+                            expr.0 .1.end += inside + 2;
+                            exprs.push(expr.0);
+                            inside += expr_str.end() - expr_str.start() + 3;
+                        }
+                    }
+
+                    if let Some(after) = caps.get(3) {
+                        let delta = after.end() - after.start();
                         exprs.push((
-                            DwarfExpression::StringLiteral(before.as_str().to_owned()),
+                            DwarfExpression::StringLiteral(after.as_str().to_owned()),
                             inside..inside + delta,
                         ));
                         inside += delta;
                     }
                 }
 
-                if let Some(expr_str) = caps.get(2) {
-                    let expr = parse_expression(expr_str.as_str());
-                    if let Ok(Some(mut expr)) = expr {
-                        expr.0 .1.start += inside + 2;
-                        expr.0 .1.end += inside + 2;
-                        exprs.push(expr.0);
-                        inside += expr_str.end() - expr_str.start() + 3;
-                    }
-                }
-
-                if let Some(after) = caps.get(3) {
-                    let delta = after.end() - after.start();
-                    exprs.push((
-                        DwarfExpression::StringLiteral(after.as_str().to_owned()),
-                        inside..inside + delta,
-                    ));
-                    inside += delta;
-                }
+                self.advance();
+                Some(((DwarfExpression::FormatString(exprs), span), LITERAL))
+            } else {
+                None
             }
-
-            self.advance();
-            Some(((DwarfExpression::FormatString(exprs), span), LITERAL))
         } else {
             None
         }
@@ -5953,13 +5955,14 @@ mod tests {
         fn main() {
             let a = 42;
             let b = 96;
-            print(`a = ${a}, b = ${b}, and this is the end of the string`);
-            print(`${a}`);
-            ``
+            print("a = ${a}, b = ${b}, and this is the end of the string");
+            print("${a}");
+            print("");
         }
         "#;
 
-        let ast = parse_dwarf("test_format_string", src);
+        let ast = parse_dwarf("test_format_str", src);
+        dbg!(&ast);
         assert!(ast.is_ok());
     }
 
@@ -5973,7 +5976,7 @@ mod tests {
         }
         "#;
 
-        let ast = parse_dwarf("test_format_string", src);
+        let ast = parse_dwarf("test_char_literal", src);
         dbg!(&ast);
         assert!(ast.is_ok());
     }
