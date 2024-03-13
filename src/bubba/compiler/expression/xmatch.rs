@@ -11,14 +11,14 @@ use crate::{
     s_read, SarzakStorePtr, Span, POP_CLR,
 };
 
-#[cfg_attr(not(test), tracing::instrument(skip(context)))]
+#[cfg_attr(not(test), tracing::instrument(skip(thonk, context)))]
 pub(in crate::bubba::compiler) fn compile(
     expr: &SarzakStorePtr,
     thonk: &mut CThonk,
     context: &mut Context,
     span: Span,
 ) -> Result<Option<ValueType>> {
-    tracing::debug!(target: "instr", "{}: {}:{}:{}", POP_CLR.paint("compile_match"), file!(), line!(), column!());
+    tracing::debug!(target: "instr", "{}", POP_CLR.paint("compile_match"));
 
     let lu_dog = context.lu_dog_heel().clone();
     let lu_dog = s_read!(lu_dog);
@@ -33,8 +33,6 @@ pub(in crate::bubba::compiler) fn compile(
     for pattern in patterns {
         // Compile the scrutinee first, as this is what we'll be matching against.
         compile_expression(&scrutinee, thonk, context)?;
-
-        tracing::debug!(target: "instr", "{}:{}:{}", file!(), line!(), column!());
 
         // We push this up here because of the pattern matching needs it's own context.
         context.push_scope();
@@ -51,8 +49,6 @@ pub(in crate::bubba::compiler) fn compile(
                 compile_expression(&pattern_expr, thonk, context)?;
             }
             ExpressionEnum::Literal(ref literal) => {
-                tracing::debug!(target: "instr", "{}:{}:{}", file!(), line!(), column!());
-
                 literal::compile(literal, thonk, context, span.clone())?;
             }
             ExpressionEnum::StructExpression(ref id) => {
@@ -80,8 +76,6 @@ pub(in crate::bubba::compiler) fn compile(
                             // 🚧 I'm already in the middle of one of these.
                             match &expr.subtype {
                                 ExpressionEnum::Literal(ref literal) => {
-                                    tracing::debug!(target: "instr", "{}:{}:{}", file!(), line!(), column!());
-
                                     literal::compile(literal, thonk, context, span.clone())?;
                                 }
                                 ExpressionEnum::VariableExpression(ref id) => {
@@ -190,7 +184,7 @@ pub(in crate::bubba::compiler) fn compile(
         // Compile the match block.
         let mut match_thonk = CThonk::new("match".to_owned());
 
-        tracing::debug!(target: "instr", "{}: {}:{}:{}", POP_CLR.paint("compile_pattern_expr"), file!(), line!(), column!());
+        tracing::debug!(target: "instr", "{}", POP_CLR.paint("compile_pattern_expr"));
         compile_expression(&pattern_expr, &mut match_thonk, context)?;
 
         let fp = match_thonk.get_frame_size();

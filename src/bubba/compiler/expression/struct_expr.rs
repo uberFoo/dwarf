@@ -11,7 +11,7 @@ use crate::{
     s_read, SarzakStorePtr, Span, POP_CLR,
 };
 
-#[cfg_attr(not(test), tracing::instrument(skip(context)))]
+#[cfg_attr(not(test), tracing::instrument(skip(thonk, context)))]
 pub(in crate::bubba::compiler) fn compile(
     expr: &SarzakStorePtr,
     thonk: &mut CThonk,

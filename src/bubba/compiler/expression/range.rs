@@ -4,7 +4,7 @@ use crate::{
     s_read, SarzakStorePtr, POP_CLR,
 };
 
-#[cfg_attr(not(test), tracing::instrument(skip(context)))]
+#[cfg_attr(not(test), tracing::instrument(skip(thonk, context)))]
 pub(in crate::bubba::compiler) fn compile(
     range: &SarzakStorePtr,
     thonk: &mut CThonk,

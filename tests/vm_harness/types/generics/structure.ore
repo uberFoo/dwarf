@@ -18,7 +18,7 @@ struct One<T> {
 fn main() {
     let node_a = Node {
         value: 42,
-        next: Option::None,
+        next: Option::<Node<int>>::None,
     };
     let node_b = Node {
         value: 69,

@@ -494,20 +494,24 @@ dependencies = [
 
 [[package]]
 name = "bitcode"
-version = "0.6.0-alpha.2"
+version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3a60bd9f7b9aa3b271b6998a06282acbc93044d796ad4473ab3a36345f403af5"
+checksum = "e8a733ab290c6e6b2859bba3e68fd1a4ca3eee0577f21ea46049a3529e500627"
 dependencies = [
  "bitcode_derive",
  "bytemuck",
+ "from_bytes_or_zeroed",
+ "residua-zigzag",
+ "simdutf8",
 ]
 
 [[package]]
 name = "bitcode_derive"
-version = "0.6.0-alpha.1"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ba68abea6574cef84905a7a471fd3ca48ccb3bd5df08302e09aa4f51da4aa763"
+checksum = "4c25ffc293cbf807499083d016ce3bc0459aaa7fd624c1cc563718a2440cb38a"
 dependencies = [
+ "packagemerge",
  "proc-macro2",
  "quote",
  "syn 2.0.52",
@@ -851,7 +855,7 @@ dependencies = [
  "clap 4.5.1",
  "criterion-plot",
  "is-terminal",
- "itertools",
+ "itertools 0.10.5",
  "num-traits",
  "once_cell",
  "oorandom",
@@ -872,7 +876,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6b50826342786a51a89e2da3a28f1c32b06e387201bc2d19791f622c673706b1"
 dependencies = [
  "cast",
- "itertools",
+ "itertools 0.10.5",
 ]
 
 [[package]]
@@ -1288,6 +1292,12 @@ checksum = "e13624c2627564efccf4934284bdd98cbaa14e79b0b5a141218e507b3a823456"
 dependencies = [
  "percent-encoding",
 ]
+
+[[package]]
+name = "from_bytes_or_zeroed"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3d25934a78435889223e575c7b0fc36a290c5a312e7a7ae901f10587792e142a"
 
 [[package]]
 name = "futures-channel"
@@ -1716,6 +1726,12 @@ dependencies = [
 
 [[package]]
 name = "itertools"
+version = "0.4.19"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c4a9b56eb56058f43dc66e58f40a214b2ccbc9f3df51861b63d51dec7b65bc3f"
+
+[[package]]
+name = "itertools"
 version = "0.10.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b0fd2260e829bddf4cb6ea802289de2f86d6a7a690192fbe91b3f46e0f2c8473"
@@ -2111,6 +2127,15 @@ name = "overload"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b15813163c1d831bf4a13c3610c05c0d03b39feb07f7e09fa234dac9b15aaf39"
+
+[[package]]
+name = "packagemerge"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0efcf6ee55f8f7a24333bc8d1dd0e541a6cedf903dbc07ae6479d7f8ff32ed08"
+dependencies = [
+ "itertools 0.4.19",
+]
 
 [[package]]
 name = "parking"
@@ -2582,6 +2607,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "residua-zigzag"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2b37805477eee599a61753230f511ae94d737f69b536e468e294723ad5f1b75f"
+
+[[package]]
 name = "ring"
 version = "0.17.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2905,6 +2936,12 @@ checksum = "d8229b473baa5980ac72ef434c4415e70c4b5e71b423043adb4ba059f89c99a1"
 dependencies = [
  "libc",
 ]
+
+[[package]]
+name = "simdutf8"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f27f6278552951f1f2b8cf9da965d10969b2efdea95a6ec47987ab46edfe263a"
 
 [[package]]
 name = "slab"

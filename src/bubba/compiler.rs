@@ -57,9 +57,9 @@ impl CThonk {
         }
     }
 
-    #[cfg_attr(not(test), tracing::instrument)]
+    #[cfg_attr(not(test), tracing::instrument(skip(self)))]
     fn insert_instruction(&mut self, instruction: Instruction, location: Location) {
-        tracing::debug!(target: "instr", "{}:\t\t{}: {instruction}\n  --> {}:{}:{}", POP_CLR.paint("add_instruction"), OTHER_CLR.paint(self.inner.name()), location.file, location.line, location.column);
+        tracing::debug!(target: "instr", "{}:\t{}: {instruction} ({}:{}:{})", POP_CLR.paint("add_instruction"), OTHER_CLR.paint(self.inner.name()), location.file, location.line, location.column);
 
         if log_enabled!(target: "instr", Trace) {
             self.inner.add_instruction(
@@ -73,9 +73,9 @@ impl CThonk {
         self.inner.add_instruction(instruction, None);
     }
 
-    #[cfg_attr(not(test), tracing::instrument)]
+    #[cfg_attr(not(test), tracing::instrument(skip(self)))]
     fn prefix_instruction(&mut self, instruction: Instruction, location: Location) {
-        tracing::debug!(target: "instr", "{}:\t\t{}: {instruction}\n  --> {}:{}:{}", POP_CLR.paint("prefix_instruction"), OTHER_CLR.paint(self.inner.name()), location.file, location.line, location.column);
+        tracing::debug!(target: "instr", "{}:\t{}: {instruction} ({}:{}:{})", POP_CLR.paint("prefix_instruction"), OTHER_CLR.paint(self.inner.name()), location.file, location.line, location.column);
 
         if log_enabled!(target: "instr", Trace) {
             self.inner.add_instruction(
@@ -89,14 +89,14 @@ impl CThonk {
         self.inner.prefix_instruction(instruction, None);
     }
 
-    #[cfg_attr(not(test), tracing::instrument)]
+    #[cfg_attr(not(test), tracing::instrument(skip(self)))]
     fn insert_instruction_with_span(
         &mut self,
         instruction: Instruction,
         span: Span,
         location: Location,
     ) {
-        tracing::debug!(target: "instr", "{}:\t\t{}: {instruction}\n  --> {}:{}:{}", POP_CLR.paint("add_instruction"), OTHER_CLR.paint(self.inner.name()), location.file, location.line, location.column);
+        tracing::debug!(target: "instr", "{}:\t{}: {instruction} ({}:{}:{})", POP_CLR.paint("add_instruction"), OTHER_CLR.paint(self.inner.name()), location.file, location.line, location.column);
 
         if log_enabled!(target: "instr", Trace) {
             self.inner.add_instruction(
@@ -589,7 +589,7 @@ fn compile_function(func: &RefType<Function>, context: &mut Context) -> Result<C
     Ok(thonk)
 }
 
-#[cfg_attr(not(test), tracing::instrument(skip(context)))]
+#[cfg_attr(not(test), tracing::instrument(skip(thonk, context)))]
 fn compile_statement(
     statement: &RefType<Statement>,
     thonk: &mut CThonk,
@@ -654,7 +654,7 @@ fn compile_statement(
     }
 }
 
-#[cfg_attr(not(test), tracing::instrument(skip(context)))]
+#[cfg_attr(not(test), tracing::instrument(skip(thonk, context)))]
 fn compile_expression(
     expression: &RefType<Expression>,
     thonk: &mut CThonk,

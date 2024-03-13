@@ -10,7 +10,7 @@ use crate::{
     new_ref, s_read, NewRef, RefType, SarzakStorePtr, Span, POP_CLR,
 };
 
-#[cfg_attr(not(test), tracing::instrument(skip(context)))]
+#[cfg_attr(not(test), tracing::instrument(skip(thonk, context)))]
 pub(in crate::bubba::compiler) fn compile_list_element(
     element: &SarzakStorePtr,
     thonk: &mut CThonk,
@@ -35,7 +35,7 @@ pub(in crate::bubba::compiler) fn compile_list_element(
 /// Note that we can't do too much here in the compiler. We can evaluate the
 /// list elements and push them on the stack, but we don't have a way of building
 /// the list. That has to be taken care of at runtime.
-#[cfg_attr(not(test), tracing::instrument(skip(context)))]
+#[cfg_attr(not(test), tracing::instrument(skip(thonk, context)))]
 pub(in crate::bubba::compiler) fn compile_list_expression(
     list: &SarzakStorePtr,
     thonk: &mut CThonk,

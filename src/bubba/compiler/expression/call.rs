@@ -22,7 +22,7 @@ use crate::{
     ModelStore, NewRef, RefType, SarzakStorePtr, Span, PATH_SEP, POP_CLR,
 };
 
-#[cfg_attr(not(test), tracing::instrument(skip(context)))]
+#[cfg_attr(not(test), tracing::instrument(skip(thonk, context)))]
 pub(in crate::bubba::compiler) fn compile(
     call: &SarzakStorePtr,
     thonk: &mut CThonk,
@@ -219,7 +219,7 @@ pub(in crate::bubba::compiler) fn compile_lambda(
 ///
 /// This ensures that the stack is setup for a function call, which we issue
 /// at the tail of the function.
-#[cfg_attr(not(test), tracing::instrument(skip(context)))]
+#[cfg_attr(not(test), tracing::instrument(skip(thonk, context)))]
 fn compile_function_call(
     name: &str,
     call: RefType<Call>,
@@ -270,7 +270,7 @@ fn compile_function_call(
     }
 }
 
-#[cfg_attr(not(test), tracing::instrument(skip(context)))]
+#[cfg_attr(not(test), tracing::instrument(skip(thonk, context)))]
 fn compile_method_call(
     name: String,
     call: RefType<Call>,
@@ -360,7 +360,7 @@ fn compile_method_call(
     result
 }
 
-#[cfg_attr(not(test), tracing::instrument(skip(context)))]
+#[cfg_attr(not(test), tracing::instrument(skip(thonk, context)))]
 fn compile_static_method_call(
     ty: &str,
     func: &str,
