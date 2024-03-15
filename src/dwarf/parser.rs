@@ -3542,8 +3542,7 @@ impl DwarfParser {
                     let re = Regex::new(r"(.*?)\$\{([^}]*)\}|(.+)").unwrap();
                     // I hate this, and I wouldn't do it but for whatever happens
                     // during test breaking.
-                    while RE.set(re.clone()).is_err() {}
-
+                    let _ = RE.set(re);
                     RE.get().unwrap()
                 }
             };
