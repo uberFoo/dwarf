@@ -34,10 +34,10 @@ pub enum Value {
     ///
     /// A single character
     Char(char),
-    #[default]
     /// Empty
     ///
     /// ()
+    #[default]
     Empty,
     #[serde(skip)]
     Error(Box<Error>),
@@ -54,8 +54,8 @@ pub enum Value {
     Range(Range<DwarfInteger>),
     String(String),
     Struct(Struct<Self>),
-    #[serde(skip)]
     #[cfg(feature = "async")]
+    #[serde(skip)]
     Task {
         name: String,
         running: bool,

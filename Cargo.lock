@@ -502,6 +502,7 @@ dependencies = [
  "bytemuck",
  "from_bytes_or_zeroed",
  "residua-zigzag",
+ "serde",
  "simdutf8",
 ]
 

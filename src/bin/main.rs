@@ -1,7 +1,7 @@
 use std::{
     env, fs,
     hash::{DefaultHasher, Hash, Hasher},
-    io::{self, BufReader, BufWriter, Write},
+    io::{self, BufReader, BufWriter},
     net::TcpListener,
     path::{Path, PathBuf},
     thread,
@@ -21,7 +21,6 @@ use dap::{prelude::BasicClient, server::Server};
 #[cfg(feature = "async")]
 use tracing_subscriber::{
     fmt::{self, format},
-    prelude::*,
     EnvFilter, FmtSubscriber,
 };
 
@@ -178,7 +177,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 Box::new(std::io::stderr())
             }))
             .fmt_fields(fmt::format::PrettyFields::new())
-            .with_max_level(tracing::Level::DEBUG)
             .finish();
 
         tracing::subscriber::set_global_default(subscriber)
@@ -399,8 +397,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 } else {
                     let bin_file = fs::File::open(path)?;
                     let reader = io::BufReader::new(bin_file);
-                    // let program: Program = bincode::deserialize_from(reader).unwrap();
                     let program: Program = serde_json::from_reader(reader)?;
+
+                    // let bytes = std::fs::read(path)?;
+                    // let program: Program = bincode::deserialize_from(reader).unwrap();
+                    // let program: Program = bitcode::deserialize(&bytes)?;
 
                     if program.compiler_version() != VERSION
                         || program.compiler_build_ts() != BUILD_TIME
@@ -593,7 +594,7 @@ fn compile_program(
             println!("{program}");
 
             // Write the compiled program to disk.
-            let bin_file = fs::File::create(path)?;
+            let mut bin_file = fs::File::create(path)?;
             let mut writer = io::BufWriter::new(bin_file);
 
             // let _ = bincode::serialize_into(writer, &program);
@@ -601,6 +602,9 @@ fn compile_program(
             // bin_file.write_all(&encoded)?;
 
             serde_json::to_writer(&mut writer, &program)?;
+
+            // let bytes = bitcode::serialize(&program)?;
+            // bin_file.write_all(&bytes)?;
 
             Ok(program)
         }
