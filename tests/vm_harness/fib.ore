@@ -8,7 +8,7 @@ fn fib2(n: int) -> int {
 
 fn main() -> int {
     let n = 5;
-    print(`Calculating fibonacci number ${n}:\n`);
+    print("Calculating fibonacci number ${n}:\n");
     let result = fib2(n as int);
     print(result as string + "\n");
     chacha::assert_eq(result, 5);

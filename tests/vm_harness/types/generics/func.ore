@@ -5,7 +5,7 @@ fn idempotent<T>(x: T) -> T {
 fn main() {
     // Here we call the generic function with a string.
     let i = idempotent::<string>("world");
-    let j = `hello ${i}`;
+    let j = "hello ${i}";
     print(j);
     chacha::assert(j == "hello world");
 

@@ -12,19 +12,19 @@ fn id<T>(x: T) -> T {
 
  impl Box<T> {
      fn display(self) {
-         print(`Box<${self.value}>\n`);
+         print("Box<${self.value}>\n");
      }
  }
 
 fn main() {
     // Here we call the generic function with an int.
     let x = id::<int>(54);
-    print(`${x}\n`);
+    print("${x}\n");
     chacha::assert(x == 96);
 
     // And here with a float.
     let y = id::<string>("Hello World, the answer is ");
-    print(`${y}\n`);
+    print("${y}\n");
     chacha::assert(y == "Hello World, the answer is 42");
 
     // Here we create a Box that stores a float.

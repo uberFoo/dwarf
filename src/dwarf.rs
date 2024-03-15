@@ -75,8 +75,6 @@ pub enum Token {
     Float(String),
     Fn,
     For,
-    FormatString(String),
-    // Global,
     Ident(String),
     If,
     Impl,
@@ -114,7 +112,6 @@ impl fmt::Display for Token {
             Self::Float(num) => write!(f, "{}", num),
             Self::Fn => write!(f, "fn"),
             Self::For => write!(f, "for"),
-            Self::FormatString(str_) => write!(f, "{}", str_),
             Self::Ident(ident) => write!(f, "{}", ident),
             Self::If => write!(f, "if"),
             Self::Impl => write!(f, "impl"),
@@ -356,7 +353,7 @@ impl Type {
                     );
                     Ok(ty)
                 } else if store.exhume_enumeration_id_by_name(&base_type).is_some() {
-                    Ok(create_generic_enum(&name, &base_type, span.to_owned(), context, store)?.1)
+                    Ok(create_generic_enum(&name, &base_type, store)?.1)
                 } else {
                     Err(vec![DwarfError::UnknownType {
                         ty: name.to_owned(),

@@ -12,7 +12,7 @@ use crate::{
     ModelStore, NewRef, RefType, SarzakStorePtr, Span, POP_CLR,
 };
 
-#[tracing::instrument]
+#[cfg_attr(not(test), tracing::instrument(skip(thonk, context)))]
 pub(in crate::bubba::compiler) fn compile(
     index: &SarzakStorePtr,
     thonk: &mut CThonk,

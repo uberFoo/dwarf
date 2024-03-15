@@ -15,6 +15,10 @@ Three is currently a compiler/VM, an interpreter, and a REPL.
 
 Think of dwarf as Rust on easy mode!
 
+## Differences from Rust
+
+- no borrow checker
+
 
 There is a [book 📒](https://uberfoo.github.io/assets/docs/dwarf/introduction.html) in progress.
 Check it out!

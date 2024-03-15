@@ -11,14 +11,14 @@ use crate::{
     s_read, SarzakStorePtr, Span, POP_CLR,
 };
 
-#[tracing::instrument]
+#[cfg_attr(not(test), tracing::instrument(skip(thonk, context)))]
 pub(in crate::bubba::compiler) fn compile(
     expr: &SarzakStorePtr,
     thonk: &mut CThonk,
     context: &mut Context,
     span: Span,
 ) -> Result<Option<ValueType>> {
-    tracing::debug!(target: "instr", "{}: {}:{}:{}", POP_CLR.paint("compile_struct_expr"), file!(), line!(), column!());
+    tracing::debug!(target: "instr", "{}", POP_CLR.paint("compile_struct_expr"));
 
     let lu_dog = context.lu_dog_heel().clone();
     let lu_dog = s_read!(lu_dog);
@@ -32,7 +32,7 @@ pub(in crate::bubba::compiler) fn compile(
 
     match &data_struct.subtype {
         DataStructureEnum::Enumeration(ref id) => {
-            tracing::debug!(target: "instr", "{}: {}:{}:{}", POP_CLR.paint("creating enum"), file!(), line!(), column!());
+            tracing::debug!(target: "instr", "{}", POP_CLR.paint("creating enum"));
 
             let woog_enum = lu_dog.exhume_enumeration(id).unwrap();
             let woog_enum = s_read!(woog_enum);
@@ -90,7 +90,7 @@ pub(in crate::bubba::compiler) fn compile(
             }
         }
         DataStructureEnum::WoogStruct(_) => {
-            tracing::debug!(target: "instr", "{}: {}:{}:{}", POP_CLR.paint("creating struct"), file!(), line!(), column!());
+            tracing::debug!(target: "instr", "{}", POP_CLR.paint("creating struct"));
 
             let woog_struct = if let DataStructureEnum::WoogStruct(ref id) = data_struct.subtype {
                 lu_dog.exhume_woog_struct(id).unwrap()

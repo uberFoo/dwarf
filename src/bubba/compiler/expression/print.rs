@@ -9,7 +9,7 @@ use crate::{
     s_read, SarzakStorePtr, POP_CLR,
 };
 
-#[tracing::instrument]
+#[cfg_attr(not(test), tracing::instrument(skip(thonk, context)))]
 pub(in crate::bubba::compiler) fn compile(
     print: &SarzakStorePtr,
     thonk: &mut CThonk,
@@ -73,7 +73,7 @@ mod test {
                        let x = 42;
                        let y = "Hello";
                        let z = "world";
-                       let α = `MOTD: ${y} ${z}!, the magic number is ${x}.`;
+                       let α = "MOTD: ${y} ${z}!, the magic number is ${x}.";
                        print(α);
                        α
                    }
@@ -98,7 +98,7 @@ mod test {
         let program = compile(&ctx).unwrap();
         println!("{program}");
         assert_eq!(program.get_thonk_card(), 1);
-        assert_eq!(program.get_instruction_card(), 31);
+        assert_eq!(program.get_instruction_card(), 25);
 
         let run = run_vm(&program);
         assert!(run.is_ok());
@@ -124,7 +124,7 @@ mod test {
                     let x = Foo {};
                        let y = "Hello";
                        let z = "world";
-                       let α = `MOTD: ${y} ${z}!, the magic number is ${x.magic()}.`;
+                       let α = "MOTD: ${y} ${z}!, the magic number is ${x.magic()}.";
                        print(α);
                         α
                    }
@@ -149,7 +149,7 @@ mod test {
         let program = compile(&ctx).unwrap();
         println!("{program}");
         assert_eq!(program.get_thonk_card(), 2);
-        assert_eq!(program.get_instruction_card(), 38);
+        assert_eq!(program.get_instruction_card(), 32);
 
         let run = run_vm(&program);
         assert!(run.is_ok());

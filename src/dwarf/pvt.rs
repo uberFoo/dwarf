@@ -61,6 +61,9 @@ impl<'d, 'a, 'b> PrintableValueType<'d, 'a, 'b> {
                     }
                 }
                 let mut name = enumeration.name.clone();
+                if let Some(base) = name.split('<').next() {
+                    name = base.to_string();
+                }
                 if !generics.is_empty() {
                     name.push('<');
                     name.push_str(generics.join(", ").as_str());

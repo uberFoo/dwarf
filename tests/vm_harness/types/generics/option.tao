@@ -16,13 +16,13 @@ fn main() {
 
     let control = Simple::Baz;
 
-    print(`a = ${a}\n`);
-    print(`b = ${b}\n`);
-    print(`c = ${c}\n`);
-    print(`d = ${d}\n`);
-    print(`e = ${e}\n`);
+    print("a = ${a}\n");
+    print("b = ${b}\n");
+    print("c = ${c}\n");
+    print("d = ${d}\n");
+    print("e = ${e}\n");
 
-    print(`control = ${control}\n`);
+    print("control = ${control}\n");
 
     chacha::assert_eq(a, Option::Some(42));
     chacha::assert_eq(b, Option::<int>::None);

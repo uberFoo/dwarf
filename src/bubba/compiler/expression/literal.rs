@@ -3,8 +3,8 @@ use snafu::{location, Location};
 use crate::{
     bubba::{
         compiler::{
-            compile_expression, error::Error, get_span, CThonk, Context, Result, BOOL, CHAR, EMPTY,
-            FLOAT, INT, STRING,
+            compile_expression, get_span, CThonk, Context, Result, BOOL, CHAR, EMPTY, FLOAT, INT,
+            STRING,
         },
         instr::Instruction,
         value::Value,
@@ -13,19 +13,21 @@ use crate::{
     s_read, SarzakStorePtr, Span, POP_CLR,
 };
 
-#[tracing::instrument]
+#[cfg_attr(not(test), tracing::instrument(skip(thonk, context)))]
 pub(in crate::bubba::compiler) fn compile(
     literal: &SarzakStorePtr,
     thonk: &mut CThonk,
     context: &mut Context,
     span: Span,
 ) -> Result<Option<ValueType>> {
-    tracing::debug!(target: "instr", "{}\n  --> {}:{}:{}", POP_CLR.paint("compile_literal"), file!(), line!(), column!());
+    tracing::debug!(target: "instr", "{}", POP_CLR.paint("compile_literal"));
 
     let lu_dog = context.lu_dog_heel().clone();
     let lu_dog = s_read!(lu_dog);
 
     let literal = lu_dog.exhume_literal(literal).unwrap();
+
+    tracing::debug!(target: "instr", "literal: {literal:?}");
 
     let (literal, ty) = match &s_read!(literal).subtype {
         //
@@ -36,8 +38,8 @@ pub(in crate::bubba::compiler) fn compile(
             let literal = s_read!(literal);
 
             let value = match literal.subtype {
-                BooleanLiteralEnum::FalseLiteral(_) => Ok::<Value, Error>(Value::Boolean(false)),
-                BooleanLiteralEnum::TrueLiteral(_) => Ok(Value::Boolean(true)),
+                BooleanLiteralEnum::FalseLiteral(_) => Value::Boolean(false),
+                BooleanLiteralEnum::TrueLiteral(_) => Value::Boolean(true),
             };
 
             (value, context.get_type(BOOL).unwrap().clone())
@@ -49,7 +51,7 @@ pub(in crate::bubba::compiler) fn compile(
             let literal = lu_dog.exhume_char_literal(literal).unwrap();
             let literal = std::char::from_u32(s_read!(literal).x_value as u32).unwrap();
             let value = Value::Char(literal);
-            (Ok(value), context.get_type(CHAR).unwrap().clone())
+            (value, context.get_type(CHAR).unwrap().clone())
         }
         //
         // FloatLiteral
@@ -58,7 +60,7 @@ pub(in crate::bubba::compiler) fn compile(
             let literal = lu_dog.exhume_float_literal(literal).unwrap();
             let value = s_read!(literal).x_value;
             let value = Value::Float(value);
-            (Ok(value), context.get_type(FLOAT).unwrap().clone())
+            (value, context.get_type(FLOAT).unwrap().clone())
         }
         //
         // FormatString
@@ -79,12 +81,14 @@ pub(in crate::bubba::compiler) fn compile(
                                 let expr_bit = s_read!(expr_bit);
                                 let expr = lu_dog.exhume_expression(&expr_bit.expression).unwrap();
                                 let span = get_span(&expr, &lu_dog);
-                                compile_expression(&expr, thonk, context)?;
-                                thonk.insert_instruction_with_span(
-                                    Instruction::ToString,
-                                    span,
-                                    location!(),
-                                );
+                                let ty = compile_expression(&expr, thonk, context)?.unwrap();
+                                if ty != context.get_type(STRING).unwrap().clone() {
+                                    thonk.insert_instruction_with_span(
+                                        Instruction::ToString,
+                                        span,
+                                        location!(),
+                                    );
+                                }
                             }
                             FormatBitEnum::StringBit(ref string) => {
                                 let string_bit = lu_dog.exhume_string_bit(string).unwrap();
@@ -133,20 +137,19 @@ pub(in crate::bubba::compiler) fn compile(
             let literal = lu_dog.exhume_integer_literal(literal).unwrap();
             let value = s_read!(literal).x_value;
             let value = Value::Integer(value);
-            (Ok(value), context.get_type(INT).unwrap().clone())
+            (value, context.get_type(INT).unwrap().clone())
         }
         //
         // StringLiteral
         //
         LiteralEnum::StringLiteral(ref literal) => {
             let literal = lu_dog.exhume_string_literal(literal).unwrap();
-            // 🚧 It'd be great if this were an Rc...
             let value = Value::String(s_read!(literal).x_value.clone());
-            (Ok(value), context.get_type(STRING).unwrap().clone())
+            (value, context.get_type(STRING).unwrap().clone())
         }
     };
 
-    thonk.insert_instruction_with_span(Instruction::Push(literal?), span, location!());
+    thonk.insert_instruction_with_span(Instruction::Push(literal), span, location!());
 
     Ok(Some(ty))
 }

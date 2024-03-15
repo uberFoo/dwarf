@@ -15,7 +15,7 @@
 use heck::ToUpperCamelCase;
 use log::{self, log_enabled, Level::Trace};
 use rustc_hash::FxHashMap as HashMap;
-use snafu::{location, prelude::*, Location};
+use snafu::{location, Location};
 
 use crate::{
     bubba::{
@@ -57,9 +57,9 @@ impl CThonk {
         }
     }
 
-    #[tracing::instrument]
+    #[cfg_attr(not(test), tracing::instrument(skip(self)))]
     fn insert_instruction(&mut self, instruction: Instruction, location: Location) {
-        tracing::debug!(target: "instr", "{}:\t\t{}: {instruction}\n  --> {}:{}:{}", POP_CLR.paint("add_instruction"), OTHER_CLR.paint(self.inner.name()), location.file, location.line, location.column);
+        tracing::debug!(target: "instr", "{}:\t{}: {instruction} ({}:{}:{})", POP_CLR.paint("add_instruction"), OTHER_CLR.paint(self.inner.name()), location.file, location.line, location.column);
 
         if log_enabled!(target: "instr", Trace) {
             self.inner.add_instruction(
@@ -73,9 +73,9 @@ impl CThonk {
         self.inner.add_instruction(instruction, None);
     }
 
-    #[tracing::instrument]
+    #[cfg_attr(not(test), tracing::instrument(skip(self)))]
     fn prefix_instruction(&mut self, instruction: Instruction, location: Location) {
-        tracing::debug!(target: "instr", "{}:\t\t{}: {instruction}\n  --> {}:{}:{}", POP_CLR.paint("prefix_instruction"), OTHER_CLR.paint(self.inner.name()), location.file, location.line, location.column);
+        tracing::debug!(target: "instr", "{}:\t{}: {instruction} ({}:{}:{})", POP_CLR.paint("prefix_instruction"), OTHER_CLR.paint(self.inner.name()), location.file, location.line, location.column);
 
         if log_enabled!(target: "instr", Trace) {
             self.inner.add_instruction(
@@ -89,14 +89,14 @@ impl CThonk {
         self.inner.prefix_instruction(instruction, None);
     }
 
-    #[tracing::instrument]
+    #[cfg_attr(not(test), tracing::instrument(skip(self)))]
     fn insert_instruction_with_span(
         &mut self,
         instruction: Instruction,
         span: Span,
         location: Location,
     ) {
-        tracing::debug!(target: "instr", "{}:\t\t{}: {instruction}\n  --> {}:{}:{}", POP_CLR.paint("add_instruction"), OTHER_CLR.paint(self.inner.name()), location.file, location.line, location.column);
+        tracing::debug!(target: "instr", "{}:\t{}: {instruction} ({}:{}:{})", POP_CLR.paint("add_instruction"), OTHER_CLR.paint(self.inner.name()), location.file, location.line, location.column);
 
         if log_enabled!(target: "instr", Trace) {
             self.inner.add_instruction(
@@ -146,7 +146,7 @@ struct SymbolTable {
 }
 
 impl SymbolTable {
-    #[tracing::instrument]
+    #[cfg_attr(not(test), tracing::instrument)]
     fn new(start: usize) -> Self {
         tracing::debug!(target: "instr", "{}: {start}", ERR_CLR.paint("new symbol table"));
         SymbolTable {
@@ -155,7 +155,7 @@ impl SymbolTable {
         }
     }
 
-    #[tracing::instrument]
+    #[cfg_attr(not(test), tracing::instrument)]
     fn insert(&mut self, name: String, ty: ValueType) -> usize {
         let number = self.count();
         tracing::debug!(target: "instr", "{}: {name} ({number})", ERR_CLR.paint("symbol insert"));
@@ -178,7 +178,7 @@ impl SymbolTable {
 }
 
 impl Drop for SymbolTable {
-    #[tracing::instrument]
+    #[cfg_attr(not(test), tracing::instrument)]
     fn drop(&mut self) {
         tracing::debug!(target: "instr", "{}", ERR_CLR.paint("drop symbol table"));
     }
@@ -449,7 +449,7 @@ fn get_function_name(func: &RefType<Function>, lu_dog: &LuDogStore) -> String {
     }
 }
 
-#[tracing::instrument]
+#[cfg_attr(not(test), tracing::instrument(skip(context)))]
 fn compile_function(func: &RefType<Function>, context: &mut Context) -> Result<CThonk> {
     let lu_dog = context.lu_dog_heel();
     let lu_dog = s_read!(lu_dog);
@@ -461,7 +461,7 @@ fn compile_function(func: &RefType<Function>, context: &mut Context) -> Result<C
     let body = s_read!(body);
     let params = func.r13_parameter(&lu_dog);
 
-    tracing::debug!(target: "instr", "{}: {}\n  --> {}:{}:{}", ERR_CLR.paint("compile_function"), func.name, file!(), line!(), column!());
+    tracing::debug!(target: "instr", "{}: {}", ERR_CLR.paint("compile_function"), func.name);
 
     // I need to iterate over the parameters to get the name of the parameter.
     if !params.is_empty() {
@@ -589,14 +589,14 @@ fn compile_function(func: &RefType<Function>, context: &mut Context) -> Result<C
     Ok(thonk)
 }
 
-#[tracing::instrument]
+#[cfg_attr(not(test), tracing::instrument(skip(thonk, context)))]
 fn compile_statement(
     statement: &RefType<Statement>,
     thonk: &mut CThonk,
     context: &mut Context,
 ) -> Result<Option<ValueType>> {
     let statement = s_read!(statement);
-    tracing::debug!(target: "instr", "{}: {:?}\n --> {}:{}:{}", POP_CLR.paint("compile_statement"), statement.subtype, file!(), line!(), column!());
+    tracing::debug!(target: "instr", "{}: {:?}", POP_CLR.paint("compile_statement"), statement.subtype);
 
     let lu_dog = context.lu_dog_heel();
     let lu_dog = s_read!(lu_dog);
@@ -654,7 +654,7 @@ fn compile_statement(
     }
 }
 
-#[tracing::instrument]
+#[cfg_attr(not(test), tracing::instrument(skip(thonk, context)))]
 fn compile_expression(
     expression: &RefType<Expression>,
     thonk: &mut CThonk,
@@ -713,7 +713,6 @@ fn compile_expression(
 
 fn get_span(expression: &RefType<Expression>, lu_dog: &LuDogStore) -> Span {
     let value = &s_read!(expression).r11_x_value(lu_dog)[0];
-    dbg!(&value);
     let span = &s_read!(value).r63_span(lu_dog)[0];
     let read = s_read!(span);
     read.start as usize..read.end as usize

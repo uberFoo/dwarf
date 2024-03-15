@@ -22,7 +22,7 @@ use crate::{
     ModelStore, NewRef, RefType, SarzakStorePtr, Span, PATH_SEP, POP_CLR,
 };
 
-#[tracing::instrument]
+#[cfg_attr(not(test), tracing::instrument(skip(thonk, context)))]
 pub(in crate::bubba::compiler) fn compile(
     call: &SarzakStorePtr,
     thonk: &mut CThonk,
@@ -94,7 +94,7 @@ pub(in crate::bubba::compiler) fn compile(
 ///
 /// Doing this in a single step is fine because the pointer will either be used
 /// directly or stored in a variable.
-#[tracing::instrument]
+#[cfg_attr(not(test), tracing::instrument(skip(context)))]
 pub(in crate::bubba::compiler) fn compile_lambda(
     λ: &SarzakStorePtr,
     outer_thonk: &mut CThonk,
@@ -219,7 +219,7 @@ pub(in crate::bubba::compiler) fn compile_lambda(
 ///
 /// This ensures that the stack is setup for a function call, which we issue
 /// at the tail of the function.
-#[tracing::instrument]
+#[cfg_attr(not(test), tracing::instrument(skip(thonk, context)))]
 fn compile_function_call(
     name: &str,
     call: RefType<Call>,
@@ -270,7 +270,7 @@ fn compile_function_call(
     }
 }
 
-#[tracing::instrument]
+#[cfg_attr(not(test), tracing::instrument(skip(thonk, context)))]
 fn compile_method_call(
     name: String,
     call: RefType<Call>,
@@ -360,7 +360,7 @@ fn compile_method_call(
     result
 }
 
-#[tracing::instrument]
+#[cfg_attr(not(test), tracing::instrument(skip(thonk, context)))]
 fn compile_static_method_call(
     ty: &str,
     func: &str,
@@ -369,13 +369,10 @@ fn compile_static_method_call(
     context: &mut Context,
     span: Span,
 ) -> Result<Option<ValueType>> {
-    tracing::debug!(target: "instr", "{}: {}:{}:{}", POP_CLR.paint("compile_static_method_call"), file!(), line!(), column!());
+    tracing::debug!(target: "instr", "{}", POP_CLR.paint("compile_static_method_call"));
 
     let lu_dog = context.lu_dog_heel();
     let lu_dog = s_read!(lu_dog);
-
-    let sarzak = context.sarzak_heel();
-    let sarzak = s_read!(sarzak);
 
     let boolean = context.get_type(BOOL).unwrap().clone();
     let string_array = context.get_type(STRING_ARRAY).unwrap().clone();
@@ -483,14 +480,11 @@ fn compile_static_method_call(
                     new_ref!(ModelStore, context.extruder_context.models.clone()),
                 );
                 let value = PrintableValueType(false, new_ref!(ValueType, value), &ctx);
-                dbg!(ty, &result, value.to_string());
 
                 thonk.insert_instruction(
                     Instruction::Push(Value::String(value.to_string())),
                     location!(),
                 );
-
-                // thonk.insert_instruction(Instruction::TypeOf, location!());
 
                 result
             }
@@ -777,7 +771,7 @@ mod test {
                          let a = 1;
                          let b = 2;
                          let c = 3;
-                         `test ${a} ${b} ${c}`
+                         \"test ${a} ${b} ${c}\"
                    }";
         let ast = parse_dwarf("test_or_expression", ore).unwrap();
         let ctx = new_lu_dog(
@@ -792,7 +786,7 @@ mod test {
 
         assert_eq!(program.get_thonk_card(), 1);
 
-        assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 24);
+        assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 21);
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &"test 1 2 3".into());
     }

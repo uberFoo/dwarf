@@ -17,10 +17,10 @@ use crate::{
         error::{BubbaError, Error},
     },
     chacha::value::{Enum, Struct},
-    lu_dog::{ObjectStore as LuDogStore, ValueType, ValueTypeEnum},
+    lu_dog::{ValueType, ValueTypeEnum},
     plug_in::PluginType,
     s_read,
-    sarzak::{ObjectStore as SarzakStore, Ty},
+    sarzak::Ty,
     DwarfFloat, DwarfInteger, RefType, VmValueResult,
 };
 
@@ -34,10 +34,10 @@ pub enum Value {
     ///
     /// A single character
     Char(char),
-    #[default]
     /// Empty
     ///
     /// ()
+    #[default]
     Empty,
     #[serde(skip)]
     Error(Box<Error>),
@@ -54,8 +54,8 @@ pub enum Value {
     Range(Range<DwarfInteger>),
     String(String),
     Struct(Struct<Self>),
-    #[serde(skip)]
     #[cfg(feature = "async")]
+    #[serde(skip)]
     Task {
         name: String,
         running: bool,
