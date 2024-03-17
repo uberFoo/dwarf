@@ -1,5 +1,2 @@
 [alias]
 xtask = "run --manifest-path ./xtask/Cargo.toml -- "
-
-[build]
-rustflags = ["-Ctarget-cpu=native"]
