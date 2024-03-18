@@ -1,4 +1,5 @@
 use abi_stable::{
+    sabi_extern_fn,
     std_types::{RBox, ROption, RResult, RString, RVec},
     StableAbi,
 };
@@ -49,6 +50,7 @@ impl std::fmt::Display for FfiProxy {
 #[derive(Clone, Debug, StableAbi)]
 pub enum FfiValue {
     Boolean(bool),
+    // Callback(Callback<F>),
     Empty,
     Error(RString),
     Float(DwarfFloat),
@@ -70,6 +72,7 @@ impl std::fmt::Display for FfiValue {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             Self::Boolean(bool_) => write!(f, "{bool_}"),
+            // Self::Callback(_) => write!(f, "callback"),
             Self::Empty => write!(f, "()"),
             Self::Error(e) => write!(f, "{}: {e}", Colour::Red.bold().paint("error")),
             Self::Float(num) => write!(f, "{num}"),
@@ -327,6 +330,23 @@ impl TryFrom<&FfiValue> for String {
     }
 }
 
+// impl TryFrom<&FfiValue> for Callback<F>
+// where
+//     F: Fn(FfiValue) -> FfiValue + 'static,
+// {
+//     type Error = ChaChaError;
+
+//     fn try_from(value: &FfiValue) -> Result<Self> {
+//         match value {
+//             FfiValue::Callback(c) => Ok(c.to_owned().into()),
+//             _ => Err(ChaChaError::Conversion {
+//                 src: value.to_string(),
+//                 dst: "String".to_owned(),
+//             }),
+//         }
+//     }
+// }
+
 impl TryFrom<&FfiValue> for i64 {
     type Error = ChaChaError;
 
@@ -340,6 +360,31 @@ impl TryFrom<&FfiValue> for i64 {
         }
     }
 }
+
+// #[repr(C)]
+// #[derive(Clone, Debug, StableAbi)]
+// pub struct Callback<F>
+// where
+//     F: Fn(FfiValue<F>) -> FfiValue<F> + 'static,
+// {
+//     callback: RBox<F>,
+// }
+
+// impl<F> Callback<F>
+// where
+//     F: Fn(FfiValue<F>) -> FfiValue<F> + 'static,
+// {
+//     pub fn new(callback: F) -> Self {
+//         let foo = Box::new(callback);
+//         let callback = RBox::from_box(foo);
+//         Self { callback }
+//     }
+
+//     #[sabi_extern_fn]
+//     pub fn call(&self, i: FfiValue<F>) -> FfiValue<F> {
+//         (self.callback)(i)
+//     }
+// }
 
 #[repr(C)]
 #[derive(Clone, Debug, StableAbi)]
