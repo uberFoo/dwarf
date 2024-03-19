@@ -72,7 +72,7 @@ pub(in crate::bubba::compiler) fn compile_list_expression(
         let expr = &list.r15_expression(&lu_dog)[0];
         let ty = &s_read!(expr).r11_x_value(&lu_dog)[0];
         let ty = s_read!(ty).r24_value_type(&lu_dog)[0].clone();
-        let ty = (*s_read!(ty)).clone();
+        let ty = s_read!(ty).clone();
         thonk.insert_instruction(Instruction::Push(Value::ValueType(ty)), location!());
 
         thonk.insert_instruction(Instruction::NewList(size), location!());
@@ -83,7 +83,7 @@ pub(in crate::bubba::compiler) fn compile_list_expression(
             inner: new_ref!(Vec<RefType<Value>>, vec![]),
         }
         .get_value_type(context);
-        let ty = (*s_read!(ty)).clone();
+        let ty = s_read!(ty).clone();
         thonk.insert_instruction(Instruction::Push(Value::ValueType(ty)), location!());
         thonk.insert_instruction_with_span(Instruction::NewList(0), entry_span, location!());
     }

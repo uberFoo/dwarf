@@ -182,8 +182,5 @@ lto = "thin"
 codegen-units = 1
 panic = "abort"
 
-[profile.dev]
-debug = 0
-
 [lib]
 crate-type = ["cdylib", "rlib"]
