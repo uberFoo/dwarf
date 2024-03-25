@@ -10,7 +10,6 @@ use std::{
 use ansi_term::Colour;
 use clap::Args;
 use heck::ToUpperCamelCase;
-use once_cell::sync::OnceCell;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use serde::{Deserialize, Serialize};
 
