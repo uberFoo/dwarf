@@ -15,7 +15,7 @@ fn main() {
 
     let x = Option::<string>::Some("Hello world!");
     let z = if let Option::<string>::Some(str) = x {
-        print("Some({str})\n");
+        print("Some(${str})\n");
         chacha::assert_eq(true, true);
         0
     } else {
@@ -29,7 +29,7 @@ fn main() {
     // let y = Option::Some::<int>(42);
     let z = if let Option::<int>::Some(y) = y {
         // if let Option::Some::<int>(y) = y {
-        print("Some({y})\n");
+        print("Some(${y})\n");
         chacha::assert_eq(true, true);
         y
     } else {

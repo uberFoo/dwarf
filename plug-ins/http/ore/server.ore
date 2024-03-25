@@ -1,9 +1,6 @@
+use std::dwarf::Plugin;
 use std::option::Option;
 use std::result::Result;
-
-struct Plugin<T> {
-    inner: T,
-}
 
 struct HttpServer {
     // This plugin value must point to a valid plugin. The first part of the
@@ -20,8 +17,8 @@ impl HttpServer {
         }
     }
 
-    // async fn serve(self) -> Future<()> {
-    //     self.inner
-    //         .invoke_func("http_server", "HttpServer", "serve", [])
-    // }
+    async fn serve(self, lambda: fn(string) -> string) -> Future<()> {
+        self.inner
+            .invoke_func("http_server", "HttpServer", "path", [lambda])
+    }
 }

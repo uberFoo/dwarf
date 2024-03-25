@@ -168,6 +168,7 @@ pub enum Instruction {
     /// the function. It is patched by the VM before execution.
     ///
     LocalCardinality(String),
+    /// Make a Lambda Pointer Value
     MakeLambdaPointer(String, usize),
     /// Look up a method
     ///

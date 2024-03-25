@@ -1,4 +1,3 @@
-use crate::chacha::ffi_value::FfiValue;
 use abi_stable::{
     declare_root_module_statics,
     library::RootModule,
@@ -8,6 +7,8 @@ use abi_stable::{
     std_types::{RResult, RStr},
     StableAbi,
 };
+
+use crate::chacha::ffi_value::FfiValue;
 
 pub mod error;
 pub use error::{Error, Unsupported};

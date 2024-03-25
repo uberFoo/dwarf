@@ -1,6 +1,7 @@
 use std::{
     env,
     path::{Path, PathBuf},
+    sync::{Arc, Mutex},
 };
 
 #[cfg(feature = "async")]
@@ -17,7 +18,7 @@ use tracy_client::{non_continuous_frame, span, Client};
 
 use abi_stable::{
     library::{lib_header_from_path, LibrarySuffix, RawLibrary},
-    std_types::{RBox, RErr, ROk, ROption, RResult},
+    std_types::{RBox, RErr, ROk, ROption, RResult, RVec},
 };
 use ansi_term::Colour;
 use log::{self, log_enabled, Level::Trace};
@@ -45,10 +46,61 @@ use crate::{
 
 use super::instr::{Instruction, Program};
 
+static LAMBDA_FUNCS: OnceCell<Arc<Mutex<HashMap<usize, Value>>>> = OnceCell::new();
+
+pub fn get_lambda_funcs() -> *const OnceCell<Arc<Mutex<HashMap<usize, Value>>>> {
+    &LAMBDA_FUNCS as *const _
+}
+
 #[cfg(feature = "async")]
 static mut EXECUTOR: OnceCell<Executor> = OnceCell::new();
+static ΛVM: OnceCell<Mutex<VM>> = OnceCell::new();
 
-#[derive(Clone, Debug)]
+#[no_mangle]
+pub extern "C" fn run_lambda(
+    // lambda_funcs: *const OnceCell<Arc<Mutex<HashMap<usize, Value>>>>,
+    lambda: usize,
+    args: RVec<FfiValue>,
+) -> RResult<FfiValue, FfiValue> {
+    // let lambda_funcs = get_lambda_funcs();
+    // dbg!("hello?");
+    // This will have been setup by the FfiValue constructor that allowed us to
+    // get here in the first place.
+    // let λ = LAMBDA_FUNCS.get().unwrap().lock().unwrap();
+    // dbg!("WTF?");
+    // let lambda_funcs = unsafe { &*lambda_funcs };
+
+    let λ = match LAMBDA_FUNCS.get() {
+        Some(λ) => λ,
+        None => {
+            panic!("Lambda functions have not been initialized.");
+            // let λ = Arc::new(Mutex::new(HashMap::default()));
+            // let _ = LAMBDA_FUNCS.set(λ);
+            // LAMBDA_FUNCS.get().unwrap()
+        }
+    };
+    let λ = λ.lock().unwrap();
+    let λ = λ.get(&lambda).unwrap();
+
+    // This will also have been set in the constructor. Calling this before
+    // construction of a VM will panic, and that's not a terrible default.
+    // 🚧 I don't love that there is only one of these for executing lambdas.
+    // I guess it wouldn't be hard to make it a Vec of VMs. Let it grow, and
+    // shrink as needed. Whatever as needed means.
+    let mut vm = ΛVM.get().unwrap().lock().unwrap();
+    let args = args
+        .iter()
+        .map(|v| <FfiValue as Into<Value>>::into(v.clone()))
+        .collect::<Vec<_>>();
+
+    let result = vm.invoke_lambda(λ, &args);
+    match result {
+        Ok(value) => ROk(<Value as Into<FfiValue>>::into(s_read!(value).clone())),
+        Err(e) => RErr(FfiValue::Error(e.to_string().into())),
+    }
+}
+
+#[derive(Debug)]
 enum StackValue {
     Pointer(RefType<Value>),
     Value(Value),
@@ -68,6 +120,25 @@ impl StackValue {
         match self {
             StackValue::Pointer(p) => s_read!(p).clone(),
             StackValue::Value(v) => v,
+        }
+    }
+}
+
+impl PartialEq for StackValue {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (StackValue::Pointer(p1), StackValue::Pointer(p2)) => &*s_read!(p1) == &*s_read!(p2),
+            (StackValue::Value(v1), StackValue::Value(v2)) => v1 == v2,
+            _ => false,
+        }
+    }
+}
+
+impl Clone for StackValue {
+    fn clone(&self) -> Self {
+        match self {
+            StackValue::Pointer(p) => StackValue::Pointer(p.clone()),
+            StackValue::Value(v) => StackValue::Value(v.clone()),
         }
     }
 }
@@ -95,14 +166,6 @@ impl From<Value> for StackValue {
 
 #[derive(Clone)]
 pub struct VM {
-    /// Instruction Pointer
-    ///
-    /// This is an isize because we have negative jump offsets.
-    // ip: isize,
-    /// Frame Pointer
-    ///
-    // fp: usize,
-    // stack: Vec<StackValue>,
     instrs: Vec<Instruction>,
     source_map: Vec<Span>,
     func_map: HashMap<String, (usize, usize)>,
@@ -119,10 +182,6 @@ pub struct VM {
 
 impl std::fmt::Debug for VM {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        // writeln!(f, "ip: {}", ip)?;
-        // writeln!(f, "fp: {}", fp)?;
-        // writeln!(f, "stack: ")?;
-        // self.debug_stack(f)?;
         writeln!(f, "func_map: {:?}", self.func_map)?;
         writeln!(f, "args: {:?}", self.args)?;
         writeln!(f, "home_dir: {:?}", self.home)?;
@@ -236,11 +295,52 @@ impl VM {
             panic!("Missing symbols: {:?}", missing_symbols);
         }
 
+        // Setup a global VM that we can use to run lambdas from a plugin.
+        match unsafe { ΛVM.get() } {
+            Some(_) => {}
+            None => unsafe {
+                ΛVM.set(Mutex::new(vm.clone())).unwrap();
+            },
+        };
+
         vm
     }
 
     fn get_span(&self, ip: isize) -> Span {
         self.source_map[(ip - 1) as usize].to_owned()
+    }
+
+    pub fn invoke_lambda(&mut self, lambda: &Value, args: &[Value]) -> Result<RefType<Value>> {
+        let mut stack = Vec::<StackValue>::new();
+        // Args need to be pushed onto the stack, and then the lambda, and then we
+        // need to execute a call instruction.
+        for arg in args.iter() {
+            stack.push(arg.clone().into());
+        }
+
+        stack.push(lambda.to_owned().into());
+
+        let Value::LambdaPointer {
+            name,
+            frame_size,
+            captures: _,
+        } = lambda.clone()
+        else {
+            panic!("Expected a lambda pointer.")
+        };
+
+        let trace = log_enabled!(target: "vm", Trace);
+
+        let (ip, _) = self.func_map.get(&format!("{name}_trampoline")).unwrap();
+        self.inner_run(
+            *ip as isize,
+            frame_size + 5,
+            stack,
+            args.len(),
+            frame_size,
+            self.program.clone(),
+            trace,
+        )
     }
 
     pub fn invoke(&mut self, func_name: &str, args: &[RefType<Value>]) -> Result<RefType<Value>> {
@@ -306,34 +406,9 @@ impl VM {
         result
     }
 
-    // fn print_stack(&self) {
-    //     let len = stack.len();
-    //     for i in 0..len {
-    //         if i == fp {
-    //             eprint!("\t{} ->\t", Colour::Green.bold().paint("fp"));
-    //         } else {
-    //             eprint!("\t     \t");
-    //         }
-    //         eprintln!("stack {i}:\t{}", stack[i]);
-    //     }
-    // }
-
-    // fn debug_stack(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    //     let len = stack.len();
-    //     for i in 0..len {
-    //         if i == fp {
-    //             write!(f, "\t{} ->\t", Colour::Green.bold().paint("fp"))?;
-    //         } else {
-    //             write!(f, "\t     \t")?;
-    //         }
-    //         writeln!(f, "stack {i}:\t{}", stack[i])?;
-    //     }
-
-    //     Ok(())
-    // }
-
     fn inner_run(
         &mut self,
+        // This is an isize because we have negative jump offsets.
         mut ip: isize,
         mut fp: usize,
         mut stack: Vec<StackValue>,
@@ -733,7 +808,8 @@ impl VM {
                             //     }
                             // }
                             huh => {
-                                dbg!(huh);
+                                dbg!(&expression);
+                                // dbg!(huh);
                                 unimplemented!()
                             }
                         };
@@ -761,7 +837,7 @@ impl VM {
                                     let args = s_read!(inner)
                                         .iter()
                                         .map(|v| {
-                                            <Value as Into<FfiValue>>::into((*s_read!(v)).clone())
+                                            <Value as Into<FfiValue>>::into(s_read!(v).clone())
                                         })
                                         .collect::<Vec<FfiValue>>();
                                     let func = stack.pop().clone().unwrap().into_value();
@@ -896,8 +972,8 @@ impl VM {
                         // locking involved.
                         // Maybe this could be configurable? Feature flag? Maybe
                         // even something at runtime, although we'd need to see
-                        // how mut that extra condition costs.
-                        // let value = (*s_read!(captures[*from])).clone();
+                        // how much that extra condition costs.
+                        // let value = s_read!(captures[*from]).clone();
                         let value = captures[*from].clone();
                         stack[fp - arity - local_count - 3 + to] = value.into();
 
@@ -1598,7 +1674,7 @@ impl VM {
                                 print_stack(&stack, fp);
                             }
                             BubbaError::VmPanic {
-                                message: "Plug-in error".to_owned(),
+                                message: format!("Plug-in error: {e}."),
                                 location: location!(),
                             }
                         })?;
@@ -1710,9 +1786,29 @@ impl VM {
                     // Any locals will cause the fp to be moved up, with the
                     // locals existing between the Thonk name and the fp.
                     Instruction::StoreLocal(index) => {
+                        // dbg!(index);
                         let value = stack.pop().unwrap();
+
                         // We gotta index into the stack in reverse order from the index.
-                        stack[fp - arity - local_count - 3 + index] = value;
+                        // dbg!(&stack[fp - arity - local_count - 3 + index], &value);
+                        // stack[fp - arity - local_count - 3 + index] = value;
+
+                        let s = &stack[fp - arity - local_count - 3 + index];
+
+                        // We *need* this check, otherwise we deadlock in the Pointer case.
+                        // In any case, why do the work if you don't need to?
+                        if value != *s {
+                            match s {
+                                StackValue::Value(_) => {
+                                    stack[fp - arity - local_count - 3 + index] = value;
+                                }
+                                StackValue::Pointer(p) => {
+                                    let mut s = s_write!(p);
+                                    let value = value.into_value();
+                                    *s = value;
+                                }
+                            }
+                        }
 
                         1
                     }
@@ -1866,10 +1962,7 @@ impl VM {
                         1
                     }
                     invalid => {
-                        return Err(BubbaError::InvalidInstruction {
-                            instr: invalid.clone(),
-                        }
-                        .into())
+                        panic!("Instruction not implemented: {invalid:?}.");
                     }
                 }
             };

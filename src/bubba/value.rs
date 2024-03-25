@@ -166,7 +166,7 @@ impl Value {
         }
     }
 
-    pub fn get_value_type(&self, context: &Context) -> RefType<ValueType> {
+    pub(crate) fn get_value_type(&self, context: &Context) -> RefType<ValueType> {
         let sarzak = context.sarzak_heel().clone();
         let sarzak = &s_read!(sarzak);
         let lu_dog = context.lu_dog_heel().clone();

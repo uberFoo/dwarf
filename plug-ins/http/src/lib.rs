@@ -1,8 +1,5 @@
 use std::{
-    cell::RefCell,
     fmt::{self, Display},
-    path::Path,
-    rc::Rc,
     sync::Arc,
 };
 
@@ -10,16 +7,12 @@ use abi_stable::{
     export_root_module,
     prefix_type::PrefixTypeTrait,
     sabi_extern_fn,
-    sabi_trait::prelude::{TD_CanDowncast, TD_Opaque},
-    std_types::{RBox, RErr, ROk, RResult, RStr, RString, RVec},
+    sabi_trait::prelude::TD_Opaque,
+    std_types::{RBox, RErr, ROk, RResult, RStr, RVec},
 };
 use async_compat::Compat;
 use dwarf::{
-    chacha::{
-        error::ChaChaError,
-        ffi_value::{FfiProxy, FfiValue},
-        value::Value,
-    },
+    chacha::{error::ChaChaError, ffi_value::FfiValue},
     plug_in::{Error, Plugin, PluginModRef, PluginModule, PluginType, Plugin_TO},
     DwarfInteger,
 };
@@ -99,7 +92,12 @@ impl Plugin for Http {
                     let client = client(vec![].into()).unwrap();
                     Ok(FfiValue::PlugIn(client))
                 }
-                // "merlin" => self.merlin.invoke_func(module, ty, func, args).into(),
+                "http_server" => {
+                    let server = http_server::instantiate_root_module();
+                    let server = server.new();
+                    let server = server(vec![].into()).unwrap();
+                    Ok(FfiValue::PlugIn(server))
+                }
                 _ => Err(Error::Uber("Invalid module".into())),
             }
         })()
@@ -291,6 +289,17 @@ mod http_client {
 mod http_server {
     use super::*;
 
+    // use std::sync::{Arc, Mutex};
+
+    use dwarf::bubba::vm::run_lambda;
+    // use once_cell::sync::OnceCell;
+    // use rustc_hash::FxHashMap as HashMap;
+    // use warp::Filter;
+
+    // extern "C" {
+    //     fn get_lambda_funcs() -> *const OnceCell<Arc<Mutex<HashMap<usize, Value>>>>;
+    // }
+
     pub fn instantiate_root_module() -> PluginModRef {
         PluginModule { name, id, new }.leak_into_prefix()
     }
@@ -312,7 +321,9 @@ mod http_server {
     }
 
     #[derive(Clone, Debug)]
-    struct HttpServer {}
+    struct HttpServer {
+        // paths: Slab<Arc<dyn Filter<Extract = Tuple>>>,
+    }
 
     impl Default for HttpServer {
         fn default() -> Self {
@@ -341,7 +352,51 @@ mod http_server {
             // let module_str = module.as_str();
             // debug!("module: {module_str}, type: {ty}, func: {func}, args: {args:?}");
             // Ok(FfiValue::Empty)
-            future::block_on(Compat::new(async { Ok(FfiValue::Empty).into() }))
+            future::block_on(Compat::new(async {
+                match ty.as_str() {
+                    "HttpServer" => match func.as_str() {
+                        // "serve" => {
+                        //     warp::serve(hello).run(([127, 0, 0, 1], 3030)).await;
+                        //     Ok(FfiValue::Empty)
+                        // }
+                        "path" => {
+                            // let path: String = args
+                            //     .first()
+                            //     .unwrap()
+                            //     .try_into()
+                            //     .map_err(|e: ChaChaError| Error::Uber(e.to_string().into()))
+                            //     .unwrap();
+                            let FfiValue::Lambda(number) = args.get(0).unwrap() else {
+                                panic!("Invalid lambda");
+                            };
+
+                            // let hello =
+                            //     warp::path(path)
+                            //         .and(warp::path::param())
+                            //         .map(|name: String| {
+                            //             let mut args = RVec::new();
+                            //             args.push(name.into());
+                            //             run_lambda(*number, args)
+                            //         });
+
+                            let mut args = RVec::new();
+                            args.push("uber".to_owned().into());
+
+                            // let lambda_funcs = unsafe { get_lambda_funcs() };
+                            // dbg!(&lambda_funcs);
+                            // let foo = unsafe { &*lambda_funcs };
+                            // dbg!(&foo);
+                            // dbg!(foo.get());
+                            run_lambda(*number, args);
+
+                            Ok(FfiValue::Empty)
+                        }
+                        func => Err(Error::Uber(format!("Invalid function: {func}").into())),
+                    },
+                    ty => Err(Error::Uber(format!("Invalid type: {ty}").into())),
+                }
+                .into()
+            }))
         }
     }
 }

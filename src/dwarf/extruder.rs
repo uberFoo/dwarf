@@ -2133,7 +2133,7 @@ pub(super) fn inter_expression(
             )?;
 
             let lambda = Lambda::new(Some(&_body), None, &ret_ty, lu_dog);
-            let _ = ValueType::new_lambda(true, &lambda, lu_dog);
+            let ty = ValueType::new_lambda(true, &lambda, lu_dog);
 
             let mut errors = Vec::new();
             let mut last_param_uuid: Option<SarzakStorePtr> = None;
@@ -4042,6 +4042,15 @@ pub(super) fn typecheck(
         // Promote unknown to the other type.
         (ValueTypeEnum::Unknown(_), _) => Ok(()),
         (_, ValueTypeEnum::Unknown(_)) => Ok(()),
+        (ValueTypeEnum::XFuture(a), ValueTypeEnum::XFuture(b)) => {
+            let a = lu_dog.exhume_x_future(a).unwrap();
+            let b = lu_dog.exhume_x_future(b).unwrap();
+            let a = s_read!(a);
+            let b = s_read!(b);
+            let a = lu_dog.exhume_value_type(&a.x_value).unwrap();
+            let b = lu_dog.exhume_value_type(&b.x_value).unwrap();
+            typecheck((&a, lhs_span), (&b, rhs_span), location, context, lu_dog)
+        }
         (ValueTypeEnum::XPlugin(a), ValueTypeEnum::XPlugin(b)) => {
             let a = lu_dog.exhume_x_plugin(a).unwrap();
             let b = lu_dog.exhume_x_plugin(b).unwrap();
@@ -4069,12 +4078,12 @@ pub(super) fn typecheck(
         (ValueTypeEnum::EnumGeneric(g), _) => {
             let g = lu_dog.exhume_enum_generic(g).unwrap();
             // let ty = s_read!(g).r99_value_type(lu_dog);
-            dbg!(&g, "a");
+            // dbg!(&g, "a");
 
             let a = PrintableValueType(true, lhs, context, lu_dog);
             let b = PrintableValueType(true, rhs, context, lu_dog);
 
-            dbg!(a.to_string(), b.to_string());
+            // dbg!(a.to_string(), b.to_string());
 
             // if !ty.is_empty() {
             //     typecheck(
@@ -4093,13 +4102,13 @@ pub(super) fn typecheck(
         }
         (_, ValueTypeEnum::EnumGeneric(g)) => {
             let g = lu_dog.exhume_enum_generic(g).unwrap();
-            // let ty = s_read!(g).r99_value_type(lu_dog);
+            // let ty = s_read!(g).r1_value_type(lu_dog);
             // dbg!(&ty, "b");
-            dbg!(&g, "b");
+            // dbg!(&g, "b");
             let a = PrintableValueType(true, lhs, context, lu_dog);
             let b = PrintableValueType(true, rhs, context, lu_dog);
 
-            dbg!(a.to_string(), b.to_string());
+            // dbg!(a.to_string(), b.to_string());
 
             // if !ty.is_empty() {
             //     typecheck(
@@ -4250,6 +4259,7 @@ pub(super) fn typecheck(
                 }
             }
         }
+        (ValueTypeEnum::Lambda(_), ValueTypeEnum::Lambda(_)) => Ok(()),
         (ValueTypeEnum::Char(_), ValueTypeEnum::Ty(id)) => {
             let ty = context.sarzak.exhume_ty(id).unwrap();
             let ty = ty.read().unwrap();

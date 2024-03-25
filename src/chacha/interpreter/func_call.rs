@@ -510,7 +510,7 @@ fn objectstore_static_methods(
             .map_err(|e| {
                 eprintln!("{e}");
                 ChaChaError::BadnessHappened {
-                    message: "Plug-in error".to_owned(),
+                    message: format!("Plug-in error: {e:?}"),
                     location: location!(),
                 }
             })?;

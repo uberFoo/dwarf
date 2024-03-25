@@ -14,7 +14,7 @@ fn main() {
     let bar = || -> int { foo(answer) as int };
     chacha::assert_eq(bar(), answer);
 
-    let baz = |name: string| -> string { "hello, {0}! The answer is {1}".format(name, answer) };
+    let baz = |name: string| -> string { "hello, ${name}! The answer is ${answer}" };
     chacha::assert_eq(baz("world"), "hello, world! The answer is 42");
 
     runner(|s: string, i: int| -> float {
@@ -22,8 +22,8 @@ fn main() {
         chacha::assert_eq(i, 77);
 
         chacha::assert_eq(answer, 42);
-        // This is pretty lame. I think the extent of the type checking machinery
-        // is going to need to be updated. See https://github.com/uberFoo/dwarf/issues/3.
+
+        // This should be captured.
         answer = 69;
         3.14
     });

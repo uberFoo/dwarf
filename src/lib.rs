@@ -1,11 +1,16 @@
 #![allow(uncommon_codepoints)]
 #![allow(mixed_script_confusables)]
 #![allow(clippy::disallowed_names)]
-use std::{ops, path::PathBuf};
+use std::{
+    ops,
+    path::PathBuf,
+    sync::{Arc, Mutex},
+};
 
 use ansi_term::Colour;
 use clap::Args;
 use heck::ToUpperCamelCase;
+use once_cell::sync::OnceCell;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use serde::{Deserialize, Serialize};
 

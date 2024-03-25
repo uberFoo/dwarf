@@ -12,7 +12,9 @@ use crate::{
         },
         Expression as ParserExpression, PrintableValueType,
     },
-    keywords::{FORMAT, IS_DIGIT, LEN, LINES, MAP, MAX, PUSH, SPLIT, SUM, TO_DIGIT, TRIM},
+    keywords::{
+        FORMAT, INVOKE_FUNC, IS_DIGIT, LEN, LINES, MAP, MAX, PUSH, SPLIT, SUM, TO_DIGIT, TRIM,
+    },
     lu_dog::{
         store::ObjectStore as LuDogStore, Argument, Block, Call, Expression, List, MethodCall,
         Span, Span as LuDogSpan, ValueType, ValueTypeEnum, XValue,
@@ -306,6 +308,19 @@ pub(in crate::dwarf::extruder) fn method_call_return_type(
             #[allow(clippy::let_and_return)]
             x
         }
+        ValueTypeEnum::XPlugin(_) => match method.as_str() {
+            // INVOKE_FUNC => ValueType::new_empty(true, lu_dog),
+            INVOKE_FUNC => ValueType::new_unknown(true, lu_dog),
+            _ => {
+                return Err(vec![DwarfError::NoSuchMethod {
+                    method: method.to_owned(),
+                    file: context.file_name.to_owned(),
+                    span: meth_span.to_owned(),
+                    location: location!(),
+                    program: context.source_string.to_owned(),
+                }])
+            }
+        },
         ref ty => {
             e_warn!("Unknown type for method call {method}, {ty:?}");
 
