@@ -4,13 +4,15 @@ use std::path::PathBuf;
 use puteketeke::{Executor, Worker};
 
 use circular_queue::CircularQueue;
-use crossbeam::channel::{Receiver, Sender};
+use crossbeam::channel::{unbounded, Receiver, Sender};
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HasSet};
 
 use crate::{
     interpreter::{DebuggerStatus, Memory, MemoryUpdateMessage},
     lu_dog::{Block, ObjectStore as LuDogStore, ValueType},
-    new_ref, s_read, s_write,
+    new_ref,
+    plug_in::LambdaCall,
+    s_read, s_write,
     sarzak::{ObjectStore as SarzakStore, Ty},
     Dirty, ModelStore, NewRef, RefType, Value,
 };
@@ -77,6 +79,8 @@ pub struct Context {
     imports: HasSet<PathBuf>,
     #[cfg(feature = "async")]
     thread_count: usize,
+    lambda_sender: Sender<LambdaCall>,
+    lambda_receiver: Receiver<LambdaCall>,
 }
 
 /// Save the lu_dog model when the context is dropped
@@ -108,8 +112,6 @@ impl Context {
         sarzak: RefType<SarzakStore>,
         models: RefType<ModelStore>,
         mem_update_recv: Receiver<MemoryUpdateMessage>,
-        std_out_send: Sender<String>,
-        std_out_recv: Receiver<String>,
         debug_status_writer: Option<Sender<DebuggerStatus>>,
         timings: CircularQueue<f64>,
         expr_count: usize,
@@ -123,6 +125,9 @@ impl Context {
         imports: HasSet<PathBuf>,
         thread_count: usize,
     ) -> Self {
+        let (std_out_send, std_out_recv) = unbounded();
+        let (lambda_sender, lambda_receiver) = unbounded();
+
         Self {
             prompt,
             block,
@@ -144,6 +149,8 @@ impl Context {
             scopes,
             imports,
             thread_count,
+            lambda_sender,
+            lambda_receiver,
         }
     }
 
@@ -157,8 +164,6 @@ impl Context {
         sarzak: RefType<SarzakStore>,
         models: RefType<ModelStore>,
         mem_update_recv: Receiver<MemoryUpdateMessage>,
-        std_out_send: Sender<String>,
-        std_out_recv: Receiver<String>,
         debug_status_writer: Option<Sender<DebuggerStatus>>,
         timings: CircularQueue<f64>,
         expr_count: usize,
@@ -170,6 +175,9 @@ impl Context {
         scopes: HashMap<String, String>,
         imports: HasSet<PathBuf>,
     ) -> Self {
+        let (std_out_send, std_out_recv) = unbounded();
+        let (lambda_sender, lambda_receiver) = unbounded();
+
         Self {
             prompt,
             block,
@@ -188,7 +196,17 @@ impl Context {
             source_file,
             scopes,
             imports,
+            lambda_sender,
+            lambda_receiver,
         }
+    }
+
+    pub fn lambda_sender(&self) -> Sender<LambdaCall> {
+        self.lambda_sender.clone()
+    }
+
+    pub fn lambda_receiver(&self) -> Receiver<LambdaCall> {
+        self.lambda_receiver.clone()
     }
 
     #[cfg(feature = "async")]

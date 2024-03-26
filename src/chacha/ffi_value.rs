@@ -9,7 +9,7 @@ use rustc_hash::FxHashMap as HashMap;
 use uuid::Uuid;
 
 use crate::{
-    bubba::{value::Value as VmValue, vm::get_lambda_funcs},
+    bubba::value::Value as VmValue,
     chacha::{
         error::{ChaChaError, Result},
         value::{Enum, TupleEnum},
@@ -17,7 +17,7 @@ use crate::{
     lu_dog::{ObjectStore as LuDogStore, ValueTypeEnum},
     new_ref,
     plug_in::PluginType,
-    s_read, DwarfFloat, DwarfInteger, NewRef, RefType, Value,
+    s_read, DwarfFloat, DwarfInteger, NewRef, RefType, Value, LAMBDA_FUNCS,
 };
 
 #[repr(C)]
@@ -186,8 +186,6 @@ impl From<VmValue> for FfiValue {
             VmValue::Empty => Self::Empty,
             VmValue::Float(num) => Self::Float(num.to_owned()),
             lambda @ VmValue::LambdaPointer { .. } => {
-                let LAMBDA_FUNCS = get_lambda_funcs();
-                let LAMBDA_FUNCS = unsafe { &*LAMBDA_FUNCS };
                 let λ = match LAMBDA_FUNCS.get() {
                     Some(λ) => λ,
                     None => {
@@ -196,9 +194,6 @@ impl From<VmValue> for FfiValue {
                         LAMBDA_FUNCS.get().unwrap()
                     }
                 };
-
-                dbg!(LAMBDA_FUNCS.get());
-                dbg!(&LAMBDA_FUNCS as *const _);
 
                 let mut λ = λ.lock().unwrap();
                 let key = λ.len();

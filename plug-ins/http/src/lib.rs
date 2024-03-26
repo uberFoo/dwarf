@@ -5,6 +5,7 @@ use std::{
 
 use abi_stable::{
     export_root_module,
+    external_types::crossbeam_channel::RSender,
     prefix_type::PrefixTypeTrait,
     sabi_extern_fn,
     sabi_trait::prelude::TD_Opaque,
@@ -13,7 +14,7 @@ use abi_stable::{
 use async_compat::Compat;
 use dwarf::{
     chacha::{error::ChaChaError, ffi_value::FfiValue},
-    plug_in::{Error, Plugin, PluginModRef, PluginModule, PluginType, Plugin_TO},
+    plug_in::{Error, LambdaCall, Plugin, PluginModRef, PluginModule, PluginType, Plugin_TO},
     DwarfInteger,
 };
 use futures_lite::future;
@@ -23,7 +24,7 @@ use slab::Slab;
 
 #[export_root_module]
 pub fn instantiate_root_module() -> PluginModRef {
-    PluginModule { name, id, new }.leak_into_prefix()
+    PluginModule { name, new }.leak_into_prefix()
 }
 
 #[sabi_extern_fn]
@@ -31,26 +32,21 @@ pub fn name() -> RStr<'static> {
     "http".into()
 }
 
-#[sabi_extern_fn]
-pub fn id() -> RStr<'static> {
-    "http".into()
-}
-
 /// Instantiates the plugin.
 #[sabi_extern_fn]
-pub fn new(args: RVec<FfiValue>) -> RResult<PluginType, Error> {
+pub fn new(lambda_sender: RSender<LambdaCall>, args: RVec<FfiValue>) -> RResult<PluginType, Error> {
     if let Some(FfiValue::String(plugin)) = args.first() {
         match plugin.as_str() {
             "http_client" => {
                 let plugin = http_client::instantiate_root_module();
                 let plugin = plugin.new();
-                let plugin = plugin(vec![].into()).unwrap();
+                let plugin = plugin(lambda_sender, vec![].into()).unwrap();
                 ROk(Plugin_TO::from_value(plugin, TD_Opaque))
             }
             "http_server" => {
                 let plugin = http_server::instantiate_root_module();
                 let plugin = plugin.new();
-                let plugin = plugin(vec![].into()).unwrap();
+                let plugin = plugin(lambda_sender, vec![].into()).unwrap();
                 ROk(Plugin_TO::from_value(plugin, TD_Opaque))
             }
             _ => RErr(Error::Uber(format!("Invalid plugin {plugin}").into())),
@@ -61,55 +57,55 @@ pub fn new(args: RVec<FfiValue>) -> RResult<PluginType, Error> {
     // ROk(Plugin_TO::from_value(Http, TD_Opaque))
 }
 
-#[derive(Clone, Debug)]
-struct Http;
+// #[derive(Clone, Debug)]
+// struct Http;
 
-impl Display for Http {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self)
-    }
-}
+// impl Display for Http {
+//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+//         write!(f, "{:?}", self)
+//     }
+// }
 
-impl Plugin for Http {
-    fn name(&self) -> RStr<'_> {
-        "Http".into()
-    }
+// impl Plugin for Http {
+//     fn name(&self) -> RStr<'_> {
+//         "Http".into()
+//     }
 
-    fn invoke_func(
-        &mut self,
-        module: RStr<'_>,
-        ty: RStr<'_>,
-        func: RStr<'_>,
-        args: RVec<FfiValue>,
-    ) -> RResult<FfiValue, Error> {
-        (|| -> Result<FfiValue, Error> {
-            let module_str = module.as_str();
-            debug!("module: {module_str}, type: {ty}, func: {func}, args: {args:?}");
-            match module_str {
-                "http_client" => {
-                    let client = http_client::instantiate_root_module();
-                    let client = client.new();
-                    let client = client(vec![].into()).unwrap();
-                    Ok(FfiValue::PlugIn(client))
-                }
-                "http_server" => {
-                    let server = http_server::instantiate_root_module();
-                    let server = server.new();
-                    let server = server(vec![].into()).unwrap();
-                    Ok(FfiValue::PlugIn(server))
-                }
-                _ => Err(Error::Uber("Invalid module".into())),
-            }
-        })()
-        .into()
-    }
-}
+//     fn invoke_func(
+//         &mut self,
+//         module: RStr<'_>,
+//         ty: RStr<'_>,
+//         func: RStr<'_>,
+//         args: RVec<FfiValue>,
+//     ) -> RResult<FfiValue, Error> {
+//         (|| -> Result<FfiValue, Error> {
+//             let module_str = module.as_str();
+//             debug!("module: {module_str}, type: {ty}, func: {func}, args: {args:?}");
+//             match module_str {
+//                 "http_client" => {
+//                     let client = http_client::instantiate_root_module();
+//                     let client = client.new();
+//                     let client = client(vec![].into()).unwrap();
+//                     Ok(FfiValue::PlugIn(client))
+//                 }
+//                 "http_server" => {
+//                     let server = http_server::instantiate_root_module();
+//                     let server = server.new();
+//                     let server = server(vec![].into()).unwrap();
+//                     Ok(FfiValue::PlugIn(server))
+//                 }
+//                 _ => Err(Error::Uber("Invalid module".into())),
+//             }
+//         })()
+//         .into()
+//     }
+// }
 
 mod http_client {
     use super::*;
 
     pub fn instantiate_root_module() -> PluginModRef {
-        PluginModule { name, id, new }.leak_into_prefix()
+        PluginModule { name, new }.leak_into_prefix()
     }
 
     #[sabi_extern_fn]
@@ -117,14 +113,12 @@ mod http_client {
         "HttpClient".into()
     }
 
-    #[sabi_extern_fn]
-    pub fn id() -> RStr<'static> {
-        "HttpClient".into()
-    }
-
     /// Instantiates the plugin.
     #[sabi_extern_fn]
-    pub fn new(args: RVec<FfiValue>) -> RResult<PluginType, Error> {
+    pub fn new(
+        lambda_sender: RSender<LambdaCall>,
+        args: RVec<FfiValue>,
+    ) -> RResult<PluginType, Error> {
         ROk(Plugin_TO::from_value(HttpClient::default(), TD_Opaque))
     }
 
@@ -291,7 +285,7 @@ mod http_server {
 
     // use std::sync::{Arc, Mutex};
 
-    use dwarf::bubba::vm::run_lambda;
+    // use dwarf::bubba::vm::run_lambda;
     // use once_cell::sync::OnceCell;
     // use rustc_hash::FxHashMap as HashMap;
     // use warp::Filter;
@@ -301,7 +295,7 @@ mod http_server {
     // }
 
     pub fn instantiate_root_module() -> PluginModRef {
-        PluginModule { name, id, new }.leak_into_prefix()
+        PluginModule { name, new }.leak_into_prefix()
     }
 
     #[sabi_extern_fn]
@@ -309,25 +303,27 @@ mod http_server {
         "HttpServer".into()
     }
 
-    #[sabi_extern_fn]
-    pub fn id() -> RStr<'static> {
-        "HttpServer".into()
-    }
-
     /// Instantiates the plugin.
     #[sabi_extern_fn]
-    pub fn new(args: RVec<FfiValue>) -> RResult<PluginType, Error> {
-        ROk(Plugin_TO::from_value(HttpServer::default(), TD_Opaque))
+    pub fn new(
+        lambda_sender: RSender<LambdaCall>,
+        _args: RVec<FfiValue>,
+    ) -> RResult<PluginType, Error> {
+        ROk(Plugin_TO::from_value(
+            HttpServer::new(lambda_sender),
+            TD_Opaque,
+        ))
     }
 
     #[derive(Clone, Debug)]
     struct HttpServer {
         // paths: Slab<Arc<dyn Filter<Extract = Tuple>>>,
+        sender: RSender<LambdaCall>,
     }
 
-    impl Default for HttpServer {
-        fn default() -> Self {
-            Self {}
+    impl HttpServer {
+        fn new(sender: RSender<LambdaCall>) -> Self {
+            Self { sender }
         }
     }
 
@@ -382,14 +378,27 @@ mod http_server {
                             let mut args = RVec::new();
                             args.push("uber".to_owned().into());
 
+                            let (s, result) = crossbeam::channel::bounded(1);
+
+                            let lambda_call = LambdaCall {
+                                lambda: *number,
+                                args,
+                                result: s.into(),
+                            };
+                            self.sender.send(lambda_call).unwrap();
+                            let result = result.recv().unwrap();
+                            dbg!(&result);
+
                             // let lambda_funcs = unsafe { get_lambda_funcs() };
                             // dbg!(&lambda_funcs);
                             // let foo = unsafe { &*lambda_funcs };
                             // dbg!(&foo);
                             // dbg!(foo.get());
-                            run_lambda(*number, args);
+                            // run_lambda(*number, args);
 
-                            Ok(FfiValue::Empty)
+                            <RResult<FfiValue, Error> as Into<Result<FfiValue, Error>>>::into(
+                                result,
+                            )
                         }
                         func => Err(Error::Uber(format!("Invalid function: {func}").into())),
                     },

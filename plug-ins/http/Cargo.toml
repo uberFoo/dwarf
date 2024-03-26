@@ -29,6 +29,7 @@ sarzak = { git = "https://github.com/uberFoo/sarzak", branch = "develop", defaul
 ] }
 warp = "0.3.6"
 once_cell = "1.19.0"
+crossbeam = { version = "0.8.4", features = ["crossbeam-channel"] }
 
 # [patch."https://github.com/uberFoo/sarzak"]
 # sarzak = { path = "../../../sarzak" }

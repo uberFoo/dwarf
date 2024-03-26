@@ -1,4 +1,3 @@
-workspace = { members = ["crates/plugin", "crates/types", "crates/value"] }
 [package]
 name = "dwarf"
 version = "0.8.1"

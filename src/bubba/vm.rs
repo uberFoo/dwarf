@@ -1,7 +1,7 @@
 use std::{
     env,
     path::{Path, PathBuf},
-    sync::{Arc, Mutex},
+    thread,
 };
 
 #[cfg(feature = "async")]
@@ -18,9 +18,10 @@ use tracy_client::{non_continuous_frame, span, Client};
 
 use abi_stable::{
     library::{lib_header_from_path, LibrarySuffix, RawLibrary},
-    std_types::{RBox, RErr, ROk, ROption, RResult, RVec},
+    std_types::{RBox, RErr, ROk, ROption, RResult},
 };
 use ansi_term::Colour;
+use crossbeam::channel::{unbounded, Receiver, Sender};
 use log::{self, log_enabled, Level::Trace};
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use snafu::{location, Location};
@@ -38,67 +39,22 @@ use crate::{
     keywords::INVOKE_FUNC,
     lu_dog::{ValueType, ValueTypeEnum},
     new_ref,
-    plug_in::{PluginModRef, PluginType},
+    plug_in::{Error as FfiError, LambdaCall, PluginModRef, PluginType},
     s_read, s_write,
     sarzak::{ObjectStore as SarzakStore, Ty, MODEL as SARZAK_MODEL},
-    DwarfInteger, NewRef, RefType, Span,
+    DwarfInteger, NewRef, RefType, Span, LAMBDA_FUNCS,
 };
 
 use super::instr::{Instruction, Program};
 
-static LAMBDA_FUNCS: OnceCell<Arc<Mutex<HashMap<usize, Value>>>> = OnceCell::new();
+// static LAMBDA_FUNCS: OnceCell<Arc<Mutex<HashMap<usize, Value>>>> = OnceCell::new();
 
-pub fn get_lambda_funcs() -> *const OnceCell<Arc<Mutex<HashMap<usize, Value>>>> {
-    &LAMBDA_FUNCS as *const _
-}
+// pub fn get_lambda_funcs() -> *const OnceCell<Arc<Mutex<HashMap<usize, Value>>>> {
+//     &LAMBDA_FUNCS as *const _
+// }
 
 #[cfg(feature = "async")]
 static mut EXECUTOR: OnceCell<Executor> = OnceCell::new();
-static ΛVM: OnceCell<Mutex<VM>> = OnceCell::new();
-
-#[no_mangle]
-pub extern "C" fn run_lambda(
-    // lambda_funcs: *const OnceCell<Arc<Mutex<HashMap<usize, Value>>>>,
-    lambda: usize,
-    args: RVec<FfiValue>,
-) -> RResult<FfiValue, FfiValue> {
-    // let lambda_funcs = get_lambda_funcs();
-    // dbg!("hello?");
-    // This will have been setup by the FfiValue constructor that allowed us to
-    // get here in the first place.
-    // let λ = LAMBDA_FUNCS.get().unwrap().lock().unwrap();
-    // dbg!("WTF?");
-    // let lambda_funcs = unsafe { &*lambda_funcs };
-
-    let λ = match LAMBDA_FUNCS.get() {
-        Some(λ) => λ,
-        None => {
-            panic!("Lambda functions have not been initialized.");
-            // let λ = Arc::new(Mutex::new(HashMap::default()));
-            // let _ = LAMBDA_FUNCS.set(λ);
-            // LAMBDA_FUNCS.get().unwrap()
-        }
-    };
-    let λ = λ.lock().unwrap();
-    let λ = λ.get(&lambda).unwrap();
-
-    // This will also have been set in the constructor. Calling this before
-    // construction of a VM will panic, and that's not a terrible default.
-    // 🚧 I don't love that there is only one of these for executing lambdas.
-    // I guess it wouldn't be hard to make it a Vec of VMs. Let it grow, and
-    // shrink as needed. Whatever as needed means.
-    let mut vm = ΛVM.get().unwrap().lock().unwrap();
-    let args = args
-        .iter()
-        .map(|v| <FfiValue as Into<Value>>::into(v.clone()))
-        .collect::<Vec<_>>();
-
-    let result = vm.invoke_lambda(λ, &args);
-    match result {
-        Ok(value) => ROk(<Value as Into<FfiValue>>::into(s_read!(value).clone())),
-        Err(e) => RErr(FfiValue::Error(e.to_string().into())),
-    }
-}
 
 #[derive(Debug)]
 enum StackValue {
@@ -178,6 +134,8 @@ pub struct VM {
     #[cfg(feature = "async")]
     thread_count: usize,
     backtrace: bool,
+    lambda_sender: Sender<LambdaCall>,
+    lambda_receiver: Receiver<LambdaCall>,
 }
 
 impl std::fmt::Debug for VM {
@@ -226,6 +184,7 @@ impl VM {
         }
 
         let backtrace = env::var("DWARF_BACKTRACE").is_ok();
+        let (lambda_sender, lambda_receiver) = unbounded();
 
         let mut vm = VM {
             // ip: 0,
@@ -250,6 +209,8 @@ impl VM {
             #[cfg(feature = "async")]
             thread_count,
             backtrace,
+            lambda_sender,
+            lambda_receiver,
         };
 
         let mut tmp_mem: Vec<Instruction> = Vec::new();
@@ -295,15 +256,53 @@ impl VM {
             panic!("Missing symbols: {:?}", missing_symbols);
         }
 
-        // Setup a global VM that we can use to run lambdas from a plugin.
-        match unsafe { ΛVM.get() } {
-            Some(_) => {}
-            None => unsafe {
-                ΛVM.set(Mutex::new(vm.clone())).unwrap();
-            },
-        };
+        let mut vm_clone = vm.clone();
+        thread::spawn(move || loop {
+            vm_clone.lambda_listen();
+        });
 
         vm
+    }
+
+    fn lambda_listen(&mut self) {
+        if let Ok(lambda_call) = self.lambda_receiver.recv() {
+            // let lambda_funcs = get_lambda_funcs();
+            // dbg!("hello?");
+            // This will have been setup by the FfiValue constructor that allowed us to
+            // get here in the first place.
+            // let λ = LAMBDA_FUNCS.get().unwrap().lock().unwrap();
+            // dbg!("WTF?");
+            let λ = match LAMBDA_FUNCS.get() {
+                Some(λ) => λ,
+                None => {
+                    panic!("Lambda functions have not been initialized.");
+                    // let λ = Arc::new(Mutex::new(HashMap::default()));
+                    // let _ = LAMBDA_FUNCS.set(λ);
+                    // LAMBDA_FUNCS.get().unwrap()
+                }
+            };
+            let λ = λ.lock().unwrap();
+            let λ = λ.get(&lambda_call.lambda).unwrap();
+
+            // This will also have been set in the constructor. Calling this before
+            // construction of a VM will panic, and that's not a terrible default.
+            // 🚧 I don't love that there is only one of these for executing lambdas.
+            // I guess it wouldn't be hard to make it a Vec of VMs. Let it grow, and
+            // shrink as needed. Whatever as needed means.
+            // let mut vm = ΛVM.get().unwrap().lock().unwrap();
+            let args = lambda_call
+                .args
+                .iter()
+                .map(|v| <FfiValue as Into<Value>>::into(v.clone()))
+                .collect::<Vec<_>>();
+
+            let result = self.invoke_lambda(λ, &args);
+            let result = match result {
+                Ok(value) => ROk(<Value as Into<FfiValue>>::into(s_read!(value).clone())),
+                Err(e) => RErr(FfiError::Uber(e.to_string().into())),
+            };
+            lambda_call.result.send(result).unwrap();
+        }
     }
 
     fn get_span(&self, ip: isize) -> Span {
@@ -312,13 +311,23 @@ impl VM {
 
     pub fn invoke_lambda(&mut self, lambda: &Value, args: &[Value]) -> Result<RefType<Value>> {
         let mut stack = Vec::<StackValue>::new();
+        // This is all pretty hacky. I need two 0 values to appease the return gods.
+        stack.push(Value::Integer(0).into());
+        stack.push(Value::Integer(0).into());
+        stack.push(Value::Integer(0).into());
+        stack.push(Value::Integer(0).into());
+        // This is really lame. The call code expects stack_len - 2 - arity to be
+        // an address (an integer) ar it doesn't do anything with it. In any case
+        // it needs to be here. So this is junk.
+        stack.push(Value::Empty.into());
+        // The next parameter is the number of locals on the stack -or- a LambdaPointer.
+        stack.push(lambda.to_owned().into());
+
         // Args need to be pushed onto the stack, and then the lambda, and then we
         // need to execute a call instruction.
         for arg in args.iter() {
             stack.push(arg.clone().into());
         }
-
-        stack.push(lambda.to_owned().into());
 
         let Value::LambdaPointer {
             name,
@@ -334,7 +343,7 @@ impl VM {
         let (ip, _) = self.func_map.get(&format!("{name}_trampoline")).unwrap();
         self.inner_run(
             *ip as isize,
-            frame_size + 5,
+            4,
             stack,
             args.len(),
             frame_size,
@@ -807,9 +816,8 @@ impl VM {
                             //         panic!("Parent is missing.");
                             //     }
                             // }
-                            huh => {
+                            _ => {
                                 dbg!(&expression);
-                                // dbg!(huh);
                                 unimplemented!()
                             }
                         };
@@ -823,6 +831,7 @@ impl VM {
 
                         let callee = &stack[stack.len() - func_arity - 2];
                         let stack_local_count = &stack[stack.len() - func_arity - 1];
+
                         if let Value::Plugin((_, plugin)) = callee.clone().into_value() {
                             let method: String =
                                 stack_local_count.clone().into_value().try_into()?;
@@ -1680,7 +1689,7 @@ impl VM {
                         })?;
 
                         let ctor = root_module.new();
-                        let plugin = ctor(args.into()).unwrap();
+                        let plugin = ctor(self.lambda_sender.clone().into(), args.into()).unwrap();
                         let name = plugin.name().to_string();
                         let plugin = new_ref!(PluginType, plugin);
                         let value = Value::Plugin((name, plugin));
@@ -1718,6 +1727,7 @@ impl VM {
                         fp = match stack.pop().unwrap().into_value() {
                             Value::Integer(fp) => fp as usize,
                             Value::Empty => {
+                                // This is how we escape the infinite loop.
                                 return Ok(result.into_pointer());
                             }
                             _ => {

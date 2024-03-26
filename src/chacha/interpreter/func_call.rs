@@ -486,7 +486,10 @@ fn objectstore_static_methods(
             let ctor = root_module.new();
             let (_, path) = arg_values.pop().unwrap();
             let path = s_read!(path).clone();
-            let plugin = new_ref!(PluginType, ctor(vec![path.into()].into()).unwrap());
+            let plugin = new_ref!(
+                PluginType,
+                ctor(context.lambda_sender().into(), vec![path.into()].into()).unwrap()
+            );
             model.1.replace(plugin.clone());
 
             let value = new_ref!(Value, Value::Store(store, plugin));
@@ -516,7 +519,10 @@ fn objectstore_static_methods(
             })?;
 
             let ctor = root_module.new();
-            let plugin = new_ref!(PluginType, ctor(vec![].into()).unwrap());
+            let plugin = new_ref!(
+                PluginType,
+                ctor(context.lambda_sender().into(), vec![].into()).unwrap()
+            );
             model.1.replace(plugin.clone());
 
             let value = new_ref!(Value, Value::Store(store, plugin));

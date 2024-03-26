@@ -1124,7 +1124,8 @@ pub fn eval(
                                 })?;
 
                                 let ctor = root_module.new();
-                                let plugin = ctor(args.into()).unwrap();
+                                let plugin =
+                                    ctor(context.lambda_sender().into(), args.into()).unwrap();
                                 let name = plugin.name().to_string();
                                 let plugin = new_ref!(PluginType, plugin);
 

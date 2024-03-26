@@ -169,8 +169,6 @@ pub fn initialize_interpreter(
         inter_store(store, &mut stack, &lu_dog);
     }
 
-    let (std_out_send, std_out_recv) = unbounded();
-
     #[cfg(feature = "tracy")]
     Client::start();
 
@@ -186,8 +184,6 @@ pub fn initialize_interpreter(
             e_context.sarzak.clone(),
             new_ref!(ModelStore, e_context.models),
             receiver,
-            std_out_send,
-            std_out_recv,
             None,
             CircularQueue::with_capacity(TIMING_COUNT),
             0,

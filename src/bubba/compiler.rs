@@ -425,6 +425,7 @@ pub fn compile(context: &ExtruderContext) -> Result<Program> {
     for (name, count) in context.lambdas.clone().iter() {
         let mut thonk = CThonk::new(format!("{name}_trampoline"));
         thonk.insert_instruction(Instruction::Call(count.to_owned()), location!());
+        thonk.insert_instruction(Instruction::Return, location!());
         context.get_program().add_thonk(thonk.into());
     }
 
