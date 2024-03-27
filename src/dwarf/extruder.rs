@@ -22,9 +22,9 @@ use crate::{
     lu_dog::{
         store::ObjectStore as LuDogStore,
         types::{
-            AWait, Block, Body, BooleanOperator, Call, CharLiteral, EnumFieldEnum, Expression,
-            ExpressionBit, ExpressionEnum, ExpressionStatement, Field, ForLoop, FormatBit,
-            FormatString, FuncGeneric, FunctionCall, ImplementationBlock, Import, Index,
+            AWait, AnyList, Block, Body, BooleanOperator, Call, CharLiteral, EnumFieldEnum,
+            Expression, ExpressionBit, ExpressionEnum, ExpressionStatement, Field, ForLoop,
+            FormatBit, FormatString, FuncGeneric, FunctionCall, ImplementationBlock, Import, Index,
             IntegerLiteral, Item as WoogItem, ItemStatement, Lambda, LambdaParameter, LetStatement,
             Literal, LocalVariable, Pattern as AssocPat, RangeExpression, Span as LuDogSpan,
             Statement, StringLiteral, StructGeneric, ValueType, ValueTypeEnum, Variable,
@@ -132,7 +132,7 @@ pub(crate) use function;
 
 macro_rules! debug {
     ($($arg:tt)*) => {
-        log::debug!(
+        tracing::debug!(
             target: "extruder",
             "{}: {}\n  --> {}:{}:{}",
             Colour::Cyan.dimmed().italic().paint(function!()),
@@ -1087,6 +1087,79 @@ pub(super) fn inter_expression(
         }
         ParserExpression::And(lhs_p, rhs_p) => {
             and::inter(lhs_p, rhs_p, span, block, context, context_stack, lu_dog)
+        }
+        //
+        // AnyList
+        //
+        ParserExpression::AnyList(ref elements) => {
+            debug!("anylist {:?}", elements);
+            if elements.is_empty() {
+                panic!("Just don't do this. It doesn't even merit an error.");
+            } else {
+                let mut elements = elements.iter();
+
+                let element = elements.next().unwrap();
+                let span1 = &element.1;
+                let ((first, first_span), first_ty) = inter_expression(
+                    &new_ref!(ParserExpression, element.0.to_owned()),
+                    &element.1,
+                    block,
+                    context,
+                    context_stack,
+                    lu_dog,
+                )?;
+
+                let element = ListElement::new(0, &first, None, lu_dog);
+                let expr = Expression::new_list_element(true, &element, lu_dog);
+                let value = XValue::new_expression(block, &first_ty, &expr, lu_dog);
+                // We need to clone the span because it's already been used
+                // by the underlying value.
+                LuDogSpan::new(
+                    s_read!(first_span).end,
+                    s_read!(first_span).start,
+                    &context.source,
+                    None,
+                    Some(&value),
+                    lu_dog,
+                );
+
+                let list_expr = ListExpression::new(Some(&element), lu_dog);
+
+                let mut last_element_uuid: Option<SarzakStorePtr> = Some(s_read!(element).id);
+                let mut position = 1;
+                for element in elements {
+                    let ((elt, elt_span), elt_ty) = inter_expression(
+                        &new_ref!(ParserExpression, element.0.to_owned()),
+                        &element.1,
+                        block,
+                        context,
+                        context_stack,
+                        lu_dog,
+                    )?;
+
+                    let element = ListElement::new(position, &elt, None, lu_dog);
+                    position += 1;
+
+                    last_element_uuid = link_list_element!(last_element_uuid, element, lu_dog);
+                    let expr = Expression::new_list_element(true, &element, lu_dog);
+                    let value = XValue::new_expression(block, &elt_ty, &expr, lu_dog);
+                    LuDogSpan::new(
+                        s_read!(elt_span).end,
+                        s_read!(elt_span).start,
+                        &context.source,
+                        None,
+                        Some(&value),
+                        lu_dog,
+                    );
+                }
+
+                let expr = Expression::new_list_expression(true, &list_expr, lu_dog);
+                let ty = ValueType::new_any_list(true, lu_dog);
+                let value = XValue::new_expression(block, &ty, &expr, lu_dog);
+                update_span_value(&span, &value, location!());
+
+                Ok(((expr, span), ty))
+            }
         }
         ParserExpression::As(expr, ref ty) => {
             expr_as::inter(expr, ty, span, block, context, context_stack, lu_dog)
@@ -2321,9 +2394,8 @@ pub(super) fn inter_expression(
         ParserExpression::List(ref elements) => {
             debug!("list {:?}", elements);
             if elements.is_empty() {
-                // 🚧 Darn -- more of this and no comment. I think it's replaced someplace.
-                // This has something to do with creating empty lists. This will cause
-                // an error if the list initialization is not typed.
+                // Note that this is just a generic that we need to use to create the
+                // list. The name of the generic is not important.
                 let generic = FuncGeneric::new("UBER_HACK".to_owned(), None, None, lu_dog);
                 let list = List::new(&ValueType::new_func_generic(true, &generic, lu_dog), lu_dog);
                 let expr = Expression::new_list_expression(

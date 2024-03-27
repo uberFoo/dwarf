@@ -194,7 +194,7 @@ fn lexer() -> impl Parser<char, Vec<Spanned<Token>>, Error = Simple<char>> {
     });
 
     // A parser for punctuation (delimiters, semicolons, etc.)
-    let punct = one_of("#=-()[]{}:;,.|&<>+*/!").map(Token::Punct);
+    let punct = one_of("#=-()[]{}:;,.|&<>+*/!@").map(Token::Punct);
 
     // A single token can be one of the above
     let token = float
@@ -2044,6 +2044,12 @@ impl DwarfParser {
         }
 
         // parse a list literal
+        if let Some(expression) = self.parse_any_list_literal()? {
+            debug!("any list literal", expression);
+            return Ok(Some(expression));
+        }
+
+        // parse a list literal
         if let Some(expression) = self.parse_list_literal()? {
             debug!("list literal", expression);
             return Ok(Some(expression));
@@ -2791,6 +2797,58 @@ impl DwarfParser {
         Ok(Some((
             (
                 DwarfExpression::List(elements),
+                start..self.previous().unwrap().1.end,
+            ),
+            LITERAL,
+        )))
+    }
+
+    /// Parse an any list expression
+    ///
+    /// any_list -> @'[' expression (, expression)* ']'
+    fn parse_any_list_literal(&mut self) -> Result<Option<Expression>> {
+        debug!("enter parse_any_list_expression");
+
+        let start = if let Some(tok) = self.peek() {
+            tok.1.start
+        } else {
+            debug!("exit parse_any_list_expression");
+            return Ok(None);
+        };
+
+        if self.match_tokens(&[Token::Punct('@')]).is_none() {
+            debug!("exit parse_any_list_expression no token");
+            return Ok(None);
+        }
+
+        if self.match_tokens(&[Token::Punct('[')]).is_none() {
+            debug!("exit parse_any_list_expression no token");
+            return Ok(None);
+        }
+
+        let mut elements = Vec::new();
+
+        while !self.at_end() && self.match_tokens(&[Token::Punct(']')]).is_none() {
+            if let Some(expr) = self.parse_expression(LITERAL.1)? {
+                elements.push(expr.0);
+                let _ = self.match_tokens(&[Token::Punct(',')]);
+            } else {
+                let tok = self.previous().unwrap();
+                let err = Simple::expected_input_found(
+                    tok.1.clone(),
+                    [Some("expression".to_owned())],
+                    Some(tok.0.to_string()),
+                );
+                let err = err.with_label("expected expression");
+                return Err(Box::new(err));
+            }
+        }
+
+        debug!("exit parse_any_list_expression");
+
+        Ok(Some((
+            (
+                DwarfExpression::AnyList(elements),
                 start..self.previous().unwrap().1.end,
             ),
             LITERAL,
@@ -5961,7 +6019,6 @@ mod tests {
         "#;
 
         let ast = parse_dwarf("test_format_str", src);
-        dbg!(&ast);
         assert!(ast.is_ok());
     }
 
@@ -5976,7 +6033,19 @@ mod tests {
         "#;
 
         let ast = parse_dwarf("test_char_literal", src);
-        dbg!(&ast);
+        assert!(ast.is_ok());
+    }
+
+    #[test]
+    fn any_list() {
+        let _ = env_logger::builder().is_test(true).try_init();
+        let src = r#"
+        fn main() {
+            let any_list = @[1, "a", 'b'];
+        }
+        "#;
+
+        let ast = parse_dwarf("test_any_list", src);
         assert!(ast.is_ok());
     }
 }

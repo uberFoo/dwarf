@@ -29,7 +29,7 @@ impl HttpServer {
         lambda: fn(Request, Response) -> Result<string, HttpError>,
     ) {
         self.inner
-            .invoke_func("http_server", "HttpServer", "route", [path, lambda, method]);
+            .invoke_func("http_server", "HttpServer", "route", @[path, lambda, method]);
     }
 }
 

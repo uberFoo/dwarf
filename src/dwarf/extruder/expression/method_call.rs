@@ -98,8 +98,8 @@ pub(in crate::dwarf::extruder) fn inter(
         method_call_return_type(instance_ty, method, meth_span, &mut arg_ty, context, lu_dog)?;
 
     debug!(
-        "{} return type {}",
-        Colour::Red.dimmed().italic().paint("MethodCall"),
+        "{}: {method} return type {}",
+        Colour::Red.italic().paint("MethodCall"),
         PrintableValueType(true, &ret_ty, context, lu_dog).to_string()
     );
 
@@ -116,10 +116,7 @@ pub(in crate::dwarf::extruder) fn method_call_return_type(
 ) -> Result<RefType<ValueType>> {
     debug!(
         "{} instance type {instance_ty:?} ({}) {method}",
-        Colour::Red
-            .dimmed()
-            .italic()
-            .paint("method_call_return_type"),
+        Colour::Red.italic().paint("method_call_return_type"),
         PrintableValueType(true, &instance_ty, context, lu_dog).to_string()
     );
     let ty = match s_read!(instance_ty).subtype {

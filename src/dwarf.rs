@@ -496,6 +496,7 @@ impl Eq for WrappedValueType {}
 pub enum Expression {
     Addition(Box<Spanned<Self>>, Box<Spanned<Self>>),
     And(Box<Spanned<Self>>, Box<Spanned<Self>>),
+    AnyList(Vec<Spanned<Self>>),
     As(Box<Spanned<Self>>, Spanned<Type>),
     Asm(Vec<Spanned<Self>>),
     /// Assignment Expression
