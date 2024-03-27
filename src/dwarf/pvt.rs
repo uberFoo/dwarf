@@ -43,6 +43,7 @@ impl<'d, 'a, 'b> PrintableValueType<'d, 'a, 'b> {
         let lu_dog = self.3;
 
         match value.subtype {
+            ValueTypeEnum::AnyList(_) => write!(f, "{}", TY_CLR.italic().paint("[Any]")),
             ValueTypeEnum::Char(_) => write!(f, "{}", TY_CLR.italic().paint("char")),
             ValueTypeEnum::Enumeration(ref enumeration) => {
                 debug!("enumeration {:?}", enumeration);
@@ -190,6 +191,7 @@ impl<'d, 'a, 'b> PrintableValueType<'d, 'a, 'b> {
         let lu_dog = self.3;
 
         match value.subtype {
+            ValueTypeEnum::AnyList(_) => write!(f, "[Any]"),
             ValueTypeEnum::Char(_) => write!(f, "char"),
             ValueTypeEnum::Enumeration(ref enumeration) => {
                 debug!("enumeration {:?}", enumeration);
