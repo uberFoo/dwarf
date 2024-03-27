@@ -58,6 +58,7 @@ pub enum FfiValue {
     Float(DwarfFloat),
     Integer(DwarfInteger),
     Lambda(usize),
+    List(RVec<Self>),
     Option(ROption<RBox<Self>>),
     PlugIn(PluginType),
     ProxyType(FfiProxy),
@@ -68,7 +69,6 @@ pub enum FfiValue {
     Unknown,
     // UserType(FfiUuid),
     Uuid(FfiUuid),
-    Vector(RVec<Self>),
 }
 
 impl std::fmt::Display for FfiValue {
@@ -81,6 +81,20 @@ impl std::fmt::Display for FfiValue {
             Self::Float(num) => write!(f, "{num}"),
             Self::Integer(num) => write!(f, "{num}"),
             Self::Lambda(n) => write!(f, "lambda {n}"),
+            Self::List(vec) => {
+                let mut first_time = true;
+                write!(f, "[")?;
+                for i in vec {
+                    if first_time {
+                        first_time = false;
+                    } else {
+                        write!(f, ", ")?;
+                    }
+
+                    write!(f, "{i}")?;
+                }
+                write!(f, "]")
+            }
             Self::Option(option) => match option {
                 ROption::RNone => write!(f, "None"),
                 ROption::RSome(value) => write!(f, "Some({value})"),
@@ -96,20 +110,6 @@ impl std::fmt::Display for FfiValue {
             Self::Unknown => write!(f, "<unknown>"),
             // Self::UserType(uuid) => write!(f, "{uuid}"),
             Self::Uuid(uuid) => write!(f, "{uuid}"),
-            Self::Vector(vec) => {
-                let mut first_time = true;
-                write!(f, "[")?;
-                for i in vec {
-                    if first_time {
-                        first_time = false;
-                    } else {
-                        write!(f, ", ")?;
-                    }
-
-                    write!(f, "{i}")?;
-                }
-                write!(f, "]")
-            }
         }
     }
 }

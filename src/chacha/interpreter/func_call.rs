@@ -235,7 +235,7 @@ fn eval_external_method(
 
                         Ok(value)
                     }
-                    FfiValue::Vector(vec) => {
+                    FfiValue::List(vec) => {
                         let vec = vec
                             .into_iter()
                             .map(|k| Value::from((k, &*s_read!(lu_dog))))
@@ -249,7 +249,7 @@ fn eval_external_method(
                         };
                         let value = new_ref!(
                             Value,
-                            Value::Vector {
+                            Value::List {
                                 ty,
                                 inner: new_ref!(Vec<RefType<Value>>, vec)
                             }

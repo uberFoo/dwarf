@@ -197,7 +197,7 @@ impl VM {
             // These are the arguments to the program. The type is String.
             args: new_ref!(
                 Value,
-                Value::Vector {
+                Value::List {
                     ty: new_ref!(ValueType, str_ty.clone()),
                     inner: new_ref!(Vec<RefType<Value>>, args.to_vec())
                 }
@@ -840,7 +840,7 @@ impl VM {
                                 INVOKE_FUNC => {
                                     let mut plugin = s_write!(plugin);
                                     let args = stack.pop().clone().unwrap().into_value();
-                                    let Value::Vector { inner, .. } = args else {
+                                    let Value::List { inner, .. } = args else {
                                         panic!("Expected a vector of arguments.")
                                     };
                                     let args = s_read!(inner)
@@ -1234,6 +1234,14 @@ impl VM {
 
                         1
                     }
+                    Instruction::InitializeLocal(index) => {
+                        let value = stack.pop().unwrap();
+
+                        // We gotta index into the stack in reverse order from the index.
+                        stack[fp - arity - local_count - 3 + index] = value;
+
+                        1
+                    }
                     Instruction::Jump(offset) => offset + 1,
                     Instruction::JumpIfFalse(offset) => {
                         let condition = stack.pop().unwrap();
@@ -1262,7 +1270,7 @@ impl VM {
                         let list = s_read!(list);
                         let index: usize = index.try_into()?;
                         match &*list {
-                            Value::Vector { ty: _, inner: vec } => {
+                            Value::List { ty: _, inner: vec } => {
                                 let vec = s_read!(vec);
                                 if index < vec.len() {
                                     stack.push(vec[index].clone().into());
@@ -1328,12 +1336,12 @@ impl VM {
                         let list = s_read!(list);
 
                         match &*list {
-                            Value::Vector { ty, inner: vec } => {
+                            Value::List { ty, inner: vec } => {
                                 let vec = s_read!(vec);
                                 if end < vec.len() {
                                     let list = new_ref!(
                                         Value,
-                                        Value::Vector {
+                                        Value::List {
                                             ty: ty.clone(),
                                             inner: new_ref!(
                                                 Vec<RefType<Value>>,
@@ -1397,7 +1405,7 @@ impl VM {
                         let list = list.into_pointer();
                         let list = s_read!(list);
                         match &*list {
-                            Value::Vector { inner, .. } => {
+                            Value::List { inner, .. } => {
                                 let inner = s_read!(inner);
                                 stack.push(Value::Integer(inner.len() as DwarfInteger).into());
                             }
@@ -1425,7 +1433,7 @@ impl VM {
                         let list = stack.pop().unwrap();
                         let list = list.into_pointer();
                         match &*s_read!(list) {
-                            Value::Vector { inner, .. } => {
+                            Value::List { inner, .. } => {
                                 let mut inner = s_write!(inner);
                                 inner.push(element.into_pointer());
                             }
@@ -1547,7 +1555,7 @@ impl VM {
                         values.reverse();
                         let values = new_ref!(Vec<RefType<Value>>, values);
 
-                        stack.push(Value::Vector { ty, inner: values }.into());
+                        stack.push(Value::List { ty, inner: values }.into());
 
                         1
                     }
@@ -1796,13 +1804,9 @@ impl VM {
                     // Any locals will cause the fp to be moved up, with the
                     // locals existing between the Thonk name and the fp.
                     Instruction::StoreLocal(index) => {
-                        // dbg!(index);
                         let value = stack.pop().unwrap();
 
                         // We gotta index into the stack in reverse order from the index.
-                        // dbg!(&stack[fp - arity - local_count - 3 + index], &value);
-                        // stack[fp - arity - local_count - 3 + index] = value;
-
                         let s = &stack[fp - arity - local_count - 3 + index];
 
                         // We *need* this check, otherwise we deadlock in the Pointer case.

@@ -43,6 +43,7 @@ pub enum ThonkInner {
 
 #[derive(Default)]
 pub enum Value {
+    AnyList(RefType<Vec<RefType<Self>>>),
     /// Boolean
     ///
     /// True and False
@@ -80,6 +81,10 @@ pub enum Value {
     },
     Integer(DwarfInteger),
     Lambda(RefType<Lambda>),
+    List {
+        ty: RefType<ValueType>,
+        inner: RefType<Vec<RefType<Self>>>,
+    },
     // #[serde(skip)]
     ParsedDwarf(Context),
     // #[serde(skip)]
@@ -108,10 +113,6 @@ pub enum Value {
     Unknown,
     Uuid(uuid::Uuid),
     ValueType(ValueType),
-    Vector {
-        ty: RefType<ValueType>,
-        inner: RefType<Vec<RefType<Self>>>,
-    },
     #[cfg(feature = "async")]
     VmFuture {
         name: String,
@@ -136,6 +137,21 @@ impl Value {
     #[inline]
     fn inner_string(&self, f: &mut Vec<u8>) -> std::io::Result<()> {
         match self {
+            Self::AnyList(list) => {
+                write!(f, "[")?;
+                let list = s_read!(list);
+                let mut first_time = true;
+                for i in &*list {
+                    if first_time {
+                        first_time = false;
+                    } else {
+                        write!(f, ", ")?;
+                    }
+
+                    write!(f, "{}", s_read!(i))?;
+                }
+                write!(f, "]")
+            }
             Self::Boolean(bool_) => write!(f, "{bool_}"),
             Self::Char(char_) => write!(f, "{char_}"),
             Self::Empty => write!(f, "()"),
@@ -167,6 +183,21 @@ impl Value {
             } => write!(f, "Task `{name}`: {task:?}, executor: {executor:?}"),
             Self::Integer(num) => write!(f, "{num}"),
             Self::Lambda(_) => write!(f, "<lambda>"),
+            Self::List { ty: _, inner } => {
+                let inner = s_read!(inner);
+                let mut first_time = true;
+                write!(f, "[")?;
+                for i in &*inner {
+                    if first_time {
+                        first_time = false;
+                    } else {
+                        write!(f, ", ")?;
+                    }
+
+                    write!(f, "{}", s_read!(i))?;
+                }
+                write!(f, "]")
+            }
             Self::ParsedDwarf(ctx) => write!(f, "{ctx:#?}"),
             Self::Plugin((name, _plugin)) => write!(f, "plugin::{name}"),
             Self::ProxyType {
@@ -194,21 +225,6 @@ impl Value {
             Self::Unknown => write!(f, "<unknown>"),
             Self::Uuid(uuid) => write!(f, "{uuid}"),
             Self::ValueType(ty) => write!(f, "{:?}", ty),
-            Self::Vector { ty: _, inner } => {
-                let inner = s_read!(inner);
-                let mut first_time = true;
-                write!(f, "[")?;
-                for i in &*inner {
-                    if first_time {
-                        first_time = false;
-                    } else {
-                        write!(f, ", ")?;
-                    }
-
-                    write!(f, "{}", s_read!(i))?;
-                }
-                write!(f, "]")
-            }
             #[cfg(feature = "async")]
             Self::VmFuture {
                 name,
@@ -286,6 +302,18 @@ impl Value {
                 #[allow(clippy::let_and_return)]
                 ƛ_type
             }
+            Value::List { ty, inner: _ } => {
+                for vt in lu_dog.iter_value_type() {
+                    if let ValueTypeEnum::List(id) = s_read!(vt).subtype {
+                        let list = lu_dog.exhume_list(&id).unwrap();
+                        let list_ty = s_read!(list).r36_value_type(lu_dog)[0].clone();
+                        if *s_read!(ty) == *s_read!(list_ty) {
+                            return vt.clone();
+                        }
+                    }
+                }
+                unreachable!()
+            }
             Value::Plugin((name, _plugin)) => {
                 for vt in lu_dog.iter_value_type() {
                     if let ValueTypeEnum::XPlugin(id) = s_read!(vt).subtype {
@@ -354,18 +382,6 @@ impl Value {
                 for vt in lu_dog.iter_value_type() {
                     if let ValueTypeEnum::Ty(_ty) = s_read!(vt).subtype {
                         if ty.read().unwrap().id() == _ty {
-                            return vt.clone();
-                        }
-                    }
-                }
-                unreachable!()
-            }
-            Value::Vector { ty, inner: _ } => {
-                for vt in lu_dog.iter_value_type() {
-                    if let ValueTypeEnum::List(id) = s_read!(vt).subtype {
-                        let list = lu_dog.exhume_list(&id).unwrap();
-                        let list_ty = s_read!(list).r36_value_type(lu_dog)[0].clone();
-                        if *s_read!(ty) == *s_read!(list_ty) {
                             return vt.clone();
                         }
                     }
@@ -445,6 +461,21 @@ impl Future for Value {
 impl std::fmt::Debug for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
+            Self::AnyList(list) => {
+                write!(f, "[")?;
+                let list = s_read!(list);
+                let mut first_time = true;
+                for i in &*list {
+                    if first_time {
+                        first_time = false;
+                    } else {
+                        write!(f, ", ")?;
+                    }
+
+                    write!(f, "{}", s_read!(i))?;
+                }
+                write!(f, "]")
+            }
             Self::Boolean(b) => write!(f, "{b:?}"),
             Self::Char(c) => write!(f, "{c:?}"),
             Self::Empty => write!(f, "()"),
@@ -475,6 +506,7 @@ impl std::fmt::Debug for Value {
             } => write!(f, "Task `{name}`: {task:?}, executor: {executor:?}"),
             Self::Integer(num) => write!(f, "{num:?}"),
             Self::Lambda(ƛ) => write!(f, "{:?}", s_read!(ƛ)),
+            Self::List { ty, inner } => write!(f, "{ty:?}: {inner:?}"),
             Self::ParsedDwarf(ctx) => write!(f, "{ctx:?}"),
             Self::Plugin((name, _plugin)) => write!(f, "plugin::{name}"),
             Self::ProxyType {
@@ -509,7 +541,6 @@ impl std::fmt::Debug for Value {
             Self::Unknown => write!(f, "<unknown>"),
             Self::Uuid(uuid) => write!(f, "{uuid:?}"),
             Self::ValueType(ty) => write!(f, "{:?}", ty),
-            Self::Vector { ty, inner } => write!(f, "{ty:?}: {inner:?}"),
             #[cfg(feature = "async")]
             Self::VmFuture {
                 name,
@@ -523,6 +554,7 @@ impl std::fmt::Debug for Value {
 impl Clone for Value {
     fn clone(&self) -> Self {
         match self {
+            Self::AnyList(list) => Self::AnyList(list.clone()),
             Self::Boolean(bool_) => Self::Boolean(*bool_),
             Self::Char(char_) => Self::Char(*char_),
             Self::Empty => Self::Empty,
@@ -552,6 +584,10 @@ impl Clone for Value {
             },
             Self::Integer(num) => Self::Integer(*num),
             Self::Lambda(ƛ) => Self::Lambda(ƛ.clone()),
+            Self::List { ty, inner } => Self::List {
+                ty: ty.clone(),
+                inner: inner.clone(),
+            },
             Self::ParsedDwarf(ctx) => Self::ParsedDwarf(ctx.clone()),
             Self::Plugin(plugin) => Self::Plugin(plugin.clone()),
             Self::ProxyType {
@@ -581,10 +617,6 @@ impl Clone for Value {
             Self::Unknown => Self::Unknown,
             Self::Uuid(uuid) => Self::Uuid(*uuid),
             Self::ValueType(ty) => Self::ValueType(ty.clone()),
-            Self::Vector { ty, inner } => Self::Vector {
-                ty: ty.clone(),
-                inner: inner.clone(),
-            },
             #[cfg(feature = "async")]
             // Note that cloned values do not inherit the task
             Self::VmFuture {
@@ -604,6 +636,21 @@ impl Clone for Value {
 impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            Self::AnyList(list) => {
+                write!(f, "[")?;
+                let list = s_read!(list);
+                let mut first_time = true;
+                for i in &*list {
+                    if first_time {
+                        first_time = false;
+                    } else {
+                        write!(f, ", ")?;
+                    }
+
+                    write!(f, "{}", s_read!(i))?;
+                }
+                write!(f, "]")
+            }
             Self::Boolean(bool_) => write!(f, "{bool_}"),
             Self::Char(char_) => write!(f, "{char_}"),
             Self::Empty => write!(f, "()"),
@@ -635,6 +682,21 @@ impl fmt::Display for Value {
             } => write!(f, "Task `{name}`: {task:?}, executor: {executor:?}"),
             Self::Integer(num) => write!(f, "{num}"),
             Self::Lambda(_) => write!(f, "<lambda>"),
+            Self::List { ty: _, inner } => {
+                let inner = s_read!(inner);
+                let mut first_time = true;
+                write!(f, "[")?;
+                for i in &*inner {
+                    if first_time {
+                        first_time = false;
+                    } else {
+                        write!(f, ", ")?;
+                    }
+
+                    write!(f, "{}", s_read!(i))?;
+                }
+                write!(f, "]")
+            }
             Self::ParsedDwarf(ctx) => write!(f, "{ctx:#?}"),
             Self::Plugin((name, _plugin)) => write!(f, "plugin::{name}"),
             Self::ProxyType {
@@ -663,21 +725,6 @@ impl fmt::Display for Value {
             Self::Unknown => write!(f, "<unknown>"),
             Self::Uuid(uuid) => write!(f, "{uuid}"),
             Self::ValueType(ty) => write!(f, "{:?}", ty),
-            Self::Vector { ty: _, inner } => {
-                let inner = s_read!(inner);
-                let mut first_time = true;
-                write!(f, "[")?;
-                for i in &*inner {
-                    if first_time {
-                        first_time = false;
-                    } else {
-                        write!(f, ", ")?;
-                    }
-
-                    write!(f, "{}", s_read!(i))?;
-                }
-                write!(f, "]")
-            }
             #[cfg(feature = "async")]
             Self::VmFuture {
                 name,
@@ -1412,11 +1459,7 @@ impl std::cmp::PartialEq for Value {
                     plugin: _,
                 },
             ) => a == b,
-            (Value::Plugin((a, _)), Value::Plugin((b, _))) => a == b,
-            (Value::String(a), Value::String(b)) => a == b,
-            (Value::Struct(a), Value::Struct(b)) => *s_read!(a) == *s_read!(b),
-            (Value::Uuid(a), Value::Uuid(b)) => a == b,
-            (Value::Vector { ty: ty_a, inner: a }, Value::Vector { ty: ty_b, inner: b }) => {
+            (Value::List { ty: ty_a, inner: a }, Value::List { ty: ty_b, inner: b }) => {
                 if *s_read!(ty_a) != *s_read!(ty_b) {
                     return false;
                 }
@@ -1436,6 +1479,10 @@ impl std::cmp::PartialEq for Value {
 
                 true
             }
+            (Value::Plugin((a, _)), Value::Plugin((b, _))) => a == b,
+            (Value::String(a), Value::String(b)) => a == b,
+            (Value::Struct(a), Value::Struct(b)) => *s_read!(a) == *s_read!(b),
+            (Value::Uuid(a), Value::Uuid(b)) => a == b,
             (_, _) => false, //Value::Error(format!("Cannot compare {} and {}", a, b)),
         }
     }

@@ -2394,8 +2394,6 @@ pub(super) fn inter_expression(
                     last_element_uuid = link_list_element!(last_element_uuid, element, lu_dog);
                     let expr = Expression::new_list_element(true, &element, lu_dog);
                     let value = XValue::new_expression(block, &elt_ty, &expr, lu_dog);
-                    // We need to clone the span because it's already been used
-                    // by the underlying value.
                     LuDogSpan::new(
                         s_read!(elt_span).end,
                         s_read!(elt_span).start,
@@ -3102,6 +3100,13 @@ pub(super) fn inter_expression(
     }
 }
 
+/// Load a module into the store
+///
+/// This is hit in response to something like:
+///
+/// mod foo;
+///
+/// It will load the foo module.
 fn inter_module(
     name: &str,
     context: &mut Context,
@@ -3132,7 +3137,6 @@ fn inter_module(
                     type_path += name;
                     type_path += PATH_SEP;
 
-                    // let mut scopes = context.scopes.clone();
                     let mut scopes = HashMap::default();
 
                     let mut dirty = Vec::new();
@@ -3181,6 +3185,11 @@ fn inter_module(
     }
 }
 
+/// Load imported code into the store
+///
+/// This is called in response to something like:
+///
+/// use foo::bar;
 fn inter_import(
     import_path: &[Spanned<String>],
     alias: &Option<(String, Range<usize>)>,

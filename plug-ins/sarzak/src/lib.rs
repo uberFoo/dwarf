@@ -7,6 +7,7 @@ use std::{
 
 use abi_stable::{
     export_root_module,
+    external_types::crossbeam_channel::RSender,
     prefix_type::PrefixTypeTrait,
     sabi_extern_fn,
     sabi_trait::prelude::{TD_CanDowncast, TD_Opaque},
@@ -17,7 +18,7 @@ use dwarf::{
         ffi_value::{FfiProxy, FfiValue},
         value::Value,
     },
-    plug_in::{Error, Plugin, PluginModRef, PluginModule, PluginType, Plugin_TO},
+    plug_in::{Error, LambdaCall, Plugin, PluginModRef, PluginModule, PluginType, Plugin_TO},
 };
 use log::debug;
 
@@ -26,7 +27,7 @@ pub mod sarzak;
 
 #[export_root_module]
 pub fn instantiate_root_module() -> PluginModRef {
-    PluginModule { name, id, new }.leak_into_prefix()
+    PluginModule { name, new }.leak_into_prefix()
 }
 
 #[sabi_extern_fn]
@@ -34,34 +35,29 @@ pub fn name() -> RStr<'static> {
     "sarzak".into()
 }
 
-#[sabi_extern_fn]
-pub fn id() -> RStr<'static> {
-    "sarzak".into()
-}
-
 /// Instantiates the plugin.
 #[sabi_extern_fn]
-pub fn new(args: RVec<FfiValue>) -> RResult<PluginType, Error> {
+pub fn new(lambda_sender: RSender<LambdaCall>, args: RVec<FfiValue>) -> RResult<PluginType, Error> {
     let this = if args.len() == 0 {
         // Each of these is a "sub-plug-in". We have to instantiate it the same
         // way that a plug-in is instantiated in the VM or interpreter.
         let sarzak = sarzak::instantiate_root_module();
         let sarzak = sarzak.new();
-        let sarzak = sarzak(vec![].into()).unwrap();
+        let sarzak = sarzak(lambda_sender.clone(), vec![].into()).unwrap();
 
         let merlin = merlin::instantiate_root_module();
         let merlin = merlin.new();
-        let merlin = merlin(vec![].into()).unwrap();
+        let merlin = merlin(lambda_sender, vec![].into()).unwrap();
 
         Model { sarzak, merlin }
     } else if args.len() == 1 {
         let sarzak = sarzak::instantiate_root_module();
         let sarzak = sarzak.new();
-        let sarzak = sarzak(args.clone()).unwrap();
+        let sarzak = sarzak(lambda_sender.clone(), args.clone()).unwrap();
 
         let merlin = merlin::instantiate_root_module();
         let merlin = merlin.new();
-        let merlin = merlin(args).unwrap();
+        let merlin = merlin(lambda_sender, args).unwrap();
 
         Model { sarzak, merlin }
     } else {

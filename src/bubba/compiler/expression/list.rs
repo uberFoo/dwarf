@@ -78,7 +78,7 @@ pub(in crate::bubba::compiler) fn compile_list_expression(
         thonk.insert_instruction(Instruction::NewList(size), location!());
     } else {
         let empty = context.get_type(EMPTY).unwrap().clone();
-        let ty = Value::Vector {
+        let ty = Value::List {
             ty: new_ref!(ValueType, empty),
             inner: new_ref!(Vec<RefType<Value>>, vec![]),
         }

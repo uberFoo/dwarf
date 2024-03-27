@@ -19,6 +19,60 @@ impl HttpServer {
 
     async fn serve(self, lambda: fn(string) -> string) -> Future<()> {
         self.inner
-            .invoke_func("http_server", "HttpServer", "path", [lambda])
+            .invoke_func("http_server", "HttpServer", "serve", [lambda])
+    }
+
+    fn route(
+        self,
+        path: string,
+        method: Method,
+        lambda: fn(Request, Response) -> Result<string, HttpError>,
+    ) {
+        // self.inner
+        //     .invoke_func("http_server", "HttpServer", "route", [path, method, lambda]);
+    }
+}
+
+enum Method {
+    Get,
+    Post,
+    Put,
+    Delete,
+}
+
+struct Response<T> {
+    #[proxy(plugin = "http::http_server")]
+    plugin: Plugin<HttpServer>,
+    inner: int,
+}
+
+struct Request {
+    #[proxy(plugin = "http::http_server")]
+    plugin: Plugin<HttpServer>,
+    inner: int,
+}
+
+impl Request {
+    fn uri(self) -> Uri {
+        let uri = self
+            .plugin
+            .invoke_func("http_server", "Request", "uri", [self.inner]);
+        Uri {
+            inner: uri,
+            plugin: self.plugin,
+        }
+    }
+}
+
+struct Uri {
+    #[proxy(plugin = "http::http_server")]
+    plugin: Plugin<HttpServer>,
+    inner: int,
+}
+
+impl Uri {
+    fn path(self) -> string {
+        self.plugin
+            .invoke_func("http_server", "Uri", "path", [self.inner])
     }
 }

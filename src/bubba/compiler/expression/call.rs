@@ -919,7 +919,7 @@ mod test {
 
         assert_eq!(program.get_thonk_card(), 3);
 
-        assert_eq!(program.get_instruction_card(), 21);
+        assert_eq!(program.get_instruction_card(), 22);
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &45.into());
     }
@@ -952,7 +952,7 @@ mod test {
 
         assert_eq!(program.get_thonk_card(), 3);
 
-        assert_eq!(program.get_instruction_card(), 23);
+        assert_eq!(program.get_instruction_card(), 24);
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Empty);
     }

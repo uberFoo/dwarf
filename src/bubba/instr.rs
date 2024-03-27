@@ -127,6 +127,13 @@ pub enum Instruction {
     ///
     HaltAndCatchFire,
     Incr,
+    ///
+    /// Pop the top value off the stack and store it in a local variable at the
+    /// given index.
+    ///
+    /// ## Stack Effect
+    ///
+    InitializeLocal(usize),
     /// Jump to the given offset.
     ///
     /// ## Stack Effect
@@ -295,6 +302,9 @@ pub enum Instruction {
     /// Pop the top value off the stack and store it in a local variable at the
     /// given index.
     ///
+    /// Note that this instruction will replace the contents of pointer that is
+    /// on the stack, rather than replacing the value.
+    ///
     /// ## Stack Effect
     ///
     StoreLocal(usize),
@@ -432,6 +442,12 @@ impl fmt::Display for Instruction {
             ),
             Instruction::HaltAndCatchFire => write!(f, "{}", opcode_style.paint("hcf 🔥")),
             Instruction::Incr => write!(f, "{}", opcode_style.paint("incr")),
+            Instruction::InitializeLocal(index) => write!(
+                f,
+                "{} {}",
+                opcode_style.paint("init"),
+                operand_style.paint(index.to_string())
+            ),
             Instruction::Jump(offset) => write!(
                 f,
                 "{} {}",

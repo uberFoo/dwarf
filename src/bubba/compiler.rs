@@ -648,7 +648,7 @@ fn compile_statement(
                 (false, index) => index,
             };
 
-            thonk.insert_instruction(Instruction::StoreLocal(offset), location!());
+            thonk.insert_instruction(Instruction::InitializeLocal(offset), location!());
 
             let empty = context.get_type(EMPTY).unwrap().clone();
             Ok(Some(empty))
@@ -963,9 +963,9 @@ mod test {
         .unwrap();
         let program = compile(&ctx).unwrap();
         println!("{program}");
-        assert_eq!(program.get_thonk_card(), 11);
+        assert_eq!(program.get_thonk_card(), 15);
 
-        assert_eq!(program.get_instruction_card(), 316);
+        assert_eq!(program.get_instruction_card(), 377);
         let run = run_vm(&program);
         println!("{:?}", run);
         assert!(run.is_ok());
@@ -1058,7 +1058,7 @@ async fn main() -> Future<()> {
         .unwrap();
         let program = compile(&ctx).unwrap();
         println!("{program}");
-        assert_eq!(program.get_thonk_card(), 13);
+        assert_eq!(program.get_thonk_card(), 18);
 
         // assert_eq!(
         //     program..get_instruction_count(),

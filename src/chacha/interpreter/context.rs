@@ -275,7 +275,7 @@ impl Context {
             .map(|a| new_ref!(Value, a.into()))
             .collect();
         let inner = new_ref!(Vec<RefType<Value>>, inner);
-        self.args = Some(new_ref!(Value, Value::Vector { ty, inner }));
+        self.args = Some(new_ref!(Value, Value::List { ty, inner }));
     }
 
     // pub fn register_model<P>(&self, model_name: String, model_path: P) -> Result<()>

@@ -18,7 +18,6 @@ use dwarf::{
     DwarfInteger,
 };
 use futures_lite::future;
-use log::debug;
 use reqwest::{Client, Error as RequestError, RequestBuilder, Response};
 use slab::Slab;
 
@@ -283,16 +282,23 @@ mod http_client {
 mod http_server {
     use super::*;
 
-    // use std::sync::{Arc, Mutex};
+    use std::convert::Infallible;
+    use std::future::Future;
+    use std::net::SocketAddr;
+    use std::pin::Pin;
+    use std::sync::{Arc, Mutex};
 
-    // use dwarf::bubba::vm::run_lambda;
-    // use once_cell::sync::OnceCell;
-    // use rustc_hash::FxHashMap as HashMap;
-    // use warp::Filter;
+    use http_body_util::Full;
+    use hyper::body::Bytes;
+    use hyper::server::conn::http1;
+    use hyper::service::service_fn;
+    use hyper::service::Service;
+    use hyper::Uri;
+    use hyper::{body::Incoming as IncomingBody, Request, Response};
+    use hyper_util::rt::TokioIo;
+    use tokio::net::TcpListener;
 
-    // extern "C" {
-    //     fn get_lambda_funcs() -> *const OnceCell<Arc<Mutex<HashMap<usize, Value>>>>;
-    // }
+    type Counter = i32;
 
     pub fn instantiate_root_module() -> PluginModRef {
         PluginModule { name, new }.leak_into_prefix()
@@ -317,13 +323,19 @@ mod http_server {
 
     #[derive(Clone, Debug)]
     struct HttpServer {
-        // paths: Slab<Arc<dyn Filter<Extract = Tuple>>>,
-        sender: RSender<LambdaCall>,
+        // This is how we call lambdas from the plugin.
+        lambda_call: RSender<LambdaCall>,
+        requests: Slab<Arc<Request<IncomingBody>>>,
+        uris: Slab<Arc<Uri>>,
     }
 
     impl HttpServer {
-        fn new(sender: RSender<LambdaCall>) -> Self {
-            Self { sender }
+        fn new(lambda_call: RSender<LambdaCall>) -> Self {
+            Self {
+                lambda_call,
+                requests: Slab::new(),
+                uris: Slab::new(),
+            }
         }
     }
 
@@ -351,29 +363,58 @@ mod http_server {
             future::block_on(Compat::new(async {
                 match ty.as_str() {
                     "HttpServer" => match func.as_str() {
-                        // "serve" => {
-                        //     warp::serve(hello).run(([127, 0, 0, 1], 3030)).await;
-                        //     Ok(FfiValue::Empty)
-                        // }
-                        "path" => {
-                            // let path: String = args
-                            //     .first()
-                            //     .unwrap()
-                            //     .try_into()
-                            //     .map_err(|e: ChaChaError| Error::Uber(e.to_string().into()))
-                            //     .unwrap();
+                        "serve" => {
+                            let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
+
+                            let listener_result = TcpListener::bind(addr).await;
+                            let listener = match listener_result {
+                                Ok(listener) => listener,
+                                Err(e) => {
+                                    return Err(Error::Uber(
+                                        format!("Failed to bind TCP listener: {}", e).into(),
+                                    ))
+                                    .into()
+                                }
+                            };
+
+                            loop {
+                                let stream = listener.accept().await;
+                                let (stream, _) = match stream {
+                                    Ok(stream) => stream,
+                                    Err(e) => {
+                                        println!("Error accepting connection: {:?}", e);
+                                        continue;
+                                    }
+                                };
+
+                                println!("Listening on http://{}", addr);
+
+                                let svc = Svc {
+                                    counter: Arc::new(Mutex::new(0)),
+                                };
+
+                                // Use an adapter to access something implementing `tokio::io`
+                                // traits as if they implement `hyper::rt` IO traits.
+                                let io = TokioIo::new(stream);
+                                let svc_clone = svc.clone();
+
+                                // Spawn a tokio task to serve multiple connections concurrently
+                                tokio::task::spawn(async move {
+                                    // Finally, we bind the incoming connection to our `hello` service
+                                    if let Err(err) = http1::Builder::new()
+                                        // `service_fn` converts our function in a `Service`
+                                        .serve_connection(io, svc_clone)
+                                        .await
+                                    {
+                                        println!("Error serving connection: {:?}", err);
+                                    }
+                                });
+                            }
+                        }
+                        "route" => {
                             let FfiValue::Lambda(number) = args.get(0).unwrap() else {
                                 panic!("Invalid lambda");
                             };
-
-                            // let hello =
-                            //     warp::path(path)
-                            //         .and(warp::path::param())
-                            //         .map(|name: String| {
-                            //             let mut args = RVec::new();
-                            //             args.push(name.into());
-                            //             run_lambda(*number, args)
-                            //         });
 
                             let mut args = RVec::new();
                             args.push("uber".to_owned().into());
@@ -385,16 +426,9 @@ mod http_server {
                                 args,
                                 result: s.into(),
                             };
-                            self.sender.send(lambda_call).unwrap();
+                            self.lambda_call.send(lambda_call).unwrap();
                             let result = result.recv().unwrap();
                             dbg!(&result);
-
-                            // let lambda_funcs = unsafe { get_lambda_funcs() };
-                            // dbg!(&lambda_funcs);
-                            // let foo = unsafe { &*lambda_funcs };
-                            // dbg!(&foo);
-                            // dbg!(foo.get());
-                            // run_lambda(*number, args);
 
                             <RResult<FfiValue, Error> as Into<Result<FfiValue, Error>>>::into(
                                 result,
@@ -402,10 +436,79 @@ mod http_server {
                         }
                         func => Err(Error::Uber(format!("Invalid function: {func}").into())),
                     },
+                    "Request" => match func.as_str() {
+                        "uri" => {
+                            let key: DwarfInteger = args
+                                .first()
+                                .unwrap()
+                                .try_into()
+                                .map_err(|e: ChaChaError| Error::Uber(e.to_string().into()))
+                                .unwrap();
+
+                            let request = self.requests.get(key as usize).unwrap();
+                            let uri = request.uri();
+                            let key = self.uris.insert(Arc::new(uri.clone()));
+                            Ok(FfiValue::Integer(key as DwarfInteger))
+                        }
+                        func => Err(Error::Uber(format!("Invalid function: {func}").into())),
+                    },
+                    "Uri" => match func.as_str() {
+                        "path" => {
+                            let key: DwarfInteger = args
+                                .first()
+                                .unwrap()
+                                .try_into()
+                                .map_err(|e: ChaChaError| Error::Uber(e.to_string().into()))
+                                .unwrap();
+
+                            let uri = self.uris.get(key as usize).unwrap();
+                            let path = uri.path().to_string();
+                            Ok(FfiValue::String(path.into()))
+                        }
+                        func => Err(Error::Uber(format!("Invalid function: {func}").into())),
+                    },
                     ty => Err(Error::Uber(format!("Invalid type: {ty}").into())),
                 }
                 .into()
             }))
+        }
+    }
+
+    async fn hello(_: Request<hyper::body::Incoming>) -> Result<Response<Full<Bytes>>, Infallible> {
+        Ok(Response::new(Full::new(Bytes::from("Hello, World!"))))
+    }
+
+    #[derive(Debug, Clone)]
+    struct Svc {
+        counter: Arc<Mutex<Counter>>,
+    }
+
+    impl Service<Request<IncomingBody>> for Svc {
+        type Response = Response<Full<Bytes>>;
+        type Error = hyper::Error;
+        type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
+
+        fn call(&self, req: Request<IncomingBody>) -> Self::Future {
+            fn mk_response(s: String) -> Result<Response<Full<Bytes>>, hyper::Error> {
+                Ok(Response::builder().body(Full::new(Bytes::from(s))).unwrap())
+            }
+
+            if req.uri().path() != "/favicon.ico" {
+                *self.counter.lock().expect("lock poisoned") += 1;
+            }
+
+            let res = match req.uri().path() {
+                "/" => mk_response(format!("home! counter = {:?}", self.counter)),
+                "/posts" => mk_response(format!("posts, of course! counter = {:?}", self.counter)),
+                "/authors" => mk_response(format!(
+                    "authors extraordinaire! counter = {:?}",
+                    self.counter
+                )),
+                // Return the 404 Not Found for other routes, and don't increment counter.
+                _ => return Box::pin(async { mk_response("oh no! not found".into()) }),
+            };
+
+            Box::pin(async { res })
         }
     }
 }
