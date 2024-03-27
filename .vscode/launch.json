@@ -142,6 +142,7 @@
                 }
             },
             "args": [
+                // "tests/vm_harness/lambda.ore"
                 // "tests/vm_harness/types/generics/failing/structure.ore",
                 // "tests/harness/types/generics/workout.ore"
                 // "tests/harness/types/generics/option.tao"

@@ -36,6 +36,7 @@ impl<'a> PrintableValueType<'a> {
         let model = context.models();
 
         match &value.subtype {
+            ValueTypeEnum::AnyList(_) => write!(f, "{}", TY_CLR.italic().paint("[Any]")),
             ValueTypeEnum::Char(_) => write!(f, "{}", TY_CLR.italic().paint("char")),
             ValueTypeEnum::Enumeration(ref enumeration) => {
                 let lu_dog = s_read!(lu_dog);
@@ -104,7 +105,7 @@ impl<'a> PrintableValueType<'a> {
                     "{}",
                     TY_CLR
                         .italic()
-                        .paint(format!("[@{}]", PrintableValueType(true, ty, context)))
+                        .paint(format!("[{}]", PrintableValueType(true, ty, context)))
                 )
             }
             ValueTypeEnum::XPlugin(ref plugin) => {
@@ -211,6 +212,7 @@ impl<'a> PrintableValueType<'a> {
         let model = context.models();
 
         match &value.subtype {
+            ValueTypeEnum::AnyList(_) => write!(f, "[Any]"),
             ValueTypeEnum::Char(_) => write!(f, "char"),
             ValueTypeEnum::Enumeration(ref enumeration) => {
                 let lu_dog = s_read!(lu_dog);

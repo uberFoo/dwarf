@@ -332,7 +332,7 @@ pub fn eval(
                             }
                         };
 
-                        let Value::Vector { inner, .. } = &*s_read!(arg_values[3]) else {
+                        let Value::List { inner, .. } = &*s_read!(arg_values[3]) else {
                             return Err(ChaChaError::TypeMismatch {
                                 expected: "Vector".to_owned(),
                                 found: s_read!(arg_values[3]).to_string(),
@@ -463,7 +463,7 @@ pub fn eval(
                         let result = new_ref!(Vec<RefType<Value>>, result);
                         Ok(new_ref!(
                             Value,
-                            Value::Vector {
+                            Value::List {
                                 ty: ret_ty,
                                 inner: result
                             }
@@ -503,7 +503,7 @@ pub fn eval(
                             .collect();
                         let inner = new_ref!(Vec<RefType<Value>>, inner);
 
-                        Ok(new_ref!(Value, Value::Vector { ty, inner }))
+                        Ok(new_ref!(Value, Value::List { ty, inner }))
                     }
                     FORMAT => {
                         debug!("evaluating String::format");
@@ -629,7 +629,7 @@ pub fn eval(
 
                         let inner = new_ref!(Vec<RefType<Value>>, inner);
 
-                        Ok(new_ref!(Value, Value::Vector { ty, inner }))
+                        Ok(new_ref!(Value, Value::List { ty, inner }))
                     }
                     TRIM => {
                         let value = string.trim().to_owned();
@@ -698,7 +698,7 @@ pub fn eval(
                     };
                     x
                 }
-                Value::Vector { ty, inner } => match meth_name.as_str() {
+                Value::List { ty, inner } => match meth_name.as_str() {
                     MAP => {
                         debug!("evaluating Vector::map");
                         let func = args.pop().unwrap();
@@ -726,7 +726,7 @@ pub fn eval(
 
                         Ok(new_ref!(
                             Value,
-                            Value::Vector {
+                            Value::List {
                                 ty: ty.clone(),
                                 inner: new_ref!(Vec<RefType<Value>>, result)
                             }
@@ -840,7 +840,7 @@ pub fn eval(
 
                                 Ok(new_ref!(
                                     Value,
-                                    Value::Vector {
+                                    Value::List {
                                         ty,
                                         inner: new_ref!(Vec<RefType<Value>>, Vec::new())
                                     }
@@ -1124,7 +1124,8 @@ pub fn eval(
                                 })?;
 
                                 let ctor = root_module.new();
-                                let plugin = ctor(args.into()).unwrap();
+                                let plugin =
+                                    ctor(context.lambda_sender().into(), args.into()).unwrap();
                                 let name = plugin.name().to_string();
                                 let plugin = new_ref!(PluginType, plugin);
 

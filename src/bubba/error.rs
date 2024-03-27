@@ -3,10 +3,7 @@ use std::fmt;
 use ariadne::{Color, Label, Report, ReportKind, Source};
 use snafu::{prelude::*, Location};
 
-use crate::{
-    bubba::{instr::Instruction, value::Value},
-    Span, ERR_CLR, OK_CLR, OTHER_CLR, POP_CLR,
-};
+use crate::{bubba::value::Value, Span, ERR_CLR, OK_CLR, OTHER_CLR, POP_CLR};
 
 #[derive(Debug, Snafu)]
 pub enum BubbaError {
@@ -29,8 +26,6 @@ pub enum BubbaError {
         span: Span,
         location: Location,
     },
-    #[snafu(display("\n{}: invalid instruction: {instr}", ERR_CLR.bold().paint("error")))]
-    InvalidInstruction { instr: Instruction },
     #[snafu(display("\n{}: ip out of bounds at {ip}", ERR_CLR.bold().paint("error")))]
     IPOutOfBounds { ip: usize },
     #[snafu(display("\n{}: multiplication error: {} × {}", ERR_CLR.bold().paint("error"), left, right))]

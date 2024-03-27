@@ -1,9 +1,6 @@
+use std::dwarf::Plugin;
 use std::option::Option;
 use std::result::Result;
-
-struct Plugin<T> {
-    inner: T,
-}
 
 struct HttpServer {
     // This plugin value must point to a valid plugin. The first part of the
@@ -20,8 +17,62 @@ impl HttpServer {
         }
     }
 
-    // async fn serve(self) -> Future<()> {
-    //     self.inner
-    //         .invoke_func("http_server", "HttpServer", "serve", [])
-    // }
+    async fn serve(self, lambda: fn(string) -> string) -> Future<()> {
+        self.inner
+            .invoke_func("http_server", "HttpServer", "serve", [lambda])
+    }
+
+    fn route(
+        self,
+        path: string,
+        method: Method,
+        lambda: fn(Request, Response) -> Result<string, HttpError>,
+    ) {
+        self.inner
+            .invoke_func("http_server", "HttpServer", "route", @[path, lambda, method]);
+    }
+}
+
+enum Method {
+    Get,
+    Post,
+    Put,
+    Delete,
+}
+
+struct Response<T> {
+    #[proxy(plugin = "http::http_server")]
+    plugin: Plugin<HttpServer>,
+    inner: int,
+}
+
+struct Request {
+    #[proxy(plugin = "http::http_server")]
+    plugin: Plugin<HttpServer>,
+    inner: int,
+}
+
+impl Request {
+    fn uri(self) -> Uri {
+        let uri = self
+            .plugin
+            .invoke_func("http_server", "Request", "uri", [self.inner]);
+        Uri {
+            inner: uri,
+            plugin: self.plugin,
+        }
+    }
+}
+
+struct Uri {
+    #[proxy(plugin = "http::http_server")]
+    plugin: Plugin<HttpServer>,
+    inner: int,
+}
+
+impl Uri {
+    fn path(self) -> string {
+        self.plugin
+            .invoke_func("http_server", "Uri", "path", [self.inner])
+    }
 }

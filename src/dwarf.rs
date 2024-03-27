@@ -241,11 +241,11 @@ impl Type {
             }
             Type::Fn(_params, return_) => {
                 let return_ = return_.0.into_value_type(&return_.1, context, store)?;
-                let ƛ = Lambda::new(None, None, &return_, store);
-                Ok(ValueType::new_lambda(true, &ƛ, store))
+                let λ = Lambda::new(None, None, &return_, store);
+                Ok(ValueType::new_lambda(true, &λ, store))
             }
             Type::Generic(name) => {
-                panic!("Generics need a next and a parent.");
+                panic!("Generics ({}) need a next and a parent.", name.0);
             }
             Type::Integer => {
                 let ty = Ty::new_integer(sarzak);
@@ -496,6 +496,7 @@ impl Eq for WrappedValueType {}
 pub enum Expression {
     Addition(Box<Spanned<Self>>, Box<Spanned<Self>>),
     And(Box<Spanned<Self>>, Box<Spanned<Self>>),
+    AnyList(Vec<Spanned<Self>>),
     As(Box<Spanned<Self>>, Spanned<Type>),
     Asm(Vec<Spanned<Self>>),
     /// Assignment Expression

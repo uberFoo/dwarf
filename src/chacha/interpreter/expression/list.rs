@@ -60,7 +60,7 @@ pub fn eval_list_expression(
 
         Ok(new_ref!(
             Value,
-            Value::Vector {
+            Value::List {
                 ty,
                 inner: new_ref!(Vec<RefType<Value>>, values)
             }
@@ -70,7 +70,7 @@ pub fn eval_list_expression(
 
         Ok(new_ref!(
             Value,
-            Value::Vector {
+            Value::List {
                 ty,
                 inner: new_ref!(Vec<RefType<Value>>, vec![])
             }

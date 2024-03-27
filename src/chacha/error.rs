@@ -6,10 +6,7 @@ use crossbeam::channel::SendError;
 use rustyline::error::ReadlineError;
 use snafu::{prelude::*, Backtrace, Location};
 
-use crate::{
-    bubba::Instruction, lu_dog::ValueType, s_read, RefType, Span, Value, ERR_CLR, OK_CLR,
-    OTHER_CLR, POP_CLR,
-};
+use crate::{lu_dog::ValueType, s_read, RefType, Span, Value, ERR_CLR, OK_CLR, OTHER_CLR, POP_CLR};
 
 #[derive(Debug, Snafu)]
 pub struct Error(pub(super) ChaChaError);
@@ -74,10 +71,6 @@ pub enum ChaChaError {
     InternalCompilerChannel {
         source: SendError<String>,
         message: String,
-    },
-    #[snafu(display("\n{}: invalid instruction `{}`.", ERR_CLR.bold().paint("error"), OTHER_CLR.paint(instr.to_string())))]
-    InvalidInstruction {
-        instr: Instruction,
     },
     #[snafu(display("\n{}: error with input/output `{}`.", ERR_CLR.bold().paint("error"), OTHER_CLR.paint(message)))]
     IO {

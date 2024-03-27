@@ -1,11 +1,16 @@
 #![allow(uncommon_codepoints)]
 #![allow(mixed_script_confusables)]
 #![allow(clippy::disallowed_names)]
-use std::{ops, path::PathBuf};
+use std::{
+    ops,
+    path::PathBuf,
+    sync::{Arc, Mutex},
+};
 
 use ansi_term::Colour;
 use clap::Args;
 use heck::ToUpperCamelCase;
+use once_cell::sync::OnceCell;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use serde::{Deserialize, Serialize};
 
@@ -35,6 +40,8 @@ pub type DwarfFloat = f64;
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub const BUILD_TIME: &str = include!(concat!(env!("OUT_DIR"), "/timestamp.txt"));
+
+static LAMBDA_FUNCS: OnceCell<Arc<Mutex<HashMap<usize, bubba::value::Value>>>> = OnceCell::new();
 
 mod keywords {
     pub(crate) const ARGS: &str = "args";

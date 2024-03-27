@@ -3,7 +3,7 @@ use dwarf::plug_in::PluginModRef;
 
 pub mod lu_dog;
 
-pub use lu_dog::{id, name, new};
+pub use lu_dog::{name, new};
 
 #[export_root_module]
 pub fn instantiate_root_module() -> PluginModRef {

@@ -1,6 +1,7 @@
 use std::{
     env,
     path::{Path, PathBuf},
+    thread,
 };
 
 #[cfg(feature = "async")]
@@ -20,6 +21,7 @@ use abi_stable::{
     std_types::{RBox, RErr, ROk, ROption, RResult},
 };
 use ansi_term::Colour;
+use crossbeam::channel::{unbounded, Receiver, Sender};
 use log::{self, log_enabled, Level::Trace};
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use snafu::{location, Location};
@@ -37,18 +39,24 @@ use crate::{
     keywords::INVOKE_FUNC,
     lu_dog::{ValueType, ValueTypeEnum},
     new_ref,
-    plug_in::{PluginModRef, PluginType},
+    plug_in::{Error as FfiError, LambdaCall, PluginModRef, PluginType},
     s_read, s_write,
     sarzak::{ObjectStore as SarzakStore, Ty, MODEL as SARZAK_MODEL},
-    DwarfInteger, NewRef, RefType, Span,
+    DwarfInteger, NewRef, RefType, Span, LAMBDA_FUNCS,
 };
 
 use super::instr::{Instruction, Program};
 
+// static LAMBDA_FUNCS: OnceCell<Arc<Mutex<HashMap<usize, Value>>>> = OnceCell::new();
+
+// pub fn get_lambda_funcs() -> *const OnceCell<Arc<Mutex<HashMap<usize, Value>>>> {
+//     &LAMBDA_FUNCS as *const _
+// }
+
 #[cfg(feature = "async")]
 static mut EXECUTOR: OnceCell<Executor> = OnceCell::new();
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 enum StackValue {
     Pointer(RefType<Value>),
     Value(Value),
@@ -68,6 +76,25 @@ impl StackValue {
         match self {
             StackValue::Pointer(p) => s_read!(p).clone(),
             StackValue::Value(v) => v,
+        }
+    }
+}
+
+impl PartialEq for StackValue {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (StackValue::Pointer(p1), StackValue::Pointer(p2)) => &*s_read!(p1) == &*s_read!(p2),
+            (StackValue::Value(v1), StackValue::Value(v2)) => v1 == v2,
+            _ => false,
+        }
+    }
+}
+
+impl Clone for StackValue {
+    fn clone(&self) -> Self {
+        match self {
+            StackValue::Pointer(p) => StackValue::Pointer(p.clone()),
+            StackValue::Value(v) => StackValue::Value(v.clone()),
         }
     }
 }
@@ -95,14 +122,6 @@ impl From<Value> for StackValue {
 
 #[derive(Clone)]
 pub struct VM {
-    /// Instruction Pointer
-    ///
-    /// This is an isize because we have negative jump offsets.
-    // ip: isize,
-    /// Frame Pointer
-    ///
-    // fp: usize,
-    // stack: Vec<StackValue>,
     instrs: Vec<Instruction>,
     source_map: Vec<Span>,
     func_map: HashMap<String, (usize, usize)>,
@@ -115,14 +134,12 @@ pub struct VM {
     #[cfg(feature = "async")]
     thread_count: usize,
     backtrace: bool,
+    lambda_sender: Sender<LambdaCall>,
+    lambda_receiver: Receiver<LambdaCall>,
 }
 
 impl std::fmt::Debug for VM {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        // writeln!(f, "ip: {}", ip)?;
-        // writeln!(f, "fp: {}", fp)?;
-        // writeln!(f, "stack: ")?;
-        // self.debug_stack(f)?;
         writeln!(f, "func_map: {:?}", self.func_map)?;
         writeln!(f, "args: {:?}", self.args)?;
         writeln!(f, "home_dir: {:?}", self.home)?;
@@ -167,6 +184,7 @@ impl VM {
         }
 
         let backtrace = env::var("DWARF_BACKTRACE").is_ok();
+        let (lambda_sender, lambda_receiver) = unbounded();
 
         let mut vm = VM {
             // ip: 0,
@@ -179,7 +197,7 @@ impl VM {
             // These are the arguments to the program. The type is String.
             args: new_ref!(
                 Value,
-                Value::Vector {
+                Value::List {
                     ty: new_ref!(ValueType, str_ty.clone()),
                     inner: new_ref!(Vec<RefType<Value>>, args.to_vec())
                 }
@@ -191,6 +209,8 @@ impl VM {
             #[cfg(feature = "async")]
             thread_count,
             backtrace,
+            lambda_sender,
+            lambda_receiver,
         };
 
         let mut tmp_mem: Vec<Instruction> = Vec::new();
@@ -236,11 +256,100 @@ impl VM {
             panic!("Missing symbols: {:?}", missing_symbols);
         }
 
+        let mut vm_clone = vm.clone();
+        thread::spawn(move || loop {
+            vm_clone.lambda_listen();
+        });
+
         vm
+    }
+
+    fn lambda_listen(&mut self) {
+        if let Ok(lambda_call) = self.lambda_receiver.recv() {
+            // let lambda_funcs = get_lambda_funcs();
+            // dbg!("hello?");
+            // This will have been setup by the FfiValue constructor that allowed us to
+            // get here in the first place.
+            // let λ = LAMBDA_FUNCS.get().unwrap().lock().unwrap();
+            // dbg!("WTF?");
+            let λ = match LAMBDA_FUNCS.get() {
+                Some(λ) => λ,
+                None => {
+                    panic!("Lambda functions have not been initialized.");
+                    // let λ = Arc::new(Mutex::new(HashMap::default()));
+                    // let _ = LAMBDA_FUNCS.set(λ);
+                    // LAMBDA_FUNCS.get().unwrap()
+                }
+            };
+            let λ = λ.lock().unwrap();
+            let λ = λ.get(&lambda_call.lambda).unwrap();
+
+            // This will also have been set in the constructor. Calling this before
+            // construction of a VM will panic, and that's not a terrible default.
+            // 🚧 I don't love that there is only one of these for executing lambdas.
+            // I guess it wouldn't be hard to make it a Vec of VMs. Let it grow, and
+            // shrink as needed. Whatever as needed means.
+            // let mut vm = ΛVM.get().unwrap().lock().unwrap();
+            let args = lambda_call
+                .args
+                .iter()
+                .map(|v| <FfiValue as Into<Value>>::into(v.clone()))
+                .collect::<Vec<_>>();
+
+            let result = self.invoke_lambda(λ, &args);
+            let result = match result {
+                Ok(value) => ROk(<Value as Into<FfiValue>>::into(s_read!(value).clone())),
+                Err(e) => RErr(FfiError::Uber(e.to_string().into())),
+            };
+            lambda_call.result.send(result).unwrap();
+        }
     }
 
     fn get_span(&self, ip: isize) -> Span {
         self.source_map[(ip - 1) as usize].to_owned()
+    }
+
+    pub fn invoke_lambda(&mut self, lambda: &Value, args: &[Value]) -> Result<RefType<Value>> {
+        let mut stack = Vec::<StackValue>::new();
+        // This is all pretty hacky. I need two 0 values to appease the return gods.
+        stack.push(Value::Integer(0).into());
+        stack.push(Value::Integer(0).into());
+        stack.push(Value::Integer(0).into());
+        stack.push(Value::Integer(0).into());
+        // This is really lame. The call code expects stack_len - 2 - arity to be
+        // an address (an integer) ar it doesn't do anything with it. In any case
+        // it needs to be here. So this is junk.
+        stack.push(Value::Empty.into());
+        // The next parameter is the number of locals on the stack -or- a LambdaPointer.
+        stack.push(lambda.to_owned().into());
+
+        // Args need to be pushed onto the stack, and then the lambda, and then we
+        // need to execute a call instruction.
+        for arg in args.iter() {
+            stack.push(arg.clone().into());
+        }
+
+        let Value::LambdaPointer {
+            name,
+            frame_size,
+            captures: _,
+        } = lambda.clone()
+        else {
+            panic!("Expected a lambda pointer.")
+        };
+
+        let trace = log_enabled!(target: "vm", Trace);
+
+        let (ip, _) = self.func_map.get(&format!("{name}_trampoline")).unwrap();
+        self.inner_run(
+            *ip as isize,
+            4,
+            stack,
+            args.len(),
+            frame_size,
+            self.program.clone(),
+            trace,
+        )
     }
 
     pub fn invoke(&mut self, func_name: &str, args: &[RefType<Value>]) -> Result<RefType<Value>> {
@@ -306,34 +415,9 @@ impl VM {
         result
     }
 
-    // fn print_stack(&self) {
-    //     let len = stack.len();
-    //     for i in 0..len {
-    //         if i == fp {
-    //             eprint!("\t{} ->\t", Colour::Green.bold().paint("fp"));
-    //         } else {
-    //             eprint!("\t     \t");
-    //         }
-    //         eprintln!("stack {i}:\t{}", stack[i]);
-    //     }
-    // }
-
-    // fn debug_stack(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    //     let len = stack.len();
-    //     for i in 0..len {
-    //         if i == fp {
-    //             write!(f, "\t{} ->\t", Colour::Green.bold().paint("fp"))?;
-    //         } else {
-    //             write!(f, "\t     \t")?;
-    //         }
-    //         writeln!(f, "stack {i}:\t{}", stack[i])?;
-    //     }
-
-    //     Ok(())
-    // }
-
     fn inner_run(
         &mut self,
+        // This is an isize because we have negative jump offsets.
         mut ip: isize,
         mut fp: usize,
         mut stack: Vec<StackValue>,
@@ -732,8 +816,8 @@ impl VM {
                             //         panic!("Parent is missing.");
                             //     }
                             // }
-                            huh => {
-                                dbg!(huh);
+                            _ => {
+                                dbg!(&expression);
                                 unimplemented!()
                             }
                         };
@@ -747,6 +831,7 @@ impl VM {
 
                         let callee = &stack[stack.len() - func_arity - 2];
                         let stack_local_count = &stack[stack.len() - func_arity - 1];
+
                         if let Value::Plugin((_, plugin)) = callee.clone().into_value() {
                             let method: String =
                                 stack_local_count.clone().into_value().try_into()?;
@@ -755,13 +840,13 @@ impl VM {
                                 INVOKE_FUNC => {
                                     let mut plugin = s_write!(plugin);
                                     let args = stack.pop().clone().unwrap().into_value();
-                                    let Value::Vector { inner, .. } = args else {
+                                    let Value::List { inner, .. } = args else {
                                         panic!("Expected a vector of arguments.")
                                     };
                                     let args = s_read!(inner)
                                         .iter()
                                         .map(|v| {
-                                            <Value as Into<FfiValue>>::into((*s_read!(v)).clone())
+                                            <Value as Into<FfiValue>>::into(s_read!(v).clone())
                                         })
                                         .collect::<Vec<FfiValue>>();
                                     let func = stack.pop().clone().unwrap().into_value();
@@ -896,8 +981,8 @@ impl VM {
                         // locking involved.
                         // Maybe this could be configurable? Feature flag? Maybe
                         // even something at runtime, although we'd need to see
-                        // how mut that extra condition costs.
-                        // let value = (*s_read!(captures[*from])).clone();
+                        // how much that extra condition costs.
+                        // let value = s_read!(captures[*from]).clone();
                         let value = captures[*from].clone();
                         stack[fp - arity - local_count - 3 + to] = value.into();
 
@@ -1149,6 +1234,14 @@ impl VM {
 
                         1
                     }
+                    Instruction::InitializeLocal(index) => {
+                        let value = stack.pop().unwrap();
+
+                        // We gotta index into the stack in reverse order from the index.
+                        stack[fp - arity - local_count - 3 + index] = value;
+
+                        1
+                    }
                     Instruction::Jump(offset) => offset + 1,
                     Instruction::JumpIfFalse(offset) => {
                         let condition = stack.pop().unwrap();
@@ -1177,7 +1270,7 @@ impl VM {
                         let list = s_read!(list);
                         let index: usize = index.try_into()?;
                         match &*list {
-                            Value::Vector { ty: _, inner: vec } => {
+                            Value::List { ty: _, inner: vec } => {
                                 let vec = s_read!(vec);
                                 if index < vec.len() {
                                     stack.push(vec[index].clone().into());
@@ -1243,12 +1336,12 @@ impl VM {
                         let list = s_read!(list);
 
                         match &*list {
-                            Value::Vector { ty, inner: vec } => {
+                            Value::List { ty, inner: vec } => {
                                 let vec = s_read!(vec);
                                 if end < vec.len() {
                                     let list = new_ref!(
                                         Value,
-                                        Value::Vector {
+                                        Value::List {
                                             ty: ty.clone(),
                                             inner: new_ref!(
                                                 Vec<RefType<Value>>,
@@ -1312,7 +1405,7 @@ impl VM {
                         let list = list.into_pointer();
                         let list = s_read!(list);
                         match &*list {
-                            Value::Vector { inner, .. } => {
+                            Value::List { inner, .. } => {
                                 let inner = s_read!(inner);
                                 stack.push(Value::Integer(inner.len() as DwarfInteger).into());
                             }
@@ -1340,7 +1433,7 @@ impl VM {
                         let list = stack.pop().unwrap();
                         let list = list.into_pointer();
                         match &*s_read!(list) {
-                            Value::Vector { inner, .. } => {
+                            Value::List { inner, .. } => {
                                 let mut inner = s_write!(inner);
                                 inner.push(element.into_pointer());
                             }
@@ -1462,7 +1555,7 @@ impl VM {
                         values.reverse();
                         let values = new_ref!(Vec<RefType<Value>>, values);
 
-                        stack.push(Value::Vector { ty, inner: values }.into());
+                        stack.push(Value::List { ty, inner: values }.into());
 
                         1
                     }
@@ -1598,13 +1691,13 @@ impl VM {
                                 print_stack(&stack, fp);
                             }
                             BubbaError::VmPanic {
-                                message: "Plug-in error".to_owned(),
+                                message: format!("Plug-in error: {e}."),
                                 location: location!(),
                             }
                         })?;
 
                         let ctor = root_module.new();
-                        let plugin = ctor(args.into()).unwrap();
+                        let plugin = ctor(self.lambda_sender.clone().into(), args.into()).unwrap();
                         let name = plugin.name().to_string();
                         let plugin = new_ref!(PluginType, plugin);
                         let value = Value::Plugin((name, plugin));
@@ -1642,6 +1735,7 @@ impl VM {
                         fp = match stack.pop().unwrap().into_value() {
                             Value::Integer(fp) => fp as usize,
                             Value::Empty => {
+                                // This is how we escape the infinite loop.
                                 return Ok(result.into_pointer());
                             }
                             _ => {
@@ -1711,8 +1805,24 @@ impl VM {
                     // locals existing between the Thonk name and the fp.
                     Instruction::StoreLocal(index) => {
                         let value = stack.pop().unwrap();
+
                         // We gotta index into the stack in reverse order from the index.
-                        stack[fp - arity - local_count - 3 + index] = value;
+                        let s = &stack[fp - arity - local_count - 3 + index];
+
+                        // We *need* this check, otherwise we deadlock in the Pointer case.
+                        // In any case, why do the work if you don't need to?
+                        if value != *s {
+                            match s {
+                                StackValue::Value(_) => {
+                                    stack[fp - arity - local_count - 3 + index] = value;
+                                }
+                                StackValue::Pointer(p) => {
+                                    let mut s = s_write!(p);
+                                    let value = value.into_value();
+                                    *s = value;
+                                }
+                            }
+                        }
 
                         1
                     }
@@ -1866,10 +1976,7 @@ impl VM {
                         1
                     }
                     invalid => {
-                        return Err(BubbaError::InvalidInstruction {
-                            instr: invalid.clone(),
-                        }
-                        .into())
+                        panic!("Instruction not implemented: {invalid:?}.");
                     }
                 }
             };

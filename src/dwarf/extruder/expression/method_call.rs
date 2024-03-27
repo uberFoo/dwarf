@@ -12,7 +12,9 @@ use crate::{
         },
         Expression as ParserExpression, PrintableValueType,
     },
-    keywords::{FORMAT, IS_DIGIT, LEN, LINES, MAP, MAX, PUSH, SPLIT, SUM, TO_DIGIT, TRIM},
+    keywords::{
+        FORMAT, INVOKE_FUNC, IS_DIGIT, LEN, LINES, MAP, MAX, PUSH, SPLIT, SUM, TO_DIGIT, TRIM,
+    },
     lu_dog::{
         store::ObjectStore as LuDogStore, Argument, Block, Call, Expression, List, MethodCall,
         Span, Span as LuDogSpan, ValueType, ValueTypeEnum, XValue,
@@ -96,8 +98,8 @@ pub(in crate::dwarf::extruder) fn inter(
         method_call_return_type(instance_ty, method, meth_span, &mut arg_ty, context, lu_dog)?;
 
     debug!(
-        "{} return type {}",
-        Colour::Red.dimmed().italic().paint("MethodCall"),
+        "{}: {method} return type {}",
+        Colour::Red.italic().paint("MethodCall"),
         PrintableValueType(true, &ret_ty, context, lu_dog).to_string()
     );
 
@@ -114,10 +116,7 @@ pub(in crate::dwarf::extruder) fn method_call_return_type(
 ) -> Result<RefType<ValueType>> {
     debug!(
         "{} instance type {instance_ty:?} ({}) {method}",
-        Colour::Red
-            .dimmed()
-            .italic()
-            .paint("method_call_return_type"),
+        Colour::Red.italic().paint("method_call_return_type"),
         PrintableValueType(true, &instance_ty, context, lu_dog).to_string()
     );
     let ty = match s_read!(instance_ty).subtype {
@@ -306,6 +305,19 @@ pub(in crate::dwarf::extruder) fn method_call_return_type(
             #[allow(clippy::let_and_return)]
             x
         }
+        ValueTypeEnum::XPlugin(_) => match method.as_str() {
+            // INVOKE_FUNC => ValueType::new_empty(true, lu_dog),
+            INVOKE_FUNC => ValueType::new_unknown(true, lu_dog),
+            _ => {
+                return Err(vec![DwarfError::NoSuchMethod {
+                    method: method.to_owned(),
+                    file: context.file_name.to_owned(),
+                    span: meth_span.to_owned(),
+                    location: location!(),
+                    program: context.source_string.to_owned(),
+                }])
+            }
+        },
         ref ty => {
             e_warn!("Unknown type for method call {method}, {ty:?}");
 

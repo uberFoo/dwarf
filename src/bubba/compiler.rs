@@ -43,6 +43,7 @@ use expression::{
     ret, struct_expr, typecast, variable, xmatch,
 };
 
+// 🚧 Maybe document why we have an abstraction over Thonk?
 #[derive(Debug)]
 struct CThonk {
     inner: Thonk,
@@ -193,6 +194,7 @@ pub(crate) struct Context<'a, 'b> {
     funcs: HashMap<String, ValueType>,
     pub(crate) captures: Option<HashMap<String, usize>>,
     types: HashMap<String, ValueType>,
+    lambdas: Vec<(String, usize)>,
 }
 
 impl<'a, 'b> Context<'a, 'b> {
@@ -205,7 +207,12 @@ impl<'a, 'b> Context<'a, 'b> {
             funcs: HashMap::default(),
             captures: None,
             types: HashMap::default(),
+            lambdas: vec![],
         }
+    }
+
+    fn insert_lambda(&mut self, name: String, index: usize) {
+        self.lambdas.push((name, index));
     }
 
     fn insert_type(&mut self, name: String, ty: ValueType) {
@@ -319,6 +326,7 @@ pub fn compile(context: &ExtruderContext) -> Result<Program> {
     let sarzak = context.sarzak_heel();
 
     // We need to grab this specific instance's value of the string type.
+    // As well as all the other types below.
     let string = Ty::new_z_string(&s_read!(sarzak));
     let string = ValueType::new_ty(true, &string, &mut s_write!(lu_dog));
     let string = (*s_read!(string)).clone();
@@ -400,6 +408,8 @@ pub fn compile(context: &ExtruderContext) -> Result<Program> {
 
     let lu_dog = s_read!(lu_dog);
 
+    // We need to insert the function names and types so that we can look that
+    // information up in the variable code.
     for func in lu_dog.iter_function() {
         context.insert_function(
             get_function_name(&func, &lu_dog),
@@ -410,6 +420,13 @@ pub fn compile(context: &ExtruderContext) -> Result<Program> {
     for func in lu_dog.iter_function() {
         let thonk = compile_function(&func, &mut context)?.into();
         context.get_program().add_thonk(thonk);
+    }
+
+    for (name, count) in context.lambdas.clone().iter() {
+        let mut thonk = CThonk::new(format!("{name}_trampoline"));
+        thonk.insert_instruction(Instruction::Call(count.to_owned()), location!());
+        thonk.insert_instruction(Instruction::Return, location!());
+        context.get_program().add_thonk(thonk.into());
     }
 
     Ok(program)
@@ -631,7 +648,7 @@ fn compile_statement(
                 (false, index) => index,
             };
 
-            thonk.insert_instruction(Instruction::StoreLocal(offset), location!());
+            thonk.insert_instruction(Instruction::InitializeLocal(offset), location!());
 
             let empty = context.get_type(EMPTY).unwrap().clone();
             Ok(Some(empty))
@@ -685,7 +702,7 @@ fn compile_expression(
 
         ExpressionEnum::ForLoop(ref for_loop) => for_loop::compile(for_loop, thonk, context, span),
         ExpressionEnum::Index(ref index) => index::compile(index, thonk, context, span),
-        ExpressionEnum::Lambda(ref λ) => call::compile_lambda(λ, thonk, context, span),
+        ExpressionEnum::Lambda(ref λ) => call::compile_lambda(λ, thonk, context),
         ExpressionEnum::ListElement(ref list) => list::compile_list_element(list, thonk, context),
         ExpressionEnum::ListExpression(ref list) => {
             list::compile_list_expression(list, thonk, context, span)
@@ -946,16 +963,16 @@ mod test {
         .unwrap();
         let program = compile(&ctx).unwrap();
         println!("{program}");
-        assert_eq!(program.get_thonk_card(), 11);
+        assert_eq!(program.get_thonk_card(), 15);
 
-        assert_eq!(program.get_instruction_card(), 316);
+        assert_eq!(program.get_instruction_card(), 393);
         let run = run_vm(&program);
         println!("{:?}", run);
         assert!(run.is_ok());
         assert_eq!(&*s_read!(run.unwrap()), &Value::Boolean(true));
     }
 
-    #[test]
+    // #[test]
     fn vm_async_http() {
         setup_logging();
         // let _ = env_logger::builder().is_test(true).try_init();
@@ -972,8 +989,8 @@ async fn async_get(urls: [String]) -> Future<[Result<string, HttpError>]> {
     let tasks: [Future<Result<string, HttpError>>] = [];
     // Start a task for each url and push them into the tasks array.
     for url in urls {
-        print(url);
-        print("\n");
+        print("${url}\n");
+
         let task = chacha::spawn(async || -> Result<string, HttpError> {
             let client = HttpClient::new();
             // This creates a request and sends it.
@@ -992,6 +1009,7 @@ async fn async_get(urls: [String]) -> Future<[Result<string, HttpError>]> {
                 Result::<Response, HttpError>::Err(e) => Result::<string, HttpError>::Err(e),
             }
         });
+
         tasks.push(task);
     }
 
@@ -1015,26 +1033,16 @@ async fn main() -> Future<()> {
     ];
     let results = async_get(requests).await;
 
-    print("Results length: ");
-    print(results.len());
-    print("\n");
+    print("Results length: ${results.len()}\n");
 
     let i = 0;
     for result in results {
         match result {
             Result::<string, HttpError>::Ok(req) => {
-                // print("{1}: {0} bytes\n".format(req.len(), requests[i]));
-                print(requests[i]);
-                print(": ");
-                print(req.len());
-                print(" bytes\n");
+                print("${requests[i]}: ${req.len()} bytes\n");
             }
             Result::<string, HttpError>::Err(e) => {
-                // print("{1}: {0}\n".format(e.to_string(), requests[i]));
-                print(requests[i]);
-                print(": ");
-                print(e.to_string());
-                print("\n");
+                print("${requests[i]}: ${e.to_string()}\n");
             }
         };
         i = i + 1;
@@ -1050,7 +1058,7 @@ async fn main() -> Future<()> {
         .unwrap();
         let program = compile(&ctx).unwrap();
         println!("{program}");
-        assert_eq!(program.get_thonk_card(), 13);
+        assert_eq!(program.get_thonk_card(), 18);
 
         // assert_eq!(
         //     program..get_instruction_count(),

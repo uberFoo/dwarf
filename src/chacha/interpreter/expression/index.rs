@@ -26,7 +26,7 @@ pub fn eval_index(index: &SarzakStorePtr, context: &mut Context) -> Result<RefTy
             let index = *index as usize;
             let list = eval_expression(target.clone(), context)?;
             let list = s_read!(list);
-            if let Value::Vector { ty: _, inner: vec } = &list.clone() {
+            if let Value::List { ty: _, inner: vec } = &list.clone() {
                 let vec = s_read!(vec);
                 if index < vec.len() {
                     Ok(vec[index].to_owned())
@@ -81,12 +81,12 @@ pub fn eval_index(index: &SarzakStorePtr, context: &mut Context) -> Result<RefTy
             let range: Range<usize> = index.try_into()?;
             let list = eval_expression(target.clone(), context)?;
             let list = s_read!(list);
-            if let Value::Vector { ty, inner: vec } = &list.clone() {
+            if let Value::List { ty, inner: vec } = &list.clone() {
                 let vec = s_read!(vec);
                 if range.end < vec.len() {
                     Ok(new_ref!(
                         Value,
-                        Value::Vector {
+                        Value::List {
                             ty: ty.clone(),
                             inner: new_ref!(Vec<RefType<Value>>, vec[range].to_owned())
                         }

@@ -1,9 +1,11 @@
+use std::sync::{Arc, Mutex};
+
 use abi_stable::{
-    sabi_extern_fn,
     std_types::{RBox, ROption, RResult, RString, RVec},
     StableAbi,
 };
 use ansi_term::Colour;
+use rustc_hash::FxHashMap as HashMap;
 use uuid::Uuid;
 
 use crate::{
@@ -15,7 +17,7 @@ use crate::{
     lu_dog::{ObjectStore as LuDogStore, ValueTypeEnum},
     new_ref,
     plug_in::PluginType,
-    s_read, DwarfFloat, DwarfInteger, NewRef, RefType, Value,
+    s_read, DwarfFloat, DwarfInteger, NewRef, RefType, Value, LAMBDA_FUNCS,
 };
 
 #[repr(C)]
@@ -55,6 +57,8 @@ pub enum FfiValue {
     Error(RString),
     Float(DwarfFloat),
     Integer(DwarfInteger),
+    Lambda(usize),
+    List(RVec<Self>),
     Option(ROption<RBox<Self>>),
     PlugIn(PluginType),
     ProxyType(FfiProxy),
@@ -65,7 +69,6 @@ pub enum FfiValue {
     Unknown,
     // UserType(FfiUuid),
     Uuid(FfiUuid),
-    Vector(RVec<Self>),
 }
 
 impl std::fmt::Display for FfiValue {
@@ -77,6 +80,21 @@ impl std::fmt::Display for FfiValue {
             Self::Error(e) => write!(f, "{}: {e}", Colour::Red.bold().paint("error")),
             Self::Float(num) => write!(f, "{num}"),
             Self::Integer(num) => write!(f, "{num}"),
+            Self::Lambda(n) => write!(f, "lambda {n}"),
+            Self::List(vec) => {
+                let mut first_time = true;
+                write!(f, "[")?;
+                for i in vec {
+                    if first_time {
+                        first_time = false;
+                    } else {
+                        write!(f, ", ")?;
+                    }
+
+                    write!(f, "{i}")?;
+                }
+                write!(f, "]")
+            }
             Self::Option(option) => match option {
                 ROption::RNone => write!(f, "None"),
                 ROption::RSome(value) => write!(f, "Some({value})"),
@@ -92,21 +110,13 @@ impl std::fmt::Display for FfiValue {
             Self::Unknown => write!(f, "<unknown>"),
             // Self::UserType(uuid) => write!(f, "{uuid}"),
             Self::Uuid(uuid) => write!(f, "{uuid}"),
-            Self::Vector(vec) => {
-                let mut first_time = true;
-                write!(f, "[")?;
-                for i in vec {
-                    if first_time {
-                        first_time = false;
-                    } else {
-                        write!(f, ", ")?;
-                    }
-
-                    write!(f, "{i}")?;
-                }
-                write!(f, "]")
-            }
         }
+    }
+}
+
+impl From<String> for FfiValue {
+    fn from(value: String) -> Self {
+        Self::String(value.into())
     }
 }
 
@@ -175,6 +185,22 @@ impl From<VmValue> for FfiValue {
             VmValue::Boolean(bool_) => Self::Boolean(bool_.to_owned()),
             VmValue::Empty => Self::Empty,
             VmValue::Float(num) => Self::Float(num.to_owned()),
+            lambda @ VmValue::LambdaPointer { .. } => {
+                let λ = match LAMBDA_FUNCS.get() {
+                    Some(λ) => λ,
+                    None => {
+                        let λ = Arc::new(Mutex::new(HashMap::default()));
+                        let _ = LAMBDA_FUNCS.set(λ);
+                        LAMBDA_FUNCS.get().unwrap()
+                    }
+                };
+
+                let mut λ = λ.lock().unwrap();
+                let key = λ.len();
+                λ.insert(key, lambda.clone());
+
+                Self::Lambda(key)
+            }
             VmValue::Integer(num) => Self::Integer(num.to_owned()),
             // VmValue::ProxyType {
             //     module,

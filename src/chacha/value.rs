@@ -28,95 +28,11 @@ use crate::{
     ChaChaError, Context, DwarfFloat, DwarfInteger, NewRef, RefType, PATH_SEP,
 };
 
-/// The type of Enumeration Field
-///
-/// There are three types of enumeration fields: Unit, Struct, and Tuple.
-///
-/// The field descriptions refer to the following enumeration, `Foo`.
-///
-/// ```ignore
-/// enum Foo {
-///     One,
-///     Bar(int),
-///     Baz { qux: string },
-/// }
-/// ```
-///
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub enum Enum<T>
-where
-    T: Clone + std::fmt::Debug + PartialEq + std::fmt::Display + std::default::Default,
-{
-    /// Struct Enumeration Field
-    ///
-    /// This type of field is for when it contains a struct, as `Baz` does above.
-    /// That is to say, `Foo::Baz { qux: string }`. We store the final path element
-    /// as a string, and the struct as a `RefType<UserStruct>`.
-    Struct(RefType<Struct<T>>),
-    /// Tuple Enumeration Field
-    ///
-    /// This type of field is for when it contains a tuple, as `Bar` does above.
-    /// That is to say, `Foo::Bar(int)`.
-    ///
-    /// The type is stored as the first element of the tuple, and the path/type
-    /// as a string in the second. The third element is the enum itself.
-    Tuple((RefType<ValueType>, String), RefType<TupleEnum<T>>),
-    /// Unit Enumeration Field
-    ///
-    /// This sort of enumeration is the simplest. In `Foo`, this refers to the
-    /// field `One`: `Foo::One`. The final field in the path is stored as a
-    /// string.
-    ///
-    /// The tuple is: (Type, TypeName, FieldValue)
-    Unit(RefType<ValueType>, String, String),
-}
+pub mod _enum;
+pub mod _struct;
 
-impl<T> Enum<T>
-where
-    T: Clone + std::fmt::Debug + PartialEq + std::fmt::Display + std::default::Default,
-{
-    pub fn get_type(&self) -> RefType<ValueType> {
-        match self {
-            Self::Unit(ty, _, _) => ty.clone(),
-            Self::Struct(ut) => s_read!(ut).get_type().clone(),
-            Self::Tuple((ty, _), _) => ty.clone(),
-        }
-    }
-}
-
-impl<T> PartialEq for Enum<T>
-where
-    T: Clone + std::fmt::Debug + PartialEq + std::fmt::Display + std::default::Default,
-{
-    fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (Self::Unit(_a, b, e), Self::Unit(_c, d, f)) => b == d && e == f,
-            (Self::Struct(a), Self::Struct(b)) => *s_read!(a) == *s_read!(b),
-            (Self::Tuple((a, _), c), Self::Tuple((b, _), d)) => {
-                *s_read!(a) == *s_read!(b) && *s_read!(c) == *s_read!(d)
-            }
-            _ => false,
-        }
-    }
-}
-
-impl<T> Eq for Enum<T> where
-    T: Clone + std::fmt::Debug + PartialEq + std::fmt::Display + std::default::Default
-{
-}
-
-impl<T> fmt::Display for Enum<T>
-where
-    T: Clone + std::fmt::Debug + PartialEq + std::fmt::Display + std::default::Default,
-{
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Self::Unit(_, t, s) => write!(f, "{t}::{s}",),
-            Self::Struct(s) => write!(f, "{}", s_read!(s)),
-            Self::Tuple((_, t), e) => write!(f, "{t}::{}", s_read!(e)),
-        }
-    }
-}
+pub use _enum::{Enum, TupleEnum};
+pub use _struct::Struct;
 
 // 🚧 This can be deleted and replaced with just a String.
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -127,6 +43,7 @@ pub enum ThonkInner {
 
 #[derive(Default)]
 pub enum Value {
+    AnyList(RefType<Vec<RefType<Self>>>),
     /// Boolean
     ///
     /// True and False
@@ -164,6 +81,10 @@ pub enum Value {
     },
     Integer(DwarfInteger),
     Lambda(RefType<Lambda>),
+    List {
+        ty: RefType<ValueType>,
+        inner: RefType<Vec<RefType<Self>>>,
+    },
     // #[serde(skip)]
     ParsedDwarf(Context),
     // #[serde(skip)]
@@ -192,10 +113,6 @@ pub enum Value {
     Unknown,
     Uuid(uuid::Uuid),
     ValueType(ValueType),
-    Vector {
-        ty: RefType<ValueType>,
-        inner: RefType<Vec<RefType<Self>>>,
-    },
     #[cfg(feature = "async")]
     VmFuture {
         name: String,
@@ -220,6 +137,21 @@ impl Value {
     #[inline]
     fn inner_string(&self, f: &mut Vec<u8>) -> std::io::Result<()> {
         match self {
+            Self::AnyList(list) => {
+                write!(f, "[")?;
+                let list = s_read!(list);
+                let mut first_time = true;
+                for i in &*list {
+                    if first_time {
+                        first_time = false;
+                    } else {
+                        write!(f, ", ")?;
+                    }
+
+                    write!(f, "{}", s_read!(i))?;
+                }
+                write!(f, "]")
+            }
             Self::Boolean(bool_) => write!(f, "{bool_}"),
             Self::Char(char_) => write!(f, "{char_}"),
             Self::Empty => write!(f, "()"),
@@ -251,6 +183,21 @@ impl Value {
             } => write!(f, "Task `{name}`: {task:?}, executor: {executor:?}"),
             Self::Integer(num) => write!(f, "{num}"),
             Self::Lambda(_) => write!(f, "<lambda>"),
+            Self::List { ty: _, inner } => {
+                let inner = s_read!(inner);
+                let mut first_time = true;
+                write!(f, "[")?;
+                for i in &*inner {
+                    if first_time {
+                        first_time = false;
+                    } else {
+                        write!(f, ", ")?;
+                    }
+
+                    write!(f, "{}", s_read!(i))?;
+                }
+                write!(f, "]")
+            }
             Self::ParsedDwarf(ctx) => write!(f, "{ctx:#?}"),
             Self::Plugin((name, _plugin)) => write!(f, "plugin::{name}"),
             Self::ProxyType {
@@ -278,21 +225,6 @@ impl Value {
             Self::Unknown => write!(f, "<unknown>"),
             Self::Uuid(uuid) => write!(f, "{uuid}"),
             Self::ValueType(ty) => write!(f, "{:?}", ty),
-            Self::Vector { ty: _, inner } => {
-                let inner = s_read!(inner);
-                let mut first_time = true;
-                write!(f, "[")?;
-                for i in &*inner {
-                    if first_time {
-                        first_time = false;
-                    } else {
-                        write!(f, ", ")?;
-                    }
-
-                    write!(f, "{}", s_read!(i))?;
-                }
-                write!(f, "]")
-            }
             #[cfg(feature = "async")]
             Self::VmFuture {
                 name,
@@ -370,6 +302,18 @@ impl Value {
                 #[allow(clippy::let_and_return)]
                 ƛ_type
             }
+            Value::List { ty, inner: _ } => {
+                for vt in lu_dog.iter_value_type() {
+                    if let ValueTypeEnum::List(id) = s_read!(vt).subtype {
+                        let list = lu_dog.exhume_list(&id).unwrap();
+                        let list_ty = s_read!(list).r36_value_type(lu_dog)[0].clone();
+                        if *s_read!(ty) == *s_read!(list_ty) {
+                            return vt.clone();
+                        }
+                    }
+                }
+                unreachable!()
+            }
             Value::Plugin((name, _plugin)) => {
                 for vt in lu_dog.iter_value_type() {
                     if let ValueTypeEnum::XPlugin(id) = s_read!(vt).subtype {
@@ -438,18 +382,6 @@ impl Value {
                 for vt in lu_dog.iter_value_type() {
                     if let ValueTypeEnum::Ty(_ty) = s_read!(vt).subtype {
                         if ty.read().unwrap().id() == _ty {
-                            return vt.clone();
-                        }
-                    }
-                }
-                unreachable!()
-            }
-            Value::Vector { ty, inner: _ } => {
-                for vt in lu_dog.iter_value_type() {
-                    if let ValueTypeEnum::List(id) = s_read!(vt).subtype {
-                        let list = lu_dog.exhume_list(&id).unwrap();
-                        let list_ty = s_read!(list).r36_value_type(lu_dog)[0].clone();
-                        if *s_read!(ty) == *s_read!(list_ty) {
                             return vt.clone();
                         }
                     }
@@ -529,6 +461,21 @@ impl Future for Value {
 impl std::fmt::Debug for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
+            Self::AnyList(list) => {
+                write!(f, "[")?;
+                let list = s_read!(list);
+                let mut first_time = true;
+                for i in &*list {
+                    if first_time {
+                        first_time = false;
+                    } else {
+                        write!(f, ", ")?;
+                    }
+
+                    write!(f, "{}", s_read!(i))?;
+                }
+                write!(f, "]")
+            }
             Self::Boolean(b) => write!(f, "{b:?}"),
             Self::Char(c) => write!(f, "{c:?}"),
             Self::Empty => write!(f, "()"),
@@ -559,6 +506,7 @@ impl std::fmt::Debug for Value {
             } => write!(f, "Task `{name}`: {task:?}, executor: {executor:?}"),
             Self::Integer(num) => write!(f, "{num:?}"),
             Self::Lambda(ƛ) => write!(f, "{:?}", s_read!(ƛ)),
+            Self::List { ty, inner } => write!(f, "{ty:?}: {inner:?}"),
             Self::ParsedDwarf(ctx) => write!(f, "{ctx:?}"),
             Self::Plugin((name, _plugin)) => write!(f, "plugin::{name}"),
             Self::ProxyType {
@@ -593,7 +541,6 @@ impl std::fmt::Debug for Value {
             Self::Unknown => write!(f, "<unknown>"),
             Self::Uuid(uuid) => write!(f, "{uuid:?}"),
             Self::ValueType(ty) => write!(f, "{:?}", ty),
-            Self::Vector { ty, inner } => write!(f, "{ty:?}: {inner:?}"),
             #[cfg(feature = "async")]
             Self::VmFuture {
                 name,
@@ -607,6 +554,7 @@ impl std::fmt::Debug for Value {
 impl Clone for Value {
     fn clone(&self) -> Self {
         match self {
+            Self::AnyList(list) => Self::AnyList(list.clone()),
             Self::Boolean(bool_) => Self::Boolean(*bool_),
             Self::Char(char_) => Self::Char(*char_),
             Self::Empty => Self::Empty,
@@ -636,6 +584,10 @@ impl Clone for Value {
             },
             Self::Integer(num) => Self::Integer(*num),
             Self::Lambda(ƛ) => Self::Lambda(ƛ.clone()),
+            Self::List { ty, inner } => Self::List {
+                ty: ty.clone(),
+                inner: inner.clone(),
+            },
             Self::ParsedDwarf(ctx) => Self::ParsedDwarf(ctx.clone()),
             Self::Plugin(plugin) => Self::Plugin(plugin.clone()),
             Self::ProxyType {
@@ -665,10 +617,6 @@ impl Clone for Value {
             Self::Unknown => Self::Unknown,
             Self::Uuid(uuid) => Self::Uuid(*uuid),
             Self::ValueType(ty) => Self::ValueType(ty.clone()),
-            Self::Vector { ty, inner } => Self::Vector {
-                ty: ty.clone(),
-                inner: inner.clone(),
-            },
             #[cfg(feature = "async")]
             // Note that cloned values do not inherit the task
             Self::VmFuture {
@@ -688,6 +636,21 @@ impl Clone for Value {
 impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            Self::AnyList(list) => {
+                write!(f, "[")?;
+                let list = s_read!(list);
+                let mut first_time = true;
+                for i in &*list {
+                    if first_time {
+                        first_time = false;
+                    } else {
+                        write!(f, ", ")?;
+                    }
+
+                    write!(f, "{}", s_read!(i))?;
+                }
+                write!(f, "]")
+            }
             Self::Boolean(bool_) => write!(f, "{bool_}"),
             Self::Char(char_) => write!(f, "{char_}"),
             Self::Empty => write!(f, "()"),
@@ -719,6 +682,21 @@ impl fmt::Display for Value {
             } => write!(f, "Task `{name}`: {task:?}, executor: {executor:?}"),
             Self::Integer(num) => write!(f, "{num}"),
             Self::Lambda(_) => write!(f, "<lambda>"),
+            Self::List { ty: _, inner } => {
+                let inner = s_read!(inner);
+                let mut first_time = true;
+                write!(f, "[")?;
+                for i in &*inner {
+                    if first_time {
+                        first_time = false;
+                    } else {
+                        write!(f, ", ")?;
+                    }
+
+                    write!(f, "{}", s_read!(i))?;
+                }
+                write!(f, "]")
+            }
             Self::ParsedDwarf(ctx) => write!(f, "{ctx:#?}"),
             Self::Plugin((name, _plugin)) => write!(f, "plugin::{name}"),
             Self::ProxyType {
@@ -747,21 +725,6 @@ impl fmt::Display for Value {
             Self::Unknown => write!(f, "<unknown>"),
             Self::Uuid(uuid) => write!(f, "{uuid}"),
             Self::ValueType(ty) => write!(f, "{:?}", ty),
-            Self::Vector { ty: _, inner } => {
-                let inner = s_read!(inner);
-                let mut first_time = true;
-                write!(f, "[")?;
-                for i in &*inner {
-                    if first_time {
-                        first_time = false;
-                    } else {
-                        write!(f, ", ")?;
-                    }
-
-                    write!(f, "{}", s_read!(i))?;
-                }
-                write!(f, "]")
-            }
             #[cfg(feature = "async")]
             Self::VmFuture {
                 name,
@@ -1496,11 +1459,7 @@ impl std::cmp::PartialEq for Value {
                     plugin: _,
                 },
             ) => a == b,
-            (Value::Plugin((a, _)), Value::Plugin((b, _))) => a == b,
-            (Value::String(a), Value::String(b)) => a == b,
-            (Value::Struct(a), Value::Struct(b)) => *s_read!(a) == *s_read!(b),
-            (Value::Uuid(a), Value::Uuid(b)) => a == b,
-            (Value::Vector { ty: ty_a, inner: a }, Value::Vector { ty: ty_b, inner: b }) => {
+            (Value::List { ty: ty_a, inner: a }, Value::List { ty: ty_b, inner: b }) => {
                 if *s_read!(ty_a) != *s_read!(ty_b) {
                     return false;
                 }
@@ -1520,174 +1479,11 @@ impl std::cmp::PartialEq for Value {
 
                 true
             }
+            (Value::Plugin((a, _)), Value::Plugin((b, _))) => a == b,
+            (Value::String(a), Value::String(b)) => a == b,
+            (Value::Struct(a), Value::Struct(b)) => *s_read!(a) == *s_read!(b),
+            (Value::Uuid(a), Value::Uuid(b)) => a == b,
             (_, _) => false, //Value::Error(format!("Cannot compare {} and {}", a, b)),
         }
     }
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct TupleEnum<T>
-where
-    T: Clone + std::fmt::Debug + PartialEq + std::fmt::Display,
-{
-    pub(crate) variant: String,
-    pub(crate) value: RefType<T>,
-}
-
-impl<T> PartialEq for TupleEnum<T>
-where
-    T: Clone + std::fmt::Debug + PartialEq + std::fmt::Display,
-{
-    fn eq(&self, other: &Self) -> bool {
-        self.variant == other.variant && s_read!(self.value).eq(&s_read!(other.value))
-    }
-}
-
-impl<T> Eq for TupleEnum<T> where T: Clone + std::fmt::Debug + PartialEq + std::fmt::Display {}
-
-impl<T> TupleEnum<T>
-where
-    T: Clone + std::fmt::Debug + PartialEq + std::fmt::Display,
-{
-    pub fn new<S: AsRef<str>>(variant_name: S, value: RefType<T>) -> Self {
-        Self {
-            variant: variant_name.as_ref().to_owned(),
-            value,
-        }
-    }
-
-    pub fn value(&self) -> RefType<T> {
-        self.value.clone()
-    }
-
-    pub fn variant(&self) -> &str {
-        &self.variant
-    }
-}
-
-impl<T> fmt::Display for TupleEnum<T>
-where
-    T: Clone + std::fmt::Debug + PartialEq + std::fmt::Display,
-{
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}({})", self.variant(), s_read!(self.value))
-    }
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct Struct<T>
-where
-    T: Clone + std::fmt::Debug + PartialEq + std::fmt::Display + std::default::Default,
-{
-    type_name: String,
-    type_: RefType<ValueType>,
-    attrs: StructAttributes<T>,
-}
-
-impl<T> PartialEq for Struct<T>
-where
-    T: Clone + std::fmt::Debug + PartialEq + std::fmt::Display + std::default::Default,
-{
-    fn eq(&self, other: &Self) -> bool {
-        s_read!(self.type_).eq(&s_read!(other.type_)) && self.attrs.eq(&other.attrs)
-    }
-}
-
-impl<T> Eq for Struct<T> where
-    T: Clone + std::fmt::Debug + PartialEq + std::fmt::Display + std::default::Default
-{
-}
-
-impl<T> Struct<T>
-where
-    T: Clone + std::fmt::Debug + PartialEq + std::fmt::Display + std::default::Default,
-{
-    pub fn new<S: AsRef<str>>(type_name: S, type_: &RefType<ValueType>) -> Self {
-        Self {
-            type_name: type_name.as_ref().to_owned(),
-            type_: type_.clone(),
-            attrs: StructAttributes::default(),
-        }
-    }
-
-    /// Create a field for the user type
-    ///
-    /// This is called during type definition, from a declaration in a source file.
-    pub fn define_field<S: AsRef<str>>(&mut self, name: S, value: T) {
-        self.attrs.0.insert(name.as_ref().to_owned(), value);
-    }
-
-    pub fn get_field_value<S: AsRef<str>>(&self, name: S) -> Option<&T> {
-        self.attrs.0.get(name.as_ref())
-    }
-
-    pub fn set_field_value<S: AsRef<str>>(&mut self, name: S, value: T) -> Option<T> {
-        self.attrs.0.insert(name.as_ref().to_owned(), value)
-    }
-
-    pub fn get_type(&self) -> &RefType<ValueType> {
-        &self.type_
-    }
-
-    pub fn type_name(&self) -> &str {
-        &self.type_name
-    }
-}
-
-impl<T> fmt::Display for Struct<T>
-where
-    T: Clone + std::fmt::Debug + PartialEq + std::fmt::Display + std::default::Default,
-{
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let mut attrs = self.attrs.0.iter().collect::<Vec<_>>();
-        attrs.sort_by(|(k1, _), (k2, _)| k1.cmp(k2));
-
-        let name = if let Some(name) = self.type_name.strip_prefix(PATH_SEP) {
-            name
-        } else {
-            &self.type_name
-        };
-
-        let mut out = f.debug_struct(name);
-        for (k, v) in attrs {
-            out.field(k, &format_args!("{v}"));
-        }
-
-        out.finish()
-    }
-}
-
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-pub struct StructAttributes<T>(HashMap<String, T>)
-where
-    T: Clone + std::fmt::Debug + PartialEq + std::fmt::Display + std::default::Default;
-
-impl<T> PartialEq for StructAttributes<T>
-where
-    T: Clone + std::fmt::Debug + PartialEq + std::fmt::Display + std::default::Default,
-{
-    fn eq(&self, other: &Self) -> bool {
-        if self.0.len() != other.0.len() {
-            return false;
-        }
-
-        for (k, v) in self.0.iter() {
-            if !other.0.contains_key(k) {
-                return false;
-            }
-
-            let ov = other.0.get(k).unwrap();
-
-            if !v.eq(&ov) {
-                return false;
-            }
-        }
-
-        true
-    }
-}
-
-impl<T> Eq for StructAttributes<T> where
-    T: Clone + std::fmt::Debug + PartialEq + std::fmt::Display + std::default::Default
-{
 }

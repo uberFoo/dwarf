@@ -1,13 +1,14 @@
-use crate::chacha::ffi_value::FfiValue;
 use abi_stable::{
     declare_root_module_statics,
+    external_types::crossbeam_channel::RSender,
     library::RootModule,
     package_version_strings, sabi_trait,
     sabi_types::VersionStrings,
-    std_types::{RBox, RVec},
-    std_types::{RResult, RStr},
+    std_types::{RBox, RResult, RStr, RVec},
     StableAbi,
 };
+
+use crate::chacha::ffi_value::FfiValue;
 
 pub mod error;
 pub use error::{Error, Unsupported};
@@ -46,6 +47,14 @@ pub trait Plugin: Clone + Debug + Display + Send + Sync {
 
 pub type PluginType = Plugin_TO<'static, RBox<()>>;
 
+#[repr(C)]
+#[derive(StableAbi)]
+pub struct LambdaCall {
+    pub lambda: usize,
+    pub args: RVec<FfiValue>,
+    pub result: RSender<RResult<FfiValue, Error>>,
+}
+
 /// The root module of a`plugin` dynamic library.
 ///
 /// To load this module,
@@ -56,7 +65,6 @@ pub type PluginType = Plugin_TO<'static, RBox<()>>;
 #[sabi(missing_field(panic))]
 pub struct PluginModule {
     pub name: extern "C" fn() -> RStr<'static>,
-    pub id: extern "C" fn() -> RStr<'static>,
     /// Constructs the plugin.
     ///
     ///
@@ -70,7 +78,7 @@ pub struct PluginModule {
     /// at which point it would be moved to the last field at the time.
     ///
     #[sabi(last_prefix_field)]
-    pub new: extern "C" fn(RVec<FfiValue>) -> RResult<PluginType, Error>,
+    pub new: extern "C" fn(RSender<LambdaCall>, RVec<FfiValue>) -> RResult<PluginType, Error>,
 }
 
 impl RootModule for PluginModRef {
