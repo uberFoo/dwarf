@@ -133,7 +133,6 @@ pub(in crate::bubba::compiler) fn compile_lambda(
 
             context.insert_symbol(var.name.clone(), ty);
             thonk.increment_frame_size();
-            dbg!(&var.name);
             // name += var.name.as_str();
             // name += ",";
 

@@ -17,16 +17,16 @@ impl HttpServer {
         }
     }
 
-    async fn serve(self, lambda: fn(string) -> string) -> Future<()> {
+    async fn serve(self, port: int) -> Future<()> {
         self.inner
-            .invoke_func("http_server", "HttpServer", "serve", [lambda])
+            .invoke_func("http_server", "HttpServer", "serve", [port])
     }
 
     fn route(
         self,
         path: string,
         method: Method,
-        lambda: fn(Request) -> Result<Response, HttpError>,
+        lambda: fn(Request) -> Result<Request, HttpError>,
     ) {
         self.inner
             .invoke_func("http_server", "HttpServer", "route", @[path, method.to_string(), lambda]);
@@ -51,10 +51,8 @@ impl Method {
     }
 }
 
-struct Response<T> {
-    #[proxy(plugin = "http::http_server")]
-    plugin: Plugin<HttpServer>,
-    inner: int,
+fn make_request(plugin: HttpServer, inner: int) -> Request {
+    Request { plugin: plugin.inner, inner: inner }
 }
 
 struct Request {

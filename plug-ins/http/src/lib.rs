@@ -282,6 +282,7 @@ mod http_client {
 mod http_server {
     use super::*;
 
+    use std::cell::RefCell;
     use std::convert::Infallible;
     use std::future::Future;
     use std::net::SocketAddr;
@@ -293,12 +294,30 @@ mod http_server {
     use hyper::server::conn::http1;
     use hyper::service::service_fn;
     use hyper::service::Service;
-    use hyper::Uri;
     use hyper::{body::Incoming as IncomingBody, Request, Response};
+    use hyper::{Method, Uri};
     use hyper_util::rt::TokioIo;
+    use rustc_hash::FxHashMap as HashMap;
     use tokio::net::TcpListener;
 
-    type Counter = i32;
+    struct MyStr<'a>(&'a str);
+
+    impl<'a> From<MyStr<'a>> for Method {
+        fn from(s: MyStr) -> Self {
+            match s {
+                MyStr("GET") => Method::GET,
+                MyStr("POST") => Method::POST,
+                MyStr("PUT") => Method::PUT,
+                MyStr("DELETE") => Method::DELETE,
+                MyStr("HEAD") => Method::HEAD,
+                MyStr("OPTIONS") => Method::OPTIONS,
+                MyStr("CONNECT") => Method::CONNECT,
+                MyStr("PATCH") => Method::PATCH,
+                MyStr("TRACE") => Method::TRACE,
+                _ => Method::GET,
+            }
+        }
+    }
 
     pub fn instantiate_root_module() -> PluginModRef {
         PluginModule { name, new }.leak_into_prefix()
@@ -322,11 +341,19 @@ mod http_server {
     }
 
     #[derive(Clone, Debug)]
+    struct Route {
+        path: String,
+        method: Method,
+        lambda: usize,
+    }
+
+    #[derive(Clone, Debug)]
     struct HttpServer {
         // This is how we call lambdas from the plugin.
         lambda_call: RSender<LambdaCall>,
         requests: Slab<Arc<Request<IncomingBody>>>,
         uris: Slab<Arc<Uri>>,
+        routes: HashMap<(String, Method), usize>,
     }
 
     impl HttpServer {
@@ -335,6 +362,7 @@ mod http_server {
                 lambda_call,
                 requests: Slab::new(),
                 uris: Slab::new(),
+                routes: HashMap::default(),
             }
         }
     }
@@ -364,7 +392,11 @@ mod http_server {
                 match ty.as_str() {
                     "HttpServer" => match func.as_str() {
                         "serve" => {
-                            let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
+                            let FfiValue::Integer(port) = args.get(0).unwrap() else {
+                                panic!("Invalid port");
+                            };
+
+                            let addr = SocketAddr::from(([127, 0, 0, 1], *port as u16));
 
                             let listener_result = TcpListener::bind(addr).await;
                             let listener = match listener_result {
@@ -389,10 +421,10 @@ mod http_server {
 
                                 println!("Listening on http://{}", addr);
 
+                                let self_clone = self.clone();
                                 let svc = Svc {
-                                    counter: Arc::new(Mutex::new(0)),
+                                    server: RefCell::new(self_clone),
                                 };
-
                                 // Use an adapter to access something implementing `tokio::io`
                                 // traits as if they implement `hyper::rt` IO traits.
                                 let io = TokioIo::new(stream);
@@ -400,11 +432,9 @@ mod http_server {
 
                                 // Spawn a tokio task to serve multiple connections concurrently
                                 tokio::task::spawn(async move {
-                                    // Finally, we bind the incoming connection to our `hello` service
-                                    if let Err(err) = http1::Builder::new()
-                                        // `service_fn` converts our function in a `Service`
-                                        .serve_connection(io, svc_clone)
-                                        .await
+                                    // Finally, we bind the incoming connection to our service
+                                    if let Err(err) =
+                                        http1::Builder::new().serve_connection(io, svc_clone).await
                                     {
                                         println!("Error serving connection: {:?}", err);
                                     }
@@ -419,28 +449,15 @@ mod http_server {
                             let FfiValue::String(method) = args.get(1).unwrap() else {
                                 panic!("Invalid method");
                             };
+                            let method = Method::from(MyStr(method.as_str()));
 
                             let FfiValue::Lambda(number) = args.get(2).unwrap() else {
                                 panic!("Invalid lambda");
                             };
 
-                            let mut args = RVec::new();
-                            args.push("uber".to_owned().into());
+                            self.routes.insert((path.to_string(), method), *number);
 
-                            let (s, result) = crossbeam::channel::bounded(1);
-
-                            let lambda_call = LambdaCall {
-                                lambda: *number,
-                                args,
-                                result: s.into(),
-                            };
-                            self.lambda_call.send(lambda_call).unwrap();
-                            let result = result.recv().unwrap();
-                            dbg!(&result);
-
-                            <RResult<FfiValue, Error> as Into<Result<FfiValue, Error>>>::into(
-                                result,
-                            )
+                            Ok(FfiValue::Empty)
                         }
                         func => Err(Error::Uber(format!("Invalid function: {func}").into())),
                     },
@@ -482,13 +499,9 @@ mod http_server {
         }
     }
 
-    async fn hello(_: Request<hyper::body::Incoming>) -> Result<Response<Full<Bytes>>, Infallible> {
-        Ok(Response::new(Full::new(Bytes::from("Hello, World!"))))
-    }
-
     #[derive(Debug, Clone)]
     struct Svc {
-        counter: Arc<Mutex<Counter>>,
+        server: RefCell<HttpServer>,
     }
 
     impl Service<Request<IncomingBody>> for Svc {
@@ -501,22 +514,36 @@ mod http_server {
                 Ok(Response::builder().body(Full::new(Bytes::from(s))).unwrap())
             }
 
-            if req.uri().path() != "/favicon.ico" {
-                *self.counter.lock().expect("lock poisoned") += 1;
+            let path = req.uri().path().to_owned();
+            let method = req.method().clone();
+
+            let mut server = self.server.borrow_mut();
+            let entry = server.requests.vacant_entry();
+            let key = entry.key();
+            server.requests.insert(Arc::new(req));
+
+            if let Some(lambda) = server.routes.get(&(path, method)) {
+                let (s, result) = crossbeam::channel::bounded(1);
+
+                let lambda_call = LambdaCall {
+                    lambda: *lambda,
+                    args: vec![FfiValue::Integer(key as DwarfInteger)].into(),
+                    result: s.into(),
+                };
+                server.lambda_call.send(lambda_call).unwrap();
+                let result = result.recv().unwrap();
+                let ROk(FfiValue::String(result)) = result else {
+                    return Box::pin(async {
+                        mk_response("oh no! something went terribly wrong. 🤯".into())
+                    });
+                };
+
+                server.requests.remove(key);
+
+                Box::pin(async move { mk_response(result.to_string()) })
+            } else {
+                Box::pin(async { mk_response("oh no! not found".into()) })
             }
-
-            let res = match req.uri().path() {
-                "/" => mk_response(format!("home! counter = {:?}", self.counter)),
-                "/posts" => mk_response(format!("posts, of course! counter = {:?}", self.counter)),
-                "/authors" => mk_response(format!(
-                    "authors extraordinaire! counter = {:?}",
-                    self.counter
-                )),
-                // Return the 404 Not Found for other routes, and don't increment counter.
-                _ => return Box::pin(async { mk_response("oh no! not found".into()) }),
-            };
-
-            Box::pin(async { res })
         }
     }
 }

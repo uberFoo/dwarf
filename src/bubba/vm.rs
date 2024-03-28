@@ -311,7 +311,7 @@ impl VM {
 
     pub fn invoke_lambda(&mut self, lambda: &Value, args: &[Value]) -> Result<RefType<Value>> {
         let mut stack = Vec::<StackValue>::new();
-        // This is all pretty hacky. I need two 0 values to appease the return gods.
+        // This is all pretty hacky. I need four 0 values to appease the return gods.
         stack.push(Value::Integer(0).into());
         stack.push(Value::Integer(0).into());
         stack.push(Value::Integer(0).into());
@@ -332,7 +332,7 @@ impl VM {
         let Value::LambdaPointer {
             name,
             frame_size,
-            captures: _,
+            captures,
         } = lambda.clone()
         else {
             panic!("Expected a lambda pointer.")
@@ -1454,11 +1454,18 @@ impl VM {
                         1
                     }
                     Instruction::MakeLambdaPointer(name, frame_size) => {
-                        let captures = stack[fp - arity - local_count - 3..fp - 3]
+                        let captures: Vec<RefType<Value>> = stack
+                            [fp - arity - local_count - 3..fp - 3]
                             .iter()
                             .cloned()
                             .map(|v| v.into_pointer())
                             .collect();
+
+                        // Replace stack values with references to the captured values.
+                        captures.iter().enumerate().for_each(|(i, v)| {
+                            stack[fp - arity - local_count - 3 + i] = v.clone().into();
+                        });
+
                         let name = name.to_owned();
                         let value = Value::LambdaPointer {
                             name,
@@ -1496,7 +1503,7 @@ impl VM {
                                 //     let name = ty.type_name();
                                 //     name.to_owned()
                                 // }
-                                oopsie => unreachable!("{oopsie:?}"),
+                                oopsie => panic!("{oopsie:?}"),
                             };
 
                             let func = format!("{}::{}", ty, name);
