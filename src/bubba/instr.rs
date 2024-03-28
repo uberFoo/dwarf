@@ -4,7 +4,7 @@ use ansi_term::Colour;
 use rustc_hash::FxHashMap as HashMap;
 use serde::{Deserialize, Serialize};
 
-use crate::{bubba::value::Value, s_read, RefType, Span};
+use crate::{bubba::value::Value, lu_dog::ObjectStore as LuDogStore, s_read, RefType, Span};
 
 /// Instruction
 ///

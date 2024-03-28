@@ -183,6 +183,33 @@ impl From<VmValue> for FfiValue {
     fn from(value: VmValue) -> Self {
         match &value {
             VmValue::Boolean(bool_) => Self::Boolean(bool_.to_owned()),
+            VmValue::Enumeration(e) => match e {
+                Enum::Struct(s) => {
+                    dbg!(s);
+                    panic!()
+                }
+                Enum::Tuple((ty, ty_name), t) => {
+                    if ty_name == "::std::result::Result" {
+                        let t = s_read!(t);
+                        match t.variant.as_str() {
+                            "Err" => Self::Result(RResult::RErr(RBox::new(
+                                s_read!(t.value).clone().into(),
+                            ))),
+                            "Ok" => Self::Result(RResult::ROk(RBox::new(
+                                s_read!(t.value).clone().into(),
+                            ))),
+                            _ => panic!(),
+                        }
+                    } else {
+                        dbg!(ty, ty_name, t);
+                        panic!()
+                    }
+                }
+                Enum::Unit(ty, ty_name, v) => {
+                    dbg!(ty, ty_name, v);
+                    panic!()
+                }
+            },
             VmValue::Empty => Self::Empty,
             VmValue::Float(num) => Self::Float(num.to_owned()),
             lambda @ VmValue::LambdaPointer { .. } => {

@@ -37,7 +37,7 @@ use crate::{
         value::{Enum, Struct, TupleEnum},
     },
     keywords::INVOKE_FUNC,
-    lu_dog::{ValueType, ValueTypeEnum},
+    lu_dog::{ObjectStore as LuDogStore, ValueType, ValueTypeEnum},
     new_ref,
     plug_in::{Error as FfiError, LambdaCall, PluginModRef, PluginType},
     s_read, s_write,

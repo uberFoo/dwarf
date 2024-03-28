@@ -412,7 +412,15 @@ mod http_server {
                             }
                         }
                         "route" => {
-                            let FfiValue::Lambda(number) = args.get(0).unwrap() else {
+                            let FfiValue::String(path) = args.get(0).unwrap() else {
+                                panic!("Invalid path");
+                            };
+
+                            let FfiValue::String(method) = args.get(1).unwrap() else {
+                                panic!("Invalid method");
+                            };
+
+                            let FfiValue::Lambda(number) = args.get(2).unwrap() else {
                                 panic!("Invalid lambda");
                             };
 

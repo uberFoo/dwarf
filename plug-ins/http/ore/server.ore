@@ -26,10 +26,10 @@ impl HttpServer {
         self,
         path: string,
         method: Method,
-        lambda: fn(Request, Response) -> Result<string, HttpError>,
+        lambda: fn(Request) -> Result<Response, HttpError>,
     ) {
         self.inner
-            .invoke_func("http_server", "HttpServer", "route", @[path, lambda, method]);
+            .invoke_func("http_server", "HttpServer", "route", @[path, method.to_string(), lambda]);
     }
 }
 
@@ -38,6 +38,17 @@ enum Method {
     Post,
     Put,
     Delete,
+}
+
+impl Method {
+    fn to_string(self) -> string {
+        match self {
+            Method::Get => "GET",
+            Method::Post => "POST",
+            Method::Put => "PUT",
+            Method::Delete => "DELETE",
+        }
+    }
 }
 
 struct Response<T> {

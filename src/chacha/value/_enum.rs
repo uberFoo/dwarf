@@ -26,8 +26,8 @@ where
     /// Struct Enumeration Field
     ///
     /// This type of field is for when it contains a struct, as `Baz` does above.
-    /// That is to say, `Foo::Baz { qux: string }`. We store the final path element
-    /// as a string, and the struct as a `RefType<UserStruct>`.
+    /// That is to say, `Foo::Baz { qux: string }`. We store the struct as a
+    /// `RefType<UserStruct>`.
     Struct(RefType<Struct<T>>),
     /// Tuple Enumeration Field
     ///
