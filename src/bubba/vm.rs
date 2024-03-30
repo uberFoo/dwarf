@@ -764,26 +764,6 @@ impl VM {
                                     panic!("Task is missing -- already awaited.");
                                 }
                             }
-                            // Value::Task {
-                            //     worker: _,
-                            //     parent: None,
-                            // } => thing.into_pointer(),
-                            // Value::Task {
-                            //     worker: Some(worker),
-                            //     parent,
-                            // } => {
-                            //     if let Some(parent) = parent.take() {
-                            //         worker.start_task(&parent);
-                            //         future::block_on(parent).map_err(|e| {
-                            //             BubbaError::ValueError {
-                            //                 source: Box::new(e),
-                            //                 location: location!(),
-                            //             }
-                            //         })?
-                            //     } else {
-                            //         panic!("Parent is missing.");
-                            //     }
-                            // }
                             _ => {
                                 dbg!(&expression);
                                 unimplemented!()

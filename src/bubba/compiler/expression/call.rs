@@ -332,10 +332,10 @@ fn compile_method_call(
                             thonk.insert_instruction(Instruction::ListLength, location!());
                             return result;
                         }
-                        darn => unreachable!("{darn:?}"),
+                        darn => panic!("{darn:?}"),
                     }
                 }
-                whoa => unreachable!("{whoa:?}"),
+                whoa => panic!("{whoa:?}"),
             },
             _ => {}
         }
