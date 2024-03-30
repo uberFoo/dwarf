@@ -1545,25 +1545,25 @@ impl VM {
                     Instruction::StoreLocal(index) => {
                         let value = stack.pop().unwrap();
 
-                        stack[fp - arity - local_count - 3 + index] = value;
+                        // stack[fp - arity - local_count - 3 + index] = value;
 
                         // We gotta index into the stack in reverse order from the index.
-                        // let s = &stack[fp - arity - local_count - 3 + index];
+                        let s = &stack[fp - arity - local_count - 3 + index];
 
-                        // // We *need* this check, otherwise we deadlock in the Pointer case.
-                        // // In any case, why do the work if you don't need to?
-                        // if value != *s {
-                        //     match s {
-                        //         StackValue::Value(_) => {
-                        //             stack[fp - arity - local_count - 3 + index] = value;
-                        //         }
-                        //         StackValue::Pointer(p) => {
-                        //             let mut s = s_write!(p);
-                        //             let value = value.into_value();
-                        //             *s = value;
-                        //         }
-                        //     }
-                        // }
+                        // We *need* this check, otherwise we deadlock in the Pointer case.
+                        // In any case, why do the work if you don't need to?
+                        if value != *s {
+                            match s {
+                                StackValue::Value(_) => {
+                                    stack[fp - arity - local_count - 3 + index] = value;
+                                }
+                                StackValue::Pointer(p) => {
+                                    let mut s = s_write!(p);
+                                    let value = value.into_value();
+                                    *s = value;
+                                }
+                            }
+                        }
 
                         1
                     }
