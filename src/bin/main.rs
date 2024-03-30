@@ -145,6 +145,16 @@ struct Arguments {
     /// With this option the interpreter will be used instead of the VM.
     #[arg(long, short, action=ArgAction::SetTrue)]
     interpreter: Option<bool>,
+    /// Verbose output
+    ///
+    /// Print verbose output.
+    #[arg(long, short, action=ArgAction::SetTrue)]
+    verbose: Option<bool>,
+    /// Extra verbose output
+    ///
+    /// Print extra verbose output.
+    #[arg(long, short, action=ArgAction::SetTrue)]
+    trace: Option<bool>,
 }
 
 #[derive(Clone, Debug, Args)]
@@ -195,6 +205,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let print_ast = args.ast.is_some() && args.ast.unwrap();
     let threads = args.threads.unwrap_or_else(num_cpus::get);
     let interpreter = args.interpreter.is_some() && args.interpreter.unwrap();
+    let trace = args.trace.is_some() && args.trace.unwrap();
 
     // if threads == 0 {
     //     return Err(Box::new(std::io::Error::new(
@@ -276,7 +287,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             };
             let mut ctx = initialize_interpreter(threads, dwarf_home, ctx)?;
             ctx.add_args(dwarf_args);
-            start_repl(&mut ctx, is_uber, threads)
+            start_repl(&mut ctx, is_uber, threads, trace)
                 .map_err(|e| {
                     println!("Interpreter exited with: {}", e);
                     e
@@ -431,16 +442,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 )?
             };
 
-            // let program = compile_program(
-            //     &file_name,
-            //     &source_code,
-            //     &dwarf_home,
-            //     &sarzak,
-            //     is_uber,
-            //     print_ast,
-            //     path,
-            // )?;
-
             // Get args and call the VM.
             let args: Vec<RefType<BubbaValue>> = dwarf_args
                 .into_iter()
@@ -448,7 +449,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .collect();
 
             #[cfg(feature = "async")]
-            let mut vm = VM::new(&program, &args, &dwarf_home, threads);
+            let mut vm = VM::new(&program, &args, &dwarf_home, threads, trace);
             #[cfg(not(feature = "async"))]
             let mut vm = VM::new(&program, &args, &dwarf_home);
 
@@ -520,7 +521,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let ctx = Context::default();
         let mut ctx = initialize_interpreter(2, dwarf_home, ctx)?;
 
-        start_repl(&mut ctx, is_uber, threads).map_err(|e| {
+        start_repl(&mut ctx, is_uber, threads, trace).map_err(|e| {
             println!("Interpreter exited with: {}", e);
             e
         })?;

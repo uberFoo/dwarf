@@ -22,7 +22,6 @@ use abi_stable::{
 };
 use ansi_term::Colour;
 use crossbeam::channel::{unbounded, Receiver, Sender};
-use log::{self, log_enabled, Level::Trace};
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use snafu::{location, Location};
 
@@ -130,6 +129,7 @@ pub struct VM {
     backtrace: bool,
     lambda_sender: Sender<LambdaCall>,
     lambda_receiver: Receiver<LambdaCall>,
+    trace: bool,
 }
 
 impl std::fmt::Debug for VM {
@@ -150,8 +150,9 @@ impl VM {
         args: &[RefType<Value>],
         home: &Path,
         thread_count: usize,
+        trace: bool,
     ) -> Self {
-        Self::inner_new(program, args, home, thread_count)
+        Self::inner_new(program, args, home, thread_count, trace)
     }
 
     #[cfg(not(feature = "async"))]
@@ -164,6 +165,7 @@ impl VM {
         args: &[RefType<Value>],
         home: &Path,
         thread_count: usize,
+        trace: bool,
     ) -> Self {
         #[cfg(feature = "tracy-client")]
         Client::start();
@@ -173,7 +175,7 @@ impl VM {
             panic!("No STRING symbol found.")
         };
 
-        if log_enabled!(target: "vm", Trace) {
+        if trace {
             eprintln!("{program}");
         }
 
@@ -202,6 +204,7 @@ impl VM {
             backtrace,
             lambda_sender,
             lambda_receiver,
+            trace,
         };
 
         let mut tmp_mem: Vec<Instruction> = Vec::new();
@@ -320,8 +323,6 @@ impl VM {
             panic!("Expected a lambda pointer.")
         };
 
-        let trace = log_enabled!(target: "vm", Trace);
-
         let (ip, _) = self.func_map.get(&format!("{name}_trampoline")).unwrap();
         self.inner_run(
             *ip as isize,
@@ -330,7 +331,6 @@ impl VM {
             args.len(),
             frame_size,
             self.program.clone(),
-            trace,
         )
     }
 
@@ -368,17 +368,7 @@ impl VM {
         let fp = frame_size + 5;
         let ip = *ip as isize;
 
-        let trace = log_enabled!(target: "vm", Trace);
-
-        let result = self.inner_run(
-            ip,
-            fp,
-            stack,
-            args.len(),
-            frame_size,
-            self.program.clone(),
-            trace,
-        );
+        let result = self.inner_run(ip, fp, stack, args.len(), frame_size, self.program.clone());
 
         result
     }
@@ -392,7 +382,6 @@ impl VM {
         mut arity: usize,
         mut local_count: usize,
         program: Program,
-        trace: bool,
     ) -> Result<RefType<Value>> {
         #[cfg(feature = "tracy-client")]
         let _frame = non_continuous_frame!("inner_run");
@@ -404,7 +393,7 @@ impl VM {
                 return Err(BubbaError::IPOutOfBounds { ip: ip as usize }.into());
             }
 
-            if trace {
+            if self.trace {
                 print_stack(&stack, fp);
                 println!("\t{} ->\t{cx}", Colour::Green.bold().paint("cx"));
                 for iip in 0.max(ip - 3)..(self.instrs.len() as isize).min(ip + 3isize) {
@@ -466,133 +455,8 @@ impl VM {
 
                         self.captures = None;
 
-                        let callee = &stack[stack.len() - func_arity - 2].clone();
-                        let stack_local_count = &stack[stack.len() - func_arity - 1].clone();
-                        let (callee, frame_size, local_card, stack_count): (
-                            isize,
-                            Value,
-                            usize,
-                            usize,
-                        ) = match stack_local_count.clone().into_value() {
-                            Value::Integer(arity) => {
-                                let callee: isize = callee.clone().into_value().try_into()?;
-                                let local_count = arity as usize;
-                                (
-                                    callee,
-                                    <usize as Into<Value>>::into(func_arity + local_count + 2),
-                                    local_count,
-                                    2,
-                                )
-                            }
-                            Value::LambdaPointer {
-                                name,
-                                frame_size,
-                                captures,
-                            } => {
-                                self.captures = Some(captures);
-                                let addr = self.func_map.get(&name).unwrap().0;
-                                let local_count = frame_size;
-                                (
-                                    addr as isize,
-                                    // This is plus one because the call frame does not include
-                                    // the frame size.
-                                    <usize as Into<Value>>::into(func_arity + local_count + 1),
-                                    local_count,
-                                    1,
-                                )
-                            }
-                            _ => {
-                                return Err(BubbaError::VmPanic {
-                                    message: format!("Unexpected value: {stack_local_count:?}.",),
-                                    location: location!(),
-                                }
-                                .into())
-                            }
-                        };
+                        self.start_task(&mut stack, *func_arity, arity, &program)?;
 
-                        let mut new_stack = Vec::new();
-                        for _ in 0..*func_arity + stack_count {
-                            new_stack.push(stack.pop().unwrap());
-                        }
-                        new_stack.reverse();
-
-                        let old_stack = &mut stack;
-                        let mut stack = new_stack;
-
-                        // The call frame has been mostly setup, but we need to make room
-                        // for locals.
-                        (0..local_card).for_each(|_| {
-                            stack.push(Value::Empty.into());
-                        });
-
-                        // Push the arity
-                        stack.push(<usize as Into<Value>>::into(arity).into());
-
-                        // Push the call frame size so that we can clean in out quickly
-                        stack.push(frame_size.into());
-
-                        // Push the sentinel IP
-                        stack.push(Value::Empty.into());
-
-                        let fp = stack.len();
-                        // Push the sentinel frame pointer
-                        stack.push(Value::Empty.into());
-
-                        let mut vm = self.clone();
-                        // This clone keeps the "escapes func body" ghoul away.
-                        let func_arity = func_arity.clone();
-
-                        let program = program.clone();
-                        let future = async move {
-                            vm.inner_run(callee, fp, stack, func_arity, local_card, program, false)
-                        };
-
-                        let executor = match unsafe { EXECUTOR.get() } {
-                            Some(executor) => executor,
-                            None => {
-                                let executor = Executor::new(self.thread_count);
-                                unsafe {
-                                    EXECUTOR.set(executor).unwrap();
-                                    EXECUTOR.get().unwrap()
-                                }
-                            }
-                        };
-                        let worker = executor.new_worker();
-                        let child_task = worker.create_task(future).unwrap();
-
-                        // let task = executor
-                        //     .new_worker()
-                        //     .create_task(async move {
-                        //         let result = child_task.await.unwrap();
-                        //         worker.destroy();
-                        //         Ok(result.into())
-                        //     })
-                        //     .unwrap();
-
-                        let value = new_ref!(
-                            Value,
-                            Value::Task {
-                                name: "invoke".to_owned(),
-                                running: false,
-                                task: Some(child_task)
-                            }
-                        );
-
-                        old_stack.push(value.into());
-
-                        // ip = callee;
-                        // let result = self.inner_run(arity, local_count, trace)?;
-
-                        // Move the frame pointer back
-                        // fp = (&*s_read!(stack[fp])).try_into().unwrap();
-                        // fp = old_fp;
-                        // ip = old_ip;
-
-                        // (0..arity + local_count + 3).for_each(|_| {
-                        //     stack.pop();
-                        // });
-
-                        // stack.push(result);
                         1
                     }
                     #[cfg(feature = "async")]
@@ -600,140 +464,15 @@ impl VM {
                         #[cfg(feature = "tracy-client")]
                         let _span = span!("AsyncSpawn");
 
-                        let callee = &stack[stack.len() - func_arity - 2].clone();
-                        let stack_local_count = &stack[stack.len() - func_arity - 1].clone();
-                        let (callee, frame_size, local_card, stack_count): (
-                            isize,
-                            Value,
-                            usize,
-                            usize,
-                        ) = match stack_local_count.clone().into_value() {
-                            Value::Integer(arity) => {
-                                let callee: isize = callee.clone().into_value().try_into()?;
-                                let local_count = arity as usize;
-                                (
-                                    callee,
-                                    <usize as Into<Value>>::into(func_arity + local_count + 2),
-                                    local_count,
-                                    2,
-                                )
-                            }
-                            Value::LambdaPointer {
-                                name,
-                                frame_size,
-                                captures,
-                            } => {
-                                self.captures = Some(captures);
-                                let addr = self.func_map.get(&name).unwrap().0;
-                                let local_count = frame_size;
-                                (
-                                    addr as isize,
-                                    // This is plus one because the call frame does not include
-                                    // the frame size.
-                                    <usize as Into<Value>>::into(func_arity + local_count + 1),
-                                    local_count,
-                                    1,
-                                )
-                            }
-                            _ => {
-                                return Err(BubbaError::VmPanic {
-                                    message: format!("Unexpected value: {stack_local_count:?}.",),
-                                    location: location!(),
-                                }
-                                .into())
-                            }
-                        };
+                        self.start_task(&mut stack, *func_arity, arity, &program)?;
 
-                        let mut new_stack = Vec::new();
-                        for _ in 0..*func_arity + stack_count {
-                            new_stack.push(stack.pop().unwrap());
-                        }
-                        new_stack.reverse();
-
-                        let old_stack = &mut stack;
-                        let mut stack = new_stack;
-
-                        // The call stack has been setup, but we need to make room
-                        // for locals.
-                        (0..local_card).for_each(|_| {
-                            stack.push(Value::Empty.into());
-                        });
-
-                        // Push the arity
-                        stack.push(<usize as Into<Value>>::into(arity).into());
-
-                        // Push the call frame size so that we can clean in out quickly
-                        stack.push(frame_size.into());
-
-                        // Push the sentinel IP
-                        stack.push(Value::Empty.into());
-
-                        let fp = stack.len();
-                        // Push the sentinel frame pointer
-                        stack.push(Value::Empty.into());
-
-                        let mut vm = self.clone();
-                        // This clone keeps the "escapes func body" ghoul away.
-                        let func_arity = func_arity.clone();
-
-                        let program = program.clone();
-                        let future = async move {
-                            vm.inner_run(callee, fp, stack, func_arity, local_card, program, false)
-                        };
-
-                        let executor = match unsafe { EXECUTOR.get() } {
-                            Some(executor) => executor,
-                            None => {
-                                let executor = Executor::new(self.thread_count);
-                                unsafe {
-                                    EXECUTOR.set(executor).unwrap();
-                                    EXECUTOR.get().unwrap()
-                                }
-                            }
-                        };
-                        let worker = executor.new_worker();
-                        let child_task = worker.spawn_task(future).unwrap();
-                        executor.start_task(&child_task);
-
-                        // let task = executor
-                        //     .new_worker()
-                        //     .create_task(async move {
-                        //         let result = child_task.await.unwrap();
-                        //         worker.destroy();
-                        //         Ok(result.into())
-                        //     })
-                        //     .unwrap();
-
-                        let value = new_ref!(
-                            Value,
-                            Value::Task {
-                                name: "invoke".to_owned(),
-                                running: true,
-                                task: Some(child_task)
-                            }
-                        );
-
-                        old_stack.push(value.into());
-
-                        // ip = callee;
-                        // let result = self.inner_run(arity, local_count, trace)?;
-
-                        // Move the frame pointer back
-                        // fp = (&*s_read!(stack[fp])).try_into().unwrap();
-                        // fp = old_fp;
-                        // ip = old_ip;
-
-                        // (0..arity + local_count + 3).for_each(|_| {
-                        //     stack.pop();
-                        // });
-
-                        // stack.push(result);
                         1
                     }
                     #[cfg(feature = "async")]
                     Instruction::Await => {
                         #[cfg(feature = "tracy-client")]
                         let _span = span!("Await");
+
                         let future = stack.pop().unwrap().into_pointer();
                         let mut expression = &mut *s_write!(future);
 
@@ -1806,23 +1545,25 @@ impl VM {
                     Instruction::StoreLocal(index) => {
                         let value = stack.pop().unwrap();
 
-                        // We gotta index into the stack in reverse order from the index.
-                        let s = &stack[fp - arity - local_count - 3 + index];
+                        stack[fp - arity - local_count - 3 + index] = value;
 
-                        // We *need* this check, otherwise we deadlock in the Pointer case.
-                        // In any case, why do the work if you don't need to?
-                        if value != *s {
-                            match s {
-                                StackValue::Value(_) => {
-                                    stack[fp - arity - local_count - 3 + index] = value;
-                                }
-                                StackValue::Pointer(p) => {
-                                    let mut s = s_write!(p);
-                                    let value = value.into_value();
-                                    *s = value;
-                                }
-                            }
-                        }
+                        // We gotta index into the stack in reverse order from the index.
+                        // let s = &stack[fp - arity - local_count - 3 + index];
+
+                        // // We *need* this check, otherwise we deadlock in the Pointer case.
+                        // // In any case, why do the work if you don't need to?
+                        // if value != *s {
+                        //     match s {
+                        //         StackValue::Value(_) => {
+                        //             stack[fp - arity - local_count - 3 + index] = value;
+                        //         }
+                        //         StackValue::Pointer(p) => {
+                        //             let mut s = s_write!(p);
+                        //             let value = value.into_value();
+                        //             *s = value;
+                        //         }
+                        //     }
+                        // }
 
                         1
                     }
@@ -1984,6 +1725,126 @@ impl VM {
             ip += ip_offset;
         }
     }
+
+    fn start_task(
+        &mut self,
+        mut stack: &mut Vec<StackValue>,
+        func_arity: usize,
+        arity: usize,
+        program: &Program,
+    ) -> Result<()> {
+        let callee = &stack[stack.len() - func_arity - 2].clone();
+        let stack_local_count = &stack[stack.len() - func_arity - 1].clone();
+        let (name, callee, frame_size, local_card, stack_count): (
+            String,
+            isize,
+            Value,
+            usize,
+            usize,
+        ) = match stack_local_count.clone().into_value() {
+            Value::Integer(arity) => {
+                let callee: isize = callee.clone().into_value().try_into()?;
+                let local_count = arity as usize;
+                (
+                    format!("{callee}({arity})"),
+                    callee,
+                    <usize as Into<Value>>::into(func_arity + local_count + 2),
+                    local_count,
+                    2,
+                )
+            }
+            Value::LambdaPointer {
+                name,
+                frame_size,
+                captures,
+            } => {
+                self.captures = Some(captures);
+                let addr = self.func_map.get(&name).unwrap().0;
+                let local_count = frame_size;
+                (
+                    name,
+                    addr as isize,
+                    // This is plus one because the call frame does not include
+                    // the frame size.
+                    <usize as Into<Value>>::into(func_arity + local_count + 1),
+                    local_count,
+                    1,
+                )
+            }
+            _ => {
+                return Err(BubbaError::VmPanic {
+                    message: format!("Unexpected value: {stack_local_count:?}.",),
+                    location: location!(),
+                }
+                .into())
+            }
+        };
+
+        let mut new_stack = Vec::new();
+        for _ in 0..func_arity + stack_count {
+            new_stack.push(stack.pop().unwrap());
+        }
+        new_stack.reverse();
+
+        let old_stack = &mut stack;
+        let mut stack = new_stack;
+
+        // The call stack has been setup, but we need to make room
+        // for locals.
+        (0..local_card).for_each(|_| {
+            stack.push(Value::Empty.into());
+        });
+
+        // Push the arity
+        stack.push(<usize as Into<Value>>::into(arity).into());
+
+        // Push the call frame size so that we can clean in out quickly
+        stack.push(frame_size.into());
+
+        // Push the sentinel IP
+        stack.push(Value::Empty.into());
+
+        let fp = stack.len();
+        // Push the sentinel frame pointer
+        stack.push(Value::Empty.into());
+
+        let mut vm = self.clone();
+        // This clone keeps the "escapes func body" ghoul away.
+        // let func_arity = func_arity.clone();
+
+        let program = program.clone();
+        let future =
+            async move { vm.inner_run(callee, fp, stack, func_arity, local_card, program) };
+
+        let executor = match unsafe { EXECUTOR.get() } {
+            Some(executor) => executor,
+            None => {
+                let executor = Executor::new(self.thread_count);
+                unsafe {
+                    EXECUTOR.set(executor).unwrap();
+                    EXECUTOR.get().unwrap()
+                }
+            }
+        };
+        let worker = executor.new_worker();
+        let child_task = worker.spawn_task(future).unwrap();
+        executor.start_task(&child_task);
+
+        tracing::debug!(target: "vm", "Task started: {name}.");
+
+        let value = new_ref!(
+            Value,
+            Value::Task {
+                name,
+                running: true,
+                task: Some(child_task)
+            }
+        );
+
+        old_stack.push(value.into());
+
+        Ok(())
+    }
 }
 
 impl From<(FfiValue, &Value)> for Value {
@@ -2092,7 +1953,7 @@ mod tests {
         );
 
         #[cfg(feature = "async")]
-        let mut vm = VM::new(&program, &[], &PathBuf::new(), 1);
+        let mut vm = VM::new(&program, &[], &PathBuf::new(), 1, true);
         #[cfg(not(feature = "async"))]
         let mut vm = VM::new(&program, &[], &PathBuf::new());
         let result = vm.invoke("test", &[]);
@@ -2120,7 +1981,7 @@ mod tests {
         );
 
         #[cfg(feature = "async")]
-        let mut vm = VM::new(&program, &[], &PathBuf::new(), 1);
+        let mut vm = VM::new(&program, &[], &PathBuf::new(), 1, true);
         #[cfg(not(feature = "async"))]
         let mut vm = VM::new(&program, &[], &PathBuf::new());
         let result = vm.invoke("test", &[]);
@@ -2158,7 +2019,7 @@ mod tests {
         );
 
         #[cfg(feature = "async")]
-        let mut vm = VM::new(&program, &[], &PathBuf::new(), 1);
+        let mut vm = VM::new(&program, &[], &PathBuf::new(), 1, true);
         #[cfg(not(feature = "async"))]
         let mut vm = VM::new(&program, &[], &PathBuf::new());
         let result = vm.invoke("test", &[]);
@@ -2196,7 +2057,7 @@ mod tests {
         );
 
         #[cfg(feature = "async")]
-        let mut vm = VM::new(&program, &[], &PathBuf::new(), 1);
+        let mut vm = VM::new(&program, &[], &PathBuf::new(), 1, true);
         #[cfg(not(feature = "async"))]
         let mut vm = VM::new(&program, &[], &PathBuf::new());
         let result = vm.invoke("test", &[]);
@@ -2233,7 +2094,7 @@ mod tests {
         );
 
         #[cfg(feature = "async")]
-        let mut vm = VM::new(&program, &[], &PathBuf::new(), 1);
+        let mut vm = VM::new(&program, &[], &PathBuf::new(), 1, true);
         #[cfg(not(feature = "async"))]
         let mut vm = VM::new(&program, &[], &PathBuf::new());
         let result = vm.invoke("test", &[]);
@@ -2269,7 +2130,7 @@ mod tests {
         );
 
         #[cfg(feature = "async")]
-        let mut vm = VM::new(&program, &[], &PathBuf::new(), 1);
+        let mut vm = VM::new(&program, &[], &PathBuf::new(), 1, true);
         #[cfg(not(feature = "async"))]
         let mut vm = VM::new(&program, &[], &PathBuf::new());
         let result = vm.invoke("test", &[]);
@@ -2304,7 +2165,7 @@ mod tests {
         );
 
         #[cfg(feature = "async")]
-        let mut vm = VM::new(&program, &[], &PathBuf::new(), 1);
+        let mut vm = VM::new(&program, &[], &PathBuf::new(), 1, true);
         #[cfg(not(feature = "async"))]
         let mut vm = VM::new(&program, &[], &PathBuf::new());
         let result = vm.invoke("test", &[]);
@@ -2339,7 +2200,7 @@ mod tests {
         );
 
         #[cfg(feature = "async")]
-        let mut vm = VM::new(&program, &[], &PathBuf::new(), 1);
+        let mut vm = VM::new(&program, &[], &PathBuf::new(), 1, true);
         #[cfg(not(feature = "async"))]
         let mut vm = VM::new(&program, &[], &PathBuf::new());
         let result = vm.invoke("test", &[]);
@@ -2387,7 +2248,7 @@ mod tests {
         );
 
         #[cfg(feature = "async")]
-        let mut vm = VM::new(&program, &[], &PathBuf::new(), 1);
+        let mut vm = VM::new(&program, &[], &PathBuf::new(), 1, true);
         #[cfg(not(feature = "async"))]
         let mut vm = VM::new(&program, &[], &PathBuf::new());
         let result = vm.invoke("test", &[]);
@@ -2425,7 +2286,7 @@ mod tests {
         );
 
         #[cfg(feature = "async")]
-        let mut vm = VM::new(&program, &[], &PathBuf::new(), 1);
+        let mut vm = VM::new(&program, &[], &PathBuf::new(), 1, true);
         #[cfg(not(feature = "async"))]
         let mut vm = VM::new(&program, &[], &PathBuf::new());
 
@@ -2509,7 +2370,7 @@ mod tests {
         program.add_symbol("STRING".to_owned(), ty);
 
         #[cfg(feature = "async")]
-        let mut vm = VM::new(&program, &[], &PathBuf::new(), 1);
+        let mut vm = VM::new(&program, &[], &PathBuf::new(), 1, true);
         #[cfg(not(feature = "async"))]
         let mut vm = VM::new(&program, &[], &PathBuf::new());
 

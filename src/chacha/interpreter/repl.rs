@@ -14,7 +14,12 @@ use crate::{
     new_ref, s_read, s_write, ChaChaError, NewRef, RefType, BUILD_TIME, PATH_ROOT, VERSION,
 };
 
-pub fn start_repl(context: &mut Context, is_uber: bool, thread_count: usize) -> Result<(), Error> {
+pub fn start_repl(
+    context: &mut Context,
+    is_uber: bool,
+    thread_count: usize,
+    trace: bool,
+) -> Result<(), Error> {
     use std::io;
 
     use rustyline::error::ReadlineError;
@@ -38,6 +43,7 @@ pub fn start_repl(context: &mut Context, is_uber: bool, thread_count: usize) -> 
         &[],
         context.get_home(),
         thread_count,
+        trace,
     );
     #[cfg(not(feature = "async"))]
     let mut vm = VM::new(

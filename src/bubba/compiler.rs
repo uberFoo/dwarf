@@ -767,7 +767,7 @@ mod test {
     const THREADS: usize = 5;
     pub(super) fn run_vm(program: &Program) -> Result<RefType<Value>, Error> {
         #[cfg(feature = "async")]
-        let mut vm = VM::new(program, &[], &get_dwarf_home(), THREADS);
+        let mut vm = VM::new(program, &[], &get_dwarf_home(), THREADS, true);
         #[cfg(not(feature = "async"))]
         let mut vm = VM::new(program, &[], &get_dwarf_home());
         vm.invoke("main", &[])
@@ -778,7 +778,7 @@ mod test {
         args: &[RefType<Value>],
     ) -> Result<RefType<Value>, Error> {
         #[cfg(feature = "async")]
-        let mut vm = VM::new(program, args, &get_dwarf_home(), THREADS);
+        let mut vm = VM::new(program, args, &get_dwarf_home(), THREADS, true);
         #[cfg(not(feature = "async"))]
         let mut vm = VM::new(program, args, &get_dwarf_home());
         vm.invoke("main", &[])
