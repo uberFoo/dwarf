@@ -26,6 +26,7 @@ use crate::{
 
 #[derive(Default, Deserialize, Serialize)]
 pub enum Value {
+    AnyList(RefType<Vec<RefType<Self>>>),
     /// Boolean
     ///
     /// True and False
@@ -49,6 +50,10 @@ pub enum Value {
         frame_size: usize,
         captures: Vec<RefType<Value>>,
     },
+    List {
+        ty: RefType<ValueType>,
+        inner: RefType<Vec<RefType<Self>>>,
+    },
     #[serde(skip)]
     Plugin((String, RefType<PluginType>)),
     Range(Range<DwarfInteger>),
@@ -63,10 +68,6 @@ pub enum Value {
     },
     Uuid(uuid::Uuid),
     ValueType(ValueType),
-    Vector {
-        ty: RefType<ValueType>,
-        inner: RefType<Vec<RefType<Self>>>,
-    },
 }
 
 // #[cfg(feature = "async")]
@@ -113,6 +114,21 @@ impl Value {
     #[inline]
     fn inner_string(&self, f: &mut Vec<u8>) -> std::io::Result<()> {
         match self {
+            Self::AnyList(list) => {
+                write!(f, "[")?;
+                let list = s_read!(list);
+                let mut first_time = true;
+                for i in &*list {
+                    if first_time {
+                        first_time = false;
+                    } else {
+                        write!(f, ", ")?;
+                    }
+
+                    write!(f, "{}", s_read!(i))?;
+                }
+                write!(f, "]")
+            }
             Self::Boolean(bool_) => write!(f, "{bool_}"),
             Self::Char(char_) => write!(f, "{char_}"),
             Self::Empty => write!(f, "()"),
@@ -136,19 +152,7 @@ impl Value {
                 }
                 write!(f, "] }}")
             }
-            Self::Plugin((name, _plugin)) => write!(f, "plugin::{name}"),
-            Self::Range(range) => write!(f, "{range:?}"),
-            Self::String(str_) => write!(f, "{str_}"),
-            Self::Struct(ty) => write!(f, "{}", ty),
-            #[cfg(feature = "async")]
-            Self::Task {
-                name,
-                running,
-                task,
-            } => write!(f, "VmTask `{name}`: {task:?}, running: {running}"),
-            Self::Uuid(uuid) => write!(f, "{uuid}"),
-            Self::ValueType(ty) => write!(f, "{:?}", ty),
-            Self::Vector { ty: _, inner } => {
+            Self::List { ty: _, inner } => {
                 let inner = s_read!(inner);
                 let mut first_time = true;
                 write!(f, "[")?;
@@ -163,10 +167,22 @@ impl Value {
                 }
                 write!(f, "]")
             }
+            Self::Plugin((name, _plugin)) => write!(f, "plugin::{name}"),
+            Self::Range(range) => write!(f, "{range:?}"),
+            Self::String(str_) => write!(f, "{str_}"),
+            Self::Struct(ty) => write!(f, "{}", ty),
+            #[cfg(feature = "async")]
+            Self::Task {
+                name,
+                running,
+                task,
+            } => write!(f, "VmTask `{name}`: {task:?}, running: {running}"),
+            Self::Uuid(uuid) => write!(f, "{uuid}"),
+            Self::ValueType(ty) => write!(f, "{:?}", ty),
         }
     }
 
-    pub fn get_value_type(&self, context: &Context) -> RefType<ValueType> {
+    pub(crate) fn get_value_type(&self, context: &Context) -> RefType<ValueType> {
         let sarzak = context.sarzak_heel().clone();
         let sarzak = &s_read!(sarzak);
         let lu_dog = context.lu_dog_heel().clone();
@@ -227,6 +243,19 @@ impl Value {
                 }
                 unreachable!()
             }
+            Value::List { ty, inner: _ } => {
+                for vt in lu_dog.iter_value_type() {
+                    if let ValueTypeEnum::List(id) = s_read!(vt).subtype {
+                        let list = lu_dog.exhume_list(&id).unwrap();
+                        let list_ty = s_read!(list).r36_value_type(lu_dog)[0].clone();
+                        dbg!(&ty, &list, &list_ty);
+                        if *s_read!(ty) == *s_read!(list_ty) {
+                            return vt.clone();
+                        }
+                    }
+                }
+                unreachable!()
+            }
             Value::Plugin((name, _plugin)) => {
                 for vt in lu_dog.iter_value_type() {
                     if let ValueTypeEnum::XPlugin(id) = s_read!(vt).subtype {
@@ -269,19 +298,6 @@ impl Value {
                 }
                 unreachable!()
             }
-            Value::Vector { ty, inner: _ } => {
-                for vt in lu_dog.iter_value_type() {
-                    if let ValueTypeEnum::List(id) = s_read!(vt).subtype {
-                        let list = lu_dog.exhume_list(&id).unwrap();
-                        let list_ty = s_read!(list).r36_value_type(lu_dog)[0].clone();
-                        dbg!(&ty, &list, &list_ty);
-                        if *s_read!(ty) == *s_read!(list_ty) {
-                            return vt.clone();
-                        }
-                    }
-                }
-                unreachable!()
-            }
             value => {
                 log::error!("Value::get_type() not implemented for {:?}", value);
                 for vt in lu_dog.iter_value_type() {
@@ -298,6 +314,21 @@ impl Value {
 impl std::fmt::Debug for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
+            Self::AnyList(list) => {
+                write!(f, "[")?;
+                let list = s_read!(list);
+                let mut first_time = true;
+                for i in &*list {
+                    if first_time {
+                        first_time = false;
+                    } else {
+                        write!(f, ", ")?;
+                    }
+
+                    write!(f, "{:?}", s_read!(i))?;
+                }
+                write!(f, "]")
+            }
             Self::Boolean(b) => write!(f, "{b:?}"),
             Self::Char(c) => write!(f, "{c:?}"),
             Self::Empty => write!(f, "()"),
@@ -320,6 +351,7 @@ impl std::fmt::Debug for Value {
                 }
                 write!(f, "] }}")
             }
+            Self::List { ty, inner } => write!(f, "{ty:?}: {inner:?}"),
             Self::Plugin((name, _plugin)) => write!(f, "plugin::{name}"),
             Self::Range(range) => write!(f, "{range:?}"),
             Self::String(s) => write!(f, "{s:?}"),
@@ -332,7 +364,6 @@ impl std::fmt::Debug for Value {
             } => write!(f, "VmTask `{name}`: {task:?}, running: {running}"),
             Self::ValueType(ty) => write!(f, "{:?}", ty),
             Self::Uuid(uuid) => write!(f, "{uuid:?}"),
-            Self::Vector { ty, inner } => write!(f, "{ty:?}: {inner:?}"),
         }
     }
 }
@@ -340,6 +371,7 @@ impl std::fmt::Debug for Value {
 impl Clone for Value {
     fn clone(&self) -> Self {
         match self {
+            Self::AnyList(list) => Self::AnyList(list.clone()),
             Self::Boolean(bool_) => Self::Boolean(*bool_),
             Self::Char(char_) => Self::Char(*char_),
             Self::Empty => Self::Empty,
@@ -355,6 +387,10 @@ impl Clone for Value {
                 name: name.to_owned(),
                 frame_size: *frame_size,
                 captures: captured.clone(),
+            },
+            Self::List { ty, inner } => Self::List {
+                ty: ty.clone(),
+                inner: inner.clone(),
             },
             Self::Plugin(plugin) => Self::Plugin(plugin.clone()),
             Self::Range(range) => Self::Range(range.clone()),
@@ -373,10 +409,6 @@ impl Clone for Value {
             },
             Self::ValueType(ty) => Self::ValueType(ty.clone()),
             Self::Uuid(uuid) => Self::Uuid(*uuid),
-            Self::Vector { ty, inner } => Self::Vector {
-                ty: ty.clone(),
-                inner: inner.clone(),
-            },
         }
     }
 }
@@ -385,6 +417,21 @@ impl Clone for Value {
 impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            Self::AnyList(list) => {
+                write!(f, "[")?;
+                let list = s_read!(list);
+                let mut first_time = true;
+                for i in &*list {
+                    if first_time {
+                        first_time = false;
+                    } else {
+                        write!(f, ", ")?;
+                    }
+
+                    write!(f, "{}", s_read!(i))?;
+                }
+                write!(f, "]")
+            }
             Self::Boolean(bool_) => write!(f, "{bool_}"),
             Self::Char(char_) => write!(f, "{char_}"),
             Self::Empty => write!(f, "()"),
@@ -408,19 +455,7 @@ impl fmt::Display for Value {
                 }
                 write!(f, "] }}")
             }
-            Self::Plugin((name, _plugin)) => write!(f, "plugin::{name}"),
-            Self::Range(range) => write!(f, "{range:?}"),
-            Self::String(str_) => write!(f, "\"{str_}\""),
-            Self::Struct(ty) => write!(f, "{}", ty),
-            #[cfg(feature = "async")]
-            Self::Task {
-                name,
-                running,
-                task,
-            } => write!(f, "VmTask `{name}`: {task:?}, running: {running}"),
-            Self::ValueType(ty) => write!(f, "{:?}", ty),
-            Self::Uuid(uuid) => write!(f, "{uuid}"),
-            Self::Vector { ty: _, inner } => {
+            Self::List { ty: _, inner } => {
                 let inner = s_read!(inner);
                 let mut first_time = true;
                 write!(f, "[")?;
@@ -435,6 +470,18 @@ impl fmt::Display for Value {
                 }
                 write!(f, "]")
             }
+            Self::Plugin((name, _plugin)) => write!(f, "plugin::{name}"),
+            Self::Range(range) => write!(f, "{range:?}"),
+            Self::String(str_) => write!(f, "\"{str_}\""),
+            Self::Struct(ty) => write!(f, "{}", ty),
+            #[cfg(feature = "async")]
+            Self::Task {
+                name,
+                running,
+                task,
+            } => write!(f, "VmTask `{name}`: {task:?}, running: {running}"),
+            Self::ValueType(ty) => write!(f, "{:?}", ty),
+            Self::Uuid(uuid) => write!(f, "{uuid}"),
         }
     }
 }
@@ -1208,11 +1255,7 @@ impl std::cmp::PartialEq for Value {
             (Value::Float(a), Value::Integer(b)) => a == &(*b as DwarfFloat),
             (Value::Integer(a), Value::Integer(b)) => a == b,
             (Value::Integer(a), Value::Float(b)) => (*a as DwarfFloat) == *b,
-            (Value::Plugin((a, _)), Value::Plugin((b, _))) => a == b,
-            (Value::String(a), Value::String(b)) => a == b,
-            (Value::Struct(a), Value::Struct(b)) => a == b,
-            (Value::Uuid(a), Value::Uuid(b)) => a == b,
-            (Value::Vector { ty: ty_a, inner: a }, Value::Vector { ty: ty_b, inner: b }) => {
+            (Value::List { ty: ty_a, inner: a }, Value::List { ty: ty_b, inner: b }) => {
                 if *s_read!(ty_a) != *s_read!(ty_b) {
                     return false;
                 }
@@ -1232,6 +1275,10 @@ impl std::cmp::PartialEq for Value {
 
                 true
             }
+            (Value::Plugin((a, _)), Value::Plugin((b, _))) => a == b,
+            (Value::String(a), Value::String(b)) => a == b,
+            (Value::Struct(a), Value::Struct(b)) => a == b,
+            (Value::Uuid(a), Value::Uuid(b)) => a == b,
             (_, _) => false, //Value::Error(format!("Cannot compare {} and {}", a, b)),
         }
     }

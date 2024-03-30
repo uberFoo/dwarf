@@ -455,7 +455,7 @@ impl fmt::Display for DwarfErrorReporter<'_> {
                 let span = span.clone();
                 let report = Report::build(ReportKind::Error, file, span.start)
                     .with_message(format!(
-                        "multiply defined symbol: {}::{}",
+                        "multiply defined symbol: {}{}",
                         OTHER_CLR.paint(orig_path),
                         OTHER_CLR.paint(name)
                     ))
@@ -474,7 +474,7 @@ impl fmt::Display for DwarfErrorReporter<'_> {
                     ))
                 } else {
                     report.with_note(format!(
-                        "The new path is {}::{}",
+                        "The new path is {}{}",
                         OTHER_CLR.paint(path),
                         OTHER_CLR.paint(name)
                     ))

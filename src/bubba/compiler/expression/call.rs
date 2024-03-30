@@ -2,7 +2,7 @@ use snafu::{location, Location};
 use uuid::Uuid;
 
 #[cfg(feature = "async")]
-use crate::keywords::{LEN, PUSH, SPAWN};
+use crate::keywords::{LEN, MAX, PUSH, SPAWN};
 
 use crate::{
     bubba::{
@@ -99,9 +99,8 @@ pub(in crate::bubba::compiler) fn compile_lambda(
     λ: &SarzakStorePtr,
     outer_thonk: &mut CThonk,
     context: &mut Context,
-    span: Span,
 ) -> Result<Option<ValueType>> {
-    tracing::debug!(target: "instr", "{}: {}:{}:{}", POP_CLR.paint("compile_lambda"), file!(), line!(), column!());
+    tracing::debug!(target: "instr", "{}", POP_CLR.paint("compile_lambda"));
 
     let lu_dog = context.lu_dog_heel();
     let lu_dog = s_read!(lu_dog);
@@ -121,6 +120,8 @@ pub(in crate::bubba::compiler) fn compile_lambda(
     let name = format!("{}", Uuid::new_v4());
 
     let mut thonk = CThonk::new(name.clone());
+
+    context.insert_lambda(name.clone(), params.len());
 
     if !params.is_empty() {
         let mut next = λ.r103_lambda_parameter(&lu_dog)[0].clone();
@@ -210,7 +211,7 @@ pub(in crate::bubba::compiler) fn compile_lambda(
         location!(),
     );
 
-    Ok(Some((*s_read!(λ.r1_value_type(&lu_dog)[0])).clone()))
+    Ok(Some(s_read!(λ.r1_value_type(&lu_dog)[0]).clone()))
 }
 
 /// Compile a Function Call
@@ -331,15 +332,33 @@ fn compile_method_call(
                             thonk.insert_instruction(Instruction::ListLength, location!());
                             return result;
                         }
-                        darn => unreachable!("{darn:?}"),
+                        darn => panic!("{darn:?}"),
                     }
                 }
-                whoa => unreachable!("{whoa:?}"),
+                whoa => panic!("{whoa:?}"),
+            },
+            MAX => match result.clone()?.unwrap().subtype {
+                ValueTypeEnum::List(_) => {
+                    // thonk.insert_instruction(Instruction::ListLength, location!());
+                }
+                ValueTypeEnum::Ty(ref id) => {
+                    let ty = sarzak.exhume_ty(id).unwrap();
+                    let ty = ty.read().unwrap();
+
+                    match &*ty {
+                        Ty::Integer(_) => {
+                            // thonk.insert_instruction(Instruction::ListLength, location!());
+                        }
+                        darn => panic!("{darn:?}"),
+                    }
+                }
+                whoa => panic!("{whoa:?}"),
             },
             _ => {}
         }
 
         thonk.insert_instruction(Instruction::MethodLookup(name), location!());
+
         result
     } else {
         panic!();
@@ -891,7 +910,7 @@ mod test {
     }
 
     #[test]
-    fn test_lambda() {
+    fn lambda_simple() {
         setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
 
@@ -916,9 +935,9 @@ mod test {
         let program = compile(&ctx).unwrap();
         println!("{program}");
 
-        assert_eq!(program.get_thonk_card(), 2);
+        assert_eq!(program.get_thonk_card(), 3);
 
-        assert_eq!(program.get_instruction_card(), 20);
+        assert_eq!(program.get_instruction_card(), 22);
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &45.into());
     }
@@ -936,7 +955,7 @@ mod test {
                        let foo = |x: int, y: int| -> () {
                            x + y + a;
                        };
-                       foo(1, 2)
+                       foo(1, 2);
                    }";
         let ast = parse_dwarf("test_lambda", ore).unwrap();
         let ctx = new_lu_dog(
@@ -949,9 +968,9 @@ mod test {
         let program = compile(&ctx).unwrap();
         println!("{program}");
 
-        assert_eq!(program.get_thonk_card(), 2);
+        assert_eq!(program.get_thonk_card(), 3);
 
-        assert_eq!(program.get_instruction_card(), 21);
+        assert_eq!(program.get_instruction_card(), 24);
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Empty);
     }

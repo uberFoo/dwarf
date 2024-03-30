@@ -3,7 +3,8 @@ use snafu::{location, Location};
 use crate::{
     bubba::{
         compiler::{
-            compile_expression, get_span, BubbaCompilerError, CThonk, Context, Result, INT, STRING,
+            compile_expression, get_span, BubbaCompilerError, CThonk, Context, Result, INTEGER,
+            STRING,
         },
         instr::Instruction,
         value::Value,
@@ -111,7 +112,7 @@ pub(in crate::bubba::compiler) fn compile(
 
                     match &*ty {
                         Ty::Integer(_) => {
-                            let int = context.get_type(INT).unwrap().clone();
+                            let int = context.get_type(INTEGER).unwrap().clone();
 
                             // Insert the iteration ident into the symbol table.
                             let iter_ident_index =
@@ -225,7 +226,7 @@ pub(in crate::bubba::compiler) fn compile(
             iter_ident_index
         }
         ValueTypeEnum::Range(_) => {
-            let int = context.get_type(INT).unwrap().clone();
+            let int = context.get_type(INTEGER).unwrap().clone();
 
             // Insert the iteration ident into the symbol table.
             let iter_ident_index = match context.insert_symbol(iter_ident, int) {

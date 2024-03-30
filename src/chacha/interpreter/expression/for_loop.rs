@@ -20,7 +20,7 @@ pub fn eval(for_loop: &SarzakStorePtr, context: &mut Context) -> Result<RefType<
         .unwrap();
 
     let list = eval_expression(list, context)?;
-    let list = if let Value::Vector { ty: _, inner: vec } = &*s_read!(list) {
+    let list = if let Value::List { ty: _, inner: vec } = &*s_read!(list) {
         vec.to_owned()
     } else if let Value::String(str) = &*s_read!(list) {
         new_ref!(

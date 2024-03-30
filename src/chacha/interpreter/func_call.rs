@@ -235,7 +235,7 @@ fn eval_external_method(
 
                         Ok(value)
                     }
-                    FfiValue::Vector(vec) => {
+                    FfiValue::List(vec) => {
                         let vec = vec
                             .into_iter()
                             .map(|k| Value::from((k, &*s_read!(lu_dog))))
@@ -249,7 +249,7 @@ fn eval_external_method(
                         };
                         let value = new_ref!(
                             Value,
-                            Value::Vector {
+                            Value::List {
                                 ty,
                                 inner: new_ref!(Vec<RefType<Value>>, vec)
                             }
@@ -486,7 +486,10 @@ fn objectstore_static_methods(
             let ctor = root_module.new();
             let (_, path) = arg_values.pop().unwrap();
             let path = s_read!(path).clone();
-            let plugin = new_ref!(PluginType, ctor(vec![path.into()].into()).unwrap());
+            let plugin = new_ref!(
+                PluginType,
+                ctor(context.lambda_sender().into(), vec![path.into()].into()).unwrap()
+            );
             model.1.replace(plugin.clone());
 
             let value = new_ref!(Value, Value::Store(store, plugin));
@@ -510,13 +513,16 @@ fn objectstore_static_methods(
             .map_err(|e| {
                 eprintln!("{e}");
                 ChaChaError::BadnessHappened {
-                    message: "Plug-in error".to_owned(),
+                    message: format!("Plug-in error: {e:?}"),
                     location: location!(),
                 }
             })?;
 
             let ctor = root_module.new();
-            let plugin = new_ref!(PluginType, ctor(vec![].into()).unwrap());
+            let plugin = new_ref!(
+                PluginType,
+                ctor(context.lambda_sender().into(), vec![].into()).unwrap()
+            );
             model.1.replace(plugin.clone());
 
             let value = new_ref!(Value, Value::Store(store, plugin));

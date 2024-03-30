@@ -105,7 +105,7 @@ pub(in crate::bubba::compiler) fn compile(
                                     );
                                     thonk.insert_instruction(Instruction::Dup, location!());
                                     thonk.insert_instruction(
-                                        Instruction::StoreLocal(idx),
+                                        Instruction::InitializeLocal(idx),
                                         location!(),
                                     );
                                 }
@@ -174,7 +174,7 @@ pub(in crate::bubba::compiler) fn compile(
 
                 thonk.insert_instruction(Instruction::Dup, location!());
                 thonk.insert_instruction(Instruction::Dup, location!());
-                thonk.insert_instruction(Instruction::StoreLocal(idx), location!());
+                thonk.insert_instruction(Instruction::InitializeLocal(idx), location!());
             }
             todo => todo!("Match expression type: {todo:?}"),
         }

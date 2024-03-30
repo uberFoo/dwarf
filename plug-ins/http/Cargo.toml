@@ -27,6 +27,11 @@ uuid = { version = "1.4.1", features = ["v4"] }
 sarzak = { git = "https://github.com/uberFoo/sarzak", branch = "develop", default-features = false, features = [
     "sarzak-rwlock",
 ] }
+crossbeam = { version = "0.8.4", features = ["crossbeam-channel"] }
+hyper = { version = "1.2.0", features = ["full"] }
+tokio = { version = "1.36.0", features = ["full"] }
+hyper-util = { version = "0.1.3", features = ["full"] }
+http-body-util = "0.1.1"
 
 # [patch."https://github.com/uberFoo/sarzak"]
 # sarzak = { path = "../../../sarzak" }

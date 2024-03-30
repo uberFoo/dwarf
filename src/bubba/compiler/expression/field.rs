@@ -2,7 +2,7 @@ use snafu::{location, Location};
 
 use crate::{
     bubba::{
-        compiler::{compile_expression, CThonk, Context, Result, INT},
+        compiler::{compile_expression, CThonk, Context, Result, INTEGER},
         instr::Instruction,
         value::Value,
     },
@@ -46,7 +46,7 @@ pub(in crate::bubba::compiler) fn compile_field_access(
                     let ty = s_read!(ty).clone();
                     ty
                 }
-                EnumFieldEnum::Unit(_) => context.get_type(INT).unwrap().clone(),
+                EnumFieldEnum::Unit(_) => context.get_type(INTEGER).unwrap().clone(),
             };
 
             (field.name.to_owned(), ty)
