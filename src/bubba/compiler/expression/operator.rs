@@ -2,7 +2,7 @@ use snafu::{location, Location};
 
 use crate::{
     bubba::{
-        compiler::{compile_expression, CThonk, Context, Result, BOOL, EMPTY, INT},
+        compiler::{compile_expression, CThonk, Context, Result, BOOL, EMPTY, INTEGER},
         instr::Instruction,
         value::Value,
     },
@@ -40,7 +40,7 @@ pub(in crate::bubba::compiler) fn compile(
                     compile_expression(&rhs, thonk, context)?;
                     thonk.insert_instruction_with_span(Instruction::Add, span, location!());
 
-                    context.get_type(INT).unwrap().clone()
+                    context.get_type(INTEGER).unwrap().clone()
                 }
                 BinaryEnum::Assignment(_) => {
                     compile_expression(&rhs, thonk, context)?;
@@ -128,21 +128,21 @@ pub(in crate::bubba::compiler) fn compile(
                     compile_expression(&rhs, thonk, context)?;
                     thonk.insert_instruction_with_span(Instruction::Divide, span, location!());
 
-                    context.get_type(INT).unwrap().clone()
+                    context.get_type(INTEGER).unwrap().clone()
                 }
                 BinaryEnum::Subtraction(_) => {
                     compile_expression(&lhs, thonk, context)?;
                     compile_expression(&rhs, thonk, context)?;
                     thonk.insert_instruction_with_span(Instruction::Subtract, span, location!());
 
-                    context.get_type(INT).unwrap().clone()
+                    context.get_type(INTEGER).unwrap().clone()
                 }
                 BinaryEnum::Multiplication(_) => {
                     compile_expression(&lhs, thonk, context)?;
                     compile_expression(&rhs, thonk, context)?;
                     thonk.insert_instruction_with_span(Instruction::Multiply, span, location!());
 
-                    context.get_type(INT).unwrap().clone()
+                    context.get_type(INTEGER).unwrap().clone()
                 }
             }
         }
@@ -231,7 +231,7 @@ pub(in crate::bubba::compiler) fn compile(
                     thonk.insert_instruction_with_span(Instruction::Multiply, span, location!());
 
                     // 🚧 WHat if it's a float?
-                    context.get_type(INT).unwrap().clone()
+                    context.get_type(INTEGER).unwrap().clone()
                 }
                 UnaryEnum::Not(_) => {
                     thonk.insert_instruction_with_span(Instruction::Not, span, location!());

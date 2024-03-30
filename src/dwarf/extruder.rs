@@ -132,7 +132,7 @@ pub(crate) use function;
 
 macro_rules! debug {
     ($($arg:tt)*) => {
-        tracing::debug!(
+        log::debug!(
             target: "extruder",
             "{}: {}\n  --> {}:{}:{}",
             Colour::Cyan.dimmed().italic().paint(function!()),
@@ -2199,7 +2199,7 @@ pub(super) fn inter_expression(
                 };
                 (body, a_sink)
             } else {
-                unreachable!("{:?}", body.0);
+                unreachable!("Not a block expression {:?}", body.0);
             };
             let block = Block::new(a_sink, Uuid::new_v4(), Some(block), None, lu_dog);
             let _body = Body::new_block(a_sink, &block, lu_dog);

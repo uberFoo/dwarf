@@ -1,0 +1,27 @@
+struct List<T> {
+    inner: [T],
+}
+
+impl List {
+    fn map(self, f: fn(int) -> int) -> [int] {
+        let result = [];
+        for i in self.inner {
+            result.push(f(i));
+        }
+        result
+    }
+}
+
+fn main() {
+    let list = [0, 1, 2];
+    chacha::assert_eq(list.len(), 3);
+    chacha::assert_eq(
+        list.map(|x: int| -> int {
+            // We need a block
+            x + 1
+        }),
+        [1, 2, 3],
+    );
+    list.push(3);
+    chacha::assert_eq(list.sum(), 6);
+}

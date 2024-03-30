@@ -1,0 +1,6 @@
+fn main() {
+    let list = [];
+    list.push();
+    list.map();
+    list.fail();
+}

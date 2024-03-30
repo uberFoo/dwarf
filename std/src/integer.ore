@@ -1,0 +1,11 @@
+struct Integer {}
+
+impl Integer {
+    fn max(self, other: Integer) -> Integer {
+        if self > other {
+            self
+        } else {
+            other
+        }
+    }
+}

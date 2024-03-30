@@ -2,7 +2,7 @@ use snafu::{location, Location};
 use uuid::Uuid;
 
 #[cfg(feature = "async")]
-use crate::keywords::{LEN, PUSH, SPAWN};
+use crate::keywords::{LEN, MAX, PUSH, SPAWN};
 
 use crate::{
     bubba::{
@@ -337,10 +337,28 @@ fn compile_method_call(
                 }
                 whoa => panic!("{whoa:?}"),
             },
+            MAX => match result.clone()?.unwrap().subtype {
+                ValueTypeEnum::List(_) => {
+                    // thonk.insert_instruction(Instruction::ListLength, location!());
+                }
+                ValueTypeEnum::Ty(ref id) => {
+                    let ty = sarzak.exhume_ty(id).unwrap();
+                    let ty = ty.read().unwrap();
+
+                    match &*ty {
+                        Ty::Integer(_) => {
+                            // thonk.insert_instruction(Instruction::ListLength, location!());
+                        }
+                        darn => panic!("{darn:?}"),
+                    }
+                }
+                whoa => panic!("{whoa:?}"),
+            },
             _ => {}
         }
 
         thonk.insert_instruction(Instruction::MethodLookup(name), location!());
+
         result
     } else {
         panic!();

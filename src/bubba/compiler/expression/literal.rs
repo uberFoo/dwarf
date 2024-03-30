@@ -3,8 +3,8 @@ use snafu::{location, Location};
 use crate::{
     bubba::{
         compiler::{
-            compile_expression, get_span, CThonk, Context, Result, BOOL, CHAR, EMPTY, FLOAT, INT,
-            STRING,
+            compile_expression, get_span, CThonk, Context, Result, BOOL, CHAR, EMPTY, FLOAT,
+            INTEGER, STRING,
         },
         instr::Instruction,
         value::Value,
@@ -137,7 +137,7 @@ pub(in crate::bubba::compiler) fn compile(
             let literal = lu_dog.exhume_integer_literal(literal).unwrap();
             let value = s_read!(literal).x_value;
             let value = Value::Integer(value);
-            (value, context.get_type(INT).unwrap().clone())
+            (value, context.get_type(INTEGER).unwrap().clone())
         }
         //
         // StringLiteral

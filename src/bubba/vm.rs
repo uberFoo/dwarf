@@ -1225,6 +1225,7 @@ impl VM {
                                     Enum::Tuple((_, ty), _) => ty.to_owned(),
                                     Enum::Unit(_, ty, _) => ty.to_owned(),
                                 },
+                                Value::Integer(_) => "::std::integer::Integer".to_owned(),
                                 Value::Struct(ty) => {
                                     let name = ty.type_name();
                                     name.to_owned()

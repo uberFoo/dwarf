@@ -1,0 +1,21 @@
+use std::dwarf::Plugin;
+
+struct TestFail {
+    // We need something to load, and this is convenient. Ideally maybe we'd have
+    // a test plugin?
+    #[proxy(plugin = "http::http_server")]
+    inner: Plugin<HttpServer>,
+}
+
+impl TestFail {
+    fn new() -> Self {
+        TestFail {
+            inner: Plugin::<HttpServer>::new(),
+        }
+    }
+
+    fn fail(self) -> Future<()> {
+        self.inner
+            .invoke_func_fail("http_server", "HttpServer", "serve", [port])
+    }
+}

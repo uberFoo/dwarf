@@ -584,16 +584,11 @@ fn compile_program(
     ) {
         Some(ctx) => ctx,
         None => {
-            return Err(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "unable to create LuDogStore",
-            )))
+            std::process::exit(1);
         }
     };
     match compile(&ctx) {
         Ok(program) => {
-            println!("{program}");
-
             // Write the compiled program to disk.
             let mut bin_file = fs::File::create(path)?;
             let mut writer = io::BufWriter::new(bin_file);
