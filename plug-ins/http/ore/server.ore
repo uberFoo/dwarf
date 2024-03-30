@@ -26,10 +26,15 @@ impl HttpServer {
         self,
         path: string,
         method: Method,
-        lambda: fn(Request) -> Result<Request, HttpError>,
+        lambda: fn(Request) -> string,
     ) {
+        let wrapper = |req: int| -> string {
+            let req = Request { plugin: self.inner, inner: req };
+            lambda(req)
+        };
+
         self.inner
-            .invoke_func("http_server", "HttpServer", "route", @[path, method.to_string(), lambda]);
+            .invoke_func("http_server", "HttpServer", "route", @[path, method.to_string(), wrapper]);
     }
 }
 
@@ -49,10 +54,6 @@ impl Method {
             Method::Delete => "DELETE",
         }
     }
-}
-
-fn make_request(plugin: HttpServer, inner: int) -> Request {
-    Request { plugin: plugin.inner, inner: inner }
 }
 
 struct Request {

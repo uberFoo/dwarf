@@ -18,6 +18,14 @@ pub use error::{Error, Unsupported};
 // #[sabi(debug_print)]
 pub trait Plugin: Clone + Debug + Display + Send + Sync {
     fn invoke_func(
+        &self,
+        module: RStr<'_>,
+        ty: RStr<'_>,
+        name: RStr<'_>,
+        args: RVec<FfiValue>,
+    ) -> RResult<FfiValue, Error>;
+
+    fn invoke_func_mut(
         &mut self,
         module: RStr<'_>,
         ty: RStr<'_>,

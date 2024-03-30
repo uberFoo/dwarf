@@ -53,52 +53,7 @@ pub fn new(lambda_sender: RSender<LambdaCall>, args: RVec<FfiValue>) -> RResult<
     } else {
         RErr(Error::Uber("Invalid plugin".into()))
     }
-    // ROk(Plugin_TO::from_value(Http, TD_Opaque))
 }
-
-// #[derive(Clone, Debug)]
-// struct Http;
-
-// impl Display for Http {
-//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-//         write!(f, "{:?}", self)
-//     }
-// }
-
-// impl Plugin for Http {
-//     fn name(&self) -> RStr<'_> {
-//         "Http".into()
-//     }
-
-//     fn invoke_func(
-//         &mut self,
-//         module: RStr<'_>,
-//         ty: RStr<'_>,
-//         func: RStr<'_>,
-//         args: RVec<FfiValue>,
-//     ) -> RResult<FfiValue, Error> {
-//         (|| -> Result<FfiValue, Error> {
-//             let module_str = module.as_str();
-//             debug!("module: {module_str}, type: {ty}, func: {func}, args: {args:?}");
-//             match module_str {
-//                 "http_client" => {
-//                     let client = http_client::instantiate_root_module();
-//                     let client = client.new();
-//                     let client = client(vec![].into()).unwrap();
-//                     Ok(FfiValue::PlugIn(client))
-//                 }
-//                 "http_server" => {
-//                     let server = http_server::instantiate_root_module();
-//                     let server = server.new();
-//                     let server = server(vec![].into()).unwrap();
-//                     Ok(FfiValue::PlugIn(server))
-//                 }
-//                 _ => Err(Error::Uber("Invalid module".into())),
-//             }
-//         })()
-//         .into()
-//     }
-// }
 
 mod http_client {
     use super::*;
@@ -153,6 +108,17 @@ mod http_client {
 
         #[tracing::instrument]
         fn invoke_func(
+            &self,
+            module: RStr<'_>,
+            ty: RStr<'_>,
+            func: RStr<'_>,
+            args: RVec<FfiValue>,
+        ) -> RResult<FfiValue, Error> {
+            future::block_on(Compat::new(async { Ok(FfiValue::Empty).into() }))
+        }
+
+        #[tracing::instrument]
+        fn invoke_func_mut(
             &mut self,
             module: RStr<'_>,
             ty: RStr<'_>,
@@ -351,18 +317,18 @@ mod http_server {
     struct HttpServer {
         // This is how we call lambdas from the plugin.
         lambda_call: RSender<LambdaCall>,
-        requests: Slab<Arc<Request<IncomingBody>>>,
-        uris: Slab<Arc<Uri>>,
-        routes: HashMap<(String, Method), usize>,
+        requests: Arc<Mutex<Slab<Arc<Request<IncomingBody>>>>>,
+        uris: Arc<Mutex<RefCell<Slab<Arc<Uri>>>>>,
+        routes: Arc<Mutex<RefCell<HashMap<(String, Method), usize>>>>,
     }
 
     impl HttpServer {
         fn new(lambda_call: RSender<LambdaCall>) -> Self {
             Self {
                 lambda_call,
-                requests: Slab::new(),
-                uris: Slab::new(),
-                routes: HashMap::default(),
+                requests: Arc::new(Mutex::new(Slab::new())),
+                uris: Arc::new(Mutex::new(RefCell::new(Slab::new()))),
+                routes: Arc::new(Mutex::new(RefCell::new(HashMap::default()))),
             }
         }
     }
@@ -379,15 +345,12 @@ mod http_server {
         }
 
         fn invoke_func(
-            &mut self,
+            &self,
             module: RStr<'_>,
             ty: RStr<'_>,
             func: RStr<'_>,
             args: RVec<FfiValue>,
         ) -> RResult<FfiValue, Error> {
-            // let module_str = module.as_str();
-            // debug!("module: {module_str}, type: {ty}, func: {func}, args: {args:?}");
-            // Ok(FfiValue::Empty)
             future::block_on(Compat::new(async {
                 match ty.as_str() {
                     "HttpServer" => match func.as_str() {
@@ -409,6 +372,8 @@ mod http_server {
                                 }
                             };
 
+                            println!("Listening on http://{}", addr);
+
                             loop {
                                 let stream = listener.accept().await;
                                 let (stream, _) = match stream {
@@ -418,8 +383,6 @@ mod http_server {
                                         continue;
                                     }
                                 };
-
-                                println!("Listening on http://{}", addr);
 
                                 let self_clone = self.clone();
                                 let svc = Svc {
@@ -455,7 +418,13 @@ mod http_server {
                                 panic!("Invalid lambda");
                             };
 
-                            self.routes.insert((path.to_string(), method), *number);
+                            println!("adding route {} {}", path, method);
+
+                            self.routes
+                                .lock()
+                                .unwrap()
+                                .borrow_mut()
+                                .insert((path.to_string(), method), *number);
 
                             Ok(FfiValue::Empty)
                         }
@@ -470,10 +439,18 @@ mod http_server {
                                 .map_err(|e: ChaChaError| Error::Uber(e.to_string().into()))
                                 .unwrap();
 
-                            let request = self.requests.get(key as usize).unwrap();
-                            let uri = request.uri();
-                            let key = self.uris.insert(Arc::new(uri.clone()));
-                            Ok(FfiValue::Integer(key as DwarfInteger))
+                            if let Some(request) = self.requests.lock().unwrap().get(key as usize) {
+                                let uri = request.uri();
+                                let key = self
+                                    .uris
+                                    .lock()
+                                    .unwrap()
+                                    .borrow_mut()
+                                    .insert(Arc::new(uri.clone()));
+                                Ok(FfiValue::Integer(key as DwarfInteger))
+                            } else {
+                                Err(Error::Uber("Invalid request".into()))
+                            }
                         }
                         func => Err(Error::Uber(format!("Invalid function: {func}").into())),
                     },
@@ -486,12 +463,71 @@ mod http_server {
                                 .map_err(|e: ChaChaError| Error::Uber(e.to_string().into()))
                                 .unwrap();
 
-                            let uri = self.uris.get(key as usize).unwrap();
+                            let guard = self.uris.lock().unwrap();
+                            let guard = guard.borrow();
+                            let uri = guard.get(key as usize).unwrap();
                             let path = uri.path().to_string();
                             Ok(FfiValue::String(path.into()))
                         }
                         func => Err(Error::Uber(format!("Invalid function: {func}").into())),
                     },
+                    ty => Err(Error::Uber(format!("Invalid type: {ty}").into())),
+                }
+                .into()
+            }))
+        }
+
+        fn invoke_func_mut(
+            &mut self,
+            module: RStr<'_>,
+            ty: RStr<'_>,
+            func: RStr<'_>,
+            args: RVec<FfiValue>,
+        ) -> RResult<FfiValue, Error> {
+            // let module_str = module.as_str();
+            // debug!("module: {module_str}, type: {ty}, func: {func}, args: {args:?}");
+            // Ok(FfiValue::Empty)
+            future::block_on(Compat::new(async {
+                match ty.as_str() {
+                    // "HttpServer" => match func.as_str() {
+                    //     "route" => {
+                    //         let FfiValue::String(path) = args.get(0).unwrap() else {
+                    //             panic!("Invalid path");
+                    //         };
+
+                    //         let FfiValue::String(method) = args.get(1).unwrap() else {
+                    //             panic!("Invalid method");
+                    //         };
+                    //         let method = Method::from(MyStr(method.as_str()));
+
+                    //         let FfiValue::Lambda(number) = args.get(2).unwrap() else {
+                    //             panic!("Invalid lambda");
+                    //         };
+
+                    //         println!("adding route {} {}", path, method);
+
+                    //         self.routes.insert((path.to_string(), method), *number);
+
+                    //         Ok(FfiValue::Empty)
+                    //     }
+                    //     func => Err(Error::Uber(format!("Invalid function: {func}").into())),
+                    // },
+                    // "Request" => match func.as_str() {
+                    //     "uri" => {
+                    //         let key: DwarfInteger = args
+                    //             .first()
+                    //             .unwrap()
+                    //             .try_into()
+                    //             .map_err(|e: ChaChaError| Error::Uber(e.to_string().into()))
+                    //             .unwrap();
+
+                    //         let request = self.requests.get(key as usize).unwrap();
+                    //         let uri = request.uri();
+                    //         let key = self.uris.insert(Arc::new(uri.clone()));
+                    //         Ok(FfiValue::Integer(key as DwarfInteger))
+                    //     }
+                    //     func => Err(Error::Uber(format!("Invalid function: {func}").into())),
+                    // },
                     ty => Err(Error::Uber(format!("Invalid type: {ty}").into())),
                 }
                 .into()
@@ -517,16 +553,23 @@ mod http_server {
             let path = req.uri().path().to_owned();
             let method = req.method().clone();
 
-            let mut server = self.server.borrow_mut();
-            let entry = server.requests.vacant_entry();
-            let key = entry.key();
-            server.requests.insert(Arc::new(req));
+            let server = self.server.borrow_mut();
+            let key = {
+                let mut requests = server.requests.lock().unwrap();
+                let entry = requests.vacant_entry();
+                let key = entry.key();
+                requests.insert(Arc::new(req));
+                key
+            };
 
-            if let Some(lambda) = server.routes.get(&(path, method)) {
+            let guard = server.routes.lock().unwrap();
+
+            let lambda_option = guard.borrow().get(&(path, method)).cloned();
+            if let Some(lambda) = lambda_option {
                 let (s, result) = crossbeam::channel::bounded(1);
 
                 let lambda_call = LambdaCall {
-                    lambda: *lambda,
+                    lambda: lambda,
                     args: vec![FfiValue::Integer(key as DwarfInteger)].into(),
                     result: s.into(),
                 };
@@ -538,7 +581,8 @@ mod http_server {
                     });
                 };
 
-                server.requests.remove(key);
+                let mut requests = server.requests.lock().unwrap();
+                requests.remove(key);
 
                 Box::pin(async move { mk_response(result.to_string()) })
             } else {

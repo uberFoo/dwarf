@@ -13,7 +13,8 @@ use crate::{
         Expression as ParserExpression, PrintableValueType,
     },
     keywords::{
-        FORMAT, INVOKE_FUNC, IS_DIGIT, LEN, LINES, MAP, MAX, PUSH, SPLIT, SUM, TO_DIGIT, TRIM,
+        FORMAT, INVOKE_FUNC, INVOKE_FUNC_MUT, IS_DIGIT, LEN, LINES, MAP, MAX, PUSH, SPLIT, SUM,
+        TO_DIGIT, TRIM,
     },
     lu_dog::{
         store::ObjectStore as LuDogStore, Argument, Block, Call, Expression, List, MethodCall,
@@ -308,6 +309,7 @@ pub(in crate::dwarf::extruder) fn method_call_return_type(
         ValueTypeEnum::XPlugin(_) => match method.as_str() {
             // INVOKE_FUNC => ValueType::new_empty(true, lu_dog),
             INVOKE_FUNC => ValueType::new_unknown(true, lu_dog),
+            INVOKE_FUNC_MUT => ValueType::new_unknown(true, lu_dog),
             _ => {
                 return Err(vec![DwarfError::NoSuchMethod {
                     method: method.to_owned(),

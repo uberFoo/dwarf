@@ -84,8 +84,18 @@ impl Plugin for Model {
         "sarzak".into()
     }
 
-    fn invoke_func(
+    fn invoke_func_mut(
         &mut self,
+        module: RStr<'_>,
+        ty: RStr<'_>,
+        func: RStr<'_>,
+        args: RVec<FfiValue>,
+    ) -> RResult<FfiValue, Error> {
+        (|| -> Result<FfiValue, Error> { Ok(FfiValue::Empty) })().into()
+    }
+
+    fn invoke_func(
+        &self,
         module: RStr<'_>,
         ty: RStr<'_>,
         func: RStr<'_>,

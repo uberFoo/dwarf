@@ -36,22 +36,16 @@ use crate::{
         ffi_value::FfiValue,
         value::{Enum, Struct, TupleEnum},
     },
-    keywords::INVOKE_FUNC,
-    lu_dog::{ObjectStore as LuDogStore, ValueType, ValueTypeEnum},
+    keywords::{INVOKE_FUNC, INVOKE_FUNC_MUT},
+    lu_dog::{ValueType, ValueTypeEnum},
     new_ref,
-    plug_in::{Error as FfiError, LambdaCall, PluginModRef, PluginType},
+    plug_in::{Error as FfiError, LambdaCall, PluginModRef, PluginType, Plugin_TO},
     s_read, s_write,
     sarzak::{ObjectStore as SarzakStore, Ty, MODEL as SARZAK_MODEL},
     DwarfInteger, NewRef, RefType, Span, LAMBDA_FUNCS,
 };
 
 use super::instr::{Instruction, Program};
-
-// static LAMBDA_FUNCS: OnceCell<Arc<Mutex<HashMap<usize, Value>>>> = OnceCell::new();
-
-// pub fn get_lambda_funcs() -> *const OnceCell<Arc<Mutex<HashMap<usize, Value>>>> {
-//     &LAMBDA_FUNCS as *const _
-// }
 
 #[cfg(feature = "async")]
 static mut EXECUTOR: OnceCell<Executor> = OnceCell::new();
@@ -187,9 +181,6 @@ impl VM {
         let (lambda_sender, lambda_receiver) = unbounded();
 
         let mut vm = VM {
-            // ip: 0,
-            // fp: 0,
-            // stack: Vec::new(),
             instrs: Vec::new(),
             source_map: Vec::new(),
             func_map: HashMap::default(),
@@ -266,19 +257,10 @@ impl VM {
 
     fn lambda_listen(&mut self) {
         if let Ok(lambda_call) = self.lambda_receiver.recv() {
-            // let lambda_funcs = get_lambda_funcs();
-            // dbg!("hello?");
-            // This will have been setup by the FfiValue constructor that allowed us to
-            // get here in the first place.
-            // let λ = LAMBDA_FUNCS.get().unwrap().lock().unwrap();
-            // dbg!("WTF?");
             let λ = match LAMBDA_FUNCS.get() {
                 Some(λ) => λ,
                 None => {
                     panic!("Lambda functions have not been initialized.");
-                    // let λ = Arc::new(Mutex::new(HashMap::default()));
-                    // let _ = LAMBDA_FUNCS.set(λ);
-                    // LAMBDA_FUNCS.get().unwrap()
                 }
             };
             let λ = λ.lock().unwrap();
@@ -397,20 +379,6 @@ impl VM {
             self.program.clone(),
             trace,
         );
-
-        // The FP is taken by the return handling code.
-        // stack.pop(); // fp
-        // stack.pop(); // ip
-        // stack.pop(); // frame size
-        // stack.pop(); // arity
-        // for _ in 0..frame_size {
-        //     stack.pop();
-        // }
-        // // for _ in 0..args.len() {
-        // // stack.pop();
-        // // }
-        // stack.pop(); // local count
-        // stack.pop(); // func addr
 
         result
     }
@@ -838,7 +806,7 @@ impl VM {
 
                             match method.as_str() {
                                 INVOKE_FUNC => {
-                                    let mut plugin = s_write!(plugin);
+                                    let plugin = s_read!(plugin);
                                     let args = stack.pop().clone().unwrap().into_value();
                                     let Value::List { inner, .. } = args else {
                                         panic!("Expected a vector of arguments.")
@@ -857,6 +825,51 @@ impl VM {
                                     let module = module.to_inner_string();
 
                                     match plugin.invoke_func(
+                                        module.as_str().into(),
+                                        ty.as_str().into(),
+                                        func.as_str().into(),
+                                        args.into(),
+                                    ) {
+                                        ROk(value) => {
+                                            let result = program.get_symbol(RESULT).expect(
+                                                "The RESULT symbol is missing from the program.",
+                                            );
+                                            stack.push(
+                                                <(FfiValue, &Value) as Into<Value>>::into((
+                                                    value, result,
+                                                ))
+                                                .into(),
+                                            );
+                                        }
+                                        RErr(e) => {
+                                            return Err(BubbaError::VmPanic {
+                                                message: format!("Plugin error: {:?}", e),
+                                                location: location!(),
+                                            }
+                                            .into())
+                                        }
+                                    }
+                                }
+                                INVOKE_FUNC_MUT => {
+                                    let mut plugin = s_write!(plugin);
+                                    let args = stack.pop().clone().unwrap().into_value();
+                                    let Value::List { inner, .. } = args else {
+                                        panic!("Expected a vector of arguments.")
+                                    };
+                                    let args = s_read!(inner)
+                                        .iter()
+                                        .map(|v| {
+                                            <Value as Into<FfiValue>>::into(s_read!(v).clone())
+                                        })
+                                        .collect::<Vec<FfiValue>>();
+                                    let func = stack.pop().clone().unwrap().into_value();
+                                    let func = func.to_inner_string();
+                                    let ty = stack.pop().clone().unwrap().into_value();
+                                    let ty = ty.to_inner_string();
+                                    let module = stack.pop().clone().unwrap().into_value();
+                                    let module = module.to_inner_string();
+
+                                    match plugin.invoke_func_mut(
                                         module.as_str().into(),
                                         ty.as_str().into(),
                                         func.as_str().into(),
@@ -2052,6 +2065,17 @@ impl From<(FfiValue, &Value)> for Value {
     }
 }
 
+fn print_stack(stack: &[StackValue], fp: usize) {
+    for (i, entry) in stack.iter().enumerate() {
+        if i == fp {
+            eprint!("\t{} ->\t", Colour::Green.bold().paint("fp"));
+        } else {
+            eprint!("\t     \t");
+        }
+        eprintln!("stack {i}:\t{}", entry);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::env;
@@ -2519,16 +2543,5 @@ mod tests {
 
         let result: DwarfFloat = (&*s_read!(result.unwrap())).try_into().unwrap();
         assert_eq!(result, std::f64::consts::PI);
-    }
-}
-
-fn print_stack(stack: &[StackValue], fp: usize) {
-    for (i, entry) in stack.iter().enumerate() {
-        if i == fp {
-            eprint!("\t{} ->\t", Colour::Green.bold().paint("fp"));
-        } else {
-            eprint!("\t     \t");
-        }
-        eprintln!("stack {i}:\t{}", entry);
     }
 }

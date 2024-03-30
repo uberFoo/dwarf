@@ -57,6 +57,7 @@ mod keywords {
     #[cfg(feature = "async")]
     pub(crate) const INTERVAL: &str = "interval";
     pub(crate) const INVOKE_FUNC: &str = "invoke_func";
+    pub(crate) const INVOKE_FUNC_MUT: &str = "invoke_func_mut";
     pub(crate) const IS_DIGIT: &str = "is_digit";
     pub(crate) const LEN: &str = "len";
     pub(crate) const LINES: &str = "lines";

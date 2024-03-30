@@ -1847,6 +1847,15 @@ pub(super) fn inter_expression(
                 ret_ty.clone()
             };
 
+            let ret_ty = if let ValueTypeEnum::Lambda(ref l) = s_read!(ret_ty).subtype {
+                let l = lu_dog.exhume_lambda(l).unwrap();
+                let ret_ty = s_read!(l).return_type.clone();
+                let ret_ty = lu_dog.exhume_value_type(&ret_ty).unwrap();
+                ret_ty
+            } else {
+                ret_ty.clone()
+            };
+
             let name = match func {
                 ParserExpression::LocalVariable(name) => name,
                 _ => "not-a-local-variable",
