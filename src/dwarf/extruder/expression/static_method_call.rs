@@ -329,9 +329,10 @@ pub fn inter(
                 let plugin_type = &generics.first().unwrap().0;
                 let Type::Generic((plugin_type, _)) = plugin_type else {
                     panic!(
-            "I don't think that we should ever see anything other than a user type here: {generics:?}",
-        );
+                        "I don't think that we should ever see anything other than a user type here: {generics:?}",
+                    );
                 };
+                dbg!(&plugin_type);
 
                 let plugin = lu_dog.exhume_x_plugin_id_by_name(plugin_type).unwrap();
                 let plugin = lu_dog.exhume_x_plugin(&plugin).unwrap();
