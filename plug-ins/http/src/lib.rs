@@ -564,7 +564,7 @@ mod http_server {
 
             let guard = server.routes.lock().unwrap();
 
-            let lambda_option = guard.borrow().get(&(path, method)).cloned();
+            let lambda_option = guard.borrow().get(&(path.clone(), method.clone())).cloned();
             if let Some(lambda) = lambda_option {
                 let (s, result) = crossbeam::channel::bounded(1);
 
@@ -586,7 +586,9 @@ mod http_server {
 
                 Box::pin(async move { mk_response(result.to_string()) })
             } else {
-                Box::pin(async { mk_response("oh no! not found".into()) })
+                Box::pin(async move {
+                    mk_response(format!("oh no! {path} ({method}) not found").into())
+                })
             }
         }
     }
