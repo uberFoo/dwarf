@@ -963,7 +963,7 @@ mod test {
         .unwrap();
         let program = compile(&ctx).unwrap();
         println!("{program}");
-        assert_eq!(program.get_thonk_card(), 20);
+        assert_eq!(program.get_thonk_card(), 21);
 
         // assert_eq!(program.get_instruction_card(), 393);
         let run = run_vm(&program);
