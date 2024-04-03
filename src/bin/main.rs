@@ -77,10 +77,12 @@ fn validate_source(s: &str) -> Result<Source, String> {
     version,
     about,
     long_about = r#"
-This is the dwarf interpreter, ChaCha.
+This is dwarf.
+
+This file encompasses the interpreter, the compiler, and the virtual machine.
 
 By default, with no arguments you will be dropped into a REPL. If you pass
-a source file, it will be executed and return to your shell.
+a source file, it will be compiled and executed, and then return to your shell.
 
 This default behavior may be modified by using any of the options below.
 "#
@@ -155,6 +157,11 @@ struct Arguments {
     /// Print extra verbose output.
     #[arg(long, short, action=ArgAction::SetTrue)]
     trace: Option<bool>,
+    /// Change working directory
+    ///
+    /// Change the working directory to the directory of the source file.
+    #[arg(long, short)]
+    cd: Option<PathBuf>,
 }
 
 #[derive(Clone, Debug, Args)]
@@ -207,12 +214,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let interpreter = args.interpreter.is_some() && args.interpreter.unwrap();
     let trace = args.trace.is_some() && args.trace.unwrap();
 
-    // if threads == 0 {
-    //     return Err(Box::new(std::io::Error::new(
-    //         std::io::ErrorKind::InvalidInput,
-    //         "Thread count must be a positive integer greater than zero.",
-    //     )));
-    // }
+    if threads == 0 {
+        return Err(Box::new(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "Thread count must be a positive integer greater than zero.",
+        )));
+    }
 
     // Figure out what we're dealing with, input-wise.
     let input = if let Some(ref source) = args.source {
@@ -227,7 +234,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     file.to_str().unwrap()
                 };
 
-                let source_code = fs::read_to_string(source)?;
+                let source_code = fs::read_to_string(source).map_err(|e| {
+                    eprintln!("Unable to read source file: {}", e);
+                    e
+                })?;
 
                 let mut dwarf_args = vec![source.to_string_lossy().to_string()];
                 dwarf_args.extend(args.dwarf_args.args);
@@ -265,14 +275,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .into();
 
     if fs::metadata(&dwarf_home).is_err() {
-        fs::create_dir_all(&dwarf_home)?;
+        fs::create_dir_all(&dwarf_home).map_err(|e| {
+            eprintln!("Unable to create DWARF_HOME: {}", e);
+            e
+        })?;
+    }
+
+    if args.banner.is_some() && args.banner.unwrap() {
+        println!("{}", banner2());
     }
 
     if let Some((source_code, dwarf_args, file_name)) = input {
-        if args.banner.is_some() && args.banner.unwrap() {
-            println!("{}", banner2());
-        }
-
         if args.repl.is_some() && args.repl.unwrap() {
             let ctx = match get_context(
                 &file_name,
@@ -285,7 +298,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 Some(ctx) => ctx,
                 None => return Ok(()),
             };
-            let mut ctx = initialize_interpreter(threads, dwarf_home, ctx)?;
+            let mut ctx = initialize_interpreter(threads, dwarf_home, ctx).map_err(|e| {
+                println!("Interpreter exited with: {}", e);
+                e
+            })?;
             ctx.add_args(dwarf_args);
             start_repl(&mut ctx, is_uber, threads, trace)
                 .map_err(|e| {
@@ -441,6 +457,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     path,
                 )?
             };
+
+            // 🚧 This is broken. It only works for the VM. It needs to be outside
+            // of the outermost `if let` block.
+            if let Some(cd) = args.cd {
+                env::set_current_dir(cd).map_err(|e| {
+                    eprintln!("Unable to change directory: {}", e);
+                    e
+                })?;
+            }
 
             // Get args and call the VM.
             let args: Vec<RefType<BubbaValue>> = dwarf_args
