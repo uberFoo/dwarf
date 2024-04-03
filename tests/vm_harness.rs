@@ -9,6 +9,7 @@ use dwarf::ref_to_inner;
 use ansi_term::Colour;
 use lazy_static::lazy_static;
 use parking_lot::Mutex;
+use test_log::test;
 
 use dwarf::{
     bubba::{

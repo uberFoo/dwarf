@@ -140,11 +140,54 @@ fn lexer() -> impl Parser<char, Vec<Spanned<Token>>, Error = Simple<char>> {
         .map(Token::Float);
 
     // A parser for strings
+    // let string = just('"')
+    //     .ignore_then(filter(|c| *c != '"').repeated())
+    //     .then_ignore(just('"'))
+    //     .collect::<String>()
+    //     .map(Token::String);
+
+    // fn string_parser() -> impl Parser<char, String, Error = Simple<char>> {
+    //     recursive(|value| {
+    let escape = just('\\').ignore_then(
+        just('\\')
+            .or(just('/'))
+            .or(just('"'))
+            .or(just('b').to('\x08'))
+            .or(just('f').to('\x0C'))
+            .or(just('n').to('\n'))
+            .or(just('r').to('\r'))
+            .or(just('t').to('\t'))
+            .or(just('u').ignore_then(
+                filter(|c: &char| c.is_digit(16))
+                    .repeated()
+                    .exactly(4)
+                    .collect::<String>()
+                    .validate(|digits, span, emit| {
+                        char::from_u32(u32::from_str_radix(&digits, 16).unwrap()).unwrap_or_else(
+                            || {
+                                emit(Simple::custom(span, "invalid unicode character"));
+                                '\u{FFFD}' // unicode replacement character
+                            },
+                        )
+                    }),
+            )),
+    );
+
     let string = just('"')
-        .ignore_then(filter(|c| *c != '"').repeated())
+        .ignore_then(filter(|c| *c != '\\' && *c != '"').or(escape).repeated())
         .then_ignore(just('"'))
         .collect::<String>()
         .map(Token::String);
+    // .labelled("string");
+
+    //         string
+    //             // .map_with_span(|tok, span| (tok, span))
+    //             // .padded_by(comment.repeated())
+    //             // .padded_by(doc_comment.repeated())
+    //             .padded()
+    //     })
+    //     .then_ignore(end().recover_with(skip_then_retry_until([])))
+    // }
 
     let char_parser = just::<char, char, Simple<char>>('\'')
         .ignore_then(filter(|c| *c != '\''))
@@ -6062,6 +6105,39 @@ mod tests {
         "#;
 
         let ast = parse_dwarf("test_any_list", src);
+        assert!(ast.is_ok());
+    }
+
+    #[test]
+    fn escaped_string() {
+        let _ = env_logger::builder().is_test(true).try_init();
+        let src = r#"
+        fn main() {
+            let a = "Hello, \"World!\"";
+            let b = "Hello, 'World!'";
+            let c = "Hello, \\World!";
+        }
+        "#;
+
+        let ast = parse_dwarf("test_escaped_string", src);
+        assert!(ast.is_ok());
+    }
+
+    #[test]
+    fn escaped_string_with_substitutions() {
+        let _ = env_logger::builder().is_test(true).try_init();
+        let src = r#"
+        fn main() {
+            let u = 42;
+            let v = 0.69;
+            let w = || -> int { 42 };
+
+            let a = "Hello, \"${u}\", ${v}, ${w()}!\n";
+        }
+        "#;
+
+        let ast = parse_dwarf("test_escaped_string", src);
+        dbg!(&ast);
         assert!(ast.is_ok());
     }
 }

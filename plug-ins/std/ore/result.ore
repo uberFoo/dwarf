@@ -17,4 +17,11 @@ impl Result<T, E> {
             Result::Err(_) => true,
         }
     }
+
+    // fn unwrap(self) -> T {
+    //     match self {
+    //         Result::Ok(value) => value,
+    //         Result::Err(_) => panic!("called `Result::unwrap()` on an `Err` value"),
+    //     }
+    // }
 }

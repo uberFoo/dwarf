@@ -90,7 +90,7 @@ smartstring = { version = "1.0.1", features = ["serde"] }
 smol = { version = "2.0.0", optional = true }
 snafu = "0.8.0"
 syntect = { version = "5.0.0", optional = true }
-test-log = { version = "0.2.14", features = ["tracing-subscriber"] }
+test-log = { version = "0.2.14", features = ["tracing-subscriber", "trace"] }
 threadpool = "1.8.1"
 tracing = { version = "0.1.40" }
 tracing-subscriber = { version = "0.3.17", features = ["env-filter"] }

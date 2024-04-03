@@ -550,6 +550,13 @@ mod http_server {
                 Ok(Response::builder().body(Full::new(Bytes::from(s))).unwrap())
             }
 
+            fn mk_not_found(s: String) -> Result<Response<Full<Bytes>>, hyper::Error> {
+                Ok(Response::builder()
+                    .status(404)
+                    .body(Full::new(Bytes::from(s)))
+                    .unwrap())
+            }
+
             let path = req.uri().path().to_owned();
             let method = req.method().clone();
 
@@ -585,9 +592,32 @@ mod http_server {
                 requests.remove(key);
 
                 Box::pin(async move { mk_response(result.to_string()) })
+            } else if method == Method::GET {
+                // We are going to tack a dot on the front of the path to sandbox it
+                // to the CWD.
+                let path = format!(".{path}");
+                let path = std::path::Path::new(&path);
+                if path.exists() {
+                    if path.is_dir() {
+                        let contents = "<p>Someday there will be a directory viewing page. For now, there's nothing to see here.</p>".to_owned();
+                        Box::pin(async move { mk_response(contents) })
+                    } else {
+                        let contents = std::fs::read(path).unwrap();
+                        Box::pin(async move {
+                            Ok(Response::builder()
+                                .body(Full::new(Bytes::from(contents)))
+                                .unwrap())
+                        })
+                    }
+                } else {
+                    let path = path.display().to_string();
+                    Box::pin(async move {
+                        mk_not_found(format!("oops! {path} ({method}) not found").into())
+                    })
+                }
             } else {
                 Box::pin(async move {
-                    mk_response(format!("oh no! {path} ({method}) not found").into())
+                    mk_not_found(format!("oh no! {path} ({method}) not found").into())
                 })
             }
         }

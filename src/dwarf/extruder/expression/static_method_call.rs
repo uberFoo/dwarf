@@ -332,7 +332,6 @@ pub fn inter(
                         "I don't think that we should ever see anything other than a user type here: {generics:?}",
                     );
                 };
-                dbg!(&plugin_type);
 
                 let plugin = lu_dog.exhume_x_plugin_id_by_name(plugin_type).unwrap();
                 let plugin = lu_dog.exhume_x_plugin(&plugin).unwrap();
@@ -371,7 +370,6 @@ pub fn inter(
         let woog_enum = if let Some(woog_enum) = lu_dog.exhume_enumeration_id_by_name(&type_name) {
             lu_dog.exhume_enumeration(&woog_enum).unwrap()
         } else if lu_dog.exhume_enumeration_id_by_name(no_generics).is_some() {
-            let span = s_read!(span).start as usize..s_read!(span).end as usize;
             create_generic_enum(&type_name, no_generics, lu_dog)?.0
         } else {
             let span = s_read!(span).start as usize..s_read!(span).end as usize;

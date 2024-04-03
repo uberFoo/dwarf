@@ -28,7 +28,8 @@ impl flags::Install {
         fs::create_dir_all(&std_dst)?;
         let mut std_lib_dir = std::env::current_dir()?;
         std_lib_dir.push("std");
-        std_lib_dir.push("src");
+        std_lib_dir.push("ore");
+
         for entry in fs::read_dir(&std_lib_dir)? {
             let file = entry?.path();
             println!("Copying {}", file.display());

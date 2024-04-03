@@ -267,7 +267,7 @@ pub(crate) fn create_generic_enum(
 
     // Down here we are copying the enumeration's fields from base to new.
     let Some(ref id) = lu_dog.exhume_enumeration_id_by_name(base_enum) else {
-        panic!("enum not found");
+        panic!("enum {base_enum} not found");
     };
 
     let woog_enum = lu_dog.exhume_enumeration(id).unwrap();

@@ -132,7 +132,7 @@ pub(crate) use function;
 
 macro_rules! debug {
     ($($arg:tt)*) => {
-        log::debug!(
+        tracing::debug!(
             target: "extruder",
             "{}: {}\n  --> {}:{}:{}",
             Colour::Cyan.dimmed().italic().paint(function!()),
