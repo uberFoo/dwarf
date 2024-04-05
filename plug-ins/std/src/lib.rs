@@ -36,7 +36,6 @@ pub fn new(lambda_sender: RSender<LambdaCall>, args: RVec<FfiValue>) -> RResult<
     if let Some(FfiValue::String(plugin)) = args.first() {
         match plugin.as_str() {
             "fs" => {
-                dbg!("woot");
                 let plugin = fs::instantiate_root_module();
                 let plugin = plugin.new();
                 let plugin = plugin(lambda_sender, vec![].into()).unwrap();
@@ -64,8 +63,8 @@ mod fs {
     /// Instantiates the plugin.
     #[sabi_extern_fn]
     pub fn new(
-        lambda_sender: RSender<LambdaCall>,
-        args: RVec<FfiValue>,
+        _lambda_sender: RSender<LambdaCall>,
+        _args: RVec<FfiValue>,
     ) -> RResult<PluginType, Error> {
         ROk(Plugin_TO::from_value(Fs::default(), TD_Opaque))
     }
@@ -152,16 +151,11 @@ mod fs {
                             .try_into()
                             .map_err(|e: ChaChaError| Error::Uber(e.to_string().into()))
                             .unwrap();
-                        let mut buf: String = args
-                            .get(1)
-                            .unwrap()
-                            .try_into()
-                            .map_err(|e: ChaChaError| Error::Uber(e.to_string().into()))
-                            .unwrap();
 
+                        let mut buf = String::new();
                         let file = self.files.get_mut(key as usize).unwrap();
                         let result = match file.read_to_string(&mut buf) {
-                            Ok(_) => ROk(RBox::new(FfiValue::Integer(buf.len() as DwarfInteger))),
+                            Ok(_) => ROk(RBox::new(FfiValue::String(buf.into()))),
                             Err(e) => {
                                 let entry = self.errors.vacant_entry();
                                 let key = entry.key();

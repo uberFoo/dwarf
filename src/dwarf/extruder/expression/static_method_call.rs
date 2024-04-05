@@ -234,8 +234,6 @@ pub fn inter(
                             location: location!(),
                             program: context.source_string.to_owned(),
                         }]);
-                        // e_warn!("ParserExpression type not found");
-                        // ValueType::new_unknown(lu_dog)
                     }
                 }
             }

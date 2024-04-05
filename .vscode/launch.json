@@ -143,16 +143,12 @@
             },
             "args": [
                 // "tests/vm_harness/lambda.ore"
-                // "tests/vm_harness/types/generics/failing/structure.ore",
-                // "tests/harness/types/generics/workout.ore"
-                // "tests/harness/types/generics/option.tao"
+                // "test.ore"
+                // "https://raw.githubusercontent.com/uberFoo/dwarf/develop/mandelbrot.ore"
                 "uberfoo.rs/uberfoo.rs.ore",
                 "-c",
                 "uberfoo.rs",
                 "-b",
-                // "tests/harness/chacha/async/http.ore"
-                // "tests/harness/expression/index/string_index_out_of_bounds.tao"
-                // "https://raw.githubusercontent.com/uberFoo/dwarf/develop/mandelbrot.ore"
             ],
             "cwd": "${workspaceFolder}",
             "env": {

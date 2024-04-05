@@ -3311,6 +3311,12 @@ fn inter_import(
         (dir, path)
     };
 
+    // let (dir, path) = if path.exists() {
+    //     (dir, path)
+    // } else {
+    //     let
+    // }
+
     match fs::read_to_string(&path) {
         Ok(source_code) => {
             // parse, and extrude the dwarf file

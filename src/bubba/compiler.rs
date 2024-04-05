@@ -765,6 +765,7 @@ mod test {
     // Nothing special about this number.
     #[cfg(feature = "async")]
     const THREADS: usize = 5;
+
     pub(super) fn run_vm(program: &Program) -> Result<RefType<Value>, Error> {
         #[cfg(feature = "async")]
         let mut vm = VM::new(program, &[], &get_dwarf_home(), THREADS, true);

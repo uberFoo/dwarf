@@ -483,28 +483,6 @@ pub fn eval(
                     }
                 },
                 Value::String(string) => match meth_name.as_str() {
-                    LEN => {
-                        debug!("evaluating String::len");
-                        let len = unicode_segmentation::UnicodeSegmentation::graphemes(
-                            string.as_str(),
-                            true,
-                        )
-                        .collect::<Vec<&str>>()
-                        .len();
-                        Ok(new_ref!(Value, Value::Integer(len as i64)))
-                    }
-                    LINES => {
-                        let ty = Ty::new_z_string(&s_read!(sarzak));
-                        let ty = ValueType::new_ty(true, &ty, &mut s_write!(lu_dog));
-
-                        let inner = string
-                            .lines()
-                            .map(|line| new_ref!(Value, Value::String(line.to_owned())))
-                            .collect();
-                        let inner = new_ref!(Vec<RefType<Value>>, inner);
-
-                        Ok(new_ref!(Value, Value::List { ty, inner }))
-                    }
                     FORMAT => {
                         debug!("evaluating String::format");
 
@@ -601,6 +579,28 @@ pub fn eval(
                         }
 
                         Ok(new_ref!(Value, Value::String(result)))
+                    }
+                    LEN => {
+                        debug!("evaluating String::len");
+                        let len = unicode_segmentation::UnicodeSegmentation::graphemes(
+                            string.as_str(),
+                            true,
+                        )
+                        .collect::<Vec<&str>>()
+                        .len();
+                        Ok(new_ref!(Value, Value::Integer(len as i64)))
+                    }
+                    LINES => {
+                        let ty = Ty::new_z_string(&s_read!(sarzak));
+                        let ty = ValueType::new_ty(true, &ty, &mut s_write!(lu_dog));
+
+                        let inner = string
+                            .lines()
+                            .map(|line| new_ref!(Value, Value::String(line.to_owned())))
+                            .collect();
+                        let inner = new_ref!(Vec<RefType<Value>>, inner);
+
+                        Ok(new_ref!(Value, Value::List { ty, inner }))
                     }
                     SPLIT => {
                         let separator = args.pop().unwrap();

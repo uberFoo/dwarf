@@ -317,7 +317,7 @@ impl VM {
         let Value::LambdaPointer {
             name,
             frame_size,
-            captures,
+            captures: _,
         } = lambda.clone()
         else {
             panic!("Expected a lambda pointer.")

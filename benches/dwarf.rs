@@ -74,7 +74,7 @@ fn fib_vm(c: &mut Criterion) {
         new_ref!(BubbaValue, "17".into()),
     ];
     #[cfg(feature = "async")]
-    let mut vm = VM::new(&program, &args, &PathBuf::new(), num_cpus::get());
+    let mut vm = VM::new(&program, &args, &PathBuf::new(), num_cpus::get(), false);
     #[cfg(not(feature = "async"))]
     let mut vm = VM::new(&program, &args, &PathBuf::new());
     c.bench_function("fib-vm-17", |b| b.iter(|| vm.invoke("main", &[]).unwrap()));
@@ -84,7 +84,7 @@ fn fib_vm(c: &mut Criterion) {
         new_ref!(BubbaValue, "28".into()),
     ];
     #[cfg(feature = "async")]
-    let mut vm = VM::new(&program, &args, &PathBuf::new(), num_cpus::get());
+    let mut vm = VM::new(&program, &args, &PathBuf::new(), num_cpus::get(), false);
     #[cfg(not(feature = "async"))]
     let mut vm = VM::new(&program, &args, &PathBuf::new());
     c.bench_function("fib-vm-28", |b| b.iter(|| vm.invoke("main", &[]).unwrap()));
@@ -94,7 +94,7 @@ fn fib_vm(c: &mut Criterion) {
         new_ref!(BubbaValue, "5".into()),
     ];
     #[cfg(feature = "async")]
-    let mut vm = VM::new(&program, &args, &PathBuf::new(), num_cpus::get());
+    let mut vm = VM::new(&program, &args, &PathBuf::new(), num_cpus::get(), false);
     #[cfg(not(feature = "async"))]
     let mut vm = VM::new(&program, &args, &PathBuf::new());
     c.bench_function("fib-vm-5", |b| b.iter(|| vm.invoke("main", &[]).unwrap()));
@@ -194,7 +194,7 @@ fn loop_vm(c: &mut Criterion) {
         panic!("Failed to compile program");
     };
     #[cfg(feature = "async")]
-    let mut vm = VM::new(&program, &[], &PathBuf::new(), num_cpus::get());
+    let mut vm = VM::new(&program, &[], &PathBuf::new(), num_cpus::get(), false);
     #[cfg(not(feature = "async"))]
     let mut vm = VM::new(&program, &[], &PathBuf::new());
 

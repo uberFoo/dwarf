@@ -239,10 +239,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     e
                 })?;
 
+                let source_meta = fs::metadata(&source).map_err(|e| {
+                    eprintln!("Unable to read source file: {}", e);
+                    e
+                })?;
+
                 let mut dwarf_args = vec![source.to_string_lossy().to_string()];
                 dwarf_args.extend(args.dwarf_args.args);
 
-                Some((source_code, dwarf_args, file.to_owned()))
+                Some((source_code, dwarf_args, file.to_owned(), Some(source_meta)))
             }
             Source::Url(url) => {
                 let response = reqwest::blocking::get(url.to_owned())?;
@@ -251,7 +256,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let mut dwarf_args = vec![url.to_string()];
                 dwarf_args.extend(args.dwarf_args.args);
 
-                Some((source_code, dwarf_args, url.to_string()))
+                Some((source_code, dwarf_args, url.to_string(), None))
             }
         }
     } else if args.stdin.is_some() && args.stdin.unwrap() {
@@ -261,7 +266,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let mut dwarf_args = vec!["stdin".to_owned()];
         dwarf_args.extend(args.dwarf_args.args);
 
-        Some((source_code, dwarf_args, "stdin".to_owned()))
+        Some((source_code, dwarf_args, "stdin".to_owned(), None))
     } else {
         None
     };
@@ -285,7 +290,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("{}", banner2());
     }
 
-    if let Some((source_code, dwarf_args, file_name)) = input {
+    if let Some(cd) = args.cd {
+        env::set_current_dir(cd).map_err(|e| {
+            eprintln!("Unable to change directory: {}", e);
+            e
+        })?;
+    }
+
+    if let Some((source_code, dwarf_args, file_name, source_meta)) = input {
         if args.repl.is_some() && args.repl.unwrap() {
             let ctx = match get_context(
                 &file_name,
@@ -383,12 +395,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             // Not so fast buck-o. We also need to recompile if the compiler
             // version is different, or if the compiler build time is newer than
             // the gp file.
-            let file_name_orig = file_name.clone();
-            let source_path = Path::new(&file_name);
-            let source_path = match source_path.parent() {
-                Some(p) => p.into(),
-                None => env::current_dir()?,
-            };
+            let source_path = env::current_dir()?;
             let file_name = Path::new(&file_name);
             let file_name = file_name.file_name().unwrap().to_str().unwrap().to_string();
 
@@ -406,10 +413,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let path = Path::new(&path);
             let program = if path.exists() {
                 // Compare timestamps of source and gp file.
-                let source_meta = fs::metadata(&file_name_orig)?;
-                let gp_meta = fs::metadata(path)?;
-                let source_time = source_meta.modified()?;
-                let gp_time = gp_meta.modified()?;
+                let source_meta = source_meta.unwrap();
+                let gp_meta = fs::metadata(path).map_err(|e| {
+                    eprintln!("Unable to read gp file: {}", e);
+                    e
+                })?;
+                let source_time = source_meta.modified().map_err(|e| {
+                    eprintln!("Unable to read source file: {}", e);
+                    e
+                })?;
+                let gp_time = gp_meta.modified().map_err(|e| {
+                    eprintln!("Unable to read gp file: {}", e);
+                    e
+                })?;
 
                 if source_time > gp_time {
                     compile_program(
@@ -422,7 +438,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         path,
                     )?
                 } else {
-                    let bin_file = fs::File::open(path)?;
+                    let bin_file = fs::File::open(path).map_err(|e| {
+                        eprintln!("Unable to read gp file: {}", e);
+                        e
+                    })?;
                     let reader = io::BufReader::new(bin_file);
                     let program: Program = serde_json::from_reader(reader)?;
 
@@ -458,14 +477,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 )?
             };
 
-            // 🚧 This is broken. It only works for the VM. It needs to be outside
-            // of the outermost `if let` block.
-            if let Some(cd) = args.cd {
-                env::set_current_dir(cd).map_err(|e| {
-                    eprintln!("Unable to change directory: {}", e);
-                    e
-                })?;
-            }
+            // // 🚧 This is broken. It only works for the VM. It needs to be outside
+            // // of the outermost `if let` block.
+            // if let Some(cd) = args.cd {
+            //     env::set_current_dir(cd).map_err(|e| {
+            //         eprintln!("Unable to change directory: {}", e);
+            //         e
+            //     })?;
+            // }
 
             // Get args and call the VM.
             let args: Vec<RefType<BubbaValue>> = dwarf_args

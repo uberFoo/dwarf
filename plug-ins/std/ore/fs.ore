@@ -23,11 +23,13 @@ impl File {
         }
     }
 
-    fn read(self, buffer: string) -> Result<int, Error> {
-        let result = self.inner.invoke_func_mut("fs", "File", "read", @[self.handle, buffer]);
+    fn read(self) -> Result<string, Error> {
+        let result = self
+            .inner
+            .invoke_func_mut("fs", "File", "read", [self.handle]);
         match result {
-            Result::Ok(f) => Result::<int, Error>::Ok(f),
-            Result::Err(e) => Result::<int, Error>::Err(e),
+            Result::Ok(f) => Result::<string, Error>::Ok(f),
+            Result::Err(e) => Result::<string, Error>::Err(e),
         }
     }
 }

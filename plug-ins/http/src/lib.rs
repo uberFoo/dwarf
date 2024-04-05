@@ -70,8 +70,8 @@ mod http_client {
     /// Instantiates the plugin.
     #[sabi_extern_fn]
     pub fn new(
-        lambda_sender: RSender<LambdaCall>,
-        args: RVec<FfiValue>,
+        _lambda_sender: RSender<LambdaCall>,
+        _args: RVec<FfiValue>,
     ) -> RResult<PluginType, Error> {
         ROk(Plugin_TO::from_value(HttpClient::default(), TD_Opaque))
     }
@@ -582,6 +582,7 @@ mod http_server {
                 };
                 server.lambda_call.send(lambda_call).unwrap();
                 let result = result.recv().unwrap();
+
                 let ROk(FfiValue::String(result)) = result else {
                     return Box::pin(async {
                         mk_response("oh no! something went terribly wrong. 🤯".into())

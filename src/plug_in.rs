@@ -55,11 +55,19 @@ pub trait Plugin: Clone + Debug + Display + Send + Sync {
 
 pub type PluginType = Plugin_TO<'static, RBox<()>>;
 
+/// A Lambda invocation
+///
+/// This little beauty encompasses everything you need to invoke a dwarf lambda
+/// from a dynamic library.
+///
 #[repr(C)]
 #[derive(StableAbi)]
 pub struct LambdaCall {
+    /// A pointer into the table of lambda functions.
     pub lambda: usize,
+    /// Arguments to the lambda function.
     pub args: RVec<FfiValue>,
+    /// A channel to send the result of the lambda function.
     pub result: RSender<RResult<FfiValue, Error>>,
 }
 

@@ -101,7 +101,7 @@ macro_rules! error {
 type Result<T, E = Box<Simple<String>>> = std::result::Result<T, E>;
 type Expression = (Spanned<DwarfExpression>, (u8, u8));
 
-static RE: OnceCell<Regex> = OnceCell::new();
+static STRING_REGEX: OnceCell<Regex> = OnceCell::new();
 
 // These are the binding strengths of the operators used by the parser.
 // The idea comes from
@@ -3637,78 +3637,7 @@ impl DwarfParser {
         let token = self.peek()?.clone();
 
         if let (Token::String(string), span) = token {
-            let re = match RE.get() {
-                Some(re) => re,
-                None => {
-                    let re = Regex::new(r"(?s)(.*?)\$\{([^}]*)\}|(.+)").unwrap();
-                    // I hate this, and I wouldn't do it but for whatever happens
-                    // during test breakage.
-                    let _ = RE.set(re);
-                    RE.get().unwrap()
-                }
-            };
-
-            // If we don't have any matches then parse this as a regular string.
-            let captures = re.captures(&string);
-            // We want to be sure that there is something in capture group 2, which
-            // is the expression. We can't just tests captures, because that's just
-            // the first capture. So we'll iterate here, and then continue if
-            // the coast is clear.
-            let mut coast_is_clear = false;
-            if captures.is_some() {
-                for caps in re.captures_iter(&string) {
-                    if caps.get(2).is_some() {
-                        coast_is_clear = true;
-                        break;
-                    }
-                }
-            } else {
-                return None;
-            }
-
-            if !coast_is_clear {
-                return None;
-            }
-
-            let mut inside = span.start;
-            let mut exprs = Vec::new();
-
-            // It doesn't implement Range or something. I could do it I suppose,
-            // but I don't think it really matters that much.
-            // let captures = captures.unwrap();
-            // for caps in &captures[1..] {
-
-            for caps in re.captures_iter(&string) {
-                if let Some(before) = caps.get(1) {
-                    if !before.is_empty() {
-                        let delta = before.end() - before.start();
-                        exprs.push((
-                            DwarfExpression::StringLiteral(before.as_str().to_owned()),
-                            inside..inside + delta,
-                        ));
-                        inside += delta;
-                    }
-                }
-
-                if let Some(expr_str) = caps.get(2) {
-                    let expr = parse_expression(expr_str.as_str());
-                    if let Ok(Some(mut expr)) = expr {
-                        expr.0 .1.start += inside + 2;
-                        expr.0 .1.end += inside + 2;
-                        exprs.push(expr.0);
-                        inside += expr_str.end() - expr_str.start() + 3;
-                    }
-                }
-
-                if let Some(after) = caps.get(3) {
-                    let delta = after.end() - after.start();
-                    exprs.push((
-                        DwarfExpression::StringLiteral(after.as_str().to_owned()),
-                        inside..inside + delta,
-                    ));
-                    inside += delta;
-                }
-            }
+            let exprs = match_format_string(&string, &span)?;
 
             self.advance();
             Some(((DwarfExpression::FormatString(exprs), span), LITERAL))
@@ -5233,6 +5162,86 @@ fn report_errors(
         });
 
     String::from_utf8_lossy(&result).to_string()
+}
+
+fn match_format_string(
+    string: &String,
+    span: &std::ops::Range<usize>,
+) -> Option<Vec<(DwarfExpression, std::ops::Range<usize>)>> {
+    let re = match STRING_REGEX.get() {
+        Some(re) => re,
+        None => {
+            let re = Regex::new(r"(?s)(.*?)\$\{([^}]*)\}|(.+)").unwrap();
+            // I hate this, and I wouldn't do it but for whatever happens
+            // during test breakage.
+            let _ = STRING_REGEX.set(re);
+            STRING_REGEX.get().unwrap()
+        }
+    };
+
+    // If we don't have any matches then parse this as a regular string.
+    let captures = re.captures(&string);
+    // We want to be sure that there is something in capture group 2, which
+    // is the expression. We can't just tests captures, because that's just
+    // the first capture. So we'll iterate here, and then continue if
+    // the coast is clear.
+    let mut coast_is_clear = false;
+    if captures.is_some() {
+        for caps in re.captures_iter(&string) {
+            if caps.get(2).is_some() {
+                coast_is_clear = true;
+                break;
+            }
+        }
+    } else {
+        return None;
+    }
+
+    if !coast_is_clear {
+        return None;
+    }
+
+    let mut inside = span.start;
+    let mut exprs = Vec::new();
+
+    // It doesn't implement Range or something. I could do it I suppose,
+    // but I don't think it really matters that much.
+    // let captures = captures.unwrap();
+    // for caps in &captures[1..] {
+
+    for caps in re.captures_iter(&string) {
+        if let Some(before) = caps.get(1) {
+            if !before.is_empty() {
+                let delta = before.end() - before.start();
+                exprs.push((
+                    DwarfExpression::StringLiteral(before.as_str().to_owned()),
+                    inside..inside + delta,
+                ));
+                inside += delta;
+            }
+        }
+
+        if let Some(expr_str) = caps.get(2) {
+            let expr = parse_expression(expr_str.as_str());
+            if let Ok(Some(mut expr)) = expr {
+                expr.0 .1.start += inside + 2;
+                expr.0 .1.end += inside + 2;
+                exprs.push(expr.0);
+                inside += expr_str.end() - expr_str.start() + 3;
+            }
+        }
+
+        if let Some(after) = caps.get(3) {
+            let delta = after.end() - after.start();
+            exprs.push((
+                DwarfExpression::StringLiteral(after.as_str().to_owned()),
+                inside..inside + delta,
+            ));
+            inside += delta;
+        }
+    }
+
+    Some(exprs)
 }
 
 #[cfg(test)]

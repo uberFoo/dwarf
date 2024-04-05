@@ -255,6 +255,10 @@ pub(in crate::dwarf::extruder) fn method_call_return_type(
                 },
                 Ty::ZString(_) => {
                     match method.as_str() {
+                        FORMAT => {
+                            let ty = Ty::new_z_string(context.sarzak);
+                            ValueType::new_ty(true, &ty, lu_dog)
+                        }
                         LEN => {
                             let ty = Ty::new_integer(context.sarzak);
                             ValueType::new_ty(true, &ty, lu_dog)
@@ -264,10 +268,6 @@ pub(in crate::dwarf::extruder) fn method_call_return_type(
                             let string = ValueType::new_ty(true, &string, lu_dog);
                             let list = List::new(&string, lu_dog);
                             ValueType::new_list(true, &list, lu_dog)
-                        }
-                        FORMAT => {
-                            let ty = Ty::new_z_string(context.sarzak);
-                            ValueType::new_ty(true, &ty, lu_dog)
                         }
                         SPLIT => {
                             let string = Ty::new_z_string(context.sarzak);
