@@ -132,7 +132,7 @@ pub(crate) use function;
 
 macro_rules! debug {
     ($($arg:tt)*) => {
-        log::debug!(
+        tracing::debug!(
             target: "extruder",
             "{}: {}\n  --> {}:{}:{}",
             Colour::Cyan.dimmed().italic().paint(function!()),
@@ -3310,6 +3310,12 @@ fn inter_import(
         path.push(LIB_TAO);
         (dir, path)
     };
+
+    // let (dir, path) = if path.exists() {
+    //     (dir, path)
+    // } else {
+    //     let
+    // }
 
     match fs::read_to_string(&path) {
         Ok(source_code) => {

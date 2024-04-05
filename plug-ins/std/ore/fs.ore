@@ -1,0 +1,41 @@
+use std::dwarf::Plugin;
+use std::result::Result;
+
+struct File {
+    #[proxy(plugin = "std::fs")]
+    inner: Plugin<File>,
+    handle: int,
+}
+
+impl File {
+    fn open(file_path: string) -> Result<File, Error> {
+        let plugin = Plugin::<File>::new();
+        let result = plugin.invoke_func_mut("fs", "File", "open", [file_path]);
+        match result {
+            Result::Ok(f) => Result::<File, Error>::Ok(File {
+                inner: plugin,
+                handle: f,
+            }),
+            Result::Err(e) => Result::<File, Error>::Err(Error {
+                inner: plugin,
+                handle: e,
+            }),
+        }
+    }
+
+    fn read(self) -> Result<string, Error> {
+        let result = self
+            .inner
+            .invoke_func_mut("fs", "File", "read", [self.handle]);
+        match result {
+            Result::Ok(f) => Result::<string, Error>::Ok(f),
+            Result::Err(e) => Result::<string, Error>::Err(e),
+        }
+    }
+}
+
+struct Error {
+    #[proxy(plugin = "std::fs")]
+    inner: Plugin<File>,
+    handle: int,
+}

@@ -23,17 +23,20 @@ impl flags::Install {
             "false"
         };
         cmd!(sh, "cargo xtask plugin --plugin http --debug {debug}").run()?;
+        cmd!(sh, "cargo xtask plugin --plugin std --debug {debug}").run()?;
+        cmd!(sh, "cargo xtask plugin --plugin md --debug {debug}").run()?;
 
-        let std_dst = format!("{}/lib/std", dwarf_home);
-        fs::create_dir_all(&std_dst)?;
-        let mut std_lib_dir = std::env::current_dir()?;
-        std_lib_dir.push("std");
-        std_lib_dir.push("src");
-        for entry in fs::read_dir(&std_lib_dir)? {
-            let file = entry?.path();
-            println!("Copying {}", file.display());
-            sh.copy_file(file, &std_dst)?;
-        }
+        // let std_dst = format!("{}/lib/std", dwarf_home);
+        // fs::create_dir_all(&std_dst)?;
+        // let mut std_lib_dir = std::env::current_dir()?;
+        // std_lib_dir.push("std");
+        // std_lib_dir.push("ore");
+
+        // for entry in fs::read_dir(&std_lib_dir)? {
+        //     let file = entry?.path();
+        //     println!("Copying {}", file.display());
+        //     sh.copy_file(file, &std_dst)?;
+        // }
 
         let compiled = format!("{}/compiled", dwarf_home);
         fs::create_dir_all(&compiled)?;

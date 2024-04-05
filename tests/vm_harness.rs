@@ -9,6 +9,7 @@ use dwarf::ref_to_inner;
 use ansi_term::Colour;
 use lazy_static::lazy_static;
 use parking_lot::Mutex;
+use test_log::test;
 
 use dwarf::{
     bubba::{
@@ -173,9 +174,9 @@ fn run_program(test: &str, program: &str) -> Result<(BubbaValue, String), String
     };
 
     #[cfg(feature = "async")]
-    let mut vm = VM::new(&binary, &[], &dwarf_home, NUM_THREADS, true);
+    let mut vm = VM::new(&binary, &[], &dwarf_home, NUM_THREADS, false);
     #[cfg(not(feature = "async"))]
-    let mut vm = VM::new(&program, &[], &dwarf_home);
+    let mut vm = VM::new(&program, &[], &dwarf_home, false);
 
     let result = match vm.invoke("main", &[]) {
         Ok(value) => {

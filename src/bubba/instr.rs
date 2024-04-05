@@ -176,6 +176,7 @@ pub enum Instruction {
     ///
     LocalCardinality(String),
     /// Make a Lambda Pointer Value
+    ///
     MakeLambdaPointer(String, usize),
     /// Look up a method
     ///

@@ -13,11 +13,11 @@ It also has support for arrays, UUIDs, structs and enums, with tuples on the way
 dwarf supports generic parameters to functions as well as structs and enums.
 Three is currently a compiler/VM, an interpreter, and a REPL.
 
-Think of dwarf as Rust on easy mode!
-
-## Differences from Rust
-
-- no borrow checker
+> **Think of dwarf as Rust on easy mode!**
+>
+> I think dwarf could be a good introduction to Rust.
+> It has most of the syntax, while leaving out the borrow checker.
+> However it also has some foot-guns, like shared mutable references.
 
 
 There is a [book 📒](https://uberfoo.github.io/assets/docs/dwarf/introduction.html) in progress.
@@ -33,6 +33,21 @@ If you run across something, file a bug report, and I'll git a fix out ASAP.
 > **Free Stuff**
 >
 > I'm giving away dwarf stickers to anyone who files a bug report!
+
+## Help Wanted
+
+This thing has grown beyond my ability to keep everything working while still making forward progress.
+
+> **For Instance**
+>
+> I've been working on the virtual machine, and not worrying overmuch about the REPL.
+> Unfortunately it's now impossible to get to the REPL because of some bug buried in `main`.
+> If I take the time to fix the REPL, then that's time away from making progress on the VM.
+> I'm not using the REPL right now, so it's not going to get fixed.
+
+If anyone is interested in hacking on this thing, that would be cool!
+I'd be happy to answer questions and/or give a code walk-through.
+Documentation is something I really need to work on, and perhaps other's working on the project would inspire me to get some done.
 
 ## Installation
 
