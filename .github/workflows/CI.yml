@@ -53,6 +53,7 @@ jobs:
               run: |
                   cd dwarf
                   cargo xtask install
+                  cargo xtask plugin
 
             - name: Build and run tests with coverage
               run: |
