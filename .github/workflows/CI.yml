@@ -52,9 +52,7 @@ jobs:
             - name: Install dwarf
               run: |
                   cd dwarf
-                  cargo xtask plugin
-                  mkdir -p ~/.dwarf/lib/std
-                  cp std/src/* ~/.dwarf/lib/std
+                  cargo xtask install
 
             - name: Build and run tests with coverage
               run: |
