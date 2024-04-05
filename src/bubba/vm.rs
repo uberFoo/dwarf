@@ -156,8 +156,8 @@ impl VM {
     }
 
     #[cfg(not(feature = "async"))]
-    pub fn new(program: &Program, args: &[RefType<Value>], home: &Path) -> Self {
-        Self::inner_new(program, args, home, 0)
+    pub fn new(program: &Program, args: &[RefType<Value>], home: &Path, trace: bool) -> Self {
+        Self::inner_new(program, args, home, 0, trace)
     }
 
     fn inner_new(
