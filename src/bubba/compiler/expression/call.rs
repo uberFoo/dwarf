@@ -530,16 +530,22 @@ fn compile_static_method_call(
                         let path = &plugin.x_path;
                         let plugin_root = path.split(PATH_SEP).next().unwrap();
 
-                        if let Some(path) = path.split(PATH_SEP).nth(1) {
+                        // This is passed as an argument to the plugin -- the new function
+                        // in particular.
+                        let arg_count = if let Some(path) = path.split(PATH_SEP).nth(1) {
                             thonk.insert_instruction(
                                 Instruction::Push(Value::String(path.to_owned())),
                                 location!(),
                             );
+                            1
+                        } else {
+                            0
                         };
 
+                        // This is used by the VM to load the plugin from the extensions directory.
                         thonk
                             .insert_instruction(Instruction::Push(plugin_root.into()), location!());
-                        thonk.insert_instruction(Instruction::PluginNew(1), location!());
+                        thonk.insert_instruction(Instruction::PluginNew(arg_count), location!());
 
                         // let id = lu_dog.exhume_woog_struct_id_by_name(&plugin.name).unwrap();
                         // let woog_struct = lu_dog.exhume_woog_struct(&id).unwrap();

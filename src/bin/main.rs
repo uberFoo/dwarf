@@ -634,7 +634,7 @@ fn compile_program(
     match compile(&ctx) {
         Ok(program) => {
             // Write the compiled program to disk.
-            let mut bin_file = fs::File::create(path)?;
+            let bin_file = fs::File::create(path)?;
             let mut writer = io::BufWriter::new(bin_file);
 
             // let _ = bincode::serialize_into(writer, &program);

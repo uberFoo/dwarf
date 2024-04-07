@@ -26,7 +26,7 @@ pub fn inter(
     span: RefType<Span>,
     block: &RefType<Block>,
     context: &mut Context,
-    context_stack: &mut Vec<(String, RefType<LuDogStore>)>,
+    import_stack: &mut Vec<String>,
     lu_dog: &mut LuDogStore,
 ) -> Result<(ExprSpan, RefType<ValueType>)> {
     let (expr, expr_ty) = inter_expression(
@@ -34,13 +34,13 @@ pub fn inter(
         &expr.1,
         block,
         context,
-        context_stack,
+        import_stack,
         lu_dog,
     )?;
     debug!("As lhs: {expr:?}: {expr_ty:?}");
 
     context.location = location!();
-    let as_type = make_value_type(&ty.0, &ty.1, None, context, context_stack, lu_dog)?;
+    let as_type = make_value_type(&ty.0, &ty.1, None, context, import_stack, lu_dog)?;
 
     let as_op = TypeCast::new(&expr.0, &as_type, lu_dog);
     let expr = Expression::new_type_cast(true, &as_op, lu_dog);

@@ -345,7 +345,7 @@ pub fn eval(
                             .map(|v| <Value as Into<FfiValue>>::into((*s_read!(v)).clone()))
                             .collect::<Vec<FfiValue>>();
 
-                        let mut plugin = s_write!(plugin);
+                        let plugin = s_write!(plugin);
                         let x = match plugin.invoke_func(
                             s_read!(arg_values[0]).to_inner_string().as_str().into(),
                             s_read!(arg_values[1]).to_inner_string().as_str().into(),

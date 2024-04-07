@@ -22,9 +22,9 @@ use crate::{
     lu_dog::{
         store::ObjectStore as LuDogStore,
         types::{
-            AWait, AnyList, Block, Body, BooleanOperator, Call, CharLiteral, EnumFieldEnum,
-            Expression, ExpressionBit, ExpressionEnum, ExpressionStatement, Field, ForLoop,
-            FormatBit, FormatString, FuncGeneric, FunctionCall, ImplementationBlock, Import, Index,
+            AWait, Block, Body, BooleanOperator, Call, CharLiteral, EnumFieldEnum, Expression,
+            ExpressionBit, ExpressionEnum, ExpressionStatement, Field, ForLoop, FormatBit,
+            FormatString, FuncGeneric, FunctionCall, ImplementationBlock, Import, Index,
             IntegerLiteral, Item as WoogItem, ItemStatement, Lambda, LambdaParameter, LetStatement,
             Literal, LocalVariable, Pattern as AssocPat, RangeExpression, Span as LuDogSpan,
             Statement, StringLiteral, StructGeneric, ValueType, ValueTypeEnum, Variable,
@@ -465,7 +465,7 @@ pub fn new_lu_dog(
 fn walk_tree(
     ast: &[Item],
     context: &mut Context,
-    context_stack: &mut Vec<(String, RefType<LuDogStore>)>,
+    import_stack: &mut Vec<String>,
     lu_dog: &mut LuDogStore,
 ) -> Result<()> {
     let mut funcs = Vec::new();
@@ -559,11 +559,11 @@ fn walk_tree(
             Item {
                 item: (InnerItem::Import((path, _path_span), alias), _span),
                 attributes: _,
-            } => inter_import(path, alias, context, context_stack, lu_dog)?,
+            } => inter_import(path, alias, context, import_stack, lu_dog)?,
             Item {
                 item: (InnerItem::Module((name, _name_span)), _span),
                 attributes: _,
-            } => inter_module(name, context, context_stack, lu_dog)?,
+            } => inter_module(name, context, import_stack, lu_dog)?,
             Item {
                 item: (InnerItem::Struct((name, _), fields, generics), span),
                 attributes,
@@ -612,6 +612,7 @@ fn walk_tree(
     } in &structs
     {
         debug!("Interring struct `{}` fields", name);
+        dbg!(&import_stack);
         let _ = strukt::inter_struct(
             name,
             span,
@@ -640,7 +641,7 @@ fn walk_tree(
             fields,
             generics.as_ref(),
             context,
-            context_stack,
+            import_stack,
             lu_dog,
         )
         .map_err(|mut e| {
@@ -664,7 +665,7 @@ fn walk_tree(
                 generics.as_ref(),
                 location,
                 context,
-                context_stack,
+                import_stack,
                 lu_dog,
             )
             .map_err(|mut e| {
@@ -693,7 +694,7 @@ fn walk_tree(
             return_type,
             None,
             context,
-            context_stack,
+            import_stack,
             lu_dog,
         )
         .map_err(|mut e| {
@@ -710,18 +711,10 @@ fn walk_tree(
     } in implementations
     {
         debug!("Interring implementation `{}`", name);
-        let _ = inter_implementation(
-            name,
-            attributes,
-            funcs,
-            span,
-            context,
-            context_stack,
-            lu_dog,
-        )
-        .map_err(|mut e| {
-            errors.append(&mut e);
-        });
+        let _ = inter_implementation(name, attributes, funcs, span, context, import_stack, lu_dog)
+            .map_err(|mut e| {
+                errors.append(&mut e);
+            });
     }
 
     // Finally, inter the loose functions.
@@ -749,7 +742,7 @@ fn walk_tree(
             None,
             span,
             context,
-            context_stack,
+            import_stack,
             lu_dog,
         )
         .map_err(|mut e| errors.append(&mut e));
@@ -767,7 +760,7 @@ pub fn inter_statement(
     index: i64,
     block: &RefType<Block>,
     context: &mut Context,
-    context_stack: &mut Vec<(String, RefType<LuDogStore>)>,
+    import_stack: &mut Vec<String>,
     lu_dog: &mut LuDogStore,
 ) -> Result<(Spanned<RefType<Statement>>, RefType<ValueType>)> {
     debug!("inter_statement {:?}", stmt);
@@ -782,7 +775,7 @@ pub fn inter_statement(
                 span,
                 block,
                 context,
-                context_stack,
+                import_stack,
                 lu_dog,
             )?;
 
@@ -843,7 +836,7 @@ pub fn inter_statement(
                         None,
                         span,
                         context,
-                        context_stack,
+                        import_stack,
                         lu_dog,
                     )?;
                     span
@@ -858,7 +851,7 @@ pub fn inter_statement(
                         funcs,
                         span,
                         context,
-                        context_stack,
+                        import_stack,
                         lu_dog,
                     )?;
                     span
@@ -867,7 +860,7 @@ pub fn inter_statement(
                     item: (InnerItem::Import((path, _path_span), alias), span),
                     attributes: _,
                 } => {
-                    inter_import(path, alias, context, context_stack, lu_dog)?;
+                    inter_import(path, alias, context, import_stack, lu_dog)?;
                     span
                 }
                 Item {
@@ -913,7 +906,7 @@ pub fn inter_statement(
                             generics.as_ref(),
                             location,
                             context,
-                            context_stack,
+                            import_stack,
                             lu_dog,
                         )
                     })?;
@@ -946,7 +939,7 @@ pub fn inter_statement(
                 expr_span,
                 block,
                 context,
-                context_stack,
+                import_stack,
                 lu_dog,
             )?;
 
@@ -1004,7 +997,7 @@ pub fn inter_statement(
                 span,
                 block,
                 context,
-                context_stack,
+                import_stack,
                 lu_dog,
             )?;
             let stmt = ResultStatement::new(&expr.0, lu_dog);
@@ -1021,7 +1014,7 @@ pub(super) fn inter_statements(
     span: &Span,
     block: &RefType<Block>,
     context: &mut Context,
-    context_stack: &mut Vec<(String, RefType<LuDogStore>)>,
+    import_stack: &mut Vec<String>,
     lu_dog: &mut LuDogStore,
 ) -> Result<Spanned<RefType<ValueType>>> {
     let mut value_type = ValueType::new_empty(true, lu_dog);
@@ -1031,7 +1024,7 @@ pub(super) fn inter_statements(
     let mut last_stmt_uuid: Option<SarzakStorePtr> = None;
     let mut index = 0;
     for stmt in statements {
-        let (stmt, ty) = match inter_statement(stmt, index, block, context, context_stack, lu_dog) {
+        let (stmt, ty) = match inter_statement(stmt, index, block, context, import_stack, lu_dog) {
             Ok((stmt, ty)) => (stmt, ty),
             Err(err) => {
                 errors.extend(err);
@@ -1065,7 +1058,7 @@ pub(super) fn inter_expression(
     span: &Span,
     block: &RefType<Block>,
     context: &mut Context,
-    context_stack: &mut Vec<(String, RefType<LuDogStore>)>,
+    import_stack: &mut Vec<String>,
     lu_dog: &mut LuDogStore,
 ) -> Result<(ExprSpan, RefType<ValueType>)> {
     debug!("expr {expr:?}, span {span:?}");
@@ -1083,10 +1076,10 @@ pub(super) fn inter_expression(
     let expr = s_read!(expr).clone();
     match expr {
         ParserExpression::Addition(lhs_p, rhs_p) => {
-             addition::inter(lhs_p, rhs_p, span, block, context, context_stack, lu_dog)
+             addition::inter(lhs_p, rhs_p, span, block, context, import_stack, lu_dog)
         }
         ParserExpression::And(lhs_p, rhs_p) => {
-            and::inter(lhs_p, rhs_p, span, block, context, context_stack, lu_dog)
+            and::inter(lhs_p, rhs_p, span, block, context, import_stack, lu_dog)
         }
         //
         // AnyList
@@ -1099,13 +1092,12 @@ pub(super) fn inter_expression(
                 let mut elements = elements.iter();
 
                 let element = elements.next().unwrap();
-                let span1 = &element.1;
                 let ((first, first_span), first_ty) = inter_expression(
                     &new_ref!(ParserExpression, element.0.to_owned()),
                     &element.1,
                     block,
                     context,
-                    context_stack,
+                    import_stack,
                     lu_dog,
                 )?;
 
@@ -1133,7 +1125,7 @@ pub(super) fn inter_expression(
                         &element.1,
                         block,
                         context,
-                        context_stack,
+                        import_stack,
                         lu_dog,
                     )?;
 
@@ -1162,7 +1154,7 @@ pub(super) fn inter_expression(
             }
         }
         ParserExpression::As(expr, ref ty) => {
-            expr_as::inter(expr, ty, span, block, context, context_stack, lu_dog)
+            expr_as::inter(expr, ty, span, block, context, import_stack, lu_dog)
         }
         //
         // Asm
@@ -1202,7 +1194,7 @@ pub(super) fn inter_expression(
                 &lhs_p.1,
                 block,
                 context,
-                context_stack,
+                import_stack,
                 lu_dog,
             )?;
             let (rhs, rhs_ty) = inter_expression(
@@ -1210,7 +1202,7 @@ pub(super) fn inter_expression(
                 &rhs_p.1,
                 block,
                 context,
-                context_stack,
+                import_stack,
                 lu_dog,
             )?;
 
@@ -1242,7 +1234,7 @@ pub(super) fn inter_expression(
                 &expr_p.1,
                 block,
                 context,
-                context_stack,
+                import_stack,
                 lu_dog,
             )?;
 
@@ -1278,7 +1270,7 @@ pub(super) fn inter_expression(
                 &expr.1,
                 block,
                 context,
-                context_stack,
+                import_stack,
                 lu_dog,
             )?;
             let not = Unary::new_not(true, lu_dog);
@@ -1326,7 +1318,7 @@ pub(super) fn inter_expression(
                 &stmts_span,
                 &block,
                 context,
-                context_stack,
+                import_stack,
                 lu_dog,
             )?;
             let value = XValue::new_expression(&block, &ty.0, &expr, lu_dog);
@@ -1401,7 +1393,7 @@ pub(super) fn inter_expression(
                 &lhs_p.1,
                 block,
                 context,
-                context_stack,
+                import_stack,
                 lu_dog,
             )?;
             let (rhs, rhs_ty) = inter_expression(
@@ -1409,7 +1401,7 @@ pub(super) fn inter_expression(
                 &rhs_p.1,
                 block,
                 context,
-                context_stack,
+                import_stack,
                 lu_dog,
             )?;
 
@@ -1457,7 +1449,7 @@ pub(super) fn inter_expression(
                 &lhs_p.1,
                 block,
                 context,
-                context_stack,
+                import_stack,
                 lu_dog,
             )?;
             let (rhs, rhs_ty) = inter_expression(
@@ -1465,7 +1457,7 @@ pub(super) fn inter_expression(
                 &rhs_p.1,
                 block,
                 context,
-                context_stack,
+                import_stack,
                 lu_dog,
             )?;
 
@@ -1501,7 +1493,7 @@ pub(super) fn inter_expression(
                 &lhs.1,
                 block,
                 context,
-                context_stack,
+                import_stack,
                 lu_dog,
             )?;
 
@@ -1682,7 +1674,7 @@ pub(super) fn inter_expression(
             let collection = new_ref!(ParserExpression, collection.0.clone());
 
             let (collection, collection_ty) =
-                inter_expression(&collection, cspan, block, context, context_stack, lu_dog)?;
+                inter_expression(&collection, cspan, block, context, import_stack, lu_dog)?;
 
             let collection_ty = match s_read!(collection_ty).subtype {
                 ValueTypeEnum::List(ref id) => {
@@ -1745,7 +1737,7 @@ pub(super) fn inter_expression(
             let body = new_ref!(ParserExpression, body.to_owned());
 
             let (body, _body_ty) =
-                inter_expression(&body, bspan, block, context, context_stack, lu_dog)?;
+                inter_expression(&body, bspan, block, context, import_stack, lu_dog)?;
 
             // 🚧 This is dumb. I'm extracting the body here, just to stick it back
             // into an expression in the interpreter. The model will need to be fixed
@@ -1787,7 +1779,7 @@ pub(super) fn inter_expression(
                     &span,
                     block,
                     context,
-                    context_stack,
+                    import_stack,
                     lu_dog,
                 )?;
 
@@ -1817,7 +1809,7 @@ pub(super) fn inter_expression(
                 fspan,
                 block,
                 context,
-                context_stack,
+                import_stack,
                 lu_dog,
             )?;
             debug!("func_expr {func_expr:?}");
@@ -1877,7 +1869,7 @@ pub(super) fn inter_expression(
                     &arg.1,
                     block,
                     context,
-                    context_stack,
+                    import_stack,
                     lu_dog,
                 )?;
                 let arg = Argument::new(
@@ -1916,7 +1908,7 @@ pub(super) fn inter_expression(
                 &lhs_p.1,
                 block,
                 context,
-                context_stack,
+                import_stack,
                 lu_dog,
             )?;
             let (rhs, rhs_ty) = inter_expression(
@@ -1924,7 +1916,7 @@ pub(super) fn inter_expression(
                 &rhs_p.1,
                 block,
                 context,
-                context_stack,
+                import_stack,
                 lu_dog,
             )?;
 
@@ -1966,7 +1958,7 @@ pub(super) fn inter_expression(
                 &lhs_p.1,
                 block,
                 context,
-                context_stack,
+                import_stack,
                 lu_dog,
             )?;
             let (rhs, rhs_ty) = inter_expression(
@@ -1974,7 +1966,7 @@ pub(super) fn inter_expression(
                 &rhs_p.1,
                 block,
                 context,
-                context_stack,
+                import_stack,
                 lu_dog,
             )?;
 
@@ -2016,7 +2008,7 @@ pub(super) fn inter_expression(
                 &expr.1,
                 block,
                 context,
-                context_stack,
+                import_stack,
                 lu_dog,
             )?;
             Ok((expr, ty))
@@ -2029,7 +2021,7 @@ pub(super) fn inter_expression(
             let cspan = &conditional.1;
             let conditional = new_ref!(ParserExpression, conditional.0.to_owned());
             let (conditional, conditional_ty) =
-                inter_expression(&conditional, cspan, block, context, context_stack, lu_dog)?;
+                inter_expression(&conditional, cspan, block, context, import_stack, lu_dog)?;
             debug!("ParserExpression::If {:?}", conditional_ty);
 
             // Check that the conditional expression evaluates to a boolean.
@@ -2072,7 +2064,7 @@ pub(super) fn inter_expression(
             let tspan = &true_block.1;
             let true_block = new_ref!(ParserExpression, true_block.0.to_owned());
             let (true_block, true_ty) =
-                inter_expression(&true_block, tspan, block, context, context_stack, lu_dog)?;
+                inter_expression(&true_block, tspan, block, context, import_stack, lu_dog)?;
             let true_block =
                 if let ExpressionEnum::Block(true_block) = s_read!(true_block.0).subtype {
                     true_block
@@ -2085,7 +2077,7 @@ pub(super) fn inter_expression(
                 let fspan = &false_block.1;
                 let false_block = new_ref!(ParserExpression, false_block.0.to_owned());
                 let (false_block, _false_ty) =
-                    inter_expression(&false_block, fspan, block, context, context_stack, lu_dog)?;
+                    inter_expression(&false_block, fspan, block, context, import_stack, lu_dog)?;
                 Some(false_block.0)
             } else {
                 None
@@ -2111,7 +2103,7 @@ pub(super) fn inter_expression(
                 &target_p.1,
                 block,
                 context,
-                context_stack,
+                import_stack,
                 lu_dog,
             )?;
             debug!("target: {target:?}, ty: {target_ty:?}");
@@ -2120,7 +2112,7 @@ pub(super) fn inter_expression(
                 &index_p.1,
                 block,
                 context,
-                context_stack,
+                import_stack,
                 lu_dog,
             )?;
 
@@ -2210,12 +2202,12 @@ pub(super) fn inter_expression(
                 &return_type.1,
                 None,
                 context,
-                context_stack,
+                import_stack,
                 lu_dog,
             )?;
 
             let lambda = Lambda::new(Some(&_body), None, &ret_ty, lu_dog);
-            let ty = ValueType::new_lambda(true, &lambda, lu_dog);
+            let _ty = ValueType::new_lambda(true, &lambda, lu_dog);
 
             let mut errors = Vec::new();
             let mut last_param_uuid: Option<SarzakStorePtr> = None;
@@ -2231,7 +2223,7 @@ pub(super) fn inter_expression(
                     ty_span,
                     None,
                     context,
-                    context_stack,
+                    import_stack,
                     lu_dog,
                 ) {
                     Ok(ty) => ty,
@@ -2281,7 +2273,7 @@ pub(super) fn inter_expression(
                 .collect();
 
             let (block_ty, block_span) =
-                inter_statements(&stmts, &body.1, &block, context, context_stack, lu_dog)?;
+                inter_statements(&stmts, &body.1, &block, context, import_stack, lu_dog)?;
 
             typecheck(
                 (&ret_ty, &return_type.1),
@@ -2306,7 +2298,7 @@ pub(super) fn inter_expression(
                 &lhs_p.1,
                 block,
                 context,
-                context_stack,
+                import_stack,
                 lu_dog,
             )?;
             let (rhs, rhs_ty) = inter_expression(
@@ -2314,7 +2306,7 @@ pub(super) fn inter_expression(
                 &rhs_p.1,
                 block,
                 context,
-                context_stack,
+                import_stack,
                 lu_dog,
             )?;
 
@@ -2356,7 +2348,7 @@ pub(super) fn inter_expression(
                 &lhs_p.1,
                 block,
                 context,
-                context_stack,
+                import_stack,
                 lu_dog,
             )?;
             let (rhs, rhs_ty) = inter_expression(
@@ -2364,7 +2356,7 @@ pub(super) fn inter_expression(
                 &rhs_p.1,
                 block,
                 context,
-                context_stack,
+                import_stack,
                 lu_dog,
             )?;
 
@@ -2428,7 +2420,7 @@ pub(super) fn inter_expression(
                     &element.1,
                     block,
                     context,
-                    context_stack,
+                    import_stack,
                     lu_dog,
                 )?;
 
@@ -2457,7 +2449,7 @@ pub(super) fn inter_expression(
                         &element.1,
                         block,
                         context,
-                        context_stack,
+                        import_stack,
                         lu_dog,
                     )?;
 
@@ -2711,7 +2703,7 @@ pub(super) fn inter_expression(
                 &scrutinee.1,
                 block,
                 context,
-                context_stack,
+                import_stack,
                 lu_dog,
             )?;
 
@@ -2727,7 +2719,7 @@ pub(super) fn inter_expression(
                     span,
                     block,
                     context,
-                    context_stack,
+                    import_stack,
                     lu_dog,
                 )?;
 
@@ -2744,7 +2736,7 @@ pub(super) fn inter_expression(
                     span,
                     block,
                     context,
-                    context_stack,
+                    import_stack,
                     lu_dog,
                 )?;
 
@@ -2777,7 +2769,7 @@ pub(super) fn inter_expression(
                 span,
                 block,
                 context,
-                context_stack,
+                import_stack,
                 lu_dog,
             )
         }
@@ -2790,7 +2782,7 @@ pub(super) fn inter_expression(
                 &expr.1,
                 block,
                 context,
-                context_stack,
+                import_stack,
                 lu_dog,
             )?;
             let negation = Unary::new_negation(true, lu_dog);
@@ -2810,7 +2802,7 @@ pub(super) fn inter_expression(
                 &lhs_p.1,
                 block,
                 context,
-                context_stack,
+                import_stack,
                 lu_dog,
             )?;
             let (rhs, rhs_ty) = inter_expression(
@@ -2818,7 +2810,7 @@ pub(super) fn inter_expression(
                 &rhs_p.1,
                 block,
                 context,
-                context_stack,
+                import_stack,
                 lu_dog,
             )?;
 
@@ -2851,7 +2843,7 @@ pub(super) fn inter_expression(
                 &expr.1,
                 block,
                 context,
-                context_stack,
+                import_stack,
                 lu_dog,
             )?;
             let ty = ValueType::new_empty(true, lu_dog);
@@ -2871,7 +2863,7 @@ pub(super) fn inter_expression(
                 &lhs_p.1,
                 block,
                 context,
-                context_stack,
+                import_stack,
                 lu_dog,
             )?;
             let (rhs, rhs_ty) = inter_expression(
@@ -2879,7 +2871,7 @@ pub(super) fn inter_expression(
                 &rhs_p.1,
                 block,
                 context,
-                context_stack,
+                import_stack,
                 lu_dog,
             )?;
 
@@ -2916,7 +2908,7 @@ pub(super) fn inter_expression(
                 &lhs_p.1,
                 block,
                 context,
-                context_stack,
+                import_stack,
                 lu_dog,
             )?;
             let (rhs, rhs_ty) = inter_expression(
@@ -2924,7 +2916,7 @@ pub(super) fn inter_expression(
                 &rhs_p.1,
                 block,
                 context,
-                context_stack,
+                import_stack,
                 lu_dog,
             )?;
 
@@ -2986,7 +2978,7 @@ pub(super) fn inter_expression(
 
                 context.location = location!();
                 let ty =
-                    make_value_type(&generic[0].0, ut_span, None, context, context_stack, lu_dog)?;
+                    make_value_type(&generic[0].0, ut_span, None, context, import_stack, lu_dog)?;
 
                 let value = XValue::new_expression(block, &ty, &expr, lu_dog);
                 update_span_value(&span, &value, location!());
@@ -3013,7 +3005,7 @@ pub(super) fn inter_expression(
                 &start.1,
                 block,
                 context,
-                context_stack,
+                import_stack,
                 lu_dog,
             )?;
             let (end, _end_ty) = inter_expression(
@@ -3021,7 +3013,7 @@ pub(super) fn inter_expression(
                 &end.1,
                 block,
                 context,
-                context_stack,
+                import_stack,
                 lu_dog,
             )?;
 
@@ -3046,7 +3038,7 @@ pub(super) fn inter_expression(
                     &expr.1,
                     block,
                     context,
-                    context_stack,
+                    import_stack,
                     lu_dog,
                 )?
             } else {
@@ -3100,7 +3092,7 @@ pub(super) fn inter_expression(
                 params,
                 block,
                 context,
-                context_stack,
+                import_stack,
                 lu_dog,
             )
         }
@@ -3127,7 +3119,7 @@ pub(super) fn inter_expression(
         //
         // Struct
         //
-        ParserExpression::Struct(name, fields) => struct_expr::inter(name, fields, span, block, context, context_stack, lu_dog)
+        ParserExpression::Struct(name, fields) => struct_expr::inter(name, fields, span, block, context, import_stack, lu_dog)
 ,
         //
         // Subtraction
@@ -3139,7 +3131,7 @@ pub(super) fn inter_expression(
                 &lhs.1,
                 block,
                 context,
-                context_stack,
+                import_stack,
                 lu_dog,
             )?;
             let (rhs, _rhs_ty) = inter_expression(
@@ -3147,7 +3139,7 @@ pub(super) fn inter_expression(
                 &rhs.1,
                 block,
                 context,
-                context_stack,
+                import_stack,
                 lu_dog,
             )?;
 
@@ -3191,10 +3183,17 @@ pub(super) fn inter_expression(
 fn inter_module(
     name: &str,
     context: &mut Context,
-    context_stack: &mut Vec<(String, RefType<LuDogStore>)>,
+    import_stack: &mut Vec<String>,
     lu_dog: &mut LuDogStore,
 ) -> Result<()> {
     debug!("inter_module: {name}");
+
+    if let Some(import) = import_stack.last() {
+        if !import.contains(name) {
+            dbg!("hahaha", name);
+            return Ok(());
+        }
+    }
 
     let mut errors = Vec::new();
 
@@ -3203,7 +3202,10 @@ fn inter_module(
     path.set_file_name(name);
     path.set_extension(TAO_EXT);
 
+    dbg!(&name, &import_stack, &path);
+
     if !context.imports.insert(path.clone()) {
+        debug!("{name} already imported");
         return Ok(());
     }
 
@@ -3214,6 +3216,8 @@ fn inter_module(
                 Ok(ast) => {
                     let path_name = format!("{}", path.display());
 
+                    // Here we are creating a path that includes the name of the module.
+                    // This is the context.path of the new context used to walk the tree.
                     let mut type_path = context.path.clone();
                     type_path += name;
                     type_path += PATH_SEP;
@@ -3239,7 +3243,7 @@ fn inter_module(
 
                     // Extrusion time
                     trace!("processing dwarf import");
-                    walk_tree(&ast, &mut new_ctx, context_stack, lu_dog)?;
+                    walk_tree(&ast, &mut new_ctx, import_stack, lu_dog)?;
                     trace!("done processing dwarf import");
 
                     context.dirty.extend(dirty);
@@ -3275,7 +3279,7 @@ fn inter_import(
     import_path: &[Spanned<String>],
     alias: &Option<(String, Range<usize>)>,
     context: &mut Context,
-    context_stack: &mut Vec<(String, RefType<LuDogStore>)>,
+    import_stack: &mut Vec<String>,
     lu_dog: &mut LuDogStore,
 ) -> Result<()> {
     debug!("inter_import: {import_path:?}");
@@ -3287,6 +3291,13 @@ fn inter_import(
         .collect::<Vec<_>>();
 
     let ty = path_root.pop().unwrap();
+
+    // if let Some(current) = import_stack.last() {
+    //     if current != &ty {
+    //         return Ok(());
+    //     }
+    // }
+
     let module = path_root.first().unwrap(); // This will have _something_.
 
     // It looks like we are first trying to load an extension.
@@ -3311,6 +3322,21 @@ fn inter_import(
         (dir, path)
     };
 
+    // We need to push the thing we are importing onto the stack so
+    // that when we are interring a module we can only import the
+    // thing on the top of the stack.
+    let foo = PATH_SEP.to_owned() + path_root.join(PATH_SEP).as_str() + PATH_SEP + &ty;
+
+    if let Some(last) = import_stack.last() {
+        if last == &foo {
+            dbg!("denied!");
+            return Ok(());
+        }
+    }
+
+    import_stack.push(PATH_SEP.to_owned() + path_root.join(PATH_SEP).as_str() + PATH_SEP + &ty);
+
+    dbg!(&ty, &import_stack);
     // let (dir, path) = if path.exists() {
     //     (dir, path)
     // } else {
@@ -3344,8 +3370,10 @@ fn inter_import(
 
                     // Extrusion time
                     trace!("processing dwarf import");
-                    walk_tree(&ast, &mut new_ctx, context_stack, lu_dog)?;
+                    walk_tree(&ast, &mut new_ctx, import_stack, lu_dog)?;
                     trace!("done processing dwarf import");
+
+                    import_stack.pop();
 
                     context.dirty.extend(dirty);
                     context.scopes.insert(
@@ -3397,7 +3425,7 @@ fn inter_implementation(
     funcs: &[Item],
     span: &Span,
     context: &mut Context,
-    context_stack: &mut Vec<(String, RefType<LuDogStore>)>,
+    import_stack: &mut Vec<String>,
     lu_dog: &mut LuDogStore,
 ) -> Result<()> {
     // 🚧 I'm not sure if I should look this up or force it.
@@ -3436,7 +3464,7 @@ fn inter_implementation(
                             span,
                             None,
                             context,
-                            context_stack,
+                            import_stack,
                             lu_dog,
                         )?;
                         (ty, None)
@@ -3469,7 +3497,7 @@ fn inter_implementation(
             span,
             None,
             context,
-            context_stack,
+            import_stack,
             lu_dog,
         )?;
 
@@ -3549,7 +3577,7 @@ fn inter_implementation(
                     impl_ty.as_ref(),
                     span,
                     context,
-                    context_stack,
+                    import_stack,
                     lu_dog,
                 ) {
                     Ok(_) => (),
@@ -3678,7 +3706,7 @@ pub(crate) fn make_value_type(
     span: &Span,
     enclosing_type: Option<&RefType<ValueType>>,
     context: &mut Context,
-    context_stack: &Vec<(String, RefType<LuDogStore>)>,
+    import_stack: &[String],
     lu_dog: &mut LuDogStore,
 ) -> Result<RefType<ValueType>> {
     let sarzak = context.sarzak;
@@ -3702,7 +3730,7 @@ pub(crate) fn make_value_type(
                 span,
                 enclosing_type,
                 context,
-                context_stack,
+                import_stack,
                 lu_dog,
             )?;
             let lambda = Lambda::new(None, None, &return_type, lu_dog);
@@ -3710,7 +3738,7 @@ pub(crate) fn make_value_type(
             let mut last_param_uuid: Option<SarzakStorePtr> = None;
             for (position, (param_ty, param_span)) in params.iter().enumerate() {
                 let param_ty =
-                    make_value_type(param_ty, param_span, None, context, context_stack, lu_dog)?;
+                    make_value_type(param_ty, param_span, None, context, import_stack, lu_dog)?;
                 debug!("param_ty {:?}", param_ty);
 
                 let param = LambdaParameter::new(
@@ -3747,7 +3775,7 @@ pub(crate) fn make_value_type(
                 &type_.1,
                 enclosing_type,
                 context,
-                context_stack,
+                import_stack,
                 lu_dog,
             )?;
             let list = List::new(&inner_type, lu_dog);
@@ -3770,7 +3798,9 @@ pub(crate) fn make_value_type(
             let name = &tok.0;
 
             if name == "Future" {
+                // It seems to me that this will always have a generic, no?
                 let inner_type = if let Type::Generic((name, span)) = &generics[0].0 {
+                    // Make a fully qualified path -- either from kts
                     let name = if let Some(path) = context.scopes.get(name) {
                         path.to_owned() + name.as_str()
                     } else {
@@ -3799,7 +3829,7 @@ pub(crate) fn make_value_type(
                         span,
                         enclosing_type,
                         context,
-                        context_stack,
+                        import_stack,
                         lu_dog,
                     )?
                 };
@@ -3901,7 +3931,7 @@ pub(crate) fn make_value_type(
                                         span,
                                         enclosing_type,
                                         context,
-                                        context_stack,
+                                        import_stack,
                                         lu_dog,
                                     )?,
                                 );
@@ -4074,35 +4104,37 @@ pub(super) fn typecheck(
     // different places? Four?
     match (&s_read!(lhs).subtype, &s_read!(rhs).subtype) {
         (ValueTypeEnum::Enumeration(a), ValueTypeEnum::Enumeration(b)) => {
-            let re = match RE.get() {
-                Some(re) => re,
-                None => {
-                    let re = Regex::new(r"^(::)?(\w+::)*\w+<(.*)>$").unwrap();
-                    match RE.set(re) {
-                        Ok(_) => {}
-                        Err(e) => {
-                            panic!("Failed to set RE: {}", e);
-                        }
-                    }
-                    RE.get().unwrap()
-                }
-            };
+            // This RE is pulling out the generic arguments from the enum.
+            // let re = match RE.get() {
+            //     Some(re) => re,
+            //     None => {
+            //         let re = Regex::new(r"^(::)?(\w+::)*\w+<(.*)>$").unwrap();
+            //         match RE.set(re) {
+            //             Ok(_) => {}
+            //             Err(e) => {
+            //                 panic!("Failed to set RE: {}", e);
+            //             }
+            //         }
+            //         RE.get().unwrap()
+            //     }
+            // };
 
             let a = lu_dog.exhume_enumeration(a).unwrap();
             let b = lu_dog.exhume_enumeration(b).unwrap();
             let a = s_read!(a);
             let b = s_read!(b);
 
-            dbg!(&a.name, &b.name);
+            // dbg!(&a.name, &b.name);
 
-            if let Some(a_c) = re.captures(&a.name) {
-                let mut inner = a_c[3].to_owned();
-                dbg!(&inner);
-                while let Some(captures) = re.captures(&inner) {
-                    inner = captures[3].to_owned();
-                    dbg!(&inner);
-                }
-            }
+            // if let Some(a_c) = re.captures(&a.name) {
+            //     let mut inner = a_c[3].to_owned();
+            //     dbg!(&inner);
+            //     // Looking for nested generics.
+            //     while let Some(captures) = re.captures(&inner) {
+            //         inner = captures[3].to_owned();
+            //         dbg!(&inner);
+            //     }
+            // }
 
             // We really need to check the generics, and we need to do it
             // recursively so that inner types are checked. If one side is
@@ -4171,13 +4203,13 @@ pub(super) fn typecheck(
         }
         (ValueTypeEnum::FuncGeneric(_), _) => Ok(()),
         (_, ValueTypeEnum::FuncGeneric(_)) => Ok(()),
-        (ValueTypeEnum::EnumGeneric(g), _) => {
-            let g = lu_dog.exhume_enum_generic(g).unwrap();
+        (ValueTypeEnum::EnumGeneric(_g), _) => {
+            // let g = lu_dog.exhume_enum_generic(g).unwrap();
             // let ty = s_read!(g).r99_value_type(lu_dog);
             // dbg!(&g, "a");
 
-            let a = PrintableValueType(true, lhs, context, lu_dog);
-            let b = PrintableValueType(true, rhs, context, lu_dog);
+            // let a = PrintableValueType(true, lhs, context, lu_dog);
+            // let b = PrintableValueType(true, rhs, context, lu_dog);
 
             // dbg!(a.to_string(), b.to_string());
 
@@ -4196,13 +4228,13 @@ pub(super) fn typecheck(
             Ok(())
             // }
         }
-        (_, ValueTypeEnum::EnumGeneric(g)) => {
-            let g = lu_dog.exhume_enum_generic(g).unwrap();
+        (_, ValueTypeEnum::EnumGeneric(_g)) => {
+            // let g = lu_dog.exhume_enum_generic(g).unwrap();
             // let ty = s_read!(g).r1_value_type(lu_dog);
             // dbg!(&ty, "b");
             // dbg!(&g, "b");
-            let a = PrintableValueType(true, lhs, context, lu_dog);
-            let b = PrintableValueType(true, rhs, context, lu_dog);
+            // let a = PrintableValueType(true, lhs, context, lu_dog);
+            // let b = PrintableValueType(true, rhs, context, lu_dog);
 
             // dbg!(a.to_string(), b.to_string());
 

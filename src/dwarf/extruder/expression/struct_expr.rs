@@ -28,7 +28,7 @@ pub fn inter(
     span: RefType<Span>,
     block: &RefType<Block>,
     context: &mut Context,
-    context_stack: &mut Vec<(String, RefType<LuDogStore>)>,
+    import_stack: &mut Vec<String>,
     lu_dog: &mut LuDogStore,
 ) -> Result<(ExprSpan, RefType<ValueType>)> {
     let name_span = &name.1;
@@ -146,7 +146,7 @@ pub fn inter(
             &field_expr_span,
             block,
             context,
-            context_stack,
+            import_stack,
             lu_dog,
         )?;
 

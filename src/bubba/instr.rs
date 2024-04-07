@@ -4,7 +4,7 @@ use ansi_term::Colour;
 use rustc_hash::FxHashMap as HashMap;
 use serde::{Deserialize, Serialize};
 
-use crate::{bubba::value::Value, lu_dog::ObjectStore as LuDogStore, s_read, RefType, Span};
+use crate::{bubba::value::Value, s_read, RefType, Span};
 
 /// Instruction
 ///
@@ -605,6 +605,7 @@ impl Program {
         self.thonks.insert(thonk.name.clone(), thonk);
     }
 
+    #[allow(dead_code)]
     pub(crate) fn get_thonk(&self, name: &str) -> Option<&Thonk> {
         self.thonks.get(name)
     }
@@ -613,6 +614,7 @@ impl Program {
         self.thonks.values()
     }
 
+    #[allow(dead_code)]
     pub(crate) fn get_thonk_card(&self) -> usize {
         self.thonks.len()
     }
@@ -625,6 +627,7 @@ impl Program {
         &self.compiler_build_ts
     }
 
+    #[allow(dead_code)]
     pub(crate) fn get_instruction_card(&self) -> usize {
         self.thonks.values().map(|t| t.instruction_card()).sum()
     }
@@ -651,6 +654,7 @@ impl fmt::Display for Program {
             writeln!(f, "{name} ({}):", thonk.frame_size())?;
             thonk.print_in_program(offset, f)?;
             offset += thonk.instruction_card();
+            writeln!(f, "")?;
         }
         Ok(())
     }

@@ -64,7 +64,7 @@ pub fn eval_assignment(
                     id: _,
                     plugin: ref proxy,
                 } => {
-                    let mut proxy = s_write!(proxy);
+                    let proxy = s_write!(proxy);
                     let result = proxy.invoke_func(
                         module.as_str().into(),
                         "self".into(),

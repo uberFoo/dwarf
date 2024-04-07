@@ -36,7 +36,7 @@ pub fn inter_enum(
     variants: &[(Spanned<String>, Option<EnumField>)],
     enum_generics: Option<&HashMap<String, Type>>,
     context: &mut Context,
-    context_stack: &mut Vec<(String, RefType<LuDogStore>)>,
+    import_stack: &mut Vec<String>,
     lu_dog: &mut LuDogStore,
 ) -> Result<()> {
     if let Some(path) = context.scopes.insert(name.0.clone(), context.path.clone()) {
@@ -129,7 +129,7 @@ pub fn inter_enum(
 
                 for ((name, _), (ty, ty_span), _attrs) in fields {
                     context.location = location!();
-                    let ty = make_value_type(ty, ty_span, None, context, context_stack, lu_dog)?;
+                    let ty = make_value_type(ty, ty_span, None, context, import_stack, lu_dog)?;
                     let _ = Field::new(name.to_owned(), &woog_struct, &ty, lu_dog);
                 }
                 let field = StructField::new(field_name.to_owned(), lu_dog);
@@ -156,7 +156,7 @@ pub fn inter_enum(
                                 span,
                                 None,
                                 context,
-                                context_stack,
+                                import_stack,
                                 lu_dog,
                             )?;
                             LuDogSpan::new(
@@ -174,7 +174,7 @@ pub fn inter_enum(
                     _ => {
                         context.location = location!();
                         let ty =
-                            make_value_type(&type_.0, span, None, context, context_stack, lu_dog)?;
+                            make_value_type(&type_.0, span, None, context, import_stack, lu_dog)?;
                         LuDogSpan::new(
                             span.end as i64,
                             span.start as i64,

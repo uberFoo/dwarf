@@ -1,11 +1,5 @@
 use std::{env, path::PathBuf};
 
-#[cfg(feature = "async")]
-use futures_lite::future;
-
-#[cfg(feature = "async")]
-use dwarf::ref_to_inner;
-
 use ansi_term::Colour;
 use lazy_static::lazy_static;
 use parking_lot::Mutex;
@@ -18,7 +12,6 @@ use dwarf::{
         value::Value as BubbaValue,
         VM,
     },
-    chacha::{error::ChaChaErrorReporter, value::Value},
     dwarf::{new_lu_dog, parse_dwarf},
     s_read,
     sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL},

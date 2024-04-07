@@ -1,7 +1,7 @@
 use std::fmt;
 
 use ariadne::{Color, Label, Report, ReportKind, Source};
-use snafu::{prelude::*, Location};
+use snafu::{prelude::*, Backtrace, Location};
 
 use crate::{bubba::value::Value, Span, ERR_CLR, OK_CLR, OTHER_CLR, POP_CLR};
 
@@ -11,8 +11,12 @@ pub enum BubbaError {
     Addition { left: Value, right: Value },
     #[snafu(display("\n{}: negation error", ERR_CLR.bold().paint("error")))]
     Bang { value: Value },
-    #[snafu(display("\n{}: could not convert `{}` to `{}`", ERR_CLR.bold().paint("error"), src, dst))]
-    Conversion { src: String, dst: String },
+    #[snafu(display("\n{backtrace}\n{}: could not convert `{src}` to `{dst}`", ERR_CLR.bold().paint("error")))]
+    Conversion {
+        src: String,
+        dst: String,
+        backtrace: Backtrace,
+    },
     #[snafu(display("\n{}: division error: `{}` ÷ `{}`", ERR_CLR.bold().paint("error"), left, right))]
     Division { left: Value, right: Value },
     #[snafu(display("\n{}: Halt and catch fire...🔥", ERR_CLR.bold().paint("error")))]
@@ -63,7 +67,7 @@ impl fmt::Display for BubbaErrorReporter<'_, '_, '_> {
         let mut std_err = Vec::new();
 
         match &self.0 .0 {
-            BubbaError::HaltAndCatchFire { file, span, ip } => {
+            BubbaError::HaltAndCatchFire { file: _, span, ip } => {
                 Report::build(ReportKind::Error, file_name, span.start)
                     .with_message("halt and catch fire...🔥")
                     .with_label(

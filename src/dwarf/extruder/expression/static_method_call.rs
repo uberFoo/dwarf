@@ -44,7 +44,7 @@ pub fn inter(
     params: &[(ParserExpression, Range<usize>)],
     block: &RefType<Block>,
     context: &mut Context,
-    context_stack: &mut Vec<(String, RefType<LuDogStore>)>,
+    import_stack: &mut Vec<String>,
     lu_dog: &mut LuDogStore,
 ) -> Result<(ExprSpan, RefType<ValueType>)> {
     let ParserExpression::PathInExpression(path) = path else {
@@ -168,7 +168,7 @@ pub fn inter(
                 &param.1,
                 block,
                 context,
-                context_stack,
+                import_stack,
                 lu_dog,
             )?;
             arg_types.push(ty);
@@ -308,7 +308,7 @@ pub fn inter(
                 &param.1,
                 block,
                 context,
-                context_stack,
+                import_stack,
                 lu_dog,
             )?;
             arg_types.push(ty);
@@ -395,7 +395,7 @@ pub fn inter(
                 &span,
                 &x_path,
                 context,
-                context_stack,
+                import_stack,
                 lu_dog,
             )
         } else {
@@ -423,7 +423,7 @@ pub fn inter(
                         &param.1,
                         block,
                         context,
-                        context_stack,
+                        import_stack,
                         lu_dog,
                     )?;
                     arg_types.push(ty);
@@ -486,7 +486,7 @@ fn inter_field(
     span: &RefType<Span>,
     x_path: &RefType<XPath>,
     context: &mut Context,
-    context_stack: &mut Vec<(String, RefType<LuDogStore>)>,
+    import_stack: &mut Vec<String>,
     lu_dog: &mut LuDogStore,
 ) -> Result<(ExprSpan, RefType<ValueType>)> {
     let subtype = &s_read!(field).subtype.clone();
@@ -550,7 +550,7 @@ fn inter_field(
                                 span,
                                 None,
                                 context,
-                                context_stack,
+                                import_stack,
                                 lu_dog,
                             )?;
                             LuDogSpan::new(
@@ -600,7 +600,7 @@ fn inter_field(
                 &param.1,
                 block,
                 context,
-                context_stack,
+                import_stack,
                 lu_dog,
             )?;
 

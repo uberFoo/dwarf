@@ -38,7 +38,7 @@ use crate::{
     keywords::{INVOKE_FUNC, INVOKE_FUNC_MUT},
     lu_dog::{ValueType, ValueTypeEnum},
     new_ref,
-    plug_in::{Error as FfiError, LambdaCall, PluginModRef, PluginType, Plugin_TO},
+    plug_in::{Error as FfiError, LambdaCall, PluginModRef, PluginType},
     s_read, s_write,
     sarzak::{ObjectStore as SarzakStore, Ty, MODEL as SARZAK_MODEL},
     DwarfInteger, NewRef, RefType, Span, LAMBDA_FUNCS,
@@ -399,7 +399,7 @@ impl VM {
                 for iip in 0.max(ip - 3)..(self.instrs.len() as isize).min(ip + 3isize) {
                     let instr = &self.instrs[iip as usize];
 
-                    let src = if let Some(source) = program.get_source() {
+                    let src = if let Some(_source) = program.get_source() {
                         // let span = self.source_map[iip as usize].clone();
                         // &source[span]
                         ""

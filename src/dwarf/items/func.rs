@@ -47,7 +47,7 @@ pub fn inter_func(
     impl_ty: Option<&RefType<ValueType>>,
     span: &Span,
     context: &mut Context,
-    context_stack: &mut Vec<(String, RefType<LuDogStore>)>,
+    import_stack: &mut Vec<String>,
     lu_dog: &mut LuDogStore,
 ) -> Result<()> {
     debug!("inter_func {}", name);
@@ -136,7 +136,7 @@ pub fn inter_func(
                 ret_span,
                 impl_ty,
                 context,
-                context_stack,
+                import_stack,
                 lu_dog,
             )?
         }
@@ -147,7 +147,7 @@ pub fn inter_func(
             ret_span,
             impl_ty,
             context,
-            context_stack,
+            import_stack,
             lu_dog,
         )?
     };
@@ -239,7 +239,7 @@ pub fn inter_func(
                 ValueType::new_func_generic(true, &g, lu_dog)
             } else {
                 context.location = location!();
-                match make_value_type(param_ty, ty_span, impl_ty, context, context_stack, lu_dog) {
+                match make_value_type(param_ty, ty_span, impl_ty, context, import_stack, lu_dog) {
                     Ok(ty) => ty,
                     Err(mut e) => {
                         errors.append(&mut e);
@@ -249,7 +249,7 @@ pub fn inter_func(
             }
         } else {
             context.location = location!();
-            match make_value_type(param_ty, ty_span, impl_ty, context, context_stack, lu_dog) {
+            match make_value_type(param_ty, ty_span, impl_ty, context, import_stack, lu_dog) {
                 Ok(ty) => ty,
                 Err(mut e) => {
                     errors.append(&mut e);
@@ -305,7 +305,7 @@ pub fn inter_func(
             .collect();
 
         let (block_ty, block_span) =
-            inter_statements(&stmts, stmt_span, &block, context, context_stack, lu_dog)?;
+            inter_statements(&stmts, stmt_span, &block, context, import_stack, lu_dog)?;
 
         let block_ty = match a_sink {
             true => {
@@ -341,7 +341,7 @@ pub fn parse_func_signature(
     return_type: &Spanned<Type>,
     impl_ty: Option<&RefType<ValueType>>,
     context: &mut Context,
-    context_stack: &Vec<(String, RefType<LuDogStore>)>,
+    import_stack: &mut Vec<String>,
     lu_dog: &mut LuDogStore,
 ) -> Result<()> {
     debug!("parse_func_signature {}", name);
@@ -364,25 +364,11 @@ pub fn parse_func_signature(
             ty
         } else {
             context.location = location!();
-            make_value_type(
-                &return_type.0,
-                span,
-                impl_ty,
-                context,
-                context_stack,
-                lu_dog,
-            )?
+            make_value_type(&return_type.0, span, impl_ty, context, import_stack, lu_dog)?
         }
     } else {
         context.location = location!();
-        make_value_type(
-            &return_type.0,
-            span,
-            impl_ty,
-            context,
-            context_stack,
-            lu_dog,
-        )?
+        make_value_type(&return_type.0, span, impl_ty, context, import_stack, lu_dog)?
     };
 
     let mut param_tuples = Vec::new();
@@ -395,11 +381,11 @@ pub fn parse_func_signature(
                 ValueType::new_func_generic(true, &g, lu_dog)
             } else {
                 context.location = location!();
-                make_value_type(param_ty, span, impl_ty, context, context_stack, lu_dog)?
+                make_value_type(param_ty, span, impl_ty, context, import_stack, lu_dog)?
             }
         } else {
             context.location = location!();
-            make_value_type(param_ty, span, impl_ty, context, context_stack, lu_dog)?
+            make_value_type(param_ty, span, impl_ty, context, import_stack, lu_dog)?
         };
 
         LuDogSpan::new(

@@ -64,7 +64,7 @@ pub mod field_access {
                 id: _,
                 plugin: ref proxy,
             } => {
-                let mut proxy = s_write!(proxy);
+                let proxy = s_write!(proxy);
                 match proxy
                     .invoke_func(
                         module.as_str().into(),
