@@ -102,6 +102,10 @@ mod md {
 
                         let md =
                             markdown::to_html_with_options(&md, &markdown::Options::gfm()).unwrap();
+
+                        // This is as hack to get around a bug in markdown-rs
+                        let md = md.replace("&lt;", "<").replace("&gt;", ">");
+
                         Ok(FfiValue::String(md.into()).into())
                     }
                     func => Err(Error::Uber(format!("Invalid function: {func}").into())),
