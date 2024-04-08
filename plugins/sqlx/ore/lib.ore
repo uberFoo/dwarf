@@ -1,0 +1,44 @@
+use std::dwarf::Plugin;
+use std::result::Result;
+
+struct Sqlx {
+    #[proxy(plugin = "sqlx:foo")]
+    plugin: Plugin<Sqlx>,
+}
+
+impl Sqlx {
+    fn new() -> Self {
+        Sqlx {
+            plugin: Plugin::<Sqlx>::new(),
+        }
+    }
+
+    fn connect(self, connection_string: string) -> Result<Pool, Error> {
+        let pool = self
+            .plugin
+            .invoke_func_mut("sqlx", "Sqlx", "connect", [connection_string]);
+
+        match pool {
+            Result::Ok(pool) => Result::<Pool, Error>::Ok(Pool {
+                plugin: self.plugin,
+                inner: pool,
+            }),
+            Result::Err(e) => Result::<Pool, Error>::Err(Error {
+                plugin: self.plugin,
+                inner: e,
+            }),
+        }
+    }
+}
+
+struct Pool {
+    #[proxy(plugin = "sqlx")]
+    plugin: Plugin<Sqlx>,
+    inner: int,
+}
+
+struct Error {
+    #[proxy(plugin = "sqlx")]
+    plugin: Plugin<Sqlx>,
+    inner: int,
+}
