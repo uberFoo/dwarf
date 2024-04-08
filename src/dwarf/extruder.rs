@@ -612,7 +612,6 @@ fn walk_tree(
     } in &structs
     {
         debug!("Interring struct `{}` fields", name);
-        dbg!(&import_stack);
         let _ = strukt::inter_struct(
             name,
             span,
@@ -3190,7 +3189,6 @@ fn inter_module(
 
     if let Some(import) = import_stack.last() {
         if !import.contains(name) {
-            dbg!("hahaha", name);
             return Ok(());
         }
     }
@@ -3201,8 +3199,6 @@ fn inter_module(
     path.push("sacrifice");
     path.set_file_name(name);
     path.set_extension(TAO_EXT);
-
-    dbg!(&name, &import_stack, &path);
 
     if !context.imports.insert(path.clone()) {
         debug!("{name} already imported");
@@ -3325,18 +3321,15 @@ fn inter_import(
     // We need to push the thing we are importing onto the stack so
     // that when we are interring a module we can only import the
     // thing on the top of the stack.
-    let foo = PATH_SEP.to_owned() + path_root.join(PATH_SEP).as_str() + PATH_SEP + &ty;
-
+    let fq_type = PATH_SEP.to_owned() + path_root.join(PATH_SEP).as_str() + PATH_SEP + &ty;
     if let Some(last) = import_stack.last() {
-        if last == &foo {
-            dbg!("denied!");
+        if last == &fq_type {
             return Ok(());
         }
     }
 
     import_stack.push(PATH_SEP.to_owned() + path_root.join(PATH_SEP).as_str() + PATH_SEP + &ty);
 
-    dbg!(&ty, &import_stack);
     // let (dir, path) = if path.exists() {
     //     (dir, path)
     // } else {

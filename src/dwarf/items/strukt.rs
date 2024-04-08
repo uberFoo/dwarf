@@ -60,8 +60,6 @@ pub fn inter_struct(
 
     let name = context.path.clone() + name;
 
-    dbg!(&name);
-
     debug!("inter_struct {name}");
 
     // If there is a proxy attribute then we'll use it's info to attach an object
@@ -361,7 +359,6 @@ pub fn inter_struct_fields(
             proxy_thang(proxy_vec)?
         } else {
             context.location = location;
-            dbg!(&type_);
             match make_value_type(type_, span, None, context, import_stack, lu_dog) {
                 Ok(ty) => ty,
                 Err(mut err) => {
