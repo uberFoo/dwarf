@@ -1,3 +1,11 @@
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-HH4R278W20"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-HH4R278W20');
+</script>
 <h1 align="center"><img width="555" src="doc/art/dwarf_sunburst.png" /></h1>
 
 ![Build Status](https://github.com/uberFoo/dwarf/workflows/CI/badge.svg)
