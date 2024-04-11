@@ -27,7 +27,7 @@ FROM users u
          JOIN posts p on u.id = p.user_id;";
 
     if let Result::<Pool, Error>::Ok(pool) = sqlx
-        .connect("postgres://postgres:password@localhost/files")
+        .connect("postgres://postgres:postgres@localhost/files")
         .await
     {
         print("Connected to database");
