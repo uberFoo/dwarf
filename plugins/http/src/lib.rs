@@ -48,10 +48,10 @@ pub fn new(lambda_sender: RSender<LambdaCall>, args: RVec<FfiValue>) -> RResult<
                 let plugin = plugin(lambda_sender, vec![].into()).unwrap();
                 ROk(Plugin_TO::from_value(plugin, TD_Opaque))
             }
-            _ => RErr(Error::Uber(format!("Invalid plugin {plugin}").into())),
+            _ => RErr(Error::Plugin(format!("Invalid plugin {plugin}").into())),
         }
     } else {
-        RErr(Error::Uber("Invalid plugin".into()))
+        RErr(Error::Plugin("Invalid plugin".into()))
     }
 }
 
@@ -134,7 +134,7 @@ mod http_client {
                                 .first()
                                 .unwrap()
                                 .try_into()
-                                .map_err(|e: ChaChaError| Error::Uber(e.to_string().into()))
+                                .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
                                 .unwrap();
 
                             let request = self.client.get(url);
@@ -145,7 +145,7 @@ mod http_client {
                             tracing::trace!("get exit");
                             Ok(FfiValue::Integer(key as DwarfInteger))
                         }
-                        func => Err(Error::Uber(format!("Invalid function: {func}").into())),
+                        func => Err(Error::Plugin(format!("Invalid function: {func}").into())),
                     },
                     "Request" => match func.as_str() {
                         "send" => {
@@ -154,7 +154,7 @@ mod http_client {
                                 .first()
                                 .unwrap()
                                 .try_into()
-                                .map_err(|e: ChaChaError| Error::Uber(e.to_string().into()))
+                                .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
                                 .unwrap();
 
                             let request = self.requests.remove(key as usize);
@@ -181,7 +181,7 @@ mod http_client {
                                 Ok(FfiValue::Error("Too many references to request.".into()))
                             }
                         }
-                        func => Err(Error::Uber(format!("Invalid function: {func}").into())),
+                        func => Err(Error::Plugin(format!("Invalid function: {func}").into())),
                     },
                     "Response" => match func.as_str() {
                         "text" => {
@@ -190,7 +190,7 @@ mod http_client {
                                 .first()
                                 .unwrap()
                                 .try_into()
-                                .map_err(|e: ChaChaError| Error::Uber(e.to_string().into()))
+                                .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
                                 .unwrap();
 
                             let response = self.responses.remove(key as usize);
@@ -212,7 +212,7 @@ mod http_client {
                                 Ok(FfiValue::Error("Too many references to response.".into()))
                             }
                         }
-                        func => Err(Error::Uber(format!("Invalid function: {func}").into())),
+                        func => Err(Error::Plugin(format!("Invalid function: {func}").into())),
                     },
                     "HttpError" => match func.as_str() {
                         "to_string" => {
@@ -221,7 +221,7 @@ mod http_client {
                                 .first()
                                 .unwrap()
                                 .try_into()
-                                .map_err(|e: ChaChaError| Error::Uber(e.to_string().into()))
+                                .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
                                 .unwrap();
 
                             let error = self.errors.remove(key as usize);
@@ -235,9 +235,9 @@ mod http_client {
                                 Ok(FfiValue::Error("Too many references to error.".into()))
                             }
                         }
-                        func => Err(Error::Uber(format!("Invalid function: {func}").into())),
+                        func => Err(Error::Plugin(format!("Invalid function: {func}").into())),
                     },
-                    ty => Err(Error::Uber(format!("Invalid type: {ty}").into())),
+                    ty => Err(Error::Plugin(format!("Invalid type: {ty}").into())),
                 }
                 .into()
             }))
@@ -365,7 +365,7 @@ mod http_server {
                             let listener = match listener_result {
                                 Ok(listener) => listener,
                                 Err(e) => {
-                                    return Err(Error::Uber(
+                                    return Err(Error::Plugin(
                                         format!("Failed to bind TCP listener: {}", e).into(),
                                     ))
                                     .into()
@@ -428,7 +428,7 @@ mod http_server {
 
                             Ok(FfiValue::Empty)
                         }
-                        func => Err(Error::Uber(format!("Invalid function: {func}").into())),
+                        func => Err(Error::Plugin(format!("Invalid function: {func}").into())),
                     },
                     "Request" => match func.as_str() {
                         "uri" => {
@@ -436,7 +436,7 @@ mod http_server {
                                 .first()
                                 .unwrap()
                                 .try_into()
-                                .map_err(|e: ChaChaError| Error::Uber(e.to_string().into()))
+                                .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
                                 .unwrap();
 
                             if let Some(request) = self.requests.lock().unwrap().get(key as usize) {
@@ -449,10 +449,10 @@ mod http_server {
                                     .insert(Arc::new(uri.clone()));
                                 Ok(FfiValue::Integer(key as DwarfInteger))
                             } else {
-                                Err(Error::Uber("Invalid request".into()))
+                                Err(Error::Plugin("Invalid request".into()))
                             }
                         }
-                        func => Err(Error::Uber(format!("Invalid function: {func}").into())),
+                        func => Err(Error::Plugin(format!("Invalid function: {func}").into())),
                     },
                     "Uri" => match func.as_str() {
                         "path" => {
@@ -460,7 +460,7 @@ mod http_server {
                                 .first()
                                 .unwrap()
                                 .try_into()
-                                .map_err(|e: ChaChaError| Error::Uber(e.to_string().into()))
+                                .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
                                 .unwrap();
 
                             let guard = self.uris.lock().unwrap();
@@ -469,9 +469,9 @@ mod http_server {
                             let path = uri.path().to_string();
                             Ok(FfiValue::String(path.into()))
                         }
-                        func => Err(Error::Uber(format!("Invalid function: {func}").into())),
+                        func => Err(Error::Plugin(format!("Invalid function: {func}").into())),
                     },
-                    ty => Err(Error::Uber(format!("Invalid type: {ty}").into())),
+                    ty => Err(Error::Plugin(format!("Invalid type: {ty}").into())),
                 }
                 .into()
             }))
@@ -510,7 +510,7 @@ mod http_server {
 
                     //         Ok(FfiValue::Empty)
                     //     }
-                    //     func => Err(Error::Uber(format!("Invalid function: {func}").into())),
+                    //     func => Err(Error::Plugin(format!("Invalid function: {func}").into())),
                     // },
                     // "Request" => match func.as_str() {
                     //     "uri" => {
@@ -518,7 +518,7 @@ mod http_server {
                     //             .first()
                     //             .unwrap()
                     //             .try_into()
-                    //             .map_err(|e: ChaChaError| Error::Uber(e.to_string().into()))
+                    //             .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
                     //             .unwrap();
 
                     //         let request = self.requests.get(key as usize).unwrap();
@@ -526,9 +526,9 @@ mod http_server {
                     //         let key = self.uris.insert(Arc::new(uri.clone()));
                     //         Ok(FfiValue::Integer(key as DwarfInteger))
                     //     }
-                    //     func => Err(Error::Uber(format!("Invalid function: {func}").into())),
+                    //     func => Err(Error::Plugin(format!("Invalid function: {func}").into())),
                     // },
-                    ty => Err(Error::Uber(format!("Invalid type: {ty}").into())),
+                    ty => Err(Error::Plugin(format!("Invalid type: {ty}").into())),
                 }
                 .into()
             }))
@@ -585,7 +585,7 @@ mod http_server {
 
                 let ROk(FfiValue::String(result)) = result else {
                     return Box::pin(async {
-                        mk_response("oh no! something went terribly wrong. 🤯".into())
+                        mk_response("<p>oh no! something went terribly wrong. 🤯</p>".into())
                     });
                 };
 

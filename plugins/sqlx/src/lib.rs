@@ -35,18 +35,20 @@ pub fn new(
     lambda_sender: RSender<LambdaCall>,
     _args: RVec<FfiValue>,
 ) -> RResult<PluginType, Error> {
-    let plugin = dsqlx::instantiate_root_module();
+    let plugin = ubersqlx::instantiate_root_module();
     let plugin = plugin.new();
     let plugin = plugin(lambda_sender, vec![].into()).unwrap();
     ROk(Plugin_TO::from_value(plugin, TD_Opaque))
 }
 
-mod dsqlx {
+mod ubersqlx {
     use super::*;
+
+    use std::sync::Mutex;
 
     use sqlx::{
         postgres::{PgPoolOptions, Postgres},
-        Error as SqlxError, Pool,
+        Error as SqlxError, Row,
     };
 
     pub fn instantiate_root_module() -> PluginModRef {
@@ -61,23 +63,33 @@ mod dsqlx {
     /// Instantiates the plugin.
     #[sabi_extern_fn]
     pub fn new(
-        _lambda_sender: RSender<LambdaCall>,
+        lambda_sender: RSender<LambdaCall>,
         _args: RVec<FfiValue>,
     ) -> RResult<PluginType, Error> {
-        ROk(Plugin_TO::from_value(Sqlx::default(), TD_Opaque))
+        ROk(Plugin_TO::from_value(Sqlx::new(lambda_sender), TD_Opaque))
     }
 
-    #[derive(Clone, Debug)]
+    #[derive(Clone)]
     struct Sqlx {
-        pools: Slab<Pool<Postgres>>,
-        errors: Slab<Arc<SqlxError>>,
+        lambda_call: RSender<LambdaCall>,
+        pools: Arc<Mutex<Slab<sqlx::Pool<Postgres>>>>,
+        errors: Arc<Mutex<Slab<Arc<SqlxError>>>>,
+        rows: Arc<Mutex<Slab<Arc<sqlx::postgres::PgRow>>>>,
     }
 
-    impl Default for Sqlx {
-        fn default() -> Self {
+    impl std::fmt::Debug for Sqlx {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            write!(f, "{:?}", self)
+        }
+    }
+
+    impl Sqlx {
+        fn new(lambda_call: RSender<LambdaCall>) -> Self {
             Self {
-                pools: Slab::new(),
-                errors: Slab::new(),
+                lambda_call,
+                pools: Arc::new(Mutex::new(Slab::new())),
+                errors: Arc::new(Mutex::new(Slab::new())),
+                rows: Arc::new(Mutex::new(Slab::new())),
             }
         }
     }
@@ -101,7 +113,119 @@ mod dsqlx {
             func: RStr<'_>,
             args: RVec<FfiValue>,
         ) -> RResult<FfiValue, Error> {
-            Ok(FfiValue::Empty).into()
+            future::block_on(async {
+                match ty.as_str() {
+                    "Pool" => match func.as_str() {
+                        "query" => {
+                            let query: String = args
+                                .first()
+                                .unwrap()
+                                .try_into()
+                                .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
+                                .unwrap();
+
+                            let pool: DwarfInteger = args
+                                .get(1)
+                                .unwrap()
+                                .try_into()
+                                .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
+                                .unwrap();
+
+                            let FfiValue::Lambda(lambda) = args.get(2).unwrap() else {
+                                panic!("Invalid lambda");
+                            };
+
+                            let guard = self.pools.lock().unwrap();
+                            let pool = guard.get(pool as usize).unwrap();
+
+                            let result = sqlx::query(&query)
+                                .map(|row: sqlx::postgres::PgRow| {
+                                    let (s, result) = crossbeam::channel::bounded(1);
+
+                                    let key = {
+                                        let mut guard = self.rows.lock().unwrap();
+                                        guard.insert(Arc::new(row))
+                                    };
+
+                                    let lambda_call = LambdaCall {
+                                        lambda: *lambda,
+                                        args: vec![FfiValue::Integer(key as DwarfInteger)].into(),
+                                        result: s.into(),
+                                    };
+                                    self.lambda_call.send(lambda_call).unwrap();
+                                    let result = result.recv().unwrap();
+
+                                    let mut guard = self.rows.lock().unwrap();
+                                    guard.remove(key);
+
+                                    result.unwrap()
+                                })
+                                .fetch_all(pool)
+                                .await;
+
+                            let result = match result {
+                                Ok(result) => ROk(RBox::new(result.into())),
+                                Err(e) => {
+                                    let mut guard = self.errors.lock().unwrap();
+                                    let entry = guard.vacant_entry();
+                                    let key = entry.key();
+                                    guard.insert(Arc::new(e));
+                                    RErr(RBox::new(FfiValue::Integer(key as DwarfInteger)))
+                                }
+                            };
+
+                            Ok(FfiValue::Result(result))
+                        }
+                        func => Err(Error::Plugin(format!("Invalid function: {func}").into())),
+                    },
+                    "Row" => match func.as_str() {
+                        "get" => {
+                            let row: DwarfInteger = args
+                                .first()
+                                .unwrap()
+                                .try_into()
+                                .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
+                                .unwrap();
+
+                            let index: String = args
+                                .get(1)
+                                .unwrap()
+                                .try_into()
+                                .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
+                                .unwrap();
+
+                            let ty: String = args
+                                .get(2)
+                                .unwrap()
+                                .try_into()
+                                .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
+                                .unwrap();
+
+                            let guard = self.rows.lock().unwrap();
+                            let row = guard.get(row as usize).unwrap();
+
+                            let result = match ty.as_str() {
+                                "::sqlx::type::String" => {
+                                    let result: String = row.get(index.as_str());
+                                    FfiValue::String(result.into())
+                                }
+                                "::sqlx::type::Integer" => {
+                                    let result: i64 = row.get(index.as_str());
+                                    FfiValue::Integer(result as DwarfInteger)
+                                }
+                                ty => {
+                                    panic!("Invalid type: {ty}");
+                                }
+                            };
+
+                            Ok(result)
+                        }
+                        func => Err(Error::Plugin(format!("Invalid function: {func}").into())),
+                    },
+                    ty => Err(Error::Plugin(format!("Invalid type: {ty}").into())),
+                }
+                .into()
+            })
         }
 
         #[tracing::instrument]
@@ -121,7 +245,7 @@ mod dsqlx {
                                 .first()
                                 .unwrap()
                                 .try_into()
-                                .map_err(|e: ChaChaError| Error::Uber(e.to_string().into()))
+                                .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
                                 .unwrap();
 
                             let pool = PgPoolOptions::new()
@@ -131,15 +255,17 @@ mod dsqlx {
 
                             let result = match pool {
                                 Ok(pool) => {
-                                    let entry = self.pools.vacant_entry();
+                                    let mut guard = self.pools.lock().unwrap();
+                                    let entry = guard.vacant_entry();
                                     let key = entry.key();
-                                    self.pools.insert(pool);
+                                    guard.insert(pool.into());
                                     ROk(RBox::new(FfiValue::Integer(key as DwarfInteger)))
                                 }
                                 Err(e) => {
-                                    let entry = self.errors.vacant_entry();
+                                    let mut guard = self.errors.lock().unwrap();
+                                    let entry = guard.vacant_entry();
                                     let key = entry.key();
-                                    self.errors.insert(Arc::new(e));
+                                    guard.insert(Arc::new(e));
                                     RErr(RBox::new(FfiValue::Integer(key as DwarfInteger)))
                                 }
                             };
@@ -147,9 +273,9 @@ mod dsqlx {
                             tracing::trace!("open exit");
                             Ok(FfiValue::Result(result))
                         }
-                        func => Err(Error::Uber(format!("Invalid function: {func}").into())),
+                        func => Err(Error::Plugin(format!("Invalid function: {func}").into())),
                     },
-                    ty => Err(Error::Uber(format!("Invalid type: {ty}").into())),
+                    ty => Err(Error::Plugin(format!("Invalid type: {ty}").into())),
                 }
                 .into()
             })

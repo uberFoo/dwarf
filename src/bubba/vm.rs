@@ -282,9 +282,10 @@ impl VM {
                 .collect::<Vec<_>>();
 
             let result = self.invoke_lambda(λ, &args);
+
             let result = match result {
                 Ok(value) => ROk(<Value as Into<FfiValue>>::into(s_read!(value).clone())),
-                Err(e) => RErr(FfiError::Uber(e.to_string().into())),
+                Err(e) => RErr(FfiError::Plugin(e.to_string().into())),
             };
             lambda_call.result.send(result).unwrap();
         }
@@ -562,7 +563,7 @@ impl VM {
                                         }
                                         RErr(e) => {
                                             return Err(BubbaError::VmPanic {
-                                                message: format!("Plugin error: {:?}", e),
+                                                message: format!("Plugin error: {:?}\nAttempting to call {module}::{ty}::{func}", e),
                                                 location: location!(),
                                             }
                                             .into())
@@ -607,7 +608,7 @@ impl VM {
                                         }
                                         RErr(e) => {
                                             return Err(BubbaError::VmPanic {
-                                                message: format!("Plugin error: {:?}", e),
+                                                message: format!("Plugin error: {:?}\nAttempting to call {module}::{ty}::{func}", e),
                                                 location: location!(),
                                             }
                                             .into())
@@ -1554,6 +1555,10 @@ impl VM {
                         // We *need* this check, otherwise we deadlock in the Pointer case.
                         // In any case, why do the work if you don't need to?
                         if value != *s {
+                            // If the value from the stack is a `Value` then we can just
+                            // replace it with the new value.
+                            // But if it's a pointer, then we need to update what it's
+                            // pointing to.
                             match s {
                                 StackValue::Value(_) => {
                                     stack[fp - arity - local_count - 3 + index] = value;
@@ -1848,6 +1853,7 @@ impl VM {
     }
 }
 
+// I think that this is here for the benefit of the Result type.
 impl From<(FfiValue, &Value)> for Value {
     fn from((ffi_value, ty): (FfiValue, &Value)) -> Self {
         match ffi_value {
@@ -1856,6 +1862,21 @@ impl From<(FfiValue, &Value)> for Value {
             // FfiValue::Error(e) => Self::Error(e.into()),
             FfiValue::Float(num) => Self::Float(num),
             FfiValue::Integer(num) => Self::Integer(num),
+            FfiValue::List(list) => {
+                let Value::ValueType(ty) = ty else {
+                    unreachable!()
+                };
+                let ty = ty.clone();
+                let vec: Vec<_> = list
+                    .into_iter()
+                    .map(|v| new_ref!(Value, v.into()))
+                    .collect();
+                let list = std::sync::Arc::new(std::sync::RwLock::new(vec));
+                Self::List {
+                    ty: new_ref!(ValueType, ty),
+                    inner: list,
+                }
+            }
             FfiValue::Option(option) => match option {
                 ROption::RNone => Self::Empty,
                 ROption::RSome(value) => {
@@ -1875,7 +1896,7 @@ impl From<(FfiValue, &Value)> for Value {
                         variant: "Err".to_owned(),
                         value: new_ref!(
                             Value,
-                            <(FfiValue, &Value) as Into<Value>>::into((RBox::into_inner(err), ty,))
+                            <(FfiValue, &Value) as Into<Value>>::into((RBox::into_inner(err), ty))
                         ),
                     },
                     RResult::ROk(ok) => TupleEnum {

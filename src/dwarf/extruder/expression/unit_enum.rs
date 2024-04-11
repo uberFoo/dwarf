@@ -114,7 +114,9 @@ pub fn inter(
         if let Some(woog_enum) = lu_dog.exhume_enumeration_id_by_name(&full_enum_name) {
             Some(woog_enum)
         } else if let Some(ty) = full_enum_name.split('<').next() {
-            let _ = create_generic_enum(&full_enum_name, ty, lu_dog)?;
+            let span = s_read!(span);
+            let span = span.start as usize..span.end as usize;
+            let _ = create_generic_enum(&full_enum_name, ty, &span, context, lu_dog)?;
             lu_dog.exhume_enumeration_id_by_name(&full_enum_name)
         } else {
             None

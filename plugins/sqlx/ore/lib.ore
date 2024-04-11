@@ -13,7 +13,7 @@ impl Sqlx {
         }
     }
 
-    fn connect(self, connection_string: string) -> Result<Pool, Error> {
+    async fn connect(self, connection_string: string) -> Future<Result<Pool, Error>> {
         let pool = self
             .plugin
             .invoke_func_mut("sqlx", "Sqlx", "connect", [connection_string]);
@@ -31,12 +31,50 @@ impl Sqlx {
     }
 }
 
+enum Type {
+    Integer,
+    String,
+}
+
+struct Row {
+    #[proxy(plugin = "sqlx")]
+    plugin: Plugin<Sqlx>,
+    inner: int,
+}
+
+impl Row {
+    fn get<T>(self, index: int, ty: Type) -> T {
+        self.plugin.invoke_func("sqlx", "Row", "get", @[self.inner, index, ty])
+    }
+}
+
 struct Pool {
     #[proxy(plugin = "sqlx")]
     plugin: Plugin<Sqlx>,
     inner: int,
 }
 
+impl Pool {
+    // fn query<F>(self, query: string, func: fn(Row) -> F) -> Result<[Row], Error> {
+    fn query<F>(self, query: string, func: F) -> Result<[Row], Error> {
+        let bounce = |row: int| {
+            let row = Row {
+                plugin: self.plugin,
+                inner: row,
+            };
+            func(row)
+        };
+
+        let rows = self
+            .plugin
+            .invoke_func("sqlx", "Pool", "query", @[query, self.inner, bounce]);
+
+        match rows {
+            Result::Ok(rows) => Result::<[Row], Error>::Ok(rows),
+            Result::Err(e) => Result::<[Row], Error>::Err(e),
+        }
+    }
+}
 struct Error {
     #[proxy(plugin = "sqlx")]
     plugin: Plugin<Sqlx>,

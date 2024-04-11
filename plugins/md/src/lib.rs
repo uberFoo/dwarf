@@ -34,10 +34,10 @@ pub fn new(lambda_sender: RSender<LambdaCall>, args: RVec<FfiValue>) -> RResult<
                 let plugin = plugin(lambda_sender, vec![].into()).unwrap();
                 ROk(Plugin_TO::from_value(plugin, TD_Opaque))
             }
-            _ => RErr(Error::Uber(format!("Invalid plugin {plugin}").into())),
+            _ => RErr(Error::Plugin(format!("Invalid plugin {plugin}").into())),
         }
     } else {
-        RErr(Error::Uber("Invalid plugin".into()))
+        RErr(Error::Plugin("Invalid plugin".into()))
     }
 }
 
@@ -97,7 +97,7 @@ mod md {
                             .first()
                             .unwrap()
                             .try_into()
-                            .map_err(|e: ChaChaError| Error::Uber(e.to_string().into()))
+                            .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
                             .unwrap();
 
                         let md =
@@ -108,9 +108,9 @@ mod md {
 
                         Ok(FfiValue::String(md.into()).into())
                     }
-                    func => Err(Error::Uber(format!("Invalid function: {func}").into())),
+                    func => Err(Error::Plugin(format!("Invalid function: {func}").into())),
                 },
-                ty => Err(Error::Uber(format!("Invalid type: {ty}").into())),
+                ty => Err(Error::Plugin(format!("Invalid type: {ty}").into())),
             }
             .into()
         }

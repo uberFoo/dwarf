@@ -27,7 +27,7 @@ pub enum Error {
     Custom(RBoxError),
     /// A list of errors.
     Many(RVec<Error>),
-    Uber(RString),
+    Plugin(RString),
 }
 
 /// Represents a command or return value that wasn't supported.
@@ -120,7 +120,7 @@ impl Display for Error {
                 }
                 Ok(())
             }
-            Error::Uber(e) => Display::fmt(e, f),
+            Error::Plugin(e) => Display::fmt(e, f),
         }
     }
 }

@@ -143,12 +143,12 @@
             },
             "args": [
                 // "tests/vm_harness/lambda.ore"
-                "test.ore"
+                "test.ore",
                 // "https://raw.githubusercontent.com/uberFoo/dwarf/develop/mandelbrot.ore"
                 // "uberfoo.rs/uberfoo.rs.ore",
                 // "-c",
                 // "uberfoo.rs",
-                // "-b",
+                "-b",
             ],
             "cwd": "${workspaceFolder}",
             "env": {

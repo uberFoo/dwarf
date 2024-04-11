@@ -3942,7 +3942,7 @@ pub(crate) fn make_value_type(
 
                         Ok(ty)
                     } else {
-                        Ok(create_generic_enum(&fq_name, &name, lu_dog)?.1)
+                        Ok(create_generic_enum(&fq_name, &name, &span, context, lu_dog)?.1)
                     }
                 } else if let Some(ty) = lookup_user_defined_type(lu_dog, &name, span, context) {
                     Ok(ty)

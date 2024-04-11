@@ -61,7 +61,7 @@ pub fn new(lambda_sender: RSender<LambdaCall>, args: RVec<FfiValue>) -> RResult<
 
         Model { sarzak, merlin }
     } else {
-        return RErr(Error::Uber("Invalid arguments".into()));
+        return RErr(Error::Plugin("Invalid arguments".into()));
     };
 
     ROk(Plugin_TO::from_value(this, TD_Opaque))
@@ -107,7 +107,7 @@ impl Plugin for Model {
             match module_str {
                 "sarzak" => self.sarzak.invoke_func(module, ty, func, args).into(),
                 "merlin" => self.merlin.invoke_func(module, ty, func, args).into(),
-                _ => Err(Error::Uber("Invalid module".into())),
+                _ => Err(Error::Plugin("Invalid module".into())),
             }
         })()
         .into()

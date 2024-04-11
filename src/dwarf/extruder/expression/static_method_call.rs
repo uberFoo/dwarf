@@ -368,7 +368,9 @@ pub fn inter(
         let woog_enum = if let Some(woog_enum) = lu_dog.exhume_enumeration_id_by_name(&type_name) {
             lu_dog.exhume_enumeration(&woog_enum).unwrap()
         } else if lu_dog.exhume_enumeration_id_by_name(no_generics).is_some() {
-            create_generic_enum(&type_name, no_generics, lu_dog)?.0
+            let span = s_read!(span);
+            let span = span.start as usize..span.end as usize;
+            create_generic_enum(&type_name, no_generics, &span, context, lu_dog)?.0
         } else {
             let span = s_read!(span).start as usize..s_read!(span).end as usize;
             return Err(vec![DwarfError::ObjectNameNotFound {
@@ -645,7 +647,8 @@ fn inter_field(
 
                     let base_name = base_path.clone() + base_name;
 
-                    let (new_enum, _) = create_generic_enum(&type_name, &base_name, lu_dog)?;
+                    let (new_enum, _) =
+                        create_generic_enum(&type_name, &base_name, &span, context, lu_dog)?;
 
                     (new_enum, expr)
                 }

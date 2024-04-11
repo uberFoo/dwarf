@@ -990,19 +990,21 @@ mod test {
                 struct Callee {
                     count: int,
                 }
+
                 impl Callee {
                     fn new() -> Callee {
                         Callee { count: 0 }
                     }
 
-                    fn call(self) -> Callee {
+                    fn incr(self) -> Callee {
                         self.count = self.count + 1;
                         self
                     }
                 }
+
                 fn main() -> bool {
                     let callee = Callee::new();
-                    callee.call().call();
+                    callee.incr().incr();
                     chacha::assert(callee.count == 2)
                 }";
         let ast = parse_dwarf("test_call_chain", ore).unwrap();

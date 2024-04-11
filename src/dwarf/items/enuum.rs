@@ -6,7 +6,7 @@ use uuid::Uuid;
 use crate::{
     dwarf::{
         error::{DwarfError, Result},
-        extruder::{debug, function, make_value_type, Context},
+        extruder::{debug, function, make_value_type, Context, Span},
         AttributeMap, EnumField, Spanned, Type,
     },
     lu_dog::{
@@ -208,6 +208,8 @@ use crate::dwarf::extruder::RE;
 pub(crate) fn create_generic_enum(
     enum_name: &str,
     base_enum: &str,
+    span: &Span,
+    context: &Context,
     lu_dog: &mut LuDogStore,
 ) -> Result<(RefType<Enumeration>, RefType<ValueType>)> {
     // Check to see if this already exists
@@ -237,72 +239,86 @@ pub(crate) fn create_generic_enum(
     // The regex matches the generic type, and group three is the inner type.
     // One may iterate through all of them with a while let loop to get to the
     // innermost types.
-    let captures = re.captures(enum_name).unwrap();
-    let inner = &captures[3];
-    let types = inner.split(',').map(|s| s.trim()).collect::<Vec<_>>();
+    if let Some(captures) = re.captures(enum_name) {
+        let inner = &captures[3];
+        let types = inner.split(',').map(|s| s.trim()).collect::<Vec<_>>();
 
-    let mut path = base_enum.split(PATH_SEP).collect::<Vec<_>>();
-    path.pop();
-    let path = path.join(PATH_SEP) + PATH_SEP;
+        let mut path = base_enum.split(PATH_SEP).collect::<Vec<_>>();
+        path.pop();
+        let path = path.join(PATH_SEP) + PATH_SEP;
 
-    let new_enum = Enumeration::new(enum_name.to_owned(), path.to_owned(), None, lu_dog);
-    let ty = ValueType::new_enumeration(true, &new_enum, lu_dog);
+        let new_enum = Enumeration::new(enum_name.to_owned(), path.to_owned(), None, lu_dog);
+        let ty = ValueType::new_enumeration(true, &new_enum, lu_dog);
 
-    // We are cheating here. we are overloading the EnumGenerics type and relationship
-    // to store the type's of the generics. As strings.
-    let mut first = true;
-    let mut first_generic = None;
-    let mut last_generic_uuid: Option<SarzakStorePtr> = None;
-    for ty in types {
-        let generic = EnumGeneric::new(ty.to_owned(), &new_enum, None, lu_dog);
-        let _ = ValueType::new_enum_generic(true, &generic, lu_dog);
+        // We are cheating here. we are overloading the EnumGenerics type and relationship
+        // to store the type's of the generics. As strings.
+        let mut first = true;
+        let mut first_generic = None;
+        let mut last_generic_uuid: Option<SarzakStorePtr> = None;
+        for ty in types {
+            let generic = EnumGeneric::new(ty.to_owned(), &new_enum, None, lu_dog);
+            let _ = ValueType::new_enum_generic(true, &generic, lu_dog);
 
-        if first {
-            first = false;
-            first_generic = Some(s_read!(generic).id);
+            if first {
+                first = false;
+                first_generic = Some(s_read!(generic).id);
+            }
+            last_generic_uuid = link_enum_generic!(last_generic_uuid, generic, lu_dog);
         }
-        last_generic_uuid = link_enum_generic!(last_generic_uuid, generic, lu_dog);
-    }
-    s_write!(new_enum).first_generic = first_generic;
+        s_write!(new_enum).first_generic = first_generic;
 
-    // Down here we are copying the enumeration's fields from base to new.
-    let Some(ref id) = lu_dog.exhume_enumeration_id_by_name(base_enum) else {
-        panic!("enum {base_enum} not found");
-    };
+        // Down here we are copying the enumeration's fields from base to new.
+        let Some(ref id) = lu_dog.exhume_enumeration_id_by_name(base_enum) else {
+            panic!("enum {base_enum} not found");
+        };
 
-    let woog_enum = lu_dog.exhume_enumeration(id).unwrap();
-    for field in s_read!(woog_enum).r88_enum_field(lu_dog) {
-        let field = s_read!(field);
-        match field.subtype {
-            EnumFieldEnum::Unit(ref id) => {
-                let orig = lu_dog.exhume_unit(id).unwrap();
-                let new = Unit::new(s_read!(orig).x_value, lu_dog);
-                let _ = LuDogEnumField::new_unit(field.name.to_owned(), &new_enum, &new, lu_dog);
-            }
-            EnumFieldEnum::StructField(ref id) => {
-                let orig = lu_dog.exhume_struct_field(id).unwrap();
-                let new = StructField::new(s_read!(orig).name.to_owned(), lu_dog);
-                let _ = LuDogEnumField::new_struct_field(
-                    field.name.to_owned(),
-                    &new_enum,
-                    &new,
-                    lu_dog,
-                );
-            }
-            EnumFieldEnum::TupleField(ref id) => {
-                // Note that we are borrowing whatever expression may exist on
-                // the original, non-generic tuple field.
-                let orig = lu_dog.exhume_tuple_field(id).unwrap();
-                let new = TupleField::new(
-                    Uuid::new_v4(),
-                    &s_read!(orig).r86_value_type(lu_dog)[0],
-                    lu_dog,
-                );
-                let _ =
-                    LuDogEnumField::new_tuple_field(field.name.to_owned(), &new_enum, &new, lu_dog);
+        let woog_enum = lu_dog.exhume_enumeration(id).unwrap();
+        for field in s_read!(woog_enum).r88_enum_field(lu_dog) {
+            let field = s_read!(field);
+            match field.subtype {
+                EnumFieldEnum::Unit(ref id) => {
+                    let orig = lu_dog.exhume_unit(id).unwrap();
+                    let new = Unit::new(s_read!(orig).x_value, lu_dog);
+                    let _ =
+                        LuDogEnumField::new_unit(field.name.to_owned(), &new_enum, &new, lu_dog);
+                }
+                EnumFieldEnum::StructField(ref id) => {
+                    let orig = lu_dog.exhume_struct_field(id).unwrap();
+                    let new = StructField::new(s_read!(orig).name.to_owned(), lu_dog);
+                    let _ = LuDogEnumField::new_struct_field(
+                        field.name.to_owned(),
+                        &new_enum,
+                        &new,
+                        lu_dog,
+                    );
+                }
+                EnumFieldEnum::TupleField(ref id) => {
+                    // Note that we are borrowing whatever expression may exist on
+                    // the original, non-generic tuple field.
+                    let orig = lu_dog.exhume_tuple_field(id).unwrap();
+                    let new = TupleField::new(
+                        Uuid::new_v4(),
+                        &s_read!(orig).r86_value_type(lu_dog)[0],
+                        lu_dog,
+                    );
+                    let _ = LuDogEnumField::new_tuple_field(
+                        field.name.to_owned(),
+                        &new_enum,
+                        &new,
+                        lu_dog,
+                    );
+                }
             }
         }
-    }
 
-    Ok((new_enum, ty))
+        Ok((new_enum, ty))
+    } else {
+        return Err(vec![DwarfError::UnknownType {
+            ty: enum_name.to_owned(),
+            file: context.file_name.to_owned(),
+            span: span.clone(),
+            program: context.source_string.to_owned(),
+            location: location!(),
+        }]);
+    }
 }

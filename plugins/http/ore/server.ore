@@ -28,7 +28,7 @@ impl HttpServer {
         method: Method,
         lambda: fn(Request) -> string,
     ) {
-        // We need this lambda to create a Request instance from the returned int.
+        // We need this function to create a Request instance from the returned int.
         let wrapper = |req: int| -> string {
             let req = Request { plugin: self.inner, inner: req };
             lambda(req)

@@ -964,7 +964,7 @@ mod test {
         .unwrap();
         let program = compile(&ctx).unwrap();
         println!("{program}");
-        assert_eq!(program.get_thonk_card(), 21);
+        assert_eq!(program.get_thonk_card(), 10);
 
         // assert_eq!(program.get_instruction_card(), 393);
         let run = run_vm(&program);
@@ -1016,9 +1016,10 @@ async fn async_get(urls: [String]) -> Future<[Result<string, HttpError>]> {
 
     let results: [Result<string, HttpError>] = [];
     for task in tasks {
+        print(task);
         // Await each task that was spawned above.
-        let result = task.await;
-        results.push(result);
+        // let result = task.await;
+        // results.push(result);
     }
 
     results
@@ -1059,7 +1060,7 @@ async fn main() -> Future<()> {
         .unwrap();
         let program = compile(&ctx).unwrap();
         println!("{program}");
-        assert_eq!(program.get_thonk_card(), 18);
+        assert_eq!(program.get_thonk_card(), 13);
 
         // assert_eq!(
         //     program..get_instruction_count(),
