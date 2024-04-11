@@ -1,0 +1,48 @@
+use std::result::Result;
+
+use sqlx::Error;
+use sqlx::Pool;
+use sqlx::Row;
+use sqlx::Sqlx;
+use sqlx::Type;
+
+struct PostWithAuthorQuery {
+    post_id: int,
+    title: string,
+    body: string,
+    author_id: int,
+    author_username: string,
+}
+
+async fn main() -> Future<()> {
+    let sqlx = Sqlx::new();
+
+    let query = "
+SELECT p.id as \"post_id\",
+       p.title,
+       p.body,
+       u.id as \"author_id\",
+       u.username as \"author_username\"
+FROM users u
+         JOIN posts p on u.id = p.user_id;";
+
+    if let Result::<Pool, Error>::Ok(pool) = sqlx
+        .connect("postgres://postgres:password@localhost/files")
+        .await
+    {
+        print("Connected to database");
+        let posts = pool.query(query, |row: Row| -> PostWithAuthorQuery {
+            // Comment to force vscode leave the block.
+            PostWithAuthorQuery {
+                post_id: row.get("post_id", Type::Integer),
+                title: row.get("title", Type::String),
+                body: row.get("body", Type::String),
+                author_id: row.get("author_id", Type::Integer),
+                author_username: row.get("author_username", Type::String),
+            }
+        });
+        print(posts);
+    } else {
+        print("Error connecting to database");
+    }
+}
