@@ -12,6 +12,7 @@ use dwarf::{
     chacha::{error::ChaChaError, ffi_value::FfiValue},
     plug_in::{Error, LambdaCall, Plugin, PluginModRef, PluginModule, PluginType, Plugin_TO},
 };
+use markdown::{CompileOptions, ParseOptions};
 
 #[export_root_module]
 pub fn instantiate_root_module() -> PluginModRef {
@@ -100,11 +101,15 @@ mod md {
                             .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
                             .unwrap();
 
-                        let md =
-                            markdown::to_html_with_options(&md, &markdown::Options::gfm()).unwrap();
+                        let options = markdown::Options {
+                            parse: ParseOptions::gfm(),
+                            compile: CompileOptions {
+                                allow_dangerous_html: true,
+                                ..CompileOptions::gfm()
+                            },
+                        };
 
-                        // This is as hack to get around a bug in markdown-rs
-                        let md = md.replace("&lt;", "<").replace("&gt;", ">");
+                        let md = markdown::to_html_with_options(&md, &options).unwrap();
 
                         Ok(FfiValue::String(md.into()).into())
                     }
