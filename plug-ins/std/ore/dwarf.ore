@@ -1,0 +1,3 @@
+struct Plugin<T> {
+    inner: T,
+}
