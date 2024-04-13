@@ -249,7 +249,6 @@ impl Value {
                     if let ValueTypeEnum::List(id) = s_read!(vt).subtype {
                         let list = lu_dog.exhume_list(&id).unwrap();
                         let list_ty = s_read!(list).r36_value_type(lu_dog)[0].clone();
-                        dbg!(&ty, &list, &list_ty);
                         if *s_read!(ty) == *s_read!(list_ty) {
                             return vt.clone();
                         }

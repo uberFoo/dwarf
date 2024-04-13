@@ -393,6 +393,12 @@ impl From<()> for FfiValue {
     }
 }
 
+impl From<u64> for FfiValue {
+    fn from(value: u64) -> Self {
+        FfiValue::Integer(value as DwarfInteger)
+    }
+}
+
 impl TryFrom<FfiValue> for String {
     type Error = ChaChaError;
 

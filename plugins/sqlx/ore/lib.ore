@@ -86,6 +86,17 @@ impl Map {
         self
     }
 
+    fn execute(self) -> Result<[Row], Error> {
+        let rows = self
+            .plugin
+            .invoke_func("sqlx", "Map", "execute", @[self.query, self.pool, self.bindings]);
+
+        match rows {
+            Result::Ok(rows) => Result::<[Row], Error>::Ok(rows),
+            Result::Err(e) => Result::<[Row], Error>::Err(e),
+        }
+    }
+
     fn map<F>(self, func: F) -> Query<F> {
         let bounce = |row: int| -> F {
             let row = Row {
@@ -116,7 +127,7 @@ impl Query<F> {
     fn fetch_all(self) -> Result<[Row], Error> {
         let rows = self
             .plugin
-            .invoke_func("sqlx", "Pool", "query", @[self.query, self.pool, self.func]);
+            .invoke_func("sqlx", "Query", "query", @[self.query, self.pool, self.func]);
 
         match rows {
             Result::Ok(rows) => Result::<[Row], Error>::Ok(rows),

@@ -115,6 +115,70 @@ mod postgres {
         ) -> RResult<FfiValue, Error> {
             future::block_on(async {
                 match ty.as_str() {
+                    "Map" => match func.as_str() {
+                        "execute" => {
+                            let query: String = args
+                                .first()
+                                .unwrap()
+                                .try_into()
+                                .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
+                                .unwrap();
+
+                            let pool: DwarfInteger = args
+                                .get(1)
+                                .unwrap()
+                                .try_into()
+                                .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
+                                .unwrap();
+
+                            let bindings: Vec<FfiValue> = args
+                                .get(2)
+                                .unwrap()
+                                .clone()
+                                .try_into()
+                                .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
+                                .unwrap();
+
+                            dbg!(&query, &pool, &bindings);
+
+                            let guard = self.pools.lock().unwrap();
+                            let pool = guard.get(pool as usize).unwrap();
+
+                            let mut result = sqlx::query(&query);
+                            for binding in bindings {
+                                match binding {
+                                    FfiValue::String(value) => {
+                                        result = result.bind(value.to_string());
+                                    }
+                                    FfiValue::Integer(value) => {
+                                        result = result.bind(value as i64);
+                                    }
+                                    _ => {
+                                        panic!("Invalid binding");
+                                    }
+                                }
+                            }
+                            let result = result.execute(pool).await;
+
+                            dbg!(&result);
+
+                            let result = match result {
+                                Ok(result) => ROk(RBox::new(result.rows_affected().into())),
+                                Err(e) => {
+                                    let mut guard = self.errors.lock().unwrap();
+                                    let entry = guard.vacant_entry();
+                                    let key = entry.key();
+                                    guard.insert(Arc::new(e));
+                                    RErr(RBox::new(FfiValue::Integer(key as DwarfInteger)))
+                                }
+                            };
+
+                            dbg!(&result);
+
+                            Ok(FfiValue::Result(result))
+                        }
+                        func => Err(Error::Plugin(format!("Invalid function: {func}").into())),
+                    },
                     "Query" => match func.as_str() {
                         "query" => {
                             let query: String = args
@@ -219,34 +283,6 @@ mod postgres {
                             };
 
                             Ok(result)
-                        }
-                        func => Err(Error::Plugin(format!("Invalid function: {func}").into())),
-                    },
-                    "Map" => match func.as_str() {
-                        "execute" => {
-                            let query: String = args
-                                .first()
-                                .unwrap()
-                                .try_into()
-                                .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
-                                .unwrap();
-
-                            let pool: DwarfInteger = args
-                                .get(1)
-                                .unwrap()
-                                .try_into()
-                                .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
-                                .unwrap();
-
-                            // let bindings: Vec<FfiValue> = args
-                            //     .get(2)
-                            //     .unwrap()
-                            //     .try_into()
-                            //     .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
-                            //     .unwrap();
-
-                            dbg!(query, pool);
-                            Ok(FfiValue::Integer(0))
                         }
                         func => Err(Error::Plugin(format!("Invalid function: {func}").into())),
                     },
