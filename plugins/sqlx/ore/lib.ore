@@ -55,23 +55,12 @@ struct Pool {
 }
 
 impl Pool {
-    // fn query<F>(self, query: string, func: fn(Row) -> F) -> Result<[Row], Error> {
-    fn query<F>(self, query: string, func: F) -> Result<[Row], Error> {
-        let bounce = |row: int| {
-            let row = Row {
-                plugin: self.plugin,
-                inner: row,
-            };
-            func(row)
-        };
-
-        let rows = self
-            .plugin
-            .invoke_func("sqlx", "Pool", "query", @[query, self.inner, bounce]);
-
-        match rows {
-            Result::Ok(rows) => Result::<[Row], Error>::Ok(rows),
-            Result::Err(e) => Result::<[Row], Error>::Err(e),
+    fn query<F>(self, query: string) -> Map {
+        Map{
+            plugin: self.plugin,
+            query: query,
+            pool: self.inner,
+            bindings: [],
         }
     }
 }
@@ -79,4 +68,59 @@ struct Error {
     #[proxy(plugin = "sqlx")]
     plugin: Plugin<Sqlx>,
     inner: int,
+}
+
+struct Map {
+    #[proxy(plugin = "sqlx")]
+    plugin: Plugin<Sqlx>,
+    query: string,
+    pool: int,
+    // This should be a heterogenous list -- it works as is though, which is scary.
+    bindings: [string],
+}
+
+impl Map {
+    fn bind(self, value: string) -> Map {
+        self.bindings.push(value);
+
+        self
+    }
+
+    fn map<F>(self, func: F) -> Query<F> {
+        let bounce = |row: int| -> F {
+            let row = Row {
+                plugin: self.plugin,
+                inner: row,
+            };
+            func(row)
+        };
+
+        Query {
+            plugin: self.plugin,
+            query: self.query,
+            func: bounce,
+            pool: self.pool,
+        }
+    }
+}
+
+struct Query<F> {
+    #[proxy(plugin = "sqlx")]
+    plugin: Plugin<Sqlx>,
+    query: string,
+    func: F,
+    pool: int,
+}
+
+impl Query<F> {
+    fn fetch_all(self) -> Result<[Row], Error> {
+        let rows = self
+            .plugin
+            .invoke_func("sqlx", "Pool", "query", @[self.query, self.pool, self.func]);
+
+        match rows {
+            Result::Ok(rows) => Result::<[Row], Error>::Ok(rows),
+            Result::Err(e) => Result::<[Row], Error>::Err(e),
+        }
+    }
 }

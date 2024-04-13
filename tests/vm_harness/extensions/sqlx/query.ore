@@ -30,8 +30,9 @@ FROM users u
         .connect("postgres://postgres:postgres@localhost/files")
         .await
     {
-        print("Connected to database");
-        let posts = pool.query(query, |row: Row| -> PostWithAuthorQuery {
+        print("Connected to database\n");
+        let map = pool.query(query);
+        let q = map.map(|row: Row| -> PostWithAuthorQuery {
             // Comment to force vscode leave the block.
             PostWithAuthorQuery {
                 post_id: row.get("post_id", Type::Integer),
@@ -41,6 +42,7 @@ FROM users u
                 author_username: row.get("author_username", Type::String),
             }
         });
+        let posts = q.fetch_all();
         print(posts);
     } else {
         print("Error connecting to database");

@@ -35,13 +35,13 @@ pub fn new(
     lambda_sender: RSender<LambdaCall>,
     _args: RVec<FfiValue>,
 ) -> RResult<PluginType, Error> {
-    let plugin = ubersqlx::instantiate_root_module();
+    let plugin = postgres::instantiate_root_module();
     let plugin = plugin.new();
     let plugin = plugin(lambda_sender, vec![].into()).unwrap();
     ROk(Plugin_TO::from_value(plugin, TD_Opaque))
 }
 
-mod ubersqlx {
+mod postgres {
     use super::*;
 
     use std::sync::Mutex;
@@ -115,7 +115,7 @@ mod ubersqlx {
         ) -> RResult<FfiValue, Error> {
             future::block_on(async {
                 match ty.as_str() {
-                    "Pool" => match func.as_str() {
+                    "Query" => match func.as_str() {
                         "query" => {
                             let query: String = args
                                 .first()
@@ -219,6 +219,34 @@ mod ubersqlx {
                             };
 
                             Ok(result)
+                        }
+                        func => Err(Error::Plugin(format!("Invalid function: {func}").into())),
+                    },
+                    "Map" => match func.as_str() {
+                        "execute" => {
+                            let query: String = args
+                                .first()
+                                .unwrap()
+                                .try_into()
+                                .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
+                                .unwrap();
+
+                            let pool: DwarfInteger = args
+                                .get(1)
+                                .unwrap()
+                                .try_into()
+                                .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
+                                .unwrap();
+
+                            // let bindings: Vec<FfiValue> = args
+                            //     .get(2)
+                            //     .unwrap()
+                            //     .try_into()
+                            //     .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
+                            //     .unwrap();
+
+                            dbg!(query, pool);
+                            Ok(FfiValue::Integer(0))
                         }
                         func => Err(Error::Plugin(format!("Invalid function: {func}").into())),
                     },

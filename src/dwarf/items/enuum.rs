@@ -203,7 +203,7 @@ pub fn inter_enum(
 
 use regex::Regex;
 
-use crate::dwarf::extruder::RE;
+use crate::dwarf::extruder::{EXTRACT_GENERICS, EXTRACT_GENERICS_RE};
 
 pub(crate) fn create_generic_enum(
     enum_name: &str,
@@ -222,17 +222,17 @@ pub(crate) fn create_generic_enum(
 
     debug!("interring generic enum {enum_name}");
 
-    let re = match RE.get() {
+    let re = match EXTRACT_GENERICS.get() {
         Some(re) => re,
         None => {
-            let re = Regex::new(r"^(::)?(\w+::)*\w+<(.*)>$").unwrap();
-            match RE.set(re) {
+            let re = Regex::new(EXTRACT_GENERICS_RE).unwrap();
+            match EXTRACT_GENERICS.set(re) {
                 Ok(_) => {}
                 Err(e) => {
                     panic!("Failed to set RE: {}", e);
                 }
             }
-            RE.get().unwrap()
+            EXTRACT_GENERICS.get().unwrap()
         }
     };
 
@@ -240,7 +240,7 @@ pub(crate) fn create_generic_enum(
     // One may iterate through all of them with a while let loop to get to the
     // innermost types.
     if let Some(captures) = re.captures(enum_name) {
-        let inner = &captures[3];
+        let inner = &captures[4];
         let types = inner.split(',').map(|s| s.trim()).collect::<Vec<_>>();
 
         let mut path = base_enum.split(PATH_SEP).collect::<Vec<_>>();
@@ -252,6 +252,7 @@ pub(crate) fn create_generic_enum(
 
         // We are cheating here. we are overloading the EnumGenerics type and relationship
         // to store the type's of the generics. As strings.
+        // 🚧 Why? What do we do with it eventually?
         let mut first = true;
         let mut first_generic = None;
         let mut last_generic_uuid: Option<SarzakStorePtr> = None;

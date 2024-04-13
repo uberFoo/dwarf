@@ -341,6 +341,7 @@ pub struct Context<'a> {
     pub in_impl: String,
     pub scopes: &'a mut HashMap<String, String>,
     pub imports: &'a mut HashSet<PathBuf>,
+    pub generics: Vec<(Type, Span)>,
 }
 
 impl<'a> Context<'a> {
@@ -375,6 +376,7 @@ impl<'a> Context<'a> {
             in_impl: "".to_owned(),
             scopes,
             imports,
+            generics: Vec::new(),
         }
     }
 }
@@ -446,6 +448,7 @@ pub fn new_lu_dog(
             in_impl: "".to_owned(),
             scopes: &mut scopes,
             imports: &mut imports,
+            generics: Vec::new(),
         };
 
         walk_tree(ast, &mut context, &mut stack, &mut lu_dog)?;
@@ -3789,6 +3792,25 @@ pub(crate) fn make_value_type(
         }
         Type::UserType(tok, generics) => {
             let name = &tok.0;
+            // We bring in the generics set in the context. This get's set when
+            // we enter a function, with the function's generics.
+            let mut generics = generics.clone();
+            generics.extend(context.generics.clone());
+
+            let generics_map: HashMap<_, _> = generics
+                .iter()
+                .filter_map(|(t, _)| match t {
+                    generic @ Type::Generic((t, _)) => Some((t.to_owned(), generic.clone())),
+                    // oops => panic!("Unexpected type: {oops:?}"),
+                    _ => None,
+                })
+                .collect();
+
+            if let Some(_generic) = generics_map.get(name) {
+                let g = FuncGeneric::new(name.to_owned(), None, None, lu_dog);
+                let ty = ValueType::new_func_generic(true, &g, lu_dog);
+                return Ok(ty);
+            }
 
             if name == "Future" {
                 // It seems to me that this will always have a generic, no?
@@ -3850,24 +3872,6 @@ pub(crate) fn make_value_type(
             } else if name == UUID_TYPE || name == FQ_UUID_TYPE {
                 Ok(ValueType::new_ty(true, &Ty::new_z_uuid(sarzak), lu_dog))
             } else {
-                // 🚧 HashMapFix
-                // for model in context.models.values() {
-                //     // Look for the Object in the model domains first.
-                //     if let Some(ty) = model.0.iter_ty().find(|ty| match &*ty.read().unwrap() {
-                //         Ty::Object(ref obj) => {
-                //             let obj = model.0.exhume_object(obj).unwrap();
-                //             // We are going to cheat a little bit here. Say we have an
-                //             // object called `Point`. We want to be able to also handle
-                //             // proxy objects for `Point`. Those are suffixed with "Proxy".
-                //             let obj = obj.read().unwrap().name.to_upper_camel_case();
-                //             obj == *name || name == format!("{}Proxy", obj).as_str()
-                //         }
-                //         _ => false,
-                //     }) {
-                //         return Ok(ValueType::new_ty(true, &ty, lu_dog));
-                //     }
-                // }
-
                 // This feels sort of dirty. Sometimes the name has leading `::`, and
                 // sometimes it does not. We don't want it here because below we
                 // concatenate the name and the path and the path has a trailing `::`.
@@ -3917,30 +3921,29 @@ pub(crate) fn make_value_type(
                             let field_ty = s_read!(field_ty);
                             if let ValueTypeEnum::StructGeneric(ref id) = field_ty.subtype {
                                 let generic = lu_dog.exhume_struct_generic(id).unwrap();
-                                generic_substitutions.insert(
-                                    s_read!(generic).name.to_owned(),
-                                    make_value_type(
-                                        &generics[i].0,
-                                        span,
-                                        enclosing_type,
-                                        context,
-                                        import_stack,
-                                        lu_dog,
-                                    )?,
-                                );
+                                let generic = s_read!(generic);
+                                let ty = generic.r1_value_type(lu_dog)[0].clone();
+                                generic_substitutions.insert(generic.name.to_owned(), ty);
                                 i += 1;
                             }
                         }
-                        let (_, ty) = create_generic_struct(
+
+                        if let Some((_, ty)) = create_generic_struct(
                             &woog_struct,
                             &generic_substitutions,
                             span,
                             context,
                             context.sarzak,
                             lu_dog,
-                        );
-
-                        Ok(ty)
+                        ) {
+                            Ok(ty)
+                        } else if let Some(ty) =
+                            lookup_user_defined_type(lu_dog, &name, span, context)
+                        {
+                            Ok(ty)
+                        } else {
+                            panic!("this is a mess");
+                        }
                     } else {
                         Ok(create_generic_enum(&fq_name, &name, &span, context, lu_dog)?.1)
                     }
@@ -4065,7 +4068,8 @@ pub(crate) fn lookup_woog_struct_method_return_type(
 use once_cell::sync::OnceCell;
 use regex::Regex;
 
-pub(crate) static RE: OnceCell<Regex> = OnceCell::new();
+pub(crate) static EXTRACT_GENERICS: OnceCell<Regex> = OnceCell::new();
+pub(crate) static EXTRACT_GENERICS_RE: &str = r"^((::)?(\w+::)*\w+)<(.*)>$";
 
 pub(super) fn typecheck(
     lhs: (&RefType<ValueType>, &Span),
@@ -4432,96 +4436,100 @@ pub(crate) fn create_generic_struct(
     context: &mut Context,
     sarzak: &SarzakStore,
     lu_dog: &mut LuDogStore,
-) -> (RefType<WoogStruct>, RefType<ValueType>) {
+) -> Option<(RefType<WoogStruct>, RefType<ValueType>)> {
     let woog_struct = s_read!(woog_struct);
 
     let mut generic_substitutions = Vec::new();
     let mut name = woog_struct.name.to_owned();
     name.push('<');
-    let first = woog_struct.r102_struct_generic(lu_dog)[0].clone();
-    let generic_name = &s_read!(first).name;
 
-    let ty = substitutions.get(generic_name).unwrap();
-    let ty = PrintableValueType(false, ty, context, lu_dog).to_string();
-    name.push_str(&ty);
-    generic_substitutions.push((generic_name.to_owned(), ty));
+    if let Some(first) = woog_struct.r102_struct_generic(lu_dog).pop() {
+        let generic_name = &s_read!(first).name;
 
-    let mut id = s_read!(first).next;
-    while let Some(next_id) = id {
-        let next = lu_dog.exhume_struct_generic(&next_id).unwrap();
-        let next = s_read!(next);
-        id = next.next;
-
-        let ty = substitutions.get(&next.name).unwrap();
+        let ty = substitutions.get(generic_name).unwrap();
         let ty = PrintableValueType(false, ty, context, lu_dog).to_string();
+        name.push_str(&ty);
+        generic_substitutions.push((generic_name.to_owned(), ty));
 
-        name.extend([", ", &ty]);
-        generic_substitutions.push((next.name.to_owned(), ty));
-    }
-    name.push('>');
+        let mut id = s_read!(first).next;
+        while let Some(next_id) = id {
+            let next = lu_dog.exhume_struct_generic(&next_id).unwrap();
+            let next = s_read!(next);
+            id = next.next;
 
-    let mut obj = woog_struct.r4_object(sarzak);
-    let obj = if !obj.is_empty() {
-        let obj = obj.pop().unwrap();
-        // Hey uber, don't change this.
-        let obj = obj.read().unwrap().clone();
-        Some(obj)
-    } else {
-        None
-    };
+            let ty = substitutions.get(&next.name).unwrap();
+            let ty = PrintableValueType(false, ty, context, lu_dog).to_string();
 
-    let new_struct = WoogStruct::new(
-        name.to_owned(),
-        context.path.clone(),
-        None,
-        obj.as_ref(),
-        lu_dog,
-    );
+            name.extend([", ", &ty]);
+            generic_substitutions.push((next.name.to_owned(), ty));
+        }
+        name.push('>');
 
-    // This is where we cheat and use the StructGeneric to store substitution types.
-    let mut field_map = HashMap::default();
-
-    let (generic_name, prev) = generic_substitutions.pop().unwrap();
-    let mut prev = StructGeneric::new(prev, None, &new_struct, lu_dog);
-    let ty = ValueType::new_struct_generic(true, &prev, lu_dog);
-    field_map.insert(generic_name, ty);
-
-    for (generic_name, ty) in generic_substitutions {
-        let sg = StructGeneric::new(ty, Some(&prev), &new_struct, lu_dog);
-        let ty = ValueType::new_struct_generic(true, &sg, lu_dog);
-        field_map.insert(generic_name, ty);
-
-        // This is cheap, and it get's the job done.
-        s_write!(new_struct).first_generic = Some(s_read!(sg).id);
-        prev = sg;
-    }
-
-    context.dirty.push(Dirty::Struct(new_struct.clone()));
-    let ty = ValueType::new_woog_struct(true, &new_struct, lu_dog);
-    LuDogSpan::new(
-        span.end as i64,
-        span.start as i64,
-        &context.source,
-        Some(&ty),
-        None,
-        lu_dog,
-    );
-
-    for field in woog_struct.r7_field(lu_dog) {
-        let field = s_read!(field);
-        let ty = &field.r5_value_type(lu_dog)[0];
-
-        let bby = PrintableValueType(false, &ty, context, lu_dog);
-        let ty = if let Some(ty) = field_map.get(&bby.to_string()) {
-            ty
+        let mut obj = woog_struct.r4_object(sarzak);
+        let obj = if !obj.is_empty() {
+            let obj = obj.pop().unwrap();
+            // Hey uber, don't change this.
+            let obj = obj.read().unwrap().clone();
+            Some(obj)
         } else {
-            ty
+            None
         };
 
-        let _ = Field::new(field.name.to_owned(), &new_struct, ty, lu_dog);
-    }
+        let new_struct = WoogStruct::new(
+            name.to_owned(),
+            context.path.clone(),
+            None,
+            obj.as_ref(),
+            lu_dog,
+        );
 
-    (new_struct, ty)
+        // This is where we cheat and use the StructGeneric to store substitution types.
+        let mut field_map = HashMap::default();
+
+        let (generic_name, prev) = generic_substitutions.pop().unwrap();
+        let mut prev = StructGeneric::new(prev, None, &new_struct, lu_dog);
+        let ty = ValueType::new_struct_generic(true, &prev, lu_dog);
+        field_map.insert(generic_name, ty);
+
+        for (generic_name, ty) in generic_substitutions {
+            let sg = StructGeneric::new(ty, Some(&prev), &new_struct, lu_dog);
+            let ty = ValueType::new_struct_generic(true, &sg, lu_dog);
+            field_map.insert(generic_name, ty);
+
+            // This is cheap, and it get's the job done.
+            s_write!(new_struct).first_generic = Some(s_read!(sg).id);
+            prev = sg;
+        }
+
+        context.dirty.push(Dirty::Struct(new_struct.clone()));
+        let ty = ValueType::new_woog_struct(true, &new_struct, lu_dog);
+        LuDogSpan::new(
+            span.end as i64,
+            span.start as i64,
+            &context.source,
+            Some(&ty),
+            None,
+            lu_dog,
+        );
+
+        for field in woog_struct.r7_field(lu_dog) {
+            let field = s_read!(field);
+            let ty = &field.r5_value_type(lu_dog)[0];
+
+            let bby = PrintableValueType(false, &ty, context, lu_dog);
+            let ty = if let Some(ty) = field_map.get(&bby.to_string()) {
+                ty
+            } else {
+                ty
+            };
+
+            let _ = Field::new(field.name.to_owned(), &new_struct, ty, lu_dog);
+        }
+
+        Some((new_struct, ty))
+    } else {
+        None
+    }
 }
 
 pub(crate) fn update_span_value(

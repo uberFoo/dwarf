@@ -332,10 +332,10 @@ fn compile_method_call(
                             thonk.insert_instruction(Instruction::ListLength, location!());
                             return result;
                         }
-                        darn => panic!("{darn:?}"),
+                        darn => panic!("type is not a string. found {darn:?}"),
                     }
                 }
-                whoa => panic!("{whoa:?}"),
+                whoa => panic!("value is not a list. found {whoa:?}"),
             },
             MAX => match result.clone()?.unwrap().subtype {
                 ValueTypeEnum::List(_) => {
@@ -1018,7 +1018,7 @@ mod test {
         let program = compile(&ctx).unwrap();
         println!("{program}");
 
-        assert_eq!(program.get_thonk_card(), 3);
+        assert_eq!(program.get_thonk_card(), 4);
 
         // assert_eq!(program.get_instruction_count(), 39);
 

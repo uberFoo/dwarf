@@ -92,6 +92,8 @@ pub fn inter(
     // other hand would include the generics, if there were any. The thing is
     // that I don't see how you can have generics to a struct expression... 🤔
     //
+    // // Indeed!
+    //
     // In any case, what we end up with is how use statements work. We bring
     // the item into our scope, and here we canonicalize the path.
     //
@@ -111,7 +113,7 @@ pub fn inter(
 
     debug!("ParserExpression::Struct {}", name);
 
-    // 🚧 Base or name? This is black magic at this point.
+    // Base is the fully qualified path. Name is just the typename.
     let id = match lu_dog.exhume_woog_struct_id_by_name(&base) {
         Some(id) => id,
         None => match lu_dog.exhume_woog_struct_id_by_name(&name) {
@@ -261,7 +263,8 @@ pub fn inter(
             context,
             context.sarzak,
             lu_dog,
-        );
+        )
+        .unwrap();
 
         woog_struct
     } else {
