@@ -1,4 +1,5 @@
 mod dwarf;
+mod env;
 mod fs;
 mod integer;
 mod option;

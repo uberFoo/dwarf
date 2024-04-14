@@ -35,6 +35,12 @@ pub fn name() -> RStr<'static> {
 pub fn new(lambda_sender: RSender<LambdaCall>, args: RVec<FfiValue>) -> RResult<PluginType, Error> {
     if let Some(FfiValue::String(plugin)) = args.first() {
         match plugin.as_str() {
+            "env" => {
+                let plugin = env::instantiate_root_module();
+                let plugin = plugin.new();
+                let plugin = plugin(lambda_sender, vec![].into()).unwrap();
+                ROk(Plugin_TO::from_value(plugin, TD_Opaque))
+            }
             "fs" => {
                 let plugin = fs::instantiate_root_module();
                 let plugin = plugin.new();
@@ -45,6 +51,112 @@ pub fn new(lambda_sender: RSender<LambdaCall>, args: RVec<FfiValue>) -> RResult<
         }
     } else {
         RErr(Error::Plugin("Invalid plugin".into()))
+    }
+}
+
+mod env {
+    use super::*;
+
+    pub fn instantiate_root_module() -> PluginModRef {
+        PluginModule { name, new }.leak_into_prefix()
+    }
+
+    #[sabi_extern_fn]
+    pub fn name() -> RStr<'static> {
+        "env".into()
+    }
+
+    /// Instantiates the plugin.
+    #[sabi_extern_fn]
+    pub fn new(
+        _lambda_sender: RSender<LambdaCall>,
+        _args: RVec<FfiValue>,
+    ) -> RResult<PluginType, Error> {
+        ROk(Plugin_TO::from_value(Var::default(), TD_Opaque))
+    }
+
+    #[derive(Clone, Debug)]
+    struct Var;
+
+    impl Default for Var {
+        fn default() -> Self {
+            Self
+        }
+    }
+
+    impl Display for Var {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            write!(f, "{:?}", self)
+        }
+    }
+
+    impl Plugin for Var {
+        fn name(&self) -> RStr<'_> {
+            "Env".into()
+        }
+
+        #[tracing::instrument]
+        fn invoke_func(
+            &self,
+            module: RStr<'_>,
+            ty: RStr<'_>,
+            func: RStr<'_>,
+            args: RVec<FfiValue>,
+        ) -> RResult<FfiValue, Error> {
+            match ty.as_str() {
+                "Var" => match func.as_str() {
+                    "var" => {
+                        let var: String = args
+                            .first()
+                            .unwrap()
+                            .try_into()
+                            .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
+                            .unwrap();
+
+                        let var = std::env::var(var);
+                        let result = match var {
+                            Ok(var) => ROk(RBox::new(FfiValue::String(var.into()))),
+                            Err(e) => RErr(RBox::new(FfiValue::String(e.to_string().into()))),
+                        };
+
+                        Ok(FfiValue::Result(result).into())
+                    }
+                    "set_var" => {
+                        let key: String = args
+                            .first()
+                            .unwrap()
+                            .try_into()
+                            .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
+                            .unwrap();
+
+                        let value: String = args
+                            .get(1)
+                            .unwrap()
+                            .try_into()
+                            .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
+                            .unwrap();
+
+                        std::env::set_var(key, value);
+
+                        Ok(FfiValue::Empty.into())
+                    }
+                    func => Err(Error::Plugin(format!("Invalid function: {func}").into())),
+                },
+                ty => Err(Error::Plugin(format!("Invalid type: {ty}").into())),
+            }
+            .into()
+        }
+
+        #[tracing::instrument]
+        fn invoke_func_mut(
+            &mut self,
+            module: RStr<'_>,
+            ty: RStr<'_>,
+            func: RStr<'_>,
+            args: RVec<FfiValue>,
+        ) -> RResult<FfiValue, Error> {
+            Ok(FfiValue::Empty).into()
+        }
     }
 }
 
