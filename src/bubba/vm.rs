@@ -255,6 +255,11 @@ impl VM {
             vm_clone.lambda_listen();
         });
 
+        let mut vm_clone = vm.clone();
+        thread::spawn(move || loop {
+            vm_clone.lambda_listen();
+        });
+
         vm
     }
 
@@ -266,8 +271,11 @@ impl VM {
                     panic!("Lambda functions have not been initialized.");
                 }
             };
-            let λ = λ.lock().unwrap();
-            let λ = λ.get(&lambda_call.lambda).unwrap();
+
+            let λ = {
+                let λ = λ.lock().unwrap();
+                λ.get(&lambda_call.lambda).unwrap().clone()
+            };
 
             // This will also have been set in the constructor. Calling this before
             // construction of a VM will panic, and that's not a terrible default.
@@ -281,7 +289,7 @@ impl VM {
                 .map(|v| <FfiValue as Into<Value>>::into(v.clone()))
                 .collect::<Vec<_>>();
 
-            let result = self.invoke_lambda(λ, &args);
+            let result = self.invoke_lambda(&λ, &args);
 
             let result = match result {
                 Ok(value) => ROk(<Value as Into<FfiValue>>::into(s_read!(value).clone())),
@@ -400,10 +408,13 @@ impl VM {
                 for iip in 0.max(ip - 3)..(self.instrs.len() as isize).min(ip + 3isize) {
                     let instr = &self.instrs[iip as usize];
 
-                    let src = if let Some(_source) = program.get_source() {
-                        // let span = self.source_map[iip as usize].clone();
-                        // &source[span]
-                        ""
+                    let src = if let Some(source) = program.get_source() {
+                        let span = self.source_map[iip as usize].clone();
+                        if span.end <= source.len() {
+                            &source[span]
+                        } else {
+                            ""
+                        }
                     } else {
                         ""
                     };
@@ -1003,6 +1014,24 @@ impl VM {
                         let list = s_read!(list);
                         let index: usize = index.try_into()?;
                         match &*list {
+                            Value::AnyList(vec) => {
+                                let vec = s_read!(vec);
+                                if index < vec.len() {
+                                    stack.push(vec[index].clone().into());
+                                } else {
+                                    if self.backtrace {
+                                        eprintln!("{self:?}");
+                                        print_stack(&stack, fp);
+                                    }
+                                    return Err(BubbaError::IndexOutOfBounds {
+                                        index,
+                                        len: vec.len(),
+                                        span: self.get_span(ip),
+                                        location: location!(),
+                                    }
+                                    .into());
+                                }
+                            }
                             Value::List { ty: _, inner: vec } => {
                                 let vec = s_read!(vec);
                                 if index < vec.len() {
@@ -1138,6 +1167,10 @@ impl VM {
                         let list = list.into_pointer();
                         let list = s_read!(list);
                         match &*list {
+                            Value::AnyList(vec) => {
+                                let vec = s_read!(vec);
+                                stack.push(Value::Integer(vec.len() as DwarfInteger).into());
+                            }
                             Value::List { inner, .. } => {
                                 let inner = s_read!(inner);
                                 stack.push(Value::Integer(inner.len() as DwarfInteger).into());
@@ -1671,6 +1704,10 @@ impl VM {
                         let lhs = s_read!(lhs);
 
                         let value = match &as_ty.subtype {
+                            ValueTypeEnum::List(_) => {
+                                let value: Vec<RefType<Value>> = (&*lhs).try_into()?;
+                                StackValue::Value(value.into())
+                            }
                             ValueTypeEnum::Ty(ref ty) => {
                                 let ty = self.sarzak.exhume_ty(ty).unwrap();
                                 let x = match &*ty.read().unwrap() {

@@ -26,6 +26,7 @@ impl HttpServer {
         self,
         path: string,
         method: Method,
+        body: Body,
         lambda: fn(Request) -> string,
     ) {
         // We need this function to create a Request instance from the returned int.
@@ -35,7 +36,7 @@ impl HttpServer {
         };
 
         self.inner
-            .invoke_func("http_server", "HttpServer", "route", @[path, method.to_string(), wrapper]);
+            .invoke_func("http_server", "HttpServer", "route", @[path, method.to_string(), body.to_string(), wrapper]);
     }
 }
 
@@ -56,6 +57,21 @@ impl Method {
         }
     }
 }
+
+enum Body {
+    Text,
+    Json,
+}
+
+impl Body {
+    fn to_string(self) -> string {
+        match self {
+            Body::Text => "text",
+            Body::Json => "json",
+        }
+    }
+}
+
 
 struct Request {
     #[proxy(plugin = "http::http_server")]

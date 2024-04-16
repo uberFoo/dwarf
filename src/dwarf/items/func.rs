@@ -141,14 +141,19 @@ pub fn inter_func(
             let types = inner.split(',').map(|s| s.trim()).collect::<Vec<&str>>();
 
             for ty in types {
-                if generics.get(ty).is_none() {
-                    return Err(vec![DwarfError::Generic {
-                        description: format!("Generic `{}` not found in generics hash", ty),
-                    }]);
-                } else {
+                if generics.get(ty).is_some() {
                     let g = FuncGeneric::new(ty.to_string(), None, None, lu_dog);
                     let _ty = ValueType::new_func_generic(true, &g, lu_dog);
                 }
+                // if generics.get(ty).is_none() {
+                //     dbg!(&type_str, &ty);
+                //     return Err(vec![DwarfError::Generic {
+                //         description: format!("Generic `{}` not found in generics hash", ty),
+                //     }]);
+                // } else {
+                //     let g = FuncGeneric::new(ty.to_string(), None, None, lu_dog);
+                //     let _ty = ValueType::new_func_generic(true, &g, lu_dog);
+                // }
             }
 
             context.location = location!();

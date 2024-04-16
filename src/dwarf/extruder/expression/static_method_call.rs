@@ -643,10 +643,9 @@ fn inter_field(
                         } else {
                             panic!("I don't think that we should ever see anything other than a user type here: {:?}", p);
                         }
-                    }).collect::<Vec<_>>().join("").as_str();
+                    }).collect::<Vec<_>>().join(PATH_SEP).as_str();
 
                     let base_name = base_path.clone() + base_name;
-
                     let (new_enum, _) =
                         create_generic_enum(&type_name, &base_name, &span, context, lu_dog)?;
 

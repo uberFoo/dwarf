@@ -281,7 +281,7 @@ impl<'a, 'b> Context<'a, 'b> {
     fn get_symbol(&self, name: &str) -> Option<&Symbol> {
         // This is a bit goofy, and I think I can work around it.
         // The goofy bit is that our symbol tables aren't bound to just lexical
-        // scope. They extend across function calls. This shouldn't be a problem
+        // scope: they extend across function calls. This shouldn't be a problem
         // in general because the extruder takes care of checking that functions
         // aren't referencing anything outside of their scope.
         //

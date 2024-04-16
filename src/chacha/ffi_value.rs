@@ -231,9 +231,13 @@ impl From<VmValue> for FfiValue {
                     }
                 };
 
-                let mut λ = λ.lock().unwrap();
-                let key = λ.len();
-                λ.insert(key, lambda.clone());
+                let lambda_clone = lambda.clone();
+                let key = {
+                    let mut λ = λ.lock().unwrap();
+                    let key = λ.len();
+                    λ.insert(key, lambda_clone);
+                    key
+                };
 
                 Self::Lambda(key)
             }

@@ -982,6 +982,41 @@ mod test {
     }
 
     // #[test]
+    fn test_nested_lambda() {
+        setup_logging();
+        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
+
+        let ore = "
+                   fn main() -> int {
+                       let a = 42;
+                       let b = 96;
+                       let foo = |x: int, y: int| -> int {
+                           let bar = |z: int| -> int {
+                               x + y + z + a
+                           };
+                           bar(1)
+                       };
+                       foo(1, 2)
+                   }";
+        let ast = parse_dwarf("test_lambda", ore).unwrap();
+        let ctx = new_lu_dog(
+            "test_lambda".to_owned(),
+            Some((ore.to_owned(), &ast)),
+            &get_dwarf_home(),
+            &sarzak,
+        )
+        .unwrap();
+        let program = compile(&ctx).unwrap();
+        println!("{program}");
+
+        assert_eq!(program.get_thonk_card(), 5);
+
+        assert_eq!(program.get_instruction_card(), 34);
+
+        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &46.into());
+    }
+
+    // #[test]
     fn test_call_chain() {
         setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();

@@ -266,21 +266,32 @@ mod http_server {
     use rustc_hash::FxHashMap as HashMap;
     use tokio::net::TcpListener;
 
-    struct MyStr<'a>(&'a str);
+    struct MethodStr<'a>(&'a str);
 
-    impl<'a> From<MyStr<'a>> for Method {
-        fn from(s: MyStr) -> Self {
+    impl<'a> From<MethodStr<'a>> for Method {
+        fn from(s: MethodStr) -> Self {
             match s {
-                MyStr("GET") => Method::GET,
-                MyStr("POST") => Method::POST,
-                MyStr("PUT") => Method::PUT,
-                MyStr("DELETE") => Method::DELETE,
-                MyStr("HEAD") => Method::HEAD,
-                MyStr("OPTIONS") => Method::OPTIONS,
-                MyStr("CONNECT") => Method::CONNECT,
-                MyStr("PATCH") => Method::PATCH,
-                MyStr("TRACE") => Method::TRACE,
+                MethodStr("GET") => Method::GET,
+                MethodStr("POST") => Method::POST,
+                MethodStr("PUT") => Method::PUT,
+                MethodStr("DELETE") => Method::DELETE,
+                MethodStr("HEAD") => Method::HEAD,
+                MethodStr("OPTIONS") => Method::OPTIONS,
+                MethodStr("CONNECT") => Method::CONNECT,
+                MethodStr("PATCH") => Method::PATCH,
+                MethodStr("TRACE") => Method::TRACE,
                 _ => Method::GET,
+            }
+        }
+    }
+
+    struct ResponseStr<'a>(&'a str);
+    impl<'a> From<ResponseStr<'a>> for ResponseType {
+        fn from(s: ResponseStr) -> Self {
+            match s {
+                ResponseStr("text") => ResponseType::Text,
+                ResponseStr("json") => ResponseType::Json,
+                _ => ResponseType::Text,
             }
         }
     }
@@ -314,12 +325,18 @@ mod http_server {
     }
 
     #[derive(Clone, Debug)]
+    enum ResponseType {
+        Json,
+        Text,
+    }
+
+    #[derive(Clone, Debug)]
     struct HttpServer {
         // This is how we call lambdas from the plugin.
         lambda_call: RSender<LambdaCall>,
         requests: Arc<Mutex<Slab<Arc<Request<IncomingBody>>>>>,
         uris: Arc<Mutex<RefCell<Slab<Arc<Uri>>>>>,
-        routes: Arc<Mutex<RefCell<HashMap<(String, Method), usize>>>>,
+        routes: Arc<Mutex<RefCell<HashMap<(String, Method), (usize, ResponseType)>>>>,
     }
 
     impl HttpServer {
@@ -412,9 +429,14 @@ mod http_server {
                             let FfiValue::String(method) = args.get(1).unwrap() else {
                                 panic!("Invalid method");
                             };
-                            let method = Method::from(MyStr(method.as_str()));
+                            let method = Method::from(MethodStr(method.as_str()));
 
-                            let FfiValue::Lambda(number) = args.get(2).unwrap() else {
+                            let FfiValue::String(body) = args.get(2).unwrap() else {
+                                panic!("Invalid body");
+                            };
+                            let body = ResponseType::from(ResponseStr(body.as_str()));
+
+                            let FfiValue::Lambda(number) = args.get(3).unwrap() else {
                                 panic!("Invalid lambda");
                             };
 
@@ -424,7 +446,7 @@ mod http_server {
                                 .lock()
                                 .unwrap()
                                 .borrow_mut()
-                                .insert((path.to_string(), method), *number);
+                                .insert((path.to_string(), method), (*number, body));
 
                             Ok(FfiValue::Empty)
                         }
@@ -482,56 +504,11 @@ mod http_server {
             module: RStr<'_>,
             ty: RStr<'_>,
             func: RStr<'_>,
-            args: RVec<FfiValue>,
+            _args: RVec<FfiValue>,
         ) -> RResult<FfiValue, Error> {
-            // let module_str = module.as_str();
-            // debug!("module: {module_str}, type: {ty}, func: {func}, args: {args:?}");
-            // Ok(FfiValue::Empty)
-            future::block_on(Compat::new(async {
-                match ty.as_str() {
-                    // "HttpServer" => match func.as_str() {
-                    //     "route" => {
-                    //         let FfiValue::String(path) = args.get(0).unwrap() else {
-                    //             panic!("Invalid path");
-                    //         };
-
-                    //         let FfiValue::String(method) = args.get(1).unwrap() else {
-                    //             panic!("Invalid method");
-                    //         };
-                    //         let method = Method::from(MyStr(method.as_str()));
-
-                    //         let FfiValue::Lambda(number) = args.get(2).unwrap() else {
-                    //             panic!("Invalid lambda");
-                    //         };
-
-                    //         println!("adding route {} {}", path, method);
-
-                    //         self.routes.insert((path.to_string(), method), *number);
-
-                    //         Ok(FfiValue::Empty)
-                    //     }
-                    //     func => Err(Error::Plugin(format!("Invalid function: {func}").into())),
-                    // },
-                    // "Request" => match func.as_str() {
-                    //     "uri" => {
-                    //         let key: DwarfInteger = args
-                    //             .first()
-                    //             .unwrap()
-                    //             .try_into()
-                    //             .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
-                    //             .unwrap();
-
-                    //         let request = self.requests.get(key as usize).unwrap();
-                    //         let uri = request.uri();
-                    //         let key = self.uris.insert(Arc::new(uri.clone()));
-                    //         Ok(FfiValue::Integer(key as DwarfInteger))
-                    //     }
-                    //     func => Err(Error::Plugin(format!("Invalid function: {func}").into())),
-                    // },
-                    ty => Err(Error::Plugin(format!("Invalid type: {ty}").into())),
-                }
-                .into()
-            }))
+            RErr(Error::Plugin(
+                format!("Invalid function: {module}::{ty}::{func}").into(),
+            ))
         }
     }
 
@@ -548,6 +525,13 @@ mod http_server {
         fn call(&self, req: Request<IncomingBody>) -> Self::Future {
             fn mk_response(s: String) -> Result<Response<Full<Bytes>>, hyper::Error> {
                 Ok(Response::builder().body(Full::new(Bytes::from(s))).unwrap())
+            }
+
+            fn mk_json_response(s: String) -> Result<Response<Full<Bytes>>, hyper::Error> {
+                Ok(Response::builder()
+                    .header("Content-Type", "application/json")
+                    .body(Full::new(Bytes::from(s)))
+                    .unwrap())
             }
 
             fn mk_not_found(s: String) -> Result<Response<Full<Bytes>>, hyper::Error> {
@@ -572,7 +556,7 @@ mod http_server {
             let guard = server.routes.lock().unwrap();
 
             let lambda_option = guard.borrow().get(&(path.clone(), method.clone())).cloned();
-            if let Some(lambda) = lambda_option {
+            if let Some((lambda, body_type)) = lambda_option {
                 let (s, result) = crossbeam::channel::bounded(1);
 
                 let lambda_call = LambdaCall {
@@ -584,6 +568,7 @@ mod http_server {
                 let result = result.recv().unwrap();
 
                 let ROk(FfiValue::String(result)) = result else {
+                    eprintln!("Error: {result:?}");
                     return Box::pin(async {
                         mk_response("<p>oh no! something went terribly wrong. 🤯</p>".into())
                     });
@@ -592,7 +577,12 @@ mod http_server {
                 let mut requests = server.requests.lock().unwrap();
                 requests.remove(key);
 
-                Box::pin(async move { mk_response(result.to_string()) })
+                match body_type {
+                    ResponseType::Text => Box::pin(async move { mk_response(result.to_string()) }),
+                    ResponseType::Json => {
+                        Box::pin(async move { mk_json_response(result.to_string()) })
+                    }
+                }
             } else if method == Method::GET {
                 // We are going to tack a dot on the front of the path to sandbox it
                 // to the CWD.

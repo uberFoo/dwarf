@@ -38,7 +38,7 @@ pub enum BubbaError {
     Negation { value: Value },
     #[snafu(display("\n{}: no such field: {} in {}", ERR_CLR.bold().paint("error"), field, ty))]
     NoSuchField { field: String, ty: String },
-    #[snafu(display("\n{}: not indexable.", ERR_CLR.bold().paint("error")))]
+    #[snafu(display("\n{}: {value} not indexable.\n --> {}::{}::{}", ERR_CLR.bold().paint("error"), location.file, location.line, location.column))]
     NotIndexable {
         span: Span,
         value: Value,

@@ -2597,11 +2597,16 @@ pub(super) fn inter_expression(
             // of makes sense that the type is `()`.
             //
             // My sieve isn't sufficient. I'm right, there should be one per `let`.
-            // WHats going on here is that we have been returned values that aren't
+            // Whats going on here is that we have been returned values that aren't
             // necessarily storage locations. So up above we need to filter values
             // that are only local variables.
             //
             // So, yeah, we always want to grab the last one.
+            //
+            // Not so fast. It seems that the last one is the outer-most scoped variable.
+            // This is a problem if there is a variable with the same name in an inner
+            // scope. So we need to find the inner-most scoped variable.
+            //
             // debug_assert!(expr_type_tuples.len() <= 1);
 
             debug!("expr_type_tuples {:?}", expr_type_tuples);
@@ -2609,7 +2614,7 @@ pub(super) fn inter_expression(
             // Why are we taking the last one? -- Oh, read above.
             if let Some(expr_ty_tuple) = expr_type_tuples.pop() {
                 debug!("returning {:?}", expr_ty_tuple);
-                Ok(expr_ty_tuple)
+                Ok(expr_ty_tuple.clone())
             } else if let Some(ref id) = lu_dog.exhume_function_id_by_name(name) {
                 // We get here because there was no local variable info, so we are
                 // going to check if it's a function.
@@ -3815,7 +3820,7 @@ pub(crate) fn make_value_type(
             if name == "Future" {
                 // It seems to me that this will always have a generic, no?
                 let inner_type = if let Type::Generic((name, span)) = &generics[0].0 {
-                    // Make a fully qualified path -- either from kts
+                    // Make a fully qualified path.
                     let name = if let Some(path) = context.scopes.get(name) {
                         path.to_owned() + name.as_str()
                     } else {

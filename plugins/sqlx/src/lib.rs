@@ -139,8 +139,6 @@ mod postgres {
                                 .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
                                 .unwrap();
 
-                            dbg!(&query, &pool, &bindings);
-
                             let guard = self.pools.lock().unwrap();
                             let pool = guard.get(pool as usize).unwrap();
 
@@ -160,8 +158,6 @@ mod postgres {
                             }
                             let result = result.execute(pool).await;
 
-                            dbg!(&result);
-
                             let result = match result {
                                 Ok(result) => ROk(RBox::new(result.rows_affected().into())),
                                 Err(e) => {
@@ -173,14 +169,12 @@ mod postgres {
                                 }
                             };
 
-                            dbg!(&result);
-
                             Ok(FfiValue::Result(result))
                         }
                         func => Err(Error::Plugin(format!("Invalid function: {func}").into())),
                     },
                     "Query" => match func.as_str() {
-                        "query" => {
+                        "query_all" => {
                             let query: String = args
                                 .first()
                                 .unwrap()
@@ -240,6 +234,70 @@ mod postgres {
 
                             Ok(FfiValue::Result(result))
                         }
+                        "query_one" => {
+                            let query: String = args
+                                .first()
+                                .unwrap()
+                                .try_into()
+                                .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
+                                .unwrap();
+
+                            let pool: DwarfInteger = args
+                                .get(1)
+                                .unwrap()
+                                .try_into()
+                                .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
+                                .unwrap();
+
+                            let FfiValue::Lambda(lambda) = args.get(2).unwrap() else {
+                                panic!("Invalid lambda");
+                            };
+
+                            dbg!(&query, &pool, &lambda);
+
+                            let guard = self.pools.lock().unwrap();
+                            let pool = guard.get(pool as usize).unwrap();
+
+                            let result = sqlx::query(&query)
+                                .map(|row: sqlx::postgres::PgRow| {
+                                    let (s, result) = crossbeam::channel::bounded(1);
+
+                                    let key = {
+                                        let mut guard = self.rows.lock().unwrap();
+                                        guard.insert(Arc::new(row))
+                                    };
+
+                                    let lambda_call = LambdaCall {
+                                        lambda: *lambda,
+                                        args: vec![FfiValue::Integer(key as DwarfInteger)].into(),
+                                        result: s.into(),
+                                    };
+                                    self.lambda_call.send(lambda_call).unwrap();
+                                    let result = result.recv().unwrap();
+
+                                    let mut guard = self.rows.lock().unwrap();
+                                    guard.remove(key);
+
+                                    result.unwrap()
+                                })
+                                .fetch_one(pool)
+                                .await;
+
+                            dbg!(&result);
+
+                            let result = match result {
+                                Ok(result) => ROk(RBox::new(result.into())),
+                                Err(e) => {
+                                    let mut guard = self.errors.lock().unwrap();
+                                    let entry = guard.vacant_entry();
+                                    let key = entry.key();
+                                    guard.insert(Arc::new(e));
+                                    RErr(RBox::new(FfiValue::Integer(key as DwarfInteger)))
+                                }
+                            };
+
+                            Ok(FfiValue::Result(result))
+                        }
                         func => Err(Error::Plugin(format!("Invalid function: {func}").into())),
                     },
                     "Row" => match func.as_str() {
@@ -269,13 +327,21 @@ mod postgres {
                             let row = guard.get(row as usize).unwrap();
 
                             let result = match ty.as_str() {
+                                "::sqlx::type::Integer" => {
+                                    let result: i64 = row.get(index.as_str());
+                                    FfiValue::Integer(result as DwarfInteger)
+                                }
+                                "::sqlx::type::Short" => {
+                                    let result: i32 = row.get(index.as_str());
+                                    FfiValue::Integer(result as DwarfInteger)
+                                }
                                 "::sqlx::type::String" => {
                                     let result: String = row.get(index.as_str());
                                     FfiValue::String(result.into())
                                 }
-                                "::sqlx::type::Integer" => {
-                                    let result: i64 = row.get(index.as_str());
-                                    FfiValue::Integer(result as DwarfInteger)
+                                "::sqlx::type::Timestamp" => {
+                                    let result: chrono::NaiveDateTime = row.get(index.as_str());
+                                    FfiValue::String(result.to_string().into())
                                 }
                                 ty => {
                                     panic!("Invalid type: {ty}");

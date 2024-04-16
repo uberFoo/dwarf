@@ -33,7 +33,9 @@ impl Sqlx {
 
 enum Type {
     Integer,
+    Short,
     String,
+    Timestamp,
 }
 
 struct Row {
@@ -124,14 +126,25 @@ struct Query<F> {
 }
 
 impl Query<F> {
-    fn fetch_all(self) -> Result<[Row], Error> {
+    fn fetch_all<T>(self) -> Result<[Row], Error> {
         let rows = self
             .plugin
-            .invoke_func("sqlx", "Query", "query", @[self.query, self.pool, self.func]);
+            .invoke_func("sqlx", "Query", "query_all", @[self.query, self.pool, self.func]);
 
         match rows {
             Result::Ok(rows) => Result::<[Row], Error>::Ok(rows),
             Result::Err(e) => Result::<[Row], Error>::Err(e),
+        }
+    }
+
+    fn fetch_one<T>(self) -> Result<Row, Error> {
+        let rows = self
+            .plugin
+            .invoke_func("sqlx", "Query", "query_one", @[self.query, self.pool, self.func]);
+
+        match rows {
+            Result::Ok(rows) => Result::<Row, Error>::Ok(rows),
+            Result::Err(e) => Result::<Row, Error>::Err(e),
         }
     }
 }

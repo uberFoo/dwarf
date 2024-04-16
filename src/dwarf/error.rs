@@ -429,7 +429,7 @@ impl fmt::Display for DwarfErrorReporter<'_> {
 
                 let report = if is_uber {
                     report.with_note(format!(
-                        "{}:{}:{}",
+                        "{}:{}:{}\nFound {ty}",
                         OTHER_CLR.paint(location.file.to_string()),
                         POP_CLR.paint(format!("{}", location.line)),
                         OK_CLR.paint(format!("{}", location.column)),

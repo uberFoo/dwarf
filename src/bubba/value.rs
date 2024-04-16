@@ -19,10 +19,11 @@ use crate::{
     },
     chacha::value::{Enum, Struct},
     lu_dog::{ValueType, ValueTypeEnum},
+    new_ref,
     plug_in::PluginType,
     s_read,
     sarzak::Ty,
-    DwarfFloat, DwarfInteger, RefType, VmValueResult,
+    DwarfFloat, DwarfInteger, NewRef, RefType, VmValueResult,
 };
 
 #[derive(Default, Deserialize, Serialize)]
@@ -564,6 +565,28 @@ impl From<Value> for Option<Uuid> {
 impl From<Range<usize>> for Value {
     fn from(value: Range<usize>) -> Self {
         Self::Range(value.start as DwarfInteger..value.end as DwarfInteger)
+    }
+}
+
+impl From<Vec<RefType<Value>>> for Value {
+    fn from(value: Vec<RefType<Value>>) -> Self {
+        Self::AnyList(new_ref!(Vec<RefType<Value>>, value))
+    }
+}
+
+impl TryFrom<&Value> for Vec<RefType<Value>> {
+    type Error = Error;
+
+    fn try_from(value: &Value) -> Result<Self, <Vec<RefType<Value>> as TryFrom<&Value>>::Error> {
+        match value {
+            Value::List { ty: _, inner } => Ok(s_read!(inner).clone()),
+            _ => Err(BubbaError::Conversion {
+                src: value.to_string(),
+                dst: "Vec<RefType<Value>>".to_owned(),
+                backtrace: Backtrace::capture(),
+            }
+            .into()),
+        }
     }
 }
 
