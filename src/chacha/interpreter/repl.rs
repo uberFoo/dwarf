@@ -151,6 +151,7 @@ pub fn start_repl(
                                     in_impl: "".to_owned(),
                                     scopes: &mut scopes,
                                     imports: &mut imports,
+                                    generics: Vec::new(),
                                 },
                                 &mut Vec::new(),
                                 &mut lu_dog,

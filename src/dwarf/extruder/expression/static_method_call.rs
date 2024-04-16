@@ -44,7 +44,7 @@ pub fn inter(
     params: &[(ParserExpression, Range<usize>)],
     block: &RefType<Block>,
     context: &mut Context,
-    context_stack: &mut Vec<(String, RefType<LuDogStore>)>,
+    import_stack: &mut Vec<String>,
     lu_dog: &mut LuDogStore,
 ) -> Result<(ExprSpan, RefType<ValueType>)> {
     let ParserExpression::PathInExpression(path) = path else {
@@ -168,7 +168,7 @@ pub fn inter(
                 &param.1,
                 block,
                 context,
-                context_stack,
+                import_stack,
                 lu_dog,
             )?;
             arg_types.push(ty);
@@ -308,7 +308,7 @@ pub fn inter(
                 &param.1,
                 block,
                 context,
-                context_stack,
+                import_stack,
                 lu_dog,
             )?;
             arg_types.push(ty);
@@ -368,7 +368,9 @@ pub fn inter(
         let woog_enum = if let Some(woog_enum) = lu_dog.exhume_enumeration_id_by_name(&type_name) {
             lu_dog.exhume_enumeration(&woog_enum).unwrap()
         } else if lu_dog.exhume_enumeration_id_by_name(no_generics).is_some() {
-            create_generic_enum(&type_name, no_generics, lu_dog)?.0
+            let span = s_read!(span);
+            let span = span.start as usize..span.end as usize;
+            create_generic_enum(&type_name, no_generics, &span, context, lu_dog)?.0
         } else {
             let span = s_read!(span).start as usize..s_read!(span).end as usize;
             return Err(vec![DwarfError::ObjectNameNotFound {
@@ -395,7 +397,7 @@ pub fn inter(
                 &span,
                 &x_path,
                 context,
-                context_stack,
+                import_stack,
                 lu_dog,
             )
         } else {
@@ -423,7 +425,7 @@ pub fn inter(
                         &param.1,
                         block,
                         context,
-                        context_stack,
+                        import_stack,
                         lu_dog,
                     )?;
                     arg_types.push(ty);
@@ -486,7 +488,7 @@ fn inter_field(
     span: &RefType<Span>,
     x_path: &RefType<XPath>,
     context: &mut Context,
-    context_stack: &mut Vec<(String, RefType<LuDogStore>)>,
+    import_stack: &mut Vec<String>,
     lu_dog: &mut LuDogStore,
 ) -> Result<(ExprSpan, RefType<ValueType>)> {
     let subtype = &s_read!(field).subtype.clone();
@@ -550,7 +552,7 @@ fn inter_field(
                                 span,
                                 None,
                                 context,
-                                context_stack,
+                                import_stack,
                                 lu_dog,
                             )?;
                             LuDogSpan::new(
@@ -600,7 +602,7 @@ fn inter_field(
                 &param.1,
                 block,
                 context,
-                context_stack,
+                import_stack,
                 lu_dog,
             )?;
 
@@ -641,11 +643,11 @@ fn inter_field(
                         } else {
                             panic!("I don't think that we should ever see anything other than a user type here: {:?}", p);
                         }
-                    }).collect::<Vec<_>>().join("").as_str();
+                    }).collect::<Vec<_>>().join(PATH_SEP).as_str();
 
                     let base_name = base_path.clone() + base_name;
-
-                    let (new_enum, _) = create_generic_enum(&type_name, &base_name, lu_dog)?;
+                    let (new_enum, _) =
+                        create_generic_enum(&type_name, &base_name, &span, context, lu_dog)?;
 
                     (new_enum, expr)
                 }

@@ -353,7 +353,7 @@ impl Type {
                     );
                     Ok(ty)
                 } else if store.exhume_enumeration_id_by_name(&base_type).is_some() {
-                    Ok(create_generic_enum(&name, &base_type, store)?.1)
+                    Ok(create_generic_enum(&name, &base_type, &span, context, store)?.1)
                 } else {
                     Err(vec![DwarfError::UnknownType {
                         ty: name.to_owned(),

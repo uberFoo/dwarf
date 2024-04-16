@@ -144,9 +144,8 @@ mod test {
         },
         chacha::value::Struct,
         dwarf::{new_lu_dog, parse_dwarf},
-        new_ref, s_write,
+        s_write,
         sarzak::MODEL as SARZAK_MODEL,
-        NewRef,
     };
 
     #[test]

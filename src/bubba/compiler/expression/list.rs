@@ -90,16 +90,3 @@ pub(in crate::bubba::compiler) fn compile_list_expression(
 
     Ok(None)
 }
-
-#[cfg(test)]
-mod test {
-
-    use crate::{
-        bubba::compiler::{
-            test::{get_dwarf_home, run_vm},
-            *,
-        },
-        dwarf::{new_lu_dog, parse_dwarf},
-        sarzak::MODEL as SARZAK_MODEL,
-    };
-}

@@ -69,7 +69,8 @@ where
             (Self::Unit(_a, b, e), Self::Unit(_c, d, f)) => b == d && e == f,
             (Self::Struct(a), Self::Struct(b)) => *s_read!(a) == *s_read!(b),
             (Self::Tuple((a, _), c), Self::Tuple((b, _), d)) => {
-                *s_read!(a) == *s_read!(b) && *s_read!(c) == *s_read!(d)
+                let result = *s_read!(a) == *s_read!(b) && *s_read!(c) == *s_read!(d);
+                result
             }
             _ => false,
         }

@@ -15,6 +15,7 @@ use futures_lite::future;
 
 use clap::{ArgAction, Args, Parser};
 use dap::{prelude::BasicClient, server::Server};
+use dotenvy::dotenv;
 
 // #[cfg(feature = "async")]
 // use smol::future;
@@ -205,6 +206,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Client::start();
 
     let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
+
+    dotenv().ok();
 
     let args = Arguments::parse();
     let bless = args.bless.is_some() && args.bless.unwrap();
@@ -634,7 +637,7 @@ fn compile_program(
     match compile(&ctx) {
         Ok(program) => {
             // Write the compiled program to disk.
-            let mut bin_file = fs::File::create(path)?;
+            let bin_file = fs::File::create(path)?;
             let mut writer = io::BufWriter::new(bin_file);
 
             // let _ = bincode::serialize_into(writer, &program);

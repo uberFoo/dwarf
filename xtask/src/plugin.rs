@@ -10,7 +10,7 @@ use crate::flags;
 
 const EXT_DIR: &str = "extensions";
 const LIB_DIR: &str = "lib";
-const PLUGIN_DIR: &str = "plug-ins";
+const PLUGIN_DIR: &str = "plugins";
 const MODEL_DIR: &str = "models";
 const SRC_DIR: &str = "src";
 const TAO_DIR: &str = "ore";

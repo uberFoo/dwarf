@@ -5,7 +5,6 @@ use smol::future;
 
 use ansi_term::Colour;
 use circular_queue::CircularQueue;
-use crossbeam::channel::unbounded;
 use lazy_static::lazy_static;
 use log::{self, log_enabled, Level::Debug};
 use parking_lot::{Condvar, Mutex};

@@ -339,8 +339,8 @@ mod test {
         let ore = "
                    fn main() -> string {
                        match \"foo\" {
-                           \"foo\" => \"foo\",
                            \"bar\" => \"bar\",
+                           \"foo\" => \"foo\",
                            \"baz\" => \"baz\",
                            _ => \"qux\",
                        }
@@ -379,9 +379,9 @@ mod test {
                    }
                    fn main() -> Foo {
                        match Foo::Bar {
-                           Foo::Bar => Foo::Bar,
                            Foo::Baz => Foo::Baz,
                            Foo::Qux => Foo::Qux,
+                           Foo::Bar => Foo::Bar,
                        }
                    }";
         let ast = parse_dwarf("match_expression", ore).unwrap();

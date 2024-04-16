@@ -25,7 +25,7 @@ use crate::{
     plug_in::PluginType,
     s_read,
     sarzak::{ObjectStore as SarzakStore, Ty},
-    ChaChaError, Context, DwarfFloat, DwarfInteger, NewRef, RefType, PATH_SEP,
+    ChaChaError, Context, DwarfFloat, DwarfInteger, NewRef, RefType,
 };
 
 pub mod _enum;

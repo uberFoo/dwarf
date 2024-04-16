@@ -42,6 +42,8 @@ pub fn inter_struct(
     lu_dog: &mut LuDogStore,
 ) -> Result<()> {
     if let Some(path) = context.scopes.insert(name.to_owned(), context.path.clone()) {
+        dbg!(&path, &context.path);
+
         if path == context.path {
             return Ok(());
         }
@@ -257,7 +259,7 @@ pub fn inter_struct_fields(
     generics: Option<&HashMap<String, Type>>,
     location: Location,
     context: &mut Context,
-    context_stack: &mut Vec<(String, RefType<LuDogStore>)>,
+    import_stack: &mut Vec<String>,
     lu_dog: &mut LuDogStore,
 ) -> Result<()> {
     let mut errors = Vec::new();
@@ -345,7 +347,7 @@ pub fn inter_struct_fields(
                 proxy_thang(proxy_vec)?
             } else {
                 context.location = location;
-                match make_value_type(type_, span, None, context, context_stack, lu_dog) {
+                match make_value_type(type_, span, None, context, import_stack, lu_dog) {
                     Ok(ty) => ty,
                     Err(mut err) => {
                         errors.append(&mut err);
@@ -357,7 +359,7 @@ pub fn inter_struct_fields(
             proxy_thang(proxy_vec)?
         } else {
             context.location = location;
-            match make_value_type(type_, span, None, context, context_stack, lu_dog) {
+            match make_value_type(type_, span, None, context, import_stack, lu_dog) {
                 Ok(ty) => ty,
                 Err(mut err) => {
                     errors.append(&mut err);

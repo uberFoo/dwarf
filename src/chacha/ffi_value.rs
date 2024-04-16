@@ -1,7 +1,10 @@
-use std::sync::{Arc, Mutex};
+use std::{
+    fmt,
+    sync::{Arc, Mutex},
+};
 
 use abi_stable::{
-    std_types::{RBox, ROption, RResult, RString, RVec},
+    std_types::{RBox, RHashMap, ROption, RResult, RString, RVec, Tuple2},
     StableAbi,
 };
 use ansi_term::Colour;
@@ -12,12 +15,13 @@ use crate::{
     bubba::value::Value as VmValue,
     chacha::{
         error::{ChaChaError, Result},
-        value::{Enum, TupleEnum},
+        value::_struct::StructAttributes,
+        value::{Enum, Struct, TupleEnum},
     },
-    lu_dog::{ObjectStore as LuDogStore, ValueTypeEnum},
+    lu_dog::{ObjectStore as LuDogStore, ValueType, ValueTypeEnum},
     new_ref,
     plug_in::PluginType,
-    s_read, DwarfFloat, DwarfInteger, NewRef, RefType, Value, LAMBDA_FUNCS,
+    s_read, DwarfFloat, DwarfInteger, NewRef, RefType, Value, LAMBDA_FUNCS, PATH_SEP,
 };
 
 #[repr(C)]
@@ -49,10 +53,11 @@ impl std::fmt::Display for FfiProxy {
 /// the VM as well.
 ///
 #[repr(C)]
-#[derive(Clone, Debug, StableAbi)]
+#[derive(Clone, Debug, Default, StableAbi)]
 pub enum FfiValue {
     Boolean(bool),
     // Callback(Callback<F>),
+    #[default]
     Empty,
     Error(RString),
     Float(DwarfFloat),
@@ -65,11 +70,14 @@ pub enum FfiValue {
     Range(FfiRange),
     Result(RResult<RBox<Self>, RBox<Self>>),
     String(RString),
+    Struct(FfiStruct),
     // Table(RHashMap<RString, RefType<Self>>),
     Unknown,
     // UserType(FfiUuid),
     Uuid(FfiUuid),
 }
+
+impl Unpin for FfiValue {}
 
 impl std::fmt::Display for FfiValue {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -107,6 +115,7 @@ impl std::fmt::Display for FfiValue {
                 RResult::ROk(ok) => write!(f, "Ok({ok})"),
             },
             Self::String(str_) => write!(f, "{str_}"),
+            Self::Struct(s) => write!(f, "{s}"),
             Self::Unknown => write!(f, "<unknown>"),
             // Self::UserType(uuid) => write!(f, "{uuid}"),
             Self::Uuid(uuid) => write!(f, "{uuid}"),
@@ -205,9 +214,9 @@ impl From<VmValue> for FfiValue {
                         panic!()
                     }
                 }
-                Enum::Unit(ty, ty_name, v) => {
-                    dbg!(ty, ty_name, v);
-                    panic!()
+                Enum::Unit(_ty, ty_name, v) => {
+                    let ty_name = ty_name.to_lowercase();
+                    Self::String(format!("{ty_name}::{v}").into())
                 }
             },
             VmValue::Empty => Self::Empty,
@@ -222,32 +231,28 @@ impl From<VmValue> for FfiValue {
                     }
                 };
 
-                let mut λ = λ.lock().unwrap();
-                let key = λ.len();
-                λ.insert(key, lambda.clone());
+                let lambda_clone = lambda.clone();
+                let key = {
+                    let mut λ = λ.lock().unwrap();
+                    let key = λ.len();
+                    λ.insert(key, lambda_clone);
+                    key
+                };
 
                 Self::Lambda(key)
             }
+            VmValue::List { ty: _, inner } => {
+                let inner = s_read!(inner);
+                let inner = inner.iter().map(|v| s_read!(v).clone().into()).collect();
+                Self::List(inner)
+            }
             VmValue::Integer(num) => Self::Integer(num.to_owned()),
-            // VmValue::ProxyType {
-            //     module,
-            //     obj_ty,
-            //     id,
-            //     plugin,
-            // } => Self::ProxyType(FfiProxy {
-            //     module: module.to_owned().into(),
-            //     ty: obj_ty.to_owned().into(),
-            //     id: id.to_owned().into(),
-            //     plugin: s_read!(plugin).clone(),
-            // }),
             VmValue::Range(range) => Self::Range(FfiRange {
                 start: range.start,
                 end: range.end,
             }),
             VmValue::String(str_) => Self::String(str_.to_owned().into()),
-            // Value::Vector(vec) => {
-            //     Self::Vector(vec.iter().map(|v| s_read!(v).clone().into()).collect())
-            // }
+            VmValue::Struct(s) => Self::Struct(s.into()),
             x => panic!("Unknown FfiValue: {x}"),
         }
     }
@@ -268,6 +273,7 @@ impl From<FfiValue> for VmValue {
             // },
             FfiValue::Range(range) => Self::Range(range.start..range.end),
             FfiValue::String(str_) => Self::String(str_.into()),
+            FfiValue::Struct(s) => Self::Struct(s.into()),
             // FfiValue::Vector(vec) => {
             //     Self::Vector(vec.into_iter().map(|v| new_ref!(Value, v.into())).collect())
             // }
@@ -355,6 +361,48 @@ impl From<(FfiValue, &LuDogStore)> for Value {
     }
 }
 
+impl<T: TryFrom<FfiValue, Error = core::convert::Infallible>> TryFrom<FfiValue> for Vec<T> {
+    type Error = ChaChaError;
+
+    fn try_from(value: FfiValue) -> Result<Self, Self::Error> {
+        match value.clone() {
+            FfiValue::List(vec) => {
+                let result: Result<Vec<_>, _> = vec.into_iter().map(|v| v.try_into()).collect();
+                result.map_err(|_| ChaChaError::Conversion {
+                    src: value.to_string(),
+                    dst: "Vec<T>".to_owned(),
+                })
+            }
+            _ => Err(ChaChaError::Conversion {
+                src: value.to_string(),
+                dst: "Vec<T>".to_owned(),
+            }),
+        }
+    }
+}
+
+impl<T: Into<FfiValue>> From<Vec<T>> for FfiValue {
+    fn from(value: Vec<T>) -> Self {
+        let vec = value
+            .into_iter()
+            .map(|v| v.into())
+            .collect::<RVec<FfiValue>>();
+        FfiValue::List(vec)
+    }
+}
+
+impl From<()> for FfiValue {
+    fn from(_: ()) -> Self {
+        FfiValue::Empty
+    }
+}
+
+impl From<u64> for FfiValue {
+    fn from(value: u64) -> Self {
+        FfiValue::Integer(value as DwarfInteger)
+    }
+}
+
 impl TryFrom<FfiValue> for String {
     type Error = ChaChaError;
 
@@ -438,6 +486,268 @@ impl TryFrom<&FfiValue> for i64 {
 //         (self.callback)(i)
 //     }
 // }
+
+#[repr(C)]
+#[derive(Clone, Debug, StableAbi)]
+pub struct FfiStruct {
+    type_name: RString,
+    type_: FfiValueType,
+    attrs: FfiStructAttributes,
+}
+
+impl fmt::Display for FfiStruct {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let mut attrs = self.attrs.0.iter().collect::<Vec<_>>();
+        attrs.sort_by(|Tuple2(k1, _), Tuple2(k2, _)| k1.cmp(k2));
+
+        let name = if let Some(name) = self.type_name.strip_prefix(PATH_SEP) {
+            name
+        } else {
+            &self.type_name
+        };
+
+        let mut out = f.debug_struct(name);
+        for Tuple2(k, v) in attrs {
+            out.field(k, &format_args!("{v}"));
+        }
+
+        out.finish()
+    }
+}
+
+impl<T> From<&Struct<T>> for FfiStruct
+where
+    T: Clone
+        + std::fmt::Debug
+        + PartialEq
+        + std::fmt::Display
+        + std::default::Default
+        + Into<FfiValue>,
+{
+    fn from(value: &Struct<T>) -> Self {
+        let ty = value.get_type();
+        let ty = &*s_read!(ty);
+        Self {
+            type_name: value.type_name().into(),
+            type_: ty.into(),
+            attrs: value.attrs().clone().into(),
+        }
+    }
+}
+
+impl From<FfiStruct> for Struct<VmValue> {
+    fn from(value: FfiStruct) -> Self {
+        let attrs = value.attrs.clone();
+        let attrs = attrs
+            .0
+            .into_iter()
+            .map(|Tuple2(k, v)| (k.into(), v.into()))
+            .collect();
+
+        Struct {
+            type_name: value.type_name.into(),
+            type_: value.type_.into(),
+            attrs: StructAttributes(attrs),
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Debug, StableAbi)]
+pub struct FfiStructAttributes(RHashMap<RString, FfiValue>);
+
+impl<T> From<StructAttributes<T>> for FfiStructAttributes
+where
+    T: Clone
+        + std::fmt::Debug
+        + PartialEq
+        + std::fmt::Display
+        + std::default::Default
+        + Into<FfiValue>,
+{
+    fn from(value: StructAttributes<T>) -> Self {
+        let attrs = value
+            .inner()
+            .into_iter()
+            .map(|(k, v)| (k.clone().into(), (*v).clone().into()))
+            .collect();
+        Self(attrs)
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Debug, StableAbi)]
+pub struct FfiValueType {
+    pub subtype: FfiValueTypeEnum,
+    pub bogus: bool,
+    pub id: usize,
+}
+
+impl From<&ValueType> for FfiValueType {
+    fn from(value: &ValueType) -> Self {
+        Self {
+            subtype: value.subtype.clone().into(),
+            bogus: value.bogus,
+            id: value.id,
+        }
+    }
+}
+
+impl From<FfiValueType> for ValueType {
+    fn from(value: FfiValueType) -> Self {
+        Self {
+            subtype: value.subtype.into(),
+            bogus: value.bogus,
+            id: value.id,
+        }
+    }
+}
+
+impl From<FfiValueType> for RefType<ValueType> {
+    fn from(value: FfiValueType) -> Self {
+        new_ref!(ValueType, value.into())
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Debug, StableAbi)]
+pub enum FfiValueTypeEnum {
+    AnyList(FfiUuid),
+    Char(FfiUuid),
+    Empty(FfiUuid),
+    EnumGeneric(usize),
+    Enumeration(usize),
+    FuncGeneric(usize),
+    Function(usize),
+    XFuture(usize),
+    Import(usize),
+    Lambda(usize),
+    List(usize),
+    ZObjectStore(usize),
+    XPlugin(usize),
+    Range(FfiUuid),
+    WoogStruct(usize),
+    StructGeneric(usize),
+    Task(FfiUuid),
+    Ty(FfiUuid),
+    Unknown(FfiUuid),
+}
+
+impl From<ValueTypeEnum> for FfiValueTypeEnum {
+    fn from(value: ValueTypeEnum) -> Self {
+        match value {
+            ValueTypeEnum::AnyList(uuid) => Self::AnyList(uuid.into()),
+            ValueTypeEnum::Char(uuid) => Self::Char(uuid.into()),
+            ValueTypeEnum::Empty(uuid) => Self::Empty(uuid.into()),
+            ValueTypeEnum::EnumGeneric(id) => Self::EnumGeneric(id),
+            ValueTypeEnum::Enumeration(id) => Self::Enumeration(id),
+            ValueTypeEnum::FuncGeneric(id) => Self::FuncGeneric(id),
+            ValueTypeEnum::Function(id) => Self::Function(id),
+            ValueTypeEnum::XFuture(id) => Self::XFuture(id),
+            ValueTypeEnum::Import(id) => Self::Import(id),
+            ValueTypeEnum::Lambda(id) => Self::Lambda(id),
+            ValueTypeEnum::List(id) => Self::List(id),
+            ValueTypeEnum::ZObjectStore(id) => Self::ZObjectStore(id),
+            ValueTypeEnum::XPlugin(id) => Self::XPlugin(id),
+            ValueTypeEnum::Range(uuid) => Self::Range(uuid.into()),
+            ValueTypeEnum::WoogStruct(id) => Self::WoogStruct(id),
+            ValueTypeEnum::StructGeneric(id) => Self::StructGeneric(id),
+            ValueTypeEnum::Task(uuid) => Self::Task(uuid.into()),
+            ValueTypeEnum::Ty(uuid) => Self::Ty(uuid.into()),
+            ValueTypeEnum::Unknown(uuid) => Self::Unknown(uuid.into()),
+        }
+    }
+}
+
+impl From<FfiValueTypeEnum> for ValueTypeEnum {
+    fn from(value: FfiValueTypeEnum) -> Self {
+        match value {
+            FfiValueTypeEnum::AnyList(uuid) => ValueTypeEnum::AnyList(uuid.into()),
+            FfiValueTypeEnum::Char(uuid) => ValueTypeEnum::Char(uuid.into()),
+            FfiValueTypeEnum::Empty(uuid) => ValueTypeEnum::Empty(uuid.into()),
+            FfiValueTypeEnum::EnumGeneric(id) => ValueTypeEnum::EnumGeneric(id),
+            FfiValueTypeEnum::Enumeration(id) => ValueTypeEnum::Enumeration(id),
+            FfiValueTypeEnum::FuncGeneric(id) => ValueTypeEnum::FuncGeneric(id),
+            FfiValueTypeEnum::Function(id) => ValueTypeEnum::Function(id),
+            FfiValueTypeEnum::XFuture(id) => ValueTypeEnum::XFuture(id),
+            FfiValueTypeEnum::Import(id) => ValueTypeEnum::Import(id),
+            FfiValueTypeEnum::Lambda(id) => ValueTypeEnum::Lambda(id),
+            FfiValueTypeEnum::List(id) => ValueTypeEnum::List(id),
+            FfiValueTypeEnum::ZObjectStore(id) => ValueTypeEnum::ZObjectStore(id),
+            FfiValueTypeEnum::XPlugin(id) => ValueTypeEnum::XPlugin(id),
+            FfiValueTypeEnum::Range(uuid) => ValueTypeEnum::Range(uuid.into()),
+            FfiValueTypeEnum::WoogStruct(id) => ValueTypeEnum::WoogStruct(id),
+            FfiValueTypeEnum::StructGeneric(id) => ValueTypeEnum::StructGeneric(id),
+            FfiValueTypeEnum::Task(uuid) => ValueTypeEnum::Task(uuid.into()),
+            FfiValueTypeEnum::Ty(uuid) => ValueTypeEnum::Ty(uuid.into()),
+            FfiValueTypeEnum::Unknown(uuid) => ValueTypeEnum::Unknown(uuid.into()),
+        }
+    }
+}
+
+impl From<FfiValueTypeEnum> for RefType<ValueTypeEnum> {
+    fn from(value: FfiValueTypeEnum) -> Self {
+        match value {
+            FfiValueTypeEnum::AnyList(uuid) => {
+                new_ref!(ValueTypeEnum, ValueTypeEnum::AnyList(uuid.into()))
+            }
+            FfiValueTypeEnum::Char(uuid) => {
+                new_ref!(ValueTypeEnum, ValueTypeEnum::Char(uuid.into()))
+            }
+            FfiValueTypeEnum::Empty(uuid) => {
+                new_ref!(ValueTypeEnum, ValueTypeEnum::Empty(uuid.into()))
+            }
+            FfiValueTypeEnum::EnumGeneric(id) => {
+                new_ref!(ValueTypeEnum, ValueTypeEnum::EnumGeneric(id))
+            }
+            FfiValueTypeEnum::Enumeration(id) => {
+                new_ref!(ValueTypeEnum, ValueTypeEnum::Enumeration(id))
+            }
+            FfiValueTypeEnum::FuncGeneric(id) => {
+                new_ref!(ValueTypeEnum, ValueTypeEnum::FuncGeneric(id))
+            }
+            FfiValueTypeEnum::Function(id) => {
+                new_ref!(ValueTypeEnum, ValueTypeEnum::Function(id))
+            }
+            FfiValueTypeEnum::XFuture(id) => {
+                new_ref!(ValueTypeEnum, ValueTypeEnum::XFuture(id))
+            }
+            FfiValueTypeEnum::Import(id) => {
+                new_ref!(ValueTypeEnum, ValueTypeEnum::Import(id))
+            }
+            FfiValueTypeEnum::Lambda(id) => {
+                new_ref!(ValueTypeEnum, ValueTypeEnum::Lambda(id))
+            }
+            FfiValueTypeEnum::List(id) => {
+                new_ref!(ValueTypeEnum, ValueTypeEnum::List(id))
+            }
+            FfiValueTypeEnum::ZObjectStore(id) => {
+                new_ref!(ValueTypeEnum, ValueTypeEnum::ZObjectStore(id))
+            }
+            FfiValueTypeEnum::XPlugin(id) => {
+                new_ref!(ValueTypeEnum, ValueTypeEnum::XPlugin(id))
+            }
+            FfiValueTypeEnum::Range(uuid) => {
+                new_ref!(ValueTypeEnum, ValueTypeEnum::Range(uuid.into()))
+            }
+            FfiValueTypeEnum::WoogStruct(id) => {
+                new_ref!(ValueTypeEnum, ValueTypeEnum::WoogStruct(id))
+            }
+            FfiValueTypeEnum::StructGeneric(id) => {
+                new_ref!(ValueTypeEnum, ValueTypeEnum::StructGeneric(id))
+            }
+            FfiValueTypeEnum::Task(uuid) => {
+                new_ref!(ValueTypeEnum, ValueTypeEnum::Task(uuid.into()))
+            }
+            FfiValueTypeEnum::Ty(uuid) => {
+                new_ref!(ValueTypeEnum, ValueTypeEnum::Ty(uuid.into()))
+            }
+            FfiValueTypeEnum::Unknown(uuid) => {
+                new_ref!(ValueTypeEnum, ValueTypeEnum::Unknown(uuid.into()))
+            }
+        }
+    }
+}
 
 #[repr(C)]
 #[derive(Clone, Debug, StableAbi)]

@@ -332,10 +332,10 @@ fn compile_method_call(
                             thonk.insert_instruction(Instruction::ListLength, location!());
                             return result;
                         }
-                        darn => panic!("{darn:?}"),
+                        darn => panic!("type is not a string. found {darn:?}"),
                     }
                 }
-                whoa => panic!("{whoa:?}"),
+                whoa => panic!("value is not a list. found {whoa:?}"),
             },
             MAX => match result.clone()?.unwrap().subtype {
                 ValueTypeEnum::List(_) => {
@@ -530,16 +530,22 @@ fn compile_static_method_call(
                         let path = &plugin.x_path;
                         let plugin_root = path.split(PATH_SEP).next().unwrap();
 
-                        if let Some(path) = path.split(PATH_SEP).nth(1) {
+                        // This is passed as an argument to the plugin -- the new function
+                        // in particular.
+                        let arg_count = if let Some(path) = path.split(PATH_SEP).nth(1) {
                             thonk.insert_instruction(
                                 Instruction::Push(Value::String(path.to_owned())),
                                 location!(),
                             );
+                            1
+                        } else {
+                            0
                         };
 
+                        // This is used by the VM to load the plugin from the extensions directory.
                         thonk
                             .insert_instruction(Instruction::Push(plugin_root.into()), location!());
-                        thonk.insert_instruction(Instruction::PluginNew(1), location!());
+                        thonk.insert_instruction(Instruction::PluginNew(arg_count), location!());
 
                         // let id = lu_dog.exhume_woog_struct_id_by_name(&plugin.name).unwrap();
                         // let woog_struct = lu_dog.exhume_woog_struct(&id).unwrap();
@@ -976,6 +982,41 @@ mod test {
     }
 
     // #[test]
+    fn test_nested_lambda() {
+        setup_logging();
+        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
+
+        let ore = "
+                   fn main() -> int {
+                       let a = 42;
+                       let b = 96;
+                       let foo = |x: int, y: int| -> int {
+                           let bar = |z: int| -> int {
+                               x + y + z + a
+                           };
+                           bar(1)
+                       };
+                       foo(1, 2)
+                   }";
+        let ast = parse_dwarf("test_lambda", ore).unwrap();
+        let ctx = new_lu_dog(
+            "test_lambda".to_owned(),
+            Some((ore.to_owned(), &ast)),
+            &get_dwarf_home(),
+            &sarzak,
+        )
+        .unwrap();
+        let program = compile(&ctx).unwrap();
+        println!("{program}");
+
+        assert_eq!(program.get_thonk_card(), 5);
+
+        assert_eq!(program.get_instruction_card(), 34);
+
+        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &46.into());
+    }
+
+    // #[test]
     fn test_call_chain() {
         setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
@@ -984,19 +1025,21 @@ mod test {
                 struct Callee {
                     count: int,
                 }
+
                 impl Callee {
                     fn new() -> Callee {
                         Callee { count: 0 }
                     }
 
-                    fn call(self) -> Callee {
+                    fn incr(self) -> Callee {
                         self.count = self.count + 1;
                         self
                     }
                 }
+
                 fn main() -> bool {
                     let callee = Callee::new();
-                    callee.call().call();
+                    callee.incr().incr();
                     chacha::assert(callee.count == 2)
                 }";
         let ast = parse_dwarf("test_call_chain", ore).unwrap();
@@ -1010,7 +1053,7 @@ mod test {
         let program = compile(&ctx).unwrap();
         println!("{program}");
 
-        assert_eq!(program.get_thonk_card(), 3);
+        assert_eq!(program.get_thonk_card(), 4);
 
         // assert_eq!(program.get_instruction_count(), 39);
 

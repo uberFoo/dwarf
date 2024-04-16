@@ -34,7 +34,7 @@ pub(in crate::dwarf::extruder) fn inter(
     span: RefType<Span>,
     block: &RefType<Block>,
     context: &mut Context,
-    context_stack: &mut Vec<(String, RefType<LuDogStore>)>,
+    import_stack: &mut Vec<String>,
     lu_dog: &mut LuDogStore,
 ) -> Result<(ExprSpan, RefType<ValueType>)> {
     debug!("MethodCall Enter: instance: {instance:?}, method: `{method}`");
@@ -44,7 +44,7 @@ pub(in crate::dwarf::extruder) fn inter(
         &instance.1,
         block,
         context,
-        context_stack,
+        import_stack,
         lu_dog,
     )?;
 
@@ -75,7 +75,7 @@ pub(in crate::dwarf::extruder) fn inter(
             &arg.1,
             block,
             context,
-            context_stack,
+            import_stack,
             lu_dog,
         )?;
         let value = XValue::new_expression(block, &ty, &arg_expr.0, lu_dog);

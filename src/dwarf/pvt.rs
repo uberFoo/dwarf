@@ -182,10 +182,6 @@ impl<'d, 'a, 'b> PrintableValueType<'d, 'a, 'b> {
     }
 
     fn plain(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        const TY_CLR: Colour = Colour::Purple;
-        const TY_WARN_CLR: Colour = Colour::Yellow;
-        const TY_ERR_CLR: Colour = Colour::Red;
-
         let value = s_read!(self.1);
         let context = self.2;
         let lu_dog = self.3;

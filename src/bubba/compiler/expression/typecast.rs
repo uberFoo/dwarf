@@ -27,7 +27,7 @@ pub(in crate::bubba::compiler) fn compile(
     let lhs = expr.r68_expression(&lu_dog)[0].clone();
     let as_ty = expr.r69_value_type(&lu_dog)[0].clone();
 
-    compile_expression(&lhs, thonk, context)?;
+    let ty = compile_expression(&lhs, thonk, context)?;
 
     thonk.insert_instruction_with_span(
         Instruction::TypeCast(new_ref!(Value, Value::ValueType((*s_read!(as_ty)).clone()))),
@@ -35,7 +35,7 @@ pub(in crate::bubba::compiler) fn compile(
         location!(),
     );
 
-    Ok(None)
+    Ok(ty)
 }
 
 #[cfg(test)]

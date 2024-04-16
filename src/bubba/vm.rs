@@ -38,7 +38,7 @@ use crate::{
     keywords::{INVOKE_FUNC, INVOKE_FUNC_MUT},
     lu_dog::{ValueType, ValueTypeEnum},
     new_ref,
-    plug_in::{Error as FfiError, LambdaCall, PluginModRef, PluginType, Plugin_TO},
+    plug_in::{Error as FfiError, LambdaCall, PluginModRef, PluginType},
     s_read, s_write,
     sarzak::{ObjectStore as SarzakStore, Ty, MODEL as SARZAK_MODEL},
     DwarfInteger, NewRef, RefType, Span, LAMBDA_FUNCS,
@@ -255,6 +255,11 @@ impl VM {
             vm_clone.lambda_listen();
         });
 
+        let mut vm_clone = vm.clone();
+        thread::spawn(move || loop {
+            vm_clone.lambda_listen();
+        });
+
         vm
     }
 
@@ -266,8 +271,11 @@ impl VM {
                     panic!("Lambda functions have not been initialized.");
                 }
             };
-            let λ = λ.lock().unwrap();
-            let λ = λ.get(&lambda_call.lambda).unwrap();
+
+            let λ = {
+                let λ = λ.lock().unwrap();
+                λ.get(&lambda_call.lambda).unwrap().clone()
+            };
 
             // This will also have been set in the constructor. Calling this before
             // construction of a VM will panic, and that's not a terrible default.
@@ -281,10 +289,11 @@ impl VM {
                 .map(|v| <FfiValue as Into<Value>>::into(v.clone()))
                 .collect::<Vec<_>>();
 
-            let result = self.invoke_lambda(λ, &args);
+            let result = self.invoke_lambda(&λ, &args);
+
             let result = match result {
                 Ok(value) => ROk(<Value as Into<FfiValue>>::into(s_read!(value).clone())),
-                Err(e) => RErr(FfiError::Uber(e.to_string().into())),
+                Err(e) => RErr(FfiError::Plugin(e.to_string().into())),
             };
             lambda_call.result.send(result).unwrap();
         }
@@ -400,9 +409,12 @@ impl VM {
                     let instr = &self.instrs[iip as usize];
 
                     let src = if let Some(source) = program.get_source() {
-                        // let span = self.source_map[iip as usize].clone();
-                        // &source[span]
-                        ""
+                        let span = self.source_map[iip as usize].clone();
+                        if span.end <= source.len() {
+                            &source[span]
+                        } else {
+                            ""
+                        }
                     } else {
                         ""
                     };
@@ -562,7 +574,7 @@ impl VM {
                                         }
                                         RErr(e) => {
                                             return Err(BubbaError::VmPanic {
-                                                message: format!("Plugin error: {:?}", e),
+                                                message: format!("Plugin error: {:?}\nAttempting to call {module}::{ty}::{func}", e),
                                                 location: location!(),
                                             }
                                             .into())
@@ -607,7 +619,7 @@ impl VM {
                                         }
                                         RErr(e) => {
                                             return Err(BubbaError::VmPanic {
-                                                message: format!("Plugin error: {:?}", e),
+                                                message: format!("Plugin error: {:?}\nAttempting to call {module}::{ty}::{func}", e),
                                                 location: location!(),
                                             }
                                             .into())
@@ -1002,6 +1014,24 @@ impl VM {
                         let list = s_read!(list);
                         let index: usize = index.try_into()?;
                         match &*list {
+                            Value::AnyList(vec) => {
+                                let vec = s_read!(vec);
+                                if index < vec.len() {
+                                    stack.push(vec[index].clone().into());
+                                } else {
+                                    if self.backtrace {
+                                        eprintln!("{self:?}");
+                                        print_stack(&stack, fp);
+                                    }
+                                    return Err(BubbaError::IndexOutOfBounds {
+                                        index,
+                                        len: vec.len(),
+                                        span: self.get_span(ip),
+                                        location: location!(),
+                                    }
+                                    .into());
+                                }
+                            }
                             Value::List { ty: _, inner: vec } => {
                                 let vec = s_read!(vec);
                                 if index < vec.len() {
@@ -1137,6 +1167,10 @@ impl VM {
                         let list = list.into_pointer();
                         let list = s_read!(list);
                         match &*list {
+                            Value::AnyList(vec) => {
+                                let vec = s_read!(vec);
+                                stack.push(Value::Integer(vec.len() as DwarfInteger).into());
+                            }
                             Value::List { inner, .. } => {
                                 let inner = s_read!(inner);
                                 stack.push(Value::Integer(inner.len() as DwarfInteger).into());
@@ -1554,6 +1588,10 @@ impl VM {
                         // We *need* this check, otherwise we deadlock in the Pointer case.
                         // In any case, why do the work if you don't need to?
                         if value != *s {
+                            // If the value from the stack is a `Value` then we can just
+                            // replace it with the new value.
+                            // But if it's a pointer, then we need to update what it's
+                            // pointing to.
                             match s {
                                 StackValue::Value(_) => {
                                     stack[fp - arity - local_count - 3 + index] = value;
@@ -1666,6 +1704,10 @@ impl VM {
                         let lhs = s_read!(lhs);
 
                         let value = match &as_ty.subtype {
+                            ValueTypeEnum::List(_) => {
+                                let value: Vec<RefType<Value>> = (&*lhs).try_into()?;
+                                StackValue::Value(value.into())
+                            }
                             ValueTypeEnum::Ty(ref ty) => {
                                 let ty = self.sarzak.exhume_ty(ty).unwrap();
                                 let x = match &*ty.read().unwrap() {
@@ -1848,6 +1890,7 @@ impl VM {
     }
 }
 
+// I think that this is here for the benefit of the Result type.
 impl From<(FfiValue, &Value)> for Value {
     fn from((ffi_value, ty): (FfiValue, &Value)) -> Self {
         match ffi_value {
@@ -1856,6 +1899,21 @@ impl From<(FfiValue, &Value)> for Value {
             // FfiValue::Error(e) => Self::Error(e.into()),
             FfiValue::Float(num) => Self::Float(num),
             FfiValue::Integer(num) => Self::Integer(num),
+            FfiValue::List(list) => {
+                let Value::ValueType(ty) = ty else {
+                    unreachable!()
+                };
+                let ty = ty.clone();
+                let vec: Vec<_> = list
+                    .into_iter()
+                    .map(|v| new_ref!(Value, v.into()))
+                    .collect();
+                let list = std::sync::Arc::new(std::sync::RwLock::new(vec));
+                Self::List {
+                    ty: new_ref!(ValueType, ty),
+                    inner: list,
+                }
+            }
             FfiValue::Option(option) => match option {
                 ROption::RNone => Self::Empty,
                 ROption::RSome(value) => {
@@ -1875,7 +1933,7 @@ impl From<(FfiValue, &Value)> for Value {
                         variant: "Err".to_owned(),
                         value: new_ref!(
                             Value,
-                            <(FfiValue, &Value) as Into<Value>>::into((RBox::into_inner(err), ty,))
+                            <(FfiValue, &Value) as Into<Value>>::into((RBox::into_inner(err), ty))
                         ),
                     },
                     RResult::ROk(ok) => TupleEnum {

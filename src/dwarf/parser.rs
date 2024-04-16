@@ -4162,10 +4162,11 @@ impl DwarfParser {
         if self.match_tokens(&[Token::Punct('(')]).is_some() {
             if self.match_tokens(&[Token::Punct(')')]).is_none() {
                 let token = self.previous().unwrap();
-                // 🚧 use the unclosed_delimiter constructor
-                let err = Simple::expected_input_found(
+                let err = Simple::unclosed_delimiter(
+                    start..token.1.end,
+                    "(".to_owned(),
                     token.1.clone(),
-                    [Some("')'".to_owned())],
+                    ")".to_owned(),
                     Some(token.0.to_string()),
                 );
                 return Err(Box::new(err));
@@ -4179,6 +4180,34 @@ impl DwarfParser {
                         .peek()
                         .map_or(self.previous().unwrap().1.end, |t| t.1.end),
             )));
+        }
+
+        // Match list
+        if self.match_tokens(&[Token::Punct('[')]).is_some() {
+            let inner = self.parse_type()?;
+
+            if let Some(inner) = inner {
+                if self.match_tokens(&[Token::Punct(']')]).is_none() {
+                    let token = self.previous().unwrap();
+                    let err = Simple::unclosed_delimiter(
+                        start..token.1.end,
+                        "[".to_owned(),
+                        token.1.clone(),
+                        "]".to_owned(),
+                        Some(token.0.to_string()),
+                    );
+                    return Err(Box::new(err));
+                }
+
+                debug!("exit parse_type: list");
+                return Ok(Some((
+                    Type::List(Box::new(inner)),
+                    start
+                        ..self
+                            .peek()
+                            .map_or(self.previous().unwrap().1.end, |t| t.1.end),
+                )));
+            }
         }
 
         // Match a float

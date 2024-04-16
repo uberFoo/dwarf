@@ -14,6 +14,18 @@ on:
 jobs:
     build:
         runs-on: ubuntu-latest
+
+        services:
+            postgres:
+                image: postgres:13
+                env:
+                    POSTGRES_USER: postgres
+                    POSTGRES_PASSWORD: postgres
+                    POSTGRES_DB: files
+                ports:
+                    - 5432:5432
+                options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
+
         steps:
             - name: Set up Rust
               uses: actions-rs/toolchain@v1
@@ -45,6 +57,15 @@ jobs:
               with:
                   ref: ${{ github.ref }}
                   path: dwarf
+
+            - name: Install PostgreSQL client
+              run: |
+                  cargo install sqlx-cli --no-default-features --features postgres
+                  cd dwarf/tests/setup/database
+                  export DATABASE_URL=postgres://postgres:postgres@localhost/files
+                  sqlx database create
+                  sqlx migrate run
+                  cargo run
 
             - name: Install cargo-llvm-cov
               uses: taiki-e/install-action@cargo-llvm-cov

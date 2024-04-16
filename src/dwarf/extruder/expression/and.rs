@@ -25,7 +25,7 @@ pub fn inter(
     span: RefType<Span>,
     block: &RefType<Block>,
     context: &mut Context,
-    context_stack: &mut Vec<(String, RefType<LuDogStore>)>,
+    import_stack: &mut Vec<String>,
     lu_dog: &mut LuDogStore,
 ) -> Result<(ExprSpan, RefType<ValueType>)> {
     let (lhs, lhs_ty) = inter_expression(
@@ -33,7 +33,7 @@ pub fn inter(
         &lhs_p.1,
         block,
         context,
-        context_stack,
+        import_stack,
         lu_dog,
     )?;
     let (rhs, rhs_ty) = inter_expression(
@@ -41,7 +41,7 @@ pub fn inter(
         &rhs_p.1,
         block,
         context,
-        context_stack,
+        import_stack,
         lu_dog,
     )?;
 

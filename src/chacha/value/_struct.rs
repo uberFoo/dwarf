@@ -10,9 +10,9 @@ pub struct Struct<T>
 where
     T: Clone + std::fmt::Debug + PartialEq + std::fmt::Display + std::default::Default,
 {
-    type_name: String,
-    type_: RefType<ValueType>,
-    attrs: StructAttributes<T>,
+    pub(crate) type_name: String,
+    pub(crate) type_: RefType<ValueType>,
+    pub(crate) attrs: StructAttributes<T>,
 }
 
 impl<T> PartialEq for Struct<T>
@@ -63,6 +63,10 @@ where
     pub fn type_name(&self) -> &str {
         &self.type_name
     }
+
+    pub fn attrs(&self) -> &StructAttributes<T> {
+        &self.attrs
+    }
 }
 
 impl<T> fmt::Display for Struct<T>
@@ -89,9 +93,18 @@ where
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
-pub struct StructAttributes<T>(HashMap<String, T>)
+pub struct StructAttributes<T>(pub(crate) HashMap<String, T>)
 where
     T: Clone + std::fmt::Debug + PartialEq + std::fmt::Display + std::default::Default;
+
+impl<T> StructAttributes<T>
+where
+    T: Clone + std::fmt::Debug + PartialEq + std::fmt::Display + std::default::Default,
+{
+    pub fn inner(&self) -> &HashMap<String, T> {
+        &self.0
+    }
+}
 
 impl<T> PartialEq for StructAttributes<T>
 where

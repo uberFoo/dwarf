@@ -1,0 +1,150 @@
+use std::dwarf::Plugin;
+use std::result::Result;
+
+struct Sqlx {
+    #[proxy(plugin = "sqlx:foo")]
+    plugin: Plugin<Sqlx>,
+}
+
+impl Sqlx {
+    fn new() -> Self {
+        Sqlx {
+            plugin: Plugin::<Sqlx>::new(),
+        }
+    }
+
+    async fn connect(self, connection_string: string) -> Future<Result<Pool, Error>> {
+        let pool = self
+            .plugin
+            .invoke_func_mut("sqlx", "Sqlx", "connect", [connection_string]);
+
+        match pool {
+            Result::Ok(pool) => Result::<Pool, Error>::Ok(Pool {
+                plugin: self.plugin,
+                inner: pool,
+            }),
+            Result::Err(e) => Result::<Pool, Error>::Err(Error {
+                plugin: self.plugin,
+                inner: e,
+            }),
+        }
+    }
+}
+
+enum Type {
+    Integer,
+    Short,
+    String,
+    Timestamp,
+}
+
+struct Row {
+    #[proxy(plugin = "sqlx")]
+    plugin: Plugin<Sqlx>,
+    inner: int,
+}
+
+impl Row {
+    fn get<T>(self, index: int, ty: Type) -> T {
+        self.plugin.invoke_func("sqlx", "Row", "get", @[self.inner, index, ty])
+    }
+}
+
+struct Pool {
+    #[proxy(plugin = "sqlx")]
+    plugin: Plugin<Sqlx>,
+    inner: int,
+}
+
+impl Pool {
+    fn query<F>(self, query: string) -> Map {
+        Map{
+            plugin: self.plugin,
+            query: query,
+            pool: self.inner,
+            bindings: [],
+        }
+    }
+}
+struct Error {
+    #[proxy(plugin = "sqlx")]
+    plugin: Plugin<Sqlx>,
+    inner: int,
+}
+
+struct Map {
+    #[proxy(plugin = "sqlx")]
+    plugin: Plugin<Sqlx>,
+    query: string,
+    pool: int,
+    // This should be a heterogenous list -- it works as is though, which is scary.
+    bindings: [string],
+}
+
+impl Map {
+    fn bind(self, value: string) -> Map {
+        self.bindings.push(value);
+
+        self
+    }
+
+    fn execute(self) -> Result<[Row], Error> {
+        let rows = self
+            .plugin
+            .invoke_func("sqlx", "Map", "execute", @[self.query, self.pool, self.bindings]);
+
+        match rows {
+            Result::Ok(rows) => Result::<[Row], Error>::Ok(rows),
+            Result::Err(e) => Result::<[Row], Error>::Err(e),
+        }
+    }
+
+    fn map<F>(self, func: F) -> Query<F> {
+        let bounce = |row: int| -> F {
+            let row = Row {
+                plugin: self.plugin,
+                inner: row,
+            };
+            func(row)
+        };
+
+        Query {
+            plugin: self.plugin,
+            query: self.query,
+            func: bounce,
+            pool: self.pool,
+        }
+    }
+}
+
+struct Query<F> {
+    #[proxy(plugin = "sqlx")]
+    plugin: Plugin<Sqlx>,
+    query: string,
+    func: F,
+    pool: int,
+}
+
+impl Query<F> {
+    fn fetch_all<T>(self) -> Result<[Row], Error> {
+        let rows = self
+            .plugin
+            .invoke_func("sqlx", "Query", "query_all", @[self.query, self.pool, self.func]);
+
+        match rows {
+            Result::Ok(rows) => Result::<[Row], Error>::Ok(rows),
+            Result::Err(e) => Result::<[Row], Error>::Err(e),
+        }
+    }
+
+    fn fetch_one<T>(self) -> Result<Row, Error> {
+        let rows = self
+            .plugin
+            .invoke_func("sqlx", "Query", "query_one", @[self.query, self.pool, self.func]);
+
+        match rows {
+            Result::Ok(rows) => Result::<Row, Error>::Ok(rows),
+            Result::Err(e) => Result::<Row, Error>::Err(e),
+        }
+    }
+}

@@ -17,7 +17,6 @@ use dwarf::{
         value::Value,
     },
     dwarf::{new_lu_dog, parse_dwarf},
-    s_read,
     sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL},
 };
 

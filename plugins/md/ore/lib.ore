@@ -1,0 +1,19 @@
+use std::dwarf::Plugin;
+use std::result::Result;
+
+struct Md {
+    #[proxy(plugin = "md::md")]
+    inner: Plugin<Md>,
+}
+
+impl Md {
+    fn new() -> Self {
+        Md {
+            inner: Plugin::<Md>::new(),
+        }
+    }
+
+    fn to_html(self, input: string) -> string {
+        self.inner.invoke_func("md", "Md", "to_html", [input])
+    }
+}

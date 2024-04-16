@@ -16,7 +16,7 @@ pub enum BubbaCompilerError {
         span: Span,
         location: Location,
     },
-    #[snafu(display("\n{}: not indexable.", ERR_CLR.bold().paint("error")))]
+    #[snafu(display("\n{}: not indexable.\n --> {}::{}::{}", ERR_CLR.bold().paint("error"), location.file, location.line, location.column))]
     NotIndexable {
         ty: String,
         span: Span,

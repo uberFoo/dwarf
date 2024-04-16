@@ -1,4 +1,5 @@
 use ansi_term::Colour;
+use regex::Regex;
 use rustc_hash::FxHashMap as HashMap;
 use snafu::{location, Location};
 use uuid::Uuid;
@@ -8,7 +9,8 @@ use crate::{
         error::{DwarfError, Result},
         extruder::{
             debug, function, inter_statements, make_value_type, typecheck, Context,
-            FunctionDefinition, Span, FUNC, OBJECT, PROXY, STORE,
+            FunctionDefinition, Span, EXTRACT_GENERICS, EXTRACT_GENERICS_RE, FUNC, OBJECT, PROXY,
+            STORE,
         },
         AttributeMap, BlockType, Expression as ParserExpression, InnerAttribute, Spanned,
         Statement as ParserStatement, Type,
@@ -18,7 +20,7 @@ use crate::{
         Function, ImplementationBlock, Item as WoogItem, LocalVariable, Parameter,
         Span as LuDogSpan, ValueType, Variable, XFuture, XValue,
     },
-    new_ref, s_read, s_write, Dirty, DwarfInteger, NewRef, RefType, SarzakStorePtr,
+    new_ref, s_read, s_write, Dirty, DwarfInteger, NewRef, RefType, SarzakStorePtr, PATH_SEP,
 };
 
 macro_rules! link_parameter {
@@ -47,7 +49,7 @@ pub fn inter_func(
     impl_ty: Option<&RefType<ValueType>>,
     span: &Span,
     context: &mut Context,
-    context_stack: &mut Vec<(String, RefType<LuDogStore>)>,
+    import_stack: &mut Vec<String>,
     lu_dog: &mut LuDogStore,
 ) -> Result<()> {
     debug!("inter_func {}", name);
@@ -113,10 +115,55 @@ pub fn inter_func(
         None
     };
 
-    let type_str = return_type.0.to_string();
     let ret_span = &return_type.1;
     let ret_ty = if let Some(generics) = generics {
-        if generics.get(&type_str).is_some() {
+        context.generics = generics.iter().map(|(_, v)| (v.clone(), 0..0)).collect();
+
+        let type_str = return_type.0.to_string();
+
+        let re = match EXTRACT_GENERICS.get() {
+            Some(re) => re,
+            None => {
+                let re = Regex::new(EXTRACT_GENERICS_RE).unwrap();
+                match EXTRACT_GENERICS.set(re) {
+                    Ok(_) => {}
+                    Err(e) => {
+                        panic!("Failed to set RE: {}", e);
+                    }
+                }
+                EXTRACT_GENERICS.get().unwrap()
+            }
+        };
+
+        if let Some(captures) = re.captures(type_str.as_str()) {
+            let name = &captures[1];
+            let inner = &captures[4];
+            let types = inner.split(',').map(|s| s.trim()).collect::<Vec<&str>>();
+
+            for ty in types {
+                if generics.get(ty).is_some() {
+                    let g = FuncGeneric::new(ty.to_string(), None, None, lu_dog);
+                    let _ty = ValueType::new_func_generic(true, &g, lu_dog);
+                }
+                // if generics.get(ty).is_none() {
+                //     dbg!(&type_str, &ty);
+                //     return Err(vec![DwarfError::Generic {
+                //         description: format!("Generic `{}` not found in generics hash", ty),
+                //     }]);
+                // } else {
+                //     let g = FuncGeneric::new(ty.to_string(), None, None, lu_dog);
+                //     let _ty = ValueType::new_func_generic(true, &g, lu_dog);
+                // }
+            }
+
+            context.location = location!();
+            // This span isn't quite right, since it includes the generics, but I think
+            // it's ok.
+            let ty = Type::UserType((name.to_owned(), return_type.1.clone()), vec![]);
+            let ty = make_value_type(&ty, ret_span, impl_ty, context, import_stack, lu_dog)?;
+
+            ty
+        } else if generics.get(&type_str).is_some() {
             let g = FuncGeneric::new(type_str, None, None, lu_dog);
             let ty = ValueType::new_func_generic(true, &g, lu_dog);
             LuDogSpan::new(
@@ -136,7 +183,7 @@ pub fn inter_func(
                 ret_span,
                 impl_ty,
                 context,
-                context_stack,
+                import_stack,
                 lu_dog,
             )?
         }
@@ -147,7 +194,7 @@ pub fn inter_func(
             ret_span,
             impl_ty,
             context,
-            context_stack,
+            import_stack,
             lu_dog,
         )?
     };
@@ -239,7 +286,7 @@ pub fn inter_func(
                 ValueType::new_func_generic(true, &g, lu_dog)
             } else {
                 context.location = location!();
-                match make_value_type(param_ty, ty_span, impl_ty, context, context_stack, lu_dog) {
+                match make_value_type(param_ty, ty_span, impl_ty, context, import_stack, lu_dog) {
                     Ok(ty) => ty,
                     Err(mut e) => {
                         errors.append(&mut e);
@@ -249,7 +296,7 @@ pub fn inter_func(
             }
         } else {
             context.location = location!();
-            match make_value_type(param_ty, ty_span, impl_ty, context, context_stack, lu_dog) {
+            match make_value_type(param_ty, ty_span, impl_ty, context, import_stack, lu_dog) {
                 Ok(ty) => ty,
                 Err(mut e) => {
                     errors.append(&mut e);
@@ -305,7 +352,7 @@ pub fn inter_func(
             .collect();
 
         let (block_ty, block_span) =
-            inter_statements(&stmts, stmt_span, &block, context, context_stack, lu_dog)?;
+            inter_statements(&stmts, stmt_span, &block, context, import_stack, lu_dog)?;
 
         let block_ty = match a_sink {
             true => {
@@ -325,6 +372,7 @@ pub fn inter_func(
     }
 
     debug!("func `{name}` saved");
+    context.generics.clear();
 
     if errors.is_empty() {
         Ok(())
@@ -341,7 +389,7 @@ pub fn parse_func_signature(
     return_type: &Spanned<Type>,
     impl_ty: Option<&RefType<ValueType>>,
     context: &mut Context,
-    context_stack: &Vec<(String, RefType<LuDogStore>)>,
+    import_stack: &mut Vec<String>,
     lu_dog: &mut LuDogStore,
 ) -> Result<()> {
     debug!("parse_func_signature {}", name);
@@ -364,25 +412,11 @@ pub fn parse_func_signature(
             ty
         } else {
             context.location = location!();
-            make_value_type(
-                &return_type.0,
-                span,
-                impl_ty,
-                context,
-                context_stack,
-                lu_dog,
-            )?
+            make_value_type(&return_type.0, span, impl_ty, context, import_stack, lu_dog)?
         }
     } else {
         context.location = location!();
-        make_value_type(
-            &return_type.0,
-            span,
-            impl_ty,
-            context,
-            context_stack,
-            lu_dog,
-        )?
+        make_value_type(&return_type.0, span, impl_ty, context, import_stack, lu_dog)?
     };
 
     let mut param_tuples = Vec::new();
@@ -395,11 +429,11 @@ pub fn parse_func_signature(
                 ValueType::new_func_generic(true, &g, lu_dog)
             } else {
                 context.location = location!();
-                make_value_type(param_ty, span, impl_ty, context, context_stack, lu_dog)?
+                make_value_type(param_ty, span, impl_ty, context, import_stack, lu_dog)?
             }
         } else {
             context.location = location!();
-            make_value_type(param_ty, span, impl_ty, context, context_stack, lu_dog)?
+            make_value_type(param_ty, span, impl_ty, context, import_stack, lu_dog)?
         };
 
         LuDogSpan::new(

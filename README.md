@@ -91,7 +91,7 @@ Check out [ariadne](https://docs.rs/ariadne/latest/ariadne/) and you too can hav
 
 ## On the Horizon
 
-These are the thins that spring to mind when I think of what I'd most like to do next with dwarf.
+These are the things that spring to mind when I think of what I'd most like to do next with dwarf.
 In no particular order:
 
 * [x] async
@@ -104,7 +104,7 @@ In no particular order:
 * [x] Generics
 * [ ] Macros (Yes, and I don't know why other interpreted languages don't have them. Am I crazy?)
 * [x] Extensions via plugins
-* [ ] Char type
+* [x] Char type
 * [x] if let expressions
 * [ ] Doc Comments, with Doc Tests
 * [x] match expression
@@ -119,7 +119,7 @@ Minimally we need inheritance, and probably polymorphism.
 dwarf syntax is (nearly) a strict subset of Rust's.
 In fact, I use the Rust language syntax parser in `vscode` to highlight, navigate, and edit Dwarf source.
 
-The bits that are missing include iterators, enumerations, paths, visibility modifiers, generics (for now), and the list goes on.
+The bits that are missing include iterators, visibility modifiers, macros, and the list goes on.
 
 ## REPL
 

@@ -107,6 +107,7 @@ tui-textarea = { git = "https://github.com/uberFoo/tui-textarea", optional = tru
 tui-tree-widget = { git = "https://github.com/uberFoo/tui-rs-tree-widget", optional = true }
 unicode-segmentation = "1.10.1"
 uuid = { version = "1.6.1", features = ["v4", "serde"] }
+dotenvy = "0.15.7"
 # value = { path = "crates/value" }
 
 
