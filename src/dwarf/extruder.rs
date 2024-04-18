@@ -49,7 +49,7 @@ pub(super) const LIB_DIR: &str = "lib";
 pub(super) const LIB_TAO: &str = "lib.ore";
 pub(super) const MODEL_DIR: &str = "models";
 pub(super) const SRC_DIR: &str = "src";
-pub(super) const TAO_EXT: &str = "ore";
+pub(super) const ORE_EXT: &str = "ore";
 
 macro_rules! link_format_bits {
     ($last:expr, $next:expr, $store:expr) => {{
@@ -3206,7 +3206,7 @@ fn inter_module(
     let mut path = context.cwd.clone();
     path.push("sacrifice");
     path.set_file_name(name);
-    path.set_extension(TAO_EXT);
+    path.set_extension(ORE_EXT);
 
     if !context.imports.insert(path.clone()) {
         debug!("{name} already imported");
@@ -3296,11 +3296,11 @@ fn inter_import(
 
     let ty = path_root.pop().unwrap();
 
-    // if let Some(current) = import_stack.last() {
-    //     if current != &ty {
-    //         return Ok(());
-    //     }
-    // }
+    if let Some(current) = import_stack.last() {
+        if current == &ty {
+            return Ok(());
+        }
+    }
 
     let module = path_root.first().unwrap(); // This will have _something_.
 
@@ -3323,6 +3323,19 @@ fn inter_import(
         let dir = path.clone();
 
         path.push(LIB_TAO);
+        (dir, path)
+    };
+
+    // Then let's try the current directory.
+    let (dir, path) = if path.exists() {
+        (dir, path)
+    } else {
+        let mut path = context.cwd.clone();
+        let dir = path.clone();
+
+        path.push(module);
+        path.set_extension(ORE_EXT);
+
         (dir, path)
     };
 
