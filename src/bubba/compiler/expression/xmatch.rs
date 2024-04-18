@@ -85,19 +85,9 @@ pub(in crate::bubba::compiler) fn compile(
                                     let value = s_read!(expr).r11_x_value(&lu_dog)[0].clone();
                                     let ty = s_read!(value).r24_value_type(&lu_dog)[0].clone();
 
-                                    let idx = match context
-                                        .insert_symbol(var.name.clone(), (*s_read!(ty)).clone())
-                                    {
-                                        (true, index) => {
-                                            thonk.increment_frame_size();
-                                            index
-                                        }
-                                        (false, index) => index,
-                                    };
-                                    // thonk.add_instruction(
-                                    // Instruction::DeconstructStructExpression,
-                                    // location!(),
-                                    // );
+                                    let idx = context
+                                        .insert_new_symbol(var.name.clone(), s_read!(ty).clone());
+
                                     thonk.insert_instruction(Instruction::Dup, location!());
                                     thonk.insert_instruction(
                                         Instruction::ExtractEnumValue,
@@ -535,5 +525,90 @@ mod test {
         assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 56);
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(42));
+    }
+
+    #[test]
+    fn match_block() {
+        setup_logging();
+        let sarzak_store = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
+        let ore = "
+                   enum Foo {
+                       Bar(int),
+                       Baz(int),
+                       Qux(int),
+                   }
+                   fn main() -> int {
+                       let x = Foo::Baz(40);
+                       match x {
+                           Foo::Bar(u) => u,
+                           Foo::Baz(v) => {
+                               let y = v + 2;
+                               y
+                           }
+                           Foo::Qux(w) => {
+                               let y = w + 4;
+                               y
+                           }
+                       }
+                   }";
+        let ast = parse_dwarf("match_expression", ore).unwrap();
+        let ctx = new_lu_dog(
+            "match_expression".to_owned(),
+            Some((ore.to_owned(), &ast)),
+            &get_dwarf_home(),
+            &sarzak_store,
+        )
+        .unwrap();
+
+        let program = compile(&ctx).unwrap();
+        println!("{program}");
+
+        assert_eq!(program.get_thonk_card(), 1);
+
+        assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 58);
+
+        assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(42));
+    }
+
+    #[test]
+    fn match_result_returning_result_err_value() {
+        setup_logging();
+        let sarzak_store = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
+        let ore = "
+                  use std::result::Result;
+
+                  struct A {
+                      inner: int,
+                  }
+
+                  struct B {
+                      inner: int,
+                    }
+
+                  fn main() -> Result<int, int> {
+                      let x = Result::Err(96);
+                      match x {
+                          Result::Ok(x) => Result::<A, B>::Ok(A { inner: x }),
+                          Result::Err(y) => Result::<A, B>::Err(B { inner: y }),
+                      }
+                    }
+                   ";
+        let ast = parse_dwarf("match_expression", ore).unwrap();
+        let ctx = new_lu_dog(
+            "match_expression".to_owned(),
+            Some((ore.to_owned(), &ast)),
+            &get_dwarf_home(),
+            &sarzak_store,
+        )
+        .unwrap();
+
+        let program = compile(&ctx).unwrap();
+        println!("{program}");
+
+        assert_eq!(program.get_thonk_card(), 3);
+
+        assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 53);
+
+        // assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(42));
     }
 }

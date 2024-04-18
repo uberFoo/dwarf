@@ -2,7 +2,7 @@ use std::dwarf::Plugin;
 use std::result::Result;
 
 struct Sqlx {
-    #[proxy(plugin = "sqlx:foo")]
+    #[proxy(plugin = "sqlx")]
     plugin: Plugin<Sqlx>,
 }
 
@@ -19,14 +19,15 @@ impl Sqlx {
             .invoke_func_mut("sqlx", "Sqlx", "connect", [connection_string]);
 
         match pool {
-            Result::Ok(pool) => Result::<Pool, Error>::Ok(Pool {
+            Result::Ok(p) => Result::<Pool, Error>::Ok(Pool {
                 plugin: self.plugin,
-                inner: pool,
+                inner: p,
             }),
-            Result::Err(e) => Result::<Pool, Error>::Err(Error {
+            Result::Err(e) => {
+                Result::<Pool, Error>::Err(Error {
                 plugin: self.plugin,
                 inner: e,
-            }),
+            })}
         }
     }
 }
@@ -70,6 +71,12 @@ struct Error {
     #[proxy(plugin = "sqlx")]
     plugin: Plugin<Sqlx>,
     inner: int,
+}
+
+impl Error {
+    fn to_string(self) -> string {
+        self.plugin.invoke_func("sqlx", "Error", "to_string", [self.inner])
+    }
 }
 
 struct Map {

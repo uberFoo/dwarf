@@ -67,7 +67,8 @@ pub fn inter_enum(
     let mut last_generic_uuid: Option<SarzakStorePtr> = None;
     if let Some(generics) = enum_generics {
         for name in generics.keys() {
-            let generic = EnumGeneric::new(name.to_owned(), &woog_enum, None, lu_dog);
+            let generic =
+                EnumGeneric::new(Uuid::new_v4(), name.to_owned(), &woog_enum, None, lu_dog);
             let ty = ValueType::new_enum_generic(true, &generic, lu_dog);
             local_generics.insert(name.to_owned(), ty.clone());
             //         LuDogSpan::new(
@@ -257,13 +258,14 @@ pub(crate) fn create_generic_enum(
         let mut first_generic = None;
         let mut last_generic_uuid: Option<SarzakStorePtr> = None;
         for ty in types {
-            let generic = EnumGeneric::new(ty.to_owned(), &new_enum, None, lu_dog);
+            let generic = EnumGeneric::new(Uuid::new_v4(), ty.to_owned(), &new_enum, None, lu_dog);
             let _ = ValueType::new_enum_generic(true, &generic, lu_dog);
 
             if first {
                 first = false;
-                first_generic = Some(s_read!(generic).id);
-            }
+                let id = { s_read!(generic).id };
+                first_generic = Some(id);
+            };
             last_generic_uuid = link_enum_generic!(last_generic_uuid, generic, lu_dog);
         }
         s_write!(new_enum).first_generic = first_generic;

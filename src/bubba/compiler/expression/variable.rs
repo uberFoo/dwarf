@@ -6,7 +6,7 @@ use crate::{
         instr::Instruction,
     },
     lu_dog::ValueType,
-    s_read, SarzakStorePtr, Span, POP_CLR,
+    s_read, SarzakStorePtr, Span, OK_CLR, POP_CLR,
 };
 
 #[cfg_attr(not(test), tracing::instrument(skip(thonk, context)))]
@@ -25,7 +25,7 @@ pub(in crate::bubba::compiler) fn compile(
     let expr = s_read!(expr);
     let name = &expr.name;
 
-    tracing::debug!(target: "instr", "Variable: {}", POP_CLR.paint(name));
+    tracing::debug!(target: "instr", "Variable: {}", OK_CLR.paint(name));
 
     if let Some(symbol) = context.get_symbol(name) {
         thonk.insert_instruction_with_span(

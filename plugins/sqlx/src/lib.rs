@@ -115,6 +115,22 @@ mod postgres {
         ) -> RResult<FfiValue, Error> {
             future::block_on(async {
                 match ty.as_str() {
+                    "Error" => match func.as_str() {
+                        "to_string" => {
+                            let key: DwarfInteger = args
+                                .first()
+                                .unwrap()
+                                .try_into()
+                                .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
+                                .unwrap();
+
+                            let guard = self.errors.lock().unwrap();
+                            let error = guard.get(key as usize).unwrap();
+
+                            Ok(FfiValue::String(error.to_string().into()))
+                        }
+                        func => Err(Error::Plugin(format!("Invalid function: {func}").into())),
+                    },
                     "Map" => match func.as_str() {
                         "execute" => {
                             let query: String = args
@@ -252,8 +268,6 @@ mod postgres {
                             let FfiValue::Lambda(lambda) = args.get(2).unwrap() else {
                                 panic!("Invalid lambda");
                             };
-
-                            dbg!(&query, &pool, &lambda);
 
                             let guard = self.pools.lock().unwrap();
                             let pool = guard.get(pool as usize).unwrap();

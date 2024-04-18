@@ -1,0 +1,7 @@
+use std::env::Var;
+use std::result::Result;
+
+fn main() {
+    Var::set_var("HELLO", "world");
+    chacha::assert_eq(Var::var("HELLO"), Result::Ok("world"));
+}

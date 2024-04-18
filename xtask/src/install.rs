@@ -25,6 +25,7 @@ impl flags::Install {
         cmd!(sh, "cargo xtask plugin --plugin http --debug {debug}").run()?;
         cmd!(sh, "cargo xtask plugin --plugin std --debug {debug}").run()?;
         cmd!(sh, "cargo xtask plugin --plugin md --debug {debug}").run()?;
+        cmd!(sh, "cargo xtask plugin --plugin sqlx --debug {debug}").run()?;
 
         // let std_dst = format!("{}/lib/std", dwarf_home);
         // fs::create_dir_all(&std_dst)?;

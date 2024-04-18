@@ -1769,6 +1769,7 @@ impl VM {
         }
     }
 
+    #[cfg(feature = "async")]
     fn start_task(
         &mut self,
         mut stack: &mut Vec<StackValue>,

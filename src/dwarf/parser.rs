@@ -1,7 +1,6 @@
 use ansi_term::Colour;
 use ariadne::{Color, Fmt, Label, Report, ReportKind, Source};
 use chumsky::{prelude::*, text::Character};
-use log;
 use once_cell::sync::OnceCell;
 use regex::Regex;
 use rustc_hash::FxHashMap as HashMap;
@@ -27,7 +26,7 @@ macro_rules! function {
 macro_rules! debug {
     ($msg:literal, $($arg:expr),*) => {
         $(
-            log::trace!(
+            tracing::trace!(
                 target: "parser",
                 "{}: {} --> {:?}\n  --> {}:{}:{}",
                 Colour::Green.dimmed().italic().paint(function!()),
@@ -40,7 +39,7 @@ macro_rules! debug {
         )*
     };
     ($arg:literal) => {
-        log::trace!(
+        tracing::trace!(
             target: "parser",
             "{}: {}\n  --> {}:{}:{}",
             Colour::Green.dimmed().italic().paint(function!()),
@@ -50,7 +49,7 @@ macro_rules! debug {
             column!())
     };
     ($arg:expr) => {
-        log::trace!(
+        tracing::trace!(
             target: "parser",
             "{}: {:?}\n  --> {}:{}:{}",
             Colour::Green.dimmed().italic().paint(function!()),
@@ -64,7 +63,7 @@ macro_rules! debug {
 macro_rules! error {
     ($msg:literal, $($arg:expr),*) => {
         $(
-            log::debug!(
+            tracing::debug!(
                 target: "parser",
                 "{}: {} --> {:?}\n  --> {}:{}:{}",
                 Colour::Green.dimmed().italic().paint(function!()),
@@ -77,7 +76,7 @@ macro_rules! error {
         )*
     };
     ($arg:literal) => {
-        log::debug!(
+        tracing::debug!(
             target: "parser",
             "{}: {}\n  --> {}:{}:{}",
             Colour::Green.dimmed().italic().paint(function!()),
@@ -87,7 +86,7 @@ macro_rules! error {
             column!())
     };
     ($arg:expr) => {
-        log::debug!(
+        tracing::debug!(
             target: "parser",
             "{}: {:?}\n  --> {}:{}:{}",
             Colour::Green.dimmed().italic().paint(function!()),

@@ -1,13 +1,10 @@
-// #[cfg(feature = "async")]
-// use std::future::Future;
-
 use std::{fmt, io::Write, ops::Range};
 
 use ansi_term::Colour;
 #[cfg(feature = "async")]
 use puteketeke::AsyncTask;
 use serde::{Deserialize, Serialize};
-use snafu::Backtrace;
+use snafu::{location, Backtrace, Location};
 // #[cfg(feature = "async")]
 // use smol::future;
 use uuid::Uuid;
@@ -583,6 +580,7 @@ impl TryFrom<&Value> for Vec<RefType<Value>> {
             _ => Err(BubbaError::Conversion {
                 src: value.to_string(),
                 dst: "Vec<RefType<Value>>".to_owned(),
+                location: location!(),
                 backtrace: Backtrace::capture(),
             }
             .into()),
@@ -599,6 +597,7 @@ impl TryFrom<&Value> for ValueType {
             _ => Err(BubbaError::Conversion {
                 src: value.to_string(),
                 dst: "ValueType".to_owned(),
+                location: location!(),
                 backtrace: Backtrace::capture(),
             }
             .into()),
@@ -615,6 +614,7 @@ impl TryFrom<Value> for ValueType {
             _ => Err(BubbaError::Conversion {
                 src: value.to_string(),
                 dst: "ValueType".to_owned(),
+                location: location!(),
                 backtrace: Backtrace::capture(),
             }
             .into()),
@@ -632,6 +632,7 @@ impl TryFrom<Value> for Uuid {
                 BubbaError::Conversion {
                     src: str_.to_owned(),
                     dst: "Uuid".to_owned(),
+                    location: location!(),
                     backtrace: Backtrace::capture(),
                 }
                 .into()
@@ -639,6 +640,7 @@ impl TryFrom<Value> for Uuid {
             _ => Err(BubbaError::Conversion {
                 src: value.to_string(),
                 dst: "Uuid".to_owned(),
+                location: location!(),
                 backtrace: Backtrace::capture(),
             }
             .into()),
@@ -656,6 +658,7 @@ impl TryFrom<&Value> for Uuid {
                 BubbaError::Conversion {
                     src: str_.to_owned(),
                     dst: "Uuid".to_owned(),
+                    location: location!(),
                     backtrace: Backtrace::capture(),
                 }
                 .into()
@@ -663,6 +666,7 @@ impl TryFrom<&Value> for Uuid {
             _ => Err(BubbaError::Conversion {
                 src: value.to_string(),
                 dst: "Uuid".to_owned(),
+                location: location!(),
                 backtrace: Backtrace::capture(),
             }
             .into()),
@@ -679,6 +683,7 @@ impl TryFrom<Value> for Range<DwarfInteger> {
             _ => Err(BubbaError::Conversion {
                 src: value.to_string(),
                 dst: "range".to_owned(),
+                location: location!(),
                 backtrace: Backtrace::capture(),
             }
             .into()),
@@ -695,6 +700,7 @@ impl TryFrom<Value> for Range<usize> {
             _ => Err(BubbaError::Conversion {
                 src: value.to_string(),
                 dst: "range".to_owned(),
+                location: location!(),
                 backtrace: Backtrace::capture(),
             }
             .into()),
@@ -711,6 +717,7 @@ impl TryFrom<&Value> for Range<usize> {
             _ => Err(BubbaError::Conversion {
                 src: value.to_string(),
                 dst: "range".to_owned(),
+                location: location!(),
                 backtrace: Backtrace::capture(),
             }
             .into()),
@@ -729,6 +736,7 @@ impl TryFrom<Value> for usize {
                 BubbaError::Conversion {
                     src: str_.to_owned(),
                     dst: "usize".to_owned(),
+                    location: location!(),
                     backtrace: Backtrace::capture(),
                 }
                 .into()
@@ -743,6 +751,7 @@ impl TryFrom<Value> for usize {
             _ => Err(BubbaError::Conversion {
                 src: value.to_string(),
                 dst: "usize".to_owned(),
+                location: location!(),
                 backtrace: Backtrace::capture(),
             }
             .into()),
@@ -761,6 +770,7 @@ impl TryFrom<&Value> for usize {
                 BubbaError::Conversion {
                     src: str_.to_owned(),
                     dst: "usize".to_owned(),
+                    location: location!(),
                     backtrace: Backtrace::capture(),
                 }
                 .into()
@@ -775,6 +785,7 @@ impl TryFrom<&Value> for usize {
             _ => Err(BubbaError::Conversion {
                 src: value.to_string(),
                 dst: "usize".to_owned(),
+                location: location!(),
                 backtrace: Backtrace::capture(),
             }
             .into()),
@@ -793,6 +804,7 @@ impl TryFrom<Value> for isize {
                 BubbaError::Conversion {
                     src: str_.to_owned(),
                     dst: "isize".to_owned(),
+                    location: location!(),
                     backtrace: Backtrace::capture(),
                 }
                 .into()
@@ -807,6 +819,7 @@ impl TryFrom<Value> for isize {
             _ => Err(BubbaError::Conversion {
                 src: value.to_string(),
                 dst: "isize".to_owned(),
+                location: location!(),
                 backtrace: Backtrace::capture(),
             }
             .into()),
@@ -825,6 +838,7 @@ impl TryFrom<&Value> for isize {
                 BubbaError::Conversion {
                     src: str_.to_owned(),
                     dst: "isize".to_owned(),
+                    location: location!(),
                     backtrace: Backtrace::capture(),
                 }
                 .into()
@@ -839,6 +853,7 @@ impl TryFrom<&Value> for isize {
             _ => Err(BubbaError::Conversion {
                 src: value.to_string(),
                 dst: "isize".to_owned(),
+                location: location!(),
                 backtrace: Backtrace::capture(),
             }
             .into()),
@@ -857,6 +872,7 @@ impl TryFrom<Value> for i64 {
                 BubbaError::Conversion {
                     src: str_.to_owned(),
                     dst: "i64".to_owned(),
+                    location: location!(),
                     backtrace: Backtrace::capture(),
                 }
                 .into()
@@ -864,6 +880,7 @@ impl TryFrom<Value> for i64 {
             _ => Err(BubbaError::Conversion {
                 src: value.to_string(),
                 dst: "i64".to_owned(),
+                location: location!(),
                 backtrace: Backtrace::capture(),
             }
             .into()),
@@ -882,6 +899,7 @@ impl TryFrom<&Value> for i64 {
                 BubbaError::Conversion {
                     src: str_.to_owned(),
                     dst: "i64".to_owned(),
+                    location: location!(),
                     backtrace: Backtrace::capture(),
                 }
                 .into()
@@ -889,6 +907,7 @@ impl TryFrom<&Value> for i64 {
             _ => Err(BubbaError::Conversion {
                 src: value.to_string(),
                 dst: "i64".to_owned(),
+                location: location!(),
                 backtrace: Backtrace::capture(),
             }
             .into()),
@@ -907,6 +926,7 @@ impl TryFrom<Value> for u64 {
                 BubbaError::Conversion {
                     src: str_.to_owned(),
                     dst: "u64".to_owned(),
+                    location: location!(),
                     backtrace: Backtrace::capture(),
                 }
                 .into()
@@ -914,6 +934,7 @@ impl TryFrom<Value> for u64 {
             _ => Err(BubbaError::Conversion {
                 src: value.to_string(),
                 dst: "u64".to_owned(),
+                location: location!(),
                 backtrace: Backtrace::capture(),
             }
             .into()),
@@ -932,6 +953,7 @@ impl TryFrom<&Value> for u64 {
                 BubbaError::Conversion {
                     src: str_.to_owned(),
                     dst: "u64".to_owned(),
+                    location: location!(),
                     backtrace: Backtrace::capture(),
                 }
                 .into()
@@ -939,6 +961,7 @@ impl TryFrom<&Value> for u64 {
             _ => Err(BubbaError::Conversion {
                 src: value.to_string(),
                 dst: "u64".to_owned(),
+                location: location!(),
                 backtrace: Backtrace::capture(),
             }
             .into()),
@@ -957,6 +980,7 @@ impl TryFrom<Value> for f64 {
                 BubbaError::Conversion {
                     src: str_.to_owned(),
                     dst: "f64".to_owned(),
+                    location: location!(),
                     backtrace: Backtrace::capture(),
                 }
                 .into()
@@ -964,6 +988,7 @@ impl TryFrom<Value> for f64 {
             _ => Err(BubbaError::Conversion {
                 src: value.to_string(),
                 dst: "f64".to_owned(),
+                location: location!(),
                 backtrace: Backtrace::capture(),
             }
             .into()),
@@ -982,6 +1007,7 @@ impl TryFrom<&Value> for f64 {
                 BubbaError::Conversion {
                     src: str_.to_owned(),
                     dst: "f64".to_owned(),
+                    location: location!(),
                     backtrace: Backtrace::capture(),
                 }
                 .into()
@@ -989,6 +1015,7 @@ impl TryFrom<&Value> for f64 {
             _ => Err(BubbaError::Conversion {
                 src: value.to_string(),
                 dst: "f64".to_owned(),
+                location: location!(),
                 backtrace: Backtrace::capture(),
             }
             .into()),
@@ -1023,6 +1050,7 @@ impl TryFrom<Value> for bool {
                 BubbaError::Conversion {
                     src: str_.to_owned(),
                     dst: "bool".to_owned(),
+                    location: location!(),
                     backtrace: Backtrace::capture(),
                 }
                 .into()
@@ -1030,6 +1058,7 @@ impl TryFrom<Value> for bool {
             _ => Err(BubbaError::Conversion {
                 src: value.to_string(),
                 dst: "bool".to_owned(),
+                location: location!(),
                 backtrace: Backtrace::capture(),
             }
             .into()),
@@ -1048,6 +1077,7 @@ impl TryFrom<&Value> for bool {
                 BubbaError::Conversion {
                     src: str_.to_owned(),
                     dst: "bool".to_owned(),
+                    location: location!(),
                     backtrace: Backtrace::capture(),
                 }
                 .into()
@@ -1055,6 +1085,7 @@ impl TryFrom<&Value> for bool {
             _ => Err(BubbaError::Conversion {
                 src: value.to_string(),
                 dst: "bool".to_owned(),
+                location: location!(),
                 backtrace: Backtrace::capture(),
             }
             .into()),

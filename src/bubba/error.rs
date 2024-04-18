@@ -11,10 +11,11 @@ pub enum BubbaError {
     Addition { left: Value, right: Value },
     #[snafu(display("\n{}: negation error", ERR_CLR.bold().paint("error")))]
     Bang { value: Value },
-    #[snafu(display("\n{backtrace}\n{}: could not convert `{src}` to `{dst}`", ERR_CLR.bold().paint("error")))]
+    #[snafu(display("\n{backtrace}\n{}: could not convert `{src}` to `{dst}`\n --> {}:{}:{}", ERR_CLR.bold().paint("error"), location.file, location.line, location.column))]
     Conversion {
         src: String,
         dst: String,
+        location: Location,
         backtrace: Backtrace,
     },
     #[snafu(display("\n{}: division error: `{}` ÷ `{}`", ERR_CLR.bold().paint("error"), left, right))]

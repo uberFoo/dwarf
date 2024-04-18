@@ -376,7 +376,7 @@ mod http_server {
                                 panic!("Invalid port");
                             };
 
-                            let addr = SocketAddr::from(([127, 0, 0, 1], *port as u16));
+                            let addr = SocketAddr::from(([0, 0, 0, 0], *port as u16));
 
                             let listener_result = TcpListener::bind(addr).await;
                             let listener = match listener_result {

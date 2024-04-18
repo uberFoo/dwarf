@@ -174,7 +174,7 @@ fn run_program(test: &str, program: &str) -> Result<(BubbaValue, String), String
     let result = match vm.invoke("main", &[]) {
         Ok(value) => {
             // #[cfg(not(feature = "async"))]
-            let value = (*s_read!(value)).clone();
+            let value = s_read!(value).clone();
             // #[cfg(feature = "async")]
             // let value = {
             //     unsafe {

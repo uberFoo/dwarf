@@ -1,0 +1,56 @@
+use std::result::Result;
+
+use sqlx::Error;
+use sqlx::Pool;
+use sqlx::Row;
+use sqlx::Sqlx;
+use sqlx::Type;
+
+async fn main() -> Future<()> {
+    let sqlx = Sqlx::new();
+
+    let query = "
+    INSERT INTO users (username) VALUES ($1)
+";
+
+    if let Result::<Pool, Error>::Ok(pool) = sqlx
+        .connect("postgres://postgres:postgres@localhost/files")
+        .await
+    {
+        print("Connected to database\n");
+
+        let map = pool.query(query);
+        let name = "uberFoo";
+        let map = map.bind(name);
+
+        let posts = map.execute();
+
+        let found = false;
+        let map = pool.query("SELECT * FROM users");
+        let q = map.map(|row: Row| -> string {
+            let username = row.get("username", Type::String);
+            print(username + "\n");
+            // if username == name {
+            // found = true;
+            // }
+
+            username
+        });
+        let users = q.fetch_all();
+        // print(users);
+
+        // if let Result::<[Row], Error>::Ok(users) = users {
+        //     let u = users as [string];
+
+        //     for user in u {
+        //         if user == name {
+        //             found = true;
+        //         }
+        //     }
+        // }
+
+        // chacha::assert(found);
+    } else {
+        print("Error connecting to database");
+    }
+}

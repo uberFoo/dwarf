@@ -268,6 +268,11 @@ impl<'a, 'b> Context<'a, 'b> {
         self.symbol_tables.last().unwrap().1
     }
 
+    fn insert_new_symbol(&mut self, name: String, ty: ValueType) -> usize {
+        let table = &mut self.symbol_tables.last_mut().unwrap().0;
+        table.insert(name, ty)
+    }
+
     fn insert_symbol(&mut self, name: String, ty: ValueType) -> (bool, usize) {
         match self.get_symbol(name.as_str()) {
             Some(value) => (false, value.number),
@@ -645,6 +650,7 @@ fn compile_statement(
                     thonk.increment_frame_size();
                     index
                 }
+                // (false, index) => index,
                 (false, index) => index,
             };
 
