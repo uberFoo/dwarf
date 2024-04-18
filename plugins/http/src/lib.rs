@@ -1,5 +1,6 @@
 use std::{
     fmt::{self, Display},
+    fs, io,
     sync::Arc,
 };
 
@@ -249,7 +250,6 @@ mod http_server {
     use super::*;
 
     use std::cell::RefCell;
-    use std::convert::Infallible;
     use std::future::Future;
     use std::net::SocketAddr;
     use std::pin::Pin;
@@ -258,13 +258,16 @@ mod http_server {
     use http_body_util::Full;
     use hyper::body::Bytes;
     use hyper::server::conn::http1;
-    use hyper::service::service_fn;
     use hyper::service::Service;
     use hyper::{body::Incoming as IncomingBody, Request, Response};
     use hyper::{Method, Uri};
-    use hyper_util::rt::TokioIo;
+    use hyper_util::rt::{TokioExecutor, TokioIo};
+    use hyper_util::server::conn::auto::Builder;
     use rustc_hash::FxHashMap as HashMap;
+    use rustls::ServerConfig;
+    use rustls_pki_types::{CertificateDer, PrivateKeyDer};
     use tokio::net::TcpListener;
+    use tokio_rustls::TlsAcceptor;
 
     struct MethodStr<'a>(&'a str);
 
@@ -337,6 +340,18 @@ mod http_server {
         requests: Arc<Mutex<Slab<Arc<Request<IncomingBody>>>>>,
         uris: Arc<Mutex<RefCell<Slab<Arc<Uri>>>>>,
         routes: Arc<Mutex<RefCell<HashMap<(String, Method), (usize, ResponseType)>>>>,
+        tls: Arc<
+            Mutex<
+                RefCell<
+                    Option<(
+                        // Cert
+                        Vec<CertificateDer<'static>>,
+                        // Key
+                        PrivateKeyDer<'static>,
+                    )>,
+                >,
+            >,
+        >,
     }
 
     impl HttpServer {
@@ -346,6 +361,7 @@ mod http_server {
                 requests: Arc::new(Mutex::new(Slab::new())),
                 uris: Arc::new(Mutex::new(RefCell::new(Slab::new()))),
                 routes: Arc::new(Mutex::new(RefCell::new(HashMap::default()))),
+                tls: Arc::new(Mutex::new(RefCell::new(None))),
             }
         }
     }
@@ -389,36 +405,95 @@ mod http_server {
                                 }
                             };
 
+                            let tls_acceptor = if let Some((certs, key)) =
+                                self.tls.lock().unwrap().borrow_mut().take()
+                            {
+                                let _ =
+                                    rustls::crypto::aws_lc_rs::default_provider().install_default();
+                                let mut server_config = ServerConfig::builder()
+                                    .with_no_client_auth()
+                                    .with_single_cert(certs, key)
+                                    .map_err(|e| Error::Plugin(e.to_string().into()))
+                                    .unwrap();
+                                server_config.alpn_protocols = vec![
+                                    b"h2".to_vec(),
+                                    b"http/1.1".to_vec(),
+                                    b"http/1.0".to_vec(),
+                                ];
+                                Some(TlsAcceptor::from(Arc::new(server_config)))
+                            } else {
+                                None
+                            };
+
                             println!("Listening on http://{}", addr);
 
-                            loop {
-                                let stream = listener.accept().await;
-                                let (stream, _) = match stream {
-                                    Ok(stream) => stream,
-                                    Err(e) => {
-                                        println!("Error accepting connection: {:?}", e);
-                                        continue;
-                                    }
-                                };
+                            if let Some(tls_acceptor) = tls_acceptor {
+                                loop {
+                                    let stream = listener.accept().await;
+                                    let (stream, _) = match stream {
+                                        Ok(stream) => stream,
+                                        Err(e) => {
+                                            println!("Error accepting connection: {:?}", e);
+                                            continue;
+                                        }
+                                    };
 
-                                let self_clone = self.clone();
-                                let svc = Svc {
-                                    server: RefCell::new(self_clone),
-                                };
-                                // Use an adapter to access something implementing `tokio::io`
-                                // traits as if they implement `hyper::rt` IO traits.
-                                let io = TokioIo::new(stream);
-                                let svc_clone = svc.clone();
+                                    let self_clone = self.clone();
+                                    let svc = Svc {
+                                        server: RefCell::new(self_clone),
+                                    };
+                                    let svc_clone = svc.clone();
 
-                                // Spawn a tokio task to serve multiple connections concurrently
-                                tokio::task::spawn(async move {
-                                    // Finally, we bind the incoming connection to our service
-                                    if let Err(err) =
-                                        http1::Builder::new().serve_connection(io, svc_clone).await
-                                    {
-                                        println!("Error serving connection: {:?}", err);
-                                    }
-                                });
+                                    let tls_acceptor = tls_acceptor.clone();
+                                    tokio::spawn(async move {
+                                        let tls_stream = match tls_acceptor.accept(stream).await {
+                                            Ok(tls_stream) => tls_stream,
+                                            Err(err) => {
+                                                eprintln!(
+                                                    "failed to perform tls handshake: {err:#}"
+                                                );
+                                                return;
+                                            }
+                                        };
+                                        if let Err(err) = Builder::new(TokioExecutor::new())
+                                            .serve_connection(TokioIo::new(tls_stream), svc_clone)
+                                            .await
+                                        {
+                                            eprintln!("failed to serve connection: {err:#}");
+                                        }
+                                    });
+                                }
+                            } else {
+                                loop {
+                                    let stream = listener.accept().await;
+                                    let (stream, _) = match stream {
+                                        Ok(stream) => stream,
+                                        Err(e) => {
+                                            println!("Error accepting connection: {:?}", e);
+                                            continue;
+                                        }
+                                    };
+
+                                    let self_clone = self.clone();
+                                    let svc = Svc {
+                                        server: RefCell::new(self_clone),
+                                    };
+                                    // Use an adapter to access something implementing `tokio::io`
+                                    // traits as if they implement `hyper::rt` IO traits.
+                                    let io = TokioIo::new(stream);
+                                    let svc_clone = svc.clone();
+
+                                    // Spawn a tokio task to serve multiple connections concurrently
+                                    tokio::task::spawn(async move {
+                                        // Finally, we bind the incoming connection to our service
+                                        if let Err(err) = http1::Builder::new()
+                                            .serve_connection(io, svc_clone)
+                                            .await
+                                        {
+                                            println!("Error serving connection: {:?}", err);
+                                        }
+                                    });
+                                }
                             }
                         }
                         "route" => {
@@ -447,6 +522,51 @@ mod http_server {
                                 .unwrap()
                                 .borrow_mut()
                                 .insert((path.to_string(), method), (*number, body));
+
+                            Ok(FfiValue::Empty)
+                        }
+                        "use_tls" => {
+                            let cert: String = args
+                                .get(0)
+                                .unwrap()
+                                .try_into()
+                                .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
+                                .unwrap();
+
+                            let key: String = args
+                                .get(1)
+                                .unwrap()
+                                .try_into()
+                                .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
+                                .unwrap();
+
+                            let certfile = fs::File::open(cert.clone())
+                                .map_err(|e| {
+                                    Error::Plugin(format!("failed to open {}: {}", cert, e).into())
+                                })
+                                .unwrap();
+                            let mut reader = io::BufReader::new(certfile);
+
+                            // Load and return certificate.
+                            let cert: Vec<CertificateDer<'static>> =
+                                rustls_pemfile::certs(&mut reader)
+                                    .collect::<io::Result<Vec<CertificateDer<'static>>>>()
+                                    .unwrap();
+
+                            let keyfile = fs::File::open(key.clone())
+                                .map_err(|e| {
+                                    Error::Plugin(format!("failed to open {}: {}", key, e).into())
+                                })
+                                .unwrap();
+                            let mut reader = io::BufReader::new(keyfile);
+
+                            // Load and return a single private key.
+                            let key: PrivateKeyDer<'static> =
+                                rustls_pemfile::private_key(&mut reader)
+                                    .map(|key| key.unwrap())
+                                    .unwrap();
+
+                            *self.tls.lock().unwrap().borrow_mut() = Some((cert, key));
 
                             Ok(FfiValue::Empty)
                         }
