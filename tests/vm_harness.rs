@@ -173,22 +173,7 @@ fn run_program(test: &str, program: &str) -> Result<(BubbaValue, String), String
 
     let result = match vm.invoke("main", &[]) {
         Ok(value) => {
-            // #[cfg(not(feature = "async"))]
             let value = s_read!(value).clone();
-            // #[cfg(feature = "async")]
-            // let value = {
-            //     unsafe {
-            //         let value = std::sync::Arc::into_raw(value);
-            //         let value = std::ptr::read(value);
-            //         let value = ref_to_inner!(value);
-
-            //         let value = future::block_on(value);
-
-            //         let value = std::sync::Arc::into_raw(value);
-            //         let value = std::ptr::read(value);
-            //         ref_to_inner!(value)
-            //     }
-            // };
 
             match value {
                 BubbaValue::Error(msg) => {
