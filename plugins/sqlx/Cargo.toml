@@ -14,7 +14,7 @@ dwarf = { path = "../../" }
 futures-lite = "2.2.0"
 slab = "0.4.9"
 sqlx = { version = "0.7", features = [
-    "runtime-async-std",
+    "runtime-async-std-rustls",
     "postgres",
     "chrono",
 ] }
