@@ -1,4 +1,4 @@
-use std::{env, fs, ops::Range, path::PathBuf};
+use std::{fs, ops::Range, path::PathBuf};
 
 use ansi_term::Colour;
 use heck::ToUpperCamelCase;
@@ -49,7 +49,7 @@ pub(super) const LIB_DIR: &str = "lib";
 pub(super) const LIB_TAO: &str = "lib.ore";
 pub(super) const MODEL_DIR: &str = "models";
 pub(super) const SRC_DIR: &str = "src";
-pub(super) const TAO_EXT: &str = "ore";
+pub(super) const ORE_EXT: &str = "ore";
 
 macro_rules! link_format_bits {
     ($last:expr, $next:expr, $store:expr) => {{
@@ -333,7 +333,7 @@ pub struct Context<'a> {
     pub models: &'a mut ModelStore,
     pub sarzak: &'a SarzakStore,
     pub dwarf_home: &'a PathBuf,
-    pub cwd: PathBuf,
+    pub cwd: &'a PathBuf,
     pub dirty: &'a mut Vec<Dirty>,
     pub file_name: &'a str,
     pub func_defs: HashMap<String, FunctionDefinition>,
@@ -350,7 +350,7 @@ impl<'a> Context<'a> {
         source: String,
         sarzak: &'a SarzakStore,
         file_name: &'a str,
-        cwd: PathBuf,
+        cwd: &'a PathBuf,
         dwarf_home: &'a PathBuf,
         models: &'a mut ModelStore,
         dirty: &'a mut Vec<Dirty>,
@@ -407,6 +407,7 @@ pub fn new_lu_dog(
     file_name: String,
     source: Option<(String, &[Item])>,
     dwarf_home: &PathBuf,
+    cwd: &PathBuf,
     sarzak: &SarzakStore,
 ) -> Result<InterContext> {
     let mut lu_dog = LuDogStore::new();
@@ -440,7 +441,7 @@ pub fn new_lu_dog(
             models: &mut models,
             sarzak,
             dwarf_home,
-            cwd: env::current_dir().unwrap(),
+            cwd,
             dirty: &mut dirty,
             file_name: file_name.as_str(),
             func_defs: HashMap::default(),
@@ -3206,7 +3207,7 @@ fn inter_module(
     let mut path = context.cwd.clone();
     path.push("sacrifice");
     path.set_file_name(name);
-    path.set_extension(TAO_EXT);
+    path.set_extension(ORE_EXT);
 
     if !context.imports.insert(path.clone()) {
         debug!("{name} already imported");
@@ -3234,7 +3235,7 @@ fn inter_module(
                         source_code,
                         context.sarzak,
                         &path_name,
-                        context.cwd.clone(),
+                        context.cwd,
                         context.dwarf_home,
                         context.models,
                         &mut dirty,
@@ -3296,11 +3297,11 @@ fn inter_import(
 
     let ty = path_root.pop().unwrap();
 
-    // if let Some(current) = import_stack.last() {
-    //     if current != &ty {
-    //         return Ok(());
-    //     }
-    // }
+    if let Some(current) = import_stack.last() {
+        if current == &ty {
+            return Ok(());
+        }
+    }
 
     let module = path_root.first().unwrap(); // This will have _something_.
 
@@ -3323,6 +3324,19 @@ fn inter_import(
         let dir = path.clone();
 
         path.push(LIB_TAO);
+        (dir, path)
+    };
+
+    // Then let's try the current directory.
+    let (dir, path) = if path.exists() {
+        (dir, path)
+    } else {
+        let mut path = context.cwd.clone();
+        let dir = path.clone();
+
+        path.push(module);
+        path.set_extension(ORE_EXT);
+
         (dir, path)
     };
 
@@ -3358,7 +3372,7 @@ fn inter_import(
                         source_code,
                         context.sarzak,
                         &path,
-                        dir,
+                        &dir,
                         context.dwarf_home,
                         context.models,
                         &mut dirty,
@@ -3918,7 +3932,6 @@ pub(crate) fn make_value_type(
                         let woog_struct = lu_dog.exhume_woog_struct(id).unwrap();
                         let struct_fields = s_read!(woog_struct).r7_field(lu_dog);
                         let mut generic_substitutions = HashMap::default();
-                        let mut i = 0;
 
                         for field in struct_fields {
                             let field = s_read!(field);
@@ -3929,7 +3942,6 @@ pub(crate) fn make_value_type(
                                 let generic = s_read!(generic);
                                 let ty = generic.r1_value_type(lu_dog)[0].clone();
                                 generic_substitutions.insert(generic.name.to_owned(), ty);
-                                i += 1;
                             }
                         }
 

@@ -423,6 +423,8 @@ pub(in crate::bubba::compiler) fn compile(
 
 #[cfg(test)]
 mod test {
+    use std::env;
+
     use test_log::test;
 
     use crate::{
@@ -450,6 +452,7 @@ mod test {
             "for_in_range".to_owned(),
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
+            &env::current_dir().unwrap(),
             &sarzak,
         )
         .unwrap();
@@ -480,6 +483,7 @@ mod test {
             "test_for_in_range".to_owned(),
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
+            &env::current_dir().unwrap(),
             &sarzak,
         )
         .unwrap();
@@ -512,6 +516,7 @@ mod test {
             "nested_for_loop".to_owned(),
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
+            &env::current_dir().unwrap(),
             &sarzak,
         )
         .unwrap();
@@ -543,6 +548,7 @@ mod test {
             "for_loop_variable".to_owned(),
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
+            &env::current_dir().unwrap(),
             &sarzak,
         )
         .unwrap();
@@ -577,6 +583,7 @@ mod test {
             "test_for_loop_iterator_param".to_owned(),
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
+            &env::current_dir().unwrap(),
             &sarzak,
         )
         .unwrap();
@@ -608,6 +615,7 @@ mod test {
             "for_loop_iter_array".to_owned(),
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
+            &env::current_dir().unwrap(),
             &sarzak,
         )
         .unwrap();
@@ -639,6 +647,7 @@ mod test {
             "for_loop_iter_array".to_owned(),
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
+            &env::current_dir().unwrap(),
             &sarzak,
         )
         .unwrap();

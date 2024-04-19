@@ -297,8 +297,6 @@ mod postgres {
                                 .fetch_one(pool)
                                 .await;
 
-                            dbg!(&result);
-
                             let result = match result {
                                 Ok(result) => ROk(RBox::new(result.into())),
                                 Err(e) => {

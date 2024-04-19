@@ -21,11 +21,28 @@ fn main() {
     // write!(f, r#""{}""#, time::OffsetDateTime::now_utc()).unwrap();
     write!(f, r#""{}""#, chrono::Utc::now().to_rfc3339()).unwrap();
 
-    // Generate the tests
+    // Generate the interpreter tests
+    let tests = generate_tests(INTERP_HARNESS_DIR);
+    let dest_path = Path::new(&out_dir).join(INTERP_OUT_NAME);
+    fs::write(dest_path, tests).unwrap();
+
+    // VM Tests
+    let tests = generate_tests(VM_HARNESS_DIR);
+    let dest_path = Path::new(&out_dir).join(VM_OUT_NAME);
+    fs::write(dest_path, tests).unwrap();
+
+    println!("cargo:rerun-if-changed={SRC_DIR}");
+    println!("cargo:rerun-if-changed={TEST_DIR}/{INTERP_HARNESS_DIR}");
+    println!("cargo:rerun-if-changed={TEST_DIR}/{VM_HARNESS_DIR}");
+}
+
+fn generate_tests(path: &str) -> String {
     let mut tests = String::new();
+    tests += "use std::path::Path;\n";
+
     let mut in_dir = std::env::current_dir().unwrap();
     in_dir.push(TEST_DIR);
-    in_dir.push(INTERP_HARNESS_DIR);
+    in_dir.push(path);
     for entry in WalkDir::new(&in_dir).into_iter().filter_map(|e| e.ok()) {
         let path = entry.path();
         let root = path.parent().unwrap();
@@ -54,7 +71,9 @@ fn main() {
             tests += &format!("fn {parent}_{name}() {{\n");
             tests += "    let _ = env_logger::builder().is_test(true).try_init();\n";
             tests += "    color_backtrace::install();\n";
-            tests += &format!("    let result = run_program(\"{name}\", r#\"{contents}\"#);\n");
+            tests += &format!("    let cwd = Path::new(\"{}\");\n", root.display());
+            tests +=
+                &format!("    let result = run_program(\"{name}\", r#\"{contents}\"#, &cwd.to_path_buf());\n");
 
             let stderr = root.join(format!("{}.stderr", name));
             if stderr.exists() {
@@ -78,59 +97,5 @@ fn main() {
         }
     }
 
-    let dest_path = Path::new(&out_dir).join(INTERP_OUT_NAME);
-    fs::write(dest_path, tests).unwrap();
-
-    let mut tests = String::new();
-    let mut in_dir = std::env::current_dir().unwrap();
-    in_dir.push(TEST_DIR);
-    in_dir.push(VM_HARNESS_DIR);
-    for entry in WalkDir::new(&in_dir).into_iter().filter_map(|e| e.ok()) {
-        let path = entry.path();
-        let root = path.parent().unwrap();
-        if root.file_name().unwrap() == "failing" {
-            continue;
-        }
-        if path.is_file() {
-            let ext = path.extension().unwrap();
-            if ext != EXT1 && ext != EXT2 {
-                continue;
-            }
-            let parent = root.file_name().unwrap().to_str().unwrap();
-            let name = path.file_stem().unwrap().to_str().unwrap();
-            let contents = fs::read_to_string(path).unwrap();
-            tests += "#[test]\n";
-            tests += &format!("fn {parent}_{name}() {{\n");
-            tests += "    let _ = env_logger::builder().is_test(true).try_init();\n";
-            tests += "    color_backtrace::install();\n";
-            tests += &format!("    let result = run_program(\"{name}\", r#\"{contents}\"#);\n");
-
-            let stderr = root.join(format!("{}.stderr", name));
-            if stderr.exists() {
-                tests += &format!(
-                    "    let _ = result.map_err(|e| {{assert!(diff_with_file(\"{stderr}\", \"{name}\", &e).is_ok()); Err::<(), String>(e)}});\n",
-                    stderr = stderr.display()
-                );
-            } else {
-                tests += "    assert!(result.is_ok());\n";
-            }
-
-            let stdout = root.join(format!("{}.stdout", name));
-            if stdout.exists() {
-                tests += &format!(
-                    "    let _ = result.map(|ok| {{assert!(diff_with_file(\"{stdout}\", \"{name}\", &ok.1).is_ok()); ok}});\n",
-                    stdout = stdout.display()
-                );
-            }
-
-            tests += "}\n\n";
-        }
-    }
-
-    let dest_path = Path::new(&out_dir).join(VM_OUT_NAME);
-    fs::write(dest_path, tests).unwrap();
-
-    println!("cargo:rerun-if-changed={SRC_DIR}");
-    println!("cargo:rerun-if-changed={TEST_DIR}/{INTERP_HARNESS_DIR}");
-    println!("cargo:rerun-if-changed={TEST_DIR}/{VM_HARNESS_DIR}");
+    tests
 }

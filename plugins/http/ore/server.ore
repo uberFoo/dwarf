@@ -38,6 +38,11 @@ impl HttpServer {
         self.inner
             .invoke_func("http_server", "HttpServer", "route", @[path, method.to_string(), body.to_string(), wrapper]);
     }
+
+    fn use_tls(self, cert: string, key: string) {
+        self.inner
+            .invoke_func("http_server", "HttpServer", "use_tls", [cert, key]);
+    }
 }
 
 enum Method {

@@ -247,6 +247,8 @@ pub(in crate::bubba::compiler) fn compile(
 
 #[cfg(test)]
 mod test {
+    use std::env;
+
     use crate::{
         bubba::compiler::{
             test::{get_dwarf_home, run_vm, setup_logging},
@@ -268,6 +270,7 @@ mod test {
             "test_add_strings".to_owned(),
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
+            &env::current_dir().unwrap(),
             &sarzak,
         )
         .unwrap();
@@ -296,6 +299,7 @@ mod test {
             "test_subtraction".to_owned(),
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
+            &env::current_dir().unwrap(),
             &sarzak,
         )
         .unwrap();
@@ -321,6 +325,7 @@ mod test {
             "test_multiplication".to_owned(),
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
+            &env::current_dir().unwrap(),
             &sarzak,
         )
         .unwrap();
@@ -347,6 +352,7 @@ mod test {
             "test_division".to_owned(),
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
+            &env::current_dir().unwrap(),
             &sarzak,
         )
         .unwrap();
@@ -375,6 +381,7 @@ mod test {
             "test_assignment".to_owned(),
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
+            &env::current_dir().unwrap(),
             &sarzak,
         )
         .unwrap();
@@ -402,6 +409,7 @@ mod test {
             "test_and_expression".to_owned(),
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
+            &env::current_dir().unwrap(),
             &sarzak,
         )
         .unwrap();
@@ -428,6 +436,7 @@ mod test {
             "test_or_expression".to_owned(),
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
+            &env::current_dir().unwrap(),
             &sarzak,
         )
         .unwrap();
@@ -454,6 +463,7 @@ mod test {
             "test_binary_not".to_owned(),
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
+            &env::current_dir().unwrap(),
             &sarzak,
         )
         .unwrap();
@@ -485,6 +495,7 @@ mod test {
             "test_assign_to_struct_field".to_owned(),
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
+            &env::current_dir().unwrap(),
             &sarzak,
         )
         .unwrap();
@@ -515,6 +526,7 @@ mod test {
             "test_greater_than".to_owned(),
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
+            &env::current_dir().unwrap(),
             &sarzak,
         )
         .unwrap();

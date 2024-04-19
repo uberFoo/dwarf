@@ -20,7 +20,7 @@ use crate::{
         Function, ImplementationBlock, Item as WoogItem, LocalVariable, Parameter,
         Span as LuDogSpan, ValueType, Variable, XFuture, XValue,
     },
-    new_ref, s_read, s_write, Dirty, DwarfInteger, NewRef, RefType, SarzakStorePtr, PATH_SEP,
+    new_ref, s_read, s_write, Dirty, DwarfInteger, NewRef, RefType, SarzakStorePtr,
 };
 
 macro_rules! link_parameter {

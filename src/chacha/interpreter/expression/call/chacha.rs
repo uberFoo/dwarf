@@ -1,4 +1,4 @@
-use std::collections::VecDeque;
+use std::{collections::VecDeque, env};
 
 use ansi_term::Colour;
 use snafu::{location, prelude::*, Location};
@@ -120,6 +120,7 @@ pub(crate) fn parse_dwarf(
         name.to_owned(),
         Some((source_code.clone(), &ast)),
         context.get_home(),
+        &env::current_dir().unwrap(),
         &s_read!(context.sarzak_heel()),
     )
     .map_err(|errors| {

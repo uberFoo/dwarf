@@ -76,7 +76,7 @@ fn diff_with_file(path: &str, test: &str, found: &str) -> Result<(), ()> {
     }
 }
 
-fn run_program(test: &str, program: &str) -> Result<(BubbaValue, String), String> {
+fn run_program(test: &str, program: &str, cwd: &PathBuf) -> Result<(BubbaValue, String), String> {
     let _guard = EXEC_MUTEX.lock();
     let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
     let dwarf_home = env::var("DWARF_HOME")
@@ -106,6 +106,7 @@ fn run_program(test: &str, program: &str) -> Result<(BubbaValue, String), String
         test.to_owned(),
         Some((program.to_owned(), &ast)),
         &dwarf_home,
+        cwd,
         &sarzak,
     ) {
         Ok(lu_dog) => lu_dog,
@@ -173,22 +174,7 @@ fn run_program(test: &str, program: &str) -> Result<(BubbaValue, String), String
 
     let result = match vm.invoke("main", &[]) {
         Ok(value) => {
-            // #[cfg(not(feature = "async"))]
             let value = s_read!(value).clone();
-            // #[cfg(feature = "async")]
-            // let value = {
-            //     unsafe {
-            //         let value = std::sync::Arc::into_raw(value);
-            //         let value = std::ptr::read(value);
-            //         let value = ref_to_inner!(value);
-
-            //         let value = future::block_on(value);
-
-            //         let value = std::sync::Arc::into_raw(value);
-            //         let value = std::ptr::read(value);
-            //         ref_to_inner!(value)
-            //     }
-            // };
 
             match value {
                 BubbaValue::Error(msg) => {
