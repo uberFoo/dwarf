@@ -208,6 +208,8 @@ pub(in crate::bubba::compiler) fn compile(
 
 #[cfg(test)]
 mod test {
+    use std::env;
+
     use crate::{
         bubba::compiler::{
             test::{get_dwarf_home, run_vm, setup_logging},
@@ -238,6 +240,7 @@ mod test {
             "match_expression".to_owned(),
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
+            &env::current_dir().unwrap(),
             &sarzak,
         )
         .unwrap();
@@ -273,6 +276,7 @@ mod test {
             "match_expression".to_owned(),
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
+            &env::current_dir().unwrap(),
             &sarzak,
         )
         .unwrap();
@@ -305,6 +309,7 @@ mod test {
             "match_expression".to_owned(),
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
+            &env::current_dir().unwrap(),
             &sarzak,
         )
         .unwrap();
@@ -337,6 +342,7 @@ mod test {
             "match_expression".to_owned(),
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
+            &env::current_dir().unwrap(),
             &sarzak,
         )
         .unwrap();
@@ -376,6 +382,7 @@ mod test {
             "match_expression".to_owned(),
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
+            &env::current_dir().unwrap(),
             &sarzak,
         )
         .unwrap();
@@ -423,6 +430,7 @@ mod test {
             "match_expression".to_owned(),
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
+            &env::current_dir().unwrap(),
             &sarzak,
         )
         .unwrap();
@@ -473,6 +481,7 @@ mod test {
             "match_expression".to_owned(),
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
+            &env::current_dir().unwrap(),
             &sarzak_store,
         )
         .unwrap();
@@ -510,6 +519,7 @@ mod test {
             "match_expression".to_owned(),
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
+            &env::current_dir().unwrap(),
             &sarzak_store,
         )
         .unwrap();
@@ -553,6 +563,7 @@ mod test {
             "match_expression".to_owned(),
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
+            &env::current_dir().unwrap(),
             &sarzak_store,
         )
         .unwrap();
@@ -595,6 +606,7 @@ mod test {
             "match_expression".to_owned(),
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
+            &env::current_dir().unwrap(),
             &sarzak_store,
         )
         .unwrap();

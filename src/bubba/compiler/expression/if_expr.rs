@@ -79,6 +79,7 @@ pub(in crate::bubba::compiler) fn compile(
 
 #[cfg(test)]
 mod test {
+    use std::env;
 
     use crate::{
         bubba::compiler::{
@@ -105,6 +106,7 @@ mod test {
             "if_expression".to_owned(),
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
+            &env::current_dir().unwrap(),
             &sarzak,
         )
         .unwrap();
@@ -136,6 +138,7 @@ mod test {
             "if_expression_else_arm".to_owned(),
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
+            &env::current_dir().unwrap(),
             &sarzak,
         )
         .unwrap();
@@ -185,6 +188,7 @@ mod test {
             "if_expression_complex_condition".to_owned(),
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
+            &env::current_dir().unwrap(),
             &sarzak,
         )
         .unwrap();

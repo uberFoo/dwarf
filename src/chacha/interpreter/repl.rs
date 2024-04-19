@@ -143,7 +143,7 @@ pub fn start_repl(
                                     models: &mut s_write!(models),
                                     sarzak: &s_read!(sarzak),
                                     dwarf_home: &dwarf_home,
-                                    cwd: env::current_dir().unwrap(),
+                                    cwd: &env::current_dir().unwrap(),
                                     dirty: &mut dirty,
                                     file_name: "REPL",
                                     func_defs: HashMap::default(),

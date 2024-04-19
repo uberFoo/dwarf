@@ -743,9 +743,7 @@ fn get_span(expression: &RefType<Expression>, lu_dog: &LuDogStore) -> Span {
 
 #[cfg(test)]
 mod test {
-    use std::path::PathBuf;
-
-    use std::env;
+    use std::{env, path::PathBuf};
 
     use super::*;
 
@@ -811,6 +809,7 @@ mod test {
             "test_let_statement".to_owned(),
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
+            &env::current_dir().unwrap(),
             &sarzak,
         )
         .unwrap();
@@ -836,6 +835,7 @@ mod test {
             "test_boolean_true".to_owned(),
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
+            &env::current_dir().unwrap(),
             &sarzak,
         )
         .unwrap();
@@ -862,6 +862,7 @@ mod test {
             "test_boolean_false".to_owned(),
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
+            &env::current_dir().unwrap(),
             &sarzak,
         )
         .unwrap();
@@ -898,6 +899,7 @@ mod test {
             "fibonacci".to_owned(),
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
+            &env::current_dir().unwrap(),
             &sarzak,
         )
         .unwrap();
@@ -936,6 +938,7 @@ mod test {
             "use_std_option".to_owned(),
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
+            &env::current_dir().unwrap(),
             &sarzak,
         )
         .unwrap();
@@ -965,6 +968,7 @@ mod test {
             "use_plugin".to_owned(),
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
+            &env::current_dir().unwrap(),
             &sarzak,
         )
         .unwrap();
@@ -1061,6 +1065,7 @@ async fn main() -> Future<()> {
             "use_async".to_owned(),
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
+            &env::current_dir().unwrap(),
             &sarzak,
         )
         .unwrap();
@@ -1100,6 +1105,7 @@ async fn main() -> Future<()> {
             "test_locals_and_params".to_owned(),
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
+            &env::current_dir().unwrap(),
             &sarzak,
         )
         .unwrap();
@@ -1137,6 +1143,7 @@ async fn main() -> Future<()> {
             "test_locals_and_params".to_owned(),
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
+            &env::current_dir().unwrap(),
             &sarzak,
         )
         .unwrap();

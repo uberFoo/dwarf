@@ -607,6 +607,8 @@ fn compile_static_method_call(
 
 #[cfg(test)]
 mod test {
+    use std::env;
+
     use test_log::test;
 
     use crate::{
@@ -630,6 +632,7 @@ mod test {
             "empty_func".to_owned(),
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
+            &env::current_dir().unwrap(),
             &sarzak,
         )
         .unwrap();
@@ -653,6 +656,7 @@ mod test {
             "empty_func".to_owned(),
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
+            &env::current_dir().unwrap(),
             &sarzak,
         )
         .unwrap();
@@ -681,6 +685,7 @@ mod test {
             "func_call".to_owned(),
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
+            &env::current_dir().unwrap(),
             &sarzak,
         )
         .unwrap();
@@ -710,6 +715,7 @@ mod test {
             "test_func_args".to_owned(),
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
+            &env::current_dir().unwrap(),
             &sarzak,
         )
         .unwrap();
@@ -742,6 +748,7 @@ mod test {
             "test_func_args_and_locals".to_owned(),
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
+            &env::current_dir().unwrap(),
             &sarzak,
         )
         .unwrap();
@@ -773,6 +780,7 @@ mod test {
             "test_argument_ordering".to_owned(),
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
+            &env::current_dir().unwrap(),
             &sarzak,
         )
         .unwrap();
@@ -803,6 +811,7 @@ mod test {
             "test_or_expression".to_owned(),
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
+            &env::current_dir().unwrap(),
             &sarzak,
         )
         .unwrap();
@@ -829,6 +838,7 @@ mod test {
             "test_or_expression".to_owned(),
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
+            &env::current_dir().unwrap(),
             &sarzak,
         )
         .unwrap();
@@ -868,6 +878,7 @@ mod test {
             "test_method_call".to_owned(),
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
+            &env::current_dir().unwrap(),
             &sarzak,
         )
         .unwrap();
@@ -897,6 +908,7 @@ mod test {
             "test_args".to_owned(),
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
+            &env::current_dir().unwrap(),
             &sarzak,
         )
         .unwrap();
@@ -935,6 +947,7 @@ mod test {
             "test_lambda".to_owned(),
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
+            &env::current_dir().unwrap(),
             &sarzak,
         )
         .unwrap();
@@ -968,6 +981,7 @@ mod test {
             "test_lambda".to_owned(),
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
+            &env::current_dir().unwrap(),
             &sarzak,
         )
         .unwrap();
@@ -1003,6 +1017,7 @@ mod test {
             "test_lambda".to_owned(),
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
+            &env::current_dir().unwrap(),
             &sarzak,
         )
         .unwrap();
@@ -1047,6 +1062,7 @@ mod test {
             "test_call_chain".to_owned(),
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
+            &env::current_dir().unwrap(),
             &sarzak,
         )
         .unwrap();

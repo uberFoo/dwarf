@@ -77,7 +77,7 @@ fn diff_with_file(path: &str, test: &str, found: &str) -> Result<(), ()> {
     }
 }
 
-fn run_program(test: &str, program: &str) -> Result<(Value, String), String> {
+fn run_program(test: &str, program: &str, cwd: &PathBuf) -> Result<(Value, String), String> {
     let _guard = EXEC_MUTEX.lock();
     let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
     let dwarf_home = env::var("DWARF_HOME")
@@ -107,6 +107,7 @@ fn run_program(test: &str, program: &str) -> Result<(Value, String), String> {
         test.to_owned(),
         Some((program.to_owned(), &ast)),
         &dwarf_home,
+        cwd,
         &sarzak,
     ) {
         Ok(lu_dog) => lu_dog,

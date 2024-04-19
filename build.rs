@@ -72,8 +72,8 @@ fn generate_tests(path: &str) -> String {
             tests += "    let _ = env_logger::builder().is_test(true).try_init();\n";
             tests += "    color_backtrace::install();\n";
             tests += &format!("    let cwd = Path::new(\"{}\");\n", root.display());
-            tests += "    env::set_current_dir(&cwd).unwrap();\n";
-            tests += &format!("    let result = run_program(\"{name}\", r#\"{contents}\"#);\n");
+            tests +=
+                &format!("    let result = run_program(\"{name}\", r#\"{contents}\"#, &cwd.to_path_buf());\n");
 
             let stderr = root.join(format!("{}.stderr", name));
             if stderr.exists() {
