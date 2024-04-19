@@ -87,6 +87,7 @@ pub(in crate::bubba::compiler) fn compile(
 
                                     let idx = context
                                         .insert_new_symbol(var.name.clone(), s_read!(ty).clone());
+                                    thonk.increment_frame_size();
 
                                     thonk.insert_instruction(Instruction::Dup, location!());
                                     thonk.insert_instruction(
@@ -128,10 +129,6 @@ pub(in crate::bubba::compiler) fn compile(
                         #[allow(clippy::clone_on_copy)]
                         id.as_ref().unwrap().clone()
                     };
-                    // thonk.add_instruction(
-                    //     Instruction::Push(new_ref!(Value, s_read!(pe).name.clone().into())),
-                    //     location!(),
-                    // );
                     pe = lu_dog.exhume_path_element(&id).unwrap();
                     path.push(s_read!(pe).name.to_owned());
                 }

@@ -250,6 +250,8 @@ impl VM {
             panic!("Missing symbols: {:?}", missing_symbols);
         }
 
+        // 🚧 This is such an ugly hack. There should probably be a thread pool.
+        // OTOH, if this is sufficient...
         let mut vm_clone = vm.clone();
         thread::spawn(move || loop {
             vm_clone.lambda_listen();
