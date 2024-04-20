@@ -1,0 +1,5 @@
+mod module;
+
+use module::Foo;
+
+fn main() {}

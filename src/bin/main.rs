@@ -600,6 +600,7 @@ fn get_context(
         file_name.to_owned(),
         Some((source_code.clone(), &ast)),
         &dwarf_home,
+        &env::current_dir().unwrap(),
         &sarzak,
     ) {
         Ok(lu_dog) => Some(lu_dog),

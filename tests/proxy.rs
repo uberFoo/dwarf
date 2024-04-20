@@ -42,6 +42,7 @@ fn run_program(test: &str, program: &str) -> Result<(RefType<Value>, String), St
         test.to_owned(),
         Some((program.to_owned(), &ast)),
         &dwarf_home,
+        &env::current_dir().unwrap(),
         &sarzak,
     ) {
         Ok(lu_dog) => lu_dog,
