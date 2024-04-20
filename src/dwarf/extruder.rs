@@ -3314,8 +3314,11 @@ fn inter_import(
 
     path.push(LIB_TAO);
 
+    dbg!(&dir, &path);
+
     // And then here if the extension doesn't exist, we try the lib dir.
     let (dir, path) = if path.exists() {
+        dbg!("extension");
         (dir, path)
     } else {
         let mut path = context.dwarf_home.clone();
@@ -3324,6 +3327,22 @@ fn inter_import(
         let dir = path.clone();
 
         path.push(LIB_TAO);
+        dbg!("lib");
+        dbg!(&dir, &path);
+        (dir, path)
+    };
+
+    // Then let's try the current directory.
+    let (dir, path) = if path.exists() {
+        dbg!("lib");
+        (dir, path)
+    } else {
+        let mut path = context.cwd.clone();
+        let dir = path.clone();
+
+        path.push(module);
+        path.set_extension(ORE_EXT);
+        dbg!("cwd");
         (dir, path)
     };
 
