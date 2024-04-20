@@ -1,5 +1,7 @@
 use std::{
     fmt::{self, Display},
+    fs, io,
+    path::PathBuf,
     sync::Arc,
 };
 
@@ -318,13 +320,6 @@ mod http_server {
     }
 
     #[derive(Clone, Debug)]
-    struct Route {
-        path: String,
-        method: Method,
-        lambda: usize,
-    }
-
-    #[derive(Clone, Debug)]
     enum ResponseType {
         Json,
         Text,
@@ -337,6 +332,20 @@ mod http_server {
         requests: Arc<Mutex<Slab<Arc<Request<IncomingBody>>>>>,
         uris: Arc<Mutex<RefCell<Slab<Arc<Uri>>>>>,
         routes: Arc<Mutex<RefCell<HashMap<(String, Method), (usize, ResponseType)>>>>,
+        prefix_routes: Arc<Mutex<RefCell<HashMap<(String, Method), (usize, ResponseType)>>>>,
+        tls: Arc<
+            Mutex<
+                RefCell<
+                    Option<(
+                        // Cert
+                        Vec<CertificateDer<'static>>,
+                        // Key
+                        PrivateKeyDer<'static>,
+                    )>,
+                >,
+            >,
+        >,
+        strings: Arc<Mutex<Slab<String>>>,
     }
 
     impl HttpServer {
@@ -346,6 +355,9 @@ mod http_server {
                 requests: Arc::new(Mutex::new(Slab::new())),
                 uris: Arc::new(Mutex::new(RefCell::new(Slab::new()))),
                 routes: Arc::new(Mutex::new(RefCell::new(HashMap::default()))),
+                prefix_routes: Arc::new(Mutex::new(RefCell::new(HashMap::default()))),
+                tls: Arc::new(Mutex::new(RefCell::new(None))),
+                strings: Arc::new(Mutex::new(Slab::new())),
             }
         }
     }
@@ -363,7 +375,7 @@ mod http_server {
 
         fn invoke_func(
             &self,
-            module: RStr<'_>,
+            _module: RStr<'_>,
             ty: RStr<'_>,
             func: RStr<'_>,
             args: RVec<FfiValue>,
@@ -450,6 +462,80 @@ mod http_server {
 
                             Ok(FfiValue::Empty)
                         }
+                        "prefix_route" => {
+                            let FfiValue::String(path) = args.get(0).unwrap() else {
+                                panic!("Invalid path");
+                            };
+
+                            let FfiValue::String(method) = args.get(1).unwrap() else {
+                                panic!("Invalid method");
+                            };
+                            let method = Method::from(MethodStr(method.as_str()));
+
+                            let FfiValue::String(body) = args.get(2).unwrap() else {
+                                panic!("Invalid body");
+                            };
+                            let body = ResponseType::from(ResponseStr(body.as_str()));
+
+                            let FfiValue::Lambda(number) = args.get(3).unwrap() else {
+                                panic!("Invalid lambda");
+                            };
+
+                            println!("adding route {} {}", path, method);
+
+                            self.prefix_routes
+                                .lock()
+                                .unwrap()
+                                .borrow_mut()
+                                .insert((path.to_string(), method), (*number, body));
+
+                            Ok(FfiValue::Empty)
+                        }
+                        "use_tls" => {
+                            let cert: String = args
+                                .get(0)
+                                .unwrap()
+                                .try_into()
+                                .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
+                                .unwrap();
+
+                            let key: String = args
+                                .get(1)
+                                .unwrap()
+                                .try_into()
+                                .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
+                                .unwrap();
+
+                            let cert_file = fs::File::open(cert.clone())
+                                .map_err(|e| {
+                                    Error::Plugin(format!("failed to open {}: {}", cert, e).into())
+                                })
+                                .unwrap();
+                            let mut reader = io::BufReader::new(cert_file);
+
+                            // Load and return certificate.
+                            let cert: Vec<CertificateDer<'static>> =
+                                rustls_pemfile::certs(&mut reader)
+                                    .collect::<io::Result<Vec<CertificateDer<'static>>>>()
+                                    .unwrap();
+
+                            let key_file = fs::File::open(key.clone())
+                                .map_err(|e| {
+                                    Error::Plugin(format!("failed to open {}: {}", key, e).into())
+                                })
+                                .unwrap();
+                            let mut reader = io::BufReader::new(key_file);
+
+                            // Load and return a single private key.
+                            let key: PrivateKeyDer<'static> =
+                                rustls_pemfile::private_key(&mut reader)
+                                    .map(|key| key.unwrap())
+                                    .unwrap();
+
+                            *self.tls.lock().unwrap().borrow_mut() = Some((cert, key));
+
+                            Ok(FfiValue::Empty)
+                        }
                         func => Err(Error::Plugin(format!("Invalid function: {func}").into())),
                     },
                     "Request" => match func.as_str() {
@@ -473,6 +559,22 @@ mod http_server {
                             } else {
                                 Err(Error::Plugin("Invalid request".into()))
                             }
+                        }
+                        func => Err(Error::Plugin(format!("Invalid function: {func}").into())),
+                    },
+                    "Suffix" => match func.as_str() {
+                        "to_string" => {
+                            let key: DwarfInteger = args
+                                .first()
+                                .unwrap()
+                                .try_into()
+                                .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
+                                .unwrap();
+
+                            let guard = self.strings.lock().unwrap();
+                            let string = guard.get(key as usize).unwrap();
+
+                            Ok(FfiValue::String(string.to_owned().into()))
                         }
                         func => Err(Error::Plugin(format!("Invalid function: {func}").into())),
                     },
@@ -553,44 +655,30 @@ mod http_server {
                 key
             };
 
+            // This is setup for the static routes.
             let guard = server.routes.lock().unwrap();
-
+            // Here we pick up the lambda based on the path and method.
             let lambda_option = guard.borrow().get(&(path.clone(), method.clone())).cloned();
-            if let Some((lambda, body_type)) = lambda_option {
-                let (s, result) = crossbeam::channel::bounded(1);
 
-                let lambda_call = LambdaCall {
-                    lambda: lambda,
-                    args: vec![FfiValue::Integer(key as DwarfInteger)].into(),
-                    result: s.into(),
-                };
-                server.lambda_call.send(lambda_call).unwrap();
-                let result = result.recv().unwrap();
+            // This is the setup for the prefix routes.
+            let p = PathBuf::from(&path);
+            let suffix = p.file_name().unwrap().to_str().unwrap();
+            let prefix = p.parent().unwrap().to_str().unwrap();
+            let prefix_guard = server.prefix_routes.lock().unwrap();
+            // Here we pick up the lambda based on the path and method.
+            let prefix_lambda_option = prefix_guard
+                .borrow()
+                .get(&(prefix.to_owned(), method.clone()))
+                .cloned();
 
-                let ROk(FfiValue::String(result)) = result else {
-                    eprintln!("Error: {result:?}");
-                    return Box::pin(async {
-                        mk_response("<p>oh no! something went terribly wrong. 🤯</p>".into())
-                    });
-                };
-
-                let mut requests = server.requests.lock().unwrap();
-                requests.remove(key);
-
-                match body_type {
-                    ResponseType::Text => Box::pin(async move { mk_response(result.to_string()) }),
-                    ResponseType::Json => {
-                        Box::pin(async move { mk_json_response(result.to_string()) })
-                    }
-                }
-            } else if method == Method::GET {
+            if method == Method::GET {
                 // We are going to tack a dot on the front of the path to sandbox it
                 // to the CWD.
-                let path = format!(".{path}");
+                let path = format!("./files{path}");
                 let path = std::path::Path::new(&path);
                 if path.exists() {
                     if path.is_dir() {
-                        let contents = "<p>Someday there will be a directory viewing page. For now, there's nothing to see here.</p>".to_owned();
+                        let contents = "<p>Someday there may be a directory viewing page. For now, there's nothing to see here.</p>".to_owned();
                         Box::pin(async move { mk_response(contents) })
                     } else {
                         let contents = std::fs::read(path).unwrap();
@@ -605,6 +693,104 @@ mod http_server {
                     Box::pin(async move {
                         mk_not_found(format!("oops! {path} ({method}) not found").into())
                     })
+                }
+            } else if let Some((lambda, response_body_type)) = lambda_option {
+                let (s, result) = crossbeam::channel::bounded(1);
+
+                let lambda_call = LambdaCall {
+                    lambda: lambda,
+                    args: vec![FfiValue::Integer(key as DwarfInteger)].into(),
+                    result: s.into(),
+                };
+                server.lambda_call.send(lambda_call).unwrap();
+                let result = result.recv().unwrap();
+
+                let ROk(FfiValue::String(result)) = result else {
+                    match result {
+                        RErr(e) => {
+                            eprintln!("Error: {e:?}");
+                            return Box::pin(async {
+                                mk_response(
+                                    format!("<p>oh no! something went terribly wrong. 🤯</p>")
+                                        .into(),
+                                )
+                            });
+                        }
+                        ROk(value) => {
+                            eprintln!("Expected String and found {value:?}");
+                            return Box::pin(async {
+                                mk_response(
+                                    format!("<p>oh no! something went terribly wrong. 🤯</p>")
+                                        .into(),
+                                )
+                            });
+                        }
+                    }
+                };
+
+                let mut requests = server.requests.lock().unwrap();
+                requests.remove(key);
+
+                match response_body_type {
+                    ResponseType::Text => Box::pin(async move { mk_response(result.to_string()) }),
+                    ResponseType::Json => {
+                        Box::pin(async move { mk_json_response(result.to_string()) })
+                    }
+                }
+            } else if let Some((lambda, response_body_type)) = prefix_lambda_option {
+                let (s, result) = crossbeam::channel::bounded(1);
+
+                let suffix = {
+                    let mut guard = server.strings.lock().unwrap();
+                    let entry = guard.vacant_entry();
+                    let key = entry.key();
+                    guard.insert(suffix.to_owned());
+                    key
+                };
+
+                let lambda_call = LambdaCall {
+                    lambda: lambda,
+                    args: vec![
+                        FfiValue::Integer(key as DwarfInteger),
+                        FfiValue::Integer(suffix as DwarfInteger),
+                    ]
+                    .into(),
+                    result: s.into(),
+                };
+                server.lambda_call.send(lambda_call).unwrap();
+                let result = result.recv().unwrap();
+
+                let ROk(FfiValue::String(result)) = result else {
+                    match result {
+                        RErr(e) => {
+                            eprintln!("Error: {e:?}");
+                            return Box::pin(async {
+                                mk_response(
+                                    format!("<p>oh no! something went terribly wrong. 🤯</p>")
+                                        .into(),
+                                )
+                            });
+                        }
+                        ROk(value) => {
+                            eprintln!("Expected String and found {value:?}");
+                            return Box::pin(async {
+                                mk_response(
+                                    format!("<p>oh no! something went terribly wrong. 🤯</p>")
+                                        .into(),
+                                )
+                            });
+                        }
+                    }
+                };
+
+                let mut requests = server.requests.lock().unwrap();
+                requests.remove(key);
+
+                match response_body_type {
+                    ResponseType::Text => Box::pin(async move { mk_response(result.to_string()) }),
+                    ResponseType::Json => {
+                        Box::pin(async move { mk_json_response(result.to_string()) })
+                    }
                 }
             } else {
                 Box::pin(async move {

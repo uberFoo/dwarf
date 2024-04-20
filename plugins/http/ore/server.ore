@@ -38,6 +38,28 @@ impl HttpServer {
         self.inner
             .invoke_func("http_server", "HttpServer", "route", @[path, method.to_string(), body.to_string(), wrapper]);
     }
+
+    fn prefix_route(
+        self,
+        path: string,
+        method: Method,
+        body: Body,
+        lambda: fn(Request, string) -> string,
+    ) {
+        // We need this function to create a Request instance from the returned int.
+        let wrapper = |req: int, suffix: string| -> string {
+            let req = Request { plugin: self.inner, inner: req };
+            lambda(req, suffix)
+        };
+
+        self.inner
+            .invoke_func("http_server", "HttpServer", "prefix_route", @[path, method.to_string(), body.to_string(), wrapper]);
+    }
+
+    fn use_tls(self, cert: string, key: string) {
+        self.inner
+            .invoke_func("http_server", "HttpServer", "use_tls", [cert, key]);
+    }
 }
 
 enum Method {
@@ -101,5 +123,18 @@ impl Uri {
     fn path(self) -> string {
         self.plugin
             .invoke_func("http_server", "Uri", "path", [self.inner])
+    }
+}
+
+struct Suffix {
+    #[proxy(plugin = "http::http_server")]
+    plugin: Plugin<HttpServer>,
+    inner: int,
+}
+
+impl Suffix {
+    fn to_string(self) -> string {
+        self.plugin
+            .invoke_func("http_server", "Suffix", "to_string", [self.inner])
     }
 }
