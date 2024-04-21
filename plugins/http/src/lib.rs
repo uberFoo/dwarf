@@ -1,4 +1,5 @@
 use std::{
+    env,
     fmt::{self, Display},
     fs, io,
     path::PathBuf,
@@ -257,7 +258,8 @@ mod http_server {
     use std::sync::{Arc, Mutex};
 
     use http_body_util::Full;
-    use hyper::body::Bytes;
+    use hyper::body::{Body, Bytes};
+    use hyper::header::{HeaderValue, CONTENT_TYPE};
     use hyper::server::conn::http1;
     use hyper::service::Service;
     use hyper::{body::Incoming as IncomingBody, Request, Response};
@@ -269,6 +271,13 @@ mod http_server {
     use rustls_pki_types::{CertificateDer, PrivateKeyDer};
     use tokio::net::TcpListener;
     use tokio_rustls::TlsAcceptor;
+
+    const EXTENSION_DIR: &str = "extensions";
+    const PLUGIN_DIR: &str = "http";
+    const MISC_DIR: &str = "misc";
+    const HTML_404: &str = "404.html";
+    const CSS_404: &str = "404.css";
+    const WEBP_404: &str = "404.webp";
 
     struct MethodStr<'a>(&'a str);
 
@@ -704,6 +713,13 @@ mod http_server {
                     .unwrap())
             }
 
+            fn mk_webp_response(s: Vec<u8>) -> Result<Response<Full<Bytes>>, hyper::Error> {
+                Ok(Response::builder()
+                    .header("Content-Type", "image/webp")
+                    .body(Full::new(Bytes::from(s)))
+                    .unwrap())
+            }
+
             let path = req.uri().path().to_owned();
             let method = req.method().clone();
 
@@ -856,9 +872,30 @@ mod http_server {
                     }
                 }
             } else {
-                Box::pin(async move {
-                    mk_not_found(format!("oh no! {path} ({method}) not found").into())
-                })
+                let mut dwarf_home: PathBuf = env::var("DWARF_HOME")
+                    .unwrap_or_else(|_| {
+                        let mut home = env::var("HOME").unwrap();
+                        home.push_str("/.dwarf");
+                        home
+                    })
+                    .into();
+                dwarf_home.push(EXTENSION_DIR);
+                dwarf_home.push(PLUGIN_DIR);
+                dwarf_home.push(MISC_DIR);
+
+                if path == "/404.css" {
+                    dwarf_home.push(CSS_404);
+                    let css_404 = fs::read_to_string(&dwarf_home).unwrap();
+                    Box::pin(async move { mk_response(css_404.into()) })
+                } else if path == "/404.webp" {
+                    dwarf_home.push(WEBP_404);
+                    let webp_404 = fs::read(&dwarf_home).unwrap();
+                    Box::pin(async move { mk_webp_response(webp_404) })
+                } else {
+                    dwarf_home.push(HTML_404);
+                    let file_404 = fs::read_to_string(&dwarf_home).unwrap();
+                    Box::pin(async move { mk_not_found(file_404.into()) })
+                }
             }
         }
     }
