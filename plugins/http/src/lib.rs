@@ -723,8 +723,16 @@ mod http_server {
 
             // This is the setup for the prefix routes.
             let p = PathBuf::from(&path);
-            let suffix = p.file_name().unwrap().to_str().unwrap();
-            let prefix = p.parent().unwrap().to_str().unwrap();
+            let suffix = if let Some(file_name) = p.file_name() {
+                file_name.to_str().unwrap()
+            } else {
+                ""
+            };
+            let prefix = if let Some(parent) = p.parent() {
+                parent.to_str().unwrap()
+            } else {
+                ""
+            };
             let prefix_guard = server.prefix_routes.lock().unwrap();
             // Here we pick up the lambda based on the path and method.
             let prefix_lambda_option = prefix_guard
@@ -732,27 +740,21 @@ mod http_server {
                 .get(&(prefix.to_owned(), method.clone()))
                 .cloned();
 
-            if method == Method::GET {
-                // We are going to tack a dot on the front of the path to sandbox it
-                // to the CWD.
-                let path = format!("./files{path}");
-                let path = std::path::Path::new(&path);
-                if path.exists() {
-                    if path.is_dir() {
-                        let contents = "<p>Someday there may be a directory viewing page. For now, there's nothing to see here.</p>".to_owned();
-                        Box::pin(async move { mk_response(contents) })
-                    } else {
-                        let contents = std::fs::read(path).unwrap();
-                        Box::pin(async move {
-                            Ok(Response::builder()
-                                .body(Full::new(Bytes::from(contents)))
-                                .unwrap())
-                        })
-                    }
+            // We are going to tack a dot on the front of the path to sandbox it
+            // to the the files subdirectory.
+            let file_path = format!("./files{path}");
+            let file_path = std::path::Path::new(&file_path);
+
+            if file_path.exists() && method == Method::GET {
+                if file_path.is_dir() {
+                    let contents = "<p>Someday there may be a directory viewing page. For now, there's nothing to see here.</p>".to_owned();
+                    Box::pin(async move { mk_response(contents) })
                 } else {
-                    let path = path.display().to_string();
+                    let contents = std::fs::read(file_path).unwrap();
                     Box::pin(async move {
-                        mk_not_found(format!("oops! {path} ({method}) not found").into())
+                        Ok(Response::builder()
+                            .body(Full::new(Bytes::from(contents)))
+                            .unwrap())
                     })
                 }
             } else if let Some((lambda, response_body_type)) = lambda_option {

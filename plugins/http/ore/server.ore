@@ -52,8 +52,9 @@ impl HttpServer {
         lambda: fn(Request, string) -> string,
     ) {
         // We need this function to create a Request instance from the returned int.
-        let wrapper = |req: int, suffix: string| -> string {
+        let wrapper = |req: int, suffix: int| -> string {
             let req = Request { plugin: self.inner, inner: req };
+            let suffix = Suffix { plugin: self.inner, inner: suffix };
             lambda(req, suffix)
         };
 
