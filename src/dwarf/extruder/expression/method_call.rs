@@ -13,8 +13,8 @@ use crate::{
         Expression as ParserExpression, PrintableValueType,
     },
     keywords::{
-        FORMAT, INVOKE_FUNC, INVOKE_FUNC_MUT, IS_DIGIT, LEN, LINES, MAP, MAX, PUSH, SPLIT, SUM,
-        TO_DIGIT, TRIM,
+        FORMAT, INVOKE_FUNC, INVOKE_FUNC_MUT, IS_DIGIT, LEN, LINES, MAP, MAX, PUSH, REPLACE, SPLIT,
+        SUM, TO_DIGIT, TRIM,
     },
     lu_dog::{
         store::ObjectStore as LuDogStore, Argument, Block, Call, Expression, List, MethodCall,
@@ -268,6 +268,10 @@ pub(in crate::dwarf::extruder) fn method_call_return_type(
                             let string = ValueType::new_ty(true, &string, lu_dog);
                             let list = List::new(&string, lu_dog);
                             ValueType::new_list(true, &list, lu_dog)
+                        }
+                        REPLACE => {
+                            let ty = Ty::new_z_string(context.sarzak);
+                            ValueType::new_ty(true, &ty, lu_dog)
                         }
                         SPLIT => {
                             let string = Ty::new_z_string(context.sarzak);

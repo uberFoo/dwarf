@@ -883,11 +883,11 @@ mod http_server {
                 dwarf_home.push(PLUGIN_DIR);
                 dwarf_home.push(MISC_DIR);
 
-                if path == "/404.css" {
+                if path.contains("/404.css") {
                     dwarf_home.push(CSS_404);
                     let css_404 = fs::read_to_string(&dwarf_home).unwrap();
                     Box::pin(async move { mk_response(css_404.into()) })
-                } else if path == "/404.webp" {
+                } else if path.contains("/404.webp") {
                     dwarf_home.push(WEBP_404);
                     let webp_404 = fs::read(&dwarf_home).unwrap();
                     Box::pin(async move { mk_webp_response(webp_404) })

@@ -102,7 +102,13 @@ impl Map {
 
         match rows {
             Result::Ok(rows) => Result::<[Row], Error>::Ok(rows),
-            Result::Err(e) => Result::<[Row], Error>::Err(e),
+            Result::Err(e) => {
+                let e = Error {
+                    plugin: self.plugin,
+                    inner: e,
+                };
+                Result::<[Row], Error>::Err(e)
+            }
         }
     }
 
@@ -140,7 +146,13 @@ impl Query<F> {
 
         match rows {
             Result::Ok(rows) => Result::<[Row], Error>::Ok(rows),
-            Result::Err(e) => Result::<[Row], Error>::Err(e),
+            Result::Err(e) => {
+                let e = Error {
+                    plugin: self.plugin,
+                    inner: e,
+                };
+                Result::<[Row], Error>::Err(e)
+            }
         }
     }
 
@@ -151,7 +163,13 @@ impl Query<F> {
 
         match rows {
             Result::Ok(rows) => Result::<Row, Error>::Ok(rows),
-            Result::Err(e) => Result::<Row, Error>::Err(e),
+            Result::Err(e) => {
+                let e = Error {
+                    plugin: self.plugin,
+                    inner: e,
+                };
+                Result::<Row, Error>::Err(e)
+            }
         }
     }
 }

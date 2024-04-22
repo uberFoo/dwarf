@@ -1251,6 +1251,7 @@ impl VM {
                             stack.push(ty);
                             stack.push(<String as Into<Value>>::into((name).clone()).into());
                         } else {
+                            // We are just building the "prefix" of the function for below.
                             let ty = match ty.into_value() {
                                 Value::Enumeration(variant) => match variant {
                                     Enum::Struct(ty) => {
@@ -1266,7 +1267,7 @@ impl VM {
                                     let name = ty.type_name();
                                     name.to_owned()
                                 }
-                                Value::String(_) => "::String".to_owned(),
+                                Value::String(_) => "::std::string::String".to_owned(),
                                 // Value::Vector { ty, .. } => {
                                 //     let ty = s_read!(ty);
                                 //     let name = ty.type_name();
@@ -1277,6 +1278,11 @@ impl VM {
 
                             let func = format!("{}::{}", ty, name);
 
+                            // This is probably slowing us down a lot. We need to do this
+                            // lookup some other way.
+                            // Couldn't this be resolved when we are compiling? I don't suppose
+                            // so since it's here. Of course there's always a more clever
+                            // solution.
                             if let Some((ip, frame_size)) = self.func_map.get(&func) {
                                 stack.push(Value::Integer(*ip as DwarfInteger).into());
                                 stack.push(Value::Integer(*frame_size as DwarfInteger).into());
@@ -1624,6 +1630,39 @@ impl VM {
                         .collect::<Vec<&str>>()
                         .len();
                         stack.push(Value::Integer(len as DwarfInteger).into());
+
+                        1
+                    }
+                    Instruction::StringReplace => {
+                        let replace = stack.pop().unwrap().into_value();
+                        let needle = stack.pop().unwrap().into_value();
+                        let haystack = stack.pop().unwrap().into_value();
+
+                        let Value::String(replace) = replace else {
+                            return Err(BubbaError::VmPanic {
+                                message: format!("Expected a string, but got: {replace:?}."),
+                                location: location!(),
+                            }
+                            .into());
+                        };
+                        let Value::String(needle) = needle else {
+                            return Err(BubbaError::VmPanic {
+                                message: format!("Expected a string, but got: {needle:?}."),
+                                location: location!(),
+                            }
+                            .into());
+                        };
+                        let Value::String(haystack) = haystack else {
+                            return Err(BubbaError::VmPanic {
+                                message: format!("Expected a string, but got: {haystack:?}."),
+                                location: location!(),
+                            }
+                            .into());
+                        };
+
+                        let result = haystack.replace(needle.as_str(), replace.as_str());
+
+                        stack.push(Value::String(result).into());
 
                         1
                     }

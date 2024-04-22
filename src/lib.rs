@@ -73,6 +73,7 @@ mod keywords {
     pub(crate) const PLUGIN: &str = "Plugin";
     pub(crate) const PUSH: &str = "push";
     pub(crate) const SLEEP: &str = "sleep";
+    pub(crate) const REPLACE: &str = "replace";
     #[cfg(feature = "async")]
     pub(crate) const SPAWN: &str = "spawn";
     #[cfg(feature = "async")]

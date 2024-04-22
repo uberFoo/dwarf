@@ -26,7 +26,17 @@ pub enum Instruction {
     ///
     /// The stack is one element shorter after this instruction.
     And,
+    /// Async Call
+    ///
+    /// See [Instruction::Call] for more information. The difference between
+    /// the two instructions is that this one is used for async functions.
+    ///
     AsyncCall(usize),
+    /// Async Spawn
+    ///
+    /// The difference between this and [Instruction::AsyncCall] is that this
+    /// spawns a [Puteketeke::Task].
+    ///
     AsyncSpawn(usize),
     Await,
     /// Call a function with the given arity.
@@ -309,7 +319,18 @@ pub enum Instruction {
     /// ## Stack Effect
     ///
     StoreLocal(usize),
+    /// String Length
+    ///
+    /// The top of the stack is a string. The length of the string is pushed onto
+    /// the stack.
+    ///
     StringLength,
+    /// String Replace
+    ///
+    /// The top of the stack is a string. The next value on the stack is the
+    /// needle. The third value on the stack is the string replacement.
+    ///
+    StringReplace,
     /// Subtract the top two values on the stack.
     ///
     /// ## Stack Effect
@@ -546,6 +567,7 @@ impl fmt::Display for Instruction {
                 operand_style.paint(index.to_string())
             ),
             Instruction::StringLength => write!(f, "{}", opcode_style.paint("slen")),
+            Instruction::StringReplace => write!(f, "{}", opcode_style.paint("srep")),
             Instruction::Subtract => write!(f, "{}", opcode_style.paint("sub ")),
             Instruction::TestEqual => write!(f, "{}", opcode_style.paint("eq  ")),
             Instruction::TestGreaterThan => write!(f, "{}", opcode_style.paint("gt  ")),
