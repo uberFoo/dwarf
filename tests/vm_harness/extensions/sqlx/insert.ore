@@ -28,7 +28,7 @@ async fn main() -> Future<()> {
         let found = false;
         let map = pool.query("SELECT * FROM users");
         let q = map.map(|row: Row| -> string {
-            let username = row.get("username", Type::String);
+            let username = row.get("username", Type::String).unwrap();
             print(username + "\n");
             // if username == name {
             // found = true;

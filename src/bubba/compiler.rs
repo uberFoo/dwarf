@@ -39,8 +39,8 @@ mod expression;
 pub use error::{BubbaCompilerError, BubbaCompilerErrorReporter, Result};
 
 use expression::{
-    a_weight, block, call, field, for_loop, if_expr, index, list, literal, operator, print, range,
-    ret, struct_expr, typecast, variable, xmatch,
+    a_weight, block, call, field, for_loop, halt_and_catch_fire, if_expr, index, list, literal,
+    operator, print, range, ret, struct_expr, typecast, variable, xmatch,
 };
 
 // 🚧 Maybe document why we have an abstraction over Thonk?
@@ -707,6 +707,9 @@ fn compile_expression(
         }
 
         ExpressionEnum::ForLoop(ref for_loop) => for_loop::compile(for_loop, thonk, context, span),
+        ExpressionEnum::HaltAndCatchFire(ref expr) => {
+            halt_and_catch_fire::compile(expr, thonk, context)
+        }
         ExpressionEnum::Index(ref index) => index::compile(index, thonk, context, span),
         ExpressionEnum::Lambda(ref λ) => call::compile_lambda(λ, thonk, context),
         ExpressionEnum::ListElement(ref list) => list::compile_list_element(list, thonk, context),
@@ -974,7 +977,7 @@ mod test {
         .unwrap();
         let program = compile(&ctx).unwrap();
         println!("{program}");
-        assert_eq!(program.get_thonk_card(), 10);
+        assert_eq!(program.get_thonk_card(), 11);
 
         // assert_eq!(program.get_instruction_card(), 393);
         let run = run_vm(&program);

@@ -46,8 +46,19 @@ struct Row {
 }
 
 impl Row {
-    fn get<T>(self, index: int, ty: Type) -> T {
-        self.plugin.invoke_func("sqlx", "Row", "get", @[self.inner, index, ty])
+    fn get<T>(self, index: int, ty: Type) -> Result<T, Error> {
+        let row = self.plugin.invoke_func("sqlx", "Row", "get", @[self.inner, index, ty]);
+
+        match row {
+            Result::Ok(row) => Result::<T, Error>::Ok(row),
+            Result::Err(e) => {
+                let e = Error {
+                    plugin: self.plugin,
+                    inner: e,
+                };
+                Result::<T, Error>::Err(e)
+            }
+        }
     }
 }
 

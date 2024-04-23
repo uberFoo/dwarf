@@ -340,20 +340,69 @@ mod postgres {
 
                             let result = match ty.as_str() {
                                 "::sqlx::type::Integer" => {
-                                    let result: i64 = row.get(index.as_str());
-                                    FfiValue::Integer(result as DwarfInteger)
+                                    match row.try_get::<i64, &str>(index.as_str()) {
+                                        Ok(result) => FfiValue::Result(ROk(RBox::new(
+                                            FfiValue::Integer(result as DwarfInteger),
+                                        ))),
+                                        Err(e) => {
+                                            let mut guard = self.errors.lock().unwrap();
+                                            let entry = guard.vacant_entry();
+                                            let key = entry.key();
+                                            guard.insert(Arc::new(e));
+                                            FfiValue::Result(RErr(RBox::new(FfiValue::Integer(
+                                                key as DwarfInteger,
+                                            ))))
+                                        }
+                                    }
                                 }
                                 "::sqlx::type::Short" => {
-                                    let result: i32 = row.get(index.as_str());
-                                    FfiValue::Integer(result as DwarfInteger)
+                                    match row.try_get::<i32, &str>(index.as_str()) {
+                                        Ok(result) => FfiValue::Result(ROk(RBox::new(
+                                            FfiValue::Integer(result as DwarfInteger),
+                                        ))),
+                                        Err(e) => {
+                                            let mut guard = self.errors.lock().unwrap();
+                                            let entry = guard.vacant_entry();
+                                            let key = entry.key();
+                                            guard.insert(Arc::new(e));
+                                            FfiValue::Result(RErr(RBox::new(FfiValue::Integer(
+                                                key as DwarfInteger,
+                                            ))))
+                                        }
+                                    }
                                 }
                                 "::sqlx::type::String" => {
-                                    let result: String = row.get(index.as_str());
-                                    FfiValue::String(result.into())
+                                    match row.try_get::<String, &str>(index.as_str()) {
+                                        Ok(result) => FfiValue::Result(ROk(RBox::new(
+                                            FfiValue::String(result.into()),
+                                        ))),
+                                        Err(e) => {
+                                            let mut guard = self.errors.lock().unwrap();
+                                            let entry = guard.vacant_entry();
+                                            let key = entry.key();
+                                            guard.insert(Arc::new(e));
+                                            FfiValue::Result(RErr(RBox::new(FfiValue::Integer(
+                                                key as DwarfInteger,
+                                            ))))
+                                        }
+                                    }
                                 }
                                 "::sqlx::type::Timestamp" => {
-                                    let result: chrono::NaiveDateTime = row.get(index.as_str());
-                                    FfiValue::String(result.to_string().into())
+                                    match row.try_get::<chrono::NaiveDateTime, &str>(index.as_str())
+                                    {
+                                        Ok(result) => FfiValue::Result(ROk(RBox::new(
+                                            FfiValue::String(result.to_string().into()),
+                                        ))),
+                                        Err(e) => {
+                                            let mut guard = self.errors.lock().unwrap();
+                                            let entry = guard.vacant_entry();
+                                            let key = entry.key();
+                                            guard.insert(Arc::new(e));
+                                            FfiValue::Result(RErr(RBox::new(FfiValue::Integer(
+                                                key as DwarfInteger,
+                                            ))))
+                                        }
+                                    }
                                 }
                                 ty => {
                                     panic!("Invalid type: {ty}");

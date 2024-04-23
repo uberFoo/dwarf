@@ -145,9 +145,9 @@
                 // "tests/vm_harness/lambda.ore"
                 // "test.ore",
                 // "https://raw.githubusercontent.com/uberFoo/dwarf/develop/mandelbrot.ore"
-                "uberfoo.rs/uberfoo.rs.ore",
+                "uberfoo.rs/src/uberfoo.rs.ore",
                 "-c",
-                "uberfoo.rs",
+                "uberfoo.rs/src",
                 // "-t",
                 "-b",
             ],

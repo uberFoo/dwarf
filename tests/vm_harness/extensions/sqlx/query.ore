@@ -35,11 +35,11 @@ FROM users u
         let q = map.map(|row: Row| -> PostWithAuthorQuery {
             // Comment to force vscode leave the block.
             PostWithAuthorQuery {
-                post_id: row.get("post_id", Type::Integer),
-                title: row.get("title", Type::String),
-                body: row.get("body", Type::String),
-                author_id: row.get("author_id", Type::Integer),
-                author_username: row.get("author_username", Type::String),
+                post_id: row.get("post_id", Type::Integer).unwrap(),
+                title: row.get("title", Type::String).unwrap(),
+                body: row.get("body", Type::String).unwrap(),
+                author_id: row.get("author_id", Type::Integer).unwrap(),
+                author_username: row.get("author_username", Type::String).unwrap(),
             }
         });
         let posts = q.fetch_all();

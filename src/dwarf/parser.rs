@@ -26,7 +26,7 @@ macro_rules! function {
 macro_rules! debug {
     ($msg:literal, $($arg:expr),*) => {
         $(
-            tracing::trace!(
+            log::trace!(
                 target: "parser",
                 "{}: {} --> {:?}\n  --> {}:{}:{}",
                 Colour::Green.dimmed().italic().paint(function!()),
@@ -39,7 +39,7 @@ macro_rules! debug {
         )*
     };
     ($arg:literal) => {
-        tracing::trace!(
+        log::trace!(
             target: "parser",
             "{}: {}\n  --> {}:{}:{}",
             Colour::Green.dimmed().italic().paint(function!()),
@@ -63,7 +63,7 @@ macro_rules! debug {
 macro_rules! error {
     ($msg:literal, $($arg:expr),*) => {
         $(
-            tracing::debug!(
+            log::debug!(
                 target: "parser",
                 "{}: {} --> {:?}\n  --> {}:{}:{}",
                 Colour::Green.dimmed().italic().paint(function!()),
@@ -76,7 +76,7 @@ macro_rules! error {
         )*
     };
     ($arg:literal) => {
-        tracing::debug!(
+        log::debug!(
             target: "parser",
             "{}: {}\n  --> {}:{}:{}",
             Colour::Green.dimmed().italic().paint(function!()),
@@ -86,7 +86,7 @@ macro_rules! error {
             column!())
     };
     ($arg:expr) => {
-        tracing::debug!(
+        log::debug!(
             target: "parser",
             "{}: {:?}\n  --> {}:{}:{}",
             Colour::Green.dimmed().italic().paint(function!()),
@@ -219,6 +219,7 @@ fn lexer() -> impl Parser<char, Vec<Spanned<Token>>, Error = Simple<char>> {
         "float" => Token::Type(Type::Float),
         "fn" => Token::Fn,
         "for" => Token::For,
+        "halt" => Token::Halt,
         "if" => Token::If,
         "impl" => Token::Impl,
         "int" => Token::Type(Type::Integer),
@@ -2133,6 +2134,12 @@ impl DwarfParser {
             return Ok(Some(expression));
         }
 
+        // parse a halt expression
+        if let Some(expression) = self.parse_halt_expression()? {
+            debug!("halt expression", expression);
+            return Ok(Some(expression));
+        }
+
         // parse an asm! expression
         if let Some(expression) = self.parse_asm_expression()? {
             debug!("asm! expression", expression);
@@ -3054,6 +3061,66 @@ impl DwarfParser {
         Ok(Some((
             (
                 DwarfExpression::Print(Box::new(expression.0)),
+                start..self.previous().unwrap().1.end,
+            ),
+            BLOCK,
+        )))
+    }
+
+    /// Parse a halt expression
+    fn parse_halt_expression(&mut self) -> Result<Option<Expression>> {
+        debug!("enter parse_halt_expression");
+
+        let start = if let Some(tok) = self.peek() {
+            tok.1.start
+        } else {
+            return Ok(None);
+        };
+
+        if self.match_tokens(&[Token::Halt]).is_none() {
+            return Ok(None);
+        }
+
+        if self.match_tokens(&[Token::Punct('(')]).is_none() {
+            let token = self.previous().unwrap();
+            let err = Simple::expected_input_found(
+                token.1.clone(),
+                [Some("(".to_owned())],
+                Some(token.0.to_string()),
+            );
+            return Err(Box::new(err));
+        }
+
+        let expression = if let Some(expr) = self.parse_expression(BLOCK.1)? {
+            expr
+        } else {
+            let token = self.previous().unwrap();
+            let err = Simple::expected_input_found(
+                token.1.clone(),
+                [Some("<expression>".to_owned())],
+                Some(token.0.to_string()),
+            );
+            return Err(Box::new(err));
+        };
+
+        let _ = self.match_tokens(&[Token::Punct(',')]);
+
+        if self.match_tokens(&[Token::Punct(')')]).is_none() {
+            let token = self.previous().unwrap();
+            // 🚧 use the unclosed_delimiter constructor
+            let err = Simple::expected_input_found(
+                token.1.clone(),
+                [Some(")".to_owned())],
+                Some(token.0.to_string()),
+            );
+            return Err(Box::new(err));
+        }
+
+        debug!("exit parse_halt_expression");
+
+        Ok(Some((
+            (
+                DwarfExpression::Halt(Box::new(expression.0)),
                 start..self.previous().unwrap().1.end,
             ),
             BLOCK,
@@ -6174,6 +6241,18 @@ mod tests {
         "#;
 
         let ast = parse_dwarf("test_escaped_string", src);
+        assert!(ast.is_ok());
+    }
+
+    #[test]
+    fn halt_and_catch_fire() {
+        let _ = env_logger::builder().is_test(true).try_init();
+        let src = r#"
+        fn main() {
+            halt("death");
+        }"#;
+
+        let ast = parse_dwarf("test_halt", src);
         dbg!(&ast);
         assert!(ast.is_ok());
     }

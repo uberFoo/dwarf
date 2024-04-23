@@ -1136,4 +1136,36 @@ mod test {
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &true.into());
     }
+
+    #[test]
+    fn test_string_replace() {
+        setup_logging();
+        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
+
+        let ore = "
+                   fn main() -> string {
+                       let s = \"Hello, world!\";
+                       s.replace(\"world\", \"universe\")
+                   }";
+        let ast = parse_dwarf("test_string_replace", ore).unwrap();
+        let ctx = new_lu_dog(
+            "test_string_replace".to_owned(),
+            Some((ore.to_owned(), &ast)),
+            &get_dwarf_home(),
+            &env::current_dir().unwrap(),
+            &sarzak,
+        )
+        .unwrap();
+        let program = compile(&ctx).unwrap();
+        println!("{program}");
+
+        assert_eq!(program.get_thonk_card(), 1);
+
+        assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 8);
+
+        assert_eq!(
+            &*s_read!(run_vm(&program).unwrap()),
+            &"Hello, universe!".into()
+        );
+    }
 }

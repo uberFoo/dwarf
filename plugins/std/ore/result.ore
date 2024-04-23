@@ -18,10 +18,10 @@ impl Result<T, E> {
         }
     }
 
-    // fn unwrap(self) -> T {
-    //     match self {
-    //         Result::Ok(value) => value,
-    //         Result::Err(_) => panic!("called `Result::unwrap()` on an `Err` value"),
-    //     }
-    // }
+    fn unwrap<T>(self) -> T {
+        match self {
+            Result::Ok(value) => value,
+            Result::Err(_) => halt("called `Result::unwrap()` on an `Err` value"),
+        }
+    }
 }

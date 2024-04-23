@@ -24,11 +24,12 @@ use crate::{
         types::{
             AWait, Block, Body, BooleanOperator, Call, CharLiteral, EnumFieldEnum, Expression,
             ExpressionBit, ExpressionEnum, ExpressionStatement, Field, ForLoop, FormatBit,
-            FormatString, FuncGeneric, FunctionCall, ImplementationBlock, Import, Index,
-            IntegerLiteral, Item as WoogItem, ItemStatement, Lambda, LambdaParameter, LetStatement,
-            Literal, LocalVariable, Pattern as AssocPat, RangeExpression, Span as LuDogSpan,
-            Statement, StringLiteral, StructGeneric, ValueType, ValueTypeEnum, Variable,
-            VariableExpression, WoogStruct, XFuture, XIf, XMatch, XPrint, XValue, XValueEnum,
+            FormatString, FuncGeneric, FunctionCall, HaltAndCatchFire, ImplementationBlock, Import,
+            Index, IntegerLiteral, Item as WoogItem, ItemStatement, Lambda, LambdaParameter,
+            LetStatement, Literal, LocalVariable, Pattern as AssocPat, RangeExpression,
+            Span as LuDogSpan, Statement, StringLiteral, StructGeneric, ValueType, ValueTypeEnum,
+            Variable, VariableExpression, WoogStruct, XFuture, XIf, XMatch, XPrint, XValue,
+            XValueEnum,
         },
         Argument, Binary, BooleanLiteral, Comparison, DwarfSourceFile, FieldAccess,
         FieldAccessTarget, FloatLiteral, List, ListElement, ListExpression, Operator,
@@ -2015,6 +2016,26 @@ pub(super) fn inter_expression(
                 lu_dog,
             )?;
             Ok((expr, ty))
+        }
+        //
+        // Halt
+        //
+        ParserExpression::Halt(expr) => {
+            let (expr, _ty) = inter_expression(
+                &new_ref!(ParserExpression, expr.0.to_owned()),
+                &expr.1,
+                block,
+                context,
+                import_stack,
+                lu_dog,
+            )?;
+            let ty = ValueType::new_empty(true, lu_dog);
+            let halt = HaltAndCatchFire::new(&expr.0, lu_dog);
+            let expr = Expression::new_halt_and_catch_fire(true, &halt, lu_dog);
+            let value = XValue::new_expression(block, &ty, &expr, lu_dog);
+            update_span_value(&span, &value, location!());
+
+            Ok(((expr, span), ty))
         }
         //
         // If

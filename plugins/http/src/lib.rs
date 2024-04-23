@@ -758,10 +758,12 @@ mod http_server {
 
             // We are going to tack a dot on the front of the path to sandbox it
             // to the the files subdirectory.
-            let file_path = format!("./files{path}");
+            let file_path = format!("../files{path}");
             let file_path = std::path::Path::new(&file_path);
 
-            if file_path.exists() && method == Method::GET {
+            dbg!(&file_path, &method, &path);
+
+            if path != "/" && file_path.exists() && method == Method::GET {
                 if file_path.is_dir() {
                     let contents = "<p>Someday there may be a directory viewing page. For now, there's nothing to see here.</p>".to_owned();
                     Box::pin(async move { mk_response(contents) })

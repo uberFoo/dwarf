@@ -454,7 +454,7 @@ mod test {
 
         assert_eq!(
             &*s_read!(run_vm(&program).unwrap()),
-            &Value::Enumeration(Enum::Tuple((ty, "Foo".to_owned()), user_enum))
+            &Value::Enumeration(Enum::Tuple((ty, "::Foo".to_owned()), user_enum))
         );
     }
 
@@ -614,7 +614,7 @@ mod test {
         let program = compile(&ctx).unwrap();
         println!("{program}");
 
-        assert_eq!(program.get_thonk_card(), 3);
+        assert_eq!(program.get_thonk_card(), 4);
 
         assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 53);
 

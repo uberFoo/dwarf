@@ -75,6 +75,7 @@ pub enum Token {
     Float(String),
     Fn,
     For,
+    Halt,
     Ident(String),
     If,
     Impl,
@@ -112,6 +113,7 @@ impl fmt::Display for Token {
             Self::Float(num) => write!(f, "{}", num),
             Self::Fn => write!(f, "fn"),
             Self::For => write!(f, "for"),
+            Self::Halt => write!(f, "hcf 🔥"),
             Self::Ident(ident) => write!(f, "{}", ident),
             Self::If => write!(f, "if"),
             Self::Impl => write!(f, "impl"),
@@ -537,6 +539,7 @@ pub enum Expression {
     GreaterThan(Box<Spanned<Self>>, Box<Spanned<Self>>),
     GreaterThanOrEqual(Box<Spanned<Self>>, Box<Spanned<Self>>),
     Group(Box<Spanned<Self>>),
+    Halt(Box<Spanned<Self>>),
     If(
         Box<Spanned<Self>>,
         Box<Spanned<Self>>,

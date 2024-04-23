@@ -1,6 +1,5 @@
 body {
     background-image: url('404.webp');
-    /* Replace 'path_to_your_image.png' with the actual path */
     background-size: cover;
     background-repeat: no-repeat;
     background-position: center;
@@ -17,7 +16,7 @@ body {
 .error-container {
     text-align: center;
     padding: 20px;
-    background-color: rgba(0, 0, 0, 0.7);
+    background-color: rgba(0, 0, 0, 0.8);
     /* Semi-transparent black background for readability */
     border-radius: 10px;
     width: 90%;
