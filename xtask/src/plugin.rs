@@ -45,14 +45,16 @@ impl flags::Plugin {
                     false
                 }
             })
-            .for_each(|entry| {
+            .try_for_each(|entry| {
                 // for entry in fs::read_dir(&current_dir)? {
                 let entry = entry.unwrap();
                 if entry.file_type().unwrap().is_dir() {
                     sh.change_dir(entry.path());
-                    build_plugin(&entry, &sh, &dwarf_home, debug).unwrap()
+                    build_plugin(&entry, &sh, &dwarf_home, debug)
+                } else {
+                    Ok(())
                 }
-            });
+            })?;
 
         Ok(())
     }
@@ -127,10 +129,12 @@ fn build_plugin(
     current_dir.pop();
     current_dir.push(MISC_DIR);
 
-    for entry in fs::read_dir(&current_dir)? {
-        let path = entry?.path();
-        println!("Copying {}", path.display());
-        sh.copy_file(path, &misc_dir)?;
+    if current_dir.exists() {
+        for entry in fs::read_dir(&current_dir)? {
+            let path = entry?.path();
+            println!("Copying {}", path.display());
+            sh.copy_file(path, &misc_dir)?;
+        }
     }
 
     // Copy model files
