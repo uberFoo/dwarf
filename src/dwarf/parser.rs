@@ -546,12 +546,16 @@ impl DwarfParser {
         debug!("exit match");
 
         if let Some(pattern) = pattern {
+            let mut matches = vec![((pattern.0, true_block.0 .0), true_block.0 .1)];
+            if let Some(false_block) = false_block {
+                matches.push((
+                    (Pattern::Identifier(("_".to_owned(), 0..0)), false_block.0),
+                    false_block.1,
+                ));
+            }
             Ok(Some((
                 (
-                    DwarfExpression::Match(
-                        Box::new(conditional.clone().0),
-                        vec![((pattern.0, true_block.0 .0), true_block.0 .1)],
-                    ),
+                    DwarfExpression::Match(Box::new(conditional.clone().0), matches),
                     start..self.previous().unwrap().1.end,
                 ),
                 BLOCK,

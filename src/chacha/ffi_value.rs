@@ -490,9 +490,9 @@ impl TryFrom<&FfiValue> for i64 {
 #[repr(C)]
 #[derive(Clone, Debug, StableAbi)]
 pub struct FfiStruct {
-    type_name: RString,
-    type_: FfiValueType,
-    attrs: FfiStructAttributes,
+    pub(crate) type_name: RString,
+    pub(crate) type_: FfiValueType,
+    pub(crate) attrs: FfiStructAttributes,
 }
 
 impl fmt::Display for FfiStruct {

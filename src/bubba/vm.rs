@@ -1997,11 +1997,8 @@ impl From<(FfiValue, &Value)> for Value {
                 ))
             }
             FfiValue::String(str_) => Self::String(str_.into()),
-            // FfiValue::UserType(uuid) => Self::UserType(new_ref!(UserType, uuid.into())),
+            FfiValue::Struct(struct_) => Self::Struct(struct_.into()),
             FfiValue::Uuid(uuid) => Self::Uuid(uuid.into()),
-            // FfiValue::Vector(vec) => {
-            //     Self::Vector(vec.into_iter().map(|v| new_ref!(Value, v.into())).collect())
-            // }
             _ => panic!("Unexpected FfiValue: {ffi_value:?}."),
         }
     }

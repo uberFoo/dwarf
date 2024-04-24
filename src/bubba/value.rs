@@ -374,7 +374,7 @@ impl Clone for Value {
             Self::Char(char_) => Self::Char(*char_),
             Self::Empty => Self::Empty,
             Self::Enumeration(var) => Self::Enumeration(var.clone()),
-            Self::Error(_e) => unimplemented!(),
+            Self::Error(e) => panic!("{e}"),
             Self::Float(num) => Self::Float(*num),
             Self::Integer(num) => Self::Integer(*num),
             Self::LambdaPointer {

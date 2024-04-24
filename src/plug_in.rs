@@ -33,14 +33,6 @@ pub trait Plugin: Clone + Debug + Display + Send + Sync {
         args: RVec<FfiValue>,
     ) -> RResult<FfiValue, Error>;
 
-    /// Closes the plugin,
-    ///
-    /// This does not unload the dynamic library of this plugin,
-    /// you can instantiate another instance of this plugin with
-    /// `PluginMod_Ref::get_module().new()(application_handle)`.
-    ///
-    ///
-    ///
     /// The `#[sabi(last_prefix_field)]` attribute here means that this is the last method
     /// that was defined in the first compatible version of the library
     /// (0.1.0, 0.2.0, 0.3.0, 1.0.0, 2.0.0 ,etc),

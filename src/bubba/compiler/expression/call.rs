@@ -198,6 +198,7 @@ pub(in crate::bubba::compiler) fn compile_lambda(
     let frame_size = thonk.inner.frame_size();
     for (var, index) in context.captures.take().unwrap() {
         let Some(symbol) = context.get_symbol(&var) else {
+            dbg!(&context.symbol_tables);
             panic!("capture not found: {var}");
         };
         thonk.prefix_instruction(Instruction::CaptureLocal(symbol.number, index), location!());

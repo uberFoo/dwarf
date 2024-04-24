@@ -188,7 +188,7 @@ impl Drop for SymbolTable {
 #[derive(Debug)]
 pub(crate) struct Context<'a, 'b> {
     extruder_context: &'a ExtruderContext,
-    symbol_tables: Vec<(SymbolTable, bool)>,
+    pub(crate) symbol_tables: Vec<(SymbolTable, bool)>,
     program: &'b mut Program,
     st_depth: usize,
     funcs: HashMap<String, ValueType>,
@@ -246,22 +246,26 @@ impl<'a, 'b> Context<'a, 'b> {
     fn push_symbol_table(&mut self) {
         self.st_depth += 1;
         self.symbol_tables.push((SymbolTable::new(0), true));
+        tracing::debug!(target: "instr", "{}", ERR_CLR.paint("push symbol table"));
     }
 
     fn push_scope(&mut self) {
         self.st_depth += 1;
         let start = self.symbol_tables.last().unwrap().0.count();
         self.symbol_tables.push((SymbolTable::new(start), false));
+        tracing::debug!(target: "instr", "{}", ERR_CLR.paint("push scope"));
     }
 
     fn pop_symbol_table(&mut self) {
         self.st_depth -= 1;
         self.symbol_tables.pop();
+        tracing::debug!(target: "instr", "{}", ERR_CLR.paint("pop symbol table"));
     }
 
     fn pop_scope(&mut self) {
         self.st_depth -= 1;
         self.symbol_tables.pop();
+        tracing::debug!(target: "instr", "{}", ERR_CLR.paint("pop scope"));
     }
 
     fn is_root_symbol_table(&self) -> bool {
@@ -275,10 +279,15 @@ impl<'a, 'b> Context<'a, 'b> {
 
     fn insert_symbol(&mut self, name: String, ty: ValueType) -> (bool, usize) {
         match self.get_symbol(name.as_str()) {
-            Some(value) => (false, value.number),
+            Some(value) => {
+                tracing::debug!(target: "instr", "{}: {name} ({})", ERR_CLR.paint("symbol insert"), value.number);
+                (false, value.number)
+            }
             None => {
                 let table = &mut self.symbol_tables.last_mut().unwrap().0;
-                (true, table.insert(name, ty))
+                let number = table.insert(name.clone(), ty);
+                tracing::debug!(target: "instr", "{}: {name} ({number})", ERR_CLR.paint("symbol insert"));
+                (true, number)
             }
         }
     }

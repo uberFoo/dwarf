@@ -1,7 +1,4 @@
-enum Option<T> {
-    Some(T),
-    None,
-}
+use std::option::Option;
 
 fn main() {
     let x = Option::<string>::None;
@@ -38,8 +35,7 @@ fn main() {
     } else {
         print("None\n");
         chacha::assert_eq(true, false);
-        // 🚧 This shouldn't typecheck.
-        // 0
+        0
     };
     chacha::assert_eq(z, 42);
 
@@ -52,8 +48,7 @@ fn main() {
     } else {
         print("Some\n");
         chacha::assert_eq(true, false);
-        // 🚧 This shouldn't typecheck.
-        // 0
+        Option::<int>::Some(0)
     };
     chacha::assert_eq(z, Option::<int>::None);
 }
