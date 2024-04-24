@@ -40,13 +40,13 @@ pub fn new(lambda_sender: RSender<LambdaCall>, args: RVec<FfiValue>) -> RResult<
     if let Some(FfiValue::String(plugin)) = args.first() {
         match plugin.as_str() {
             "http_client" => {
-                let plugin = http_client::instantiate_root_module();
+                let plugin = http_client::instantiate_sub_module();
                 let plugin = plugin.new();
                 let plugin = plugin(lambda_sender, vec![].into()).unwrap();
                 ROk(Plugin_TO::from_value(plugin, TD_Opaque))
             }
             "http_server" => {
-                let plugin = http_server::instantiate_root_module();
+                let plugin = http_server::instantiate_sub_module();
                 let plugin = plugin.new();
                 let plugin = plugin(lambda_sender, vec![].into()).unwrap();
                 ROk(Plugin_TO::from_value(plugin, TD_Opaque))
@@ -61,7 +61,7 @@ pub fn new(lambda_sender: RSender<LambdaCall>, args: RVec<FfiValue>) -> RResult<
 mod http_client {
     use super::*;
 
-    pub fn instantiate_root_module() -> PluginModRef {
+    pub fn instantiate_sub_module() -> PluginModRef {
         PluginModule { name, new }.leak_into_prefix()
     }
 
@@ -309,7 +309,7 @@ mod http_server {
         }
     }
 
-    pub fn instantiate_root_module() -> PluginModRef {
+    pub fn instantiate_sub_module() -> PluginModRef {
         PluginModule { name, new }.leak_into_prefix()
     }
 
@@ -761,8 +761,6 @@ mod http_server {
             let file_path = format!("../files{path}");
             let file_path = std::path::Path::new(&file_path);
 
-            dbg!(&file_path, &method, &path);
-
             if path != "/" && file_path.exists() && method == Method::GET {
                 if file_path.is_dir() {
                     let contents = "<p>Someday there may be a directory viewing page. For now, there's nothing to see here.</p>".to_owned();
@@ -884,6 +882,8 @@ mod http_server {
                 dwarf_home.push(EXTENSION_DIR);
                 dwarf_home.push(PLUGIN_DIR);
                 dwarf_home.push(MISC_DIR);
+
+                dbg!(&path);
 
                 if path.contains("/404.css") {
                     dwarf_home.push(CSS_404);

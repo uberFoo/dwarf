@@ -37,7 +37,7 @@ impl flags::Plugin {
         fs::read_dir(&current_dir)?
             .filter(|e| {
                 if let Ok(e) = e {
-                    match &self.plugin {
+                    match &self.name {
                         Some(plugin) => e.file_name().into_string().unwrap() == *plugin,
                         None => true,
                     }

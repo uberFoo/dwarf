@@ -35,7 +35,7 @@ pub fn new(
     lambda_sender: RSender<LambdaCall>,
     _args: RVec<FfiValue>,
 ) -> RResult<PluginType, Error> {
-    let plugin = postgres::instantiate_root_module();
+    let plugin = postgres::instantiate_sub_module();
     let plugin = plugin.new();
     let plugin = plugin(lambda_sender, vec![].into()).unwrap();
     ROk(Plugin_TO::from_value(plugin, TD_Opaque))
@@ -51,7 +51,7 @@ mod postgres {
         Error as SqlxError, Row,
     };
 
-    pub fn instantiate_root_module() -> PluginModRef {
+    pub fn instantiate_sub_module() -> PluginModRef {
         PluginModule { name, new }.leak_into_prefix()
     }
 

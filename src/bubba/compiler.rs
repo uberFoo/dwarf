@@ -188,7 +188,7 @@ impl Drop for SymbolTable {
 #[derive(Debug)]
 pub(crate) struct Context<'a, 'b> {
     extruder_context: &'a ExtruderContext,
-    pub(crate) symbol_tables: Vec<(SymbolTable, bool)>,
+    symbol_tables: Vec<(SymbolTable, bool)>,
     program: &'b mut Program,
     st_depth: usize,
     funcs: HashMap<String, ValueType>,

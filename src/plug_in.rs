@@ -11,7 +11,7 @@ use abi_stable::{
 use crate::chacha::ffi_value::FfiValue;
 
 pub mod error;
-pub use error::{Error, Unsupported};
+pub use error::Error;
 
 #[sabi_trait]
 /// A plugin which is loaded by the application,and provides some functionality.
@@ -65,8 +65,6 @@ pub struct LambdaCall {
 
 /// The root module of a`plugin` dynamic library.
 ///
-/// To load this module,
-/// call <PluginMod as RootModule>::load_from_directory(some_directory_path)
 #[repr(C)]
 #[derive(StableAbi)]
 #[sabi(kind(Prefix(prefix_ref = PluginModRef)))]
