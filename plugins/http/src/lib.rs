@@ -39,13 +39,13 @@ pub fn name() -> RStr<'static> {
 pub fn new(lambda_sender: RSender<LambdaCall>, args: RVec<FfiValue>) -> RResult<PluginType, Error> {
     if let Some(FfiValue::String(plugin)) = args.first() {
         match plugin.as_str() {
-            "http_client" => {
+            "client" => {
                 let plugin = http_client::instantiate_sub_module();
                 let plugin = plugin.new();
                 let plugin = plugin(lambda_sender, vec![].into()).unwrap();
                 ROk(Plugin_TO::from_value(plugin, TD_Opaque))
             }
-            "http_server" => {
+            "server" => {
                 let plugin = http_server::instantiate_sub_module();
                 let plugin = plugin.new();
                 let plugin = plugin(lambda_sender, vec![].into()).unwrap();

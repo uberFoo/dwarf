@@ -2,7 +2,7 @@ use std::dwarf::Plugin;
 use std::result::Result;
 
 struct Md {
-    #[proxy(plugin = "md::md")]
+    #[proxy(plugin = "md")]
     inner: Plugin<Md>,
 }
 

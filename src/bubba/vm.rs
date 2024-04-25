@@ -1429,7 +1429,7 @@ impl VM {
                             }
                             1 => {
                                 eprint!("{value}");
-                                std::io::Write::flush(&mut std::io::stdout()).unwrap();
+                                std::io::Write::flush(&mut std::io::stderr()).unwrap();
                             }
                             _ => {
                                 return Err::<RefType<Value>, Error>(

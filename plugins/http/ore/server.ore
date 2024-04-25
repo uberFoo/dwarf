@@ -6,7 +6,7 @@ struct HttpServer {
     // This plugin value must point to a valid plugin. The first part of the
     // path is the name, and the second part is a parameter to send to the
     // constructor.
-    #[proxy(plugin = "http::http_server")]
+    #[proxy(plugin = "http::server")]
     inner: Plugin<HttpServer>,
 }
 
@@ -19,7 +19,7 @@ impl HttpServer {
 
     async fn serve(self, port: int) -> Future<()> {
         self.inner
-            .invoke_func("http_server", "HttpServer", "serve", [port])
+            .invoke_func("server", "HttpServer", "serve", [port])
     }
 
     fn route(
@@ -36,12 +36,12 @@ impl HttpServer {
         };
 
         self.inner
-            .invoke_func("http_server", "HttpServer", "route", @[path, method.to_string(), body.to_string(), wrapper]);
+            .invoke_func("server", "HttpServer", "route", @[path, method.to_string(), body.to_string(), wrapper]);
     }
 
     fn use_tls(self, cert: string, key: string) {
         self.inner
-            .invoke_func("http_server", "HttpServer", "use_tls", [cert, key]);
+            .invoke_func("server", "HttpServer", "use_tls", [cert, key]);
     }
 
     fn prefix_route(
@@ -59,12 +59,12 @@ impl HttpServer {
         };
 
         self.inner
-            .invoke_func("http_server", "HttpServer", "prefix_route", @[path, method.to_string(), body.to_string(), wrapper]);
+            .invoke_func("server", "HttpServer", "prefix_route", @[path, method.to_string(), body.to_string(), wrapper]);
     }
 
     fn use_tls(self, cert: string, key: string) {
         self.inner
-            .invoke_func("http_server", "HttpServer", "use_tls", [cert, key]);
+            .invoke_func("server", "HttpServer", "use_tls", [cert, key]);
     }
 }
 
@@ -102,7 +102,7 @@ impl Body {
 
 
 struct Request {
-    #[proxy(plugin = "http::http_server")]
+    #[proxy(plugin = "http::server")]
     plugin: Plugin<HttpServer>,
     inner: int,
 }
@@ -111,7 +111,7 @@ impl Request {
     fn uri(self) -> Uri {
         let uri = self
             .plugin
-            .invoke_func("http_server", "Request", "uri", [self.inner]);
+            .invoke_func("server", "Request", "uri", [self.inner]);
         Uri {
             inner: uri,
             plugin: self.plugin,
@@ -120,7 +120,7 @@ impl Request {
 }
 
 struct Uri {
-    #[proxy(plugin = "http::http_server")]
+    #[proxy(plugin = "http::server")]
     plugin: Plugin<HttpServer>,
     inner: int,
 }
@@ -128,12 +128,12 @@ struct Uri {
 impl Uri {
     fn path(self) -> string {
         self.plugin
-            .invoke_func("http_server", "Uri", "path", [self.inner])
+            .invoke_func("server", "Uri", "path", [self.inner])
     }
 }
 
 struct Suffix {
-    #[proxy(plugin = "http::http_server")]
+    #[proxy(plugin = "http::server")]
     plugin: Plugin<HttpServer>,
     inner: int,
 }
@@ -141,6 +141,6 @@ struct Suffix {
 impl Suffix {
     fn to_string(self) -> string {
         self.plugin
-            .invoke_func("http_server", "Suffix", "to_string", [self.inner])
+            .invoke_func("server", "Suffix", "to_string", [self.inner])
     }
 }

@@ -602,15 +602,17 @@ fn compile_static_method_call(
                             .insert_instruction(Instruction::Push(plugin_root.into()), location!());
                         thonk.insert_instruction(Instruction::PluginNew(arg_count), location!());
 
-                        // let id = lu_dog.exhume_woog_struct_id_by_name(&plugin.name).unwrap();
-                        // let woog_struct = lu_dog.exhume_woog_struct(&id).unwrap();
-                        // let woog_struct = s_read!(woog_struct);
+                        let name = format!("::{}::{}", plugin.x_path, plugin.name);
+                        let expect =
+                            format!("Double check that you have your plugin path correct: {name}.");
 
-                        // Ok(Some(
-                        //     (*s_read!(woog_struct.r1_value_type(&lu_dog)[0])).clone(),
-                        // ))
+                        let id = lu_dog.exhume_woog_struct_id_by_name(&name).expect(&expect);
+                        let woog_struct = lu_dog.exhume_woog_struct(&id).unwrap();
+                        let woog_struct = s_read!(woog_struct);
 
-                        Ok(None)
+                        Ok(Some(
+                            (*s_read!(woog_struct.r1_value_type(&lu_dog)[0])).clone(),
+                        ))
                     }
                     missing_method => {
                         panic!("plugin only supports `new`, found: {missing_method}");
