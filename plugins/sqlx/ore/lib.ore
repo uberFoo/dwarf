@@ -100,6 +100,7 @@ struct Map {
 }
 
 impl Map {
+    // Maybe scarier is that I'm apparently still not checking function signatures.
     fn bind(self, value: string) -> Map {
         self.bindings.push(value);
 

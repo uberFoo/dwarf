@@ -21,7 +21,7 @@ jobs:
                 env:
                     POSTGRES_USER: postgres
                     POSTGRES_PASSWORD: postgres
-                    POSTGRES_DB: files
+                    POSTGRES_DB: users
                 ports:
                     - 5432:5432
                 options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
@@ -62,10 +62,9 @@ jobs:
               run: |
                   cargo install sqlx-cli --no-default-features --features postgres
                   cd dwarf/tests/setup/database
-                  export DATABASE_URL=postgres://postgres:postgres@localhost/files
+                  export DATABASE_URL=postgres://postgres:postgres@localhost/users
                   sqlx database create
                   sqlx migrate run
-                  cargo run
 
             - name: Install cargo-llvm-cov
               uses: taiki-e/install-action@cargo-llvm-cov

@@ -6,44 +6,35 @@ use sqlx::Row;
 use sqlx::Sqlx;
 use sqlx::Type;
 
-struct PostWithAuthorQuery {
-    post_id: int,
-    title: string,
-    body: string,
-    author_id: int,
-    author_username: string,
+struct User {
+    id: int,
+    flubber: int,
+    username: string,
 }
 
 async fn main() -> Future<()> {
     let sqlx = Sqlx::new();
 
     let query = "
-SELECT p.id as \"post_id\",
-       p.title,
-       p.body,
-       u.id as \"author_id\",
-       u.username as \"author_username\"
-FROM users u
-         JOIN posts p on u.id = p.user_id;";
+SELECT id, flubber, username FROM users;
+";
 
     if let Result::<Pool, Error>::Ok(pool) = sqlx
-        .connect("postgres://postgres:postgres@localhost/files")
+        .connect("postgres://postgres:postgres@localhost/users")
         .await
     {
         print("Connected to database\n");
         let map = pool.query(query);
-        let q = map.map(|row: Row| -> PostWithAuthorQuery {
+        let q = map.map(|row: Row| -> User {
             // Comment to force vscode leave the block.
-            PostWithAuthorQuery {
-                post_id: row.get("post_id", Type::Integer).unwrap(),
-                title: row.get("title", Type::String).unwrap(),
-                body: row.get("body", Type::String).unwrap(),
-                author_id: row.get("author_id", Type::Integer).unwrap(),
-                author_username: row.get("author_username", Type::String).unwrap(),
+            User {
+                id: row.get("id", Type::Integer).unwrap(),
+                flubber: row.get("flubber", Type::Short).unwrap(),
+                username: row.get("username", Type::String).unwrap(),
             }
         });
-        let posts = q.fetch_all();
-        print(posts);
+        let users = q.fetch_all();
+        print(users);
     } else {
         print("Error connecting to database");
     }

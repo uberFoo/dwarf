@@ -10,17 +10,18 @@ async fn main() -> Future<()> {
     let sqlx = Sqlx::new();
 
     let query = "
-    INSERT INTO users (username) VALUES ($1)
+    INSERT INTO users (flubber, username) VALUES ($1, $2);
 ";
 
     if let Result::<Pool, Error>::Ok(pool) = sqlx
-        .connect("postgres://postgres:postgres@localhost/files")
+        .connect("postgres://postgres:postgres@localhost/users")
         .await
     {
         print("Connected to database\n");
 
         let map = pool.query(query);
         let name = "uberFoo";
+        let map = map.bind(42);
         let map = map.bind(name);
 
         let posts = map.execute();
@@ -29,6 +30,8 @@ async fn main() -> Future<()> {
         let map = pool.query("SELECT * FROM users");
         let q = map.map(|row: Row| -> string {
             let username = row.get("username", Type::String).unwrap();
+            let flubber = row.get("flubber", Type::Short).unwrap();
+            print(flubber as string + "\n");
             print(username + "\n");
             // if username == name {
             // found = true;
