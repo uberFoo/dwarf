@@ -340,6 +340,11 @@ pub struct Context<'a> {
     pub func_defs: HashMap<String, FunctionDefinition>,
     pub path: String,
     pub in_impl: String,
+    /// Scopes
+    ///
+    /// This is used to lookup a fully qualified type name based on just the
+    /// short name. It's populated by the code that processes the `use`
+    /// statement.
     pub scopes: &'a mut HashMap<String, String>,
     pub imports: &'a mut HashSet<PathBuf>,
     pub generics: Vec<(Type, Span)>,
@@ -3386,12 +3391,6 @@ fn inter_import(
     }
 
     import_stack.push(PATH_SEP.to_owned() + path_root.join(PATH_SEP).as_str() + PATH_SEP + &ty);
-
-    // let (dir, path) = if path.exists() {
-    //     (dir, path)
-    // } else {
-    //     let
-    // }
 
     match fs::read_to_string(&path) {
         Ok(source_code) => {
