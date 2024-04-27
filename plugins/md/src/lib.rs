@@ -60,11 +60,28 @@ mod md {
     }
 
     #[derive(Clone, Debug)]
-    struct Md {}
+    struct Md {
+        links: Regex,
+        code: Regex,
+        h1: Regex,
+        h2: Regex,
+        h3: Regex,
+        h4: Regex,
+    }
 
     impl Default for Md {
         fn default() -> Self {
-            Self {}
+            Self {
+                links: Regex::new("<a href=\"#(.*?)\">").unwrap(),
+                code: Regex::new(
+                    r#"<pre><code class="language-mermaid">\s*([\s\S]*?)\s*</code></pre>"#,
+                )
+                .unwrap(),
+                h1: Regex::new(r#"<h1>(.*?)</h1>"#).unwrap(),
+                h2: Regex::new(r#"<h2>(.*?)</h2>"#).unwrap(),
+                h3: Regex::new(r#"<h3>(.*?)</h3>"#).unwrap(),
+                h4: Regex::new(r#"<h4>(.*?)</h4>"#).unwrap(),
+            }
         }
     }
 
@@ -107,14 +124,42 @@ mod md {
 
                     let md = markdown::to_html_with_options(&md, &options).unwrap();
 
+                    // Post-process the HTML to handle internal links
+                    let md = self.links.replace_all(&md, |caps: &regex::Captures| {
+                        let id = &caps[1];
+                        let id = id.to_lowercase().replace(" ", "-");
+                        format!(r#"<a href="javascript:void(0)" onclick="history.pushState(null, null, window.location.href); window.scrollTo({{top: document.getElementById('{id}').offsetTop, behavior: 'smooth'}});">"#)
+                    });
+
+                    // Post-process the HTML to add id attributes to section headers
+                    let md = self.h1.replace_all(&md, |caps: &regex::Captures| {
+                        let title = &caps[1];
+                        let id = title.to_lowercase().replace(" ", "-");
+                        format!(r#"<h1 id="{}">{}</h1>"#, id, title)
+                    });
+
+                    let md = self.h2.replace_all(&md, |caps: &regex::Captures| {
+                        let title = &caps[1];
+                        let id = title.to_lowercase().replace(" ", "-");
+                        format!(r#"<h2 id="{}">{}</h2>"#, id, title)
+                    });
+
+                    let md = self.h3.replace_all(&md, |caps: &regex::Captures| {
+                        let title = &caps[1];
+                        let id = title.to_lowercase().replace(" ", "-");
+                        format!(r#"<h3 id="{}">{}</h3>"#, id, title)
+                    });
+
+                    let md = self.h4.replace_all(&md, |caps: &regex::Captures| {
+                        let title = &caps[1];
+                        let id = title.to_lowercase().replace(" ", "-");
+                        format!(r#"<h4 id="{}">{}</h4>"#, id, title)
+                    });
+
                     // Here's where we handle mermaid diagrams
                     let md = if md.contains("class=\"language-mermaid\"") {
                         // Replace the <pre><code> with what mermaid wants
-                        let re = Regex::new(
-                            r#"<pre><code class="language-mermaid">\s*([\s\S]*?)\s*</code></pre>"#,
-                        )
-                        .unwrap();
-                    let md = re.replace_all(&md, |caps: &regex::Captures| {
+                    let md = self.code.replace_all(&md, |caps: &regex::Captures| {
                         let code = &caps[1];
                         let code = decode_html_entities(code).to_string();
 
@@ -129,7 +174,7 @@ mod md {
 
                     format!("{}\n{}", md, mermaid)
                 } else {
-                    md
+                    md.to_string()
                 };
 
                 Ok(FfiValue::String(md.into()).into())

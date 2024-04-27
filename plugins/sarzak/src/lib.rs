@@ -14,10 +14,7 @@ use abi_stable::{
     std_types::{RErr, ROk, RResult, RStr, RString, RVec},
 };
 use dwarf::{
-    chacha::{
-        ffi_value::{FfiProxy, FfiValue},
-        value::Value,
-    },
+    chacha::{ffi_value::FfiValue, value::Value},
     plug_in::{Error, LambdaCall, Plugin, PluginModRef, PluginModule, PluginType, Plugin_TO},
 };
 use log::debug;

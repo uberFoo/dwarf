@@ -24,28 +24,6 @@ use crate::{
     s_read, DwarfFloat, DwarfInteger, NewRef, RefType, Value, LAMBDA_FUNCS, PATH_SEP,
 };
 
-#[repr(C)]
-#[derive(Clone, Debug, StableAbi)]
-pub struct FfiProxy {
-    pub module: RString,
-    pub ty: FfiUuid,
-    pub id: FfiUuid,
-    pub plugin: PluginType,
-}
-
-impl std::fmt::Display for FfiProxy {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(
-            f,
-            "{{ module: {}, ty: {}, id: {}, plugin: {} }}",
-            self.module,
-            self.ty,
-            self.id,
-            self.plugin.name()
-        )
-    }
-}
-
 /// A value that can be passed across FFI boundaries.
 ///
 /// This is a simplified version of the `Value` type, which is used to represent
@@ -55,25 +33,72 @@ impl std::fmt::Display for FfiProxy {
 #[repr(C)]
 #[derive(Clone, Debug, Default, StableAbi)]
 pub enum FfiValue {
+    /// Boolean
+    ///
+    /// A boolean value.
     Boolean(bool),
-    // Callback(Callback<F>),
+    /// Empty
+    ///
+    /// This is equivalent to `()`.
     #[default]
     Empty,
+    /// Error
+    ///
+    /// An error message.
     Error(RString),
+    /// Float
+    ///
+    /// A floating point number.
     Float(DwarfFloat),
+    /// Integer
+    ///
+    /// An integer number.
     Integer(DwarfInteger),
+    /// Lambda
+    ///
+    /// A handle to a lambda function. This is used to invoke a lambda function
+    /// from dwarf in the plugin.
     Lambda(usize),
+    /// List
+    ///
+    /// A list of values; aka a Vec.
     List(RVec<Self>),
+    /// Option
+    ///
+    /// An optional value. Note that this is not the same as `Option<T>`, but
+    /// uses the FFI-safe `ROption` type.
     Option(ROption<RBox<Self>>),
+    /// PlugIn
+    ///
+    /// A plugin type.
     PlugIn(PluginType),
-    ProxyType(FfiProxy),
+    /// Range
+    ///
+    /// A range of integers, with a start and an end.
     Range(FfiRange),
+    /// Result
+    ///
+    /// A result type. Note that this is not the same as `Result<T, E>`, but
+    /// uses the FFI-safe `RResult` type.
     Result(RResult<RBox<Self>, RBox<Self>>),
+    /// String
+    ///
+    /// A string. Note that this is not the same as `String`, but uses the
+    /// FFI-safe `RString` type.
     String(RString),
+    /// Struct
+    ///
+    /// This is a user defined struct.
     Struct(FfiStruct),
-    // Table(RHashMap<RString, RefType<Self>>),
+    /// A value of unknown type.
+    ///
+    /// This is useful for dumping value that maybe we just don't want to deal
+    /// with, or that we don't know how to deal with. It's probably a terrible
+    /// crutch that will come back and bite me.
     Unknown,
-    // UserType(FfiUuid),
+    /// UUID type
+    ///
+    /// Version 4 UUID.
     Uuid(FfiUuid),
 }
 
@@ -108,7 +133,6 @@ impl std::fmt::Display for FfiValue {
                 ROption::RSome(value) => write!(f, "Some({value})"),
             },
             Self::PlugIn(plugin) => write!(f, "plugin::{}", plugin.name()),
-            Self::ProxyType(proxy) => write!(f, "{proxy}"),
             Self::Range(range) => write!(f, "{range:?}"),
             Self::Result(result) => match result {
                 RResult::RErr(err) => write!(f, "Err({err})"),
@@ -134,29 +158,14 @@ impl From<Value> for FfiValue {
         match &value {
             Value::Boolean(bool_) => Self::Boolean(bool_.to_owned()),
             Value::Empty => Self::Empty,
-            // Value::Error(e) => Self::Error(e.to_owned().into()),
             Value::Float(num) => Self::Float(num.to_owned()),
             Value::Integer(num) => Self::Integer(num.to_owned()),
-            Value::ProxyType {
-                module,
-                obj_ty,
-                id,
-                plugin,
-            } => Self::ProxyType(FfiProxy {
-                module: module.to_owned().into(),
-                ty: obj_ty.to_owned().into(),
-                id: id.to_owned().into(),
-                plugin: s_read!(plugin).clone(),
-            }),
             Value::Range(range) => Self::Range(FfiRange {
                 start: range.start,
                 end: range.end,
             }),
             Value::String(str_) => Self::String(str_.to_owned().into()),
             Value::Uuid(uuid) => Self::Uuid(uuid.to_owned().into()),
-            // Value::Vector(vec) => {
-            //     Self::Vector(vec.iter().map(|v| s_read!(v).clone().into()).collect())
-            // }
             _ => Self::Unknown,
         }
     }
@@ -167,22 +176,11 @@ impl From<FfiValue> for Value {
         match value {
             FfiValue::Boolean(bool_) => Self::Boolean(bool_),
             FfiValue::Empty => Self::Empty,
-            // FfiValue::Error(e) => Self::Error(e.into()),
             FfiValue::Float(num) => Self::Float(num),
             FfiValue::Integer(num) => Self::Integer(num),
-            FfiValue::ProxyType(plugin) => Self::ProxyType {
-                module: plugin.module.into(),
-                obj_ty: plugin.ty.into(),
-                id: plugin.id.into(),
-                plugin: new_ref!(PluginType, plugin.plugin),
-            },
             FfiValue::Range(range) => Self::Range(range.start..range.end),
             FfiValue::String(str_) => Self::String(str_.into()),
-            // FfiValue::UserType(uuid) => Self::UserType(new_ref!(UserType, uuid.into())),
             FfiValue::Uuid(uuid) => Self::Uuid(uuid.into()),
-            // FfiValue::Vector(vec) => {
-            //     Self::Vector(vec.into_iter().map(|v| new_ref!(Value, v.into())).collect())
-            // }
             _ => Self::Unknown,
         }
     }
@@ -265,18 +263,9 @@ impl From<FfiValue> for VmValue {
             FfiValue::Empty => Self::Empty,
             FfiValue::Float(num) => Self::Float(num),
             FfiValue::Integer(num) => Self::Integer(num),
-            // FfiValue::ProxyType(plugin) => Self::ProxyType {
-            //     module: plugin.module.into(),
-            //     obj_ty: plugin.ty.into(),
-            //     id: plugin.id.into(),
-            //     plugin: new_ref!(PluginType, plugin.plugin),
-            // },
             FfiValue::Range(range) => Self::Range(range.start..range.end),
             FfiValue::String(str_) => Self::String(str_.into()),
             FfiValue::Struct(s) => Self::Struct(s.into()),
-            // FfiValue::Vector(vec) => {
-            //     Self::Vector(vec.into_iter().map(|v| new_ref!(Value, v.into())).collect())
-            // }
             x => panic!("Unknown FfiValue: {x}"),
         }
     }
@@ -288,7 +277,6 @@ impl From<(FfiValue, &LuDogStore)> for Value {
         match value.0 {
             FfiValue::Boolean(bool_) => Self::Boolean(bool_),
             FfiValue::Empty => Self::Empty,
-            // FfiValue::Error(e) => Self::Error(e.into()),
             FfiValue::Float(num) => Self::Float(num),
             FfiValue::Integer(num) => Self::Integer(num),
             FfiValue::Option(option) => match option {
@@ -297,12 +285,6 @@ impl From<(FfiValue, &LuDogStore)> for Value {
                     RBox::into_inner(value),
                     lu_dog,
                 )),
-            },
-            FfiValue::ProxyType(plugin) => Self::ProxyType {
-                module: plugin.module.into(),
-                obj_ty: plugin.ty.into(),
-                id: plugin.id.into(),
-                plugin: new_ref!(PluginType, plugin.plugin),
             },
             FfiValue::Range(range) => Self::Range(range.start..range.end),
             FfiValue::Result(result) => {
