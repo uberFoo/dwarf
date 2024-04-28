@@ -663,6 +663,20 @@ mod http_server {
                             let path = uri.path().to_string();
                             Ok(FfiValue::String(path.into()))
                         }
+                        "query" => {
+                            let key: DwarfInteger = args
+                                .first()
+                                .unwrap()
+                                .try_into()
+                                .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
+                                .unwrap();
+
+                            let guard = self.uris.lock().unwrap();
+                            let guard = guard.borrow();
+                            let uri = guard.get(key as usize).unwrap();
+                            let query = uri.query().unwrap_or("").to_string();
+                            Ok(FfiValue::String(query.into()))
+                        }
                         func => Err(Error::Plugin(format!("Invalid function: {func}").into())),
                     },
                     ty => Err(Error::Plugin(format!("Invalid type: {ty}").into())),

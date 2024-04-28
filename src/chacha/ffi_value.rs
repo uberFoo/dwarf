@@ -24,6 +24,28 @@ use crate::{
     s_read, DwarfFloat, DwarfInteger, NewRef, RefType, Value, LAMBDA_FUNCS, PATH_SEP,
 };
 
+#[repr(C)]
+#[derive(Clone, Debug, StableAbi)]
+pub struct FfiProxy {
+    pub module: RString,
+    pub ty: FfiUuid,
+    pub id: FfiUuid,
+    pub plugin: PluginType,
+}
+
+impl std::fmt::Display for FfiProxy {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(
+            f,
+            "{{ module: {}, ty: {}, id: {}, plugin: {} }}",
+            self.module,
+            self.ty,
+            self.id,
+            self.plugin.name()
+        )
+    }
+}
+
 /// A value that can be passed across FFI boundaries.
 ///
 /// This is a simplified version of the `Value` type, which is used to represent
@@ -72,6 +94,7 @@ pub enum FfiValue {
     ///
     /// A plugin type.
     PlugIn(PluginType),
+    ProxyType(FfiProxy),
     /// Range
     ///
     /// A range of integers, with a start and an end.
@@ -133,6 +156,7 @@ impl std::fmt::Display for FfiValue {
                 ROption::RSome(value) => write!(f, "Some({value})"),
             },
             Self::PlugIn(plugin) => write!(f, "plugin::{}", plugin.name()),
+            Self::ProxyType(proxy) => write!(f, "{proxy}"),
             Self::Range(range) => write!(f, "{range:?}"),
             Self::Result(result) => match result {
                 RResult::RErr(err) => write!(f, "Err({err})"),
@@ -160,6 +184,17 @@ impl From<Value> for FfiValue {
             Value::Empty => Self::Empty,
             Value::Float(num) => Self::Float(num.to_owned()),
             Value::Integer(num) => Self::Integer(num.to_owned()),
+            Value::ProxyType {
+                module,
+                obj_ty,
+                id,
+                plugin,
+            } => Self::ProxyType(FfiProxy {
+                module: module.to_owned().into(),
+                ty: obj_ty.to_owned().into(),
+                id: id.to_owned().into(),
+                plugin: s_read!(plugin).clone(),
+            }),
             Value::Range(range) => Self::Range(FfiRange {
                 start: range.start,
                 end: range.end,
@@ -178,6 +213,12 @@ impl From<FfiValue> for Value {
             FfiValue::Empty => Self::Empty,
             FfiValue::Float(num) => Self::Float(num),
             FfiValue::Integer(num) => Self::Integer(num),
+            FfiValue::ProxyType(plugin) => Self::ProxyType {
+                module: plugin.module.into(),
+                obj_ty: plugin.ty.into(),
+                id: plugin.id.into(),
+                plugin: new_ref!(PluginType, plugin.plugin),
+            },
             FfiValue::Range(range) => Self::Range(range.start..range.end),
             FfiValue::String(str_) => Self::String(str_.into()),
             FfiValue::Uuid(uuid) => Self::Uuid(uuid.into()),
@@ -263,6 +304,12 @@ impl From<FfiValue> for VmValue {
             FfiValue::Empty => Self::Empty,
             FfiValue::Float(num) => Self::Float(num),
             FfiValue::Integer(num) => Self::Integer(num),
+            // FfiValue::ProxyType(plugin) => Self::ProxyType {
+            //     module: plugin.module.into(),
+            //     obj_ty: plugin.ty.into(),
+            //     id: plugin.id.into(),
+            //     plugin: new_ref!(PluginType, plugin.plugin),
+            // },
             FfiValue::Range(range) => Self::Range(range.start..range.end),
             FfiValue::String(str_) => Self::String(str_.into()),
             FfiValue::Struct(s) => Self::Struct(s.into()),
@@ -285,6 +332,12 @@ impl From<(FfiValue, &LuDogStore)> for Value {
                     RBox::into_inner(value),
                     lu_dog,
                 )),
+            },
+            FfiValue::ProxyType(plugin) => Self::ProxyType {
+                module: plugin.module.into(),
+                obj_ty: plugin.ty.into(),
+                id: plugin.id.into(),
+                plugin: new_ref!(PluginType, plugin.plugin),
             },
             FfiValue::Range(range) => Self::Range(range.start..range.end),
             FfiValue::Result(result) => {

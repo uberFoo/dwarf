@@ -3969,7 +3969,9 @@ pub(crate) fn make_value_type(
 
                         for field in struct_fields {
                             let field = s_read!(field);
+                            dbg!(&field);
                             let field_ty = lu_dog.exhume_value_type(&field.ty).unwrap();
+                            dbg!(&field_ty);
                             let field_ty = s_read!(field_ty);
                             if let ValueTypeEnum::StructGeneric(ref id) = field_ty.subtype {
                                 let generic = lu_dog.exhume_struct_generic(id).unwrap();
@@ -3978,6 +3980,8 @@ pub(crate) fn make_value_type(
                                 generic_substitutions.insert(generic.name.to_owned(), ty);
                             }
                         }
+
+                        dbg!(&name);
 
                         if let Some((_, ty)) = create_generic_struct(
                             &woog_struct,
@@ -4496,6 +4500,8 @@ pub(crate) fn create_generic_struct(
 
     if let Some(first) = woog_struct.r102_struct_generic(lu_dog).pop() {
         let generic_name = &s_read!(first).name;
+
+        dbg!(&generic_name);
 
         let ty = substitutions.get(generic_name).unwrap();
         let ty = PrintableValueType(false, ty, context, lu_dog).to_string();

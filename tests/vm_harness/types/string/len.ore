@@ -1,0 +1,4 @@
+fn main() {
+    let a = "Hello, World!";
+    chacha::assert(a.len() == 13);
+}

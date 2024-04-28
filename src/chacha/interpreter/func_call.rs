@@ -222,6 +222,19 @@ fn eval_external_method(
                     .into(),
             ) {
                 ROk(proxy_obj) => match proxy_obj {
+                    FfiValue::ProxyType(proxy_obj) => {
+                        let value = new_ref!(
+                            Value,
+                            Value::ProxyType {
+                                module: model_name,
+                                obj_ty: obj_id,
+                                id: proxy_obj.id.into(),
+                                plugin: new_ref!(PluginType, proxy_obj.plugin)
+                            }
+                        );
+
+                        Ok(value)
+                    }
                     FfiValue::List(vec) => {
                         let vec = vec
                             .into_iter()
