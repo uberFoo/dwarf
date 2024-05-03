@@ -674,8 +674,18 @@ mod http_server {
                             let guard = self.uris.lock().unwrap();
                             let guard = guard.borrow();
                             let uri = guard.get(key as usize).unwrap();
-                            let query = uri.query().unwrap_or("").to_string();
-                            Ok(FfiValue::String(query.into()))
+                            let query_string = uri.query().unwrap_or("");
+                            let params: HashMap<String, String> = query_string
+                                .split('&')
+                                .filter_map(|part| {
+                                    let mut split = part.split('=');
+                                    let key = split.next()?;
+                                    let value = split.next()?;
+                                    Some((key.to_string(), value.to_string()))
+                                })
+                                .collect();
+
+                            Ok(FfiValue::String(query_string.into()))
                         }
                         func => Err(Error::Plugin(format!("Invalid function: {func}").into())),
                     },

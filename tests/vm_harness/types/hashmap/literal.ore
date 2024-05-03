@@ -1,0 +1,4 @@
+fn main() {
+    let map = {{"a": 42, "b": 96}};
+    print(map);
+}

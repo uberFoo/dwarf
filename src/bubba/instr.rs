@@ -188,6 +188,22 @@ pub enum Instruction {
     /// Make a Lambda Pointer Value
     ///
     MakeLambdaPointer(String, usize),
+    /// Map Get
+    ///
+    /// The top of the stack is the key. The next value on the stack is the map.
+    /// The value is pushed onto the stack.
+    MapGet,
+    /// Map Insert
+    ///
+    /// The top of the stack is the value. The next value on the stack is the key.
+    /// The third value on the stack is the map.
+    /// The map is updated with the key and value.
+    MapInsert,
+    /// Map Length
+    ///
+    /// The top of the stack is a map. The length of the map is pushed onto the
+    /// stack.
+    MapLength,
     /// Look up a method
     ///
     /// The top of the stack is a reference to the user defined type upon which
@@ -201,6 +217,10 @@ pub enum Instruction {
     /// The stack is one element longer.
     ///
     MethodLookup(String),
+    /// Move
+    ///
+    /// We have a single register used in loops, and this moves the top value
+    /// of the stack into that register.
     Mov,
     /// Multiply the top two values on the stack.
     ///
@@ -222,6 +242,14 @@ pub enum Instruction {
     /// pushed.
     ///
     NewList(usize),
+    /// New HashMap
+    ///
+    /// Create a new hashmap and store it on the stack.
+    ///
+    /// The first value on the stack is the key type, and the second is the value
+    /// type.
+    ///
+    NewMap,
     /// New Tuple Enum
     ///
     /// The first operand, `n` is the number of tuple fields. It is expected that the
@@ -511,6 +539,9 @@ impl fmt::Display for Instruction {
                 operand_style.paint(name.to_string()),
                 operand_style.paint(arity.to_string())
             ),
+            Instruction::MapGet => write!(f, "{}", opcode_style.paint("mget")),
+            Instruction::MapInsert => write!(f, "{}", opcode_style.paint("mins")),
+            Instruction::MapLength => write!(f, "{}", opcode_style.paint("mlen")),
             Instruction::MethodLookup(name) => write!(
                 f,
                 "{} {}",
@@ -525,6 +556,7 @@ impl fmt::Display for Instruction {
                 opcode_style.paint("nl  "),
                 operand_style.paint(n.to_string())
             ),
+            Instruction::NewMap => write!(f, "{}", opcode_style.paint("nm  ")),
             Instruction::NewTupleEnum(n) => write!(
                 f,
                 "{} {}",

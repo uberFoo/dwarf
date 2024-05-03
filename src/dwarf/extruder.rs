@@ -26,10 +26,10 @@ use crate::{
             ExpressionBit, ExpressionEnum, ExpressionStatement, Field, ForLoop, FormatBit,
             FormatString, FuncGeneric, FunctionCall, HaltAndCatchFire, ImplementationBlock, Import,
             Index, IntegerLiteral, Item as WoogItem, ItemStatement, Lambda, LambdaParameter,
-            LetStatement, Literal, LocalVariable, Pattern as AssocPat, RangeExpression,
-            Span as LuDogSpan, Statement, StringLiteral, StructGeneric, ValueType, ValueTypeEnum,
-            Variable, VariableExpression, WoogStruct, XFuture, XIf, XMatch, XPrint, XValue,
-            XValueEnum,
+            LetStatement, Literal, LocalVariable, Map, MapElement, MapExpression,
+            Pattern as AssocPat, RangeExpression, Span as LuDogSpan, Statement, StringLiteral,
+            StructGeneric, ValueType, ValueTypeEnum, Variable, VariableExpression, WoogStruct,
+            XFuture, XIf, XMatch, XPrint, XValue, XValueEnum,
         },
         Argument, Binary, BooleanLiteral, Comparison, DwarfSourceFile, FieldAccess,
         FieldAccessTarget, FloatLiteral, List, ListElement, ListExpression, Operator,
@@ -2677,6 +2677,106 @@ pub(super) fn inter_expression(
             }
         }
         //
+        // Map
+        //
+        ParserExpression::Map(ref elts) => {
+            debug!("Map {:?}", elts);
+            if elts.is_empty() {
+                // Note that this is just a generic that we need to use to create the
+                // list. The name of the generic is not important.
+                let key_type = FuncGeneric::new("KEY_HACK".to_owned(), None, None, lu_dog);
+                let value_type = FuncGeneric::new("VALUE_HACK".to_owned(), None, None, lu_dog);
+                let map = Map::new(&ValueType::new_func_generic(true, &key_type, lu_dog),
+                    &ValueType::new_func_generic(true, &value_type, lu_dog), lu_dog);
+                let expr = Expression::new_literal(
+                    true,
+                    &Literal::new_map_expression(true, &MapExpression::new(Uuid::new_v4(), lu_dog), lu_dog),
+                    lu_dog,
+                );
+                let ty = ValueType::new_map(true, &map, lu_dog);
+                let value = XValue::new_expression(block, &ty, &expr, lu_dog);
+                update_span_value(&span, &value, location!());
+
+                Ok(((expr, span), ty))
+            } else {
+                let mut elements = elts.iter();
+                // I'm going to get the type of the first element, and then check
+                // that each subsequent element is the same type.
+                let (key, value) = elements.next().unwrap();
+                let key_span = &key.1;
+                let value_span = &value.1;
+                let ((first_key, _first_key_span), first_key_ty) = inter_expression(
+                    &new_ref!(ParserExpression, key.0.to_owned()),
+                    &key.1,
+                    block,
+                    context,
+                    import_stack,
+                    lu_dog,
+                )?;
+                let ((first_value, _first_value_span), first_value_ty) = inter_expression(
+                    &new_ref!(ParserExpression, value.0.to_owned()),
+                    &value.1,
+                    block,
+                    context,
+                    import_stack,
+                    lu_dog,
+                )?;
+
+                let map = Map::new(&first_key_ty, &first_value_ty, lu_dog);
+                let map_expr = MapExpression::new(Uuid::new_v4(), lu_dog);
+                let _element = MapElement::new(&first_key, &map_expr, &first_value, lu_dog);
+
+                for (key, value) in elements {
+                    let ((key_elt, _key_span), key_ty) = inter_expression(
+                        &new_ref!(ParserExpression, key.0.to_owned()),
+                        &key.1,
+                        block,
+                        context,
+                        import_stack,
+                        lu_dog,
+                    )?;
+
+                    typecheck(
+                        (&first_key_ty, key_span),
+                        (&key_ty, &key.1),
+                        location!(),
+                        context,
+                        lu_dog,
+                    )?;
+
+                    let ((value_elt, _value_span), value_ty) = inter_expression(
+                        &new_ref!(ParserExpression, value.0.to_owned()),
+                        &value.1,
+                        block,
+                        context,
+                        import_stack,
+                        lu_dog,
+                    )?;
+
+                    typecheck(
+                        (&first_value_ty, value_span),
+                        (&value_ty, &value.1),
+                        location!(),
+                        context,
+                        lu_dog,
+                    )?;
+
+                    let _element = MapElement::new(&key_elt, &map_expr, &value_elt, lu_dog);
+                }
+
+                let expr = Expression::new_literal(
+                    true,
+                    &Literal::new_map_expression(true, &map_expr, lu_dog),
+                    lu_dog,
+                );
+                let ty = ValueType::new_map(true, &map, lu_dog);
+                let value = XValue::new_expression(block, &ty, &expr, lu_dog);
+                update_span_value(&span, &value, location!());
+
+                Ok(((expr, span), ty))
+            }
+        }
+        //
         // Match
         //
         // The idea here is to take the pattern and see if it matches the scrutinee.
@@ -3969,9 +4069,7 @@ pub(crate) fn make_value_type(
 
                         for field in struct_fields {
                             let field = s_read!(field);
-                            dbg!(&field);
                             let field_ty = lu_dog.exhume_value_type(&field.ty).unwrap();
-                            dbg!(&field_ty);
                             let field_ty = s_read!(field_ty);
                             if let ValueTypeEnum::StructGeneric(ref id) = field_ty.subtype {
                                 let generic = lu_dog.exhume_struct_generic(id).unwrap();
@@ -3980,8 +4078,6 @@ pub(crate) fn make_value_type(
                                 generic_substitutions.insert(generic.name.to_owned(), ty);
                             }
                         }
-
-                        dbg!(&name);
 
                         if let Some((_, ty)) = create_generic_struct(
                             &woog_struct,
@@ -4500,8 +4596,6 @@ pub(crate) fn create_generic_struct(
 
     if let Some(first) = woog_struct.r102_struct_generic(lu_dog).pop() {
         let generic_name = &s_read!(first).name;
-
-        dbg!(&generic_name);
 
         let ty = substitutions.get(generic_name).unwrap();
         let ty = PrintableValueType(false, ty, context, lu_dog).to_string();

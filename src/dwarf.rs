@@ -557,6 +557,7 @@ pub enum Expression {
     LessThanOrEqual(Box<Spanned<Self>>, Box<Spanned<Self>>),
     List(Vec<Spanned<Self>>),
     LocalVariable(String),
+    Map(Vec<(Spanned<Self>, Spanned<Self>)>),
     Match(Box<Spanned<Self>>, Vec<Spanned<(Pattern, Self)>>),
     MethodCall(Box<Spanned<Self>>, Spanned<String>, Vec<Spanned<Self>>),
     Multiplication(Box<Spanned<Self>>, Box<Spanned<Self>>),

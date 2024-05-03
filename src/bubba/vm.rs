@@ -1,4 +1,5 @@
 use std::{
+    collections::HashMap as StdHashMap,
     env,
     path::{Path, PathBuf},
     thread,
@@ -37,11 +38,11 @@ use crate::{
     },
     keywords::{INVOKE_FUNC, INVOKE_FUNC_MUT},
     lu_dog::{ValueType, ValueTypeEnum},
-    new_ref,
+    new_rc, new_ref,
     plug_in::{Error as FfiError, LambdaCall, PluginModRef, PluginType},
     s_read, s_write,
     sarzak::{ObjectStore as SarzakStore, Ty, MODEL as SARZAK_MODEL},
-    DwarfInteger, NewRef, RefType, Span, LAMBDA_FUNCS,
+    DwarfInteger, NewRcType, NewRef, RcType, RefType, Span, LAMBDA_FUNCS,
 };
 
 use super::instr::{Instruction, Program};
@@ -407,35 +408,7 @@ impl VM {
             if self.trace {
                 print_stack(&stack, fp);
                 println!("\t{} ->\t{cx}", Colour::Green.bold().paint("cx"));
-                for iip in 0.max(ip - 3)..(self.instrs.len() as isize).min(ip + 3isize) {
-                    let instr = &self.instrs[iip as usize];
-
-                    let src = if let Some(source) = program.get_source() {
-                        let span = self.source_map[iip as usize].clone();
-                        if span.end <= source.len() {
-                            &source[span]
-                        } else {
-                            ""
-                        }
-                    } else {
-                        ""
-                    };
-
-                    if ip == iip {
-                        println!(
-                            "<{:08x}:\t{instr}\t\t<- {}\t{}",
-                            iip,
-                            Colour::Purple.bold().paint("ip"),
-                            Colour::White.dimmed().paint(src)
-                        );
-                    } else {
-                        println!(
-                            "<{:08x}:\t{instr}\t\t\t{}",
-                            iip,
-                            Colour::White.dimmed().paint(src)
-                        );
-                    }
-                }
+                print_instrs(ip, &program, &self.instrs, &self.source_map);
                 println!();
             }
 
@@ -489,6 +462,7 @@ impl VM {
 
                         let future = stack.pop().unwrap().into_pointer();
                         let mut expression = &mut *s_write!(future);
+                        dbg!(&expression);
 
                         let executor = match unsafe { EXECUTOR.get() } {
                             Some(executor) => executor,
@@ -503,18 +477,23 @@ impl VM {
 
                         let result = match &mut expression {
                             Value::Task {
-                                name: _,
+                                name,
                                 task,
                                 running,
                             } => {
-                                if let Some(task) = task.take() {
+                                if let Some(task) = s_write!(task).take() {
                                     if !*running {
+                                        tracing::trace!(target: "vm", "Starting task: {name}");
                                         executor.start_task(&task);
                                     }
+
+                                    tracing::trace!(target: "vm", "Awaiting task: {name}");
                                     let f = future::block_on(task)?;
                                     f
                                 } else {
-                                    panic!("Task is missing -- already awaited.");
+                                    panic!(
+                                        "Task ({name}) is missing -- already awaited. Why does this happen?"
+                                    );
                                 }
                             }
                             _ => {
@@ -827,7 +806,9 @@ impl VM {
                         let Value::Enumeration(user_enum) = user_enum.clone().into_value() else {
                             if self.backtrace {
                                 eprintln!("{self:?}");
+                                eprintln!("{program}");
                                 print_stack(&stack, fp);
+                                print_instrs(ip, &program, &self.instrs, &self.source_map);
                             }
                             return Err(BubbaError::VmPanic {
                                 message: format!("Expected enum, found: {user_enum:?}."),
@@ -899,6 +880,7 @@ impl VM {
                                 if self.backtrace {
                                     eprintln!("{self:?}");
                                     print_stack(&stack, fp);
+                                    print_instrs(ip, &program, &self.instrs, &self.source_map);
                                 }
                                 return Err::<RefType<Value>, Error>(
                                     BubbaError::VmPanic {
@@ -1024,6 +1006,7 @@ impl VM {
                                     if self.backtrace {
                                         eprintln!("{self:?}");
                                         print_stack(&stack, fp);
+                                        print_instrs(ip, &program, &self.instrs, &self.source_map);
                                     }
                                     return Err(BubbaError::IndexOutOfBounds {
                                         index,
@@ -1042,6 +1025,7 @@ impl VM {
                                     if self.backtrace {
                                         eprintln!("{self:?}");
                                         print_stack(&stack, fp);
+                                        print_instrs(ip, &program, &self.instrs, &self.source_map);
                                     }
                                     return Err(BubbaError::IndexOutOfBounds {
                                         index,
@@ -1070,6 +1054,7 @@ impl VM {
                                     if self.backtrace {
                                         eprintln!("{self:?}");
                                         print_stack(&stack, fp);
+                                        print_instrs(ip, &program, &self.instrs, &self.source_map);
                                     }
                                     return Err(BubbaError::IndexOutOfBounds {
                                         index,
@@ -1119,6 +1104,7 @@ impl VM {
                                     if self.backtrace {
                                         eprintln!("{self:?}");
                                         print_stack(&stack, fp);
+                                        print_instrs(ip, &program, &self.instrs, &self.source_map);
                                     }
                                     return Err(BubbaError::IndexOutOfBounds {
                                         index: end,
@@ -1142,6 +1128,7 @@ impl VM {
                                     if self.backtrace {
                                         eprintln!("{self:?}");
                                         print_stack(&stack, fp);
+                                        print_instrs(ip, &program, &self.instrs, &self.source_map);
                                     }
                                     return Err(BubbaError::IndexOutOfBounds {
                                         index: end,
@@ -1184,6 +1171,7 @@ impl VM {
                                 if self.backtrace {
                                     eprintln!("{self:?}");
                                     print_stack(&stack, fp);
+                                    print_instrs(ip, &program, &self.instrs, &self.source_map);
                                 }
                                 return Err(BubbaError::NotIndexable {
                                     span: self.get_span(ip),
@@ -1209,6 +1197,7 @@ impl VM {
                                 if self.backtrace {
                                     eprintln!("{self:?}");
                                     print_stack(&stack, fp);
+                                    print_instrs(ip, &program, &self.instrs, &self.source_map);
                                 }
                                 return Err(BubbaError::NotIndexable {
                                     span: self.get_span(ip),
@@ -1244,6 +1233,106 @@ impl VM {
 
                         1
                     }
+                    Instruction::MapGet => {
+                        let key = stack.pop().unwrap();
+                        let key = key.into_value();
+                        let key: String = key.try_into()?;
+
+                        let map = stack.pop().unwrap();
+                        let map = map.into_pointer();
+                        let map = s_read!(map);
+                        match &*map {
+                            Value::Map { inner, .. } => {
+                                let inner = s_read!(inner);
+                                let value = inner.get(&key);
+                                // stack.push(value.into());
+                                match inner.get(&key) {
+                                    Some(value) => {
+                                        stack.push(value.clone().into());
+                                    }
+                                    None => {
+                                        stack.push(Value::Empty.into());
+                                    }
+                                }
+                            }
+                            value => {
+                                if self.backtrace {
+                                    eprintln!("{self:?}");
+                                    print_stack(&stack, fp);
+                                    print_instrs(ip, &program, &self.instrs, &self.source_map);
+                                }
+                                return Err(BubbaError::NotIndexable {
+                                    span: self.get_span(ip),
+                                    value: value.to_owned(),
+                                    location: location!(),
+                                }
+                                .into());
+                            }
+                        }
+
+                        1
+                    }
+                    Instruction::MapInsert => {
+                        let value = stack.pop().unwrap();
+                        let value = value.into_pointer();
+
+                        let key = stack.pop().unwrap();
+                        let key = key.into_value();
+                        let key = key.try_into()?;
+
+                        let map = stack.pop().unwrap();
+                        let map_value = map.into_pointer();
+                        let map = s_write!(map_value);
+                        match &*map {
+                            Value::Map { inner, .. } => {
+                                let mut inner = s_write!(inner);
+                                inner.insert(key, value);
+                            }
+                            value => {
+                                if self.backtrace {
+                                    eprintln!("{self:?}");
+                                    print_stack(&stack, fp);
+                                    print_instrs(ip, &program, &self.instrs, &self.source_map);
+                                }
+                                return Err(BubbaError::NotIndexable {
+                                    span: self.get_span(ip),
+                                    value: value.to_owned(),
+                                    location: location!(),
+                                }
+                                .into());
+                            }
+                        }
+
+                        stack.push(map_value.clone().into());
+
+                        1
+                    }
+                    Instruction::MapLength => {
+                        let map = stack.pop().unwrap();
+                        let map = map.into_pointer();
+                        let map = s_read!(map);
+                        match &*map {
+                            Value::Map { inner, .. } => {
+                                let inner = s_read!(inner);
+                                stack.push(Value::Integer(inner.len() as DwarfInteger).into());
+                            }
+                            value => {
+                                if self.backtrace {
+                                    eprintln!("{self:?}");
+                                    print_stack(&stack, fp);
+                                    print_instrs(ip, &program, &self.instrs, &self.source_map);
+                                }
+                                return Err(BubbaError::NotIndexable {
+                                    span: self.get_span(ip),
+                                    value: value.to_owned(),
+                                    location: location!(),
+                                }
+                                .into());
+                            }
+                        }
+
+                        1
+                    }
                     Instruction::MethodLookup(name) => {
                         let ty = stack.pop().unwrap();
 
@@ -1263,11 +1352,12 @@ impl VM {
                                     Enum::Unit(_, ty, _) => ty.to_owned(),
                                 },
                                 Value::Integer(_) => "::std::integer::Integer".to_owned(),
+                                Value::Map { .. } => "::std::collections::HashMap".to_owned(),
                                 Value::Struct(ty) => {
                                     let name = ty.type_name();
                                     name.to_owned()
                                 }
-                                Value::String(_) => "String".to_owned(),
+                                Value::String(_) => "::std::string::String".to_owned(),
                                 // Value::Vector { ty, .. } => {
                                 //     let ty = s_read!(ty);
                                 //     let name = ty.type_name();
@@ -1338,6 +1428,28 @@ impl VM {
                         let values = new_ref!(Vec<RefType<Value>>, values);
 
                         stack.push(Value::List { ty, inner: values }.into());
+
+                        1
+                    }
+                    Instruction::NewMap => {
+                        let map = StdHashMap::new();
+
+                        // let key_ty = stack.pop().unwrap();
+                        // let key_ty: ValueType = key_ty.into_value().try_into()?;
+                        // let key_ty = new_ref!(ValueType, key_ty);
+
+                        // let value_ty = stack.pop().unwrap();
+                        // let value_ty: ValueType = value_ty.into_value().try_into()?;
+                        // let value_ty = new_ref!(ValueType, value_ty);
+
+                        stack.push(
+                            Value::Map {
+                                // key_ty,
+                                // value_ty,
+                                inner: new_ref!(StdHashMap<String, RefType<Value>>, map),
+                            }
+                            .into(),
+                        );
 
                         1
                     }
@@ -1471,6 +1583,7 @@ impl VM {
                             if self.backtrace {
                                 eprintln!("{self:?}");
                                 print_stack(&stack, fp);
+                                print_instrs(ip, &program, &self.instrs, &self.source_map);
                             }
                             BubbaError::VmPanic {
                                 message: format!("Plug-in error: {e}."),
@@ -1818,6 +1931,10 @@ impl VM {
         arity: usize,
         program: &Program,
     ) -> Result<()> {
+        use puteketeke::AsyncTask;
+
+        use crate::VmValueResult;
+
         let callee = &stack[stack.len() - func_arity - 2].clone();
         let stack_local_count = &stack[stack.len() - func_arity - 1].clone();
         let (name, callee, frame_size, local_card, stack_count): (
@@ -1915,16 +2032,18 @@ impl VM {
         let child_task = worker.spawn_task(future).unwrap();
         executor.start_task(&child_task);
 
-        tracing::debug!(target: "vm", "Task started: {name}.");
+        tracing::trace!(target: "vm", "Task started: {name} {child_task:?}.");
 
         let value = new_ref!(
             Value,
             Value::Task {
                 name,
                 running: true,
-                task: Some(child_task)
+                task: new_ref!(Option<AsyncTask<'static, VmValueResult>>, Some(child_task))
             }
         );
+
+        dbg!(&value);
 
         old_stack.push(value.into());
 
@@ -2012,6 +2131,38 @@ fn print_stack(stack: &[StackValue], fp: usize) {
             eprint!("\t     \t");
         }
         eprintln!("stack {i}:\t{}", entry);
+    }
+}
+
+fn print_instrs(ip: isize, program: &Program, instrs: &[Instruction], source_map: &[Span]) {
+    for iip in 0.max(ip - 3)..(instrs.len() as isize).min(ip + 3isize) {
+        let instr = &instrs[iip as usize];
+
+        let src = if let Some(source) = program.get_source() {
+            let span = source_map[iip as usize].clone();
+            if span.end <= source.len() {
+                &source[span]
+            } else {
+                ""
+            }
+        } else {
+            ""
+        };
+
+        if ip == iip {
+            eprintln!(
+                "<{:08x}:\t{instr}\t\t<- {}\t{}",
+                iip,
+                Colour::Purple.bold().paint("ip"),
+                Colour::White.dimmed().paint(src)
+            );
+        } else {
+            eprintln!(
+                "<{:08x}:\t{instr}\t\t\t{}",
+                iip,
+                Colour::White.dimmed().paint(src)
+            );
+        }
     }
 }
 

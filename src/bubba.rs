@@ -15,6 +15,7 @@ pub(crate) const EMPTY: &str = "EMPTY";
 pub(crate) const FLOAT: &str = "FLOAT";
 pub(crate) const INTEGER: &str = "INTEGER";
 pub(crate) const RANGE: &str = "RANGE";
+pub(crate) const MAP: &str = "MAP";
 pub(crate) const RESULT: &str = "RESULT";
 pub(crate) const STRING: &str = "STRING";
 pub(crate) const STRING_ARRAY: &str = "STRING_ARRAY";

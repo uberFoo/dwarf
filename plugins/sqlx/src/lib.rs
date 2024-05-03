@@ -229,8 +229,10 @@ mod postgres {
                             let guard = self.pools.lock().unwrap();
                             let pool = guard.get(pool as usize).unwrap();
 
-                            // Run the query
+                            // Build the query
                             let mut result = sqlx::query(&query);
+
+                            // Add bindings to the query
                             for binding in bindings {
                                 match binding {
                                     FfiValue::String(value) => {
@@ -244,6 +246,8 @@ mod postgres {
                                     }
                                 }
                             }
+
+                            // Run the query, mapping results to the lambda.
                             let result = result
                                 .map(|row: sqlx::postgres::PgRow| {
                                     // This is how we get the result of running the lambda.
@@ -277,7 +281,7 @@ mod postgres {
                                 .fetch_all(pool)
                                 .await;
 
-                            // New we wrap the result up as an RResult that may be sent back
+                            // Now we wrap the result up as an RResult that may be sent back
                             // to dwarf.
                             let result = match result {
                                 Ok(result) => ROk(RBox::new(result.into())),

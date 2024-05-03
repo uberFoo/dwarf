@@ -21,10 +21,10 @@ use crate::{
     bubba::{
         instr::{Instruction, Program, Thonk},
         value::Value,
-        BOOL, CHAR, EMPTY, FLOAT, INTEGER, RANGE, RESULT, STRING, STRING_ARRAY, UNKNOWN, UUID,
+        BOOL, CHAR, EMPTY, FLOAT, INTEGER, MAP, RANGE, RESULT, STRING, STRING_ARRAY, UNKNOWN, UUID,
     },
     lu_dog::{
-        BodyEnum, Expression, ExpressionEnum, Function, ObjectStore as LuDogStore, Statement,
+        BodyEnum, Expression, ExpressionEnum, Function, Map, ObjectStore as LuDogStore, Statement,
         StatementEnum, ValueType, ValueTypeEnum,
     },
     s_read, s_write,
@@ -342,8 +342,8 @@ pub fn compile(context: &ExtruderContext) -> Result<Program> {
     // We need to grab this specific instance's value of the string type.
     // As well as all the other types below.
     let string = Ty::new_z_string(&s_read!(sarzak));
-    let string = ValueType::new_ty(true, &string, &mut s_write!(lu_dog));
-    let string = (*s_read!(string)).clone();
+    let string_ty = ValueType::new_ty(true, &string, &mut s_write!(lu_dog));
+    let string = (*s_read!(string_ty)).clone();
     let string_value = Value::ValueType(string.clone());
     context
         .get_program()
@@ -379,6 +379,11 @@ pub fn compile(context: &ExtruderContext) -> Result<Program> {
     let empty = ValueType::new_empty(true, &mut s_write!(lu_dog));
     let empty = (*s_read!(empty)).clone();
     context.insert_type(EMPTY.to_owned(), empty);
+
+    let map = Map::new(&string_ty, &string_ty, &mut s_write!(lu_dog));
+    let map = ValueType::new_map(true, &map, &mut s_write!(lu_dog));
+    let map = (*s_read!(map)).clone();
+    context.insert_type(MAP.to_owned(), map);
 
     let uuid = ValueType::new_ty(
         true,
@@ -795,7 +800,7 @@ mod test {
         args: &[RefType<Value>],
     ) -> Result<RefType<Value>, Error> {
         #[cfg(feature = "async")]
-        let mut vm = VM::new(program, args, &get_dwarf_home(), THREADS, true);
+        let mut vm = VM::new(program, args, &get_dwarf_home(), THREADS, false);
         #[cfg(not(feature = "async"))]
         let mut vm = VM::new(program, args, &get_dwarf_home());
         vm.invoke("main", &[])
@@ -990,7 +995,7 @@ mod test {
 
         // assert_eq!(program.get_instruction_card(), 393);
         let run = run_vm(&program);
-        println!("{:?}", run);
+        eprintln!("{:?}", run);
         assert!(run.is_ok());
         assert_eq!(&*s_read!(run.unwrap()), &Value::Boolean(true));
     }

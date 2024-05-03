@@ -16,7 +16,8 @@ use crate::{
     },
     chacha::interpreter::{ModelContext, PrintableValueType},
     keywords::{
-        ARGS, ASSERT, ASSERT_EQ, CHACHA, FORMAT, FQ_UUID_TYPE, NEW, PLUGIN, REPLACE, TYPEOF,
+        ARGS, ASSERT, ASSERT_EQ, CHACHA, FORMAT, FQ_UUID_TYPE, GET, INSERT, NEW, PLUGIN, REPLACE,
+        TYPEOF,
     },
     lu_dog::{BodyEnum, Call, CallEnum, Expression, ValueType, ValueTypeEnum},
     new_ref, s_read,
@@ -324,6 +325,33 @@ fn compile_method_call(
                     }
                     meth => panic!("list does not support {meth}"),
                 },
+                ValueTypeEnum::Map(_) => match name.as_str() {
+                    LEN => {
+                        thonk.insert_instruction(Instruction::MapLength, location!());
+                        return Ok(Some(result));
+                    }
+                    GET => {
+                        // First arg is self
+                        compile_expression(&args[0], thonk, context)?;
+                        // The second arg is the key
+                        compile_expression(&args[1], thonk, context)?;
+
+                        thonk.insert_instruction(Instruction::MapGet, location!());
+                        return Ok(Some(result));
+                    }
+                    INSERT => {
+                        // First arg is self
+                        compile_expression(&args[0], thonk, context)?;
+                        // The second arg is the key
+                        compile_expression(&args[1], thonk, context)?;
+                        // The third arg is the value
+                        compile_expression(&args[2], thonk, context)?;
+
+                        thonk.insert_instruction(Instruction::MapInsert, location!());
+                        return Ok(Some(result));
+                    }
+                    meth => panic!("map does not support {meth}"),
+                },
                 ValueTypeEnum::Ty(ref id) => {
                     let ty = sarzak.exhume_ty(id).unwrap();
                     let ty = ty.read().unwrap();
@@ -356,61 +384,6 @@ fn compile_method_call(
                 _ => {}
             }
         }
-
-        // match name.as_str() {
-        //     PUSH => {
-        //         match result.clone()?.unwrap().subtype {
-        //             ValueTypeEnum::List(_) => {
-        //                 // skip self
-        //                 for (_, expr) in args.iter().enumerate().skip(1) {
-        //                     compile_expression(expr, thonk, context)?;
-        //                 }
-
-        //                 thonk.insert_instruction(Instruction::ListPush, location!());
-
-        //                 return result;
-        //             }
-        //             _ => unreachable!(),
-        //         }
-        //     }
-        //     LEN => match result.clone()?.unwrap().subtype {
-        //         ValueTypeEnum::List(_) => {
-        //             thonk.insert_instruction(Instruction::ListLength, location!());
-        //             return result;
-        //         }
-        //         ValueTypeEnum::Ty(ref id) => {
-        //             let ty = sarzak.exhume_ty(id).unwrap();
-        //             let ty = ty.read().unwrap();
-
-        //             match &*ty {
-        //                 Ty::ZString(_) => {
-        //                     thonk.insert_instruction(Instruction::ListLength, location!());
-        //                     return result;
-        //                 }
-        //                 darn => panic!("type is not a string. found {darn:?}"),
-        //             }
-        //         }
-        //         whoa => panic!("value is not a list. found {whoa:?}"),
-        //     },
-        //     MAX => match result.clone()?.unwrap().subtype {
-        //         ValueTypeEnum::List(_) => {
-        //             // thonk.insert_instruction(Instruction::ListLength, location!());
-        //         }
-        //         ValueTypeEnum::Ty(ref id) => {
-        //             let ty = sarzak.exhume_ty(id).unwrap();
-        //             let ty = ty.read().unwrap();
-
-        //             match &*ty {
-        //                 Ty::Integer(_) => {
-        //                     // thonk.insert_instruction(Instruction::ListLength, location!());
-        //                 }
-        //                 darn => panic!("{darn:?}"),
-        //             }
-        //         }
-        //         whoa => panic!("{whoa:?}"),
-        //     },
-        //     _ => {}
-        // }
 
         thonk.insert_instruction(Instruction::MethodLookup(name), location!());
 

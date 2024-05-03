@@ -13,8 +13,8 @@ use crate::{
         Expression as ParserExpression, PrintableValueType,
     },
     keywords::{
-        FORMAT, INVOKE_FUNC, INVOKE_FUNC_MUT, IS_DIGIT, LEN, LINES, MAP, MAX, PUSH, REPLACE, SPLIT,
-        SUM, TO_DIGIT, TRIM,
+        FORMAT, GET, INSERT, INVOKE_FUNC, INVOKE_FUNC_MUT, IS_DIGIT, LEN, LINES, MAP, MAX, PUSH,
+        REPLACE, SPLIT, SUM, TO_DIGIT, TRIM,
     },
     lu_dog::{
         store::ObjectStore as LuDogStore, Argument, Block, Call, Expression, List, MethodCall,
@@ -179,9 +179,10 @@ pub(in crate::dwarf::extruder) fn method_call_return_type(
                 let inner_ty = s_read!(inner_ty);
 
                 if &*s_read!(arg_ty) != &*inner_ty {
-                    let expected_span = &inner_ty.r62_span(lu_dog)[0];
-                    let expected_span = s_read!(expected_span);
-                    let expected_span = expected_span.start as usize..expected_span.end as usize;
+                    // let expected_span = &inner_ty.r62_span(lu_dog)[0];
+                    // let expected_span = s_read!(expected_span);
+                    // let expected_span = expected_span.start as usize..expected_span.end as usize;
+                    let expected_span = 0..0;
 
                     return Err(vec![DwarfError::TypeMismatch {
                         expected: PrintableValueType(true, &instance_ty, context, lu_dog)
@@ -198,6 +199,82 @@ pub(in crate::dwarf::extruder) fn method_call_return_type(
                 arg_ty.clone()
             }
             SUM => instance_ty.clone(),
+            _ => {
+                return Err(vec![DwarfError::NoSuchMethod {
+                    method: method.to_owned(),
+                    file: context.file_name.to_owned(),
+                    span: meth_span.to_owned(),
+                    location: location!(),
+                    program: context.source_string.to_owned(),
+                }])
+            }
+        },
+        ValueTypeEnum::Map(ref map) => match method.as_str() {
+            LEN => {
+                let ty = Ty::new_integer(context.sarzak);
+                ValueType::new_ty(true, &ty, lu_dog)
+            }
+            INSERT => {
+                if arg_ty.len() != 2 {
+                    return Err(vec![DwarfError::WrongNumberOfArguments {
+                        expected: 2,
+                        found: arg_ty.len(),
+                        file: context.file_name.to_owned(),
+                        span: meth_span.to_owned(),
+                        location: location!(),
+                        program: context.source_string.to_owned(),
+                    }]);
+                }
+                let key_ty = arg_ty.pop().unwrap();
+                let value_ty = arg_ty.pop().unwrap();
+                let map = lu_dog.exhume_map(map).unwrap();
+                let map = s_read!(map);
+
+                let map_key_type = map.key_type;
+                let map_key_type = lu_dog.exhume_value_type(&map_key_type).unwrap();
+                let map_key_type = s_read!(map_key_type);
+
+                if &*s_read!(key_ty) != &*map_key_type {
+                    // let expected_span = &map_key_type.r62_span(lu_dog)[0];
+                    // let expected_span = s_read!(expected_span);
+                    // let expected_span = expected_span.start as usize..expected_span.end as usize;
+                    let expected_span = 0..0;
+
+                    return Err(vec![DwarfError::TypeMismatch {
+                        expected: PrintableValueType(true, &instance_ty, context, lu_dog)
+                            .to_string(),
+                        found: PrintableValueType(true, &key_ty, context, lu_dog).to_string(),
+                        file: context.file_name.to_owned(),
+                        expected_span,
+                        found_span: meth_span.to_owned(),
+                        location: location!(),
+                        program: context.source_string.to_owned(),
+                    }]);
+                }
+
+                let map_value_type = map.value_type;
+                let map_value_type = lu_dog.exhume_value_type(&map_value_type).unwrap();
+                let map_value_type = s_read!(map_value_type);
+
+                if &*s_read!(value_ty) != &*map_value_type {
+                    let expected_span = &map_value_type.r62_span(lu_dog)[0];
+                    let expected_span = s_read!(expected_span);
+                    let expected_span = expected_span.start as usize..expected_span.end as usize;
+
+                    return Err(vec![DwarfError::TypeMismatch {
+                        expected: PrintableValueType(true, &instance_ty, context, lu_dog)
+                            .to_string(),
+                        found: PrintableValueType(true, &value_ty, context, lu_dog).to_string(),
+                        file: context.file_name.to_owned(),
+                        expected_span,
+                        found_span: meth_span.to_owned(),
+                        location: location!(),
+                        program: context.source_string.to_owned(),
+                    }]);
+                }
+
+                ValueType::new_empty(true, lu_dog)
+            }
             _ => {
                 return Err(vec![DwarfError::NoSuchMethod {
                     method: method.to_owned(),

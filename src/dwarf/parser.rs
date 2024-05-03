@@ -26,7 +26,7 @@ macro_rules! function {
 macro_rules! debug {
     ($msg:literal, $($arg:expr),*) => {
         $(
-            log::trace!(
+            tracing::trace!(
                 target: "parser",
                 "{}: {} --> {:?}\n  --> {}:{}:{}",
                 Colour::Green.dimmed().italic().paint(function!()),
@@ -39,7 +39,7 @@ macro_rules! debug {
         )*
     };
     ($arg:literal) => {
-        log::trace!(
+        tracing::trace!(
             target: "parser",
             "{}: {}\n  --> {}:{}:{}",
             Colour::Green.dimmed().italic().paint(function!()),
@@ -63,7 +63,7 @@ macro_rules! debug {
 macro_rules! error {
     ($msg:literal, $($arg:expr),*) => {
         $(
-            log::debug!(
+            tracing::debug!(
                 target: "parser",
                 "{}: {} --> {:?}\n  --> {}:{}:{}",
                 Colour::Green.dimmed().italic().paint(function!()),
@@ -76,7 +76,7 @@ macro_rules! error {
         )*
     };
     ($arg:literal) => {
-        log::debug!(
+        tracing::debug!(
             target: "parser",
             "{}: {}\n  --> {}:{}:{}",
             Colour::Green.dimmed().italic().paint(function!()),
@@ -86,7 +86,7 @@ macro_rules! error {
             column!())
     };
     ($arg:expr) => {
-        log::debug!(
+        tracing::debug!(
             target: "parser",
             "{}: {:?}\n  --> {}:{}:{}",
             Colour::Green.dimmed().italic().paint(function!()),
@@ -1011,7 +1011,6 @@ impl DwarfParser {
                 body.push(item);
             } else {
                 let token = self.previous().unwrap();
-                // 🚧 use the unclosed_delimiter constructor
                 let err = Simple::unclosed_delimiter(
                     open_brace..token.1.end,
                     "{".to_owned(),
@@ -2102,6 +2101,12 @@ impl DwarfParser {
             return Ok(Some(expression));
         }
 
+        // parse a hash map literal
+        if let Some(expression) = self.parse_map_literal()? {
+            debug!("Map literal", expression);
+            return Ok(Some(expression));
+        }
+
         // parse an empty literal
         if let Some(expression) = self.parse_empty_literal() {
             debug!("empty literal", expression);
@@ -2834,11 +2839,13 @@ impl DwarfParser {
                 elements.push(expr.0);
                 let _ = self.match_tokens(&[Token::Punct(',')]);
             } else {
-                let tok = self.previous().unwrap();
-                let err = Simple::expected_input_found(
-                    tok.1.clone(),
-                    [Some("expression".to_owned())],
-                    Some(tok.0.to_string()),
+                let token = self.previous().unwrap();
+                let err = Simple::unclosed_delimiter(
+                    start..token.1.end,
+                    "[".to_owned(),
+                    token.1.clone(),
+                    "]".to_owned(),
+                    Some(token.0.to_string()),
                 );
                 let err = err.with_label("expected expression");
                 return Err(Box::new(err));
@@ -2850,6 +2857,96 @@ impl DwarfParser {
         Ok(Some((
             (
                 DwarfExpression::List(elements),
+                start..self.previous().unwrap().1.end,
+            ),
+            LITERAL,
+        )))
+    }
+
+    /// Parse a map expression
+    ///
+    /// map -> '{' entry (, entry)* '}'
+    /// entry -> expression ':' expression
+    fn parse_map_literal(&mut self) -> Result<Option<Expression>> {
+        debug!("enter parse_map_literal");
+
+        let start = if let Some(tok) = self.peek() {
+            tok.1.start
+        } else {
+            debug!("exit parse_map_literal");
+            return Ok(None);
+        };
+
+        if !self.check(&Token::Punct('{')) || !self.check2(&Token::Punct('{')) {
+            return Ok(None);
+        }
+
+        self.advance();
+        self.advance();
+
+        let mut elements = Vec::new();
+
+        while !self.at_end() && self.match_tokens(&[Token::Punct('}')]).is_none() {
+            if let Some(key) = self.parse_expression(LITERAL.1)? {
+                if self.match_tokens(&[Token::Punct(':')]).is_none() {
+                    let token = self.previous().unwrap();
+                    let err = Simple::expected_input_found(
+                        token.1.clone(),
+                        [Some(":".to_owned())],
+                        Some(token.0.to_string()),
+                    );
+                    let err = err.with_label("expected ':'");
+                    return Err(Box::new(err));
+                }
+
+                if let Some(value) = self.parse_expression(LITERAL.1)? {
+                    elements.push((key.0, value.0));
+                } else {
+                    let token = self.previous().unwrap();
+                    let err = Simple::expected_input_found(
+                        token.1.clone(),
+                        [Some("expression".to_owned())],
+                        Some(token.0.to_string()),
+                    );
+                    let err = err.with_label("expected expression");
+                    return Err(Box::new(err));
+                }
+
+                let _ = self.match_tokens(&[Token::Punct(',')]);
+            } else {
+                let tok = self.previous().unwrap();
+                let err = Simple::unclosed_delimiter(
+                    start..tok.1.end,
+                    "{".to_owned(),
+                    tok.1.clone(),
+                    "}".to_owned(),
+                    Some(tok.0.to_string()),
+                );
+
+                let err = err.with_label("expected expression");
+                return Err(Box::new(err));
+            }
+        }
+
+        if self.match_tokens(&[Token::Punct('}')]).is_none() {
+            let token = self.previous().unwrap();
+            let err = Simple::unclosed_delimiter(
+                start..token.1.end,
+                "{".to_owned(),
+                token.1.clone(),
+                "}".to_owned(),
+                Some(token.0.to_string()),
+            );
+
+            let err = err.with_label("expected expression");
+            return Err(Box::new(err));
+        }
+
+        debug!("exit parse_map_literal");
+
+        Ok(Some((
+            (
+                DwarfExpression::Map(elements),
                 start..self.previous().unwrap().1.end,
             ),
             LITERAL,
@@ -3051,12 +3148,14 @@ impl DwarfParser {
 
         if self.match_tokens(&[Token::Punct(')')]).is_none() {
             let token = self.previous().unwrap();
-            // 🚧 use the unclosed_delimiter constructor
-            let err = Simple::expected_input_found(
+            let err = Simple::unclosed_delimiter(
+                start..token.1.end,
+                "(".to_owned(),
                 token.1.clone(),
-                [Some(")".to_owned())],
+                ")".to_owned(),
                 Some(token.0.to_string()),
             );
+
             return Err(Box::new(err));
         }
 
@@ -3111,12 +3210,14 @@ impl DwarfParser {
 
         if self.match_tokens(&[Token::Punct(')')]).is_none() {
             let token = self.previous().unwrap();
-            // 🚧 use the unclosed_delimiter constructor
-            let err = Simple::expected_input_found(
+            let err = Simple::unclosed_delimiter(
+                start..token.1.end,
+                "(".to_owned(),
                 token.1.clone(),
-                [Some(")".to_owned())],
+                ")".to_owned(),
                 Some(token.0.to_string()),
             );
+
             return Err(Box::new(err));
         }
 
@@ -3298,18 +3399,31 @@ impl DwarfParser {
         let start = path.0 .1.start;
         // let mut end = path.0 .1.end;
 
-        if self.match_tokens(&[Token::Punct(':')]).is_none() {
-            // return Ok(Some((
-            // (DwarfExpression::PathInExpression(path), start..end),
-            // PATH,
-            // )))
+        // if self.match_tokens(&[Token::Punct(':')]).is_none() {
+        //     // return Ok(Some((
+        //     // (DwarfExpression::PathInExpression(path), start..end),
+        //     // PATH,
+        //     // )))
+        //     return Ok(None);
+        // }
+
+        // if self.match_tokens(&[Token::Punct(':')]).is_none() {
+        //     debug!("exit no other colon");
+        //     return Ok(None);
+        // }
+
+        if !self.check(&Token::Punct(':')) {
+            debug!("exit no ..");
             return Ok(None);
         }
 
-        if self.match_tokens(&[Token::Punct(':')]).is_none() {
-            debug!("exit no other colon");
+        if !self.check2(&Token::Punct(':')) {
+            debug!("exit no ..");
             return Ok(None);
         }
+
+        self.advance();
+        self.advance();
 
         let mut path = if let (DwarfExpression::LocalVariable(name), span) = &path.0 {
             vec![(
@@ -3924,12 +4038,12 @@ impl DwarfParser {
         let return_type = if self.match_tokens(&[Token::Punct('-')]).is_some() {
             if self.match_tokens(&[Token::Punct('>')]).is_none() {
                 let token = self.previous().unwrap();
-                // 🚧 use the unclosed_delimiter constructor
                 let err = Simple::expected_input_found(
                     token.1.clone(),
                     [Some("'>'".to_owned())],
                     Some(token.0.to_string()),
                 );
+
                 debug!("exit: got '-', but no '>'");
                 return Err(Box::new(err));
             }
@@ -4067,12 +4181,12 @@ impl DwarfParser {
         let return_type = if self.match_tokens(&[Token::Punct('-')]).is_some() {
             if self.match_tokens(&[Token::Punct('>')]).is_none() {
                 let token = self.previous().unwrap();
-                // 🚧 use the unclosed_delimiter constructor
                 let err = Simple::expected_input_found(
                     token.1.clone(),
                     [Some("'>'".to_owned())],
                     Some(token.0.to_string()),
                 );
+
                 error!("exit: got '-', but no '>'");
                 return Err(Box::new(err));
             }
@@ -4320,12 +4434,14 @@ impl DwarfParser {
 
             if self.match_tokens(&[Token::Punct(']')]).is_none() {
                 let token = self.previous().unwrap();
-                // 🚧 use the unclosed_delimiter constructor
-                let err = Simple::expected_input_found(
+                let err = Simple::unclosed_delimiter(
+                    start..token.1.end,
+                    "[".to_owned(),
                     token.1.clone(),
-                    [Some("']'".to_owned())],
+                    "]".to_owned(),
                     Some(token.0.to_string()),
                 );
+
                 return Err(Box::new(err));
             }
 
@@ -4343,12 +4459,14 @@ impl DwarfParser {
         if self.match_tokens(&[Token::Fn]).is_some() {
             if self.match_tokens(&[Token::Punct('(')]).is_none() {
                 let token = self.previous().unwrap();
-                // 🚧 use the unclosed_delimiter constructor
-                let err = Simple::expected_input_found(
+                let err = Simple::unclosed_delimiter(
+                    start..token.1.end,
+                    "(".to_owned(),
                     token.1.clone(),
-                    [Some("'('".to_owned())],
+                    ")".to_owned(),
                     Some(token.0.to_string()),
                 );
+
                 debug!("exit parse_function: no '('");
                 return Err(Box::new(err));
             }
@@ -4384,7 +4502,6 @@ impl DwarfParser {
             let return_type = if self.match_tokens(&[Token::Punct('-')]).is_some() {
                 if self.match_tokens(&[Token::Punct('>')]).is_none() {
                     let token = self.previous().unwrap();
-                    // 🚧 use the unclosed_delimiter constructor
                     let err = Simple::expected_input_found(
                         token.1.clone(),
                         [Some("'>'".to_owned())],
@@ -4424,7 +4541,6 @@ impl DwarfParser {
                 }
             } else {
                 let token = self.previous().unwrap();
-                // 🚧 use the unclosed_delimiter constructor
                 let err = Simple::expected_input_found(
                     token.1.clone(),
                     [Some("'-> <type>'".to_owned())],
@@ -6257,6 +6373,23 @@ mod tests {
         }"#;
 
         let ast = parse_dwarf("test_halt", src);
+        assert!(ast.is_ok());
+    }
+
+    #[test]
+    fn hash_map() {
+        let _ = env_logger::builder().is_test(true).try_init();
+        let src = r#"
+        fn main() {
+            let map = {{
+                "foo": 42,
+                "bar": 69,
+                "baz": 96,
+            }};
+        }
+        "#;
+
+        let ast = parse_dwarf("test_hash_map", src);
         dbg!(&ast);
         assert!(ast.is_ok());
     }

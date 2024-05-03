@@ -85,6 +85,7 @@ pub enum FfiValue {
     ///
     /// A list of values; aka a Vec.
     List(RVec<Self>),
+    Map(RHashMap<RString, RBox<Self>>),
     /// Option
     ///
     /// An optional value. Note that this is not the same as `Option<T>`, but
@@ -150,6 +151,20 @@ impl std::fmt::Display for FfiValue {
                     write!(f, "{i}")?;
                 }
                 write!(f, "]")
+            }
+            Self::Map(map) => {
+                let mut first_time = true;
+                write!(f, "{{")?;
+                for Tuple2(k, v) in map {
+                    if first_time {
+                        first_time = false;
+                    } else {
+                        write!(f, ", ")?;
+                    }
+
+                    write!(f, "{k}: {v}")?;
+                }
+                write!(f, "}}")
             }
             Self::Option(option) => match option {
                 ROption::RNone => write!(f, "None"),
@@ -658,6 +673,7 @@ pub enum FfiValueTypeEnum {
     Import(usize),
     Lambda(usize),
     List(usize),
+    Map(usize),
     ZObjectStore(usize),
     XPlugin(usize),
     Range(FfiUuid),
@@ -682,6 +698,7 @@ impl From<ValueTypeEnum> for FfiValueTypeEnum {
             ValueTypeEnum::Import(id) => Self::Import(id),
             ValueTypeEnum::Lambda(id) => Self::Lambda(id),
             ValueTypeEnum::List(id) => Self::List(id),
+            ValueTypeEnum::Map(id) => Self::Map(id),
             ValueTypeEnum::ZObjectStore(id) => Self::ZObjectStore(id),
             ValueTypeEnum::XPlugin(id) => Self::XPlugin(id),
             ValueTypeEnum::Range(uuid) => Self::Range(uuid.into()),
@@ -708,6 +725,7 @@ impl From<FfiValueTypeEnum> for ValueTypeEnum {
             FfiValueTypeEnum::Import(id) => ValueTypeEnum::Import(id),
             FfiValueTypeEnum::Lambda(id) => ValueTypeEnum::Lambda(id),
             FfiValueTypeEnum::List(id) => ValueTypeEnum::List(id),
+            FfiValueTypeEnum::Map(id) => ValueTypeEnum::Map(id),
             FfiValueTypeEnum::ZObjectStore(id) => ValueTypeEnum::ZObjectStore(id),
             FfiValueTypeEnum::XPlugin(id) => ValueTypeEnum::XPlugin(id),
             FfiValueTypeEnum::Range(uuid) => ValueTypeEnum::Range(uuid.into()),
@@ -755,6 +773,9 @@ impl From<FfiValueTypeEnum> for RefType<ValueTypeEnum> {
             }
             FfiValueTypeEnum::List(id) => {
                 new_ref!(ValueTypeEnum, ValueTypeEnum::List(id))
+            }
+            FfiValueTypeEnum::Map(id) => {
+                new_ref!(ValueTypeEnum, ValueTypeEnum::Map(id))
             }
             FfiValueTypeEnum::ZObjectStore(id) => {
                 new_ref!(ValueTypeEnum, ValueTypeEnum::ZObjectStore(id))

@@ -110,6 +110,7 @@ pub fn eval(literal: &SarzakStorePtr, context: &mut Context) -> Result<RefType<V
             let value = Value::String(s_read!(literal).x_value.clone());
             Ok(new_ref!(Value, value))
         }
+        _ => unimplemented!(),
     };
 
     #[allow(clippy::let_and_return)]

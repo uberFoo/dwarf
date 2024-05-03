@@ -54,6 +54,8 @@ mod keywords {
     pub(crate) const EPS: &str = "eps";
     pub(crate) const EVAL: &str = "eval";
     pub(crate) const FN_NEW: &str = "new";
+    pub(crate) const GET: &str = "get";
+    pub(crate) const INSERT: &str = "insert";
     #[cfg(feature = "async")]
     pub(crate) const INTERVAL: &str = "interval";
     pub(crate) const INVOKE_FUNC: &str = "invoke_func";

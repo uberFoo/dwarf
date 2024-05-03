@@ -210,6 +210,8 @@ pub(in crate::bubba::compiler) fn compile(
 mod test {
     use std::env;
 
+    use test_log::test;
+
     use crate::{
         bubba::compiler::{
             test::{get_dwarf_home, run_vm, setup_logging},
