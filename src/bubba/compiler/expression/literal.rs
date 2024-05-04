@@ -87,7 +87,6 @@ pub(in crate::bubba::compiler) fn compile(
                                 let expr = lu_dog.exhume_expression(&expr_bit.expression).unwrap();
                                 let span = get_span(&expr, &lu_dog);
                                 let ty = compile_expression(&expr, thonk, context)?.unwrap();
-                                dbg!(&expr, &ty);
                                 if ty != *context.get_type(STRING).unwrap() {
                                     thonk.insert_instruction_with_span(
                                         Instruction::ToString,

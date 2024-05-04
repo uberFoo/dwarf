@@ -86,8 +86,6 @@ pub(in crate::bubba::compiler) fn compile(
                     let ty = en.r1_value_type(&lu_dog)[0].clone();
                     let ty = (*s_read!(ty)).clone();
 
-                    dbg!("a", &ty);
-
                     // Insert the iteration ident into the symbol table.
                     let iter_ident_index = match context.insert_symbol(iter_ident, ty.clone()) {
                         (true, index) => {
@@ -115,7 +113,6 @@ pub(in crate::bubba::compiler) fn compile(
                     match &*ty {
                         Ty::Integer(_) => {
                             let int = context.get_type(INTEGER).unwrap().clone();
-                            dbg!("b");
                             // Insert the iteration ident into the symbol table.
                             let iter_ident_index =
                                 match context.insert_symbol(iter_ident, int.clone()) {
@@ -140,7 +137,6 @@ pub(in crate::bubba::compiler) fn compile(
                         }
                         Ty::ZString(_) => {
                             let string = context.get_type(STRING).unwrap().clone();
-                            dbg!("c");
                             // Insert the iteration ident into the symbol table.
                             let iter_ident_index =
                                 match context.insert_symbol(iter_ident, string.clone()) {
@@ -166,7 +162,7 @@ pub(in crate::bubba::compiler) fn compile(
                         ty => todo!("list element ty: {:?}", ty),
                     }
                 }
-                ValueTypeEnum::XFuture(ref future) => {
+                ValueTypeEnum::XFuture(ref _future) => {
                     // let future = lu_dog.exhume_x_future(future).unwrap();
                     // let future = s_read!(future);
                     // let ty = future.r2_value_type(&lu_dog)[0].clone();
@@ -230,7 +226,6 @@ pub(in crate::bubba::compiler) fn compile(
         }
         ValueTypeEnum::Range(_) => {
             let int = context.get_type(INTEGER).unwrap().clone();
-            dbg!("f");
             // Insert the iteration ident into the symbol table.
             let iter_ident_index = match context.insert_symbol(iter_ident, int) {
                 (true, index) => {
@@ -253,7 +248,6 @@ pub(in crate::bubba::compiler) fn compile(
             match &*ty {
                 Ty::ZString(_) => {
                     let string = context.get_type(STRING).unwrap().clone();
-                    dbg!("g");
                     // Insert the iteration ident into the symbol table.
                     let iter_ident_index = match context.insert_symbol(iter_ident, string.clone()) {
                         (true, index) => {

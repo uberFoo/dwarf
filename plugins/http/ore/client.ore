@@ -18,7 +18,10 @@ impl HttpClient {
     }
 
     async fn get(self, url: String) -> Future<Request> {
-        let request = self.inner.invoke_func("client", "HttpClient", "get", [url]);
+        let request = self
+            .inner
+            .invoke_func_mut("client", "HttpClient", "get", [url]);
+        print("\nrequest: ${request}\n");
         Request {
             inner: request,
             plugin: self.inner,
@@ -36,7 +39,7 @@ impl Request {
     async fn send(self) -> Future<Result<Response, HttpError>> {
         let response = self
             .plugin
-            .invoke_func("client", "Request", "send", [self.inner]);
+            .invoke_func_mut("client", "Request", "send", [self.inner]);
 
         match response {
             Result::Err(e) => Result::<Response, HttpError>::Err(HttpError {
@@ -61,7 +64,7 @@ impl Response {
     async fn text(self) -> Future<Result<string, HttpError>> {
         let text = self
             .plugin
-            .invoke_func("client", "Response", "text", [self.inner]);
+            .invoke_func_mut("client", "Response", "text", [self.inner]);
 
         match text {
             Result::Err(e) => Result::<string, HttpError>::Err(HttpError {
@@ -82,6 +85,6 @@ struct HttpError {
 impl HttpError {
     fn to_string(self) -> string {
         self.plugin
-            .invoke_func("client", "HttpError", "to_string", [self.inner])
+            .invoke_func_mut("client", "HttpError", "to_string", [self.inner])
     }
 }

@@ -141,6 +141,7 @@ mod http_client {
                                 .unwrap();
 
                             let request = self.client.get(url);
+
                             let entry = self.requests.vacant_entry();
                             let key = entry.key();
                             self.requests.insert(Arc::new(request));
