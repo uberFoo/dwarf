@@ -139,6 +139,13 @@ cfg_if::cfg_if! {
         }
 
         #[macro_export]
+        macro_rules! ref_try_read {
+            ($arg:expr) => {
+                $arg.try_read()
+            };
+        }
+
+        #[macro_export]
         macro_rules! ref_write {
             ($arg:expr) => {
                 $arg.borrow_mut()
@@ -217,6 +224,13 @@ cfg_if::cfg_if! {
         }
 
         #[macro_export]
+        macro_rules! ref_try_read {
+            ($arg:expr) => {
+                $arg.try_read()
+            };
+        }
+
+        #[macro_export]
         macro_rules! ref_write {
             ($arg:expr) => {
                 $arg.borrow_mut()
@@ -252,6 +266,13 @@ cfg_if::cfg_if! {
         macro_rules! ref_read {
             ($arg:expr) => {
                 $arg.borrow()
+            };
+        }
+
+        #[macro_export]
+        macro_rules! ref_try_read {
+            ($arg:expr) => {
+                $arg.try_read()
             };
         }
 
@@ -294,6 +315,13 @@ cfg_if::cfg_if! {
         }
 
         #[macro_export]
+        macro_rules! ref_try_read {
+            ($arg:expr) => {
+                $arg.try_read()
+            };
+        }
+
+        #[macro_export]
         macro_rules! ref_write {
             ($arg:expr) => {
                 $arg.write().unwrap()
@@ -332,6 +360,13 @@ cfg_if::cfg_if! {
         }
 
         #[macro_export]
+        macro_rules! ref_try_read {
+            ($arg:expr) => {
+                $arg.try_read()
+            };
+        }
+
+        #[macro_export]
         macro_rules! ref_write {
             ($arg:expr) => {
                 $arg.write().unwrap()
@@ -348,6 +383,7 @@ cfg_if::cfg_if! {
 }
 
 pub use ref_read as s_read;
+pub use ref_try_read as s_try_read;
 pub use ref_write as s_write;
 
 trait NewRcType<T> {

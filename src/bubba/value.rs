@@ -19,9 +19,9 @@ use crate::{
     lu_dog::{ValueType, ValueTypeEnum},
     new_ref,
     plug_in::PluginType,
-    s_read,
+    s_read, s_try_read,
     sarzak::Ty,
-    DwarfFloat, DwarfInteger, NewRef, RcType, RefType, VmValueResult,
+    DwarfFloat, DwarfInteger, NewRef, RefType, VmValueResult,
 };
 
 #[derive(Default, Deserialize, Serialize)]
@@ -499,7 +499,11 @@ impl fmt::Display for Value {
                         write!(f, ", ")?;
                     }
 
-                    write!(f, "{}", s_read!(i))?;
+                    if let Ok(i) = s_try_read!(i) {
+                        write!(f, "{i}, ")?;
+                    } else {
+                        write!(f, "<locked>, ")?;
+                    }
                 }
                 write!(f, "]")
             }
@@ -520,9 +524,19 @@ impl fmt::Display for Value {
                     f,
                     "FubarPointer {{ name: {name}, frame_size: {frame_size}, captures: ["
                 )?;
+                let mut first_time = true;
                 for i in captures {
-                    let i = s_read!(i);
-                    write!(f, "{i}, ")?;
+                    if first_time {
+                        first_time = false;
+                    } else {
+                        write!(f, ", ")?;
+                    }
+
+                    if let Ok(i) = s_try_read!(i) {
+                        write!(f, "{i}, ")?;
+                    } else {
+                        write!(f, "<locked>, ")?;
+                    }
                 }
                 write!(f, "] }}")
             }
@@ -531,13 +545,18 @@ impl fmt::Display for Value {
                 let mut first_time = true;
                 write!(f, "[")?;
                 for i in &*inner {
+                    // dbg!(&i);
                     if first_time {
                         first_time = false;
                     } else {
                         write!(f, ", ")?;
                     }
 
-                    write!(f, "{}", s_read!(i))?;
+                    if let Ok(i) = s_try_read!(i) {
+                        write!(f, "{i}, ")?;
+                    } else {
+                        write!(f, "<locked>, ")?;
+                    }
                 }
                 write!(f, "]")
             }
@@ -555,7 +574,11 @@ impl fmt::Display for Value {
                         write!(f, ", ")?;
                     }
 
-                    write!(f, "{key}: {value}", value = s_read!(value))?;
+                    if let Ok(value) = s_try_read!(value) {
+                        write!(f, "{key}: {value}")?;
+                    } else {
+                        write!(f, "{key}: <locked>")?;
+                    }
                 }
                 write!(f, "}}")
             }

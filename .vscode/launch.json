@@ -148,7 +148,7 @@
                 // "uberfoo.rs/src/uberfoo.rs.ore",
                 // "-c",
                 // "uberfoo.rs/src",
-                // "-t",
+                "-t",
                 "-b",
             ],
             "cwd": "${workspaceFolder}",

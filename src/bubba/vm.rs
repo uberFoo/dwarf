@@ -2,6 +2,7 @@ use std::{
     collections::HashMap as StdHashMap,
     env,
     path::{Path, PathBuf},
+    sync::Mutex,
     thread,
 };
 
@@ -38,17 +39,19 @@ use crate::{
     },
     keywords::{INVOKE_FUNC, INVOKE_FUNC_MUT},
     lu_dog::{ValueType, ValueTypeEnum},
-    new_rc, new_ref,
+    new_ref,
     plug_in::{Error as FfiError, LambdaCall, PluginModRef, PluginType},
     s_read, s_write,
     sarzak::{ObjectStore as SarzakStore, Ty, MODEL as SARZAK_MODEL},
-    DwarfInteger, NewRcType, NewRef, RcType, RefType, Span, LAMBDA_FUNCS,
+    DwarfInteger, NewRef, RefType, Span, LAMBDA_FUNCS,
 };
 
 use super::instr::{Instruction, Program};
 
 #[cfg(feature = "async")]
 static mut EXECUTOR: OnceCell<Executor> = OnceCell::new();
+
+static mut WRITE_MUTEX: OnceCell<Mutex<()>> = OnceCell::new();
 
 #[derive(Debug)]
 enum StackValue {
@@ -335,8 +338,10 @@ impl VM {
             panic!("Expected a lambda pointer.")
         };
 
-        let (ip, _) = self.func_map.get(&format!("{name}_trampoline")).unwrap();
+        let func_name = format!("{name}_trampoline");
+        let (ip, _) = self.func_map.get(&func_name).unwrap();
         self.inner_run(
+            &func_name,
             *ip as isize,
             4,
             stack,
@@ -380,13 +385,23 @@ impl VM {
         let fp = frame_size + 5;
         let ip = *ip as isize;
 
-        let result = self.inner_run(ip, fp, stack, args.len(), frame_size, self.program.clone());
+        let result = self.inner_run(
+            func_name,
+            ip,
+            fp,
+            stack,
+            args.len(),
+            frame_size,
+            self.program.clone(),
+        );
 
         result
     }
 
     fn inner_run(
         &mut self,
+        // This is really just for debugging
+        name: &str,
         // This is an isize because we have negative jump offsets.
         mut ip: isize,
         mut fp: usize,
@@ -406,8 +421,22 @@ impl VM {
             }
 
             if self.trace {
+                // let mutex = WRITE_MUTEX.get_or_init(|| Mutex::new(()));
+                // let guard = mutex.lock().unwrap();
+                let mutex = match unsafe { WRITE_MUTEX.get() } {
+                    Some(mutex) => mutex,
+                    None => {
+                        let mutex = Mutex::new(());
+                        unsafe {
+                            WRITE_MUTEX.set(mutex).unwrap();
+                            WRITE_MUTEX.get().unwrap()
+                        }
+                    }
+                };
+                let guard = mutex.lock().unwrap();
                 print_stack(&stack, fp);
                 println!("\t{} ->\t{cx}", Colour::Green.bold().paint("cx"));
+                println!("{}: {name}", Colour::Green.bold().paint("Thread"));
                 print_instrs(ip, &program, &self.instrs, &self.source_map);
                 println!();
             }
@@ -462,7 +491,7 @@ impl VM {
 
                         let future = stack.pop().unwrap().into_pointer();
                         let mut expression = &mut *s_write!(future);
-                        dbg!(&expression);
+                        // dbg!(&expression);
 
                         let executor = match unsafe { EXECUTOR.get() } {
                             Some(executor) => executor,
@@ -496,9 +525,8 @@ impl VM {
                                     );
                                 }
                             }
-                            _ => {
-                                dbg!(&expression);
-                                unimplemented!()
+                            something_else => {
+                                panic!("Expected a task, found {something_else:?}.");
                             }
                         };
 
@@ -1711,8 +1739,8 @@ impl VM {
                         if value != *s {
                             // If the value from the stack is a `Value` then we can just
                             // replace it with the new value.
-                            // But if it's a pointer, then we need to update what it's
-                            // pointing to.
+                            // But if it's a pointer, then we need to update the value
+                            // that it's pointing at.
                             match s {
                                 StackValue::Value(_) => {
                                     stack[fp - arity - local_count - 3 + index] = value;
@@ -2011,12 +2039,20 @@ impl VM {
         stack.push(Value::Empty.into());
 
         let mut vm = self.clone();
-        // This clone keeps the "escapes func body" ghoul away.
-        // let func_arity = func_arity.clone();
 
         let program = program.clone();
-        let future =
-            async move { vm.inner_run(callee, fp, stack, func_arity, local_card, program) };
+        let inner_name = name.clone();
+        let future = async move {
+            vm.inner_run(
+                &inner_name,
+                callee,
+                fp,
+                stack,
+                func_arity,
+                local_card,
+                program,
+            )
+        };
 
         let executor = match unsafe { EXECUTOR.get() } {
             Some(executor) => executor,
@@ -2042,8 +2078,6 @@ impl VM {
                 task: new_ref!(Option<AsyncTask<'static, VmValueResult>>, Some(child_task))
             }
         );
-
-        dbg!(&value);
 
         old_stack.push(value.into());
 

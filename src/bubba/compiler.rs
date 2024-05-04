@@ -789,7 +789,7 @@ mod test {
 
     pub(super) fn run_vm(program: &Program) -> Result<RefType<Value>, Error> {
         #[cfg(feature = "async")]
-        let mut vm = VM::new(program, &[], &get_dwarf_home(), THREADS, true);
+        let mut vm = VM::new(program, &[], &get_dwarf_home(), THREADS, false);
         #[cfg(not(feature = "async"))]
         let mut vm = VM::new(program, &[], &get_dwarf_home());
         vm.invoke("main", &[])
