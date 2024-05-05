@@ -54,6 +54,8 @@ mod keywords {
     pub(crate) const EPS: &str = "eps";
     pub(crate) const EVAL: &str = "eval";
     pub(crate) const FN_NEW: &str = "new";
+    pub(crate) const GET: &str = "get";
+    pub(crate) const INSERT: &str = "insert";
     #[cfg(feature = "async")]
     pub(crate) const INTERVAL: &str = "interval";
     pub(crate) const INVOKE_FUNC: &str = "invoke_func";
@@ -73,6 +75,7 @@ mod keywords {
     pub(crate) const PLUGIN: &str = "Plugin";
     pub(crate) const PUSH: &str = "push";
     pub(crate) const SLEEP: &str = "sleep";
+    pub(crate) const REPLACE: &str = "replace";
     #[cfg(feature = "async")]
     pub(crate) const SPAWN: &str = "spawn";
     #[cfg(feature = "async")]
@@ -132,6 +135,13 @@ cfg_if::cfg_if! {
         macro_rules! ref_read {
             ($arg:expr) => {
                 $arg.borrow()
+            };
+        }
+
+        #[macro_export]
+        macro_rules! ref_try_read {
+            ($arg:expr) => {
+                $arg.try_read()
             };
         }
 
@@ -214,6 +224,13 @@ cfg_if::cfg_if! {
         }
 
         #[macro_export]
+        macro_rules! ref_try_read {
+            ($arg:expr) => {
+                $arg.try_read()
+            };
+        }
+
+        #[macro_export]
         macro_rules! ref_write {
             ($arg:expr) => {
                 $arg.borrow_mut()
@@ -249,6 +266,13 @@ cfg_if::cfg_if! {
         macro_rules! ref_read {
             ($arg:expr) => {
                 $arg.borrow()
+            };
+        }
+
+        #[macro_export]
+        macro_rules! ref_try_read {
+            ($arg:expr) => {
+                $arg.try_read()
             };
         }
 
@@ -291,6 +315,13 @@ cfg_if::cfg_if! {
         }
 
         #[macro_export]
+        macro_rules! ref_try_read {
+            ($arg:expr) => {
+                $arg.try_read()
+            };
+        }
+
+        #[macro_export]
         macro_rules! ref_write {
             ($arg:expr) => {
                 $arg.write().unwrap()
@@ -329,6 +360,13 @@ cfg_if::cfg_if! {
         }
 
         #[macro_export]
+        macro_rules! ref_try_read {
+            ($arg:expr) => {
+                $arg.try_read()
+            };
+        }
+
+        #[macro_export]
         macro_rules! ref_write {
             ($arg:expr) => {
                 $arg.write().unwrap()
@@ -345,6 +383,7 @@ cfg_if::cfg_if! {
 }
 
 pub use ref_read as s_read;
+pub use ref_try_read as s_try_read;
 pub use ref_write as s_write;
 
 trait NewRcType<T> {

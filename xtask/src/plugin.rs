@@ -14,6 +14,7 @@ const PLUGIN_DIR: &str = "plugins";
 const MODEL_DIR: &str = "models";
 const SRC_DIR: &str = "src";
 const TAO_DIR: &str = "ore";
+const MISC_DIR: &str = "misc";
 
 impl flags::Plugin {
     pub(crate) fn run(self, sh: &Shell) -> anyhow::Result<()> {
@@ -36,7 +37,7 @@ impl flags::Plugin {
         fs::read_dir(&current_dir)?
             .filter(|e| {
                 if let Ok(e) = e {
-                    match &self.plugin {
+                    match &self.name {
                         Some(plugin) => e.file_name().into_string().unwrap() == *plugin,
                         None => true,
                     }
@@ -44,14 +45,16 @@ impl flags::Plugin {
                     false
                 }
             })
-            .for_each(|entry| {
+            .try_for_each(|entry| {
                 // for entry in fs::read_dir(&current_dir)? {
                 let entry = entry.unwrap();
                 if entry.file_type().unwrap().is_dir() {
                     sh.change_dir(entry.path());
-                    build_plugin(&entry, &sh, &dwarf_home, debug).unwrap()
+                    build_plugin(&entry, &sh, &dwarf_home, debug)
+                } else {
+                    Ok(())
                 }
-            });
+            })?;
 
         Ok(())
     }
@@ -91,9 +94,11 @@ fn build_plugin(
     let lib_dir = format!("{dwarf_home}/{EXT_DIR}/{name}/{LIB_DIR}");
     let src_dir = format!("{dwarf_home}/{EXT_DIR}/{name}/{SRC_DIR}");
     let model_dir = format!("{dwarf_home}/{EXT_DIR}/{name}/{MODEL_DIR}");
+    let misc_dir = format!("{dwarf_home}/{EXT_DIR}/{name}/{MISC_DIR}");
     fs::create_dir_all(&lib_dir)?;
     fs::create_dir_all(&src_dir)?;
     fs::create_dir_all(&model_dir)?;
+    fs::create_dir_all(&misc_dir)?;
 
     let target_dir = if debug { "debug" } else { "release" };
 
@@ -118,6 +123,18 @@ fn build_plugin(
         let path = entry?.path();
         println!("Copying {}", path.display());
         sh.copy_file(path, &src_dir)?;
+    }
+
+    // Copy any miscellaneous files that the plugin may require
+    current_dir.pop();
+    current_dir.push(MISC_DIR);
+
+    if current_dir.exists() {
+        for entry in fs::read_dir(&current_dir)? {
+            let path = entry?.path();
+            println!("Copying {}", path.display());
+            sh.copy_file(path, &misc_dir)?;
+        }
     }
 
     // Copy model files

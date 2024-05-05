@@ -1,6 +1,8 @@
 use std::{
+    env,
     fmt::{self, Display},
     fs, io,
+    path::PathBuf,
     sync::Arc,
 };
 
@@ -37,14 +39,14 @@ pub fn name() -> RStr<'static> {
 pub fn new(lambda_sender: RSender<LambdaCall>, args: RVec<FfiValue>) -> RResult<PluginType, Error> {
     if let Some(FfiValue::String(plugin)) = args.first() {
         match plugin.as_str() {
-            "http_client" => {
-                let plugin = http_client::instantiate_root_module();
+            "client" => {
+                let plugin = http_client::instantiate_sub_module();
                 let plugin = plugin.new();
                 let plugin = plugin(lambda_sender, vec![].into()).unwrap();
                 ROk(Plugin_TO::from_value(plugin, TD_Opaque))
             }
-            "http_server" => {
-                let plugin = http_server::instantiate_root_module();
+            "server" => {
+                let plugin = http_server::instantiate_sub_module();
                 let plugin = plugin.new();
                 let plugin = plugin(lambda_sender, vec![].into()).unwrap();
                 ROk(Plugin_TO::from_value(plugin, TD_Opaque))
@@ -59,7 +61,7 @@ pub fn new(lambda_sender: RSender<LambdaCall>, args: RVec<FfiValue>) -> RResult<
 mod http_client {
     use super::*;
 
-    pub fn instantiate_root_module() -> PluginModRef {
+    pub fn instantiate_sub_module() -> PluginModRef {
         PluginModule { name, new }.leak_into_prefix()
     }
 
@@ -139,6 +141,7 @@ mod http_client {
                                 .unwrap();
 
                             let request = self.client.get(url);
+
                             let entry = self.requests.vacant_entry();
                             let key = entry.key();
                             self.requests.insert(Arc::new(request));
@@ -256,7 +259,8 @@ mod http_server {
     use std::sync::{Arc, Mutex};
 
     use http_body_util::Full;
-    use hyper::body::Bytes;
+    use hyper::body::{Body, Bytes};
+    use hyper::header::{HeaderValue, CONTENT_TYPE};
     use hyper::server::conn::http1;
     use hyper::service::Service;
     use hyper::{body::Incoming as IncomingBody, Request, Response};
@@ -268,6 +272,13 @@ mod http_server {
     use rustls_pki_types::{CertificateDer, PrivateKeyDer};
     use tokio::net::TcpListener;
     use tokio_rustls::TlsAcceptor;
+
+    const EXTENSION_DIR: &str = "extensions";
+    const PLUGIN_DIR: &str = "http";
+    const MISC_DIR: &str = "misc";
+    const HTML_404: &str = "404.html";
+    const CSS_404: &str = "404.css";
+    const WEBP_404: &str = "404.webp";
 
     struct MethodStr<'a>(&'a str);
 
@@ -299,7 +310,7 @@ mod http_server {
         }
     }
 
-    pub fn instantiate_root_module() -> PluginModRef {
+    pub fn instantiate_sub_module() -> PluginModRef {
         PluginModule { name, new }.leak_into_prefix()
     }
 
@@ -321,13 +332,6 @@ mod http_server {
     }
 
     #[derive(Clone, Debug)]
-    struct Route {
-        path: String,
-        method: Method,
-        lambda: usize,
-    }
-
-    #[derive(Clone, Debug)]
     enum ResponseType {
         Json,
         Text,
@@ -340,6 +344,7 @@ mod http_server {
         requests: Arc<Mutex<Slab<Arc<Request<IncomingBody>>>>>,
         uris: Arc<Mutex<RefCell<Slab<Arc<Uri>>>>>,
         routes: Arc<Mutex<RefCell<HashMap<(String, Method), (usize, ResponseType)>>>>,
+        prefix_routes: Arc<Mutex<RefCell<HashMap<(String, Method), (usize, ResponseType)>>>>,
         tls: Arc<
             Mutex<
                 RefCell<
@@ -352,6 +357,7 @@ mod http_server {
                 >,
             >,
         >,
+        strings: Arc<Mutex<Slab<String>>>,
     }
 
     impl HttpServer {
@@ -361,7 +367,9 @@ mod http_server {
                 requests: Arc::new(Mutex::new(Slab::new())),
                 uris: Arc::new(Mutex::new(RefCell::new(Slab::new()))),
                 routes: Arc::new(Mutex::new(RefCell::new(HashMap::default()))),
+                prefix_routes: Arc::new(Mutex::new(RefCell::new(HashMap::default()))),
                 tls: Arc::new(Mutex::new(RefCell::new(None))),
+                strings: Arc::new(Mutex::new(Slab::new())),
             }
         }
     }
@@ -379,7 +387,7 @@ mod http_server {
 
         fn invoke_func(
             &self,
-            module: RStr<'_>,
+            _module: RStr<'_>,
             ty: RStr<'_>,
             func: RStr<'_>,
             args: RVec<FfiValue>,
@@ -525,6 +533,35 @@ mod http_server {
 
                             Ok(FfiValue::Empty)
                         }
+                        "prefix_route" => {
+                            let FfiValue::String(path) = args.get(0).unwrap() else {
+                                panic!("Invalid path");
+                            };
+
+                            let FfiValue::String(method) = args.get(1).unwrap() else {
+                                panic!("Invalid method");
+                            };
+                            let method = Method::from(MethodStr(method.as_str()));
+
+                            let FfiValue::String(body) = args.get(2).unwrap() else {
+                                panic!("Invalid body");
+                            };
+                            let body = ResponseType::from(ResponseStr(body.as_str()));
+
+                            let FfiValue::Lambda(number) = args.get(3).unwrap() else {
+                                panic!("Invalid lambda");
+                            };
+
+                            println!("adding route {} {}", path, method);
+
+                            self.prefix_routes
+                                .lock()
+                                .unwrap()
+                                .borrow_mut()
+                                .insert((path.to_string(), method), (*number, body));
+
+                            Ok(FfiValue::Empty)
+                        }
                         "use_tls" => {
                             let cert: String = args
                                 .get(0)
@@ -540,12 +577,12 @@ mod http_server {
                                 .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
                                 .unwrap();
 
-                            let certfile = fs::File::open(cert.clone())
+                            let cert_file = fs::File::open(cert.clone())
                                 .map_err(|e| {
                                     Error::Plugin(format!("failed to open {}: {}", cert, e).into())
                                 })
                                 .unwrap();
-                            let mut reader = io::BufReader::new(certfile);
+                            let mut reader = io::BufReader::new(cert_file);
 
                             // Load and return certificate.
                             let cert: Vec<CertificateDer<'static>> =
@@ -553,12 +590,12 @@ mod http_server {
                                     .collect::<io::Result<Vec<CertificateDer<'static>>>>()
                                     .unwrap();
 
-                            let keyfile = fs::File::open(key.clone())
+                            let key_file = fs::File::open(key.clone())
                                 .map_err(|e| {
                                     Error::Plugin(format!("failed to open {}: {}", key, e).into())
                                 })
                                 .unwrap();
-                            let mut reader = io::BufReader::new(keyfile);
+                            let mut reader = io::BufReader::new(key_file);
 
                             // Load and return a single private key.
                             let key: PrivateKeyDer<'static> =
@@ -596,6 +633,22 @@ mod http_server {
                         }
                         func => Err(Error::Plugin(format!("Invalid function: {func}").into())),
                     },
+                    "Suffix" => match func.as_str() {
+                        "to_string" => {
+                            let key: DwarfInteger = args
+                                .first()
+                                .unwrap()
+                                .try_into()
+                                .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
+                                .unwrap();
+
+                            let guard = self.strings.lock().unwrap();
+                            let string = guard.get(key as usize).unwrap();
+
+                            Ok(FfiValue::String(string.to_owned().into()))
+                        }
+                        func => Err(Error::Plugin(format!("Invalid function: {func}").into())),
+                    },
                     "Uri" => match func.as_str() {
                         "path" => {
                             let key: DwarfInteger = args
@@ -610,6 +663,32 @@ mod http_server {
                             let uri = guard.get(key as usize).unwrap();
                             let path = uri.path().to_string();
                             Ok(FfiValue::String(path.into()))
+                        }
+                        "query" => {
+                            let key: DwarfInteger = args
+                                .first()
+                                .unwrap()
+                                .try_into()
+                                .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
+                                .unwrap();
+
+                            let guard = self.uris.lock().unwrap();
+                            let guard = guard.borrow();
+                            let uri = guard.get(key as usize).unwrap();
+                            let query_string = uri.query().unwrap_or("");
+                            let params: HashMap<String, String> = query_string
+                                .split('&')
+                                .filter_map(|part| {
+                                    let mut split = part.split('=');
+                                    let key = split.next()?;
+                                    let value = split.next()?;
+                                    Some((key.to_string(), value.to_string()))
+                                })
+                                .collect();
+
+                            let value = params.into();
+
+                            Ok(FfiValue::Map(value))
                         }
                         func => Err(Error::Plugin(format!("Invalid function: {func}").into())),
                     },
@@ -661,6 +740,13 @@ mod http_server {
                     .unwrap())
             }
 
+            fn mk_webp_response(s: Vec<u8>) -> Result<Response<Full<Bytes>>, hyper::Error> {
+                Ok(Response::builder()
+                    .header("Content-Type", "image/webp")
+                    .body(Full::new(Bytes::from(s)))
+                    .unwrap())
+            }
+
             let path = req.uri().path().to_owned();
             let method = req.method().clone();
 
@@ -673,10 +759,48 @@ mod http_server {
                 key
             };
 
+            // This is setup for the static routes.
             let guard = server.routes.lock().unwrap();
-
+            // Here we pick up the lambda based on the path and method.
             let lambda_option = guard.borrow().get(&(path.clone(), method.clone())).cloned();
-            if let Some((lambda, body_type)) = lambda_option {
+
+            // This is the setup for the prefix routes.
+            let p = PathBuf::from(&path);
+            let suffix = if let Some(file_name) = p.file_name() {
+                file_name.to_str().unwrap()
+            } else {
+                ""
+            };
+            let prefix = if let Some(parent) = p.parent() {
+                parent.to_str().unwrap()
+            } else {
+                ""
+            };
+            let prefix_guard = server.prefix_routes.lock().unwrap();
+            // Here we pick up the lambda based on the path and method.
+            let prefix_lambda_option = prefix_guard
+                .borrow()
+                .get(&(prefix.to_owned(), method.clone()))
+                .cloned();
+
+            // We are going to tack a dot on the front of the path to sandbox it
+            // to the the files subdirectory.
+            let file_path = format!("../files{path}");
+            let file_path = std::path::Path::new(&file_path);
+
+            if path != "/" && file_path.exists() && method == Method::GET {
+                if file_path.is_dir() {
+                    let contents = "<p>Someday there may be a directory viewing page. For now, there's nothing to see here.</p>".to_owned();
+                    Box::pin(async move { mk_response(contents) })
+                } else {
+                    let contents = std::fs::read(file_path).unwrap();
+                    Box::pin(async move {
+                        Ok(Response::builder()
+                            .body(Full::new(Bytes::from(contents)))
+                            .unwrap())
+                    })
+                }
+            } else if let Some((lambda, response_body_type)) = lambda_option {
                 let (s, result) = crossbeam::channel::bounded(1);
 
                 let lambda_call = LambdaCall {
@@ -688,48 +812,119 @@ mod http_server {
                 let result = result.recv().unwrap();
 
                 let ROk(FfiValue::String(result)) = result else {
-                    eprintln!("Error: {result:?}");
-                    return Box::pin(async {
-                        mk_response("<p>oh no! something went terribly wrong. 🤯</p>".into())
-                    });
+                    match result {
+                        RErr(e) => {
+                            eprintln!("Error: {e:?}");
+                            return Box::pin(async {
+                                mk_response(
+                                    format!("<p>oh no! something went terribly wrong. 🤯</p>")
+                                        .into(),
+                                )
+                            });
+                        }
+                        ROk(value) => {
+                            eprintln!("Expected String and found {value:?}");
+                            return Box::pin(async {
+                                mk_response(
+                                    format!("<p>oh no! something went terribly wrong. 🤯</p>")
+                                        .into(),
+                                )
+                            });
+                        }
+                    }
                 };
 
                 let mut requests = server.requests.lock().unwrap();
                 requests.remove(key);
 
-                match body_type {
+                match response_body_type {
                     ResponseType::Text => Box::pin(async move { mk_response(result.to_string()) }),
                     ResponseType::Json => {
                         Box::pin(async move { mk_json_response(result.to_string()) })
                     }
                 }
-            } else if method == Method::GET {
-                // We are going to tack a dot on the front of the path to sandbox it
-                // to the CWD.
-                let path = format!(".{path}");
-                let path = std::path::Path::new(&path);
-                if path.exists() {
-                    if path.is_dir() {
-                        let contents = "<p>Someday there will be a directory viewing page. For now, there's nothing to see here.</p>".to_owned();
-                        Box::pin(async move { mk_response(contents) })
-                    } else {
-                        let contents = std::fs::read(path).unwrap();
-                        Box::pin(async move {
-                            Ok(Response::builder()
-                                .body(Full::new(Bytes::from(contents)))
-                                .unwrap())
-                        })
+            } else if let Some((lambda, response_body_type)) = prefix_lambda_option {
+                let (s, result) = crossbeam::channel::bounded(1);
+
+                let suffix = {
+                    let mut guard = server.strings.lock().unwrap();
+                    let entry = guard.vacant_entry();
+                    let key = entry.key();
+                    guard.insert(suffix.to_owned());
+                    key
+                };
+
+                let lambda_call = LambdaCall {
+                    lambda: lambda,
+                    args: vec![
+                        FfiValue::Integer(key as DwarfInteger),
+                        FfiValue::Integer(suffix as DwarfInteger),
+                    ]
+                    .into(),
+                    result: s.into(),
+                };
+                server.lambda_call.send(lambda_call).unwrap();
+                let result = result.recv().unwrap();
+
+                let ROk(FfiValue::String(result)) = result else {
+                    match result {
+                        RErr(e) => {
+                            eprintln!("Error: {e:?}");
+                            return Box::pin(async {
+                                mk_response(
+                                    format!("<p>oh no! something went terribly wrong. 🤯</p>")
+                                        .into(),
+                                )
+                            });
+                        }
+                        ROk(value) => {
+                            eprintln!("Expected String and found {value:?}");
+                            return Box::pin(async {
+                                mk_response(
+                                    format!("<p>oh no! something went terribly wrong. 🤯</p>")
+                                        .into(),
+                                )
+                            });
+                        }
                     }
-                } else {
-                    let path = path.display().to_string();
-                    Box::pin(async move {
-                        mk_not_found(format!("oops! {path} ({method}) not found").into())
-                    })
+                };
+
+                let mut requests = server.requests.lock().unwrap();
+                requests.remove(key);
+
+                match response_body_type {
+                    ResponseType::Text => Box::pin(async move { mk_response(result.to_string()) }),
+                    ResponseType::Json => {
+                        Box::pin(async move { mk_json_response(result.to_string()) })
+                    }
                 }
             } else {
-                Box::pin(async move {
-                    mk_not_found(format!("oh no! {path} ({method}) not found").into())
-                })
+                let mut dwarf_home: PathBuf = env::var("DWARF_HOME")
+                    .unwrap_or_else(|_| {
+                        let mut home = env::var("HOME").unwrap();
+                        home.push_str("/.dwarf");
+                        home
+                    })
+                    .into();
+                dwarf_home.push(EXTENSION_DIR);
+                dwarf_home.push(PLUGIN_DIR);
+                dwarf_home.push(MISC_DIR);
+
+                dbg!(&path);
+
+                if path.contains("/404.css") {
+                    dwarf_home.push(CSS_404);
+                    let css_404 = fs::read_to_string(&dwarf_home).unwrap();
+                    Box::pin(async move { mk_response(css_404.into()) })
+                } else if path.contains("/404.webp") {
+                    dwarf_home.push(WEBP_404);
+                    let webp_404 = fs::read(&dwarf_home).unwrap();
+                    Box::pin(async move { mk_webp_response(webp_404) })
+                } else {
+                    dwarf_home.push(HTML_404);
+                    let file_404 = fs::read_to_string(&dwarf_home).unwrap();
+                    Box::pin(async move { mk_not_found(file_404.into()) })
+                }
             }
         }
     }

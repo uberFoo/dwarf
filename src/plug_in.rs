@@ -11,12 +11,22 @@ use abi_stable::{
 use crate::chacha::ffi_value::FfiValue;
 
 pub mod error;
-pub use error::{Error, Unsupported};
+pub use error::Error;
 
 #[sabi_trait]
 /// A plugin which is loaded by the application,and provides some functionality.
 // #[sabi(debug_print)]
 pub trait Plugin: Clone + Debug + Display + Send + Sync {
+    /// Invoke a function in the plugin.
+    ///
+    /// # Parameters
+    /// - `module`: The module in which the function is defined.
+    /// - `ty`: The type of the function.
+    /// - `name`: The name of the function.
+    /// - `args`: The arguments to the function.
+    ///
+    /// Invoke a function in the plugin, using the `module`, `ty`, and `name` to
+    /// locate the function, and `args` as the arguments to the function.
     fn invoke_func(
         &self,
         module: RStr<'_>,
@@ -25,6 +35,18 @@ pub trait Plugin: Clone + Debug + Display + Send + Sync {
         args: RVec<FfiValue>,
     ) -> RResult<FfiValue, Error>;
 
+    /// Invoke a mutable function in the plugin.
+    ///
+    /// # Parameters
+    /// - `module`: The module in which the function is defined.
+    /// - `ty`: The type of the function.
+    /// - `name`: The name of the function.
+    /// - `args`: The arguments to the function.
+    ///
+    /// Invoke a mutable function in the plugin, using the `module`, `ty`, and `name` to
+    /// locate the function, and `args` as the arguments to the function.
+    ///
+    /// This is the same as `invoke_func` but with a mutable reference to self.
     fn invoke_func_mut(
         &mut self,
         module: RStr<'_>,
@@ -33,14 +55,6 @@ pub trait Plugin: Clone + Debug + Display + Send + Sync {
         args: RVec<FfiValue>,
     ) -> RResult<FfiValue, Error>;
 
-    /// Closes the plugin,
-    ///
-    /// This does not unload the dynamic library of this plugin,
-    /// you can instantiate another instance of this plugin with
-    /// `PluginMod_Ref::get_module().new()(application_handle)`.
-    ///
-    ///
-    ///
     /// The `#[sabi(last_prefix_field)]` attribute here means that this is the last method
     /// that was defined in the first compatible version of the library
     /// (0.1.0, 0.2.0, 0.3.0, 1.0.0, 2.0.0 ,etc),
@@ -50,6 +64,9 @@ pub trait Plugin: Clone + Debug + Display + Send + Sync {
     /// bumps its "major" version,
     /// at which point it would be moved to the last method at the time.
     #[sabi(last_prefix_field)]
+    /// Return the name
+    ///
+    /// The name of this plugin.
     fn name(&self) -> RStr<'_>;
 }
 
@@ -73,8 +90,6 @@ pub struct LambdaCall {
 
 /// The root module of a`plugin` dynamic library.
 ///
-/// To load this module,
-/// call <PluginMod as RootModule>::load_from_directory(some_directory_path)
 #[repr(C)]
 #[derive(StableAbi)]
 #[sabi(kind(Prefix(prefix_ref = PluginModRef)))]

@@ -107,6 +107,18 @@ impl<'d, 'a, 'b> PrintableValueType<'d, 'a, 'b> {
                 let ty = list.r36_value_type(lu_dog)[0].clone();
                 write!(f, "[{}]", PrintableValueType(true, &ty, context, lu_dog))
             }
+            ValueTypeEnum::Map(ref map) => {
+                let map = lu_dog.exhume_map(map).unwrap();
+                let map = s_read!(map);
+                let key_ty = map.r115_value_type(lu_dog)[0].clone();
+                let value_ty = map.r116_value_type(lu_dog)[0].clone();
+                write!(
+                    f,
+                    "Map<{}, {}>",
+                    PrintableValueType(true, &key_ty, context, lu_dog),
+                    PrintableValueType(true, &value_ty, context, lu_dog)
+                )
+            }
             ValueTypeEnum::XPlugin(ref plugin) => {
                 let plugin = lu_dog.exhume_x_plugin(plugin).unwrap();
                 let plugin = s_read!(plugin);
@@ -247,6 +259,18 @@ impl<'d, 'a, 'b> PrintableValueType<'d, 'a, 'b> {
                 let list = s_read!(list);
                 let ty = list.r36_value_type(lu_dog)[0].clone();
                 write!(f, "[{}]", PrintableValueType(false, &ty, context, lu_dog))
+            }
+            ValueTypeEnum::Map(ref map) => {
+                let map = lu_dog.exhume_map(map).unwrap();
+                let map = s_read!(map);
+                let key_ty = map.r115_value_type(lu_dog)[0].clone();
+                let value_ty = map.r116_value_type(lu_dog)[0].clone();
+                write!(
+                    f,
+                    "Map<{}, {}>",
+                    PrintableValueType(true, &key_ty, context, lu_dog),
+                    PrintableValueType(true, &value_ty, context, lu_dog)
+                )
             }
             ValueTypeEnum::XPlugin(ref plugin) => {
                 let plugin = lu_dog.exhume_x_plugin(plugin).unwrap();

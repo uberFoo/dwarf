@@ -1,10 +1,11 @@
-use std::{fmt, io::Write, ops::Range};
+use std::{collections::HashMap, fmt, io::Write, ops::Range};
 
 use ansi_term::Colour;
 #[cfg(feature = "async")]
 use puteketeke::AsyncTask;
 use serde::{Deserialize, Serialize};
 use snafu::{location, Backtrace, Location};
+
 // #[cfg(feature = "async")]
 // use smol::future;
 use uuid::Uuid;
@@ -18,7 +19,7 @@ use crate::{
     lu_dog::{ValueType, ValueTypeEnum},
     new_ref,
     plug_in::PluginType,
-    s_read,
+    s_read, s_try_read,
     sarzak::Ty,
     DwarfFloat, DwarfInteger, NewRef, RefType, VmValueResult,
 };
@@ -53,6 +54,12 @@ pub enum Value {
         ty: RefType<ValueType>,
         inner: RefType<Vec<RefType<Self>>>,
     },
+    Map {
+        // key_ty: RefType<ValueType>,
+        // value_ty: RefType<ValueType>,
+        // inner: HashMap<HashMapKey, RefType<Self>>,
+        inner: RefType<HashMap<String, RefType<Self>>>,
+    },
     #[serde(skip)]
     Plugin((String, RefType<PluginType>)),
     Range(Range<DwarfInteger>),
@@ -63,10 +70,17 @@ pub enum Value {
     Task {
         name: String,
         running: bool,
-        task: Option<AsyncTask<'static, VmValueResult>>,
+        task: RefType<Option<AsyncTask<'static, VmValueResult>>>,
     },
     Uuid(uuid::Uuid),
     ValueType(ValueType),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum HashMapKey {
+    String(String),
+    Integer(DwarfInteger),
+    Uuid(Uuid),
 }
 
 // #[cfg(feature = "async")]
@@ -165,6 +179,24 @@ impl Value {
                     write!(f, "{}", s_read!(i))?;
                 }
                 write!(f, "]")
+            }
+            Self::Map {
+                // key_ty: _,
+                // value_ty: _,
+                inner,
+            } => {
+                write!(f, "{{")?;
+                let mut first_time = true;
+                for (key, value) in &*s_read!(inner) {
+                    if first_time {
+                        first_time = false;
+                    } else {
+                        write!(f, ", ")?;
+                    }
+
+                    write!(f, "{key}: {value}", key = key, value = s_read!(value))?;
+                }
+                write!(f, "}}")
             }
             Self::Plugin((name, _plugin)) => write!(f, "plugin::{name}"),
             Self::Range(range) => write!(f, "{range:?}"),
@@ -349,7 +381,39 @@ impl std::fmt::Debug for Value {
                 }
                 write!(f, "] }}")
             }
-            Self::List { ty, inner } => write!(f, "{ty:?}: {inner:?}"),
+            Self::List { ty: _, inner } => {
+                let inner = s_read!(inner);
+                let mut first_time = true;
+                write!(f, "[")?;
+                for i in &*inner {
+                    if first_time {
+                        first_time = false;
+                    } else {
+                        write!(f, ", ")?;
+                    }
+
+                    write!(f, "{}", s_read!(i))?;
+                }
+                write!(f, "]")
+            }
+            Self::Map {
+                // key_ty: _,
+                // value_ty: _,
+                inner,
+            } => {
+                write!(f, "{{")?;
+                let mut first_time = true;
+                for (key, value) in &*s_read!(inner) {
+                    if first_time {
+                        first_time = false;
+                    } else {
+                        write!(f, ", ")?;
+                    }
+
+                    write!(f, "{key:?}: {value:?}", key = key, value = s_read!(value))?;
+                }
+                write!(f, "}}")
+            }
             Self::Plugin((name, _plugin)) => write!(f, "plugin::{name}"),
             Self::Range(range) => write!(f, "{range:?}"),
             Self::String(s) => write!(f, "{s:?}"),
@@ -374,7 +438,7 @@ impl Clone for Value {
             Self::Char(char_) => Self::Char(*char_),
             Self::Empty => Self::Empty,
             Self::Enumeration(var) => Self::Enumeration(var.clone()),
-            Self::Error(_e) => unimplemented!(),
+            Self::Error(e) => panic!("{e}"),
             Self::Float(num) => Self::Float(*num),
             Self::Integer(num) => Self::Integer(*num),
             Self::LambdaPointer {
@@ -390,6 +454,15 @@ impl Clone for Value {
                 ty: ty.clone(),
                 inner: inner.clone(),
             },
+            Self::Map {
+                // key_ty,
+                // value_ty,
+                inner,
+            } => Self::Map {
+                // key_ty: key_ty.clone(),
+                // value_ty: value_ty.clone(),
+                inner: inner.clone(),
+            },
             Self::Plugin(plugin) => Self::Plugin(plugin.clone()),
             Self::Range(range) => Self::Range(range.clone()),
             Self::String(str_) => Self::String(str_.clone()),
@@ -398,12 +471,12 @@ impl Clone for Value {
             // Note that cloned values do not inherit the task
             Self::Task {
                 name,
-                running: _,
-                task: _,
+                running,
+                task,
             } => Self::Task {
                 name: name.to_owned(),
-                running: false,
-                task: None,
+                running: *running,
+                task: task.clone(),
             },
             Self::ValueType(ty) => Self::ValueType(ty.clone()),
             Self::Uuid(uuid) => Self::Uuid(*uuid),
@@ -426,7 +499,11 @@ impl fmt::Display for Value {
                         write!(f, ", ")?;
                     }
 
-                    write!(f, "{}", s_read!(i))?;
+                    if let Ok(i) = s_try_read!(i) {
+                        write!(f, "{i}, ")?;
+                    } else {
+                        write!(f, "<locked>, ")?;
+                    }
                 }
                 write!(f, "]")
             }
@@ -447,9 +524,19 @@ impl fmt::Display for Value {
                     f,
                     "FubarPointer {{ name: {name}, frame_size: {frame_size}, captures: ["
                 )?;
+                let mut first_time = true;
                 for i in captures {
-                    let i = s_read!(i);
-                    write!(f, "{i}, ")?;
+                    if first_time {
+                        first_time = false;
+                    } else {
+                        write!(f, ", ")?;
+                    }
+
+                    if let Ok(i) = s_try_read!(i) {
+                        write!(f, "{i}, ")?;
+                    } else {
+                        write!(f, "<locked>, ")?;
+                    }
                 }
                 write!(f, "] }}")
             }
@@ -458,15 +545,42 @@ impl fmt::Display for Value {
                 let mut first_time = true;
                 write!(f, "[")?;
                 for i in &*inner {
+                    // dbg!(&i);
                     if first_time {
                         first_time = false;
                     } else {
                         write!(f, ", ")?;
                     }
 
-                    write!(f, "{}", s_read!(i))?;
+                    if let Ok(i) = s_try_read!(i) {
+                        write!(f, "{i}, ")?;
+                    } else {
+                        write!(f, "<locked>, ")?;
+                    }
                 }
                 write!(f, "]")
+            }
+            Self::Map {
+                // key_ty: _,
+                // value_ty: _,
+                inner,
+            } => {
+                write!(f, "{{")?;
+                let mut first_time = true;
+                for (key, value) in &*s_read!(inner) {
+                    if first_time {
+                        first_time = false;
+                    } else {
+                        write!(f, ", ")?;
+                    }
+
+                    if let Ok(value) = s_try_read!(value) {
+                        write!(f, "{key}: {value}")?;
+                    } else {
+                        write!(f, "{key}: <locked>")?;
+                    }
+                }
+                write!(f, "}}")
             }
             Self::Plugin((name, _plugin)) => write!(f, "plugin::{name}"),
             Self::Range(range) => write!(f, "{range:?}"),
@@ -568,6 +682,25 @@ impl From<Range<usize>> for Value {
 impl From<Vec<RefType<Value>>> for Value {
     fn from(value: Vec<RefType<Value>>) -> Self {
         Self::AnyList(new_ref!(Vec<RefType<Value>>, value))
+    }
+}
+
+impl TryFrom<&Value> for HashMap<String, RefType<Value>> {
+    type Error = Error;
+
+    fn try_from(
+        value: &Value,
+    ) -> Result<Self, <HashMap<String, RefType<Value>> as TryFrom<&Value>>::Error> {
+        match value {
+            Value::Map { inner, .. } => Ok(s_read!(inner).clone()),
+            _ => Err(BubbaError::Conversion {
+                src: value.to_string(),
+                dst: "HashMap<String, RefType<Value>>".to_owned(),
+                location: location!(),
+                backtrace: Backtrace::capture(),
+            }
+            .into()),
+        }
     }
 }
 

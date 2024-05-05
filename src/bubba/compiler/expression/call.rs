@@ -2,7 +2,7 @@ use snafu::{location, Location};
 use uuid::Uuid;
 
 #[cfg(feature = "async")]
-use crate::keywords::{LEN, MAX, PUSH, SPAWN};
+use crate::keywords::{LEN, PUSH, SPAWN};
 
 use crate::{
     bubba::{
@@ -15,7 +15,10 @@ use crate::{
         BOOL, STRING_ARRAY, UUID,
     },
     chacha::interpreter::{ModelContext, PrintableValueType},
-    keywords::{ARGS, ASSERT, ASSERT_EQ, CHACHA, FORMAT, FQ_UUID_TYPE, NEW, PLUGIN, TYPEOF},
+    keywords::{
+        ARGS, ASSERT, ASSERT_EQ, CHACHA, FORMAT, FQ_UUID_TYPE, GET, INSERT, NEW, PLUGIN, REPLACE,
+        TYPEOF,
+    },
     lu_dog::{BodyEnum, Call, CallEnum, Expression, ValueType, ValueTypeEnum},
     new_ref, s_read,
     sarzak::Ty,
@@ -196,6 +199,7 @@ pub(in crate::bubba::compiler) fn compile_lambda(
     let frame_size = thonk.inner.frame_size();
     for (var, index) in context.captures.take().unwrap() {
         let Some(symbol) = context.get_symbol(&var) else {
+            dbg!(&context.symbol_tables);
             panic!("capture not found: {var}");
         };
         thonk.prefix_instruction(Instruction::CaptureLocal(symbol.number, index), location!());
@@ -302,10 +306,10 @@ fn compile_method_call(
         // Evaluate the LHS to get at the underlying value/instance.
         let result = compile_expression(&expr, thonk, context);
 
-        match name.as_str() {
-            PUSH => {
-                match result.clone()?.unwrap().subtype {
-                    ValueTypeEnum::List(_) => {
+        if let Ok(Some(result)) = result.clone() {
+            match result.subtype {
+                ValueTypeEnum::List(_) => match name.as_str() {
+                    PUSH => {
                         // skip self
                         for (_, expr) in args.iter().enumerate().skip(1) {
                             compile_expression(expr, thonk, context)?;
@@ -313,48 +317,72 @@ fn compile_method_call(
 
                         thonk.insert_instruction(Instruction::ListPush, location!());
 
-                        return result;
+                        return Ok(Some(result));
                     }
-                    _ => unreachable!(),
+                    LEN => {
+                        thonk.insert_instruction(Instruction::ListLength, location!());
+                        return Ok(Some(result));
+                    }
+                    meth => panic!("list does not support {meth}"),
+                },
+                ValueTypeEnum::Map(_) => match name.as_str() {
+                    LEN => {
+                        thonk.insert_instruction(Instruction::MapLength, location!());
+                        return Ok(Some(result));
+                    }
+                    GET => {
+                        // First arg is self
+                        compile_expression(&args[0], thonk, context)?;
+                        // The second arg is the key
+                        compile_expression(&args[1], thonk, context)?;
+
+                        thonk.insert_instruction(Instruction::MapGet, location!());
+                        return Ok(Some(result));
+                    }
+                    INSERT => {
+                        // First arg is self
+                        compile_expression(&args[0], thonk, context)?;
+                        // The second arg is the key
+                        compile_expression(&args[1], thonk, context)?;
+                        // The third arg is the value
+                        compile_expression(&args[2], thonk, context)?;
+
+                        thonk.insert_instruction(Instruction::MapInsert, location!());
+                        return Ok(Some(result));
+                    }
+                    meth => panic!("map does not support {meth}"),
+                },
+                ValueTypeEnum::Ty(ref id) => {
+                    let ty = sarzak.exhume_ty(id).unwrap();
+                    let ty = ty.read().unwrap();
+
+                    match &*ty {
+                        Ty::ZString(_) => match name.as_str() {
+                            LEN => {
+                                thonk.insert_instruction(Instruction::ListLength, location!());
+                                return Ok(Some(result));
+                            }
+                            REPLACE => {
+                                // First arg is self
+                                compile_expression(&args[0], thonk, context)?;
+                                // The second arg is the needle
+                                compile_expression(&args[1], thonk, context)?;
+                                // The third arg is the replacement
+                                compile_expression(&args[2], thonk, context)?;
+
+                                thonk.insert_instruction(Instruction::StringReplace, location!());
+                                return Ok(Some(result));
+                            }
+                            meth => {
+                                dbg!(&meth);
+                                {}
+                            }
+                        },
+                        _ => {}
+                    }
                 }
+                _ => {}
             }
-            LEN => match result.clone()?.unwrap().subtype {
-                ValueTypeEnum::List(_) => {
-                    thonk.insert_instruction(Instruction::ListLength, location!());
-                    return result;
-                }
-                ValueTypeEnum::Ty(ref id) => {
-                    let ty = sarzak.exhume_ty(id).unwrap();
-                    let ty = ty.read().unwrap();
-
-                    match &*ty {
-                        Ty::ZString(_) => {
-                            thonk.insert_instruction(Instruction::ListLength, location!());
-                            return result;
-                        }
-                        darn => panic!("type is not a string. found {darn:?}"),
-                    }
-                }
-                whoa => panic!("value is not a list. found {whoa:?}"),
-            },
-            MAX => match result.clone()?.unwrap().subtype {
-                ValueTypeEnum::List(_) => {
-                    // thonk.insert_instruction(Instruction::ListLength, location!());
-                }
-                ValueTypeEnum::Ty(ref id) => {
-                    let ty = sarzak.exhume_ty(id).unwrap();
-                    let ty = ty.read().unwrap();
-
-                    match &*ty {
-                        Ty::Integer(_) => {
-                            // thonk.insert_instruction(Instruction::ListLength, location!());
-                        }
-                        darn => panic!("{darn:?}"),
-                    }
-                }
-                whoa => panic!("{whoa:?}"),
-            },
-            _ => {}
         }
 
         thonk.insert_instruction(Instruction::MethodLookup(name), location!());
@@ -547,15 +575,17 @@ fn compile_static_method_call(
                             .insert_instruction(Instruction::Push(plugin_root.into()), location!());
                         thonk.insert_instruction(Instruction::PluginNew(arg_count), location!());
 
-                        // let id = lu_dog.exhume_woog_struct_id_by_name(&plugin.name).unwrap();
-                        // let woog_struct = lu_dog.exhume_woog_struct(&id).unwrap();
-                        // let woog_struct = s_read!(woog_struct);
+                        let name = format!("::{}::{}", plugin.x_path, plugin.name);
+                        let expect =
+                            format!("Double check that you have your plugin path correct: {name}.");
 
-                        // Ok(Some(
-                        //     (*s_read!(woog_struct.r1_value_type(&lu_dog)[0])).clone(),
-                        // ))
+                        let id = lu_dog.exhume_woog_struct_id_by_name(&name).expect(&expect);
+                        let woog_struct = lu_dog.exhume_woog_struct(&id).unwrap();
+                        let woog_struct = s_read!(woog_struct);
 
-                        Ok(None)
+                        Ok(Some(
+                            (*s_read!(woog_struct.r1_value_type(&lu_dog)[0])).clone(),
+                        ))
                     }
                     missing_method => {
                         panic!("plugin only supports `new`, found: {missing_method}");
@@ -1032,6 +1062,13 @@ mod test {
     }
 
     // #[test]
+    // The problem with this is in the way that we evaluate the call. In a simple
+    // example, we have foo.bar(). We evaluate the lhs, `foo`, first to get the
+    // value of `foo`. Then we evaluate the call to `bar`. The problem is that
+    // with a call chain, like foo.bar().baz(), we evaluate the lhs, `foo`, then
+    // the call to `bar`. When `baz` is evaluated it evaluates `bar` again, and
+    // then maybe `foo` too. It's confusing. But here is a breadcrumb for the
+    // future.`
     fn test_call_chain() {
         setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
@@ -1074,5 +1111,37 @@ mod test {
         // assert_eq!(program.get_instruction_count(), 39);
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &true.into());
+    }
+
+    #[test]
+    fn test_string_replace() {
+        setup_logging();
+        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
+
+        let ore = "
+                   fn main() -> string {
+                       let s = \"Hello, world!\";
+                       s.replace(\"world\", \"universe\")
+                   }";
+        let ast = parse_dwarf("test_string_replace", ore).unwrap();
+        let ctx = new_lu_dog(
+            "test_string_replace".to_owned(),
+            Some((ore.to_owned(), &ast)),
+            &get_dwarf_home(),
+            &env::current_dir().unwrap(),
+            &sarzak,
+        )
+        .unwrap();
+        let program = compile(&ctx).unwrap();
+        println!("{program}");
+
+        assert_eq!(program.get_thonk_card(), 1);
+
+        assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 8);
+
+        assert_eq!(
+            &*s_read!(run_vm(&program).unwrap()),
+            &"Hello, universe!".into()
+        );
     }
 }

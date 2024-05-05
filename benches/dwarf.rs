@@ -35,6 +35,7 @@ fn mandelbrot(c: &mut Criterion) {
         "mandelbrot".to_owned(),
         Some((source, &ast)),
         &dwarf_home,
+        &env::current_dir().unwrap(),
         &sarzak,
     )
     .unwrap();
@@ -62,8 +63,14 @@ fn fib_vm(c: &mut Criterion) {
         })
         .into();
 
-    let lu_dog_ctx =
-        new_lu_dog("fib".to_owned(), Some((source, &ast)), &dwarf_home, &sarzak).unwrap();
+    let lu_dog_ctx = new_lu_dog(
+        "fib".to_owned(),
+        Some((source, &ast)),
+        &dwarf_home,
+        &env::current_dir().unwrap(),
+        &sarzak,
+    )
+    .unwrap();
 
     let Ok(program) = compile(&lu_dog_ctx) else {
         panic!("Failed to compile program");
@@ -116,8 +123,14 @@ fn fib(c: &mut Criterion) {
         })
         .into();
 
-    let lu_dog_ctx =
-        new_lu_dog("fib".to_owned(), Some((source, &ast)), &dwarf_home, &sarzak).unwrap();
+    let lu_dog_ctx = new_lu_dog(
+        "fib".to_owned(),
+        Some((source, &ast)),
+        &dwarf_home,
+        &env::current_dir().unwrap(),
+        &sarzak,
+    )
+    .unwrap();
 
     let mut ctx =
         initialize_interpreter(num_cpus::get(), dwarf_home.clone(), lu_dog_ctx.clone()).unwrap();
@@ -155,6 +168,7 @@ fn loop_(c: &mut Criterion) {
         "loop".to_owned(),
         Some((source, &ast)),
         &dwarf_home,
+        &env::current_dir().unwrap(),
         &sarzak,
     )
     .unwrap();
@@ -186,6 +200,7 @@ fn loop_vm(c: &mut Criterion) {
         "loop".to_owned(),
         Some((source, &ast)),
         &dwarf_home,
+        &env::current_dir().unwrap(),
         &sarzak,
     )
     .unwrap();

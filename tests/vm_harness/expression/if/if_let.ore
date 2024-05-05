@@ -1,14 +1,15 @@
 use std::option::Option;
+use std::result::Result;
 
 fn main() {
     let x = Option::<string>::None;
     let z = if let Option::<string>::None = x {
         print("None\n");
-        chacha::assert_eq(true, true);
+        chacha::assert(true);
         0
     } else {
         print("Some\n");
-        chacha::assert_eq(true, false);
+        chacha::assert(false);
         1
     };
     chacha::assert_eq(z, 0);
@@ -16,11 +17,11 @@ fn main() {
     let x = Option::<string>::Some("Hello world!");
     let z = if let Option::<string>::Some(str) = x {
         print("Some(${str})\n");
-        chacha::assert_eq(true, true);
+        chacha::assert(true);
         0
     } else {
         print("None\n");
-        chacha::assert_eq(true, false);
+        chacha::assert(false);
         1
     };
     chacha::assert_eq(z, 0);
@@ -30,13 +31,12 @@ fn main() {
     let z = if let Option::<int>::Some(y) = y {
         // if let Option::Some::<int>(y) = y {
         print("Some(${y})\n");
-        chacha::assert_eq(true, true);
+        chacha::assert(true);
         y
     } else {
         print("None\n");
-        chacha::assert_eq(true, false);
-        // 🚧 This shouldn't typecheck.
-        // 0
+        chacha::assert(false);
+        0
     };
     chacha::assert_eq(z, 42);
 
@@ -44,13 +44,24 @@ fn main() {
     // let y = Option::Some::<int>(42);
     let z = if let Option::<int>::None = y {
         print("None\n");
-        chacha::assert_eq(true, true);
+        chacha::assert(true);
         y
     } else {
         print("Some\n");
-        chacha::assert_eq(true, false);
-        // 🚧 This shouldn't typecheck.
-        // 0
+        chacha::assert(false);
+        Option::<int>::Some(0)
     };
     chacha::assert_eq(z, Option::<int>::None);
+
+    // Test the else block
+    let result = Result::<int, string>::Err("oops");
+    let z = if let Result::<int, string>::Ok(y) = result {
+        print("Ok(${y})\n");
+        chacha::assert(false);
+        y
+    } else {
+        print("Err\n");
+        chacha::assert(true);
+        0
+    };
 }

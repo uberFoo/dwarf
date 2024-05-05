@@ -24,11 +24,12 @@ use crate::{
         types::{
             AWait, Block, Body, BooleanOperator, Call, CharLiteral, EnumFieldEnum, Expression,
             ExpressionBit, ExpressionEnum, ExpressionStatement, Field, ForLoop, FormatBit,
-            FormatString, FuncGeneric, FunctionCall, ImplementationBlock, Import, Index,
-            IntegerLiteral, Item as WoogItem, ItemStatement, Lambda, LambdaParameter, LetStatement,
-            Literal, LocalVariable, Pattern as AssocPat, RangeExpression, Span as LuDogSpan,
-            Statement, StringLiteral, StructGeneric, ValueType, ValueTypeEnum, Variable,
-            VariableExpression, WoogStruct, XFuture, XIf, XMatch, XPrint, XValue, XValueEnum,
+            FormatString, FuncGeneric, FunctionCall, HaltAndCatchFire, ImplementationBlock, Import,
+            Index, IntegerLiteral, Item as WoogItem, ItemStatement, Lambda, LambdaParameter,
+            LetStatement, Literal, LocalVariable, Map, MapElement, MapExpression,
+            Pattern as AssocPat, RangeExpression, Span as LuDogSpan, Statement, StringLiteral,
+            StructGeneric, ValueType, ValueTypeEnum, Variable, VariableExpression, WoogStruct,
+            XFuture, XIf, XMatch, XPrint, XValue, XValueEnum,
         },
         Argument, Binary, BooleanLiteral, Comparison, DwarfSourceFile, FieldAccess,
         FieldAccessTarget, FloatLiteral, List, ListElement, ListExpression, Operator,
@@ -339,6 +340,11 @@ pub struct Context<'a> {
     pub func_defs: HashMap<String, FunctionDefinition>,
     pub path: String,
     pub in_impl: String,
+    /// Scopes
+    ///
+    /// This is used to lookup a fully qualified type name based on just the
+    /// short name. It's populated by the code that processes the `use`
+    /// statement.
     pub scopes: &'a mut HashMap<String, String>,
     pub imports: &'a mut HashSet<PathBuf>,
     pub generics: Vec<(Type, Span)>,
@@ -2017,6 +2023,26 @@ pub(super) fn inter_expression(
             Ok((expr, ty))
         }
         //
+        // Halt
+        //
+        ParserExpression::Halt(expr) => {
+            let (expr, _ty) = inter_expression(
+                &new_ref!(ParserExpression, expr.0.to_owned()),
+                &expr.1,
+                block,
+                context,
+                import_stack,
+                lu_dog,
+            )?;
+            let ty = ValueType::new_empty(true, lu_dog);
+            let halt = HaltAndCatchFire::new(&expr.0, lu_dog);
+            let expr = Expression::new_halt_and_catch_fire(true, &halt, lu_dog);
+            let value = XValue::new_expression(block, &ty, &expr, lu_dog);
+            update_span_value(&span, &value, location!());
+
+            Ok(((expr, span), ty))
+        }
+        //
         // If
         //
         ParserExpression::If(conditional, true_block, false_block) => {
@@ -2644,6 +2670,106 @@ pub(super) fn inter_expression(
                 let ty = ValueType::new_unknown(true, lu_dog);
                 e_warn!("Unknown type for variable {name}");
 
+                let value = XValue::new_expression(block, &ty, &expr, lu_dog);
+                update_span_value(&span, &value, location!());
+
+                Ok(((expr, span), ty))
+            }
+        }
+        //
+        // Map
+        //
+        ParserExpression::Map(ref elts) => {
+            debug!("Map {:?}", elts);
+            if elts.is_empty() {
+                // Note that this is just a generic that we need to use to create the
+                // list. The name of the generic is not important.
+                let key_type = FuncGeneric::new("KEY_HACK".to_owned(), None, None, lu_dog);
+                let value_type = FuncGeneric::new("VALUE_HACK".to_owned(), None, None, lu_dog);
+                let map = Map::new(&ValueType::new_func_generic(true, &key_type, lu_dog),
+                    &ValueType::new_func_generic(true, &value_type, lu_dog), lu_dog);
+                let expr = Expression::new_literal(
+                    true,
+                    &Literal::new_map_expression(true, &MapExpression::new(Uuid::new_v4(), lu_dog), lu_dog),
+                    lu_dog,
+                );
+                let ty = ValueType::new_map(true, &map, lu_dog);
+                let value = XValue::new_expression(block, &ty, &expr, lu_dog);
+                update_span_value(&span, &value, location!());
+
+                Ok(((expr, span), ty))
+            } else {
+                let mut elements = elts.iter();
+                // I'm going to get the type of the first element, and then check
+                // that each subsequent element is the same type.
+                let (key, value) = elements.next().unwrap();
+                let key_span = &key.1;
+                let value_span = &value.1;
+                let ((first_key, _first_key_span), first_key_ty) = inter_expression(
+                    &new_ref!(ParserExpression, key.0.to_owned()),
+                    &key.1,
+                    block,
+                    context,
+                    import_stack,
+                    lu_dog,
+                )?;
+                let ((first_value, _first_value_span), first_value_ty) = inter_expression(
+                    &new_ref!(ParserExpression, value.0.to_owned()),
+                    &value.1,
+                    block,
+                    context,
+                    import_stack,
+                    lu_dog,
+                )?;
+
+                let map = Map::new(&first_key_ty, &first_value_ty, lu_dog);
+                let map_expr = MapExpression::new(Uuid::new_v4(), lu_dog);
+                let _element = MapElement::new(&first_key, &map_expr, &first_value, lu_dog);
+
+                for (key, value) in elements {
+                    let ((key_elt, _key_span), key_ty) = inter_expression(
+                        &new_ref!(ParserExpression, key.0.to_owned()),
+                        &key.1,
+                        block,
+                        context,
+                        import_stack,
+                        lu_dog,
+                    )?;
+
+                    typecheck(
+                        (&first_key_ty, key_span),
+                        (&key_ty, &key.1),
+                        location!(),
+                        context,
+                        lu_dog,
+                    )?;
+
+                    let ((value_elt, _value_span), value_ty) = inter_expression(
+                        &new_ref!(ParserExpression, value.0.to_owned()),
+                        &value.1,
+                        block,
+                        context,
+                        import_stack,
+                        lu_dog,
+                    )?;
+
+                    typecheck(
+                        (&first_value_ty, value_span),
+                        (&value_ty, &value.1),
+                        location!(),
+                        context,
+                        lu_dog,
+                    )?;
+
+                    let _element = MapElement::new(&key_elt, &map_expr, &value_elt, lu_dog);
+                }
+
+                let expr = Expression::new_literal(
+                    true,
+                    &Literal::new_map_expression(true, &map_expr, lu_dog),
+                    lu_dog,
+                );
+                let ty = ValueType::new_map(true, &map, lu_dog);
                 let value = XValue::new_expression(block, &ty, &expr, lu_dog);
                 update_span_value(&span, &value, location!());
 
@@ -3324,6 +3450,20 @@ fn inter_import(
         let dir = path.clone();
 
         path.push(LIB_TAO);
+
+        (dir, path)
+    };
+
+    // Then let's try the current directory.
+    let (dir, path) = if path.exists() {
+        (dir, path)
+    } else {
+        let mut path = context.cwd.clone();
+        let dir = path.clone();
+
+        path.push(module);
+        path.set_extension(ORE_EXT);
+
         (dir, path)
     };
 
@@ -3351,12 +3491,6 @@ fn inter_import(
     }
 
     import_stack.push(PATH_SEP.to_owned() + path_root.join(PATH_SEP).as_str() + PATH_SEP + &ty);
-
-    // let (dir, path) = if path.exists() {
-    //     (dir, path)
-    // } else {
-    //     let
-    // }
 
     match fs::read_to_string(&path) {
         Ok(source_code) => {

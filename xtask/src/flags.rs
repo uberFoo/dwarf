@@ -6,7 +6,7 @@ xflags::xflags! {
     /// Run custom build command.
     cmd xtask {
         cmd plugin {
-            optional --plugin plugin: String
+            optional --name name: String
             optional --debug debug: bool
         }
         cmd package {
@@ -35,7 +35,7 @@ pub enum XtaskCmd {
 
 #[derive(Debug)]
 pub struct Plugin {
-    pub plugin: Option<String>,
+    pub name: Option<String>,
     pub debug: Option<bool>,
 }
 

@@ -113,7 +113,6 @@ pub(in crate::bubba::compiler) fn compile(
                     match &*ty {
                         Ty::Integer(_) => {
                             let int = context.get_type(INTEGER).unwrap().clone();
-
                             // Insert the iteration ident into the symbol table.
                             let iter_ident_index =
                                 match context.insert_symbol(iter_ident, int.clone()) {
@@ -138,7 +137,6 @@ pub(in crate::bubba::compiler) fn compile(
                         }
                         Ty::ZString(_) => {
                             let string = context.get_type(STRING).unwrap().clone();
-
                             // Insert the iteration ident into the symbol table.
                             let iter_ident_index =
                                 match context.insert_symbol(iter_ident, string.clone()) {
@@ -164,12 +162,12 @@ pub(in crate::bubba::compiler) fn compile(
                         ty => todo!("list element ty: {:?}", ty),
                     }
                 }
-                ValueTypeEnum::XFuture(ref future) => {
-                    let future = lu_dog.exhume_x_future(future).unwrap();
-                    let future = s_read!(future);
-                    let ty = future.r2_value_type(&lu_dog)[0].clone();
-                    let ty = (*s_read!(ty)).clone();
-
+                ValueTypeEnum::XFuture(ref _future) => {
+                    // let future = lu_dog.exhume_x_future(future).unwrap();
+                    // let future = s_read!(future);
+                    // let ty = future.r2_value_type(&lu_dog)[0].clone();
+                    // let ty = (*s_read!(ty)).clone();
+                    // dbg!("e", &ty);
                     // Insert the iteration ident into the symbol table.
                     let iter_ident_index = match context.insert_symbol(iter_ident, ty.clone()) {
                         (true, index) => {
@@ -180,7 +178,8 @@ pub(in crate::bubba::compiler) fn compile(
                     };
 
                     // This is the starting value of the iteration.
-                    let list_var_idx = match context.insert_symbol(LIST_VAR.to_owned(), ty) {
+                    let list_var_idx = match context.insert_symbol(LIST_VAR.to_owned(), ty.clone())
+                    {
                         (true, index) => {
                             inner_thonk.increment_frame_size();
                             index
@@ -202,7 +201,7 @@ pub(in crate::bubba::compiler) fn compile(
             thonk.insert_instruction_with_span(Instruction::Dup, list_span.clone(), location!());
 
             thonk.insert_instruction_with_span(
-                Instruction::StoreLocal(list_var_idx),
+                Instruction::InitializeLocal(list_var_idx),
                 list_span.clone(),
                 location!(),
             );
@@ -227,7 +226,6 @@ pub(in crate::bubba::compiler) fn compile(
         }
         ValueTypeEnum::Range(_) => {
             let int = context.get_type(INTEGER).unwrap().clone();
-
             // Insert the iteration ident into the symbol table.
             let iter_ident_index = match context.insert_symbol(iter_ident, int) {
                 (true, index) => {
@@ -250,7 +248,6 @@ pub(in crate::bubba::compiler) fn compile(
             match &*ty {
                 Ty::ZString(_) => {
                     let string = context.get_type(STRING).unwrap().clone();
-
                     // Insert the iteration ident into the symbol table.
                     let iter_ident_index = match context.insert_symbol(iter_ident, string.clone()) {
                         (true, index) => {
@@ -326,6 +323,7 @@ pub(in crate::bubba::compiler) fn compile(
 
     match ty.subtype {
         ValueTypeEnum::List(_) => {
+            // This nop is important for some reason.
             thonk.insert_instruction(Instruction::Comment("nop".to_owned()), location!());
             let list_var_idx = context.get_symbol(LIST_VAR).unwrap().number;
             thonk.insert_instruction_with_span(
@@ -340,7 +338,7 @@ pub(in crate::bubba::compiler) fn compile(
                 location!(),
             );
             thonk.insert_instruction_with_span(
-                Instruction::StoreLocal(iter_ident_index),
+                Instruction::InitializeLocal(iter_ident_index),
                 list_span.clone(),
                 location!(),
             );
@@ -349,7 +347,7 @@ pub(in crate::bubba::compiler) fn compile(
             // thonk.insert_instruction_with_span(Instruction::Vom, list_span.clone(), location!());
             // thonk.insert_instruction(Instruction::Comment("nop".to_owned()), location!());
             thonk.insert_instruction_with_span(
-                Instruction::StoreLocal(iter_ident_index),
+                Instruction::InitializeLocal(iter_ident_index),
                 list_span.clone(),
                 location!(),
             );
@@ -360,7 +358,7 @@ pub(in crate::bubba::compiler) fn compile(
             match &*ty {
                 Ty::ZString(_) => {
                     thonk.insert_instruction_with_span(
-                        Instruction::StoreLocal(iter_ident_index),
+                        Instruction::InitializeLocal(iter_ident_index),
                         list_span.clone(),
                         location!(),
                     );

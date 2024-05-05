@@ -1,0 +1,13 @@
+fn main() {
+    let map = { {} };
+    let list = [];
+
+    list.push(42);
+    list.push("hello");
+
+    chacha::assert_eq(map.len(), 0);
+    map.insert("key", "value");
+    chacha::assert_eq(map.len(), 1);
+    map.insert("other_key", 42);
+    print(map);
+}

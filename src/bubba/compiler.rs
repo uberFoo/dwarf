@@ -21,10 +21,10 @@ use crate::{
     bubba::{
         instr::{Instruction, Program, Thonk},
         value::Value,
-        BOOL, CHAR, EMPTY, FLOAT, INTEGER, RANGE, RESULT, STRING, STRING_ARRAY, UNKNOWN, UUID,
+        BOOL, CHAR, EMPTY, FLOAT, INTEGER, MAP, RANGE, RESULT, STRING, STRING_ARRAY, UNKNOWN, UUID,
     },
     lu_dog::{
-        BodyEnum, Expression, ExpressionEnum, Function, ObjectStore as LuDogStore, Statement,
+        BodyEnum, Expression, ExpressionEnum, Function, Map, ObjectStore as LuDogStore, Statement,
         StatementEnum, ValueType, ValueTypeEnum,
     },
     s_read, s_write,
@@ -39,8 +39,8 @@ mod expression;
 pub use error::{BubbaCompilerError, BubbaCompilerErrorReporter, Result};
 
 use expression::{
-    a_weight, block, call, field, for_loop, if_expr, index, list, literal, operator, print, range,
-    ret, struct_expr, typecast, variable, xmatch,
+    a_weight, block, call, field, for_loop, halt_and_catch_fire, if_expr, index, list, literal,
+    operator, print, range, ret, struct_expr, typecast, variable, xmatch,
 };
 
 // 🚧 Maybe document why we have an abstraction over Thonk?
@@ -246,22 +246,26 @@ impl<'a, 'b> Context<'a, 'b> {
     fn push_symbol_table(&mut self) {
         self.st_depth += 1;
         self.symbol_tables.push((SymbolTable::new(0), true));
+        tracing::debug!(target: "instr", "{}", ERR_CLR.paint("push symbol table"));
     }
 
     fn push_scope(&mut self) {
         self.st_depth += 1;
         let start = self.symbol_tables.last().unwrap().0.count();
         self.symbol_tables.push((SymbolTable::new(start), false));
+        tracing::debug!(target: "instr", "{}", ERR_CLR.paint("push scope"));
     }
 
     fn pop_symbol_table(&mut self) {
         self.st_depth -= 1;
         self.symbol_tables.pop();
+        tracing::debug!(target: "instr", "{}", ERR_CLR.paint("pop symbol table"));
     }
 
     fn pop_scope(&mut self) {
         self.st_depth -= 1;
         self.symbol_tables.pop();
+        tracing::debug!(target: "instr", "{}", ERR_CLR.paint("pop scope"));
     }
 
     fn is_root_symbol_table(&self) -> bool {
@@ -275,10 +279,15 @@ impl<'a, 'b> Context<'a, 'b> {
 
     fn insert_symbol(&mut self, name: String, ty: ValueType) -> (bool, usize) {
         match self.get_symbol(name.as_str()) {
-            Some(value) => (false, value.number),
+            Some(value) => {
+                tracing::debug!(target: "instr", "{}: {name} ({})", ERR_CLR.paint("symbol insert"), value.number);
+                (false, value.number)
+            }
             None => {
                 let table = &mut self.symbol_tables.last_mut().unwrap().0;
-                (true, table.insert(name, ty))
+                let number = table.insert(name.clone(), ty);
+                tracing::debug!(target: "instr", "{}: {name} ({number})", ERR_CLR.paint("symbol insert"));
+                (true, number)
             }
         }
     }
@@ -333,8 +342,8 @@ pub fn compile(context: &ExtruderContext) -> Result<Program> {
     // We need to grab this specific instance's value of the string type.
     // As well as all the other types below.
     let string = Ty::new_z_string(&s_read!(sarzak));
-    let string = ValueType::new_ty(true, &string, &mut s_write!(lu_dog));
-    let string = (*s_read!(string)).clone();
+    let string_ty = ValueType::new_ty(true, &string, &mut s_write!(lu_dog));
+    let string = (*s_read!(string_ty)).clone();
     let string_value = Value::ValueType(string.clone());
     context
         .get_program()
@@ -370,6 +379,11 @@ pub fn compile(context: &ExtruderContext) -> Result<Program> {
     let empty = ValueType::new_empty(true, &mut s_write!(lu_dog));
     let empty = (*s_read!(empty)).clone();
     context.insert_type(EMPTY.to_owned(), empty);
+
+    let map = Map::new(&string_ty, &string_ty, &mut s_write!(lu_dog));
+    let map = ValueType::new_map(true, &map, &mut s_write!(lu_dog));
+    let map = (*s_read!(map)).clone();
+    context.insert_type(MAP.to_owned(), map);
 
     let uuid = ValueType::new_ty(
         true,
@@ -707,6 +721,9 @@ fn compile_expression(
         }
 
         ExpressionEnum::ForLoop(ref for_loop) => for_loop::compile(for_loop, thonk, context, span),
+        ExpressionEnum::HaltAndCatchFire(ref expr) => {
+            halt_and_catch_fire::compile(expr, thonk, context)
+        }
         ExpressionEnum::Index(ref index) => index::compile(index, thonk, context, span),
         ExpressionEnum::Lambda(ref λ) => call::compile_lambda(λ, thonk, context),
         ExpressionEnum::ListElement(ref list) => list::compile_list_element(list, thonk, context),
@@ -772,7 +789,7 @@ mod test {
 
     pub(super) fn run_vm(program: &Program) -> Result<RefType<Value>, Error> {
         #[cfg(feature = "async")]
-        let mut vm = VM::new(program, &[], &get_dwarf_home(), THREADS, true);
+        let mut vm = VM::new(program, &[], &get_dwarf_home(), THREADS, false);
         #[cfg(not(feature = "async"))]
         let mut vm = VM::new(program, &[], &get_dwarf_home());
         vm.invoke("main", &[])
@@ -783,7 +800,7 @@ mod test {
         args: &[RefType<Value>],
     ) -> Result<RefType<Value>, Error> {
         #[cfg(feature = "async")]
-        let mut vm = VM::new(program, args, &get_dwarf_home(), THREADS, true);
+        let mut vm = VM::new(program, args, &get_dwarf_home(), THREADS, false);
         #[cfg(not(feature = "async"))]
         let mut vm = VM::new(program, args, &get_dwarf_home());
         vm.invoke("main", &[])
@@ -974,11 +991,11 @@ mod test {
         .unwrap();
         let program = compile(&ctx).unwrap();
         println!("{program}");
-        assert_eq!(program.get_thonk_card(), 10);
+        assert_eq!(program.get_thonk_card(), 11);
 
         // assert_eq!(program.get_instruction_card(), 393);
         let run = run_vm(&program);
-        println!("{:?}", run);
+        eprintln!("{:?}", run);
         assert!(run.is_ok());
         assert_eq!(&*s_read!(run.unwrap()), &Value::Boolean(true));
     }

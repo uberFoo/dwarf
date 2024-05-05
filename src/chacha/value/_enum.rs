@@ -68,8 +68,12 @@ where
         match (self, other) {
             (Self::Unit(_a, b, e), Self::Unit(_c, d, f)) => b == d && e == f,
             (Self::Struct(a), Self::Struct(b)) => *s_read!(a) == *s_read!(b),
-            (Self::Tuple((a, _), c), Self::Tuple((b, _), d)) => {
-                let result = *s_read!(a) == *s_read!(b) && *s_read!(c) == *s_read!(d);
+            (Self::Tuple((alpha, a), c), Self::Tuple((beta, b), d)) => {
+                // kts -- not sure about this. I don't like how sometimes the TypeName
+                // is std::result::Result and sometimes Result, and yet the ValueType
+                // match...
+                let result =
+                    (a == b || *s_read!(alpha) == *s_read!(beta)) && *s_read!(c) == *s_read!(d);
                 result
             }
             _ => false,

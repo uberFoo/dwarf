@@ -4,7 +4,7 @@ use crate::{
     bubba::{
         compiler::{
             compile_expression, get_span, CThonk, Context, Result, BOOL, CHAR, EMPTY, FLOAT,
-            INTEGER, STRING,
+            INTEGER, MAP, STRING,
         },
         instr::Instruction,
         value::Value,
@@ -29,7 +29,7 @@ pub(in crate::bubba::compiler) fn compile(
 
     tracing::debug!(target: "instr", "literal: {literal:?}");
 
-    let (literal, ty) = match &s_read!(literal).subtype {
+    let ty = match &s_read!(literal).subtype {
         //
         // BooleanLiteral
         //
@@ -41,8 +41,9 @@ pub(in crate::bubba::compiler) fn compile(
                 BooleanLiteralEnum::FalseLiteral(_) => Value::Boolean(false),
                 BooleanLiteralEnum::TrueLiteral(_) => Value::Boolean(true),
             };
+            thonk.insert_instruction_with_span(Instruction::Push(value), span, location!());
 
-            (value, context.get_type(BOOL).unwrap().clone())
+            context.get_type(BOOL).unwrap().clone()
         }
         //
         // CharLiteral
@@ -51,7 +52,9 @@ pub(in crate::bubba::compiler) fn compile(
             let literal = lu_dog.exhume_char_literal(literal).unwrap();
             let literal = std::char::from_u32(s_read!(literal).x_value as u32).unwrap();
             let value = Value::Char(literal);
-            (value, context.get_type(CHAR).unwrap().clone())
+            thonk.insert_instruction_with_span(Instruction::Push(value), span, location!());
+
+            context.get_type(CHAR).unwrap().clone()
         }
         //
         // FloatLiteral
@@ -60,7 +63,9 @@ pub(in crate::bubba::compiler) fn compile(
             let literal = lu_dog.exhume_float_literal(literal).unwrap();
             let value = s_read!(literal).x_value;
             let value = Value::Float(value);
-            (value, context.get_type(FLOAT).unwrap().clone())
+            thonk.insert_instruction_with_span(Instruction::Push(value), span, location!());
+
+            context.get_type(FLOAT).unwrap().clone()
         }
         //
         // FormatString
@@ -82,7 +87,7 @@ pub(in crate::bubba::compiler) fn compile(
                                 let expr = lu_dog.exhume_expression(&expr_bit.expression).unwrap();
                                 let span = get_span(&expr, &lu_dog);
                                 let ty = compile_expression(&expr, thonk, context)?.unwrap();
-                                if ty != context.get_type(STRING).unwrap().clone() {
+                                if ty != *context.get_type(STRING).unwrap() {
                                     thonk.insert_instruction_with_span(
                                         Instruction::ToString,
                                         span,
@@ -128,7 +133,8 @@ pub(in crate::bubba::compiler) fn compile(
 
                 return Ok(Some(context.get_type(STRING).unwrap().clone()));
             }
-            return Ok(Some(context.get_type(EMPTY).unwrap().clone()));
+
+            context.get_type(EMPTY).unwrap().clone()
         }
         //
         // IntegerLiteral
@@ -137,7 +143,45 @@ pub(in crate::bubba::compiler) fn compile(
             let literal = lu_dog.exhume_integer_literal(literal).unwrap();
             let value = s_read!(literal).x_value;
             let value = Value::Integer(value);
-            (value, context.get_type(INTEGER).unwrap().clone())
+            thonk.insert_instruction_with_span(Instruction::Push(value), span, location!());
+
+            context.get_type(INTEGER).unwrap().clone()
+        }
+        //
+        // MapExpression
+        //
+        LiteralEnum::MapExpression(ref literal) => {
+            let literal = lu_dog.exhume_map_expression(literal).unwrap();
+            let literal = s_read!(literal);
+            // let key_ty = literal.r115_value_type(&lu_dog);
+            // let value_ty = literal.r116_value_type(&lu_dog);
+
+            // thonk.insert_instruction_with_span(
+            //     Instruction::Push(value_ty),
+            //     span.clone(),
+            //     location!(),
+            // );
+            // thonk.insert_instruction_with_span(
+            //     Instruction::Push(key_ty),
+            //     span.clone(),
+            //     location!(),
+            // );
+            thonk.insert_instruction_with_span(Instruction::NewMap, span.clone(), location!());
+
+            for pair in literal.r117_map_element(&lu_dog) {
+                let pair = s_read!(pair);
+                let key = lu_dog.exhume_expression(&pair.key).unwrap();
+                compile_expression(&key, thonk, context)?.unwrap();
+                let value = lu_dog.exhume_expression(&pair.x_value).unwrap();
+                compile_expression(&value, thonk, context)?.unwrap();
+                thonk.insert_instruction_with_span(
+                    Instruction::MapInsert,
+                    span.clone(),
+                    location!(),
+                );
+            }
+
+            context.get_type(MAP).unwrap().clone()
         }
         //
         // StringLiteral
@@ -145,11 +189,54 @@ pub(in crate::bubba::compiler) fn compile(
         LiteralEnum::StringLiteral(ref literal) => {
             let literal = lu_dog.exhume_string_literal(literal).unwrap();
             let value = Value::String(s_read!(literal).x_value.clone());
-            (value, context.get_type(STRING).unwrap().clone())
+            thonk.insert_instruction_with_span(Instruction::Push(value), span, location!());
+
+            context.get_type(STRING).unwrap().clone()
         }
     };
 
-    thonk.insert_instruction_with_span(Instruction::Push(literal), span, location!());
-
     Ok(Some(ty))
+}
+
+#[cfg(test)]
+mod test {
+    use std::env;
+
+    use test_log::test;
+
+    use crate::{
+        bubba::compiler::{
+            test::{get_dwarf_home, setup_logging},
+            *,
+        },
+        dwarf::{new_lu_dog, parse_dwarf},
+        sarzak::MODEL as SARZAK_MODEL,
+    };
+
+    #[test]
+    fn map_literal() {
+        setup_logging();
+        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
+        let ore = r#"
+fn main() {
+    let map = {{"a": 42, "b": 96}};
+    print(map);
+}"#;
+        let ast = parse_dwarf("map_literal", ore).unwrap();
+        let ctx = new_lu_dog(
+            "for_in_range".to_owned(),
+            Some((ore.to_owned(), &ast)),
+            &get_dwarf_home(),
+            &env::current_dir().unwrap(),
+            &sarzak,
+        )
+        .unwrap();
+
+        let program = compile(&ctx).unwrap();
+
+        println!("{program}");
+
+        assert_eq!(program.get_thonk_card(), 1);
+        assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 12);
+    }
 }
