@@ -134,6 +134,7 @@ impl Uri {
     fn query(self) -> Option<string> {
         let query: string = self.plugin
             .invoke_func("server", "Uri", "query", [self.inner]);
+
         if query.len() == 0 {
             Option::None
         } else {

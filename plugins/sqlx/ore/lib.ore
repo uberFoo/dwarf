@@ -14,6 +14,10 @@ struct Sqlx {
 impl Sqlx {
     /// Create a new instance of the SQLx plugin.
     ///
+    /// # Parameters
+    ///
+    /// None
+    ///
     /// This function creates a new instance of the SQLx plugin. It is the main entry
     /// point for the plugin and is responsible for creating connections to the database.
     ///
@@ -43,7 +47,7 @@ impl Sqlx {
     /// # use std::result::Result;
     /// # async fn example() {
     /// let sqlx = Sqlx::new();
-    /// let pool = sqlx.connect("postgres://user:pass@localhost:5432/db");
+    /// let pool = sqlx.connect("postgres://user:pass@localhost:5432/db").await;
     /// # }
     /// ```
     async fn connect(self, connection_string: string) -> Future<Result<Pool, Error>> {
@@ -89,7 +93,7 @@ impl Pool {
     /// # use std::result::Result;
     /// # async fn example() {
     /// let sqlx = Sqlx::new();
-    /// let pool = sqlx.connect("postgres://user:pass@localhost:5432/db");
+    /// let pool = sqlx.connect("postgres://user:pass@localhost:5432/db").await.unwrap();
     /// let map = pool.query("SELECT * FROM users");
     /// # }
     /// ```
@@ -123,7 +127,7 @@ impl Error {
     /// # use std::result::Result;
     /// # async fn example() {
     /// let sqlx = Sqlx::new();
-    /// let pool = sqlx.connect("postgres://user:pass@localhost:5432/db");
+    /// let pool = sqlx.connect("postgres://user:pass@localhost:5432/db").await.unwrap();
     /// if let Result::Err(e) = pool {
     ///    print(e.to_string());
     /// }
@@ -158,17 +162,22 @@ struct Map {
 impl Map {
     /// Bind a value to a query.
     ///
+    /// # Parameters
+    ///
+    /// - `value`: The value to bind
+    ///
     /// We just hold on to these until we execute the query.
     /// Notice that we are returning self.
     ///
     /// Maybe scarier is that I'm apparently still not checking function signatures.
+    /// This thing should be generic.
     ///
     /// ```
     /// # use sqlx::Sqlx;
     /// # use std::result::Result;
     /// # async fn example() {
     /// let sqlx = Sqlx::new();
-    /// let pool = sqlx.connect("postgres://user:pass@localhost:5432/db");
+    /// let pool = sqlx.connect("postgres://user:pass@localhost:5432/db").await.unwrap();
     /// let map = pool.query("SELECT * FROM users WHERE id = $1");
     /// let map = map.bind("1");
     /// # }
@@ -181,6 +190,10 @@ impl Map {
 
     /// Execute the query.
     ///
+    /// # Parameters
+    ///
+    /// None
+    ///
     /// This is only used for INSERTS and the like that require bindings. Other queries
     /// like SELECTs use `map` to iterate over the results.
     ///
@@ -189,7 +202,7 @@ impl Map {
     /// # use std::result::Result;
     /// # async fn example() {
     /// let sqlx = Sqlx::new();
-    /// let pool = sqlx.connect("postgres://user:pass@localhost:5432/db");
+    /// let pool = sqlx.connect("postgres://user:pass@localhost:5432/db").await.unwrap();
     /// let map = pool.query("SELECT * FROM users WHERE id = $1");
     /// let map = map.bind("1");
     /// let rows = map.execute();
@@ -216,6 +229,24 @@ impl Map {
     ///
     /// Note that we don't actually do any work here. We are just setting everything
     /// up to be done by [`Query`]s `fetch_all` or `fetch_one` calls.
+    ///
+    /// # Parameters
+    ///
+    /// - `func`: The function to execute on each row
+    ///
+    /// ```
+    /// # use sqlx::Sqlx;
+    /// # use std::result::Result;
+    /// # async fn example() {
+    /// let sqlx = Sqlx::new();
+    /// let pool = sqlx.connect("postgres://user:pass@localhost:5432/db").await.unwrap();
+    /// let query = pool.query("SELECT * FROM users");
+    /// let map = map.map(|row| -> int {
+    ///    let id: int = row.get("id", Type::Integer).unwrap();
+    ///    id
+    /// }
+    /// # }
+    /// ```
     fn map<T>(self, func: fn(Row) -> T) -> Query<T> {
         // This is fun. We need to bounce the function to the Query struct because
         // we need to execute the user `func` on a `Row` struct, not an `int`.
@@ -275,13 +306,39 @@ impl Query<T> {
         }
     }
 
+    /// Fetch one row from the query.
+    ///
+    /// # Parameters
+    ///
+    /// None
+    ///
+    /// Our `self` is the `Query` struct instantiated by the Map implementation. Our
+    /// job is to return ane row from the query. Note that it is best that your query
+    /// return only one row.
+    ///
+    /// The result is a row that may be deconstructed for it's columnar data.
+    ///
+    /// ```
+    /// # use sqlx::Sqlx;
+    /// # use std::result::Result;
+    /// # async fn example() {
+    /// let sqlx = Sqlx::new();
+    /// let pool = sqlx.connect("postgres://user:pass@localhost:5432/db").await.unwrap();
+    /// let query = pool.query("SELECT * FROM users");
+    /// let map = map.map(|row| -> int {
+    ///    let id: int = row.get("id", Type::Integer).unwrap();
+    ///    id
+    /// }
+    /// let id = map.fetch_one();
+    /// # }
+    /// ```
     fn fetch_one(self) -> Result<Row, Error> {
-        let rows = self
+        let row = self
             .plugin
             .invoke_func("sqlx", "Query", "query_one", @[self.query, self.pool, self.func, self.bindings]);
 
-        match rows {
-            Result::Ok(rows) => Result::<Row, Error>::Ok(rows),
+        match row {
+            Result::Ok(row) => Result::<Row, Error>::Ok(row),
             Result::Err(e) => {
                 let e = Error {
                     plugin: self.plugin,
@@ -331,6 +388,7 @@ impl Row {
     /// Get a value from a row.
     ///
     /// # Parameters
+    ///
     /// - `index`: The index of the value to get -- note that this is a string
     /// - `ty`: The [`Type`] of the value to get
     ///

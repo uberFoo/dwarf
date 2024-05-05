@@ -20,7 +20,7 @@ use tracy_client::{non_continuous_frame, span, Client};
 
 use abi_stable::{
     library::{lib_header_from_path, LibrarySuffix, RawLibrary},
-    std_types::{RBox, RErr, ROk, ROption, RResult},
+    std_types::{RBox, RErr, ROk, ROption, RResult, Tuple2},
 };
 use ansi_term::Colour;
 use crossbeam::channel::{unbounded, Receiver, Sender};
@@ -433,7 +433,7 @@ impl VM {
                         }
                     }
                 };
-                let guard = mutex.lock().unwrap();
+                let _guard = mutex.lock().unwrap();
                 print_stack(&stack, fp);
                 println!("\t{} ->\t{cx}", Colour::Green.bold().paint("cx"));
                 println!("{}: {name}", Colour::Green.bold().paint("Thread"));
@@ -1189,6 +1189,10 @@ impl VM {
                                 stack.push(Value::Integer(vec.len() as DwarfInteger).into());
                             }
                             Value::List { inner, .. } => {
+                                let inner = s_read!(inner);
+                                stack.push(Value::Integer(inner.len() as DwarfInteger).into());
+                            }
+                            Value::Map { inner } => {
                                 let inner = s_read!(inner);
                                 stack.push(Value::Integer(inner.len() as DwarfInteger).into());
                             }
@@ -2108,6 +2112,15 @@ impl From<(FfiValue, &Value)> for Value {
                     ty: new_ref!(ValueType, ty),
                     inner: list,
                 }
+            }
+            FfiValue::Map(map) => {
+                let map: StdHashMap<String, _> = map
+                    .0
+                    .into_iter()
+                    .map(|Tuple2(k, v)| (k.into(), new_ref!(Value, v.into())))
+                    .collect();
+                let map = std::sync::Arc::new(std::sync::RwLock::new(map));
+                Self::Map { inner: map }
             }
             FfiValue::Option(option) => match option {
                 ROption::RNone => Self::Empty,

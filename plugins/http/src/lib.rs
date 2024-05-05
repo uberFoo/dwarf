@@ -686,7 +686,9 @@ mod http_server {
                                 })
                                 .collect();
 
-                            Ok(FfiValue::String(query_string.into()))
+                            let value = params.into();
+
+                            Ok(FfiValue::Map(value))
                         }
                         func => Err(Error::Plugin(format!("Invalid function: {func}").into())),
                     },

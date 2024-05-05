@@ -1,4 +1,5 @@
 use std::{
+    collections::HashMap as StdHashMap,
     fmt,
     sync::{Arc, Mutex},
 };
@@ -85,7 +86,7 @@ pub enum FfiValue {
     ///
     /// A list of values; aka a Vec.
     List(RVec<Self>),
-    Map(RHashMap<RString, RBox<Self>>),
+    Map(FfiHashMap),
     /// Option
     ///
     /// An optional value. Note that this is not the same as `Option<T>`, but
@@ -155,7 +156,7 @@ impl std::fmt::Display for FfiValue {
             Self::Map(map) => {
                 let mut first_time = true;
                 write!(f, "{{")?;
-                for Tuple2(k, v) in map {
+                for Tuple2(k, v) in &map.0 {
                     if first_time {
                         first_time = false;
                     } else {
@@ -189,6 +190,36 @@ impl std::fmt::Display for FfiValue {
 impl From<String> for FfiValue {
     fn from(value: String) -> Self {
         Self::String(value.into())
+    }
+}
+
+impl<T> From<HashMap<String, T>> for FfiValue
+where
+    T: Into<FfiValue>,
+{
+    fn from(value: HashMap<String, T>) -> Self {
+        let map = value
+            .into_iter()
+            .map(|(k, v)| (k.into(), v.into()))
+            .collect::<RHashMap<RString, FfiValue>>();
+        Self::Map(FfiHashMap(map))
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Debug, StableAbi)]
+pub struct FfiHashMap(pub(crate) RHashMap<RString, FfiValue>);
+
+impl<T> From<HashMap<String, T>> for FfiHashMap
+where
+    T: Into<FfiValue>,
+{
+    fn from(value: HashMap<String, T>) -> Self {
+        let map = value
+            .into_iter()
+            .map(|(k, v)| (k.into(), v.into()))
+            .collect::<RHashMap<RString, FfiValue>>();
+        FfiHashMap(map)
     }
 }
 
@@ -325,6 +356,16 @@ impl From<FfiValue> for VmValue {
             //     id: plugin.id.into(),
             //     plugin: new_ref!(PluginType, plugin.plugin),
             // },
+            FfiValue::Map(map) => {
+                let inner = map
+                    .0
+                    .into_iter()
+                    .map(|Tuple2(k, v)| (k.into(), new_ref!(VmValue, v.into())))
+                    .collect::<StdHashMap<String, RefType<VmValue>>>();
+                Self::Map {
+                    inner: new_ref!(StdHashMap<String, RefType<VmValue>>, inner),
+                }
+            }
             FfiValue::Range(range) => Self::Range(range.start..range.end),
             FfiValue::String(str_) => Self::String(str_.into()),
             FfiValue::Struct(s) => Self::Struct(s.into()),
