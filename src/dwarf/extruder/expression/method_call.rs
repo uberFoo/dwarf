@@ -8,7 +8,8 @@ use crate::{
         error::{DwarfError, Result},
         extruder::{
             debug, e_warn, function, inter_expression, link_argument,
-            lookup_woog_struct_method_return_type, update_span_value, Context, ExprSpan,
+            lookup_woog_enum_method_return_type, lookup_woog_struct_method_return_type,
+            update_span_value, Context, ExprSpan,
         },
         Expression as ParserExpression, PrintableValueType,
     },
@@ -140,6 +141,25 @@ pub(in crate::dwarf::extruder) fn method_call_return_type(
                 }])
             }
         },
+        ValueTypeEnum::Enumeration(ref id) => {
+            let woog_enum = lu_dog.exhume_enumeration(id).unwrap();
+            let x = lookup_woog_enum_method_return_type(
+                &s_read!(woog_enum).name,
+                method,
+                meth_span,
+                context,
+                lu_dog,
+            )?;
+
+            #[allow(clippy::let_and_return)]
+            x
+        }
+        ValueTypeEnum::EnumGeneric(ref generic) => {
+            let generic = lu_dog.exhume_enum_generic(generic).unwrap();
+            let woog_enum = &s_read!(generic).r104_enumeration(lu_dog)[0];
+            let ty = s_read!(woog_enum).r1_value_type(lu_dog)[0].clone();
+            ty
+        }
         ValueTypeEnum::List(ref list) => match method.as_str() {
             LEN => {
                 let ty = Ty::new_integer(context.sarzak);
@@ -383,9 +403,10 @@ pub(in crate::dwarf::extruder) fn method_call_return_type(
             let x = lookup_woog_struct_method_return_type(
                 &s_read!(woog_struct).name,
                 method,
-                context.sarzak,
+                meth_span,
+                context,
                 lu_dog,
-            );
+            )?;
 
             #[allow(clippy::let_and_return)]
             x
@@ -405,9 +426,13 @@ pub(in crate::dwarf::extruder) fn method_call_return_type(
             }
         },
         ref ty => {
-            e_warn!("Unknown type for method call {method}, {ty:?}");
-
-            ValueType::new_unknown(true, lu_dog)
+            return Err(vec![DwarfError::Internal {
+                description: format!("unknown type for method call: `{ty:?}`"),
+                file: context.file_name.to_owned(),
+                span: meth_span.to_owned(),
+                location: location!(),
+                program: context.source_string.to_owned(),
+            }])
         }
     };
 

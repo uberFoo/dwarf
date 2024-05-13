@@ -85,10 +85,13 @@ pub enum DwarfError {
     /// Internal Error
     ///
     /// This is an unrecoverable internal error.
-    #[snafu(display("\n{}: unrecoverable internal error\n  -->{description}\n  --> {}:{}:{}", ERR_CLR.bold().paint("error"), location.file, location.line, location.column))]
+    #[snafu(display("\n{}: internal compiler error\n  -->{description}\n  --> {}:{}:{}", ERR_CLR.bold().paint("error"), location.file, location.line, location.column))]
     Internal {
         description: String,
+        file: String,
+        span: Span,
         location: Location,
+        program: String,
     },
 
     /// IO Related Error
@@ -388,6 +391,39 @@ impl fmt::Display for DwarfErrorReporter<'_> {
                     )
                     .finish()
                     .write((file, Source::from(&program)), &mut std_err)
+                    .map_err(|_| fmt::Error)?;
+                write!(f, "{}", String::from_utf8_lossy(&std_err))
+            }
+            DwarfError::Internal {
+                description,
+                file,
+                span,
+                location,
+                program,
+            } => {
+                let report = Report::build(ReportKind::Error, file, span.start)
+                    .with_message("Internal Compiler Error")
+                    .with_label(
+                        Label::new((file, span.to_owned()))
+                            .with_message(format!("{}", description))
+                            .with_color(Color::Red),
+                    );
+
+                let report = if is_uber {
+                    report.with_note(format!(
+                        "{}:{}:{}\n",
+                        OTHER_CLR.paint(location.file.to_string()),
+                        POP_CLR.paint(format!("{}", location.line)),
+                        OK_CLR.paint(format!("{}", location.column)),
+                    ))
+                } else {
+                    report
+                };
+
+                let source = Source::from(&program);
+                report
+                    .finish()
+                    .write((file, source), &mut std_err)
                     .map_err(|_| fmt::Error)?;
                 write!(f, "{}", String::from_utf8_lossy(&std_err))
             }

@@ -64,24 +64,32 @@ pub fn inter(
                     name.push('>');
                 }
             } else {
+                let s = s_read!(span).start as usize..s_read!(span).end as usize;
                 return Err(vec![DwarfError::Internal {
                     description: format!(
                         "Expected a user type in struct expression, found {:?}",
                         ty
                     ),
+                    file: context.file_name.to_owned(),
+                    span: s,
                     location: location!(),
+                    program: context.source_string.to_owned(),
                 }]);
             }
         }
 
         (path, base, name)
     } else {
+        let s = s_read!(span).start as usize..s_read!(span).end as usize;
         return Err(vec![DwarfError::Internal {
             description: format!(
                 "Expected a local variable in struct expression, found {:?}",
                 name.0
             ),
+            file: context.file_name.to_owned(),
+            span: s,
             location: location!(),
+            program: context.source_string.to_owned(),
         }]);
     };
 

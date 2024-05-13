@@ -585,24 +585,22 @@ mod test {
         setup_logging();
         let sarzak_store = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "
-                  use std::result::Result;
-
-                  struct A {
-                      inner: int,
-                  }
-
-                  struct B {
-                      inner: int,
-                    }
-
-                  fn main() -> Result<int, int> {
-                      let x = Result::Err(96);
-                      match x {
-                          Result::Ok(x) => Result::<A, B>::Ok(A { inner: x }),
-                          Result::Err(y) => Result::<A, B>::Err(B { inner: y }),
-                      }
-                    }
-                   ";
+use std::result::Result;
+struct A {
+    inner: int,
+}
+struct B {
+    inner: int,
+  }
+fn main() -> Result<A, B> {
+    let result = Result::Err(96);
+    let foo = match result {
+        std::result::Result::Ok(x) => Result::<A, B>::Ok(A { inner: x}),
+        std::result::Result::Err(y) => Result::<A, B>::Err(B { inner: y }),
+    };
+    print(foo);
+    foo
+  }";
         let ast = parse_dwarf("match_expression", ore).unwrap();
         let ctx = new_lu_dog(
             "match_expression".to_owned(),
@@ -611,14 +609,19 @@ mod test {
             &env::current_dir().unwrap(),
             &sarzak_store,
         )
-        .unwrap();
+        .unwrap_or_else(|e| {
+            for err in e {
+                eprintln!("{}", crate::dwarf::error::DwarfErrorReporter(&err, true));
+            }
+            panic!("Failed to create lu_dog");
+        });
 
         let program = compile(&ctx).unwrap();
         println!("{program}");
 
         assert_eq!(program.get_thonk_card(), 4);
 
-        assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 53);
+        assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 57);
 
         // assert_eq!(&*s_read!(run_vm(&program).unwrap()), &Value::Integer(42));
     }

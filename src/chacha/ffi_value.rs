@@ -332,6 +332,7 @@ impl From<VmValue> for FfiValue {
                 Self::List(inner)
             }
             VmValue::Integer(num) => Self::Integer(num.to_owned()),
+            VmValue::Plugin((_name, plugin)) => Self::PlugIn(s_read!(plugin).clone()),
             VmValue::Range(range) => Self::Range(FfiRange {
                 start: range.start,
                 end: range.end,
@@ -584,6 +585,12 @@ pub struct FfiStruct {
     pub(crate) type_name: RString,
     pub(crate) type_: FfiValueType,
     pub(crate) attrs: FfiStructAttributes,
+}
+
+impl FfiStruct {
+    pub fn get_attr(&self, key: &str) -> Option<&FfiValue> {
+        self.attrs.0.get(key)
+    }
 }
 
 impl fmt::Display for FfiStruct {

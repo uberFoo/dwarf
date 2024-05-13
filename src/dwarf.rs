@@ -13,14 +13,15 @@ use rustc_hash::FxHashMap as HashMap;
 use sarzak::sarzak::types::Ty;
 use serde::{Deserialize, Serialize};
 use snafu::{location, Location};
+use uuid::Uuid;
 
 use crate::{
     dwarf::items::enuum::create_generic_enum,
     lu_dog::{
-        store::ObjectStore as LuDogStore, types::ValueType, Lambda, List, Span as LuDogSpan,
-        XFuture,
+        store::ObjectStore as LuDogStore, types::ValueType, Block, DwarfSourceFile, Lambda, List,
+        LocalVariable, Span as LuDogSpan, Variable, XFuture, XValue,
     },
-    s_read, RefType,
+    s_read, s_write, RefType, PATH_SEP,
 };
 
 pub mod error;
@@ -411,11 +412,47 @@ pub enum Pattern {
 /// Deep magic happens here. We are writing code in here, more or less. We are
 /// creating static method calls and local variables. Very cool stuff happening
 /// here.
-impl From<Pattern> for Expression {
-    fn from(pattern: Pattern) -> Self {
+impl<'a>
+    From<(
+        Pattern,
+        RefType<Block>,
+        RefType<ValueType>,
+        &'a RefType<DwarfSourceFile>,
+        RefType<LuDogStore>,
+        bool,
+    )> for Expression
+{
+    fn from(
+        (pattern, block, ty, source, lu_dog, inter_local): (
+            Pattern,
+            RefType<Block>,
+            RefType<ValueType>,
+            &'a RefType<DwarfSourceFile>,
+            RefType<LuDogStore>,
+            bool,
+        ),
+    ) -> Self {
         match pattern {
             // transmogrify an identifier into a local variable
-            Pattern::Identifier((name, _span)) => Expression::LocalVariable(name),
+            // Not so fast. We need to create a local variable in the s_read!(store).
+            Pattern::Identifier((name, span)) => {
+                if inter_local {
+                    let mut lu_dog = s_write!(lu_dog);
+
+                    let local = LocalVariable::new(Uuid::new_v4(), &mut lu_dog);
+                    let var = Variable::new_local_variable(name.clone(), &local, &mut lu_dog);
+                    let value = XValue::new_variable(&block, &ty, &var, &mut lu_dog);
+                    LuDogSpan::new(
+                        span.start as i64,
+                        span.end as i64,
+                        source,
+                        None,
+                        Some(&value),
+                        &mut lu_dog,
+                    );
+                }
+                Expression::LocalVariable(name)
+            }
             // 🚧 Need to do something about this.
             Pattern::Literal((literal, _span)) => match literal {
                 Expression::BooleanLiteral(b) => Expression::BooleanLiteral(b),
@@ -470,7 +507,20 @@ impl From<Pattern> for Expression {
 
                 let fields = fields
                     .into_iter()
-                    .map(|f| (f.0.into(), f.1))
+                    .map(|f| {
+                        (
+                            (
+                                f.0,
+                                block.clone(),
+                                ty.clone(),
+                                source,
+                                lu_dog.clone(),
+                                false,
+                            )
+                                .into(),
+                            f.1,
+                        )
+                    })
                     .collect::<Vec<_>>();
 
                 Expression::StaticMethodCall(
@@ -482,7 +532,6 @@ impl From<Pattern> for Expression {
         }
     }
 }
-
 #[derive(Clone, Debug)]
 pub struct WrappedValueType(pub RefType<ValueType>);
 

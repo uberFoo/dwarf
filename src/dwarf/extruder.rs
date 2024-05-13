@@ -346,8 +346,15 @@ pub struct Context<'a> {
     /// short name. It's populated by the code that processes the `use`
     /// statement.
     pub scopes: &'a mut HashMap<String, String>,
+    /// Imports
+    ///
+    /// This is a HashSet of module paths that have been imported.
     pub imports: &'a mut HashSet<PathBuf>,
     pub generics: Vec<(Type, Span)>,
+    /// Types
+    ///
+    /// This is a HashSet of types that have been imported.
+    pub types: &'a mut HashSet<String>,
 }
 
 impl<'a> Context<'a> {
@@ -365,6 +372,7 @@ impl<'a> Context<'a> {
         path: String,
         scopes: &'a mut HashMap<String, String>,
         imports: &'a mut HashSet<PathBuf>,
+        types: &'a mut HashSet<String>,
     ) -> Self {
         Self {
             location,
@@ -383,6 +391,7 @@ impl<'a> Context<'a> {
             scopes,
             imports,
             generics: Vec::new(),
+            types,
         }
     }
 }
@@ -437,6 +446,7 @@ pub fn new_lu_dog(
     let mut dirty = Vec::new();
     let mut stack = Vec::new();
     let mut imports = HashSet::default();
+    let mut types = HashSet::default();
 
     if let Some((source, ast)) = source {
         let mut context = Context {
@@ -456,6 +466,7 @@ pub fn new_lu_dog(
             scopes: &mut scopes,
             imports: &mut imports,
             generics: Vec::new(),
+            types: &mut types,
         };
 
         walk_tree(ast, &mut context, &mut stack, &mut lu_dog)?;
@@ -2527,15 +2538,18 @@ pub(super) fn inter_expression(
             // need one -- and it needs to be the right one...
             // To expound, there are likely to be multiple values in this block,
             // and we need to find the one that matches the variable name.
-
+            //
             // Blocks may be nested, so we collect all of the values up the chain.
             let mut values = Vec::new();
 
             let mut parent = Some(block.clone());
+            dbg!(&parent);
             while let Some(block) = parent {
                 let mut foo = s_read!(block).r33_x_value(lu_dog);
+                dbg!(&foo);
                 values.append(&mut foo);
                 parent = s_read!(block).r93_block(lu_dog).pop();
+                dbg!(&parent);
             }
 
             // Now search for a value that's a Variable, and see if the access matches
@@ -2567,7 +2581,7 @@ pub(super) fn inter_expression(
 
                                         let ty_str =
                                             PrintableValueType(true, &ty, context, lu_dog);
-                                        debug!("{name}, {}, {value:?} ({ty:?})", ty_str.to_string());
+                                        debug!("LocalVariable: {name}, {}, {value:?} ({ty:?})", ty_str.to_string());
 
                                         let expr = lu_dog
                                             .iter_variable_expression()
@@ -2585,8 +2599,6 @@ pub(super) fn inter_expression(
                                         let value =
                                             XValue::new_expression(block, &ty, &expr, lu_dog);
                                         update_span_value(&span, &value, location!());
-
-                                        debug!("expr {expr:?}, value {value:?}, type {ty:?}, span {span:?}");
 
                                         Some(((expr, span.clone()), ty))
                                     }
@@ -2636,7 +2648,7 @@ pub(super) fn inter_expression(
             //
             // debug_assert!(expr_type_tuples.len() <= 1);
 
-            debug!("expr_type_tuples {:?}", expr_type_tuples);
+            debug!("expr_type_tuples ({}): {expr_type_tuples:?}", expr_type_tuples.len());
 
             // Why are we taking the last one? -- Oh, read above.
             if let Some(expr_ty_tuple) = expr_type_tuples.pop() {
@@ -2664,16 +2676,14 @@ pub(super) fn inter_expression(
                 debug!("LocalVariable result ({expr:#?}, {ty:#?})");
                 Ok(((expr, span), ty))
             } else {
-                debug!("variable not found: `{name}`");
-                let expr = VariableExpression::new(name.to_owned(), lu_dog);
-                let expr = Expression::new_variable_expression(true, &expr, lu_dog);
-                let ty = ValueType::new_unknown(true, lu_dog);
-                e_warn!("Unknown type for variable {name}");
-
-                let value = XValue::new_expression(block, &ty, &expr, lu_dog);
-                update_span_value(&span, &value, location!());
-
-                Ok(((expr, span), ty))
+                let s = s_read!(span).start as usize..s_read!(span).end as usize;
+                Err(vec![DwarfError::Internal {
+                    description: format!("variable not found: `{name}`"),
+                    file: context.file_name.to_owned(),
+                    span: s,
+                    location: location!(),
+                    program: context.source_string.to_owned(),
+                }])
             }
         }
         //
@@ -2847,11 +2857,22 @@ pub(super) fn inter_expression(
             let mut match_ty = ValueType::new_unknown(true, lu_dog);
             for ((pattern, match_expr), ref span) in patterns {
                 debug!("pattern: {pattern:?}");
-                let pattern_expr: ParserExpression = pattern.to_owned().into();
+
+                let block = Block::new(false, Uuid::new_v4(), Some(block), None, lu_dog);
+
+                dbg!(&block);
+
+                let lu_dog_tmp = new_ref!(LuDogStore, lu_dog.clone());
+
+                // This bit is really neat.
+                let pattern_expr: ParserExpression = (pattern.to_owned(), block.clone(), scrutinee_ty.clone(), &context.source, lu_dog_tmp.clone(), true).into();
+                // kts
+                // lu_dog.merge(lu_dog_tmp);
+
                 let (pattern_expr, ty) = inter_expression(
                     &new_ref!(ParserExpression, pattern_expr),
                     span,
-                    block,
+                    &block,
                     context,
                     import_stack,
                     lu_dog,
@@ -2868,7 +2889,7 @@ pub(super) fn inter_expression(
                 let (expr, ty) = inter_expression(
                     &new_ref!(ParserExpression, match_expr.to_owned()),
                     span,
-                    block,
+                    &block,
                     context,
                     import_stack,
                     lu_dog,
@@ -3185,16 +3206,16 @@ pub(super) fn inter_expression(
                 let ty = ValueType::new_empty(true, lu_dog);
                 let value = XValue::new_expression(block, &ty, &expr, lu_dog);
                 cfg_if::cfg_if! {
-                if #[cfg(not(feature="debug"))] {
-                    // See # Span Bug
+                    if #[cfg(not(feature="debug"))] {
+                        // See # Span Bug
                         lu_dog.inter_span(|id| {
                             let mut span = s_read!(span).clone();
                             span.x_value = Some(s_read!(value).id);
                             span.id = id;
                             new_ref!(LuDogSpan, span)
                         });
-                        // update_span_value(&span, &value, location!());
                     } else {
+                        // update_span_value(&span, &value, location!());
                         let span = LuDogSpan::new(
                             s_read!(span).end,
                             s_read!(span).start,
@@ -3311,9 +3332,19 @@ pub(super) fn inter_expression(
 ///
 /// This is hit in response to something like:
 ///
+/// ```no_run
 /// mod foo;
+/// ```
 ///
-/// It will load the foo module.
+/// It will load the foo module. The specific type that is being loaded is on
+/// top of the `import_stack` parameter. We test the incoming type name with
+/// the top of the stack to see if we should load the module. If we should, we
+/// build a path to the module. We keep a hash set of the paths that have been
+/// imported so that we don't load a module more than once.
+///
+/// Note that before we walk the tree we need to ensure that `scopes`, on `Context`,
+/// is clean. This allows each module (a file) to build it's own set of types.
+/// The same needs to be done with `types`.
 fn inter_module(
     name: &str,
     context: &mut Context,
@@ -3322,9 +3353,13 @@ fn inter_module(
 ) -> Result<()> {
     debug!("inter_module: {name}");
 
+    // We only want to import the module for the currently processing type.
     if let Some(import) = import_stack.last() {
         if !import.contains(name) {
+            debug!("{import} is not {name}");
             return Ok(());
+        } else {
+            debug!("found {import} is {name}");
         }
     }
 
@@ -3353,9 +3388,10 @@ fn inter_module(
                     type_path += name;
                     type_path += PATH_SEP;
 
-                    let mut scopes = HashMap::default();
-
                     let mut dirty = Vec::new();
+                    // We want fresh scopes and types importing a module.
+                    let mut scopes = HashMap::default();
+                    let mut types = HashSet::default();
 
                     let mut new_ctx = Context::new(
                         source_code,
@@ -3370,6 +3406,7 @@ fn inter_module(
                         type_path,
                         &mut scopes,
                         context.imports,
+                        &mut types,
                     );
 
                     // Extrusion time
@@ -3405,7 +3442,23 @@ fn inter_module(
 ///
 /// This is called in response to something like:
 ///
+/// ```no_run
 /// use foo::bar;
+/// ```
+///
+/// We are building up an environment of imports in the current `Context`.
+/// This function adds to that environment when "using" a type. The type
+/// becomes part of the environment via the `types` hash set hanging off of
+/// `Context``.
+///
+/// We also maintain an `import_stack` ~~on `Context`~~ that should be hanging
+/// off of `Context`, but we're passing it around. Go figure. At any rate we
+/// push the current type onto the stack before we walk the tree. This lets us
+/// avoid loading things that aren't the type we are looking for up in `inter_module`.
+/// We pop the stack after we are done walking the tree.
+///
+/// Finally we maintain a `scopes` hash map that maps the type to the path of the
+/// type. This is used to resolve the type later on.
 fn inter_import(
     import_path: &[Spanned<String>],
     alias: &Option<(String, Range<usize>)>,
@@ -3422,12 +3475,6 @@ fn inter_import(
         .collect::<Vec<_>>();
 
     let ty = path_root.pop().unwrap();
-
-    if let Some(current) = import_stack.last() {
-        if current == &ty {
-            return Ok(());
-        }
-    }
 
     let module = path_root.first().unwrap(); // This will have _something_.
 
@@ -3481,13 +3528,16 @@ fn inter_import(
     };
 
     // We need to push the thing we are importing onto the stack so
-    // that when we are interring a module we can only import the
+    // that when we are interring a module we can import only the
     // thing on the top of the stack.
     let fq_type = PATH_SEP.to_owned() + path_root.join(PATH_SEP).as_str() + PATH_SEP + &ty;
-    if let Some(last) = import_stack.last() {
-        if last == &fq_type {
-            return Ok(());
-        }
+
+    if let Some(t) = context.types.get(&fq_type) {
+        debug!("{fq_type} already imported");
+        return Ok(());
+    } else {
+        debug!("{fq_type} being imported");
+        context.types.insert(fq_type.clone());
     }
 
     import_stack.push(PATH_SEP.to_owned() + path_root.join(PATH_SEP).as_str() + PATH_SEP + &ty);
@@ -3499,8 +3549,7 @@ fn inter_import(
                 Ok(ast) => {
                     let path = format!("{}", path.display());
                     let mut dirty = Vec::new();
-                    // let mut scopes = context.scopes.clone();
-                    let mut scopes = HashMap::default();
+                    // let mut scopes = HashMap::default();
 
                     let mut new_ctx = Context::new(
                         source_code,
@@ -3513,8 +3562,9 @@ fn inter_import(
                         location!(),
                         lu_dog,
                         format!("::{module}::"),
-                        &mut scopes,
+                        context.scopes,
                         context.imports,
+                        context.types,
                     );
 
                     // Extrusion time
@@ -4042,17 +4092,18 @@ pub(crate) fn make_value_type(
 
                 let name = fq_name.clone();
 
-                if !generics.is_empty() {
-                    fq_name.push('<');
-                    for (i, (generic, _)) in generics.iter().enumerate() {
-                        fq_name.extend([generic.to_string()]);
+                // kts
+                // if !generics.is_empty() {
+                //     fq_name.push('<');
+                //     for (i, (generic, _)) in generics.iter().enumerate() {
+                //         fq_name.extend([generic.to_string()]);
 
-                        if i != generics.len() - 1 {
-                            fq_name.extend([", "]);
-                        }
-                    }
-                    fq_name.push('>');
-                }
+                //         if i != generics.len() - 1 {
+                //             fq_name.extend([", "]);
+                //         }
+                //     }
+                //     fq_name.push('>');
+                // }
 
                 if let Some(ty) = lookup_user_defined_type(lu_dog, &fq_name, span, context) {
                     // 🔥 I think that I need to look at the returned type and see if it has
@@ -4165,9 +4216,12 @@ pub(crate) fn lookup_user_defined_type(
 pub(crate) fn lookup_woog_struct_method_return_type(
     type_name: &str,
     method: &str,
-    sarzak: &SarzakStore,
+    span: Span,
+    context: &Context,
     lu_dog: &mut LuDogStore,
-) -> RefType<ValueType> {
+) -> Result<RefType<ValueType>> {
+    let sarzak = context.sarzak;
+
     // Look up the type in lu_dog structs.
     if let Some(ref id) = lu_dog.exhume_woog_struct_id_by_name(type_name) {
         let woog_struct = lu_dog.exhume_woog_struct(id).unwrap();
@@ -4180,16 +4234,26 @@ pub(crate) fn lookup_woog_struct_method_return_type(
                 lu_dog.exhume_value_type(&ret_ty).unwrap()
             })
         } else {
-            debug!("type not found");
-            e_warn!("Unknown type for variable {method}");
-            Some(ValueType::new_unknown(true, lu_dog))
+            return Err(vec![DwarfError::Internal {
+                description: format!("type not found: : `{type_name}`"),
+                file: context.file_name.to_owned(),
+                span,
+                location: location!(),
+                program: context.source_string.to_owned(),
+            }]);
         };
+
         debug!("found type: {ty:?}");
         if let Some(ty) = ty {
-            ty
+            Ok(ty)
         } else {
-            e_warn!("Unknown type for variable {method}");
-            ValueType::new_unknown(true, lu_dog)
+            Err(vec![DwarfError::Internal {
+                description: format!("type not found: : `{type_name}`"),
+                file: context.file_name.to_owned(),
+                span,
+                location: location!(),
+                program: context.source_string.to_owned(),
+            }])
         }
     } else if type_name == CHACHA {
         match method {
@@ -4201,18 +4265,79 @@ pub(crate) fn lookup_woog_struct_method_return_type(
                     .find(|t| s_read!(t).subtype == ValueTypeEnum::Ty(ty.read().unwrap().id()))
                     .unwrap();
                 let list = List::new(&ty, lu_dog);
-                ValueType::new_list(true, &list, lu_dog)
+                Ok(ValueType::new_list(true, &list, lu_dog))
             }
-            _ => {
-                e_warn!("ParserExpression type not found");
-                ValueType::new_unknown(true, lu_dog)
-            }
+            _ => Err(vec![DwarfError::Internal {
+                description: format!("type not found: : `{type_name}`"),
+                file: context.file_name.to_owned(),
+                span,
+                location: location!(),
+                program: context.source_string.to_owned(),
+            }]),
         }
     } else if (type_name == UUID_TYPE || type_name == FQ_UUID_TYPE) && method == FN_NEW {
-        ValueType::new_ty(true, &Ty::new_z_uuid(sarzak), lu_dog)
+        Ok(ValueType::new_ty(true, &Ty::new_z_uuid(sarzak), lu_dog))
     } else {
-        e_warn!("ParserExpression type not found: {type_name}");
-        ValueType::new_unknown(true, lu_dog)
+        Err(vec![DwarfError::Internal {
+            description: format!("struct not found: : `{type_name}`"),
+            file: context.file_name.to_owned(),
+            span,
+            location: location!(),
+            program: context.source_string.to_owned(),
+        }])
+    }
+}
+
+pub(crate) fn lookup_woog_enum_method_return_type(
+    type_name: &str,
+    method: &str,
+    span: Span,
+    context: &Context,
+    lu_dog: &mut LuDogStore,
+) -> Result<RefType<ValueType>> {
+    let sarzak = context.sarzak;
+
+    // Look up the type in lu_dog structs.
+    if let Some(ref id) = lu_dog.exhume_enumeration_id_by_name(type_name) {
+        let woog_enum = lu_dog.exhume_enumeration(id).unwrap();
+        let ty = if let Some(impl_) = s_read!(woog_enum).r84c_implementation_block(lu_dog).pop() {
+            let impl_ = s_read!(impl_);
+
+            let funcs = impl_.r9_function(lu_dog);
+            funcs.iter().find(|f| s_read!(f).name == *method).map(|f| {
+                let ret_ty = s_read!(f).return_type;
+                lu_dog.exhume_value_type(&ret_ty).unwrap()
+            })
+        } else {
+            return Err(vec![DwarfError::Internal {
+                description: format!("type not found: : `{type_name}`"),
+                file: context.file_name.to_owned(),
+                span,
+                location: location!(),
+                program: context.source_string.to_owned(),
+            }]);
+        };
+
+        debug!("found type: {ty:?}");
+        if let Some(ty) = ty {
+            Ok(ty)
+        } else {
+            Err(vec![DwarfError::Internal {
+                description: format!("type not found: : `{type_name}`"),
+                file: context.file_name.to_owned(),
+                span,
+                location: location!(),
+                program: context.source_string.to_owned(),
+            }])
+        }
+    } else {
+        Err(vec![DwarfError::Internal {
+            description: format!("enumeration not: : `{type_name}`"),
+            file: context.file_name.to_owned(),
+            span,
+            location: location!(),
+            program: context.source_string.to_owned(),
+        }])
     }
 }
 
@@ -4557,6 +4682,45 @@ pub(super) fn typecheck(
                         program: context.source_string.to_owned(),
                     }])
                 }
+            }
+        }
+        (ValueTypeEnum::WoogStruct(ref lhs_id), ValueTypeEnum::WoogStruct(ref rhs_id)) => {
+            let a = lu_dog.exhume_woog_struct(lhs_id).unwrap();
+            let b = lu_dog.exhume_woog_struct(rhs_id).unwrap();
+            let a = s_read!(a);
+            let b = s_read!(b);
+
+            // We really need to check the generics, and we need to do it
+            // recursively so that inner types are checked. If one side is
+            // generic then the other must be as well.
+            let a_name = if let Some(next) = a.name.split('<').next() {
+                next
+            } else {
+                &a.name
+            };
+            let b_name = if let Some(next) = b.name.split('<').next() {
+                next
+            } else {
+                &b.name
+            };
+
+            if a_name == b_name {
+                Ok(())
+            } else {
+                let a = PrintableValueType(true, lhs, context, lu_dog);
+                let b = PrintableValueType(true, rhs, context, lu_dog);
+
+                dbg!(a.to_string(), b.to_string());
+
+                Err(vec![DwarfError::TypeMismatch {
+                    expected: a.to_string(),
+                    found: b.to_string(),
+                    file: context.file_name.to_owned(),
+                    expected_span: lhs_span.to_owned(),
+                    found_span: rhs_span.to_owned(),
+                    location,
+                    program: context.source_string.to_owned(),
+                }])
             }
         }
         (lhs_t, rhs_t) => {

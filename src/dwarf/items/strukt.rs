@@ -42,8 +42,6 @@ pub fn inter_struct(
     lu_dog: &mut LuDogStore,
 ) -> Result<()> {
     if let Some(path) = context.scopes.insert(name.to_owned(), context.path.clone()) {
-        dbg!(&path, &context.path);
-
         if path == context.path {
             return Ok(());
         }

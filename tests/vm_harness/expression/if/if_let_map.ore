@@ -1,0 +1,12 @@
+use std::option::Option;
+
+fn get_map() -> Option<int> {
+    Option::Some({{"key": "value"}})
+}
+
+fn main() {
+    if let Option::Some(map) = get_map() {
+        print("${map}");
+        print(map.get("key"));
+    }
+}

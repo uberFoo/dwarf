@@ -32,12 +32,14 @@ async fn main() -> Future<()> {
             let username = row.get("username", Type::String).unwrap();
             let flubber = row.get("flubber", Type::Short).unwrap();
             print(flubber as string + "\n");
-            print(username + "\n");
+            // This is bogus.
+            print(username as string + "\n");
             // if username == name {
             // found = true;
             // }
 
-            username
+            // This is doubly bogus.
+            username as string
         });
         let users = q.fetch_all();
         // print(users);

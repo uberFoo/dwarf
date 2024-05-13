@@ -704,12 +704,14 @@ mod test {
     fn func_call() {
         setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
-        let ore = "fn main() {
-                       foo();
-                   }
-                   fn foo() {
-                       print(\"Hello, world!\");
-                   }";
+        let ore = "
+        fn foo() {
+            print(\"Hello, world!\");
+        }
+        fn main() {
+            foo();
+        }
+                   ";
         let ast = parse_dwarf("func_call", ore).unwrap();
         let ctx = new_lu_dog(
             "func_call".to_owned(),
@@ -734,12 +736,14 @@ mod test {
     fn test_func_args() {
         setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
-        let ore = "fn main() -> int {
-                       foo(1, 2, 3)
-                   }
-                   fn foo(x: int, y: int, z: int) -> int {
-                       x + y + z
-                   }";
+        let ore = "
+        fn foo(x: int, y: int, z: int) -> int {
+            x + y + z
+        }
+        fn main() -> int {
+            foo(1, 2, 3)
+        }
+                   ";
         let ast = parse_dwarf("test_func_args", ore).unwrap();
         let ctx = new_lu_dog(
             "test_func_args".to_owned(),
@@ -764,15 +768,17 @@ mod test {
     fn test_func_with_args_and_locals() {
         setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
-        let ore = "fn main() -> int {
-                       foo(1, 2, 3)
-                   }
-                   fn foo(x: int, y: int, z: int) -> int {
-                       let a = 1;
-                       let b = 2;
-                       let c = 3;
-                       x + y + z + a + b + c
-                   }";
+        let ore = "
+        fn foo(x: int, y: int, z: int) -> int {
+            let a = 1;
+            let b = 2;
+            let c = 3;
+            x + y + z + a + b + c
+        }
+        fn main() -> int {
+           foo(1, 2, 3)
+        }
+    ";
         let ast = parse_dwarf("test_func_args_and_locals", ore).unwrap();
         let ctx = new_lu_dog(
             "test_func_args_and_locals".to_owned(),
@@ -797,14 +803,16 @@ mod test {
     fn test_argument_ordering() {
         setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
-        let ore = "fn main() {
-                       foo(1, 2, 3)
-                   }
-                   fn foo(x: int, y: int, z: int) {
-                       chacha::assert_eq(x, 1);
-                       chacha::assert_eq(y, 2);
-                       chacha::assert_eq(z, 3);
-                   }";
+        let ore = "
+        fn foo(x: int, y: int, z: int) {
+            chacha::assert_eq(x, 1);
+            chacha::assert_eq(y, 2);
+            chacha::assert_eq(z, 3);
+        }
+        fn main() {
+            foo(1, 2, 3)
+        }
+                   ";
         let ast = parse_dwarf("test_argument_ordering", ore).unwrap();
         let ctx = new_lu_dog(
             "test_argument_ordering".to_owned(),

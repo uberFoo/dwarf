@@ -753,9 +753,15 @@ fn compile_expression(
 
 fn get_span(expression: &RefType<Expression>, lu_dog: &LuDogStore) -> Span {
     let value = &s_read!(expression).r11_x_value(lu_dog)[0];
-    let span = &s_read!(value).r63_span(lu_dog)[0];
-    let read = s_read!(span);
-    read.start as usize..read.end as usize
+    let span = if let Some(span) = &s_read!(value).r63_span(lu_dog).get(0) {
+        let read = s_read!(span);
+        read.start as usize..read.end as usize
+    } else {
+        dbg!(&expression, &value);
+        0..0
+    };
+
+    span
 }
 
 #[cfg(test)]
@@ -899,9 +905,6 @@ mod test {
         setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "
-                   fn main() -> int {
-                       fib(10)
-                   }
                    fn fib(n: int) -> int {
                        if n == 0 {
                            0
@@ -910,7 +913,11 @@ mod test {
                        } else {
                            fib(n - 1) + fib(n - 2)
                        }
-                   }";
+                   }
+                   fn main() -> int {
+                       fib(10)
+                   }
+                   ";
         let ast = parse_dwarf("fibonacci", ore).unwrap();
         let ctx = new_lu_dog(
             "fibonacci".to_owned(),
@@ -991,7 +998,7 @@ mod test {
         .unwrap();
         let program = compile(&ctx).unwrap();
         println!("{program}");
-        assert_eq!(program.get_thonk_card(), 11);
+        assert_eq!(program.get_thonk_card(), 12);
 
         // assert_eq!(program.get_instruction_card(), 393);
         let run = run_vm(&program);
@@ -1104,18 +1111,19 @@ async fn main() -> Future<()> {
     fn test_locals_and_params() {
         setup_logging();
         let ore = "
-                   fn main() -> int {
-                       let x = 1;
-                       let y = 2;
-                       let z = 3;
-                       foo(x, y, z)
-                   }
-                   fn foo(a: int, b: int, c: int) -> int {
-                       let z = 42;
-                       let x = a + b;
-                       let y = x + c;
-                       y
-                   }";
+        fn foo(a: int, b: int, c: int) -> int {
+            let z = 42;
+            let x = a + b;
+            let y = x + c;
+            y
+        }
+        fn main() -> int {
+            let x = 1;
+            let y = 2;
+            let z = 3;
+            foo(x, y, z)
+        }
+                   ";
         let ast = parse_dwarf("test_locals_and_params", ore).unwrap();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ctx = new_lu_dog(
