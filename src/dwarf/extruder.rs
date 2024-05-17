@@ -133,7 +133,7 @@ pub(crate) use function;
 
 macro_rules! debug {
     ($($arg:tt)*) => {
-        tracing::debug!(
+        log::debug!(
             target: "extruder",
             "{}: {}\n  --> {}:{}:{}",
             Colour::Cyan.dimmed().italic().paint(function!()),
@@ -3630,7 +3630,6 @@ fn inter_implementation(
     import_stack: &mut Vec<String>,
     lu_dog: &mut LuDogStore,
 ) -> Result<()> {
-    // 🚧 I'm not sure if I should look this up or force it.
     let name = context.path.clone() + name;
 
     debug!("inter_implementation: {name}");
@@ -3672,15 +3671,29 @@ fn inter_implementation(
                         (ty, None)
                     };
 
-                    let implementation =
-                        ImplementationBlock::new(None, None, store.as_ref(), lu_dog);
-                    let _ = WoogItem::new_implementation_block(
-                        &context.source,
-                        &implementation,
-                        lu_dog,
-                    );
-
-                    (Some(ty), Some(implementation))
+                    if let Some(id) = lu_dog.exhume_woog_struct_id_by_name(&name) {
+                        let woog_struct = lu_dog.exhume_woog_struct(&id).unwrap();
+                        let implementation = ImplementationBlock::new(
+                            None,
+                            Some(&woog_struct),
+                            store.as_ref(),
+                            lu_dog,
+                        );
+                        let _ = WoogItem::new_implementation_block(
+                            &context.source,
+                            &implementation,
+                            lu_dog,
+                        );
+                        (Some(ty), Some(implementation))
+                    } else {
+                        return Err(vec![DwarfError::ObjectNameNotFound {
+                            name: name.to_owned(),
+                            file: context.file_name.to_owned(),
+                            span: span.to_owned(),
+                            location: location!(),
+                            program: context.source_string.to_owned(),
+                        }]);
+                    }
                 } else {
                     unreachable!();
                 }
@@ -3709,8 +3722,6 @@ fn inter_implementation(
             let woog_struct = lu_dog.exhume_woog_struct(&id).unwrap();
             ImplementationBlock::new(None, Some(&woog_struct), None, lu_dog)
         } else if let Some(id) = lu_dog.exhume_enumeration_id_by_name(&name) {
-            // OMG this is ugly.
-            // 🚧 Fix the model.
             let woog_enum = lu_dog.exhume_enumeration(&id).unwrap();
             ImplementationBlock::new(Some(&woog_enum), None, None, lu_dog)
         } else {
@@ -3729,8 +3740,6 @@ fn inter_implementation(
     };
 
     let mut errors = Vec::new();
-
-    debug!("inter_implementation {}", name);
 
     for func in funcs {
         match func {
@@ -4234,14 +4243,17 @@ pub(crate) fn lookup_woog_struct_method_return_type(
 
     // Look up the type in lu_dog structs.
     if let Some(ref id) = lu_dog.exhume_woog_struct_id_by_name(type_name) {
+        dbg!(&type_name);
         let woog_struct = lu_dog.exhume_woog_struct(id).unwrap();
         let ty = if let Some(impl_) = s_read!(woog_struct).r8c_implementation_block(lu_dog).pop() {
+            dbg!("hahahahah");
             let funcs = s_read!(impl_).r9_function(lu_dog);
             funcs.iter().find(|f| s_read!(f).name == *method).map(|f| {
                 let ret_ty = s_read!(f).return_type;
                 lu_dog.exhume_value_type(&ret_ty).unwrap()
             })
         } else {
+            dbg!(&type_name);
             return Err(vec![DwarfError::NoImplementation {
                 missing: type_name.to_owned(),
                 file: context.file_name.to_owned(),
