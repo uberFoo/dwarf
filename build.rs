@@ -39,11 +39,6 @@ fn main() {
 fn generate_tests(path: &str) -> String {
     let mut tests = String::new();
     tests += "use std::path::Path;\n";
-    tests += r#"use tracing_subscriber::{
-    fmt::{self, format},
-    EnvFilter, FmtSubscriber,
-};
-"#;
 
     let mut in_dir = std::env::current_dir().unwrap();
     in_dir.push(TEST_DIR);
@@ -74,21 +69,7 @@ fn generate_tests(path: &str) -> String {
             let contents = fs::read_to_string(path).unwrap();
             tests += "#[test]\n";
             tests += &format!("fn {parent}_{name}() {{\n");
-            // tests += "    let _ = env_logger::builder().is_test(true).try_init();\n";
-            tests += r#"let filter_layer =
-            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("error"));
-
-        let subscriber = FmtSubscriber::builder()
-            .with_env_filter(filter_layer)
-            .event_format(format().pretty())
-            .with_writer(fmt::writer::BoxMakeWriter::new(|| {
-                Box::new(std::io::stderr())
-            }))
-            .fmt_fields(fmt::format::PrettyFields::new())
-            .finish();
-
-        tracing::subscriber::set_global_default(subscriber)
-            .expect("setting default subscriber failed");"#;
+            tests += "    let _ = env_logger::builder().is_test(true).try_init();\n";
             tests += "    color_backtrace::install();\n";
             tests += &format!("    let cwd = Path::new(\"{}\");\n", root.display());
             tests +=
