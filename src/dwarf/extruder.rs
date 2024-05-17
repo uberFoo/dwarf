@@ -1534,9 +1534,7 @@ pub(super) fn inter_expression(
                         let func = if let Some(impl_) =
                             s_read!(woog_struct).r8c_implementation_block(lu_dog).pop()
                         {
-                            let impl_ = s_read!(impl_);
-
-                            let funcs = impl_.r9_function(lu_dog);
+                            let funcs = s_read!(impl_).r9_function(lu_dog);
                             funcs.iter().find(|f| s_read!(f).name == rhs.0).cloned()
                         } else {
                             None
@@ -1606,9 +1604,7 @@ pub(super) fn inter_expression(
                                 let func = if let Some(impl_) =
                                     s_read!(woog_struct).r8c_implementation_block(lu_dog).pop()
                                 {
-                                    let impl_ = s_read!(impl_);
-
-                                    let funcs = impl_.r9_function(lu_dog);
+                                    let funcs = s_read!(impl_).r9_function(lu_dog);
                                     funcs.iter().find(|f| s_read!(f).name == rhs.0).cloned()
                                 } else {
                                     None
@@ -2543,13 +2539,10 @@ pub(super) fn inter_expression(
             let mut values = Vec::new();
 
             let mut parent = Some(block.clone());
-            dbg!(&parent);
             while let Some(block) = parent {
                 let mut foo = s_read!(block).r33_x_value(lu_dog);
-                dbg!(&foo);
                 values.append(&mut foo);
                 parent = s_read!(block).r93_block(lu_dog).pop();
-                dbg!(&parent);
             }
 
             // Now search for a value that's a Variable, and see if the access matches
@@ -2654,7 +2647,7 @@ pub(super) fn inter_expression(
             if let Some(expr_ty_tuple) = expr_type_tuples.pop() {
                 debug!("returning {:?}", expr_ty_tuple);
                 Ok(expr_ty_tuple.clone())
-            } else if let Some(ref id) = lu_dog.exhume_function_id_by_name(name) {
+            } else if let Some(func) = context.func_defs.get(name) {
                 // We get here because there was no local variable info, so we are
                 // going to check if it's a function.
                 // 🚧 NB: We'll only find it if it's been processed. We really need to
@@ -2664,6 +2657,19 @@ pub(super) fn inter_expression(
                 // Dang. We need to return an expression, and what I'd really like
                 // to do is just return the function's return type. I wonder if I
                 // can cheat and return a variable expression?
+                //     debug!("found a function named {name}");
+                //     let func = lu_dog.exhume_function(id).unwrap();
+                //     let ty = s_read!(func).r10_value_type(lu_dog)[0].clone();
+                let ty = func.return_type.clone();
+                let expr = VariableExpression::new(name.to_owned(), lu_dog);
+                let expr = Expression::new_variable_expression(true, &expr, lu_dog);
+
+                let value = XValue::new_expression(block, &ty, &expr, lu_dog);
+                update_span_value(&span, &value, location!());
+
+                debug!("LocalVariable function ({expr:#?}, {ty:#?})");
+                Ok(((expr, span), ty))
+            } else if let Some(ref id) = lu_dog.exhume_function_id_by_name(name) {
                 debug!("found a function named {name}");
                 let func = lu_dog.exhume_function(id).unwrap();
                 let ty = s_read!(func).r10_value_type(lu_dog)[0].clone();
@@ -2673,12 +2679,12 @@ pub(super) fn inter_expression(
                 let value = XValue::new_expression(block, &ty, &expr, lu_dog);
                 update_span_value(&span, &value, location!());
 
-                debug!("LocalVariable result ({expr:#?}, {ty:#?})");
+                debug!("LocalVariable function ({expr:#?}, {ty:#?})");
                 Ok(((expr, span), ty))
             } else {
                 let s = s_read!(span).start as usize..s_read!(span).end as usize;
-                Err(vec![DwarfError::Internal {
-                    description: format!("variable not found: `{name}`"),
+                Err(vec![DwarfError::VariableNotFound {
+                    var: name.to_owned(),
                     file: context.file_name.to_owned(),
                     span: s,
                     location: location!(),
@@ -2859,15 +2865,11 @@ pub(super) fn inter_expression(
                 debug!("pattern: {pattern:?}");
 
                 let block = Block::new(false, Uuid::new_v4(), Some(block), None, lu_dog);
-
-                dbg!(&block);
-
                 let lu_dog_tmp = new_ref!(LuDogStore, lu_dog.clone());
-
                 // This bit is really neat.
                 let pattern_expr: ParserExpression = (pattern.to_owned(), block.clone(), scrutinee_ty.clone(), &context.source, lu_dog_tmp.clone(), true).into();
                 // kts
-                // lu_dog.merge(lu_dog_tmp);
+                lu_dog.merge(&s_read!(lu_dog_tmp));
 
                 let (pattern_expr, ty) = inter_expression(
                     &new_ref!(ParserExpression, pattern_expr),
@@ -3200,7 +3202,7 @@ pub(super) fn inter_expression(
                 // 🚧 Once we have tuples, I'd prefer to return the empty tuple.
                 let expr = Expression::new_block(
                     true,
-                    &Block::new(false, Uuid::new_v4(), None, None, lu_dog),
+                    &Block::new(false, Uuid::new_v4(), Some(block), None, lu_dog),
                     lu_dog,
                 );
                 let ty = ValueType::new_empty(true, lu_dog);
@@ -3320,9 +3322,10 @@ pub(super) fn inter_expression(
             let span = s_read!(span).start as usize..s_read!(span).end as usize;
             Err(vec![DwarfError::NoImplementation {
                 missing: format!("inter_expression: {:?}", 道),
-                code: source[span.clone()].to_owned(),
                 file: context.file_name.to_owned(),
                 span,
+                location: location!(),
+                program: context.source_string.to_owned(),
             }])
         }
     }
@@ -4222,20 +4225,25 @@ pub(crate) fn lookup_woog_struct_method_return_type(
 ) -> Result<RefType<ValueType>> {
     let sarzak = context.sarzak;
 
+    // Strip the generics from the type name.
+    let type_name = if let Some(name) = type_name.split('<').next() {
+        name
+    } else {
+        type_name
+    };
+
     // Look up the type in lu_dog structs.
     if let Some(ref id) = lu_dog.exhume_woog_struct_id_by_name(type_name) {
         let woog_struct = lu_dog.exhume_woog_struct(id).unwrap();
         let ty = if let Some(impl_) = s_read!(woog_struct).r8c_implementation_block(lu_dog).pop() {
-            let impl_ = s_read!(impl_);
-
-            let funcs = impl_.r9_function(lu_dog);
+            let funcs = s_read!(impl_).r9_function(lu_dog);
             funcs.iter().find(|f| s_read!(f).name == *method).map(|f| {
                 let ret_ty = s_read!(f).return_type;
                 lu_dog.exhume_value_type(&ret_ty).unwrap()
             })
         } else {
-            return Err(vec![DwarfError::Internal {
-                description: format!("type not found: : `{type_name}`"),
+            return Err(vec![DwarfError::NoImplementation {
+                missing: type_name.to_owned(),
                 file: context.file_name.to_owned(),
                 span,
                 location: location!(),
@@ -4243,12 +4251,11 @@ pub(crate) fn lookup_woog_struct_method_return_type(
             }]);
         };
 
-        debug!("found type: {ty:?}");
         if let Some(ty) = ty {
             Ok(ty)
         } else {
-            Err(vec![DwarfError::Internal {
-                description: format!("type not found: : `{type_name}`"),
+            Err(vec![DwarfError::NoSuchMethod {
+                method: method.to_owned(),
                 file: context.file_name.to_owned(),
                 span,
                 location: location!(),
@@ -4268,7 +4275,7 @@ pub(crate) fn lookup_woog_struct_method_return_type(
                 Ok(ValueType::new_list(true, &list, lu_dog))
             }
             _ => Err(vec![DwarfError::Internal {
-                description: format!("type not found: : `{type_name}`"),
+                description: format!("struct not found: : `{type_name}`"),
                 file: context.file_name.to_owned(),
                 span,
                 location: location!(),
@@ -4295,22 +4302,25 @@ pub(crate) fn lookup_woog_enum_method_return_type(
     context: &Context,
     lu_dog: &mut LuDogStore,
 ) -> Result<RefType<ValueType>> {
-    let sarzak = context.sarzak;
+    // Strip the generics from the type name.
+    let type_name = if let Some(name) = type_name.split('<').next() {
+        name
+    } else {
+        type_name
+    };
 
     // Look up the type in lu_dog structs.
     if let Some(ref id) = lu_dog.exhume_enumeration_id_by_name(type_name) {
         let woog_enum = lu_dog.exhume_enumeration(id).unwrap();
         let ty = if let Some(impl_) = s_read!(woog_enum).r84c_implementation_block(lu_dog).pop() {
-            let impl_ = s_read!(impl_);
-
-            let funcs = impl_.r9_function(lu_dog);
+            let funcs = s_read!(impl_).r9_function(lu_dog);
             funcs.iter().find(|f| s_read!(f).name == *method).map(|f| {
                 let ret_ty = s_read!(f).return_type;
                 lu_dog.exhume_value_type(&ret_ty).unwrap()
             })
         } else {
-            return Err(vec![DwarfError::Internal {
-                description: format!("type not found: : `{type_name}`"),
+            return Err(vec![DwarfError::NoImplementation {
+                missing: type_name.to_owned(),
                 file: context.file_name.to_owned(),
                 span,
                 location: location!(),
@@ -4322,8 +4332,8 @@ pub(crate) fn lookup_woog_enum_method_return_type(
         if let Some(ty) = ty {
             Ok(ty)
         } else {
-            Err(vec![DwarfError::Internal {
-                description: format!("type not found: : `{type_name}`"),
+            Err(vec![DwarfError::NoSuchMethod {
+                method: method.to_owned(),
                 file: context.file_name.to_owned(),
                 span,
                 location: location!(),

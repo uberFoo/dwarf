@@ -3,6 +3,8 @@ fn main() {
     fn outer() {
         let x = "outer";
         fn inner() {
+            // let x = "maybe this should only be defined inside the function";
+            let x = "outer";
             print(x);
         }
         inner();

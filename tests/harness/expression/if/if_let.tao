@@ -27,11 +27,11 @@ fn main() {
 
     let y = Option::<int>::Some(42);
     // let y = Option::Some::<int>(42);
-    let z = if let Option::<int>::Some(y) = y {
+    let z = if let Option::<int>::Some(a) = y {
         // if let Option::Some::<int>(y) = y {
-        print("Some({0})\n".format(y));
+        print("Some({0})\n".format(a));
         chacha::assert_eq(true, true);
-        y
+        a
     } else {
         print("None\n");
         chacha::assert_eq(true, false);

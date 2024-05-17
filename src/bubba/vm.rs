@@ -12,9 +12,6 @@ use smol::future;
 #[cfg(feature = "async")]
 use puteketeke::Executor;
 
-#[cfg(feature = "async")]
-use once_cell::sync::OnceCell;
-
 #[cfg(feature = "tracy-client")]
 use tracy_client::{non_continuous_frame, span, Client};
 
@@ -24,6 +21,7 @@ use abi_stable::{
 };
 use ansi_term::Colour;
 use crossbeam::channel::{unbounded, Receiver, Sender};
+use once_cell::sync::OnceCell;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use snafu::{location, Location};
 

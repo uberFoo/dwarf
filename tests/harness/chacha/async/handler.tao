@@ -20,6 +20,21 @@ struct Color {
     blue: float,
 }
 
+fn assert_off(light: Light) {
+    // print("💤\n");
+    chacha::assert_eq(light.power, Power::Off);
+    chacha::assert_eq(light.color.red, 0.0);
+    chacha::assert_eq(light.color.green, 0.0);
+    chacha::assert_eq(light.color.blue, 0.0);
+}
+
+fn assert_on(light: Light) {
+    // print("💡\n");
+    chacha::assert_eq(light.power, Power::On);
+    chacha::assert_eq(light.color.red, 1.0);
+    chacha::assert_eq(light.color.green, 1.0);
+    chacha::assert_eq(light.color.blue, 1.0);
+}
 struct Light {
     power: Power,
     color: Color,
@@ -158,20 +173,4 @@ async fn main() -> Future<int> {
 
     // c.await
     42
-}
-
-fn assert_off(light: Light) {
-    // print("💤\n");
-    chacha::assert_eq(light.power, Power::Off);
-    chacha::assert_eq(light.color.red, 0.0);
-    chacha::assert_eq(light.color.green, 0.0);
-    chacha::assert_eq(light.color.blue, 0.0);
-}
-
-fn assert_on(light: Light) {
-    // print("💡\n");
-    chacha::assert_eq(light.power, Power::On);
-    chacha::assert_eq(light.color.red, 1.0);
-    chacha::assert_eq(light.color.green, 1.0);
-    chacha::assert_eq(light.color.blue, 1.0);
 }
