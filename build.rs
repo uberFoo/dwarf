@@ -67,9 +67,8 @@ fn generate_tests(path: &str) -> String {
             let parent = root.file_name().unwrap().to_str().unwrap();
             let name = path.file_stem().unwrap().to_str().unwrap();
             let contents = fs::read_to_string(path).unwrap();
-            tests += "#[test]\n";
+            tests += "#[test_log::test]\n";
             tests += &format!("fn {parent}_{name}() {{\n");
-            tests += "    let _ = env_logger::builder().is_test(true).try_init();\n";
             tests += "    color_backtrace::install();\n";
             tests += &format!("    let cwd = Path::new(\"{}\");\n", root.display());
             tests +=

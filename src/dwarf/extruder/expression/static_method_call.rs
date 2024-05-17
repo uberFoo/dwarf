@@ -493,6 +493,7 @@ fn inter_field(
     import_stack: &mut Vec<String>,
     lu_dog: &mut LuDogStore,
 ) -> Result<(ExprSpan, RefType<ValueType>)> {
+    dbg!(&field, &path);
     let subtype = &s_read!(field).subtype.clone();
     let (woog_enum, expr) = match subtype {
         EnumFieldEnum::TupleField(ref id) => {
@@ -658,6 +659,7 @@ fn inter_field(
                     (new_enum, expr)
                 }
             } else {
+                dbg!(&ty, &expr_ty);
                 typecheck(
                     (&ty, &span),
                     (&expr_ty, &param.1),

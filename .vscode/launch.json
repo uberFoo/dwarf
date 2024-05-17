@@ -142,13 +142,14 @@
                 }
             },
             "args": [
+                "tests/vm_harness/extensions/std/fs.ore",
                 // "tests/vm_harness/lambda.ore"
                 // "bench.ore",
                 // "https://raw.githubusercontent.com/uberFoo/dwarf/develop/mandelbrot.ore"
-                "uberfoo.rs/src/uberfoo.rs.ore",
-                "-c",
-                "uberfoo.rs/src",
-                "-t",
+                // "uberfoo.rs/src/uberfoo.rs.ore",
+                // "-c",
+                // "uberfoo.rs/src",
+                // "-t",
                 "-b",
                 "--uber",
             ],

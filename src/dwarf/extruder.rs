@@ -2539,14 +2539,18 @@ pub(super) fn inter_expression(
             let mut values = Vec::new();
 
             let mut parent = Some(block.clone());
+            dbg!(&parent);
             while let Some(block) = parent {
                 let mut foo = s_read!(block).r33_x_value(lu_dog);
+                dbg!(&foo);
                 values.append(&mut foo);
                 parent = s_read!(block).r93_block(lu_dog).pop();
+                dbg!(&parent);
             }
 
             // Now search for a value that's a Variable, and see if the access matches
             // the variable.
+            let mut found = false;
             let mut expr_type_tuples = values
                 .iter()
                 .filter_map(|value| {
@@ -2565,11 +2569,13 @@ pub(super) fn inter_expression(
                             let var = s_read!(lu_dog.exhume_variable(var).unwrap()).clone();
                             debug!("value var {:?}", var);
                             // Check the name
-                            if var.name == *name {
+                            if var.name == *name && !found {
                                 match var.subtype {
                                     VariableEnum::LocalVariable(_) |
                                     VariableEnum::Parameter(_) |
                                     VariableEnum::LambdaParameter(_)=> {
+                                        found = true;
+
                                         let ty = value.r24_value_type(lu_dog)[0].clone();
 
                                         let ty_str =
