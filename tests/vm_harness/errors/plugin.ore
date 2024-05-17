@@ -16,6 +16,6 @@ impl TestFail {
 
     fn fail(self) -> Future<()> {
         self.inner
-            .invoke_func_fail("http_server", "HttpServer", "serve", [port])
+            .invoke_func_fail("http_server", "HttpServer", "serve", [])
     }
 }
