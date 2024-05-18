@@ -326,10 +326,6 @@ fn compile_method_call(
                     meth => panic!("list does not support {meth}"),
                 },
                 ValueTypeEnum::Map(_) => match name.as_str() {
-                    LEN => {
-                        thonk.insert_instruction(Instruction::MapLength, location!());
-                        return Ok(Some(result));
-                    }
                     GET => {
                         // First arg is self
                         compile_expression(&args[0], thonk, context)?;
@@ -348,6 +344,10 @@ fn compile_method_call(
                         compile_expression(&args[2], thonk, context)?;
 
                         thonk.insert_instruction(Instruction::MapInsert, location!());
+                        return Ok(Some(result));
+                    }
+                    LEN => {
+                        thonk.insert_instruction(Instruction::MapLength, location!());
                         return Ok(Some(result));
                     }
                     meth => panic!("map does not support {meth}"),

@@ -158,6 +158,10 @@ pub(in crate::dwarf::extruder) fn method_call_return_type(
             let generic = lu_dog.exhume_enum_generic(generic).unwrap();
             let woog_enum = &s_read!(generic).r104_enumeration(lu_dog)[0];
             let ty = s_read!(woog_enum).r1_value_type(lu_dog)[0].clone();
+            // let ty = s_read!(generic).r1_value_type(lu_dog)[0].clone();
+            // let ty_str = PrintableValueType(true, &ty, context, lu_dog);
+
+            // dbg!(ty_str.to_string());
             ty
         }
         ValueTypeEnum::List(ref list) => match method.as_str() {

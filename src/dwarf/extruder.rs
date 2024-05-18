@@ -2536,21 +2536,19 @@ pub(super) fn inter_expression(
             // and we need to find the one that matches the variable name.
             //
             // Blocks may be nested, so we collect all of the values up the chain.
+            // But they need to be grabbed in reverse order. However the values
+            // inside each block need their order maintained...
             let mut values = Vec::new();
 
             let mut parent = Some(block.clone());
-            dbg!(&parent);
             while let Some(block) = parent {
-                let mut foo = s_read!(block).r33_x_value(lu_dog);
-                dbg!(&foo);
-                values.append(&mut foo);
+                let foo = s_read!(block).r33_x_value(lu_dog);
+                values.splice(0..0, foo);
                 parent = s_read!(block).r93_block(lu_dog).pop();
-                dbg!(&parent);
             }
 
             // Now search for a value that's a Variable, and see if the access matches
             // the variable.
-            let mut found = false;
             let mut expr_type_tuples = values
                 .iter()
                 .filter_map(|value| {
@@ -2569,13 +2567,11 @@ pub(super) fn inter_expression(
                             let var = s_read!(lu_dog.exhume_variable(var).unwrap()).clone();
                             debug!("value var {:?}", var);
                             // Check the name
-                            if var.name == *name && !found {
+                            if var.name == *name  {
                                 match var.subtype {
                                     VariableEnum::LocalVariable(_) |
                                     VariableEnum::Parameter(_) |
                                     VariableEnum::LambdaParameter(_)=> {
-                                        found = true;
-
                                         let ty = value.r24_value_type(lu_dog)[0].clone();
 
                                         let ty_str =
@@ -2666,6 +2662,7 @@ pub(super) fn inter_expression(
                 //     debug!("found a function named {name}");
                 //     let func = lu_dog.exhume_function(id).unwrap();
                 //     let ty = s_read!(func).r10_value_type(lu_dog)[0].clone();
+                debug!("found a function named {name}");
                 let ty = func.return_type.clone();
                 let expr = VariableExpression::new(name.to_owned(), lu_dog);
                 let expr = Expression::new_variable_expression(true, &expr, lu_dog);

@@ -590,6 +590,7 @@ fn inter_field(
             // We only allow a single one. Stupid restriction. Wait for tuples.
             let param = &params[0];
             if let ParserExpression::LocalVariable(name) = &param.0 {
+                dbg!(&name);
                 let local = LocalVariable::new(Uuid::new_v4(), lu_dog);
                 let var = Variable::new_local_variable(name.to_owned(), &local, lu_dog);
                 let value = XValue::new_variable(block, &ty, &var, lu_dog);

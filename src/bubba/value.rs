@@ -1495,6 +1495,22 @@ impl std::cmp::PartialEq for Value {
 
                 true
             }
+            (Value::Map { inner: a }, Value::Map { inner: b }) => {
+                let a = s_read!(a);
+                let b = s_read!(b);
+
+                if a.len() != b.len() {
+                    return false;
+                }
+
+                for (k, v) in a.iter() {
+                    if !s_read!(v).eq(&s_read!(b[k])) {
+                        return false;
+                    }
+                }
+
+                true
+            }
             (Value::Plugin((a, _)), Value::Plugin((b, _))) => a == b,
             (Value::String(a), Value::String(b)) => a == b,
             (Value::Struct(a), Value::Struct(b)) => a == b,

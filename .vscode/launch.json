@@ -142,7 +142,7 @@
                 }
             },
             "args": [
-                "tests/vm_harness/extensions/std/fs.ore",
+                "tests/vm_harness/expression/if/if_let_map.ore",
                 // "tests/vm_harness/lambda.ore"
                 // "bench.ore",
                 // "https://raw.githubusercontent.com/uberFoo/dwarf/develop/mandelbrot.ore"
