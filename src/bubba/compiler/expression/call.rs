@@ -2,7 +2,7 @@ use snafu::{location, Location};
 use uuid::Uuid;
 
 #[cfg(feature = "async")]
-use crate::keywords::{LEN, PUSH, SPAWN};
+use crate::keywords::{JOIN, LEN, PUSH, SPAWN};
 
 use crate::{
     bubba::{
@@ -309,18 +309,25 @@ fn compile_method_call(
         if let Ok(Some(result)) = result.clone() {
             match result.subtype {
                 ValueTypeEnum::List(_) => match name.as_str() {
-                    PUSH => {
+                    JOIN => {
                         // skip self
-                        for (_, expr) in args.iter().enumerate().skip(1) {
-                            compile_expression(expr, thonk, context)?;
-                        }
+                        // Take the second argument, which is the separator.
+                        compile_expression(&args[1], thonk, context)?;
 
-                        thonk.insert_instruction(Instruction::ListPush, location!());
+                        thonk.insert_instruction(Instruction::ListJoin, location!());
 
                         return Ok(Some(result));
                     }
                     LEN => {
                         thonk.insert_instruction(Instruction::ListLength, location!());
+                        return Ok(Some(result));
+                    }
+                    PUSH => {
+                        // skip self
+                        compile_expression(&args[1], thonk, context)?;
+
+                        thonk.insert_instruction(Instruction::ListPush, location!());
+
                         return Ok(Some(result));
                     }
                     meth => panic!("list does not support {meth}"),

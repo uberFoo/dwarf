@@ -493,7 +493,6 @@ fn inter_field(
     import_stack: &mut Vec<String>,
     lu_dog: &mut LuDogStore,
 ) -> Result<(ExprSpan, RefType<ValueType>)> {
-    dbg!(&field, &path);
     let subtype = &s_read!(field).subtype.clone();
     let (woog_enum, expr) = match subtype {
         EnumFieldEnum::TupleField(ref id) => {
@@ -590,7 +589,6 @@ fn inter_field(
             // We only allow a single one. Stupid restriction. Wait for tuples.
             let param = &params[0];
             if let ParserExpression::LocalVariable(name) = &param.0 {
-                dbg!(&name);
                 let local = LocalVariable::new(Uuid::new_v4(), lu_dog);
                 let var = Variable::new_local_variable(name.to_owned(), &local, lu_dog);
                 let value = XValue::new_variable(block, &ty, &var, lu_dog);
@@ -660,7 +658,6 @@ fn inter_field(
                     (new_enum, expr)
                 }
             } else {
-                dbg!(&ty, &expr_ty);
                 typecheck(
                     (&ty, &span),
                     (&expr_ty, &param.1),

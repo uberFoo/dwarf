@@ -61,6 +61,7 @@ mod keywords {
     pub(crate) const INVOKE_FUNC: &str = "invoke_func";
     pub(crate) const INVOKE_FUNC_MUT: &str = "invoke_func_mut";
     pub(crate) const IS_DIGIT: &str = "is_digit";
+    pub(crate) const JOIN: &str = "join";
     pub(crate) const LEN: &str = "len";
     pub(crate) const LINES: &str = "lines";
     pub(crate) const LOAD_PLUGIN: &str = "load_plugin";

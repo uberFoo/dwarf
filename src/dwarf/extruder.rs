@@ -3381,6 +3381,8 @@ fn inter_module(
         return Ok(());
     }
 
+    println!("extruding {}", path.display());
+
     match fs::read_to_string(&path) {
         Ok(source_code) => {
             // parse, and extrude the dwarf file
@@ -3472,7 +3474,6 @@ fn inter_import(
     import_stack: &mut Vec<String>,
     lu_dog: &mut LuDogStore,
 ) -> Result<()> {
-    debug!("inter_import: {import_path:?}");
     let mut errors = Vec::new();
 
     let mut path_root = import_path
@@ -3520,19 +3521,6 @@ fn inter_import(
         (dir, path)
     };
 
-    // Then let's try the current directory.
-    let (dir, path) = if path.exists() {
-        (dir, path)
-    } else {
-        let mut path = context.cwd.clone();
-        let dir = path.clone();
-
-        path.push(module);
-        path.set_extension(ORE_EXT);
-
-        (dir, path)
-    };
-
     // We need to push the thing we are importing onto the stack so
     // that when we are interring a module we can import only the
     // thing on the top of the stack.
@@ -3545,6 +3533,8 @@ fn inter_import(
         debug!("{fq_type} being imported");
         context.types.insert(fq_type.clone());
     }
+
+    println!("extruding {}", path.display());
 
     import_stack.push(PATH_SEP.to_owned() + path_root.join(PATH_SEP).as_str() + PATH_SEP + &ty);
 
@@ -4099,7 +4089,7 @@ pub(crate) fn make_value_type(
                     tok.0.clone()
                 };
 
-                let mut fq_name = if let Some(path) = context.scopes.get(&fq_name) {
+                let fq_name = if let Some(path) = context.scopes.get(&fq_name) {
                     path.to_owned() + fq_name.as_str()
                 } else {
                     context.path.clone() + fq_name.as_str()
@@ -4246,17 +4236,14 @@ pub(crate) fn lookup_woog_struct_method_return_type(
 
     // Look up the type in lu_dog structs.
     if let Some(ref id) = lu_dog.exhume_woog_struct_id_by_name(type_name) {
-        dbg!(&type_name);
         let woog_struct = lu_dog.exhume_woog_struct(id).unwrap();
         let ty = if let Some(impl_) = s_read!(woog_struct).r8c_implementation_block(lu_dog).pop() {
-            dbg!("hahahahah");
             let funcs = s_read!(impl_).r9_function(lu_dog);
             funcs.iter().find(|f| s_read!(f).name == *method).map(|f| {
                 let ret_ty = s_read!(f).return_type;
                 lu_dog.exhume_value_type(&ret_ty).unwrap()
             })
         } else {
-            dbg!(&type_name);
             return Err(vec![DwarfError::NoImplementation {
                 missing: type_name.to_owned(),
                 file: context.file_name.to_owned(),

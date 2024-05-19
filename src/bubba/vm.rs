@@ -1177,6 +1177,47 @@ impl VM {
 
                         1
                     }
+                    Instruction::ListJoin => {
+                        let sep = stack.pop().unwrap();
+                        let list = stack.pop().unwrap();
+                        let list = list.into_pointer();
+                        let list = s_read!(list);
+                        match &*list {
+                            Value::AnyList(vec) => {
+                                let vec = s_read!(vec);
+                                let result = vec
+                                    .iter()
+                                    .map(|v| s_read!(v).to_inner_string())
+                                    .collect::<Vec<String>>()
+                                    .join(sep.into_value().to_inner_string().as_str());
+                                stack.push(Value::String(result).into());
+                            }
+                            Value::List { inner, .. } => {
+                                let inner = s_read!(inner);
+                                let result = inner
+                                    .iter()
+                                    .map(|v| s_read!(v).to_inner_string())
+                                    .collect::<Vec<String>>()
+                                    .join(sep.into_value().to_inner_string().as_str());
+                                stack.push(Value::String(result).into());
+                            }
+                            value => {
+                                if self.backtrace {
+                                    eprintln!("{self:?}");
+                                    print_stack(&stack, fp);
+                                    print_instrs(ip, &program, &self.instrs, &self.source_map);
+                                }
+                                return Err(BubbaError::NotIndexable {
+                                    span: self.get_span(ip),
+                                    value: value.to_owned(),
+                                    location: location!(),
+                                }
+                                .into());
+                            }
+                        }
+
+                        1
+                    }
                     Instruction::ListLength => {
                         let list = stack.pop().unwrap();
                         let list = list.into_pointer();

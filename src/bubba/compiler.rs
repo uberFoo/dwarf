@@ -331,6 +331,8 @@ impl<'a, 'b> Context<'a, 'b> {
 }
 
 pub fn compile(context: &ExtruderContext) -> Result<Program> {
+    println!("Compiling");
+
     let mut program = Program::new(VERSION.to_owned(), BUILD_TIME.to_owned());
     program.set_source(context.source());
 

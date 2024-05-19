@@ -14,8 +14,8 @@ use crate::{
         Expression as ParserExpression, PrintableValueType,
     },
     keywords::{
-        FORMAT, GET, INSERT, INVOKE_FUNC, INVOKE_FUNC_MUT, IS_DIGIT, LEN, LINES, MAP, MAX, PUSH,
-        REPLACE, SPLIT, SUM, TO_DIGIT, TRIM,
+        FORMAT, GET, INSERT, INVOKE_FUNC, INVOKE_FUNC_MUT, IS_DIGIT, JOIN, LEN, LINES, MAP, MAX,
+        PUSH, REPLACE, SPLIT, SUM, TO_DIGIT, TRIM,
     },
     lu_dog::{
         store::ObjectStore as LuDogStore, Argument, Block, Call, Expression, List, MethodCall,
@@ -165,6 +165,10 @@ pub(in crate::dwarf::extruder) fn method_call_return_type(
             ty
         }
         ValueTypeEnum::List(ref list) => match method.as_str() {
+            JOIN => {
+                let ty = Ty::new_z_string(context.sarzak);
+                ValueType::new_ty(true, &ty, lu_dog)
+            }
             LEN => {
                 let ty = Ty::new_integer(context.sarzak);
                 ValueType::new_ty(true, &ty, lu_dog)
