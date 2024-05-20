@@ -15,7 +15,7 @@ use crate::{
     },
     keywords::{
         FORMAT, GET, INSERT, INVOKE_FUNC, INVOKE_FUNC_MUT, IS_DIGIT, JOIN, LEN, LINES, MAP, MAX,
-        PUSH, REPLACE, SPLIT, SUM, TO_DIGIT, TRIM,
+        OPTION, OPTION_TYPE, PUSH, REPLACE, SPLIT, SUM, TO_DIGIT, TRIM,
     },
     lu_dog::{
         store::ObjectStore as LuDogStore, Argument, Block, Call, Expression, List, MethodCall,
@@ -238,10 +238,6 @@ pub(in crate::dwarf::extruder) fn method_call_return_type(
             }
         },
         ValueTypeEnum::Map(ref map) => match method.as_str() {
-            LEN => {
-                let ty = Ty::new_integer(context.sarzak);
-                ValueType::new_ty(true, &ty, lu_dog)
-            }
             INSERT => {
                 if arg_ty.len() != 2 {
                     return Err(vec![DwarfError::WrongNumberOfArguments {
@@ -302,6 +298,42 @@ pub(in crate::dwarf::extruder) fn method_call_return_type(
                 }
 
                 ValueType::new_empty(true, lu_dog)
+            }
+            GET => {
+                if arg_ty.len() != 1 {
+                    return Err(vec![DwarfError::WrongNumberOfArguments {
+                        expected: 2,
+                        found: arg_ty.len(),
+                        file: context.file_name.to_owned(),
+                        span: meth_span.to_owned(),
+                        location: location!(),
+                        program: context.source_string.to_owned(),
+                    }]);
+                }
+
+                // let map = lu_dog.exhume_map(map).unwrap();
+                // let map = s_read!(map);
+                // Ideally this becomes part of the type we are returning.
+                // let value_ty = map.r116_value_type(lu_dog)[0].clone();
+
+                let Some(ty) = lu_dog.exhume_enumeration_id_by_name(OPTION_TYPE) else {
+                    return Err(vec![DwarfError::ObjectNameNotFound {
+                        name: OPTION_TYPE.to_owned(),
+                        file: context.file_name.to_owned(),
+                        span: meth_span.to_owned(),
+                        location: location!(),
+                        program: context.source_string.to_owned(),
+                    }]);
+                };
+                let option = lu_dog.exhume_enumeration(&ty).unwrap();
+
+                let result = s_read!(option).r1_value_type(lu_dog)[0].clone();
+
+                result
+            }
+            LEN => {
+                let ty = Ty::new_integer(context.sarzak);
+                ValueType::new_ty(true, &ty, lu_dog)
             }
             _ => {
                 return Err(vec![DwarfError::NoSuchMethod {

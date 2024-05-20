@@ -29,13 +29,13 @@ use crate::{
     bubba::{
         error::{BubbaError, Error, Result},
         value::Value,
-        RESULT, STRING,
+        STRING,
     },
     chacha::{
         ffi_value::FfiValue,
         value::{Enum, Struct, TupleEnum},
     },
-    keywords::{INVOKE_FUNC, INVOKE_FUNC_MUT},
+    keywords::{INVOKE_FUNC, INVOKE_FUNC_MUT, NONE, OPTION, OPTION_TYPE, RESULT_TYPE, SOME},
     lu_dog::{ValueType, ValueTypeEnum},
     new_ref,
     plug_in::{Error as FfiError, LambdaCall, PluginModRef, PluginType},
@@ -435,7 +435,7 @@ impl VM {
                 print_stack(&stack, fp);
                 println!("\t{} ->\t{cx}", Colour::Green.bold().paint("cx"));
                 println!("{}: {name}", Colour::Green.bold().paint("Thread"));
-                print_instrs(ip, &program, &self.instrs, &self.source_map);
+                // print_instrs(ip, &program, &self.instrs, &self.source_map);
                 println!();
             }
 
@@ -569,8 +569,8 @@ impl VM {
                                         args.into(),
                                     ) {
                                         ROk(value) => {
-                                            let result = program.get_symbol(RESULT).expect(
-                                                "The RESULT symbol is missing from the program.",
+                                            let result = program.get_symbol(RESULT_TYPE).expect(
+                                                "The {RESULT_TYPE} symbol is missing from the program.",
                                             );
                                             stack.push(
                                                 <(FfiValue, &Value) as Into<Value>>::into((
@@ -614,8 +614,8 @@ impl VM {
                                         args.into(),
                                     ) {
                                         ROk(value) => {
-                                            let result = program.get_symbol(RESULT).expect(
-                                                "The RESULT symbol is missing from the program.",
+                                            let result = program.get_symbol(RESULT_TYPE).expect(
+                                                "The {RESULT_TYPE} symbol is missing from the program.",
                                             );
                                             stack.push(
                                                 <(FfiValue, &Value) as Into<Value>>::into((
@@ -1315,16 +1315,37 @@ impl VM {
                         match &*map {
                             Value::Map { inner, .. } => {
                                 let inner = s_read!(inner);
-                                let value = inner.get(&key);
-                                // stack.push(value.into());
+                                let ty = program.get_symbol(OPTION_TYPE).expect(
+                                    "The {OPTION_TYPE} symbol is missing from the program.",
+                                );
+                                let Value::ValueType(ty) = ty else {
+                                    panic!();
+                                };
+
                                 match inner.get(&key) {
                                     Some(value) => {
-                                        stack.push(value.clone().into());
+                                        let tuple = TupleEnum {
+                                            variant: SOME.to_owned(),
+                                            value: new_ref!(Value, s_read!(value).clone()),
+                                        };
+                                        let value = Value::Enumeration(Enum::Tuple(
+                                            (new_ref!(ValueType, ty.clone()), OPTION.to_owned()),
+                                            new_ref!(TupleEnum<Value>, tuple),
+                                        ));
+                                        stack.push(value.into());
                                     }
                                     None => {
-                                        stack.push(Value::Empty.into());
+                                        let tuple = TupleEnum {
+                                            variant: NONE.to_owned(),
+                                            value: new_ref!(Value, Value::Empty),
+                                        };
+                                        let value = Value::Enumeration(Enum::Tuple(
+                                            (new_ref!(ValueType, ty.clone()), OPTION.to_owned()),
+                                            new_ref!(TupleEnum<Value>, tuple),
+                                        ));
+                                        stack.push(value.into());
                                     }
-                                }
+                                };
                             }
                             value => {
                                 if self.backtrace {

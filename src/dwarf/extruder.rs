@@ -3381,7 +3381,7 @@ fn inter_module(
         return Ok(());
     }
 
-    println!("extruding {}", path.display());
+    println!("extruding mod {name}");
 
     match fs::read_to_string(&path) {
         Ok(source_code) => {
@@ -3534,7 +3534,7 @@ fn inter_import(
         context.types.insert(fq_type.clone());
     }
 
-    println!("extruding {}", path.display());
+    println!("extruding {fq_type}");
 
     import_stack.push(PATH_SEP.to_owned() + path_root.join(PATH_SEP).as_str() + PATH_SEP + &ty);
 

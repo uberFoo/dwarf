@@ -19,6 +19,7 @@ use crate::{
         value::_struct::StructAttributes,
         value::{Enum, Struct, TupleEnum},
     },
+    keywords::{ERR, OK, RESULT, RESULT_TYPE},
     lu_dog::{ObjectStore as LuDogStore, ValueType, ValueTypeEnum},
     new_ref,
     plug_in::PluginType,
@@ -283,7 +284,7 @@ impl From<VmValue> for FfiValue {
                     panic!()
                 }
                 Enum::Tuple((ty, ty_name), t) => {
-                    if ty_name == "::std::result::Result" {
+                    if ty_name == RESULT_TYPE {
                         let t = s_read!(t);
                         match t.variant.as_str() {
                             "Err" => Self::Result(RResult::RErr(RBox::new(
@@ -398,25 +399,26 @@ impl From<(FfiValue, &LuDogStore)> for Value {
             },
             FfiValue::Range(range) => Self::Range(range.start..range.end),
             FfiValue::Result(result) => {
-                let Some(ty) = lu_dog.exhume_enumeration_id_by_name("::std::result::Result") else {
+                let Some(ty) = lu_dog.exhume_enumeration_id_by_name(RESULT_TYPE) else {
                     panic!("Result type not found")
                 };
                 let ty = lu_dog.exhume_enumeration(&ty).unwrap();
-                let Some(ty) = lu_dog.iter_value_type().find(|vt| {
-                    if let ValueTypeEnum::Enumeration(id) = s_read!(vt).subtype {
-                        let id = lu_dog.exhume_enumeration(&id).unwrap();
-                        if s_read!(id).id == s_read!(ty).id {
-                            return true;
-                        }
-                    }
-                    false
-                }) else {
-                    unreachable!()
-                };
+                let ty = s_read!(ty).r1_value_type(lu_dog)[0].clone();
+                // let Some(ty) = lu_dog.iter_value_type().find(|vt| {
+                //     if let ValueTypeEnum::Enumeration(id) = s_read!(vt).subtype {
+                //         let id = lu_dog.exhume_enumeration(&id).unwrap();
+                //         if s_read!(id).id == s_read!(ty).id {
+                //             return true;
+                //         }
+                //     }
+                //     false
+                // }) else {
+                //     unreachable!()
+                // };
 
                 let tuple = match result {
                     RResult::RErr(err) => TupleEnum {
-                        variant: "Err".to_owned(),
+                        variant: ERR.to_owned(),
                         value: new_ref!(
                             Value,
                             <(FfiValue, &LuDogStore) as Into<Value>>::into((
@@ -426,7 +428,7 @@ impl From<(FfiValue, &LuDogStore)> for Value {
                         ),
                     },
                     RResult::ROk(ok) => TupleEnum {
-                        variant: "Ok".to_owned(),
+                        variant: OK.to_owned(),
                         value: new_ref!(
                             Value,
                             <(FfiValue, &LuDogStore) as Into<Value>>::into((
@@ -438,7 +440,7 @@ impl From<(FfiValue, &LuDogStore)> for Value {
                 };
 
                 Value::Enumeration(Enum::Tuple(
-                    (ty.clone(), "Result".to_owned()),
+                    (ty.clone(), RESULT.to_owned()),
                     new_ref!(TupleEnum<Value>, tuple),
                 ))
             }

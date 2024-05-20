@@ -4585,10 +4585,13 @@ impl DwarfParser {
                 vec![]
             };
             debug!("exit parse_type: user defined", ident);
-            let ty = Ok(Some((
-                Type::UserType(ident, inner),
-                start..self.peek().unwrap().1.start,
-            )));
+            let end = if let Some(tok) = self.peek() {
+                tok.1.start
+            } else {
+                self.previous().unwrap().1.end
+            };
+
+            let ty = Ok(Some((Type::UserType(ident, inner), start..end)));
 
             return ty;
         }
@@ -4647,8 +4650,14 @@ impl DwarfParser {
             }
         }
 
+        let end = if let Some(tok) = self.peek() {
+            tok.1.start
+        } else {
+            self.previous().unwrap().1.end
+        };
+
         debug!("exit parse_generic");
-        Ok(Some((generics, start..self.peek().unwrap().1.end)))
+        Ok(Some((generics, start..end)))
     }
 
     /// Parse a Struct

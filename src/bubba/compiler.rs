@@ -21,8 +21,9 @@ use crate::{
     bubba::{
         instr::{Instruction, Program, Thonk},
         value::Value,
-        BOOL, CHAR, EMPTY, FLOAT, INTEGER, MAP, RANGE, RESULT, STRING, STRING_ARRAY, UNKNOWN, UUID,
+        BOOL, CHAR, EMPTY, FLOAT, INTEGER, MAP, RANGE, STRING, STRING_ARRAY, UNKNOWN, UUID,
     },
+    keywords::{OPTION, OPTION_TYPE, RESULT, RESULT_TYPE},
     lu_dog::{
         BodyEnum, Expression, ExpressionEnum, Function, Map, ObjectStore as LuDogStore, Statement,
         StatementEnum, ValueType, ValueTypeEnum,
@@ -408,8 +409,34 @@ pub fn compile(context: &ExtruderContext) -> Result<Program> {
     let string_array = (*s_read!(string_array)).clone();
     context.insert_type(STRING_ARRAY.to_owned(), string_array);
 
+    // Compile everything here in this block, and then add the rest of the symbols.
+    {
+        let lu_dog = s_read!(lu_dog);
+
+        // We need to insert the function names and types so that we can look that
+        // information up in the variable code.
+        for func in lu_dog.iter_function() {
+            context.insert_function(
+                get_function_name(&func, &lu_dog),
+                get_function_type(&func, &lu_dog),
+            );
+        }
+
+        for func in lu_dog.iter_function() {
+            let thonk = compile_function(&func, &mut context)?.into();
+            context.get_program().add_thonk(thonk);
+        }
+
+        for (name, count) in context.lambdas.clone().iter() {
+            let mut thonk = CThonk::new(format!("{name}_trampoline"));
+            thonk.insert_instruction(Instruction::Call(count.to_owned()), location!());
+            thonk.insert_instruction(Instruction::Return, location!());
+            context.get_program().add_thonk(thonk.into());
+        }
+    }
+
     // And Result
-    if let Some(ref ty) = s_read!(lu_dog).exhume_enumeration_id_by_name("::std::result::Result") {
+    if let Some(ref ty) = s_read!(lu_dog).exhume_enumeration_id_by_name(RESULT_TYPE) {
         let ty = s_read!(lu_dog).exhume_enumeration(ty).unwrap();
         let Some(ty) = s_read!(lu_dog).iter_value_type().find(|vt| {
             if let ValueTypeEnum::Enumeration(id) = s_read!(vt).subtype {
@@ -422,33 +449,31 @@ pub fn compile(context: &ExtruderContext) -> Result<Program> {
         }) else {
             unreachable!()
         };
-        context
-            .get_program()
-            .add_symbol(RESULT.to_owned(), Value::ValueType((*s_read!(ty)).clone()));
+        context.get_program().add_symbol(
+            RESULT_TYPE.to_owned(),
+            Value::ValueType((*s_read!(ty)).clone()),
+        );
     };
 
-    let lu_dog = s_read!(lu_dog);
-
-    // We need to insert the function names and types so that we can look that
-    // information up in the variable code.
-    for func in lu_dog.iter_function() {
-        context.insert_function(
-            get_function_name(&func, &lu_dog),
-            get_function_type(&func, &lu_dog),
+    // And Option
+    if let Some(ref ty) = s_read!(lu_dog).exhume_enumeration_id_by_name(OPTION_TYPE) {
+        let ty = s_read!(lu_dog).exhume_enumeration(ty).unwrap();
+        let Some(ty) = s_read!(lu_dog).iter_value_type().find(|vt| {
+            if let ValueTypeEnum::Enumeration(id) = s_read!(vt).subtype {
+                let id = s_read!(lu_dog).exhume_enumeration(&id).unwrap();
+                if s_read!(id).id == s_read!(ty).id {
+                    return true;
+                }
+            }
+            false
+        }) else {
+            unreachable!()
+        };
+        context.get_program().add_symbol(
+            OPTION_TYPE.to_owned(),
+            Value::ValueType((*s_read!(ty)).clone()),
         );
-    }
-
-    for func in lu_dog.iter_function() {
-        let thonk = compile_function(&func, &mut context)?.into();
-        context.get_program().add_thonk(thonk);
-    }
-
-    for (name, count) in context.lambdas.clone().iter() {
-        let mut thonk = CThonk::new(format!("{name}_trampoline"));
-        thonk.insert_instruction(Instruction::Call(count.to_owned()), location!());
-        thonk.insert_instruction(Instruction::Return, location!());
-        context.get_program().add_thonk(thonk.into());
-    }
+    };
 
     Ok(program)
 }
