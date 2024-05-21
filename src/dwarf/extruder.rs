@@ -3592,10 +3592,7 @@ fn inter_import(
 
                     context.dirty.extend(dirty);
 
-                    context.scopes.insert(
-                        ty.clone(),
-                        PATH_SEP.to_owned() + path_root.join(PATH_SEP).as_str() + PATH_SEP,
-                    );
+                    context.scopes.insert(ty.clone(), type_root);
                 }
                 Err(_) => {
                     e_warn!("Failed to parse import: {path:?}");
