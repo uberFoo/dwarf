@@ -6468,4 +6468,22 @@ mod tests {
         dbg!(&ast);
         assert!(ast.is_ok());
     }
+
+    #[test]
+    fn hash_map_decl() {
+        let _ = env_logger::builder().is_test(true).try_init();
+        let src = r#"
+        fn main() {
+            let map: HashMap<string, int> = {{
+                "foo": 42,
+                "bar": 69,
+                "baz": 96,
+            }};
+        }
+        "#;
+
+        let ast = parse_dwarf("test_hash_map_decl", src);
+        dbg!(&ast);
+        assert!(ast.is_ok());
+    }
 }
