@@ -1830,31 +1830,6 @@ pub(super) fn inter_expression(
             )?;
             debug!("func_expr {func_expr:?}");
 
-            let ret_ty = if let ValueTypeEnum::Unknown(_) = s_read!(ret_ty).subtype {
-                match func {
-                    ParserExpression::LocalVariable(name) => {
-                        if let Some(defn) = context.func_defs.get(name) {
-                            defn.return_type.clone()
-                        } else {
-                            return Err(vec![DwarfError::MissingFunctionDefinition {
-                                span: fspan.to_owned(),
-                                file: context.file_name.to_owned(),
-                                program: context.source_string.to_owned(),
-                            }]);
-                        }
-                    }
-                    _ => {
-                        return Err(vec![DwarfError::MissingFunctionDefinition {
-                            span: fspan.to_owned(),
-                            file: context.file_name.to_owned(),
-                            program: context.source_string.to_owned(),
-                        }]);
-                    }
-                }
-            } else {
-                ret_ty.clone()
-            };
-
             let ret_ty = if let ValueTypeEnum::Lambda(ref l) = s_read!(ret_ty).subtype {
                 let l = lu_dog.exhume_lambda(l).unwrap();
                 let ret_ty = s_read!(l).return_type.clone();
