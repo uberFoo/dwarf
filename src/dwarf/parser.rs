@@ -6486,4 +6486,22 @@ mod tests {
         dbg!(&ast);
         assert!(ast.is_ok());
     }
+
+    #[test]
+    fn hash_map_fails() {
+        let _ = env_logger::builder().is_test(true).try_init();
+        let src = r#"
+        fn main() {
+            let map: HashMap = {{}};
+            let map: HashMap< = {{}};
+            let map: HashMap<string = {{}};
+            let map: HashMap<string, = {{}};
+            let map: HashMap<string, int = {{}};
+        }
+        "#;
+
+        let ast = parse_dwarf("test_hash_map_fails", src);
+        dbg!(&ast);
+        assert!(ast.is_err());
+    }
 }

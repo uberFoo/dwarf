@@ -302,7 +302,7 @@ pub(in crate::dwarf::extruder) fn method_call_return_type(
             GET => {
                 if arg_ty.len() != 1 {
                     return Err(vec![DwarfError::WrongNumberOfArguments {
-                        expected: 2,
+                        expected: 1,
                         found: arg_ty.len(),
                         file: context.file_name.to_owned(),
                         span: meth_span.to_owned(),
