@@ -2,7 +2,7 @@ use std::fmt;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{chacha::value::Struct, lu_dog::ValueType, s_read, RefType};
+use crate::{chacha::value::Struct, lu_dog::ValueType, s_read, RefType, PATH_SEP};
 
 /// The type of Enumeration Field
 ///
@@ -66,14 +66,22 @@ where
 {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
-            (Self::Unit(_a, b, e), Self::Unit(_c, d, f)) => b == d && e == f,
+            (Self::Unit(_a, b, e), Self::Unit(_c, d, f)) => {
+                // We have a bit of a problem. The a might be "Option" and b can
+                // be "::std::option::Option". And maybe even vice-versa. I guess
+                // we can just chop off the first part of the string and compare?
+                b.split(PATH_SEP).last() == d.split(PATH_SEP).last() && e == f
+            }
             (Self::Struct(a), Self::Struct(b)) => *s_read!(a) == *s_read!(b),
             (Self::Tuple((alpha, a), c), Self::Tuple((beta, b), d)) => {
                 // kts -- not sure about this. I don't like how sometimes the TypeName
                 // is std::result::Result and sometimes Result, and yet the ValueType
                 // match...
-                let result =
-                    (a == b || *s_read!(alpha) == *s_read!(beta)) && *s_read!(c) == *s_read!(d);
+                let alpha = s_read!(alpha);
+                let beta = s_read!(beta);
+                let c = s_read!(c);
+                let d = s_read!(d);
+                let result = (a == b || *alpha == *beta) && *c == *d;
                 result
             }
             _ => false,

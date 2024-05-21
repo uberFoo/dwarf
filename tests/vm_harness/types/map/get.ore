@@ -1,0 +1,20 @@
+use std::option::Option;
+
+fn main() {
+    let a = {{"key": "value", "key2": "value2"}};
+
+    match a.get("key") {
+        Option::Some(value) => chacha::assert_eq(value, "value"),
+        Option::None => chacha::assert(false),
+    };
+
+    match a.get("key2") {
+        Option::Some(value) => chacha::assert_eq(value, "value2"),
+        Option::None => chacha::assert(false),
+    };
+
+    match a.get("key3") {
+        Option::Some(value) => chacha::assert(false),
+        Option::None => chacha::assert(true),
+    };
+}

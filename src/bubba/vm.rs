@@ -1326,7 +1326,7 @@ impl VM {
                                     Some(value) => {
                                         let tuple = TupleEnum {
                                             variant: SOME.to_owned(),
-                                            value: new_ref!(Value, s_read!(value).clone()),
+                                            value: value.clone(),
                                         };
                                         let value = Value::Enumeration(Enum::Tuple(
                                             (new_ref!(ValueType, ty.clone()), OPTION.to_owned()),
@@ -1335,13 +1335,10 @@ impl VM {
                                         stack.push(value.into());
                                     }
                                     None => {
-                                        let tuple = TupleEnum {
-                                            variant: NONE.to_owned(),
-                                            value: new_ref!(Value, Value::Empty),
-                                        };
-                                        let value = Value::Enumeration(Enum::Tuple(
-                                            (new_ref!(ValueType, ty.clone()), OPTION.to_owned()),
-                                            new_ref!(TupleEnum<Value>, tuple),
+                                        let value = Value::Enumeration(Enum::Unit(
+                                            new_ref!(ValueType, ty.clone()),
+                                            OPTION.to_owned(),
+                                            NONE.to_owned(),
                                         ));
                                         stack.push(value.into());
                                     }
@@ -1885,6 +1882,7 @@ impl VM {
                         let a = stack.pop().unwrap();
                         let a = a.into_value();
                         let b = b.into_value();
+                        dbg!(&a, &b);
                         stack.push(Value::Boolean(a == b).into());
 
                         1

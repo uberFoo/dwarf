@@ -14,7 +14,7 @@ use crate::{
         store::ObjectStore as LuDogStore, Block, DataStructure, Expression, PathElement, Span,
         StructExpression, ValueType, ValueTypeEnum, XPath, XValue,
     },
-    s_read, s_write, RefType,
+    s_read, s_write, RefType, PATH_SEP,
 };
 
 // Let's just say that I don't get this lint. The docs say you have to box it
@@ -69,16 +69,13 @@ pub fn inter(
                 } else {
                     panic!("I don't think that we should ever see anything other than a user type here: {:?}", p);
                 }
-            }).collect::<Vec<_>>().join("").as_str();
+            }).collect::<Vec<_>>().join(PATH_SEP).as_str();
 
     debug!("enum_name {full_enum_name:?}, path {path:?}");
 
     let x_path = XPath::new(Uuid::new_v4(), None, lu_dog);
     let mut elts = path
         .iter()
-        .inspect(|ty| {
-            debug!("ty {:?}", ty);
-        })
         .map(|ty| {
             if let Type::UserType((name, _), _generics) = &ty.0 {
                 PathElement::new(name.to_owned(), None, &x_path, lu_dog)
