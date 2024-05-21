@@ -1,0 +1,10 @@
+enum Foo {
+    A,
+    B,
+}
+
+fn main() {
+    let foos = [Foo::A, Foo::B];
+
+    for foo in foos {}
+}
