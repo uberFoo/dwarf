@@ -1,0 +1,8 @@
+use std::option::Option;
+
+fn main() {
+    // There is a bug that makes it impossible to insert into and empty list.
+    let a = {{ "key": "value" }};
+    a.insert("hello", "world");
+    chacha::assert_eq(a.get("hello"), Option::Some("world"));
+}
