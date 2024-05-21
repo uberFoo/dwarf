@@ -1882,7 +1882,7 @@ impl VM {
                         let a = stack.pop().unwrap();
                         let a = a.into_value();
                         let b = b.into_value();
-                        dbg!(&a, &b);
+
                         stack.push(Value::Boolean(a == b).into());
 
                         1
