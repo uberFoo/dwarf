@@ -220,6 +220,7 @@ fn lexer() -> impl Parser<char, Vec<Spanned<Token>>, Error = Simple<char>> {
         "fn" => Token::Fn,
         "for" => Token::For,
         "halt" => Token::Halt,
+        "HashMap" => Token::HashMap,
         "if" => Token::If,
         "impl" => Token::Impl,
         "int" => Token::Type(Type::Integer),
@@ -4329,6 +4330,71 @@ impl DwarfParser {
             debug!("exit parse_type: boolean");
             return Ok(Some((
                 Type::Boolean,
+                start
+                    ..self
+                        .peek()
+                        .map_or(self.previous().unwrap().1.end, |t| t.1.end),
+            )));
+        }
+
+        // Match HashMap
+        if self.match_tokens(&[Token::HashMap]).is_some() {
+            if self.match_tokens(&[Token::Punct('<')]).is_none() {
+                let token = self.previous().unwrap();
+                let err = Simple::expected_input_found(
+                    start..token.1.end,
+                    [Some("<".to_owned())],
+                    Some(token.0.to_string()),
+                );
+                return Err(Box::new(err));
+            }
+            let key = if let Some(key) = self.parse_type()? {
+                key
+            } else {
+                let start = self.previous().unwrap().1.end;
+                let end = self
+                    .peek()
+                    .map_or(self.previous().unwrap().1.end, |t| t.1.end);
+
+                let err = Simple::custom(start..end, "missing key type");
+                return Err(Box::new(err));
+            };
+            if self.match_tokens(&[Token::Punct(',')]).is_none() {
+                let token = self.previous().unwrap();
+                let err = Simple::expected_input_found(
+                    start..token.1.end,
+                    [Some(",".to_owned())],
+                    Some(token.0.to_string()),
+                );
+                return Err(Box::new(err));
+            }
+            let value = if let Some(value) = self.parse_type()? {
+                value
+            } else {
+                let start = self.previous().unwrap().1.end;
+                let end = self
+                    .peek()
+                    .map_or(self.previous().unwrap().1.end, |t| t.1.end);
+
+                let err = Simple::custom(start..end, "missing value type");
+                return Err(Box::new(err));
+            };
+            if self.match_tokens(&[Token::Punct('>')]).is_none() {
+                let token = self.previous().unwrap();
+                let err = Simple::expected_input_found(
+                    start..token.1.end,
+                    [Some(">".to_owned())],
+                    Some(token.0.to_string()),
+                );
+                return Err(Box::new(err));
+            }
+
+            debug!("exit pasre_type: HashMap");
+            return Ok(Some((
+                Type::HashMap {
+                    key: Box::new(key),
+                    value: Box::new(value),
+                },
                 start
                     ..self
                         .peek()

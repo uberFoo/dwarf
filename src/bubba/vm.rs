@@ -435,7 +435,7 @@ impl VM {
                 print_stack(&stack, fp);
                 println!("\t{} ->\t{cx}", Colour::Green.bold().paint("cx"));
                 println!("{}: {name}", Colour::Green.bold().paint("Thread"));
-                // print_instrs(ip, &program, &self.instrs, &self.source_map);
+                print_instrs(ip, &program, &self.instrs, &self.source_map);
                 println!();
             }
 
@@ -2245,29 +2245,31 @@ fn print_instrs(ip: isize, program: &Program, instrs: &[Instruction], source_map
     for iip in 0.max(ip - 3)..(instrs.len() as isize).min(ip + 3isize) {
         let instr = &instrs[iip as usize];
 
-        let src = if let Some(source) = program.get_source() {
-            let span = source_map[iip as usize].clone();
-            if span.end <= source.len() {
-                &source[span]
-            } else {
-                ""
-            }
-        } else {
-            ""
-        };
+        // let src = if let Some(source) = program.get_source() {
+        //     let span = source_map[iip as usize].clone();
+        //     if span.end <= source.len() {
+        //         &source[span]
+        //     } else {
+        //         ""
+        //     }
+        // } else {
+        //     ""
+        // };
 
         if ip == iip {
             eprintln!(
-                "<{:08x}:\t{instr}\t\t<- {}\t{}",
+                // "<{:08x}:\t{instr}\t\t<- {}\t{}",
+                "<{:08x}:\t{instr}\t\t<- {}",
                 iip,
                 Colour::Purple.bold().paint("ip"),
-                Colour::White.dimmed().paint(src)
+                // Colour::White.dimmed().paint(src)
             );
         } else {
             eprintln!(
-                "<{:08x}:\t{instr}\t\t\t{}",
+                // "<{:08x}:\t{instr}\t\t\t{}",
+                "<{:08x}:\t{instr}",
                 iip,
-                Colour::White.dimmed().paint(src)
+                // Colour::White.dimmed().paint(src)
             );
         }
     }

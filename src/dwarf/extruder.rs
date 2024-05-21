@@ -133,7 +133,7 @@ pub(crate) use function;
 
 macro_rules! debug {
     ($($arg:tt)*) => {
-        log::debug!(
+        tracing::debug!(
             target: "extruder",
             "{}: {}\n  --> {}:{}:{}",
             Colour::Cyan.dimmed().italic().paint(function!()),
@@ -163,7 +163,7 @@ pub(crate) use trace;
 
 macro_rules! e_warn {
     ($($arg:tt)*) => {
-        log::warn!(
+        tracing::warn!(
             target: "extruder",
             "{}: {}\n  --> {}:{}:{}",
             Colour::Cyan.dimmed().italic().paint(function!()),
@@ -179,7 +179,7 @@ pub(crate) use e_warn;
 #[allow(unused_macros)]
 macro_rules! error {
     ($($arg:tt)*) => {
-        log::error!(
+        tracing::error!(
             target: "extruder",
             "{}: {}\n  --> {}:{}:{}",
             Colour::Red.underline().italic().paint(function!()),
@@ -3569,8 +3569,29 @@ fn inter_import(
                     trace!("done processing dwarf import");
 
                     import_stack.pop();
+                    let type_root =
+                        PATH_SEP.to_owned() + path_root.join(PATH_SEP).as_str() + PATH_SEP;
+
+                    for dirty in dirty.iter() {
+                        match dirty {
+                            Dirty::Enum(x_enum) => {
+                                let name = &s_read!(x_enum).name;
+                                let ty = name.split("::").last().unwrap().to_owned();
+                                // context.scopes.insert(ty, type_root.clone());
+                                // context.types.insert(name.clone());
+                            }
+                            Dirty::Struct(x_struct) => {
+                                let name = &s_read!(x_struct).name;
+                                let ty = name.split("::").last().unwrap().to_owned();
+                                // context.scopes.insert(ty, type_root.clone());
+                                // context.types.insert(name.clone());
+                            }
+                            _ => {}
+                        }
+                    }
 
                     context.dirty.extend(dirty);
+
                     context.scopes.insert(
                         ty.clone(),
                         PATH_SEP.to_owned() + path_root.join(PATH_SEP).as_str() + PATH_SEP,

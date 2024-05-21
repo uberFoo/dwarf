@@ -129,8 +129,8 @@ impl Uri {
             .invoke_func("server", "Uri", "path", [self.inner])
     }
 
-    fn query(self) -> Option<string> {
-        let query: string = self.plugin
+    fn query(self) -> Option<Hashmap<string, string>> {
+        let query: HashMap<string, string> = self.plugin
             .invoke_func("server", "Uri", "query", [self.inner]);
 
         if query.len() == 0 {

@@ -376,7 +376,7 @@ pub fn inter(
         } else {
             let span = s_read!(span).start as usize..s_read!(span).end as usize;
             return Err(vec![DwarfError::ObjectNameNotFound {
-                name: type_name.strip_prefix(PATH_SEP).unwrap().to_owned(),
+                name: type_name.to_owned(),
                 file: context.file_name.to_owned(),
                 span,
                 location: location!(),

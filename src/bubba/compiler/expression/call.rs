@@ -381,8 +381,7 @@ fn compile_method_call(
                                 return Ok(Some(result));
                             }
                             meth => {
-                                dbg!(&meth);
-                                {}
+                                dbg!(&ty, &meth, &args);
                             }
                         },
                         _ => {}
