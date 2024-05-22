@@ -2,7 +2,7 @@ use snafu::{location, Location};
 use uuid::Uuid;
 
 #[cfg(feature = "async")]
-use crate::keywords::{JOIN, LEN, PUSH, SPAWN};
+use crate::keywords::{JOIN, LEN, MAP, PUSH, SPAWN};
 
 use crate::{
     bubba::{
@@ -320,6 +320,14 @@ fn compile_method_call(
                     }
                     LEN => {
                         thonk.insert_instruction(Instruction::ListLength, location!());
+                        return Ok(Some(result));
+                    }
+                    MAP => {
+                        // skip self
+                        compile_expression(&args[1], thonk, context)?;
+
+                        thonk.insert_instruction(Instruction::ListMap, location!());
+
                         return Ok(Some(result));
                     }
                     PUSH => {

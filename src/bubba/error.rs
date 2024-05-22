@@ -118,6 +118,41 @@ impl fmt::Display for BubbaErrorReporter<'_, '_, '_> {
                     .map_err(|_| fmt::Error)?;
                 write!(f, "{}", String::from_utf8_lossy(&std_err))
             }
+            BubbaError::NotIndexable {
+                span,
+                value,
+                location,
+            } => {
+                let mut note = format!(
+                    "value {}, is not indexable",
+                    POP_CLR.paint(format!("{value}"))
+                );
+
+                if is_uber {
+                    note += &format!(
+                        " --> {}:{}:{}",
+                        OTHER_CLR.paint(location.file.to_string()),
+                        POP_CLR.paint(format!("{}", location.line)),
+                        OK_CLR.paint(format!("{}", location.column)),
+                    );
+                }
+
+                Report::build(ReportKind::Error, file_name, span.start)
+                    .with_message("not indexable")
+                    .with_label(
+                        Label::new((file_name, span.to_owned()))
+                            .with_message(format!(
+                                "the type is {}",
+                                POP_CLR.paint(format!("{value}"))
+                            ))
+                            .with_color(Color::Red),
+                    )
+                    .with_note(note)
+                    .finish()
+                    .write((file_name, Source::from(&program)), &mut std_err)
+                    .map_err(|_| fmt::Error)?;
+                write!(f, "{}", String::from_utf8_lossy(&std_err))
+            }
             _ => write!(f, "{}", self.0),
         }
     }

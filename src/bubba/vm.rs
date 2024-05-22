@@ -281,12 +281,6 @@ impl VM {
                 λ.get(&lambda_call.lambda).unwrap().clone()
             };
 
-            // This will also have been set in the constructor. Calling this before
-            // construction of a VM will panic, and that's not a terrible default.
-            // 🚧 I don't love that there is only one of these for executing lambdas.
-            // I guess it wouldn't be hard to make it a Vec of VMs. Let it grow, and
-            // shrink as needed. Whatever as needed means.
-            // let mut vm = ΛVM.get().unwrap().lock().unwrap();
             let args = lambda_call
                 .args
                 .iter()
@@ -1237,6 +1231,57 @@ impl VM {
                             }
                             Value::String(str) => {
                                 stack.push(Value::Integer(str.len() as DwarfInteger).into());
+                            }
+                            value => {
+                                if self.backtrace {
+                                    eprintln!("{self:?}");
+                                    print_stack(&stack, fp);
+                                    print_instrs(ip, &program, &self.instrs, &self.source_map);
+                                }
+                                return Err(BubbaError::NotIndexable {
+                                    span: self.get_span(ip),
+                                    value: value.to_owned(),
+                                    location: location!(),
+                                }
+                                .into());
+                            }
+                        }
+
+                        1
+                    }
+                    Instruction::ListMap => {
+                        let lambda = stack.pop().unwrap();
+                        let lambda = lambda.into_value();
+
+                        let list = stack.pop().unwrap();
+                        let list = list.into_pointer();
+                        let list = s_read!(list);
+                        match &*list {
+                            Value::AnyList(vec) => {
+                                let vec = s_read!(vec);
+                                let result = vec
+                                    .iter()
+                                    .map(|v| self.invoke_lambda(&lambda, &vec![s_read!(v).clone()]))
+                                    .collect::<Result<Vec<RefType<Value>>>>()?;
+                                let result = new_ref!(
+                                    Value,
+                                    Value::AnyList(new_ref!(Vec<RefType<Value>>, result))
+                                );
+                                stack.push(result.into());
+                            }
+                            Value::List { inner, ty } => {
+                                let inner = s_read!(inner);
+                                let result = inner
+                                    .iter()
+                                    .map(|v| self.invoke_lambda(&lambda, &vec![s_read!(v).clone()]))
+                                    .collect::<Result<Vec<RefType<Value>>>>()?;
+                                stack.push(
+                                    Value::List {
+                                        ty: ty.clone(),
+                                        inner: new_ref!(Vec<RefType<Value>>, result),
+                                    }
+                                    .into(),
+                                );
                             }
                             value => {
                                 if self.backtrace {

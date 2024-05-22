@@ -1,0 +1,9 @@
+fn main() {
+    let list = [1, 2, 3, 4, 5];
+    let list = list.map(|x: int| -> int {
+        // Don't collapse.
+        x * 2
+    });
+    print(list);
+    chacha::assert_eq(list, [2, 4, 6, 8, 10]);
+}

@@ -1,0 +1,4 @@
+fn main() {
+    let a = {{"key": "value", "key2": "value2"}};
+    let b = a.insert();
+}

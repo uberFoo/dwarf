@@ -179,6 +179,7 @@ pub enum Instruction {
     ListIndexRange,
     ListJoin,
     ListLength,
+    ListMap,
     ListPush,
     /// Local Cardinality
     ///
@@ -527,6 +528,7 @@ impl fmt::Display for Instruction {
             Instruction::ListIndexRange => write!(f, "{}", opcode_style.paint("idxr")),
             Instruction::ListJoin => write!(f, "{}", opcode_style.paint("join")),
             Instruction::ListLength => write!(f, "{}", opcode_style.paint("len ")),
+            Instruction::ListMap => write!(f, "{}", opcode_style.paint("lmap")),
             Instruction::ListPush => write!(f, "{}", opcode_style.paint("lpush")),
             Instruction::LocalCardinality(name) => write!(
                 f,

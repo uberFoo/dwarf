@@ -204,17 +204,16 @@ pub(in crate::dwarf::extruder) fn method_call_return_type(
 
                 let inner_ty = s_read!(list).ty;
                 let inner_ty = lu_dog.exhume_value_type(&inner_ty).unwrap();
-                let inner_ty = s_read!(inner_ty);
+                let r_inner_ty = s_read!(inner_ty);
 
-                if &*s_read!(arg_ty) != &*inner_ty {
+                if &*s_read!(arg_ty) != &*r_inner_ty {
                     // let expected_span = &inner_ty.r62_span(lu_dog)[0];
                     // let expected_span = s_read!(expected_span);
                     // let expected_span = expected_span.start as usize..expected_span.end as usize;
                     let expected_span = 0..0;
 
                     return Err(vec![DwarfError::TypeMismatch {
-                        expected: PrintableValueType(true, &instance_ty, context, lu_dog)
-                            .to_string(),
+                        expected: PrintableValueType(true, &inner_ty, context, lu_dog).to_string(),
                         found: PrintableValueType(true, &arg_ty, context, lu_dog).to_string(),
                         file: context.file_name.to_owned(),
                         expected_span,
