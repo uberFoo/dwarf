@@ -500,7 +500,7 @@ impl fmt::Display for Value {
                     }
 
                     if let Ok(i) = s_try_read!(i) {
-                        write!(f, "{i}, ")?;
+                        write!(f, "{i}")?;
                     } else {
                         write!(f, "<locked>, ")?;
                     }
@@ -553,7 +553,7 @@ impl fmt::Display for Value {
                     }
 
                     if let Ok(i) = s_try_read!(i) {
-                        write!(f, "{i}, ")?;
+                        write!(f, "{i}")?;
                     } else {
                         write!(f, "<locked>, ")?;
                     }
@@ -1466,6 +1466,22 @@ impl Value {
 impl std::cmp::PartialEq for Value {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
+            (Value::AnyList(a), Value::AnyList(b)) => {
+                let a = s_read!(a);
+                let b = s_read!(b);
+
+                if a.len() != b.len() {
+                    return false;
+                }
+
+                for (i, v) in a.iter().enumerate() {
+                    if !s_read!(v).eq(&s_read!(b[i])) {
+                        return false;
+                    }
+                }
+
+                true
+            }
             (Value::Boolean(a), Value::Boolean(b)) => a == b,
             (Value::Char(a), Value::Char(b)) => a == b,
             (Value::Empty, Value::Empty) => true,

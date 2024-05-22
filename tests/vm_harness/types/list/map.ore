@@ -6,4 +6,12 @@ fn main() {
     });
     print(list);
     chacha::assert_eq(list, [2, 4, 6, 8, 10]);
+
+    let list = @[1, 2, 3.14, 4, "string"];
+    let list = list.map(|x: int| -> string {
+        // Don't collapse.
+        x as string + "!"
+    });
+    print(list);
+    chacha::assert_eq(list, @["1!", "2!", "3.14!", "4!", "string!"]);
 }

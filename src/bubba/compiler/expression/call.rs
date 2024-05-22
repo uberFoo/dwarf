@@ -308,7 +308,7 @@ fn compile_method_call(
 
         if let Ok(Some(result)) = result.clone() {
             match result.subtype {
-                ValueTypeEnum::List(_) => match name.as_str() {
+                ValueTypeEnum::AnyList(_) | ValueTypeEnum::List(_) => match name.as_str() {
                     JOIN => {
                         // skip self
                         // Take the second argument, which is the separator.

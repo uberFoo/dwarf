@@ -2,6 +2,7 @@ use std::ops::Range;
 
 use ansi_term::Colour;
 use snafu::{location, Location};
+use uuid::Uuid;
 
 use crate::{
     dwarf::{
@@ -15,7 +16,7 @@ use crate::{
     },
     keywords::{
         FORMAT, GET, INSERT, INVOKE_FUNC, INVOKE_FUNC_MUT, IS_DIGIT, JOIN, LEN, LINES, MAP, MAX,
-        OPTION, OPTION_TYPE, PUSH, REPLACE, SPLIT, SUM, TO_DIGIT, TRIM,
+        OPTION_TYPE, PUSH, REPLACE, SPLIT, SUM, TO_DIGIT, TRIM,
     },
     lu_dog::{
         store::ObjectStore as LuDogStore, Argument, Block, Call, Expression, List, MethodCall,
@@ -122,6 +123,55 @@ pub(in crate::dwarf::extruder) fn method_call_return_type(
         PrintableValueType(true, &instance_ty, context, lu_dog).to_string()
     );
     let ty = match s_read!(instance_ty).subtype {
+        ValueTypeEnum::AnyList(ref list) => match method.as_str() {
+            JOIN => {
+                let ty = Ty::new_z_string(context.sarzak);
+                ValueType::new_ty(true, &ty, lu_dog)
+            }
+            LEN => {
+                let ty = Ty::new_integer(context.sarzak);
+                ValueType::new_ty(true, &ty, lu_dog)
+            }
+            MAP => {
+                if arg_ty.len() != 1 {
+                    return Err(vec![DwarfError::WrongNumberOfArguments {
+                        expected: 1,
+                        found: arg_ty.len(),
+                        file: context.file_name.to_owned(),
+                        span: meth_span.to_owned(),
+                        location: location!(),
+                        program: context.source_string.to_owned(),
+                    }]);
+                }
+
+                ValueType::new_any_list(true, lu_dog)
+            }
+            PUSH => {
+                if arg_ty.len() != 1 {
+                    return Err(vec![DwarfError::WrongNumberOfArguments {
+                        expected: 1,
+                        found: arg_ty.len(),
+                        file: context.file_name.to_owned(),
+                        span: meth_span.to_owned(),
+                        location: location!(),
+                        program: context.source_string.to_owned(),
+                    }]);
+                }
+                let arg_ty = arg_ty.pop().unwrap();
+
+                arg_ty.clone()
+            }
+            SUM => instance_ty.clone(),
+            _ => {
+                return Err(vec![DwarfError::NoSuchMethod {
+                    method: method.to_owned(),
+                    file: context.file_name.to_owned(),
+                    span: meth_span.to_owned(),
+                    location: location!(),
+                    program: context.source_string.to_owned(),
+                }])
+            }
+        },
         ValueTypeEnum::Char(_) => match method.as_str() {
             IS_DIGIT => {
                 let ty = Ty::new_boolean(context.sarzak);
