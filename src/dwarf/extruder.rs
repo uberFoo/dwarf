@@ -2846,7 +2846,6 @@ pub(super) fn inter_expression(
                 let lu_dog_tmp = new_ref!(LuDogStore, lu_dog.clone());
                 // This bit is really neat.
                 let pattern_expr: ParserExpression = (pattern.to_owned(), block.clone(), scrutinee_ty.clone(), &context.source, lu_dog_tmp.clone(), true).into();
-                // kts
                 lu_dog.merge(&s_read!(lu_dog_tmp));
 
                 let (pattern_expr, ty) = inter_expression(
@@ -3430,9 +3429,10 @@ fn inter_module(
 /// ```
 ///
 /// We are building up an environment of imports in the current `Context`.
-/// This function adds to that environment when "using" a type. The type
+/// This function adds to that environment when "using" a type. ~~The type
 /// becomes part of the environment via the `types` hash set hanging off of
-/// `Context``.
+/// `Context``.~~ Actually the `types` set is only used to gate importing the
+/// type twice below.
 ///
 /// We also maintain an `import_stack` ~~on `Context`~~ that should be hanging
 /// off of `Context`, but we're passing it around. Go figure. At any rate we
@@ -3441,7 +3441,8 @@ fn inter_module(
 /// We pop the stack after we are done walking the tree.
 ///
 /// Finally we maintain a `scopes` hash map that maps the type to the path of the
-/// type. This is used to resolve the type later on.
+/// type. This is used to resolve the type later on. This is the really important
+/// bit.
 fn inter_import(
     import_path: &[Spanned<String>],
     alias: &Option<(String, Range<usize>)>,
@@ -3496,10 +3497,12 @@ fn inter_import(
         (dir, path)
     };
 
+    let type_root = PATH_SEP.to_owned() + path_root.join(PATH_SEP).as_str() + PATH_SEP;
+
     // We need to push the thing we are importing onto the stack so
     // that when we are interring a module we can import only the
     // thing on the top of the stack.
-    let fq_type = PATH_SEP.to_owned() + path_root.join(PATH_SEP).as_str() + PATH_SEP + &ty;
+    let fq_type = type_root.clone() + &ty;
 
     if let Some(t) = context.types.get(&fq_type) {
         debug!("{fq_type} already imported");
@@ -3511,7 +3514,7 @@ fn inter_import(
 
     println!("extruding {fq_type}");
 
-    import_stack.push(PATH_SEP.to_owned() + path_root.join(PATH_SEP).as_str() + PATH_SEP + &ty);
+    import_stack.push(fq_type);
 
     match fs::read_to_string(&path) {
         Ok(source_code) => {
@@ -3544,9 +3547,6 @@ fn inter_import(
                     trace!("done processing dwarf import");
 
                     import_stack.pop();
-                    let type_root =
-                        PATH_SEP.to_owned() + path_root.join(PATH_SEP).as_str() + PATH_SEP;
-
                     for dirty in dirty.iter() {
                         match dirty {
                             Dirty::Enum(x_enum) => {

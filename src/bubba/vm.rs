@@ -1492,11 +1492,6 @@ impl VM {
                                     name.to_owned()
                                 }
                                 Value::String(_) => "::std::string::String".to_owned(),
-                                // Value::Vector { ty, .. } => {
-                                //     let ty = s_read!(ty);
-                                //     let name = ty.type_name();
-                                //     name.to_owned()
-                                // }
                                 oopsie => panic!("{oopsie:?}"),
                             };
 

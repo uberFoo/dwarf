@@ -45,7 +45,7 @@ pub fn inter_struct(
         if path == context.path {
             return Ok(());
         }
-        dbg!(&name);
+
         return Err(vec![DwarfError::MultiplyDefinedSymbol {
             name: name.to_owned(),
             span: span.clone(),

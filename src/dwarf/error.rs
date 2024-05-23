@@ -540,8 +540,7 @@ impl fmt::Display for DwarfErrorReporter<'_> {
                 let span = span.clone();
                 let report = Report::build(ReportKind::Error, file, span.start)
                     .with_message(format!(
-                        "multiply defined symbol: {}{}",
-                        OTHER_CLR.paint(orig_path),
+                        "multiply defined symbol: {}",
                         OTHER_CLR.paint(name)
                     ))
                     .with_label(
@@ -551,16 +550,26 @@ impl fmt::Display for DwarfErrorReporter<'_> {
                     );
 
                 let report = if is_uber {
-                    report.with_note(format!(
-                        "{}:{}:{}",
-                        OTHER_CLR.paint(location.file.to_string()),
-                        POP_CLR.paint(format!("{}", location.line)),
-                        OK_CLR.paint(format!("{}", location.column)),
-                    ))
+                    report
+                        .with_note(format!(
+                            "{}:{}:{}",
+                            OTHER_CLR.paint(location.file.to_string()),
+                            POP_CLR.paint(format!("{}", location.line)),
+                            OK_CLR.paint(format!("{}", location.column)),
+                        ))
+                        .with_note(format!(
+                            "The new symbol {}{} collides with the old symbol {}{}",
+                            OTHER_CLR.paint(path),
+                            OTHER_CLR.paint(name),
+                            OTHER_CLR.paint(orig_path),
+                            OTHER_CLR.paint(name)
+                        ))
                 } else {
                     report.with_note(format!(
-                        "The new path is {}{}",
+                        "The new symbol {}{} collides with the old symbol {}{}",
                         OTHER_CLR.paint(path),
+                        OTHER_CLR.paint(name),
+                        OTHER_CLR.paint(orig_path),
                         OTHER_CLR.paint(name)
                     ))
                 };
