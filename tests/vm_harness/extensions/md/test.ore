@@ -1,7 +1,7 @@
 use md::Md;
 
 fn main() {
-    let md = Md::new();
+    let md = Md::new("dark");
     let html = md.to_html("*Hello World!*");
     print(html);
     chacha::assert_eq(html, "<p><em>Hello World!</em></p>");
