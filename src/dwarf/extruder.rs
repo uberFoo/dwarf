@@ -469,6 +469,7 @@ pub fn new_lu_dog(
             types: &mut types,
         };
 
+        println!("extruding {file_name}");
         walk_tree(ast, &mut context, &mut stack, &mut lu_dog)?;
     };
 
@@ -3355,7 +3356,7 @@ fn inter_module(
         return Ok(());
     }
 
-    println!("extruding mod {name}");
+    println!("\nextruding {name}.{ORE_EXT}");
 
     match fs::read_to_string(&path) {
         Ok(source_code) => {
@@ -3512,7 +3513,7 @@ fn inter_import(
         context.types.insert(fq_type.clone());
     }
 
-    println!("extruding {fq_type}");
+    println!("extruding type {fq_type} @ {}", path.display());
 
     import_stack.push(fq_type);
 
@@ -3547,23 +3548,6 @@ fn inter_import(
                     trace!("done processing dwarf import");
 
                     import_stack.pop();
-                    for dirty in dirty.iter() {
-                        match dirty {
-                            Dirty::Enum(x_enum) => {
-                                let name = &s_read!(x_enum).name;
-                                let ty = name.split("::").last().unwrap().to_owned();
-                                // context.scopes.insert(ty, type_root.clone());
-                                // context.types.insert(name.clone());
-                            }
-                            Dirty::Struct(x_struct) => {
-                                let name = &s_read!(x_struct).name;
-                                let ty = name.split("::").last().unwrap().to_owned();
-                                // context.scopes.insert(ty, type_root.clone());
-                                // context.types.insert(name.clone());
-                            }
-                            _ => {}
-                        }
-                    }
 
                     context.dirty.extend(dirty);
 

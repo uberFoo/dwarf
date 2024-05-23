@@ -73,13 +73,7 @@ pub(in crate::bubba::compiler) fn compile(
         CallEnum::MethodCall(ref meth) => {
             let meth = lu_dog.exhume_method_call(meth).unwrap();
             let meth = s_read!(meth);
-            compile_method_call(
-                meth.name.to_owned(),
-                wrapped_call.clone(),
-                &arg_exprs,
-                thonk,
-                context,
-            )
+            compile_method_call(&meth.name, wrapped_call.clone(), &arg_exprs, thonk, context)
         }
         CallEnum::StaticMethodCall(ref meth) => {
             let meth = lu_dog.exhume_static_method_call(meth).unwrap();
@@ -277,7 +271,7 @@ fn compile_function_call(
 
 #[cfg_attr(not(test), tracing::instrument(skip(thonk, context)))]
 fn compile_method_call(
-    name: String,
+    name: &str,
     call: RefType<Call>,
     args: &[RefType<Expression>],
     thonk: &mut CThonk,
@@ -308,7 +302,7 @@ fn compile_method_call(
 
         if let Ok(Some(result)) = result.clone() {
             match result.subtype {
-                ValueTypeEnum::AnyList(_) | ValueTypeEnum::List(_) => match name.as_str() {
+                ValueTypeEnum::AnyList(_) | ValueTypeEnum::List(_) => match name {
                     JOIN => {
                         // skip self
                         // Take the second argument, which is the separator.
@@ -340,7 +334,7 @@ fn compile_method_call(
                     }
                     meth => panic!("list does not support {meth}"),
                 },
-                ValueTypeEnum::Map(_) => match name.as_str() {
+                ValueTypeEnum::Map(_) => match name {
                     GET => {
                         // First arg is self
                         compile_expression(&args[0], thonk, context)?;
@@ -372,7 +366,7 @@ fn compile_method_call(
                     let ty = ty.read().unwrap();
 
                     match &*ty {
-                        Ty::ZString(_) => match name.as_str() {
+                        Ty::ZString(_) => match name {
                             LEN => {
                                 thonk.insert_instruction(Instruction::ListLength, location!());
                                 return Ok(Some(result));
@@ -399,7 +393,7 @@ fn compile_method_call(
             }
         }
 
-        thonk.insert_instruction(Instruction::MethodLookup(name), location!());
+        thonk.insert_instruction(Instruction::MethodLookup(name.to_owned()), location!());
 
         result
     } else {
@@ -574,7 +568,7 @@ fn compile_static_method_call(
 
                         // This is passed as an argument to the plugin -- the new function
                         // in particular.
-                        let arg_count = if let Some(path) = path.split(PATH_SEP).nth(1) {
+                        let mut arg_count = if let Some(path) = path.split(PATH_SEP).nth(1) {
                             thonk.insert_instruction(
                                 Instruction::Push(Value::String(path.to_owned())),
                                 location!(),
@@ -583,6 +577,12 @@ fn compile_static_method_call(
                         } else {
                             0
                         };
+
+                        for arg in args.iter() {
+                            compile_expression(arg, thonk, context)?;
+                        }
+
+                        arg_count += args.len();
 
                         // This is used by the VM to load the plugin from the extensions directory.
                         thonk
@@ -607,6 +607,7 @@ fn compile_static_method_call(
                 }
             } else {
                 // 🚧 I feel like the extruder should catch this.
+                // Another mysterious comment by yours truly.
                 let func1 = lu_dog.exhume_function_id_by_name(func);
 
                 let func1 = match func1 {
