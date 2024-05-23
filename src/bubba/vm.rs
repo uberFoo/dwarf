@@ -1085,14 +1085,7 @@ impl VM {
                                     .into());
                                 }
                             }
-                            value => {
-                                return Err(BubbaError::NotIndexable {
-                                    span: self.get_span(ip),
-                                    value: value.to_owned(),
-                                    location: location!(),
-                                }
-                                .into());
-                            }
+                            _ => panic!("Expected a list."),
                         }
 
                         1
@@ -1159,14 +1152,7 @@ impl VM {
                                     .into());
                                 }
                             }
-                            value => {
-                                return Err(BubbaError::NotIndexable {
-                                    span: self.get_span(ip),
-                                    value: value.to_owned(),
-                                    location: location!(),
-                                }
-                                .into());
-                            }
+                            _ => panic!("Expected a list."),
                         }
 
                         1
@@ -1177,15 +1163,6 @@ impl VM {
                         let list = list.into_pointer();
                         let list = s_read!(list);
                         match &*list {
-                            Value::AnyList(vec) => {
-                                let vec = s_read!(vec);
-                                let result = vec
-                                    .iter()
-                                    .map(|v| s_read!(v).to_inner_string())
-                                    .collect::<Vec<String>>()
-                                    .join(sep.into_value().to_inner_string().as_str());
-                                stack.push(Value::String(result).into());
-                            }
                             Value::List { inner, .. } => {
                                 let inner = s_read!(inner);
                                 let result = inner
@@ -1195,19 +1172,7 @@ impl VM {
                                     .join(sep.into_value().to_inner_string().as_str());
                                 stack.push(Value::String(result).into());
                             }
-                            value => {
-                                if self.backtrace {
-                                    eprintln!("{self:?}");
-                                    print_stack(&stack, fp);
-                                    print_instrs(ip, &program, &self.instrs, &self.source_map);
-                                }
-                                return Err(BubbaError::NotIndexable {
-                                    span: self.get_span(ip),
-                                    value: value.to_owned(),
-                                    location: location!(),
-                                }
-                                .into());
-                            }
+                            _ => panic!("Expected a list."),
                         }
 
                         1
@@ -1232,19 +1197,7 @@ impl VM {
                             Value::String(str) => {
                                 stack.push(Value::Integer(str.len() as DwarfInteger).into());
                             }
-                            value => {
-                                if self.backtrace {
-                                    eprintln!("{self:?}");
-                                    print_stack(&stack, fp);
-                                    print_instrs(ip, &program, &self.instrs, &self.source_map);
-                                }
-                                return Err(BubbaError::NotIndexable {
-                                    span: self.get_span(ip),
-                                    value: value.to_owned(),
-                                    location: location!(),
-                                }
-                                .into());
-                            }
+                            _ => panic!("Expected a list."),
                         }
 
                         1
@@ -1283,19 +1236,7 @@ impl VM {
                                     .into(),
                                 );
                             }
-                            value => {
-                                if self.backtrace {
-                                    eprintln!("{self:?}");
-                                    print_stack(&stack, fp);
-                                    print_instrs(ip, &program, &self.instrs, &self.source_map);
-                                }
-                                return Err(BubbaError::NotIndexable {
-                                    span: self.get_span(ip),
-                                    value: value.to_owned(),
-                                    location: location!(),
-                                }
-                                .into());
-                            }
+                            _ => panic!("Expected a list."),
                         }
 
                         1
@@ -1309,19 +1250,7 @@ impl VM {
                                 let mut inner = s_write!(inner);
                                 inner.push(element.into_pointer());
                             }
-                            value => {
-                                if self.backtrace {
-                                    eprintln!("{self:?}");
-                                    print_stack(&stack, fp);
-                                    print_instrs(ip, &program, &self.instrs, &self.source_map);
-                                }
-                                return Err(BubbaError::NotIndexable {
-                                    span: self.get_span(ip),
-                                    value: value.to_owned(),
-                                    location: location!(),
-                                }
-                                .into());
-                            }
+                            _ => panic!("Expected a list."),
                         }
 
                         1
@@ -1389,19 +1318,7 @@ impl VM {
                                     }
                                 };
                             }
-                            value => {
-                                if self.backtrace {
-                                    eprintln!("{self:?}");
-                                    print_stack(&stack, fp);
-                                    print_instrs(ip, &program, &self.instrs, &self.source_map);
-                                }
-                                return Err(BubbaError::NotIndexable {
-                                    span: self.get_span(ip),
-                                    value: value.to_owned(),
-                                    location: location!(),
-                                }
-                                .into());
-                            }
+                            _ => panic!("Expected a list."),
                         }
 
                         1
@@ -1422,19 +1339,7 @@ impl VM {
                                 let mut inner = s_write!(inner);
                                 inner.insert(key, value);
                             }
-                            value => {
-                                if self.backtrace {
-                                    eprintln!("{self:?}");
-                                    print_stack(&stack, fp);
-                                    print_instrs(ip, &program, &self.instrs, &self.source_map);
-                                }
-                                return Err(BubbaError::NotIndexable {
-                                    span: self.get_span(ip),
-                                    value: value.to_owned(),
-                                    location: location!(),
-                                }
-                                .into());
-                            }
+                            _ => panic!("Expected a list."),
                         }
 
                         stack.push(map_value.clone().into());
@@ -1450,19 +1355,7 @@ impl VM {
                                 let inner = s_read!(inner);
                                 stack.push(Value::Integer(inner.len() as DwarfInteger).into());
                             }
-                            value => {
-                                if self.backtrace {
-                                    eprintln!("{self:?}");
-                                    print_stack(&stack, fp);
-                                    print_instrs(ip, &program, &self.instrs, &self.source_map);
-                                }
-                                return Err(BubbaError::NotIndexable {
-                                    span: self.get_span(ip),
-                                    value: value.to_owned(),
-                                    location: location!(),
-                                }
-                                .into());
-                            }
+                            _ => panic!("Expected a map."),
                         }
 
                         1

@@ -39,12 +39,6 @@ pub enum BubbaError {
     Negation { value: Value },
     #[snafu(display("\n{}: no such field: {} in {}", ERR_CLR.bold().paint("error"), field, ty))]
     NoSuchField { field: String, ty: String },
-    #[snafu(display("\n{}: {value} not indexable.\n --> {}::{}::{}", ERR_CLR.bold().paint("error"), location.file, location.line, location.column))]
-    NotIndexable {
-        span: Span,
-        value: Value,
-        location: Location,
-    },
     #[snafu(display("\n{}: subtraction error: {} - {}", ERR_CLR.bold().paint("error"), left, right))]
     Subtraction { left: Value, right: Value },
     // #[snafu(display("\n{}: value error: {value}\n\t--> {}:{}:{}", ERR_CLR.bold().paint("error"), location.file, location.line, location.column))]
@@ -109,41 +103,6 @@ impl fmt::Display for BubbaErrorReporter<'_, '_, '_> {
                             .with_message(format!(
                                 "the index is {}",
                                 POP_CLR.paint(format!("{index}"))
-                            ))
-                            .with_color(Color::Red),
-                    )
-                    .with_note(note)
-                    .finish()
-                    .write((file_name, Source::from(&program)), &mut std_err)
-                    .map_err(|_| fmt::Error)?;
-                write!(f, "{}", String::from_utf8_lossy(&std_err))
-            }
-            BubbaError::NotIndexable {
-                span,
-                value,
-                location,
-            } => {
-                let mut note = format!(
-                    "value {}, is not indexable",
-                    POP_CLR.paint(format!("{value}"))
-                );
-
-                if is_uber {
-                    note += &format!(
-                        " --> {}:{}:{}",
-                        OTHER_CLR.paint(location.file.to_string()),
-                        POP_CLR.paint(format!("{}", location.line)),
-                        OK_CLR.paint(format!("{}", location.column)),
-                    );
-                }
-
-                Report::build(ReportKind::Error, file_name, span.start)
-                    .with_message("not indexable")
-                    .with_label(
-                        Label::new((file_name, span.to_owned()))
-                            .with_message(format!(
-                                "the type is {}",
-                                POP_CLR.paint(format!("{value}"))
                             ))
                             .with_color(Color::Red),
                     )
