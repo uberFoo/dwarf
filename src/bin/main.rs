@@ -179,14 +179,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     color_backtrace::install();
     #[cfg(feature = "async")]
     {
-        // let format_layer = fmt::layer().with_thread_ids(true).pretty();
         let filter_layer =
             EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("error"));
-
-        // tracing_subscriber::registry()
-        //     .with(filter_layer)
-        //     .with(format_layer)
-        //     .init();
 
         let subscriber = FmtSubscriber::builder()
             .with_env_filter(filter_layer)

@@ -17,4 +17,10 @@ impl Option<T> {
             Option::None => true,
         }
     }
+    fn unwrap<T>(self) -> T {
+        match self {
+            Option::Some(value) => value,
+            Option::None => halt("called `Option::unwrap()` on `None`"),
+        }
+    }
 }

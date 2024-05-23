@@ -7,65 +7,7 @@ struct HttpServer {
     // path is the name, and the second part is a parameter to send to the
     // constructor.
     #[proxy(plugin = "http::server")]
-    inner: Plugin<HttpServer>,
-}
-
-impl HttpServer {
-    fn new() -> Self {
-        HttpServer {
-            inner: Plugin::<HttpServer>::new(),
-        }
-    }
-
-    async fn serve(self, port: int) -> Future<()> {
-        self.inner
-            .invoke_func("server", "HttpServer", "serve", [port])
-    }
-
-    fn route(
-        self,
-        path: string,
-        method: Method,
-        body: Body,
-        lambda: fn(Request) -> string,
-    ) {
-        // We need this function to create a Request instance from the returned int.
-        let wrapper = |req: int| -> string {
-            let req = Request { plugin: self.inner, inner: req };
-            lambda(req)
-        };
-
-        self.inner
-            .invoke_func("server", "HttpServer", "route", @[path, method.to_string(), body.to_string(), wrapper]);
-    }
-
-    fn use_tls(self, cert: string, key: string) {
-        self.inner
-            .invoke_func("server", "HttpServer", "use_tls", [cert, key]);
-    }
-
-    fn prefix_route(
-        self,
-        path: string,
-        method: Method,
-        body: Body,
-        lambda: fn(Request, string) -> string,
-    ) {
-        // We need this function to create a Request instance from the returned int.
-        let wrapper = |req: int, suffix: int| -> string {
-            let req = Request { plugin: self.inner, inner: req };
-            let suffix = Suffix { plugin: self.inner, inner: suffix };
-            lambda(req, suffix)
-        };
-
-        self.inner
-            .invoke_func("server", "HttpServer", "prefix_route", @[path, method.to_string(), body.to_string(), wrapper]);
-    }
-
-    fn use_tls(self, cert: string, key: string) {
-        self.inner
-            .invoke_func("server", "HttpServer", "use_tls", [cert, key]);
-    }
+    plugin: Plugin<HttpServer>,
 }
 
 enum Method {
@@ -83,6 +25,62 @@ impl Method {
             Method::Put => "PUT",
             Method::Delete => "DELETE",
         }
+    }
+}
+
+impl HttpServer {
+    fn new() -> Self {
+        HttpServer {
+            plugin: Plugin::<HttpServer>::new(),
+        }
+    }
+
+    async fn serve(self, port: int) -> Future<()> {
+        self.plugin
+            .invoke_func("server", "HttpServer", "serve", [port])
+    }
+
+    fn route(
+        self,
+        path: string,
+        method: Method,
+        lambda: fn(Request) -> string,
+    ) {
+        // We need this function to create a Request instance from the returned int.
+        let wrapper = |req: int| -> string {
+            let req = Request { plugin: self.plugin, inner: req };
+            lambda(req)
+        };
+
+        self.plugin
+            .invoke_func("server", "HttpServer", "route", @[path, method.to_string(), wrapper]);
+    }
+
+    fn use_tls(self, cert: string, key: string) {
+        self.plugin
+            .invoke_func("server", "HttpServer", "use_tls", [cert, key]);
+    }
+
+    fn prefix_route(
+        self,
+        path: string,
+        method: Method,
+        lambda: fn(Request, string) -> string,
+    ) {
+        // We need this function to create a Request instance from the returned int.
+        let wrapper = |req: int, suffix: int| -> string {
+            let req = Request { plugin: self.plugin, inner: req };
+            let suffix = Suffix { plugin: self.plugin, inner: suffix };
+            lambda(req, suffix)
+        };
+
+        self.plugin
+            .invoke_func("server", "HttpServer", "prefix_route", @[path, method.to_string(), wrapper]);
+    }
+
+    fn use_tls(self, cert: string, key: string) {
+        self.plugin
+            .invoke_func("server", "HttpServer", "use_tls", [cert, key]);
     }
 }
 
@@ -131,8 +129,8 @@ impl Uri {
             .invoke_func("server", "Uri", "path", [self.inner])
     }
 
-    fn query(self) -> Option<string> {
-        let query: string = self.plugin
+    fn query(self) -> Option<Hashmap<string, string>> {
+        let query: HashMap<string, string> = self.plugin
             .invoke_func("server", "Uri", "query", [self.inner]);
 
         if query.len() == 0 {
@@ -153,5 +151,52 @@ impl Suffix {
     fn to_string(self) -> string {
         self.plugin
             .invoke_func("server", "Suffix", "to_string", [self.inner])
+    }
+}
+
+struct Response {
+    #[proxy(plugin = "http::server")]
+    plugin: Plugin<HttpServer>,
+    inner: int,
+}
+
+impl Response {
+    fn new(req: Request) -> Self {
+        let plugin = req.plugin;
+        let inner = plugin
+            .invoke_func("server", "Response", "new", []);
+        Response {
+            plugin: plugin,
+            inner: inner,
+        }
+        // Response {
+        //     plugin: server.plugin,
+        //     inner: server.plugin
+        //         .invoke_func("server", "Response", "new", []),
+        // }
+    }
+
+    fn status(self, status: int) {
+        self.plugin
+            .invoke_func("server", "Response", "status", [self.inner, status]);
+    }
+
+    fn text(self, body: string) {
+        let inner = self.plugin
+            .invoke_func("server", "Response", "body", @[self.inner, body]);
+        // We get a different type back from the plugin.
+        self.inner = inner;
+    }
+
+    fn json(self, json: string) {
+        let inner = self.plugin
+            .invoke_func("server", "Response", "json", @[self.inner, json]);
+        // We get a different type back from the plugin.
+        self.inner = inner;
+    }
+
+    fn set_header(self, fob: string, value: string) {
+        self.plugin
+            .invoke_func("server", "Response", "set_header", @[self.inner, fob, value]);
     }
 }

@@ -21,8 +21,9 @@ use crate::{
     bubba::{
         instr::{Instruction, Program, Thonk},
         value::Value,
-        BOOL, CHAR, EMPTY, FLOAT, INTEGER, MAP, RANGE, RESULT, STRING, STRING_ARRAY, UNKNOWN, UUID,
+        BOOL, CHAR, EMPTY, FLOAT, INTEGER, MAP, RANGE, STRING, STRING_ARRAY, UNKNOWN, UUID,
     },
+    keywords::{OPTION, OPTION_TYPE, RESULT, RESULT_TYPE},
     lu_dog::{
         BodyEnum, Expression, ExpressionEnum, Function, Map, ObjectStore as LuDogStore, Statement,
         StatementEnum, ValueType, ValueTypeEnum,
@@ -331,6 +332,8 @@ impl<'a, 'b> Context<'a, 'b> {
 }
 
 pub fn compile(context: &ExtruderContext) -> Result<Program> {
+    println!("Compiling");
+
     let mut program = Program::new(VERSION.to_owned(), BUILD_TIME.to_owned());
     program.set_source(context.source());
 
@@ -406,8 +409,34 @@ pub fn compile(context: &ExtruderContext) -> Result<Program> {
     let string_array = (*s_read!(string_array)).clone();
     context.insert_type(STRING_ARRAY.to_owned(), string_array);
 
+    // Compile everything here in this block, and then add the rest of the symbols.
+    {
+        let lu_dog = s_read!(lu_dog);
+
+        // We need to insert the function names and types so that we can look that
+        // information up in the variable code.
+        for func in lu_dog.iter_function() {
+            context.insert_function(
+                get_function_name(&func, &lu_dog),
+                get_function_type(&func, &lu_dog),
+            );
+        }
+
+        for func in lu_dog.iter_function() {
+            let thonk = compile_function(&func, &mut context)?.into();
+            context.get_program().add_thonk(thonk);
+        }
+
+        for (name, count) in context.lambdas.clone().iter() {
+            let mut thonk = CThonk::new(format!("{name}_trampoline"));
+            thonk.insert_instruction(Instruction::Call(count.to_owned()), location!());
+            thonk.insert_instruction(Instruction::Return, location!());
+            context.get_program().add_thonk(thonk.into());
+        }
+    }
+
     // And Result
-    if let Some(ref ty) = s_read!(lu_dog).exhume_enumeration_id_by_name("::std::result::Result") {
+    if let Some(ref ty) = s_read!(lu_dog).exhume_enumeration_id_by_name(RESULT_TYPE) {
         let ty = s_read!(lu_dog).exhume_enumeration(ty).unwrap();
         let Some(ty) = s_read!(lu_dog).iter_value_type().find(|vt| {
             if let ValueTypeEnum::Enumeration(id) = s_read!(vt).subtype {
@@ -420,33 +449,31 @@ pub fn compile(context: &ExtruderContext) -> Result<Program> {
         }) else {
             unreachable!()
         };
-        context
-            .get_program()
-            .add_symbol(RESULT.to_owned(), Value::ValueType((*s_read!(ty)).clone()));
+        context.get_program().add_symbol(
+            RESULT_TYPE.to_owned(),
+            Value::ValueType((*s_read!(ty)).clone()),
+        );
     };
 
-    let lu_dog = s_read!(lu_dog);
-
-    // We need to insert the function names and types so that we can look that
-    // information up in the variable code.
-    for func in lu_dog.iter_function() {
-        context.insert_function(
-            get_function_name(&func, &lu_dog),
-            get_function_type(&func, &lu_dog),
+    // And Option
+    if let Some(ref ty) = s_read!(lu_dog).exhume_enumeration_id_by_name(OPTION_TYPE) {
+        let ty = s_read!(lu_dog).exhume_enumeration(ty).unwrap();
+        let Some(ty) = s_read!(lu_dog).iter_value_type().find(|vt| {
+            if let ValueTypeEnum::Enumeration(id) = s_read!(vt).subtype {
+                let id = s_read!(lu_dog).exhume_enumeration(&id).unwrap();
+                if s_read!(id).id == s_read!(ty).id {
+                    return true;
+                }
+            }
+            false
+        }) else {
+            unreachable!()
+        };
+        context.get_program().add_symbol(
+            OPTION_TYPE.to_owned(),
+            Value::ValueType((*s_read!(ty)).clone()),
         );
-    }
-
-    for func in lu_dog.iter_function() {
-        let thonk = compile_function(&func, &mut context)?.into();
-        context.get_program().add_thonk(thonk);
-    }
-
-    for (name, count) in context.lambdas.clone().iter() {
-        let mut thonk = CThonk::new(format!("{name}_trampoline"));
-        thonk.insert_instruction(Instruction::Call(count.to_owned()), location!());
-        thonk.insert_instruction(Instruction::Return, location!());
-        context.get_program().add_thonk(thonk.into());
-    }
+    };
 
     Ok(program)
 }
@@ -753,9 +780,15 @@ fn compile_expression(
 
 fn get_span(expression: &RefType<Expression>, lu_dog: &LuDogStore) -> Span {
     let value = &s_read!(expression).r11_x_value(lu_dog)[0];
-    let span = &s_read!(value).r63_span(lu_dog)[0];
-    let read = s_read!(span);
-    read.start as usize..read.end as usize
+    let span = if let Some(span) = &s_read!(value).r63_span(lu_dog).get(0) {
+        let read = s_read!(span);
+        read.start as usize..read.end as usize
+    } else {
+        dbg!(&expression, &value);
+        0..0
+    };
+
+    span
 }
 
 #[cfg(test)]
@@ -899,9 +932,6 @@ mod test {
         setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ore = "
-                   fn main() -> int {
-                       fib(10)
-                   }
                    fn fib(n: int) -> int {
                        if n == 0 {
                            0
@@ -910,7 +940,11 @@ mod test {
                        } else {
                            fib(n - 1) + fib(n - 2)
                        }
-                   }";
+                   }
+                   fn main() -> int {
+                       fib(10)
+                   }
+                   ";
         let ast = parse_dwarf("fibonacci", ore).unwrap();
         let ctx = new_lu_dog(
             "fibonacci".to_owned(),
@@ -991,7 +1025,7 @@ mod test {
         .unwrap();
         let program = compile(&ctx).unwrap();
         println!("{program}");
-        assert_eq!(program.get_thonk_card(), 11);
+        assert_eq!(program.get_thonk_card(), 12);
 
         // assert_eq!(program.get_instruction_card(), 393);
         let run = run_vm(&program);
@@ -1104,18 +1138,19 @@ async fn main() -> Future<()> {
     fn test_locals_and_params() {
         setup_logging();
         let ore = "
-                   fn main() -> int {
-                       let x = 1;
-                       let y = 2;
-                       let z = 3;
-                       foo(x, y, z)
-                   }
-                   fn foo(a: int, b: int, c: int) -> int {
-                       let z = 42;
-                       let x = a + b;
-                       let y = x + c;
-                       y
-                   }";
+        fn foo(a: int, b: int, c: int) -> int {
+            let z = 42;
+            let x = a + b;
+            let y = x + c;
+            y
+        }
+        fn main() -> int {
+            let x = 1;
+            let y = 2;
+            let z = 3;
+            foo(x, y, z)
+        }
+                   ";
         let ast = parse_dwarf("test_locals_and_params", ore).unwrap();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
         let ctx = new_lu_dog(

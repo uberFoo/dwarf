@@ -7,9 +7,9 @@ struct Md {
 }
 
 impl Md {
-    fn new() -> Self {
+    fn new(theme: string) -> Self {
         Md {
-            inner: Plugin::<Md>::new(),
+            inner: Plugin::<Md>::new(theme),
         }
     }
 

@@ -162,6 +162,32 @@ pub(in crate::bubba::compiler) fn compile(
                         ty => todo!("list element ty: {:?}", ty),
                     }
                 }
+                ValueTypeEnum::WoogStruct(ref st) => {
+                    let st = lu_dog.exhume_woog_struct(st).unwrap();
+                    let st = s_read!(st);
+                    let ty = st.r1_value_type(&lu_dog)[0].clone();
+                    let ty = (*s_read!(ty)).clone();
+
+                    // Insert the iteration ident into the symbol table.
+                    let iter_ident_index = match context.insert_symbol(iter_ident, ty.clone()) {
+                        (true, index) => {
+                            inner_thonk.increment_frame_size();
+                            index
+                        }
+                        (false, index) => index,
+                    };
+
+                    // This is the starting value of the iteration.
+                    let list_var_idx = match context.insert_symbol(LIST_VAR.to_owned(), ty) {
+                        (true, index) => {
+                            inner_thonk.increment_frame_size();
+                            index
+                        }
+                        (false, index) => index,
+                    };
+
+                    (iter_ident_index, list_var_idx)
+                }
                 ValueTypeEnum::XFuture(ref _future) => {
                     // let future = lu_dog.exhume_x_future(future).unwrap();
                     // let future = s_read!(future);

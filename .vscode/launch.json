@@ -142,14 +142,16 @@
                 }
             },
             "args": [
+                // "tests/vm_harness/types/map/get.ore",
                 // "tests/vm_harness/lambda.ore"
-                "bench.ore",
+                "mandelbrot.ore",
                 // "https://raw.githubusercontent.com/uberFoo/dwarf/develop/mandelbrot.ore"
                 // "uberfoo.rs/src/uberfoo.rs.ore",
                 // "-c",
                 // "uberfoo.rs/src",
-                "-t",
+                // "-t",
                 "-b",
+                "--uber",
             ],
             "cwd": "${workspaceFolder}",
             "env": {

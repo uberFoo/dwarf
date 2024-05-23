@@ -53,6 +53,7 @@ pub fn inter_enum(
             location: location!(),
         }]);
     }
+    context.types.insert(name.0.clone());
 
     let name = context.path.clone() + &name.0;
     debug!("inter_enum {name}");

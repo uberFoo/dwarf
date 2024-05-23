@@ -220,6 +220,7 @@ fn lexer() -> impl Parser<char, Vec<Spanned<Token>>, Error = Simple<char>> {
         "fn" => Token::Fn,
         "for" => Token::For,
         "halt" => Token::Halt,
+        "HashMap" => Token::HashMap,
         "if" => Token::If,
         "impl" => Token::Impl,
         "int" => Token::Type(Type::Integer),
@@ -4336,6 +4337,71 @@ impl DwarfParser {
             )));
         }
 
+        // Match HashMap
+        if self.match_tokens(&[Token::HashMap]).is_some() {
+            if self.match_tokens(&[Token::Punct('<')]).is_none() {
+                let token = self.previous().unwrap();
+                let err = Simple::expected_input_found(
+                    start..token.1.end,
+                    [Some("<".to_owned())],
+                    Some(token.0.to_string()),
+                );
+                return Err(Box::new(err));
+            }
+            let key = if let Some(key) = self.parse_type()? {
+                key
+            } else {
+                let start = self.previous().unwrap().1.end;
+                let end = self
+                    .peek()
+                    .map_or(self.previous().unwrap().1.end, |t| t.1.end);
+
+                let err = Simple::custom(start..end, "missing key type");
+                return Err(Box::new(err));
+            };
+            if self.match_tokens(&[Token::Punct(',')]).is_none() {
+                let token = self.previous().unwrap();
+                let err = Simple::expected_input_found(
+                    start..token.1.end,
+                    [Some(",".to_owned())],
+                    Some(token.0.to_string()),
+                );
+                return Err(Box::new(err));
+            }
+            let value = if let Some(value) = self.parse_type()? {
+                value
+            } else {
+                let start = self.previous().unwrap().1.end;
+                let end = self
+                    .peek()
+                    .map_or(self.previous().unwrap().1.end, |t| t.1.end);
+
+                let err = Simple::custom(start..end, "missing value type");
+                return Err(Box::new(err));
+            };
+            if self.match_tokens(&[Token::Punct('>')]).is_none() {
+                let token = self.previous().unwrap();
+                let err = Simple::expected_input_found(
+                    start..token.1.end,
+                    [Some(">".to_owned())],
+                    Some(token.0.to_string()),
+                );
+                return Err(Box::new(err));
+            }
+
+            debug!("exit pasre_type: HashMap");
+            return Ok(Some((
+                Type::HashMap {
+                    key: Box::new(key),
+                    value: Box::new(value),
+                },
+                start
+                    ..self
+                        .peek()
+                        .map_or(self.previous().unwrap().1.end, |t| t.1.end),
+            )));
+        }
+
         // Match a char
         if self.match_tokens(&[Token::Type(Type::Char)]).is_some() {
             debug!("exit parse_type: char");
@@ -4585,10 +4651,13 @@ impl DwarfParser {
                 vec![]
             };
             debug!("exit parse_type: user defined", ident);
-            let ty = Ok(Some((
-                Type::UserType(ident, inner),
-                start..self.peek().unwrap().1.start,
-            )));
+            let end = if let Some(tok) = self.peek() {
+                tok.1.start
+            } else {
+                self.previous().unwrap().1.end
+            };
+
+            let ty = Ok(Some((Type::UserType(ident, inner), start..end)));
 
             return ty;
         }
@@ -4647,8 +4716,14 @@ impl DwarfParser {
             }
         }
 
+        let end = if let Some(tok) = self.peek() {
+            tok.1.start
+        } else {
+            self.previous().unwrap().1.end
+        };
+
         debug!("exit parse_generic");
-        Ok(Some((generics, start..self.peek().unwrap().1.end)))
+        Ok(Some((generics, start..end)))
     }
 
     /// Parse a Struct
@@ -6392,5 +6467,41 @@ mod tests {
         let ast = parse_dwarf("test_hash_map", src);
         dbg!(&ast);
         assert!(ast.is_ok());
+    }
+
+    #[test]
+    fn hash_map_decl() {
+        let _ = env_logger::builder().is_test(true).try_init();
+        let src = r#"
+        fn main() {
+            let map: HashMap<string, int> = {{
+                "foo": 42,
+                "bar": 69,
+                "baz": 96,
+            }};
+        }
+        "#;
+
+        let ast = parse_dwarf("test_hash_map_decl", src);
+        dbg!(&ast);
+        assert!(ast.is_ok());
+    }
+
+    #[test]
+    fn hash_map_fails() {
+        let _ = env_logger::builder().is_test(true).try_init();
+        let src = r#"
+        fn main() {
+            let map: HashMap = {{}};
+            let map: HashMap< = {{}};
+            let map: HashMap<string = {{}};
+            let map: HashMap<string, = {{}};
+            let map: HashMap<string, int = {{}};
+        }
+        "#;
+
+        let ast = parse_dwarf("test_hash_map_fails", src);
+        dbg!(&ast);
+        assert!(ast.is_err());
     }
 }

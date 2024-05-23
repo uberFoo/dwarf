@@ -65,6 +65,7 @@ fn escape_time(c: Complex, limit: int) -> Option<int> {
     let z = Complex::zero();
     // print(z);
     // print("\n");
+
     for i in 1..limit {
         // z.square().add(c);
         // ComplexEx::square(z);
@@ -75,10 +76,10 @@ fn escape_time(c: Complex, limit: int) -> Option<int> {
         z = z.add(c);
         // print(z);
         // print("\n");
-        z.square_2();
+        let foo = z.square_2();
         // print(z);
         // print("\n");
-        z.add_2(c);
+        let bar = z.add_2(c);
         // print(z);
         // print("\n");
         // Having the RHS of this statement on the lhs of the expression below
@@ -155,7 +156,7 @@ fn plot(t: int) {
         // if row > 1 {
         // debugger;
         // }
-        do_column(t, row, width, height, upper_left, lower_right);
+        let a = do_column(t, row, width, height, upper_left, lower_right);
         // debugger;
     }
 
@@ -171,33 +172,12 @@ fn do_column(
     upper_left: Complex,
     lower_right: Complex,
 ) {
-    print("row ");
-    print(row);
-    print("\n");
-    // print(`width ${width)`);
-    print("width ");
-    print(width);
-    print("\n");
-    // print(width);
     for column in 0..width {
-        print("col ");
-        print(column);
-        print("\n");
         let point = pixel_to_point(width, height, column, row, upper_left, lower_right);
-        // print(point);
-        // let time: Option<int> = escape_time(point, time);
         let et = escape_time(point, time);
-        // print(time);
         match et {
-            Option::<int>::None => print("*"),
-            Option::<int>::Some(time) => print(" "),
+            Option::None => print("*"),
+            Option::Some(time) => print(" "),
         };
-
-        // if et > 0 {
-        //     print(" ");
-        // } else {
-        //     print("*");
-        // };
     }
-    print("dude\n");
 }

@@ -2,7 +2,7 @@ use snafu::{location, Location};
 use uuid::Uuid;
 
 #[cfg(feature = "async")]
-use crate::keywords::{LEN, PUSH, SPAWN};
+use crate::keywords::{JOIN, LEN, MAP, PUSH, SPAWN};
 
 use crate::{
     bubba::{
@@ -73,13 +73,7 @@ pub(in crate::bubba::compiler) fn compile(
         CallEnum::MethodCall(ref meth) => {
             let meth = lu_dog.exhume_method_call(meth).unwrap();
             let meth = s_read!(meth);
-            compile_method_call(
-                meth.name.to_owned(),
-                wrapped_call.clone(),
-                &arg_exprs,
-                thonk,
-                context,
-            )
+            compile_method_call(&meth.name, wrapped_call.clone(), &arg_exprs, thonk, context)
         }
         CallEnum::StaticMethodCall(ref meth) => {
             let meth = lu_dog.exhume_static_method_call(meth).unwrap();
@@ -277,7 +271,7 @@ fn compile_function_call(
 
 #[cfg_attr(not(test), tracing::instrument(skip(thonk, context)))]
 fn compile_method_call(
-    name: String,
+    name: &str,
     call: RefType<Call>,
     args: &[RefType<Expression>],
     thonk: &mut CThonk,
@@ -308,14 +302,13 @@ fn compile_method_call(
 
         if let Ok(Some(result)) = result.clone() {
             match result.subtype {
-                ValueTypeEnum::List(_) => match name.as_str() {
-                    PUSH => {
+                ValueTypeEnum::AnyList(_) | ValueTypeEnum::List(_) => match name {
+                    JOIN => {
                         // skip self
-                        for (_, expr) in args.iter().enumerate().skip(1) {
-                            compile_expression(expr, thonk, context)?;
-                        }
+                        // Take the second argument, which is the separator.
+                        compile_expression(&args[1], thonk, context)?;
 
-                        thonk.insert_instruction(Instruction::ListPush, location!());
+                        thonk.insert_instruction(Instruction::ListJoin, location!());
 
                         return Ok(Some(result));
                     }
@@ -323,13 +316,25 @@ fn compile_method_call(
                         thonk.insert_instruction(Instruction::ListLength, location!());
                         return Ok(Some(result));
                     }
-                    meth => panic!("list does not support {meth}"),
-                },
-                ValueTypeEnum::Map(_) => match name.as_str() {
-                    LEN => {
-                        thonk.insert_instruction(Instruction::MapLength, location!());
+                    MAP => {
+                        // skip self
+                        compile_expression(&args[1], thonk, context)?;
+
+                        thonk.insert_instruction(Instruction::ListMap, location!());
+
                         return Ok(Some(result));
                     }
+                    PUSH => {
+                        // skip self
+                        compile_expression(&args[1], thonk, context)?;
+
+                        thonk.insert_instruction(Instruction::ListPush, location!());
+
+                        return Ok(Some(result));
+                    }
+                    meth => panic!("list does not support {meth}"),
+                },
+                ValueTypeEnum::Map(_) => match name {
                     GET => {
                         // First arg is self
                         compile_expression(&args[0], thonk, context)?;
@@ -350,6 +355,10 @@ fn compile_method_call(
                         thonk.insert_instruction(Instruction::MapInsert, location!());
                         return Ok(Some(result));
                     }
+                    LEN => {
+                        thonk.insert_instruction(Instruction::MapLength, location!());
+                        return Ok(Some(result));
+                    }
                     meth => panic!("map does not support {meth}"),
                 },
                 ValueTypeEnum::Ty(ref id) => {
@@ -357,7 +366,7 @@ fn compile_method_call(
                     let ty = ty.read().unwrap();
 
                     match &*ty {
-                        Ty::ZString(_) => match name.as_str() {
+                        Ty::ZString(_) => match name {
                             LEN => {
                                 thonk.insert_instruction(Instruction::ListLength, location!());
                                 return Ok(Some(result));
@@ -374,8 +383,7 @@ fn compile_method_call(
                                 return Ok(Some(result));
                             }
                             meth => {
-                                dbg!(&meth);
-                                {}
+                                dbg!(&ty, &meth, &args);
                             }
                         },
                         _ => {}
@@ -385,7 +393,7 @@ fn compile_method_call(
             }
         }
 
-        thonk.insert_instruction(Instruction::MethodLookup(name), location!());
+        thonk.insert_instruction(Instruction::MethodLookup(name.to_owned()), location!());
 
         result
     } else {
@@ -560,7 +568,7 @@ fn compile_static_method_call(
 
                         // This is passed as an argument to the plugin -- the new function
                         // in particular.
-                        let arg_count = if let Some(path) = path.split(PATH_SEP).nth(1) {
+                        let mut arg_count = if let Some(path) = path.split(PATH_SEP).nth(1) {
                             thonk.insert_instruction(
                                 Instruction::Push(Value::String(path.to_owned())),
                                 location!(),
@@ -569,6 +577,12 @@ fn compile_static_method_call(
                         } else {
                             0
                         };
+
+                        for arg in args.iter() {
+                            compile_expression(arg, thonk, context)?;
+                        }
+
+                        arg_count += args.len();
 
                         // This is used by the VM to load the plugin from the extensions directory.
                         thonk
@@ -593,6 +607,7 @@ fn compile_static_method_call(
                 }
             } else {
                 // 🚧 I feel like the extruder should catch this.
+                // Another mysterious comment by yours truly.
                 let func1 = lu_dog.exhume_function_id_by_name(func);
 
                 let func1 = match func1 {
@@ -704,12 +719,14 @@ mod test {
     fn func_call() {
         setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
-        let ore = "fn main() {
-                       foo();
-                   }
-                   fn foo() {
-                       print(\"Hello, world!\");
-                   }";
+        let ore = "
+        fn foo() {
+            print(\"Hello, world!\");
+        }
+        fn main() {
+            foo();
+        }
+                   ";
         let ast = parse_dwarf("func_call", ore).unwrap();
         let ctx = new_lu_dog(
             "func_call".to_owned(),
@@ -734,12 +751,14 @@ mod test {
     fn test_func_args() {
         setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
-        let ore = "fn main() -> int {
-                       foo(1, 2, 3)
-                   }
-                   fn foo(x: int, y: int, z: int) -> int {
-                       x + y + z
-                   }";
+        let ore = "
+        fn foo(x: int, y: int, z: int) -> int {
+            x + y + z
+        }
+        fn main() -> int {
+            foo(1, 2, 3)
+        }
+                   ";
         let ast = parse_dwarf("test_func_args", ore).unwrap();
         let ctx = new_lu_dog(
             "test_func_args".to_owned(),
@@ -764,15 +783,17 @@ mod test {
     fn test_func_with_args_and_locals() {
         setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
-        let ore = "fn main() -> int {
-                       foo(1, 2, 3)
-                   }
-                   fn foo(x: int, y: int, z: int) -> int {
-                       let a = 1;
-                       let b = 2;
-                       let c = 3;
-                       x + y + z + a + b + c
-                   }";
+        let ore = "
+        fn foo(x: int, y: int, z: int) -> int {
+            let a = 1;
+            let b = 2;
+            let c = 3;
+            x + y + z + a + b + c
+        }
+        fn main() -> int {
+           foo(1, 2, 3)
+        }
+    ";
         let ast = parse_dwarf("test_func_args_and_locals", ore).unwrap();
         let ctx = new_lu_dog(
             "test_func_args_and_locals".to_owned(),
@@ -797,14 +818,16 @@ mod test {
     fn test_argument_ordering() {
         setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
-        let ore = "fn main() {
-                       foo(1, 2, 3)
-                   }
-                   fn foo(x: int, y: int, z: int) {
-                       chacha::assert_eq(x, 1);
-                       chacha::assert_eq(y, 2);
-                       chacha::assert_eq(z, 3);
-                   }";
+        let ore = "
+        fn foo(x: int, y: int, z: int) {
+            chacha::assert_eq(x, 1);
+            chacha::assert_eq(y, 2);
+            chacha::assert_eq(z, 3);
+        }
+        fn main() {
+            foo(1, 2, 3)
+        }
+                   ";
         let ast = parse_dwarf("test_argument_ordering", ore).unwrap();
         let ctx = new_lu_dog(
             "test_argument_ordering".to_owned(),

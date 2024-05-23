@@ -2,7 +2,7 @@
 use std::{env, thread};
 
 use ansi_term::Colour;
-use rustc_hash::FxHashMap as HashMap;
+use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use snafu::{location, Location};
 
 use crate::{
@@ -152,6 +152,7 @@ pub fn start_repl(
                                     scopes: &mut scopes,
                                     imports: &mut imports,
                                     generics: Vec::new(),
+                                    types: &mut HashSet::default(),
                                 },
                                 &mut Vec::new(),
                                 &mut lu_dog,

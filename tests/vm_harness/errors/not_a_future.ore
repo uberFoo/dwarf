@@ -1,0 +1,4 @@
+async fn main() -> Future<()> {
+    let a = 6;
+    a.await;
+}

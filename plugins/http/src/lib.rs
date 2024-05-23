@@ -16,7 +16,10 @@ use abi_stable::{
 };
 use async_compat::Compat;
 use dwarf::{
-    chacha::{error::ChaChaError, ffi_value::FfiValue},
+    chacha::{
+        error::ChaChaError,
+        ffi_value::{FfiStruct, FfiValue},
+    },
     plug_in::{Error, LambdaCall, Plugin, PluginModRef, PluginModule, PluginType, Plugin_TO},
     DwarfInteger,
 };
@@ -343,8 +346,8 @@ mod http_server {
         lambda_call: RSender<LambdaCall>,
         requests: Arc<Mutex<Slab<Arc<Request<IncomingBody>>>>>,
         uris: Arc<Mutex<RefCell<Slab<Arc<Uri>>>>>,
-        routes: Arc<Mutex<RefCell<HashMap<(String, Method), (usize, ResponseType)>>>>,
-        prefix_routes: Arc<Mutex<RefCell<HashMap<(String, Method), (usize, ResponseType)>>>>,
+        routes: Arc<Mutex<RefCell<HashMap<(String, Method), usize>>>>,
+        prefix_routes: Arc<Mutex<RefCell<HashMap<(String, Method), usize>>>>,
         tls: Arc<
             Mutex<
                 RefCell<
@@ -358,6 +361,8 @@ mod http_server {
             >,
         >,
         strings: Arc<Mutex<Slab<String>>>,
+        response_builders: Arc<Mutex<Slab<Option<hyper::http::response::Builder>>>>,
+        responses: Arc<Mutex<Slab<Response<Full<Bytes>>>>>,
     }
 
     impl HttpServer {
@@ -370,6 +375,8 @@ mod http_server {
                 prefix_routes: Arc::new(Mutex::new(RefCell::new(HashMap::default()))),
                 tls: Arc::new(Mutex::new(RefCell::new(None))),
                 strings: Arc::new(Mutex::new(Slab::new())),
+                response_builders: Arc::new(Mutex::new(Slab::new())),
+                responses: Arc::new(Mutex::new(Slab::new())),
             }
         }
     }
@@ -514,12 +521,7 @@ mod http_server {
                             };
                             let method = Method::from(MethodStr(method.as_str()));
 
-                            let FfiValue::String(body) = args.get(2).unwrap() else {
-                                panic!("Invalid body");
-                            };
-                            let body = ResponseType::from(ResponseStr(body.as_str()));
-
-                            let FfiValue::Lambda(number) = args.get(3).unwrap() else {
+                            let FfiValue::Lambda(number) = args.get(2).unwrap() else {
                                 panic!("Invalid lambda");
                             };
 
@@ -529,7 +531,7 @@ mod http_server {
                                 .lock()
                                 .unwrap()
                                 .borrow_mut()
-                                .insert((path.to_string(), method), (*number, body));
+                                .insert((path.to_string(), method), *number);
 
                             Ok(FfiValue::Empty)
                         }
@@ -543,12 +545,7 @@ mod http_server {
                             };
                             let method = Method::from(MethodStr(method.as_str()));
 
-                            let FfiValue::String(body) = args.get(2).unwrap() else {
-                                panic!("Invalid body");
-                            };
-                            let body = ResponseType::from(ResponseStr(body.as_str()));
-
-                            let FfiValue::Lambda(number) = args.get(3).unwrap() else {
+                            let FfiValue::Lambda(number) = args.get(2).unwrap() else {
                                 panic!("Invalid lambda");
                             };
 
@@ -558,7 +555,7 @@ mod http_server {
                                 .lock()
                                 .unwrap()
                                 .borrow_mut()
-                                .insert((path.to_string(), method), (*number, body));
+                                .insert((path.to_string(), method), *number);
 
                             Ok(FfiValue::Empty)
                         }
@@ -604,6 +601,127 @@ mod http_server {
                                     .unwrap();
 
                             *self.tls.lock().unwrap().borrow_mut() = Some((cert, key));
+
+                            Ok(FfiValue::Empty)
+                        }
+                        func => Err(Error::Plugin(format!("Invalid function: {func}").into())),
+                    },
+                    "Response" => match func.as_str() {
+                        "new" => {
+                            let response = Response::builder();
+                            let mut guard = self.response_builders.lock().unwrap();
+                            let entry = guard.vacant_entry();
+                            let key = entry.key();
+                            guard.insert(Some(response));
+
+                            Ok(FfiValue::Integer(key as DwarfInteger))
+                        }
+                        "status" => {
+                            let key: DwarfInteger = args
+                                .first()
+                                .unwrap()
+                                .try_into()
+                                .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
+                                .unwrap();
+                            let status: DwarfInteger = args
+                                .get(1)
+                                .unwrap()
+                                .try_into()
+                                .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
+                                .unwrap();
+
+                            let mut guard = self.response_builders.lock().unwrap();
+                            if let Some(option) = guard.get_mut(key as usize) {
+                                let response = option.take().unwrap();
+                                let response = response.status(status as u16);
+                                *option = Some(response);
+
+                                Ok(FfiValue::Empty)
+                            } else {
+                                Err(Error::Plugin("Invalid response".into()))
+                            }
+                        }
+                        "body" => {
+                            let key: DwarfInteger = args
+                                .first()
+                                .unwrap()
+                                .try_into()
+                                .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
+                                .unwrap();
+                            let body: String = args
+                                .get(1)
+                                .unwrap()
+                                .try_into()
+                                .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
+                                .unwrap();
+
+                            let mut guard = self.response_builders.lock().unwrap();
+                            let option = guard.get_mut(key as usize).unwrap();
+                            let response = option.take().unwrap();
+                            let response = response.body(Full::new(Bytes::from(body)));
+                            guard.remove(key as usize);
+
+                            let mut guard = self.responses.lock().unwrap();
+                            let entry = guard.vacant_entry();
+                            let key = entry.key();
+                            guard.insert(response.unwrap());
+
+                            Ok(FfiValue::Integer(key as DwarfInteger))
+                        }
+                        "json" => {
+                            let key: DwarfInteger = args
+                                .first()
+                                .unwrap()
+                                .try_into()
+                                .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
+                                .unwrap();
+                            let json: String = args
+                                .get(1)
+                                .unwrap()
+                                .try_into()
+                                .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
+                                .unwrap();
+
+                            let mut guard = self.response_builders.lock().unwrap();
+                            let option = guard.get_mut(key as usize).unwrap();
+                            let response = option.take().unwrap();
+                            let response = response
+                                .header(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+                            let response = response.body(Full::new(Bytes::from(json)));
+                            guard.remove(key as usize);
+
+                            let mut guard = self.responses.lock().unwrap();
+                            let entry = guard.vacant_entry();
+                            let key = entry.key();
+                            guard.insert(response.unwrap());
+
+                            Ok(FfiValue::Integer(key as DwarfInteger))
+                        }
+                        "set_header" => {
+                            let key: DwarfInteger = args
+                                .first()
+                                .unwrap()
+                                .try_into()
+                                .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
+                                .unwrap();
+                            let header: String = args
+                                .get(1)
+                                .unwrap()
+                                .try_into()
+                                .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
+                                .unwrap();
+                            let value: String = args
+                                .get(2)
+                                .unwrap()
+                                .try_into()
+                                .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
+                                .unwrap();
+
+                            let mut guard = self.response_builders.lock().unwrap();
+                            let option = guard.get_mut(key as usize).unwrap();
+                            let response = option.take().unwrap();
+                            let response = response.header(header, value);
+                            *option = Some(response);
 
                             Ok(FfiValue::Empty)
                         }
@@ -723,12 +841,8 @@ mod http_server {
 
         fn call(&self, req: Request<IncomingBody>) -> Self::Future {
             fn mk_response(s: String) -> Result<Response<Full<Bytes>>, hyper::Error> {
-                Ok(Response::builder().body(Full::new(Bytes::from(s))).unwrap())
-            }
-
-            fn mk_json_response(s: String) -> Result<Response<Full<Bytes>>, hyper::Error> {
                 Ok(Response::builder()
-                    .header("Content-Type", "application/json")
+                    .header("Content-Type", "text/plain; charset=utf-8")
                     .body(Full::new(Bytes::from(s)))
                     .unwrap())
             }
@@ -747,11 +861,18 @@ mod http_server {
                     .unwrap())
             }
 
+            fn mk_css_response(s: String) -> Result<Response<Full<Bytes>>, hyper::Error> {
+                Ok(Response::builder()
+                    .header("Content-Type", "text/css; charset=utf-8")
+                    .body(Full::new(Bytes::from(s)))
+                    .unwrap())
+            }
+
             let path = req.uri().path().to_owned();
             let method = req.method().clone();
 
             let server = self.server.borrow_mut();
-            let key = {
+            let request_handle = {
                 let mut requests = server.requests.lock().unwrap();
                 let entry = requests.vacant_entry();
                 let key = entry.key();
@@ -800,52 +921,27 @@ mod http_server {
                             .unwrap())
                     })
                 }
-            } else if let Some((lambda, response_body_type)) = lambda_option {
-                let (s, result) = crossbeam::channel::bounded(1);
-
-                let lambda_call = LambdaCall {
-                    lambda: lambda,
-                    args: vec![FfiValue::Integer(key as DwarfInteger)].into(),
-                    result: s.into(),
-                };
-                server.lambda_call.send(lambda_call).unwrap();
-                let result = result.recv().unwrap();
-
-                let ROk(FfiValue::String(result)) = result else {
-                    match result {
-                        RErr(e) => {
-                            eprintln!("Error: {e:?}");
-                            return Box::pin(async {
-                                mk_response(
-                                    format!("<p>oh no! something went terribly wrong. 🤯</p>")
-                                        .into(),
-                                )
-                            });
-                        }
-                        ROk(value) => {
-                            eprintln!("Expected String and found {value:?}");
-                            return Box::pin(async {
-                                mk_response(
-                                    format!("<p>oh no! something went terribly wrong. 🤯</p>")
-                                        .into(),
-                                )
-                            });
-                        }
+            } else if let Some(lambda) = lambda_option {
+                // Invoke the lambda passing the handle to the request.
+                let response = match invoke_lambda(
+                    lambda,
+                    vec![FfiValue::Integer(request_handle as DwarfInteger)].into(),
+                    &server,
+                ) {
+                    Ok(result) => result,
+                    Err(e) => {
+                        return Box::pin(async { mk_response(e) });
                     }
                 };
 
                 let mut requests = server.requests.lock().unwrap();
-                requests.remove(key);
+                requests.remove(request_handle);
 
-                match response_body_type {
-                    ResponseType::Text => Box::pin(async move { mk_response(result.to_string()) }),
-                    ResponseType::Json => {
-                        Box::pin(async move { mk_json_response(result.to_string()) })
-                    }
-                }
-            } else if let Some((lambda, response_body_type)) = prefix_lambda_option {
-                let (s, result) = crossbeam::channel::bounded(1);
+                let mut responses = server.responses.lock().unwrap();
+                let response = responses.remove(response as usize);
 
+                Box::pin(async { Ok(response) })
+            } else if let Some(lambda) = prefix_lambda_option {
                 let suffix = {
                     let mut guard = server.strings.lock().unwrap();
                     let entry = guard.vacant_entry();
@@ -854,50 +950,30 @@ mod http_server {
                     key
                 };
 
-                let lambda_call = LambdaCall {
-                    lambda: lambda,
-                    args: vec![
-                        FfiValue::Integer(key as DwarfInteger),
+                // Invoke the lambda passing the handle to the request as well as
+                // the suffix of the path.
+                let response = match invoke_lambda(
+                    lambda,
+                    vec![
+                        FfiValue::Integer(request_handle as DwarfInteger),
                         FfiValue::Integer(suffix as DwarfInteger),
                     ]
                     .into(),
-                    result: s.into(),
-                };
-                server.lambda_call.send(lambda_call).unwrap();
-                let result = result.recv().unwrap();
-
-                let ROk(FfiValue::String(result)) = result else {
-                    match result {
-                        RErr(e) => {
-                            eprintln!("Error: {e:?}");
-                            return Box::pin(async {
-                                mk_response(
-                                    format!("<p>oh no! something went terribly wrong. 🤯</p>")
-                                        .into(),
-                                )
-                            });
-                        }
-                        ROk(value) => {
-                            eprintln!("Expected String and found {value:?}");
-                            return Box::pin(async {
-                                mk_response(
-                                    format!("<p>oh no! something went terribly wrong. 🤯</p>")
-                                        .into(),
-                                )
-                            });
-                        }
+                    &server,
+                ) {
+                    Ok(result) => result,
+                    Err(e) => {
+                        return Box::pin(async { mk_response(e) });
                     }
                 };
 
                 let mut requests = server.requests.lock().unwrap();
-                requests.remove(key);
+                requests.remove(request_handle);
 
-                match response_body_type {
-                    ResponseType::Text => Box::pin(async move { mk_response(result.to_string()) }),
-                    ResponseType::Json => {
-                        Box::pin(async move { mk_json_response(result.to_string()) })
-                    }
-                }
+                let mut responses = server.responses.lock().unwrap();
+                let response = responses.remove(response as usize);
+
+                Box::pin(async { Ok(response) })
             } else {
                 let mut dwarf_home: PathBuf = env::var("DWARF_HOME")
                     .unwrap_or_else(|_| {
@@ -915,7 +991,7 @@ mod http_server {
                 if path.contains("/404.css") {
                     dwarf_home.push(CSS_404);
                     let css_404 = fs::read_to_string(&dwarf_home).unwrap();
-                    Box::pin(async move { mk_response(css_404.into()) })
+                    Box::pin(async move { mk_css_response(css_404.into()) })
                 } else if path.contains("/404.webp") {
                     dwarf_home.push(WEBP_404);
                     let webp_404 = fs::read(&dwarf_home).unwrap();
@@ -927,5 +1003,45 @@ mod http_server {
                 }
             }
         }
+    }
+
+    /// Invoke a Lambda returning a [`FfiValue::Struct``]
+    ///
+    /// Invoke a lambda in the dwarf process and return a Struct to the caller.
+    /// This is used by the Service.
+    fn invoke_lambda(
+        lambda: usize,
+        args: RVec<FfiValue>,
+        server: &HttpServer,
+    ) -> Result<DwarfInteger, String> {
+        let (s, result) = crossbeam::channel::bounded(1);
+
+        let lambda_call = LambdaCall {
+            lambda: lambda,
+            args,
+            result: s.into(),
+        };
+        server.lambda_call.send(lambda_call).unwrap();
+        let result = result.recv().unwrap();
+
+        let ROk(FfiValue::Struct(response)) = result else {
+            match result {
+                RErr(e) => {
+                    eprintln!("Error in http plugin lambda result: {e:?}");
+                    return Err(format!("oh no! something went terribly wrong. 🤯").into());
+                }
+                ROk(value) => {
+                    eprintln!("Expected Struct and found {value:?}");
+                    return Err(format!("oh no! something went terribly wrong. 🤯").into());
+                }
+            }
+        };
+
+        let inner = response.get_attr("inner");
+        let Some(&FfiValue::Integer(inner)) = inner else {
+            return Err("No inner attribute found on Response object! 😱".to_owned());
+        };
+
+        Ok(inner)
     }
 }

@@ -1,4 +1,3 @@
-Interpreter exited with:
 [31mError:[0m variable `[33ma[0m` not found
    [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m var_not_found:2:11 [38;5;246m][0m
    [38;5;246m│[0m

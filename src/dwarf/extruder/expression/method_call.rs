@@ -2,19 +2,21 @@ use std::ops::Range;
 
 use ansi_term::Colour;
 use snafu::{location, Location};
+use uuid::Uuid;
 
 use crate::{
     dwarf::{
         error::{DwarfError, Result},
         extruder::{
             debug, e_warn, function, inter_expression, link_argument,
-            lookup_woog_struct_method_return_type, update_span_value, Context, ExprSpan,
+            lookup_woog_enum_method_return_type, lookup_woog_struct_method_return_type,
+            update_span_value, Context, ExprSpan,
         },
         Expression as ParserExpression, PrintableValueType,
     },
     keywords::{
-        FORMAT, GET, INSERT, INVOKE_FUNC, INVOKE_FUNC_MUT, IS_DIGIT, LEN, LINES, MAP, MAX, PUSH,
-        REPLACE, SPLIT, SUM, TO_DIGIT, TRIM,
+        FORMAT, GET, INSERT, INVOKE_FUNC, INVOKE_FUNC_MUT, IS_DIGIT, JOIN, LEN, LINES, MAP, MAX,
+        OPTION_TYPE, PUSH, REPLACE, SPLIT, SUM, TO_DIGIT, TRIM,
     },
     lu_dog::{
         store::ObjectStore as LuDogStore, Argument, Block, Call, Expression, List, MethodCall,
@@ -121,6 +123,55 @@ pub(in crate::dwarf::extruder) fn method_call_return_type(
         PrintableValueType(true, &instance_ty, context, lu_dog).to_string()
     );
     let ty = match s_read!(instance_ty).subtype {
+        ValueTypeEnum::AnyList(ref list) => match method.as_str() {
+            JOIN => {
+                let ty = Ty::new_z_string(context.sarzak);
+                ValueType::new_ty(true, &ty, lu_dog)
+            }
+            LEN => {
+                let ty = Ty::new_integer(context.sarzak);
+                ValueType::new_ty(true, &ty, lu_dog)
+            }
+            MAP => {
+                if arg_ty.len() != 1 {
+                    return Err(vec![DwarfError::WrongNumberOfArguments {
+                        expected: 1,
+                        found: arg_ty.len(),
+                        file: context.file_name.to_owned(),
+                        span: meth_span.to_owned(),
+                        location: location!(),
+                        program: context.source_string.to_owned(),
+                    }]);
+                }
+
+                ValueType::new_any_list(true, lu_dog)
+            }
+            PUSH => {
+                if arg_ty.len() != 1 {
+                    return Err(vec![DwarfError::WrongNumberOfArguments {
+                        expected: 1,
+                        found: arg_ty.len(),
+                        file: context.file_name.to_owned(),
+                        span: meth_span.to_owned(),
+                        location: location!(),
+                        program: context.source_string.to_owned(),
+                    }]);
+                }
+                let arg_ty = arg_ty.pop().unwrap();
+
+                arg_ty.clone()
+            }
+            SUM => instance_ty.clone(),
+            _ => {
+                return Err(vec![DwarfError::NoSuchMethod {
+                    method: method.to_owned(),
+                    file: context.file_name.to_owned(),
+                    span: meth_span.to_owned(),
+                    location: location!(),
+                    program: context.source_string.to_owned(),
+                }])
+            }
+        },
         ValueTypeEnum::Char(_) => match method.as_str() {
             IS_DIGIT => {
                 let ty = Ty::new_boolean(context.sarzak);
@@ -140,7 +191,34 @@ pub(in crate::dwarf::extruder) fn method_call_return_type(
                 }])
             }
         },
+        ValueTypeEnum::Enumeration(ref id) => {
+            let woog_enum = lu_dog.exhume_enumeration(id).unwrap();
+            let x = lookup_woog_enum_method_return_type(
+                &s_read!(woog_enum).name,
+                method,
+                meth_span,
+                context,
+                lu_dog,
+            )?;
+
+            #[allow(clippy::let_and_return)]
+            x
+        }
+        ValueTypeEnum::EnumGeneric(ref generic) => {
+            let generic = lu_dog.exhume_enum_generic(generic).unwrap();
+            let woog_enum = &s_read!(generic).r104_enumeration(lu_dog)[0];
+            let ty = s_read!(woog_enum).r1_value_type(lu_dog)[0].clone();
+            // let ty = s_read!(generic).r1_value_type(lu_dog)[0].clone();
+            // let ty_str = PrintableValueType(true, &ty, context, lu_dog);
+
+            // dbg!(ty_str.to_string());
+            ty
+        }
         ValueTypeEnum::List(ref list) => match method.as_str() {
+            JOIN => {
+                let ty = Ty::new_z_string(context.sarzak);
+                ValueType::new_ty(true, &ty, lu_dog)
+            }
             LEN => {
                 let ty = Ty::new_integer(context.sarzak);
                 ValueType::new_ty(true, &ty, lu_dog)
@@ -176,17 +254,16 @@ pub(in crate::dwarf::extruder) fn method_call_return_type(
 
                 let inner_ty = s_read!(list).ty;
                 let inner_ty = lu_dog.exhume_value_type(&inner_ty).unwrap();
-                let inner_ty = s_read!(inner_ty);
+                let r_inner_ty = s_read!(inner_ty);
 
-                if &*s_read!(arg_ty) != &*inner_ty {
+                if &*s_read!(arg_ty) != &*r_inner_ty {
                     // let expected_span = &inner_ty.r62_span(lu_dog)[0];
                     // let expected_span = s_read!(expected_span);
                     // let expected_span = expected_span.start as usize..expected_span.end as usize;
                     let expected_span = 0..0;
 
                     return Err(vec![DwarfError::TypeMismatch {
-                        expected: PrintableValueType(true, &instance_ty, context, lu_dog)
-                            .to_string(),
+                        expected: PrintableValueType(true, &inner_ty, context, lu_dog).to_string(),
                         found: PrintableValueType(true, &arg_ty, context, lu_dog).to_string(),
                         file: context.file_name.to_owned(),
                         expected_span,
@@ -210,10 +287,6 @@ pub(in crate::dwarf::extruder) fn method_call_return_type(
             }
         },
         ValueTypeEnum::Map(ref map) => match method.as_str() {
-            LEN => {
-                let ty = Ty::new_integer(context.sarzak);
-                ValueType::new_ty(true, &ty, lu_dog)
-            }
             INSERT => {
                 if arg_ty.len() != 2 {
                     return Err(vec![DwarfError::WrongNumberOfArguments {
@@ -274,6 +347,42 @@ pub(in crate::dwarf::extruder) fn method_call_return_type(
                 }
 
                 ValueType::new_empty(true, lu_dog)
+            }
+            GET => {
+                if arg_ty.len() != 1 {
+                    return Err(vec![DwarfError::WrongNumberOfArguments {
+                        expected: 1,
+                        found: arg_ty.len(),
+                        file: context.file_name.to_owned(),
+                        span: meth_span.to_owned(),
+                        location: location!(),
+                        program: context.source_string.to_owned(),
+                    }]);
+                }
+
+                // let map = lu_dog.exhume_map(map).unwrap();
+                // let map = s_read!(map);
+                // Ideally this becomes part of the type we are returning.
+                // let value_ty = map.r116_value_type(lu_dog)[0].clone();
+
+                let Some(ty) = lu_dog.exhume_enumeration_id_by_name(OPTION_TYPE) else {
+                    return Err(vec![DwarfError::ObjectNameNotFound {
+                        name: OPTION_TYPE.to_owned(),
+                        file: context.file_name.to_owned(),
+                        span: meth_span.to_owned(),
+                        location: location!(),
+                        program: context.source_string.to_owned(),
+                    }]);
+                };
+                let option = lu_dog.exhume_enumeration(&ty).unwrap();
+
+                let result = s_read!(option).r1_value_type(lu_dog)[0].clone();
+
+                result
+            }
+            LEN => {
+                let ty = Ty::new_integer(context.sarzak);
+                ValueType::new_ty(true, &ty, lu_dog)
             }
             _ => {
                 return Err(vec![DwarfError::NoSuchMethod {
@@ -383,9 +492,10 @@ pub(in crate::dwarf::extruder) fn method_call_return_type(
             let x = lookup_woog_struct_method_return_type(
                 &s_read!(woog_struct).name,
                 method,
-                context.sarzak,
+                meth_span,
+                context,
                 lu_dog,
-            );
+            )?;
 
             #[allow(clippy::let_and_return)]
             x
@@ -405,9 +515,13 @@ pub(in crate::dwarf::extruder) fn method_call_return_type(
             }
         },
         ref ty => {
-            e_warn!("Unknown type for method call {method}, {ty:?}");
-
-            ValueType::new_unknown(true, lu_dog)
+            return Err(vec![DwarfError::Internal {
+                description: format!("unknown type for method call: `{ty:?}`"),
+                file: context.file_name.to_owned(),
+                span: meth_span.to_owned(),
+                location: location!(),
+                program: context.source_string.to_owned(),
+            }])
         }
     };
 

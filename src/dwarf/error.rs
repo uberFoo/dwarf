@@ -85,10 +85,13 @@ pub enum DwarfError {
     /// Internal Error
     ///
     /// This is an unrecoverable internal error.
-    #[snafu(display("\n{}: unrecoverable internal error\n  -->{description}\n  --> {}:{}:{}", ERR_CLR.bold().paint("error"), location.file, location.line, location.column))]
+    #[snafu(display("\n{}: internal compiler error\n  -->{description}\n  --> {}:{}:{}", ERR_CLR.bold().paint("error"), location.file, location.line, location.column))]
     Internal {
         description: String,
+        file: String,
+        span: Span,
         location: Location,
+        program: String,
     },
 
     /// IO Related Error
@@ -125,12 +128,13 @@ pub enum DwarfError {
     /// Missing Implementation
     ///
     /// This is just not done yet.
-    #[snafu(display("\n{}: Missing implementation: {missing}\n  --> {}", POP_CLR.bold().paint("warning"), POP_CLR.underline().paint(code)))]
+    #[snafu(display("\n{}: Missing implementation: {missing}\n --> {}:{}:{}", POP_CLR.bold().paint("warning"), location.file, location.line, location.column))]
     NoImplementation {
         missing: String,
-        code: String,
         file: String,
         span: Span,
+        program: String,
+        location: Location,
     },
 
     /// Not a List Type
@@ -239,6 +243,18 @@ pub enum DwarfError {
     #[snafu(display("\n{}: Unknown type: {ty}", ERR_CLR.bold().paint("error")))]
     UnknownType {
         ty: String,
+        file: String,
+        span: Span,
+        location: Location,
+        program: String,
+    },
+    /// A Variable was not found
+    ///
+    /// While happily interpreting away, we ran into a variable that we could
+    /// not resolve.
+    #[snafu(display("\n{}: variable `{}` not found.", ERR_CLR.bold().paint("error"), POP_CLR.paint(var)))]
+    VariableNotFound {
+        var: String,
         file: String,
         span: Span,
         location: Location,
@@ -391,6 +407,39 @@ impl fmt::Display for DwarfErrorReporter<'_> {
                     .map_err(|_| fmt::Error)?;
                 write!(f, "{}", String::from_utf8_lossy(&std_err))
             }
+            DwarfError::Internal {
+                description,
+                file,
+                span,
+                location,
+                program,
+            } => {
+                let report = Report::build(ReportKind::Error, file, span.start)
+                    .with_message("Internal Compiler Error")
+                    .with_label(
+                        Label::new((file, span.to_owned()))
+                            .with_message(format!("{}", description))
+                            .with_color(Color::Red),
+                    );
+
+                let report = if is_uber {
+                    report.with_note(format!(
+                        "{}:{}:{}\n",
+                        OTHER_CLR.paint(location.file.to_string()),
+                        POP_CLR.paint(format!("{}", location.line)),
+                        OK_CLR.paint(format!("{}", location.column)),
+                    ))
+                } else {
+                    report
+                };
+
+                let source = Source::from(&program);
+                report
+                    .finish()
+                    .write((file, source), &mut std_err)
+                    .map_err(|_| fmt::Error)?;
+                write!(f, "{}", String::from_utf8_lossy(&std_err))
+            }
             DwarfError::MissingFunctionDefinition {
                 file,
                 span,
@@ -403,6 +452,42 @@ impl fmt::Display for DwarfErrorReporter<'_> {
                             .with_message("function called here is not found")
                             .with_color(Color::Red),
                     )
+                    .finish()
+                    .write((file, Source::from(&program)), &mut std_err)
+                    .map_err(|_| fmt::Error)?;
+                write!(f, "{}", String::from_utf8_lossy(&std_err))
+            }
+            DwarfError::NoImplementation {
+                missing,
+                span,
+                location,
+                program,
+                file,
+            } => {
+                let span = span.clone();
+                let report = Report::build(ReportKind::Error, file, span.start)
+                    // 🚧 Figure out some error numbering scheme and use one of
+                    // the snafu magic methods to provide the value here.
+                    //.with_code(&code)
+                    .with_message(format!("no implementation for {missing}"))
+                    .with_label(
+                        Label::new((file, span))
+                            .with_message("used here".to_string())
+                            .with_color(Color::Red),
+                    );
+
+                let report = if is_uber {
+                    report.with_note(format!(
+                        "{}:{}:{}",
+                        OTHER_CLR.paint(location.file.to_string()),
+                        POP_CLR.paint(format!("{}", location.line)),
+                        OK_CLR.paint(format!("{}", location.column)),
+                    ))
+                } else {
+                    report
+                };
+
+                report
                     .finish()
                     .write((file, Source::from(&program)), &mut std_err)
                     .map_err(|_| fmt::Error)?;
@@ -455,8 +540,7 @@ impl fmt::Display for DwarfErrorReporter<'_> {
                 let span = span.clone();
                 let report = Report::build(ReportKind::Error, file, span.start)
                     .with_message(format!(
-                        "multiply defined symbol: {}{}",
-                        OTHER_CLR.paint(orig_path),
+                        "multiply defined symbol: {}",
                         OTHER_CLR.paint(name)
                     ))
                     .with_label(
@@ -466,16 +550,26 @@ impl fmt::Display for DwarfErrorReporter<'_> {
                     );
 
                 let report = if is_uber {
-                    report.with_note(format!(
-                        "{}:{}:{}",
-                        OTHER_CLR.paint(location.file.to_string()),
-                        POP_CLR.paint(format!("{}", location.line)),
-                        OK_CLR.paint(format!("{}", location.column)),
-                    ))
+                    report
+                        .with_note(format!(
+                            "{}:{}:{}",
+                            OTHER_CLR.paint(location.file.to_string()),
+                            POP_CLR.paint(format!("{}", location.line)),
+                            OK_CLR.paint(format!("{}", location.column)),
+                        ))
+                        .with_note(format!(
+                            "The new symbol {}{} collides with the old symbol {}{}",
+                            OTHER_CLR.paint(path),
+                            OTHER_CLR.paint(name),
+                            OTHER_CLR.paint(orig_path),
+                            OTHER_CLR.paint(name)
+                        ))
                 } else {
                     report.with_note(format!(
-                        "The new path is {}{}",
+                        "The new symbol {}{} collides with the old symbol {}{}",
                         OTHER_CLR.paint(path),
+                        OTHER_CLR.paint(name),
+                        OTHER_CLR.paint(orig_path),
                         OTHER_CLR.paint(name)
                     ))
                 };
@@ -726,6 +820,44 @@ impl fmt::Display for DwarfErrorReporter<'_> {
                     } else {
                         report
                     }
+                } else {
+                    report
+                };
+
+                report
+                    .finish()
+                    .write((file, Source::from(&program)), &mut std_err)
+                    .map_err(|_| fmt::Error)?;
+                write!(f, "{}", String::from_utf8_lossy(&std_err))
+            }
+            DwarfError::VariableNotFound {
+                var,
+                file,
+                span,
+                location,
+                program,
+            } => {
+                let report = Report::build(ReportKind::Error, file, span.start)
+                    .with_message(format!("variable `{}` not found", POP_CLR.paint(var)))
+                    .with_label(
+                        Label::new((file, span.clone()))
+                            .with_message("used here")
+                            .with_color(Color::Red),
+                    );
+
+                let report = if is_uber {
+                    report.with_note(format!(
+                        "{}:{}:{}\n",
+                        OTHER_CLR.paint(location.file.to_string()),
+                        POP_CLR.paint(format!("{}", location.line)),
+                        OK_CLR.paint(format!("{}", location.column)),
+                    ))
+                } else if var == "assert_eq" || var == "time" || var == "eps" {
+                    report.with_note(format!(
+                        "This is a built-in function. Try adding `chacha::` before \
+                         the name, e.g. `chacha::{}`.",
+                        POP_CLR.paint(var)
+                    ))
                 } else {
                     report
                 };

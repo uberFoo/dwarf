@@ -92,6 +92,7 @@ pub fn inter(
     } else {
         &type_name
     };
+
     let type_name = if let Some(path) = context.scopes.get(base_name) {
         path.to_owned() + type_name.as_str()
     } else {
@@ -271,7 +272,8 @@ pub fn inter(
             }
             _ => {
                 debug!("ParserExpression::StaticMethodCall: looking up type {type_name}");
-                lookup_woog_struct_method_return_type(&type_name, method, context.sarzak, lu_dog)
+                let span = s_read!(span).start as usize..s_read!(span).end as usize;
+                lookup_woog_struct_method_return_type(&type_name, method, span, context, lu_dog)?
             }
         };
 
@@ -374,7 +376,7 @@ pub fn inter(
         } else {
             let span = s_read!(span).start as usize..s_read!(span).end as usize;
             return Err(vec![DwarfError::ObjectNameNotFound {
-                name: type_name.strip_prefix(PATH_SEP).unwrap().to_owned(),
+                name: type_name.to_owned(),
                 file: context.file_name.to_owned(),
                 span,
                 location: location!(),
@@ -532,9 +534,13 @@ fn inter_field(
                         }
 
                         let (Type::UserType(_, generics), _) = &path[0] else {
+                            let s = s_read!(span).start as usize..s_read!(span).end as usize;
                             return Err(vec![DwarfError::Internal {
                                 description: "Expected generics".to_owned(),
+                                file: context.file_name.to_owned(),
+                                span: s,
                                 location: location!(),
+                                program: context.source_string.to_owned(),
                             }]);
                         };
 

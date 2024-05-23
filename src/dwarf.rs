@@ -13,14 +13,15 @@ use rustc_hash::FxHashMap as HashMap;
 use sarzak::sarzak::types::Ty;
 use serde::{Deserialize, Serialize};
 use snafu::{location, Location};
+use uuid::Uuid;
 
 use crate::{
     dwarf::items::enuum::create_generic_enum,
     lu_dog::{
-        store::ObjectStore as LuDogStore, types::ValueType, Lambda, List, Span as LuDogSpan,
-        XFuture,
+        store::ObjectStore as LuDogStore, types::ValueType, Block, DwarfSourceFile, Lambda, List,
+        LocalVariable, Map, Span as LuDogSpan, Variable, XFuture, XValue,
     },
-    s_read, RefType,
+    s_read, s_write, RefType, PATH_SEP,
 };
 
 pub mod error;
@@ -76,6 +77,7 @@ pub enum Token {
     Fn,
     For,
     Halt,
+    HashMap,
     Ident(String),
     If,
     Impl,
@@ -114,6 +116,7 @@ impl fmt::Display for Token {
             Self::Fn => write!(f, "fn"),
             Self::For => write!(f, "for"),
             Self::Halt => write!(f, "hcf 🔥"),
+            Self::HashMap => write!(f, "HashMap"),
             Self::Ident(ident) => write!(f, "{}", ident),
             Self::If => write!(f, "if"),
             Self::Impl => write!(f, "impl"),
@@ -145,6 +148,10 @@ pub enum Type {
     Float,
     Fn(Vec<Spanned<Self>>, Box<Spanned<Self>>),
     Generic(Spanned<String>),
+    HashMap {
+        key: Box<Spanned<Self>>,
+        value: Box<Spanned<Self>>,
+    },
     Integer,
     List(Box<Spanned<Self>>),
     Path(Vec<Spanned<Self>>),
@@ -179,6 +186,7 @@ impl fmt::Display for Type {
                 write!(f, ") -> {}", return_.0)
             }
             Self::Generic(name) => write!(f, "{}", name.0),
+            Self::HashMap { key, value } => write!(f, "HashMap<{}, {}>", key.0, value.0),
             Self::Integer => write!(f, "int"),
             Self::List(type_) => write!(f, "[{}]", type_.0),
             Self::Path(path) => {
@@ -248,6 +256,12 @@ impl Type {
             }
             Type::Generic(name) => {
                 panic!("Generics ({}) need a next and a parent.", name.0);
+            }
+            Type::HashMap { key, value } => {
+                let key = key.0.into_value_type(&key.1, context, store)?;
+                let value = value.0.into_value_type(&value.1, context, store)?;
+                let ty = Map::new(&key, &value, store);
+                Ok(ValueType::new_map(true, &ty, store))
             }
             Type::Integer => {
                 let ty = Ty::new_integer(sarzak);
@@ -411,11 +425,47 @@ pub enum Pattern {
 /// Deep magic happens here. We are writing code in here, more or less. We are
 /// creating static method calls and local variables. Very cool stuff happening
 /// here.
-impl From<Pattern> for Expression {
-    fn from(pattern: Pattern) -> Self {
+impl<'a>
+    From<(
+        Pattern,
+        RefType<Block>,
+        RefType<ValueType>,
+        &'a RefType<DwarfSourceFile>,
+        RefType<LuDogStore>,
+        bool,
+    )> for Expression
+{
+    fn from(
+        (pattern, block, ty, source, lu_dog, inter_local): (
+            Pattern,
+            RefType<Block>,
+            RefType<ValueType>,
+            &'a RefType<DwarfSourceFile>,
+            RefType<LuDogStore>,
+            bool,
+        ),
+    ) -> Self {
         match pattern {
             // transmogrify an identifier into a local variable
-            Pattern::Identifier((name, _span)) => Expression::LocalVariable(name),
+            // Not so fast. We need to create a local variable in the s_read!(store).
+            Pattern::Identifier((name, span)) => {
+                if inter_local {
+                    let mut lu_dog = s_write!(lu_dog);
+
+                    let local = LocalVariable::new(Uuid::new_v4(), &mut lu_dog);
+                    let var = Variable::new_local_variable(name.clone(), &local, &mut lu_dog);
+                    let value = XValue::new_variable(&block, &ty, &var, &mut lu_dog);
+                    LuDogSpan::new(
+                        span.start as i64,
+                        span.end as i64,
+                        source,
+                        None,
+                        Some(&value),
+                        &mut lu_dog,
+                    );
+                }
+                Expression::LocalVariable(name)
+            }
             // 🚧 Need to do something about this.
             Pattern::Literal((literal, _span)) => match literal {
                 Expression::BooleanLiteral(b) => Expression::BooleanLiteral(b),
@@ -470,7 +520,20 @@ impl From<Pattern> for Expression {
 
                 let fields = fields
                     .into_iter()
-                    .map(|f| (f.0.into(), f.1))
+                    .map(|f| {
+                        (
+                            (
+                                f.0,
+                                block.clone(),
+                                ty.clone(),
+                                source,
+                                lu_dog.clone(),
+                                false,
+                            )
+                                .into(),
+                            f.1,
+                        )
+                    })
                     .collect::<Vec<_>>();
 
                 Expression::StaticMethodCall(
@@ -482,7 +545,6 @@ impl From<Pattern> for Expression {
         }
     }
 }
-
 #[derive(Clone, Debug)]
 pub struct WrappedValueType(pub RefType<ValueType>);
 

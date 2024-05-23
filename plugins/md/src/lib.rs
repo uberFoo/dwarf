@@ -6,7 +6,7 @@ use abi_stable::{
     prefix_type::PrefixTypeTrait,
     sabi_extern_fn,
     sabi_trait::prelude::TD_Opaque,
-    std_types::{ROk, RResult, RStr, RVec},
+    std_types::{RErr, ROk, RResult, RStr, RVec},
 };
 use dwarf::{
     chacha::{error::ChaChaError, ffi_value::FfiValue},
@@ -28,13 +28,10 @@ pub fn name() -> RStr<'static> {
 
 /// Instantiates the plugin.
 #[sabi_extern_fn]
-pub fn new(
-    lambda_sender: RSender<LambdaCall>,
-    _args: RVec<FfiValue>,
-) -> RResult<PluginType, Error> {
+pub fn new(lambda_sender: RSender<LambdaCall>, args: RVec<FfiValue>) -> RResult<PluginType, Error> {
     let plugin = md::instantiate_root_module();
     let plugin = plugin.new();
-    let plugin = plugin(lambda_sender, vec![].into()).unwrap();
+    let plugin = plugin(lambda_sender, args).unwrap();
     ROk(Plugin_TO::from_value(plugin, TD_Opaque))
 }
 
@@ -54,13 +51,44 @@ mod md {
     #[sabi_extern_fn]
     pub fn new(
         _lambda_sender: RSender<LambdaCall>,
-        _args: RVec<FfiValue>,
+        mut args: RVec<FfiValue>,
     ) -> RResult<PluginType, Error> {
-        ROk(Plugin_TO::from_value(Md::default(), TD_Opaque))
+        if args.len() < 1 {
+            return ROk(Plugin_TO::from_value(Md::default(), TD_Opaque));
+        }
+
+        let mode: String = args.pop().unwrap().try_into().unwrap();
+        ROk(Plugin_TO::from_value(Md::new(mode.into()), TD_Opaque))
+    }
+
+    #[derive(Clone, Debug)]
+    enum Theme {
+        Dark,
+        Light,
+    }
+
+    impl fmt::Display for Theme {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            match self {
+                Theme::Dark => write!(f, "dark"),
+                Theme::Light => write!(f, "light"),
+            }
+        }
+    }
+
+    impl From<String> for Theme {
+        fn from(s: String) -> Self {
+            match s.as_str() {
+                "dark" => Theme::Dark,
+                "light" => Theme::Light,
+                _ => Theme::Dark,
+            }
+        }
     }
 
     #[derive(Clone, Debug)]
     struct Md {
+        theme: Theme,
         links: Regex,
         code: Regex,
         h1: Regex,
@@ -69,9 +97,27 @@ mod md {
         h4: Regex,
     }
 
+    impl Md {
+        pub fn new(mode: Theme) -> Self {
+            Self {
+                theme: mode,
+                links: Regex::new("<a href=\"#(.*?)\">").unwrap(),
+                code: Regex::new(
+                    r#"<pre><code class="language-mermaid">\s*([\s\S]*?)\s*</code></pre>"#,
+                )
+                .unwrap(),
+                h1: Regex::new(r#"<h1>(.*?)</h1>"#).unwrap(),
+                h2: Regex::new(r#"<h2>(.*?)</h2>"#).unwrap(),
+                h3: Regex::new(r#"<h3>(.*?)</h3>"#).unwrap(),
+                h4: Regex::new(r#"<h4>(.*?)</h4>"#).unwrap(),
+            }
+        }
+    }
+
     impl Default for Md {
         fn default() -> Self {
             Self {
+                theme: Theme::Dark,
                 links: Regex::new("<a href=\"#(.*?)\">").unwrap(),
                 code: Regex::new(
                     r#"<pre><code class="language-mermaid">\s*([\s\S]*?)\s*</code></pre>"#,
@@ -167,10 +213,10 @@ mod md {
                         format!("<pre class='mermaid'>\n{code}\n</pre>")
                     });
 
-                    let mermaid = r#"<script type="module">
+                    let mermaid = format!("<script type=\"module\">
                         import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
-                        mermaid.initialize({ startOnLoad: true, theme: 'dark' });
-                    </script>"#;
+                        mermaid.initialize({{ startOnLoad: true, theme: '{}' }});
+                    </script>", self.theme);
 
                     format!("{}\n{}", md, mermaid)
                 } else {

@@ -12,9 +12,6 @@ use smol::future;
 #[cfg(feature = "async")]
 use puteketeke::Executor;
 
-#[cfg(feature = "async")]
-use once_cell::sync::OnceCell;
-
 #[cfg(feature = "tracy-client")]
 use tracy_client::{non_continuous_frame, span, Client};
 
@@ -24,6 +21,7 @@ use abi_stable::{
 };
 use ansi_term::Colour;
 use crossbeam::channel::{unbounded, Receiver, Sender};
+use once_cell::sync::OnceCell;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use snafu::{location, Location};
 
@@ -31,13 +29,13 @@ use crate::{
     bubba::{
         error::{BubbaError, Error, Result},
         value::Value,
-        RESULT, STRING,
+        STRING,
     },
     chacha::{
         ffi_value::FfiValue,
         value::{Enum, Struct, TupleEnum},
     },
-    keywords::{INVOKE_FUNC, INVOKE_FUNC_MUT},
+    keywords::{INVOKE_FUNC, INVOKE_FUNC_MUT, NONE, OPTION, OPTION_TYPE, RESULT_TYPE, SOME},
     lu_dog::{ValueType, ValueTypeEnum},
     new_ref,
     plug_in::{Error as FfiError, LambdaCall, PluginModRef, PluginType},
@@ -283,12 +281,6 @@ impl VM {
                 λ.get(&lambda_call.lambda).unwrap().clone()
             };
 
-            // This will also have been set in the constructor. Calling this before
-            // construction of a VM will panic, and that's not a terrible default.
-            // 🚧 I don't love that there is only one of these for executing lambdas.
-            // I guess it wouldn't be hard to make it a Vec of VMs. Let it grow, and
-            // shrink as needed. Whatever as needed means.
-            // let mut vm = ΛVM.get().unwrap().lock().unwrap();
             let args = lambda_call
                 .args
                 .iter()
@@ -571,8 +563,8 @@ impl VM {
                                         args.into(),
                                     ) {
                                         ROk(value) => {
-                                            let result = program.get_symbol(RESULT).expect(
-                                                "The RESULT symbol is missing from the program.",
+                                            let result = program.get_symbol(RESULT_TYPE).expect(
+                                                "The {RESULT_TYPE} symbol is missing from the program.",
                                             );
                                             stack.push(
                                                 <(FfiValue, &Value) as Into<Value>>::into((
@@ -616,8 +608,8 @@ impl VM {
                                         args.into(),
                                     ) {
                                         ROk(value) => {
-                                            let result = program.get_symbol(RESULT).expect(
-                                                "The RESULT symbol is missing from the program.",
+                                            let result = program.get_symbol(RESULT_TYPE).expect(
+                                                "The {RESULT_TYPE} symbol is missing from the program.",
                                             );
                                             stack.push(
                                                 <(FfiValue, &Value) as Into<Value>>::into((
@@ -1093,14 +1085,7 @@ impl VM {
                                     .into());
                                 }
                             }
-                            value => {
-                                return Err(BubbaError::NotIndexable {
-                                    span: self.get_span(ip),
-                                    value: value.to_owned(),
-                                    location: location!(),
-                                }
-                                .into());
-                            }
+                            _ => panic!("Expected a list."),
                         }
 
                         1
@@ -1167,14 +1152,27 @@ impl VM {
                                     .into());
                                 }
                             }
-                            value => {
-                                return Err(BubbaError::NotIndexable {
-                                    span: self.get_span(ip),
-                                    value: value.to_owned(),
-                                    location: location!(),
-                                }
-                                .into());
+                            _ => panic!("Expected a list."),
+                        }
+
+                        1
+                    }
+                    Instruction::ListJoin => {
+                        let sep = stack.pop().unwrap();
+                        let list = stack.pop().unwrap();
+                        let list = list.into_pointer();
+                        let list = s_read!(list);
+                        match &*list {
+                            Value::List { inner, .. } => {
+                                let inner = s_read!(inner);
+                                let result = inner
+                                    .iter()
+                                    .map(|v| s_read!(v).to_inner_string())
+                                    .collect::<Vec<String>>()
+                                    .join(sep.into_value().to_inner_string().as_str());
+                                stack.push(Value::String(result).into());
                             }
+                            _ => panic!("Expected a list."),
                         }
 
                         1
@@ -1199,19 +1197,46 @@ impl VM {
                             Value::String(str) => {
                                 stack.push(Value::Integer(str.len() as DwarfInteger).into());
                             }
-                            value => {
-                                if self.backtrace {
-                                    eprintln!("{self:?}");
-                                    print_stack(&stack, fp);
-                                    print_instrs(ip, &program, &self.instrs, &self.source_map);
-                                }
-                                return Err(BubbaError::NotIndexable {
-                                    span: self.get_span(ip),
-                                    value: value.to_owned(),
-                                    location: location!(),
-                                }
-                                .into());
+                            _ => panic!("Expected a list."),
+                        }
+
+                        1
+                    }
+                    Instruction::ListMap => {
+                        let lambda = stack.pop().unwrap();
+                        let lambda = lambda.into_value();
+
+                        let list = stack.pop().unwrap();
+                        let list = list.into_pointer();
+                        let list = s_read!(list);
+                        match &*list {
+                            Value::AnyList(vec) => {
+                                let vec = s_read!(vec);
+                                let result = vec
+                                    .iter()
+                                    .map(|v| self.invoke_lambda(&lambda, &vec![s_read!(v).clone()]))
+                                    .collect::<Result<Vec<RefType<Value>>>>()?;
+                                let result = new_ref!(
+                                    Value,
+                                    Value::AnyList(new_ref!(Vec<RefType<Value>>, result))
+                                );
+                                stack.push(result.into());
                             }
+                            Value::List { inner, ty } => {
+                                let inner = s_read!(inner);
+                                let result = inner
+                                    .iter()
+                                    .map(|v| self.invoke_lambda(&lambda, &vec![s_read!(v).clone()]))
+                                    .collect::<Result<Vec<RefType<Value>>>>()?;
+                                stack.push(
+                                    Value::List {
+                                        ty: ty.clone(),
+                                        inner: new_ref!(Vec<RefType<Value>>, result),
+                                    }
+                                    .into(),
+                                );
+                            }
+                            _ => panic!("Expected a list."),
                         }
 
                         1
@@ -1225,19 +1250,7 @@ impl VM {
                                 let mut inner = s_write!(inner);
                                 inner.push(element.into_pointer());
                             }
-                            value => {
-                                if self.backtrace {
-                                    eprintln!("{self:?}");
-                                    print_stack(&stack, fp);
-                                    print_instrs(ip, &program, &self.instrs, &self.source_map);
-                                }
-                                return Err(BubbaError::NotIndexable {
-                                    span: self.get_span(ip),
-                                    value: value.to_owned(),
-                                    location: location!(),
-                                }
-                                .into());
-                            }
+                            _ => panic!("Expected a list."),
                         }
 
                         1
@@ -1276,30 +1289,36 @@ impl VM {
                         match &*map {
                             Value::Map { inner, .. } => {
                                 let inner = s_read!(inner);
-                                let value = inner.get(&key);
-                                // stack.push(value.into());
+                                let ty = program.get_symbol(OPTION_TYPE).expect(
+                                    "The {OPTION_TYPE} symbol is missing from the program.",
+                                );
+                                let Value::ValueType(ty) = ty else {
+                                    panic!();
+                                };
+
                                 match inner.get(&key) {
                                     Some(value) => {
-                                        stack.push(value.clone().into());
+                                        let tuple = TupleEnum {
+                                            variant: SOME.to_owned(),
+                                            value: value.clone(),
+                                        };
+                                        let value = Value::Enumeration(Enum::Tuple(
+                                            (new_ref!(ValueType, ty.clone()), OPTION.to_owned()),
+                                            new_ref!(TupleEnum<Value>, tuple),
+                                        ));
+                                        stack.push(value.into());
                                     }
                                     None => {
-                                        stack.push(Value::Empty.into());
+                                        let value = Value::Enumeration(Enum::Unit(
+                                            new_ref!(ValueType, ty.clone()),
+                                            OPTION.to_owned(),
+                                            NONE.to_owned(),
+                                        ));
+                                        stack.push(value.into());
                                     }
-                                }
+                                };
                             }
-                            value => {
-                                if self.backtrace {
-                                    eprintln!("{self:?}");
-                                    print_stack(&stack, fp);
-                                    print_instrs(ip, &program, &self.instrs, &self.source_map);
-                                }
-                                return Err(BubbaError::NotIndexable {
-                                    span: self.get_span(ip),
-                                    value: value.to_owned(),
-                                    location: location!(),
-                                }
-                                .into());
-                            }
+                            _ => panic!("Expected a list."),
                         }
 
                         1
@@ -1320,19 +1339,7 @@ impl VM {
                                 let mut inner = s_write!(inner);
                                 inner.insert(key, value);
                             }
-                            value => {
-                                if self.backtrace {
-                                    eprintln!("{self:?}");
-                                    print_stack(&stack, fp);
-                                    print_instrs(ip, &program, &self.instrs, &self.source_map);
-                                }
-                                return Err(BubbaError::NotIndexable {
-                                    span: self.get_span(ip),
-                                    value: value.to_owned(),
-                                    location: location!(),
-                                }
-                                .into());
-                            }
+                            _ => panic!("Expected a list."),
                         }
 
                         stack.push(map_value.clone().into());
@@ -1348,19 +1355,7 @@ impl VM {
                                 let inner = s_read!(inner);
                                 stack.push(Value::Integer(inner.len() as DwarfInteger).into());
                             }
-                            value => {
-                                if self.backtrace {
-                                    eprintln!("{self:?}");
-                                    print_stack(&stack, fp);
-                                    print_instrs(ip, &program, &self.instrs, &self.source_map);
-                                }
-                                return Err(BubbaError::NotIndexable {
-                                    span: self.get_span(ip),
-                                    value: value.to_owned(),
-                                    location: location!(),
-                                }
-                                .into());
-                            }
+                            _ => panic!("Expected a map."),
                         }
 
                         1
@@ -1390,11 +1385,6 @@ impl VM {
                                     name.to_owned()
                                 }
                                 Value::String(_) => "::std::string::String".to_owned(),
-                                // Value::Vector { ty, .. } => {
-                                //     let ty = s_read!(ty);
-                                //     let name = ty.type_name();
-                                //     name.to_owned()
-                                // }
                                 oopsie => panic!("{oopsie:?}"),
                             };
 
@@ -1825,6 +1815,7 @@ impl VM {
                         let a = stack.pop().unwrap();
                         let a = a.into_value();
                         let b = b.into_value();
+
                         stack.push(Value::Boolean(a == b).into());
 
                         1
@@ -2185,29 +2176,31 @@ fn print_instrs(ip: isize, program: &Program, instrs: &[Instruction], source_map
     for iip in 0.max(ip - 3)..(instrs.len() as isize).min(ip + 3isize) {
         let instr = &instrs[iip as usize];
 
-        let src = if let Some(source) = program.get_source() {
-            let span = source_map[iip as usize].clone();
-            if span.end <= source.len() {
-                &source[span]
-            } else {
-                ""
-            }
-        } else {
-            ""
-        };
+        // let src = if let Some(source) = program.get_source() {
+        //     let span = source_map[iip as usize].clone();
+        //     if span.end <= source.len() {
+        //         &source[span]
+        //     } else {
+        //         ""
+        //     }
+        // } else {
+        //     ""
+        // };
 
         if ip == iip {
             eprintln!(
-                "<{:08x}:\t{instr}\t\t<- {}\t{}",
+                // "<{:08x}:\t{instr}\t\t<- {}\t{}",
+                "<{:08x}:\t{instr}\t\t<- {}",
                 iip,
                 Colour::Purple.bold().paint("ip"),
-                Colour::White.dimmed().paint(src)
+                // Colour::White.dimmed().paint(src)
             );
         } else {
             eprintln!(
-                "<{:08x}:\t{instr}\t\t\t{}",
+                // "<{:08x}:\t{instr}\t\t\t{}",
+                "<{:08x}:\t{instr}",
                 iip,
-                Colour::White.dimmed().paint(src)
+                // Colour::White.dimmed().paint(src)
             );
         }
     }
