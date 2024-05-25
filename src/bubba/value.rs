@@ -688,9 +688,7 @@ impl From<Vec<RefType<Value>>> for Value {
 impl TryFrom<&Value> for HashMap<String, RefType<Value>> {
     type Error = Error;
 
-    fn try_from(
-        value: &Value,
-    ) -> Result<Self, <HashMap<String, RefType<Value>> as TryFrom<&Value>>::Error> {
+    fn try_from(value: &Value) -> Result<Self, <Self as TryFrom<&Value>>::Error> {
         match value {
             Value::Map { inner, .. } => Ok(s_read!(inner).clone()),
             _ => Err(BubbaError::Conversion {

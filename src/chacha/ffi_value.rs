@@ -224,6 +224,20 @@ where
     }
 }
 
+impl fmt::Display for FfiHashMap {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let mut attrs = self.0.iter().collect::<Vec<_>>();
+        attrs.sort_by(|Tuple2(k1, _), Tuple2(k2, _)| k1.cmp(k2));
+
+        let mut out = f.debug_map();
+        for Tuple2(k, v) in attrs {
+            out.entry(k, &format_args!("{v}"));
+        }
+
+        out.finish()
+    }
+}
+
 impl From<Value> for FfiValue {
     fn from(value: Value) -> Self {
         match &value {
@@ -455,10 +469,37 @@ impl From<(FfiValue, &LuDogStore)> for Value {
     }
 }
 
-impl<T: TryFrom<FfiValue, Error = core::convert::Infallible>> TryFrom<FfiValue> for Vec<T> {
+impl<V> TryFrom<&FfiValue> for StdHashMap<String, V>
+where
+    V: TryFrom<FfiValue, Error = ChaChaError>,
+{
     type Error = ChaChaError;
 
-    fn try_from(value: FfiValue) -> Result<Self, Self::Error> {
+    fn try_from(value: &FfiValue) -> Result<Self, <Self as TryFrom<&FfiValue>>::Error> {
+        match value {
+            FfiValue::Map(map) => {
+                let result: Result<StdHashMap<_, _>, _> = map
+                    .0
+                    .iter()
+                    .map(|Tuple2(k, v)| Ok((k.to_string(), v.to_owned().try_into()?)))
+                    .collect();
+                result.map_err(|_: ChaChaError| ChaChaError::Conversion {
+                    src: map.to_string(),
+                    dst: "HashMap<K, V>".to_owned(),
+                })
+            }
+            _ => Err(ChaChaError::Conversion {
+                src: value.to_string(),
+                dst: "HashMap<K, V>".to_owned(),
+            }),
+        }
+    }
+}
+
+impl<T: TryFrom<FfiValue, Error = ChaChaError>> TryFrom<&FfiValue> for Vec<T> {
+    type Error = ChaChaError;
+
+    fn try_from(value: &FfiValue) -> Result<Self, Self::Error> {
         match value.clone() {
             FfiValue::List(vec) => {
                 let result: Result<Vec<_>, _> = vec.into_iter().map(|v| v.try_into()).collect();

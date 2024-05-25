@@ -1025,7 +1025,7 @@ mod test {
         .unwrap();
         let program = compile(&ctx).unwrap();
         println!("{program}");
-        assert_eq!(program.get_thonk_card(), 12);
+        assert_eq!(program.get_thonk_card(), 14);
 
         // assert_eq!(program.get_instruction_card(), 393);
         let run = run_vm(&program);

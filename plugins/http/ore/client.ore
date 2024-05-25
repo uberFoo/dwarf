@@ -21,7 +21,18 @@ impl HttpClient {
         let request = self
             .inner
             .invoke_func_mut("client", "HttpClient", "get", [url]);
-        print("\nrequest: ${request}\n");
+
+        Request {
+            inner: request,
+            plugin: self.inner,
+        }
+    }
+
+    async fn post(self, url: String) -> Future<Request> {
+        let request = self
+            .inner
+            .invoke_func_mut("client", "HttpClient", "post", [url]);
+
         Request {
             inner: request,
             plugin: self.inner,
@@ -36,6 +47,15 @@ struct Request {
 }
 
 impl Request {
+    async fn set_header(self, key: string, value: string) -> Future<Request> {
+        let inner =
+            self.plugin
+                .invoke_func_mut("client", "Request", "header", @[self.inner, key, value]);
+
+        self.inner = inner;
+        self
+    }
+
     async fn send(self) -> Future<Result<Response, HttpError>> {
         let response = self
             .plugin

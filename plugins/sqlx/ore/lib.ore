@@ -155,7 +155,11 @@ struct Map {
     /// The bindings for the query.
     ///
     /// This should be a heterogenous list -- it works as is though, which is scary.
+    /// Well, not totally scary. Everything that is pushed is a string, so it type
+    /// checks fine. The scary thing I guess is that SQL manages the type conversions?
     /// It's not a heterogenous list because dwarf doesn't support that as a type yet.
+    ///
+    /// And maybe I'm wrong and it should just be a string.
     bindings: [string],
 }
 

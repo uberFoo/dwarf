@@ -21,7 +21,7 @@ async fn main() -> Future<()> {
 
         let map = pool.query(query);
         let name = "uberFoo";
-        let map = map.bind(42);
+        let map = map.bind("42");
         let map = map.bind(name);
 
         let posts = map.execute();

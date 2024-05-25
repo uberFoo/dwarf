@@ -1,4 +1,5 @@
 use std::{
+    collections::HashMap,
     env,
     fmt::{self, Display},
     fs, io,
@@ -16,10 +17,7 @@ use abi_stable::{
 };
 use async_compat::Compat;
 use dwarf::{
-    chacha::{
-        error::ChaChaError,
-        ffi_value::{FfiStruct, FfiValue},
-    },
+    chacha::{error::ChaChaError, ffi_value::FfiValue},
     plug_in::{Error, LambdaCall, Plugin, PluginModRef, PluginModule, PluginType, Plugin_TO},
     DwarfInteger,
 };
@@ -82,6 +80,9 @@ mod http_client {
         ROk(Plugin_TO::from_value(HttpClient::default(), TD_Opaque))
     }
 
+    /// Note that the things dangling off here need to be wrapped in `Arc`'s so
+    /// that they can be cloned. We need to be Clone to satisfy the TD_Opaque
+    /// bound for the plugin stuff.
     #[derive(Clone, Debug)]
     struct HttpClient {
         client: Client,
@@ -133,117 +134,184 @@ mod http_client {
         ) -> RResult<FfiValue, Error> {
             future::block_on(Compat::new(async {
                 match ty.as_str() {
-                    "HttpClient" => match func.as_str() {
-                        "get" => {
-                            tracing::trace!("get enter");
-                            let url: String = args
-                                .first()
-                                .unwrap()
-                                .try_into()
-                                .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
-                                .unwrap();
+                    "HttpClient" => {
+                        match func.as_str() {
+                            "get" => {
+                                tracing::trace!("get enter");
+                                let url: String =
+                                    match args.first().unwrap().try_into().map_err(
+                                        |e: ChaChaError| Error::Plugin(e.to_string().into()),
+                                    ) {
+                                        Ok(url) => url,
+                                        Err(e) => return RErr(e),
+                                    };
 
-                            let request = self.client.get(url);
+                                let request = self.client.get(url);
 
-                            let entry = self.requests.vacant_entry();
-                            let key = entry.key();
-                            self.requests.insert(Arc::new(request));
+                                let entry = self.requests.vacant_entry();
+                                let key = entry.key();
+                                self.requests.insert(Arc::new(request));
 
-                            tracing::trace!("get exit");
-                            Ok(FfiValue::Integer(key as DwarfInteger))
-                        }
-                        func => Err(Error::Plugin(format!("Invalid function: {func}").into())),
-                    },
-                    "Request" => match func.as_str() {
-                        "send" => {
-                            tracing::trace!("send enter");
-                            let key: DwarfInteger = args
-                                .first()
-                                .unwrap()
-                                .try_into()
-                                .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
-                                .unwrap();
-
-                            let request = self.requests.remove(key as usize);
-                            if let Some(request) = Arc::into_inner(request) {
-                                let response = request.send().await;
-                                let response = match response {
-                                    Ok(response) => {
-                                        let entry = self.responses.vacant_entry();
-                                        let key = entry.key();
-                                        self.responses.insert(Arc::new(response));
-                                        ROk(RBox::new(FfiValue::Integer(key as DwarfInteger)))
-                                    }
-                                    Err(e) => {
-                                        let entry = self.errors.vacant_entry();
-                                        let key = entry.key();
-                                        self.errors.insert(Arc::new(e));
-                                        RErr(RBox::new(FfiValue::Integer(key as DwarfInteger)))
-                                    }
-                                };
-                                tracing::trace!("send exit");
-                                Ok(FfiValue::Result(response))
-                            } else {
-                                tracing::trace!("send exit");
-                                Ok(FfiValue::Error("Too many references to request.".into()))
+                                tracing::trace!("get exit");
+                                Ok(FfiValue::Integer(key as DwarfInteger))
                             }
-                        }
-                        func => Err(Error::Plugin(format!("Invalid function: {func}").into())),
-                    },
-                    "Response" => match func.as_str() {
-                        "text" => {
-                            tracing::trace!("text enter");
-                            let key: DwarfInteger = args
-                                .first()
-                                .unwrap()
-                                .try_into()
-                                .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
-                                .unwrap();
+                            "post" => {
+                                tracing::trace!("post enter");
+                                let url: String =
+                                    match args.get(0).unwrap().try_into().map_err(
+                                        |e: ChaChaError| Error::Plugin(e.to_string().into()),
+                                    ) {
+                                        Ok(url) => url,
+                                        Err(e) => return RErr(e),
+                                    };
 
-                            let response = self.responses.remove(key as usize);
-                            if let Some(response) = Arc::into_inner(response) {
-                                let body = response.text().await;
-                                let result = match body {
-                                    Ok(body) => ROk(RBox::new(FfiValue::String(body.into()))),
-                                    Err(e) => {
-                                        let entry = self.errors.vacant_entry();
-                                        let key = entry.key();
-                                        self.errors.insert(Arc::new(e));
-                                        RErr(RBox::new(FfiValue::Integer(key as DwarfInteger)))
-                                    }
-                                };
-                                tracing::trace!("text exit");
-                                Ok(FfiValue::Result(result))
-                            } else {
-                                tracing::trace!("text exit");
-                                Ok(FfiValue::Error("Too many references to response.".into()))
-                            }
-                        }
-                        func => Err(Error::Plugin(format!("Invalid function: {func}").into())),
-                    },
-                    "HttpError" => match func.as_str() {
-                        "to_string" => {
-                            tracing::trace!("to_string enter");
-                            let key: DwarfInteger = args
-                                .first()
-                                .unwrap()
-                                .try_into()
-                                .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
-                                .unwrap();
+                                let request = self.client.post(url);
 
-                            let error = self.errors.remove(key as usize);
-                            if let Some(error) = Arc::into_inner(error) {
-                                let result =
-                                    ROk(RBox::new(FfiValue::String(error.to_string().into())));
-                                tracing::trace!("to_string exit");
-                                Ok(FfiValue::Result(result))
-                            } else {
-                                tracing::trace!("to_string exit");
-                                Ok(FfiValue::Error("Too many references to error.".into()))
+                                let entry = self.requests.vacant_entry();
+                                let key = entry.key();
+                                self.requests.insert(Arc::new(request));
+
+                                tracing::trace!("post exit");
+                                Ok(FfiValue::Integer(key as DwarfInteger))
                             }
+                            func => Err(Error::Plugin(format!("Invalid function: {func}").into())),
                         }
-                        func => Err(Error::Plugin(format!("Invalid function: {func}").into())),
-                    },
+                    }
+                    "Request" => {
+                        match func.as_str() {
+                            "header" => {
+                                tracing::trace!("header enter");
+                                let key: DwarfInteger =
+                                    match args.get(0).unwrap().try_into().map_err(
+                                        |e: ChaChaError| Error::Plugin(e.to_string().into()),
+                                    ) {
+                                        Ok(key) => key,
+                                        Err(e) => return RErr(e),
+                                    };
+
+                                let header: String =
+                                    match args.get(1).unwrap().try_into().map_err(
+                                        |e: ChaChaError| Error::Plugin(e.to_string().into()),
+                                    ) {
+                                        Ok(header) => header,
+                                        Err(e) => return RErr(e),
+                                    };
+
+                                let value: String =
+                                    match args.get(2).unwrap().try_into().map_err(
+                                        |e: ChaChaError| Error::Plugin(e.to_string().into()),
+                                    ) {
+                                        Ok(value) => value,
+                                        Err(e) => return RErr(e),
+                                    };
+
+                                let request = self.requests.remove(key as usize);
+                                let request = Arc::try_unwrap(request).unwrap();
+                                let request = request.header(header, value);
+
+                                let entry = self.requests.vacant_entry();
+                                let key = entry.key();
+                                self.requests.insert(Arc::new(request));
+
+                                Ok(FfiValue::Integer(key as DwarfInteger))
+                            }
+                            "send" => {
+                                tracing::trace!("send enter");
+                                let key: DwarfInteger =
+                                    match args.get(0).unwrap().try_into().map_err(
+                                        |e: ChaChaError| Error::Plugin(e.to_string().into()),
+                                    ) {
+                                        Ok(key) => key,
+                                        Err(e) => return RErr(e),
+                                    };
+
+                                let request = self.requests.remove(key as usize);
+                                if let Some(request) = Arc::into_inner(request) {
+                                    let response = request.send().await;
+                                    let response = match response {
+                                        Ok(response) => {
+                                            let entry = self.responses.vacant_entry();
+                                            let key = entry.key();
+                                            self.responses.insert(Arc::new(response));
+                                            ROk(RBox::new(FfiValue::Integer(key as DwarfInteger)))
+                                        }
+                                        Err(e) => {
+                                            let entry = self.errors.vacant_entry();
+                                            let key = entry.key();
+                                            self.errors.insert(Arc::new(e));
+                                            RErr(RBox::new(FfiValue::Integer(key as DwarfInteger)))
+                                        }
+                                    };
+                                    tracing::trace!("send exit");
+                                    Ok(FfiValue::Result(response))
+                                } else {
+                                    tracing::trace!("send exit");
+                                    Ok(FfiValue::Error("Too many references to request.".into()))
+                                }
+                            }
+                            func => Err(Error::Plugin(format!("Invalid function: {func}").into())),
+                        }
+                    }
+                    "Response" => {
+                        match func.as_str() {
+                            "text" => {
+                                tracing::trace!("text enter");
+                                let key: DwarfInteger =
+                                    match args.get(0).unwrap().try_into().map_err(
+                                        |e: ChaChaError| Error::Plugin(e.to_string().into()),
+                                    ) {
+                                        Ok(key) => key,
+                                        Err(e) => return RErr(e),
+                                    };
+
+                                let response = self.responses.remove(key as usize);
+                                if let Some(response) = Arc::into_inner(response) {
+                                    let body = response.text().await;
+                                    let result = match body {
+                                        Ok(body) => ROk(RBox::new(FfiValue::String(body.into()))),
+                                        Err(e) => {
+                                            let entry = self.errors.vacant_entry();
+                                            let key = entry.key();
+                                            self.errors.insert(Arc::new(e));
+                                            RErr(RBox::new(FfiValue::Integer(key as DwarfInteger)))
+                                        }
+                                    };
+                                    tracing::trace!("text exit");
+                                    Ok(FfiValue::Result(result))
+                                } else {
+                                    tracing::trace!("text exit");
+                                    Ok(FfiValue::Error("Too many references to response.".into()))
+                                }
+                            }
+                            func => Err(Error::Plugin(format!("Invalid function: {func}").into())),
+                        }
+                    }
+                    "HttpError" => {
+                        match func.as_str() {
+                            "to_string" => {
+                                tracing::trace!("to_string enter");
+                                let key: DwarfInteger =
+                                    match args.get(0).unwrap().try_into().map_err(
+                                        |e: ChaChaError| Error::Plugin(e.to_string().into()),
+                                    ) {
+                                        Ok(key) => key,
+                                        Err(e) => return RErr(e),
+                                    };
+
+                                let error = self.errors.remove(key as usize);
+                                if let Some(error) = Arc::into_inner(error) {
+                                    let result =
+                                        ROk(RBox::new(FfiValue::String(error.to_string().into())));
+                                    tracing::trace!("to_string exit");
+                                    Ok(FfiValue::Result(result))
+                                } else {
+                                    tracing::trace!("to_string exit");
+                                    Ok(FfiValue::Error("Too many references to error.".into()))
+                                }
+                            }
+                            func => Err(Error::Plugin(format!("Invalid function: {func}").into())),
+                        }
+                    }
                     ty => Err(Error::Plugin(format!("Invalid type: {ty}").into())),
                 }
                 .into()
@@ -560,19 +628,25 @@ mod http_server {
                             Ok(FfiValue::Empty)
                         }
                         "use_tls" => {
-                            let cert: String = args
+                            let cert: String = match args
                                 .get(0)
                                 .unwrap()
                                 .try_into()
                                 .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
-                                .unwrap();
+                            {
+                                Ok(cert) => cert,
+                                Err(e) => return RErr(e),
+                            };
 
-                            let key: String = args
+                            let key: String = match args
                                 .get(1)
                                 .unwrap()
                                 .try_into()
                                 .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
-                                .unwrap();
+                            {
+                                Ok(key) => key,
+                                Err(e) => return RErr(e),
+                            };
 
                             let cert_file = fs::File::open(cert.clone())
                                 .map_err(|e| {
@@ -606,135 +680,151 @@ mod http_server {
                         }
                         func => Err(Error::Plugin(format!("Invalid function: {func}").into())),
                     },
-                    "Response" => match func.as_str() {
-                        "new" => {
-                            let response = Response::builder();
-                            let mut guard = self.response_builders.lock().unwrap();
-                            let entry = guard.vacant_entry();
-                            let key = entry.key();
-                            guard.insert(Some(response));
+                    "Response" => {
+                        match func.as_str() {
+                            "new" => {
+                                let response = Response::builder();
+                                let mut guard = self.response_builders.lock().unwrap();
+                                let entry = guard.vacant_entry();
+                                let key = entry.key();
+                                guard.insert(Some(response));
 
-                            Ok(FfiValue::Integer(key as DwarfInteger))
-                        }
-                        "status" => {
-                            let key: DwarfInteger = args
-                                .first()
-                                .unwrap()
-                                .try_into()
-                                .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
-                                .unwrap();
-                            let status: DwarfInteger = args
-                                .get(1)
-                                .unwrap()
-                                .try_into()
-                                .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
-                                .unwrap();
+                                Ok(FfiValue::Integer(key as DwarfInteger))
+                            }
+                            "status" => {
+                                let key: DwarfInteger =
+                                    match args.get(0).unwrap().try_into().map_err(
+                                        |e: ChaChaError| Error::Plugin(e.to_string().into()),
+                                    ) {
+                                        Ok(key) => key,
+                                        Err(e) => return RErr(e),
+                                    };
+                                let status: DwarfInteger =
+                                    match args.get(1).unwrap().try_into().map_err(
+                                        |e: ChaChaError| Error::Plugin(e.to_string().into()),
+                                    ) {
+                                        Ok(status) => status,
+                                        Err(e) => return RErr(e),
+                                    };
 
-                            let mut guard = self.response_builders.lock().unwrap();
-                            if let Some(option) = guard.get_mut(key as usize) {
+                                let mut guard = self.response_builders.lock().unwrap();
+                                if let Some(option) = guard.get_mut(key as usize) {
+                                    let response = option.take().unwrap();
+                                    let response = response.status(status as u16);
+                                    *option = Some(response);
+
+                                    Ok(FfiValue::Empty)
+                                } else {
+                                    Err(Error::Plugin("Invalid response".into()))
+                                }
+                            }
+                            "body" => {
+                                let key: DwarfInteger =
+                                    match args.get(0).unwrap().try_into().map_err(
+                                        |e: ChaChaError| Error::Plugin(e.to_string().into()),
+                                    ) {
+                                        Ok(key) => key,
+                                        Err(e) => return RErr(e),
+                                    };
+                                let body: String =
+                                    match args.get(1).unwrap().try_into().map_err(
+                                        |e: ChaChaError| Error::Plugin(e.to_string().into()),
+                                    ) {
+                                        Ok(body) => body,
+                                        Err(e) => return RErr(e),
+                                    };
+
+                                let mut guard = self.response_builders.lock().unwrap();
+                                let option = guard.get_mut(key as usize).unwrap();
                                 let response = option.take().unwrap();
-                                let response = response.status(status as u16);
+                                let response = response.body(Full::new(Bytes::from(body)));
+                                guard.remove(key as usize);
+
+                                let mut guard = self.responses.lock().unwrap();
+                                let entry = guard.vacant_entry();
+                                let key = entry.key();
+                                guard.insert(response.unwrap());
+
+                                Ok(FfiValue::Integer(key as DwarfInteger))
+                            }
+                            "json" => {
+                                let key: DwarfInteger =
+                                    match args.first().unwrap().try_into().map_err(
+                                        |e: ChaChaError| Error::Plugin(e.to_string().into()),
+                                    ) {
+                                        Ok(key) => key,
+                                        Err(e) => return RErr(e),
+                                    };
+                                let json: String =
+                                    match args.get(1).unwrap().try_into().map_err(
+                                        |e: ChaChaError| Error::Plugin(e.to_string().into()),
+                                    ) {
+                                        Ok(json) => json,
+                                        Err(e) => return RErr(e),
+                                    };
+
+                                let mut guard = self.response_builders.lock().unwrap();
+                                let option = guard.get_mut(key as usize).unwrap();
+                                let response = option.take().unwrap();
+                                let response = response.header(
+                                    CONTENT_TYPE,
+                                    HeaderValue::from_static("application/json"),
+                                );
+                                let response = response.body(Full::new(Bytes::from(json)));
+                                guard.remove(key as usize);
+
+                                let mut guard = self.responses.lock().unwrap();
+                                let entry = guard.vacant_entry();
+                                let key = entry.key();
+                                guard.insert(response.unwrap());
+
+                                Ok(FfiValue::Integer(key as DwarfInteger))
+                            }
+                            "set_header" => {
+                                let key: DwarfInteger =
+                                    match args.first().unwrap().try_into().map_err(
+                                        |e: ChaChaError| Error::Plugin(e.to_string().into()),
+                                    ) {
+                                        Ok(key) => key,
+                                        Err(e) => return RErr(e),
+                                    };
+                                let header: String =
+                                    match args.get(1).unwrap().try_into().map_err(
+                                        |e: ChaChaError| Error::Plugin(e.to_string().into()),
+                                    ) {
+                                        Ok(header) => header,
+                                        Err(e) => return RErr(e),
+                                    };
+                                let value: String =
+                                    match args.get(2).unwrap().try_into().map_err(
+                                        |e: ChaChaError| Error::Plugin(e.to_string().into()),
+                                    ) {
+                                        Ok(value) => value,
+                                        Err(e) => return RErr(e),
+                                    };
+
+                                let mut guard = self.response_builders.lock().unwrap();
+                                let option = guard.get_mut(key as usize).unwrap();
+                                let response = option.take().unwrap();
+                                let response = response.header(header, value);
                                 *option = Some(response);
 
                                 Ok(FfiValue::Empty)
-                            } else {
-                                Err(Error::Plugin("Invalid response".into()))
                             }
+                            func => Err(Error::Plugin(format!("Invalid function: {func}").into())),
                         }
-                        "body" => {
-                            let key: DwarfInteger = args
-                                .first()
-                                .unwrap()
-                                .try_into()
-                                .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
-                                .unwrap();
-                            let body: String = args
-                                .get(1)
-                                .unwrap()
-                                .try_into()
-                                .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
-                                .unwrap();
-
-                            let mut guard = self.response_builders.lock().unwrap();
-                            let option = guard.get_mut(key as usize).unwrap();
-                            let response = option.take().unwrap();
-                            let response = response.body(Full::new(Bytes::from(body)));
-                            guard.remove(key as usize);
-
-                            let mut guard = self.responses.lock().unwrap();
-                            let entry = guard.vacant_entry();
-                            let key = entry.key();
-                            guard.insert(response.unwrap());
-
-                            Ok(FfiValue::Integer(key as DwarfInteger))
-                        }
-                        "json" => {
-                            let key: DwarfInteger = args
-                                .first()
-                                .unwrap()
-                                .try_into()
-                                .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
-                                .unwrap();
-                            let json: String = args
-                                .get(1)
-                                .unwrap()
-                                .try_into()
-                                .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
-                                .unwrap();
-
-                            let mut guard = self.response_builders.lock().unwrap();
-                            let option = guard.get_mut(key as usize).unwrap();
-                            let response = option.take().unwrap();
-                            let response = response
-                                .header(CONTENT_TYPE, HeaderValue::from_static("application/json"));
-                            let response = response.body(Full::new(Bytes::from(json)));
-                            guard.remove(key as usize);
-
-                            let mut guard = self.responses.lock().unwrap();
-                            let entry = guard.vacant_entry();
-                            let key = entry.key();
-                            guard.insert(response.unwrap());
-
-                            Ok(FfiValue::Integer(key as DwarfInteger))
-                        }
-                        "set_header" => {
-                            let key: DwarfInteger = args
-                                .first()
-                                .unwrap()
-                                .try_into()
-                                .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
-                                .unwrap();
-                            let header: String = args
-                                .get(1)
-                                .unwrap()
-                                .try_into()
-                                .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
-                                .unwrap();
-                            let value: String = args
-                                .get(2)
-                                .unwrap()
-                                .try_into()
-                                .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
-                                .unwrap();
-
-                            let mut guard = self.response_builders.lock().unwrap();
-                            let option = guard.get_mut(key as usize).unwrap();
-                            let response = option.take().unwrap();
-                            let response = response.header(header, value);
-                            *option = Some(response);
-
-                            Ok(FfiValue::Empty)
-                        }
-                        func => Err(Error::Plugin(format!("Invalid function: {func}").into())),
-                    },
+                    }
                     "Request" => match func.as_str() {
                         "uri" => {
-                            let key: DwarfInteger = args
+                            let key: DwarfInteger = match args
                                 .first()
                                 .unwrap()
                                 .try_into()
                                 .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
-                                .unwrap();
+                            {
+                                Ok(key) => key,
+                                Err(e) => return RErr(e),
+                            };
 
                             if let Some(request) = self.requests.lock().unwrap().get(key as usize) {
                                 let uri = request.uri();
@@ -751,65 +841,72 @@ mod http_server {
                         }
                         func => Err(Error::Plugin(format!("Invalid function: {func}").into())),
                     },
-                    "Suffix" => match func.as_str() {
-                        "to_string" => {
-                            let key: DwarfInteger = args
-                                .first()
-                                .unwrap()
-                                .try_into()
-                                .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
-                                .unwrap();
+                    "Suffix" => {
+                        match func.as_str() {
+                            "to_string" => {
+                                let key: DwarfInteger =
+                                    match args.first().unwrap().try_into().map_err(
+                                        |e: ChaChaError| Error::Plugin(e.to_string().into()),
+                                    ) {
+                                        Ok(key) => key,
+                                        Err(e) => return RErr(e),
+                                    };
 
-                            let guard = self.strings.lock().unwrap();
-                            let string = guard.get(key as usize).unwrap();
+                                let guard = self.strings.lock().unwrap();
+                                let string = guard.get(key as usize).unwrap();
 
-                            Ok(FfiValue::String(string.to_owned().into()))
+                                Ok(FfiValue::String(string.to_owned().into()))
+                            }
+                            func => Err(Error::Plugin(format!("Invalid function: {func}").into())),
                         }
-                        func => Err(Error::Plugin(format!("Invalid function: {func}").into())),
-                    },
-                    "Uri" => match func.as_str() {
-                        "path" => {
-                            let key: DwarfInteger = args
-                                .first()
-                                .unwrap()
-                                .try_into()
-                                .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
-                                .unwrap();
+                    }
+                    "Uri" => {
+                        match func.as_str() {
+                            "path" => {
+                                let key: DwarfInteger =
+                                    match args.first().unwrap().try_into().map_err(
+                                        |e: ChaChaError| Error::Plugin(e.to_string().into()),
+                                    ) {
+                                        Ok(key) => key,
+                                        Err(e) => return RErr(e),
+                                    };
 
-                            let guard = self.uris.lock().unwrap();
-                            let guard = guard.borrow();
-                            let uri = guard.get(key as usize).unwrap();
-                            let path = uri.path().to_string();
-                            Ok(FfiValue::String(path.into()))
+                                let guard = self.uris.lock().unwrap();
+                                let guard = guard.borrow();
+                                let uri = guard.get(key as usize).unwrap();
+                                let path = uri.path().to_string();
+                                Ok(FfiValue::String(path.into()))
+                            }
+                            "query" => {
+                                let key: DwarfInteger =
+                                    match args.first().unwrap().try_into().map_err(
+                                        |e: ChaChaError| Error::Plugin(e.to_string().into()),
+                                    ) {
+                                        Ok(key) => key,
+                                        Err(e) => return RErr(e),
+                                    };
+
+                                let guard = self.uris.lock().unwrap();
+                                let guard = guard.borrow();
+                                let uri = guard.get(key as usize).unwrap();
+                                let query_string = uri.query().unwrap_or("");
+                                let params: HashMap<String, String> = query_string
+                                    .split('&')
+                                    .filter_map(|part| {
+                                        let mut split = part.split('=');
+                                        let key = split.next()?;
+                                        let value = split.next()?;
+                                        Some((key.to_string(), value.to_string()))
+                                    })
+                                    .collect();
+
+                                let value = params.into();
+
+                                Ok(FfiValue::Map(value))
+                            }
+                            func => Err(Error::Plugin(format!("Invalid function: {func}").into())),
                         }
-                        "query" => {
-                            let key: DwarfInteger = args
-                                .first()
-                                .unwrap()
-                                .try_into()
-                                .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
-                                .unwrap();
-
-                            let guard = self.uris.lock().unwrap();
-                            let guard = guard.borrow();
-                            let uri = guard.get(key as usize).unwrap();
-                            let query_string = uri.query().unwrap_or("");
-                            let params: HashMap<String, String> = query_string
-                                .split('&')
-                                .filter_map(|part| {
-                                    let mut split = part.split('=');
-                                    let key = split.next()?;
-                                    let value = split.next()?;
-                                    Some((key.to_string(), value.to_string()))
-                                })
-                                .collect();
-
-                            let value = params.into();
-
-                            Ok(FfiValue::Map(value))
-                        }
-                        func => Err(Error::Plugin(format!("Invalid function: {func}").into())),
-                    },
+                    }
                     ty => Err(Error::Plugin(format!("Invalid type: {ty}").into())),
                 }
                 .into()
