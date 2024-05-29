@@ -56,17 +56,17 @@ impl Request {
         self
     }
 
-    async fn send(self) -> Future<Result<Response, HttpError>> {
+    async fn send(self) -> Future<Result<ClientResponse, HttpError>> {
         let response = self
             .plugin
             .invoke_func_mut("client", "Request", "send", [self.inner]);
 
         match response {
-            Result::Err(e) => Result::<Response, HttpError>::Err(HttpError {
+            Result::Err(e) => Result::<ClientResponse, HttpError>::Err(HttpError {
                 inner: e,
                 plugin: self.plugin,
             }),
-            Result::Ok(r) => Result::<Response, HttpError>::Ok(Response {
+            Result::Ok(r) => Result::<ClientResponse, HttpError>::Ok(ClientResponse {
                 inner: r,
                 plugin: self.plugin,
             }),
@@ -74,13 +74,13 @@ impl Request {
     }
 }
 
-struct Response {
+struct ClientResponse {
     #[proxy(plugin = "http::client")]
     plugin: Plugin<HttpClient>,
     inner: int,
 }
 
-impl Response {
+impl ClientResponse {
     async fn text(self) -> Future<Result<string, HttpError>> {
         let text = self
             .plugin

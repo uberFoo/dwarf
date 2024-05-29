@@ -154,18 +154,18 @@ impl Suffix {
     }
 }
 
-struct Response {
+struct ServerResponse {
     #[proxy(plugin = "http::server")]
     plugin: Plugin<HttpServer>,
     inner: int,
 }
 
-impl Response {
+impl ServerResponse {
     fn new(req: Request) -> Self {
         let plugin = req.plugin;
         let inner = plugin
             .invoke_func("server", "Response", "new", []);
-        Response {
+        ServerResponse {
             plugin: plugin,
             inner: inner,
         }

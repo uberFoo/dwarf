@@ -1,0 +1,58 @@
+use sarzak::sarzak::Attribute;
+use sarzak::sarzak::Object;
+use sarzak::sarzak::SarzakStore;
+
+fn main() {
+    // Specifying the type of the lhs forces a type check.
+    // This will create an object, but it won't be in the store.
+    let object: Object = Object {
+        id: Uuid::new(),
+        key_letters: "ᚠ",
+        name: "Gandalf",
+        description: "A wandering wizard",
+    };
+    print("${object}\n");
+    // print("{0}\n".format(object));
+
+    // This fails, and well done. We don't want this to be constructable.
+    // let store: SarzakStore = SarzakStore {};
+
+    // We create a new store.
+    let store = SarzakStore::new();
+    print("${store}\n");
+
+    // And use it here to create an object. This will be saved in the store.
+    let gandalf = Object::new("A wandering wizard", "ᚠ", "Gandalf");
+    let merlin = Object::new("Magician of Camelot", "M", "Merlin");
+
+    chacha::assert_eq(gandalf.name, "Gandalf");
+    chacha::assert_eq(gandalf.description, "A wandering wizard");
+    chacha::assert_eq(gandalf.key_letters, "ᚠ");
+
+    chacha::assert_eq(merlin.name, "Merlin");
+    chacha::assert_eq(merlin.description, "Magician of Camelot");
+    chacha::assert_eq(merlin.key_letters, "M");
+
+    gandalf.name = "Gandalf the Grey";
+    chacha::assert_eq(gandalf.name, "Gandalf the Grey");
+
+    for instance in Object::instances() {
+        print("instance: ${instance}\n");
+        // This is what I'd prefer to see, we just need to generate the code!
+        // for attribute in instance.attributes() {
+        for attribute in Attribute::instances() {
+            if attribute.obj_id == instance {
+                print("attribute: ${attribute}\n");
+            }
+        }
+    }
+
+    Object::help();
+
+    // let merlin = MerlinStore::new();
+
+    // for instance in Point::instances() {
+    // print(instance);
+    // print("\n");
+    // }
+}

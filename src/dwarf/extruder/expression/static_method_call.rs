@@ -282,7 +282,6 @@ pub fn inter(
 
         Ok(((call_expr, span), ty))
     } else if {
-        dbg!(&type_name);
         if let Some(prefix) = type_name.split('<').next() {
             if let Some(plugin) = prefix.split(PATH_SEP).last() {
                 if plugin == PLUGIN {

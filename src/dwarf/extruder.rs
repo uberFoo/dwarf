@@ -3521,12 +3521,22 @@ fn inter_import(
 ) -> Result<()> {
     let mut errors = Vec::new();
 
+    let (alias, has_alias) = match alias {
+        Some((alias, _)) => (alias.to_owned(), true),
+        None => ("".to_owned(), false),
+    };
+
     let mut path_root = import_path
         .iter()
         .map(|p| p.0.to_owned())
         .collect::<Vec<_>>();
 
-    let ty = path_root.pop().unwrap();
+    let ty = if has_alias {
+        path_root.pop();
+        alias.clone()
+    } else {
+        path_root.pop().unwrap()
+    };
 
     let module = path_root.first().unwrap(); // This will have _something_.
 
@@ -3572,6 +3582,8 @@ fn inter_import(
     // that when we are interring a module we can import only the
     // thing on the top of the stack.
     let fq_type = type_root.clone() + &ty;
+
+    dbg!(&fq_type);
 
     if let Some(t) = context.types.get(&fq_type) {
         debug!("{fq_type} already imported");
@@ -3641,11 +3653,6 @@ fn inter_import(
             });
         }
     }
-
-    let (alias, has_alias) = match alias {
-        Some((alias, _)) => (alias.to_owned(), true),
-        None => ("".to_owned(), false),
-    };
 
     let import = Import::new(
         alias,
