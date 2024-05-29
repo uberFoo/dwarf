@@ -739,6 +739,10 @@ impl TryFrom<&InnerAttribute> for String {
             InnerAttribute::Expression((Expression::StringLiteral(s), _)) => Ok(s.to_string()),
             _ => Err(DwarfError::Generic {
                 description: format!("Error converting InnerAttribute to String: {inner:?}."),
+                location: location!(),
+                span: 0..0,
+                file: "try_from".to_owned(),
+                program: "try_from".to_owned(),
             }),
         }
     }

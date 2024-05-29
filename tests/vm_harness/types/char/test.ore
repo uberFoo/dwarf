@@ -1,6 +1,0 @@
-fn main() -> char {
-    let str = "This is a test string. 🥰 Note the emoji.";
-    let emoji = str[23];
-    chacha::assert_eq(emoji, '🥰');
-    emoji
-}

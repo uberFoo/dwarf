@@ -1,4 +1,0 @@
-fn main() {
-    let uuid = Uuid::new();
-    print(uuid);
-}

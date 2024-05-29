@@ -1,26 +1,84 @@
 use std::{env, path::PathBuf};
 
+use ansi_term::Colour;
+use lazy_static::lazy_static;
+use parking_lot::Mutex;
 use test_log::test;
 
 use dwarf::{
     bubba::{
         compiler::{compile, BubbaCompilerErrorReporter},
         error::BubbaErrorReporter,
-        value::Value,
+        value::Value as BubbaValue,
         VM,
     },
     dwarf::{new_lu_dog, parse_dwarf},
     s_read,
     sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL},
 };
-#[cfg(feature = "tracy")]
-use tracy_client::Client;
 
 const NUM_THREADS: usize = 4;
 
-fn run_program(test: &str, program: &str, cwd: &PathBuf) -> Result<(Value, String), String> {
-    let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
+lazy_static! {
+    static ref EXEC_MUTEX: Mutex<()> = Mutex::new(());
+}
 
+#[cfg(feature = "print-std-out")]
+compile_error!("The tests don't function with the print-std-out feature enabled.");
+
+fn output_diffs(expected: &str, found: &str, test: &str) -> Result<(), ()> {
+    let mut diff_count = 0;
+    let mut diff = String::new();
+    for line in diff::lines(expected, found) {
+        match line {
+            diff::Result::Left(expected) => {
+                if expected.starts_with("[31mError:[0m Unexpected token in input, expected") {
+                    continue;
+                }
+                diff_count += 1;
+                diff += &format!("{} {expected}\n", Colour::Green.paint("+++"));
+            }
+            diff::Result::Right(found) => {
+                if found.starts_with("[31mError:[0m Unexpected token in input, expected") {
+                    continue;
+                }
+                diff += &format!("{} {found}\n", Colour::Red.paint("---"));
+            }
+            diff::Result::Both(a, _) => eprintln!("    {a}"),
+        }
+    }
+
+    if diff_count > 0 {
+        eprintln!(
+            "{}",
+            Colour::Red.paint(format!(
+                "stderr does not match .stderr file for test {test}"
+            ))
+        );
+        eprintln!("Expected:\n{expected}");
+        eprintln!("Found:\n{found}");
+        eprintln!("Diff:\n{diff}");
+        Err(())
+    } else {
+        Ok(())
+    }
+}
+
+fn diff_with_file(path: &str, test: &str, found: &str) -> Result<(), ()> {
+    let path = PathBuf::from(path);
+    let stdout = std::fs::read_to_string(path).unwrap().trim().to_owned();
+    if stdout == found {
+        // The output matches the .stdout file. We pass the test.
+        Ok(())
+    } else {
+        // The output does not match the .stdout file -- do a diff.
+        output_diffs(&stdout, found, test)
+    }
+}
+
+fn run_program(test: &str, program: &str, cwd: &PathBuf) -> Result<(BubbaValue, String), String> {
+    let _guard = EXEC_MUTEX.lock();
+    let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
     let dwarf_home = env::var("DWARF_HOME")
         .unwrap_or_else(|_| {
             let mut home = env::var("HOME").unwrap();
@@ -48,7 +106,7 @@ fn run_program(test: &str, program: &str, cwd: &PathBuf) -> Result<(Value, Strin
         test.to_owned(),
         Some((program.to_owned(), &ast)),
         &dwarf_home,
-        &env::current_dir().unwrap(),
+        cwd,
         &sarzak,
     ) {
         Ok(lu_dog) => lu_dog,
@@ -59,7 +117,7 @@ fn run_program(test: &str, program: &str, cwd: &PathBuf) -> Result<(Value, Strin
                     .map(|e| {
                         format!(
                             "{}",
-                            // Print the "uber" error message.
+                            // This one is uber.
                             dwarf::dwarf::error::DwarfErrorReporter(e, true)
                         )
                     })
@@ -70,7 +128,13 @@ fn run_program(test: &str, program: &str, cwd: &PathBuf) -> Result<(Value, Strin
 
             let errors = e
                 .iter()
-                .map(|e| format!("{}", dwarf::dwarf::error::DwarfErrorReporter(e, false)))
+                .map(|e| {
+                    format!(
+                        "{}",
+                        // This one is not uber.
+                        dwarf::dwarf::error::DwarfErrorReporter(e, false)
+                    )
+                })
                 .collect::<Vec<_>>()
                 .join("\n")
                 .trim()
@@ -113,7 +177,7 @@ fn run_program(test: &str, program: &str, cwd: &PathBuf) -> Result<(Value, Strin
             let value = s_read!(value).clone();
 
             match value {
-                Value::Error(msg) => {
+                BubbaValue::Error(msg) => {
                     let msg = *msg;
                     let error = format!(
                         "Vm exited with:\n{}",
@@ -156,15 +220,5 @@ fn run_program(test: &str, program: &str, cwd: &PathBuf) -> Result<(Value, Strin
     result
 }
 
-#[test_log::test]
-fn declaration() {
-    let _ = env_logger::builder().is_test(true).try_init();
-    #[cfg(feature = "tracy")]
-    let _ = Client::start();
-    color_backtrace::install();
-
-    let program = include_str!("proxy/declare.ore");
-    let cwd = env::current_dir().unwrap();
-    // This needs to be fixed
-    // run_program("proxy/declare.tao", program, &cwd).unwrap();
-}
+// This loads the generated tests.
+include!(concat!(env!("OUT_DIR"), "/tests.rs"));

@@ -1,4 +1,0 @@
-fn main() {
-    let name = "uberFoo";
-    let out_of_bounds = name[7];
-}

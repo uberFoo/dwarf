@@ -114,8 +114,8 @@ dotenvy = "0.15.7"
 # [patch.crates-io]
 # puteketeke = { path = "../../github/puteketeke" }
 
-# [patch."https://github.com/uberFoo/sarzak"]
-# sarzak = { path = "../sarzak" }
+[patch."https://github.com/uberFoo/sarzak"]
+sarzak = { path = "../sarzak" }
 
 [dev-dependencies]
 backtrace = "0.3.67"

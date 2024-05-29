@@ -1,5 +1,0 @@
-use std::integer::Integer;
-
-fn main() {
-    chacha::assert_eq(3.max(0), 3);
-}

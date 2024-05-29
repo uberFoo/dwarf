@@ -469,7 +469,8 @@ pub fn new_lu_dog(
             types: &mut types,
         };
 
-        println!("extruding {file_name}");
+        println!("\n{} {file_name}", Colour::Green.paint("Extruding:"));
+
         walk_tree(ast, &mut context, &mut stack, &mut lu_dog)?;
     };
 
@@ -633,7 +634,7 @@ fn walk_tree(
         generics,
     } in &structs
     {
-        debug!("Interring struct `{}` fields", name);
+        debug!("Interring struct `{}`", name);
         let _ = strukt::inter_struct(
             name,
             span,
@@ -671,7 +672,8 @@ fn walk_tree(
     }
 
     // This needs to be after the enums are interred.
-    for _ in &structs {
+    for ConveyStruct { name, .. } in &structs {
+        debug!("Interring struct `{name}` fields");
         let params = context.struct_fields.drain(..).collect::<Vec<_>>();
         for StructFields {
             woog_struct,
@@ -1658,12 +1660,77 @@ pub(super) fn inter_expression(
                         }
                     }
                 }
-                _ => Err(vec![DwarfError::NotAStruct {
+                ValueTypeEnum::ZObjectStore(ref id) => {
+                    let store = lu_dog.exhume_z_object_store(id).unwrap();
+                    let name = &s_read!(store).name;
+                    let id = lu_dog.exhume_woog_struct_id_by_name(name).unwrap();
+                    let woog_struct = lu_dog.exhume_woog_struct(&id).unwrap();
+                    let fields = s_read!(woog_struct).r7_field(lu_dog);
+                    let field = fields.iter().find(|f| s_read!(f).name == rhs.0);
+
+                    if let Some(field) = field {
+                        let field = lu_dog.exhume_field(&s_read!(field).id);
+                        let func = if let Some(impl_) =
+                            s_read!(woog_struct).r8c_implementation_block(lu_dog).pop()
+                        {
+                            let funcs = s_read!(impl_).r9_function(lu_dog);
+                            funcs.iter().find(|f| s_read!(f).name == rhs.0).cloned()
+                        } else {
+                            None
+                        };
+
+                        debug!("field {:?}", field);
+                        debug!("func {:?}", func);
+
+                        // We need to grab the type from the field: what we have above is the type
+                        // of the struct.
+                        if let Some(field) = field {
+                            let fat = FieldAccessTarget::new_field(true, &field, lu_dog);
+                            let expr = FieldAccess::new(&lhs.0, &fat, &woog_struct, lu_dog);
+                            let expr = Expression::new_field_access(true, &expr, lu_dog);
+                            let ty = s_read!(field).r5_value_type(lu_dog)[0].clone();
+                            let value = XValue::new_expression(block, &ty, &expr, lu_dog);
+                            update_span_value(&span, &value, location!());
+
+                            Ok(((expr, span), ty))
+                        } else if let Some(func) = func {
+                            let fat = FieldAccessTarget::new_function(true, &func, lu_dog);
+                            let expr = FieldAccess::new(&lhs.0, &fat, &woog_struct, lu_dog);
+                            let expr = Expression::new_field_access(true, &expr, lu_dog);
+                            let ty = s_read!(func).r10_value_type(lu_dog)[0].clone();
+                            let value = XValue::new_expression(block, &ty, &expr, lu_dog);
+                            update_span_value(&span, &value, location!());
+
+                            Ok(((expr, span), ty))
+                        } else {
+                            let span = s_read!(span);
+                            let span = span.start as usize..span.end as usize;
+                            Err(vec![DwarfError::StructFieldNotFound {
+                                field: rhs.0.clone(),
+                                file: context.file_name.to_owned(),
+                                span,
+                                location: location!(),
+                                program: context.source_string.to_owned(),
+                            }])
+                        }
+                    } else {
+                        Err(vec![DwarfError::StructFieldNotFound {
+                            field: rhs.0.clone(),
+                            file: context.file_name.to_owned(),
+                            span: rhs.1.to_owned(),
+                            location: location!(),
+                            program: context.source_string.to_owned(),
+                        }])
+                    }
+                }
+                what => {
+                    dbg!(&what);
+                    Err(vec![DwarfError::NotAStruct {
                     file: context.file_name.to_owned(),
                     span: rhs.1.to_owned(),
                     ty: PrintableValueType(true, &ty, context, lu_dog).to_string(),
                     program: context.source_string.to_owned(),
-                }]),
+                }])},
             }
         }
         //
@@ -2847,6 +2914,7 @@ pub(super) fn inter_expression(
                 let lu_dog_tmp = new_ref!(LuDogStore, lu_dog.clone());
                 // This bit is really neat.
                 let pattern_expr: ParserExpression = (pattern.to_owned(), block.clone(), scrutinee_ty.clone(), &context.source, lu_dog_tmp.clone(), true).into();
+
                 lu_dog.merge(&s_read!(lu_dog_tmp));
 
                 let (pattern_expr, ty) = inter_expression(
@@ -3356,7 +3424,7 @@ fn inter_module(
         return Ok(());
     }
 
-    println!("\nextruding {name}.{ORE_EXT}");
+    println!("\n{} {}", Colour::Green.paint("Extruding:"), path.display());
 
     match fs::read_to_string(&path) {
         Ok(source_code) => {
@@ -3513,7 +3581,12 @@ fn inter_import(
         context.types.insert(fq_type.clone());
     }
 
-    println!("extruding type {fq_type} @ {}", path.display());
+    println!(
+        "{} {} @ {}",
+        Colour::Green.paint("Extruding:"),
+        Colour::Blue.paint(&fq_type),
+        path.display()
+    );
 
     import_stack.push(fq_type);
 
@@ -3670,6 +3743,10 @@ fn inter_implementation(
             } else {
                 return Err(vec![DwarfError::Generic {
                     description: "No model specified".to_owned(),
+                    location: location!(),
+                    span: span.clone(),
+                    file: context.file_name.to_owned(),
+                    program: context.source_string.to_owned(),
                 }]);
             }
         } else {

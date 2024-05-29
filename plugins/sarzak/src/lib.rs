@@ -1,20 +1,15 @@
-use std::{
-    cell::RefCell,
-    fmt::{self, Display},
-    path::Path,
-    rc::Rc,
-};
+use std::fmt::{self, Display};
 
 use abi_stable::{
     export_root_module,
     external_types::crossbeam_channel::RSender,
     prefix_type::PrefixTypeTrait,
     sabi_extern_fn,
-    sabi_trait::prelude::{TD_CanDowncast, TD_Opaque},
-    std_types::{RErr, ROk, RResult, RStr, RString, RVec},
+    sabi_trait::prelude::TD_Opaque,
+    std_types::{RErr, ROk, RResult, RStr, RVec},
 };
 use dwarf::{
-    chacha::{ffi_value::FfiValue, value::Value},
+    chacha::ffi_value::FfiValue,
     plug_in::{Error, LambdaCall, Plugin, PluginModRef, PluginModule, PluginType, Plugin_TO},
 };
 use log::debug;

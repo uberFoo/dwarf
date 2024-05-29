@@ -16,13 +16,13 @@ fn main() {
 
     let control = Simple::Baz;
 
-    print("a = {0}\n".format(a));
-    print("b = {0}\n".format(b));
-    print("c = {0}\n".format(c));
-    print("d = {0}\n".format(d));
-    print("e = {0}\n".format(e));
+    print("a = ${a}\n");
+    print("b = ${b}\n");
+    print("c = ${c}\n");
+    print("d = ${d}\n");
+    print("e = ${e}\n");
 
-    print("control = {0}\n".format(control));
+    print("control = ${control}\n");
 
     chacha::assert_eq(a, Option::Some(42));
     chacha::assert_eq(b, Option::<int>::None);
@@ -32,14 +32,14 @@ fn main() {
 
     chacha::assert_eq(control, Simple::Baz);
 
-    chacha::assert_eq(a.is_some(), true);
-    chacha::assert_eq(a.is_none(), false);
-    chacha::assert_eq(b.is_some(), false);
-    chacha::assert_eq(b.is_none(), true);
-    chacha::assert_eq(c.is_some(), true);
-    chacha::assert_eq(c.is_none(), false);
-    chacha::assert_eq(d.is_some(), true);
-    chacha::assert_eq(d.is_none(), false);
-    chacha::assert_eq(e.is_some(), false);
-    chacha::assert_eq(e.is_none(), true);
+    chacha::assert(a.is_some());
+    chacha::assert(!a.is_none());
+    chacha::assert(!b.is_some());
+    chacha::assert(b.is_none());
+    chacha::assert(c.is_some());
+    chacha::assert(!c.is_none());
+    chacha::assert(d.is_some());
+    chacha::assert(!d.is_none());
+    chacha::assert(!e.is_some());
+    chacha::assert(e.is_none());
 }

@@ -25,13 +25,9 @@ pub mod plug_in;
     not(any(feature = "single", feature = "single-vec", feature = "multi-nd-vec"))
 ))]
 pub mod tui;
-// pub(crate) mod woog_structs;
-// pub mod lu_dog_proxy;
 
 pub use ::sarzak::{lu_dog, sarzak};
 use bubba::error::Error as BubbaError;
-pub use chacha::value::Value;
-pub(crate) use chacha::{error::ChaChaError, interpreter};
 
 // These should eventually come from the domain.
 pub type DwarfInteger = i64;
@@ -563,8 +559,8 @@ impl Default for Context {
     }
 }
 
-pub type ValueResult = Result<RefType<Value>, ChaChaError>;
-pub type VmValueResult = Result<RefType<crate::bubba::value::Value>, BubbaError>;
+// pub type ValueResult = Result<RefType<Value>, ChaChaError>;
+pub type ValueResult = Result<RefType<crate::bubba::value::Value>, BubbaError>;
 
 pub(crate) trait Desanitize {
     fn desanitize(&self) -> String;

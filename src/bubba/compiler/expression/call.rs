@@ -14,7 +14,7 @@ use crate::{
         value::Value,
         BOOL, STRING_ARRAY, UUID,
     },
-    chacha::interpreter::{ModelContext, PrintableValueType},
+    chacha::{models::ModelContext, pvt::PrintableValueType},
     keywords::{
         ARGS, ASSERT, ASSERT_EQ, CHACHA, FORMAT, FQ_UUID_TYPE, GET, INSERT, NEW, PLUGIN, REPLACE,
         TYPEOF,
@@ -623,8 +623,11 @@ fn compile_static_method_call(
                 };
 
                 let func1 = lu_dog.exhume_function(&func1).unwrap();
-                let body = s_read!(func1).r19_body(&lu_dog)[0].clone();
+                let func1 = s_read!(func1);
+                let body = func1.r19_body(&lu_dog)[0].clone();
                 let a_sink = s_read!(body).a_sink;
+                let ret_ty = func1.r10_value_type(&lu_dog)[0].clone();
+                let ret_ty = s_read!(ret_ty).clone();
 
                 let func_name = format!("{ty}::{func}");
                 // These instructions will be patched by the VM.
@@ -644,7 +647,7 @@ fn compile_static_method_call(
                     thonk.insert_instruction(Instruction::Call(args.len()), location!());
                 }
 
-                Ok(None)
+                Ok(Some(ret_ty))
             }
         }
     }

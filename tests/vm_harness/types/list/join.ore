@@ -1,9 +1,0 @@
-fn main() {
-    let a = ["hello", "world"];
-    let b = a.join(" ");
-    chacha::assert_eq(b, "hello world");
-
-    let c = @["hello", "world"];
-    let d = c.join(" ");
-    print(d);
-}

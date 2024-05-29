@@ -171,8 +171,7 @@ impl VM {
     ) -> Self {
         #[cfg(feature = "tracy-client")]
         Client::start();
-        // println!("{}", program);
-        // dbg!(&program);
+
         let Some(Value::ValueType(str_ty)) = program.get_symbol(STRING) else {
             panic!("No STRING symbol found.")
         };
@@ -413,8 +412,6 @@ impl VM {
             }
 
             if self.trace {
-                // let mutex = WRITE_MUTEX.get_or_init(|| Mutex::new(()));
-                // let guard = mutex.lock().unwrap();
                 let mutex = match unsafe { WRITE_MUTEX.get() } {
                     Some(mutex) => mutex,
                     None => {
@@ -426,6 +423,7 @@ impl VM {
                     }
                 };
                 let _guard = mutex.lock().unwrap();
+
                 print_stack(&stack, fp);
                 println!("\t{} ->\t{cx}", Colour::Green.bold().paint("cx"));
                 println!("{}: {name}", Colour::Green.bold().paint("Thread"));
@@ -1956,7 +1954,7 @@ impl VM {
     ) -> Result<()> {
         use puteketeke::AsyncTask;
 
-        use crate::VmValueResult;
+        use crate::ValueResult;
 
         let callee = &stack[stack.len() - func_arity - 2].clone();
         let stack_local_count = &stack[stack.len() - func_arity - 1].clone();
@@ -2070,7 +2068,7 @@ impl VM {
             Value::Task {
                 name,
                 running: true,
-                task: new_ref!(Option<AsyncTask<'static, VmValueResult>>, Some(child_task))
+                task: new_ref!(Option<AsyncTask<'static, ValueResult>>, Some(child_task))
             }
         );
 
@@ -2215,7 +2213,6 @@ mod tests {
     use crate::{
         bubba::instr::Thonk,
         dwarf::{DwarfFloat, DwarfInteger},
-        interpreter::{initialize_interpreter, PrintableValueType},
         lu_dog::ObjectStore as LuDogStore,
         Context,
     };
@@ -2589,89 +2586,5 @@ mod tests {
 
         let result: DwarfInteger = (&*s_read!(result.unwrap())).try_into().unwrap();
         assert_eq!(result, 42);
-    }
-
-    #[test]
-    fn test_instr_field() {
-        use crate::{
-            chacha::value::Struct,
-            lu_dog::{Field, ValueType, WoogStruct},
-            PATH_ROOT,
-        };
-        use sarzak::sarzak::{ObjectStore as SarzakStore, Ty, MODEL as SARZAK_MODEL};
-
-        #[cfg(feature = "tracy")]
-        Client::start();
-
-        let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
-
-        let ctx = Context::default();
-        let struct_ty = {
-            let mut lu_dog = s_write!(ctx.lu_dog);
-
-            // We need to create a WoogStruct and add some fields to it
-            let foo = WoogStruct::new(
-                "Foo".to_owned(),
-                PATH_ROOT.to_owned(),
-                None,
-                None,
-                &mut lu_dog,
-            );
-            // let _ = WoogItem::new_woog_struct(source, &mt, lu_dog);
-            let struct_ty = ValueType::new_woog_struct(true, &foo, &mut lu_dog);
-            let ty = Ty::new_integer(&sarzak);
-            let ty = ValueType::new_ty(true, &ty, &mut lu_dog);
-            let _ = Field::new("bar".to_owned(), &foo, &ty, &mut lu_dog);
-            let ty = Ty::new_float(&sarzak);
-            let ty = ValueType::new_ty(true, &ty, &mut lu_dog);
-            let _ = Field::new("baz".to_owned(), &foo, &ty, &mut lu_dog);
-            struct_ty
-        };
-
-        let ty = Ty::new_z_string(&sarzak);
-        let ty = ValueType::new_ty(true, &ty, &mut s_write!(ctx.lu_dog));
-        let ty = Value::ValueType((*s_read!(ty)).clone());
-
-        // Now we need an instance.
-        let dwarf_home = env::var("DWARF_HOME")
-            .unwrap_or_else(|_| {
-                let mut home = env::var("HOME").unwrap();
-                home.push_str("/.dwarf");
-                home
-            })
-            .into();
-
-        let ctx = initialize_interpreter(2, dwarf_home, ctx).unwrap();
-        let ty_name = PrintableValueType(false, struct_ty.clone(), ctx.models());
-        let mut foo_inst = Struct::new(ty_name.to_string(), &struct_ty);
-        foo_inst.define_field("bar", 42.into());
-        foo_inst.define_field("baz", std::f64::consts::PI.into());
-
-        let mut thonk = Thonk::new("test".to_string());
-        thonk.add_instruction(Instruction::Push(Value::Struct(foo_inst)), None);
-        thonk.add_instruction(Instruction::Push("baz".into()), None);
-        thonk.add_instruction(Instruction::FieldRead, None);
-        thonk.add_instruction(Instruction::Return, None);
-        println!("{}", thonk);
-        let mut program = Program::new(VERSION.to_owned(), BUILD_TIME.to_owned());
-        program.add_thonk(thonk);
-
-        program.add_symbol("STRING".to_owned(), ty);
-
-        #[cfg(feature = "async")]
-        let mut vm = VM::new(&program, &[], &PathBuf::new(), 1, true);
-        #[cfg(not(feature = "async"))]
-        let mut vm = VM::new(&program, &[], &PathBuf::new());
-
-        let result = vm.invoke("test", &[]);
-        println!("{:?}", result);
-        println!("{:?}", vm);
-
-        // assert!(vm.stack.is_empty());
-
-        assert!(result.is_ok());
-
-        let result: DwarfFloat = (&*s_read!(result.unwrap())).try_into().unwrap();
-        assert_eq!(result, std::f64::consts::PI);
     }
 }

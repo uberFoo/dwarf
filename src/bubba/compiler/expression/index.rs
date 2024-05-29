@@ -5,7 +5,7 @@ use crate::{
         compiler::{compile_expression, BubbaCompilerError, CThonk, Context, Result},
         instr::Instruction,
     },
-    chacha::interpreter::{ModelContext, PrintableValueType},
+    chacha::{models::ModelContext, pvt::PrintableValueType},
     lu_dog::{ValueType, ValueTypeEnum},
     new_ref, s_read,
     sarzak::Ty,

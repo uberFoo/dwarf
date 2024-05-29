@@ -21,7 +21,7 @@ use crate::{
     plug_in::PluginType,
     s_read, s_try_read,
     sarzak::Ty,
-    DwarfFloat, DwarfInteger, NewRef, RefType, VmValueResult,
+    DwarfFloat, DwarfInteger, NewRef, RefType, ValueResult,
 };
 
 #[derive(Default, Deserialize, Serialize)]
@@ -70,7 +70,7 @@ pub enum Value {
     Task {
         name: String,
         running: bool,
-        task: RefType<Option<AsyncTask<'static, VmValueResult>>>,
+        task: RefType<Option<AsyncTask<'static, ValueResult>>>,
     },
     Uuid(uuid::Uuid),
     ValueType(ValueType),

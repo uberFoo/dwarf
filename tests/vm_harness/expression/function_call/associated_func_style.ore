@@ -1,6 +1,0 @@
-use std::option::Option;
-
-fn main() {
-    let foo = Option::Some(1);
-    chacha::assert(Option::is_some(foo));
-}

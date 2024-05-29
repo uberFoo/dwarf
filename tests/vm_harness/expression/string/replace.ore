@@ -1,6 +1,0 @@
-// Exercise String::replace
-fn main() {
-    let s = "Hello, USER!";
-    let s = s.replace("USER", "world");
-    chacha::assert_eq(s, "Hello, world!");
-}

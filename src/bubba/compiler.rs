@@ -564,8 +564,8 @@ fn compile_function(func: &RefType<Function>, context: &mut Context) -> Result<C
     let (name, incr_fs) = if ty_name.is_empty() {
         (func.name.clone(), false)
     } else {
-        // Here is where we look for actual user defined types, as
-        // in types that are defined in dwarf source.
+        // Here is where we look for actual user defined types, i.e., types
+        // that are defined as dwarf source code..
         let ty = if let Some(ref id) = lu_dog.exhume_woog_struct_id_by_name(&ty_name) {
             let woog_struct = lu_dog.exhume_woog_struct(id).unwrap();
             let woog_struct = s_read!(woog_struct);
@@ -643,7 +643,7 @@ fn compile_function(func: &RefType<Function>, context: &mut Context) -> Result<C
             let object_name = &external.object;
             let object_name = object_name.to_upper_camel_case();
 
-            dbg!(model, func_name, object_name);
+            dbg!(func_name, object_name);
         }
     };
 

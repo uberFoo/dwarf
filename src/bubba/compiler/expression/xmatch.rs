@@ -303,7 +303,7 @@ mod test {
                            1 => 1,
                            2 => 2,
                            3 => 3,
-                           _ => 4,
+                           4 => 4,
                        }
                    }";
         let ast = parse_dwarf("match_expression", ore).unwrap();
@@ -321,7 +321,7 @@ mod test {
 
         assert_eq!(program.get_thonk_card(), 1);
 
-        assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 31);
+        assert_eq!(program.get_thonk("main").unwrap().instruction_card(), 29);
 
         assert_eq!(&*s_read!(run_vm(&program).unwrap()), &3.into());
     }
@@ -330,15 +330,15 @@ mod test {
     fn match_string_literal_expression() {
         setup_logging();
         let sarzak = SarzakStore::from_bincode(SARZAK_MODEL).unwrap();
-        let ore = "
+        let ore = r#"
                    fn main() -> string {
-                       match \"foo\" {
-                           \"bar\" => \"bar\",
-                           \"foo\" => \"foo\",
-                           \"baz\" => \"baz\",
-                           _ => \"qux\",
+                       match "foo" {
+                           "bar" => "bar",
+                           "foo" => "foo",
+                           "baz" => "baz",
+                           _ => "qux",
                        }
-                   }";
+                   }"#;
         let ast = parse_dwarf("match_expression", ore).unwrap();
         let ctx = new_lu_dog(
             "match_expression".to_owned(),

@@ -1,9 +1,0 @@
-fn main() {
-    let list = [1, 2, 3, 4];
-    list.push(5);
-    chacha::assert_eq(list.len(), 5);
-
-    let any_list = @[1, "hello"];
-    any_list.push(3.14);
-    chacha::assert_eq(any_list.len(), 3);
-}

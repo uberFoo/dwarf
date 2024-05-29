@@ -35,15 +35,11 @@ use dwarf::{
         value::Value as BubbaValue,
         Program, VM,
     },
-    chacha::{
-        dap::DapAdapter,
-        error::{ChaChaError, ChaChaErrorReporter},
-        interpreter::{banner2, initialize_interpreter, start_func, start_repl},
-    },
+    chacha::{banner::banner, dap::DapAdapter},
     dwarf::{new_lu_dog, parse_dwarf},
     new_ref, s_read,
     sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL},
-    Context, NewRef, RefType, Value, BUILD_TIME, VERSION,
+    Context, NewRef, RefType, BUILD_TIME, VERSION,
 };
 use reqwest::Url;
 #[cfg(feature = "tracy")]
@@ -80,7 +76,7 @@ fn validate_source(s: &str) -> Result<Source, String> {
     long_about = r#"
 This is dwarf.
 
-This file encompasses the interpreter, the compiler, and the virtual machine.
+This file encompasses the compiler, and the virtual machine.
 
 By default, with no arguments you will be dropped into a REPL. If you pass
 a source file, it will be compiled and executed, and then return to your shell.
@@ -89,7 +85,7 @@ This default behavior may be modified by using any of the options below.
 "#
 )]
 #[command(propagate_version = true)]
-/// This is the dwarf interpreter, ChaCha.
+/// This is the dwarf VM.
 ///
 /// By default, with no arguments you will be dropped into a REPL. If you pass
 /// a source file, it will be executed and return to your shell.
@@ -143,11 +139,6 @@ struct Arguments {
     /// The number of threads to use for the executor. Defaults to the number of cpus.
     #[arg(long)]
     threads: Option<usize>,
-    /// Use Interpreter
-    ///
-    /// With this option the interpreter will be used instead of the VM.
-    #[arg(long, short, action=ArgAction::SetTrue)]
-    interpreter: Option<bool>,
     /// Verbose output
     ///
     /// Print verbose output.
@@ -208,7 +199,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let is_uber = args.uber.is_some() && args.uber.unwrap();
     let print_ast = args.ast.is_some() && args.ast.unwrap();
     let threads = args.threads.unwrap_or_else(num_cpus::get);
-    let interpreter = args.interpreter.is_some() && args.interpreter.unwrap();
     let trace = args.trace.is_some() && args.trace.unwrap();
 
     if threads == 0 {
@@ -268,7 +258,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         None
     };
 
-    let dwarf_home = env::var("DWARF_HOME")
+    let dwarf_home: PathBuf = env::var("DWARF_HOME")
         .unwrap_or_else(|_| {
             let mut home = env::var("HOME").unwrap();
             home.push_str("/.dwarf");
@@ -284,7 +274,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     if args.banner.is_some() && args.banner.unwrap() {
-        println!("{}", banner2());
+        println!("{}", banner());
     }
 
     if let Some(cd) = args.cd {
@@ -296,90 +286,29 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     if let Some((source_code, dwarf_args, file_name, source_meta)) = input {
         if args.repl.is_some() && args.repl.unwrap() {
-            let ctx = match get_context(
-                &file_name,
-                &source_code,
-                &dwarf_home,
-                &sarzak,
-                is_uber,
-                print_ast,
-            ) {
-                Some(ctx) => ctx,
-                None => return Ok(()),
-            };
-            let mut ctx = initialize_interpreter(threads, dwarf_home, ctx).map_err(|e| {
-                println!("Interpreter exited with: {}", e);
-                e
-            })?;
-            ctx.add_args(dwarf_args);
-            start_repl(&mut ctx, is_uber, threads, trace)
-                .map_err(|e| {
-                    println!("Interpreter exited with: {}", e);
-                    e
-                })
-                .unwrap();
-        } else if interpreter {
-            let ctx = match get_context(
-                &file_name,
-                &source_code,
-                &dwarf_home,
-                &sarzak,
-                is_uber,
-                print_ast,
-            ) {
-                Some(ctx) => ctx,
-                None => return Ok(()),
-            };
-            let mut ctx = initialize_interpreter(threads, dwarf_home, ctx)?;
-            ctx.add_args(dwarf_args);
-            match start_func("main", false, &mut ctx) {
-                // 🚧 What's a sensible thing to do with this?
-                #[allow(unused_variables)]
-                Ok(value) => {
-                    #[cfg(feature = "async")]
-                    {
-                        unsafe {
-                            let value = std::sync::Arc::into_raw(value);
-                            let value = std::ptr::read(value);
-                            let value = ref_to_inner!(value);
-
-                            let value = future::block_on(value);
-
-                            let value = std::sync::Arc::into_raw(value);
-                            let value = std::ptr::read(value);
-                            let value = ref_to_inner!(value);
-
-                            match value {
-                                Value::Error(msg) => {
-                                    let msg = *msg;
-                                    eprintln!("Interpreter exited with:");
-                                    eprintln!(
-                                        "{}",
-                                        ChaChaErrorReporter(
-                                            &msg.into(),
-                                            is_uber,
-                                            &source_code,
-                                            &file_name
-                                        )
-                                    );
-                                }
-                                _ => println!("{}", value),
-                            }
-                        }
-                    }
-
-                    Ok::<(), ChaChaError>(())
-                }
-                Err(e) => {
-                    eprintln!("Interpreter exited with:");
-                    eprintln!(
-                        "{}",
-                        ChaChaErrorReporter(&e, is_uber, &source_code, &file_name)
-                    );
-                    Ok(())
-                }
-            }
-            .unwrap();
+            eprintln!("The REPL is currently out of commission.");
+            // let ctx = match get_context(
+            //     &file_name,
+            //     &source_code,
+            //     &dwarf_home,
+            //     &sarzak,
+            //     is_uber,
+            //     print_ast,
+            // ) {
+            //     Some(ctx) => ctx,
+            //     None => return Ok(()),
+            // };
+            // let mut ctx = initialize_interpreter(threads, dwarf_home, ctx).map_err(|e| {
+            //     println!("Interpreter exited with: {}", e);
+            //     e
+            // })?;
+            // ctx.add_args(dwarf_args);
+            // start_repl(&mut ctx, is_uber, threads, trace)
+            //     .map_err(|e| {
+            //         println!("Interpreter exited with: {}", e);
+            //         e
+            //     })
+            //     .unwrap();
         } else {
             // Running in the VM
             //
@@ -559,13 +488,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             // }
         }
     } else {
-        let ctx = Context::default();
-        let mut ctx = initialize_interpreter(2, dwarf_home, ctx)?;
+        eprintln!("No source file specified.");
+        // let ctx = Context::default();
+        // let mut ctx = initialize_interpreter(2, dwarf_home, ctx)?;
 
-        start_repl(&mut ctx, is_uber, threads, trace).map_err(|e| {
-            println!("Interpreter exited with: {}", e);
-            e
-        })?;
+        // start_repl(&mut ctx, is_uber, threads, trace).map_err(|e| {
+        //     println!("Interpreter exited with: {}", e);
+        //     e
+        // })?;
     }
 
     Ok(())

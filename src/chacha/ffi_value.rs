@@ -10,12 +10,15 @@ use abi_stable::{
 };
 use ansi_term::Colour;
 use rustc_hash::FxHashMap as HashMap;
+use snafu::{location, Backtrace, Location};
 use uuid::Uuid;
 
 use crate::{
-    bubba::value::Value as VmValue,
+    bubba::{
+        error::{BubbaError, Error, Result},
+        value::Value,
+    },
     chacha::{
-        error::{ChaChaError, Result},
         value::_struct::StructAttributes,
         value::{Enum, Struct, TupleEnum},
     },
@@ -23,7 +26,7 @@ use crate::{
     lu_dog::{ObjectStore as LuDogStore, ValueType, ValueTypeEnum},
     new_ref,
     plug_in::PluginType,
-    s_read, DwarfFloat, DwarfInteger, NewRef, RefType, Value, LAMBDA_FUNCS, PATH_SEP,
+    s_read, DwarfFloat, DwarfInteger, NewRef, RefType, LAMBDA_FUNCS, PATH_SEP,
 };
 
 #[repr(C)]
@@ -51,7 +54,7 @@ impl std::fmt::Display for FfiProxy {
 /// A value that can be passed across FFI boundaries.
 ///
 /// This is a simplified version of the `Value` type, which is used to represent
-/// values in the interpreter. Using the `VmValue` type we can send values from
+/// values in the interpreter. Using the `Value` type we can send values from
 /// the VM as well.
 ///
 #[repr(C)]
@@ -242,57 +245,7 @@ impl From<Value> for FfiValue {
     fn from(value: Value) -> Self {
         match &value {
             Value::Boolean(bool_) => Self::Boolean(bool_.to_owned()),
-            Value::Empty => Self::Empty,
-            Value::Float(num) => Self::Float(num.to_owned()),
-            Value::Integer(num) => Self::Integer(num.to_owned()),
-            Value::ProxyType {
-                module,
-                obj_ty,
-                id,
-                plugin,
-            } => Self::ProxyType(FfiProxy {
-                module: module.to_owned().into(),
-                ty: obj_ty.to_owned().into(),
-                id: id.to_owned().into(),
-                plugin: s_read!(plugin).clone(),
-            }),
-            Value::Range(range) => Self::Range(FfiRange {
-                start: range.start,
-                end: range.end,
-            }),
-            Value::String(str_) => Self::String(str_.to_owned().into()),
-            Value::Uuid(uuid) => Self::Uuid(uuid.to_owned().into()),
-            _ => Self::Unknown,
-        }
-    }
-}
-
-impl From<FfiValue> for Value {
-    fn from(value: FfiValue) -> Self {
-        match value {
-            FfiValue::Boolean(bool_) => Self::Boolean(bool_),
-            FfiValue::Empty => Self::Empty,
-            FfiValue::Float(num) => Self::Float(num),
-            FfiValue::Integer(num) => Self::Integer(num),
-            FfiValue::ProxyType(plugin) => Self::ProxyType {
-                module: plugin.module.into(),
-                obj_ty: plugin.ty.into(),
-                id: plugin.id.into(),
-                plugin: new_ref!(PluginType, plugin.plugin),
-            },
-            FfiValue::Range(range) => Self::Range(range.start..range.end),
-            FfiValue::String(str_) => Self::String(str_.into()),
-            FfiValue::Uuid(uuid) => Self::Uuid(uuid.into()),
-            _ => Self::Unknown,
-        }
-    }
-}
-
-impl From<VmValue> for FfiValue {
-    fn from(value: VmValue) -> Self {
-        match &value {
-            VmValue::Boolean(bool_) => Self::Boolean(bool_.to_owned()),
-            VmValue::Enumeration(e) => match e {
+            Value::Enumeration(e) => match e {
                 Enum::Struct(s) => {
                     dbg!(s);
                     panic!()
@@ -319,9 +272,9 @@ impl From<VmValue> for FfiValue {
                     Self::String(format!("{ty_name}::{v}").into())
                 }
             },
-            VmValue::Empty => Self::Empty,
-            VmValue::Float(num) => Self::Float(num.to_owned()),
-            lambda @ VmValue::LambdaPointer { .. } => {
+            Value::Empty => Self::Empty,
+            Value::Float(num) => Self::Float(num.to_owned()),
+            lambda @ Value::LambdaPointer { .. } => {
                 let λ = match LAMBDA_FUNCS.get() {
                     Some(λ) => λ,
                     None => {
@@ -341,25 +294,25 @@ impl From<VmValue> for FfiValue {
 
                 Self::Lambda(key)
             }
-            VmValue::List { ty: _, inner } => {
+            Value::List { ty: _, inner } => {
                 let inner = s_read!(inner);
                 let inner = inner.iter().map(|v| s_read!(v).clone().into()).collect();
                 Self::List(inner)
             }
-            VmValue::Integer(num) => Self::Integer(num.to_owned()),
-            VmValue::Plugin((_name, plugin)) => Self::PlugIn(s_read!(plugin).clone()),
-            VmValue::Range(range) => Self::Range(FfiRange {
+            Value::Integer(num) => Self::Integer(num.to_owned()),
+            Value::Plugin((_name, plugin)) => Self::PlugIn(s_read!(plugin).clone()),
+            Value::Range(range) => Self::Range(FfiRange {
                 start: range.start,
                 end: range.end,
             }),
-            VmValue::String(str_) => Self::String(str_.to_owned().into()),
-            VmValue::Struct(s) => Self::Struct(s.into()),
+            Value::String(str_) => Self::String(str_.to_owned().into()),
+            Value::Struct(s) => Self::Struct(s.into()),
             x => panic!("Unknown FfiValue: {x}"),
         }
     }
 }
 
-impl From<FfiValue> for VmValue {
+impl From<FfiValue> for Value {
     fn from(value: FfiValue) -> Self {
         match value {
             FfiValue::Boolean(bool_) => Self::Boolean(bool_),
@@ -376,10 +329,10 @@ impl From<FfiValue> for VmValue {
                 let inner = map
                     .0
                     .into_iter()
-                    .map(|Tuple2(k, v)| (k.into(), new_ref!(VmValue, v.into())))
-                    .collect::<StdHashMap<String, RefType<VmValue>>>();
+                    .map(|Tuple2(k, v)| (k.into(), new_ref!(Value, v.into())))
+                    .collect::<StdHashMap<String, RefType<Value>>>();
                 Self::Map {
-                    inner: new_ref!(StdHashMap<String, RefType<VmValue>>, inner),
+                    inner: new_ref!(StdHashMap<String, RefType<Value>>, inner),
                 }
             }
             FfiValue::Range(range) => Self::Range(range.start..range.end),
@@ -390,90 +343,11 @@ impl From<FfiValue> for VmValue {
     }
 }
 
-impl From<(FfiValue, &LuDogStore)> for Value {
-    fn from(value: (FfiValue, &LuDogStore)) -> Self {
-        let lu_dog = value.1;
-        match value.0 {
-            FfiValue::Boolean(bool_) => Self::Boolean(bool_),
-            FfiValue::Empty => Self::Empty,
-            FfiValue::Float(num) => Self::Float(num),
-            FfiValue::Integer(num) => Self::Integer(num),
-            FfiValue::Option(option) => match option {
-                ROption::RNone => Self::Empty,
-                ROption::RSome(value) => <(FfiValue, &LuDogStore) as Into<Value>>::into((
-                    RBox::into_inner(value),
-                    lu_dog,
-                )),
-            },
-            FfiValue::ProxyType(plugin) => Self::ProxyType {
-                module: plugin.module.into(),
-                obj_ty: plugin.ty.into(),
-                id: plugin.id.into(),
-                plugin: new_ref!(PluginType, plugin.plugin),
-            },
-            FfiValue::Range(range) => Self::Range(range.start..range.end),
-            FfiValue::Result(result) => {
-                let Some(ty) = lu_dog.exhume_enumeration_id_by_name(RESULT_TYPE) else {
-                    panic!("Result type not found")
-                };
-                let ty = lu_dog.exhume_enumeration(&ty).unwrap();
-                let ty = s_read!(ty).r1_value_type(lu_dog)[0].clone();
-                // let Some(ty) = lu_dog.iter_value_type().find(|vt| {
-                //     if let ValueTypeEnum::Enumeration(id) = s_read!(vt).subtype {
-                //         let id = lu_dog.exhume_enumeration(&id).unwrap();
-                //         if s_read!(id).id == s_read!(ty).id {
-                //             return true;
-                //         }
-                //     }
-                //     false
-                // }) else {
-                //     unreachable!()
-                // };
-
-                let tuple = match result {
-                    RResult::RErr(err) => TupleEnum {
-                        variant: ERR.to_owned(),
-                        value: new_ref!(
-                            Value,
-                            <(FfiValue, &LuDogStore) as Into<Value>>::into((
-                                RBox::into_inner(err),
-                                lu_dog,
-                            ))
-                        ),
-                    },
-                    RResult::ROk(ok) => TupleEnum {
-                        variant: OK.to_owned(),
-                        value: new_ref!(
-                            Value,
-                            <(FfiValue, &LuDogStore) as Into<Value>>::into((
-                                RBox::into_inner(ok),
-                                lu_dog,
-                            ))
-                        ),
-                    },
-                };
-
-                Value::Enumeration(Enum::Tuple(
-                    (ty.clone(), RESULT.to_owned()),
-                    new_ref!(TupleEnum<Value>, tuple),
-                ))
-            }
-            FfiValue::String(str_) => Self::String(str_.into()),
-            // FfiValue::UserType(uuid) => Self::UserType(new_ref!(UserType, uuid.into())),
-            FfiValue::Uuid(uuid) => Self::Uuid(uuid.into()),
-            // FfiValue::Vector(vec) => {
-            //     Self::Vector(vec.into_iter().map(|v| new_ref!(Value, v.into())).collect())
-            // }
-            _ => Self::Unknown,
-        }
-    }
-}
-
 impl<V> TryFrom<&FfiValue> for StdHashMap<String, V>
 where
-    V: TryFrom<FfiValue, Error = ChaChaError>,
+    V: TryFrom<FfiValue, Error = BubbaError>,
 {
-    type Error = ChaChaError;
+    type Error = BubbaError;
 
     fn try_from(value: &FfiValue) -> Result<Self, <Self as TryFrom<&FfiValue>>::Error> {
         match value {
@@ -483,34 +357,42 @@ where
                     .iter()
                     .map(|Tuple2(k, v)| Ok((k.to_string(), v.to_owned().try_into()?)))
                     .collect();
-                result.map_err(|_: ChaChaError| ChaChaError::Conversion {
+                result.map_err(|_: BubbaError| BubbaError::Conversion {
                     src: map.to_string(),
                     dst: "HashMap<K, V>".to_owned(),
+                    location: location!(),
+                    backtrace: Backtrace::capture(),
                 })
             }
-            _ => Err(ChaChaError::Conversion {
+            _ => Err(BubbaError::Conversion {
                 src: value.to_string(),
                 dst: "HashMap<K, V>".to_owned(),
+                location: location!(),
+                backtrace: Backtrace::capture(),
             }),
         }
     }
 }
 
-impl<T: TryFrom<FfiValue, Error = ChaChaError>> TryFrom<&FfiValue> for Vec<T> {
-    type Error = ChaChaError;
+impl<T: TryFrom<FfiValue, Error = BubbaError>> TryFrom<&FfiValue> for Vec<T> {
+    type Error = BubbaError;
 
     fn try_from(value: &FfiValue) -> Result<Self, Self::Error> {
         match value.clone() {
             FfiValue::List(vec) => {
                 let result: Result<Vec<_>, _> = vec.into_iter().map(|v| v.try_into()).collect();
-                result.map_err(|_| ChaChaError::Conversion {
+                result.map_err(|_| BubbaError::Conversion {
                     src: value.to_string(),
                     dst: "Vec<T>".to_owned(),
+                    location: location!(),
+                    backtrace: Backtrace::capture(),
                 })
             }
-            _ => Err(ChaChaError::Conversion {
+            _ => Err(BubbaError::Conversion {
                 src: value.to_string(),
                 dst: "Vec<T>".to_owned(),
+                location: location!(),
+                backtrace: Backtrace::capture(),
             }),
         }
     }
@@ -539,29 +421,35 @@ impl From<u64> for FfiValue {
 }
 
 impl TryFrom<FfiValue> for String {
-    type Error = ChaChaError;
+    type Error = Error;
 
     fn try_from(value: FfiValue) -> Result<Self> {
         match value {
             FfiValue::String(s) => Ok(s.into()),
-            _ => Err(ChaChaError::Conversion {
+            _ => Err(BubbaError::Conversion {
                 src: value.to_string(),
                 dst: "String".to_owned(),
-            }),
+                location: location!(),
+                backtrace: Backtrace::capture(),
+            }
+            .into()),
         }
     }
 }
 
 impl TryFrom<&FfiValue> for String {
-    type Error = ChaChaError;
+    type Error = Error;
 
     fn try_from(value: &FfiValue) -> Result<Self> {
         match value {
             FfiValue::String(s) => Ok(s.to_owned().into()),
-            _ => Err(ChaChaError::Conversion {
+            _ => Err(BubbaError::Conversion {
                 src: value.to_string(),
                 dst: "String".to_owned(),
-            }),
+                location: location!(),
+                backtrace: Backtrace::capture(),
+            }
+            .into()),
         }
     }
 }
@@ -570,12 +458,12 @@ impl TryFrom<&FfiValue> for String {
 // where
 //     F: Fn(FfiValue) -> FfiValue + 'static,
 // {
-//     type Error = ChaChaError;
+//     type Error = BubbaError;
 
 //     fn try_from(value: &FfiValue) -> Result<Self> {
 //         match value {
 //             FfiValue::Callback(c) => Ok(c.to_owned().into()),
-//             _ => Err(ChaChaError::Conversion {
+//             _ => Err(BubbaError::Conversion {
 //                 src: value.to_string(),
 //                 dst: "String".to_owned(),
 //             }),
@@ -584,15 +472,18 @@ impl TryFrom<&FfiValue> for String {
 // }
 
 impl TryFrom<&FfiValue> for i64 {
-    type Error = ChaChaError;
+    type Error = Error;
 
     fn try_from(value: &FfiValue) -> Result<Self> {
         match value {
             FfiValue::Integer(i) => Ok(*i),
-            _ => Err(ChaChaError::Conversion {
+            _ => Err(BubbaError::Conversion {
                 src: value.to_string(),
                 dst: "i64".to_owned(),
-            }),
+                location: location!(),
+                backtrace: Backtrace::capture(),
+            }
+            .into()),
         }
     }
 }
@@ -676,7 +567,7 @@ where
     }
 }
 
-impl From<FfiStruct> for Struct<VmValue> {
+impl From<FfiStruct> for Struct<Value> {
     fn from(value: FfiStruct) -> Self {
         let attrs = value.attrs.clone();
         let attrs = attrs

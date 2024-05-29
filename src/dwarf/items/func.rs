@@ -90,6 +90,10 @@ pub fn inter_func(
                             } else {
                                 return Err(vec![DwarfError::Generic {
                                     description: "No object specified".to_owned(),
+                                    location: location!(),
+                                    span: span.clone(),
+                                    file: context.file_name.to_owned(),
+                                    program: context.source_string.to_owned(),
                                 }]);
                             }
                         } else {
@@ -98,6 +102,10 @@ pub fn inter_func(
                     } else {
                         return Err(vec![DwarfError::Generic {
                             description: "No function specified".to_owned(),
+                            location: location!(),
+                            span: span.clone(),
+                            file: context.file_name.to_owned(),
+                            program: context.source_string.to_owned(),
                         }]);
                     }
                 } else {
@@ -106,6 +114,10 @@ pub fn inter_func(
             } else {
                 return Err(vec![DwarfError::Generic {
                     description: "No store specified".to_owned(),
+                    location: location!(),
+                    span: span.clone(),
+                    file: context.file_name.to_owned(),
+                    program: context.source_string.to_owned(),
                 }]);
             }
         } else {
@@ -252,6 +264,10 @@ pub fn inter_func(
         } else {
             return Err(vec![DwarfError::Generic {
                 description: "No body specified".to_owned(),
+                location: location!(),
+                span: span.clone(),
+                file: context.file_name.to_owned(),
+                program: context.source_string.to_owned(),
             }]);
         };
 

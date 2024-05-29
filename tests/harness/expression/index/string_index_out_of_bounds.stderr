@@ -1,4 +1,4 @@
-Interpreter exited with:
+VM exited with:
 [31mError:[0m index out of bounds 💥
    [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m string_index_out_of_bounds:3:30 [38;5;246m][0m
    [38;5;246m│[0m
