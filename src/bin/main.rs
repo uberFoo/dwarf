@@ -35,7 +35,7 @@ use dwarf::{
         value::Value as BubbaValue,
         Program, VM,
     },
-    chacha::{banner::banner, dap::DapAdapter},
+    chacha::{banner::banner2, dap::DapAdapter},
     dwarf::{new_lu_dog, parse_dwarf},
     new_ref, s_read,
     sarzak::{ObjectStore as SarzakStore, MODEL as SARZAK_MODEL},
@@ -274,7 +274,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     if args.banner.is_some() && args.banner.unwrap() {
-        println!("{}", banner());
+        println!("{}", banner2());
     }
 
     if let Some(cd) = args.cd {

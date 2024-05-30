@@ -135,7 +135,7 @@ mod http_client {
                 match ty.as_str() {
                     "HttpClient" => match func.as_str() {
                         "get" => {
-                            tracing::trace!("get enter");
+                            tracing::trace!(target: "http", "get enter");
                             let url: String = match args.first().unwrap().try_into() {
                                 Ok(url) => url,
                                 Err(e) => return RErr(Error::Plugin(e.to_string().into())),
@@ -147,11 +147,11 @@ mod http_client {
                             let key = entry.key();
                             self.requests.insert(Arc::new(request));
 
-                            tracing::trace!("get exit");
+                            tracing::trace!(target: "http", "get exit");
                             Ok(FfiValue::Integer(key as DwarfInteger))
                         }
                         "post" => {
-                            tracing::trace!("post enter");
+                            tracing::trace!(target: "http", "post enter");
                             let url: String = match args.get(0).unwrap().try_into() {
                                 Ok(url) => url,
                                 Err(e) => return RErr(Error::Plugin(e.to_string().into())),
@@ -163,14 +163,14 @@ mod http_client {
                             let key = entry.key();
                             self.requests.insert(Arc::new(request));
 
-                            tracing::trace!("post exit");
+                            tracing::trace!(target: "http", "post exit");
                             Ok(FfiValue::Integer(key as DwarfInteger))
                         }
                         func => Err(Error::Plugin(format!("Invalid function: {func}").into())),
                     },
                     "Request" => match func.as_str() {
                         "header" => {
-                            tracing::trace!("header enter");
+                            tracing::trace!(target: "http", "header enter");
                             let key: DwarfInteger = match args.get(0).unwrap().try_into() {
                                 Ok(key) => key,
                                 Err(e) => return RErr(Error::Plugin(e.to_string().into())),
@@ -197,7 +197,7 @@ mod http_client {
                             Ok(FfiValue::Integer(key as DwarfInteger))
                         }
                         "send" => {
-                            tracing::trace!("send enter");
+                            tracing::trace!(target: "http", "send enter");
                             let key: DwarfInteger = match args.get(0).unwrap().try_into() {
                                 Ok(key) => key,
                                 Err(e) => return RErr(Error::Plugin(e.to_string().into())),
@@ -220,10 +220,10 @@ mod http_client {
                                         RErr(RBox::new(FfiValue::Integer(key as DwarfInteger)))
                                     }
                                 };
-                                tracing::trace!("send exit");
+                                tracing::trace!(target: "http", "send exit");
                                 Ok(FfiValue::Result(response))
                             } else {
-                                tracing::trace!("send exit");
+                                tracing::trace!(target: "http", "send exit");
                                 Ok(FfiValue::Error("Too many references to request.".into()))
                             }
                         }
@@ -231,7 +231,7 @@ mod http_client {
                     },
                     "Response" => match func.as_str() {
                         "text" => {
-                            tracing::trace!("text enter");
+                            tracing::trace!(target: "http", "text enter");
                             let key: DwarfInteger = match args.get(0).unwrap().try_into() {
                                 Ok(key) => key,
                                 Err(e) => return RErr(Error::Plugin(e.to_string().into())),
@@ -249,10 +249,10 @@ mod http_client {
                                         RErr(RBox::new(FfiValue::Integer(key as DwarfInteger)))
                                     }
                                 };
-                                tracing::trace!("text exit");
+                                tracing::trace!(target: "http", "text exit");
                                 Ok(FfiValue::Result(result))
                             } else {
-                                tracing::trace!("text exit");
+                                tracing::trace!(target: "http", "text exit");
                                 Ok(FfiValue::Error("Too many references to response.".into()))
                             }
                         }
@@ -260,7 +260,7 @@ mod http_client {
                     },
                     "HttpError" => match func.as_str() {
                         "to_string" => {
-                            tracing::trace!("to_string enter");
+                            tracing::trace!(target: "http", "to_string enter");
                             let key: DwarfInteger = match args.get(0).unwrap().try_into() {
                                 Ok(key) => key,
                                 Err(e) => return RErr(Error::Plugin(e.to_string().into())),
@@ -270,10 +270,10 @@ mod http_client {
                             if let Some(error) = Arc::into_inner(error) {
                                 let result =
                                     ROk(RBox::new(FfiValue::String(error.to_string().into())));
-                                tracing::trace!("to_string exit");
+                                tracing::trace!(target: "http", "to_string exit");
                                 Ok(FfiValue::Result(result))
                             } else {
-                                tracing::trace!("to_string exit");
+                                tracing::trace!(target: "http", "to_string exit");
                                 Ok(FfiValue::Error("Too many references to error.".into()))
                             }
                         }

@@ -23,7 +23,7 @@ use crate::{
         value::Value,
         BOOL, CHAR, EMPTY, FLOAT, INTEGER, MAP, RANGE, STRING, STRING_ARRAY, UNKNOWN, UUID,
     },
-    keywords::{OPTION, OPTION_TYPE, RESULT, RESULT_TYPE},
+    keywords::{OPTION_TYPE, RESULT_TYPE},
     lu_dog::{
         BodyEnum, Expression, ExpressionEnum, Function, Map, ObjectStore as LuDogStore, Statement,
         StatementEnum, ValueType, ValueTypeEnum,

@@ -2,7 +2,6 @@ use std::ops::Range;
 
 use ansi_term::Colour;
 use snafu::{location, Location};
-use uuid::Uuid;
 
 use crate::{
     dwarf::{

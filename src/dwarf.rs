@@ -21,7 +21,7 @@ use crate::{
         store::ObjectStore as LuDogStore, types::ValueType, Block, DwarfSourceFile, Lambda, List,
         LocalVariable, Map, Span as LuDogSpan, Variable, XFuture, XValue,
     },
-    s_read, s_write, RefType, PATH_SEP,
+    s_read, s_write, RefType,
 };
 
 pub mod error;

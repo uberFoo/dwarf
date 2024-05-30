@@ -2210,12 +2210,7 @@ mod tests {
     #[cfg(feature = "tracy")]
     use tracy_client::Client;
 
-    use crate::{
-        bubba::instr::Thonk,
-        dwarf::{DwarfFloat, DwarfInteger},
-        lu_dog::ObjectStore as LuDogStore,
-        Context,
-    };
+    use crate::{bubba::instr::Thonk, dwarf::DwarfInteger, lu_dog::ObjectStore as LuDogStore};
 
     use super::*;
 
