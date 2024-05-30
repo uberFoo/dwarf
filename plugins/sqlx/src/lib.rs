@@ -12,7 +12,8 @@ use abi_stable::{
     std_types::{RBox, RErr, ROk, RResult, RStr, RVec},
 };
 use dwarf::{
-    chacha::{error::ChaChaError, ffi_value::FfiValue},
+    bubba::error::BubbaError,
+    chacha::ffi_value::FfiValue,
     plug_in::{Error, LambdaCall, Plugin, PluginModRef, PluginModule, PluginType, Plugin_TO},
     DwarfInteger,
 };
@@ -120,98 +121,79 @@ mod postgres {
         ) -> RResult<FfiValue, Error> {
             future::block_on(async {
                 match ty.as_str() {
-                    "Error" => {
-                        match func.as_str() {
-                            "to_string" => {
-                                let key: DwarfInteger =
-                                    match args.first().unwrap().try_into().map_err(
-                                        |e: ChaChaError| Error::Plugin(e.to_string().into()),
-                                    ) {
-                                        Ok(key) => key,
-                                        Err(e) => return RErr(e),
-                                    };
+                    "Error" => match func.as_str() {
+                        "to_string" => {
+                            let key: DwarfInteger = match args.first().unwrap().try_into() {
+                                Ok(key) => key,
+                                Err(e) => return RErr(Error::Plugin(e.to_string().into())),
+                            };
 
-                                let guard = self.errors.lock().unwrap();
-                                let error = guard.get(key as usize).unwrap();
+                            let guard = self.errors.lock().unwrap();
+                            let error = guard.get(key as usize).unwrap();
 
-                                Ok(FfiValue::String(error.to_string().into()))
-                            }
-                            func => Err(Error::Plugin(format!("Invalid function: {func}").into())),
+                            Ok(FfiValue::String(error.to_string().into()))
                         }
-                    }
-                    "Map" => {
-                        match func.as_str() {
-                            "execute" => {
-                                let query: String =
-                                    match args.first().unwrap().try_into().map_err(
-                                        |e: ChaChaError| Error::Plugin(e.to_string().into()),
-                                    ) {
-                                        Ok(query) => query,
-                                        Err(e) => return RErr(e),
-                                    };
+                        func => Err(Error::Plugin(format!("Invalid function: {func}").into())),
+                    },
+                    "Map" => match func.as_str() {
+                        "execute" => {
+                            let query: String = match args.first().unwrap().try_into() {
+                                Ok(query) => query,
+                                Err(e) => return RErr(Error::Plugin(e.to_string().into())),
+                            };
 
-                                let pool: DwarfInteger =
-                                    match args.get(1).unwrap().try_into().map_err(
-                                        |e: ChaChaError| Error::Plugin(e.to_string().into()),
-                                    ) {
-                                        Ok(pool) => pool,
-                                        Err(e) => return RErr(e),
-                                    };
+                            let pool: DwarfInteger = match args.get(1).unwrap().try_into() {
+                                Ok(pool) => pool,
+                                Err(e) => return RErr(Error::Plugin(e.to_string().into())),
+                            };
 
-                                let bindings: Vec<String> =
-                                    match args.get(2).unwrap().try_into().map_err(
-                                        |e: ChaChaError| Error::Plugin(e.to_string().into()),
-                                    ) {
-                                        Ok(bindings) => bindings,
-                                        Err(e) => return RErr(e),
-                                    };
+                            let bindings: Vec<String> = match args.get(2).unwrap().try_into() {
+                                Ok(bindings) => bindings,
+                                Err(e) => return RErr(Error::Plugin(e.to_string().into())),
+                            };
 
-                                let guard = self.pools.lock().unwrap();
-                                let pool = guard.get(pool as usize).unwrap();
+                            let guard = self.pools.lock().unwrap();
+                            let pool = guard.get(pool as usize).unwrap();
 
-                                let mut result = sqlx::query(&query);
-                                for binding in bindings {
-                                    result = result.bind(binding.to_string());
+                            let mut result = sqlx::query(&query);
+                            for binding in bindings {
+                                result = result.bind(binding.to_string());
+                            }
+
+                            let result = result.execute(pool).await;
+
+                            let result = match result {
+                                Ok(result) => ROk(RBox::new(result.rows_affected().into())),
+                                Err(e) => {
+                                    let mut guard = self.errors.lock().unwrap();
+                                    let entry = guard.vacant_entry();
+                                    let key = entry.key();
+                                    guard.insert(Arc::new(e));
+                                    RErr(RBox::new(FfiValue::Integer(key as DwarfInteger)))
                                 }
+                            };
 
-                                let result = result.execute(pool).await;
-
-                                let result = match result {
-                                    Ok(result) => ROk(RBox::new(result.rows_affected().into())),
-                                    Err(e) => {
-                                        let mut guard = self.errors.lock().unwrap();
-                                        let entry = guard.vacant_entry();
-                                        let key = entry.key();
-                                        guard.insert(Arc::new(e));
-                                        RErr(RBox::new(FfiValue::Integer(key as DwarfInteger)))
-                                    }
-                                };
-
-                                Ok(FfiValue::Result(result))
-                            }
-                            func => Err(Error::Plugin(format!("Invalid function: {func}").into())),
+                            Ok(FfiValue::Result(result))
                         }
-                    }
+                        func => Err(Error::Plugin(format!("Invalid function: {func}").into())),
+                    },
                     "Query" => {
                         match func.as_str() {
                             "query_all" => {
                                 // The first parameter is the query string.
                                 let query: String =
                                     match args.first().unwrap().try_into().map_err(
-                                        |e: ChaChaError| Error::Plugin(e.to_string().into()),
+                                        |e: BubbaError| Error::Plugin(e.to_string().into()),
                                     ) {
                                         Ok(query) => query,
                                         Err(e) => return RErr(e),
                                     };
 
                                 // The second parameter is a handle to the pool.
-                                let pool: DwarfInteger =
-                                    match args.get(1).unwrap().try_into().map_err(
-                                        |e: ChaChaError| Error::Plugin(e.to_string().into()),
-                                    ) {
-                                        Ok(pool) => pool,
-                                        Err(e) => return RErr(e),
-                                    };
+                                let pool: DwarfInteger = match args.get(1).unwrap().try_into() {
+                                    Ok(pool) => pool,
+                                    Err(e) => return RErr(Error::Plugin(e.to_string().into())),
+                                };
 
                                 // The lambda to invoke on the result.
                                 let FfiValue::Lambda(lambda) = args.get(2).unwrap() else {
@@ -220,7 +202,7 @@ mod postgres {
 
                                 let bindings: Vec<String> =
                                     match args.get(3).unwrap().try_into().map_err(
-                                        |e: ChaChaError| Error::Plugin(e.to_string().into()),
+                                        |e: BubbaError| Error::Plugin(e.to_string().into()),
                                     ) {
                                         Ok(bindings) => bindings,
                                         Err(e) => return RErr(e),
@@ -290,31 +272,25 @@ mod postgres {
                             "query_one" => {
                                 let query: String =
                                     match args.first().unwrap().try_into().map_err(
-                                        |e: ChaChaError| Error::Plugin(e.to_string().into()),
+                                        |e: BubbaError| Error::Plugin(e.to_string().into()),
                                     ) {
                                         Ok(query) => query,
                                         Err(e) => return RErr(e),
                                     };
 
-                                let pool: DwarfInteger =
-                                    match args.get(1).unwrap().try_into().map_err(
-                                        |e: ChaChaError| Error::Plugin(e.to_string().into()),
-                                    ) {
-                                        Ok(pool) => pool,
-                                        Err(e) => return RErr(e),
-                                    };
+                                let pool: DwarfInteger = match args.get(1).unwrap().try_into() {
+                                    Ok(pool) => pool,
+                                    Err(e) => return RErr(Error::Plugin(e.to_string().into())),
+                                };
 
                                 let FfiValue::Lambda(lambda) = args.get(2).unwrap() else {
                                     panic!("Invalid lambda");
                                 };
 
-                                let bindings: Vec<String> =
-                                    match args.get(3).unwrap().try_into().map_err(
-                                        |e: ChaChaError| Error::Plugin(e.to_string().into()),
-                                    ) {
-                                        Ok(bindings) => bindings,
-                                        Err(e) => return RErr(e),
-                                    };
+                                let bindings: Vec<String> = match args.get(3).unwrap().try_into() {
+                                    Ok(bindings) => bindings,
+                                    Err(e) => return RErr(Error::Plugin(e.to_string().into())),
+                                };
 
                                 let guard = self.pools.lock().unwrap();
                                 let pool = guard.get(pool as usize).unwrap();
@@ -370,31 +346,22 @@ mod postgres {
                         match func.as_str() {
                             "get" => {
                                 // The first parameter is the row handle.
-                                let row: DwarfInteger =
-                                    match args.first().unwrap().try_into().map_err(
-                                        |e: ChaChaError| Error::Plugin(e.to_string().into()),
-                                    ) {
-                                        Ok(row) => row,
-                                        Err(e) => return RErr(e),
-                                    };
+                                let row: DwarfInteger = match args.first().unwrap().try_into() {
+                                    Ok(row) => row,
+                                    Err(e) => return RErr(Error::Plugin(e.to_string().into())),
+                                };
 
                                 // The second parameter is the name of the column.
-                                let index: String =
-                                    match args.get(1).unwrap().try_into().map_err(
-                                        |e: ChaChaError| Error::Plugin(e.to_string().into()),
-                                    ) {
-                                        Ok(index) => index,
-                                        Err(e) => return RErr(e),
-                                    };
+                                let index: String = match args.get(1).unwrap().try_into() {
+                                    Ok(index) => index,
+                                    Err(e) => return RErr(Error::Plugin(e.to_string().into())),
+                                };
 
                                 // The third parameter is the type of the column.
-                                let ty: String =
-                                    match args.get(2).unwrap().try_into().map_err(
-                                        |e: ChaChaError| Error::Plugin(e.to_string().into()),
-                                    ) {
-                                        Ok(ty) => ty,
-                                        Err(e) => return RErr(e),
-                                    };
+                                let ty: String = match args.get(2).unwrap().try_into() {
+                                    Ok(ty) => ty,
+                                    Err(e) => return RErr(Error::Plugin(e.to_string().into())),
+                                };
 
                                 let guard = self.rows.lock().unwrap();
                                 let row = guard.get(row as usize).unwrap();
@@ -494,7 +461,7 @@ mod postgres {
                                 tracing::trace!("connect enter");
                                 let connection_string: String =
                                     match args.first().unwrap().try_into().map_err(
-                                        |e: ChaChaError| Error::Plugin(e.to_string().into()),
+                                        |e: BubbaError| Error::Plugin(e.to_string().into()),
                                     ) {
                                         Ok(connection_string) => connection_string,
                                         Err(e) => return RErr(e),

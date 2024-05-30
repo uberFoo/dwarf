@@ -20,10 +20,10 @@ use crate::{
     },
     chacha::{
         value::_struct::StructAttributes,
-        value::{Enum, Struct, TupleEnum},
+        value::{Enum, Struct},
     },
-    keywords::{ERR, OK, RESULT, RESULT_TYPE},
-    lu_dog::{ObjectStore as LuDogStore, ValueType, ValueTypeEnum},
+    keywords::RESULT_TYPE,
+    lu_dog::{ValueType, ValueTypeEnum},
     new_ref,
     plug_in::PluginType,
     s_read, DwarfFloat, DwarfInteger, NewRef, RefType, LAMBDA_FUNCS, PATH_SEP,
@@ -421,9 +421,9 @@ impl From<u64> for FfiValue {
 }
 
 impl TryFrom<FfiValue> for String {
-    type Error = Error;
+    type Error = BubbaError;
 
-    fn try_from(value: FfiValue) -> Result<Self> {
+    fn try_from(value: FfiValue) -> Result<Self, Self::Error> {
         match value {
             FfiValue::String(s) => Ok(s.into()),
             _ => Err(BubbaError::Conversion {
@@ -438,9 +438,9 @@ impl TryFrom<FfiValue> for String {
 }
 
 impl TryFrom<&FfiValue> for String {
-    type Error = Error;
+    type Error = BubbaError;
 
-    fn try_from(value: &FfiValue) -> Result<Self> {
+    fn try_from(value: &FfiValue) -> Result<Self, Self::Error> {
         match value {
             FfiValue::String(s) => Ok(s.to_owned().into()),
             _ => Err(BubbaError::Conversion {

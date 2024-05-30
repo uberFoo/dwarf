@@ -1,5 +1,4 @@
 use std::{
-    collections::HashMap,
     env,
     fmt::{self, Display},
     fs, io,
@@ -17,7 +16,6 @@ use abi_stable::{
 };
 use async_compat::Compat;
 use dwarf::{
-    bubba::error::BubbaError,
     chacha::ffi_value::FfiValue,
     plug_in::{Error, LambdaCall, Plugin, PluginModRef, PluginModule, PluginType, Plugin_TO},
     DwarfInteger,
