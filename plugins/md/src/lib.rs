@@ -9,7 +9,8 @@ use abi_stable::{
     std_types::{RErr, ROk, RResult, RStr, RVec},
 };
 use dwarf::{
-    chacha::{error::ChaChaError, ffi_value::FfiValue},
+    bubba::error::BubbaError,
+    chacha::ffi_value::FfiValue,
     plug_in::{Error, LambdaCall, Plugin, PluginModRef, PluginModule, PluginType, Plugin_TO},
 };
 use html_escape::decode_html_entities;
@@ -61,7 +62,7 @@ mod md {
             .pop()
             .unwrap()
             .try_into()
-            .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
+            .map_err(|e: BubbaError| Error::Plugin(e.to_string().into()))
         {
             Ok(mode) => mode,
             Err(e) => return RErr(e),
@@ -165,7 +166,7 @@ mod md {
                         .first()
                         .unwrap()
                         .try_into()
-                        .map_err(|e: ChaChaError| Error::Plugin(e.to_string().into()))
+                        .map_err(|e: BubbaError| Error::Plugin(e.to_string().into()))
                         {
                             Ok(md) => md,
                             Err(e) => return RErr(e),
