@@ -263,6 +263,11 @@ impl VM {
             vm_clone.lambda_listen();
         });
 
+        let mut vm_clone = vm.clone();
+        thread::spawn(move || loop {
+            vm_clone.lambda_listen();
+        });
+
         vm
     }
 

@@ -548,16 +548,16 @@ mod http_server {
                         }
                         "route" => {
                             let FfiValue::String(path) = args.get(0).unwrap() else {
-                                panic!("Invalid path");
+                                return RErr(Error::Plugin("Invalid path".into()));
                             };
 
                             let FfiValue::String(method) = args.get(1).unwrap() else {
-                                panic!("Invalid method");
+                                return RErr(Error::Plugin("Invalid method".into()));
                             };
                             let method = Method::from(MethodStr(method.as_str()));
 
                             let FfiValue::Lambda(number) = args.get(2).unwrap() else {
-                                panic!("Invalid lambda");
+                                return RErr(Error::Plugin("Invalid lambda".into()));
                             };
 
                             println!("adding route {} {}", path, method);
@@ -572,16 +572,16 @@ mod http_server {
                         }
                         "prefix_route" => {
                             let FfiValue::String(path) = args.get(0).unwrap() else {
-                                panic!("Invalid path");
+                                return RErr(Error::Plugin("Invalid path".into()));
                             };
 
                             let FfiValue::String(method) = args.get(1).unwrap() else {
-                                panic!("Invalid method");
+                                return RErr(Error::Plugin("Invalid method".into()));
                             };
                             let method = Method::from(MethodStr(method.as_str()));
 
                             let FfiValue::Lambda(number) = args.get(2).unwrap() else {
-                                panic!("Invalid lambda");
+                                return RErr(Error::Plugin("Invalid lambda".into()));
                             };
 
                             println!("adding route {} {}", path, method);

@@ -75,6 +75,25 @@ mod postgres {
         ROk(Plugin_TO::from_value(Sqlx::new(lambda_sender), TD_Opaque))
     }
 
+    // enum SqlxType {
+    //     Integer,
+    //     Short,
+    //     String,
+    //     Timestamp,
+    // }
+
+    // impl From<&str> for SqlxType {
+    //     fn from(s: &str) -> Self {
+    //         match s {
+    //             INTEGER => Self::Integer,
+    //             SHORT => Self::Short,
+    //             STRING => Self::String,
+    //             TIMESTAMP => Self::Timestamp,
+    //             _ => panic!("Invalid type: {s}"),
+    //         }
+    //     }
+    // }
+
     #[derive(Clone)]
     struct Sqlx {
         lambda_call: RSender<LambdaCall>,
@@ -152,12 +171,28 @@ mod postgres {
                                 Err(e) => return RErr(Error::Plugin(e.to_string().into())),
                             };
 
+                            let binding_types: Vec<String> = match args.get(3).unwrap().try_into() {
+                                Ok(binding_types) => binding_types,
+                                Err(e) => return RErr(Error::Plugin(e.to_string().into())),
+                            };
+
                             let guard = self.pools.lock().unwrap();
                             let pool = guard.get(pool as usize).unwrap();
 
                             let mut result = sqlx::query(&query);
-                            for binding in bindings {
-                                result = result.bind(binding.to_string());
+                            for (i, binding) in bindings.iter().enumerate() {
+                                match binding_types[i].as_str() {
+                                    INTEGER => {
+                                        result = result.bind(binding.parse::<i64>().unwrap())
+                                    }
+                                    SHORT => result = result.bind(binding.parse::<i32>().unwrap()),
+                                    STRING => result = result.bind(binding),
+                                    TIMESTAMP => {
+                                        result = result
+                                            .bind(binding.parse::<chrono::NaiveDateTime>().unwrap())
+                                    }
+                                    ty => panic!("Invalid type: {ty}"),
+                                }
                             }
 
                             let result = result.execute(pool).await;
@@ -208,6 +243,12 @@ mod postgres {
                                         Err(e) => return RErr(e),
                                     };
 
+                                let binding_types: Vec<String> =
+                                    match args.get(3).unwrap().try_into() {
+                                        Ok(binding_types) => binding_types,
+                                        Err(e) => return RErr(Error::Plugin(e.to_string().into())),
+                                    };
+
                                 // Dereference the pool handle
                                 let guard = self.pools.lock().unwrap();
                                 let pool = guard.get(pool as usize).unwrap();
@@ -216,8 +257,22 @@ mod postgres {
                                 let mut result = sqlx::query(&query);
 
                                 // Add bindings to the query
-                                for binding in bindings {
-                                    result = result.bind(binding.to_string());
+                                for (i, binding) in bindings.iter().enumerate() {
+                                    match binding_types[i].as_str() {
+                                        INTEGER => {
+                                            result = result.bind(binding.parse::<i64>().unwrap())
+                                        }
+                                        SHORT => {
+                                            result = result.bind(binding.parse::<i32>().unwrap())
+                                        }
+                                        STRING => result = result.bind(binding),
+                                        TIMESTAMP => {
+                                            result = result.bind(
+                                                binding.parse::<chrono::NaiveDateTime>().unwrap(),
+                                            )
+                                        }
+                                        ty => panic!("Invalid type: {ty}"),
+                                    }
                                 }
 
                                 // Run the query, mapping results to the lambda.
@@ -292,14 +347,35 @@ mod postgres {
                                     Err(e) => return RErr(Error::Plugin(e.to_string().into())),
                                 };
 
+                                let binding_types: Vec<String> =
+                                    match args.get(3).unwrap().try_into() {
+                                        Ok(binding_types) => binding_types,
+                                        Err(e) => return RErr(Error::Plugin(e.to_string().into())),
+                                    };
+
                                 let guard = self.pools.lock().unwrap();
                                 let pool = guard.get(pool as usize).unwrap();
 
                                 // Run the query
                                 let mut result = sqlx::query(&query);
-                                for binding in bindings {
-                                    result = result.bind(binding.to_string());
+                                for (i, binding) in bindings.iter().enumerate() {
+                                    match binding_types[i].as_str() {
+                                        INTEGER => {
+                                            result = result.bind(binding.parse::<i64>().unwrap())
+                                        }
+                                        SHORT => {
+                                            result = result.bind(binding.parse::<i32>().unwrap())
+                                        }
+                                        STRING => result = result.bind(binding),
+                                        TIMESTAMP => {
+                                            result = result.bind(
+                                                binding.parse::<chrono::NaiveDateTime>().unwrap(),
+                                            )
+                                        }
+                                        ty => panic!("Invalid type: {ty}"),
+                                    }
                                 }
+
                                 let result = result
                                     .map(|row: sqlx::postgres::PgRow| {
                                         let (s, result) = crossbeam::channel::bounded(1);

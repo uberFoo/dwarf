@@ -22,7 +22,7 @@ use crate::{
         value::_struct::StructAttributes,
         value::{Enum, Struct},
     },
-    keywords::RESULT_TYPE,
+    keywords::{ERR, OK, RESULT_TYPE},
     lu_dog::{ValueType, ValueTypeEnum},
     new_ref,
     plug_in::PluginType,
@@ -254,10 +254,10 @@ impl From<Value> for FfiValue {
                     if ty_name == RESULT_TYPE {
                         let t = s_read!(t);
                         match t.variant.as_str() {
-                            "Err" => Self::Result(RResult::RErr(RBox::new(
+                            ERR => Self::Result(RResult::RErr(RBox::new(
                                 s_read!(t.value).clone().into(),
                             ))),
-                            "Ok" => Self::Result(RResult::ROk(RBox::new(
+                            OK => Self::Result(RResult::ROk(RBox::new(
                                 s_read!(t.value).clone().into(),
                             ))),
                             _ => panic!(),
@@ -374,7 +374,7 @@ where
     }
 }
 
-impl<T: TryFrom<FfiValue, Error = BubbaError>> TryFrom<&FfiValue> for Vec<T> {
+impl<T: TryFrom<FfiValue, Error = BubbaError> + std::fmt::Debug> TryFrom<&FfiValue> for Vec<T> {
     type Error = BubbaError;
 
     fn try_from(value: &FfiValue) -> Result<Self, Self::Error> {
@@ -425,7 +425,17 @@ impl TryFrom<FfiValue> for String {
 
     fn try_from(value: FfiValue) -> Result<Self, Self::Error> {
         match value {
+            FfiValue::Boolean(b) => Ok(b.to_string().into()),
+            FfiValue::Empty => Ok("()".to_owned()),
+            FfiValue::Error(e) => Ok(e.into()),
+            FfiValue::Float(f) => Ok(f.to_string().into()),
+            FfiValue::Integer(i) => Ok(i.to_string().into()),
+            FfiValue::Lambda(l) => Ok(l.to_string().into()),
+            FfiValue::Range(r) => Ok(format!("{}..{}", r.start, r.end).into()),
             FfiValue::String(s) => Ok(s.into()),
+            FfiValue::Struct(s) => Ok(s.to_string().into()),
+            FfiValue::Unknown => Ok("<unknown>".to_owned()),
+            FfiValue::Uuid(u) => Ok(u.to_string().into()),
             _ => Err(BubbaError::Conversion {
                 src: value.to_string(),
                 dst: "String".to_owned(),
@@ -442,7 +452,17 @@ impl TryFrom<&FfiValue> for String {
 
     fn try_from(value: &FfiValue) -> Result<Self, Self::Error> {
         match value {
+            FfiValue::Boolean(b) => Ok(b.to_string().into()),
+            FfiValue::Empty => Ok("()".to_owned()),
+            FfiValue::Error(e) => Ok(e.to_owned().into()),
+            FfiValue::Float(f) => Ok(f.to_string().into()),
+            FfiValue::Integer(i) => Ok(i.to_string().into()),
+            FfiValue::Lambda(l) => Ok(l.to_string().into()),
+            FfiValue::Range(r) => Ok(format!("{}..{}", r.start, r.end).into()),
             FfiValue::String(s) => Ok(s.to_owned().into()),
+            FfiValue::Struct(s) => Ok(s.to_string().into()),
+            FfiValue::Unknown => Ok("<unknown>".to_owned()),
+            FfiValue::Uuid(u) => Ok(u.to_string().into()),
             _ => Err(BubbaError::Conversion {
                 src: value.to_string(),
                 dst: "String".to_owned(),
@@ -453,23 +473,6 @@ impl TryFrom<&FfiValue> for String {
         }
     }
 }
-
-// impl TryFrom<&FfiValue> for Callback<F>
-// where
-//     F: Fn(FfiValue) -> FfiValue + 'static,
-// {
-//     type Error = BubbaError;
-
-//     fn try_from(value: &FfiValue) -> Result<Self> {
-//         match value {
-//             FfiValue::Callback(c) => Ok(c.to_owned().into()),
-//             _ => Err(BubbaError::Conversion {
-//                 src: value.to_string(),
-//                 dst: "String".to_owned(),
-//             }),
-//         }
-//     }
-// }
 
 impl TryFrom<&FfiValue> for i64 {
     type Error = Error;
@@ -487,31 +490,6 @@ impl TryFrom<&FfiValue> for i64 {
         }
     }
 }
-
-// #[repr(C)]
-// #[derive(Clone, Debug, StableAbi)]
-// pub struct Callback<F>
-// where
-//     F: Fn(FfiValue<F>) -> FfiValue<F> + 'static,
-// {
-//     callback: RBox<F>,
-// }
-
-// impl<F> Callback<F>
-// where
-//     F: Fn(FfiValue<F>) -> FfiValue<F> + 'static,
-// {
-//     pub fn new(callback: F) -> Self {
-//         let foo = Box::new(callback);
-//         let callback = RBox::from_box(foo);
-//         Self { callback }
-//     }
-
-//     #[sabi_extern_fn]
-//     pub fn call(&self, i: FfiValue<F>) -> FfiValue<F> {
-//         (self.callback)(i)
-//     }
-// }
 
 #[repr(C)]
 #[derive(Clone, Debug, StableAbi)]

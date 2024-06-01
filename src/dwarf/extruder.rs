@@ -3583,8 +3583,6 @@ fn inter_import(
     // thing on the top of the stack.
     let fq_type = type_root.clone() + &ty;
 
-    dbg!(&fq_type);
-
     if let Some(t) = context.types.get(&fq_type) {
         debug!("{fq_type} already imported");
         return Ok(());

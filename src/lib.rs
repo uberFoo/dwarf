@@ -75,7 +75,6 @@ mod keywords {
     pub(crate) const PARSE: &str = "parse";
     pub(crate) const PLUGIN: &str = "Plugin";
     pub(crate) const PUSH: &str = "push";
-    pub(crate) const RESULT: &str = "Result";
     pub(crate) const SLEEP: &str = "sleep";
     pub(crate) const SOME: &str = "Some";
     pub(crate) const REPLACE: &str = "replace";
