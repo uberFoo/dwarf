@@ -1,0 +1,20 @@
+use std::dwarf::Plugin;
+use std::result::Result;
+
+struct TestFfi {
+    #[proxy(plugin = "test_ffi")]
+    inner: Plugin<TestFfi>,
+}
+
+impl TestFfi {
+    fn new(theme: string) -> Self {
+        TestFfi {
+            inner: Plugin::<TestFfi>::new(),
+        }
+    }
+
+    fn test_bool(self, b: bool) -> bool {
+        self.inner
+            .invoke_func("test_ffi", "TestFfi", "test_bool", [b])
+    }
+}

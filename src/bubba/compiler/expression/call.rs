@@ -115,7 +115,6 @@ pub(in crate::bubba::compiler) fn compile_lambda(
     // let mut name = "(".to_owned();
 
     let name = format!("{}", Uuid::new_v4());
-
     let mut thonk = CThonk::new(name.clone());
 
     context.insert_lambda(name.clone(), params.len());

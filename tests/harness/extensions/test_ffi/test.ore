@@ -1,0 +1,8 @@
+use test_ffi::TestFfi;
+
+fn main() {
+    let ffi = TestFfi::new();
+
+    chacha::assert(ffi.test_bool(true));
+    chacha::assert(!ffi.test_bool(false));
+}

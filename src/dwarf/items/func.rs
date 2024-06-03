@@ -140,7 +140,7 @@ pub fn inter_func(
                 match EXTRACT_GENERICS.set(re) {
                     Ok(_) => {}
                     Err(e) => {
-                        panic!("Failed to set RE: {}", e);
+                        // panic!("Failed to set RE: {}", e);
                     }
                 }
                 EXTRACT_GENERICS.get().unwrap()

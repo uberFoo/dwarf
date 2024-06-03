@@ -475,11 +475,28 @@ impl TryFrom<&FfiValue> for String {
 }
 
 impl TryFrom<&FfiValue> for i64 {
-    type Error = Error;
+    type Error = BubbaError;
 
-    fn try_from(value: &FfiValue) -> Result<Self> {
+    fn try_from(value: &FfiValue) -> Result<Self, Self::Error> {
         match value {
             FfiValue::Integer(i) => Ok(*i),
+            _ => Err(BubbaError::Conversion {
+                src: value.to_string(),
+                dst: "i64".to_owned(),
+                location: location!(),
+                backtrace: Backtrace::capture(),
+            }
+            .into()),
+        }
+    }
+}
+
+impl TryFrom<&FfiValue> for bool {
+    type Error = BubbaError;
+
+    fn try_from(value: &FfiValue) -> Result<Self, Self::Error> {
+        match value {
+            FfiValue::Boolean(b) => Ok(*b),
             _ => Err(BubbaError::Conversion {
                 src: value.to_string(),
                 dst: "i64".to_owned(),
