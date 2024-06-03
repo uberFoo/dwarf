@@ -1,0 +1,15 @@
+// Main is valid, just to not confuse the issue.
+fn main() {}
+
+// This function indicates a value of int, but it's implicitly empty.
+fn a() -> int {}
+
+// This function is returning a value of the wrong type.
+fn b() -> int {
+    "hello"
+}
+
+// This function could coerce, but it should not.
+fn c() -> string {
+    42
+}
