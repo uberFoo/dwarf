@@ -355,6 +355,10 @@ pub struct Context<'a> {
     ///
     /// This is a HashSet of types that have been imported.
     pub types: &'a mut HashSet<String>,
+    /// Silent
+    ///
+    /// If true, then we don't print anything.
+    pub silent: bool,
 }
 
 impl<'a> Context<'a> {
@@ -373,6 +377,7 @@ impl<'a> Context<'a> {
         scopes: &'a mut HashMap<String, String>,
         imports: &'a mut HashSet<PathBuf>,
         types: &'a mut HashSet<String>,
+        silent: bool,
     ) -> Self {
         Self {
             location,
@@ -392,6 +397,7 @@ impl<'a> Context<'a> {
             imports,
             generics: Vec::new(),
             types,
+            silent,
         }
     }
 }
@@ -423,6 +429,7 @@ pub fn new_lu_dog(
     source: Option<(String, &[Item])>,
     dwarf_home: &PathBuf,
     cwd: &PathBuf,
+    silent: bool,
     sarzak: &SarzakStore,
 ) -> Result<InterContext> {
     let mut lu_dog = LuDogStore::new();
@@ -467,9 +474,12 @@ pub fn new_lu_dog(
             imports: &mut imports,
             generics: Vec::new(),
             types: &mut types,
+            silent,
         };
 
-        println!("\n{} {file_name}", Colour::Green.paint("Extruding:"));
+        if !context.silent {
+            println!("\n{} {file_name}", Colour::Green.paint("Extruding:"));
+        }
 
         walk_tree(ast, &mut context, &mut stack, &mut lu_dog)?;
     };
@@ -3424,7 +3434,9 @@ fn inter_module(
         return Ok(());
     }
 
-    println!("\n{} {}", Colour::Green.paint("Extruding:"), path.display());
+    if !context.silent {
+        println!("\n{} {}", Colour::Green.paint("Extruding:"), path.display());
+    }
 
     match fs::read_to_string(&path) {
         Ok(source_code) => {
@@ -3458,6 +3470,7 @@ fn inter_module(
                         &mut scopes,
                         context.imports,
                         &mut types,
+                        context.silent,
                     );
 
                     // Extrusion time
@@ -3591,12 +3604,14 @@ fn inter_import(
         context.types.insert(fq_type.clone());
     }
 
-    println!(
-        "{} {} @ {}",
-        Colour::Green.paint("Extruding:"),
-        Colour::Blue.paint(&fq_type),
-        path.display()
-    );
+    if !context.silent {
+        println!(
+            "{} {} @ {}",
+            Colour::Green.paint("Extruding:"),
+            Colour::Blue.paint(&fq_type),
+            path.display()
+        );
+    }
 
     import_stack.push(fq_type);
 
@@ -3623,6 +3638,7 @@ fn inter_import(
                         context.scopes,
                         context.imports,
                         context.types,
+                        context.silent,
                     );
 
                     // Extrusion time
@@ -4598,7 +4614,6 @@ pub(super) fn typecheck(
             let g = lu_dog.exhume_struct_generic(g).unwrap();
             // let ty = s_read!(g).r99_value_type(lu_dog);
             // dbg!(&ty, "a");
-            dbg!(&g, "a");
             let a = PrintableValueType(true, lhs, context, lu_dog);
             let b = PrintableValueType(true, rhs, context, lu_dog);
 
@@ -4623,11 +4638,8 @@ pub(super) fn typecheck(
             let g = lu_dog.exhume_struct_generic(g).unwrap();
             // let ty = s_read!(g).r99_value_type(lu_dog);
             // dbg!(&ty, "b");
-            dbg!(&g, "b");
             let a = PrintableValueType(true, lhs, context, lu_dog);
             let b = PrintableValueType(true, rhs, context, lu_dog);
-
-            dbg!(a.to_string(), b.to_string());
 
             // if !ty.is_empty() {
             //     typecheck(
@@ -4780,8 +4792,6 @@ pub(super) fn typecheck(
             } else {
                 let a = PrintableValueType(true, lhs, context, lu_dog);
                 let b = PrintableValueType(true, rhs, context, lu_dog);
-
-                dbg!(a.to_string(), b.to_string());
 
                 Err(vec![DwarfError::TypeMismatch {
                     expected: a.to_string(),

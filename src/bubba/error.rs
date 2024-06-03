@@ -3,7 +3,10 @@ use std::fmt;
 use ariadne::{Color, Label, Report, ReportKind, Source};
 use snafu::{prelude::*, Backtrace, Location};
 
-use crate::{bubba::value::Value, Span, ERR_CLR, OK_CLR, OTHER_CLR, POP_CLR};
+use crate::{
+    bubba::{value::Value, Program},
+    Span, ERR_CLR, OK_CLR, OTHER_CLR, POP_CLR,
+};
 
 #[derive(Debug, Snafu)]
 pub enum BubbaError {
@@ -44,7 +47,11 @@ pub enum BubbaError {
     // #[snafu(display("\n{}: value error: {value}\n\t--> {}:{}:{}", ERR_CLR.bold().paint("error"), location.file, location.line, location.column))]
     // ValueError { value: Value, location: Location },
     #[snafu(display("\n{}: vm panic: {message}\n\t--> {}:{}:{}", ERR_CLR.bold().paint("error"), location.file, location.line, location.column))]
-    VmPanic { message: String, location: Location },
+    VmPanic {
+        message: String,
+        program: Program,
+        location: Location,
+    },
 }
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;
@@ -111,6 +118,25 @@ impl fmt::Display for BubbaErrorReporter<'_, '_, '_> {
                     .write((file_name, Source::from(&program)), &mut std_err)
                     .map_err(|_| fmt::Error)?;
                 write!(f, "{}", String::from_utf8_lossy(&std_err))
+            }
+            BubbaError::VmPanic {
+                message,
+                program,
+                location,
+            } => {
+                let mut note = format!("VM Panic: {}\n", POP_CLR.paint(format!("{message}")));
+
+                if is_uber {
+                    note += &format!(
+                        " --> {}:{}:{}\n",
+                        OTHER_CLR.paint(location.file.to_string()),
+                        POP_CLR.paint(format!("{}", location.line)),
+                        OK_CLR.paint(format!("{}", location.column)),
+                    );
+                }
+
+                write!(f, "Program:\n{program}\n")?;
+                write!(f, "{note}")
             }
             _ => write!(f, "{}", self.0),
         }

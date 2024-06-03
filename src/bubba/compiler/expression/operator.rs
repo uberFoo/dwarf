@@ -103,7 +103,7 @@ pub(in crate::bubba::compiler) fn compile(
                             context.get_type(EMPTY).unwrap().clone()
                         }
                         _ => {
-                            panic!("In assignment and lhs is not a variable: {lhs:?}")
+                            panic!("Attempt to assign to lhs that is not a variable: {lhs:?}")
                         }
                     }
                 }
@@ -271,10 +271,10 @@ mod test {
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
-            &sarzak,
+true,            &sarzak,
         )
         .unwrap();
-        let program = compile(&ctx).unwrap();
+        let program = compile(&ctx, true).unwrap();
 
         println!("{program}");
 
@@ -300,10 +300,10 @@ mod test {
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
-            &sarzak,
+true,            &sarzak,
         )
         .unwrap();
-        let program = compile(&ctx).unwrap();
+        let program = compile(&ctx, true).unwrap();
 
         println!("{program}");
 
@@ -326,11 +326,11 @@ mod test {
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
-            &sarzak,
+true,            &sarzak,
         )
         .unwrap();
 
-        let program = compile(&ctx).unwrap();
+        let program = compile(&ctx, true).unwrap();
 
         println!("{program}");
 
@@ -353,11 +353,11 @@ mod test {
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
-            &sarzak,
+true,            &sarzak,
         )
         .unwrap();
 
-        let program = compile(&ctx).unwrap();
+        let program = compile(&ctx, true).unwrap();
 
         println!("{program}");
 
@@ -382,11 +382,11 @@ mod test {
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
-            &sarzak,
+true,            &sarzak,
         )
         .unwrap();
 
-        let program = compile(&ctx).unwrap();
+        let program = compile(&ctx, true).unwrap();
 
         println!("{program}");
 
@@ -410,10 +410,10 @@ mod test {
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
-            &sarzak,
+true,            &sarzak,
         )
         .unwrap();
-        let program = compile(&ctx).unwrap();
+        let program = compile(&ctx, true).unwrap();
         println!("{program}");
 
         assert_eq!(program.get_thonk_card(), 1);
@@ -437,10 +437,10 @@ mod test {
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
-            &sarzak,
+true,            &sarzak,
         )
         .unwrap();
-        let program = compile(&ctx).unwrap();
+        let program = compile(&ctx, true).unwrap();
         println!("{program}");
 
         assert_eq!(program.get_thonk_card(), 1);
@@ -464,10 +464,10 @@ mod test {
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
-            &sarzak,
+true,            &sarzak,
         )
         .unwrap();
-        let program = compile(&ctx).unwrap();
+        let program = compile(&ctx, true).unwrap();
         println!("{program}");
 
         assert_eq!(program.get_thonk_card(), 1);
@@ -496,11 +496,11 @@ mod test {
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
-            &sarzak,
+true,            &sarzak,
         )
         .unwrap();
 
-        let program = compile(&ctx).unwrap();
+        let program = compile(&ctx, true).unwrap();
 
         println!("{program}");
 
@@ -527,11 +527,11 @@ mod test {
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
-            &sarzak,
+true,            &sarzak,
         )
         .unwrap();
 
-        let program = compile(&ctx).unwrap();
+        let program = compile(&ctx, true).unwrap();
 
         println!("{program}");
 

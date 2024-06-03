@@ -157,7 +157,7 @@ impl Value {
             } => {
                 write!(
                     f,
-                    "FubarPointer {{ name: {name}, frame_size: {frame_size}, captures: ["
+                    "LambdaPointer {{ name: {name}, frame_size: {frame_size}, captures: ["
                 )?;
                 for i in captures {
                     let i = s_read!(i);
@@ -373,7 +373,7 @@ impl std::fmt::Debug for Value {
             } => {
                 write!(
                     f,
-                    "FubarPointer {{ name: {name}, frame_size: {frame_size}, captures: ["
+                    "LambdaPointer {{ name: {name}, frame_size: {frame_size}, captures: ["
                 )?;
                 for i in captures {
                     let i = s_read!(i);
@@ -522,7 +522,7 @@ impl fmt::Display for Value {
             } => {
                 write!(
                     f,
-                    "FubarPointer {{ name: {name}, frame_size: {frame_size}, captures: ["
+                    "LambdaPointer {{ name: {name}, frame_size: {frame_size}, captures: ["
                 )?;
                 let mut first_time = true;
                 for i in captures {

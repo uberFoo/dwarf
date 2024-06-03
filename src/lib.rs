@@ -92,7 +92,7 @@ mod keywords {
     pub(crate) const TIMER: &str = "timer";
     pub(crate) const TO_DIGIT: &str = "to_digit";
     pub(crate) const TRIM: &str = "trim";
-    pub(crate) const TYPEOF: &str = "typeof";
+    pub(crate) const TYPEOF: &str = "type_of";
     // 🚧 We have a token already...
     pub(crate) const FQ_UUID_TYPE: &str = "::Uuid";
     pub(crate) const UUID_TYPE: &str = "Uuid";

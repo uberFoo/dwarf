@@ -244,7 +244,7 @@ mod postgres {
                                     };
 
                                 let binding_types: Vec<String> =
-                                    match args.get(3).unwrap().try_into() {
+                                    match args.get(4).unwrap().try_into() {
                                         Ok(binding_types) => binding_types,
                                         Err(e) => return RErr(Error::Plugin(e.to_string().into())),
                                     };
@@ -348,7 +348,7 @@ mod postgres {
                                 };
 
                                 let binding_types: Vec<String> =
-                                    match args.get(3).unwrap().try_into() {
+                                    match args.get(4).unwrap().try_into() {
                                         Ok(binding_types) => binding_types,
                                         Err(e) => return RErr(Error::Plugin(e.to_string().into())),
                                     };

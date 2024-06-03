@@ -331,8 +331,10 @@ impl<'a, 'b> Context<'a, 'b> {
     }
 }
 
-pub fn compile(context: &ExtruderContext) -> Result<Program> {
-    println!("Compiling");
+pub fn compile(context: &ExtruderContext, silent: bool) -> Result<Program> {
+    if !silent {
+        println!("Compiling");
+    }
 
     let mut program = Program::new(VERSION.to_owned(), BUILD_TIME.to_owned());
     program.set_source(context.source());
@@ -860,10 +862,11 @@ mod test {
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
+            true,
             &sarzak,
         )
         .unwrap();
-        let program = compile(&ctx).unwrap();
+        let program = compile(&ctx, true).unwrap();
 
         println!("{program}");
 
@@ -886,11 +889,12 @@ mod test {
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
+            true,
             &sarzak,
         )
         .unwrap();
 
-        let program = compile(&ctx).unwrap();
+        let program = compile(&ctx, true).unwrap();
 
         println!("{program}");
 
@@ -913,11 +917,12 @@ mod test {
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
+            true,
             &sarzak,
         )
         .unwrap();
 
-        let program = compile(&ctx).unwrap();
+        let program = compile(&ctx, true).unwrap();
 
         println!("{program}");
 
@@ -951,11 +956,12 @@ mod test {
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
+            true,
             &sarzak,
         )
         .unwrap();
 
-        let program = compile(&ctx).unwrap();
+        let program = compile(&ctx, true).unwrap();
         println!("{program}");
 
         assert_eq!(program.get_thonk_card(), 2);
@@ -990,10 +996,11 @@ mod test {
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
+            true,
             &sarzak,
         )
         .unwrap();
-        let program = compile(&ctx).unwrap();
+        let program = compile(&ctx, true).unwrap();
         println!("{program}");
         // assert_eq!(program.get_thonk_card(), 5);
 
@@ -1020,10 +1027,11 @@ mod test {
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
+            true,
             &sarzak,
         )
         .unwrap();
-        let program = compile(&ctx).unwrap();
+        let program = compile(&ctx, true).unwrap();
         println!("{program}");
         assert_eq!(program.get_thonk_card(), 14);
 
@@ -1117,10 +1125,11 @@ async fn main() -> Future<()> {
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
+            true,
             &sarzak,
         )
         .unwrap();
-        let program = compile(&ctx).unwrap();
+        let program = compile(&ctx, true).unwrap();
         println!("{program}");
         assert_eq!(program.get_thonk_card(), 13);
 
@@ -1158,10 +1167,11 @@ async fn main() -> Future<()> {
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
+            true,
             &sarzak,
         )
         .unwrap();
-        let program = compile(&ctx).unwrap();
+        let program = compile(&ctx, true).unwrap();
         println!("{program}");
         assert_eq!(program.get_thonk_card(), 2);
 
@@ -1196,10 +1206,11 @@ async fn main() -> Future<()> {
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
+            true,
             &sarzak,
         )
         .unwrap();
-        let program = compile(&ctx).unwrap();
+        let program = compile(&ctx, true).unwrap();
         println!("{program}");
         assert_eq!(program.get_thonk_card(), 1);
 

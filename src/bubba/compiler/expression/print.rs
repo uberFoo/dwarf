@@ -54,10 +54,10 @@ mod test {
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
-            &sarzak,
+true,            &sarzak,
         )
         .unwrap();
-        let program = compile(&ctx).unwrap();
+        let program = compile(&ctx, true).unwrap();
 
         println!("{program}");
 
@@ -95,10 +95,10 @@ mod test {
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
-            &sarzak,
+true,            &sarzak,
         )
         .unwrap();
-        let program = compile(&ctx).unwrap();
+        let program = compile(&ctx, true).unwrap();
         println!("{program}");
         assert_eq!(program.get_thonk_card(), 1);
         assert_eq!(program.get_instruction_card(), 25);
@@ -147,10 +147,10 @@ mod test {
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
-            &sarzak,
+true,            &sarzak,
         )
         .unwrap();
-        let program = compile(&ctx).unwrap();
+        let program = compile(&ctx, true).unwrap();
         println!("{program}");
         assert_eq!(program.get_thonk_card(), 2);
         assert_eq!(program.get_instruction_card(), 32);

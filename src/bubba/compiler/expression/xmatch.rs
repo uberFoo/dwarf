@@ -243,11 +243,11 @@ mod test {
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
-            &sarzak,
+true,            &sarzak,
         )
         .unwrap();
 
-        let program = compile(&ctx).unwrap();
+        let program = compile(&ctx, true).unwrap();
         println!("{program}");
 
         assert_eq!(program.get_thonk_card(), 1);
@@ -279,11 +279,11 @@ mod test {
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
-            &sarzak,
+true,            &sarzak,
         )
         .unwrap();
 
-        let program = compile(&ctx).unwrap();
+        let program = compile(&ctx, true).unwrap();
         println!("{program}");
 
         assert_eq!(program.get_thonk_card(), 1);
@@ -312,11 +312,11 @@ mod test {
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
-            &sarzak,
+true,            &sarzak,
         )
         .unwrap();
 
-        let program = compile(&ctx).unwrap();
+        let program = compile(&ctx, true).unwrap();
         println!("{program}");
 
         assert_eq!(program.get_thonk_card(), 1);
@@ -345,11 +345,11 @@ mod test {
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
-            &sarzak,
+true,            &sarzak,
         )
         .unwrap();
 
-        let program = compile(&ctx).unwrap();
+        let program = compile(&ctx, true).unwrap();
         println!("{program}");
 
         assert_eq!(program.get_thonk_card(), 1);
@@ -385,7 +385,7 @@ mod test {
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
-            &sarzak,
+true,            &sarzak,
         )
         .unwrap();
 
@@ -397,7 +397,7 @@ mod test {
             ValueType::new_enumeration(true, &woog_enum, &mut lu_dog)
         };
 
-        let program = compile(&ctx).unwrap();
+        let program = compile(&ctx, true).unwrap();
         println!("{program}");
 
         assert_eq!(program.get_thonk_card(), 1);
@@ -433,7 +433,7 @@ mod test {
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
-            &sarzak,
+true,            &sarzak,
         )
         .unwrap();
 
@@ -447,7 +447,7 @@ mod test {
         let user_enum = TupleEnum::new("Bar", new_ref!(Value, Value::Integer(42)));
         let user_enum = new_ref!(TupleEnum<Value>, user_enum);
 
-        let program = compile(&ctx).unwrap();
+        let program = compile(&ctx, true).unwrap();
         println!("{program}");
 
         assert_eq!(program.get_thonk_card(), 1);
@@ -484,11 +484,11 @@ mod test {
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
-            &sarzak_store,
+true,            &sarzak_store,
         )
         .unwrap();
 
-        let program = compile(&ctx).unwrap();
+        let program = compile(&ctx, true).unwrap();
         println!("{program}");
 
         assert_eq!(program.get_thonk_card(), 1);
@@ -522,11 +522,11 @@ mod test {
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
-            &sarzak_store,
+true,            &sarzak_store,
         )
         .unwrap();
 
-        let program = compile(&ctx).unwrap();
+        let program = compile(&ctx, true).unwrap();
         println!("{program}");
 
         assert_eq!(program.get_thonk_card(), 1);
@@ -566,11 +566,11 @@ mod test {
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
-            &sarzak_store,
+true,            &sarzak_store,
         )
         .unwrap();
 
-        let program = compile(&ctx).unwrap();
+        let program = compile(&ctx, true).unwrap();
         println!("{program}");
 
         assert_eq!(program.get_thonk_card(), 1);
@@ -607,7 +607,7 @@ fn main() -> Result<A, B> {
             Some((ore.to_owned(), &ast)),
             &get_dwarf_home(),
             &env::current_dir().unwrap(),
-            &sarzak_store,
+true,            &sarzak_store,
         )
         .unwrap_or_else(|e| {
             for err in e {
@@ -616,7 +616,7 @@ fn main() -> Result<A, B> {
             panic!("Failed to create lu_dog");
         });
 
-        let program = compile(&ctx).unwrap();
+        let program = compile(&ctx, true).unwrap();
         println!("{program}");
 
         assert_eq!(program.get_thonk_card(), 4);

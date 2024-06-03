@@ -161,6 +161,7 @@ fn main() -> Result<()> {
         Some((source_code.clone(), &ast)),
         &dwarf_home,
         &env::current_dir().unwrap(),
+        false,
         &sarzak,
     ) {
         Ok(lu_dog) => lu_dog,

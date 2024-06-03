@@ -348,50 +348,58 @@ impl VM {
     }
 
     pub fn invoke(&mut self, func_name: &str, args: &[RefType<Value>]) -> Result<RefType<Value>> {
-        let (ip, frame_size) = self.func_map.get(func_name).unwrap();
-        let frame_size = *frame_size;
+        if let Some((ip, frame_size)) = self.func_map.get(func_name) {
+            let frame_size = *frame_size;
 
-        let mut stack = Vec::new();
+            let mut stack = Vec::new();
 
-        // Address of the function to invoke.
-        stack.push(Value::Integer(*ip as DwarfInteger).into());
-        // Number of parameters and locals in the function.
-        stack.push(Value::Integer(frame_size as DwarfInteger).into());
+            // Address of the function to invoke.
+            stack.push(Value::Integer(*ip as DwarfInteger).into());
+            // Number of parameters and locals in the function.
+            stack.push(Value::Integer(frame_size as DwarfInteger).into());
 
-        for arg in args.iter() {
-            stack.push(arg.clone().into());
-        }
-        for _ in 0..frame_size - args.len() {
+            for arg in args.iter() {
+                stack.push(arg.clone().into());
+            }
+            for _ in 0..frame_size - args.len() {
+                stack.push(Value::Empty.into());
+            }
+
+            // Arity
+            stack.push(StackValue::Value(
+                Value::Integer(args.len() as DwarfInteger),
+            ));
+            // Frame size
+            stack.push(StackValue::Value(Value::Integer(
+                (frame_size + 2) as DwarfInteger,
+            )));
+            // This is the IP sentinel value.
             stack.push(Value::Empty.into());
+            // Setup the frame pointer and it's sentinel.
+            stack.push(Value::Empty.into());
+
+            let fp = frame_size + 5;
+            let ip = *ip as isize;
+
+            let result = self.inner_run(
+                func_name,
+                ip,
+                fp,
+                stack,
+                args.len(),
+                frame_size,
+                self.program.clone(),
+            );
+
+            result
+        } else {
+            Err(BubbaError::VmPanic {
+                message: format!("No such function: `{}`", func_name.to_owned()),
+                program: self.program.clone(),
+                location: location!(),
+            }
+            .into())
         }
-
-        // Arity
-        stack.push(StackValue::Value(
-            Value::Integer(args.len() as DwarfInteger),
-        ));
-        // Frame size
-        stack.push(StackValue::Value(Value::Integer(
-            (frame_size + 2) as DwarfInteger,
-        )));
-        // This is the IP sentinel value.
-        stack.push(Value::Empty.into());
-        // Setup the frame pointer and it's sentinel.
-        stack.push(Value::Empty.into());
-
-        let fp = frame_size + 5;
-        let ip = *ip as isize;
-
-        let result = self.inner_run(
-            func_name,
-            ip,
-            fp,
-            stack,
-            args.len(),
-            frame_size,
-            self.program.clone(),
-        );
-
-        result
     }
 
     fn inner_run(
@@ -431,7 +439,7 @@ impl VM {
 
                 print_stack(&stack, fp);
                 println!("\t{} ->\t{cx}", Colour::Green.bold().paint("cx"));
-                println!("{}: {name}", Colour::Green.bold().paint("Thread"));
+                println!("{}: {name}", Colour::Green.bold().paint("Task"));
                 print_instrs(ip, &program, &self.instrs, &self.source_map);
                 println!();
             }
@@ -464,9 +472,12 @@ impl VM {
                         #[cfg(feature = "tracy-client")]
                         let _span = span!("AsyncCall");
 
+                        // This is the only difference between this and AsyncSpawn below.
+                        // The only difference is that we don't capture the environment.
+                        // Isn't that odd?
                         self.captures = None;
 
-                        self.start_task(&mut stack, *func_arity, arity, &program)?;
+                        self.start_task(true, &mut stack, *func_arity, arity, &program)?;
 
                         1
                     }
@@ -475,7 +486,7 @@ impl VM {
                         #[cfg(feature = "tracy-client")]
                         let _span = span!("AsyncSpawn");
 
-                        self.start_task(&mut stack, *func_arity, arity, &program)?;
+                        self.start_task(true, &mut stack, *func_arity, arity, &program)?;
 
                         1
                     }
@@ -484,8 +495,8 @@ impl VM {
                         #[cfg(feature = "tracy-client")]
                         let _span = span!("Await");
 
-                        let future = stack.pop().unwrap().into_pointer();
-                        let mut expression = &mut *s_write!(future);
+                        let task = stack.pop().unwrap().into_pointer();
+                        let mut expression = &mut *s_write!(task);
                         // dbg!(&expression);
 
                         let executor = match unsafe { EXECUTOR.get() } {
@@ -508,6 +519,7 @@ impl VM {
                                 if let Some(task) = s_write!(task).take() {
                                     if !*running {
                                         tracing::trace!(target: "vm", "Starting task: {name}");
+                                        *running = true;
                                         executor.start_task(&task);
                                     }
 
@@ -579,6 +591,7 @@ impl VM {
                                         RErr(e) => {
                                             return Err(BubbaError::VmPanic {
                                                 message: format!("Plugin error: {:?}\nAttempting to call {module}::{ty}::{func}", e),
+                                                program: self.program.clone(),
                                                 location: location!(),
                                             }
                                             .into())
@@ -624,6 +637,7 @@ impl VM {
                                         RErr(e) => {
                                             return Err(BubbaError::VmPanic {
                                                 message: format!("Plugin error: {:?}\nAttempting to call {module}::{ty}::{func}", e),
+                                                program: self.program.clone(),
                                                 location: location!(),
                                             }
                                             .into())
@@ -633,6 +647,7 @@ impl VM {
                                 _ => {
                                     return Err(BubbaError::VmPanic {
                                         message: format!("Unknown method: {method}.",),
+                                        program: self.program.clone(),
                                         location: location!(),
                                     }
                                     .into())
@@ -675,6 +690,7 @@ impl VM {
                                         message: format!(
                                             "Unexpected value: {stack_local_count:?}.",
                                         ),
+                                        program: self.program.clone(),
                                         location: location!(),
                                     }
                                     .into())
@@ -737,6 +753,15 @@ impl VM {
                         1
                     }
                     Instruction::Comment(_) => 1,
+                    #[cfg(feature = "async")]
+                    Instruction::CreateTask(func_arity) => {
+                        #[cfg(feature = "tracy-client")]
+                        let _span = span!("CreateTask");
+
+                        self.start_task(false, &mut stack, *func_arity, arity, &program)?;
+
+                        1
+                    }
                     // Instruction::DeconstructStructExpression => {
                     //     fn decode_expression(
                     //         value: RefType<Value>,
@@ -835,6 +860,7 @@ impl VM {
                             }
                             return Err(BubbaError::VmPanic {
                                 message: format!("Expected enum, found: {user_enum:?}."),
+                                program: self.program.clone(),
                                 location: location!(),
                             }
                             .into());
@@ -908,6 +934,7 @@ impl VM {
                                 return Err::<RefType<Value>, Error>(
                                     BubbaError::VmPanic {
                                         message: format!("FieldRead unexpected value: {value}."),
+                                        program: self.program.clone(),
                                         location: location!(),
                                     }
                                     .into(),
@@ -946,6 +973,7 @@ impl VM {
                                 return Err::<RefType<Value>, Error>(
                                     BubbaError::VmPanic {
                                         message: format!("Unexpected value. type: {value}."),
+                                        program: self.program.clone(),
                                         location: location!(),
                                     }
                                     .into(),
@@ -961,6 +989,7 @@ impl VM {
                         } else {
                             return Err(BubbaError::VmPanic {
                                 location: location!(),
+                                program: self.program.clone(),
                                 message: format!("Unknown label: {label}."),
                             }
                             .into());
@@ -1404,6 +1433,7 @@ impl VM {
                             } else {
                                 return Err(BubbaError::VmPanic {
                                     message: format!("Missing function definition: {func}"),
+                                    program: self.program.clone(),
                                     location: location!(),
                                 }
                                 .into());
@@ -1418,6 +1448,7 @@ impl VM {
                         let Value::Integer(value) = value else {
                             return Err(BubbaError::VmPanic {
                                 message: format!("Expected integer, found: {value:?}."),
+                                program: self.program.clone(),
                                 location: location!(),
                             }
                             .into());
@@ -1572,6 +1603,7 @@ impl VM {
                                 return Err::<RefType<Value>, Error>(
                                     BubbaError::VmPanic {
                                         message: format!("Unknown stream: {stream}."),
+                                        program: self.program.clone(),
                                         location: location!(),
                                     }
                                     .into(),
@@ -1612,6 +1644,7 @@ impl VM {
                             }
                             BubbaError::VmPanic {
                                 message: format!("Plug-in error: {e}."),
+                                program: self.program.clone(),
                                 location: location!(),
                             }
                         })?;
@@ -1664,6 +1697,7 @@ impl VM {
                                         "Expected an integer, but got: {:?}.",
                                         stack.pop().unwrap()
                                     ),
+                                    program: self.program.clone(),
                                     location: location!(),
                                 }
                                 .into());
@@ -1757,6 +1791,7 @@ impl VM {
                         let Value::String(string) = string else {
                             return Err(BubbaError::VmPanic {
                                 message: format!("Expected a string, but got: {string:?}."),
+                                program: self.program.clone(),
                                 location: location!(),
                             }
                             .into());
@@ -1779,6 +1814,7 @@ impl VM {
                         let Value::String(replace) = replace else {
                             return Err(BubbaError::VmPanic {
                                 message: format!("Expected a string, but got: {replace:?}."),
+                                program: self.program.clone(),
                                 location: location!(),
                             }
                             .into());
@@ -1786,6 +1822,7 @@ impl VM {
                         let Value::String(needle) = needle else {
                             return Err(BubbaError::VmPanic {
                                 message: format!("Expected a string, but got: {needle:?}."),
+                                program: self.program.clone(),
                                 location: location!(),
                             }
                             .into());
@@ -1793,6 +1830,7 @@ impl VM {
                         let Value::String(haystack) = haystack else {
                             return Err(BubbaError::VmPanic {
                                 message: format!("Expected a string, but got: {haystack:?}."),
+                                program: self.program.clone(),
                                 location: location!(),
                             }
                             .into());
@@ -1874,6 +1912,7 @@ impl VM {
                                     "Expected a ValueType, but got: {as_ty:?}.",
                                     as_ty = *as_ty
                                 ),
+                                program: self.program.clone(),
                                 location: location!(),
                             }
                             .into());
@@ -1914,6 +1953,7 @@ impl VM {
                                     ref alpha => {
                                         return Err(BubbaError::VmPanic {
                                             message: format!("Unexpected type: {alpha:?}.",),
+                                            program: self.program.clone(),
                                             location: location!(),
                                         }
                                         .into())
@@ -1924,6 +1964,7 @@ impl VM {
                             ty => {
                                 return Err(BubbaError::VmPanic {
                                     message: format!("Unexpected type: {ty:?}.",),
+                                    program: self.program.clone(),
                                     location: location!(),
                                 }
                                 .into())
@@ -1952,6 +1993,7 @@ impl VM {
     #[cfg(feature = "async")]
     fn start_task(
         &mut self,
+        running: bool,
         mut stack: &mut Vec<StackValue>,
         func_arity: usize,
         arity: usize,
@@ -2002,6 +2044,7 @@ impl VM {
             _ => {
                 return Err(BubbaError::VmPanic {
                     message: format!("Unexpected value: {stack_local_count:?}.",),
+                    program: self.program.clone(),
                     location: location!(),
                 }
                 .into())
@@ -2063,16 +2106,20 @@ impl VM {
             }
         };
         let worker = executor.new_worker();
-        let child_task = worker.spawn_task(future).unwrap();
-        executor.start_task(&child_task);
+        let child_task = worker.create_task(future).unwrap();
 
-        tracing::trace!(target: "vm", "Task started: {name} {child_task:?}.");
+        tracing::trace!(target: "vm", "Task created: {name} {child_task:?}.");
+
+        if running {
+            executor.start_task(&child_task);
+            tracing::trace!(target: "vm", "Task started: {name} {child_task:?}.");
+        }
 
         let value = new_ref!(
             Value,
             Value::Task {
                 name,
-                running: true,
+                running,
                 task: new_ref!(Option<AsyncTask<'static, ValueResult>>, Some(child_task))
             }
         );

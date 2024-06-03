@@ -107,6 +107,7 @@ fn run_program(test: &str, program: &str, cwd: &PathBuf) -> Result<(BubbaValue, 
         Some((program.to_owned(), &ast)),
         &dwarf_home,
         cwd,
+        true,
         &sarzak,
     ) {
         Ok(lu_dog) => lu_dog,
@@ -144,7 +145,7 @@ fn run_program(test: &str, program: &str, cwd: &PathBuf) -> Result<(BubbaValue, 
         }
     };
 
-    let binary = match compile(&ctx) {
+    let binary = match compile(&ctx, true) {
         Ok(program) => program,
         Err(e) => {
             let error = format!(

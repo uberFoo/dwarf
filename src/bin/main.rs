@@ -362,6 +362,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         is_uber,
                         print_ast,
                         path,
+                        bless,
                     )?
                 } else {
                     let bin_file = fs::File::open(path).map_err(|e| {
@@ -386,6 +387,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             is_uber,
                             print_ast,
                             path,
+                            bless,
                         )?
                     } else {
                         program
@@ -400,6 +402,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     is_uber,
                     print_ast,
                     path,
+                    bless,
                 )?
             };
 
@@ -508,6 +511,7 @@ fn get_context(
     sarzak: &SarzakStore,
     is_uber: bool,
     print_ast: bool,
+    silent: bool,
 ) -> Option<Context> {
     let ast = match parse_dwarf(&file_name, &source_code) {
         Ok(ast) => ast,
@@ -525,6 +529,7 @@ fn get_context(
         Some((source_code.clone(), &ast)),
         &dwarf_home,
         &env::current_dir().unwrap(),
+        silent,
         &sarzak,
     ) {
         Ok(lu_dog) => Some(lu_dog),
@@ -545,6 +550,7 @@ fn compile_program(
     is_uber: bool,
     print_ast: bool,
     path: &Path,
+    silent: bool,
 ) -> Result<Program, Box<dyn std::error::Error>> {
     let ctx = match get_context(
         &file_name,
@@ -553,13 +559,14 @@ fn compile_program(
         &sarzak,
         is_uber,
         print_ast,
+        silent,
     ) {
         Some(ctx) => ctx,
         None => {
             std::process::exit(1);
         }
     };
-    match compile(&ctx) {
+    match compile(&ctx, true) {
         Ok(program) => {
             // Write the compiled program to disk.
             let bin_file = fs::File::create(path)?;
